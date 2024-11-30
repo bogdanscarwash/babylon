@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" elementFormDefault="qualified">
+
+  <!-- Root element for a character -->
+  <xs:element name="Character">
+    <xs:complexType>
+      <xs:sequence>
+        
+        <!-- Basic Information -->
+        <xs:element name="Name" type="xs:string" />
+        <xs:element name="Age" type="xs:integer" />
+        <xs:element name="Gender" type="xs:string" />
+        <xs:element name="Biography" type="xs:string" minOccurs="0" />
+
+        <!-- Class and Economic Factors -->
+        <xs:element name="Class" type="xs:string" />
+        <xs:element name="Occupation" type="xs:string" minOccurs="0" />
+        <xs:element name="IncomeLevel" type="xs:string" minOccurs="0" />
+        <xs:element name="PropertyOwned" type="xs:string" minOccurs="0" />
+
+        <!-- Relationships -->
+        <xs:element name="Relationships" minOccurs="0" maxOccurs="1">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="Relationship" maxOccurs="unbounded">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="TargetCharacter" type="xs:string" />
+                    <xs:element name="Type" type="xs:string" />
+                    <xs:element name="Strength" type="xs:integer" minOccurs="0" />
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+
+        <!-- Ideological Alignment -->
+        <xs:element name="Ideology" type="xs:string" />
+        <xs:element name="Beliefs" minOccurs="0" maxOccurs="unbounded">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="Belief" type="xs:string" />
+              <xs:element name="Intensity" type="xs:integer" />
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+
+        <!-- Cultural Attributes -->
+        <xs:element name="Culture" type="xs:string" />
+        <xs:element name="LanguagesSpoken" minOccurs="0">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="Language" type="xs:string" maxOccurs="unbounded" />
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="Customs" minOccurs="0">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="Custom" type="xs:string" maxOccurs="unbounded" />
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+
+        <!-- Skills and Capabilities -->
+        <xs:element name="Skills" minOccurs="0">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="Skill" maxOccurs="unbounded">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="Name" type="xs:string" />
+                    <xs:element name="Level" type="xs:integer" />
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+
+        <!-- Faction Membership -->
+        <xs:element name="FactionMembership" minOccurs="0" maxOccurs="1">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="Faction" type="xs:string" />
+              <xs:element name="Role" type="xs:string" minOccurs="0" />
+              <xs:element name="Loyalty" type="xs:integer" minOccurs="0" />
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+
+        <!-- Contradictions -->
+        <xs:element name="Contradictions" minOccurs="0">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="Contradiction" maxOccurs="unbounded">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="Type" type="xs:string" />
+                    <xs:element name="Impact" type="xs:string" />
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+</xs:schema>

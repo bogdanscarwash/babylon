@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+
+  <!-- Root Element: EconomySystem -->
+  <xs:element name="EconomySystem">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="Resources" type="ResourcesType"/>
+        <xs:element name="MeansOfProduction" type="MeansOfProductionType"/>
+        <xs:element name="Technologies" type="TechnologiesType"/>
+        <xs:element name="Markets" type="MarketsType"/>
+        <xs:element name="EconomicPolicies" type="EconomicPoliciesType"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- Resources -->
+  <xs:complexType name="ResourcesType">
+    <xs:sequence>
+      <xs:element name="Resource" type="ResourceType" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="ResourceType">
+    <xs:sequence>
+      <xs:element name="ID" type="xs:string"/>
+      <xs:element name="Name" type="xs:string"/>
+      <xs:element name="Type" type="xs:string"/> <!-- RawMaterial, ManufacturedGood, Service -->
+      <xs:element name="Category" type="xs:string"/> <!-- Mineral, Agricultural, Technological -->
+      <xs:element name="Quantity" type="xs:decimal"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Means of Production -->
+  <xs:complexType name="MeansOfProductionType">
+    <xs:sequence>
+      <xs:element name="ProductionUnit" type="ProductionUnitType" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="ProductionUnitType">
+    <xs:sequence>
+      <xs:element name="ID" type="xs:string"/>
+      <xs:element name="Name" type="xs:string"/>
+      <xs:element name="Type" type="xs:string"/> <!-- Factory, Farm, Mine -->
+      <xs:element name="OwnerID" type="xs:string"/>
+      <xs:element name="OutputResourceID" type="xs:string"/> <!-- Resource produced -->
+      <xs:element name="ProductionRate" type="xs:decimal"/> <!-- Units produced per cycle -->
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Technologies -->
+  <xs:complexType name="TechnologiesType">
+    <xs:sequence>
+      <xs:element name="Technology" type="TechnologyType" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="TechnologyType">
+    <xs:sequence>
+      <xs:element name="ID" type="xs:string"/>
+      <xs:element name="Name" type="xs:string"/>
+      <xs:element name="Category" type="xs:string"/> <!-- Military, Economic -->
+      <xs:element name="Description" type="xs:string"/>
+      <xs:element name="Effect" type="xs:string"/> <!-- e.g., Increases production -->
+      <xs:element name="Prerequisites" minOccurs="0">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="TechnologyID" type="xs:string" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Markets -->
+  <xs:complexType name="MarketsType">
+    <xs:sequence>
+      <xs:element name="Market" type="MarketType" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="MarketType">
+    <xs:sequence>
+      <xs:element name="Name" type="xs:string"/>
+      <xs:element name="ResourceID" type="xs:string"/>
+      <xs:element name="Supply" type="xs:decimal"/>
+      <xs:element name="Demand" type="xs:decimal"/>
+      <xs:element name="Price" type="xs:decimal"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Economic Policies -->
+  <xs:complexType name="EconomicPoliciesType">
+    <xs:sequence>
+      <xs:element name="Policy" type="PolicyType" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="PolicyType">
+    <xs:sequence>
+      <xs:element name="Name" type="xs:string"/>
+      <xs:element name="Category" type="xs:string"/> <!-- e.g., Taxation, Subsidy -->
+      <xs:element name="Effect" type="xs:string"/> <!-- Description of impact -->
+      <xs:element name="Cost" type="xs:decimal"/> <!-- Cost of policy -->
+    </xs:sequence>
+  </xs:complexType>
+
+</xs:schema>

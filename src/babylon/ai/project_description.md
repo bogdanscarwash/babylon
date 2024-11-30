@@ -8,7 +8,7 @@
 
 ### **Overview:**
 
-"Dialectics of Revolution" is an intricate simulation-like role playing game that immerses players in a dynamic world shaped by Marxist theory and dialectical materialism. The game models the complex interplay between the **Base** (economic structures) and the **Superstructure** (ideologies, political systems, cultures, and institutions) of society. The fundamental gameplay mechanic that drives the progress of the game is **Contradiction**. Players engage with various entities such as factions, social classes, production units, technologies, ideologies, cultures, political systems, contradictions, and institutions, all interconnected through carefully designed XML schemas. Every game object 
+"The Fall of Bablyon" is an intricate simulation-like role playing game that immerses players in a dynamic world shaped by Marxist theory and dialectical materialism. The game models the complex interplay between the **Base** (economic structures) and the **Superstructure** (ideologies, political systems, cultures, and institutions) of society. The fundamental gameplay mechanic that drives the progress of the game is **Contradiction**. Players engage with various entities such as factions, social classes, production units, technologies, ideologies, cultures, political systems, contradictions, and institutions, all interconnected through carefully designed XML schemas. Every game object 
 
 ---
 
