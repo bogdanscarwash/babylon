@@ -1,0 +1,7 @@
+.venv*
+.aider*
+.vscode*
+.env*
+*.log
+*.sqlite3
+.venv-babylon*
