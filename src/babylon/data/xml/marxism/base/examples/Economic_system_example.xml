@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<EconomySystem>
+  <Resources>
+    <Resource>
+      <ID>R001</ID>
+      <Name>Iron Ore</Name>
+      <Type>Raw Material</Type>
+      <Quantity>10000</Quantity>
+      <Value>5.0</Value>
+    </Resource>
+    <Resource>
+      <ID>R002</ID>
+      <Name>Steel</Name>
+      <Type>Manufactured Good</Type>
+      <Quantity>5000</Quantity>
+      <Value>20.0</Value>
+    </Resource>
+  </Resources>
+
+  <MeansOfProduction>
+    <ProductionUnit>
+      <ID>P001</ID>
+      <Name>Steel Factory Alpha</Name>
+      <OwnerFactionID>F001</OwnerFactionID>
+      <LocationID>L001</LocationID>
+      <Type>Factory</Type>
+      <InputResources>
+        <ResourceID>R001</ResourceID>
+      </InputResources>
+      <OutputResources>
+        <ResourceID>R002</ResourceID>
+      </OutputResources>
+      <Efficiency>0.85</Efficiency>
+    </ProductionUnit>
+  </MeansOfProduction>
+
+  <Technologies>
+    <Technology>
+      <ID>T001</ID>
+      <Name>Advanced Metallurgy</Name>
+      <Description>Improves the efficiency of metal production units.</Description>
+      <RequiredTechnologies/>
+      <Effects>
+        <Effect>
+          <Target>ProductionUnit</Target>
+          <Attribute>Efficiency</Attribute>
+          <ModificationType>Increase</ModificationType>
+          <Value>0.10</Value>
+        </Effect>
+      </Effects>
+    </Technology>
+  </Technologies>
+
+  <TradeSystems>
+    <TradeRoute>
+      <ID>TR001</ID>
+      <FromFactionID>F001</FromFactionID>
+      <ToFactionID>F002</ToFactionID>
+      <ResourceID>R002</ResourceID>
+      <Quantity>1000</Quantity>
+      <PricePerUnit>22.0</PricePerUnit>
+      <Status>Active</Status>
+    </TradeRoute>
+  </TradeSystems>
+
+  <EconomicRelationships>
+    <Relationship>
+      <BetweenFactions>
+        <FactionID>F001</FactionID>
+        <FactionID>F003</FactionID>
+      </BetweenFactions>
+      <RelationshipType>Embargo</RelationshipType>
+      <Terms>No trade of steel products.</Terms>
+      <Duration>30</Duration>
+      <Effects>
+        <Effect>
+          <Target>Faction</Target>
+          <Attribute>ResourceAccess</Attribute>
+          <ModificationType>Decrease</ModificationType>
+          <Value>0.50</Value>
+        </Effect>
+      </Effects>
+    </Relationship>
+  </EconomicRelationships>
+</EconomySystem>

@@ -1,0 +1,217 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- social_classes.xml -->
+<Classes>
+  <!-- Proletariat -->
+  <Class>
+    <Name>Proletariat</Name>
+    <Description>The working class who sell their labor power in exchange for wages.</Description>
+    <Attributes>
+      <Attribute>
+        <Name>EconomicPower</Name>
+        <Value>Low</Value>
+      </Attribute>
+      <Attribute>
+        <Name>PoliticalInfluence</Name>
+        <Value>Growing</Value>
+      </Attribute>
+    </Attributes>
+    <Relationships>
+      <Relationship>
+        <WithClassName>Bourgeoisie</WithClassName>
+        <Nature>Antagonistic</Nature>
+      </Relationship>
+    </Relationships>
+    <Subclasses>
+      <!-- Labor Aristocracy -->
+      <Class>
+        <Name>Labor Aristocracy</Name>
+        <Description>Skilled workers with higher wages and better working conditions.</Description>
+        <Attributes>
+          <Attribute>
+            <Name>EconomicPower</Name>
+            <Value>Medium</Value>
+          </Attribute>
+          <Attribute>
+            <Name>ClassConsciousness</Name>
+            <Value>Moderate</Value>
+          </Attribute>
+        </Attributes>
+      </Class>
+      <!-- Precariat -->
+      <Class>
+        <Name>Precariat</Name>
+        <Description>Workers in precarious employment without job security.</Description>
+        <Attributes>
+          <Attribute>
+            <Name>EconomicPower</Name>
+            <Value>Very Low</Value>
+          </Attribute>
+          <Attribute>
+            <Name>ClassConsciousness</Name>
+            <Value>High</Value>
+          </Attribute>
+        </Attributes>
+      </Class>
+    </Subclasses>
+  </Class>
+
+  <!-- Bourgeoisie -->
+  <Class>
+    <Name>Bourgeoisie</Name>
+    <Description>The capitalist class who own the means of production.</Description>
+    <Attributes>
+      <Attribute>
+        <Name>EconomicPower</Name>
+        <Value>High</Value>
+      </Attribute>
+      <Attribute>
+        <Name>PoliticalInfluence</Name>
+        <Value>Dominant</Value>
+      </Attribute>
+    </Attributes>
+    <Relationships>
+      <Relationship>
+        <WithClassName>Proletariat</WithClassName>
+        <Nature>Antagonistic</Nature>
+      </Relationship>
+    </Relationships>
+    <Subclasses>
+      <!-- Haute Bourgeoisie -->
+      <Class>
+        <Name>Haute Bourgeoisie</Name>
+        <Description>The upper echelons of the capitalist class with significant wealth and influence.</Description>
+        <Attributes>
+          <Attribute>
+            <Name>EconomicPower</Name>
+            <Value>Very High</Value>
+          </Attribute>
+        </Attributes>
+      </Class>
+      <!-- Nouveau Bourgeoisie -->
+      <Class>
+        <Name>Nouveau Bourgeoisie</Name>
+        <Description>Individuals who have recently acquired wealth and entered the capitalist class.</Description>
+        <Attributes>
+          <Attribute>
+            <Name>EconomicPower</Name>
+            <Value>High</Value>
+          </Attribute>
+        </Attributes>
+      </Class>
+    </Subclasses>
+  </Class>
+
+  <!-- Petit Bourgeoisie -->
+  <Class>
+    <Name>Petit Bourgeoisie</Name>
+    <Description>The middle class, including small business owners and professionals.</Description>
+    <Attributes>
+      <Attribute>
+        <Name>EconomicPower</Name>
+        <Value>Medium</Value>
+      </Attribute>
+    </Attributes>
+    <Relationships>
+      <Relationship>
+        <WithClassName>Bourgeoisie</WithClassName>
+        <Nature>Allied</Nature>
+      </Relationship>
+      <Relationship>
+        <WithClassName>Proletariat</WithClassName>
+        <Nature>Ambivalent</Nature>
+      </Relationship>
+    </Relationships>
+    <Subclasses>
+      <!-- Professional Managerial Class -->
+      <Class>
+        <Name>Professional Managerial Class</Name>
+        <Description>Professionals who manage workers on behalf of the bourgeoisie.</Description>
+        <Attributes>
+          <Attribute>
+            <Name>EconomicPower</Name>
+            <Value>Medium</Value>
+          </Attribute>
+        </Attributes>
+      </Class>
+      <!-- Small Business Owners -->
+      <Class>
+        <Name>Small Business Owners</Name>
+        <Description>Individuals who own and operate small businesses.</Description>
+        <Attributes>
+          <Attribute>
+            <Name>EconomicPower</Name>
+            <Value>Medium</Value>
+          </Attribute>
+        </Attributes>
+      </Class>
+      <!-- Self Employed -->
+      <Class>
+        <Name>Self Employed</Name>
+        <Description>Individuals working for themselves without employing others.</Description>
+        <Attributes>
+          <Attribute>
+            <Name>EconomicPower</Name>
+            <Value>Low to Medium</Value>
+          </Attribute>
+        </Attributes>
+      </Class>
+    </Subclasses>
+  </Class>
+
+  <!-- Lumpenproletariat -->
+  <Class>
+    <Name>Lumpenproletariat</Name>
+    <Description>The marginalized underclass often outside the formal economy.</Description>
+    <Attributes>
+      <Attribute>
+        <Name>EconomicPower</Name>
+        <Value>Very Low</Value>
+      </Attribute>
+      <Attribute>
+        <Name>ClassConsciousness</Name>
+        <Value>Low</Value>
+      </Attribute>
+    </Attributes>
+    <Relationships>
+      <Relationship>
+        <WithClassName>Proletariat</WithClassName>
+        <Nature>Disconnected</Nature>
+      </Relationship>
+    </Relationships>
+    <Subclasses>
+      <!-- Criminals -->
+      <Class>
+        <Name>Criminals</Name>
+        <Description>Individuals engaged in illegal activities for survival.</Description>
+        <Attributes>
+          <Attribute>
+            <Name>SocialInfluence</Name>
+            <Value>Negative</Value>
+          </Attribute>
+        </Attributes>
+      </Class>
+      <!-- Homeless -->
+      <Class>
+        <Name>Homeless</Name>
+        <Description>Individuals without stable housing.</Description>
+        <Attributes>
+          <Attribute>
+            <Name>EconomicPower</Name>
+            <Value>None</Value>
+          </Attribute>
+        </Attributes>
+      </Class>
+      <!-- Chronically Unemployed -->
+      <Class>
+        <Name>Chronically Unemployed</Name>
+        <Description>Individuals unable to secure steady employment.</Description>
+        <Attributes>
+          <Attribute>
+            <Name>EconomicPower</Name>
+            <Value>Very Low</Value>
+          </Attribute>
+        </Attributes>
+      </Class>
+    </Subclasses>
+  </Class>
+</Classes>

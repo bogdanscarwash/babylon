@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- guerrilla_army.xsd -->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+
+  <!-- Root Element: GuerrillaArmy -->
+  <xs:element name="GuerrillaArmy">
+    <xs:complexType>
+      <xs:sequence>
+        <!-- Basic Information -->
+        <xs:element name="ID" type="xs:string"/>
+        <xs:element name="Name" type="xs:string"/>
+        <xs:element name="FactionID" type="xs:string"/>
+        <xs:element name="Leader">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="Name" type="xs:string"/>
+              <xs:element name="Background" type="xs:string" minOccurs="0"/>
+              <xs:element name="ExperienceLevel" type="xs:string"/> <!-- e.g., Novice, Experienced -->
+              <xs:element name="IdeologicalCommitment" type="xs:string"/> <!-- e.g., Low, Medium, High -->
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <!-- Organizational Structure -->
+        <xs:element name="Cells">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="Cell" type="GuerrillaCellType" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <!-- Operational Details -->
+        <xs:element name="CurrentOperations" type="xs:string" minOccurs="0"/>
+        <xs:element name="SafeHouses">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="LocationID" type="xs:string" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <!-- Attributes -->
+        <xs:element name="Attributes">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="Attribute" type="AttributeType" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <!-- Resources -->
+        <xs:element name="Resources">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="Resource" type="ResourceType" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <!-- Support from Population -->
+        <xs:element name="PopulationSupportLevel" type="xs:string"/> <!-- e.g., Low, Medium, High -->
+        <!-- Intelligence Capabilities -->
+        <xs:element name="IntelligenceNetwork" type="xs:string"/> <!-- e.g., Weak, Moderate, Strong -->
+        <!-- Morale and Ideology -->
+        <xs:element name="Morale" type="xs:string"/> <!-- e.g., Low, Medium, High -->
+        <xs:element name="Ideology" type="xs:string"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- Guerrilla Cell Type -->
+  <xs:complexType name="GuerrillaCellType">
+    <xs:sequence>
+      <xs:element name="CellID" type="xs:string"/>
+      <xs:element name="CellName" type="xs:string"/>
+      <xs:element name="LeaderName" type="xs:string"/>
+      <xs:element name="Strength" type="xs:integer"/> <!-- Number of fighters -->
+      <xs:element name="ExperienceLevel" type="xs:string"/>
+      <xs:element name="Specialization" type="xs:string" minOccurs="0"/> <!-- e.g., Sabotage, Propaganda -->
+      <xs:element name="CurrentLocationID" type="xs:string"/>
+      <xs:element name="LocalSupportLevel" type="xs:string"/> <!-- e.g., Low, Medium, High -->
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Attribute Type -->
+  <xs:complexType name="AttributeType">
+    <xs:sequence>
+      <xs:element name="Name" type="xs:string"/>
+      <xs:element name="Value" type="xs:string"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Resource Type -->
+  <xs:complexType name="ResourceType">
+    <xs:sequence>
+      <xs:element name="ResourceID" type="xs:string"/>
+      <xs:element name="Name" type="xs:string"/>
+      <xs:element name="Quantity" type="xs:integer"/>
+    </xs:sequence>
+  </xs:complexType>
+
+</xs:schema>

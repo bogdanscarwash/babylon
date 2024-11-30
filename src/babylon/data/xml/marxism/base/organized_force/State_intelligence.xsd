@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- state_intelligence.xsd -->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+
+  <!-- Root Element: StateIntelligence -->
+  <xs:element name="StateIntelligence">
+    <xs:complexType>
+      <xs:sequence>
+        <!-- Basic Information -->
+        <xs:element name="ID" type="xs:string"/>
+        <xs:element name="AgencyName" type="xs:string"/>
+        <xs:element name="Leader">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="Name" type="xs:string"/>
+              <xs:element name="Title" type="xs:string"/> <!-- e.g., Director, Chief -->
+              <xs:element name="ExperienceLevel" type="xs:string"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <!-- Departments -->
+        <xs:element name="Departments">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="Department" type="DepartmentType" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <!-- Intelligence Capabilities -->
+        <xs:element name="Capabilities">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="Capability" type="xs:string" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <!-- Intelligence Operations -->
+        <xs:element name="CurrentOperations">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="Operation" type="OperationType" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <!-- Resources -->
+        <xs:element name="Resources">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="Resource" type="ResourceType" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <!-- Attributes -->
+        <xs:element name="Attributes" minOccurs="0">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="Attribute" type="AttributeType" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <!-- Public Perception -->
+        <xs:element name="PublicPerception" type="xs:string"/> <!-- e.g., Negative, Neutral, Positive -->
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- Department Type -->
+  <xs:complexType name="DepartmentType">
+    <xs:sequence>
+      <xs:element name="DepartmentID" type="xs:string"/>
+      <xs:element name="Name" type="xs:string"/>
+      <xs:element name="HeadName" type="xs:string"/>
+      <xs:element name="Specialization" type="xs:string"/> <!-- e.g., Counterintelligence, Cybersecurity -->
+      <xs:element name="StaffCount" type="xs:integer"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Operation Type -->
+  <xs:complexType name="OperationType">
+    <xs:sequence>
+      <xs:element name="OperationID" type="xs:string"/>
+      <xs:element name="Name" type="xs:string"/>
+      <xs:element name="Objective" type="xs:string"/>
+      <xs:element name="Target" type="xs:string"/>
+      <xs:element name="Status" type="xs:string"/> <!-- e.g., Planned, Ongoing, Completed -->
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Resource Type -->
+  <xs:complexType name="ResourceType">
+    <xs:sequence>
+      <xs:element name="ResourceID" type="xs:string"/>
+      <xs:element name="Name" type="xs:string"/>
+      <xs:element name="Quantity" type="xs:integer"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Attribute Type -->
+  <xs:complexType name="AttributeType">
+    <xs:sequence>
+      <xs:element name="Name" type="xs:string"/>
+      <xs:element name="Value" type="xs:string"/>
+    </xs:sequence>
+  </xs:complexType>
+
+</xs:schema>

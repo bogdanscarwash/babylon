@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- institutions.xsd -->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+
+  <!-- Root Element: Institutions -->
+  <xs:element name="Institutions">
+    <xs:complexType>
+      <xs:sequence>
+        <!-- Multiple Institution Elements -->
+        <xs:element name="Institution" type="InstitutionType" maxOccurs="unbounded"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- Institution Type -->
+  <xs:complexType name="InstitutionType">
+    <xs:sequence>
+      <!-- Basic Information -->
+      <xs:element name="ID" type="xs:string"/>
+      <xs:element name="Name" type="xs:string"/>
+      <xs:element name="Type" type="xs:string"/> <!-- e.g., Legal, Educational, Religious, Familial -->
+      <xs:element name="Description" type="xs:string" minOccurs="0"/>
+      <xs:element name="HistoricalContext" type="xs:string" minOccurs="0"/>
+
+      <!-- Functions and Roles -->
+      <xs:element name="Functions">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="Function" type="xs:string" maxOccurs="unbounded"/> <!-- e.g., Law Enforcement, Education -->
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      <xs:element name="Roles" minOccurs="0">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="Role" type="RoleType" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+
+      <!-- Associated Ideologies -->
+      <xs:element name="AssociatedIdeologies" minOccurs="0">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="IdeologyID" type="xs:string" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+
+      <!-- Controlled By Classes or Factions -->
+      <xs:element name="ControlledBy" minOccurs="0">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="ClassID" type="xs:string" minOccurs="0"/>
+            <xs:element name="FactionID" type="xs:string" minOccurs="0"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+
+      <!-- Influence on Game Elements -->
+      <xs:element name="Effects">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="Effect" type="EffectType" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+
+      <!-- Laws and Policies -->
+      <xs:element name="EnactedLaws" minOccurs="0">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="LawID" type="xs:string" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      <xs:element name="Policies" minOccurs="0">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="Policy" type="PolicyType" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+
+      <!-- Relationships with Other Institutions -->
+      <xs:element name="Relationships" minOccurs="0">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="Relationship" type="RelationshipType" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+
+      <!-- Attributes -->
+      <xs:element name="Attributes" minOccurs="0">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="Attribute" type="AttributeType" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Role Type -->
+  <xs:complexType name="RoleType">
+    <xs:sequence>
+      <xs:element name="Title" type="xs:string"/> <!-- e.g., Judge, Teacher, Priest -->
+      <xs:element name="CharacterID" type="xs:string" minOccurs="0"/>
+      <xs:element name="Responsibilities" minOccurs="0">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="Responsibility" type="xs:string" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Policy Type -->
+  <xs:complexType name="PolicyType">
+    <xs:sequence>
+      <xs:element name="ID" type="xs:string"/>
+      <xs:element name="Name" type="xs:string"/>
+      <xs:element name="Description" type="xs:string" minOccurs="0"/>
+      <xs:element name="Effects">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="Effect" type="EffectType" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Relationship Type -->
+  <xs:complexType name="RelationshipType">
+    <xs:sequence>
+      <xs:element name="InstitutionID" type="xs:string"/>
+      <xs:element name="RelationshipType" type="xs:string"/> <!-- e.g., Oversight, Collaboration -->
+      <xs:element name="Description" type="xs:string" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Effect Type -->
+  <xs:complexType name="EffectType">
+    <xs:sequence>
+      <xs:element name="Target" type="xs:string"/> <!-- e.g., Population, Faction, Class -->
+      <xs:element name="Attribute" type="xs:string"/>
+      <xs:element name="ModificationType" type="xs:string"/> <!-- Increase, Decrease, Enable, Disable -->
+      <xs:element name="Value" type="xs:decimal" minOccurs="0"/>
+      <xs:element name="Duration" type="xs:string" minOccurs="0"/> <!-- Permanent, Temporary -->
+      <xs:element name="Description" type="xs:string" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Attribute Type -->
+  <xs:complexType name="AttributeType">
+    <xs:sequence>
+      <xs:element name="Name" type="xs:string"/>
+      <xs:element name="Value" type="xs:string"/>
+    </xs:sequence>
+  </xs:complexType>
+
+</xs:schema>

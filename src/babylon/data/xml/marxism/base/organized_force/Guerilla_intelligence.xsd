@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- guerrilla_intelligence.xsd -->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+
+  <!-- Root Element: GuerrillaIntelligence -->
+  <xs:element name="GuerrillaIntelligence">
+    <xs:complexType>
+      <xs:sequence>
+        <!-- Basic Information -->
+        <xs:element name="ID" type="xs:string"/>
+        <xs:element name="FactionID" type="xs:string"/> <!-- Associated guerrilla faction -->
+        <xs:element name="Leader">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="Name" type="xs:string"/>
+              <xs:element name="Background" type="xs:string" minOccurs="0"/>
+              <xs:element name="ExperienceLevel" type="xs:string"/> <!-- e.g., Novice, Experienced -->
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <!-- Network Details -->
+        <xs:element name="Operatives">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="Operative" type="OperativeType" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <!-- Intelligence Capabilities -->
+        <xs:element name="Capabilities">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="Capability" type="xs:string" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <!-- Intelligence Operations -->
+        <xs:element name="CurrentOperations">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="Operation" type="OperationType" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <!-- Resources -->
+        <xs:element name="Resources">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="Resource" type="ResourceType" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <!-- Attributes -->
+        <xs:element name="Attributes" minOccurs="0">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="Attribute" type="AttributeType" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <!-- Support from Population -->
+        <xs:element name="PopulationSupportLevel" type="xs:string"/> <!-- e.g., Low, Medium, High -->
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- Operative Type -->
+  <xs:complexType name="OperativeType">
+    <xs:sequence>
+      <xs:element name="OperativeID" type="xs:string"/>
+      <xs:element name="Name" type="xs:string"/>
+      <xs:element name="Role" type="xs:string"/> <!-- e.g., Spy, Courier -->
+      <xs:element name="SkillLevel" type="xs:string"/> <!-- e.g., Novice, Expert -->
+      <xs:element name="CurrentLocationID" type="xs:string"/>
+      <xs:element name="Status" type="xs:string"/> <!-- e.g., Active, Captured -->
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Operation Type -->
+  <xs:complexType name="OperationType">
+    <xs:sequence>
+      <xs:element name="OperationID" type="xs:string"/>
+      <xs:element name="Name" type="xs:string"/>
+      <xs:element name="Objective" type="xs:string"/>
+      <xs:element name="Target" type="xs:string"/> <!-- e.g., Infrastructure, Personnel -->
+      <xs:element name="Status" type="xs:string"/> <!-- e.g., Planned, Ongoing, Completed -->
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Resource Type -->
+  <xs:complexType name="ResourceType">
+    <xs:sequence>
+      <xs:element name="ResourceID" type="xs:string"/>
+      <xs:element name="Name" type="xs:string"/>
+      <xs:element name="Quantity" type="xs:integer"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Attribute Type -->
+  <xs:complexType name="AttributeType">
+    <xs:sequence>
+      <xs:element name="Name" type="xs:string"/>
+      <xs:element name="Value" type="xs:string"/>
+    </xs:sequence>
+  </xs:complexType>
+
+</xs:schema>

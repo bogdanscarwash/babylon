@@ -1,0 +1,192 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Ideologies>
+  <!-- Capitalism -->
+  <Ideology>
+    <!-- Basic Information -->
+    <ID>I001</ID>
+    <Name>Capitalism</Name>
+    <Description>An economic system based on private ownership of the means of production and their operation for profit.</Description>
+    <HistoricalContext>Developed during the Industrial Revolution, becoming the dominant economic system in the Western world.</HistoricalContext>
+    
+    <!-- Core Principles -->
+    <CorePrinciples>
+      <Principle>Private Property</Principle>
+      <Principle>Free Market Competition</Principle>
+      <Principle>Profit Motive</Principle>
+      <Principle>Individualism</Principle>
+    </CorePrinciples>
+    
+    <!-- Associated Entities -->
+    <AssociatedFactions>
+      <FactionID>F002</FactionID> <!-- Corporate Elites -->
+    </AssociatedFactions>
+    <AssociatedClasses>
+      <ClassID>C002</ClassID> <!-- Bourgeoisie -->
+      <ClassID>C003</ClassID> <!-- Petit Bourgeoisie -->
+    </AssociatedClasses>
+    
+    <!-- Effects on Game Elements -->
+    <Effects>
+      <Effect>
+        <Target>MeansOfProduction</Target>
+        <Attribute>Ownership</Attribute>
+        <ModificationType>Privatize</ModificationType>
+        <Description>Means of production are owned by private individuals or corporations.</Description>
+      </Effect>
+      <Effect>
+        <Target>EconomicSystem</Target>
+        <Attribute>MarketRegulation</Attribute>
+        <ModificationType>Decrease</ModificationType>
+        <Value>0.20</Value> <!-- Decreases regulation by 20% -->
+        <Description>Reduces government intervention in the economy.</Description>
+      </Effect>
+    </Effects>
+    
+    <!-- Contradictions with Other Ideologies -->
+    <ContradictsIdeologies>
+      <IdeologyID>I002</IdeologyID> <!-- Communism -->
+      <IdeologyID>I003</IdeologyID> <!-- Socialism -->
+    </ContradictsIdeologies>
+    
+    <!-- Influence on Superstructure Elements -->
+    <Influences>
+      <InstitutionID>Inst001</InstitutionID> <!-- Stock Exchange -->
+      <LawID>Law001</LawID> <!-- Property Rights Law -->
+      <CultureID>Cult001</CultureID> <!-- Consumer Culture -->
+    </Influences>
+    
+    <!-- Attributes -->
+    <Attributes>
+      <Attribute>
+        <Name>EconomicFreedomIndex</Name>
+        <Value>High</Value>
+      </Attribute>
+    </Attributes>
+  </Ideology>
+  
+  <!-- Communism -->
+  <Ideology>
+    <!-- Basic Information -->
+    <ID>I002</ID>
+    <Name>Communism</Name>
+    <Description>A socioeconomic order structured upon the ideas of common ownership of the means of production and the absence of social classes, money, and the state.</Description>
+    <HistoricalContext>Developed by Karl Marx and Friedrich Engels in the 19th century as a critique of capitalism.</HistoricalContext>
+    
+    <!-- Core Principles -->
+    <CorePrinciples>
+      <Principle>Collective Ownership</Principle>
+      <Principle>Abolition of Class Distinctions</Principle>
+      <Principle>From each according to his ability, to each according to his needs</Principle>
+      <Principle>Central Planning</Principle>
+    </CorePrinciples>
+    
+    <!-- Associated Entities -->
+    <AssociatedFactions>
+      <FactionID>F003</FactionID> <!-- Revolutionary Front -->
+    </AssociatedFactions>
+    <AssociatedClasses>
+      <ClassID>C001</ClassID> <!-- Proletariat -->
+    </AssociatedClasses>
+    <InfluentialCharacters>
+      <CharacterID>Char001</CharacterID> <!-- Maria Sanchez -->
+    </InfluentialCharacters>
+    
+    <!-- Effects on Game Elements -->
+    <Effects>
+      <Effect>
+        <Target>MeansOfProduction</Target>
+        <Attribute>Ownership</Attribute>
+        <ModificationType>Nationalize</ModificationType>
+        <Description>Means of production are owned collectively by society.</Description>
+      </Effect>
+      <Effect>
+        <Target>SocialClasses</Target>
+        <Attribute>ClassDistinctions</Attribute>
+        <ModificationType>Eliminate</ModificationType>
+        <Description>Aims to abolish class distinctions.</Description>
+      </Effect>
+    </Effects>
+    
+    <!-- Contradictions with Other Ideologies -->
+    <ContradictsIdeologies>
+      <IdeologyID>I001</IdeologyID> <!-- Capitalism -->
+      <IdeologyID>I004</IdeologyID> <!-- Fascism -->
+    </ContradictsIdeologies>
+    
+    <!-- Influence on Superstructure Elements -->
+    <Influences>
+      <InstitutionID>Inst002</InstitutionID> <!-- Workers' Councils -->
+      <LawID>Law002</LawID> <!-- Equal Distribution Law -->
+      <CultureID>Cult002</CultureID> <!-- Revolutionary Culture -->
+    </Influences>
+    
+    <!-- Attributes -->
+    <Attributes>
+      <Attribute>
+        <Name>EqualityIndex</Name>
+        <Value>High</Value>
+      </Attribute>
+    </Attributes>
+  </Ideology>
+  
+  <!-- Fascism -->
+  <Ideology>
+    <!-- Basic Information -->
+    <ID>I004</ID>
+    <Name>Fascism</Name>
+    <Description>A form of far-right, authoritarian ultranationalism characterized by dictatorial power, forcible suppression of opposition, and strong regimentation of society and the economy.</Description>
+    <HistoricalContext>Emerged in early 20th-century Europe amid social and economic unrest.</HistoricalContext>
+    
+    <!-- Core Principles -->
+    <CorePrinciples>
+      <Principle>Ultranationalism</Principle>
+      <Principle>Authoritarianism</Principle>
+      <Principle>State Control</Principle>
+      <Principle>Suppression of Opposition</Principle>
+    </CorePrinciples>
+    
+    <!-- Associated Entities -->
+    <AssociatedFactions>
+      <FactionID>F004</FactionID> <!-- National Unity Party -->
+    </AssociatedFactions>
+    
+    <!-- Effects on Game Elements -->
+    <Effects>
+      <Effect>
+        <Target>PoliticalPowerStructures</Target>
+        <Attribute>Centralization</Attribute>
+        <ModificationType>Increase</ModificationType>
+        <Value>0.30</Value> <!-- Increases centralization by 30% -->
+        <Description>Consolidates power under a single leader or party.</Description>
+      </Effect>
+      <Effect>
+        <Target>Laws</Target>
+        <Attribute>CivilLiberties</Attribute>
+        <ModificationType>Decrease</ModificationType>
+        <Value>0.50</Value> <!-- Decreases civil liberties by 50% -->
+        <Description>Reduces individual freedoms in favor of state control.</Description>
+      </Effect>
+    </Effects>
+    
+    <!-- Contradictions with Other Ideologies -->
+    <ContradictsIdeologies>
+      <IdeologyID>I002</IdeologyID> <!-- Communism -->
+      <IdeologyID>I003</IdeologyID> <!-- Democracy -->
+    </ContradictsIdeologies>
+    
+    <!-- Influence on Superstructure Elements -->
+    <Influences>
+      <InstitutionID>Inst003</InstitutionID> <!-- State Propaganda Department -->
+      <LawID>Law003</LawID> <!-- National Security Law -->
+    </Influences>
+    
+    <!-- Attributes -->
+    <Attributes>
+      <Attribute>
+        <Name>NationalismLevel</Name>
+        <Value>Extreme</Value>
+      </Attribute>
+    </Attributes>
+  </Ideology>
+
+</Ideologies>

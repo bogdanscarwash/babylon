@@ -1,0 +1,330 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- game_master_schema.xsd -->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+
+  <!-- Root Element: Game -->
+  <xs:element name="Game">
+    <xs:complexType>
+      <xs:sequence>
+        <!-- Society -->
+        <xs:element name="Society">
+          <xs:complexType>
+            <xs:sequence>
+              <!-- Base -->
+              <xs:element name="Base">
+                <xs:complexType>
+                  <xs:sequence>
+                    <!-- Categories under Base -->
+                    <xs:element name="EconomySystem" type="EconomySystemType"/>
+                    <xs:element name="Resources" type="EconomicResourcesType"/>
+                    <xs:element name="MeansOfProduction" type="MeansOfProductionType"/>
+                    <xs:element name="OrganizedForce" type="OrganizedForceType"/>
+                    <xs:element name="Technologies" type="TechnologiesType"/>
+                    <!-- Additional Category -->
+                    <xs:element name="Locations" type="LocationsType"/>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+              <!-- Superstructure -->
+              <xs:element name="Superstructure">
+                <xs:complexType>
+                  <xs:sequence>
+                    <!-- Elements under Superstructure -->
+                    <xs:element name="IdeologiesAndBeliefSystems" type="IdeologiesType"/>
+                    <xs:element name="Institutions" type="InstitutionsType"/>
+                    <xs:element name="Laws" type="LawsType"/>
+                    <xs:element name="PoliticalPowerStructures" type="PoliticalPowerStructuresType"/>
+                    <xs:element name="Contradictions" type="ContradictionsType"/>
+                    <xs:element name="Cultures" type="CulturesType"/>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+              <!-- Socially Determined Objects -->
+              <xs:element name="SociallyDeterminedObjects">
+                <xs:complexType>
+                  <xs:sequence>
+                    <!-- Elements under SociallyDeterminedObjects -->
+                    <xs:element name="Crises" type="CrisesType"/>
+                    <xs:element name="SocialClasses" type="SocialClassesType"/>
+                    <xs:element name="Factions" type="FactionsType"/>
+                    <xs:element name="Characters" type="CharactersType"/>
+                    <xs:element name="Relationships" type="RelationshipsType"/>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <!-- GameObjects -->
+        <xs:element name="GameObjects">
+          <xs:complexType>
+            <xs:sequence>
+              <!-- Metadata -->
+              <xs:element name="Metadata">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="GameStateData" type="GameStateDataType"/>
+                    <xs:element name="PlayerStatistics" type="PlayerStatisticsType"/>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+              <!-- Mechanics -->
+              <xs:element name="Mechanics">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="CombatMechanics" type="CombatMechanicsType"/>
+                    <xs:element name="SkillsAndAbilities" type="SkillsAndAbilitiesType"/>
+                    <xs:element name="ProtractedWarAndGuerrillaWarfareMechanics" type="GuerrillaWarfareMechanicsType"/>
+                    <xs:element name="PlayerChoices" type="PlayerChoicesType"/>
+                    <xs:element name="QuestsMissions" type="QuestsMissionsType"/>
+                    <xs:element name="Items" type="ItemsType"/>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+              <!-- Systems -->
+              <xs:element name="Systems">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="AIBehaviorTemplates" type="AIBehaviorTemplatesType"/>
+                    <xs:element name="UserInterfaceElements" type="UserInterfaceElementsType"/>
+                    <xs:element name="DialogueSystems" type="DialogueSystemsType"/>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <!-- Miscellaneous -->
+        <xs:element name="Miscellaneous">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="Scenes" type="ScenesType"/>
+              <xs:element name="Events" type="EventsType"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- Type Definitions -->
+
+  <!-- Economy System Type -->
+  <xs:complexType name="EconomySystemType">
+    <xs:sequence>
+      <!-- Insert elements from economy_system.xsd -->
+      <!-- For brevity, this part is abbreviated -->
+      <!-- Include Resources, MeansOfProduction, Technologies, TradeSystems, EconomicRelationships -->
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Economic Resources Type -->
+  <xs:complexType name="EconomicResourcesType">
+    <xs:sequence>
+      <xs:element name="Resource" type="ResourceType" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Means Of Production Type -->
+  <xs:complexType name="MeansOfProductionType">
+    <xs:sequence>
+      <xs:element name="ProductionUnit" type="ProductionUnitType" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Organized Force Type -->
+  <xs:complexType name="OrganizedForceType">
+    <xs:sequence>
+      <xs:element name="StandingArmies">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="StandingArmy" type="StandingArmyType" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      <xs:element name="GuerrillaArmies">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="GuerrillaArmy" type="GuerrillaArmyType" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      <xs:element name="GuerrillaIntelligence">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="GuerrillaIntelligenceUnit" type="GuerrillaIntelligenceType" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      <xs:element name="StateIntelligence">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="StateIntelligenceAgency" type="StateIntelligenceType" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      <xs:element name="LawEnforcement">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="LawEnforcementAgency" type="LawEnforcementType" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Technologies Type -->
+  <xs:complexType name="TechnologiesType">
+    <xs:sequence>
+      <xs:element name="Technology" type="TechnologyType" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Locations Type -->
+  <xs:complexType name="LocationsType">
+    <xs:sequence>
+      <xs:element name="Location" type="LocationType" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Define other complex types as needed -->
+  <!-- For brevity, types such as Superstructure, Contradictions, Crises, SocialClasses, etc., are not fully expanded here. -->
+
+  <!-- Sample Complex Type Definitions -->
+
+  <!-- Resource Type -->
+  <xs:complexType name="ResourceType">
+    <xs:sequence>
+      <xs:element name="ID" type="xs:string"/>
+      <xs:element name="Name" type="xs:string"/>
+      <xs:element name="Type" type="xs:string"/>
+      <xs:element name="Category" type="xs:string"/>
+      <xs:element name="Description" type="xs:string" minOccurs="0"/>
+      <xs:element name="Attributes" type="AttributesType" minOccurs="0"/>
+      <xs:element name="ProductionDetails" type="ProductionDetailsType"/>
+      <xs:element name="ConsumptionDetails" type="ConsumptionDetailsType"/>
+      <xs:element name="Value" type="xs:decimal"/>
+      <xs:element name="MarketPrice" type="xs:decimal" minOccurs="0"/>
+      <xs:element name="ResourceRelationships" type="ResourceRelationshipsType" minOccurs="0"/>
+      <xs:element name="Availability" type="AvailabilityType"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Production Unit Type -->
+  <xs:complexType name="ProductionUnitType">
+    <xs:sequence>
+      <!-- Elements from means_of_production.xsd -->
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Standing Army Type -->
+  <xs:complexType name="StandingArmyType">
+    <xs:sequence>
+      <!-- Elements from standing_army.xsd -->
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Guerrilla Army Type -->
+  <xs:complexType name="GuerrillaArmyType">
+    <xs:sequence>
+      <!-- Elements from guerrilla_army.xsd -->
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Guerrilla Intelligence Type -->
+  <xs:complexType name="GuerrillaIntelligenceType">
+    <xs:sequence>
+      <!-- Elements from guerrilla_intelligence.xsd -->
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- State Intelligence Type -->
+  <xs:complexType name="StateIntelligenceType">
+    <xs:sequence>
+      <!-- Elements from state_intelligence.xsd -->
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Law Enforcement Type -->
+  <xs:complexType name="LawEnforcementType">
+    <xs:sequence>
+      <!-- Elements from law_enforcement.xsd -->
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Technologies Type -->
+  <xs:complexType name="TechnologyType">
+    <xs:sequence>
+      <xs:element name="ID" type="xs:string"/>
+      <xs:element name="Name" type="xs:string"/>
+      <xs:element name="Description" type="xs:string"/>
+      <xs:element name="RequiredTechnologies" type="RequiredTechnologiesType" minOccurs="0"/>
+      <xs:element name="Effects" type="EffectsType"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Locations Type -->
+  <xs:complexType name="LocationType">
+    <xs:sequence>
+      <xs:element name="ID" type="xs:string"/>
+      <xs:element name="Name" type="xs:string"/>
+      <xs:element name="Description" type="xs:string" minOccurs="0"/>
+      <xs:element name="Type" type="xs:string"/> <!-- e.g., City, Region, Facility -->
+      <xs:element name="Coordinates" type="CoordinatesType" minOccurs="0"/>
+      <xs:element name="Attributes" type="AttributesType" minOccurs="0"/>
+      <xs:element name="ControlledBy" type="xs:string" minOccurs="0"/> <!-- FactionID or ClassID -->
+      <xs:element name="ResourcesAvailable" type="ResourcesAvailableType" minOccurs="0"/>
+      <xs:element name="Population" type="xs:integer" minOccurs="0"/>
+      <xs:element name="SubLocations" minOccurs="0">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="Location" type="LocationType" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Coordinates Type -->
+  <xs:complexType name="CoordinatesType">
+    <xs:sequence>
+      <xs:element name="Latitude" type="xs:decimal"/>
+      <xs:element name="Longitude" type="xs:decimal"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Attributes Type -->
+  <xs:complexType name="AttributesType">
+    <xs:sequence>
+      <xs:element name="Attribute" type="AttributeType" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Attribute Type -->
+  <xs:complexType name="AttributeType">
+    <xs:sequence>
+      <xs:element name="Name" type="xs:string"/>
+      <xs:element name="Value" type="xs:string"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Resources Available Type -->
+  <xs:complexType name="ResourcesAvailableType">
+    <xs:sequence>
+      <xs:element name="Resource" type="ResourceQuantityType" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Resource Quantity Type -->
+  <xs:complexType name="ResourceQuantityType">
+    <xs:sequence>
+      <xs:element name="ResourceID" type="xs:string"/>
+      <xs:element name="Quantity" type="xs:decimal"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Additional Complex Types as needed -->
+
+  <!-- For brevity, the definitions of complex types like ContradictionsType, CrisesType, SocialClassesType, FactionsType, CharactersType, RelationshipsType, GameStateDataType, PlayerStatisticsType, CombatMechanicsType, etc., are not fully expanded here. They should be defined similarly, including the elements from their respective XSD files. -->
+
+</xs:schema>
