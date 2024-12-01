@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Faction xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:noNamespaceSchemaLocation="../../../marxism/socially_determined_objects/Faction.xsd">
+         xsi:noNamespaceSchemaLocation="../../../marxism/socially_determined_objects/faction_template.xsd">
     <ID>F003</ID>
     <Name>Revolutionary Workers Party</Name>
     <Description>Orthodox Marxist-Leninist party focused on building a vanguard party and organizing industrial workers.</Description>

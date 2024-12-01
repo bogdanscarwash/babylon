@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Locations xmlns="http://babylon/marxism/base/location"
           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-          xsi:schemaLocation="http://babylon/marxism/base/location ../../marxism/base/Location.xsd">
+          xsi:schemaLocation="http://babylon/marxism/base/location ../../marxism/base/location_template.xsd">
     
     <!-- Los Angeles Metro Area -->
     <Location>
@@ -29,15 +29,15 @@
                 <ID>L001A</ID>
                 <Name>Long Beach Port</Name>
                 <Type>Industrial</Type>
-                <Population>466451</Population>
                 <ControlledBy>F001</ControlledBy>
+                <Population>466451</Population>
             </Location>
             <Location>
                 <ID>L001B</ID>
                 <Name>Hollywood</Name>
                 <Type>Cultural</Type>
-                <Population>153075</Population>
                 <ControlledBy>F002</ControlledBy>
+                <Population>153075</Population>
             </Location>
         </SubLocations>
     </Location>
@@ -62,15 +62,15 @@
                 <ID>L002A</ID>
                 <Name>Industrial Corridor</Name>
                 <Type>Industrial</Type>
-                <Population>311598</Population>
                 <ControlledBy>F002</ControlledBy>
+                <Population>311598</Population>
             </Location>
             <Location>
                 <ID>L002B</ID>
                 <Name>Financial District</Name>
                 <Type>Financial</Type>
-                <Population>247280</Population>
                 <ControlledBy>F003</ControlledBy>
+                <Population>247280</Population>
             </Location>
         </SubLocations>
     </Location>
@@ -95,22 +95,22 @@
                 <ID>L003A</ID>
                 <Name>Capitol Hill</Name>
                 <Type>Government</Type>
-                <Population>876150</Population>
                 <ControlledBy>F001</ControlledBy>
+                <Population>876150</Population>
             </Location>
             <Location>
                 <ID>L003B</ID>
                 <Name>Pentagon City</Name>
                 <Type>Military</Type>
-                <Population>547196</Population>
                 <ControlledBy>F001</ControlledBy>
+                <Population>547196</Population>
             </Location>
             <Location>
                 <ID>L003C</ID>
                 <Name>Alexandria Old Town</Name>
                 <Type>Historical</Type>
-                <Population>293693</Population>
                 <ControlledBy>F002</ControlledBy>
+                <Population>293693</Population>
             </Location>
         </SubLocations>
     </Location>
@@ -135,15 +135,17 @@
                 <ID>L004A</ID>
                 <Name>Tech Center</Name>
                 <Type>Technology</Type>
-                <Population>151321</Population>
                 <ControlledBy>F003</ControlledBy>
+                <Population>151321</Population>
+                
             </Location>
             <Location>
                 <ID>L004B</ID>
                 <Name>Mining District</Name>
                 <Type>Industrial</Type>
-                <Population>121485</Population>
                 <ControlledBy>F002</ControlledBy>
+                <Population>121485</Population>
+                
             </Location>
         </SubLocations>
     </Location>
@@ -168,15 +170,16 @@
                 <ID>L005A</ID>
                 <Name>Inner Harbor</Name>
                 <Type>Port</Type>
-                <Population>131381</Population>
                 <ControlledBy>F002</ControlledBy>
+                <Population>131381</Population>
             </Location>
             <Location>
                 <ID>L005B</ID>
                 <Name>Industrial Park</Name>
                 <Type>Industrial</Type>
-                <Population>110672</Population>
                 <ControlledBy>F002</ControlledBy>
+                <Population>110672</Population>
+                
             </Location>
         </SubLocations>
     </Location>
@@ -214,8 +217,9 @@
                     <Longitude>-96.5717</Longitude>
                 </Coordinates>
                 <TerrainType>Plains</TerrainType>
-                <Population>132831</Population>
                 <ControlledBy>F002</ControlledBy>
+                <Population>132831</Population>
+                
             </Location>
             
             <!-- Lawrence -->
@@ -229,8 +233,9 @@
                     <Longitude>-95.2353</Longitude>
                 </Coordinates>
                 <TerrainType>Plains</TerrainType>
-                <Population>120553</Population>
                 <ControlledBy>F002</ControlledBy>
+                <Population>120553</Population>
+                
             </Location>
             
             <!-- Topeka -->
@@ -244,8 +249,9 @@
                     <Longitude>-95.6752</Longitude>
                 </Coordinates>
                 <TerrainType>Plains</TerrainType>
-                <Population>126587</Population>
                 <ControlledBy>F001</ControlledBy>
+                <Population>126587</Population>
+                
             </Location>
         </SubLocations>
     </Location>
