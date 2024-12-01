@@ -89,6 +89,16 @@ class ContradictionAnalysis:
             attributes={}
         )
         
+        # Define resolution methods and their effects
+        contradiction.resolution_methods = {
+            'Suppression': [Effect('working_class', 'freedom', 'Decrease', 0.1, 'Suppress dissent')],
+            'Reform': [Effect('economy', 'gini_coefficient', 'Decrease', 0.1, 'Implement wealth redistribution')],
+            'Revolution': [
+                Effect('upper_class', 'wealth', 'Decrease', 0.5, 'Expropriate assets'),
+                Effect('working_class', 'wealth', 'Increase', 0.5, 'Redistribute wealth')
+            ]
+        }
+        
         # Add custom intensity update method
         def update_intensity(self, game_state):
             gini_coefficient = game_state['economy'].gini_coefficient
@@ -144,6 +154,13 @@ class ContradictionAnalysis:
             effects=[],
             attributes={}
         )
+        
+        # Define resolution methods and their effects
+        contradiction.resolution_methods = {
+            'Suppression': [Effect('citizens', 'freedom', 'Decrease', 0.2, 'Impose martial law')],
+            'Reform': [Effect('politics', 'stability_index', 'Increase', 0.2, 'Enact democratic reforms')],
+            'Revolution': [Effect('government', 'power', 'Decrease', 1.0, 'Overthrow the government')]
+        }
         return contradiction
         
     def update_contradictions(self, game_state):
@@ -206,9 +223,16 @@ class ContradictionAnalysis:
         return False
         
     def _resolve_contradiction(self, contradiction, game_state):
-        """Resolve a contradiction and apply its effects."""
-        contradiction.state = 'Resolved'
-        self._apply_effects(contradiction.effects, game_state)
+        """Resolve a contradiction using the selected resolution method."""
+        resolution_method = self._select_resolution_method(contradiction, game_state)
+        contradiction.selected_resolution_method = resolution_method
+        contradiction.state = f'Resolved by {resolution_method}'
+        
+        effects = contradiction.resolution_methods.get(resolution_method, [])
+        self._apply_effects(effects, game_state)
+        
+        print(f"Contradiction '{contradiction.name}' resolved through {resolution_method}.")
+        self._post_resolution_check(contradiction, game_state)
         
     def _check_transformation_conditions(self, contradiction, game_state):
         """Check if conditions for transformation are met."""
@@ -229,6 +253,39 @@ class ContradictionAnalysis:
             if target_entity:
                 self._modify_attribute(target_entity, effect)
                 
+    def _select_resolution_method(self, contradiction, game_state):
+        """Determine the resolution method for a contradiction."""
+        if game_state.get('is_player_responsible', False):
+            available_methods = list(contradiction.resolution_methods.keys())
+            print(f"Choose a resolution method for '{contradiction.name}':")
+            for idx, method in enumerate(available_methods, 1):
+                print(f"{idx}. {method}")
+            choice = int(input("Enter the number of your choice: "))
+            return available_methods[choice - 1]
+        else:
+            return self._ai_select_resolution_method(contradiction, game_state)
+
+    def _ai_select_resolution_method(self, contradiction, game_state):
+        """AI selects a resolution method based on strategy."""
+        if contradiction.intensity == 'High' and 'Revolution' in contradiction.resolution_methods:
+            return 'Revolution'
+        elif contradiction.intensity == 'Medium' and 'Reform' in contradiction.resolution_methods:
+            return 'Reform'
+        elif 'Suppression' in contradiction.resolution_methods:
+            return 'Suppression'
+        return list(contradiction.resolution_methods.keys())[0]  # Fallback
+
+    def _post_resolution_check(self, contradiction, game_state):
+        """Handle side effects and potential new contradictions after resolution."""
+        method = contradiction.selected_resolution_method
+        if method == 'Suppression':
+            print(f"Suppression of '{contradiction.name}' may lead to further unrest.")
+            self._check_for_new_contradictions(contradiction, game_state)
+        elif method == 'Reform':
+            print(f"Reforms implemented for '{contradiction.name}'. Stability may improve.")
+        elif method == 'Revolution':
+            print(f"Revolution occurred due to '{contradiction.name}'. Game state changed significantly.")
+
     def _modify_attribute(self, target, effect):
         """Modify an entity's attribute based on an effect."""
         if hasattr(target, effect.attribute):
@@ -240,6 +297,7 @@ class ContradictionAnalysis:
             else:  # Change
                 new_value = effect.value
             setattr(target, effect.attribute, new_value)
+            print(f"{effect.description}: {target} {effect.modification_type}d {effect.attribute} by {effect.value}.")
             
     def generate_events(self, game_state):
         """Generate events based on active contradictions."""

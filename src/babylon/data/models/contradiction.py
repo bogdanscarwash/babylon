@@ -20,7 +20,8 @@ class Contradiction:
         self.state = state
         self.potential_for_transformation = potential_for_transformation
         self.conditions_for_transformation = conditions_for_transformation
-        self.resolution_methods = resolution_methods
+        self.resolution_methods = {}  # Dictionary mapping methods to effects
+        self.selected_resolution_method = None
         self.resolution_conditions = resolution_conditions
         self.effects = effects  # List of Effect objects
         self.attributes = attributes  # Dictionary of additional attributes
