@@ -78,7 +78,7 @@
       <xs:element name="Type" type="xs:string"/> <!-- e.g., Strike, Riot, Uprising -->
       <xs:element name="InvolvedClasses" type="ClassInvolvementType"/>
       <xs:element name="Duration" type="xs:string"/> <!-- Time of conflict -->
-      <xs:element name="Outcome" type="OutcomeType" minOccurs="0"/>
+      <xs:element name="Outcome" type="xs:string" minOccurs="0"/>
     </xs:sequence>
   </xs:complexType>
 
