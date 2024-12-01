@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+
+  <!-- Root Element: CombatSystem -->
+  <xs:element name="CombatSystem">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="Battles" type="BattlesType"/>
+        <xs:element name="Units" type="UnitsType"/>
+        <xs:element name="Terrain" type="TerrainType"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- Battles -->
+  <xs:complexType name="BattlesType">
+    <xs:sequence>
+      <xs:element name="Battle" type="BattleType" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="BattleType">
+    <xs:sequence>
+      <xs:element name="ID" type="xs:string"/>
+      <xs:element name="Location" type="xs:string"/> <!-- Tied to a Location ID -->
+      <xs:element name="Participants" type="ParticipantsType"/>
+      <xs:element name="Duration" type="xs:string"/> <!-- e.g., "3 Hours" -->
+      <xs:element name="Outcome" type="OutcomeType"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Participants -->
+  <xs:complexType name="ParticipantsType">
+    <xs:sequence>
+      <xs:element name="Faction" type="FactionParticipationType" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="FactionParticipationType">
+    <xs:sequence>
+      <xs:element name="FactionID" type="xs:string"/>
+      <xs:element name="Units" type="UnitListType"/>
+      <xs:element name="Strategy" type="xs:string"/> <!-- e.g., Aggressive, Defensive -->
+      <xs:element name="Morale" type="xs:decimal"/> <!-- 0.0 to 1.0 -->
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="UnitListType">
+    <xs:sequence>
+      <xs:element name="UnitID" type="xs:string" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Units -->
+  <xs:complexType name="UnitsType">
+    <xs:sequence>
+      <xs:element name="Unit" type="UnitType" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="UnitType">
+    <xs:sequence>
+      <xs:element name="ID" type="xs:string"/>
+      <xs:element name="Type" type="xs:string"/> <!-- e.g., Infantry, Tank, Aircraft -->
+      <xs:element name="Strength" type="xs:decimal"/> <!-- Combat effectiveness -->
+      <xs:element name="Health" type="xs:decimal"/> <!-- 0.0 to 1.0 -->
+      <xs:element name="SpecialAbilities" type="SpecialAbilitiesType" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="SpecialAbilitiesType">
+    <xs:sequence>
+      <xs:element name="Ability" type="xs:string" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Terrain -->
+  <xs:complexType name="TerrainType">
+    <xs:sequence>
+      <xs:element name="TerrainFeature" type="TerrainFeatureType" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="TerrainFeatureType">
+    <xs:sequence>
+      <xs:element name="Name" type="xs:string"/> <!-- e.g., Mountain, River -->
+      <xs:element name="EffectOnCombat" type="xs:string"/> <!-- e.g., "Reduces tank speed" -->
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Outcome -->
+  <xs:complexType name="OutcomeType">
+    <xs:sequence>
+      <xs:element name="WinningFactionID" type="xs:string"/>
+      <xs:element name="Casualties" type="CasualtiesType"/>
+      <xs:element name="TerritoryChanges" type="TerritoryChangesType" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="CasualtiesType">
+    <xs:sequence>
+      <xs:element name="FactionCasualties" type="FactionCasualtiesType" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="FactionCasualtiesType">
+    <xs:sequence>
+      <xs:element name="FactionID" type="xs:string"/>
+      <xs:element name="UnitsLost" type="UnitListType"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="TerritoryChangesType">
+    <xs:sequence>
+      <xs:element name="Gained" type="xs:string" maxOccurs="unbounded"/>
+      <xs:element name="Lost" type="xs:string" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+</xs:schema>

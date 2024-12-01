@@ -14,7 +14,11 @@
   <xs:complexType name="ContradictionType">
     <xs:sequence>
       <!-- Basic Information -->
-      <xs:element name="ID" type="xs:string"/>
+      <xs:element name="ID" type="xs:string">
+        <xs:annotation>
+          <xs:documentation>Format: CON### (e.g., CON001)</xs:documentation>
+        </xs:annotation>
+      </xs:element>
       <xs:element name="Name" type="xs:string" minOccurs="0"/>
       <xs:element name="Description" type="xs:string"/>
 
@@ -89,7 +93,12 @@
   <!-- Entity Type -->
   <xs:complexType name="EntityType">
     <xs:sequence>
-      <xs:element name="EntityID" type="xs:string"/>
+      <xs:element name="EntityID" type="xs:string">
+        <xs:annotation>
+          <xs:documentation>Must reference valid Faction (F###), Class (C###), or Institution (Inst###) ID</xs:documentation>
+        </xs:annotation>
+        <xs:pattern value="(F|C|Inst)[0-9]{3}"/>
+      </xs:element>
       <xs:element name="EntityType" type="xs:string"/> <!-- Faction, Class, Ideology, Institution -->
       <xs:element name="Role" type="xs:string" minOccurs="0"/> <!-- e.g., Oppressor, Oppressed -->
     </xs:sequence>

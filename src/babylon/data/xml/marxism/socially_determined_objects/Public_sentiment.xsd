@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" elementFormDefault="qualified">
+
+  <!-- Root element for Public Sentiments -->
+  <xs:element name="PublicSentiments">
+    <xs:complexType>
+      <xs:sequence>
+
+        <!-- General Information -->
+        <xs:element name="Region" type="xs:string">
+          <xs:annotation>
+            <xs:documentation>
+              The geographical or cultural area where these sentiments are measured (e.g., nation, city, social group).
+            </xs:documentation>
+          </xs:annotation>
+        </xs:element>
+        <xs:element name="TimeFrame" type="xs:string">
+          <xs:annotation>
+            <xs:documentation>
+              The time frame during which these sentiments are observed (e.g., historical period, specific event-driven era).
+            </xs:documentation>
+          </xs:annotation>
+        </xs:element>
+
+        <!-- Sentiments -->
+        <xs:element name="Sentiments">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="Sentiment" maxOccurs="unbounded">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="Type" type="xs:string">
+                      <xs:annotation>
+                        <xs:documentation>
+                          Examples: Approval, Discontent, Fear, Hope, Revolutionary Spirit, Nationalism.
+                        </xs:documentation>
+                      </xs:annotation>
+                    </xs:element>
+                    <xs:element name="Magnitude" type="xs:integer">
+                      <xs:annotation>
+                        <xs:documentation>
+                          A numeric value (e.g., 1-100) indicating the intensity of the sentiment.
+                        </xs:documentation>
+                      </xs:annotation>
+                    </xs:element>
+                    <xs:element name="Target" type="xs:string" minOccurs="0">
+                      <xs:annotation>
+                        <xs:documentation>
+                          The focus of the sentiment (e.g., government, ideology, social class, faction).
+                        </xs:documentation>
+                      </xs:annotation>
+                    </xs:element>
+                    <xs:element name="Reason" type="xs:string" minOccurs="0">
+                      <xs:annotation>
+                        <xs:documentation>
+                          The primary cause or event that generated this sentiment.
+                        </xs:documentation>
+                      </xs:annotation>
+                    </xs:element>
+                    <xs:element name="Dynamics" minOccurs="0">
+                      <xs:complexType>
+                        <xs:sequence>
+                          <xs:element name="ChangeRate" type="xs:decimal">
+                            <xs:annotation>
+                              <xs:documentation>
+                                The rate of increase or decrease in this sentiment over time (e.g., +2.5 per month).
+                              </xs:documentation>
+                            </xs:annotation>
+                          </xs:element>
+                          <xs:element name="Stability" type="xs:string">
+                            <xs:annotation>
+                              <xs:documentation>
+                                Describes whether the sentiment is Stable, Volatile, or Transitional.
+                              </xs:documentation>
+                            </xs:annotation>
+                          </xs:element>
+                        </xs:sequence>
+                      </xs:complexType>
+                    </xs:element>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+
+        <!-- Influences -->
+        <xs:element name="Influences" minOccurs="0">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="Influence" maxOccurs="unbounded">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="Source" type="xs:string">
+                      <xs:annotation>
+                        <xs:documentation>
+                          The origin of the influence (e.g., a faction, event, policy, ideology).
+                        </xs:documentation>
+                      </xs:annotation>
+                    </xs:element>
+                    <xs:element name="Type" type="xs:string">
+                      <xs:annotation>
+                        <xs:documentation>
+                          Examples: Media Propaganda, Economic Policy, Revolutionary Speech, Cultural Movement.
+                        </xs:documentation>
+                      </xs:annotation>
+                    </xs:element>
+                    <xs:element name="Impact" type="xs:integer">
+                      <xs:annotation>
+                        <xs:documentation>
+                          A numeric value indicating the strength of the influence on public sentiment.
+                        </xs:documentation>
+                      </xs:annotation>
+                    </xs:element>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+
+        <!-- Outcomes -->
+        <xs:element name="Outcomes" minOccurs="0">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="Outcome" maxOccurs="unbounded">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="Type" type="xs:string">
+                      <xs:annotation>
+                        <xs:documentation>
+                          Examples: Policy Shift, Revolt, Cultural Shift, Election Outcome.
+                        </xs:documentation>
+                      </xs:annotation>
+                    </xs:element>
+                    <xs:element name="Magnitude" type="xs:integer">
+                      <xs:annotation>
+                        <xs:documentation>
+                          The scale or significance of the outcome (e.g., local, national, global).
+                        </xs:documentation>
+                      </xs:annotation>
+                    </xs:element>
+                    <xs:element name="Description" type="xs:string" />
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+</xs:schema>
