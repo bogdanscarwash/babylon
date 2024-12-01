@@ -1,7 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
-           xmlns:ct="http://babylon/common/types"
-           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
 
   <!-- Root Element: CivilRightsSystem -->
   <xs:element name="CivilRightsSystem">
@@ -55,7 +53,7 @@
   <xs:complexType name="PolicyType">
     <xs:sequence>
       <xs:element name="Name" type="xs:string"/> <!-- e.g., Civil Rights Act -->
-      <xs:element name="Effect" type="ct:EffectType"/>
+      <xs:element name="Effect" type="EffectType"/>
       <xs:element name="Cost" type="xs:decimal"/> <!-- Resources or political capital required -->
       <xs:element name="Resistance" type="xs:string" minOccurs="0"/> <!-- Opposition from factions -->
     </xs:sequence>
