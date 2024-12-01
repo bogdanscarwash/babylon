@@ -1,0 +1,180 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Laws>
+    <Law>
+        <ID>LAW001</ID>
+        <Name>Drug Prohibition</Name>
+        <Description>Laws criminalizing the possession, sale, and distribution of specified controlled substances</Description>
+        <Type>Criminal</Type>
+        <EnforcementMechanism>
+            <Institution>Inst002</Institution>
+            <Institution>Inst005</Institution>
+            <Method>Surveillance</Method>
+            <Method>Raids</Method>
+            <Method>Border control</Method>
+            <Penalty>Imprisonment</Penalty>
+            <Penalty>Asset forfeiture</Penalty>
+            <Penalty>Fines</Penalty>
+        </EnforcementMechanism>
+        <ClassEffects>
+            <ClassEffect>
+                <TargetClass>Working Class</TargetClass>
+                <Impact>Disproportionate imprisonment and criminalization</Impact>
+            </ClassEffect>
+            <ClassEffect>
+                <TargetClass>Minority Communities</TargetClass>
+                <Impact>Over-policing and systemic discrimination</Impact>
+            </ClassEffect>
+        </ClassEffects>
+        <SocialImpact>
+            <Economic>Creation of black markets and underground economies</Economic>
+            <Political>Expansion of police powers and surveillance state</Political>
+            <Social>Mass incarceration and community disruption</Social>
+        </SocialImpact>
+        <RelatedIdeologies>
+            <Ideology>Conservatism</Ideology>
+            <Ideology>AuthoritarianControl</Ideology>
+        </RelatedIdeologies>
+        <HistoricalContext>Emerged from early 20th century moral panics and racial targeting</HistoricalContext>
+    </Law>
+
+    <Law>
+        <ID>LAW002</ID>
+        <Name>Freedom of Speech</Name>
+        <Description>Constitutional protection of expression, press, and assembly rights</Description>
+        <Type>Constitutional</Type>
+        <EnforcementMechanism>
+            <Institution>Courts</Institution>
+            <Method>Judicial review</Method>
+            <Method>Civil litigation</Method>
+            <Penalty>Injunctive relief</Penalty>
+            <Penalty>Damages</Penalty>
+        </EnforcementMechanism>
+        <ClassEffects>
+            <ClassEffect>
+                <TargetClass>Bourgeoisie</TargetClass>
+                <Impact>Enhanced ability to influence public discourse through media ownership</Impact>
+            </ClassEffect>
+            <ClassEffect>
+                <TargetClass>Working Class</TargetClass>
+                <Impact>Limited practical access due to economic barriers</Impact>
+            </ClassEffect>
+        </ClassEffects>
+        <SocialImpact>
+            <Economic>Market dominance of major media corporations</Economic>
+            <Political>Protection of political dissent but with class-based limitations</Political>
+            <Social>Uneven access to platforms and influence</Social>
+        </SocialImpact>
+        <RelatedIdeologies>
+            <Ideology>Liberalism</Ideology>
+            <Ideology>Democracy</Ideology>
+        </RelatedIdeologies>
+        <HistoricalContext>Fundamental right established in liberal democratic constitutions</HistoricalContext>
+    </Law>
+
+    <Law>
+        <ID>LAW003</ID>
+        <Name>Private Property</Name>
+        <Description>Legal framework protecting private ownership of means of production and resources</Description>
+        <Type>Property</Type>
+        <EnforcementMechanism>
+            <Institution>Courts</Institution>
+            <Institution>Inst002</Institution>
+            <Method>Property registration</Method>
+            <Method>Police protection</Method>
+            <Method>Legal enforcement</Method>
+            <Penalty>Civil damages</Penalty>
+            <Penalty>Criminal prosecution</Penalty>
+        </EnforcementMechanism>
+        <ClassEffects>
+            <ClassEffect>
+                <TargetClass>Bourgeoisie</TargetClass>
+                <Impact>Legal protection of capital accumulation</Impact>
+            </ClassEffect>
+            <ClassEffect>
+                <TargetClass>Working Class</TargetClass>
+                <Impact>Restricted access to means of production</Impact>
+            </ClassEffect>
+        </ClassEffects>
+        <SocialImpact>
+            <Economic>Concentration of wealth and productive resources</Economic>
+            <Political>Property-based power relations</Political>
+            <Social>Class stratification and inequality</Social>
+        </SocialImpact>
+        <RelatedIdeologies>
+            <Ideology>Capitalism</Ideology>
+            <Ideology>Liberalism</Ideology>
+        </RelatedIdeologies>
+        <HistoricalContext>Cornerstone of capitalist economic system</HistoricalContext>
+    </Law>
+
+    <Law>
+        <ID>LAW004</ID>
+        <Name>Free Market</Name>
+        <Description>Legal framework enabling unregulated market exchange and competition</Description>
+        <Type>Economic</Type>
+        <EnforcementMechanism>
+            <Institution>Courts</Institution>
+            <Institution>Regulatory agencies</Institution>
+            <Method>Contract enforcement</Method>
+            <Method>Limited oversight</Method>
+            <Penalty>Civil litigation</Penalty>
+            <Penalty>Administrative fines</Penalty>
+        </EnforcementMechanism>
+        <ClassEffects>
+            <ClassEffect>
+                <TargetClass>Bourgeoisie</TargetClass>
+                <Impact>Freedom to exploit market advantages</Impact>
+            </ClassEffect>
+            <ClassEffect>
+                <TargetClass>Working Class</TargetClass>
+                <Impact>Exposure to market volatility and exploitation</Impact>
+            </ClassEffect>
+        </ClassEffects>
+        <SocialImpact>
+            <Economic>Market-driven resource allocation and inequality</Economic>
+            <Political>Corporate influence over policy</Political>
+            <Social>Commodification of social relations</Social>
+        </SocialImpact>
+        <RelatedIdeologies>
+            <Ideology>Neoliberalism</Ideology>
+            <Ideology>Capitalism</Ideology>
+        </RelatedIdeologies>
+        <HistoricalContext>Emerged with industrial capitalism and expanded under neoliberalism</HistoricalContext>
+    </Law>
+
+    <Law>
+        <ID>LAW005</ID>
+        <Name>Gun Ownership</Name>
+        <Description>Constitutional and statutory rights regarding firearms possession</Description>
+        <Type>Constitutional</Type>
+        <EnforcementMechanism>
+            <Institution>Courts</Institution>
+            <Institution>Inst002</Institution>
+            <Method>Licensing</Method>
+            <Method>Background checks</Method>
+            <Method>Registration</Method>
+            <Penalty>Criminal prosecution</Penalty>
+            <Penalty>License revocation</Penalty>
+        </EnforcementMechanism>
+        <ClassEffects>
+            <ClassEffect>
+                <TargetClass>Rural Communities</TargetClass>
+                <Impact>Cultural identification with gun rights</Impact>
+            </ClassEffect>
+            <ClassEffect>
+                <TargetClass>Urban Working Class</TargetClass>
+                <Impact>Stricter regulation and enforcement</Impact>
+            </ClassEffect>
+        </ClassEffects>
+        <SocialImpact>
+            <Economic>Large firearms industry influence</Economic>
+            <Political>Intense political polarization</Political>
+            <Social>Cultural divisions and safety concerns</Social>
+        </SocialImpact>
+        <RelatedIdeologies>
+            <Ideology>Conservatism</Ideology>
+            <Ideology>Libertarianism</Ideology>
+        </RelatedIdeologies>
+        <HistoricalContext>Rooted in historical militia rights and modern interpretations</HistoricalContext>
+    </Law>
+</Laws>
