@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Character>
+    <!-- Basic Information -->
+    <Name>Sarah Martinez</Name>
+    <Age>28</Age>
+    <Gender>Woman</Gender>
+    <Biography>Sarah is a rising labor organizer in the healthcare sector, working as a medical technician while building worker power from within. Under Emma Goldman's mentorship, she has become increasingly effective at organizing her fellow workers and understanding the broader implications of labor struggle.</Biography>
+
+    <!-- Class and Economic Factors -->
+    <Class>Working class</Class>
+    <Occupation>Medical Technician</Occupation>
+    <IncomeLevel>38000</IncomeLevel>
+    <PropertyOwned>None</PropertyOwned>
+
+    <!-- Relationships -->
+    <Relationships>
+        <Relationship>
+            <TargetCharacter>Emma Goldman</TargetCharacter>
+            <Type>Mentee</Type>
+            <Strength>90</Strength>
+        </Relationship>
+    </Relationships>
+
+    <!-- Ideological Alignment -->
+    <Ideology>Socialist Labor Organizing</Ideology>
+    <Beliefs>
+        <Belief>
+            <Belief>Worker Rights</Belief>
+            <Intensity>90</Intensity>
+        </Belief>
+        <Belief>
+            <Belief>Healthcare Justice</Belief>
+            <Intensity>85</Intensity>
+        </Belief>
+    </Beliefs>
+
+    <!-- Cultural Attributes -->
+    <Culture>Mexican American</Culture>
+    <LanguagesSpoken>
+        <Language>English</Language>
+        <Language>Spanish</Language>
+    </LanguagesSpoken>
+    <Customs>
+        <Custom>First Generation American</Custom>
+        <Custom>Healthcare Worker</Custom>
+    </Customs>
+
+    <!-- Skills and Capabilities -->
+    <Skills>
+        <Skill>
+            <Name>Medical Technology</Name>
+            <Level>80</Level>
+        </Skill>
+        <Skill>
+            <Name>Organizing</Name>
+            <Level>75</Level>
+        </Skill>
+        <Skill>
+            <Name>Bilingual Communication</Name>
+            <Level>85</Level>
+        </Skill>
+    </Skills>
+
+    <!-- Faction Membership -->
+    <FactionMembership>
+        <Faction>Healthcare Workers United</Faction>
+        <Role>Shop Steward</Role>
+        <Loyalty>85</Loyalty>
+    </FactionMembership>
+
+    <!-- Contradictions -->
+    <Contradictions>
+        <Contradiction>
+            <Type>Career Risk</Type>
+            <Impact>Fear of retaliation for union activities</Impact>
+        </Contradiction>
+        <Contradiction>
+            <Type>Family Pressure</Type>
+            <Impact>Balancing activism with family expectations</Impact>
+        </Contradiction>
+    </Contradictions>
+</Character>

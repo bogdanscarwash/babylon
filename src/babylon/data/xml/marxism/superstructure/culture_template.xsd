@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- culture.xsd -->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+
+  <!-- Root Element: Cultures -->
+  <xs:element name="Cultures">
+    <xs:complexType>
+      <xs:sequence>
+        <!-- Multiple Culture Elements -->
+        <xs:element name="Culture" type="CultureType" maxOccurs="unbounded"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- Culture Type -->
+  <xs:complexType name="CultureType">
+    <xs:sequence>
+      <!-- Basic Information -->
+      <xs:element name="ID" type="xs:string"/>
+      <xs:element name="Name" type="xs:string"/>
+      <xs:element name="Description" type="xs:string" minOccurs="0"/>
+      <xs:element name="HistoricalContext" type="xs:string" minOccurs="0"/>
+
+      <!-- Cultural Expressions -->
+      <xs:element name="CulturalExpressions">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="Expression" type="ExpressionType" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+
+      <!-- Associated Ideologies -->
+      <xs:element name="AssociatedIdeologies" minOccurs="0">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="IdeologyID" type="xs:string" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+
+      <!-- Associated Classes -->
+      <xs:element name="AssociatedClasses" minOccurs="0">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="ClassID" type="xs:string" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+
+      <!-- Values and Norms -->
+      <xs:element name="ValuesAndNorms">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="Value" type="xs:string" maxOccurs="unbounded"/>
+            <xs:element name="Norm" type="xs:string" maxOccurs="unbounded" minOccurs="0"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+
+      <!-- Traditions and Customs -->
+      <xs:element name="TraditionsAndCustoms" minOccurs="0">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="Tradition" type="xs:string" maxOccurs="unbounded"/>
+            <xs:element name="Custom" type="xs:string" maxOccurs="unbounded" minOccurs="0"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+
+      <!-- Influence on Game Elements -->
+      <xs:element name="Effects">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="Effect" type="EffectType" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+
+      <!-- Contradictions with Other Cultures -->
+      <xs:element name="ContradictsCultures" minOccurs="0">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="CultureID" type="xs:string" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+
+      <!-- Attributes -->
+      <xs:element name="Attributes" minOccurs="0">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="Attribute" type="AttributeType" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Expression Type -->
+  <xs:complexType name="ExpressionType">
+    <xs:sequence>
+      <xs:element name="Type" type="xs:string"/> <!-- e.g., Art, Music, Literature -->
+      <xs:element name="Name" type="xs:string"/>
+      <xs:element name="Description" type="xs:string" minOccurs="0"/>
+      <xs:element name="Creator" type="xs:string" minOccurs="0"/> <!-- CharacterID or Group -->
+      <xs:element name="Influence" type="xs:string" minOccurs="0"/> <!-- Low, Medium, High -->
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Effect Type -->
+  <xs:complexType name="EffectType">
+    <xs:sequence>
+      <xs:element name="Target" type="xs:string"/> <!-- e.g., Faction, Class, Character, Institution -->
+      <xs:element name="Attribute" type="xs:string"/> <!-- Attribute to be affected -->
+      <xs:element name="ModificationType" type="xs:string"/> <!-- Increase, Decrease, Change -->
+      <xs:element name="Value" type="xs:decimal" minOccurs="0"/>
+      <xs:element name="Description" type="xs:string" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Attribute Type -->
+  <xs:complexType name="AttributeType">
+    <xs:sequence>
+      <xs:element name="Name" type="xs:string"/>
+      <xs:element name="Value" type="xs:string"/>
+    </xs:sequence>
+  </xs:complexType>
+
+</xs:schema>

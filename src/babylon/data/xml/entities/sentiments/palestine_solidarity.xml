@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<PublicSentiments>
+    <Region>International Community</Region>
+    <TimeFrame>Palestine Aid Crisis Period</TimeFrame>
+    
+    <Sentiments>
+        <Sentiment>
+            <Type>Solidarity</Type>
+            <Magnitude>85</Magnitude>
+            <Target>Palestine Movement</Target>
+            <Reason>Humanitarian crisis and military aid controversy</Reason>
+            <Dynamics>
+                <ChangeRate>4.0</ChangeRate>
+                <Stability>Transitional</Stability>
+            </Dynamics>
+        </Sentiment>
+        <Sentiment>
+            <Type>Discontent</Type>
+            <Magnitude>80</Magnitude>
+            <Target>Military Aid Policies</Target>
+            <Reason>International law violations and civilian casualties</Reason>
+            <Dynamics>
+                <ChangeRate>2.5</ChangeRate>
+                <Stability>Stable</Stability>
+            </Dynamics>
+        </Sentiment>
+    </Sentiments>
+    
+    <Influences>
+        <Influence>
+            <Source>Maoist Faction</Source>
+            <Type>International Solidarity Campaign</Type>
+            <Impact>75</Impact>
+        </Influence>
+        <Influence>
+            <Source>Socialist Movement</Source>
+            <Type>Anti-War Demonstrations</Type>
+            <Impact>70</Impact>
+        </Influence>
+    </Influences>
+    
+    <Outcomes>
+        <Outcome>
+            <Type>Cultural Shift</Type>
+            <Magnitude>90</Magnitude>
+            <Description>Widespread support for Palestinian rights and humanitarian aid reform</Description>
+        </Outcome>
+    </Outcomes>
+</PublicSentiments>

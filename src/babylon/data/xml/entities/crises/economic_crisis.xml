@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Crisis>
+    <ID>CRISIS_003</ID>
+    <Name>Wealth Tax Rebellion</Name>
+    <Description>Economic crisis triggered by capital flight and market manipulation in response to wealth tax implementation, leading to class tensions and economic instability.</Description>
+    <Type>Economic</Type>
+    
+    <Participants>
+        <FactionID>SOCIALIST_MOVEMENT</FactionID>
+        <FactionID>FASCIST_FACTION</FactionID>
+        <FactionID>LUMPENPROLETARIAT</FactionID>
+    </Participants>
+    
+    <Triggers>
+        <Trigger>
+            <Type>Policy Implementation</Type>
+            <Description>Introduction of progressive wealth tax</Description>
+        </Trigger>
+        <Trigger>
+            <Type>Market Response</Type>
+            <Description>Coordinated capital flight and market manipulation</Description>
+        </Trigger>
+    </Triggers>
+    
+    <Contradictions>
+        <Contradiction>
+            <WithFactionID>FASCIST_FACTION</WithFactionID>
+            <Nature>Class Warfare</Nature>
+            <Intensity>Severe</Intensity>
+        </Contradiction>
+        <Contradiction>
+            <WithFactionID>LUMPENPROLETARIAT</WithFactionID>
+            <Nature>Economic Survival vs System Stability</Nature>
+            <Intensity>High</Intensity>
+        </Contradiction>
+    </Contradictions>
+    
+    <Resolutions>
+        <Resolution>
+            <Type>Economic Reform</Type>
+            <Description>Emergency economic measures and capital controls</Description>
+            <Outcome>Pending</Outcome>
+        </Resolution>
+        <Resolution>
+            <Type>Class Struggle</Type>
+            <Description>Mass strikes and economic disruption</Description>
+            <Outcome>Pending</Outcome>
+        </Resolution>
+    </Resolutions>
+    
+    <Impact>
+        <FactionImpact>
+            <FactionID>SOCIALIST_MOVEMENT</FactionID>
+            <Effect>Popular Support Surge</Effect>
+            <Magnitude>High</Magnitude>
+        </FactionImpact>
+        <WorldImpact>
+            <Effect>Economic System Destabilization</Effect>
+            <Magnitude>Severe</Magnitude>
+            <Description>Fundamental challenge to existing economic order and class relations</Description>
+        </WorldImpact>
+    </Impact>
+</Crisis>

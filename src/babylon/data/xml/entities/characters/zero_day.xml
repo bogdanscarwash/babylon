@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Character>
+    <!-- Basic Information -->
+    <Name>Zero Day</Name>
+    <Age>Unknown</Age>
+    <Gender>Unknown</Gender>
+    <Biography>Zero Day is a mysterious hacktivist and privacy advocate known for exposing corporate surveillance and privacy violations. Their true identity remains unknown, but their technical expertise and commitment to digital rights have made them a significant force in the resistance against tech industry overreach.</Biography>
+
+    <!-- Class and Economic Factors -->
+    <Class>Unknown</Class>
+    <Occupation>Hacktivist</Occupation>
+    <IncomeLevel>Unknown</IncomeLevel>
+    <PropertyOwned>Unknown</PropertyOwned>
+
+    <!-- Relationships -->
+    <Relationships>
+        <Relationship>
+            <TargetCharacter>Victoria Chen</TargetCharacter>
+            <Type>Ideological Opponent</Type>
+            <Strength>-85</Strength>
+        </Relationship>
+    </Relationships>
+
+    <!-- Ideological Alignment -->
+    <Ideology>Digital Liberation</Ideology>
+    <Beliefs>
+        <Belief>
+            <Belief>Privacy Rights</Belief>
+            <Intensity>100</Intensity>
+        </Belief>
+        <Belief>
+            <Belief>Anti-Corporate Surveillance</Belief>
+            <Intensity>95</Intensity>
+        </Belief>
+    </Beliefs>
+
+    <!-- Cultural Attributes -->
+    <Culture>Digital Underground</Culture>
+    <LanguagesSpoken>
+        <Language>Multiple Programming Languages</Language>
+    </LanguagesSpoken>
+    <Customs>
+        <Custom>Anonymity</Custom>
+        <Custom>Hacker Ethics</Custom>
+    </Customs>
+
+    <!-- Skills and Capabilities -->
+    <Skills>
+        <Skill>
+            <Name>Cyber Security</Name>
+            <Level>95</Level>
+        </Skill>
+        <Skill>
+            <Name>Network Infiltration</Name>
+            <Level>90</Level>
+        </Skill>
+        <Skill>
+            <Name>Digital Forensics</Name>
+            <Level>88</Level>
+        </Skill>
+    </Skills>
+
+    <!-- Faction Membership -->
+    <FactionMembership>
+        <Faction>Digital Rights Underground</Faction>
+        <Role>Anonymous Operative</Role>
+        <Loyalty>95</Loyalty>
+    </FactionMembership>
+
+    <!-- Contradictions -->
+    <Contradictions>
+        <Contradiction>
+            <Type>Methods vs Ethics</Type>
+            <Impact>Balancing illegal actions with moral imperatives</Impact>
+        </Contradiction>
+        <Contradiction>
+            <Type>Identity Protection</Type>
+            <Impact>Isolation required to maintain anonymity</Impact>
+        </Contradiction>
+    </Contradictions>
+</Character>

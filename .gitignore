@@ -1,0 +1,24 @@
+# Virtual Environment
+.venv*
+.venv-babylon*
+
+# IDE
+.vscode*
+.aider*
+
+# Environment Variables & Secrets
+.env
+*.env
+.env.local
+.env.development
+.env.test
+.env.production
+
+# Logs and Databases
+*.log
+*.sqlite3
+
+# Tool Configuration
+.continue*
+.continuerules
+.continuerc.json

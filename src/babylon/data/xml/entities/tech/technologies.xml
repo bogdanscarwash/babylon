@@ -1,0 +1,161 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Technologies>
+    <!-- Advanced Manufacturing Automation -->
+    <Technology>
+        <ID>T001</ID>
+        <Name>Advanced Manufacturing Automation</Name>
+        <Category>Economic</Category>
+        <Description>Cutting-edge robotics and AI systems for automotive manufacturing</Description>
+        <PrerequisiteTechnologies>
+            <TechnologyID>T004</TechnologyID> <!-- Semiconductor Manufacturing -->
+        </PrerequisiteTechnologies>
+        <RequiredResources>
+            <ResourceRequirement>
+                <ResourceID>SEMI001</ResourceID> <!-- Semiconductors -->
+                <Quantity>100</Quantity>
+            </ResourceRequirement>
+        </RequiredResources>
+        <ResearchCost>5000.00</ResearchCost>
+        <ResearchTime>360</ResearchTime>
+        <Effects>
+            <Effect>
+                <Target>AutoFactory</Target>
+                <Attribute>ProductionEfficiency</Attribute>
+                <ModificationType>Increase</ModificationType>
+                <Value>0.35</Value>
+                <Description>35% increase in automobile production efficiency</Description>
+            </Effect>
+            <Effect>
+                <Target>LaborForce</Target>
+                <Attribute>RequiredWorkers</Attribute>
+                <ModificationType>Decrease</ModificationType>
+                <Value>0.25</Value>
+                <Description>25% reduction in required workforce</Description>
+            </Effect>
+        </Effects>
+        <AvailableToClasses>
+            <ClassID>BOURGEOISIE</ClassID>
+        </AvailableToClasses>
+    </Technology>
+
+    <!-- Precision Agriculture -->
+    <Technology>
+        <ID>T002</ID>
+        <Name>Precision Agriculture Systems</Name>
+        <Category>Economic</Category>
+        <Description>AI-driven farming systems with automated irrigation and harvest optimization</Description>
+        <RequiredResources>
+            <ResourceRequirement>
+                <ResourceID>CHIP001</ResourceID> <!-- Computer Chips -->
+                <Quantity>50</Quantity>
+            </ResourceRequirement>
+        </RequiredResources>
+        <ResearchCost>3000.00</ResearchCost>
+        <ResearchTime>240</ResearchTime>
+        <Effects>
+            <Effect>
+                <Target>WheatProduction</Target>
+                <Attribute>YieldRate</Attribute>
+                <ModificationType>Increase</ModificationType>
+                <Value>0.25</Value>
+                <Description>25% increase in wheat yield per acre</Description>
+            </Effect>
+            <Effect>
+                <Target>ResourceConsumption</Target>
+                <Attribute>WaterUsage</Attribute>
+                <ModificationType>Decrease</ModificationType>
+                <Value>0.20</Value>
+                <Description>20% reduction in water consumption</Description>
+            </Effect>
+        </Effects>
+    </Technology>
+
+    <!-- Advanced Semiconductor Fabrication -->
+    <Technology>
+        <ID>T003</ID>
+        <Name>Advanced Semiconductor Fabrication</Name>
+        <Category>Economic</Category>
+        <Description>Next-generation semiconductor manufacturing processes</Description>
+        <RequiredResources>
+            <ResourceRequirement>
+                <ResourceID>SEMI001</ResourceID>
+                <Quantity>200</Quantity>
+            </ResourceRequirement>
+        </RequiredResources>
+        <ResearchCost>8000.00</ResearchCost>
+        <ResearchTime>480</ResearchTime>
+        <Effects>
+            <Effect>
+                <Target>SemiconductorProduction</Target>
+                <Attribute>Quality</Attribute>
+                <ModificationType>Increase</ModificationType>
+                <Value>0.40</Value>
+                <Description>40% increase in semiconductor quality and complexity</Description>
+            </Effect>
+            <Effect>
+                <Target>ProductionCost</Target>
+                <Attribute>Cost</Attribute>
+                <ModificationType>Decrease</ModificationType>
+                <Value>0.30</Value>
+                <Description>30% reduction in production costs</Description>
+            </Effect>
+        </Effects>
+    </Technology>
+
+    <!-- Solar Panel Efficiency -->
+    <Technology>
+        <ID>T004</ID>
+        <Name>High-Efficiency Solar Technology</Name>
+        <Category>Economic</Category>
+        <Description>Advanced photovoltaic materials and manufacturing techniques</Description>
+        <RequiredResources>
+            <ResourceRequirement>
+                <ResourceID>SEMI001</ResourceID>
+                <Quantity>150</Quantity>
+            </ResourceRequirement>
+        </RequiredResources>
+        <ResearchCost>4000.00</ResearchCost>
+        <ResearchTime>300</ResearchTime>
+        <Effects>
+            <Effect>
+                <Target>SolarPanelProduction</Target>
+                <Attribute>Efficiency</Attribute>
+                <ModificationType>Increase</ModificationType>
+                <Value>0.30</Value>
+                <Description>30% increase in solar panel energy conversion efficiency</Description>
+            </Effect>
+        </Effects>
+    </Technology>
+
+    <!-- Advanced Steel Processing -->
+    <Technology>
+        <ID>T005</ID>
+        <Name>Advanced Steel Processing</Name>
+        <Category>Economic</Category>
+        <Description>Enhanced steel production methods with reduced environmental impact</Description>
+        <RequiredResources>
+            <ResourceRequirement>
+                <ResourceID>IRON001</ResourceID>
+                <Quantity>500</Quantity>
+            </ResourceRequirement>
+        </RequiredResources>
+        <ResearchCost>3500.00</ResearchCost>
+        <ResearchTime>270</ResearchTime>
+        <Effects>
+            <Effect>
+                <Target>SteelProduction</Target>
+                <Attribute>Quality</Attribute>
+                <ModificationType>Increase</ModificationType>
+                <Value>0.25</Value>
+                <Description>25% increase in steel quality</Description>
+            </Effect>
+            <Effect>
+                <Target>Emissions</Target>
+                <Attribute>CarbonOutput</Attribute>
+                <ModificationType>Decrease</ModificationType>
+                <Value>0.35</Value>
+                <Description>35% reduction in carbon emissions</Description>
+            </Effect>
+        </Effects>
+    </Technology>
+</Technologies>

@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Policy>
+    <Name>Enhanced Domestic Surveillance Act</Name>
+    <Description>Expansion of state surveillance powers over social movements and protests</Description>
+    <Category>Political</Category>
+    <Origin>Federal Government</Origin>
+    <EnactmentDate>2024-06-01T00:00:00</EnactmentDate>
+
+    <Objectives>
+        <Objective>
+            <Description>Monitor and track protest movements</Description>
+            <Priority>1</Priority>
+        </Objective>
+        <Objective>
+            <Description>Predict and prevent mass demonstrations</Description>
+            <Priority>2</Priority>
+        </Objective>
+    </Objectives>
+
+    <Implementation>
+        <Stage>
+            <Name>Digital Infrastructure Setup</Name>
+            <StartDate>2024-06-01T00:00:00</StartDate>
+            <EndDate>2024-08-01T00:00:00</EndDate>
+            <Cost>500000000</Cost>
+            <RequiredResources>
+                <Resource>
+                    <Name>AI Systems</Name>
+                    <Quantity>1000</Quantity>
+                </Resource>
+            </RequiredResources>
+        </Stage>
+    </Implementation>
+
+    <Effects>
+        <Effect>
+            <Type>Political</Type>
+            <Description>Increased tension between state and protest movements</Description>
+            <ImpactStrength>8</ImpactStrength>
+            <Target>All Social Movements</Target>
+        </Effect>
+        <Effect>
+            <Type>Social</Type>
+            <Description>Chilling effect on public protests</Description>
+            <ImpactStrength>7</ImpactStrength>
+            <Target>Civil Society</Target>
+        </Effect>
+    </Effects>
+
+    <Contradictions>
+        <Contradiction>
+            <Description>Civil liberties versus state control</Description>
+            <Severity>9</Severity>
+            <ResolutionPlan>Gradual implementation with oversight</ResolutionPlan>
+        </Contradiction>
+    </Contradictions>
+</Policy>

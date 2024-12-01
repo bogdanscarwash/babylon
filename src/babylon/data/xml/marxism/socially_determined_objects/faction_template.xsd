@@ -1,0 +1,215 @@
+<!-- faction.xsd -->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+
+  <!-- Root Element: Faction -->
+  <xs:element name="Faction">
+    <xs:complexType>
+      <xs:sequence>
+        <!-- Basic Information -->
+        <xs:element name="ID">
+          <xs:annotation>
+            <xs:documentation>Format: F### (e.g., F001)</xs:documentation>
+          </xs:annotation>
+          <xs:simpleType>
+            <xs:restriction base="xs:string">
+              <xs:pattern value="F[0-9]{3}"/>
+              <xs:minLength value="4"/>
+              <xs:maxLength value="4"/>
+            </xs:restriction>
+          </xs:simpleType>
+        </xs:element>
+        <xs:element name="Name" type="xs:string"/>
+        <xs:element name="Description" type="xs:string"/>
+        <xs:element name="Ideology" type="xs:string"/>
+
+        <!-- Class Composition -->
+        <xs:element name="ClassComposition">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="Class" maxOccurs="unbounded">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="ClassID">
+                      <xs:simpleType>
+                        <xs:restriction base="xs:string">
+                          <xs:pattern value="C[0-9]{3}"/>
+                        </xs:restriction>
+                      </xs:simpleType>
+                    </xs:element>
+                    <xs:element name="Percentage" type="xs:decimal"/>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+
+        <!-- Economic Base -->
+        <xs:element name="EconomicBase">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="ModeOfProduction" type="xs:string"/>
+              <xs:element name="Resources">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="Resource" type="ResourceType" maxOccurs="unbounded"/>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+
+        <!-- Strategic Doctrine -->
+        <xs:element name="StrategicDoctrine">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="PoliticalStrategy" type="xs:string"/>
+              <xs:element name="MilitaryStrategy" type="xs:string"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+
+        <!-- Dialectical Relationships (Contradictions) -->
+        <xs:element name="DialecticalRelationships">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="Contradiction" type="ContradictionType" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+
+        <!-- Historical Development -->
+        <xs:element name="HistoricalDevelopment" type="xs:string"/>
+
+        <!-- Leader Information -->
+        <xs:element name="Leader">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="Name" type="xs:string"/>
+              <xs:element name="Background" type="xs:string"/>
+              <xs:element name="Traits">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="Trait" type="xs:string" maxOccurs="unbounded"/>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+
+        <!-- Alliances and Enemies -->
+        <xs:element name="Alliances" minOccurs="0">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="FactionID">
+                <xs:simpleType>
+                  <xs:restriction base="xs:string">
+                    <xs:pattern value="F[0-9]{3}"/>
+                  </xs:restriction>
+                </xs:simpleType>
+              </xs:element>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+
+        <xs:element name="Enemies" minOccurs="0">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="FactionID" type="xs:string" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+
+        <!-- Influence -->
+        <xs:element name="Influence">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="Region" type="RegionType" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+
+        <!-- Military Details -->
+        <xs:element name="Military">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="Strength" type="xs:integer"/>
+              <xs:element name="Units">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="Unit" type="UnitType" maxOccurs="unbounded"/>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+
+        <!-- Attributes -->
+        <xs:element name="Attributes">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="Attribute" type="AttributeType" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- Complex Types Definitions -->
+
+  <!-- Class Type -->
+  <xs:complexType name="ClassType">
+    <xs:sequence>
+      <xs:element name="Name" type="xs:string"/>
+      <xs:element name="Percentage" type="xs:decimal"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Resource Type -->
+  <xs:complexType name="ResourceType">
+    <xs:sequence>
+      <xs:element name="Type" type="xs:string"/>
+      <xs:element name="Quantity" type="xs:integer"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Contradiction Type -->
+  <xs:complexType name="ContradictionType">
+    <xs:sequence>
+      <xs:element name="WithFactionID" type="xs:string"/>
+      <xs:element name="Nature" type="xs:string"/> <!-- e.g., Antagonistic, Non-Antagonistic -->
+      <xs:element name="Intensity" type="xs:string"/> <!-- e.g., Low, Medium, High -->
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Region Type -->
+  <xs:complexType name="RegionType">
+    <xs:sequence>
+      <xs:element name="Name" type="xs:string"/>
+      <xs:element name="ControlLevel" type="xs:string"/> <!-- e.g., Low, Medium, High -->
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Unit Type -->
+  <xs:complexType name="UnitType">
+    <xs:sequence>
+      <xs:element name="Name" type="xs:string"/>
+      <xs:element name="Type" type="xs:string"/> <!-- e.g., Infantry, Armored -->
+      <xs:element name="Strength" type="xs:integer"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Attribute Type -->
+  <xs:complexType name="AttributeType">
+    <xs:sequence>
+      <xs:element name="Name" type="xs:string"/>
+      <xs:element name="Value" type="xs:string"/>
+    </xs:sequence>
+  </xs:complexType>
+
+</xs:schema>

@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Character>
+    <!-- Basic Information -->
+    <Name>Colonel Richard Blackwood</Name>
+    <Age>52</Age>
+    <Gender>Man</Gender>
+    <Biography>Colonel Blackwood is a career military officer with strong nationalist views. He maintains significant influence within military circles and has formed strategic alliances with wealthy conservatives like Robert Sterling to advance their shared political agenda.</Biography>
+
+    <!-- Class and Economic Factors -->
+    <Class>Military Elite</Class>
+    <Occupation>Military Officer</Occupation>
+    <IncomeLevel>120000</IncomeLevel>
+    <PropertyOwned>Military pension, residential property</PropertyOwned>
+
+    <!-- Relationships -->
+    <Relationships>
+        <Relationship>
+            <TargetCharacter>Robert Sterling</TargetCharacter>
+            <Type>Strategic Alliance</Type>
+            <Strength>75</Strength>
+        </Relationship>
+    </Relationships>
+
+    <!-- Ideological Alignment -->
+    <Ideology>Military Nationalism</Ideology>
+    <Beliefs>
+        <Belief>
+            <Belief>Military Supremacy</Belief>
+            <Intensity>95</Intensity>
+        </Belief>
+        <Belief>
+            <Belief>National Security</Belief>
+            <Intensity>90</Intensity>
+        </Belief>
+    </Beliefs>
+
+    <!-- Cultural Attributes -->
+    <Culture>White American</Culture>
+    <LanguagesSpoken>
+        <Language>English</Language>
+    </LanguagesSpoken>
+    <Customs>
+        <Custom>Military Tradition</Custom>
+        <Custom>Conservative Elite</Custom>
+    </Customs>
+
+    <!-- Skills and Capabilities -->
+    <Skills>
+        <Skill>
+            <Name>Military Strategy</Name>
+            <Level>90</Level>
+        </Skill>
+        <Skill>
+            <Name>Political Networking</Name>
+            <Level>85</Level>
+        </Skill>
+        <Skill>
+            <Name>Command Leadership</Name>
+            <Level>88</Level>
+        </Skill>
+    </Skills>
+
+    <!-- Faction Membership -->
+    <FactionMembership>
+        <Faction>Military Command Structure</Faction>
+        <Role>Senior Officer</Role>
+        <Loyalty>95</Loyalty>
+    </FactionMembership>
+
+    <!-- Contradictions -->
+    <Contradictions>
+        <Contradiction>
+            <Type>Loyalty Conflicts</Type>
+            <Impact>Balancing military duty with political ambitions</Impact>
+        </Contradiction>
+        <Contradiction>
+            <Type>Power Dynamics</Type>
+            <Impact>Tension between military authority and civilian oversight</Impact>
+        </Contradiction>
+    </Contradictions>
+</Character>

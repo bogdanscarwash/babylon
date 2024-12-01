@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Character>
+    <!-- Basic Information -->
+    <Name>Emma Goldman</Name>
+    <Age>45</Age>
+    <Gender>Woman</Gender>
+    <Biography>Emma is a veteran labor organizer and nurse who has spent decades building worker power in healthcare. She leads organizing efforts at several hospitals and serves as a mentor to younger organizers like Sarah Martinez. Her experience in both healthcare and labor organizing makes her a respected figure in the movement.</Biography>
+
+    <!-- Class and Economic Factors -->
+    <Class>Working class</Class>
+    <Occupation>Nurse and Union Organizer</Occupation>
+    <IncomeLevel>65000</IncomeLevel>
+    <PropertyOwned>None</PropertyOwned>
+
+    <!-- Relationships -->
+    <Relationships>
+        <Relationship>
+            <TargetCharacter>Sarah Martinez</TargetCharacter>
+            <Type>Union Mentor</Type>
+            <Strength>90</Strength>
+        </Relationship>
+    </Relationships>
+
+    <!-- Ideological Alignment -->
+    <Ideology>Revolutionary Syndicalism</Ideology>
+    <Beliefs>
+        <Belief>
+            <Belief>Worker Power</Belief>
+            <Intensity>95</Intensity>
+        </Belief>
+        <Belief>
+            <Belief>Healthcare Justice</Belief>
+            <Intensity>90</Intensity>
+        </Belief>
+    </Beliefs>
+
+    <!-- Cultural Attributes -->
+    <Culture>Jewish American</Culture>
+    <LanguagesSpoken>
+        <Language>English</Language>
+        <Language>Yiddish</Language>
+    </LanguagesSpoken>
+    <Customs>
+        <Custom>Labor Activist</Custom>
+        <Custom>Healthcare Worker</Custom>
+    </Customs>
+
+    <!-- Skills and Capabilities -->
+    <Skills>
+        <Skill>
+            <Name>Labor Organizing</Name>
+            <Level>90</Level>
+        </Skill>
+        <Skill>
+            <Name>Nursing</Name>
+            <Level>85</Level>
+        </Skill>
+        <Skill>
+            <Name>Negotiation</Name>
+            <Level>85</Level>
+        </Skill>
+    </Skills>
+
+    <!-- Faction Membership -->
+    <FactionMembership>
+        <Faction>Healthcare Workers United</Faction>
+        <Role>Lead Organizer</Role>
+        <Loyalty>95</Loyalty>
+    </FactionMembership>
+
+    <!-- Contradictions -->
+    <Contradictions>
+        <Contradiction>
+            <Type>Work Stress</Type>
+            <Impact>Balancing healthcare duties with organizing responsibilities</Impact>
+        </Contradiction>
+        <Contradiction>
+            <Type>Institutional Pressure</Type>
+            <Impact>Facing potential retaliation for union activities</Impact>
+        </Contradiction>
+    </Contradictions>
+</Character>

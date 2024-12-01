@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Character>
+    <!-- Basic Information -->
+    <Name>Victoria Chen</Name>
+    <Age>42</Age>
+    <Gender>Woman</Gender>
+    <Biography>Victoria is a prominent tech executive and AI researcher who champions the development of artificial intelligence without regulatory constraints. Her corporate success and technological vision put her in direct ideological conflict with privacy advocates and tech critics like Zero Day.</Biography>
+
+    <!-- Class and Economic Factors -->
+    <Class>Bourgeoisie</Class>
+    <Occupation>Tech Executive / AI Researcher</Occupation>
+    <IncomeLevel>850000</IncomeLevel>
+    <PropertyOwned>Multiple properties, stock options</PropertyOwned>
+
+    <!-- Relationships -->
+    <Relationships>
+        <Relationship>
+            <TargetCharacter>Zero Day</TargetCharacter>
+            <Type>Ideological Opponent</Type>
+            <Strength>-85</Strength>
+        </Relationship>
+    </Relationships>
+
+    <!-- Ideological Alignment -->
+    <Ideology>Techno-capitalism</Ideology>
+    <Beliefs>
+        <Belief>
+            <Belief>Technological Progress</Belief>
+            <Intensity>95</Intensity>
+        </Belief>
+        <Belief>
+            <Belief>Free Market Innovation</Belief>
+            <Intensity>90</Intensity>
+        </Belief>
+    </Beliefs>
+
+    <!-- Cultural Attributes -->
+    <Culture>Chinese American</Culture>
+    <LanguagesSpoken>
+        <Language>English</Language>
+        <Language>Mandarin</Language>
+    </LanguagesSpoken>
+    <Customs>
+        <Custom>Silicon Valley Elite</Custom>
+        <Custom>Tech Industry Leader</Custom>
+    </Customs>
+
+    <!-- Skills and Capabilities -->
+    <Skills>
+        <Skill>
+            <Name>AI Development</Name>
+            <Level>95</Level>
+        </Skill>
+        <Skill>
+            <Name>Corporate Leadership</Name>
+            <Level>90</Level>
+        </Skill>
+        <Skill>
+            <Name>Strategic Planning</Name>
+            <Level>88</Level>
+        </Skill>
+    </Skills>
+
+    <!-- Faction Membership -->
+    <FactionMembership>
+        <Faction>Tech Industry Alliance</Faction>
+        <Role>Board Member</Role>
+        <Loyalty>95</Loyalty>
+    </FactionMembership>
+
+    <!-- Contradictions -->
+    <Contradictions>
+        <Contradiction>
+            <Type>Ethical Conflicts</Type>
+            <Impact>Tension between profit motives and societal impact of AI</Impact>
+        </Contradiction>
+        <Contradiction>
+            <Type>Public Image</Type>
+            <Impact>Managing corporate interests while facing privacy advocacy criticism</Impact>
+        </Contradiction>
+    </Contradictions>
+</Character>

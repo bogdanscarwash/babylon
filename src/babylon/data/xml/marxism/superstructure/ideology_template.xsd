@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- ideology.xsd -->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+
+  <!-- Root Element: Ideologies -->
+  <xs:element name="Ideologies">
+    <xs:complexType>
+      <xs:sequence>
+        <!-- Multiple Ideology Elements -->
+        <xs:element name="Ideology" type="IdeologyType" maxOccurs="unbounded"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- Ideology Type -->
+  <xs:complexType name="IdeologyType">
+    <xs:sequence>
+      <!-- Basic Information -->
+      <xs:element name="ID" type="xs:string"/>
+      <xs:element name="Name" type="xs:string"/>
+      <xs:element name="Description" type="xs:string" minOccurs="0"/>
+      <xs:element name="HistoricalContext" type="xs:string" minOccurs="0"/>
+
+      <!-- Core Principles -->
+      <xs:element name="CorePrinciples">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="Principle" type="xs:string" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+
+      <!-- Associated Entities -->
+      <xs:element name="AssociatedFactions" minOccurs="0">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="FactionID" type="xs:string" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      <xs:element name="AssociatedClasses" minOccurs="0">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="ClassID" type="xs:string" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      <xs:element name="InfluentialCharacters" minOccurs="0">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="CharacterID" type="xs:string" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+
+      <!-- Effects on Game Elements -->
+      <xs:element name="Effects">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="Effect" type="EffectType" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+
+      <!-- Contradictions with Other Ideologies -->
+      <xs:element name="ContradictsIdeologies" minOccurs="0">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="IdeologyID" type="xs:string" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+
+      <!-- Influence on Superstructure Elements -->
+      <xs:element name="Influences">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="InstitutionID" type="xs:string" maxOccurs="unbounded" minOccurs="0"/>
+            <xs:element name="LawID" type="xs:string" maxOccurs="unbounded" minOccurs="0"/>
+            <xs:element name="CultureID" type="xs:string" maxOccurs="unbounded" minOccurs="0"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+
+      <!-- Attributes -->
+      <xs:element name="Attributes" minOccurs="0">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="Attribute" type="AttributeType" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Effect Type -->
+  <xs:complexType name="EffectType">
+    <xs:sequence>
+      <xs:element name="Target" type="xs:string"/> <!-- e.g., Faction, Class, Character -->
+      <xs:element name="Attribute" type="xs:string"/> <!-- Attribute to be affected -->
+      <xs:element name="ModificationType" type="xs:string"/> <!-- e.g., Increase, Decrease -->
+      <xs:element name="Value" type="xs:decimal" minOccurs="0"/> <!-- Numerical value -->
+      <xs:element name="Description" type="xs:string" minOccurs="0"/> <!-- Description of the effect -->
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Attribute Type -->
+  <xs:complexType name="AttributeType">
+    <xs:sequence>
+      <xs:element name="Name" type="xs:string"/>
+      <xs:element name="Value" type="xs:string"/>
+    </xs:sequence>
+  </xs:complexType>
+
+</xs:schema>

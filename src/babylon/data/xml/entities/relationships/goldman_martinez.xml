@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Relationships>
+    <Relationship>
+        <Source>Emma Goldman</Source>
+        <Target>Sarah Martinez</Target>
+        <Type>Union Mentor</Type>
+        <Strength>90</Strength>
+        <Dynamic>Growing</Dynamic>
+        <Influences>
+            <Influence>
+                <Type>Ideological</Type>
+                <Impact>Shared labor organizing experience strengthens mentorship</Impact>
+            </Influence>
+        </Influences>
+        <History>
+            <Event>
+                <Description>First met during hospital unionization drive</Description>
+                <Timestamp>2023-06-15T00:00:00</Timestamp>
+            </Event>
+        </History>
+    </Relationship>
+</Relationships>

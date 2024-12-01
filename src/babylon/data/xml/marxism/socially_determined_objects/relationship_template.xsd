@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" elementFormDefault="qualified">
+
+  <!-- Root element for Relationships -->
+  <xs:element name="Relationships">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="Relationship" maxOccurs="unbounded">
+          <xs:complexType>
+            <xs:sequence>
+
+              <!-- Source of the Relationship -->
+              <xs:element name="Source" type="xs:string">
+                <xs:annotation>
+                  <xs:documentation>
+                    Identifier for the source of the relationship. Could be a character, organization, group, or faction.
+                  </xs:documentation>
+                </xs:annotation>
+              </xs:element>
+
+              <!-- Target of the Relationship -->
+              <xs:element name="Target" type="xs:string">
+                <xs:annotation>
+                  <xs:documentation>
+                    Identifier for the target of the relationship. Could be a character, organization, group, or faction.
+                  </xs:documentation>
+                </xs:annotation>
+              </xs:element>
+
+              <!-- Relationship Type -->
+              <xs:element name="Type" type="xs:string">
+                <xs:annotation>
+                  <xs:documentation>
+                    Types may include: Alliance, Rivalry, Subjugation, Partnership, Dependency, Trade, Familial, Romantic, etc.
+                  </xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              
+              <!-- Strength and Dynamics -->
+              <xs:element name="Strength" type="xs:integer">
+                <xs:annotation>
+                  <xs:documentation>
+                    A numeric value representing the intensity of the relationship (e.g., trust, hostility).
+                  </xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="Dynamic" type="xs:string" minOccurs="0">
+                <xs:annotation>
+                  <xs:documentation>
+                    Describes how the relationship evolves over time (e.g., Growing, Deteriorating, Stagnant).
+                  </xs:documentation>
+                </xs:annotation>
+              </xs:element>
+
+              <!-- Influences -->
+              <xs:element name="Influences" minOccurs="0">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="Influence" maxOccurs="unbounded">
+                      <xs:complexType>
+                        <xs:sequence>
+                          <xs:element name="Type" type="xs:string">
+                            <xs:annotation>
+                              <xs:documentation>
+                                Types of influences such as Ideological, Economic, Emotional, or Political.
+                              </xs:documentation>
+                            </xs:annotation>
+                          </xs:element>
+                          <xs:element name="Impact" type="xs:string">
+                            <xs:annotation>
+                              <xs:documentation>
+                                The specific nature or outcome of the influence (e.g., Persuasion, Debt, Trust).
+                              </xs:documentation>
+                            </xs:annotation>
+                          </xs:element>
+                        </xs:sequence>
+                      </xs:complexType>
+                    </xs:element>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+
+              <!-- Historical Context -->
+              <xs:element name="History" minOccurs="0">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="Event" maxOccurs="unbounded">
+                      <xs:complexType>
+                        <xs:sequence>
+                          <xs:element name="Description" type="xs:string" />
+                          <xs:element name="Timestamp" type="xs:dateTime" />
+                        </xs:sequence>
+                      </xs:complexType>
+                    </xs:element>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+
+            </xs:sequence>
+            <xs:attribute name="IsInterGroup" type="xs:boolean" use="optional" default="false">
+              <xs:annotation>
+                <xs:documentation>
+                  Indicates whether the relationship is between groups, factions, or organizations rather than individuals.
+                </xs:documentation>
+              </xs:annotation>
+            </xs:attribute>
+          </xs:complexType>
+        </xs:element>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+</xs:schema>
