@@ -2,6 +2,8 @@ from dotenv import load_dotenv
 from config import Config
 from data.entity_registry import EntityRegistry
 from systems.contradiction_analysis import ContradictionAnalysis
+from data.models.economy import Economy
+from data.models.politics import Politics
 
 def handle_event(event, game_state):
     """Process and apply an event's effects to the game state."""

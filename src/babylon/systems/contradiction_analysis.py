@@ -1,6 +1,6 @@
 import matplotlib.pyplot as plt
 import networkx as nx
-from ..data.models.contradiction import Contradiction, Effect
+from ..data.models.contradiction import Contradiction, Effect, Entity
 from ..data.models.event import Event
 
 class ContradictionAnalysis:
