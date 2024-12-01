@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- locations.xsd -->
-<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           targetNamespace="http://babylon/marxism/base/location"
+           xmlns="http://babylon/marxism/base/location"
+           elementFormDefault="qualified">
 
   <!-- Root Element: Locations -->
   <xs:element name="Locations">
