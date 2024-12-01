@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Locations xmlns="http://babylon/marxism/base/location"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://babylon/marxism/base/location ../../marxism/base/Location.xsd">
+
+    <!-- Kansas City Metropolitan Area -->
+    <Location>
+        <ID>L001</ID>
+        <Name>Kansas City</Name>
+        <Type>Metropolitan</Type>
+        <Description>Major Midwestern transportation and cultural hub</Description>
+        <Coordinates>
+            <Latitude>39.0997</Latitude>
+            <Longitude>-94.5786</Longitude>
+        </Coordinates>
+        <TerrainType>Urban Plains</TerrainType>
+        <Climate>Continental</Climate>
+        <ControlledBy>F001</ControlledBy>
+        <Population>2219865</Population>
+        <DominantSocialClass>C001</DominantSocialClass>
+        <ResourcesAvailable>
+            <Resource>
+                <ResourceID>R001</ResourceID>
+                <Quantity>500.0</Quantity>
+            </Resource>
+        </ResourcesAvailable>
+        <SubLocations>
+            <!-- Manhattan -->
+            <Location>
+                <ID>L001A</ID>
+                <Name>Manhattan</Name>
+                <Type>Educational</Type>
+                <Description>Home to Kansas State University</Description>
+                <Coordinates>
+                    <Latitude>39.1836</Latitude>
+                    <Longitude>-96.5717</Longitude>
+                </Coordinates>
+                <TerrainType>Plains</TerrainType>
+                <Population>132831</Population>
+                <ControlledBy>F002</ControlledBy>
+            </Location>
+            
+            <!-- Lawrence -->
+            <Location>
+                <ID>L001B</ID>
+                <Name>Lawrence</Name>
+                <Type>Educational</Type>
+                <Description>Home to University of Kansas</Description>
+                <Coordinates>
+                    <Latitude>38.9717</Latitude>
+                    <Longitude>-95.2353</Longitude>
+                </Coordinates>
+                <TerrainType>Plains</TerrainType>
+                <Population>120553</Population>
+                <ControlledBy>F002</ControlledBy>
+            </Location>
+            
+            <!-- Topeka -->
+            <Location>
+                <ID>L001C</ID>
+                <Name>Topeka</Name>
+                <Type>Government</Type>
+                <Description>State Capital of Kansas</Description>
+                <Coordinates>
+                    <Latitude>39.0473</Latitude>
+                    <Longitude>-95.6752</Longitude>
+                </Coordinates>
+                <TerrainType>Plains</TerrainType>
+                <Population>126587</Population>
+                <ControlledBy>F001</ControlledBy>
+            </Location>
+        </SubLocations>
+    </Location>
+</Locations>
