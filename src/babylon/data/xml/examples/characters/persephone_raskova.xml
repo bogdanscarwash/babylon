@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Character>
+    <!-- Basic Information -->
+    <Name>Persephone Raskova</Name>
+    <Age>36</Age>
+    <Gender>Trans woman</Gender>
+    <Biography>Persephone is a trans woman who served in the US army for a decade before leaving many years ago. She has developed into a committed Marxist-Leninist-Maoist and has dedicated her life to communism. She works as a software developer, keeping her political views private while using her high-paying position to fund revolutionary activity. She currently leads the Kansas Socialist Book Club, working to advance Maoist ideology in Kansas, and has plans to relocate to Baltimore to live with her partner Astra Dremel.</Biography>
+
+    <!-- Class and Economic Factors -->
+    <Class>Petit bourgeoisie</Class>
+    <Occupation>Computer programmer</Occupation>
+    <IncomeLevel>100000</IncomeLevel>
+    <PropertyOwned>Personal vehicle</PropertyOwned>
+
+    <!-- Relationships -->
+    <Relationships>
+        <Relationship>
+            <TargetCharacter>Astra Dremel</TargetCharacter>
+            <Type>Romantic</Type>
+            <Strength>95</Strength>
+        </Relationship>
+        <Relationship>
+            <TargetCharacter>Nick McKee-Rist</TargetCharacter>
+            <Type>Mentor</Type>
+            <Strength>90</Strength>
+        </Relationship>
+        <Relationship>
+            <TargetCharacter>Alkemy Roanoke</TargetCharacter>
+            <Type>Comrade and Close Friend</Type>
+            <Strength>80</Strength>
+        </Relationship>
+    </Relationships>
+
+    <!-- Ideological Alignment -->
+    <Ideology>Marxism-Leninism-Maoism Third Worldism</Ideology>
+    <Beliefs>
+        <Belief>
+            <Belief>Revolutionary Communism</Belief>
+            <Intensity>100</Intensity>
+        </Belief>
+        <Belief>
+            <Belief>Anti-Imperialism</Belief>
+            <Intensity>95</Intensity>
+        </Belief>
+    </Beliefs>
+
+    <!-- Cultural Attributes -->
+    <Culture>White American</Culture>
+    <LanguagesSpoken>
+        <Language>English</Language>
+    </LanguagesSpoken>
+    <Customs>
+        <Custom>Veteran</Custom>
+        <Custom>Atheist</Custom>
+        <Custom>Transgender</Custom>
+    </Customs>
+
+    <!-- Skills and Capabilities -->
+    <Skills>
+        <Skill>
+            <Name>Firearms</Name>
+            <Level>70</Level>
+        </Skill>
+        <Skill>
+            <Name>Computer Programming</Name>
+            <Level>80</Level>
+        </Skill>
+        <Skill>
+            <Name>Military Training</Name>
+            <Level>65</Level>
+        </Skill>
+    </Skills>
+
+    <!-- Faction Membership -->
+    <FactionMembership>
+        <Faction>Kansas Socialist Book Club</Faction>
+        <Role>Leader</Role>
+        <Loyalty>100</Loyalty>
+    </FactionMembership>
+
+    <!-- Contradictions -->
+    <Contradictions>
+        <Contradiction>
+            <Type>Substance Dependency</Type>
+            <Impact>Causes mood swings, unpredictable behavior, and risk-taking</Impact>
+        </Contradiction>
+        <Contradiction>
+            <Type>PTSD</Type>
+            <Impact>Negative impacts on mental health and behavior patterns</Impact>
+        </Contradiction>
+        <Contradiction>
+            <Type>Parental Responsibilities</Type>
+            <Impact>Constant tension between revolutionary leadership and parental duties</Impact>
+        </Contradiction>
+    </Contradictions>
+
+</Character>
