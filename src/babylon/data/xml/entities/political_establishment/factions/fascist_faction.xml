@@ -66,9 +66,7 @@
     </Leader>
     
     <Influence>
-        <Region>
-            <Name>Urban Centers</Name>
-            <ControlLevel>High</ControlLevel>
+- [Next Steps in Development](#next-steps-in-development)el>
         </Region>
         <Region>
             <Name>Industrial Regions</Name>
@@ -85,9 +83,7 @@
                 <Strength>3500</Strength>
             </Unit>
         </Units>
-    </Military>
-    
-    <Attributes>
+- [Next Steps in Development](#next-steps-in-development)
         <Attribute>
             <Name>PopularSupport</Name>
             <Value>35</Value>
@@ -98,3 +94,5 @@
         </Attribute>
     </Attributes>
 </Faction>
+
+- [Next Steps in Development](#next-steps-in-development)
