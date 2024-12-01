@@ -22,7 +22,13 @@
 
   <xs:complexType name="RightType">
     <xs:sequence>
-      <xs:element name="ID" type="xs:string"/>
+      <xs:element name="ID">
+        <xs:simpleType>
+          <xs:restriction base="xs:string">
+            <xs:pattern value="CL[0-9]{3}"/>
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:element>
       <xs:element name="Name" type="xs:string"/> <!-- e.g., Freedom of Speech, Voting Rights -->
       <xs:element name="Status" type="xs:string"/> <!-- Granted, Suppressed, Restricted -->
       <xs:element name="AffectedPopulation" type="AffectedPopulationType"/>

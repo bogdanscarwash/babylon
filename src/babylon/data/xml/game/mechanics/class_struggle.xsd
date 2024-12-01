@@ -23,7 +23,13 @@
 
   <xs:complexType name="ClassType">
     <xs:sequence>
-      <xs:element name="ID" type="xs:string"/>
+      <xs:element name="ID">
+        <xs:simpleType>
+          <xs:restriction base="xs:string">
+            <xs:pattern value="CS[0-9]{3}"/>
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:element>
       <xs:element name="Name" type="xs:string"/> <!-- e.g., Proletariat, Bourgeoisie -->
       <xs:element name="Population" type="xs:integer"/> <!-- Number of members -->
       <xs:element name="Wealth" type="xs:decimal"/> <!-- Total wealth controlled -->

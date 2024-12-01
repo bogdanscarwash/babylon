@@ -21,7 +21,13 @@
 
   <xs:complexType name="BattleType">
     <xs:sequence>
-      <xs:element name="ID" type="xs:string"/>
+      <xs:element name="ID">
+        <xs:simpleType>
+          <xs:restriction base="xs:string">
+            <xs:pattern value="CB[0-9]{3}"/>
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:element>
       <xs:element name="Location" type="xs:string"/> <!-- Tied to a Location ID -->
       <xs:element name="Participants" type="ParticipantsType"/>
       <xs:element name="Duration" type="xs:string"/> <!-- e.g., "3 Hours" -->
