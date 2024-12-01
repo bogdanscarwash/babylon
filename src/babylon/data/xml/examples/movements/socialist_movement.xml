@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Movement>
+    <ID>M005</ID>
+    <Name>Socialist Movement</Name>
+    <Description>A political and economic movement advocating for worker control of the means of production, economic democracy, and the elimination of class-based exploitation.</Description>
+    <Type>Political-Economic</Type>
+    <FoundingDate>1848-02-21T00:00:00</FoundingDate>
+    <PrimaryCause>Class exploitation and economic inequality under capitalism</PrimaryCause>
+    
+    <Membership>
+        <Member>
+            <Name>Labor Unions</Name>
+            <Role>Worker organization and direct action</Role>
+        </Member>
+        <Member>
+            <Name>Socialist Political Parties</Name>
+            <Role>Electoral politics and policy advocacy</Role>
+        </Member>
+        <Member>
+            <Name>Worker Cooperatives</Name>
+            <Role>Alternative economic models</Role>
+        </Member>
+    </Membership>
+    
+    <Leader>Various historical and contemporary figures</Leader>
+    
+    <AffiliatedFactions>
+        <Faction>Democratic Socialists</Faction>
+        <Faction>Revolutionary Socialists</Faction>
+        <Faction>Market Socialists</Faction>
+    </AffiliatedFactions>
+    
+    <Ideology>Socialist economics, worker democracy, class consciousness, anti-capitalism</Ideology>
+    
+    <Goals>
+        <Goal>
+            <Description>Democratic control of the means of production</Description>
+            <Priority>1</Priority>
+        </Goal>
+        <Goal>
+            <Description>Universal public services and welfare</Description>
+            <Priority>2</Priority>
+        </Goal>
+        <Goal>
+            <Description>Workplace democracy and worker rights</Description>
+            <Priority>2</Priority>
+        </Goal>
+        <Goal>
+            <Description>Economic planning for social needs</Description>
+            <Priority>3</Priority>
+        </Goal>
+    </Goals>
+    
+    <Tactics>
+        <Tactic>
+            <Type>Labor Strikes</Type>
+            <Effectiveness>9</Effectiveness>
+            <Impact>Economic pressure and worker solidarity</Impact>
+        </Tactic>
+        <Tactic>
+            <Type>Electoral Politics</Type>
+            <Effectiveness>7</Effectiveness>
+            <Impact>Legislative reforms and policy changes</Impact>
+        </Tactic>
+        <Tactic>
+            <Type>Education and Theory</Type>
+            <Effectiveness>8</Effectiveness>
+            <Impact>Class consciousness and ideological development</Impact>
+        </Tactic>
+    </Tactics>
+    
+    <Impact>
+        <Effect>
+            <Type>Economic</Type>
+            <Target>Labor Rights</Target>
+            <Magnitude>8</Magnitude>
+        </Effect>
+        <Effect>
+            <Type>Political</Type>
+            <Target>Social Democracy</Target>
+            <Magnitude>7</Magnitude>
+        </Effect>
+        <Effect>
+            <Type>Social</Type>
+            <Target>Class Consciousness</Target>
+            <Magnitude>8</Magnitude>
+        </Effect>
+    </Impact>
+    
+    <Challenges>
+        <Challenge>
+            <Description>Opposition from capitalist interests</Description>
+            <Severity>9</Severity>
+            <Response>Building class solidarity and alternative institutions</Response>
+        </Challenge>
+        <Challenge>
+            <Description>Internal ideological divisions</Description>
+            <Severity>7</Severity>
+            <Response>Focus on common goals and practical unity</Response>
+        </Challenge>
+        <Challenge>
+            <Description>Media opposition and propaganda</Description>
+            <Severity>8</Severity>
+            <Response>Independent media and grassroots communication</Response>
+        </Challenge>
+    </Challenges>
+</Movement>
