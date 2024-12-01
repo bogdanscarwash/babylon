@@ -63,6 +63,29 @@
    # Command or script to validate XML files
    ```
 
+### Environment Variables
+
+   Create a `.env` file at the root of the project to store environment variables for local development:
+
+   ```dotenv
+   ENVIRONMENT='development'
+   SECRET_KEY='your-secret-key'
+   DATABASE_URL='your-database-url'
+   DEBUG=True
+   ```
+
+   **Note:** The `.env` file is included in `.gitignore` and should not be committed to version control.
+
+   In production, set these variables in your environment instead of using a `.env` file.
+   
+   Copy the `.env.example` file to `.env`:
+
+   ```shell
+   cp .env.example .env
+   ```
+
+   Then, update the values in `.env` with your own configuration.
+
 ## Usage Instructions
 
 To start the game, run the main script:

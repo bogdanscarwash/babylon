@@ -1,3 +1,6 @@
+from babylon.config import Config
+
+
 class EntityRegistry:
     """Registry to maintain references to all game entities."""
     
