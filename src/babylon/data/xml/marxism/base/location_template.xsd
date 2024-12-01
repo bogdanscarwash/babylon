@@ -44,13 +44,6 @@
         </xs:simpleType>
       </xs:element>
       <xs:element name="Population" type="xs:integer" minOccurs="0"/>
-      <xs:element name="ControlledBy" minOccurs="0">
-        <xs:simpleType>
-          <xs:restriction base="xs:string">
-            <xs:pattern value="(F|C)[0-9]{3}"/>
-          </xs:restriction>
-        </xs:simpleType>
-      </xs:element>
       <xs:element name="DominantSocialClass" minOccurs="0">
         <xs:simpleType>
           <xs:restriction base="xs:string">
