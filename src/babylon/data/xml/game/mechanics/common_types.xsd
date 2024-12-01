@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           targetNamespace="http://babylon/common/types"
+           xmlns:ct="http://babylon/common/types"
+           elementFormDefault="qualified">
+
+    <!-- Effect Type Definition -->
+    <xs:complexType name="EffectType">
+        <xs:sequence>
+            <xs:element name="Type">
+                <xs:simpleType>
+                    <xs:restriction base="xs:string">
+                        <xs:enumeration value="Positive"/>
+                        <xs:enumeration value="Negative"/>
+                        <xs:enumeration value="Neutral"/>
+                    </xs:restriction>
+                </xs:simpleType>
+            </xs:element>
+            <xs:element name="Magnitude">
+                <xs:simpleType>
+                    <xs:restriction base="xs:decimal">
+                        <xs:minInclusive value="0.0"/>
+                        <xs:maxInclusive value="1.0"/>
+                    </xs:restriction>
+                </xs:simpleType>
+            </xs:element>
+            <xs:element name="Duration" type="xs:positiveInteger"/>
+            <xs:element name="Target" type="xs:string"/>
+            <xs:element name="Description" type="xs:string"/>
+        </xs:sequence>
+    </xs:complexType>
+
+</xs:schema>
