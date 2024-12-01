@@ -1,155 +1,154 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <PoliticalSystems>
-    <PoliticalSystem>
-        <ID>PS001</ID>
-        <Name>Modern Representative Democracy</Name>
-        <Description>A representative democratic system with multiple competing factions, including both system-integrated and anti-system forces</Description>
-        <HistoricalContext>Emerged from liberal democratic traditions but facing increasing internal contradictions and rising populist movements</HistoricalContext>
-
-        <GovernmentType>Representative Democracy</GovernmentType>
-        <BranchesOfGovernment>
-            <Branch>
-                <Name>Executive</Name>
-                <Description>Elected head of state and administration</Description>
-                <Powers>
-                    <Power>Policy Implementation</Power>
-                    <Power>Executive Orders</Power>
-                    <Power>Foreign Relations</Power>
-                </Powers>
-            </Branch>
-            <Branch>
-                <Name>Legislative</Name>
-                <Description>Bicameral parliament</Description>
-                <Powers>
-                    <Power>Law Making</Power>
-                    <Power>Budget Control</Power>
-                    <Power>Oversight</Power>
-                </Powers>
-            </Branch>
-            <Branch>
-                <Name>Judicial</Name>
-                <Description>Supreme and constitutional courts</Description>
-                <Powers>
-                    <Power>Constitutional Review</Power>
-                    <Power>Legal Interpretation</Power>
-                </Powers>
-            </Branch>
-        </BranchesOfGovernment>
-
-        <LeadershipSelectionMethod>Democratic Elections</LeadershipSelectionMethod>
-        <CurrentLeaders>
-            <Leader>
-                <CharacterID>CHAR001</CharacterID>
-                <Title>President</Title>
-                <TermDuration>4</TermDuration>
-                <TermLimit>2</TermLimit>
-            </Leader>
-        </CurrentLeaders>
-
-        <AssociatedIdeologies>
-            <IdeologyID>IDE001</IdeologyID> <!-- Liberal Democracy -->
-            <IdeologyID>IDE002</IdeologyID> <!-- Fascism -->
-            <IdeologyID>IDE003</IdeologyID> <!-- Progressivism -->
-            <IdeologyID>IDE004</IdeologyID> <!-- Communism -->
-        </AssociatedIdeologies>
-
-        <PoliticalParties>
-            <Party>
-                <FactionID>FAC001</FactionID>
-                <Name>Liberal Democratic Party</Name>
-                <IdeologyID>IDE001</IdeologyID>
-                <Popularity>30.0</Popularity>
-                <Influence>Medium</Influence>
-            </Party>
-            <Party>
-                <FactionID>FAC002</FactionID>
-                <Name>National Front</Name>
-                <IdeologyID>IDE002</IdeologyID>
-                <Popularity>35.0</Popularity>
-                <Influence>High</Influence>
-            </Party>
-            <Party>
-                <FactionID>FAC003</FactionID>
-                <Name>Progressive Alliance</Name>
-                <IdeologyID>IDE003</IdeologyID>
-                <Popularity>25.0</Popularity>
-                <Influence>Medium</Influence>
-            </Party>
-            <Party>
-                <FactionID>FAC004</FactionID>
-                <Name>Revolutionary Communist Movement</Name>
-                <IdeologyID>IDE004</IdeologyID>
-                <Popularity>10.0</Popularity>
-                <Influence>Low</Influence>
-            </Party>
-        </PoliticalParties>
-
-        <Laws>
-            <LawID>LAW002</LawID> <!-- Freedom of Speech -->
-            <LawID>LAW003</LawID> <!-- Private Property -->
-            <LawID>LAW004</LawID> <!-- Free Market -->
-        </Laws>
-
-        <PoliticalProcesses>
-            <Process>
-                <Name>General Elections</Name>
-                <Description>National elections for executive and legislative positions</Description>
-                <Participants>
-                    <ParticipantType>Citizens</ParticipantType>
-                    <ParticipantType>Political Parties</ParticipantType>
-                    <ParticipantType>Electoral Commission</ParticipantType>
-                </Participants>
-                <Frequency>Every 4 years</Frequency>
-            </Process>
-            <Process>
-                <Name>Street Demonstrations</Name>
-                <Description>Regular protests and counter-protests by various factions</Description>
-                <Participants>
-                    <ParticipantType>Citizens</ParticipantType>
-                    <ParticipantType>Political Movements</ParticipantType>
-                    <ParticipantType>Law Enforcement</ParticipantType>
-                </Participants>
-                <Frequency>Ongoing</Frequency>
-            </Process>
-        </PoliticalProcesses>
-
-        <Effects>
-            <Effect>
-                <Target>Working Class</Target>
-                <Attribute>Political Power</Attribute>
-                <ModificationType>Decrease</ModificationType>
-                <Value>-2.0</Value>
-                <Description>Diminishing influence of working class in political decision-making</Description>
-            </Effect>
-            <Effect>
-                <Target>Fascist Movement</Target>
-                <Attribute>Social Influence</Attribute>
-                <ModificationType>Increase</ModificationType>
-                <Value>3.0</Value>
-                <Description>Rising influence of fascist ideology in mainstream politics</Description>
-            </Effect>
-            <Effect>
-                <Target>Progressive Movement</Target>
-                <Attribute>Popular Support</Attribute>
-                <ModificationType>Increase</ModificationType>
-                <Value>2.0</Value>
-                <Description>Growing support for progressive policies among youth and urban populations</Description>
-            </Effect>
-        </Effects>
-
-        <Attributes>
-            <Attribute>
-                <Name>SystemStability</Name>
-                <Value>Medium</Value>
-            </Attribute>
-            <Attribute>
-                <Name>PopularLegitimacy</Name>
-                <Value>Declining</Value>
-            </Attribute>
-            <Attribute>
-                <Name>ClassConflict</Name>
-                <Value>High</Value>
-            </Attribute>
-        </Attributes>
-    </PoliticalSystem>
+  <PoliticalSystem>
+    <ID>PS001</ID>
+    <Name>Modern Representative Democracy</Name>
+    <Description>A representative democratic system with multiple competing factions, including both system-integrated and anti-system forces</Description>
+    <HistoricalContext>Emerged from liberal democratic traditions but facing increasing internal contradictions and rising populist movements</HistoricalContext>
+    <GovernmentType>Representative Democracy</GovernmentType>
+    <BranchesOfGovernment>
+      <Branch>
+        <Name>Executive</Name>
+        <Description>Elected head of state and administration</Description>
+        <Powers>
+          <Power>Policy Implementation</Power>
+          <Power>Executive Orders</Power>
+          <Power>Foreign Relations</Power>
+        </Powers>
+      </Branch>
+      <Branch>
+        <Name>Legislative</Name>
+        <Description>Bicameral parliament</Description>
+        <Powers>
+          <Power>Law Making</Power>
+          <Power>Budget Control</Power>
+          <Power>Oversight</Power>
+        </Powers>
+      </Branch>
+      <Branch>
+        <Name>Judicial</Name>
+        <Description>Supreme and constitutional courts</Description>
+        <Powers>
+          <Power>Constitutional Review</Power>
+          <Power>Legal Interpretation</Power>
+        </Powers>
+      </Branch>
+    </BranchesOfGovernment>
+    <LeadershipSelectionMethod>Democratic Elections</LeadershipSelectionMethod>
+    <CurrentLeaders>
+      <Leader>
+        <CharacterID>CHAR001</CharacterID>
+        <Title>President</Title>
+        <TermDuration>4</TermDuration>
+        <TermLimit>2</TermLimit>
+      </Leader>
+    </CurrentLeaders>
+    <AssociatedIdeologies>
+      <IdeologyID>IDE001</IdeologyID>
+      <!-- Liberal Democracy -->
+      <IdeologyID>IDE002</IdeologyID>
+      <!-- Fascism -->
+      <IdeologyID>IDE003</IdeologyID>
+      <!-- Progressivism -->
+      <IdeologyID>IDE004</IdeologyID>
+      <!-- Communism -->
+    </AssociatedIdeologies>
+    <PoliticalParties>
+      <Party>
+        <FactionID>FAC001</FactionID>
+        <Name>Liberal Democratic Party</Name>
+        <IdeologyID>IDE001</IdeologyID>
+        <Popularity>30.0</Popularity>
+        <Influence>Medium</Influence>
+      </Party>
+      <Party>
+        <FactionID>FAC002</FactionID>
+        <Name>National Front</Name>
+        <IdeologyID>IDE002</IdeologyID>
+        <Popularity>35.0</Popularity>
+        <Influence>High</Influence>
+      </Party>
+      <Party>
+        <FactionID>FAC003</FactionID>
+        <Name>Progressive Alliance</Name>
+        <IdeologyID>IDE003</IdeologyID>
+        <Popularity>25.0</Popularity>
+        <Influence>Medium</Influence>
+      </Party>
+      <Party>
+        <FactionID>FAC004</FactionID>
+        <Name>Revolutionary Communist Movement</Name>
+        <IdeologyID>IDE004</IdeologyID>
+        <Popularity>10.0</Popularity>
+        <Influence>Low</Influence>
+      </Party>
+    </PoliticalParties>
+    <Laws>
+      <LawID>LAW002</LawID>
+      <!-- Freedom of Speech -->
+      <LawID>LAW003</LawID>
+      <!-- Private Property -->
+      <LawID>LAW004</LawID>
+      <!-- Free Market -->
+    </Laws>
+    <PoliticalProcesses>
+      <Process>
+        <Name>General Elections</Name>
+        <Description>National elections for executive and legislative positions</Description>
+        <Participants>
+          <ParticipantType>Citizens</ParticipantType>
+          <ParticipantType>Political Parties</ParticipantType>
+          <ParticipantType>Electoral Commission</ParticipantType>
+        </Participants>
+        <Frequency>Every 4 years</Frequency>
+      </Process>
+      <Process>
+        <Name>Street Demonstrations</Name>
+        <Description>Regular protests and counter-protests by various factions</Description>
+        <Participants>
+          <ParticipantType>Citizens</ParticipantType>
+          <ParticipantType>Political Movements</ParticipantType>
+          <ParticipantType>Law Enforcement</ParticipantType>
+        </Participants>
+        <Frequency>Ongoing</Frequency>
+      </Process>
+    </PoliticalProcesses>
+    <Effects>
+      <Effect>
+        <Target>Working Class</Target>
+        <Attribute>Political Power</Attribute>
+        <ModificationType>Decrease</ModificationType>
+        <Value>-2.0</Value>
+        <Description>Diminishing influence of working class in political decision-making</Description>
+      </Effect>
+      <Effect>
+        <Target>Fascist Movement</Target>
+        <Attribute>Social Influence</Attribute>
+        <ModificationType>Increase</ModificationType>
+        <Value>3.0</Value>
+        <Description>Rising influence of fascist ideology in mainstream politics</Description>
+      </Effect>
+      <Effect>
+        <Target>Progressive Movement</Target>
+        <Attribute>Popular Support</Attribute>
+        <ModificationType>Increase</ModificationType>
+        <Value>2.0</Value>
+        <Description>Growing support for progressive policies among youth and urban populations</Description>
+      </Effect>
+    </Effects>
+    <Attributes>
+      <Attribute>
+        <Name>SystemStability</Name>
+        <Value>Medium</Value>
+      </Attribute>
+      <Attribute>
+        <Name>PopularLegitimacy</Name>
+        <Value>Declining</Value>
+      </Attribute>
+      <Attribute>
+        <Name>ClassConflict</Name>
+        <Value>High</Value>
+      </Attribute>
+    </Attributes>
+  </PoliticalSystem>
 </PoliticalSystems>
