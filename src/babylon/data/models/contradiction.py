@@ -15,6 +15,8 @@ class Contradiction:
         self.secondary_aspect = secondary_aspect
         self.antagonism = antagonism
         self.intensity = intensity
+        self.intensity_value = 0.0  # Numerical intensity value between 0 and 1
+        self.intensity_history = []  # Track historical intensity values
         self.state = state
         self.potential_for_transformation = potential_for_transformation
         self.conditions_for_transformation = conditions_for_transformation
@@ -53,6 +55,11 @@ class Effect:
                 setattr(entity, self.attribute, current_value - self.value)
             elif self.modification_type == 'Change':
                 setattr(entity, self.attribute, self.value)
+
+    def update_intensity(self, game_state):
+        """Calculate and update the intensity of this contradiction."""
+        # Base method - should be overridden by specific contradiction types
+        pass
 
 class Attribute:
     def __init__(self, name, value):

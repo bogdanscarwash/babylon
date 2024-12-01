@@ -88,6 +88,34 @@ class ContradictionAnalysis:
             effects=[],
             attributes={}
         )
+        
+        # Add custom intensity update method
+        def update_intensity(self, game_state):
+            gini_coefficient = game_state['economy'].gini_coefficient
+            unemployment_rate = game_state['economy'].unemployment_rate
+            
+            # Define weights
+            gini_weight = 0.7
+            unemployment_weight = 0.3
+            
+            # Calculate weighted intensity value
+            self.intensity_value = (
+                gini_weight * gini_coefficient +
+                unemployment_weight * unemployment_rate
+            )
+            
+            # Set categorical intensity based on value
+            if self.intensity_value >= 0.6:
+                self.intensity = 'High'
+            elif self.intensity_value >= 0.4:
+                self.intensity = 'Medium'
+            else:
+                self.intensity = 'Low'
+        
+        # Bind the method to the contradiction instance
+        from types import MethodType
+        contradiction.update_intensity = MethodType(update_intensity, contradiction)
+        
         return contradiction
 
     def _create_political_unrest_contradiction(self, game_state):
@@ -126,8 +154,19 @@ class ContradictionAnalysis:
                 
     def _update_contradiction(self, contradiction, game_state):
         """Update a single contradiction's state."""
-        # Update intensity
-        contradiction.intensity = self._calculate_intensity(contradiction, game_state)
+        old_intensity = contradiction.intensity
+        
+        # Update intensity using contradiction's own method
+        contradiction.update_intensity(game_state)
+        
+        # Record intensity history
+        contradiction.intensity_history.append(contradiction.intensity_value)
+        if len(contradiction.intensity_history) > 10:
+            contradiction.intensity_history.pop(0)
+            
+        # Log intensity changes
+        if contradiction.intensity != old_intensity:
+            print(f"Contradiction '{contradiction.name}' intensity changed from {old_intensity} to {contradiction.intensity}")
         
         # Check for resolution or transformation
         if self._check_resolution_conditions(contradiction, game_state):
@@ -316,10 +355,11 @@ class ContradictionAnalysis:
                 G.add_edge(contradiction.principal_contradiction.id,
                           contradiction.id)
 
-        # Get colors based on intensity
+        # Get colors based on numerical intensity values
+        max_intensity = max([c.intensity_value for c in self.contradictions] + [1])
         node_colors = [
-            self._get_intensity_color(contradiction.intensity)
-            for contradiction in self.contradictions
+            plt.cm.hot(c.intensity_value / max_intensity)
+            for c in self.contradictions
         ]
 
         # Create a layout for the nodes
