@@ -1,0 +1,79 @@
+---
+Basic Information:
+  Id: C001-M
+  Name: Persephone Raskova
+  Age: 36
+  Gender: Woman
+  Race: White
+  Religion: Athiest
+  Biography: Persephone is a trans woman. She served in the US army but got out many years ago after a decade of service. She is a committed and highly developed Marxist-Leninist-Maoist and has wholly dedicated her life to communism. She works as a software developer, keeping her views under the table, and holds a high-paying job to fund revolutionary activity. She plans to move from Kansas to Baltimore to live with her partner, Astra Dremel. She currently leads the Kansas Socialist Book Club, which is winning the radical population of Kansas over to Maoism.
+
+Class and Economic Position:
+  Social class: Petit bourgeoisie
+  Occupation: Computer programmer
+  Income level: $100,000/year
+  Property owned: Personal vehicle
+
+Ideological Framework:
+  Primary Beliefs:
+  Main ideology: Marxism-Leninism-Maoism Third Worldism
+    Key beliefs:
+      - Settler colonialism is the primary contradiction.
+      - The working class as a whole is a labor aristocracy.
+      - 
+  Cultural Background:
+  Cultural identity: White, atheist, army veteran, transgender
+  Languages: English
+  Customs/traditions: [fill in]
+
+Relationships:
+  Personal:
+    - Astra Dremel:
+        Id:
+        Type: Romantic, Comrades
+        Strength: 95
+        Major character: true
+    - Nick McKee-Rist:
+        Id:
+        Type: Mentor, Comrade
+        Strength: 90
+        Major character: true
+    - Alkemy Roanoke:
+        Id:
+        Type: Comrades, Close Friends
+        Strength: 80
+        Major character: true
+  Organizational:
+    - Kansas Socialist Book Club:
+        Id:
+        Role: Leader
+        Strength: 100
+        Major organization: true
+
+Skills and Capabilities:
+  Firearms: 70
+  Computers: 80
+  Military training: 65
+
+Political Alignment:
+  Ideology: Marxist-Leninist-Maoism (Third Worldism)
+  Alignment: Left-wing
+  Loyalty: 100
+  Description: 
+    - Anti-revisionist communist ideology.
+    - Upholds universality of protracted peoples war.
+    - Proletariat in the US is a labor aristocracy.
+    - Primary contradiction is settler colonialism.
+    - Revolutionary subject are the workers who are nationally oppressed, queer, disabled, lumpenproletariat, and illegal immigrants.
+    - Russia and China are aspiring imperialists.
+  Aligned ideologies:
+    - Marxism-Leninism
+    - Maoism
+    - Marxism-Leninism-Maoism
+
+Internal Conflicts:
+  Personal contradictions:
+    - Contradiction: Persephone struggles with the balance between her high-income job and her commitment to revolutionary ideals.
+      Impact: She views her high paying job as a resource. She used to feel a lot of guilt about it, but has since changed her view about it. She now recognizes that being a wealthier person can be a benefit to a movement that doesn't get much funding.
+    - Contradiction: She is committed to anti imperialism, but also believs that Russia and China are aspiring imperialists despite them opposing the United States.
+      Impact: This makes her feel torn when it comes to issues of accepting foreign assistance or working with foreign states. On one hand, the movement can use that support. On the other hand, we do not want to me making bargains with aspiring imperialists.

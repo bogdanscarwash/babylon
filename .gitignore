@@ -6,7 +6,5 @@
 *.sqlite3
 .venv-babylon*
 .continue*
-docs/IDEAS.md
-docs/MECHANICS.md
-docs/gameplay_ideas.md
-src/babylon/data/xml/examples/characters/*
+.continuerules
+.continuerc.json
