@@ -1,0 +1,173 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- economy_system.xsd -->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+
+  <!-- Root Element: EconomySystem -->
+  <xs:element name="EconomySystem">
+    <xs:complexType>
+      <xs:sequence>
+        <!-- Resources Available in the Game -->
+        <xs:element name="Resources">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="Resource" type="ResourceType" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+
+        <!-- Means of Production -->
+        <xs:element name="MeansOfProduction">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="ProductionUnit" type="ProductionUnitType" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+
+        <!-- Technologies and Advancements -->
+        <xs:element name="Technologies">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="Technology" type="TechnologyType" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+
+        <!-- Trade Systems -->
+        <xs:element name="TradeSystems">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="TradeRoute" type="TradeRouteType" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+
+        <!-- Economic Relationships -->
+        <xs:element name="EconomicRelationships">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="Relationship" type="EconomicRelationshipType" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- Complex Types Definitions -->
+
+  <!-- Resource Type -->
+  <xs:complexType name="ResourceType">
+    <xs:sequence>
+      <xs:element name="ID" type="xs:string"/>
+      <xs:element name="Name" type="xs:string"/>
+      <xs:element name="Type" type="xs:string"/> <!-- e.g., Raw Material, Manufactured Good -->
+      <xs:element name="Quantity" type="xs:integer"/>
+      <xs:element name="Value" type="xs:decimal"/>
+      <xs:element name="Description" type="xs:string" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Production Unit Type -->
+  <xs:complexType name="ProductionUnitType">
+    <xs:sequence>
+      <xs:element name="ID" type="xs:string"/>
+      <xs:element name="Name" type="xs:string"/>
+      <xs:element name="OwnerFactionID" type="xs:string"/>
+      <xs:element name="LocationID" type="xs:string"/>
+      <xs:element name="Type" type="xs:string"/> <!-- e.g., Factory, Farm -->
+      <xs:element name="InputResources">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="ResourceID" type="xs:string" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      <xs:element name="OutputResources">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="ResourceID" type="xs:string" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      <xs:element name="Efficiency" type="xs:decimal"/> <!-- Value between 0 and 1 -->
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Technology Type -->
+  <xs:complexType name="TechnologyType">
+    <xs:sequence>
+      <xs:element name="ID" type="xs:string"/>
+      <xs:element name="Name" type="xs:string"/>
+      <xs:element name="Description" type="xs:string"/>
+      <xs:element name="RequiredTechnologies">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="TechnologyID" maxOccurs="unbounded" minOccurs="0">
+              <xs:simpleType>
+                <xs:restriction base="xs:string">
+                  <xs:pattern value="T[0-9]{3}"/>
+                </xs:restriction>
+              </xs:simpleType>
+            </xs:element>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      <xs:element name="Effects">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="Effect" type="EffectType" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Effect Type -->
+  <xs:complexType name="EffectType">
+    <xs:sequence>
+      <xs:element name="Target" type="xs:string"/> <!-- e.g., ProductionUnit, Resource -->
+      <xs:element name="Attribute" type="xs:string"/> <!-- e.g., Efficiency, Quantity -->
+      <xs:element name="ModificationType" type="xs:string"/> <!-- e.g., Increase, Decrease -->
+      <xs:element name="Value" type="xs:decimal"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Trade Route Type -->
+  <xs:complexType name="TradeRouteType">
+    <xs:sequence>
+      <xs:element name="ID" type="xs:string"/>
+      <xs:element name="FromFactionID" type="xs:string"/>
+      <xs:element name="ToFactionID" type="xs:string"/>
+      <xs:element name="ResourceID" type="xs:string"/>
+      <xs:element name="Quantity" type="xs:integer"/>
+      <xs:element name="PricePerUnit" type="xs:decimal"/>
+      <xs:element name="Status" type="xs:string"/> <!-- e.g., Active, Suspended -->
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Economic Relationship Type -->
+  <xs:complexType name="EconomicRelationshipType">
+    <xs:sequence>
+      <xs:element name="BetweenFactions">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="FactionID" type="xs:string" maxOccurs="2"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      <xs:element name="RelationshipType" type="xs:string"/> <!-- e.g., Trade Agreement, Embargo -->
+      <xs:element name="Terms" type="xs:string"/>
+      <xs:element name="Duration" type="xs:integer"/> <!-- In game days or turns -->
+      <xs:element name="Effects">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="Effect" type="EffectType" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+    </xs:sequence>
+  </xs:complexType>
+
+</xs:schema>

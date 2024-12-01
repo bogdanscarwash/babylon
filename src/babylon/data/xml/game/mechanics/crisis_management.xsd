@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+
+  <!-- Root Element: CrisisSystem -->
+  <xs:element name="CrisisSystem">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="Crises" type="CrisesType"/>
+        <xs:element name="Responses" type="ResponsesType"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- Crises -->
+  <xs:complexType name="CrisesType">
+    <xs:sequence>
+      <xs:element name="Crisis" type="CrisisType" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="CrisisType">
+    <xs:sequence>
+      <xs:element name="ID">
+        <xs:simpleType>
+          <xs:restriction base="xs:string">
+            <xs:pattern value="CR[0-9]{3}"/>
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:element>
+      <xs:element name="Name" type="xs:string"/> <!-- e.g., "Economic Collapse", "Flood" -->
+      <xs:element name="Type" type="xs:string"/> <!-- Natural, Political, Economic -->
+      <xs:element name="Severity" type="xs:string"/> <!-- Low, Medium, High -->
+      <xs:element name="Trigger" type="TriggerType"/>
+      <xs:element name="Progression" type="ProgressionType"/>
+      <xs:element name="Impact" type="ImpactType"/>
+      <xs:element name="Outcome" type="OutcomeType" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Trigger -->
+  <xs:complexType name="TriggerType">
+    <xs:sequence>
+      <xs:element name="Condition" type="xs:string"/> <!-- e.g., "Unemployment > 20%" -->
+      <xs:element name="Probability" type="xs:decimal"/> <!-- Likelihood of triggering (0.0 to 1.0) -->
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Progression -->
+  <xs:complexType name="ProgressionType">
+    <xs:sequence>
+      <xs:element name="Phase" type="PhaseType" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="PhaseType">
+    <xs:sequence>
+      <xs:element name="Name" type="xs:string"/> <!-- e.g., "Initial", "Escalation", "Resolution" -->
+      <xs:element name="Duration" type="xs:string"/> <!-- Time for this phase -->
+      <xs:element name="Description" type="xs:string"/> <!-- Narrative description of phase -->
+      <xs:element name="Effects" type="EffectsType"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Impact -->
+  <xs:complexType name="ImpactType">
+    <xs:sequence>
+      <xs:element name="AffectedSystem" type="xs:string"/> <!-- Economy, Politics -->
+      <xs:element name="Severity" type="xs:string"/> <!-- Low, Medium, High -->
+      <xs:element name="Description" type="xs:string"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Responses -->
+  <xs:complexType name="ResponsesType">
+    <xs:sequence>
+      <xs:element name="Response" type="ResponseType" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="ResponseType">
+    <xs:sequence>
+      <xs:element name="CrisisID" type="xs:string"/> <!-- Tied to specific crisis -->
+      <xs:element name="Name" type="xs:string"/> <!-- e.g., "Bailout", "Military Deployment" -->
+      <xs:element name="Cost" type="xs:decimal"/> <!-- Resources required -->
+      <xs:element name="Effect" type="EffectType"/>
+      <xs:element name="ProbabilityOfSuccess" type="xs:decimal"/> <!-- 0.0 to 1.0 -->
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Effects -->
+  <xs:complexType name="EffectsType">
+    <xs:sequence>
+      <xs:element name="Effect" type="EffectType" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="EffectType">
+    <xs:sequence>
+      <xs:element name="System" type="xs:string"/> <!-- Economy, Politics, Military -->
+      <xs:element name="Change" type="xs:string"/> <!-- e.g., "Stability +5%" -->
+      <xs:element name="Duration" type="xs:string"/> <!-- Time for effect to last -->
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Outcome -->
+  <xs:complexType name="OutcomeType">
+    <xs:sequence>
+      <xs:element name="Status" type="xs:string"/> <!-- Resolved, Escalated -->
+      <xs:element name="Description" type="xs:string"/> <!-- Narrative outcome -->
+    </xs:sequence>
+  </xs:complexType>
+
+</xs:schema>

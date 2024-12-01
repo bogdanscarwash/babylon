@@ -1,0 +1,202 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Contradictions>
+    <!-- Capital vs Labor -->
+    <Contradiction>
+        <ID>CON001</ID>
+        <Name>Capital vs Labor</Name>
+        <Description>The fundamental contradiction between capitalist owners and working class over surplus value and means of production</Description>
+        <BetweenEntities>
+            <Entity>
+                <EntityID>C001</EntityID>
+                <EntityType>Class</EntityType>
+                <Role>Oppressor</Role>
+            </Entity>
+            <Entity>
+                <EntityID>C002</EntityID>
+                <EntityType>Class</EntityType>
+                <Role>Oppressed</Role>
+            </Entity>
+        </BetweenEntities>
+        <Universality>true</Universality>
+        <Particularity>Manifests in wage relations, working conditions, and control over production</Particularity>
+        <PrincipalContradiction>true</PrincipalContradiction>
+        <PrincipalAspect>C002</PrincipalAspect>
+        <Antagonism>Antagonistic</Antagonism>
+        <Intensity>High</Intensity>
+        <State>Active</State>
+        <PotentialForTransformation>true</PotentialForTransformation>
+        <ConditionsForTransformation>
+            <Condition>Class consciousness development</Condition>
+            <Condition>Worker organization</Condition>
+            <Condition>Economic crisis</Condition>
+        </ConditionsForTransformation>
+        <ResolutionMethods>
+            <Method>Revolution</Method>
+            <Method>Reform</Method>
+            <Method>Collective action</Method>
+        </ResolutionMethods>
+        <ResolutionConditions>
+            <Condition>Abolition of private property</Condition>
+            <Condition>Democratic control of production</Condition>
+        </ResolutionConditions>
+        <Effects>
+            <Effect>
+                <Target>ClassStruggle</Target>
+                <Attribute>Intensity</Attribute>
+                <ModificationType>Increase</ModificationType>
+                <Value>0.5</Value>
+                <Description>Intensifies class struggle</Description>
+            </Effect>
+        </Effects>
+    </Contradiction>
+
+    <!-- Colonizer vs Colonized -->
+    <Contradiction>
+        <ID>CON002</ID>
+        <Name>Colonizer vs Colonized</Name>
+        <Description>The contradiction between imperial powers and colonized peoples, manifesting in economic exploitation and cultural domination</Description>
+        <BetweenEntities>
+            <Entity>
+                <EntityID>F001</EntityID>
+                <EntityType>Faction</EntityType>
+                <Role>Oppressor</Role>
+            </Entity>
+            <Entity>
+                <EntityID>F002</EntityID>
+                <EntityType>Faction</EntityType>
+                <Role>Oppressed</Role>
+            </Entity>
+        </BetweenEntities>
+        <Universality>true</Universality>
+        <Particularity>Expressed through economic dependency, resource extraction, and cultural imperialism</Particularity>
+        <PrincipalContradiction>false</PrincipalContradiction>
+        <PrincipalAspect>F002</PrincipalAspect>
+        <Antagonism>Antagonistic</Antagonism>
+        <Intensity>High</Intensity>
+        <State>Active</State>
+        <PotentialForTransformation>true</PotentialForTransformation>
+        <ConditionsForTransformation>
+            <Condition>National liberation movement</Condition>
+            <Condition>Economic independence</Condition>
+            <Condition>Cultural revival</Condition>
+        </ConditionsForTransformation>
+        <ResolutionMethods>
+            <Method>Liberation struggle</Method>
+            <Method>Decolonization</Method>
+            <Method>Economic sovereignty</Method>
+        </ResolutionMethods>
+        <ResolutionConditions>
+            <Condition>Political independence</Condition>
+            <Condition>Economic self-determination</Condition>
+        </ResolutionConditions>
+        <Effects>
+            <Effect>
+                <Target>NationalLiberation</Target>
+                <Attribute>Strength</Attribute>
+                <ModificationType>Increase</ModificationType>
+                <Value>0.6</Value>
+                <Description>Strengthens liberation movements</Description>
+            </Effect>
+        </Effects>
+    </Contradiction>
+
+    <!-- Economic Growth vs Environmental Degradation -->
+    <Contradiction>
+        <ID>CON003</ID>
+        <Name>Economic Growth vs Environmental Degradation</Name>
+        <Description>The contradiction between capitalist expansion and ecological sustainability</Description>
+        <BetweenEntities>
+            <Entity>
+                <EntityID>Inst001</EntityID>
+                <EntityType>Institution</EntityType>
+                <Role>Economic System</Role>
+            </Entity>
+            <Entity>
+                <EntityID>M001</EntityID>
+                <EntityType>Movement</EntityType>
+                <Role>Environmental Movement</Role>
+            </Entity>
+        </BetweenEntities>
+        <Universality>true</Universality>
+        <Particularity>Manifests in climate change, resource depletion, and pollution</Particularity>
+        <PrincipalContradiction>false</PrincipalContradiction>
+        <PrincipalAspect>M001</PrincipalAspect>
+        <Antagonism>Antagonistic</Antagonism>
+        <Intensity>High</Intensity>
+        <State>Active</State>
+        <PotentialForTransformation>true</PotentialForTransformation>
+        <ConditionsForTransformation>
+            <Condition>Sustainable technology adoption</Condition>
+            <Condition>Economic system restructuring</Condition>
+            <Condition>Public awareness</Condition>
+        </ConditionsForTransformation>
+        <ResolutionMethods>
+            <Method>Green technology</Method>
+            <Method>Economic reform</Method>
+            <Method>Social movement</Method>
+        </ResolutionMethods>
+        <ResolutionConditions>
+            <Condition>Sustainable economy</Condition>
+            <Condition>Environmental protection</Condition>
+        </ResolutionConditions>
+        <Effects>
+            <Effect>
+                <Target>Environment</Target>
+                <Attribute>Degradation</Attribute>
+                <ModificationType>Increase</ModificationType>
+                <Value>0.7</Value>
+                <Description>Accelerates environmental damage</Description>
+            </Effect>
+        </Effects>
+    </Contradiction>
+
+    <!-- Racism vs Equality -->
+    <Contradiction>
+        <ID>CON004</ID>
+        <Name>Racism vs Equality</Name>
+        <Description>The contradiction between systemic racism and the struggle for racial equality and justice</Description>
+        <BetweenEntities>
+            <Entity>
+                <EntityID>Inst002</EntityID>
+                <EntityType>Institution</EntityType>
+                <Role>Systemic Racism</Role>
+            </Entity>
+            <Entity>
+                <EntityID>M002</EntityID>
+                <EntityType>Movement</EntityType>
+                <Role>Equality Movement</Role>
+            </Entity>
+        </BetweenEntities>
+        <Universality>true</Universality>
+        <Particularity>Manifests in institutional discrimination, social inequality, and cultural oppression</Particularity>
+        <PrincipalContradiction>false</PrincipalContradiction>
+        <PrincipalAspect>M002</PrincipalAspect>
+        <Antagonism>Antagonistic</Antagonism>
+        <Intensity>High</Intensity>
+        <State>Active</State>
+        <PotentialForTransformation>true</PotentialForTransformation>
+        <ConditionsForTransformation>
+            <Condition>Social consciousness</Condition>
+            <Condition>Institutional reform</Condition>
+            <Condition>Cultural change</Condition>
+        </ConditionsForTransformation>
+        <ResolutionMethods>
+            <Method>Social movement</Method>
+            <Method>Legal reform</Method>
+            <Method>Education</Method>
+        </ResolutionMethods>
+        <ResolutionConditions>
+            <Condition>Institutional equality</Condition>
+            <Condition>Cultural transformation</Condition>
+        </ResolutionConditions>
+        <Effects>
+            <Effect>
+                <Target>SocialUnity</Target>
+                <Attribute>Cohesion</Attribute>
+                <ModificationType>Decrease</ModificationType>
+                <Value>0.8</Value>
+                <Description>Decreases social cohesion</Description>
+            </Effect>
+        </Effects>
+    </Contradiction>
+</Contradictions>

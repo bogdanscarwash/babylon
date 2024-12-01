@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Classes>
+    <Class>
+        <Name>Proletariat</Name>
+        <Description>The working class who must sell their labor power to survive, owning no means of production themselves.</Description>
+        <Attributes>
+            <Attribute>
+                <Name>RelationToProduction</Name>
+                <Value>Sells labor power</Value>
+            </Attribute>
+            <Attribute>
+                <Name>ClassConsciousness</Name>
+                <Value>Varies by historical conditions</Value>
+            </Attribute>
+        </Attributes>
+        <Relationships>
+            <Relationship>
+                <WithClassName>Bourgeoisie</WithClassName>
+                <Nature>Antagonistic</Nature>
+            </Relationship>
+            <Relationship>
+                <WithClassName>Petit Bourgeoisie</WithClassName>
+                <Nature>Complex</Nature>
+            </Relationship>
+        </Relationships>
+    </Class>
+</Classes>

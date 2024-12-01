@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+
+    <xs:element name="Laws">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="Law" maxOccurs="unbounded">
+                    <xs:complexType>
+                        <xs:sequence>
+                            <xs:element name="ID" type="xs:string"/>
+                            <xs:element name="Name" type="xs:string"/>
+                            <xs:element name="Description" type="xs:string"/>
+                            <xs:element name="Type">
+                                <xs:simpleType>
+                                    <xs:restriction base="xs:string">
+                                        <xs:enumeration value="Constitutional"/>
+                                        <xs:enumeration value="Criminal"/>
+                                        <xs:enumeration value="Civil"/>
+                                        <xs:enumeration value="Administrative"/>
+                                        <xs:enumeration value="Property"/>
+                                        <xs:enumeration value="Economic"/>
+                                    </xs:restriction>
+                                </xs:simpleType>
+                            </xs:element>
+                            <xs:element name="EnforcementMechanism">
+                                <xs:complexType>
+                                    <xs:sequence>
+                                        <xs:element name="Institution" type="xs:string" maxOccurs="unbounded"/>
+                                        <xs:element name="Method" type="xs:string" maxOccurs="unbounded"/>
+                                        <xs:element name="Penalty" type="xs:string" maxOccurs="unbounded"/>
+                                    </xs:sequence>
+                                </xs:complexType>
+                            </xs:element>
+                            <xs:element name="ClassEffects">
+                                <xs:complexType>
+                                    <xs:sequence>
+                                        <xs:element name="ClassEffect" maxOccurs="unbounded">
+                                            <xs:complexType>
+                                                <xs:sequence>
+                                                    <xs:element name="TargetClass" type="xs:string"/>
+                                                    <xs:element name="Impact" type="xs:string"/>
+                                                </xs:sequence>
+                                            </xs:complexType>
+                                        </xs:element>
+                                    </xs:sequence>
+                                </xs:complexType>
+                            </xs:element>
+                            <xs:element name="SocialImpact">
+                                <xs:complexType>
+                                    <xs:sequence>
+                                        <xs:element name="Economic" type="xs:string"/>
+                                        <xs:element name="Political" type="xs:string"/>
+                                        <xs:element name="Social" type="xs:string"/>
+                                    </xs:sequence>
+                                </xs:complexType>
+                            </xs:element>
+                            <xs:element name="RelatedIdeologies">
+                                <xs:complexType>
+                                    <xs:sequence>
+                                        <xs:element name="Ideology" type="xs:string" maxOccurs="unbounded"/>
+                                    </xs:sequence>
+                                </xs:complexType>
+                            </xs:element>
+                            <xs:element name="HistoricalContext" type="xs:string"/>
+                        </xs:sequence>
+                    </xs:complexType>
+                </xs:element>
+            </xs:sequence>
+        </xs:complexType>
+    </xs:element>
+
+</xs:schema>

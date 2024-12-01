@@ -1,0 +1,168 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" elementFormDefault="qualified">
+
+  <!-- Root element for an Organization -->
+  <xs:element name="Organization">
+    <xs:complexType>
+      <xs:sequence>
+
+        <!-- General Information -->
+        <xs:element name="Name" type="xs:string" />
+        <xs:element name="Type" type="xs:string">
+          <xs:annotation>
+            <xs:documentation>
+              Types may include: Government, Corporation, Union, Religious Group, Activist Group, Secret Society, etc.
+            </xs:documentation>
+          </xs:annotation>
+        </xs:element>
+        <xs:element name="Description" type="xs:string" />
+        <xs:element name="FoundingDate" type="xs:dateTime" />
+        <xs:element name="Location" type="xs:string" />
+        <xs:element name="Ideology" type="xs:string">
+          <xs:annotation>
+            <xs:documentation>
+              The guiding ideology or philosophy of the organization (e.g., Capitalism, Marxism, Nationalism, Environmentalism).
+            </xs:documentation>
+          </xs:annotation>
+        </xs:element>
+
+        <!-- Leadership and Membership -->
+        <xs:element name="Leadership" minOccurs="0">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="Leader" maxOccurs="unbounded">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="Name" type="xs:string" />
+                    <xs:element name="Role" type="xs:string" />
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="Membership" minOccurs="0">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="Member" maxOccurs="unbounded">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="Name" type="xs:string" />
+                    <xs:element name="Role" type="xs:string" minOccurs="0" />
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+
+        <!-- Goals and Objectives -->
+        <xs:element name="Goals" minOccurs="0">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="Goal" maxOccurs="unbounded">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="Description" type="xs:string" />
+                    <xs:element name="Priority" type="xs:integer" />
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+
+        <!-- Resources and Infrastructure -->
+        <xs:element name="Resources" minOccurs="0">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="Resource" maxOccurs="unbounded">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="Type" type="xs:string" />
+                    <xs:element name="Quantity" type="xs:decimal" />
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="Facilities" minOccurs="0">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="Facility" maxOccurs="unbounded">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="Name" type="xs:string" />
+                    <xs:element name="Location" type="xs:string" />
+                    <xs:element name="Purpose" type="xs:string" />
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+
+        <!-- Activities -->
+        <xs:element name="Activities" minOccurs="0">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="Activity" maxOccurs="unbounded">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="Type" type="xs:string">
+                      <xs:annotation>
+                        <xs:documentation>
+                          Types may include: Advocacy, Research, Production, Military Action, Diplomatic Mission, etc.
+                        </xs:documentation>
+                      </xs:annotation>
+                    </xs:element>
+                    <xs:element name="Impact" type="xs:string" />
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+
+        <!-- Influence and Impact -->
+        <xs:element name="Influence" minOccurs="0">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="Scope" type="xs:string">
+                <xs:annotation>
+                  <xs:documentation>
+                    The geographical or societal reach of the organization's influence (e.g., Local, Regional, Global).
+                  </xs:documentation>
+                </xs:annotation>
+              </xs:element>
+              <xs:element name="Effects" minOccurs="0">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="Effect" maxOccurs="unbounded">
+                      <xs:complexType>
+                        <xs:sequence>
+                          <xs:element name="Type" type="xs:string">
+                            <xs:annotation>
+                              <xs:documentation>
+                                Types may include: Economic, Social, Political, Cultural, Ideological.
+                              </xs:documentation>
+                            </xs:annotation>
+                          </xs:element>
+                          <xs:element name="Description" type="xs:string" />
+                          <xs:element name="Magnitude" type="xs:integer" />
+                        </xs:sequence>
+                      </xs:complexType>
+                    </xs:element>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+</xs:schema>

@@ -1,0 +1,159 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<MeansOfProduction>
+  <!-- Steel Factory Alpha -->
+  <ProductionUnit>
+    <ID>P001</ID>
+    <Name>Steel Factory Alpha</Name>
+    <Type>Factory</Type>
+    <Description>A large steel production facility equipped with modern machinery.</Description>
+
+    <!-- Ownership -->
+    <OwnerType>Faction</OwnerType>
+    <OwnerID>F001</OwnerID>
+
+    <!-- Location -->
+    <LocationID>L003</LocationID>
+
+    <!-- Production Details -->
+    <InputResources>
+      <ResourceRequirement>
+        <ResourceID>R001</ResourceID> <!-- Iron Ore -->
+        <Quantity>1000</Quantity>
+      </ResourceRequirement>
+      <ResourceRequirement>
+        <ResourceID>R004</ResourceID> <!-- Coal -->
+        <Quantity>500</Quantity>
+      </ResourceRequirement>
+    </InputResources>
+    <OutputResources>
+      <ResourceOutput>
+        <ResourceID>R002</ResourceID> <!-- Steel -->
+        <Quantity>800</Quantity>
+      </ResourceOutput>
+    </OutputResources>
+    <ProductionCapacity>800</ProductionCapacity>
+    <Efficiency>0.85</Efficiency>
+
+    <!-- Labor Details -->
+    <RequiredLabor>200</RequiredLabor>
+    <LaborType>Skilled</LaborType>
+
+    <!-- Technology -->
+    <TechnologyLevel>Industrial</TechnologyLevel>
+    <RequiredTechnologies>
+      <TechnologyID>T002</TechnologyID> <!-- Advanced Metallurgy -->
+    </RequiredTechnologies>
+
+    <!-- Maintenance and Upkeep -->
+    <MaintenanceCost>5000.0</MaintenanceCost>
+    <Condition>Good</Condition>
+
+    <!-- Attributes -->
+    <Attributes>
+      <Attribute>
+        <Name>EmissionLevel</Name>
+        <Value>High</Value>
+      </Attribute>
+    </Attributes>
+  </ProductionUnit>
+
+  <!-- Organic Farm Beta -->
+  <ProductionUnit>
+    <ID>P002</ID>
+    <Name>Organic Farm Beta</Name>
+    <Type>Farm</Type>
+    <Description>A sustainable farm producing organic food supplies.</Description>
+
+    <!-- Ownership -->
+    <OwnerType>Class</OwnerType>
+    <OwnerID>C001</OwnerID> <!-- Owned by Petit Bourgeoisie -->
+
+    <!-- Location -->
+    <LocationID>L005</LocationID>
+
+    <!-- Production Details -->
+    <InputResources>
+      <ResourceRequirement>
+        <ResourceID>R005</ResourceID> <!-- Seeds -->
+        <Quantity>200</Quantity>
+      </ResourceRequirement>
+      <ResourceRequirement>
+        <ResourceID>R006</ResourceID> <!-- Water -->
+        <Quantity>1000</Quantity>
+      </ResourceRequirement>
+    </InputResources>
+    <OutputResources>
+      <ResourceOutput>
+        <ResourceID>R003</ResourceID> <!-- Food Supplies -->
+        <Quantity>500</Quantity>
+      </ResourceOutput>
+    </OutputResources>
+    <ProductionCapacity>500</ProductionCapacity>
+    <Efficiency>0.90</Efficiency>
+
+    <!-- Labor Details -->
+    <RequiredLabor>50</RequiredLabor>
+    <LaborType>Unskilled</LaborType>
+
+    <!-- Technology -->
+    <TechnologyLevel>Modern</TechnologyLevel>
+    <RequiredTechnologies>
+      <TechnologyID>T003</TechnologyID> <!-- Sustainable Farming Techniques -->
+    </RequiredTechnologies>
+
+    <!-- Maintenance and Upkeep -->
+    <MaintenanceCost>1500.0</MaintenanceCost>
+    <Condition>New</Condition>
+  </ProductionUnit>
+
+  <!-- Coal Mine Gamma -->
+  <ProductionUnit>
+    <ID>P003</ID>
+    <Name>Coal Mine Gamma</Name>
+    <Type>Mine</Type>
+    <Description>An underground mine extracting coal for energy production.</Description>
+
+    <!-- Ownership -->
+    <OwnerType>Faction</OwnerType>
+    <OwnerID>F002</OwnerID> <!-- Corporate Elites -->
+
+    <!-- Location -->
+    <LocationID>L004</LocationID>
+
+    <!-- Production Details -->
+    <InputResources>
+      <!-- No input resources needed -->
+    </InputResources>
+    <OutputResources>
+      <ResourceOutput>
+        <ResourceID>R004</ResourceID> <!-- Coal -->
+        <Quantity>1000</Quantity>
+      </ResourceOutput>
+    </OutputResources>
+    <ProductionCapacity>1000</ProductionCapacity>
+    <Efficiency>0.80</Efficiency>
+
+    <!-- Labor Details -->
+    <RequiredLabor>300</RequiredLabor>
+    <LaborType>Unskilled</LaborType>
+
+    <!-- Technology -->
+    <TechnologyLevel>Industrial</TechnologyLevel>
+    <RequiredTechnologies>
+      <TechnologyID>T004</TechnologyID> <!-- Mining Machinery -->
+    </RequiredTechnologies>
+
+    <!-- Maintenance and Upkeep -->
+    <MaintenanceCost>4000.0</MaintenanceCost>
+    <Condition>Worn</Condition>
+
+    <!-- Attributes -->
+    <Attributes>
+      <Attribute>
+        <Name>SafetyLevel</Name>
+        <Value>Low</Value>
+      </Attribute>
+    </Attributes>
+  </ProductionUnit>
+
+</MeansOfProduction>

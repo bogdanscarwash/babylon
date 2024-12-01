@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Movement>
+    <ID>M001</ID>
+    <Name>Labor Movement</Name>
+    <Description>A broad social movement advocating for workers' rights, better working conditions, and economic justice through collective action and organization.</Description>
+    <Type>Labor</Type>
+    <FoundingDate>1866-08-20T00:00:00</FoundingDate>
+    <PrimaryCause>Worker exploitation and poor working conditions under industrial capitalism</PrimaryCause>
+    
+    <Membership>
+        <Member>
+            <Name>Industrial Workers</Name>
+            <Role>Core constituency</Role>
+        </Member>
+        <Member>
+            <Name>Trade Unions</Name>
+            <Role>Organizational backbone</Role>
+        </Member>
+    </Membership>
+    
+    <AffiliatedFactions>
+        <Faction>F003</Faction> <!-- Marxist-Leninist faction -->
+        <Faction>F004</Faction> <!-- Maoist faction -->
+    </AffiliatedFactions>
+    
+    <Ideology>Working class solidarity, trade unionism, collective bargaining, workers' rights</Ideology>
+    
+    <Goals>
+        <Goal>
+            <Description>Establish living wages for all workers</Description>
+            <Priority>1</Priority>
+        </Goal>
+        <Goal>
+            <Description>Secure workplace safety regulations</Description>
+            <Priority>2</Priority>
+        </Goal>
+        <Goal>
+            <Description>Achieve universal labor rights and protections</Description>
+            <Priority>3</Priority>
+        </Goal>
+    </Goals>
+    
+    <Tactics>
+        <Tactic>
+            <Type>Strikes</Type>
+            <Effectiveness>8</Effectiveness>
+            <Impact>Direct economic pressure on employers</Impact>
+        </Tactic>
+        <Tactic>
+            <Type>Collective Bargaining</Type>
+            <Effectiveness>7</Effectiveness>
+            <Impact>Negotiated improvements in working conditions</Impact>
+        </Tactic>
+        <Tactic>
+            <Type>Political Lobbying</Type>
+            <Effectiveness>6</Effectiveness>
+            <Impact>Legislative reforms for workers' rights</Impact>
+        </Tactic>
+    </Tactics>
+    
+    <Impact>
+        <Effect>
+            <Type>Economic</Type>
+            <Target>Working Class</Target>
+            <Magnitude>8</Magnitude>
+        </Effect>
+        <Effect>
+            <Type>Political</Type>
+            <Target>Labor Laws</Target>
+            <Magnitude>7</Magnitude>
+        </Effect>
+    </Impact>
+    
+    <Challenges>
+        <Challenge>
+            <Description>Union-busting tactics by corporations</Description>
+            <Severity>8</Severity>
+            <Response>Legal action and worker solidarity campaigns</Response>
+        </Challenge>
+        <Challenge>
+            <Description>Automation and technological displacement</Description>
+            <Severity>7</Severity>
+            <Response>Worker retraining programs and technology adaptation strategies</Response>
+        </Challenge>
+    </Challenges>
+</Movement>

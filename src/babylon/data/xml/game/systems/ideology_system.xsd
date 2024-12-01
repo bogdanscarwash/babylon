@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+
+  <!-- Root Element: Ideologies -->
+  <xs:element name="Ideologies">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="Ideology" type="IdeologyType" maxOccurs="unbounded"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- Ideology Type -->
+  <xs:complexType name="IdeologyType">
+    <xs:sequence>
+      <!-- Basic Information -->
+      <xs:element name="ID">
+        <xs:simpleType>
+          <xs:restriction base="xs:string">
+            <xs:pattern value="I[0-9]{3}"/>
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:element>
+      <xs:element name="Name" type="xs:string"/>
+      <xs:element name="Description" type="xs:string" minOccurs="0"/>
+      <xs:element name="HistoricalContext" type="xs:string" minOccurs="0"/>
+
+      <!-- Core Principles -->
+      <xs:element name="CorePrinciples">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="Principle" type="xs:string" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+
+      <!-- Support Groups -->
+      <xs:element name="SupportGroups">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="Group" type="SupportGroupType" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+
+      <!-- Influence Metrics -->
+      <xs:element name="InfluenceMetrics">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="Popularity" type="xs:decimal"/> <!-- 0.0 to 1.0 -->
+            <xs:element name="EliteSupport" type="xs:decimal"/> <!-- 0.0 to 1.0 -->
+            <xs:element name="GeographicalReach" type="xs:string"/> <!-- e.g., "Local", "National", "Global" -->
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+
+      <!-- Contradictions -->
+      <xs:element name="Contradictions">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="Contradiction" type="ContradictionType" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+
+      <!-- Evolution -->
+      <xs:element name="Evolution">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="Phase" type="PhaseType" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Support Group Type -->
+  <xs:complexType name="SupportGroupType">
+    <xs:sequence>
+      <xs:element name="Name" type="xs:string"/>
+      <xs:element name="ClassAlignment" type="xs:string"/> <!-- e.g., "Working Class", "Bourgeoisie" -->
+      <xs:element name="Size" type="xs:integer"/> <!-- Population size supporting this ideology -->
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Contradiction Type -->
+  <xs:complexType name="ContradictionType">
+    <xs:sequence>
+      <xs:element name="OpposingIdeology" type="xs:string"/>
+      <xs:element name="Description" type="xs:string"/>
+      <xs:element name="Severity" type="xs:string"/> <!-- e.g., "Low", "Medium", "High" -->
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Phase Type -->
+  <xs:complexType name="PhaseType">
+    <xs:sequence>
+      <xs:element name="Name" type="xs:string"/> <!-- e.g., "Emergence", "Dominance", "Decline" -->
+      <xs:element name="Description" type="xs:string" minOccurs="0"/>
+      <xs:element name="Triggers" type="xs:string" maxOccurs="unbounded"/> <!-- e.g., "Economic Collapse", "War" -->
+    </xs:sequence>
+  </xs:complexType>
+
+</xs:schema>

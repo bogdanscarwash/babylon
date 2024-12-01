@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Crisis>
+    <ID>CRISIS_002</ID>
+    <Name>Palestine Military Aid Controversy</Name>
+    <Description>International crisis erupts over military aid policies and their impact on Palestinian civilians, leading to global protests and diplomatic tensions.</Description>
+    <Type>Military</Type>
+    
+    <Participants>
+        <FactionID>PALESTINE_MOVEMENT</FactionID>
+        <FactionID>MAOIST_FACTION</FactionID>
+        <FactionID>SOCIALIST_MOVEMENT</FactionID>
+    </Participants>
+    
+    <Triggers>
+        <Trigger>
+            <Type>Policy Implementation</Type>
+            <Description>Increased military aid deployment under new policy</Description>
+        </Trigger>
+        <Trigger>
+            <Type>Humanitarian Crisis</Type>
+            <Description>Civilian casualties from military operations</Description>
+        </Trigger>
+    </Triggers>
+    
+    <Contradictions>
+        <Contradiction>
+            <WithFactionID>PALESTINE_MOVEMENT</WithFactionID>
+            <Nature>Human Rights vs Military Support</Nature>
+            <Intensity>Severe</Intensity>
+        </Contradiction>
+        <Contradiction>
+            <WithFactionID>SOCIALIST_MOVEMENT</WithFactionID>
+            <Nature>International Solidarity vs State Policy</Nature>
+            <Intensity>High</Intensity>
+        </Contradiction>
+    </Contradictions>
+    
+    <Resolutions>
+        <Resolution>
+            <Type>International Pressure</Type>
+            <Description>Global campaign to halt military aid</Description>
+            <Outcome>Pending</Outcome>
+        </Resolution>
+        <Resolution>
+            <Type>Direct Action</Type>
+            <Description>Blockade of military shipments</Description>
+            <Outcome>Pending</Outcome>
+        </Resolution>
+    </Resolutions>
+    
+    <Impact>
+        <FactionImpact>
+            <FactionID>PALESTINE_MOVEMENT</FactionID>
+            <Effect>Movement Growth</Effect>
+            <Magnitude>High</Magnitude>
+        </FactionImpact>
+        <WorldImpact>
+            <Effect>Global Political Realignment</Effect>
+            <Magnitude>Severe</Magnitude>
+            <Description>Major shift in international alliances and solidarity movements</Description>
+        </WorldImpact>
+    </Impact>
+</Crisis>

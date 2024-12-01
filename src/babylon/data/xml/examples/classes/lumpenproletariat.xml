@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Classes>
+    <Class>
+        <Name>Lumpenproletariat</Name>
+        <Description>The underclass existing outside the wage-labor system, including the chronically unemployed, criminals, and others existing on the margins of society.</Description>
+        <Attributes>
+            <Attribute>
+                <Name>RelationToProduction</Name>
+                <Value>Outside formal economic system</Value>
+            </Attribute>
+            <Attribute>
+                <Name>SocialStatus</Name>
+                <Value>Marginalized</Value>
+            </Attribute>
+        </Attributes>
+        <Relationships>
+            <Relationship>
+                <WithClassName>Proletariat</WithClassName>
+                <Nature>Disconnected</Nature>
+            </Relationship>
+            <Relationship>
+                <WithClassName>Bourgeoisie</WithClassName>
+                <Nature>Antagonistic</Nature>
+            </Relationship>
+        </Relationships>
+    </Class>
+</Classes>

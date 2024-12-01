@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- locations.xsd -->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+
+  <!-- Root Element: Locations -->
+  <xs:element name="Locations">
+    <xs:complexType>
+      <xs:sequence>
+        <!-- Multiple Location Elements -->
+        <xs:element name="Location" type="LocationType" maxOccurs="unbounded"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- Location Type -->
+  <xs:complexType name="LocationType">
+    <xs:sequence>
+      <!-- Basic Information -->
+      <xs:element name="ID" type="xs:string"/>
+      <xs:element name="Name" type="xs:string"/>
+      <xs:element name="Type" type="xs:string"/> <!-- e.g., City, Region, Facility -->
+      <xs:element name="Description" type="xs:string" minOccurs="0"/>
+      
+      <!-- Geography and Coordinates -->
+      <xs:element name="Coordinates" type="CoordinatesType" minOccurs="0"/>
+      <xs:element name="TerrainType" type="xs:string" minOccurs="0"/> <!-- e.g., Mountainous, Urban -->
+      <xs:element name="Climate" type="xs:string" minOccurs="0"/> <!-- e.g., Tropical, Arid -->
+      
+      <!-- Political and Control Information -->
+      <xs:element name="ControlledBy" type="xs:string" minOccurs="0"/> <!-- FactionID or ClassID -->
+      <xs:element name="Population" type="xs:integer" minOccurs="0"/>
+      <xs:element name="DominantSocialClass" type="xs:string" minOccurs="0"/> <!-- ClassID -->
+      
+      <!-- Economic Information -->
+      <xs:element name="ResourcesAvailable" type="ResourcesAvailableType" minOccurs="0"/>
+      <xs:element name="ProductionUnits" minOccurs="0">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="ProductionUnitID" type="xs:string" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      
+      <!-- Attributes -->
+      <xs:element name="Attributes" type="AttributesType" minOccurs="0"/>
+      
+      <!-- Sub-Locations -->
+      <xs:element name="SubLocations" minOccurs="0">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="Location" type="LocationType" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Coordinates Type -->
+  <xs:complexType name="CoordinatesType">
+    <xs:sequence>
+      <xs:element name="Latitude" type="xs:decimal"/>
+      <xs:element name="Longitude" type="xs:decimal"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Resources Available Type -->
+  <xs:complexType name="ResourcesAvailableType">
+    <xs:sequence>
+      <xs:element name="Resource" type="ResourceQuantityType" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Resource Quantity Type -->
+  <xs:complexType name="ResourceQuantityType">
+    <xs:sequence>
+      <xs:element name="ResourceID" type="xs:string"/>
+      <xs:element name="Quantity" type="xs:decimal"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Attributes Type -->
+  <xs:complexType name="AttributesType">
+    <xs:sequence>
+      <xs:element name="Attribute" type="AttributeType" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Attribute Type -->
+  <xs:complexType name="AttributeType">
+    <xs:sequence>
+      <xs:element name="Name" type="xs:string"/>
+      <xs:element name="Value" type="xs:string"/>
+    </xs:sequence>
+  </xs:complexType>
+
+</xs:schema>

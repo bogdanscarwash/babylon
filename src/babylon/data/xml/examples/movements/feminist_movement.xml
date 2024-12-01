@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Movement>
+    <ID>M002</ID>
+    <Name>Feminist Movement</Name>
+    <Description>A social and political movement advocating for women's rights, gender equality, and the dismantling of patriarchal systems of oppression.</Description>
+    <Type>Civil Rights</Type>
+    <FoundingDate>1848-07-19T00:00:00</FoundingDate>
+    <PrimaryCause>Systemic gender-based discrimination and patriarchal oppression</PrimaryCause>
+    
+    <Membership>
+        <Member>
+            <Name>Women's Rights Organizations</Name>
+            <Role>Core organizing bodies</Role>
+        </Member>
+        <Member>
+            <Name>LGBTQ+ Activists</Name>
+            <Role>Intersectional allies</Role>
+        </Member>
+        <Member>
+            <Name>Academic Feminists</Name>
+            <Role>Theoretical development</Role>
+        </Member>
+    </Membership>
+    
+    <Leader>Decentralized leadership structure</Leader>
+    
+    <Ideology>Intersectional feminism, gender equality, reproductive rights, bodily autonomy</Ideology>
+    
+    <Goals>
+        <Goal>
+            <Description>Achieve full economic equality and workplace rights</Description>
+            <Priority>1</Priority>
+        </Goal>
+        <Goal>
+            <Description>Secure and protect reproductive rights</Description>
+            <Priority>1</Priority>
+        </Goal>
+        <Goal>
+            <Description>End gender-based violence and discrimination</Description>
+            <Priority>2</Priority>
+        </Goal>
+        <Goal>
+            <Description>Achieve equal political representation</Description>
+            <Priority>3</Priority>
+        </Goal>
+    </Goals>
+    
+    <Tactics>
+        <Tactic>
+            <Type>Mass Protests</Type>
+            <Effectiveness>8</Effectiveness>
+            <Impact>Public awareness and political pressure</Impact>
+        </Tactic>
+        <Tactic>
+            <Type>Legislative Advocacy</Type>
+            <Effectiveness>7</Effectiveness>
+            <Impact>Legal reforms for gender equality</Impact>
+        </Tactic>
+        <Tactic>
+            <Type>Education Campaigns</Type>
+            <Effectiveness>8</Effectiveness>
+            <Impact>Cultural transformation and consciousness-raising</Impact>
+        </Tactic>
+    </Tactics>
+    
+    <Impact>
+        <Effect>
+            <Type>Political</Type>
+            <Target>Women's Rights Legislation</Target>
+            <Magnitude>8</Magnitude>
+        </Effect>
+        <Effect>
+            <Type>Social</Type>
+            <Target>Gender Roles</Target>
+            <Magnitude>7</Magnitude>
+        </Effect>
+        <Effect>
+            <Type>Economic</Type>
+            <Target>Workplace Equality</Target>
+            <Magnitude>6</Magnitude>
+        </Effect>
+    </Impact>
+    
+    <Challenges>
+        <Challenge>
+            <Description>Patriarchal resistance and backlash</Description>
+            <Severity>9</Severity>
+            <Response>Coalition building and sustained organizing</Response>
+        </Challenge>
+        <Challenge>
+            <Description>Intersectional inclusion and representation</Description>
+            <Severity>7</Severity>
+            <Response>Developing inclusive feminist theory and practice</Response>
+        </Challenge>
+        <Challenge>
+            <Description>Religious and cultural opposition</Description>
+            <Severity>8</Severity>
+            <Response>Interfaith dialogue and cultural education</Response>
+        </Challenge>
+    </Challenges>
+</Movement>

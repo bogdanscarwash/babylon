@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Movement>
+    <ID>M007</ID>
+    <Name>MAGA Movement</Name>
+    <Description>A right-wing populist movement centered around former President Donald Trump's "Make America Great Again" slogan and ideology.</Description>
+    <Type>Political-Populist</Type>
+    <FoundingDate>2015-06-16T00:00:00</FoundingDate>
+    <PrimaryCause>Perceived decline of traditional American values and economic displacement</PrimaryCause>
+    
+    <Membership>
+        <Member>
+            <Name>Conservative Political Organizations</Name>
+            <Role>Political mobilization</Role>
+        </Member>
+        <Member>
+            <Name>Right-wing Media Networks</Name>
+            <Role>Message amplification</Role>
+        </Member>
+        <Member>
+            <Name>Grassroots Supporters</Name>
+            <Role>Rally attendance and social media</Role>
+        </Member>
+    </Membership>
+    
+    <Leader>Donald Trump and associated political figures</Leader>
+    
+    <AffiliatedFactions>
+        <Faction>America First Republicans</Faction>
+        <Faction>Tea Party remnants</Faction>
+        <Faction>Populist Right</Faction>
+    </AffiliatedFactions>
+    
+    <Ideology>Right-wing populism, economic nationalism, cultural conservatism</Ideology>
+    
+    <Goals>
+        <Goal>
+            <Description>Electoral victory and political control</Description>
+            <Priority>1</Priority>
+        </Goal>
+        <Goal>
+            <Description>Immigration restriction and border control</Description>
+            <Priority>2</Priority>
+        </Goal>
+        <Goal>
+            <Description>Economic protectionism and nationalism</Description>
+            <Priority>2</Priority>
+        </Goal>
+        <Goal>
+            <Description>Cultural traditionalism</Description>
+            <Priority>3</Priority>
+        </Goal>
+    </Goals>
+    
+    <Tactics>
+        <Tactic>
+            <Type>Mass Rallies</Type>
+            <Effectiveness>9</Effectiveness>
+            <Impact>Base mobilization and media attention</Impact>
+        </Tactic>
+        <Tactic>
+            <Type>Social Media Campaigns</Type>
+            <Effectiveness>8</Effectiveness>
+            <Impact>Message dissemination and coordination</Impact>
+        </Tactic>
+        <Tactic>
+            <Type>Electoral Politics</Type>
+            <Effectiveness>8</Effectiveness>
+            <Impact>Political power and policy influence</Impact>
+        </Tactic>
+    </Tactics>
+    
+    <Impact>
+        <Effect>
+            <Type>Political</Type>
+            <Target>Party Alignment</Target>
+            <Magnitude>9</Magnitude>
+        </Effect>
+        <Effect>
+            <Type>Social</Type>
+            <Target>Political Polarization</Target>
+            <Magnitude>9</Magnitude>
+        </Effect>
+        <Effect>
+            <Type>Cultural</Type>
+            <Target>Public Discourse</Target>
+            <Magnitude>8</Magnitude>
+        </Effect>
+    </Impact>
+    
+    <Challenges>
+        <Challenge>
+            <Description>Electoral setbacks and legal issues</Description>
+            <Severity>8</Severity>
+            <Response>Claims of election fraud and system rigging</Response>
+        </Challenge>
+        <Challenge>
+            <Description>Mainstream media opposition</Description>
+            <Severity>7</Severity>
+            <Response>Alternative media networks and direct communication</Response>
+        </Challenge>
+        <Challenge>
+            <Description>Internal Republican Party divisions</Description>
+            <Severity>6</Severity>
+            <Response>Primary challenges and party realignment</Response>
+        </Challenge>
+    </Challenges>
+</Movement>

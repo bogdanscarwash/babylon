@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- technology.xsd -->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+
+  <!-- Root Element: Technologies -->
+  <xs:element name="Technologies">
+    <xs:complexType>
+      <xs:sequence>
+        <!-- Multiple Technology Elements -->
+        <xs:element name="Technology" type="TechnologyType" maxOccurs="unbounded"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- Technology Type -->
+  <xs:complexType name="TechnologyType">
+    <xs:sequence>
+      <!-- Basic Information -->
+      <xs:element name="ID">
+        <xs:simpleType>
+          <xs:restriction base="xs:string">
+            <xs:pattern value="T[0-9]{3}"/>
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:element>
+      <xs:element name="Name" type="xs:string"/>
+      <xs:element name="Category" type="xs:string"/> <!-- e.g., Military, Economic, Social -->
+      <xs:element name="Description" type="xs:string" minOccurs="0"/>
+      
+      <!-- Prerequisites -->
+      <xs:element name="PrerequisiteTechnologies" minOccurs="0">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="TechnologyID" type="xs:string" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      <xs:element name="RequiredResources" minOccurs="0">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="ResourceRequirement" type="ResourceRequirementType" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      
+      <!-- Research Details -->
+      <xs:element name="ResearchCost" type="xs:decimal"/> <!-- Cost in research points or equivalent -->
+      <xs:element name="ResearchTime" type="xs:integer"/> <!-- Time units required to research -->
+      
+      <!-- Effects -->
+      <xs:element name="Effects">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="Effect" type="EffectType" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      
+      <!-- Availability -->
+      <xs:element name="AvailableToFactions" minOccurs="0">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="FactionID" type="xs:string" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      <xs:element name="AvailableToClasses" minOccurs="0">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="ClassID" type="xs:string" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      
+      <!-- Attributes -->
+      <xs:element name="Attributes" minOccurs="0">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="Attribute" type="AttributeType" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Resource Requirement Type -->
+  <xs:complexType name="ResourceRequirementType">
+    <xs:sequence>
+      <xs:element name="ResourceID" type="xs:string"/>
+      <xs:element name="Quantity" type="xs:decimal"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Effect Type -->
+  <xs:complexType name="EffectType">
+    <xs:sequence>
+      <xs:element name="Target" type="xs:string"/> <!-- e.g., ProductionUnit, MilitaryUnit -->
+      <xs:element name="Attribute" type="xs:string"/> <!-- Attribute to be affected -->
+      <xs:element name="ModificationType" type="xs:string"/> <!-- e.g., Increase, Decrease, Enable -->
+      <xs:element name="Value" type="xs:decimal" minOccurs="0"/> <!-- Numerical value -->
+      <xs:element name="Description" type="xs:string" minOccurs="0"/> <!-- Description of the effect -->
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Attribute Type -->
+  <xs:complexType name="AttributeType">
+    <xs:sequence>
+      <xs:element name="Name" type="xs:string"/>
+      <xs:element name="Value" type="xs:string"/>
+    </xs:sequence>
+  </xs:complexType>
+
+</xs:schema>

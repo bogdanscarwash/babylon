@@ -1,0 +1,52 @@
+{
+  "customCommands": [
+    {
+      "name": "generate-xml-template",
+      "prompt": "{{{ input }}}\n\n- Create XSD templates for game objects based on the project description and game mechanics.\n- Include appropriate data types, restrictions, and relationships between elements.\n- Ensure dialectical consistency between the XSD templates and the game mechanics.\n- Define complex types for contradictions, classes, and social relations\n- Implement validation rules for dialectical relationships\n- Ensure proper modeling of base-superstructure dynamics\n- Include cross-references between related entities\n- Use appropriate restrictions for historical materialist progression",
+      "description": "For the Fall of Babylon create a game object template."
+    },
+    {
+      "name": "generate-game-object",
+      "prompt": "{{{ input }}}\n\n- Generate valid instances of the XSD template specificed by the user representing game entities\n- Include realistic contradiction and class relationships\n- Maintain referential integrity across social structures\n- Use meaningful IDs for cross referencing (e.g., ContradictionID, ClassID)\n- Follow naming convention: PascalCase for elements, camelCase for attributes\n- Include comprehensive documentation of dialectical relationships",
+      "description": "For the Fall of Babylon game, create a game object as an instance of a template."
+    }
+  ],
+  "contextProviders": [
+    {
+      "name": "database",
+      "params": {
+        "connections": [
+          {
+            "name": "examplePostgres",
+            "connection_type": "postgres",
+            "connection": {
+              "user": "username",
+              "host": "localhost",
+              "database": "exampleDB",
+              "password": "yourPassword",
+              "port": 5432
+            }
+          },
+          {
+            "name": "exampleMssql",
+            "connection_type": "mssql",
+            "connection": {
+              "user": "username",
+              "server": "localhost",
+              "database": "exampleDB",
+              "password": "yourPassword"
+            }
+          },
+          {
+            "name": "exampleSqlite",
+            "connection_type": "sqlite",
+            "connection": {
+              "filename": "/path/to/your/sqlite/database.db"
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "mergeBehavior": "merge"
+}

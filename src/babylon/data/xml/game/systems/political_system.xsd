@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+
+  <!-- Root Element: FactionPoliticalSystem -->
+  <xs:element name="FactionPoliticalSystem">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="Factions" type="FactionsType"/>
+        <xs:element name="PoliticalStructures" type="PoliticalStructuresType"/>
+        <xs:element name="Policies" type="PoliciesType"/>
+        <xs:element name="Conflicts" type="ConflictsType"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <!-- Factions -->
+  <xs:complexType name="FactionsType">
+    <xs:sequence>
+      <xs:element name="Faction" type="FactionType" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="FactionType">
+    <xs:sequence>
+      <xs:element name="ID" type="xs:string"/>
+      <xs:element name="Name" type="xs:string"/>
+      <xs:element name="Ideology" type="xs:string"/>
+      <xs:element name="Popularity" type="xs:decimal"/> <!-- Faction's public support -->
+      <xs:element name="EliteSupport" type="xs:decimal"/> <!-- Support from political elites -->
+      <xs:element name="Relationships" type="RelationshipsType"/>
+      <xs:element name="Goals" type="GoalsType"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Faction Relationships -->
+  <xs:complexType name="RelationshipsType">
+    <xs:sequence>
+      <xs:element name="Relationship" type="RelationshipType" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="RelationshipType">
+    <xs:sequence>
+      <xs:element name="TargetFactionID" type="xs:string"/>
+      <xs:element name="Type" type="xs:string"/> <!-- Ally, Enemy, Neutral -->
+      <xs:element name="Strength" type="xs:decimal"/> <!-- 0.0 to 1.0 -->
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Faction Goals -->
+  <xs:complexType name="GoalsType">
+    <xs:sequence>
+      <xs:element name="Goal" type="GoalType" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="GoalType">
+    <xs:sequence>
+      <xs:element name="Description" type="xs:string"/>
+      <xs:element name="Priority" type="xs:string"/> <!-- e.g., High, Medium, Low -->
+      <xs:element name="SuccessCriteria" type="xs:string"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Political Structures -->
+  <xs:complexType name="PoliticalStructuresType">
+    <xs:sequence>
+      <xs:element name="Structure" type="StructureType" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="StructureType">
+    <xs:sequence>
+      <xs:element name="Name" type="xs:string"/> <!-- e.g., Democracy, Autocracy -->
+      <xs:element name="Branches" type="BranchesType"/>
+      <xs:element name="Legitimacy" type="LegitimacyType"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="BranchesType">
+    <xs:sequence>
+      <xs:element name="Branch" type="BranchType" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="BranchType">
+    <xs:sequence>
+      <xs:element name="Name" type="xs:string"/> <!-- Executive, Legislative, Judicial -->
+      <xs:element name="Power" type="xs:decimal"/> <!-- Proportion of power this branch holds -->
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Legitimacy -->
+  <xs:complexType name="LegitimacyType">
+    <xs:sequence>
+      <xs:element name="PublicSupport" type="xs:decimal"/> <!-- 0.0 to 1.0 -->
+      <xs:element name="EliteSupport" type="xs:decimal"/>
+      <xs:element name="Stability" type="xs:string"/> <!-- Stable, Unstable -->
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Policies -->
+  <xs:complexType name="PoliciesType">
+    <xs:sequence>
+      <xs:element name="Policy" type="PolicyType" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="PolicyType">
+    <xs:sequence>
+      <xs:element name="Name" type="xs:string"/>
+      <xs:element name="Category" type="xs:string"/> <!-- e.g., Economic, Social, Military -->
+      <xs:element name="Effect" type="xs:string"/> <!-- Narrative or systemic impact -->
+      <xs:element name="FactionSupport" type="xs:string"/> <!-- Which factions support this -->
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Conflicts -->
+  <xs:complexType name="ConflictsType">
+    <xs:sequence>
+      <xs:element name="Conflict" type="ConflictType" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="ConflictType">
+    <xs:sequence>
+      <xs:element name="Type" type="xs:string"/> <!-- Electoral, Coup, Civil War -->
+      <xs:element name="Participants" type="xs:string"/> <!-- Factions involved -->
+      <xs:element name="Resolution" type="xs:string"/> <!-- Outcome -->
+    </xs:sequence>
+  </xs:complexType>
+
+</xs:schema>

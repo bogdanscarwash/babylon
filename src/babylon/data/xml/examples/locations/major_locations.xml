@@ -1,0 +1,252 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Locations xmlns="http://babylon/marxism/base/location"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://babylon/marxism/base/location ../../marxism/base/Location.xsd">
+    
+    <!-- Los Angeles Metro Area -->
+    <Location>
+        <ID>L001</ID>
+        <Name>Los Angeles-Long Beach-Anaheim</Name>
+        <Type>Metropolitan</Type>
+        <Description>Major West Coast metropolitan area with diverse economy</Description>
+        <Coordinates>
+            <Latitude>34.0522</Latitude>
+            <Longitude>-118.2437</Longitude>
+        </Coordinates>
+        <TerrainType>Coastal Urban</TerrainType>
+        <Climate>Mediterranean</Climate>
+        <ControlledBy>F001</ControlledBy>
+        <Population>12799100</Population>
+        <DominantSocialClass>C001</DominantSocialClass>
+        <ResourcesAvailable>
+            <Resource>
+                <ResourceID>R001</ResourceID>
+                <Quantity>1000.0</Quantity>
+            </Resource>
+        </ResourcesAvailable>
+        <SubLocations>
+            <Location>
+                <ID>L001A</ID>
+                <Name>Long Beach Port</Name>
+                <Type>Industrial</Type>
+                <Population>466451</Population>
+                <ControlledBy>F001</ControlledBy>
+            </Location>
+            <Location>
+                <ID>L001B</ID>
+                <Name>Hollywood</Name>
+                <Type>Cultural</Type>
+                <Population>153075</Population>
+                <ControlledBy>F002</ControlledBy>
+            </Location>
+        </SubLocations>
+    </Location>
+
+    <!-- Chicago Metro Area -->
+    <Location>
+        <ID>L002</ID>
+        <Name>Chicago-Naperville-Elgin</Name>
+        <Type>Metropolitan</Type>
+        <Description>Major Midwestern industrial and financial hub</Description>
+        <Coordinates>
+            <Latitude>41.8781</Latitude>
+            <Longitude>-87.6298</Longitude>
+        </Coordinates>
+        <TerrainType>Urban Plains</TerrainType>
+        <Climate>Continental</Climate>
+        <ControlledBy>F002</ControlledBy>
+        <Population>9262559</Population>
+        <DominantSocialClass>C002</DominantSocialClass>
+        <SubLocations>
+            <Location>
+                <ID>L002A</ID>
+                <Name>Industrial Corridor</Name>
+                <Type>Industrial</Type>
+                <Population>311598</Population>
+                <ControlledBy>F002</ControlledBy>
+            </Location>
+            <Location>
+                <ID>L002B</ID>
+                <Name>Financial District</Name>
+                <Type>Financial</Type>
+                <Population>247280</Population>
+                <ControlledBy>F003</ControlledBy>
+            </Location>
+        </SubLocations>
+    </Location>
+
+    <!-- Washington DC Metro Area -->
+    <Location>
+        <ID>L003</ID>
+        <Name>Washington-Arlington-Alexandria</Name>
+        <Type>Metropolitan</Type>
+        <Description>Capital region and political center</Description>
+        <Coordinates>
+            <Latitude>38.9072</Latitude>
+            <Longitude>-77.0369</Longitude>
+        </Coordinates>
+        <TerrainType>Urban Coastal Plain</TerrainType>
+        <Climate>Humid Subtropical</Climate>
+        <ControlledBy>F001</ControlledBy>
+        <Population>6304449</Population>
+        <DominantSocialClass>C003</DominantSocialClass>
+        <SubLocations>
+            <Location>
+                <ID>L003A</ID>
+                <Name>Capitol Hill</Name>
+                <Type>Government</Type>
+                <Population>876150</Population>
+                <ControlledBy>F001</ControlledBy>
+            </Location>
+            <Location>
+                <ID>L003B</ID>
+                <Name>Pentagon City</Name>
+                <Type>Military</Type>
+                <Population>547196</Population>
+                <ControlledBy>F001</ControlledBy>
+            </Location>
+            <Location>
+                <ID>L003C</ID>
+                <Name>Alexandria Old Town</Name>
+                <Type>Historical</Type>
+                <Population>293693</Population>
+                <ControlledBy>F002</ControlledBy>
+            </Location>
+        </SubLocations>
+    </Location>
+
+    <!-- Denver Metro Area -->
+    <Location>
+        <ID>L004</ID>
+        <Name>Denver-Aurora-Centennial</Name>
+        <Type>Metropolitan</Type>
+        <Description>Mountain region hub with tech and resource industries</Description>
+        <Coordinates>
+            <Latitude>39.7392</Latitude>
+            <Longitude>-104.9903</Longitude>
+        </Coordinates>
+        <TerrainType>Mountain Urban</TerrainType>
+        <Climate>Semi-arid</Climate>
+        <ControlledBy>F003</ControlledBy>
+        <Population>3005131</Population>
+        <DominantSocialClass>C002</DominantSocialClass>
+        <SubLocations>
+            <Location>
+                <ID>L004A</ID>
+                <Name>Tech Center</Name>
+                <Type>Technology</Type>
+                <Population>151321</Population>
+                <ControlledBy>F003</ControlledBy>
+            </Location>
+            <Location>
+                <ID>L004B</ID>
+                <Name>Mining District</Name>
+                <Type>Industrial</Type>
+                <Population>121485</Population>
+                <ControlledBy>F002</ControlledBy>
+            </Location>
+        </SubLocations>
+    </Location>
+
+    <!-- Baltimore Metro Area -->
+    <Location>
+        <ID>L005</ID>
+        <Name>Baltimore-Columbia-Towson</Name>
+        <Type>Metropolitan</Type>
+        <Description>Major port and industrial center</Description>
+        <Coordinates>
+            <Latitude>39.2904</Latitude>
+            <Longitude>-76.6122</Longitude>
+        </Coordinates>
+        <TerrainType>Coastal Urban</TerrainType>
+        <Climate>Humid Subtropical</Climate>
+        <ControlledBy>F002</ControlledBy>
+        <Population>2834316</Population>
+        <DominantSocialClass>C001</DominantSocialClass>
+        <SubLocations>
+            <Location>
+                <ID>L005A</ID>
+                <Name>Inner Harbor</Name>
+                <Type>Port</Type>
+                <Population>131381</Population>
+                <ControlledBy>F002</ControlledBy>
+            </Location>
+            <Location>
+                <ID>L005B</ID>
+                <Name>Industrial Park</Name>
+                <Type>Industrial</Type>
+                <Population>110672</Population>
+                <ControlledBy>F002</ControlledBy>
+            </Location>
+        </SubLocations>
+    </Location>
+
+    <!-- Kansas City Metropolitan Area -->
+    <Location>
+        <ID>L006</ID>
+        <Name>Kansas City</Name>
+        <Type>Metropolitan</Type>
+        <Description>Major Midwestern transportation and cultural hub</Description>
+        <Coordinates>
+            <Latitude>39.0997</Latitude>
+            <Longitude>-94.5786</Longitude>
+        </Coordinates>
+        <TerrainType>Urban Plains</TerrainType>
+        <Climate>Continental</Climate>
+        <ControlledBy>F001</ControlledBy>
+        <Population>2219865</Population>
+        <DominantSocialClass>C001</DominantSocialClass>
+        <ResourcesAvailable>
+            <Resource>
+                <ResourceID>R001</ResourceID>
+                <Quantity>500.0</Quantity>
+            </Resource>
+        </ResourcesAvailable>
+        <SubLocations>
+            <!-- Manhattan -->
+            <Location>
+                <ID>L006A</ID>
+                <Name>Manhattan</Name>
+                <Type>Educational</Type>
+                <Description>Home to Kansas State University</Description>
+                <Coordinates>
+                    <Latitude>39.1836</Latitude>
+                    <Longitude>-96.5717</Longitude>
+                </Coordinates>
+                <TerrainType>Plains</TerrainType>
+                <Population>132831</Population>
+                <ControlledBy>F002</ControlledBy>
+            </Location>
+            
+            <!-- Lawrence -->
+            <Location>
+                <ID>L006B</ID>
+                <Name>Lawrence</Name>
+                <Type>Educational</Type>
+                <Description>Home to University of Kansas</Description>
+                <Coordinates>
+                    <Latitude>38.9717</Latitude>
+                    <Longitude>-95.2353</Longitude>
+                </Coordinates>
+                <TerrainType>Plains</TerrainType>
+                <Population>120553</Population>
+                <ControlledBy>F002</ControlledBy>
+            </Location>
+            
+            <!-- Topeka -->
+            <Location>
+                <ID>L006C</ID>
+                <Name>Topeka</Name>
+                <Type>Government</Type>
+                <Description>State Capital of Kansas</Description>
+                <Coordinates>
+                    <Latitude>39.0473</Latitude>
+                    <Longitude>-95.6752</Longitude>
+                </Coordinates>
+                <TerrainType>Plains</TerrainType>
+                <Population>126587</Population>
+                <ControlledBy>F001</ControlledBy>
+            </Location>
+        </SubLocations>
+    </Location>
+</Locations>

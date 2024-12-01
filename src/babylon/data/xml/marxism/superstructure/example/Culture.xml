@@ -1,0 +1,163 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Cultures>
+  <!-- Consumer Culture -->
+  <Culture>
+    <!-- Basic Information -->
+    <ID>Cult001</ID>
+    <Name>Consumer Culture</Name>
+    <Description>A culture that emphasizes the consumption of goods and services as a path to happiness and social status.</Description>
+    <HistoricalContext>Rose to prominence with the expansion of capitalism and mass production.</HistoricalContext>
+
+    <!-- Cultural Expressions -->
+    <CulturalExpressions>
+      <Expression>
+        <Type>Advertising</Type>
+        <Name>Brand Loyalty Campaigns</Name>
+        <Description>Marketing strategies aimed at fostering loyalty to specific brands.</Description>
+        <Influence>High</Influence>
+      </Expression>
+      <Expression>
+        <Type>Fashion</Type>
+        <Name>Seasonal Trends</Name>
+        <Description>Regularly changing styles that encourage continual consumption.</Description>
+        <Influence>Medium</Influence>
+      </Expression>
+    </CulturalExpressions>
+
+    <!-- Associated Ideologies -->
+    <AssociatedIdeologies>
+      <IdeologyID>I001</IdeologyID> <!-- Capitalism -->
+    </AssociatedIdeologies>
+
+    <!-- Associated Classes -->
+    <AssociatedClasses>
+      <ClassID>C002</ClassID> <!-- Bourgeoisie -->
+      <ClassID>C003</ClassID> <!-- Petit Bourgeoisie -->
+    </AssociatedClasses>
+
+    <!-- Values and Norms -->
+    <ValuesAndNorms>
+      <Value>Material Success</Value>
+      <Value>Individualism</Value>
+      <Norm>Conspicuous Consumption</Norm>
+    </ValuesAndNorms>
+
+    <!-- Traditions and Customs -->
+    <TraditionsAndCustoms>
+      <Tradition>Black Friday Shopping</Tradition>
+      <Custom>Gift-Giving on Holidays</Custom>
+    </TraditionsAndCustoms>
+
+    <!-- Influence on Game Elements -->
+    <Effects>
+      <Effect>
+        <Target>Population</Target>
+        <Attribute>ConsumerSpending</Attribute>
+        <ModificationType>Increase</ModificationType>
+        <Value>0.15</Value> <!-- Increases spending by 15% -->
+        <Description>Boosts economic activity through increased consumption.</Description>
+      </Effect>
+      <Effect>
+        <Target>EnvironmentalResources</Target>
+        <Attribute>ResourceDepletionRate</Attribute>
+        <ModificationType>Increase</ModificationType>
+        <Value>0.10</Value> <!-- Increases depletion by 10% -->
+        <Description>Accelerates resource depletion due to higher demand.</Description>
+      </Effect>
+    </Effects>
+
+    <!-- Contradictions with Other Cultures -->
+    <ContradictsCultures>
+      <CultureID>Cult002</CultureID> <!-- Sustainable Culture -->
+    </ContradictsCultures>
+
+    <!-- Attributes -->
+    <Attributes>
+      <Attribute>
+        <Name>Prevalence</Name>
+        <Value>Widespread</Value>
+      </Attribute>
+    </Attributes>
+  </Culture>
+
+  <!-- Revolutionary Culture -->
+  <Culture>
+    <!-- Basic Information -->
+    <ID>Cult002</ID>
+    <Name>Revolutionary Culture</Name>
+    <Description>A culture that promotes social change, collective action, and the overthrow of oppressive systems.</Description>
+    <HistoricalContext>Emerged from the struggles of oppressed classes seeking liberation.</HistoricalContext>
+
+    <!-- Cultural Expressions -->
+    <CulturalExpressions>
+      <Expression>
+        <Type>Music</Type>
+        <Name>Protest Songs</Name>
+        <Description>Songs that express dissent and inspire action.</Description>
+        <Creator>Char001</Creator> <!-- Maria Sanchez -->
+        <Influence>High</Influence>
+      </Expression>
+      <Expression>
+        <Type>Art</Type>
+        <Name>Political Murals</Name>
+        <Description>Visual art depicting revolutionary themes.</Description>
+        <Influence>Medium</Influence>
+      </Expression>
+    </CulturalExpressions>
+
+    <!-- Associated Ideologies -->
+    <AssociatedIdeologies>
+      <IdeologyID>I002</IdeologyID> <!-- Communism -->
+    </AssociatedIdeologies>
+
+    <!-- Associated Classes -->
+    <AssociatedClasses>
+      <ClassID>C001</ClassID> <!-- Proletariat -->
+    </AssociatedClasses>
+
+    <!-- Values and Norms -->
+    <ValuesAndNorms>
+      <Value>Equality</Value>
+      <Value>Solidarity</Value>
+      <Norm>Collective Decision-Making</Norm>
+    </ValuesAndNorms>
+
+    <!-- Traditions and Customs -->
+    <TraditionsAndCustoms>
+      <Tradition>May Day Celebrations</Tradition>
+      <Custom>Community Assemblies</Custom>
+    </TraditionsAndCustoms>
+
+    <!-- Influence on Game Elements -->
+    <Effects>
+      <Effect>
+        <Target>SocialClasses</Target>
+        <Attribute>ClassConsciousness</Attribute>
+        <ModificationType>Increase</ModificationType>
+        <Value>0.20</Value> <!-- Increases consciousness by 20% -->
+        <Description>Raises awareness of class issues among the population.</Description>
+      </Effect>
+      <Effect>
+        <Target>Institutions</Target>
+        <Attribute>Authority</Attribute>
+        <ModificationType>Decrease</ModificationType>
+        <Value>0.15</Value> <!-- Decreases institutional authority by 15% -->
+        <Description>Challenges the legitimacy of existing institutions.</Description>
+      </Effect>
+    </Effects>
+
+    <!-- Contradictions with Other Cultures -->
+    <ContradictsCultures>
+      <CultureID>Cult001</CultureID> <!-- Consumer Culture -->
+    </ContradictsCultures>
+
+    <!-- Attributes -->
+    <Attributes>
+      <Attribute>
+        <Name>Prevalence</Name>
+        <Value>Growing</Value>
+      </Attribute>
+    </Attributes>
+  </Culture>
+
+</Cultures>

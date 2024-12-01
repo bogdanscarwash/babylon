@@ -1,0 +1,380 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<EconomicResources>
+    <!-- Raw Materials -->
+    <Resource>
+        <ID>R001</ID>
+        <Name>Iron Ore</Name>
+        <Type>RawMaterial</Type>
+        <Category>Mineral</Category>
+        <Description>High-grade iron ore suitable for steel production</Description>
+        <Attributes>
+            <Attribute>
+                <Name>Purity</Name>
+                <Value>65%</Value>
+            </Attribute>
+        </Attributes>
+        <ProductionDetails>
+            <BaseProductionRate>1000.0</BaseProductionRate>
+            <ProductionUnits>
+                <ProductionUnitID>DENVER_MINING</ProductionUnitID>
+            </ProductionUnits>
+            <RequiredTechnologies>
+                <TechnologyID>MINING_TECH_01</TechnologyID>
+            </RequiredTechnologies>
+        </ProductionDetails>
+        <ConsumptionDetails>
+            <ConsumptionRate>800.0</ConsumptionRate>
+            <ConsumedBy>
+                <ConsumerType>Steel Works</ConsumerType>
+            </ConsumedBy>
+        </ConsumptionDetails>
+        <Value>50.0</Value>
+        <MarketPrice>65.0</MarketPrice>
+        <Availability>
+            <LocationID>ROCKY_MOUNTAINS</LocationID>
+            <Scarcity>Limited</Scarcity>
+        </Availability>
+    </Resource>
+
+    <Resource>
+        <ID>R002</ID>
+        <Name>Crude Oil</Name>
+        <Type>RawMaterial</Type>
+        <Category>Energy</Category>
+        <Description>Unrefined petroleum</Description>
+        <Attributes>
+            <Attribute>
+                <Name>Grade</Name>
+                <Value>Light Sweet Crude</Value>
+            </Attribute>
+        </Attributes>
+        <ProductionDetails>
+            <BaseProductionRate>5000.0</BaseProductionRate>
+            <ProductionUnits>
+                <ProductionUnitID>OIL_FIELD_01</ProductionUnitID>
+            </ProductionUnits>
+            <RequiredTechnologies>
+                <TechnologyID>OIL_EXTRACTION_01</TechnologyID>
+            </RequiredTechnologies>
+        </ProductionDetails>
+        <ConsumptionDetails>
+            <ConsumptionRate>4800.0</ConsumptionRate>
+            <ConsumedBy>
+                <ConsumerType>Refinery</ConsumerType>
+            </ConsumedBy>
+        </ConsumptionDetails>
+        <Value>70.0</Value>
+        <MarketPrice>75.0</MarketPrice>
+        <Availability>
+            <LocationID>GULF_COAST</LocationID>
+            <Scarcity>Limited</Scarcity>
+        </Availability>
+    </Resource>
+
+    <!-- Industrial Goods -->
+    <Resource>
+        <ID>R003</ID>
+        <Name>Steel</Name>
+        <Type>ManufacturedGood</Type>
+        <Category>Industrial</Category>
+        <Description>Refined steel for construction and manufacturing</Description>
+        <Attributes>
+            <Attribute>
+                <Name>Strength</Name>
+                <Value>High-Grade</Value>
+            </Attribute>
+        </Attributes>
+        <ProductionDetails>
+            <BaseProductionRate>500.0</BaseProductionRate>
+            <ProductionUnits>
+                <ProductionUnitID>CHICAGO_STEEL</ProductionUnitID>
+            </ProductionUnits>
+            <RequiredTechnologies>
+                <TechnologyID>STEEL_PRODUCTION_02</TechnologyID>
+            </RequiredTechnologies>
+        </ProductionDetails>
+        <ConsumptionDetails>
+            <ConsumptionRate>450.0</ConsumptionRate>
+            <ConsumedBy>
+                <ConsumerType>Manufacturing</ConsumerType>
+            </ConsumedBy>
+        </ConsumptionDetails>
+        <Value>200.0</Value>
+        <MarketPrice>225.0</MarketPrice>
+        <ResourceRelationships>
+            <Relationship>
+                <RelatedResourceID>R001</RelatedResourceID>
+                <RelationshipType>Input</RelationshipType>
+                <EffectDescription>Requires Iron Ore for production</EffectDescription>
+            </Relationship>
+        </ResourceRelationships>
+        <Availability>
+            <LocationID>CHICAGO_INDUSTRIAL</LocationID>
+            <Scarcity>Abundant</Scarcity>
+        </Availability>
+    </Resource>
+
+    <Resource>
+        <ID>R004</ID>
+        <Name>Semiconductors</Name>
+        <Type>ManufacturedGood</Type>
+        <Category>Technology</Category>
+        <Description>Electronic components for computing devices</Description>
+        <Attributes>
+            <Attribute>
+                <Name>Precision</Name>
+                <Value>5nm</Value>
+            </Attribute>
+        </Attributes>
+        <ProductionDetails>
+            <BaseProductionRate>100.0</BaseProductionRate>
+            <ProductionUnits>
+                <ProductionUnitID>TECH_FACILITY</ProductionUnitID>
+            </ProductionUnits>
+            <RequiredTechnologies>
+                <TechnologyID>SEMICONDUCTOR_TECH_03</TechnologyID>
+            </RequiredTechnologies>
+        </ProductionDetails>
+        <ConsumptionDetails>
+            <ConsumptionRate>95.0</ConsumptionRate>
+            <ConsumedBy>
+                <ConsumerType>Electronics Manufacturing</ConsumerType>
+            </ConsumedBy>
+        </ConsumptionDetails>
+        <Value>1000.0</Value>
+        <MarketPrice>1200.0</MarketPrice>
+        <Availability>
+            <LocationID>LAWRENCE_TECH</LocationID>
+            <Scarcity>Limited</Scarcity>
+        </Availability>
+    </Resource>
+
+    <!-- Consumer Goods -->
+    <Resource>
+        <ID>R005</ID>
+        <Name>Automobiles</Name>
+        <Type>ManufacturedGood</Type>
+        <Category>Consumer</Category>
+        <Description>Passenger vehicles for consumer use</Description>
+        <Attributes>
+            <Attribute>
+                <Name>Class</Name>
+                <Value>Mid-Size</Value>
+            </Attribute>
+        </Attributes>
+        <ProductionDetails>
+            <BaseProductionRate>50.0</BaseProductionRate>
+            <ProductionUnits>
+                <ProductionUnitID>KC_AUTO_PLANT</ProductionUnitID>
+            </ProductionUnits>
+            <RequiredTechnologies>
+                <TechnologyID>AUTO_ASSEMBLY_02</TechnologyID>
+            </RequiredTechnologies>
+        </ProductionDetails>
+        <ConsumptionDetails>
+            <ConsumptionRate>48.0</ConsumptionRate>
+            <ConsumedBy>
+                <ConsumerType>Consumer</ConsumerType>
+            </ConsumedBy>
+        </ConsumptionDetails>
+        <Value>25000.0</Value>
+        <MarketPrice>30000.0</MarketPrice>
+        <Availability>
+            <LocationID>KANSAS_CITY</LocationID>
+            <Scarcity>Abundant</Scarcity>
+        </Availability>
+    </Resource>
+
+    <!-- Food Resources -->
+    <Resource>
+        <ID>R006</ID>
+        <Name>Wheat</Name>
+        <Type>RawMaterial</Type>
+        <Category>Agricultural</Category>
+        <Description>Basic grain crop for food production</Description>
+        <Attributes>
+            <Attribute>
+                <Name>Quality</Name>
+                <Value>Grade A</Value>
+            </Attribute>
+        </Attributes>
+        <ProductionDetails>
+            <BaseProductionRate>2000.0</BaseProductionRate>
+            <ProductionUnits>
+                <ProductionUnitID>MANHATTAN_AG</ProductionUnitID>
+            </ProductionUnits>
+            <RequiredTechnologies>
+                <TechnologyID>AGRICULTURE_01</TechnologyID>
+            </RequiredTechnologies>
+        </ProductionDetails>
+        <ConsumptionDetails>
+            <ConsumptionRate>1800.0</ConsumptionRate>
+            <ConsumedBy>
+                <ConsumerType>Food Processing</ConsumerType>
+            </ConsumedBy>
+        </ConsumptionDetails>
+        <Value>20.0</Value>
+        <MarketPrice>22.0</MarketPrice>
+        <Availability>
+            <LocationID>KANSAS_PLAINS</LocationID>
+            <Scarcity>Abundant</Scarcity>
+        </Availability>
+    </Resource>
+
+    <Resource>
+        <ID>R007</ID>
+        <Name>Processed Food</Name>
+        <Type>ManufacturedGood</Type>
+        <Category>Consumer</Category>
+        <Description>Packaged food products for consumer consumption</Description>
+        <Attributes>
+            <Attribute>
+                <Name>ShelfLife</Name>
+                <Value>12 months</Value>
+            </Attribute>
+        </Attributes>
+        <ProductionDetails>
+            <BaseProductionRate>1000.0</BaseProductionRate>
+            <ProductionUnits>
+                <ProductionUnitID>FOOD_PROCESSING_01</ProductionUnitID>
+            </ProductionUnits>
+            <RequiredTechnologies>
+                <TechnologyID>FOOD_TECH_02</TechnologyID>
+            </RequiredTechnologies>
+        </ProductionDetails>
+        <ConsumptionDetails>
+            <ConsumptionRate>950.0</ConsumptionRate>
+            <ConsumedBy>
+                <ConsumerType>Consumer</ConsumerType>
+            </ConsumedBy>
+        </ConsumptionDetails>
+        <Value>40.0</Value>
+        <MarketPrice>45.0</MarketPrice>
+        <Availability>
+            <LocationID>MULTIPLE</LocationID>
+            <Scarcity>Abundant</Scarcity>
+        </Availability>
+    </Resource>
+
+    <!-- Energy Resources -->
+    <Resource>
+        <ID>R008</ID>
+        <Name>Gasoline</Name>
+        <Type>ManufacturedGood</Type>
+        <Category>Energy</Category>
+        <Description>Refined petroleum fuel for vehicles</Description>
+        <Attributes>
+            <Attribute>
+                <Name>Octane</Name>
+                <Value>87</Value>
+            </Attribute>
+        </Attributes>
+        <ProductionDetails>
+            <BaseProductionRate>3000.0</BaseProductionRate>
+            <ProductionUnits>
+                <ProductionUnitID>REFINERY_01</ProductionUnitID>
+            </ProductionUnits>
+            <RequiredTechnologies>
+                <TechnologyID>REFINING_02</TechnologyID>
+            </RequiredTechnologies>
+        </ProductionDetails>
+        <ConsumptionDetails>
+            <ConsumptionRate>2900.0</ConsumptionRate>
+            <ConsumedBy>
+                <ConsumerType>Consumer</ConsumerType>
+                <ConsumerType>Transportation</ConsumerType>
+            </ConsumedBy>
+        </ConsumptionDetails>
+        <Value>3.0</Value>
+        <MarketPrice>3.5</MarketPrice>
+        <ResourceRelationships>
+            <Relationship>
+                <RelatedResourceID>R002</RelatedResourceID>
+                <RelationshipType>Input</RelationshipType>
+                <EffectDescription>Refined from Crude Oil</EffectDescription>
+            </Relationship>
+        </ResourceRelationships>
+        <Availability>
+            <LocationID>MULTIPLE</LocationID>
+            <Scarcity>Abundant</Scarcity>
+        </Availability>
+    </Resource>
+
+    <Resource>
+        <ID>R009</ID>
+        <Name>Solar Panels</Name>
+        <Type>ManufacturedGood</Type>
+        <Category>Energy</Category>
+        <Description>Photovoltaic panels for renewable energy generation</Description>
+        <Attributes>
+            <Attribute>
+                <Name>Efficiency</Name>
+                <Value>22%</Value>
+            </Attribute>
+        </Attributes>
+        <ProductionDetails>
+            <BaseProductionRate>200.0</BaseProductionRate>
+            <ProductionUnits>
+                <ProductionUnitID>TECH_FACILITY</ProductionUnitID>
+            </ProductionUnits>
+            <RequiredTechnologies>
+                <TechnologyID>SOLAR_TECH_03</TechnologyID>
+            </RequiredTechnologies>
+        </ProductionDetails>
+        <ConsumptionDetails>
+            <ConsumptionRate>190.0</ConsumptionRate>
+            <ConsumedBy>
+                <ConsumerType>Energy Sector</ConsumerType>
+                <ConsumerType>Consumer</ConsumerType>
+            </ConsumedBy>
+        </ConsumptionDetails>
+        <Value>500.0</Value>
+        <MarketPrice>600.0</MarketPrice>
+        <Availability>
+            <LocationID>LAWRENCE_TECH</LocationID>
+            <Scarcity>Limited</Scarcity>
+        </Availability>
+    </Resource>
+
+    <Resource>
+        <ID>R010</ID>
+        <Name>Computer Chips</Name>
+        <Type>ManufacturedGood</Type>
+        <Category>Technology</Category>
+        <Description>Processed semiconductor chips for computing devices</Description>
+        <Attributes>
+            <Attribute>
+                <Name>Processing Power</Name>
+                <Value>High Performance</Value>
+            </Attribute>
+        </Attributes>
+        <ProductionDetails>
+            <BaseProductionRate>75.0</BaseProductionRate>
+            <ProductionUnits>
+                <ProductionUnitID>TECH_FACILITY</ProductionUnitID>
+            </ProductionUnits>
+            <RequiredTechnologies>
+                <TechnologyID>CHIP_TECH_03</TechnologyID>
+            </RequiredTechnologies>
+        </ProductionDetails>
+        <ConsumptionDetails>
+            <ConsumptionRate>70.0</ConsumptionRate>
+            <ConsumedBy>
+                <ConsumerType>Electronics Manufacturing</ConsumerType>
+            </ConsumedBy>
+        </ConsumptionDetails>
+        <Value>1500.0</Value>
+        <MarketPrice>1800.0</MarketPrice>
+        <ResourceRelationships>
+            <Relationship>
+                <RelatedResourceID>R004</RelatedResourceID>
+                <RelationshipType>Input</RelationshipType>
+                <EffectDescription>Requires semiconductors for production</EffectDescription>
+            </Relationship>
+        </ResourceRelationships>
+        <Availability>
+            <LocationID>LAWRENCE_TECH</LocationID>
+            <Scarcity>Limited</Scarcity>
+        </Availability>
+    </Resource>
+</EconomicResources>
