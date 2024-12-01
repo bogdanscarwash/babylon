@@ -14,7 +14,7 @@
   <xs:complexType name="ContradictionType">
     <xs:sequence>
       <!-- Basic Information -->
-      <xs:element name="ID" type="xs:string">
+      <xs:element name="ID">
         <xs:annotation>
           <xs:documentation>Format: CON### (e.g., CON001)</xs:documentation>
         </xs:annotation>
