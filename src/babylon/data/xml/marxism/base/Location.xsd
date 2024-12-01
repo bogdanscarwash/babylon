@@ -16,7 +16,13 @@
   <xs:complexType name="LocationType">
     <xs:sequence>
       <!-- Basic Information -->
-      <xs:element name="ID" type="xs:string"/>
+      <xs:element name="ID">
+        <xs:simpleType>
+          <xs:restriction base="xs:string">
+            <xs:pattern value="L[0-9]{3}"/>
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:element>
       <xs:element name="Name" type="xs:string"/>
       <xs:element name="Type" type="xs:string"/> <!-- e.g., City, Region, Facility -->
       <xs:element name="Description" type="xs:string" minOccurs="0"/>
@@ -27,9 +33,21 @@
       <xs:element name="Climate" type="xs:string" minOccurs="0"/> <!-- e.g., Tropical, Arid -->
       
       <!-- Political and Control Information -->
-      <xs:element name="ControlledBy" type="xs:string" minOccurs="0"/> <!-- FactionID or ClassID -->
+      <xs:element name="ControlledBy" minOccurs="0">
+        <xs:simpleType>
+          <xs:restriction base="xs:string">
+            <xs:pattern value="(F|C)[0-9]{3}"/>
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:element>
       <xs:element name="Population" type="xs:integer" minOccurs="0"/>
-      <xs:element name="DominantSocialClass" type="xs:string" minOccurs="0"/> <!-- ClassID -->
+      <xs:element name="DominantSocialClass" minOccurs="0">
+        <xs:simpleType>
+          <xs:restriction base="xs:string">
+            <xs:pattern value="C[0-9]{3}"/>
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:element>
       
       <!-- Economic Information -->
       <xs:element name="ResourcesAvailable" type="ResourcesAvailableType" minOccurs="0"/>

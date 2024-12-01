@@ -104,7 +104,13 @@
       <xs:element name="RequiredTechnologies">
         <xs:complexType>
           <xs:sequence>
-            <xs:element name="TechnologyID" type="xs:string" maxOccurs="unbounded" minOccurs="0"/>
+            <xs:element name="TechnologyID" maxOccurs="unbounded" minOccurs="0">
+              <xs:simpleType>
+                <xs:restriction base="xs:string">
+                  <xs:pattern value="T[0-9]{3}"/>
+                </xs:restriction>
+              </xs:simpleType>
+            </xs:element>
           </xs:sequence>
         </xs:complexType>
       </xs:element>

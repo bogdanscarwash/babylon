@@ -16,7 +16,13 @@
   <xs:complexType name="ResourceType">
     <xs:sequence>
       <!-- Basic Information -->
-      <xs:element name="ID" type="xs:string"/>
+      <xs:element name="ID">
+        <xs:simpleType>
+          <xs:restriction base="xs:string">
+            <xs:pattern value="R[0-9]{3}"/>
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:element>
       <xs:element name="Name" type="xs:string"/>
       <xs:element name="Type" type="xs:string"/> <!-- e.g., RawMaterial, ManufacturedGood, Service -->
       <xs:element name="Category" type="xs:string"/> <!-- e.g., Mineral, Agricultural, Technological -->
