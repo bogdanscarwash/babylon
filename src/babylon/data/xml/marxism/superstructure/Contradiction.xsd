@@ -18,6 +18,11 @@
         <xs:annotation>
           <xs:documentation>Format: CON### (e.g., CON001)</xs:documentation>
         </xs:annotation>
+        <xs:simpleType>
+          <xs:restriction base="xs:string">
+            <xs:pattern value="CON[0-9]{3}"/>
+          </xs:restriction>
+        </xs:simpleType>
       </xs:element>
       <xs:element name="Name" type="xs:string" minOccurs="0"/>
       <xs:element name="Description" type="xs:string"/>
@@ -93,11 +98,15 @@
   <!-- Entity Type -->
   <xs:complexType name="EntityType">
     <xs:sequence>
-      <xs:element name="EntityID" type="xs:string">
+      <xs:element name="EntityID">
         <xs:annotation>
-          <xs:documentation>Must reference valid Faction (F###), Class (C###), or Institution (Inst###) ID</xs:documentation>
+          <xs:documentation>Must reference valid Faction (F###), Class (C###), Institution (Inst###), or Movement (M###) ID</xs:documentation>
         </xs:annotation>
-        <xs:pattern value="(F|C|Inst)[0-9]{3}"/>
+        <xs:simpleType>
+          <xs:restriction base="xs:string">
+            <xs:pattern value="(F|C|Inst|M)[0-9]{3}"/>
+          </xs:restriction>
+        </xs:simpleType>
       </xs:element>
       <xs:element name="EntityType" type="xs:string"/> <!-- Faction, Class, Ideology, Institution -->
       <xs:element name="Role" type="xs:string" minOccurs="0"/> <!-- e.g., Oppressor, Oppressed -->

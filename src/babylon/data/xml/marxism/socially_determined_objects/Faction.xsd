@@ -6,11 +6,17 @@
     <xs:complexType>
       <xs:sequence>
         <!-- Basic Information -->
-        <xs:element name="ID" type="xs:string">
+        <xs:element name="ID">
           <xs:annotation>
             <xs:documentation>Format: F### (e.g., F001)</xs:documentation>
           </xs:annotation>
-          <xs:pattern value="F[0-9]{3}"/>
+          <xs:simpleType>
+            <xs:restriction base="xs:string">
+              <xs:pattern value="F[0-9]{3}"/>
+              <xs:minLength value="4"/>
+              <xs:maxLength value="4"/>
+            </xs:restriction>
+          </xs:simpleType>
         </xs:element>
         <xs:element name="Name" type="xs:string"/>
         <xs:element name="Description" type="xs:string"/>
