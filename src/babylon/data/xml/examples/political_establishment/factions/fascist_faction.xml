@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Faction xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="../../../marxism/socially_determined_objects/Faction.xsd">
+    <ID>F001</ID>
+    <Name>National Revival Movement</Name>
+    <Description>A far-right nationalist movement that has gained significant influence through populist rhetoric and promises of national renewal.</Description>
+    <Ideology>Fascism</Ideology>
+    
+    <ClassComposition>
+        <Class>
+            <ClassID>C001</ClassID>
+            <Percentage>40</Percentage>
+        </Class>
+        <Class>
+            <ClassID>C002</ClassID>
+            <Percentage>35</Percentage>
+        </Class>
+        <Class>
+            <ClassID>C003</ClassID>
+            <Percentage>25</Percentage>
+        </Class>
+    </ClassComposition>
+    
+    <EconomicBase>
+        <ModeOfProduction>Corporate State Capitalism</ModeOfProduction>
+        <Resources>
+            <Resource>
+                <Type>Industrial Capital</Type>
+                <Quantity>8000</Quantity>
+            </Resource>
+            <Resource>
+                <Type>Military Industry</Type>
+                <Quantity>5000</Quantity>
+            </Resource>
+        </Resources>
+    </EconomicBase>
+    
+    <StrategicDoctrine>
+        <PoliticalStrategy>Populist Authoritarianism</PoliticalStrategy>
+        <MilitaryStrategy>Militant Nationalism</MilitaryStrategy>
+    </StrategicDoctrine>
+    
+    <DialecticalRelationships>
+        <Contradiction>
+            <WithFactionID>F003</WithFactionID>
+            <Nature>Antagonistic</Nature>
+            <Intensity>High</Intensity>
+        </Contradiction>
+        <Contradiction>
+            <WithFactionID>F004</WithFactionID>
+            <Nature>Antagonistic</Nature>
+            <Intensity>Critical</Intensity>
+        </Contradiction>
+    </DialecticalRelationships>
+    
+    <HistoricalDevelopment>Emerged from economic crisis and social instability, capitalizing on middle class fears and nationalist sentiments</HistoricalDevelopment>
+    
+    <Leader>
+        <Name>Viktor Thule</Name>
+        <Background>Former military officer and business executive</Background>
+        <Traits>
+            <Trait>Charismatic</Trait>
+            <Trait>Authoritarian</Trait>
+            <Trait>Nationalist</Trait>
+        </Traits>
+    </Leader>
+    
+    <Influence>
+        <Region>
+            <Name>Urban Centers</Name>
+            <ControlLevel>High</ControlLevel>
+        </Region>
+        <Region>
+            <Name>Industrial Regions</Name>
+            <ControlLevel>Medium</ControlLevel>
+        </Region>
+    </Influence>
+    
+    <Military>
+        <Strength>8500</Strength>
+        <Units>
+            <Unit>
+                <Name>Nationalist Guard</Name>
+                <Type>Paramilitary</Type>
+                <Strength>3500</Strength>
+            </Unit>
+        </Units>
+    </Military>
+    
+    <Attributes>
+        <Attribute>
+            <Name>PopularSupport</Name>
+            <Value>35</Value>
+        </Attribute>
+        <Attribute>
+            <Name>OrganizationalCapacity</Name>
+            <Value>High</Value>
+        </Attribute>
+    </Attributes>
+</Faction>
