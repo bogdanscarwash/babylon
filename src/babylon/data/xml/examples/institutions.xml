@@ -1,0 +1,193 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Institutions>
+    <!-- Systemic Racism -->
+    <Institution>
+        <ID>Inst001</ID>
+        <Name>Systemic Racism</Name>
+        <Type>Social</Type>
+        <Description>A system of structures, policies, practices, and cultural norms that perpetuate racial inequality and discrimination.</Description>
+        <HistoricalContext>Deeply rooted in colonial history, slavery, and continued practices of discrimination.</HistoricalContext>
+        <Functions>
+            <Function>Social Control</Function>
+            <Function>Economic Oppression</Function>
+            <Function>Cultural Hegemony</Function>
+        </Functions>
+        <AssociatedIdeologies>
+            <IdeologyID>IDE001</IdeologyID> <!-- Fascism -->
+        </AssociatedIdeologies>
+        <Effects>
+            <Effect>
+                <Target>Minorities</Target>
+                <Attribute>Economic_Mobility</Attribute>
+                <ModificationType>Decrease</ModificationType>
+                <Value>-0.4</Value>
+                <Description>Reduces economic opportunities and social mobility for minority populations</Description>
+            </Effect>
+        </Effects>
+    </Institution>
+
+    <!-- Policing -->
+    <Institution>
+        <ID>Inst002</ID>
+        <Name>Policing</Name>
+        <Type>Legal</Type>
+        <Description>State-sanctioned law enforcement institution responsible for maintaining order and enforcing laws.</Description>
+        <Functions>
+            <Function>Law Enforcement</Function>
+            <Function>Social Control</Function>
+            <Function>Public Safety</Function>
+        </Functions>
+        <Roles>
+            <Role>
+                <Title>Police Officer</Title>
+                <Responsibilities>
+                    <Responsibility>Law Enforcement</Responsibility>
+                    <Responsibility>Public Order Maintenance</Responsibility>
+                </Responsibilities>
+            </Role>
+        </Roles>
+        <ControlledBy>
+            <ClassID>ruling_class</ClassID>
+        </ControlledBy>
+        <Effects>
+            <Effect>
+                <Target>Working_Class</Target>
+                <Attribute>Resistance</Attribute>
+                <ModificationType>Decrease</ModificationType>
+                <Value>-0.3</Value>
+                <Description>Suppresses working class organization and resistance</Description>
+            </Effect>
+        </Effects>
+    </Institution>
+
+    <!-- Media -->
+    <Institution>
+        <ID>Inst003</ID>
+        <Name>Mass Media</Name>
+        <Type>Cultural</Type>
+        <Description>System of communication channels that shape public opinion and cultural narratives.</Description>
+        <Functions>
+            <Function>Information Distribution</Function>
+            <Function>Ideological Production</Function>
+            <Function>Social Control</Function>
+        </Functions>
+        <AssociatedIdeologies>
+            <IdeologyID>IDE003</IdeologyID> <!-- Liberalism -->
+        </AssociatedIdeologies>
+        <ControlledBy>
+            <ClassID>capitalist_class</ClassID>
+        </ControlledBy>
+        <Effects>
+            <Effect>
+                <Target>Population</Target>
+                <Attribute>Class_Consciousness</Attribute>
+                <ModificationType>Decrease</ModificationType>
+                <Value>-0.5</Value>
+                <Description>Reduces class consciousness through ideological manipulation</Description>
+            </Effect>
+        </Effects>
+    </Institution>
+
+    <!-- Unions -->
+    <Institution>
+        <ID>Inst004</ID>
+        <Name>Labor Unions</Name>
+        <Type>Economic</Type>
+        <Description>Organizations of workers formed to protect and advance their rights and interests.</Description>
+        <Functions>
+            <Function>Worker Organization</Function>
+            <Function>Collective Bargaining</Function>
+            <Function>Class Struggle</Function>
+        </Functions>
+        <AssociatedIdeologies>
+            <IdeologyID>IDE002</IdeologyID> <!-- Communism -->
+        </AssociatedIdeologies>
+        <Effects>
+            <Effect>
+                <Target>Working_Class</Target>
+                <Attribute>Class_Consciousness</Attribute>
+                <ModificationType>Increase</ModificationType>
+                <Value>0.6</Value>
+                <Description>Increases working class organization and solidarity</Description>
+            </Effect>
+        </Effects>
+    </Institution>
+
+    <!-- Military -->
+    <Institution>
+        <ID>Inst005</ID>
+        <Name>Military</Name>
+        <Type>State</Type>
+        <Description>Armed forces responsible for national defense and projection of state power.</Description>
+        <Functions>
+            <Function>National Defense</Function>
+            <Function>Imperial Power Projection</Function>
+            <Function>Internal Control</Function>
+        </Functions>
+        <ControlledBy>
+            <ClassID>ruling_class</ClassID>
+        </ControlledBy>
+        <Effects>
+            <Effect>
+                <Target>State</Target>
+                <Attribute>Coercive_Power</Attribute>
+                <ModificationType>Increase</ModificationType>
+                <Value>0.8</Value>
+                <Description>Maintains state monopoly on violence</Description>
+            </Effect>
+        </Effects>
+    </Institution>
+
+    <!-- Church -->
+    <Institution>
+        <ID>Inst006</ID>
+        <Name>Religious Institutions</Name>
+        <Type>Religious</Type>
+        <Description>Organized religious bodies that shape moral and social values.</Description>
+        <Functions>
+            <Function>Moral Guidance</Function>
+            <Function>Social Control</Function>
+            <Function>Community Organization</Function>
+        </Functions>
+        <Effects>
+            <Effect>
+                <Target>Population</Target>
+                <Attribute>Social_Conformity</Attribute>
+                <ModificationType>Increase</ModificationType>
+                <Value>0.4</Value>
+                <Description>Promotes social stability and traditional values</Description>
+            </Effect>
+        </Effects>
+    </Institution>
+
+    <!-- University -->
+    <Institution>
+        <ID>Inst007</ID>
+        <Name>Higher Education</Name>
+        <Type>Educational</Type>
+        <Description>Academic institutions for advanced learning and research.</Description>
+        <Functions>
+            <Function>Knowledge Production</Function>
+            <Function>Professional Training</Function>
+            <Function>Social Reproduction</Function>
+        </Functions>
+        <Roles>
+            <Role>
+                <Title>Professor</Title>
+                <Responsibilities>
+                    <Responsibility>Research</Responsibility>
+                    <Responsibility>Teaching</Responsibility>
+                </Responsibilities>
+            </Role>
+        </Roles>
+        <Effects>
+            <Effect>
+                <Target>Population</Target>
+                <Attribute>Critical_Thinking</Attribute>
+                <ModificationType>Increase</ModificationType>
+                <Value>0.5</Value>
+                <Description>Develops intellectual capabilities and professional skills</Description>
+            </Effect>
+        </Effects>
+    </Institution>
+</Institutions>
