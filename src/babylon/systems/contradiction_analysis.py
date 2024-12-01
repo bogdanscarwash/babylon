@@ -135,6 +135,67 @@ class ContradictionAnalysis:
             'High': 'red'
         }.get(intensity, 'grey')
         
+    def _get_entity_color(self, entity_type):
+        """Map entity types to colors."""
+        color_map = {
+            'Faction': 'blue',
+            'Class': 'green',
+            'Character': 'orange',
+            'Organization': 'purple'
+        }
+        return color_map.get(entity_type, 'grey')
+
+    def visualize_entity_relationships(self):
+        """Visualize relationships between entities based on contradictions."""
+        G = nx.Graph()
+
+        # Add nodes for entities
+        entity_ids = set()
+        for contradiction in self.contradictions:
+            for entity in contradiction.entities:
+                entity_id = entity.entity_id
+                entity_type = entity.entity_type
+                entity_ids.add((entity_id, entity_type))
+                G.add_node(entity_id, label=entity_type)
+
+        # Add edges between entities involved in the same contradiction
+        for contradiction in self.contradictions:
+            involved_entities = [entity.entity_id for entity in contradiction.entities]
+            for i in range(len(involved_entities)):
+                for j in range(i + 1, len(involved_entities)):
+                    G.add_edge(
+                        involved_entities[i],
+                        involved_entities[j],
+                        label=contradiction.name
+                    )
+
+        # Position the nodes using a layout
+        pos = nx.spring_layout(G)
+
+        # Prepare node colors based on entity types
+        node_colors = [
+            self._get_entity_color(G.nodes[node]['label'])
+            for node in G.nodes()
+        ]
+
+        # Draw nodes with labels and colors
+        nx.draw_networkx_nodes(G, pos, node_size=800, node_color=node_colors)
+        node_labels = nx.get_node_attributes(G, 'label')
+        nx.draw_networkx_labels(G, pos, labels=node_labels, font_size=10)
+
+        # Draw edges
+        nx.draw_networkx_edges(G, pos)
+
+        # Add edge labels if not too cluttered
+        if len(G.edges()) <= 20:
+            edge_labels = nx.get_edge_attributes(G, 'label')
+            nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, font_color='gray')
+
+        # Display the graph
+        plt.title('Entity Relationship Network')
+        plt.axis('off')
+        plt.show()
+
     def visualize_contradictions(self):
         """Visualize contradictions and their relationships."""
         G = nx.DiGraph()
