@@ -29,6 +29,9 @@ def main():
         # Update contradictions
         contradiction_analysis.update_contradictions(game_state)
 
+        # Visualize contradictions
+        contradiction_analysis.visualize_contradictions()
+
         # Generate and handle events
         events = contradiction_analysis.generate_events(game_state)
         for event in events:

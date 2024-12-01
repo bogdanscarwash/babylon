@@ -1,3 +1,5 @@
+import matplotlib.pyplot as plt
+import networkx as nx
 from ..data.models.contradiction import Contradiction, Effect
 from ..data.models.event import Event
 
@@ -124,6 +126,52 @@ class ContradictionAnalysis:
             return 'Medium'
         else:
             return 'Low'
+            
+    def _get_intensity_color(self, intensity):
+        """Map intensity levels to colors."""
+        return {
+            'Low': 'green',
+            'Medium': 'yellow',
+            'High': 'red'
+        }.get(intensity, 'grey')
+        
+    def visualize_contradictions(self):
+        """Visualize contradictions and their relationships."""
+        G = nx.DiGraph()
+
+        # Add nodes for contradictions
+        for contradiction in self.contradictions:
+            G.add_node(contradiction.id, label=contradiction.name,
+                      intensity=contradiction.intensity)
+
+        # Add edges for principal contradictions
+        for contradiction in self.contradictions:
+            if contradiction.principal_contradiction:
+                G.add_edge(contradiction.principal_contradiction.id,
+                          contradiction.id)
+
+        # Get colors based on intensity
+        node_colors = [
+            self._get_intensity_color(contradiction.intensity)
+            for contradiction in self.contradictions
+        ]
+
+        # Create a layout for the nodes
+        pos = nx.spring_layout(G)
+
+        # Draw nodes with labels and colors
+        nx.draw_networkx_nodes(G, pos, node_size=800, node_color=node_colors)
+        labels = {contradiction.id: contradiction.name
+                 for contradiction in self.contradictions}
+        nx.draw_networkx_labels(G, pos, labels, font_size=10)
+
+        # Draw edges
+        nx.draw_networkx_edges(G, pos)
+
+        # Display the graph
+        plt.title('Dialectical Map of Contradictions')
+        plt.axis('off')
+        plt.show()
             
     def _evaluate_condition(self, condition, game_state):
         """Evaluate if a condition is met based on game state."""
