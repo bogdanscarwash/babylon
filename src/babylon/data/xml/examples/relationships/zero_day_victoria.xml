@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Relationships>
+    <Relationship>
+        <Source>Zero Day</Source>
+        <Target>Victoria Chen</Target>
+        <Type>Ideological Opponents</Type>
+        <Strength>-85</Strength>
+        <Dynamic>Deteriorating</Dynamic>
+        <Influences>
+            <Influence>
+                <Type>Political</Type>
+                <Impact>Fundamental disagreement over tech industry's role in society</Impact>
+            </Influence>
+            <Influence>
+                <Type>Technical</Type>
+                <Impact>Opposing views on AI development and regulation</Impact>
+            </Influence>
+        </Influences>
+        <History>
+            <Event>
+                <Description>Zero Day exposed privacy violations at Victoria's company</Description>
+                <Timestamp>2024-03-15T00:00:00</Timestamp>
+            </Event>
+        </History>
+    </Relationship>
+</Relationships>
