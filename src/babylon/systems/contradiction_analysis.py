@@ -1,4 +1,5 @@
 from ..data.models.contradiction import Contradiction, Effect
+from ..data.models.event import Event
 
 class ContradictionAnalysis:
     """System for analyzing and managing contradictions in the game."""
@@ -93,6 +94,36 @@ class ContradictionAnalysis:
             else:  # Change
                 new_value = effect.value
             setattr(target, effect.attribute, new_value)
+            
+    def generate_events(self, game_state):
+        """Generate events based on active contradictions."""
+        events = []
+        for contradiction in self.contradictions:
+            if contradiction.state == 'Active' and contradiction.intensity in ['Medium', 'High']:
+                event = self._create_event_from_contradiction(contradiction)
+                events.append(event)
+        return events
+        
+    def _create_event_from_contradiction(self, contradiction):
+        """Create an Event object based on a Contradiction."""
+        event_id = f"event_{contradiction.id}"
+        event_name = f"Escalation of {contradiction.name}"
+        event_description = f"The contradiction '{contradiction.name}' has escalated."
+        effects = contradiction.effects
+        triggers = []
+        escalation_level = self._determine_escalation_level(contradiction)
+        return Event(event_id, event_name, event_description, effects, triggers, escalation_level)
+        
+    def _determine_escalation_level(self, contradiction):
+        """Determine the escalation level based on contradiction intensity and antagonism."""
+        if contradiction.intensity == 'High' and contradiction.antagonism == 'Antagonistic':
+            return 'Critical'
+        elif contradiction.intensity == 'High':
+            return 'High'
+        elif contradiction.intensity == 'Medium':
+            return 'Medium'
+        else:
+            return 'Low'
             
     def _evaluate_condition(self, condition, game_state):
         """Evaluate if a condition is met based on game state."""

@@ -37,6 +37,22 @@ class Effect:
         self.modification_type = modification_type
         self.value = value
         self.description = description
+        
+    def apply(self, game_state):
+        """Apply the effect to the target within the game state."""
+        if isinstance(self.target, str):
+            entity = game_state.entity_registry.get_entity(self.target)
+        else:
+            entity = self.target
+
+        if entity and hasattr(entity, self.attribute):
+            current_value = getattr(entity, self.attribute)
+            if self.modification_type == 'Increase':
+                setattr(entity, self.attribute, current_value + self.value)
+            elif self.modification_type == 'Decrease':
+                setattr(entity, self.attribute, current_value - self.value)
+            elif self.modification_type == 'Change':
+                setattr(entity, self.attribute, self.value)
 
 class Attribute:
     def __init__(self, name, value):
