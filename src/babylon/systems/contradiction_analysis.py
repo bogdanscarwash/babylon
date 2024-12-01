@@ -169,6 +169,11 @@ class ContradictionAnalysis:
             if contradiction.state != 'Resolved':
                 self._update_contradiction(contradiction, game_state)
                 
+        # Generate events after updating contradictions
+        new_events = self.generate_events(game_state)
+        # Add events to the game state's event queue
+        game_state['event_queue'].extend(new_events)
+                
     def _update_contradiction(self, contradiction, game_state):
         """Update a single contradiction's state."""
         old_intensity = contradiction.intensity
@@ -303,20 +308,55 @@ class ContradictionAnalysis:
         """Generate events based on active contradictions."""
         events = []
         for contradiction in self.contradictions:
-            if contradiction.state == 'Active' and contradiction.intensity in ['Medium', 'High']:
-                event = self._create_event_from_contradiction(contradiction)
-                events.append(event)
+            if contradiction.state == 'Active':
+                # Generate event based on contradiction properties
+                event = self._create_event_from_contradiction(contradiction, game_state)
+                if event:
+                    events.append(event)
         return events
         
-    def _create_event_from_contradiction(self, contradiction):
-        """Create an Event object based on a Contradiction."""
-        event_id = f"event_{contradiction.id}"
-        event_name = f"Escalation of {contradiction.name}"
-        event_description = f"The contradiction '{contradiction.name}' has escalated."
-        effects = contradiction.effects
-        triggers = []
+    def _create_event_from_contradiction(self, contradiction, game_state):
+        """Create an Event object procedurally based on a Contradiction."""
+        event_id = f"event_{contradiction.id}_{len(contradiction.intensity_history)}"
+        event_name = f"{contradiction.intensity} {contradiction.name}"
+        event_description = (
+            f"The contradiction '{contradiction.name}' involving "
+            f"{', '.join([entity.entity_id for entity in contradiction.entities])} "
+            f"is escalating."
+        )
+        
+        # Procedurally generate effects based on contradiction's intensity and entities
+        effects = self._generate_effects_from_contradiction(contradiction, game_state)
+        
+        triggers = []  # Define any triggers if necessary
         escalation_level = self._determine_escalation_level(contradiction)
+        
         return Event(event_id, event_name, event_description, effects, triggers, escalation_level)
+
+    def _generate_effects_from_contradiction(self, contradiction, game_state):
+        """Generate a list of Effect objects based on the contradiction."""
+        effects = []
+        for entity in contradiction.entities:
+            target = entity.entity_id
+            attribute = 'stability'  # Example attribute affected
+            
+            # Determine effect based on intensity
+            if contradiction.intensity == 'High':
+                modification_type = 'Decrease'
+                value = 0.3
+                description = f"{contradiction.name} severely impacts {target}'s {attribute}."
+            elif contradiction.intensity == 'Medium':
+                modification_type = 'Decrease'
+                value = 0.2
+                description = f"{contradiction.name} moderately affects {target}'s {attribute}."
+            else:  # Low intensity
+                modification_type = 'Decrease'
+                value = 0.1
+                description = f"{contradiction.name} slightly affects {target}'s {attribute}."
+            
+            effect = Effect(target, attribute, modification_type, value, description)
+            effects.append(effect)
+        return effects
         
     def _determine_escalation_level(self, contradiction):
         """Determine the escalation level based on contradiction intensity and antagonism."""
