@@ -14,7 +14,13 @@
   <xs:complexType name="IdeologyType">
     <xs:sequence>
       <!-- Basic Information -->
-      <xs:element name="ID" type="xs:string"/>
+      <xs:element name="ID">
+        <xs:simpleType>
+          <xs:restriction base="xs:string">
+            <xs:pattern value="I[0-9]{3}"/>
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:element>
       <xs:element name="Name" type="xs:string"/>
       <xs:element name="Description" type="xs:string" minOccurs="0"/>
       <xs:element name="HistoricalContext" type="xs:string" minOccurs="0"/>

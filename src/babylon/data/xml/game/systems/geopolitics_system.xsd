@@ -23,7 +23,13 @@
 
   <xs:complexType name="LocationType">
     <xs:sequence>
-      <xs:element name="ID" type="xs:string"/>
+      <xs:element name="ID">
+        <xs:simpleType>
+          <xs:restriction base="xs:string">
+            <xs:pattern value="G[0-9]{3}"/>
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:element>
       <xs:element name="Name" type="xs:string"/>
       <xs:element name="Type" type="xs:string"/> <!-- e.g., City, Region, Facility -->
       <xs:element name="Terrain" type="xs:string"/> <!-- e.g., Mountainous, Urban -->
