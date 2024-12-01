@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<MeansOfProduction>
+    <!-- Los Angeles Area -->
+    <ProductionUnit>
+        <ID>MOP_LA_001</ID>
+        <Name>Long Beach Port Terminal</Name>
+        <Type>Port</Type>
+        <Description>Major shipping and logistics facility</Description>
+        <OwnerType>Faction</OwnerType>
+        <OwnerID>F001</OwnerID>
+        <LocationID>L001A</LocationID>
+        <InputResources>
+            <ResourceRequirement>
+                <ResourceID>FUEL</ResourceID>
+                <Quantity>1000.0</Quantity>
+            </ResourceRequirement>
+        </InputResources>
+        <OutputResources>
+            <ResourceOutput>
+                <ResourceID>LOGISTICS</ResourceID>
+                <Quantity>10000.0</Quantity>
+            </ResourceOutput>
+        </OutputResources>
+        <ProductionCapacity>12000.0</ProductionCapacity>
+        <Efficiency>0.92</Efficiency>
+        <RequiredLabor>5000</RequiredLabor>
+        <LaborType>Mixed</LaborType>
+        <TechnologyLevel>Advanced</TechnologyLevel>
+        <MaintenanceCost>100000.0</MaintenanceCost>
+        <Condition>Good</Condition>
+    </ProductionUnit>
+
+    <!-- Chicago Area -->
+    <ProductionUnit>
+        <ID>MOP_CHI_001</ID>
+        <Name>Chicago Steel Works</Name>
+        <Type>Factory</Type>
+        <Description>Heavy industrial steel manufacturing</Description>
+        <OwnerType>Faction</OwnerType>
+        <OwnerID>F002</OwnerID>
+        <LocationID>L002A</LocationID>
+        <InputResources>
+            <ResourceRequirement>
+                <ResourceID>IRON_ORE</ResourceID>
+                <Quantity>5000.0</Quantity>
+            </ResourceRequirement>
+            <ResourceRequirement>
+                <ResourceID>COAL</ResourceID>
+                <Quantity>2000.0</Quantity>
+            </ResourceRequirement>
+        </InputResources>
+        <OutputResources>
+            <ResourceOutput>
+                <ResourceID>STEEL</ResourceID>
+                <Quantity>4000.0</Quantity>
+            </ResourceOutput>
+        </OutputResources>
+        <ProductionCapacity>5000.0</ProductionCapacity>
+        <Efficiency>0.80</Efficiency>
+        <RequiredLabor>1500</RequiredLabor>
+        <LaborType>Skilled</LaborType>
+        <TechnologyLevel>Industrial</TechnologyLevel>
+        <MaintenanceCost>75000.0</MaintenanceCost>
+        <Condition>Worn</Condition>
+    </ProductionUnit>
+
+    <!-- Denver Area -->
+    <ProductionUnit>
+        <ID>MOP_DEN_001</ID>
+        <Name>Rocky Mountain Mining Complex</Name>
+        <Type>Mine</Type>
+        <Description>Precious metals and rare earth mining facility</Description>
+        <OwnerType>Faction</OwnerType>
+        <OwnerID>F003</OwnerID>
+        <LocationID>L004B</LocationID>
+        <InputResources>
+            <ResourceRequirement>
+                <ResourceID>EQUIPMENT</ResourceID>
+                <Quantity>100.0</Quantity>
+            </ResourceRequirement>
+        </InputResources>
+        <OutputResources>
+            <ResourceOutput>
+                <ResourceID>RARE_METALS</ResourceID>
+                <Quantity>200.0</Quantity>
+            </ResourceOutput>
+        </OutputResources>
+        <ProductionCapacity>250.0</ProductionCapacity>
+        <Efficiency>0.75</Efficiency>
+        <RequiredLabor>800</RequiredLabor>
+        <LaborType>Mixed</LaborType>
+        <TechnologyLevel>Advanced</TechnologyLevel>
+        <MaintenanceCost>60000.0</MaintenanceCost>
+        <Condition>Good</Condition>
+    </ProductionUnit>
+
+    <!-- Baltimore Area -->
+    <ProductionUnit>
+        <ID>MOP_BAL_001</ID>
+        <Name>Baltimore Harbor Industrial Complex</Name>
+        <Type>Factory</Type>
+        <Description>Mixed industrial manufacturing and shipping facility</Description>
+        <OwnerType>Faction</OwnerType>
+        <OwnerID>F002</OwnerID>
+        <LocationID>L005A</LocationID>
+        <InputResources>
+            <ResourceRequirement>
+                <ResourceID>RAW_MATERIALS</ResourceID>
+                <Quantity>3000.0</Quantity>
+            </ResourceRequirement>
+        </InputResources>
+        <OutputResources>
+            <ResourceOutput>
+                <ResourceID>MANUFACTURED_GOODS</ResourceID>
+                <Quantity>2500.0</Quantity>
+            </ResourceOutput>
+        </OutputResources>
+        <ProductionCapacity>3000.0</ProductionCapacity>
+        <Efficiency>0.83</Efficiency>
+        <RequiredLabor>2000</RequiredLabor>
+        <LaborType>Mixed</LaborType>
+        <TechnologyLevel>Industrial</TechnologyLevel>
+        <MaintenanceCost>45000.0</MaintenanceCost>
+        <Condition>Good</Condition>
+    </ProductionUnit>
+</MeansOfProduction>
