@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Character>
+    <!-- Basic Information -->
+    <Name>Alkemy Roanoke</Name>
+    <Age>31</Age>
+    <Gender>Non-binary</Gender>
+    <Biography>Alkemy is a skilled cybersecurity specialist who uses their technical expertise to support revolutionary movements. They met Persephone through revolutionary study groups and have developed a strong comradeship based on shared political commitments and technical interests.</Biography>
+
+    <!-- Class and Economic Factors -->
+    <Class>Working class</Class>
+    <Occupation>Cybersecurity Specialist</Occupation>
+    <IncomeLevel>75000</IncomeLevel>
+    <PropertyOwned>Personal computer equipment</PropertyOwned>
+
+    <!-- Relationships -->
+    <Relationships>
+        <Relationship>
+            <TargetCharacter>Persephone Raskova</TargetCharacter>
+            <Type>Comrade and Close Friend</Type>
+            <Strength>80</Strength>
+        </Relationship>
+    </Relationships>
+
+    <!-- Ideological Alignment -->
+    <Ideology>Revolutionary Socialism</Ideology>
+    <Beliefs>
+        <Belief>
+            <Belief>Digital Privacy</Belief>
+            <Intensity>95</Intensity>
+        </Belief>
+        <Belief>
+            <Belief>Anti-Capitalism</Belief>
+            <Intensity>90</Intensity>
+        </Belief>
+    </Beliefs>
+
+    <!-- Cultural Attributes -->
+    <Culture>Mixed Race American</Culture>
+    <LanguagesSpoken>
+        <Language>English</Language>
+        <Language>Python</Language>
+        <Language>C++</Language>
+    </LanguagesSpoken>
+    <Customs>
+        <Custom>Hacker Culture</Custom>
+        <Custom>Privacy Advocate</Custom>
+    </Customs>
+
+    <!-- Skills and Capabilities -->
+    <Skills>
+        <Skill>
+            <Name>Cybersecurity</Name>
+            <Level>90</Level>
+        </Skill>
+        <Skill>
+            <Name>Programming</Name>
+            <Level>85</Level>
+        </Skill>
+        <Skill>
+            <Name>Network Security</Name>
+            <Level>88</Level>
+        </Skill>
+    </Skills>
+
+    <!-- Faction Membership -->
+    <FactionMembership>
+        <Faction>Digital Rights Collective</Faction>
+        <Role>Security Specialist</Role>
+        <Loyalty>85</Loyalty>
+    </FactionMembership>
+
+    <!-- Contradictions -->
+    <Contradictions>
+        <Contradiction>
+            <Type>Professional Ethics</Type>
+            <Impact>Balancing corporate work with revolutionary activities</Impact>
+        </Contradiction>
+        <Contradiction>
+            <Type>Security Concerns</Type>
+            <Impact>Managing risks of detection while supporting movement security</Impact>
+        </Contradiction>
+    </Contradictions>
+</Character>
