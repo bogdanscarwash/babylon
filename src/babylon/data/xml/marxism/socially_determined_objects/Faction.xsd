@@ -26,7 +26,20 @@
         <xs:element name="ClassComposition">
           <xs:complexType>
             <xs:sequence>
-              <xs:element name="Class" type="ClassType" maxOccurs="unbounded"/>
+              <xs:element name="Class" maxOccurs="unbounded">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="ClassID">
+                      <xs:simpleType>
+                        <xs:restriction base="xs:string">
+                          <xs:pattern value="C[0-9]{3}"/>
+                        </xs:restriction>
+                      </xs:simpleType>
+                    </xs:element>
+                    <xs:element name="Percentage" type="xs:decimal"/>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
             </xs:sequence>
           </xs:complexType>
         </xs:element>
@@ -90,7 +103,13 @@
         <xs:element name="Alliances" minOccurs="0">
           <xs:complexType>
             <xs:sequence>
-              <xs:element name="FactionID" type="xs:string" maxOccurs="unbounded"/>
+              <xs:element name="FactionID">
+                <xs:simpleType>
+                  <xs:restriction base="xs:string">
+                    <xs:pattern value="F[0-9]{3}"/>
+                  </xs:restriction>
+                </xs:simpleType>
+              </xs:element>
             </xs:sequence>
           </xs:complexType>
         </xs:element>

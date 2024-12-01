@@ -6,7 +6,14 @@
     <xs:complexType>
       <xs:sequence>
 
-        <!-- General Information -->
+        <!-- ID and General Information -->
+        <xs:element name="ID">
+          <xs:simpleType>
+            <xs:restriction base="xs:string">
+              <xs:pattern value="M[0-9]{3}"/>
+            </xs:restriction>
+          </xs:simpleType>
+        </xs:element>
         <xs:element name="Name" type="xs:string" />
         <xs:element name="Description" type="xs:string" />
         <xs:element name="Type" type="xs:string">
