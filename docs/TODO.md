@@ -1,20 +1,41 @@
-## To get your project into a minimum viable state
+## Table of Contents
 
-Where you can run a local text-based RPG using your XML files on your terminal, you'll need to follow a series of steps to tie together your data, game logic, AI components, and user interface. Below is a comprehensive plan to guide you through the process:
+- [Next Steps in Development](#next-steps-in-development)
+- [1. Implement Core Game Mechanics](#1-implement-core-game-mechanics)
+- [2. Develop Economic System](#2-develop-economic-system) 
+- [3. Develop Political System](#3-develop-political-system)
+- [4. Implement Class and Faction System](#4-implement-class-and-faction-system)
+- [5. Implement Cultural and Ideological System](#5-implement-cultural-and-ideological-system)
+- [6. Implement Environmental and Geopolitical System](#6-implement-environmental-and-geopolitical-system)
+- [7. Integrate AI Components](#7-integrate-ai-components)
+- [8. Develop User Interface Enhancements](#8-develop-user-interface-enhancements)
+- [9. Testing and Iteration](#9-testing-and-iteration)
+- [10. Additional Mechanics to Implement](#10-additional-mechanics-to-implement)
+- [Example Workflow](#example-workflow)
+- [Next Steps and Milestones](#next-steps-and-milestones)
+
+## Next Steps in Development
+
+With the foundational setup complete, including data structures and initial game logic, we will now focus on implementing core game mechanics and expanding features as outlined in `IDEAS.md` and `MECHANICS.md`. This updated plan will guide the next phase of development:
 
 ---
 
-### 1. Finalize and Validate Your XML Schemas
+### 1. Implement Core Game Mechanics
 
-#### a. Ensure XML Schemas are Complete
+#### a. Contradiction Analysis System
+- Design algorithms to identify and track contradictions within the game world
+- Implement intensity metrics for contradictions
+- Develop resolution options: Suppression, Reform, Revolution
 
-- **Review Schemas:** Go through all your XML Schema Definition (XSD) files under `src/babylon/data/xml/` to ensure they comprehensively define the structure of your game entities.
-- **Consistency Checks:** Ensure that all references between schemas are correctly defined, and IDs (like FactionID, ClassID, etc.) are consistently used.
+#### b. Dynamic Event Generation  
+- Create procedural generation logic for events based on contradictions
+- Implement consequence chains that affect the game world
+- Design event triggers and escalation paths
 
-#### b. Validate Schemas
-
-- **Use XML Tools:** Utilize tools like XMLSpy, XSD Validator, or online validators to check your schemas for errors.
-- **Test with Sample Data:** Create sample XML documents conforming to each schema to test validation.
+#### c. Visualization Tools
+- Develop dialectical mapping interfaces
+- Build network relationship displays
+- Create statistical indicators and historical tracking
 
 ---
 
