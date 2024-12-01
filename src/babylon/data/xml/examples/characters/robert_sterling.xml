@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Character>
+    <!-- Basic Information -->
+    <Name>Robert Sterling</Name>
+    <Age>58</Age>
+    <Gender>Man</Gender>
+    <Biography>Robert Sterling is a wealthy industrialist who uses his financial influence to support conservative political causes. His alliance with Colonel Blackwood represents a merger of economic and military interests in pursuit of nationalist objectives.</Biography>
+
+    <!-- Class and Economic Factors -->
+    <Class>Bourgeoisie</Class>
+    <Occupation>Industrial Magnate</Occupation>
+    <IncomeLevel>15000000</IncomeLevel>
+    <PropertyOwned>Multiple corporate assets, real estate portfolio</PropertyOwned>
+
+    <!-- Relationships -->
+    <Relationships>
+        <Relationship>
+            <TargetCharacter>Colonel Richard Blackwood</TargetCharacter>
+            <Type>Strategic Alliance</Type>
+            <Strength>75</Strength>
+        </Relationship>
+    </Relationships>
+
+    <!-- Ideological Alignment -->
+    <Ideology>Corporate Nationalism</Ideology>
+    <Beliefs>
+        <Belief>
+            <Belief>Free Market Capitalism</Belief>
+            <Intensity>95</Intensity>
+        </Belief>
+        <Belief>
+            <Belief>Military-Industrial Complex</Belief>
+            <Intensity>90</Intensity>
+        </Belief>
+    </Beliefs>
+
+    <!-- Cultural Attributes -->
+    <Culture>White American</Culture>
+    <LanguagesSpoken>
+        <Language>English</Language>
+    </LanguagesSpoken>
+    <Customs>
+        <Custom>Corporate Elite</Custom>
+        <Custom>Political Donor</Custom>
+    </Customs>
+
+    <!-- Skills and Capabilities -->
+    <Skills>
+        <Skill>
+            <Name>Corporate Management</Name>
+            <Level>95</Level>
+        </Skill>
+        <Skill>
+            <Name>Political Influence</Name>
+            <Level>90</Level>
+        </Skill>
+        <Skill>
+            <Name>Financial Strategy</Name>
+            <Level>92</Level>
+        </Skill>
+    </Skills>
+
+    <!-- Faction Membership -->
+    <FactionMembership>
+        <Faction>Industrial-Military Complex</Faction>
+        <Role>Key Financier</Role>
+        <Loyalty>90</Loyalty>
+    </FactionMembership>
+
+    <!-- Contradictions -->
+    <Contradictions>
+        <Contradiction>
+            <Type>Public Relations</Type>
+            <Impact>Managing corporate image while pursuing controversial political agenda</Impact>
+        </Contradiction>
+        <Contradiction>
+            <Type>Business Ethics</Type>
+            <Impact>Conflict between profit maximization and nationalist objectives</Impact>
+        </Contradiction>
+    </Contradictions>
+</Character>
