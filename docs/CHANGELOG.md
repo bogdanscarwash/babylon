@@ -1,4 +1,5 @@
 # Changelog
+
 All notable changes to this project will be documented in this file.  
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),  
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
@@ -6,20 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Initial commit adding census data files in various categories: demographics, economics, housing, and social data [COMMIT_EDITMSG].
-- Implementation of a basic contradiction analysis system in `contradiction_analysis.py`.
-- XML parsing for definitions of contradictions in `contradiction_parser.py`.
-- Entity registry to maintain references to all game entities in `entity_registry.py`.
-- `__main__.py` script provided for executing the game.
-- Configuration management via environment in `__init__.py` and .env.
+- Basic implementation of the contradiction analysis system in `contradiction_analysis.py`.
+- XML parsing for contradiction definitions in `contradiction_parser.py`.
+- Entity registry for creating and managing game entities within `entity_registry.py`.
+- Entry point script `__main__.py` to execute the game.
+- Environment-based configuration management in the `__init__.py`.
+- Initial setup with census data files in categories like demographics, economics, housing, and social data.
+- Core game libraries in `requirements.txt` to support features such as XML schema handling, environment variable management, and more.
 
 ### Changed
-- Placeholder sections for game mechanics such as skills and guerrilla warfare in `combat_types.xsd`.
-- Updates to the core game loop and data handling structures to support contradiction logic and entity management.
-
-### TODO
-- Complete game objects and mechanics listed in `TODO.md`.
-- Implement remaining functionalities in game systems as outlined in `IDEAS.md`.
+- Enhancements to the core game loop structure for incorporating contradiction logic within entity management.
+- Placeholder sections in `combat_types.xsd` have been updated to include more detailed mechanics for future development.
 
 ### Deprecated
 - No deprecated features at this time.
@@ -33,10 +31,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Security
 - No specific security improvements are noted currently.
 
+### TODO
+- Complete outlined gameplay objects and mechanics as described in `TODO.md` and `MECHANICS.md`.
+- Implement and enhance AI-driven components according to planned functionalities in the `IDEAS.md`.
+
 ## [0.1.0] - 2024-11-30
 
 ### Added
-- Initial shell structure for project setup, including the basic directory organization, libraries in `requirements.txt`, and `pyproject.toml` for configuration.
+- Initial shell structure for project setup, defining the directory organization, libraries in `requirements.txt`, and `pyproject.toml` for package configuration.
+
 ---
 
-To maintain this changelog, each contributor should document their changes in the "Unreleased" section with a brief description upon committing. Before a release, entries should be moved from "Unreleased" to a new version section, and the version number should be incremented according to semantic versioning rules.
+Contributors are reminded to document all changes in the "Unreleased" section upon committing. Before a release, items from "Unreleased" should be transferred to a new version section, with the version number incremented according to semantic versioning rules.
