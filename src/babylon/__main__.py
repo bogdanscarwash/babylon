@@ -18,7 +18,11 @@ def main():
     # Initialize systems
     entity_registry = EntityRegistry()
     contradiction_analysis = ContradictionAnalysis(entity_registry)
-    game_state = {"entity_registry": entity_registry}
+    game_state = {
+        "entity_registry": entity_registry,
+        "economy": Economy(),
+        "politics": Politics()
+    }
 
     print(f"Running with SECRET_KEY={secret_key}")
     print(f"Database URL: {database_url}")
@@ -26,6 +30,10 @@ def main():
 
     # Game loop
     while True:
+        # Update game state components
+        game_state['economy'].update()
+        game_state['politics'].update()
+
         # Update contradictions
         contradiction_analysis.update_contradictions(game_state)
 

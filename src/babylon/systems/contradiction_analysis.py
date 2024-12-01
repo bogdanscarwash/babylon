@@ -22,15 +22,101 @@ class ContradictionAnalysis:
             entity.game_entity = actual_entity
             
     def detect_new_contradictions(self, game_state):
-        """Detect if new contradictions should emerge based on game state."""
+        """Detect new contradictions based on the game state."""
         new_contradictions = []
-        
-        # Example detection logic - implement specific rules here
-        if self._check_class_struggle_conditions(game_state):
-            new_contradiction = self._create_class_struggle_contradiction()
-            new_contradictions.append(new_contradiction)
+
+        # Economic inequality check
+        if self._check_economic_inequality(game_state):
+            contradiction = self._create_economic_inequality_contradiction(game_state)
+            new_contradictions.append(contradiction)
+
+        # Political unrest check
+        if self._check_political_unrest(game_state):
+            contradiction = self._create_political_unrest_contradiction(game_state)
+            new_contradictions.append(contradiction)
+
+        # Add detected contradictions
+        for contradiction in new_contradictions:
+            self.add_contradiction(contradiction)
             
         return new_contradictions
+
+    def _check_economic_inequality(self, game_state):
+        """Check if economic inequality exceeds a threshold."""
+        gini_coefficient = game_state['economy'].gini_coefficient
+        inequality_threshold = 0.4  # Define thresholds as per game design
+        if gini_coefficient >= inequality_threshold:
+            return not self._contradiction_exists('economic_inequality')
+        return False
+
+    def _check_political_unrest(self, game_state):
+        """Check if political stability is below a threshold."""
+        stability_index = game_state['politics'].stability_index
+        unrest_threshold = 0.3
+        if stability_index <= unrest_threshold:
+            return not self._contradiction_exists('political_unrest')
+        return False
+
+    def _contradiction_exists(self, contradiction_id):
+        """Check if a contradiction already exists."""
+        return any(c.id == contradiction_id and c.state != 'Resolved' 
+                  for c in self.contradictions)
+
+    def _create_economic_inequality_contradiction(self, game_state):
+        """Create an economic inequality contradiction."""
+        upper_class = Entity('upper_class', 'Class', 'Oppressor')
+        working_class = Entity('working_class', 'Class', 'Oppressed')
+        entities = [upper_class, working_class]
+
+        contradiction = Contradiction(
+            id='economic_inequality',
+            name='Economic Inequality',
+            description='Growing disparity between rich and poor.',
+            entities=entities,
+            universality='Universal',
+            particularity='Economic',
+            principal_contradiction=None,
+            principal_aspect=upper_class,
+            secondary_aspect=working_class,
+            antagonism='Antagonistic',
+            intensity='Medium',
+            state='Active',
+            potential_for_transformation='High',
+            conditions_for_transformation=['Revolutionary Movement'],
+            resolution_methods=['Policy Reform', 'Revolution'],
+            resolution_conditions=['Reduce Inequality'],
+            effects=[],
+            attributes={}
+        )
+        return contradiction
+
+    def _create_political_unrest_contradiction(self, game_state):
+        """Create a political unrest contradiction."""
+        government = Entity('government', 'Organization', 'Oppressor')
+        citizens = Entity('citizens', 'Faction', 'Oppressed')
+        entities = [government, citizens]
+
+        contradiction = Contradiction(
+            id='political_unrest',
+            name='Political Unrest',
+            description='Citizens are losing trust in the government.',
+            entities=entities,
+            universality='Universal',
+            particularity='Political',
+            principal_contradiction=None,
+            principal_aspect=government,
+            secondary_aspect=citizens,
+            antagonism='Antagonistic',
+            intensity='Medium',
+            state='Active',
+            potential_for_transformation='Medium',
+            conditions_for_transformation=['Mass Protests'],
+            resolution_methods=['Policy Changes', 'Suppression'],
+            resolution_conditions=['Increase Stability'],
+            effects=[],
+            attributes={}
+        )
+        return contradiction
         
     def update_contradictions(self, game_state):
         """Update all active contradictions based on current game state."""
@@ -50,16 +136,35 @@ class ContradictionAnalysis:
             self._transform_contradiction(contradiction, game_state)
             
     def _calculate_intensity(self, contradiction, game_state):
-        """Calculate the current intensity of a contradiction."""
-        # Implement intensity calculation logic based on game state
-        return 'Medium'  # Placeholder
+        """Calculate the intensity of a contradiction."""
+        if contradiction.id == 'economic_inequality':
+            gini_coefficient = game_state['economy'].gini_coefficient
+            if gini_coefficient >= 0.6:
+                return 'High'
+            elif gini_coefficient >= 0.4:
+                return 'Medium'
+            else:
+                return 'Low'
+        elif contradiction.id == 'political_unrest':
+            stability_index = game_state['politics'].stability_index
+            if stability_index <= 0.2:
+                return 'High'
+            elif stability_index <= 0.3:
+                return 'Medium'
+            else:
+                return 'Low'
+        else:
+            return 'Low'
         
     def _check_resolution_conditions(self, contradiction, game_state):
         """Check if conditions for resolution are met."""
-        for condition in contradiction.resolution_conditions:
-            if not self._evaluate_condition(condition, game_state):
-                return False
-        return True
+        if contradiction.id == 'economic_inequality':
+            gini_coefficient = game_state['economy'].gini_coefficient
+            return gini_coefficient <= 0.35  # Threshold for resolution
+        elif contradiction.id == 'political_unrest':
+            stability_index = game_state['politics'].stability_index
+            return stability_index >= 0.5
+        return False
         
     def _resolve_contradiction(self, contradiction, game_state):
         """Resolve a contradiction and apply its effects."""
