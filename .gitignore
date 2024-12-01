@@ -1,7 +1,9 @@
 .venv*
 .aider*
 .vscode*
-.env*
+.env
+.env.*
+!.env.example
 *.log
 *.sqlite3
 .venv-babylon*
