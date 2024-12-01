@@ -22,7 +22,7 @@
       <xs:element name="ID">
         <xs:simpleType>
           <xs:restriction base="xs:string">
-            <xs:pattern value="L[0-9]{3}"/>
+            <xs:pattern value="L[0-9]{3}[A-Z]/"/>
           </xs:restriction>
         </xs:simpleType>
       </xs:element>
