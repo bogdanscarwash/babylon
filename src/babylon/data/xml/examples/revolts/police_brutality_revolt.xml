@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Revolt>
+    <Name>Police Brutality Uprising</Name>
+    <Description>Mass uprising triggered by systematic police violence against marginalized communities</Description>
+    <Type>Protest</Type>
+    <StartDate>2024-05-15T00:00:00</StartDate>
+    <Location>Urban Centers</Location>
+    <PrimaryCause>Police Violence and Systemic Racism</PrimaryCause>
+    
+    <Participants>
+        <Participant>
+            <Name>Community Organizers</Name>
+            <Role>Leader</Role>
+            <Faction>Civil Rights Groups</Faction>
+        </Participant>
+        <Participant>
+            <Name>Local Residents</Name>
+            <Role>Participant</Role>
+        </Participant>
+    </Participants>
+
+    <Motivations>
+        <Motivation>
+            <Type>Social</Type>
+            <Description>End police brutality and racial profiling</Description>
+        </Motivation>
+        <Motivation>
+            <Type>Political</Type>
+            <Description>Reform law enforcement and accountability systems</Description>
+        </Motivation>
+    </Motivations>
+
+    <Events>
+        <Event>
+            <Description>Initial protest gathering</Description>
+            <Timestamp>2024-05-15T14:00:00</Timestamp>
+            <Impact>Widespread media coverage and social media amplification</Impact>
+        </Event>
+        <Event>
+            <Description>Solidarity demonstrations spread to multiple cities</Description>
+            <Timestamp>2024-05-17T12:00:00</Timestamp>
+            <Impact>National attention and policy debate</Impact>
+        </Event>
+    </Events>
+
+    <Contradictions>
+        <Contradiction>
+            <Description>Tension between public safety and civil rights</Description>
+            <Severity>8</Severity>
+        </Contradiction>
+        <Contradiction>
+            <Description>Militarized response versus peaceful protest</Description>
+            <Severity>9</Severity>
+        </Contradiction>
+    </Contradictions>
+</Revolt>

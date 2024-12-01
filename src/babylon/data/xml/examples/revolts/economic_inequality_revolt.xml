@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Revolt>
+    <Name>Economic Justice Movement</Name>
+    <Description>Mass uprising against extreme wealth inequality and corporate exploitation</Description>
+    <Type>Strike</Type>
+    <StartDate>2024-07-01T00:00:00</StartDate>
+    <Location>Multiple Economic Centers</Location>
+    <PrimaryCause>Extreme Economic Inequality</PrimaryCause>
+    
+    <Participants>
+        <Participant>
+            <Name>Labor Unions</Name>
+            <Role>Organizer</Role>
+            <Faction>Workers' Rights Coalition</Faction>
+        </Participant>
+        <Participant>
+            <Name>Gig Economy Workers</Name>
+            <Role>Participant</Role>
+        </Participant>
+    </Participants>
+
+    <Motivations>
+        <Motivation>
+            <Type>Economic</Type>
+            <Description>Living wages and wealth redistribution</Description>
+        </Motivation>
+        <Motivation>
+            <Type>Political</Type>
+            <Description>Corporate regulation and tax reform</Description>
+        </Motivation>
+    </Motivations>
+
+    <Events>
+        <Event>
+            <Description>Coordinated worker walkouts</Description>
+            <Timestamp>2024-07-01T09:00:00</Timestamp>
+            <Impact>Major disruption to economic activity</Impact>
+        </Event>
+        <Event>
+            <Description>General strike spreads across sectors</Description>
+            <Timestamp>2024-07-03T12:00:00</Timestamp>
+            <Impact>Economic pressure on corporate entities</Impact>
+        </Event>
+    </Events>
+
+    <Contradictions>
+        <Contradiction>
+            <Description>Capital accumulation versus worker welfare</Description>
+            <Severity>9</Severity>
+        </Contradiction>
+        <Contradiction>
+            <Description>Corporate profit versus living wages</Description>
+            <Severity>8</Severity>
+        </Contradiction>
+    </Contradictions>
+</Revolt>
