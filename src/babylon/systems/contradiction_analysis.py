@@ -103,9 +103,6 @@ class ContradictionAnalysis:
             ]
         }
         
-        # Set the intensity update method
-        contradiction.update_intensity = lambda game_state: Contradiction.update_intensity_from_economy(contradiction, game_state)
-        
         return contradiction
 
     def _create_political_unrest_contradiction(self, game_state):
@@ -158,7 +155,7 @@ class ContradictionAnalysis:
         """Update a single contradiction's state."""
         old_intensity: str = contradiction.intensity
         
-        # Update intensity using contradiction's own method
+        # Update intensity using the instance method
         contradiction.update_intensity(game_state)
         
         # Record intensity history

@@ -64,7 +64,6 @@ class Contradiction:
         selected_resolution_method: Optional[str] = None,
         intensity_value: float = 0.0,
         intensity_history: Optional[List[float]] = None,
-        update_intensity: Optional[Callable[[Contradiction, Dict[str, Any]], None]] = None
     ) -> None:
         self.id: str = id
         self.entity_id: str = id  # Add alias for compatibility
@@ -86,7 +85,30 @@ class Contradiction:
         self.selected_resolution_method: Optional[str] = selected_resolution_method
         self.intensity_value: float = intensity_value
         self.intensity_history: List[float] = intensity_history if intensity_history is not None else []
-        self.update_intensity: Optional[Callable[[Contradiction, Dict[str, Any]], None]] = update_intensity
+        
+    def update_intensity(self, game_state: Dict[str, Any]) -> None:
+        """Update contradiction intensity based on game state indicators."""
+        # Get economic indicators
+        gini_coefficient = game_state['economy'].gini_coefficient
+        unemployment_rate = game_state['economy'].unemployment_rate
+        
+        # Define weights
+        gini_weight = 0.7
+        unemployment_weight = 0.3
+        
+        # Calculate weighted intensity value
+        self.intensity_value = (
+            gini_weight * gini_coefficient +
+            unemployment_weight * unemployment_rate
+        )
+        
+        # Set categorical intensity based on value
+        if self.intensity_value >= 0.6:
+            self.intensity = 'High'
+        elif self.intensity_value >= 0.4:
+            self.intensity = 'Medium'
+        else:
+            self.intensity = 'Low'
 
     def is_resolvable(self) -> bool:
         return self.potential_for_transformation > 0.5
