@@ -30,10 +30,19 @@
       <xs:element name="Type" type="xs:string"/> <!-- e.g., City, Region, Facility -->
       <xs:element name="Description" type="xs:string" minOccurs="0"/>
       
-      <!-- Geography and Coordinates -->
-      <xs:element name="Coordinates" type="CoordinatesType" minOccurs="0"/>
-      <xs:element name="TerrainType" type="xs:string" minOccurs="0"/> <!-- e.g., Mountainous, Urban -->
-      <xs:element name="Climate" type="xs:string" minOccurs="0"/> <!-- e.g., Tropical, Arid -->
+      <!-- Census Data and Geography -->
+      <xs:element name="CensusData" type="CensusDataType"/>
+      <xs:element name="Coordinates" type="CoordinatesType"/>
+      <xs:element name="TerrainType" type="xs:string" minOccurs="0"/>
+      <xs:element name="AreaType">
+        <xs:simpleType>
+          <xs:restriction base="xs:string">
+            <xs:enumeration value="Metropolitan"/>
+            <xs:enumeration value="Micropolitan"/>
+            <xs:enumeration value="Rural"/>
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:element>
       
       <!-- Political and Control Information -->
       <xs:element name="ControlledBy" minOccurs="0">
@@ -112,6 +121,57 @@
     <xs:sequence>
       <xs:element name="Name" type="xs:string"/>
       <xs:element name="Value" type="xs:string"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Census Data Type -->
+  <xs:complexType name="CensusDataType">
+    <xs:sequence>
+      <xs:element name="FIPS" type="xs:string"/>
+      <xs:element name="Demographics">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="Population" type="xs:integer"/>
+            <xs:element name="MedianAge" type="xs:decimal"/>
+            <xs:element name="RacialComposition" type="DemographicBreakdownType"/>
+            <xs:element name="EducationLevels" type="DemographicBreakdownType"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      <xs:element name="Economics">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="MedianIncome" type="xs:decimal"/>
+            <xs:element name="UnemploymentRate" type="xs:decimal"/>
+            <xs:element name="PovertyRate" type="xs:decimal"/>
+            <xs:element name="IndustryComposition" type="DemographicBreakdownType"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      <xs:element name="Housing">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="MedianHomeValue" type="xs:decimal"/>
+            <xs:element name="RentVsOwn" type="DemographicBreakdownType"/>
+            <xs:element name="VacancyRate" type="xs:decimal"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      <xs:element name="LastUpdated" type="xs:date"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- Demographic Breakdown Type -->
+  <xs:complexType name="DemographicBreakdownType">
+    <xs:sequence>
+      <xs:element name="Category" maxOccurs="unbounded">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="Name" type="xs:string"/>
+            <xs:element name="Percentage" type="xs:decimal"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
     </xs:sequence>
   </xs:complexType>
 
