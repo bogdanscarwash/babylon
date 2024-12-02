@@ -68,8 +68,10 @@ class TestContradictionAnalysis(unittest.TestCase):
             state='Active',
             potential_for_transformation='High',
             conditions_for_transformation=['Revolutionary Movement'],
-            resolution_methods=['Reform', 'Revolution'],
-            resolution_conditions=['Reduce Inequality'],
+            resolution_methods={
+                'Reform': [Effect('upper_class', 'wealth', 'Decrease', 0.5, 'Test effect')],
+                'Revolution': [Effect('upper_class', 'wealth', 'Decrease', 1.0, 'Test effect')]
+            },
             effects=[],
             attributes={}
         )
@@ -109,17 +111,17 @@ class TestContradictionAnalysis(unittest.TestCase):
 
     def test_effect_application(self) -> None:
         """Test applying effects to entities."""
-        effect: Effect = Effect(
-            target='upper_class',
-            attribute='wealth',
-            modification_type='Decrease',
-            value=0.5,
-            description='Test effect'
-        )
+        contradiction = self._create_sample_contradiction()
+        self.contradiction_analysis.add_contradiction(contradiction)
         
         upper_class = self.entity_registry.get_entity('upper_class')
         initial_wealth = upper_class.wealth
-        effect.apply(self.game_state)
+        
+        # Apply Reform resolution method effects
+        effects = contradiction.resolution_methods['Reform']
+        for effect in effects:
+            self.contradiction_analysis._apply_effects([effect], self.game_state)
+            
         self.assertEqual(upper_class.wealth, initial_wealth - 0.5)
 
 if __name__ == '__main__':
