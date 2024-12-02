@@ -1,6 +1,29 @@
 # Babylon: The Collapse of America - Development Roadmap
 
-## Alpha 1 - Core Infrastructure [IN PROGRESS]
+## Table of Contents
+1. Core Development Milestones
+   - Alpha 1: Core Infrastructure [IN PROGRESS]
+   - Alpha 2: Basic Playable Version [PLANNED]
+   - Alpha 3: Enhanced Gameplay [PLANNED]
+   - Beta: Full Systems Integration [PLANNED]
+   - Release: Final Polish [PLANNED]
+
+2. Major System Milestones
+   - Character System
+   - GUI Development
+   - Vector Database & RAG
+   - Economic System
+   - Political System
+
+3. Technical Implementation
+   - Performance Targets
+   - Development Standards
+   - Security Considerations
+   - Testing & Documentation
+
+## Core Development Milestones
+
+### Alpha 1 - Core Infrastructure [IN PROGRESS]
 Foundation and data management:
 - [x] Core contradiction analysis system
 - [x] Basic event generation
