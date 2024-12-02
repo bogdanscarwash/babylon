@@ -66,6 +66,7 @@ class Contradiction:
         update_intensity: Optional[Callable[[Contradiction, Dict[str, Any]], None]] = None
     ) -> None:
         self.id: str = id
+        self.entity_id: str = id  # Add alias for compatibility
         self.name: str = name
         self.description: str = description
         self.entities: List[Entity] = entities
