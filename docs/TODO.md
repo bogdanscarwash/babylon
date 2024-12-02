@@ -1,20 +1,17 @@
-# Roadmap to Babylon: The Collapse of America text-based RPG
+# Babylon: The Collapse of America - Development Roadmap
 
-## Development Milestones
-
-### Alpha Milestone 1 - Core Infrastructure [IN PROGRESS]
-After completing these tasks, you'll have the foundational systems:
+## Alpha 1 - Core Infrastructure [IN PROGRESS]
+Foundation and data management:
 - [x] Core contradiction analysis system
 - [x] Basic event generation
 - [x] Initial visualization tools
 - [x] Metrics collection system
-- [ ] Vector database implementation (200k token context)
+- [ ] Vector database (200k token context)
 - [ ] RAG system for object management
 - [ ] Object lifecycle management
-  - [ ] Immediate context (20-30 objects)
-  - [ ] Active cache (100-200 objects)
-  - [ ] Background context (300-500 objects)
-Expected: Can efficiently manage large numbers of game objects
+  - Immediate context (20-30 objects)
+  - Active cache (100-200 objects)
+  - Background context (300-500 objects)
 
 ### Alpha Milestone 2 - Basic Playable Version [PLANNED]
 Building on the infrastructure:
