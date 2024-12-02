@@ -1,5 +1,45 @@
 ## Table of Contents
 
+## Development Milestones
+
+### Alpha Milestone 1 - Basic Playable Version
+After completing these tasks, you'll have a basic playable version:
+- [x] Core contradiction analysis system
+- [x] Basic event generation
+- [x] Initial visualization tools
+- [ ] Basic terminal UI with command input
+- [ ] Initial data loading from XML
+- [ ] Simple game loop implementation
+Expected: Can run basic simulation and interact through commands
+
+### Alpha Milestone 2 - Enhanced Gameplay
+Building on basic version:
+- [ ] Complete event system with consequences
+- [ ] Economic system basics
+- [ ] Political system fundamentals
+- [ ] Save/load functionality
+- [ ] Enhanced UI with help system
+Expected: Can play through multiple scenarios with meaningful choices
+
+### Beta Milestone - Full Systems Integration
+Major systems working together:
+- [ ] Class and faction mechanics
+- [ ] Cultural and ideological systems
+- [ ] Environmental impacts
+- [ ] AI decision making
+- [ ] Complete visualization tools
+Expected: Full gameplay experience with all core systems
+
+### Release Milestone
+Final polishing:
+- [ ] Performance optimization
+- [ ] Comprehensive testing
+- [ ] Complete documentation
+- [ ] Tutorial scenarios
+Expected: Ready for public release
+
+## Table of Contents
+
 - [Next Steps in Development](#next-steps-in-development)
 - [1. Core Game Mechanics Implementation](#1-implement-core-game-mechanics)
   - [Contradiction Analysis System](#a-contradiction-analysis-system-x)
