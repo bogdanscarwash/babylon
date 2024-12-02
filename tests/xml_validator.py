@@ -65,14 +65,6 @@ def check_id_references(xml_file_path: str) -> bool:
     Returns:
         bool: True if all references are valid, False otherwise
     """
-    ensuring that every referenced ID exists in the document.
-
-    Args:
-        xml_file_path: Path to the XML file to check
-
-    Returns:
-        bool: True if all references are valid, False otherwise
-    """
     tree = ET.parse(xml_file_path)
     root = tree.getroot()
 
@@ -112,15 +104,6 @@ def check_entity_imports(xsd_file_path: str, base_dir: str) -> bool:
     Returns:
         bool: True if all imports are valid, False if any imports are missing
     """
-    elements can be found in the specified base directory.
-
-    Args:
-        xsd_file_path: Path to the XSD schema file to check
-        base_dir: Base directory to look for imported schemas
-
-    Returns:
-        bool: True if all imports are valid, False if any imports are missing
-    """
     tree = ET.parse(xsd_file_path)
     root = tree.getroot()
     xs_namespace = 'http://www.w3.org/2001/XMLSchema'
@@ -151,14 +134,6 @@ def validate_naming_conventions(xml_file_path: str) -> bool:
     Args:
         xml_file_path: Path to the XML file to validate
         
-    Returns:
-        bool: True if all names follow conventions, False otherwise
-    """
-    as per project conventions.
-
-    Args:
-        xml_file_path: Path to the XML file to validate
-
     Returns:
         bool: True if all names follow conventions, False otherwise
     """
@@ -195,15 +170,6 @@ def check_unused_ids(xml_file_path: str) -> bool:
     Args:
         xml_file_path: Path to the XML file to check
         
-    Returns:
-        bool: True if no unused IDs found, False if unused IDs exist
-    """
-    referenced by any other elements, which may indicate unused
-    or obsolete definitions.
-
-    Args:
-        xml_file_path: Path to the XML file to check
-
     Returns:
         bool: True if no unused IDs found, False if unused IDs exist
     """
