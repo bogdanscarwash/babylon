@@ -180,3 +180,61 @@ class StorySeed:
 - Manage active story count
 - Balance narrative density
 - Control memory usage
+
+## Thematic Elements
+
+### Historical Parallels
+- Soviet economic planning
+- Chinese Cultural Revolution
+- Industrial Revolution impacts
+- Historical labor movements
+- Cold War tensions
+
+### Cultural Elements
+- Folk tales and myths
+- Local customs and traditions
+- Religious practices and conflicts
+- Cultural revolution impacts
+- Generational differences
+
+### Environmental Themes
+- Industrial pollution effects
+- Resource depletion
+- Climate change parallels
+- Urban development impacts
+- Agricultural transformation
+
+### Character Archetypes
+- Party officials
+- Factory workers
+- Peasant farmers
+- Intellectual dissidents
+- Religious leaders
+- Black market traders
+- Foreign observers
+
+## Narrative Devices
+
+### Documentation
+- Government reports
+- Personal diaries
+- Propaganda posters
+- News bulletins
+- Statistical analyses
+- Classified documents
+- Worker testimonies
+
+### Time Periods
+- Pre-revolution context
+- Revolutionary period
+- Post-revolution adaptation
+- Reform and opening
+- System breakdown
+- Transformation period
+
+### Story Structures
+- Parallel narratives
+- Flashbacks/forwards
+- Multiple perspectives
+- Unreliable narrators
+- Documentary style

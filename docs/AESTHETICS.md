@@ -125,6 +125,27 @@ Representing:
 - Consistent spacing system
 - Performance optimization
 
+### Sound Design
+- Industrial/mechanical ambient sounds
+- Soviet-era music influences
+- Factory/machinery sound effects
+- Alert sounds following constructivist principles
+- Minimal but impactful audio cues
+
+### Environmental Design
+- Weather effects (snow, rain, fog)
+- Day/night cycle influences
+- Seasonal changes affecting visuals
+- Industrial smog and pollution effects
+- Environmental degradation visualization
+
+### Propaganda Elements
+- Dynamic poster generation system
+- Period-appropriate slogans
+- Statistical infographics
+- Achievement certificates
+- News bulletin styling
+
 ### Accessibility
 - High contrast ratios
 - Clear visual hierarchy
