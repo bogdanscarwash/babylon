@@ -1,25 +1,139 @@
 # Babylon: The Collapse of America - Development Roadmap
 
-## Table of Contents
-1. Core Development Milestones
-   - Alpha 1: Core Infrastructure [IN PROGRESS]
-   - Alpha 2: Basic Playable Version [PLANNED]
-   - Alpha 3: Enhanced Gameplay [PLANNED]
-   - Beta: Full Systems Integration [PLANNED]
-   - Release: Final Polish [PLANNED]
+## Development Phases
 
-2. Major System Milestones
-   - Character System
-   - GUI Development
-   - Vector Database & RAG
-   - Economic System
-   - Political System
+### 1. Alpha 1 - Core Infrastructure [IN PROGRESS]
+- [x] Core contradiction analysis system
+- [x] Basic event generation
+- [x] Initial visualization tools
+- [x] Metrics collection system
+- [ ] Vector Database & RAG Integration
+  - Vector database (200k token context)
+  - RAG system for object management
+  - Object lifecycle management
+    - Immediate context (20-30 objects)
+    - Active cache (100-200 objects)
+    - Background context (300-500 objects)
 
-3. Technical Implementation
-   - Performance Targets
-   - Development Standards
-   - Security Considerations
-   - Testing & Documentation
+### 2. Alpha 2 - Basic Playable Version [PLANNED]
+- [ ] Basic terminal UI with command input
+- [ ] Initial data loading from XML
+- [ ] Simple game loop implementation
+- [ ] Integration with RAG system
+- [ ] Constructivist/Soviet UI design
+  - Color scheme implementation
+  - Typography system
+  - Industrial/brutalist styling
+  - Dynamic visualization tools
+
+### 3. Alpha 3 - Enhanced Gameplay [PLANNED]
+- [ ] Complete Event System
+  - Economic events
+  - Political events
+  - Social events
+- [ ] Core Systems Implementation
+  - Economic system basics
+  - Political system fundamentals
+- [ ] Save/load functionality with vector DB
+- [ ] Enhanced UI with help system
+- [ ] Story seed system
+  - Dynamic narrative generation
+  - Multiple resolution paths
+  - Consequence chains
+
+### 4. Beta - Full Systems Integration [PLANNED]
+- [ ] Major Systems
+  - Class and faction mechanics
+  - Cultural and ideological systems
+  - Environmental impacts
+  - AI decision making
+- [ ] GUI Implementation
+  - Constructivist design elements
+  - Dynamic data visualization
+  - Real-time metrics display
+- [ ] Character System
+  - Base attributes and creation
+  - Relationship mapping
+  - Personal history system
+  - Family/professional networks
+
+### 5. Release - Final Polish [PLANNED]
+- [ ] Performance Optimization
+  - Token usage optimization
+  - Cache performance tuning
+  - Query latency reduction
+  - Memory usage optimization
+- [ ] Testing & Documentation
+  - System integration tests
+  - Performance benchmarks
+  - Technical documentation
+  - User/narrative guides
+- [ ] Tutorial Implementation
+  - Basic gameplay tutorials
+  - Advanced mechanics guides
+  - Story creation guides
+  - Modding tutorials
+
+## Major Systems Specifications
+
+### Character System
+- Core Framework
+  - Attribute system
+  - Skills and abilities
+  - Background generator
+  - Personal history
+  - Family relationships
+- Character Creation Interface
+  - Creation wizard
+  - Template system
+  - Custom attributes
+  - Relationship builder
+- Integration Features
+  - Character-event interaction
+  - Social network effects
+  - Economic/political involvement
+
+### GUI Development
+- Layout Components
+  - Main window (tkinter)
+  - Panel organization
+  - Menu/status bars
+- Visualization Systems
+  - Contradiction map (NetworkX)
+  - Status panels and HUD
+  - Data visualization tools
+- Interface Features
+  - Hybrid command interface
+  - Event display system
+  - Performance optimization
+
+### Vector Database & RAG
+- Database Infrastructure
+  - Scalability (50k+ objects)
+  - Query optimization
+  - Backup/restore
+- Context Management
+  - Dynamic window sizing
+  - Priority queuing
+  - State tracking
+- Performance Targets
+  - Query response < 100ms
+  - Memory usage < 2GB
+  - Cache hit rate > 90%
+
+### Technical Standards
+- Development Requirements
+  - Code coverage > 80%
+  - Comprehensive documentation
+  - Structured logging
+- Security Considerations
+  - Input validation
+  - Data integrity
+  - Access control
+- Testing Framework
+  - Unit testing suite
+  - Integration tests
+  - Performance benchmarks
 
 ## Core Development Milestones
 
