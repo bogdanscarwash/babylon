@@ -7,10 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Initial commit adding census data files in various categories: demographics, economics, housing, and social data [COMMIT_EDITMSG].
-- Implementation of a basic contradiction analysis system in `contradiction_analysis.py`.
-- XML parsing for definitions of contradictions in `contradiction_parser.py`.
-- Entity registry to maintain references to all game entities in `entity_registry.py`.
-- `__main__.py` script provided for executing the game.
+- Enhanced contradiction analysis system with visualization capabilities in `contradiction_analysis.py`:
+  - Added network graph visualization for entity relationships
+  - Added dialectical map visualization for contradictions
+  - Implemented intensity tracking and history
+- Expanded XML parsing for contradictions in `contradiction_parser.py`:
+  - Added support for parsing effects and attributes
+  - Enhanced entity relationship parsing
+- Improved entity registry in `entity_registry.py`:
+  - Added entity removal functionality
+  - Enhanced type safety with Optional types
+- Enhanced game loop in `__main__.py`:
+  - Added event queue processing
+  - Implemented contradiction detection and resolution
+  - Added game state management
 - Configuration management via environment in `__init__.py` and .env.
 
 ### Changed
