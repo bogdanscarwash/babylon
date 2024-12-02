@@ -57,5 +57,47 @@ def handle_event(event: Event, game_state: Dict[str, Any]) -> None:
         # Your application logic...
         break  # Replace with actual game loop condition
 
+def main() -> None:
+    """Main function to initialize and run the game loop."""
+    # Access configuration variables
+    secret_key: str = Config.SECRET_KEY
+    database_url: str = Config.DATABASE_URL
+
+    # Initialize systems
+    entity_registry: EntityRegistry = EntityRegistry()
+    contradiction_analysis: ContradictionAnalysis = ContradictionAnalysis(entity_registry)
+    game_state: Dict[str, Any] = {
+        "entity_registry": entity_registry,
+        "economy": Economy(),
+        "politics": Politics(),
+        "event_queue": [],
+        "is_player_responsible": False
+    }
+
+    print(f"Running with SECRET_KEY={secret_key}")
+    print(f"Database URL: {database_url}")
+    print(f"Debug mode: {Config.DEBUG}")
+
+    # Game loop
+    while True:
+        # Update game state components
+        game_state['economy'].update()
+        game_state['politics'].update()
+
+        # Update contradictions
+        contradiction_analysis.update_contradictions(game_state)
+
+        # Visualize contradictions and relationships
+        contradiction_analysis.visualize_contradictions()
+        contradiction_analysis.visualize_entity_relationships()
+
+        # Process all events in the event queue
+        while game_state['event_queue']:
+            event = game_state['event_queue'].pop(0)
+            handle_event(event, game_state)
+
+        # Your application logic...
+        break  # Replace with actual game loop condition
+
 if __name__ == "__main__":
     main()
