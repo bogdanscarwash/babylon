@@ -100,8 +100,14 @@ class BabylonGUI:
     def configure_styles(self) -> None:
         """Configure the styles for the GUI elements.
         
-        Sets up ttk styles for labels and other widgets using the game's
-        constructivist-inspired color scheme and typography.
+        Sets up ttk styles following constructivist design principles:
+        - Stark contrasts between elements
+        - Industrial/brutalist appearance
+        - Soviet-inspired color scheme
+        - Geometric sans-serif typography
+        
+        The styles are applied consistently across all interface elements
+        to maintain the game's revolutionary aesthetic.
         """
         style = ttk.Style()
         style.configure('Babylon.TLabel',
@@ -116,9 +122,14 @@ class BabylonGUI:
     def setup_contradiction_map(self) -> None:
         """Setup the contradiction map visualization panel.
         
-        Creates a matplotlib figure embedded in the left frame for displaying
-        the network graph of contradictions. Uses constructivist styling with
-        dark background and Soviet-inspired color scheme.
+        Creates a matplotlib figure in the left frame showing the network
+        of dialectical contradictions. The visualization uses:
+        - Dark background reflecting industrial aesthetic
+        - Soviet red for important relationships
+        - Geometric shapes for nodes
+        - Clear hierarchical layout
+        
+        The map updates dynamically as contradictions evolve and transform.
         """
         fig = plt.figure(figsize=(6,6))
         ax = fig.add_subplot(111)
@@ -140,9 +151,17 @@ class BabylonGUI:
     def setup_main_view(self) -> None:
         """Setup the main central view panel.
         
-        Creates a text widget in the center frame for displaying detailed
-        information about selected contradictions and events. Uses
-        constructivist-inspired styling with custom fonts and colors.
+        Creates the primary information display area using:
+        - Constructivist-inspired typography
+        - High contrast color scheme
+        - Industrial/brutalist styling
+        - Clear information hierarchy
+        
+        This panel shows detailed information about:
+        - Selected contradictions
+        - Entity relationships
+        - Historical materialist analysis
+        - System state changes
         """
         self.details_text = tk.Text(self.center_frame,
                                   bg=STYLE['bg'],
@@ -160,9 +179,17 @@ class BabylonGUI:
     def setup_status_panel(self) -> None:
         """Setup the economic indicators status panel.
         
-        Creates a panel in the right frame displaying key economic metrics
-        using industrial/brutalist styling. Shows GDP, unemployment rate,
-        and production metrics with monospace fonts and stark colors.
+        Creates a brutalist-styled panel showing key metrics:
+        - Economic indicators (GDP, unemployment)
+        - Production statistics
+        - Class relationships
+        - System stability measures
+        
+        Uses:
+        - Monospace fonts for data
+        - Soviet-inspired header styling
+        - Industrial/mechanical appearance
+        - Clear data visualization
         """
         header = ttk.Label(self.right_frame, text="ECONOMIC INDICATORS",
                           style='BabylonHeader.TLabel')
@@ -187,9 +214,17 @@ class BabylonGUI:
     def setup_event_log(self) -> None:
         """Setup the event log display panel.
         
-        Creates a text widget in the bottom frame for displaying game events
-        and notifications. Uses constructivist styling with monospace font
-        and Soviet-inspired color scheme.
+        Creates a console-style log display showing:
+        - System events and notifications
+        - Contradiction developments
+        - Class struggle progression
+        - Economic system changes
+        
+        Styled with:
+        - Monospace font for readability
+        - Industrial/terminal appearance
+        - Soviet-inspired headers
+        - Clear event hierarchy
         """
         frame = tk.Frame(self.bottom_frame, bg=STYLE['bg'])
         frame.pack(fill=tk.X, padx=STYLE['padding'], pady=STYLE['padding'])
@@ -210,9 +245,17 @@ class BabylonGUI:
     def setup_command_line(self) -> None:
         """Setup the command line input interface.
         
-        Creates a command prompt in the bottom frame for entering game commands.
-        Uses industrial styling with monospace font and Soviet red prompt symbol.
-        Binds the Return key to process_command().
+        Creates a command prompt for direct system interaction:
+        - Enter commands to modify system state
+        - Trigger events and transformations
+        - Query contradiction status
+        - Analyze class relationships
+        
+        Uses:
+        - Soviet red prompt symbol (►)
+        - Monospace font for commands
+        - Industrial/terminal styling
+        - Clear visual feedback
         """
         frame = tk.Frame(self.bottom_frame, bg=STYLE['bg'])
         frame.pack(fill=tk.X, padx=STYLE['padding'], pady=STYLE['padding'])
