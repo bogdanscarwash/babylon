@@ -305,6 +305,7 @@ class ContradictionAnalysis:
         # Procedurally generate effects based on contradiction's intensity and entities
         effects = self._generate_effects_from_contradiction(contradiction, game_state)
         
+        escalation_level = self._determine_escalation_level(contradiction)
         triggers = []  # Define any triggers if necessary
         # Define consequences based on escalation level
         if escalation_level == 'Critical':

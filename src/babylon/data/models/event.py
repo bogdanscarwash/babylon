@@ -1,4 +1,7 @@
-from typing import List, Optional, Union
+from typing import List, Optional, Union, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .contradiction import Effect
 
 class Event:
     def __init__(self, id: str, name: str, description: str, effects, triggers, escalation_level: float, consequences: Optional[List[Union[Event, Effect]]] = None):

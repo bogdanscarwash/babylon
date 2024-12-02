@@ -7,7 +7,7 @@ from systems.contradiction_analysis import ContradictionAnalysis
 from data.models.economy import Economy
 from data.models.politics import Politics
 
-def handle_event(event: Event, game_state: Dict[str, Any]) -> None:
+def main() -> None:
     """Process and apply an event's effects to the game state."""
     print(f"Event Occurred: {event.name}")
     print(event.description)
