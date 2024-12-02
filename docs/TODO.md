@@ -41,15 +41,19 @@ Expected: Ready for public release
 ## Table of Contents
 
 ### Alpha Milestone 1 - Core Systems
-- [Core Game Mechanics](#1-implement-core-game-mechanics)
-  - [Contradiction Analysis System](#a-contradiction-analysis-system-x)
-  - [Dynamic Event Generation](#b-dynamic-event-generation-ip)
-  - [Visualization Tools](#c-visualization-tools-ip)
-- [Data Foundation](#7-data-population)
-  - [XML Data Creation](#a-create-xml-data-files)
-  - [Data Loading Implementation](#3-implement-data-loading-mechanism-in-python)
-- [Basic Game Engine](#4-set-up-the-core-game-logic-game-engine)
-- [Terminal UI Development](#6-develop-the-terminal-based-user-interface)
+- Core Game Mechanics
+  - [x] Contradiction Analysis System
+  - [ ] Dynamic Event Generation
+  - [ ] Visualization Tools
+- Data Foundation
+  - [ ] XML Data Creation
+  - [ ] Data Loading Implementation
+- Basic Game Engine
+  - [ ] Game Loop Implementation
+  - [ ] State Management
+- Terminal UI Development
+  - [ ] Command Interface
+  - [ ] Display System
 
 ### Alpha Milestone 2 - Enhanced Systems
 - [Economic System](#2-develop-economic-system)
@@ -81,57 +85,6 @@ Expected: Ready for public release
 - [Summary](#summary)
 - [Next Steps](#next-steps)
 
-## Implementation Tasks
-
-### Alpha Milestone 1 - Core Systems Implementation
-
-#### Core Game Mechanics
-
-#### a. Contradiction Analysis System [x]
-- Design algorithms to identify and track contradictions within the game world [x]
-- Implement intensity metrics for contradictions [x]
-- Develop resolution options: Suppression, Reform, Revolution [x]
-- Optimize contradiction detection performance [IP]
-- Implement caching for frequently accessed contradiction states []
-
-#### b. Dynamic Event Generation [IP]
-- Create procedural generation logic for events based on contradictions [x]
-- Implement consequence chains that affect the game world [IP]
-- Design event triggers and escalation paths [IP]
-- Refine trigger conditions based on game state []
-- Add weighted randomization to event outcomes []
-- Implement event cooldown mechanics []
-
-#### c. Visualization Tools [IP]
-- Develop dialectical mapping interfaces [x]
-- Build network relationship displays [x]
-- Create statistical indicators and historical tracking [IP]
-- Add interactive filtering options []
-- Implement performance optimizations for large networks []
-- Add data export capabilities []
-
-#### d. User Interface Enhancements []
-- Implement command history and autocomplete []
-- Add context-sensitive help system []
-- Create detailed event logs []
-- Implement save/load game state []
-- Add configuration options for display preferences []
-
-#### e. Testing and Documentation []
-- Write comprehensive unit tests for core systems []
-- Create integration tests for event chains []
-- Document API interfaces and data structures []
-- Create user manual and quick reference guide []
-- Add example scenarios and tutorials []
-
-#### f. Performance Optimization []
-- Profile and optimize memory usage []
-- Implement lazy loading for game entities []
-- Add caching for frequently accessed data []
-- Optimize network graph calculations []
-- Implement batch processing for updates []
-
----
 
 ### Alpha Milestone 2 - Enhanced Systems Implementation
 
