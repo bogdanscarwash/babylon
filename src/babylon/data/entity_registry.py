@@ -1,5 +1,5 @@
 from typing import Dict, Optional
-from babylon.entities.entity import Entity  # Assuming this is your Entity class
+from babylon.entities.entity import Entity
 
 class EntityRegistry:
     """Registry to maintain references to all game entities."""
