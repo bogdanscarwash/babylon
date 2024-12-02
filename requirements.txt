@@ -4,3 +4,5 @@ matplotlib>=3.0.0
 networkx>=2.0.0
 pytest>=6.0.0
 hatchling>=1.26.3
+tk>=0.1.0
+pandas>=1.0.0
