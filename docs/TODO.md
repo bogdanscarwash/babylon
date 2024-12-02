@@ -226,28 +226,27 @@ Expected: Ready for public release
   - Add historical memory systems
   - Create value system dynamics
 
-### 6. Implement Environmental and Geopolitical System
+#### Environmental and Geopolitical System
+- [ ] Environmental Mechanics
+  - Design climate change systems
+  - Implement resource depletion
+  - Create pollution tracking
+  - Add natural disaster events
+  - Design environmental policy impacts
 
-#### a. Environmental Mechanics []
-- Design climate change systems []
-- Implement resource depletion []
-- Create pollution tracking []
-- Add natural disaster events []
-- Design environmental policy impacts []
+- [ ] Geopolitical Dynamics
+  - Implement territorial control
+  - Create international relations
+  - Design conflict resolution
+  - Add alliance systems
+  - Implement trade agreements
 
-#### b. Geopolitical Dynamics []
-- Implement territorial control []
-- Create international relations []
-- Design conflict resolution []
-- Add alliance systems []
-- Implement trade agreements []
-
-#### c. Global Systems []
-- Create world market mechanics []
-- Implement global crisis triggers []
-- Design international organization systems []
-- Add global power dynamics []
-- Create world system evolution []
+- [ ] Global Systems
+  - Create world market mechanics
+  - Implement global crisis triggers
+  - Design international organization systems
+  - Add global power dynamics
+  - Create world system evolution
 
 ### 7. Populate Your Game World with Initial Data
 
