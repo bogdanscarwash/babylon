@@ -1,3 +1,4 @@
+from typing import Any
 import tkinter as tk
 from tkinter import ttk, font
 import matplotlib.pyplot as plt
