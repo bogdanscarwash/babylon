@@ -24,13 +24,12 @@ def validate_xml_schema(xml_file_path: str, xsd_file_path: str) -> bool:
     """Validate an XML file against its XSD schema definition.
     
     Performs full schema validation including:
-    - Data type validation
+    - Data type validation 
     - Element structure validation
     - Attribute validation
     - Complex type validation
     
     The validation is strict - any schema violation will cause a failure.
-    """Validate an XML file against its XSD schema.
 
     Args:
         xml_file_path: Path to the XML file to validate
@@ -59,9 +58,13 @@ def check_id_references(xml_file_path: str) -> bool:
     
     This ensures that all cross-references within the XML document are valid
     and prevents dangling references that could cause runtime errors.
-    """Verify that all ID references in the XML file point to existing IDs.
     
-    Scans through the XML file to find all ID attributes and references,
+    Args:
+        xml_file_path: Path to the XML file to check
+        
+    Returns:
+        bool: True if all references are valid, False otherwise
+    """
     ensuring that every referenced ID exists in the document.
 
     Args:
@@ -101,9 +104,14 @@ def check_entity_imports(xsd_file_path: str, base_dir: str) -> bool:
     
     This prevents schema compilation failures due to missing dependencies.
     Critical for maintaining schema modularity and reuse.
-    """Verify that all imported/included schema files exist.
     
-    Checks that all schema files referenced via xs:include or xs:import
+    Args:
+        xsd_file_path: Path to the XSD schema file to check
+        base_dir: Base directory to look for imported schemas
+        
+    Returns:
+        bool: True if all imports are valid, False if any imports are missing
+    """
     elements can be found in the specified base directory.
 
     Args:
@@ -139,9 +147,13 @@ def validate_naming_conventions(xml_file_path: str) -> bool:
     - Data exchange formats
     - Configuration files
     - Game data definitions
-    """Verify that XML elements and attributes follow naming conventions.
     
-    Checks that all element and attribute names use lowercase letters
+    Args:
+        xml_file_path: Path to the XML file to validate
+        
+    Returns:
+        bool: True if all names follow conventions, False otherwise
+    """
     as per project conventions.
 
     Args:
@@ -179,9 +191,13 @@ def check_unused_ids(xml_file_path: str) -> bool:
     - Dead code/data
     
     This helps maintain clean and efficient XML documents.
-    """Check for IDs that are defined but never referenced.
     
-    Identifies any ID attributes in the XML file that are not
+    Args:
+        xml_file_path: Path to the XML file to check
+        
+    Returns:
+        bool: True if no unused IDs found, False if unused IDs exist
+    """
     referenced by any other elements, which may indicate unused
     or obsolete definitions.
 
