@@ -2,35 +2,51 @@
 
 ## Development Milestones
 
-### Alpha Milestone 1 - Core Infrastructure
+### Alpha Milestone 1 - Core Infrastructure [IN PROGRESS]
 After completing these tasks, you'll have the foundational systems:
 - [x] Core contradiction analysis system
 - [x] Basic event generation
 - [x] Initial visualization tools
-- [ ] Vector database implementation
+- [x] Metrics collection system
+- [ ] Vector database implementation (200k token context)
 - [ ] RAG system for object management
 - [ ] Object lifecycle management
+  - [ ] Immediate context (20-30 objects)
+  - [ ] Active cache (100-200 objects)
+  - [ ] Background context (300-500 objects)
 Expected: Can efficiently manage large numbers of game objects
 
-### Alpha Milestone 2 - Basic Playable Version
+### Alpha Milestone 2 - Basic Playable Version [PLANNED]
 Building on the infrastructure:
 - [ ] Basic terminal UI with command input
 - [ ] Initial data loading from XML
 - [ ] Simple game loop implementation
 - [ ] Integration with RAG system
+- [ ] Constructivist/Soviet UI design implementation
+  - [ ] Color scheme implementation
+  - [ ] Typography system
+  - [ ] Industrial/brutalist styling
+  - [ ] Dynamic visualization tools
 Expected: Can run basic simulation and interact through commands
 
-### Alpha Milestone 3 - Enhanced Gameplay
+### Alpha Milestone 3 - Enhanced Gameplay [PLANNED]
 Building on basic version:
 - [ ] Complete event system with consequences
+  - [ ] Economic events
+  - [ ] Political events
+  - [ ] Social events
 - [ ] Economic system basics
 - [ ] Political system fundamentals
 - [ ] Save/load functionality with vector DB integration
 - [ ] Enhanced UI with help system
 - [ ] Optimized object retrieval patterns
+- [ ] Story seed system implementation
+  - [ ] Dynamic narrative generation
+  - [ ] Multiple resolution paths
+  - [ ] Consequence chains
 Expected: Can play through multiple scenarios with meaningful choices
 
-### Beta Milestone - Full Systems Integration
+### Beta Milestone - Full Systems Integration [PLANNED]
 Major systems working together:
 - [ ] Class and faction mechanics
 - [ ] Cultural and ideological systems
@@ -38,6 +54,9 @@ Major systems working together:
 - [ ] AI decision making
 - [ ] Complete visualization tools
 - [ ] GUI Implementation
+  - [ ] Constructivist design elements
+  - [ ] Dynamic data visualization
+  - [ ] Real-time metrics display
 - [ ] Character Creation System
   - [ ] Base character attributes
   - [ ] Background generation
@@ -45,6 +64,9 @@ Major systems working together:
   - [ ] Personal history system
   - [ ] Character portraits
   - [ ] Custom trait system
+  - [ ] Family connections
+  - [ ] Professional networks
+  - [ ] Political affiliations
 Expected: Full gameplay experience with all core systems
 
 ### Character System Milestone
@@ -138,12 +160,28 @@ Building the graphical interface:
   - Memory management
   - Cache implementation
 
-### Release Milestone
+### Release Milestone [PLANNED]
 Final polishing:
 - [ ] Performance optimization
+  - [ ] Token usage optimization
+  - [ ] Cache performance tuning
+  - [ ] Query latency reduction
+  - [ ] Memory usage optimization
 - [ ] Comprehensive testing
+  - [ ] System integration tests
+  - [ ] Performance benchmarks
+  - [ ] Narrative coherence tests
+  - [ ] UI/UX testing
 - [ ] Complete documentation
+  - [ ] Technical documentation
+  - [ ] User guides
+  - [ ] Story/narrative guides
+  - [ ] Modding documentation
 - [ ] Tutorial scenarios
+  - [ ] Basic gameplay tutorials
+  - [ ] Advanced mechanics guides
+  - [ ] Story creation tutorials
+  - [ ] Modding tutorials
 Expected: Ready for public release
 
 ## Table of Contents
