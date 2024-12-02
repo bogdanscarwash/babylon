@@ -4,6 +4,7 @@ import networkx as nx
 from ..data.models.contradiction import Contradiction, Effect
 from ..entities.entity import Entity
 from ..data.models.event import Event
+from ..data.models.trigger import Trigger
 from ..data.entity_registry import EntityRegistry
 
 class ContradictionAnalysis:
@@ -302,6 +303,27 @@ class ContradictionAnalysis:
             f"is escalating."
         )
         
+        # Define triggers based on contradiction properties
+        triggers = [
+            Trigger(
+                condition=lambda gs: contradiction.intensity == 'High',
+                description='Contradiction intensity is High'
+            )
+        ]
+
+        # Define escalation paths
+        escalation_event = Event(
+            id=f"escalation_{event_id}",
+            name=f"Escalation of {contradiction.name}",
+            description="The situation worsens.",
+            effects=[],
+            triggers=[Trigger(
+                condition=lambda gs: contradiction.intensity_value > 0.8,
+                description='Intensity value exceeds 0.8'
+            )],
+            escalation_level='Critical',
+        )
+
         # Procedurally generate effects based on contradiction's intensity and entities
         effects = self._generate_effects_from_contradiction(contradiction, game_state)
         
@@ -314,7 +336,16 @@ class ContradictionAnalysis:
             consequences = []
 
         # Create and return the Event object with consequences
-        return Event(event_id, event_name, event_description, effects, triggers, escalation_level, consequences)
+        return Event(
+            event_id,
+            event_name,
+            event_description,
+            effects,
+            triggers,
+            escalation_level,
+            consequences=[],
+            escalation_paths=[escalation_event]
+        )
         escalation_level = self._determine_escalation_level(contradiction)
         
     def _create_follow_up_event(self, contradiction, game_state):

@@ -14,14 +14,21 @@ def handle_event(event: Event, game_state: Dict[str, Any]) -> None:
     for effect in event.effects:
         effect.apply(game_state)
 
+    # Check for escalation paths
+    for escalation_event in event.escalation_paths:
+        if any(trigger.evaluate(game_state) for trigger in escalation_event.triggers):
+            game_state['event_queue'].append(escalation_event)
+
     # Process consequences
     if event.consequences:
         game_state['event_queue'].extend(event.consequences)
     # Access configuration variables
+    game_state['event_history'] = []  # Add this line
     secret_key: str = Config.SECRET_KEY
     database_url: str = Config.DATABASE_URL
 
     # Initialize systems
+    all_events = []  # List of all Event instances in the game
     entity_registry: EntityRegistry = EntityRegistry()
     contradiction_analysis: ContradictionAnalysis = ContradictionAnalysis(entity_registry)
     game_state: Dict[str, Any] = {
@@ -48,6 +55,13 @@ def handle_event(event: Event, game_state: Dict[str, Any]) -> None:
         # Visualize contradictions and relationships
         contradiction_analysis.visualize_contradictions()
         contradiction_analysis.visualize_entity_relationships()
+
+        # Evaluate triggers for all events
+        for event in all_events:
+            if event not in game_state['event_history']:
+                if all(trigger.evaluate(game_state) for trigger in event.triggers):
+                    game_state['event_queue'].append(event)
+                    game_state['event_history'].append(event)
 
         # Process all events in the event queue
         while game_state['event_queue']:
