@@ -4,7 +4,7 @@ if TYPE_CHECKING:
     from .contradiction import Effect
 
 class Event:
-    def __init__(self, id: str, name: str, description: str, effects, triggers, escalation_level: float, consequences: Optional[List[Union[Event, Effect]]] = None):
+    def __init__(self, id: str, name: str, description: str, effects, triggers, escalation_level: float, consequences: Optional[List[Union['Event', Effect]]] = None):
         self.id = id
         self.name = name
         self.description = description
