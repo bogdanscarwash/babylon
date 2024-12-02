@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Any, Dict, List, Optional, Union
 import matplotlib.pyplot as plt
 import networkx as nx
@@ -6,6 +7,7 @@ from ..entities.entity import Entity
 from ..data.models.event import Event
 from ..data.models.trigger import Trigger
 from ..data.entity_registry import EntityRegistry
+from ..metrics.collector import MetricsCollector
 
 class ContradictionAnalysis:
     """System for analyzing and managing contradictions in the game."""
