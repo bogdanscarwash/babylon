@@ -103,32 +103,8 @@ class ContradictionAnalysis:
             ]
         }
         
-        # Add custom intensity update method
-        def update_intensity(self, game_state):
-            gini_coefficient = game_state['economy'].gini_coefficient
-            unemployment_rate = game_state['economy'].unemployment_rate
-            
-            # Define weights
-            gini_weight = 0.7
-            unemployment_weight = 0.3
-            
-            # Calculate weighted intensity value
-            self.intensity_value = (
-                gini_weight * gini_coefficient +
-                unemployment_weight * unemployment_rate
-            )
-            
-            # Set categorical intensity based on value
-            if self.intensity_value >= 0.6:
-                self.intensity = 'High'
-            elif self.intensity_value >= 0.4:
-                self.intensity = 'Medium'
-            else:
-                self.intensity = 'Low'
-        
-        # Bind the method to the contradiction instance
-        from types import MethodType
-        contradiction.update_intensity = MethodType(update_intensity, contradiction)
+        # Set the intensity update method
+        contradiction.update_intensity = Contradiction.update_intensity_from_economy
         
         return contradiction
 
