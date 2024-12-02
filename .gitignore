@@ -22,3 +22,6 @@
 .continue*
 .continuerules
 .continuerc.json
+
+#pycache
+*__pycache__*

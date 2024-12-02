@@ -16,6 +16,7 @@
     - Use appropriate data structures for efficient data manipulation.
     - Use exception handling for error management.
     - Use logging for debugging and monitoring.
+    - When writing functions, ensure that you explicitly declare types for type safety.
 
 ## Vector Database: 
     - Use a vector database for storing and querying game objects.

@@ -1,6 +1,6 @@
 import os
 import unittest
-from xml_validator import (
+from babylon.utils.xml_validator import (
     validate_xml_schema,
     check_id_references,
     check_entity_imports,

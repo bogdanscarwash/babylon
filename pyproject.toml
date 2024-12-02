@@ -1,0 +1,42 @@
+[project]
+name = "babylon"
+version = "0.1.0"
+description = "A game system modeling societal contradictions and power dynamics"
+requires-python = ">=3.12"
+dependencies = [
+   "xmlschema>=2.0.0",
+   "python-dotenv>=0.19.0",
+   "matplotlib>=3.0.0",
+   "networkx>=2.0.0",
+   "pytest>=8.3.3",
+   "pluggy>=1.5.0"
+]
+
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.black]
+line-length = 88
+target-version = ['py312']
+include = '\.pyi?$'
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+check_untyped_defs = true
+
+[project.urls]
+"Homepage" = "https://github.com/yourusername/babylon"
+"Bug Tracker" = "https://github.com/yourusername/babylon/issues"
