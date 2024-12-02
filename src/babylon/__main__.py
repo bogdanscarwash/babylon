@@ -1,29 +1,33 @@
+from typing import Any, Dict, List
 from dotenv import load_dotenv
 from config import Config
 from data.entity_registry import EntityRegistry
+from data.models.event import Event
 from systems.contradiction_analysis import ContradictionAnalysis
 from data.models.economy import Economy
 from data.models.politics import Politics
 
-def handle_event(event, game_state):
+def handle_event(event: Event, game_state: Dict[str, Any]) -> None:
     """Process and apply an event's effects to the game state."""
     print(f"Event Occurred: {event.name}")
     print(event.description)
     for effect in event.effects:
         effect.apply(game_state)
 
-def main():
+def main() -> None:
     # Access configuration variables
-    secret_key = Config.SECRET_KEY
-    database_url = Config.DATABASE_URL
+    secret_key: str = Config.SECRET_KEY
+    database_url: str = Config.DATABASE_URL
 
     # Initialize systems
-    entity_registry = EntityRegistry()
-    contradiction_analysis = ContradictionAnalysis(entity_registry)
-    game_state = {
+    entity_registry: EntityRegistry = EntityRegistry()
+    contradiction_analysis: ContradictionAnalysis = ContradictionAnalysis(entity_registry)
+    game_state: Dict[str, Any] = {
         "entity_registry": entity_registry,
         "economy": Economy(),
-        "politics": Politics()
+        "politics": Politics(),
+        "event_queue": [],
+        "is_player_responsible": False
     }
 
     print(f"Running with SECRET_KEY={secret_key}")
@@ -44,7 +48,7 @@ def main():
         contradiction_analysis.visualize_entity_relationships()
 
         # Generate and handle events
-        events = contradiction_analysis.generate_events(game_state)
+        events: List[Event] = contradiction_analysis.generate_events(game_state)
         for event in events:
             handle_event(event, game_state)
 
