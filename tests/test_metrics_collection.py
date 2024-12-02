@@ -34,7 +34,14 @@ class TestMetricsCollection(unittest.TestCase):
             universality="Universal",
             particularity="Economic",
             principal_contradiction=None,
-            principal_aspect=entities[0]
+            principal_aspect=entities[0],
+            secondary_aspect=entities[0],
+            antagonism="Primary",
+            intensity="High",
+            state="Active",
+            potential_for_transformation="High",
+            conditions_for_transformation=["Condition1"],
+            resolution_methods={"Method1": []}
         )
         
         # Add contradiction and verify metrics

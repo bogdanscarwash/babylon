@@ -98,7 +98,7 @@ class MetricsCollector:
         """Calculate average token usage."""
         return sum(self.metrics['token_usage']) / len(self.metrics['token_usage']) if self.metrics['token_usage'] else 0
 
-    def _identify_hot_objects(self, threshold: int = 10) -> List[str]:
+    def _identify_hot_objects(self, threshold: int = 3) -> List[str]:
         """Identify frequently accessed objects."""
         return [obj_id for obj_id, count in self.metrics['object_access'].most_common() 
                 if count >= threshold]
