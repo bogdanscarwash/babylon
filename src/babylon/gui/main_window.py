@@ -62,8 +62,12 @@ class BabylonGUI:
         self.setup_event_log()
         self.setup_command_line()
 
-    def configure_styles(self):
-        """Configure the styles for the GUI elements"""
+    def configure_styles(self) -> None:
+        """Configure the styles for the GUI elements.
+        
+        Sets up ttk styles for labels and other widgets using the game's
+        constructivist-inspired color scheme and typography.
+        """
         style = ttk.Style()
         style.configure('Babylon.TLabel',
                        background=STYLE['bg'],
@@ -74,8 +78,13 @@ class BabylonGUI:
                        foreground=COLORS['soviet_red'],
                        font=STYLE['font_header'])
         
-    def setup_contradiction_map(self):
-        """Setup the contradiction map with constructivist styling"""
+    def setup_contradiction_map(self) -> None:
+        """Setup the contradiction map visualization panel.
+        
+        Creates a matplotlib figure embedded in the left frame for displaying
+        the network graph of contradictions. Uses constructivist styling with
+        dark background and Soviet-inspired color scheme.
+        """
         fig = plt.figure(figsize=(6,6))
         ax = fig.add_subplot(111)
         
@@ -93,8 +102,13 @@ class BabylonGUI:
         canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True, padx=STYLE['padding'], 
                                   pady=STYLE['padding'])
 
-    def setup_main_view(self):
-        """Setup the main view with constructivist-inspired styling"""
+    def setup_main_view(self) -> None:
+        """Setup the main central view panel.
+        
+        Creates a text widget in the center frame for displaying detailed
+        information about selected contradictions and events. Uses
+        constructivist-inspired styling with custom fonts and colors.
+        """
         self.details_text = tk.Text(self.center_frame,
                                   bg=STYLE['bg'],
                                   fg=STYLE['fg'],
@@ -108,8 +122,13 @@ class BabylonGUI:
         self.details_text.pack(fill=tk.BOTH, expand=True, padx=STYLE['padding'],
                              pady=STYLE['padding'])
 
-    def setup_status_panel(self):
-        """Setup the status panel with industrial/brutalist styling"""
+    def setup_status_panel(self) -> None:
+        """Setup the economic indicators status panel.
+        
+        Creates a panel in the right frame displaying key economic metrics
+        using industrial/brutalist styling. Shows GDP, unemployment rate,
+        and production metrics with monospace fonts and stark colors.
+        """
         header = ttk.Label(self.right_frame, text="ECONOMIC INDICATORS",
                           style='BabylonHeader.TLabel')
         header.pack(pady=(STYLE['padding'], 0))
@@ -130,8 +149,13 @@ class BabylonGUI:
                                   font=STYLE['font_mono'])
             value_label.pack(side=tk.RIGHT)
 
-    def setup_event_log(self):
-        """Setup the event log with constructivist styling"""
+    def setup_event_log(self) -> None:
+        """Setup the event log display panel.
+        
+        Creates a text widget in the bottom frame for displaying game events
+        and notifications. Uses constructivist styling with monospace font
+        and Soviet-inspired color scheme.
+        """
         frame = tk.Frame(self.bottom_frame, bg=STYLE['bg'])
         frame.pack(fill=tk.X, padx=STYLE['padding'], pady=STYLE['padding'])
         
@@ -148,8 +172,13 @@ class BabylonGUI:
                                 pady=STYLE['padding'])
         self.event_log.pack(fill=tk.X)
 
-    def setup_command_line(self):
-        """Setup the command line with industrial styling"""
+    def setup_command_line(self) -> None:
+        """Setup the command line input interface.
+        
+        Creates a command prompt in the bottom frame for entering game commands.
+        Uses industrial styling with monospace font and Soviet red prompt symbol.
+        Binds the Return key to process_command().
+        """
         frame = tk.Frame(self.bottom_frame, bg=STYLE['bg'])
         frame.pack(fill=tk.X, padx=STYLE['padding'], pady=STYLE['padding'])
         
@@ -168,12 +197,25 @@ class BabylonGUI:
         self.cmd_entry.pack(fill=tk.X, padx=(STYLE['padding'], 0))
         self.cmd_entry.bind('<Return>', self.process_command)
 
-    def process_command(self, event):
+    def process_command(self, event: Any) -> None:
+        """Process a command entered in the command line.
+        
+        Args:
+            event: The event object from the key binding
+            
+        Retrieves the command text from the entry widget, processes it,
+        and clears the entry field. Command processing logic to be implemented.
+        """
         command = self.cmd_entry.get()
         # Process command here
         self.cmd_entry.delete(0, tk.END)
 
-def main():
+def main() -> None:
+    """Main entry point for the Babylon GUI application.
+    
+    Creates the root Tkinter window, instantiates the BabylonGUI class,
+    and starts the main event loop.
+    """
     root = tk.Tk()
     app = BabylonGUI(root)
     root.mainloop()
