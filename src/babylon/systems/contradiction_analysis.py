@@ -3,12 +3,13 @@ import matplotlib.pyplot as plt
 import networkx as nx
 from ..data.models.contradiction import Contradiction, Effect, Entity
 from ..data.models.event import Event
+from ..data.models.entity import EntityRegistry
 
 class ContradictionAnalysis:
     """System for analyzing and managing contradictions in the game."""
     
-    def __init__(self, entity_registry: 'EntityRegistry') -> None:
-        self.entity_registry: 'EntityRegistry' = entity_registry
+    def __init__(self, entity_registry: EntityRegistry) -> None:
+        self.entity_registry: EntityRegistry = entity_registry
         self.contradictions: List[Contradiction] = []
         
     def add_contradiction(self, contradiction: Contradiction) -> None:
