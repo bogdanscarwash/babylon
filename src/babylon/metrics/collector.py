@@ -9,35 +9,38 @@ class MetricsCollector:
     """Collects and analyzes performance metrics for object tracking."""
     
     def __init__(self, log_dir: Optional[Path] = None):
+        # Set up logging directory, default to logs/metrics if not specified
         self.log_dir = log_dir or Path("logs/metrics")
         self.log_dir.mkdir(parents=True, exist_ok=True)
         
-        # Configure logging
+        # Configure logging with timestamp, component name, and message
         logging.basicConfig(
             filename=self.log_dir / "metrics.log",
             level=logging.INFO,
             format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
         )
         
+        # Initialize metrics storage containers
         self.metrics = {
-            'object_access': Counter(),
-            'token_usage': deque(maxlen=1000),
+            'object_access': Counter(),  # Tracks access frequency per object
+            'token_usage': deque(maxlen=1000),  # Rolling window of token counts
             'cache_performance': {
-                'hits': Counter(),
-                'misses': Counter()
+                'hits': Counter(),  # Successful cache retrievals by type
+                'misses': Counter()  # Failed cache lookups by type
             },
             'latency': {
-                'db_queries': deque(maxlen=100),
-                'context_switches': deque(maxlen=100)
+                'db_queries': deque(maxlen=100),  # Database query response times
+                'context_switches': deque(maxlen=100)  # Context switch durations
             },
-            'memory_usage': deque(maxlen=1000)
+            'memory_usage': deque(maxlen=1000)  # Rolling window of memory samples
         }
         
+        # Track current session statistics
         self.current_session = {
-            'start_time': datetime.now(),
-            'total_objects': 0,
-            'active_objects': 0,
-            'cached_objects': 0
+            'start_time': datetime.now(),  # Session start timestamp
+            'total_objects': 0,  # Total objects created in session
+            'active_objects': 0,  # Currently active objects
+            'cached_objects': 0   # Objects currently in cache
         }
 
     def record_object_access(self, object_id: str, context_level: str) -> None:
@@ -85,12 +88,20 @@ class MetricsCollector:
         return analysis
 
     def _calculate_hit_rate(self) -> Dict[str, float]:
-        """Calculate cache hit rates for different cache levels."""
+        """Calculate cache hit rates for different cache levels.
+        
+        Computes the ratio of cache hits to total accesses for each cache type.
+        A higher hit rate indicates better cache efficiency.
+        
+        Returns:
+            Dict mapping cache type to hit rate (0.0 to 1.0)
+        """
         rates = {}
         for cache_type in self.metrics['cache_performance']['hits']:
             hits = self.metrics['cache_performance']['hits'][cache_type]
             misses = self.metrics['cache_performance']['misses'][cache_type]
             total = hits + misses
+            # Avoid division by zero for unused cache types
             rates[cache_type] = (hits / total) if total > 0 else 0
         return rates
 
@@ -128,21 +139,30 @@ class MetricsCollector:
         }
 
     def _generate_suggestions(self) -> List[str]:
-        """Generate optimization suggestions based on metrics."""
+        """Generate optimization suggestions based on metrics.
+        
+        Analyzes various performance metrics and generates actionable suggestions:
+        - Cache size adjustments when hit rates are below target (80%)
+        - Token usage optimizations when approaching context limits
+        - Memory management recommendations when usage is high
+        
+        Returns:
+            List of suggestion strings for system optimization
+        """
         suggestions = []
         
-        # Cache performance suggestions
+        # Cache performance suggestions - target 80% hit rate
         hit_rates = self._calculate_hit_rate()
         for cache_type, rate in hit_rates.items():
-            if rate < 0.8:
+            if rate < 0.8:  # Below target efficiency
                 suggestions.append(f"Consider increasing {cache_type} cache size (current hit rate: {rate:.2%})")
 
-        # Token usage suggestions
+        # Token usage suggestions - warn at 75% of context window
         avg_tokens = self._calculate_avg_tokens()
         if avg_tokens > 150000:  # 75% of context window
             suggestions.append("High token usage detected. Consider implementing more aggressive object summarization.")
 
-        # Memory usage suggestions
+        # Memory usage suggestions - warn at 80% of peak
         memory_stats = self._analyze_memory_usage()
         if memory_stats.get('current', 0) > 0.8 * memory_stats.get('peak', 0):
             suggestions.append("Memory usage approaching peak. Consider garbage collection.")
