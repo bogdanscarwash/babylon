@@ -21,7 +21,7 @@ class ContradictionAnalysis:
     def _link_contradiction_entities(self, contradiction: Contradiction) -> None:
         """Link contradiction entities to actual game entities."""
         for entity in contradiction.entities:
-            actual_entity = self.entity_registry.get_entity(entity.entity_id)
+            actual_entity = self.entity_registry.get_entity(entity.id)
             entity.game_entity = actual_entity
             
     def detect_new_contradictions(self, game_state: Dict[str, Any]) -> List[Contradiction]:
