@@ -13,11 +13,18 @@ class ContradictionAnalysis:
     def __init__(self, entity_registry: EntityRegistry) -> None:
         self.entity_registry: EntityRegistry = entity_registry
         self.contradictions: List[Contradiction] = []
+        self.metrics = MetricsCollector()
         
     def add_contradiction(self, contradiction: Contradiction) -> None:
         """Add a new contradiction to the system."""
+        start_time = datetime.now()
         self.contradictions.append(contradiction)
         self._link_contradiction_entities(contradiction)
+        
+        # Record metrics
+        self.metrics.record_object_access(contradiction.id, "contradiction_system")
+        processing_time = (datetime.now() - start_time).total_seconds() * 1000
+        self.metrics.record_context_switch(processing_time)
         
     def _link_contradiction_entities(self, contradiction: Contradiction) -> None:
         """Link contradiction entities to actual game entities."""
