@@ -22,3 +22,5 @@
 .continue*
 .continuerules
 .continuerc.json
+
+*.pyc
