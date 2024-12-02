@@ -306,9 +306,31 @@ class ContradictionAnalysis:
         effects = self._generate_effects_from_contradiction(contradiction, game_state)
         
         triggers = []  # Define any triggers if necessary
+        # Define consequences based on escalation level
+        if escalation_level == 'Critical':
+            consequences = [self._create_follow_up_event(contradiction, game_state)]
+        else:
+            consequences = []
+
+        # Create and return the Event object with consequences
+        return Event(event_id, event_name, event_description, effects, triggers, escalation_level, consequences)
         escalation_level = self._determine_escalation_level(contradiction)
         
-        return Event(event_id, event_name, event_description, effects, triggers, escalation_level)
+    def _create_follow_up_event(self, contradiction, game_state):
+        """Create a follow-up event as a consequence of the current contradiction."""
+        follow_up_event_id = f"event_{contradiction.id}_follow_up"
+        follow_up_event_name = f"Aftermath of {contradiction.name}"
+        follow_up_event_description = f"The situation escalates due to {contradiction.name}."
+        
+        # Define effects for the follow-up event
+        follow_up_effects = [
+            # ... define additional effects ...
+        ]
+        
+        # No further consequences for this example
+        consequences = []
+
+        return Event(follow_up_event_id, follow_up_event_name, follow_up_event_description, follow_up_effects, [], 'High', consequences)
 
     def _generate_effects_from_contradiction(self, contradiction, game_state):
         """Generate a list of Effect objects based on the contradiction."""

@@ -1,4 +1,4 @@
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from dotenv import load_dotenv
 from config import Config
 from data.entity_registry import EntityRegistry
@@ -14,7 +14,16 @@ def handle_event(event: Event, game_state: Dict[str, Any]) -> None:
     for effect in event.effects:
         effect.apply(game_state)
 
-def main() -> None:
+def handle_event(event: Event, game_state: Dict[str, Any]) -> None:
+    """Process and apply an event's effects to the game state."""
+    print(f"Event Occurred: {event.name}")
+    print(event.description)
+    for effect in event.effects:
+        effect.apply(game_state)
+
+    # Process consequences
+    if event.consequences:
+        game_state['event_queue'].extend(event.consequences)
     # Access configuration variables
     secret_key: str = Config.SECRET_KEY
     database_url: str = Config.DATABASE_URL
@@ -47,9 +56,9 @@ def main() -> None:
         contradiction_analysis.visualize_contradictions()
         contradiction_analysis.visualize_entity_relationships()
 
-        # Generate and handle events
-        events: List[Event] = contradiction_analysis.generate_events(game_state)
-        for event in events:
+        # Process all events in the event queue
+        while game_state['event_queue']:
+            event = game_state['event_queue'].pop(0)
             handle_event(event, game_state)
 
         # Your application logic...
