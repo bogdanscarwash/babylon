@@ -59,7 +59,19 @@ class ContradictionAnalysis:
         self.metrics.record_context_switch(processing_time)
         
     def _link_contradiction_entities(self, contradiction: Contradiction) -> None:
-        """Link contradiction entities to actual game entities."""
+        """Link contradiction entities to actual game entities in the registry.
+        
+        For each entity referenced in the contradiction, looks up the corresponding
+        game entity in the entity registry and creates a bidirectional link.
+        This allows contradictions to access and modify actual game entity states.
+        
+        Args:
+            contradiction: The Contradiction instance whose entities need linking
+            
+        Side Effects:
+            - Sets the game_entity attribute on each contradiction entity
+            - Records entity access metrics via the metrics collector
+        """
         for entity in contradiction.entities:
             actual_entity = self.entity_registry.get_entity(entity.id)
             entity.game_entity = actual_entity
@@ -242,8 +254,26 @@ class ContradictionAnalysis:
         elif self._check_transformation_conditions(contradiction, game_state):
             self._transform_contradiction(contradiction, game_state)
             
-    def _calculate_intensity(self, contradiction, game_state):
-        """Calculate the intensity of a contradiction."""
+    def _calculate_intensity(self, contradiction: Contradiction, game_state: Dict[str, Any]) -> str:
+        """Calculate the current intensity level of a contradiction.
+        
+        Analyzes the game state to determine how severe a contradiction has become.
+        Different contradiction types use different metrics:
+        - Economic contradictions use the Gini coefficient
+        - Political contradictions use the stability index
+        
+        Args:
+            contradiction: The Contradiction instance to analyze
+            game_state: Current game state containing relevant metrics
+            
+        Returns:
+            str: The intensity level ('Low', 'Medium', or 'High')
+            
+        Note:
+            Thresholds for intensity levels are defined by game design constants:
+            - Economic: 0.4 for Medium, 0.6 for High
+            - Political: 0.3 for Medium, 0.2 for High
+        """
         if contradiction.id == 'economic_inequality':
             gini_coefficient = game_state['economy'].gini_coefficient
             if gini_coefficient >= 0.6:
@@ -263,8 +293,21 @@ class ContradictionAnalysis:
         else:
             return 'Low'
         
-    def _check_resolution_conditions(self, contradiction, game_state):
-        """Check if conditions for resolution are met."""
+    def _check_resolution_conditions(self, contradiction: Contradiction, game_state: Dict[str, Any]) -> bool:
+        """Check if a contradiction's conditions for resolution have been met.
+        
+        Each contradiction type has specific thresholds that indicate when
+        the underlying conflict has been sufficiently addressed:
+        - Economic inequality: Gini coefficient <= 0.35
+        - Political unrest: Stability index >= 0.5
+        
+        Args:
+            contradiction: The Contradiction instance to check
+            game_state: Current game state containing resolution metrics
+            
+        Returns:
+            bool: True if resolution conditions are met, False otherwise
+        """
         if contradiction.id == 'economic_inequality':
             gini_coefficient = game_state['economy'].gini_coefficient
             return gini_coefficient <= 0.35  # Threshold for resolution
@@ -273,8 +316,25 @@ class ContradictionAnalysis:
             return stability_index >= 0.5
         return False
         
-    def _resolve_contradiction(self, contradiction, game_state):
-        """Resolve a contradiction using the selected resolution method."""
+    def _resolve_contradiction(self, contradiction: Contradiction, game_state: Dict[str, Any]) -> None:
+        """Resolve a contradiction through the selected resolution method.
+        
+        The resolution process:
+        1. Selects an appropriate resolution method
+        2. Updates the contradiction's state
+        3. Applies the resolution method's effects
+        4. Performs post-resolution checks
+        
+        Args:
+            contradiction: The Contradiction instance to resolve
+            game_state: Current game state to apply resolution effects to
+            
+        Side Effects:
+            - Changes contradiction state to 'Resolved'
+            - Applies resolution effects to game entities
+            - May trigger new contradictions via post-resolution check
+            - Logs resolution process details
+        """
         resolution_method = self._select_resolution_method(contradiction, game_state)
         contradiction.selected_resolution_method = resolution_method
         contradiction.state = f'Resolved by {resolution_method}'
@@ -285,15 +345,53 @@ class ContradictionAnalysis:
         print(f"Contradiction '{contradiction.name}' resolved through {resolution_method}.")
         self._post_resolution_check(contradiction, game_state)
         
-    def _check_transformation_conditions(self, contradiction, game_state):
-        """Check if conditions for transformation are met."""
+    def _check_transformation_conditions(self, contradiction: Contradiction, game_state: Dict[str, Any]) -> bool:
+        """Check if conditions for dialectical transformation are met.
+        
+        Transformation occurs when quantitative changes lead to qualitative
+        changes in the contradiction's nature. Each contradiction defines its
+        own conditions_for_transformation list that must all evaluate to True.
+        
+        Args:
+            contradiction: The Contradiction instance to check
+            game_state: Current game state for evaluating conditions
+            
+        Returns:
+            bool: True if all transformation conditions are met, False otherwise
+            
+        Note:
+            Transformation is a key concept in dialectical materialism,
+            representing the point where gradual changes result in a
+            fundamental shift in the nature of the contradiction.
+        """
         for condition in contradiction.conditions_for_transformation:
             if not self._evaluate_condition(condition, game_state):
                 return False
         return True
         
-    def _transform_contradiction(self, contradiction, game_state):
-        """Transform a contradiction's nature."""
+    def _transform_contradiction(self, contradiction: Contradiction, game_state: Dict[str, Any]) -> None:
+        """Transform a contradiction into a new qualitative state.
+        
+        When quantitative changes accumulate sufficiently, they lead to
+        qualitative transformation of the contradiction. This method handles:
+        1. Changing the contradiction's fundamental nature
+        2. Updating affected entities and relationships
+        3. Potentially spawning new contradictions
+        
+        Args:
+            contradiction: The Contradiction instance to transform
+            game_state: Current game state to apply transformation effects to
+            
+        Side Effects:
+            - Updates contradiction attributes and relationships
+            - May create new contradictions
+            - Applies transformation effects to game state
+            - Logs transformation details
+            
+        Note:
+            This implements the dialectical materialist principle of
+            transformation of quantity into quality.
+        """
         # Implement transformation logic
         pass
         
