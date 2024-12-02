@@ -81,13 +81,11 @@ Expected: Ready for public release
 - [Summary](#summary)
 - [Next Steps](#next-steps)
 
-## Next Steps in Development
+## Implementation Tasks
 
-With the foundational setup complete, including data structures and initial game logic, we will now focus on implementing core game mechanics and expanding features as outlined in `IDEAS.md` and `MECHANICS.md`. This updated plan will guide the next phase of development:
+### Alpha Milestone 1 - Core Systems Implementation
 
----
-
-### 1. Implement Core Game Mechanics
+#### Core Game Mechanics
 
 #### a. Contradiction Analysis System [x]
 - Design algorithms to identify and track contradictions within the game world [x]
@@ -135,30 +133,31 @@ With the foundational setup complete, including data structures and initial game
 
 ---
 
-### 2. Develop Economic System
+### Alpha Milestone 2 - Enhanced Systems Implementation
 
-#### a. Resource Management []
-- Implement resource generation and consumption mechanics []
-- Create supply and demand dynamics []
-- Design resource distribution networks []
-- Implement market price fluctuations []
-- Add trade routes and economic zones []
+#### Economic System Development
+- [ ] Resource Management
+  - Implement resource generation and consumption mechanics
+  - Create supply and demand dynamics
+  - Design resource distribution networks
+  - Implement market price fluctuations
+  - Add trade routes and economic zones
 
-#### b. Production Systems []
-- Design means of production mechanics []
-- Implement labor and automation systems []
-- Create production chains and dependencies []
-- Add technological advancement effects []
-- Design industrial capacity metrics []
+- [ ] Production Systems
+  - Design means of production mechanics
+  - Implement labor and automation systems
+  - Create production chains and dependencies
+  - Add technological advancement effects
+  - Design industrial capacity metrics
 
-#### c. Economic Indicators []
-- Implement GDP and growth calculations []
-- Create inflation and monetary systems []
-- Design unemployment tracking []
-- Add wealth distribution metrics []
-- Implement economic crisis triggers []
+- [ ] Economic Indicators
+  - Implement GDP and growth calculations
+  - Create inflation and monetary systems
+  - Design unemployment tracking
+  - Add wealth distribution metrics
+  - Implement economic crisis triggers
 
-### 3. Develop Political System
+#### Political System Development
 
 #### a. Government Systems []
 - Implement different forms of government []
