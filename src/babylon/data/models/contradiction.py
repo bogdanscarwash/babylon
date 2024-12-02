@@ -4,11 +4,12 @@ from typing import Any, Callable, Dict, List, Optional, Union
 class Entity:
     def __init__(
         self,
-        entity_id: str,
+        id: str,
         entity_type: str,
         role: str
     ) -> None:
-        self.entity_id: str = entity_id
+        self.id: str = id
+        self.entity_id: str = id  # Add alias for compatibility
         self.entity_type: str = entity_type
         self.role: str = role
 

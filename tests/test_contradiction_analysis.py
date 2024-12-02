@@ -73,8 +73,8 @@ class TestContradictionAnalysis(unittest.TestCase):
                 'Revolution': [Effect('upper_class', 'wealth', 'Decrease', 1.0, 'Test effect')]
             },
             attributes={},
-            update_intensity=lambda self, game_state: setattr(self, 'intensity_value', 
-                                                            game_state['economy'].gini_coefficient)
+            update_intensity=lambda contradiction, game_state: setattr(contradiction, 'intensity_value', 
+                                                                     game_state['economy'].gini_coefficient)
         )
 
     def test_add_contradiction(self) -> None:
