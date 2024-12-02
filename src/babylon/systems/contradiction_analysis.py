@@ -86,9 +86,10 @@ class ContradictionAnalysis:
             state='Active',
             potential_for_transformation='High',
             conditions_for_transformation=['Revolutionary Movement'],
-            resolution_methods=['Policy Reform', 'Revolution'],
-            resolution_conditions=['Reduce Inequality'],
-            effects=[],
+            resolution_methods={
+                'Policy Reform': [Effect('upper_class', 'wealth', 'Decrease', 0.5, 'Implement reforms')],
+                'Revolution': [Effect('upper_class', 'wealth', 'Decrease', 1.0, 'Revolutionary change')]
+            },
             attributes={}
         )
         

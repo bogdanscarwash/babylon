@@ -51,14 +51,15 @@ class Contradiction:
         universality: str,
         particularity: str,
         principal_contradiction: Optional[Contradiction],
-        principal_aspect: str,
-        secondary_aspect: str,
-        antagonism: bool,
+        principal_aspect: Entity,
+        secondary_aspect: Entity,
+        antagonism: str,
         intensity: str,
         state: str,
-        potential_for_transformation: float,
+        potential_for_transformation: str,
         conditions_for_transformation: List[str],
         resolution_methods: Dict[str, List[Effect]],
+        attributes: Dict[str, Any] = {},
         selected_resolution_method: Optional[str] = None,
         intensity_value: float = 0.0,
         intensity_history: Optional[List[float]] = None,
@@ -73,12 +74,13 @@ class Contradiction:
         self.principal_contradiction: Optional[Contradiction] = principal_contradiction
         self.principal_aspect: str = principal_aspect
         self.secondary_aspect: str = secondary_aspect
-        self.antagonism: bool = antagonism
+        self.antagonism: str = antagonism
         self.intensity: str = intensity
         self.state: str = state
-        self.potential_for_transformation: float = potential_for_transformation
+        self.potential_for_transformation: str = potential_for_transformation
         self.conditions_for_transformation: List[str] = conditions_for_transformation
         self.resolution_methods: Dict[str, List[Effect]] = resolution_methods
+        self.attributes: Dict[str, Any] = attributes
         self.selected_resolution_method: Optional[str] = selected_resolution_method
         self.intensity_value: float = intensity_value
         self.intensity_history: List[float] = intensity_history if intensity_history is not None else []
