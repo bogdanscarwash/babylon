@@ -1,3 +1,17 @@
+"""Main window implementation for the Babylon GUI.
+
+This module implements the primary graphical interface for The Fall of Babylon,
+following the constructivist/brutalist design principles defined in AESTHETICS.md.
+The interface is divided into four main panels:
+- Left: Contradiction map visualization
+- Center: Main detail view
+- Right: Status indicators
+- Bottom: Event log and command line
+
+The design uses a Soviet-inspired color scheme with stark contrasts and
+geometric shapes to reflect the game's dialectical materialist themes.
+"""
+
 from typing import Any
 import tkinter as tk
 from tkinter import ttk, font
@@ -5,7 +19,7 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import networkx as nx
 
-# Color scheme from AESTHETICS.md
+# Color scheme from AESTHETICS.md - Soviet constructivist inspired palette
 COLORS = {
     'soviet_red': '#D40000',
     'near_black': '#1A1A1A',
@@ -28,7 +42,27 @@ STYLE = {
 }
 
 class BabylonGUI:
+    """Main GUI class for the Babylon application.
+    
+    Implements a constructivist-inspired interface divided into four main areas:
+    - Contradiction Map (left): Network visualization of dialectical relationships
+    - Detail View (center): In-depth information about selected elements
+    - Status Panel (right): Economic and social indicators
+    - Command Interface (bottom): Event log and command line input
+    
+    The interface follows the brutalist/industrial aesthetic defined in AESTHETICS.md,
+    using stark contrasts, geometric shapes, and a Soviet-inspired color scheme.
+    """
+    
     def __init__(self, root):
+        """Initialize the main window and all UI components.
+        
+        Args:
+            root: The root Tkinter window
+            
+        Creates the main frame layout and initializes all visualization components
+        with appropriate styling based on the constructivist design principles.
+        """
         self.root = root
         self.root.title("The Fall of Babylon")
         self.root.configure(bg=STYLE['bg'])
