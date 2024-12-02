@@ -104,7 +104,7 @@ class ContradictionAnalysis:
         }
         
         # Set the intensity update method
-        contradiction.update_intensity = Contradiction.update_intensity_from_economy
+        contradiction.update_intensity = lambda game_state: Contradiction.update_intensity_from_economy(contradiction, game_state)
         
         return contradiction
 
