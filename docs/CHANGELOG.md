@@ -26,7 +26,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - No removals at this time.
 
 ### Fixed
-- No bug fixes applicable yet.
+- Fixed test failures in metrics collection system:
+  - Updated Contradiction class constructor test to include all required arguments
+  - Adjusted hot object threshold in MetricsCollector from 10 to 3 accesses
+  - Enhanced contradiction metrics tracking to record multiple accesses during initialization
 
 ### Security
 - No specific security improvements are noted currently.
