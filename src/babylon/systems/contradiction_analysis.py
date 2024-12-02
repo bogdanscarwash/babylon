@@ -1,3 +1,4 @@
+from typing import Any, Dict, List, Optional, Union
 import matplotlib.pyplot as plt
 import networkx as nx
 from ..data.models.contradiction import Contradiction, Effect, Entity
@@ -6,24 +7,24 @@ from ..data.models.event import Event
 class ContradictionAnalysis:
     """System for analyzing and managing contradictions in the game."""
     
-    def __init__(self, entity_registry):
-        self.entity_registry = entity_registry
-        self.contradictions = []
+    def __init__(self, entity_registry: 'EntityRegistry') -> None:
+        self.entity_registry: 'EntityRegistry' = entity_registry
+        self.contradictions: List[Contradiction] = []
         
-    def add_contradiction(self, contradiction):
+    def add_contradiction(self, contradiction: Contradiction) -> None:
         """Add a new contradiction to the system."""
         self.contradictions.append(contradiction)
         self._link_contradiction_entities(contradiction)
         
-    def _link_contradiction_entities(self, contradiction):
+    def _link_contradiction_entities(self, contradiction: Contradiction) -> None:
         """Link contradiction entities to actual game entities."""
         for entity in contradiction.entities:
             actual_entity = self.entity_registry.get_entity(entity.entity_id)
             entity.game_entity = actual_entity
             
-    def detect_new_contradictions(self, game_state):
+    def detect_new_contradictions(self, game_state: Dict[str, Any]) -> List[Contradiction]:
         """Detect new contradictions based on the game state."""
-        new_contradictions = []
+        new_contradictions: List[Contradiction] = []
 
         # Economic inequality check
         if self._check_economic_inequality(game_state):
@@ -41,7 +42,7 @@ class ContradictionAnalysis:
             
         return new_contradictions
 
-    def _check_economic_inequality(self, game_state):
+    def _check_economic_inequality(self, game_state: Dict[str, Any]) -> bool:
         """Check if economic inequality exceeds a threshold."""
         gini_coefficient = game_state['economy'].gini_coefficient
         inequality_threshold = 0.4  # Define thresholds as per game design
@@ -49,7 +50,7 @@ class ContradictionAnalysis:
             return not self._contradiction_exists('economic_inequality')
         return False
 
-    def _check_political_unrest(self, game_state):
+    def _check_political_unrest(self, game_state: Dict[str, Any]) -> bool:
         """Check if political stability is below a threshold."""
         stability_index = game_state['politics'].stability_index
         unrest_threshold = 0.3
@@ -57,7 +58,7 @@ class ContradictionAnalysis:
             return not self._contradiction_exists('political_unrest')
         return False
 
-    def _contradiction_exists(self, contradiction_id):
+    def _contradiction_exists(self, contradiction_id: str) -> bool:
         """Check if a contradiction already exists."""
         return any(c.id == contradiction_id and c.state != 'Resolved' 
                   for c in self.contradictions)
@@ -163,20 +164,20 @@ class ContradictionAnalysis:
         }
         return contradiction
         
-    def update_contradictions(self, game_state):
+    def update_contradictions(self, game_state: Dict[str, Any]) -> None:
         """Update all active contradictions based on current game state."""
         for contradiction in self.contradictions:
             if contradiction.state != 'Resolved':
                 self._update_contradiction(contradiction, game_state)
                 
         # Generate events after updating contradictions
-        new_events = self.generate_events(game_state)
+        new_events: List[Event] = self.generate_events(game_state)
         # Add events to the game state's event queue
         game_state['event_queue'].extend(new_events)
                 
-    def _update_contradiction(self, contradiction, game_state):
+    def _update_contradiction(self, contradiction: Contradiction, game_state: Dict[str, Any]) -> None:
         """Update a single contradiction's state."""
-        old_intensity = contradiction.intensity
+        old_intensity: str = contradiction.intensity
         
         # Update intensity using contradiction's own method
         contradiction.update_intensity(game_state)
@@ -369,7 +370,7 @@ class ContradictionAnalysis:
         else:
             return 'Low'
             
-    def _get_intensity_color(self, intensity):
+    def _get_intensity_color(self, intensity: str) -> str:
         """Map intensity levels to colors."""
         return {
             'Low': 'green',
@@ -377,7 +378,7 @@ class ContradictionAnalysis:
             'High': 'red'
         }.get(intensity, 'grey')
         
-    def _get_entity_color(self, entity_type):
+    def _get_entity_color(self, entity_type: str) -> str:
         """Map entity types to colors."""
         color_map = {
             'Faction': 'blue',
