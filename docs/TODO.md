@@ -40,28 +40,42 @@ Expected: Ready for public release
 
 ## Table of Contents
 
-- [Next Steps in Development](#next-steps-in-development)
-- [1. Core Game Mechanics Implementation](#1-implement-core-game-mechanics)
+### Alpha Milestone 1 - Core Systems
+- [Core Game Mechanics](#1-implement-core-game-mechanics)
   - [Contradiction Analysis System](#a-contradiction-analysis-system-x)
   - [Dynamic Event Generation](#b-dynamic-event-generation-ip)
   - [Visualization Tools](#c-visualization-tools-ip)
-  - [User Interface Enhancements](#d-user-interface-enhancements)
-  - [Testing and Documentation](#e-testing-and-documentation)
-  - [Performance Optimization](#f-performance-optimization)
-- [2. Develop Economic System](#2-develop-economic-system)
-- [3. Develop Political System](#3-develop-political-system)
-- [4. Implement Class and Faction System](#4-implement-class-and-faction-system)
-- [5. Implement Cultural and Ideological System](#5-implement-cultural-and-ideological-system)
-- [6. Implement Environmental and Geopolitical System](#6-implement-environmental-and-geopolitical-system)
-- [7. Data Population](#2-populate-your-game-world-with-initial-data)
-- [3. Data Loading Implementation](#3-implement-data-loading-mechanism-in-python)
-- [4. Core Game Logic](#4-set-up-the-core-game-logic-game-engine)
-- [5. AI Integration](#5-integrate-ai-components)
-- [6. User Interface Development](#6-develop-the-terminal-based-user-interface)
-- [7. Testing and Iteration](#7-testing-and-iteration)
-- [8. Documentation](#8-documentation-and-code-cleanup)
-- [9. Environment Setup](#9-set-up-the-execution-environment)
-- [10. Additional Considerations](#10-additional-considerations)
+- [Data Foundation](#7-data-population)
+  - [XML Data Creation](#a-create-xml-data-files)
+  - [Data Loading Implementation](#3-implement-data-loading-mechanism-in-python)
+- [Basic Game Engine](#4-set-up-the-core-game-logic-game-engine)
+- [Terminal UI Development](#6-develop-the-terminal-based-user-interface)
+
+### Alpha Milestone 2 - Enhanced Systems
+- [Economic System](#2-develop-economic-system)
+  - [Resource Management](#a-resource-management)
+  - [Production Systems](#b-production-systems)
+  - [Economic Indicators](#c-economic-indicators)
+- [Political System](#3-develop-political-system)
+  - [Government Systems](#a-government-systems)
+  - [Power Dynamics](#b-power-dynamics)
+  - [Legal Framework](#c-legal-framework)
+- [Save/Load System](#d-user-interface-enhancements)
+
+### Beta Milestone - Advanced Features
+- [Class and Faction System](#4-implement-class-and-faction-system)
+- [Cultural and Ideological System](#5-implement-cultural-and-ideological-system)
+- [Environmental System](#6-implement-environmental-and-geopolitical-system)
+- [AI Integration](#5-integrate-ai-components)
+- [Advanced Visualization](#c-visualization-tools-ip)
+
+### Release Milestone - Polish
+- [Testing and Documentation](#e-testing-and-documentation)
+- [Performance Optimization](#f-performance-optimization)
+- [Environment Setup](#9-set-up-the-execution-environment)
+- [Additional Considerations](#10-additional-considerations)
+
+### Reference
 - [Example Workflow](#example-workflow)
 - [Tools and Libraries](#tools-and-libraries-recommendations)
 - [Summary](#summary)
