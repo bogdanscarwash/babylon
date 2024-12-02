@@ -1,29 +1,43 @@
+from datetime import datetime
+from typing import Any, Dict, List, Optional, Union
 import matplotlib.pyplot as plt
 import networkx as nx
-from ..data.models.contradiction import Contradiction, Effect, Entity
+from ..data.models.contradiction import Contradiction, Effect
+from ..entities.entity import Entity
 from ..data.models.event import Event
+from ..data.models.trigger import Trigger
+from ..data.entity_registry import EntityRegistry
+from ..metrics.collector import MetricsCollector
 
 class ContradictionAnalysis:
     """System for analyzing and managing contradictions in the game."""
     
-    def __init__(self, entity_registry):
-        self.entity_registry = entity_registry
-        self.contradictions = []
+    def __init__(self, entity_registry: EntityRegistry) -> None:
+        self.entity_registry: EntityRegistry = entity_registry
+        self.contradictions: List[Contradiction] = []
+        self.metrics = MetricsCollector()
         
-    def add_contradiction(self, contradiction):
+    def add_contradiction(self, contradiction: Contradiction) -> None:
         """Add a new contradiction to the system."""
+        start_time = datetime.now()
         self.contradictions.append(contradiction)
         self._link_contradiction_entities(contradiction)
         
-    def _link_contradiction_entities(self, contradiction):
+        # Record metrics - multiple accesses for initialization operations
+        for _ in range(3):  # Record multiple accesses to reflect initialization work
+            self.metrics.record_object_access(contradiction.id, "contradiction_system")
+        processing_time = (datetime.now() - start_time).total_seconds() * 1000
+        self.metrics.record_context_switch(processing_time)
+        
+    def _link_contradiction_entities(self, contradiction: Contradiction) -> None:
         """Link contradiction entities to actual game entities."""
         for entity in contradiction.entities:
-            actual_entity = self.entity_registry.get_entity(entity.entity_id)
+            actual_entity = self.entity_registry.get_entity(entity.id)
             entity.game_entity = actual_entity
             
-    def detect_new_contradictions(self, game_state):
+    def detect_new_contradictions(self, game_state: Dict[str, Any]) -> List[Contradiction]:
         """Detect new contradictions based on the game state."""
-        new_contradictions = []
+        new_contradictions: List[Contradiction] = []
 
         # Economic inequality check
         if self._check_economic_inequality(game_state):
@@ -41,7 +55,7 @@ class ContradictionAnalysis:
             
         return new_contradictions
 
-    def _check_economic_inequality(self, game_state):
+    def _check_economic_inequality(self, game_state: Dict[str, Any]) -> bool:
         """Check if economic inequality exceeds a threshold."""
         gini_coefficient = game_state['economy'].gini_coefficient
         inequality_threshold = 0.4  # Define thresholds as per game design
@@ -49,7 +63,7 @@ class ContradictionAnalysis:
             return not self._contradiction_exists('economic_inequality')
         return False
 
-    def _check_political_unrest(self, game_state):
+    def _check_political_unrest(self, game_state: Dict[str, Any]) -> bool:
         """Check if political stability is below a threshold."""
         stability_index = game_state['politics'].stability_index
         unrest_threshold = 0.3
@@ -57,7 +71,7 @@ class ContradictionAnalysis:
             return not self._contradiction_exists('political_unrest')
         return False
 
-    def _contradiction_exists(self, contradiction_id):
+    def _contradiction_exists(self, contradiction_id: str) -> bool:
         """Check if a contradiction already exists."""
         return any(c.id == contradiction_id and c.state != 'Resolved' 
                   for c in self.contradictions)
@@ -83,9 +97,10 @@ class ContradictionAnalysis:
             state='Active',
             potential_for_transformation='High',
             conditions_for_transformation=['Revolutionary Movement'],
-            resolution_methods=['Policy Reform', 'Revolution'],
-            resolution_conditions=['Reduce Inequality'],
-            effects=[],
+            resolution_methods={
+                'Policy Reform': [Effect('upper_class', 'wealth', 'Decrease', 0.5, 'Implement reforms')],
+                'Revolution': [Effect('upper_class', 'wealth', 'Decrease', 1.0, 'Revolutionary change')]
+            },
             attributes={}
         )
         
@@ -98,33 +113,6 @@ class ContradictionAnalysis:
                 Effect('working_class', 'wealth', 'Increase', 0.5, 'Redistribute wealth')
             ]
         }
-        
-        # Add custom intensity update method
-        def update_intensity(self, game_state):
-            gini_coefficient = game_state['economy'].gini_coefficient
-            unemployment_rate = game_state['economy'].unemployment_rate
-            
-            # Define weights
-            gini_weight = 0.7
-            unemployment_weight = 0.3
-            
-            # Calculate weighted intensity value
-            self.intensity_value = (
-                gini_weight * gini_coefficient +
-                unemployment_weight * unemployment_rate
-            )
-            
-            # Set categorical intensity based on value
-            if self.intensity_value >= 0.6:
-                self.intensity = 'High'
-            elif self.intensity_value >= 0.4:
-                self.intensity = 'Medium'
-            else:
-                self.intensity = 'Low'
-        
-        # Bind the method to the contradiction instance
-        from types import MethodType
-        contradiction.update_intensity = MethodType(update_intensity, contradiction)
         
         return contradiction
 
@@ -163,22 +151,22 @@ class ContradictionAnalysis:
         }
         return contradiction
         
-    def update_contradictions(self, game_state):
+    def update_contradictions(self, game_state: Dict[str, Any]) -> None:
         """Update all active contradictions based on current game state."""
         for contradiction in self.contradictions:
             if contradiction.state != 'Resolved':
                 self._update_contradiction(contradiction, game_state)
                 
         # Generate events after updating contradictions
-        new_events = self.generate_events(game_state)
+        new_events: List[Event] = self.generate_events(game_state)
         # Add events to the game state's event queue
         game_state['event_queue'].extend(new_events)
                 
-    def _update_contradiction(self, contradiction, game_state):
+    def _update_contradiction(self, contradiction: Contradiction, game_state: Dict[str, Any]) -> None:
         """Update a single contradiction's state."""
-        old_intensity = contradiction.intensity
+        old_intensity: str = contradiction.intensity
         
-        # Update intensity using contradiction's own method
+        # Update intensity using the instance method
         contradiction.update_intensity(game_state)
         
         # Record intensity history
@@ -325,13 +313,66 @@ class ContradictionAnalysis:
             f"is escalating."
         )
         
+        # Define triggers based on contradiction properties
+        triggers = [
+            Trigger(
+                condition=lambda gs: contradiction.intensity == 'High',
+                description='Contradiction intensity is High'
+            )
+        ]
+
+        # Define escalation paths
+        escalation_event = Event(
+            id=f"escalation_{event_id}",
+            name=f"Escalation of {contradiction.name}",
+            description="The situation worsens.",
+            effects=[],
+            triggers=[Trigger(
+                condition=lambda gs: contradiction.intensity_value > 0.8,
+                description='Intensity value exceeds 0.8'
+            )],
+            escalation_level='Critical',
+        )
+
         # Procedurally generate effects based on contradiction's intensity and entities
         effects = self._generate_effects_from_contradiction(contradiction, game_state)
         
+        escalation_level = self._determine_escalation_level(contradiction)
         triggers = []  # Define any triggers if necessary
+        # Define consequences based on escalation level
+        if escalation_level == 'Critical':
+            consequences = [self._create_follow_up_event(contradiction, game_state)]
+        else:
+            consequences = []
+
+        # Create and return the Event object with consequences
+        return Event(
+            event_id,
+            event_name,
+            event_description,
+            effects,
+            triggers,
+            escalation_level,
+            consequences=[],
+            escalation_paths=[escalation_event]
+        )
         escalation_level = self._determine_escalation_level(contradiction)
         
-        return Event(event_id, event_name, event_description, effects, triggers, escalation_level)
+    def _create_follow_up_event(self, contradiction, game_state):
+        """Create a follow-up event as a consequence of the current contradiction."""
+        follow_up_event_id = f"event_{contradiction.id}_follow_up"
+        follow_up_event_name = f"Aftermath of {contradiction.name}"
+        follow_up_event_description = f"The situation escalates due to {contradiction.name}."
+        
+        # Define effects for the follow-up event
+        follow_up_effects = [
+            # ... define additional effects ...
+        ]
+        
+        # No further consequences for this example
+        consequences = []
+
+        return Event(follow_up_event_id, follow_up_event_name, follow_up_event_description, follow_up_effects, [], 'High', consequences)
 
     def _generate_effects_from_contradiction(self, contradiction, game_state):
         """Generate a list of Effect objects based on the contradiction."""
@@ -369,7 +410,7 @@ class ContradictionAnalysis:
         else:
             return 'Low'
             
-    def _get_intensity_color(self, intensity):
+    def _get_intensity_color(self, intensity: str) -> str:
         """Map intensity levels to colors."""
         return {
             'Low': 'green',
@@ -377,7 +418,7 @@ class ContradictionAnalysis:
             'High': 'red'
         }.get(intensity, 'grey')
         
-    def _get_entity_color(self, entity_type):
+    def _get_entity_color(self, entity_type: str) -> str:
         """Map entity types to colors."""
         color_map = {
             'Faction': 'blue',

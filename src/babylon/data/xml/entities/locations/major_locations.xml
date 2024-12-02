@@ -31,6 +31,7 @@
                 <Type>Industrial</Type>
                 <ControlledBy>F001</ControlledBy>
                 <Population>466451</Population>
+                
             </Location>
             <Location>
                 <ID>L001B</ID>
@@ -38,6 +39,7 @@
                 <Type>Cultural</Type>
                 <ControlledBy>F002</ControlledBy>
                 <Population>153075</Population>
+                
             </Location>
         </SubLocations>
     </Location>
@@ -64,6 +66,7 @@
                 <Type>Industrial</Type>
                 <ControlledBy>F002</ControlledBy>
                 <Population>311598</Population>
+                
             </Location>
             <Location>
                 <ID>L002B</ID>
@@ -71,6 +74,7 @@
                 <Type>Financial</Type>
                 <ControlledBy>F003</ControlledBy>
                 <Population>247280</Population>
+                
             </Location>
         </SubLocations>
     </Location>
@@ -97,6 +101,7 @@
                 <Type>Government</Type>
                 <ControlledBy>F001</ControlledBy>
                 <Population>876150</Population>
+                
             </Location>
             <Location>
                 <ID>L003B</ID>
@@ -104,6 +109,7 @@
                 <Type>Military</Type>
                 <ControlledBy>F001</ControlledBy>
                 <Population>547196</Population>
+                
             </Location>
             <Location>
                 <ID>L003C</ID>
@@ -111,6 +117,7 @@
                 <Type>Historical</Type>
                 <ControlledBy>F002</ControlledBy>
                 <Population>293693</Population>
+                
             </Location>
         </SubLocations>
     </Location>
@@ -172,6 +179,7 @@
                 <Type>Port</Type>
                 <ControlledBy>F002</ControlledBy>
                 <Population>131381</Population>
+                
             </Location>
             <Location>
                 <ID>L005B</ID>

@@ -24,3 +24,6 @@
 .continuerc.json
 
 *.pyc
+
+#pycache
+*__pycache__*
