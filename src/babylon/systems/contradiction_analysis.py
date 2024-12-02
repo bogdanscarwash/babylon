@@ -111,7 +111,15 @@ class ContradictionAnalysis:
         return new_contradictions
 
     def _check_economic_inequality(self, game_state: Dict[str, Any]) -> bool:
-        """Check if economic inequality exceeds a threshold."""
+        """Check if economic inequality exceeds a threshold.
+        
+        Uses the Gini coefficient from the game's economic system to measure inequality.
+        Returns True only if:
+        1. The coefficient is above the inequality threshold (0.4)
+        2. No active economic inequality contradiction already exists
+        
+        This prevents duplicate contradictions for the same economic condition.
+        """
         gini_coefficient = game_state['economy'].gini_coefficient
         inequality_threshold = 0.4  # Define thresholds as per game design
         if gini_coefficient >= inequality_threshold:
@@ -119,7 +127,14 @@ class ContradictionAnalysis:
         return False
 
     def _check_political_unrest(self, game_state: Dict[str, Any]) -> bool:
-        """Check if political stability is below a threshold."""
+        """Check if political stability is below a threshold.
+        
+        Examines the stability_index from the political system:
+        - Below 0.3 indicates significant unrest
+        - Only returns True if no active political unrest contradiction exists
+        
+        This allows new unrest contradictions only when previous ones are resolved.
+        """
         stability_index = game_state['politics'].stability_index
         unrest_threshold = 0.3
         if stability_index <= unrest_threshold:
@@ -256,6 +271,19 @@ class ContradictionAnalysis:
             
     def _calculate_intensity(self, contradiction: Contradiction, game_state: Dict[str, Any]) -> str:
         """Calculate the current intensity level of a contradiction.
+        
+        Intensity Thresholds:
+        Economic contradictions:
+        - High: Gini coefficient >= 0.6 
+        - Medium: Gini coefficient >= 0.4
+        - Low: Gini coefficient < 0.4
+        
+        Political contradictions:
+        - High: Stability index <= 0.2
+        - Medium: Stability index <= 0.3 
+        - Low: Stability index > 0.3
+        
+        Returns 'Low', 'Medium', or 'High' based on these thresholds.
         
         Analyzes the game state to determine how severe a contradiction has become.
         Different contradiction types use different metrics:
@@ -403,7 +431,17 @@ class ContradictionAnalysis:
                 self._modify_attribute(target_entity, effect)
                 
     def _select_resolution_method(self, contradiction, game_state):
-        """Determine the resolution method for a contradiction."""
+        """Determine the resolution method for a contradiction.
+        
+        Two resolution paths:
+        1. Player-controlled: Presents available methods and lets player choose
+        2. AI-controlled: Automatically selects based on intensity:
+           - High intensity -> Revolution (if available)
+           - Medium intensity -> Reform (if available) 
+           - Otherwise -> Suppression or first available method
+        
+        Returns the name of the chosen resolution method.
+        """
         if game_state.get('is_player_responsible', False):
             available_methods = list(contradiction.resolution_methods.keys())
             print(f"Choose a resolution method for '{contradiction.name}':")
@@ -531,7 +569,16 @@ class ContradictionAnalysis:
         return Event(follow_up_event_id, follow_up_event_name, follow_up_event_description, follow_up_effects, [], 'High', consequences)
 
     def _generate_effects_from_contradiction(self, contradiction, game_state):
-        """Generate a list of Effect objects based on the contradiction."""
+        """Generate a list of Effect objects based on the contradiction.
+        
+        Effect strength scales with contradiction intensity:
+        - High intensity: -0.3 to stability
+        - Medium intensity: -0.2 to stability
+        - Low intensity: -0.1 to stability
+        
+        Creates one effect per involved entity, targeting their stability attribute.
+        Returns a list of Effect objects ready to be applied to the game state.
+        """
         effects = []
         for entity in contradiction.entities:
             target = entity.entity_id
@@ -556,7 +603,16 @@ class ContradictionAnalysis:
         return effects
         
     def _determine_escalation_level(self, contradiction):
-        """Determine the escalation level based on contradiction intensity and antagonism."""
+        """Determine the escalation level based on contradiction intensity and antagonism.
+        
+        Escalation Levels:
+        - Critical: High intensity + Antagonistic relationship
+        - High: High intensity but not Antagonistic
+        - Medium: Medium intensity regardless of antagonism
+        - Low: Low intensity or default case
+        
+        Used to determine event severity and potential consequences.
+        """
         if contradiction.intensity == 'High' and contradiction.antagonism == 'Antagonistic':
             return 'Critical'
         elif contradiction.intensity == 'High':
