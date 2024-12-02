@@ -1,12 +1,35 @@
+"""XML Validation Module
+
+This module provides comprehensive XML validation functionality, including:
+- Schema validation against XSD files
+- ID reference integrity checking
+- Schema import/include verification
+- XML naming convention enforcement
+
+The module uses xmlschema for XSD validation and ElementTree for XML parsing.
+It implements a thorough validation pipeline that can be used for both
+development-time validation and runtime checks.
+"""
+
 import os
 import logging
 import xmlschema
 import xml.etree.ElementTree as ET
 
+# Configure module-level logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 def validate_xml_schema(xml_file_path: str, xsd_file_path: str) -> bool:
+    """Validate an XML file against its XSD schema definition.
+    
+    Performs full schema validation including:
+    - Data type validation
+    - Element structure validation
+    - Attribute validation
+    - Complex type validation
+    
+    The validation is strict - any schema violation will cause a failure.
     """Validate an XML file against its XSD schema.
 
     Args:
@@ -28,6 +51,14 @@ def validate_xml_schema(xml_file_path: str, xsd_file_path: str) -> bool:
         return False
 
 def check_id_references(xml_file_path: str) -> bool:
+    """Verify referential integrity of ID/IDREF attributes in XML.
+    
+    Performs a two-pass validation:
+    1. First pass collects all ID attributes
+    2. Second pass verifies all IDREF attributes point to existing IDs
+    
+    This ensures that all cross-references within the XML document are valid
+    and prevents dangling references that could cause runtime errors.
     """Verify that all ID references in the XML file point to existing IDs.
     
     Scans through the XML file to find all ID attributes and references,
@@ -61,6 +92,15 @@ def check_id_references(xml_file_path: str) -> bool:
     return True
 
 def check_entity_imports(xsd_file_path: str, base_dir: str) -> bool:
+    """Verify that all imported/included schema files exist and are accessible.
+    
+    Validates the schema dependency chain by:
+    1. Parsing the schema file
+    2. Finding all xs:include and xs:import elements
+    3. Verifying each referenced schema exists in the base directory
+    
+    This prevents schema compilation failures due to missing dependencies.
+    Critical for maintaining schema modularity and reuse.
     """Verify that all imported/included schema files exist.
     
     Checks that all schema files referenced via xs:include or xs:import
@@ -88,6 +128,17 @@ def check_entity_imports(xsd_file_path: str, base_dir: str) -> bool:
     return True
 
 def validate_naming_conventions(xml_file_path: str) -> bool:
+    """Verify XML elements and attributes follow project naming conventions.
+    
+    Enforces lowercase naming requirements for:
+    - Element names
+    - Attribute names
+    
+    This maintains consistency across XML files and aligns with
+    project coding standards. Particularly important for:
+    - Data exchange formats
+    - Configuration files
+    - Game data definitions
     """Verify that XML elements and attributes follow naming conventions.
     
     Checks that all element and attribute names use lowercase letters
@@ -115,6 +166,19 @@ def validate_naming_conventions(xml_file_path: str) -> bool:
     return not naming_issue
 
 def check_unused_ids(xml_file_path: str) -> bool:
+    """Check for orphaned ID attributes that are never referenced.
+    
+    Performs static analysis to:
+    1. Collect all defined ID attributes
+    2. Track all IDREF references
+    3. Identify IDs that are never referenced
+    
+    While unused IDs don't cause errors, they may indicate:
+    - Obsolete definitions
+    - Incomplete refactoring
+    - Dead code/data
+    
+    This helps maintain clean and efficient XML documents.
     """Check for IDs that are defined but never referenced.
     
     Identifies any ID attributes in the XML file that are not
