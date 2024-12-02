@@ -1,8 +1,6 @@
-from typing import List, Optional, Union, TYPE_CHECKING
+from typing import List, Optional, Union
 from .trigger import Trigger
-
-if TYPE_CHECKING:
-    from .contradiction import Effect
+from .contradiction import Effect
 
 class Event:
     def __init__(
