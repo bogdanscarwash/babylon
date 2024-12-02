@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Faction xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:noNamespaceSchemaLocation="../../../marxism/socially_determined_objects/Faction.xsd">
+         xsi:noNamespaceSchemaLocation="../../../marxism/socially_determined_objects/faction_template.xsd">
     <ID>F001</ID>
     <Name>National Revival Movement</Name>
     <Description>A far-right nationalist movement that has gained significant influence through populist rhetoric and promises of national renewal.</Description>
@@ -66,14 +66,14 @@
     </Leader>
     
     <Influence>
-        <Region>
-            <Name>Urban Centers</Name>
-            <ControlLevel>High</ControlLevel>
-        </Region>
-        <Region>
-            <Name>Industrial Regions</Name>
-            <ControlLevel>Medium</ControlLevel>
-        </Region>
+      <Region>
+         <Name>Urban Regions</Name>
+         <ControlLevel>High</ControlLevel>
+      </Region>
+      <Region>
+         <Name>Industrial Regions</Name>
+         <ControlLevel>Medium</ControlLevel>
+      </Region>
     </Influence>
     
     <Military>
@@ -85,16 +85,17 @@
                 <Strength>3500</Strength>
             </Unit>
         </Units>
-    </Military>
+      </Military>
+        <Attributes>
+            <Attribute>
+               <Name>PopularSupport</Name>
+               <Value>35</Value>
+            </Attribute>
+            <Attribute>
+               <Name>OrganizationalCapacity</Name>
+               <Value>High</Value>
+            </Attribute>
+      </Attributes>
     
-    <Attributes>
-        <Attribute>
-            <Name>PopularSupport</Name>
-            <Value>35</Value>
-        </Attribute>
-        <Attribute>
-            <Name>OrganizationalCapacity</Name>
-            <Value>High</Value>
-        </Attribute>
-    </Attributes>
+    
 </Faction>

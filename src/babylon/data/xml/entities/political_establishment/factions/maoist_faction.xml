@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Faction xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:noNamespaceSchemaLocation="../../../marxism/socially_determined_objects/Faction.xsd">
+         xsi:noNamespaceSchemaLocation="../../../marxism/socially_determined_objects/faction_template.xsd">
     <ID>F004</ID>
     <Name>People's Liberation Front</Name>
     <Description>Marxist-Leninist-Maoist organization emphasizing protracted people's war and mass line organizing among urban and rural poor.</Description>
