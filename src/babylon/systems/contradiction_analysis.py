@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import networkx as nx
 from ..data.models.contradiction import Contradiction, Effect, Entity
 from ..data.models.event import Event
-from ..data.entity_registry import EntityRegistry
+from babylon.data.entity_registry import EntityRegistry
 
 class ContradictionAnalysis:
     """System for analyzing and managing contradictions in the game."""
