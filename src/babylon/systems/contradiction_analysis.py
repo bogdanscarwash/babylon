@@ -10,7 +10,23 @@ from ..data.entity_registry import EntityRegistry
 from ..metrics.collector import MetricsCollector
 
 class ContradictionAnalysis:
-    """System for analyzing and managing contradictions in the game."""
+    """System for analyzing and managing dialectical contradictions in the game.
+    
+    This class implements the core dialectical materialist analysis system,
+    managing contradictions between entities, their relationships, intensities,
+    and transformations. It handles:
+    
+    - Detection and creation of new contradictions
+    - Tracking contradiction intensity and relationships
+    - Resolution and transformation of contradictions
+    - Generation of events from contradiction states
+    - Visualization of contradiction networks
+    
+    Attributes:
+        entity_registry (EntityRegistry): Registry of all game entities
+        contradictions (List[Contradiction]): List of active contradictions
+        metrics (MetricsCollector): Collector for performance metrics
+    """
     
     def __init__(self, entity_registry: EntityRegistry) -> None:
         self.entity_registry: EntityRegistry = entity_registry
@@ -18,7 +34,20 @@ class ContradictionAnalysis:
         self.metrics = MetricsCollector()
         
     def add_contradiction(self, contradiction: Contradiction) -> None:
-        """Add a new contradiction to the system."""
+        """Add a new contradiction to the analysis system.
+        
+        Adds the contradiction to the tracking list and initializes its
+        relationships with existing entities. Records metrics about the
+        contradiction initialization process.
+        
+        Args:
+            contradiction: The Contradiction instance to add to the system
+            
+        Side Effects:
+            - Links contradiction entities to game entities
+            - Records metrics about object access and processing time
+            - Updates the contradictions list
+        """
         start_time = datetime.now()
         self.contradictions.append(contradiction)
         self._link_contradiction_entities(contradiction)
@@ -36,7 +65,21 @@ class ContradictionAnalysis:
             entity.game_entity = actual_entity
             
     def detect_new_contradictions(self, game_state: Dict[str, Any]) -> List[Contradiction]:
-        """Detect new contradictions based on the game state."""
+        """Detect and create new contradictions based on the current game state.
+        
+        Analyzes the game state to identify conditions that would give rise
+        to new contradictions, such as economic inequality or political unrest.
+        Creates appropriate contradiction instances when conditions are met.
+        
+        Args:
+            game_state: Current game state containing economy, politics etc.
+            
+        Returns:
+            List of newly created Contradiction instances
+            
+        Side Effects:
+            Adds any new contradictions to the system via add_contradiction()
+        """
         new_contradictions: List[Contradiction] = []
 
         # Economic inequality check
@@ -152,7 +195,22 @@ class ContradictionAnalysis:
         return contradiction
         
     def update_contradictions(self, game_state: Dict[str, Any]) -> None:
-        """Update all active contradictions based on current game state."""
+        """Update all active contradictions based on current game state.
+        
+        For each unresolved contradiction:
+        - Updates intensity based on game conditions
+        - Checks for resolution or transformation conditions
+        - Generates events based on contradiction states
+        - Applies any necessary effects to the game state
+        
+        Args:
+            game_state: Current game state containing all game systems
+            
+        Side Effects:
+            - Updates contradiction intensities and states
+            - May resolve or transform contradictions
+            - Adds generated events to the game state's event queue
+        """
         for contradiction in self.contradictions:
             if contradiction.state != 'Resolved':
                 self._update_contradiction(contradiction, game_state)
@@ -428,8 +486,22 @@ class ContradictionAnalysis:
         }
         return color_map.get(entity_type, 'grey')
 
-    def visualize_entity_relationships(self):
-        """Visualize relationships between entities based on contradictions."""
+    def visualize_entity_relationships(self) -> None:
+        """Visualize the network of relationships between entities.
+        
+        Creates an undirected graph visualization where:
+        - Nodes represent entities
+        - Node colors indicate entity types
+        - Edges show entities involved in the same contradictions
+        - Labels show entity types and contradiction names
+        
+        Uses networkx spring layout and matplotlib for rendering.
+        Limited to showing edge labels when there are 20 or fewer edges
+        to maintain readability.
+        
+        Side Effects:
+            Displays a matplotlib figure showing the entity relationship network
+        """
         G = nx.Graph()
 
         # Add nodes for entities
@@ -479,8 +551,20 @@ class ContradictionAnalysis:
         plt.axis('off')
         plt.show()
 
-    def visualize_contradictions(self):
-        """Visualize contradictions and their relationships."""
+    def visualize_contradictions(self) -> None:
+        """Visualize the network of contradictions and their relationships.
+        
+        Creates a directed graph visualization using networkx where:
+        - Nodes represent contradictions
+        - Node colors indicate contradiction intensity
+        - Edges show principal/secondary contradiction relationships
+        - Labels show contradiction names
+        
+        The visualization uses a spring layout and matplotlib for rendering.
+        
+        Side Effects:
+            Displays a matplotlib figure showing the contradiction network
+        """
         G = nx.DiGraph()
 
         # Add nodes for contradictions
