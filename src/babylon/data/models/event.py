@@ -1,5 +1,7 @@
+from typing import List
+
 class Event:
-    def __init__(self, id, name, description, effects, triggers, escalation_level):
+    def __init__(self, id: str, name: str, description: str, effects, triggers, escalation_level: float):
         self.id = id
         self.name = name
         self.description = description
