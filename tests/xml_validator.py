@@ -6,7 +6,19 @@ import xml.etree.ElementTree as ET
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def validate_xml_schema(xml_file_path, xsd_file_path):
+def validate_xml_schema(xml_file_path: str, xsd_file_path: str) -> bool:
+    """Validate an XML file against its XSD schema.
+
+    Args:
+        xml_file_path: Path to the XML file to validate
+        xsd_file_path: Path to the XSD schema file
+
+    Returns:
+        bool: True if validation succeeds, False if validation fails
+
+    Raises:
+        XMLSchemaValidationError: If the XML fails to validate against the schema
+    """
     schema = xmlschema.XMLSchema(xsd_file_path)
     try:
         schema.validate(xml_file_path)
@@ -15,7 +27,18 @@ def validate_xml_schema(xml_file_path, xsd_file_path):
         logger.error(f"Validation error in '{xml_file_path}': {e}")
         return False
 
-def check_id_references(xml_file_path):
+def check_id_references(xml_file_path: str) -> bool:
+    """Verify that all ID references in the XML file point to existing IDs.
+    
+    Scans through the XML file to find all ID attributes and references,
+    ensuring that every referenced ID exists in the document.
+
+    Args:
+        xml_file_path: Path to the XML file to check
+
+    Returns:
+        bool: True if all references are valid, False otherwise
+    """
     tree = ET.parse(xml_file_path)
     root = tree.getroot()
 
@@ -37,7 +60,19 @@ def check_id_references(xml_file_path):
         return False
     return True
 
-def check_entity_imports(xsd_file_path, base_dir):
+def check_entity_imports(xsd_file_path: str, base_dir: str) -> bool:
+    """Verify that all imported/included schema files exist.
+    
+    Checks that all schema files referenced via xs:include or xs:import
+    elements can be found in the specified base directory.
+
+    Args:
+        xsd_file_path: Path to the XSD schema file to check
+        base_dir: Base directory to look for imported schemas
+
+    Returns:
+        bool: True if all imports are valid, False if any imports are missing
+    """
     tree = ET.parse(xsd_file_path)
     root = tree.getroot()
     xs_namespace = 'http://www.w3.org/2001/XMLSchema'
@@ -52,7 +87,18 @@ def check_entity_imports(xsd_file_path, base_dir):
                 return False
     return True
 
-def validate_naming_conventions(xml_file_path):
+def validate_naming_conventions(xml_file_path: str) -> bool:
+    """Verify that XML elements and attributes follow naming conventions.
+    
+    Checks that all element and attribute names use lowercase letters
+    as per project conventions.
+
+    Args:
+        xml_file_path: Path to the XML file to validate
+
+    Returns:
+        bool: True if all names follow conventions, False otherwise
+    """
     tree = ET.parse(xml_file_path)
     root = tree.getroot()
     naming_issue = False
@@ -68,7 +114,19 @@ def validate_naming_conventions(xml_file_path):
                 naming_issue = True
     return not naming_issue
 
-def check_unused_ids(xml_file_path):
+def check_unused_ids(xml_file_path: str) -> bool:
+    """Check for IDs that are defined but never referenced.
+    
+    Identifies any ID attributes in the XML file that are not
+    referenced by any other elements, which may indicate unused
+    or obsolete definitions.
+
+    Args:
+        xml_file_path: Path to the XML file to check
+
+    Returns:
+        bool: True if no unused IDs found, False if unused IDs exist
+    """
     tree = ET.parse(xml_file_path)
     root = tree.getroot()
 
