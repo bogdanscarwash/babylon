@@ -154,9 +154,13 @@ class MetricsCollector:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         metrics_file = self.log_dir / f"metrics_{timestamp}.json"
         
+        # Create a copy of current_session with datetime converted to string
+        session_info = dict(self.current_session)
+        session_info['start_time'] = session_info['start_time'].isoformat()
+        
         with open(metrics_file, 'w') as f:
             json.dump({
-                'session_info': self.current_session,
+                'session_info': session_info,
                 'metrics': {
                     'object_access': dict(self.metrics['object_access']),
                     'token_usage': list(self.metrics['token_usage']),
