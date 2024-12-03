@@ -13,6 +13,7 @@
 .env.development
 .env.test
 .env.production
+.envrc
 
 # Logs and Databases
 *.log
@@ -27,6 +28,3 @@
 
 #pycache
 *__pycache__*
-
-#website
-~/projects/babylon-dotcom
