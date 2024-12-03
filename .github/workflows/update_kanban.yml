@@ -1,0 +1,32 @@
+name: Update Kanban Board
+
+on:
+  push:
+    branches:
+      - dev
+    paths:
+      - 'docs/TODO.md'
+
+jobs:
+  update-kanban:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Install Dependencies
+        run: |
+          pip install PyGithub
+
+      - name: Parse TODO.md and Update Kanban Board
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}
+          REPO_NAME: ${{ github.repository }}
+          PROJECT_NAME: 'Your Project Name'  # Replace with your project's name
+        run: |
+          python scripts/update_kanban.py
