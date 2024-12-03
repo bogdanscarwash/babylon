@@ -1,7 +1,7 @@
 ---
 title: "Babylon Development Update: Expanding Contradiction Systems"
 date: 2024-12-01
-draft: true
+draft: false
 description: "Progress report on entity management, contradiction analysis, and a look ahead."
 featured_image: "/images/contradiction-mapping.png" 
 ---
