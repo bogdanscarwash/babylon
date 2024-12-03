@@ -1,0 +1,100 @@
+// Variables from AESTHETICS.md
+$soviet-red: #D40000;
+$near-black: #1A1A1A;
+$off-white: #F5F5F5;
+$gold: #FFD700;
+$dark-red: #8B0000;
+$dark-gray: #404040;
+$silver: #C0C0C0;
+
+// Typography
+$header-font: 'Space Grotesk', 'DIN Alternate', sans-serif;
+$body-font: 'Inter', 'Helvetica Neue', sans-serif;
+$mono-font: 'Roboto Mono', monospace;
+
+body {
+    font-family: $body-font;
+    background-color: $near-black;
+    color: $off-white;
+    font-family: $body-font;
+    line-height: 1.6;
+    margin: 0;
+    padding: 0;
+}
+
+// Footer
+.site-footer {
+    background: $dark-gray;
+    padding: 2rem 0;
+    margin-top: 4rem;
+    border-top: 2px solid $soviet-red;
+    
+    p {
+        margin: 0;
+        text-align: center;
+        color: $silver;
+    }
+}
+
+h1, h2, h3, h4, h5, h6 {
+    color: $soviet-red;
+    font-weight: 700;
+    font-family: $header-font;
+}
+
+a {
+    color: $soviet-red;
+    text-decoration: none;
+    transition: color 0.3s ease;
+    
+    &:hover {
+        color: $gold;
+    }
+}
+
+code {
+    font-family: $mono-font;
+    background: $dark-gray;
+    padding: 0.2em 0.4em;
+    border-radius: 3px;
+}
+
+// Layout
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 1rem;
+}
+
+// Navigation
+nav {
+    background: $dark-gray;
+    padding: 1rem 0;
+    
+    ul {
+        list-style: none;
+        display: flex;
+        gap: 2rem;
+        margin: 0;
+        padding: 0;
+    }
+}
+
+// Brutalist elements
+.brutalist-panel {
+    border: 2px solid $soviet-red;
+    padding: 2rem;
+    margin: 2rem 0;
+    position: relative;
+    
+    &::before {
+        content: '';
+        position: absolute;
+        top: -5px;
+        left: -5px;
+        width: 20px;
+        height: 20px;
+        border-top: 2px solid $gold;
+        border-left: 2px solid $gold;
+    }
+}

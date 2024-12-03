@@ -1,0 +1,10 @@
+{{ partial "head-fonts.html" . }}
+<header>
+    <nav class="container">
+        <ul>
+            {{ range .Site.Menus.main }}
+            <li><a href="{{ .URL }}" class="brutalist-link">{{ .Name }}</a></li>
+            {{ end }}
+        </ul>
+    </nav>
+</header>

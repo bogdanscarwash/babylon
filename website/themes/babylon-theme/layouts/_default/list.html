@@ -1,0 +1,12 @@
+{{ define "main" }}
+<div class="container">
+    <h1>{{ .Title }}</h1>
+    {{ .Content }}
+    {{ range .Pages }}
+    <article class="brutalist-panel">
+        <h2><a href="{{ .RelPermalink }}">{{ .Title }}</a></h2>
+        {{ .Summary }}
+    </article>
+    {{ end }}
+</div>
+{{ end }}
