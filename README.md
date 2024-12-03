@@ -100,22 +100,35 @@ Currently, the game is in a development state with placeholder mechanics. The in
 
 ## Game Mechanics
 
-- **Contradiction System**: Central engine of the game, modeling societal contradictions based on Marxist theory.
-- **Supply and Demand**: Dynamic resource availability affecting prices and economy.
+- **Contradiction Analysis System**: 
+  - Advanced engine modeling societal contradictions based on Marxist theory
+  - Network visualization of entity relationships
+  - Dialectical mapping interface for contradiction analysis
+  - Real-time intensity tracking and historical data
+- **Event Generation System**:
+  - Procedural event generation based on contradiction states
+  - Dynamic consequence chains affecting the game world
+  - Escalation paths for major contradictions
+- **Supply and Demand**: Dynamic resource availability affecting prices and economy (planned).
 - **Combat System**: Placeholder schemas for combat mechanics are defined but not yet implemented.
-- **Political Systems**: Structures for elections, policies, and governance.
+- **Political Systems**: Structures for elections, policies, and governance (in development).
 
 For more detailed information, refer to the [MECHANICS.md](docs/MECHANICS.md) and [IDEAS.md](docs/IDEAS.md) files.
 
 ## AI Integration
 
-The game plans to incorporate AI models for:
+The game currently incorporates AI models for:
 
-- **NPC Behaviors**: More realistic and dynamic non-player character interactions.
-- **Decision Making**: AI-driven events and responses based on game state.
-- **Language Processing**: Understanding complex player commands (future implementation).
+- **Contradiction Analysis**: AI-powered analysis of societal contradictions and their relationships
+- **Event Generation**: Smart event creation based on game state and historical patterns
+- **Visualization**: Intelligent layout and organization of network graphs and dialectical maps
 
-AI components are currently in the planning phase, as outlined in the [TODO.md](docs/TODO.md) file.
+Planned AI features include:
+- **NPC Behaviors**: More realistic and dynamic non-player character interactions
+- **Decision Making**: AI-driven events and responses based on game state
+- **Language Processing**: Understanding complex player commands
+
+For development status and upcoming features, see the [TODO.md](docs/TODO.md) file.
 
 ## Contributing
 
