@@ -27,7 +27,8 @@ class ChromaDBConfig:
         allow_reset=True,  # Enable reset for testing
         anonymized_telemetry=False,  # Disable telemetry
         persist_directory=str(BASE_DIR),
-        is_persistent=True
+        is_persistent=True,  # Can be overridden for testing
+        chroma_db_impl="duckdb+parquet"  # Default persistence implementation
     )
     
     # Collection settings

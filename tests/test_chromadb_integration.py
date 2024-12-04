@@ -23,7 +23,7 @@ class TestChromaDBIntegration(unittest.TestCase):
             persist_directory=self.temp_dir,
             allow_reset=True,
             anonymized_telemetry=False,
-            sqlite_database=":memory:"  # Use in-memory SQLite for tests
+            is_persistent=False  # Use in-memory storage for tests
         )
         
         # Initialize ChromaDB client
