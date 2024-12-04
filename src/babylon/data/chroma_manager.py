@@ -1,10 +1,30 @@
-from typing import Optional, Any
+from typing import Optional, Any, Dict
 import chromadb
 from chromadb.config import Settings
+from chromadb.api import API as ChromaAPI
+from chromadb.errors import ChromaError, NoIndexException, InvalidDimensionException
 import logging
+from datetime import datetime
+import time
 from config.base import BaseConfig as Config
+from utils.retry import retry_on_exception
 
 logger = logging.getLogger(__name__)
+
+# Define ChromaDB specific exceptions to handle
+CHROMA_RETRYABLE_EXCEPTIONS = (
+    ChromaError,
+    NoIndexException,
+    ConnectionError,
+    TimeoutError
+)
+
+# Define non-retryable exceptions
+CHROMA_FATAL_EXCEPTIONS = (
+    InvalidDimensionException,
+    ValueError,
+    TypeError
+)
 
 class ChromaManager:
     """Manages ChromaDB client lifecycle and operations.
@@ -12,6 +32,12 @@ class ChromaManager:
     This class implements the Singleton pattern to ensure only one ChromaDB client
     exists throughout the application lifecycle. It provides centralized management
     of vector database operations for storing and retrieving entity embeddings.
+    
+    Error Handling:
+        - Implements retries for transient failures
+        - Provides detailed error context
+        - Logs performance metrics
+        - Tracks operation correlation IDs
     
     Implementation Details:
         - Uses DuckDB+Parquet backend for efficient local storage and querying
@@ -69,6 +95,12 @@ class ChromaManager:
             # Only initialize client if it hasn't been created yet
             self._initialize_client()
     
+    @retry_on_exception(
+        max_retries=3,
+        delay=1,
+        exceptions=CHROMA_RETRYABLE_EXCEPTIONS,
+        logger=logger
+    )
     def _initialize_client(self) -> None:
         """Initialize the ChromaDB client with proper settings.
         
@@ -78,22 +110,67 @@ class ChromaManager:
         - Custom persistence directory from config
         
         Raises:
-            Exception: If client initialization fails, with detailed error logging
+            ChromaError: For ChromaDB specific errors
+            ConnectionError: For network/connection issues
+            ValueError: For invalid configuration
             
         Note:
             The method uses DuckDB+Parquet for optimal performance in local deployments.
             This combination provides good query performance and data compression.
         """
+        start_time = time.perf_counter()
+        correlation_id = str(uuid.uuid4())
+        
         try:
+            logger.debug(
+                "Initializing ChromaDB client",
+                extra={
+                    "correlation_id": correlation_id,
+                    "persist_dir": Config.CHROMADB_PERSIST_DIR
+                }
+            )
+            
             # Create client with local persistence configuration
             self._client = chromadb.Client(Settings(
-                chroma_db_impl="duckdb+parquet",  # Use DuckDB for local storage
-                persist_directory=Config.CHROMADB_PERSIST_DIR  # Set custom persistence location
+                chroma_db_impl="duckdb+parquet",
+                persist_directory=Config.CHROMADB_PERSIST_DIR
             ))
-        except Exception as e:
-            # Log error details and re-raise to allow proper error handling
-            logger.error(f"Failed to initialize ChromaDB client: {e}")
+            
+            # Test connection
+            self._client.heartbeat()
+            
+            elapsed = time.perf_counter() - start_time
+            logger.info(
+                "ChromaDB client initialized successfully",
+                extra={
+                    "correlation_id": correlation_id,
+                    "elapsed_seconds": elapsed
+                }
+            )
+            
+        except CHROMA_FATAL_EXCEPTIONS as e:
+            logger.error(
+                "Fatal error initializing ChromaDB client",
+                extra={
+                    "correlation_id": correlation_id,
+                    "error": str(e),
+                    "error_type": e.__class__.__name__
+                },
+                exc_info=True
+            )
             raise
+            
+        except Exception as e:
+            logger.error(
+                "Error initializing ChromaDB client",
+                extra={
+                    "correlation_id": correlation_id,
+                    "error": str(e),
+                    "error_type": e.__class__.__name__
+                },
+                exc_info=True
+            )
+            raise ChromaError(f"Failed to initialize ChromaDB client: {e}")
     
     @property
     def client(self) -> chromadb.Client:
