@@ -56,6 +56,19 @@
    mkdir -p backups
    ```
 
+2. **Set Up Metrics Collection**
+
+   The game requires metrics collection for optimal performance:
+   - Create metrics database directory
+   - Configure logging paths
+   - Set up backup location
+
+   ```shell
+   mkdir -p data/metrics
+   mkdir -p logs
+   mkdir -p backups
+   ```
+
 2. **Create and Activate a Virtual Environment**
 
    ```shell
