@@ -50,14 +50,33 @@ class BabylonError(Exception):
     """Base exception class for all Babylon-specific errors.
     
     This class serves as the root of the Babylon exception hierarchy.
-    All other Babylon-specific exceptions inherit from this class.
+    All other Babylon-specific exceptions inherit from this class to provide
+    consistent error handling and reporting throughout the application.
+    
+    The error code system follows a standardized pattern:
+    - First 2-4 letters indicate the subsystem (e.g., DB, ENT, CFG)
+    - Underscore separator
+    - 3 digits for specific error type
     
     Attributes:
         message (str): Human-readable error description
         error_code (Optional[str]): Machine-readable error code (e.g., "DB_001")
         
     Example:
-        raise BabylonError("Failed to initialize game state", "GAME_001")
+        try:
+            raise BabylonError(
+                message="Failed to initialize game state",
+                error_code="GAME_001"
+            )
+        except BabylonError as e:
+            logger.error(f"{e.error_code}: {e.message}")
+            
+    Error Code Ranges:
+        - GAME_001-099: Core game system errors
+        - DB_001-099: Database operation errors
+        - ENT_001-099: Entity management errors
+        - CFG_001-099: Configuration errors
+        - BACKUP_001-099: Backup/restore errors
     """
     def __init__(self, message: str, error_code: str = None):
         self.message = message
@@ -67,24 +86,64 @@ class BabylonError(Exception):
 class DatabaseError(BabylonError):
     """Raised when database operations fail.
     
-    Used for errors related to:
-    - Connection failures
-    - Query execution errors
-    - Data integrity issues
-    - Backup/restore operations
+    Used for errors related to ChromaDB operations including:
+    - Connection failures (DB_001-019)
+    - Query execution errors (DB_020-039)
+    - Data integrity issues (DB_040-059)
+    - Backup/restore operations (DB_060-079)
+    - Performance issues (DB_080-099)
     
+    Attributes:
+        message (str): Detailed error description
+        error_code (str): DB_XXX format code
+        
     Example:
-        raise DatabaseError("Failed to connect to ChromaDB", "DB_001")
+        try:
+            result = chroma_client.query(...)
+        except Exception as e:
+            raise DatabaseError(
+                message=f"Query failed: {str(e)}",
+                error_code="DB_021"
+            )
+            
+    Common Error Codes:
+        DB_001: Connection failed
+        DB_002: Authentication failed
+        DB_020: Query syntax error
+        DB_040: Data corruption detected
+        DB_060: Backup creation failed
     """
     pass
 
 class EntityError(BabylonError):
     """Base class for entity-related errors.
     
-    Parent class for all exceptions related to game entities:
-    - Entity creation/deletion
-    - Entity state management
-    - Entity relationships
+    Parent class for all exceptions related to game entities and their lifecycle:
+    - Entity creation/deletion (ENT_001-019)
+    - Entity state management (ENT_020-039)
+    - Entity relationships (ENT_040-059)
+    - Entity validation (ENT_060-079)
+    - Entity persistence (ENT_080-099)
+    
+    This class provides common functionality for entity-specific errors while
+    maintaining the error code hierarchy. Child classes should use appropriate
+    error code ranges from the ENT_XXX namespace.
+    
+    Example:
+        try:
+            entity.update_state(new_state)
+        except ValidationError as e:
+            raise EntityError(
+                message=f"Invalid entity state: {e}",
+                error_code="ENT_022"
+            )
+            
+    Common Error Codes:
+        ENT_001: Creation failed
+        ENT_020: Invalid state transition
+        ENT_040: Invalid relationship
+        ENT_060: Validation failed
+        ENT_080: Persistence failed
     """
     pass
 
