@@ -14,11 +14,20 @@ echo "${YELLOW}🐍 Running Python pre-comm1it checks...${NC}"
 
 # Function to check if Python files were modified
 check_python_files() {
-    git diff --cached --name-only | grep -E '\.py$'
+    git diff --cached --name-status | grep -E '^[AM].*\.py$' | cut -f2
 }
 
-# Only run checks if Python files were modified
-if check_python_files; then
+# Only run checks if Python files were modified and exist
+if python_files=$(check_python_files); then
+    # Filter to only existing files
+    existing_files=""
+    for file in $python_files; do
+        if [ -f "$file" ]; then
+            existing_files="$existing_files $file"
+        fi
+    done
+    
+    if [ -n "$existing_files" ]; then
     # Check virtual environment
 #    if [ ! -d "venv" ] && [ ! -d "env" ]; then
 #        echo "${RED}❌ Virtual environment not found. Please create one:${NC}"
