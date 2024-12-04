@@ -1,10 +1,15 @@
 import pytest
 from datetime import datetime
 from pathlib import Path
+from typing import Generator, Dict, List, Any, Optional
+from pathlib import Path
 from babylon.metrics.collector import MetricsCollector
 
+from pathlib import Path
+from typing import Generator
+
 @pytest.fixture
-def temp_log_dir(tmp_path):
+def temp_log_dir(tmp_path: Path) -> Path:
     """Create a temporary directory for metrics logs during testing.
     
     Creates an isolated test directory to prevent test logs from mixing with
@@ -19,7 +24,7 @@ def temp_log_dir(tmp_path):
     return tmp_path / "test_logs"
 
 @pytest.fixture
-def metrics_collector(temp_log_dir):
+def metrics_collector(temp_log_dir: Path) -> MetricsCollector:
     """Create a fresh MetricsCollector instance for each test.
     
     Provides an isolated MetricsCollector instance configured to use
@@ -34,7 +39,7 @@ def metrics_collector(temp_log_dir):
     """
     return MetricsCollector(log_dir=temp_log_dir)
 
-def test_init(metrics_collector, temp_log_dir):
+def test_init(metrics_collector: MetricsCollector, temp_log_dir: Path) -> None:
     """Test initialization of MetricsCollector.
     
     Verifies that a new MetricsCollector instance is properly initialized with:
@@ -61,7 +66,7 @@ def test_init(metrics_collector, temp_log_dir):
     assert metrics_collector.current_session['total_objects'] == 0
     assert len(metrics_collector.metrics['object_access']) == 0
 
-def test_record_object_access(metrics_collector):
+def test_record_object_access(metrics_collector: MetricsCollector) -> None:
     """Test the object access tracking functionality.
     
     Validates that the MetricsCollector accurately tracks:
@@ -92,7 +97,7 @@ def test_record_object_access(metrics_collector):
     assert metrics_collector.metrics['object_access']['test_obj_1'] == 2
     assert metrics_collector.metrics['object_access']['test_obj_2'] == 1
 
-def test_record_token_usage(metrics_collector):
+def test_record_token_usage(metrics_collector: MetricsCollector) -> None:
     """Test recording token usage.
     
     This test checks the token usage tracking functionality:
@@ -109,7 +114,7 @@ def test_record_token_usage(metrics_collector):
     assert len(metrics_collector.metrics['token_usage']) == 2
     assert list(metrics_collector.metrics['token_usage']) == [100, 150]
 
-def test_record_cache_event(metrics_collector):
+def test_record_cache_event(metrics_collector: MetricsCollector) -> None:
     """Test recording cache hits and misses.
     
     This test validates the cache performance tracking system:
@@ -130,7 +135,7 @@ def test_record_cache_event(metrics_collector):
     assert metrics_collector.metrics['cache_performance']['hits']['L2'] == 1
     assert metrics_collector.metrics['cache_performance']['misses']['L2'] == 0
 
-def test_analyze_performance(metrics_collector):
+def test_analyze_performance(metrics_collector: MetricsCollector) -> None:
     """Test performance analysis functionality.
     
     This test validates the performance analysis system by:
@@ -194,7 +199,7 @@ def test_analyze_performance(metrics_collector):
     assert analysis['hot_objects'] == ['hot_object']
     assert analysis['cache_hit_rate']['L1'] == 0.5
 
-def test_save_metrics(metrics_collector, temp_log_dir):
+def test_save_metrics(metrics_collector: MetricsCollector, temp_log_dir: Path) -> None:
     """Test saving metrics to disk.
     
     This test validates the metrics persistence system:
@@ -218,7 +223,7 @@ def test_save_metrics(metrics_collector, temp_log_dir):
     metric_files = list(temp_log_dir.glob("metrics_*.json"))
     assert len(metric_files) == 1
 
-def test_memory_analysis(metrics_collector):
+def test_memory_analysis(metrics_collector: MetricsCollector) -> None:
     """Test memory usage analysis.
     
     This test validates the memory analysis subsystem:
@@ -243,7 +248,7 @@ def test_memory_analysis(metrics_collector):
     assert memory_analysis['peak'] == max(test_values)
     assert memory_analysis['current'] == test_values[-1]
 
-def test_latency_tracking(metrics_collector):
+def test_latency_tracking(metrics_collector: MetricsCollector) -> None:
     """Test latency statistics calculation.
     
     This test validates the latency tracking system:
