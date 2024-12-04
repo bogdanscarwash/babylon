@@ -27,11 +27,10 @@ class TestChromaDBIntegration(unittest.TestCase):
         os.makedirs(self.temp_persist_dir)
 
         # Initialize ChromaDB with retry settings
-        self.client = chromadb.Client(Settings(
-            chroma_db_impl="duckdb+parquet",
-            persist_directory=self.temp_persist_dir,
-            anonymized_telemetry=False
-        ))
+        self.client = chromadb.PersistentClient(
+            path=self.temp_persist_dir,
+            settings=Settings(anonymized_telemetry=False)
+        )
         self.collection = self.client.get_or_create_collection(name='test_entities')
 
         self.entity_registry = EntityRegistry(chroma_collection=self.collection)
