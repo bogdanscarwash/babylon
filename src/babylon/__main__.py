@@ -116,6 +116,10 @@ def handle_event(event: Event, game_state: Dict[str, Any]) -> None:
         # Currently breaks immediately - replace with actual game logic
         break
 
+    # After the game loop ends, perform backup
+    backup_dir = os.path.join("backups", datetime.now().strftime("%Y%m%d_%H%M%S"))
+    backup_chroma(chroma_client, backup_dir)
+
 def cleanup_chroma(client: chromadb.Client) -> None:
     """Cleanup ChromaDB resources gracefully.
     
