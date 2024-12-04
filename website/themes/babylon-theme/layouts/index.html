@@ -1,0 +1,18 @@
+{{ define "main" }}
+<div class="container">
+    <div class="brutalist-panel">
+        <h1>{{ .Title }}</h1>
+        {{ .Content }}
+    </div>
+    
+    <section>
+        <h2>Latest Updates</h2>
+        {{ range first 5 (where .Site.RegularPages "Section" "in" .Site.Params.mainSections) }}
+        <article class="brutalist-panel">
+            <h3><a href="{{ .RelPermalink }}">{{ .Title }}</a></h3>
+            {{ .Summary }}
+        </article>
+        {{ end }}
+    </section>
+</div>
+{{ end }}
