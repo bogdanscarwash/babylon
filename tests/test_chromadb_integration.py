@@ -2,38 +2,37 @@ import unittest
 import os
 import shutil
 import tempfile
-import time
-import logging
+import numpy as np
 import chromadb
-from concurrent.futures import ThreadPoolExecutor
-from src.babylon.metrics.performance_metrics import MetricsCollector
-from chromadb.config import Settings
+from src.babylon.config.chromadb_config import ChromaDBConfig
+from src.babylon.entities.entity import Entity
 from src.babylon.entities.entity_registry import EntityRegistry
 from src.babylon.utils.backup import backup_chroma, restore_chroma
 
 class TestChromaDBIntegration(unittest.TestCase):
     def setUp(self):
-        # Set up logging
-        self.log_file = os.path.join(tempfile.mkdtemp(), 'test.log')
-        logging.basicConfig(filename=self.log_file, level=logging.DEBUG)
-        self.logger = logging.getLogger(__name__)
-
-        # Set up metrics collection
-        self.metrics = MetricsCollector()
-        
-        # Create temporary directories and initialize clients
+        """Set up test environment with temporary ChromaDB instance."""
+        # Create temporary test directory
         self.temp_dir = tempfile.mkdtemp()
-        self.temp_persist_dir = os.path.join(self.temp_dir, 'persist')
-        os.makedirs(self.temp_persist_dir)
-
-        # Initialize ChromaDB with retry settings
-        self.client = chromadb.PersistentClient(
-            path=self.temp_persist_dir,
-            settings=Settings(anonymized_telemetry=False)
+        
+        # Configure ChromaDB with test settings
+        self.settings = ChromaDBConfig.get_settings(
+            persist_directory=self.temp_dir,
+            allow_reset=True,
+            anonymized_telemetry=False
         )
-        self.collection = self.client.get_or_create_collection(name='test_entities')
-
-        self.entity_registry = EntityRegistry(chroma_collection=self.collection)
+        
+        # Initialize ChromaDB client
+        self.client = chromadb.Client(self.settings)
+        
+        # Create test collection
+        self.collection = self.client.create_collection(
+            name=ChromaDBConfig.DEFAULT_COLLECTION_NAME,
+            metadata=ChromaDBConfig.DEFAULT_METADATA
+        )
+        
+        # Initialize entity registry
+        self.entity_registry = EntityRegistry(self.collection)
 
     def tearDown(self):
         # Clean up temporary directories
