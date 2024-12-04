@@ -1,59 +1,185 @@
 """Performance metrics collection module.
 
-Collects system performance metrics including:
-- CPU/Memory/GPU utilization
-- AI model performance data
-- Gameplay analytics
-- User behavior patterns
+This module provides comprehensive performance monitoring capabilities for the Babylon system:
+
+Core Features:
+- System resource monitoring (CPU, Memory, GPU, Disk)
+- AI model performance tracking (latency, cache efficiency)
+- Gameplay analytics collection
+- Performance threshold validation
+- Metric persistence and alerting
+
+Usage:
+    collector = MetricsCollector()
+    
+    # System metrics
+    sys_metrics = collector.collect_system_metrics()
+    
+    # AI performance
+    ai_metrics = collector.collect_ai_metrics(
+        query_time=0.05,
+        token_count=100,
+        embedding_dim=384,
+        cache_hits=90,
+        cache_total=100,
+        anomaly_score=0.1
+    )
+    
+    # Log all metrics
+    collector.log_metrics(
+        system_metrics=sys_metrics,
+        ai_metrics=ai_metrics
+    )
 """
 
-import psutil
-import logging
+# Standard library imports
 import json
+import logging
 import time
-from typing import Dict, Any, Optional
-import GPUtil
-from dataclasses import dataclass, asdict
 from datetime import datetime
+from typing import Dict, Any, Optional, List, Tuple
+
+# Third-party imports
+import psutil
+import GPUtil
+from dataclasses import dataclass, asdict, field
+
+# Configure module logger
+logger = logging.getLogger(__name__)
 
 logger = logging.getLogger(__name__)
 
 @dataclass
 class SystemMetrics:
-    """System performance metrics."""
+    """System performance metrics.
+    
+    Tracks real-time system resource utilization including CPU, memory,
+    disk, and GPU metrics when available.
+    
+    Attributes:
+        timestamp: ISO format timestamp of metric collection
+        cpu_percent: CPU utilization percentage (0-100)
+        memory_percent: RAM utilization percentage (0-100)
+        swap_percent: Swap space utilization percentage (0-100)
+        disk_usage_percent: Disk space utilization percentage (0-100)
+        gpu_utilization: GPU utilization percentage if available (0-100)
+        gpu_memory_percent: GPU memory utilization if available (0-100)
+    """
     timestamp: str
     cpu_percent: float
     memory_percent: float
     swap_percent: float
     disk_usage_percent: float
-    gpu_utilization: Optional[float]
-    gpu_memory_percent: Optional[float]
+    gpu_utilization: Optional[float] = None
+    gpu_memory_percent: Optional[float] = None
+    
+    def __post_init__(self):
+        """Validate metric ranges."""
+        for field_name in ['cpu_percent', 'memory_percent', 'swap_percent', 'disk_usage_percent']:
+            value = getattr(self, field_name)
+            if not 0 <= value <= 100:
+                raise ValueError(f"{field_name} must be between 0 and 100")
+        
+        # Validate GPU metrics if present
+        for field_name in ['gpu_utilization', 'gpu_memory_percent']:
+            value = getattr(self, field_name)
+            if value is not None and not 0 <= value <= 100:
+                raise ValueError(f"{field_name} must be between 0 and 100")
 
 @dataclass
 class PerformanceThresholds:
-    """Performance thresholds for monitoring."""
-    MAX_QUERY_LATENCY_MS: float = 100.0  # 100ms max query time
-    MAX_MEMORY_USAGE_GB: float = 2.0      # 2GB max memory usage
-    MIN_CACHE_HIT_RATE: float = 0.90      # 90% minimum cache hit rate
+    """Performance thresholds for monitoring.
+    
+    Defines acceptable ranges for various performance metrics.
+    Exceeding these thresholds triggers warnings/alerts.
+    
+    Attributes:
+        MAX_QUERY_LATENCY_MS: Maximum acceptable query response time
+        MAX_MEMORY_USAGE_GB: Maximum acceptable memory usage
+        MIN_CACHE_HIT_RATE: Minimum acceptable cache hit rate
+        ALERT_INTERVAL_SEC: Minimum time between repeated alerts
+    """
+    MAX_QUERY_LATENCY_MS: float = 100.0
+    MAX_MEMORY_USAGE_GB: float = 2.0
+    MIN_CACHE_HIT_RATE: float = 0.90
+    ALERT_INTERVAL_SEC: float = 300.0  # 5 minutes between repeated alerts
+    
+    def __post_init__(self):
+        """Validate threshold values."""
+        if self.MAX_QUERY_LATENCY_MS <= 0:
+            raise ValueError("MAX_QUERY_LATENCY_MS must be positive")
+        if self.MAX_MEMORY_USAGE_GB <= 0:
+            raise ValueError("MAX_MEMORY_USAGE_GB must be positive")
+        if not 0 <= self.MIN_CACHE_HIT_RATE <= 1:
+            raise ValueError("MIN_CACHE_HIT_RATE must be between 0 and 1")
+        if self.ALERT_INTERVAL_SEC <= 0:
+            raise ValueError("ALERT_INTERVAL_SEC must be positive")
 
 @dataclass
 class AIMetrics:
-    """AI system performance and behavior metrics."""
+    """AI system performance and behavior metrics.
+    
+    Tracks performance metrics related to AI model operations including
+    query latency, memory usage, and cache efficiency.
+    
+    Attributes:
+        query_latency_ms: Query response time in milliseconds
+        memory_usage_gb: Memory usage in gigabytes
+        token_count: Number of tokens processed
+        embedding_dimension: Dimension of embedding vectors
+        cache_hit_rate: Cache hit rate (0-1)
+        anomaly_score: Anomaly detection score (0-1)
+        threshold_violations: List of recent threshold violations
+    """
     query_latency_ms: float
     memory_usage_gb: float
     token_count: int
     embedding_dimension: int
     cache_hit_rate: float
     anomaly_score: float
+    threshold_violations: List[Tuple[str, float]] = field(default_factory=list)
+    
+    def __post_init__(self):
+        """Validate metric ranges."""
+        if self.query_latency_ms < 0:
+            raise ValueError("query_latency_ms must be non-negative")
+        if self.memory_usage_gb < 0:
+            raise ValueError("memory_usage_gb must be non-negative")
+        if self.token_count < 0:
+            raise ValueError("token_count must be non-negative")
+        if self.embedding_dimension <= 0:
+            raise ValueError("embedding_dimension must be positive")
+        if not 0 <= self.cache_hit_rate <= 1:
+            raise ValueError("cache_hit_rate must be between 0 and 1")
+        if not 0 <= self.anomaly_score <= 1:
+            raise ValueError("anomaly_score must be between 0 and 1")
     
     def check_thresholds(self) -> Dict[str, bool]:
-        """Check if metrics meet performance thresholds."""
+        """Check if metrics meet performance thresholds.
+        
+        Returns:
+            Dict mapping metric names to boolean threshold compliance.
+            
+        Side Effects:
+            Records threshold violations in threshold_violations list.
+        """
         thresholds = PerformanceThresholds()
-        return {
+        results = {
             "query_latency": self.query_latency_ms <= thresholds.MAX_QUERY_LATENCY_MS,
             "memory_usage": self.memory_usage_gb <= thresholds.MAX_MEMORY_USAGE_GB,
             "cache_hit_rate": self.cache_hit_rate >= thresholds.MIN_CACHE_HIT_RATE
         }
+        
+        # Record violations with their values
+        timestamp = datetime.now().isoformat()
+        for metric, compliant in results.items():
+            if not compliant:
+                value = getattr(self, f"{metric}_ms" if metric == "query_latency" else 
+                                    f"{metric}_gb" if metric == "memory_usage" else
+                                    metric)
+                self.threshold_violations.append((timestamp, metric, value))
+        
+        return results
 
 @dataclass
 class GameplayMetrics:
