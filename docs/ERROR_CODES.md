@@ -7,6 +7,18 @@
 - 1003: GPU metrics collection failed
 - 1004: System metrics validation failed
 
+## Metrics Collection (1500-1599)
+- 1500: Failed to record metric
+- 1501: Invalid metric name
+- 1502: Invalid metric value
+- 1503: Metric validation failed
+- 1504: Context validation failed
+- 1505: Failed to save metrics to disk
+- 1506: Failed to load metrics from disk
+- 1507: Failed to analyze metrics
+- 1508: Failed to generate suggestions
+- 1509: Failed to calculate statistics
+
 ## AI Metrics (2000-2999)
 - 2000: Query latency exceeds threshold
 - 2001: Memory usage exceeds threshold
