@@ -2,6 +2,7 @@ from typing import Any, Dict, Optional
 from numpy.typing import NDArray
 import numpy as np
 from datetime import datetime
+from utils.retry import retry_on_exception
 import logging
 
 logger = logging.getLogger(__name__)
@@ -83,6 +84,7 @@ class Entity:
             "power": float(self.power)
         }
 
+    @retry_on_exception(max_retries=3, delay=2, exceptions=(Exception,))
     def add_to_chromadb(self, collection: Any) -> None:
         """Add the entity's embedding and metadata to the ChromaDB collection.
         

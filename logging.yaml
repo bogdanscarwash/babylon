@@ -1,0 +1,25 @@
+version: 1
+disable_existing_loggers: False
+formatters:
+  standard:
+    format: '%(asctime)s [%(levelname)s] %(name)s: %(message)s'
+  json:
+    class: pythonjsonlogger.jsonlogger.JsonFormatter
+    format: '%(asctime)s %(levelname)s %(name)s %(message)s'
+
+handlers:
+  console:
+    class: logging.StreamHandler
+    level: INFO
+    formatter: standard
+    stream: ext://sys.stdout
+  file:
+    class: logging.FileHandler
+    level: DEBUG
+    formatter: json
+    filename: 'logs/gameplay.log'
+
+loggers:
+  '':
+    level: DEBUG
+    handlers: [console, file]

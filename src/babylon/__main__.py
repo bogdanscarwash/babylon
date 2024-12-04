@@ -11,6 +11,7 @@ import shutil
 from datetime import datetime
 from sentence_transformers import SentenceTransformer
 from config.base import BaseConfig as Config
+from config.logging_config import setup_logging
 from entities.entity import Entity
 from data.entity_registry import EntityRegistry
 from data.models.event import Event
@@ -34,8 +35,8 @@ def handle_event(event: Event, game_state: Dict[str, Any]) -> None:
         event: The Event instance to process
         game_state: The current game state to modify
     """
-    print(f"Event Occurred: {event.name}")
-    print(event.description)
+    logger.info(f"Event Occurred: {event.name}")
+    logger.debug(f"Event Description: {event.description}")
     for effect in event.effects:
         effect.apply(game_state)
 
@@ -79,9 +80,9 @@ def handle_event(event: Event, game_state: Dict[str, Any]) -> None:
         "event_history": []                      # History of processed events
     }
 
-    print(f"Running with SECRET_KEY={Config.SECRET_KEY}")
-    print(f"Database URL: {Config.DATABASE_URL}")
-    print(f"Debug mode: {Config.DEBUG}")
+    logger.info(f"Running with SECRET_KEY={Config.SECRET_KEY}")
+    logger.info(f"Database URL: {Config.DATABASE_URL}")
+    logger.info(f"Debug mode: {Config.DEBUG}")
 
     # Initialize all_events list
     all_events: List[Event] = []  # Populate this list with Event instances
@@ -167,6 +168,8 @@ def main() -> None:
        - Processes queued events
        - Visualizes the game state
     """
+    setup_logging()
+
     # Prompt user for backup directory
     backup_dir = input("Enter the path to the backup directory (or press Enter to skip restore): ")
     if backup_dir:
