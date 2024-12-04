@@ -104,6 +104,69 @@ class EntityRegistry:
     def get_deleted_entities(self) -> Dict[str, datetime]:
         """Get IDs and deletion times of deleted entities."""
         return self._deleted_entities.copy()
+        
+    def find_similar_entities(
+        self,
+        entity_id: str,
+        n_results: int = 5,
+        min_similarity: float = 0.7,
+        filter_criteria: Optional[Dict[str, Any]] = None
+    ) -> List[Entity]:
+        """Find similar entities using kNN search with optional filtering.
+        
+        Args:
+            entity_id: ID of the entity to find similarities for
+            n_results: Maximum number of similar entities to return
+            min_similarity: Minimum similarity threshold (0.0 to 1.0)
+            filter_criteria: Optional dict of metadata filters (e.g., {"type": "Class"})
+            
+        Returns:
+            List[Entity]: List of similar entities, sorted by similarity
+            
+        Raises:
+            ValueError: If entity_id not found or ChromaDB not configured
+        """
+        if not self._chroma_collection:
+            raise ValueError("ChromaDB collection not configured")
+            
+        entity = self.get_entity(entity_id)
+        if not entity or entity.embedding is None:
+            raise ValueError(f"Entity {entity_id} not found or has no embedding")
+            
+        # Construct query parameters
+        query_params = {
+            "query_embeddings": [entity.embedding],
+            "n_results": n_results + 1,  # Add 1 to account for self-match
+            "include": ["metadatas", "distances", "documents"]
+        }
+        
+        # Add metadata filters if provided
+        if filter_criteria:
+            query_params["where"] = filter_criteria
+            
+        # Execute search
+        results = self._chroma_collection.query(**query_params)
+        
+        # Process results
+        similar_entities = []
+        for i, (doc_id, distance) in enumerate(zip(results["ids"][0], results["distances"][0])):
+            # Skip the query entity itself
+            if doc_id == entity_id:
+                continue
+                
+            # Convert distance to similarity score (1.0 - normalized_distance)
+            similarity = 1.0 - (distance / 2.0)  # Assuming normalized distance
+            
+            # Apply similarity threshold
+            if similarity >= min_similarity:
+                found_entity = self.get_entity(doc_id)
+                if found_entity:
+                    similar_entities.append(found_entity)
+                    
+            if len(similar_entities) >= n_results:
+                break
+                
+        return similar_entities
     
     def count_entities(self) -> int:
         """Get the total number of active entities."""
