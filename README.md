@@ -119,9 +119,21 @@ For more detailed information, refer to the [MECHANICS.md](docs/MECHANICS.md) an
 
 The game currently incorporates AI models for:
 
+- **Vector Database**: ChromaDB integration for efficient entity storage and similarity search
 - **Contradiction Analysis**: AI-powered analysis of societal contradictions and their relationships
 - **Event Generation**: Smart event creation based on game state and historical patterns
 - **Visualization**: Intelligent layout and organization of network graphs and dialectical maps
+
+Key Features:
+- **Entity Embeddings**: Vector representations of game entities using SentenceTransformer
+- **Similarity Search**: Fast kNN search for finding related entities and patterns
+- **Persistent Storage**: DuckDB+Parquet backend for efficient data management
+- **Automatic Backups**: Scheduled backups and restore capabilities
+
+Performance Metrics:
+- Query response < 100ms
+- Memory usage < 2GB
+- Cache hit rate > 90%
 
 Planned AI features include:
 - **NPC Behaviors**: More realistic and dynamic non-player character interactions
