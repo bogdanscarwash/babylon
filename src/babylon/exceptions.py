@@ -356,53 +356,8 @@ class GameStateError(BabylonError):
 class BackupError(BabylonError):
     """Raised when backup or restore operations fail.
     
-    This exception handles all backup/restore errors including:
-    - Backup creation failures (BACKUP_001 to BACKUP_019)
-    - Restore validation errors (BACKUP_020 to BACKUP_039)
-    - Storage space issues (BACKUP_040 to BACKUP_059)
-    - File system errors (BACKUP_060 to BACKUP_079)
-    - Data integrity problems (BACKUP_080 to BACKUP_099)
-    
-    The backup system ensures:
-    - Reliable state preservation
-    - Data integrity verification
-    - Space management
-    - Atomic operations
-    - Version control
-    
-    Attributes:
-        message (str): Detailed backup error description
-        error_code (str): BACKUP_XXX format code
-        backup_path (Optional[str]): Path to backup location
-        required_space (Optional[int]): Required storage space in bytes
-        available_space (Optional[int]): Available storage space in bytes
-        
-    Example:
-        try:
-            if available_space < required_space:
-                raise BackupError(
-                    message="Insufficient disk space for backup",
-                    error_code="BACKUP_041",
-                    backup_path="/path/to/backup",
-                    required_space=required_space,
-                    available_space=available_space
-                )
-        except BackupError as e:
-            logger.error(
-                f"Backup failed: {e.message} "
-                f"(Path: {e.backup_path}, "
-                f"Required: {e.required_space}, "
-                f"Available: {e.available_space})"
-            )
-            
-    Common Error Codes:
-        BACKUP_001: Backup creation failed
-        BACKUP_021: Restore validation failed
-        BACKUP_041: Insufficient storage space
-        BACKUP_061: File system error
-        BACKUP_081: Data integrity error
+    See ERROR_CODES.md for detailed documentation of BACKUP_XXX error codes.
     """
-    
     def __init__(self, message: str, error_code: str, backup_path: Optional[str] = None,
                  required_space: Optional[int] = None, available_space: Optional[int] = None):
         super().__init__(message, error_code)
