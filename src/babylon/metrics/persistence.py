@@ -1,31 +1,41 @@
 """Metric persistence module.
 
 Provides functionality to store and retrieve performance metrics using SQLite.
-Implements efficient storage and querying of time-series metric data.
+Implements efficient storage and querying of time-series metric data with support
+for data retention policies and time-range queries.
+
+Classes:
+    MetricsPersistence: Main class handling all database operations for metrics.
 """
 
 import sqlite3
 import json
 from datetime import datetime, timedelta
-from typing import Dict, Any, List, Optional
-from dataclasses import asdict
+from typing import List, Optional
 from contextlib import contextmanager
-from pathlib import Path
 
 from .performance_metrics import SystemMetrics, AIMetrics, GameplayMetrics
 
+
 class MetricsPersistence:
-    """Handles persistence of performance metrics to SQLite database."""
+    """Handles persistence of performance metrics to SQLite database.
     
+    This class provides methods to store and retrieve different types of metrics
+    (system, AI, gameplay) using SQLite as the backing store. It handles database
+    initialization, connection management, and data cleanup.
+    
+    Attributes:
+        db_path (str): Path to the SQLite database file
+    """
     def __init__(self, db_path: str = "metrics.db"):
         """Initialize metrics persistence.
         
         Args:
-            db_path: Path to SQLite database file
+            db_path: Path to SQLite database file. Defaults to 'metrics.db'
+                    in the current directory.
         """
         self.db_path = db_path
         self._init_db()
-    
     def _init_db(self) -> None:
         """Initialize database schema if not exists."""
         with self._get_connection() as conn:
@@ -60,11 +70,11 @@ class MetricsPersistence:
                     user_choices TEXT
                 );
 
-                CREATE INDEX IF NOT EXISTS idx_system_metrics_timestamp 
+                CREATE INDEX IF NOT EXISTS idx_system_metrics_timestamp
                 ON system_metrics(timestamp);
-                CREATE INDEX IF NOT EXISTS idx_ai_metrics_timestamp 
+                CREATE INDEX IF NOT EXISTS idx_ai_metrics_timestamp
                 ON ai_metrics(timestamp);
-                CREATE INDEX IF NOT EXISTS idx_gameplay_metrics_timestamp 
+                CREATE INDEX IF NOT EXISTS idx_gameplay_metrics_timestamp
                 ON gameplay_metrics(timestamp);
             """)
 
@@ -137,8 +147,11 @@ class MetricsPersistence:
                 json.dumps(metrics.user_choices)
             ))
 
-    def get_system_metrics(self, start_time: Optional[str] = None,
-                         end_time: Optional[str] = None) -> List[SystemMetrics]:
+    def get_system_metrics(
+        self,
+        start_time: Optional[str] = None,
+        end_time: Optional[str] = None
+    ) -> List[SystemMetrics]:
         """Retrieve system metrics within time range.
         
         Args:
@@ -165,8 +178,11 @@ class MetricsPersistence:
             cursor = conn.execute(query, params)
             return [SystemMetrics(*row) for row in cursor.fetchall()]
 
-    def get_ai_metrics(self, start_time: Optional[str] = None,
-                      end_time: Optional[str] = None) -> List[AIMetrics]:
+    def get_ai_metrics(
+        self,
+        start_time: Optional[str] = None,
+        end_time: Optional[str] = None
+    ) -> List[AIMetrics]:
         """Retrieve AI metrics within time range."""
         query = "SELECT * FROM ai_metrics"
         params = []
@@ -196,8 +212,11 @@ class MetricsPersistence:
                 for row in cursor.fetchall()
             ]
 
-    def get_gameplay_metrics(self, start_time: Optional[str] = None,
-                           end_time: Optional[str] = None) -> List[GameplayMetrics]:
+    def get_gameplay_metrics(
+        self,
+        start_time: Optional[str] = None,
+        end_time: Optional[str] = None
+    ) -> List[GameplayMetrics]:
         """Retrieve gameplay metrics within time range."""
         query = "SELECT * FROM gameplay_metrics"
         params = []
