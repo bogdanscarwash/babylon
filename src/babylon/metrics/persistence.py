@@ -6,7 +6,7 @@ Implements efficient storage and querying of time-series metric data.
 
 import sqlite3
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional
 from dataclasses import asdict
 from contextlib import contextmanager
