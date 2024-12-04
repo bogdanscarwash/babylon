@@ -11,7 +11,7 @@ import os
 import shutil
 from datetime import datetime
 from sentence_transformers import SentenceTransformer
-from config.base import BaseConfig as Config
+from babylon.config.base import BaseConfig as Config
 from config.logging_config import setup_logging
 from entities.entity import Entity
 from data.entity_registry import EntityRegistry
