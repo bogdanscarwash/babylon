@@ -17,7 +17,7 @@ from babylon.entities.entity import Entity
 from babylon.data.entity_registry import EntityRegistry
 from babylon.data.models.event import Event
 from babylon.systems.contradiction_analysis import ContradictionAnalysis
-from utils.backup import backup_chroma, restore_chroma
+from babylon.utils.backup import backup_chroma, restore_chroma
 from data.models.economy import Economy
 from data.models.politics import Politics
 
