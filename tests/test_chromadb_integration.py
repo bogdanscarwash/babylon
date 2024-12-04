@@ -2,6 +2,8 @@ import unittest
 import os
 import shutil
 import tempfile
+import time
+from concurrent.futures import ThreadPoolExecutor
 import numpy as np
 import chromadb
 from src.babylon.config.chromadb_config import ChromaDBConfig
@@ -115,8 +117,7 @@ class TestChromaDBIntegration(unittest.TestCase):
         restore_chroma(backup_dir)
 
         # Initialize a new client and verify data is restored
-        new_client = chromadb.Client(Settings(
-            chroma_db_impl="duckdb+parquet",
+        new_client = chromadb.Client(ChromaDBConfig.get_settings(
             persist_directory=self.temp_persist_dir
         ))
         collection = new_client.get_collection(name='test_entities')
@@ -195,8 +196,7 @@ class TestChromaDBIntegration(unittest.TestCase):
         self.client.reset()
 
         # Re-initialize client and collection
-        new_client = chromadb.Client(Settings(
-            chroma_db_impl="duckdb+parquet",
+        new_client = chromadb.Client(ChromaDBConfig.get_settings(
             persist_directory=self.temp_persist_dir
         ))
         collection = new_client.get_collection(name='test_entities')
