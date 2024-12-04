@@ -17,8 +17,11 @@ check_python_files() {
     git diff --cached --name-status | grep -E '^[AM].*\.py$' | cut -f2
 }
 
+# Get modified Python files
+python_files=$(check_python_files)
+
 # Only run checks if Python files were modified and exist
-if python_files=$(check_python_files); then
+if [ -n "$python_files" ]; then
     # Filter to only existing files
     existing_files=""
     for file in $python_files; do
@@ -41,15 +44,15 @@ if python_files=$(check_python_files); then
 
     # Format code with Black
     echo "🎨 Formatting code with Black..."
-    python -m black $(check_python_files)
+    python -m black $existing_files
 
     # Sort imports with isort
     echo "📝 Sorting imports with isort..."
-    python -m isort $(check_python_files)
+    python -m isort $existing_files
 
     # Run Flake8
     echo "🔍 Running Flake8..."
-    if ! python -m flake8 $(check_python_files); then
+    if ! python -m flake8 $existing_files; then
         echo "${RED}❌ Flake8 check failed. Please fix the issues above.${NC}"
         exit 1
     fi
