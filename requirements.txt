@@ -6,3 +6,5 @@ pytest>=6.0.0
 hatchling>=1.26.3
 tk>=0.1.0
 pandas>=1.0.0
+chromadb>=0.4.5
+sentence-transformers>=2.2.2
