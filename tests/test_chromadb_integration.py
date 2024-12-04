@@ -14,14 +14,16 @@ from src.babylon.utils.backup import backup_chroma, restore_chroma
 class TestChromaDBIntegration(unittest.TestCase):
     def setUp(self):
         """Set up test environment with temporary ChromaDB instance."""
-        # Create temporary test directory
+        # Create temporary test directory with proper permissions
         self.temp_dir = tempfile.mkdtemp()
+        os.chmod(self.temp_dir, 0o755)
         
         # Configure ChromaDB with test settings
         self.settings = ChromaDBConfig.get_settings(
             persist_directory=self.temp_dir,
             allow_reset=True,
-            anonymized_telemetry=False
+            anonymized_telemetry=False,
+            sqlite_database=":memory:"  # Use in-memory SQLite for tests
         )
         
         # Initialize ChromaDB client
