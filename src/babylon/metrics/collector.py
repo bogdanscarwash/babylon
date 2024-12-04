@@ -8,7 +8,9 @@ from pathlib import Path
 from typing import Dict, List, Any, Optional
 
 class MetricsCollector:
-    """Collects and analyzes performance metrics for object tracking."""
+    """Collects and analyzes performance metrics for object tracking.
+    
+    See ERROR_CODES.md section 1500-1599 for error handling details."""
     
     def __init__(self, log_dir: Optional[Path] = None) -> None:
         from collections import Counter, deque
