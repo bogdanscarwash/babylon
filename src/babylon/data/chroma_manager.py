@@ -6,6 +6,7 @@ from chromadb.errors import ChromaError, NoIndexException, InvalidDimensionExcep
 import logging
 from datetime import datetime
 import time
+import uuid
 from config.base import BaseConfig as Config
 from utils.retry import retry_on_exception
 
