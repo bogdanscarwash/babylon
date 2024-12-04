@@ -1,6 +1,7 @@
 from typing import Any, Dict, Optional
 from numpy.typing import NDArray
 import numpy as np
+from datetime import datetime
 
 class Entity:
     """Base class for all game entities.
@@ -33,6 +34,10 @@ class Entity:
         
         # Vector embedding
         self.embedding: Optional[NDArray] = None
+        
+        # Lifecycle tracking
+        self.created_at = datetime.now()
+        self.last_updated = self.created_at
 
     def generate_embedding(self, embedding_model: Any) -> NDArray:
         """Generate a vector embedding for the entity using the given embedding model.
