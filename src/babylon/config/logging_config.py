@@ -12,6 +12,7 @@ import logging
 import logging.handlers
 import os
 from typing import Optional, Dict, Any
+from babylon.logging_handlers.database_handler import DatabaseHandler
 from datetime import datetime
 import uuid
 from pythonjsonlogger import jsonlogger
@@ -116,7 +117,9 @@ def setup_logging() -> None:
     metrics_handler.setFormatter(json_formatter)
     metrics_handler.setLevel(logging.INFO)
     
-    # Configure root logger
+    # Add the database handler
+    db_handler = DatabaseHandler()
+    db_handler.setLevel(logging.INFO)
     root_logger = logging.getLogger()
     root_logger.setLevel(logging.DEBUG)
     

@@ -1,4 +1,6 @@
 from collections import Counter, deque
+from .database import SessionLocal
+from .models import Metric
 from datetime import datetime
 import json
 import logging
@@ -13,13 +15,8 @@ class MetricsCollector:
         self.log_dir = log_dir or Path("logs/metrics")
         self.log_dir.mkdir(parents=True, exist_ok=True)
         
-        # Configure logging with timestamp, component name, and message
-        logging.basicConfig(
-            filename=self.log_dir / "metrics.log",
-            level=logging.INFO,
-            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-        )
-        
+        # Initialize database session
+        self.db = SessionLocal()
         # Initialize metrics storage containers
         self.metrics = {
             'object_access': Counter(),  # Tracks access frequency per object
@@ -43,7 +40,11 @@ class MetricsCollector:
             'cached_objects': 0   # Objects currently in cache
         }
 
-    def record_object_access(self, object_id: str, context_level: str) -> None:
+    def record_metric(self, name: str, value: float, context: str = '') -> None:
+        """Record a metric in the database."""
+        metric = Metric(name=name, value=value, context=context)
+        self.db.add(metric)
+        self.db.commit()
         """Record an object access event."""
         self.metrics['object_access'][object_id] += 1
         logging.info(f"Object accessed: {object_id} in {context_level}")

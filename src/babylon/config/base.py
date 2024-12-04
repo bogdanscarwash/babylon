@@ -30,7 +30,7 @@ class BaseConfig:
     SECRET_KEY = os.getenv('SECRET_KEY', 'default-secret-key')
     
     # Database settings
-    DATABASE_URL = os.getenv('DATABASE_URL', 'sqlite:///default.db')
+    DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://username:password@localhost:5432/babylon_db')
     
     # Application mode flags
     DEBUG = False
