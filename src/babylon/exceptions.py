@@ -75,11 +75,11 @@ class BabylonError(Exception):
             logger.error(f"{e.error_code}: {e.message}")
             
     Error Code Ranges:
-        - GAME_001-099: Core game system errors
-        - DB_001-099: Database operation errors
-        - ENT_001-099: Entity management errors
-        - CFG_001-099: Configuration errors
-        - BACKUP_001-099: Backup/restore errors
+        - GAME_001 to GAME_099: Core game system errors
+        - DB_001 to DB_099: Database operation errors
+        - ENT_001 to ENT_099: Entity management errors
+        - CFG_001 to CFG_099: Configuration errors
+        - BACKUP_001 to BACKUP_099: Backup/restore errors
     """
     def __init__(self, message: str, error_code: str = None):
         self.message = message
@@ -90,11 +90,11 @@ class DatabaseError(BabylonError):
     """Raised when database operations fail.
     
     Used for errors related to ChromaDB operations including:
-    - Connection failures (DB_001-019)
-    - Query execution errors (DB_020-039)
-    - Data integrity issues (DB_040-059)
-    - Backup/restore operations (DB_060-079)
-    - Performance issues (DB_080-099)
+    - Connection failures (DB_001 to DB_019)
+    - Query execution errors (DB_020 to DB_039)
+    - Data integrity issues (DB_040 to DB_059)
+    - Backup/restore operations (DB_060 to DB_079)
+    - Performance issues (DB_080 to DB_099)
     
     Attributes:
         message (str): Detailed error description
@@ -122,11 +122,11 @@ class EntityError(BabylonError):
     """Base class for entity-related errors.
     
     Parent class for all exceptions related to game entities and their lifecycle:
-    - Entity creation/deletion (ENT_001-019)
-    - Entity state management (ENT_020-039)
-    - Entity relationships (ENT_040-059)
-    - Entity validation (ENT_060-079)
-    - Entity persistence (ENT_080-099)
+    - Entity creation/deletion (ENT_001 to ENT_019)
+    - Entity state management (ENT_020 to ENT_039)
+    - Entity relationships (ENT_040 to ENT_059)
+    - Entity validation (ENT_060 to ENT_079)
+    - Entity persistence (ENT_080 to ENT_099)
     
     This class provides common functionality for entity-specific errors while
     maintaining the error code hierarchy. Child classes should use appropriate
@@ -160,10 +160,10 @@ class EntityNotFoundError(EntityError):
     - Entity type mismatch (ENT_460)
     
     Error Code Ranges:
-        ENT_404-409: Basic lookup failures
-        ENT_410-419: Deleted entity access
-        ENT_450-459: Reference resolution errors
-        ENT_460-469: Type/role mismatch errors
+        ENT_404 to ENT_409: Basic lookup failures
+        ENT_410 to ENT_419: Deleted entity access
+        ENT_450 to ENT_459: Reference resolution errors
+        ENT_460 to ENT_469: Type/role mismatch errors
     
     Attributes:
         message (str): Detailed error description
@@ -198,11 +198,11 @@ class EntityValidationError(EntityError):
     """Raised when entity validation fails during creation or updates.
     
     This exception handles all validation failures including:
-    - Data type validation (ENT_601-619)
-    - Value range validation (ENT_620-639)
-    - Required field validation (ENT_640-659)
-    - State transition validation (ENT_660-679)
-    - Relationship validation (ENT_680-699)
+    - Data type validation (ENT_601 to ENT_619)
+    - Value range validation (ENT_620 to ENT_639)
+    - Required field validation (ENT_640 to ENT_659)
+    - State transition validation (ENT_660 to ENT_679)
+    - Relationship validation (ENT_680 to ENT_699)
     
     The validation system ensures entities maintain consistency with:
     - Data type constraints
@@ -255,11 +255,11 @@ class ConfigurationError(BabylonError):
     """Raised when configuration loading or validation fails.
     
     This exception handles all configuration-related errors including:
-    - Environment variable issues (CFG_001-019)
-    - Configuration file problems (CFG_020-039)
-    - Value validation failures (CFG_040-059)
-    - Dependency configuration (CFG_060-079)
-    - Runtime reconfiguration (CFG_080-099)
+    - Environment variable issues (CFG_001 to CFG_019)
+    - Configuration file problems (CFG_020 to CFG_039)
+    - Value validation failures (CFG_040 to CFG_059)
+    - Dependency configuration (CFG_060 to CFG_079)
+    - Runtime reconfiguration (CFG_080 to CFG_099)
     
     The configuration system validates:
     - Required settings presence
@@ -309,11 +309,11 @@ class GameStateError(BabylonError):
     """Raised when game state consistency or transitions fail.
     
     This exception handles all game state errors including:
-    - State consistency violations (GAME_001-019)
-    - Invalid state transitions (GAME_020-039)
-    - Rule enforcement failures (GAME_040-059)
-    - System synchronization issues (GAME_060-079)
-    - Resource management problems (GAME_080-099)
+    - State consistency violations (GAME_001 to GAME_019)
+    - Invalid state transitions (GAME_020 to GAME_039)
+    - Rule enforcement failures (GAME_040 to GAME_059)
+    - System synchronization issues (GAME_060 to GAME_079)
+    - Resource management problems (GAME_080 to GAME_099)
     
     The game state system ensures:
     - State consistency across systems
@@ -366,11 +366,11 @@ class BackupError(BabylonError):
     """Raised when backup or restore operations fail.
     
     This exception handles all backup/restore errors including:
-    - Backup creation failures (BACKUP_001-019)
-    - Restore validation errors (BACKUP_020-039)
-    - Storage space issues (BACKUP_040-059)
-    - File system errors (BACKUP_060-079)
-    - Data integrity problems (BACKUP_080-099)
+    - Backup creation failures (BACKUP_001 to BACKUP_019)
+    - Restore validation errors (BACKUP_020 to BACKUP_039)
+    - Storage space issues (BACKUP_040 to BACKUP_059)
+    - File system errors (BACKUP_060 to BACKUP_079)
+    - Data integrity problems (BACKUP_080 to BACKUP_099)
     
     The backup system ensures:
     - Reliable state preservation
