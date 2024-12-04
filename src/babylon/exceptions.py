@@ -432,6 +432,7 @@ class BackupError(BabylonError):
         BACKUP_061: File system error
         BACKUP_081: Data integrity error
     """
+    
     def __init__(self, message: str, error_code: str, backup_path: Optional[str] = None,
                  required_space: Optional[int] = None, available_space: Optional[int] = None):
         super().__init__(message, error_code)
