@@ -148,70 +148,270 @@ class EntityError(BabylonError):
     pass
 
 class EntityNotFoundError(EntityError):
-    """Raised when an entity cannot be found.
+    """Raised when an entity cannot be found in the registry.
     
-    Used when:
-    - Looking up entities by ID
-    - Accessing deleted entities
-    - Resolving entity references
+    This exception is used for all entity lookup failures including:
+    - Entity ID not found in registry (ENT_404)
+    - Entity was previously deleted (ENT_410)
+    - Reference to non-existent entity (ENT_450)
+    - Entity type mismatch (ENT_460)
     
+    Error Code Ranges:
+        ENT_404-409: Basic lookup failures
+        ENT_410-419: Deleted entity access
+        ENT_450-459: Reference resolution errors
+        ENT_460-469: Type/role mismatch errors
+    
+    Attributes:
+        message (str): Detailed error description
+        error_code (str): ENT_XXX format code
+        entity_id (Optional[str]): ID of the entity that wasn't found
+        
     Example:
-        raise EntityNotFoundError(f"Entity {entity_id} not found", "ENT_404")
+        try:
+            entity = registry.get_entity(entity_id)
+            if not entity:
+                raise EntityNotFoundError(
+                    message=f"Entity {entity_id} not found in registry",
+                    error_code="ENT_404",
+                    entity_id=entity_id
+                )
+        except EntityNotFoundError as e:
+            logger.error(f"Entity lookup failed: {e.message} ({e.error_code})")
+            # Handle missing entity appropriately
+            
+    Common Error Codes:
+        ENT_404: Entity not found in registry
+        ENT_410: Attempted access to deleted entity
+        ENT_450: Invalid entity reference
+        ENT_460: Entity type mismatch
     """
+    def __init__(self, message: str, error_code: str, entity_id: Optional[str] = None):
+        super().__init__(message, error_code)
+        self.entity_id = entity_id
     pass
 
 class EntityValidationError(EntityError):
-    """Raised when entity validation fails.
+    """Raised when entity validation fails during creation or updates.
     
-    Used for:
-    - Invalid attribute values
-    - Missing required fields
-    - Constraint violations
-    - State transition errors
+    This exception handles all validation failures including:
+    - Data type validation (ENT_601-619)
+    - Value range validation (ENT_620-639)
+    - Required field validation (ENT_640-659)
+    - State transition validation (ENT_660-679)
+    - Relationship validation (ENT_680-699)
     
+    The validation system ensures entities maintain consistency with:
+    - Data type constraints
+    - Value range limits
+    - Required attribute presence
+    - Valid state transitions
+    - Relationship integrity rules
+    
+    Attributes:
+        message (str): Detailed validation error description
+        error_code (str): ENT_XXX format code
+        field_name (Optional[str]): Name of the invalid field
+        current_value: Current invalid value
+        allowed_values: List or description of allowed values
+        
     Example:
-        raise EntityValidationError("Invalid power value: must be 0-100", "ENT_VAL_001")
+        try:
+            if not (0 <= power_value <= 100):
+                raise EntityValidationError(
+                    message="Power value must be between 0 and 100",
+                    error_code="ENT_621",
+                    field_name="power",
+                    current_value=power_value,
+                    allowed_values="0-100"
+                )
+        except EntityValidationError as e:
+            logger.error(
+                f"Validation failed: {e.message} "
+                f"(Field: {e.field_name}, "
+                f"Value: {e.current_value}, "
+                f"Allowed: {e.allowed_values})"
+            )
+            
+    Common Error Codes:
+        ENT_601: Invalid data type
+        ENT_621: Value out of range
+        ENT_641: Missing required field
+        ENT_661: Invalid state transition
+        ENT_681: Invalid relationship
     """
+    def __init__(self, message: str, error_code: str, field_name: Optional[str] = None,
+                 current_value: Any = None, allowed_values: Any = None):
+        super().__init__(message, error_code)
+        self.field_name = field_name
+        self.current_value = current_value
+        self.allowed_values = allowed_values
     pass
 
 class ConfigurationError(BabylonError):
-    """Raised when there are configuration issues.
+    """Raised when configuration loading or validation fails.
     
-    Used for:
-    - Missing environment variables
-    - Invalid configuration values
-    - Configuration conflicts
-    - Initialization failures
+    This exception handles all configuration-related errors including:
+    - Environment variable issues (CFG_001-019)
+    - Configuration file problems (CFG_020-039)
+    - Value validation failures (CFG_040-059)
+    - Dependency configuration (CFG_060-079)
+    - Runtime reconfiguration (CFG_080-099)
     
+    The configuration system validates:
+    - Required settings presence
+    - Value type correctness
+    - Value range constraints
+    - Setting dependencies
+    - Configuration consistency
+    
+    Attributes:
+        message (str): Detailed configuration error description
+        error_code (str): CFG_XXX format code
+        setting_name (Optional[str]): Name of the problematic setting
+        current_value (Optional[Any]): Current invalid value
+        required_type (Optional[type]): Expected type for the setting
+        
     Example:
-        raise ConfigurationError("Missing required SECRET_KEY", "CFG_001")
+        try:
+            if 'SECRET_KEY' not in os.environ:
+                raise ConfigurationError(
+                    message="Missing required SECRET_KEY environment variable",
+                    error_code="CFG_001",
+                    setting_name="SECRET_KEY"
+                )
+        except ConfigurationError as e:
+            logger.error(
+                f"Configuration error: {e.message} "
+                f"(Setting: {e.setting_name})"
+            )
+            sys.exit(1)
+            
+    Common Error Codes:
+        CFG_001: Missing environment variable
+        CFG_020: Configuration file not found
+        CFG_040: Invalid setting value
+        CFG_060: Missing dependency configuration
+        CFG_080: Invalid runtime reconfiguration
     """
+    def __init__(self, message: str, error_code: str, setting_name: Optional[str] = None,
+                 current_value: Any = None, required_type: Optional[type] = None):
+        super().__init__(message, error_code)
+        self.setting_name = setting_name
+        self.current_value = current_value
+        self.required_type = required_type
     pass
 
 class GameStateError(BabylonError):
-    """Raised when game state becomes invalid.
+    """Raised when game state consistency or transitions fail.
     
-    Used for:
-    - Inconsistent game state
-    - Invalid state transitions
-    - Rule violations
-    - System synchronization errors
+    This exception handles all game state errors including:
+    - State consistency violations (GAME_001-019)
+    - Invalid state transitions (GAME_020-039)
+    - Rule enforcement failures (GAME_040-059)
+    - System synchronization issues (GAME_060-079)
+    - Resource management problems (GAME_080-099)
     
+    The game state system ensures:
+    - State consistency across systems
+    - Valid state transitions
+    - Rule compliance
+    - System synchronization
+    - Resource integrity
+    
+    Attributes:
+        message (str): Detailed state error description
+        error_code (str): GAME_XXX format code
+        current_state (Optional[str]): Current invalid state
+        expected_state (Optional[str]): Expected valid state
+        affected_systems (Optional[List[str]]): Impacted game systems
+        
     Example:
-        raise GameStateError("Invalid event sequence detected", "GAME_002")
+        try:
+            if not self._validate_state_transition(current_state, new_state):
+                raise GameStateError(
+                    message="Invalid state transition attempted",
+                    error_code="GAME_021",
+                    current_state=current_state,
+                    expected_state=new_state,
+                    affected_systems=['economy', 'politics']
+                )
+        except GameStateError as e:
+            logger.error(
+                f"Game state error: {e.message} "
+                f"(Current: {e.current_state}, "
+                f"Expected: {e.expected_state}, "
+                f"Systems: {', '.join(e.affected_systems)})"
+            )
+            
+    Common Error Codes:
+        GAME_001: State consistency violation
+        GAME_021: Invalid state transition
+        GAME_041: Rule violation detected
+        GAME_061: System synchronization failure
+        GAME_081: Resource integrity error
     """
+    def __init__(self, message: str, error_code: str, current_state: Optional[str] = None,
+                 expected_state: Optional[str] = None, affected_systems: Optional[List[str]] = None):
+        super().__init__(message, error_code)
+        self.current_state = current_state
+        self.expected_state = expected_state
+        self.affected_systems = affected_systems or []
     pass
 
 class BackupError(BabylonError):
-    """Raised when backup/restore operations fail.
+    """Raised when backup or restore operations fail.
     
-    Used for:
-    - Backup creation failures
-    - Restore validation errors
-    - Disk space issues
-    - File system errors
+    This exception handles all backup/restore errors including:
+    - Backup creation failures (BACKUP_001-019)
+    - Restore validation errors (BACKUP_020-039)
+    - Storage space issues (BACKUP_040-059)
+    - File system errors (BACKUP_060-079)
+    - Data integrity problems (BACKUP_080-099)
     
+    The backup system ensures:
+    - Reliable state preservation
+    - Data integrity verification
+    - Space management
+    - Atomic operations
+    - Version control
+    
+    Attributes:
+        message (str): Detailed backup error description
+        error_code (str): BACKUP_XXX format code
+        backup_path (Optional[str]): Path to backup location
+        required_space (Optional[int]): Required storage space in bytes
+        available_space (Optional[int]): Available storage space in bytes
+        
     Example:
-        raise BackupError("Insufficient disk space for backup", "BACKUP_001")
+        try:
+            if available_space < required_space:
+                raise BackupError(
+                    message="Insufficient disk space for backup",
+                    error_code="BACKUP_041",
+                    backup_path="/path/to/backup",
+                    required_space=required_space,
+                    available_space=available_space
+                )
+        except BackupError as e:
+            logger.error(
+                f"Backup failed: {e.message} "
+                f"(Path: {e.backup_path}, "
+                f"Required: {e.required_space}, "
+                f"Available: {e.available_space})"
+            )
+            
+    Common Error Codes:
+        BACKUP_001: Backup creation failed
+        BACKUP_021: Restore validation failed
+        BACKUP_041: Insufficient storage space
+        BACKUP_061: File system error
+        BACKUP_081: Data integrity error
     """
+    def __init__(self, message: str, error_code: str, backup_path: Optional[str] = None,
+                 required_space: Optional[int] = None, available_space: Optional[int] = None):
+        super().__init__(message, error_code)
+        self.backup_path = backup_path
+        self.required_space = required_space
+        self.available_space = available_space
     pass
