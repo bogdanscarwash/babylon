@@ -5,12 +5,16 @@ from typing import Any, Dict, List, Optional
 from dotenv import load_dotenv
 import chromadb
 from chromadb.config import Settings
+import os
+import shutil
+from datetime import datetime
 from sentence_transformers import SentenceTransformer
 from config.base import BaseConfig as Config
 from entities.entity import Entity
 from data.entity_registry import EntityRegistry
 from data.models.event import Event
 from systems.contradiction_analysis import ContradictionAnalysis
+from utils.backup import backup_chroma
 from data.models.economy import Economy
 from data.models.politics import Politics
 
