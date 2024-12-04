@@ -46,6 +46,9 @@ class MetricsPersistence:
                     in the current directory.
         """
         self.db_path = db_path
+        # Ensure parent directory exists with proper permissions
+        db_dir = os.path.dirname(os.path.abspath(db_path))
+        os.makedirs(db_dir, mode=0o755, exist_ok=True)
         self._init_db()
 
     def _init_db(self) -> None:
@@ -103,7 +106,9 @@ class MetricsPersistence:
         """
         conn = None
         try:
-            conn = sqlite3.connect(self.db_path)
+            conn = sqlite3.connect(self.db_path, timeout=20)
+            conn.execute("PRAGMA journal_mode=WAL")  # Use Write-Ahead Logging
+            conn.execute("PRAGMA busy_timeout=10000")  # 10 second timeout
             logger.debug(f"Established database connection to {self.db_path}")
             yield conn
         except sqlite3.Error as e:
