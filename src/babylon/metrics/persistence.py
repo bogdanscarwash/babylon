@@ -334,11 +334,24 @@ class MetricsPersistence:
 
     def cleanup_old_metrics(self, days_to_keep: int = 30) -> None:
         """Remove metrics older than specified days."""
-        cutoff = (datetime.now() - timedelta(days=days_to_keep)).isoformat()
-        
-        with self._get_connection() as conn:
-            for table in ['system_metrics', 'ai_metrics', 'gameplay_metrics']:
-                conn.execute(f"""
-                    DELETE FROM {table}
-                    WHERE timestamp < ?
-                """, (cutoff,))
+        try:
+            cutoff = (datetime.now() - timedelta(days=days_to_keep)).isoformat()
+            logger.info(f"Cleaning up metrics older than {cutoff}")
+            
+            with self._get_connection() as conn:
+                for table in ['system_metrics', 'ai_metrics', 'gameplay_metrics']:
+                    try:
+                        conn.execute(f"""
+                            DELETE FROM {table}
+                            WHERE timestamp < ?
+                        """, (cutoff,))
+                        logger.debug(f"Cleaned up old records from {table}")
+                    except sqlite3.Error as e:
+                        error_msg = f"Failed to clean up old metrics from {table}: {str(e)}"
+                        logger.error(error_msg)
+                        raise MetricsPersistenceError(error_msg)
+                        
+        except Exception as e:
+            error_msg = f"Metrics cleanup failed: {str(e)}"
+            logger.error(error_msg)
+            raise MetricsPersistenceError(error_msg)
