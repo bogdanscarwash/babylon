@@ -193,11 +193,16 @@ class GameplayMetrics:
 class MetricsCollector:
     """Collects and logs system, AI, and gameplay metrics."""
 
-    def __init__(self):
+    def __init__(self, persist_metrics: bool = True, db_path: str = "metrics.db"):
         self.start_time = time.time()
         self.action_count = 0
         self.event_counts = {}
         self.user_choices = {}
+        
+        self.persist_metrics = persist_metrics
+        if persist_metrics:
+            from .persistence import MetricsPersistence
+            self.persistence = MetricsPersistence(db_path)
 
     def collect_system_metrics(self) -> SystemMetrics:
         """Collect current system performance metrics."""
@@ -262,7 +267,7 @@ class MetricsCollector:
     def log_metrics(self, system_metrics: Optional[SystemMetrics] = None,
                    ai_metrics: Optional[AIMetrics] = None,
                    gameplay_metrics: Optional[GameplayMetrics] = None) -> None:
-        """Log collected metrics in JSON format."""
+        """Log collected metrics in JSON format and persist if enabled."""
         metrics_data = {
             "timestamp": datetime.now().isoformat(),
             "system": asdict(system_metrics) if system_metrics else None,
@@ -271,6 +276,14 @@ class MetricsCollector:
         }
 
         logger.info("Performance metrics", extra={"metrics": metrics_data})
+        
+        if self.persist_metrics:
+            if system_metrics:
+                self.persistence.save_system_metrics(system_metrics)
+            if ai_metrics:
+                self.persistence.save_ai_metrics(ai_metrics)
+            if gameplay_metrics:
+                self.persistence.save_gameplay_metrics(gameplay_metrics)
 
     def record_event(self, event_type: str) -> None:
         """Record occurrence of a game event."""
