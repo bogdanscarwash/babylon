@@ -90,12 +90,17 @@ def test_record_object_access(metrics_collector: MetricsCollector) -> None:
         - test_obj_1 has exactly 2 recorded accesses
         - test_obj_2 has exactly 1 recorded access
     """
-    metrics_collector.record_object_access("test_obj_1", "test_context")
-    metrics_collector.record_object_access("test_obj_1", "test_context")
-    metrics_collector.record_object_access("test_obj_2", "test_context")
-    
-    assert metrics_collector.metrics['object_access']['test_obj_1'] == 2
-    assert metrics_collector.metrics['object_access']['test_obj_2'] == 1
+    try:
+        metrics_collector.record_object_access("test_obj_1", "test_context")
+        metrics_collector.record_object_access("test_obj_1", "test_context")
+        metrics_collector.record_object_access("test_obj_2", "test_context")
+        
+        assert metrics_collector.metrics['object_access']['test_obj_1'] == 2
+        assert metrics_collector.metrics['object_access']['test_obj_2'] == 1
+    except KeyError as e:
+        pytest.fail(f"Failed to access metrics data: {str(e)}")
+    except Exception as e:
+        pytest.fail(f"Unexpected error recording object access: {str(e)}")
 
 def test_record_token_usage(metrics_collector: MetricsCollector) -> None:
     """Test recording token usage.
@@ -108,11 +113,16 @@ def test_record_token_usage(metrics_collector: MetricsCollector) -> None:
     Token usage tracking is essential for monitoring AI model consumption
     and optimizing resource usage in the game's AI systems.
     """
-    metrics_collector.record_token_usage(100)
-    metrics_collector.record_token_usage(150)
-    
-    assert len(metrics_collector.metrics['token_usage']) == 2
-    assert list(metrics_collector.metrics['token_usage']) == [100, 150]
+    try:
+        metrics_collector.record_token_usage(100)
+        metrics_collector.record_token_usage(150)
+        
+        assert len(metrics_collector.metrics['token_usage']) == 2
+        assert list(metrics_collector.metrics['token_usage']) == [100, 150]
+    except ValueError as e:
+        pytest.fail(f"Invalid token value: {str(e)}")
+    except Exception as e:
+        pytest.fail(f"Unexpected error recording token usage: {str(e)}")
 
 def test_record_cache_event(metrics_collector: MetricsCollector) -> None:
     """Test recording cache hits and misses.
