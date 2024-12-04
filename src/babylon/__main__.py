@@ -175,11 +175,10 @@ def main() -> None:
     if backup_dir:
         restore_chroma(backup_dir)
 
-    # Initialize ChromaDB client with persistence directory
-    chroma_client = chromadb.Client(Settings(
-        chroma_db_impl="duckdb+parquet",
-        persist_directory=Config.CHROMADB_PERSIST_DIR
-    ))
+    # Initialize ChromaDB
+    from data.chroma_manager import ChromaManager
+    chroma_manager = ChromaManager()
+    chroma_client = chroma_manager.client
 
     # Register cleanup handlers
     atexit.register(cleanup_chroma, chroma_client)
