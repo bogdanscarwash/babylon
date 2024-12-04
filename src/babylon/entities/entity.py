@@ -1,3 +1,5 @@
+from typing import Any
+
 class Entity:
     """Base class for all game entities.
     

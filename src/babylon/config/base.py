@@ -11,3 +11,4 @@ class BaseConfig:
    DEBUG = False
    TESTING = False
    CHROMADB_PERSIST_DIR = os.getenv('CHROMADB_PERSIST_DIR', './chromadb')
+   # Add any additional configuration settings here

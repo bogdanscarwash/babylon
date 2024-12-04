@@ -1,6 +1,7 @@
 from typing import Any, Dict, List, Optional
 from dotenv import load_dotenv
-from config import Config
+from config.base import BaseConfig as Config
+from entities.entity import Entity
 from data.entity_registry import EntityRegistry
 from data.models.event import Event
 from systems.contradiction_analysis import ContradictionAnalysis
@@ -38,47 +39,54 @@ def handle_event(event: Event, game_state: Dict[str, Any]) -> None:
     # These can be either follow-up Events or direct Effects
     if event.consequences:
         game_state['event_queue'].extend(event.consequences)
-    # Initialize ChromaDB client and embedding model
+    # Initialize ChromaDB client with persistence directory from config
     chroma_client = chromadb.Client(Settings(
         chroma_db_impl="duckdb+parquet",
-        persist_directory=Config.CHROMADB_PERSIST_DIR  # Ensure this is set in your config
+        persist_directory=Config.CHROMADB_PERSIST_DIR
     ))
+
+    # Initialize the embedding model
     embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
 
-    # Create or get the collection for entities
+    # Create or get the existing collection for entities
     collection = chroma_client.get_or_create_collection(name='entities')
 
-    # Access configuration variables
-    game_state['event_history'] = []  # Add this line
-    secret_key: str = Config.SECRET_KEY
-    database_url: str = Config.DATABASE_URL
-
-    # Initialize systems
-    all_events = []  # List of all Event instances in the game
-    entity_registry: EntityRegistry = EntityRegistry()
-    contradiction_analysis: ContradictionAnalysis = ContradictionAnalysis(entity_registry)
+    # Initialize core game systems
+    entity_registry: EntityRegistry = EntityRegistry()  # Central registry of all game entities
+    contradiction_analysis: ContradictionAnalysis = ContradictionAnalysis(entity_registry)  # Dialectical analysis system
+    
+    # Initialize the game state dictionary that tracks all game systems
     game_state: Dict[str, Any] = {
-        "entity_registry": entity_registry,
-        "economy": Economy(),
-        "politics": Politics(),
-        "event_queue": [],
-        "is_player_responsible": False
+        "entity_registry": entity_registry,      # Manages all game entities
+        "economy": Economy(),                    # Handles economic simulation
+        "politics": Politics(),                  # Manages political simulation
+        "event_queue": [],                       # Queue of pending events to process
+        "is_player_responsible": False,          # Flag for player vs AI decision making
+        "event_history": []                      # History of processed events
     }
 
-    print(f"Running with SECRET_KEY={secret_key}")
-    print(f"Database URL: {database_url}")
+    print(f"Running with SECRET_KEY={Config.SECRET_KEY}")
+    print(f"Database URL: {Config.DATABASE_URL}")
     print(f"Debug mode: {Config.DEBUG}")
 
-    # Game loop
+    # Add entities to ChromaDB
+    for entity in entity_registry.entities:
+        entity.generate_embedding(embedding_model)
+        entity.add_to_chromadb(collection)
+
+    # Main game loop - runs until an exit condition is met
     while True:
-        # Update game state components
+        # Update economic simulation (prices, production, trade, etc)
         game_state['economy'].update()
+        
+        # Update political simulation (stability, factions, power relations)
         game_state['politics'].update()
 
-        # Update contradictions
+        # Analyze and update dialectical contradictions in society
         contradiction_analysis.update_contradictions(game_state)
 
-        # Visualize contradictions and relationships
+        # Visualize the current state of contradictions and relationships
+        # This creates network graphs showing how entities and conflicts relate
         contradiction_analysis.visualize_contradictions()
         contradiction_analysis.visualize_entity_relationships()
 
@@ -89,13 +97,14 @@ def handle_event(event: Event, game_state: Dict[str, Any]) -> None:
                     game_state['event_queue'].append(event)
                     game_state['event_history'].append(event)
 
-        # Process all events in the event queue
+        # Process all pending events in the queue (protests, reforms, crises, etc)
         while game_state['event_queue']:
-            event = game_state['event_queue'].pop(0)
-            handle_event(event, game_state)
+            event = game_state['event_queue'].pop(0)  # Get next event
+            handle_event(event, game_state)           # Process its effects
 
-        # Your application logic...
-        break  # Replace with actual game loop condition
+        # TODO: Add proper game loop exit conditions
+        # Currently breaks immediately - replace with actual game logic
+        break
 
 def main() -> None:
     """Main function to initialize and run the game loop.
