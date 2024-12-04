@@ -13,10 +13,10 @@ from datetime import datetime
 from sentence_transformers import SentenceTransformer
 from babylon.config.base import BaseConfig as Config
 from config.logging_config import setup_logging
-from entities.entity import Entity
-from data.entity_registry import EntityRegistry
-from data.models.event import Event
-from systems.contradiction_analysis import ContradictionAnalysis
+from babylon.entities.entity import Entity
+from babylon.data.entity_registry import EntityRegistry
+from babylon.data.models.event import Event
+from babylon.systems.contradiction_analysis import ContradictionAnalysis
 from utils.backup import backup_chroma, restore_chroma
 from data.models.economy import Economy
 from data.models.politics import Politics
@@ -200,7 +200,7 @@ def main() -> None:
         restore_chroma(backup_dir)
 
     # Initialize ChromaDB
-    from data.chroma_manager import ChromaManager
+    from babylon.data.chroma_manager import ChromaManager
     chroma_manager = ChromaManager()
     chroma_client = chroma_manager.client
 
