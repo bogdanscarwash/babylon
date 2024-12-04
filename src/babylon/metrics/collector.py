@@ -40,14 +40,16 @@ class MetricsCollector:
             'cached_objects': 0   # Objects currently in cache
         }
 
-    def record_metric(self, name: str, value: float, context: str = '') -> None:
+    def record_metric(self, name: str, value: float, context: str = '', object_id: Optional[str] = None, context_level: Optional[str] = None) -> None:
         """Record a metric in the database."""
         metric = Metric(name=name, value=value, context=context)
         self.db.add(metric)
         self.db.commit()
-        """Record an object access event."""
-        self.metrics['object_access'][object_id] += 1
-        logging.info(f"Object accessed: {object_id} in {context_level}")
+        
+        # Record an object access event if object_id is provided
+        if object_id is not None:
+            self.metrics['object_access'][object_id] += 1
+            logging.info(f"Object accessed: {object_id} in {context_level}")
 
     def record_token_usage(self, tokens_used: int) -> None:
         """Record token usage."""
