@@ -86,7 +86,21 @@ def test_record_cache_event(metrics_collector):
     assert metrics_collector.metrics['cache_performance']['misses']['L2'] == 0
 
 def test_analyze_performance(metrics_collector):
-    """Test performance analysis functionality."""
+    """Test performance analysis functionality.
+    
+    This test validates the performance analysis system by:
+    1. Setting up test data with specific thresholds
+    2. Recording metrics for:
+       - Hot object access patterns
+       - Token usage statistics
+       - Cache hit/miss rates
+       - Query latencies
+       - Memory usage patterns
+    3. Verifying analysis results for:
+       - Cache performance
+       - Resource utilization
+       - System optimization
+    """
     # Setup test data with specific thresholds
     test_data = {
         'hot_object': 5,  # Access count
@@ -113,18 +127,6 @@ def test_analyze_performance(metrics_collector):
         
     for memory in test_data['memory_usage']:
         metrics_collector.record_memory_usage(memory)
-       
-    2. Triggers analysis and verifies:
-       - Cache hit rates are calculated correctly (expected 0.5 for L1)
-       - Hot objects are identified based on access frequency
-       - Token usage statistics are computed
-       - Latency metrics are properly aggregated
-       - Memory usage patterns are analyzed
-       - System generates relevant optimization suggestions
-    
-    This test ensures the analysis system provides accurate insights
-    for performance optimization and system health monitoring.
-    """
     # Setup some test data
     metrics_collector.record_object_access("hot_object", "test")
     metrics_collector.record_object_access("hot_object", "test")
