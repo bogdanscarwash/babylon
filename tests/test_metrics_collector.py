@@ -5,24 +5,56 @@ from babylon.metrics.collector import MetricsCollector
 
 @pytest.fixture
 def temp_log_dir(tmp_path):
-    """Create a temporary directory for logs during testing."""
+    """Create a temporary directory for metrics logs during testing.
+    
+    Creates an isolated test directory to prevent test logs from mixing with
+    production logs and ensure clean test environment for each test run.
+    
+    Args:
+        tmp_path: pytest built-in fixture providing temporary directory
+
+    Returns:
+        Path: Temporary directory path for test logs
+    """
     return tmp_path / "test_logs"
 
 @pytest.fixture
 def metrics_collector(temp_log_dir):
-    """Create a MetricsCollector instance for testing."""
+    """Create a fresh MetricsCollector instance for each test.
+    
+    Provides an isolated MetricsCollector instance configured to use
+    the temporary test directory, ensuring each test starts with a
+    clean metrics collection state.
+    
+    Args:
+        temp_log_dir: Fixture providing temporary log directory
+
+    Returns:
+        MetricsCollector: Fresh collector instance for testing
+    """
     return MetricsCollector(log_dir=temp_log_dir)
 
 def test_init(metrics_collector, temp_log_dir):
     """Test initialization of MetricsCollector.
     
-    This test verifies the proper initialization of a new MetricsCollector instance:
-    - Confirms log directory is set to the provided temporary directory
-    - Validates that session start time is initialized as a proper datetime object
-    - Checks that all counters start at zero (total_objects)
-    - Ensures data structures (object_access dict, etc.) are empty
+    Verifies that a new MetricsCollector instance is properly initialized with:
+    - Correct log directory configuration
+    - Valid session start timestamp
+    - Zero-initialized counters
+    - Empty data structures
     
-    The test uses a temporary directory fixture to avoid polluting the real logs directory.
+    The test ensures the collector starts in a clean state and is ready
+    to begin collecting metrics without any residual data.
+    
+    Args:
+        metrics_collector: Fresh collector instance for testing
+        temp_log_dir: Temporary directory for test logs
+        
+    Assertions:
+        - Log directory matches provided temp directory
+        - Session start time is a valid datetime
+        - Total objects counter is zero
+        - Object access dictionary is empty
     """
     assert metrics_collector.log_dir == temp_log_dir
     assert isinstance(metrics_collector.current_session['start_time'], datetime)
@@ -30,15 +62,28 @@ def test_init(metrics_collector, temp_log_dir):
     assert len(metrics_collector.metrics['object_access']) == 0
 
 def test_record_object_access(metrics_collector):
-    """Test recording object access events.
+    """Test the object access tracking functionality.
     
-    This test validates the object access tracking system:
-    - Records multiple accesses (2x) to test_obj_1 and verifies the count
-    - Records single access to test_obj_2 to ensure separate object tracking
-    - Confirms counter accuracy by checking exact values
+    Validates that the MetricsCollector accurately tracks:
+    - Multiple accesses to the same object
+    - Single access to different objects
+    - Separate counters for distinct objects
+    - Exact access count accuracy
     
-    This tracking is crucial for identifying "hot" objects that may need optimization
-    or caching in the game engine.
+    This tracking helps identify frequently accessed "hot" objects
+    that may benefit from caching or optimization.
+    
+    Args:
+        metrics_collector: Fresh collector instance for testing
+        
+    Test Steps:
+        1. Record two accesses to test_obj_1
+        2. Record one access to test_obj_2
+        3. Verify access counts match expected values
+        
+    Assertions:
+        - test_obj_1 has exactly 2 recorded accesses
+        - test_obj_2 has exactly 1 recorded access
     """
     metrics_collector.record_object_access("test_obj_1", "test_context")
     metrics_collector.record_object_access("test_obj_1", "test_context")
