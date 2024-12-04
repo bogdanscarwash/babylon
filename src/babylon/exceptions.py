@@ -3,9 +3,6 @@
 This module defines a comprehensive hierarchy of custom exceptions used throughout 
 the application. The hierarchy is designed to provide specific error types while 
 maintaining a common base class for all Babylon-specific errors.
-"""
-
-from typing import Optional, Any, List
 
 Exception Hierarchy:
     BabylonError                  # Root exception for all Babylon errors
@@ -18,21 +15,9 @@ Exception Hierarchy:
     - BackupError                # Backup/restore operation failures
 
 Each exception includes:
-- message: A human-readable error description
-- error_code: A machine-readable error code (e.g., "DB_001")
-- Additional context through inheritance and stack traces
-
-Usage Example:
-    try:
-        entity = registry.get_entity(entity_id)
-        if not entity:
-            raise EntityNotFoundError(
-                message=f"Entity {entity_id} not found",
-                error_code="ENT_404"
-            )
-    except EntityNotFoundError as e:
-        logger.error(f"Entity lookup failed: {e.message} ({e.error_code})")
-        # Handle the error appropriately
+    - message: A human-readable error description
+    - error_code: A machine-readable error code (e.g., "DB_001")
+    - Additional context through inheritance and stack traces
 
 Error Code Convention:
     - DB_XXX: Database-related errors
@@ -47,6 +32,7 @@ Integration with Logging:
     - Error codes for filtering and analysis
     - Stack traces for debugging
     - Correlation IDs for request tracking
+"""
 """
 
 class BabylonError(Exception):
@@ -410,7 +396,6 @@ class BackupError(BabylonError):
         BACKUP_041: Insufficient storage space
         BACKUP_061: File system error
         BACKUP_081: Data integrity error
-    """
     """
     def __init__(self, message: str, error_code: str, backup_path: Optional[str] = None,
                  required_space: Optional[int] = None, available_space: Optional[int] = None):
