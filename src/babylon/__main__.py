@@ -12,7 +12,7 @@ import shutil
 from datetime import datetime
 from sentence_transformers import SentenceTransformer
 from babylon.config.base import BaseConfig as Config
-from config.logging_config import setup_logging
+from babylon.config.logging_config import setup_logging
 from babylon.entities.entity import Entity
 from babylon.data.entity_registry import EntityRegistry
 from babylon.data.models.event import Event
