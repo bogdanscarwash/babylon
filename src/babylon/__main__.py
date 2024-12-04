@@ -69,6 +69,9 @@ def handle_event(event: Event, game_state: Dict[str, Any]) -> None:
     print(f"Database URL: {Config.DATABASE_URL}")
     print(f"Debug mode: {Config.DEBUG}")
 
+    # Initialize all_events list
+    all_events: List[Event] = []  # Populate this list with Event instances
+
     # Add entities to ChromaDB
     for entity in entity_registry.entities:
         entity.generate_embedding(embedding_model)
