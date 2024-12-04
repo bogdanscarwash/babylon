@@ -3,6 +3,7 @@ import sys
 import atexit
 import logging
 from typing import Any, Dict, List, Optional
+from babylon.exceptions import BabylonError
 from dotenv import load_dotenv
 import chromadb
 from chromadb.config import Settings
