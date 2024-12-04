@@ -7,19 +7,15 @@ maintaining a common base class for all Babylon-specific errors.
 
 from typing import Optional, Any, List
 
-This module defines a comprehensive hierarchy of custom exceptions used throughout 
-the application. The hierarchy is designed to provide specific error types while 
-maintaining a common base class for all Babylon-specific errors.
-
 Exception Hierarchy:
     BabylonError                  # Root exception for all Babylon errors
-    ├── DatabaseError            # Database operations and connectivity issues
-    ├── EntityError             # Base class for entity-related errors
-    │   ├── EntityNotFoundError    # Entity lookup/access failures
-    │   └── EntityValidationError  # Entity data validation failures
-    ├── ConfigurationError      # Configuration loading and validation issues
-    ├── GameStateError         # Game state consistency and transition errors
-    └── BackupError           # Backup/restore operation failures
+    - DatabaseError               # Database operations and connectivity issues
+    - EntityError                 # Base class for entity-related errors
+        - EntityNotFoundError     # Entity lookup/access failures
+        - EntityValidationError   # Entity data validation failures
+    - ConfigurationError          # Configuration loading and validation issues
+    - GameStateError             # Game state consistency and transition errors
+    - BackupError                # Backup/restore operation failures
 
 Each exception includes:
 - message: A human-readable error description
