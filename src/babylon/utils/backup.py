@@ -3,7 +3,7 @@ import shutil
 from datetime import datetime
 import chromadb
 import logging
-from config.base import BaseConfig as Config
+from babylon.config.base import BaseConfig as Config
 
 logger = logging.getLogger(__name__)
 
