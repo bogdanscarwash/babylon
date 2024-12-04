@@ -1,7 +1,10 @@
 from typing import Dict, List, Optional, Any
 from datetime import datetime
 import uuid
+import logging
 from .entity import Entity
+
+logger = logging.getLogger(__name__)
 
 class EntityRegistry:
     """Registry to maintain and track all game entities.

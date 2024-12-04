@@ -2,7 +2,10 @@ import os
 import shutil
 from datetime import datetime
 import chromadb
+import logging
 from config.base import BaseConfig as Config
+
+logger = logging.getLogger(__name__)
 
 def backup_chroma(client: chromadb.Client, backup_dir: str) -> None:
     """Backup ChromaDB data to the specified backup directory.

@@ -2,6 +2,9 @@ from typing import Any, Dict, Optional
 from numpy.typing import NDArray
 import numpy as np
 from datetime import datetime
+import logging
+
+logger = logging.getLogger(__name__)
 
 class Entity:
     """Base class for all game entities.

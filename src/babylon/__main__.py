@@ -21,7 +21,8 @@ from data.models.politics import Politics
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-    """Process and apply an event's effects to the game state.
+
+def handle_event(event: Event, game_state: Dict[str, Any]) -> None:
     
     This function:
     1. Announces the event occurrence
