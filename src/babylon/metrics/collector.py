@@ -50,6 +50,16 @@ class MetricsCollector:
             'cached_objects': 0   # Objects currently in cache
         }
 
+    def record_object_access(self, object_id: str, context: str) -> None:
+        """Record an object access event.
+        
+        Args:
+            object_id: ID of the accessed object
+            context: Context of the access (e.g., "entity_registry", "contradiction_system")
+        """
+        self.metrics['object_access'][object_id] += 1
+        logging.info(f"Object accessed: {object_id} in {context}")
+
     def record_metric(
         self,
         name: str,

@@ -41,6 +41,7 @@ class MetricsPersistence:
         """Initialize database schema if not exists."""
         with self._get_connection() as conn:
             conn.executescript("""
+                PRAGMA foreign_keys = ON;
                 CREATE TABLE IF NOT EXISTS system_metrics (
                     timestamp TEXT PRIMARY KEY,
                     cpu_percent REAL,
@@ -244,6 +245,39 @@ class MetricsPersistence:
                 )
                 for row in cursor.fetchall()
             ]
+
+    def rotate_logs(self, max_age_days: int = 30, max_size_mb: int = 10, compress: bool = False) -> None:
+        """Rotate log files based on age and size.
+        
+        Args:
+            max_age_days: Maximum age of log files in days
+            max_size_mb: Maximum size of log files in MB
+            compress: Whether to compress rotated logs
+        """
+        cutoff = datetime.now() - timedelta(days=max_age_days)
+        max_bytes = max_size_mb * 1024 * 1024
+        
+        for log_file in Path(self.db_path).parent.glob("*.log"):
+            stats = log_file.stat()
+            
+            # Check age and size
+            if (datetime.fromtimestamp(stats.st_mtime) < cutoff or 
+                stats.st_size > max_bytes):
+                
+                # Rotate the file
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                rotated_name = f"{log_file.stem}_{timestamp}{log_file.suffix}"
+                rotated_path = log_file.with_name(rotated_name)
+                
+                # Compress if requested
+                if compress:
+                    import gzip
+                    with log_file.open('rb') as f_in:
+                        with gzip.open(f"{rotated_path}.gz", 'wb') as f_out:
+                            f_out.write(f_in.read())
+                    log_file.unlink()
+                else:
+                    log_file.rename(rotated_path)
 
     def cleanup_old_metrics(self, days_to_keep: int = 30) -> None:
         """Remove metrics older than specified days."""
