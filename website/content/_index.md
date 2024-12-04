@@ -1,18 +1,31 @@
 ---
 title: "Babylon"
-description: "Explore the forces of historical materialism"
+description: "A groundbreaking simulation game exploring the forces of historical materialism"
 featured_image: '/images/hero.jpg'
 ---
 
-# Welcome to Babylon
+![A menacing picture of a rectangular tower, stretching to the sky](/images/A_menacing(1).jpeg)
 
-A groundbreaking simulation game where dialectical contradictions shape the course of history. Navigate complex social forces, manage economic systems, and witness the transformation of society through the lens of historical materialism.
+# Witness the Unfolding of History
 
-## Key Features
+In Babylon, you'll navigate the complex web of social forces, economic systems, and ideological struggles that shape the course of human civilization. Experience the transformative power of dialectical contradictions as you guide your society through the crucible of historical change.
 
-- **Dialectical Systems**: Experience how contradictions drive social change
-- **Economic Simulation**: Manage resources and means of production
-- **Historical Evolution**: Watch societies transform through different modes of production
-- **Complex Decision Making**: Every choice affects the material conditions of your society
+## Immerse Yourself in a Living World
 
-[Download Now](#) | [Learn More](/about/) | [View Documentation](/docs/)
+- Dive into a richly detailed simulation where every choice you make reverberates through the fabric of society
+- Watch as opposing forces collide, giving rise to new social formations and modes of production  
+- Contend with the unintended consequences of your decisions as they ripple across the political and economic landscape
+
+## Master the Dynamics of Social Change
+
+- Analyze the material conditions of your society to identify the key contradictions that drive historical development
+- Manage scarce resources and optimize production to meet the needs of your growing population
+- Balance competing interests and factions to maintain social stability in the face of mounting tensions
+
+## Explore Alternative Paths of Development
+
+- Lead your society through the epochal transitions between different modes of production
+- Experiment with various political and economic systems to chart a unique course through history
+- Uncover the hidden potentials latent within each stage of social development and bring them to fruition
+
+[View the Changelog](https://github.com/jmyeary/babylon/blob/main/docs/CHANGELOG.md) | [LRead Development Progress](https://github.com/jmyeary/babylon/blob/main/docs/TODO.md) | [View Readme](https://github.com/jmyeary/babylon#readme)

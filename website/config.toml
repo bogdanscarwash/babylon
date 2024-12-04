@@ -23,25 +23,29 @@ enableGitInfo = true
 
 [menu]
   [[menu.main]]
+    name = "Home"
+    url = "/"
+    weight = 1
+  [[menu.main]]
     name = "About"
     url = "/about/"
-    weight = 1
+    weight = 2
   [[menu.main]]
     name = "Features"
     url = "/features/"
-    weight = 2
+    weight = 3
   [[menu.main]]
     name = "Blog"
     url = "/blog/"
-    weight = 3
+    weight = 4
   [[menu.main]]
     name = "Documentation"
     url = "/docs/"
-    weight = 4
+    weight = 5
   [[menu.main]]
     name = "Media"
     url = "/media/"
-    weight = 5
+    weight = 6
 
 [markup]
   [markup.goldmark]

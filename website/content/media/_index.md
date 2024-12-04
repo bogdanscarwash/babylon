@@ -7,19 +7,19 @@ type: "media"
 
 # Babylon: The Future of Gaming
 
-Welcome to the Media page for Babylon, the groundbreaking game that's set to revolutionize the gaming industry. Here, you'll find information about our vision, the game's potential, and investment opportunities.
+Welcome to the Media page for Babylon, the groundbreaking game that's set to revolutionize the gaming industry. Here, you'll find information about my vision, the game's potential, and investment opportunities.
 
 ## Our Vision
 
-At Babylon, we're creating a gaming experience like no other. By integrating the principles of dialectical materialism into a rich, immersive game world, we're not just entertaining players—we're challenging them to think critically and engage with profound philosophical concepts.
+I am creating a gaming experience like no other. By integrating the principles of dialectical materialism into a rich, immersive game world, I'm not just entertaining players— I am challenging them to think critically and engage with profound philosophical concepts.
 
 ## Market Potential
 
-The gaming industry is growing at an unprecedented rate, with global revenues expected to surpass $200 billion by 2023. Babylon is poised to capture a significant share of this market by offering a unique, thought-provoking gaming experience that appeals to a wide range of players.
+The gaming industry is growing at an unprecedented rate, with global revenues expected to surpass $250 billion by 2024. Babylon is poised to capture a significant share of this market by offering a unique, thought-provoking gaming experience that appeals to a wide range of players.
 
 ## Investment Opportunities
 
-We're seeking visionary investors who share our passion for innovation and our commitment to pushing the boundaries of what's possible in gaming. By investing in Babylon, you'll be part of a project that's not just financially promising, but also culturally significant.
+I am seeking visionary investors who share my passion for innovation and my commitment to pushing the boundaries of what's possible in gaming. By investing in Babylon, you'll be part of a project that's not just financially promising, but also culturally significant.
 
 ### Why Invest in Babylon?
 
@@ -30,4 +30,4 @@ We're seeking visionary investors who share our passion for innovation and our c
 
 ## Contact Us
 
-Interested in learning more about investment opportunities or featuring Babylon in your publication? Contact our media team at [media@babylonrpg.com](mailto:media@babylonrpg.com). Also feel free to reach out to the developer on Github!
+Interested in learning more about investment opportunities or featuring Babylon in your publication? [Contact me and let's make a deal](mailto:percy@babylonrpg.com). Also feel free to reach out to the developer on Github!
