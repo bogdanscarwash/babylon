@@ -23,7 +23,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 def handle_event(event: Event, game_state: Dict[str, Any]) -> None:
-    
+    """
     This function:
     1. Announces the event occurrence
     2. Applies all event effects to the game state
