@@ -1,5 +1,8 @@
 from typing import Any, Dict, List, Optional
 from dotenv import load_dotenv
+import chromadb
+from chromadb.config import Settings
+from sentence_transformers import SentenceTransformer
 from config.base import BaseConfig as Config
 from entities.entity import Entity
 from data.entity_registry import EntityRegistry
@@ -114,14 +117,27 @@ def main() -> None:
     
     This function:
     1. Loads configuration from environment variables
-    2. Initializes core game systems (entities, economy, politics)
-    3. Sets up the contradiction analysis system
-    4. Runs the main game loop which:
+    2. Initializes ChromaDB and embedding model
+    3. Initializes core game systems (entities, economy, politics)
+    4. Sets up the contradiction analysis system
+    5. Runs the main game loop which:
        - Updates economic and political systems
        - Analyzes and updates contradictions
        - Processes queued events
        - Visualizes the game state
     """
+    # Initialize ChromaDB client with persistence directory
+    chroma_client = chromadb.Client(Settings(
+        chroma_db_impl="duckdb+parquet",
+        persist_directory=Config.CHROMADB_PERSIST_DIR
+    ))
+
+    # Initialize the embedding model
+    embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
+
+    # Create or get the collection for entities
+    collection = chroma_client.get_or_create_collection(name='entities')
+
     # Access configuration variables
     secret_key: str = Config.SECRET_KEY
     database_url: str = Config.DATABASE_URL
