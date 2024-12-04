@@ -9,6 +9,7 @@ import time
 import uuid
 from config.base import BaseConfig as Config
 from utils.retry import retry_on_exception
+from babylon.exceptions import DatabaseError, ConfigurationError
 
 logger = logging.getLogger(__name__)
 
@@ -171,7 +172,7 @@ class ChromaManager:
                 },
                 exc_info=True
             )
-            raise ChromaError(f"Failed to initialize ChromaDB client: {e}")
+            raise DatabaseError(f"Failed to initialize ChromaDB client: {e}", "DB_001")
     
     @property
     def client(self) -> chromadb.Client:

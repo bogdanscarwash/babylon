@@ -4,6 +4,7 @@ from datetime import datetime
 import chromadb
 import logging
 from babylon.config.base import BaseConfig as Config
+from babylon.exceptions import BackupError
 
 logger = logging.getLogger(__name__)
 
@@ -51,15 +52,13 @@ def backup_chroma(client: chromadb.Client, backup_dir: str, max_backups: int = 5
         
         # Validate persistence directory exists
         if not persist_dir.exists():
-            logger.error("ChromaDB persistence directory does not exist")
-            return False
+            raise BackupError("ChromaDB persistence directory does not exist", "BACKUP_001")
             
         # Check disk space (including space for compressed backup)
         required_space = shutil.disk_usage(persist_dir).used
         available_space = shutil.disk_usage(backup_path.parent).free
         if available_space < required_space * 1.1:
-            logger.error("Insufficient disk space for backup")
-            return False
+            raise BackupError("Insufficient disk space for backup", "BACKUP_002")
 
         # Create backup directory
         backup_path.mkdir(parents=True, exist_ok=True)

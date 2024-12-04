@@ -4,6 +4,7 @@ import numpy as np
 from datetime import datetime
 from utils.retry import retry_on_exception
 import logging
+from babylon.exceptions import EntityError, EntityValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -95,7 +96,7 @@ class Entity:
             ValueError: If embedding hasn't been generated yet
         """
         if self.embedding is None:
-            raise ValueError("Embedding must be generated before adding to ChromaDB")
+            raise EntityValidationError("Embedding must be generated before adding to ChromaDB", "ENTITY_001")
             
         try:
             collection.add(

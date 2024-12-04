@@ -263,6 +263,12 @@ def main() -> None:
 if __name__ == "__main__":
     try:
         main()
-    except Exception as e:
-        logger.error(f"An unexpected error occurred: {e}")
+    except KeyboardInterrupt:
+        logger.info("Game terminated by user")
+        sys.exit(0)
+    except BabylonError as e:
+        logger.error(f"Game error occurred: {e.message} (Code: {e.error_code})")
         sys.exit(1)
+    except Exception as e:
+        logger.critical(f"Unexpected error occurred", exc_info=True)
+        sys.exit(2)
