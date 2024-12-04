@@ -33,6 +33,9 @@ Integration with Logging:
     - Stack traces for debugging
     - Correlation IDs for request tracking
 """
+from typing import Optional, Dict, List, Any
+from datetime import datetime
+import logging
 """
 
 class BabylonError(Exception):
@@ -50,15 +53,26 @@ class BabylonError(Exception):
     Attributes:
         message (str): Human-readable error description
         error_code (Optional[str]): Machine-readable error code (e.g., "DB_001")
+        timestamp (datetime): When the error occurred
+        details (Optional[Dict[str, Any]]): Additional error context
+        correlation_id (Optional[str]): Request tracking ID
         
     Example:
         try:
             raise BabylonError(
                 message="Failed to initialize game state",
-                error_code="GAME_001"
+                error_code="GAME_001",
+                details={"state": "initializing", "component": "core"}
             )
         except BabylonError as e:
-            logger.error(f"{e.error_code}: {e.message}")
+            logger.error(
+                f"{e.error_code}: {e.message}",
+                extra={
+                    "correlation_id": e.correlation_id,
+                    "details": e.details,
+                    "timestamp": e.timestamp.isoformat()
+                }
+            )
             
     Error Code Ranges:
         - GAME_001 to GAME_099: Core game system errors
@@ -67,9 +81,30 @@ class BabylonError(Exception):
         - CFG_001 to CFG_099: Configuration errors
         - BACKUP_001 to BACKUP_099: Backup/restore errors
     """
-    def __init__(self, message: str, error_code: str = None):
-        self.message = message
-        self.error_code = error_code
+    def __init__(
+        self,
+        message: str,
+        error_code: Optional[str] = None,
+        details: Optional[Dict[str, Any]] = None,
+        correlation_id: Optional[str] = None
+    ) -> None:
+        self.message: str = message
+        self.error_code: Optional[str] = error_code
+        self.timestamp: datetime = datetime.now()
+        self.details: Dict[str, Any] = details or {}
+        self.correlation_id: Optional[str] = correlation_id
+        
+        # Log the error with full context
+        logging.error(
+            f"{self.error_code}: {self.message}",
+            extra={
+                "error_code": self.error_code,
+                "correlation_id": self.correlation_id,
+                "details": self.details,
+                "timestamp": self.timestamp.isoformat()
+            }
+        )
+        
         super().__init__(self.message)
 
 class DatabaseError(BabylonError):
