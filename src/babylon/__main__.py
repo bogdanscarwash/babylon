@@ -1,3 +1,6 @@
+import signal
+import sys
+import atexit
 from typing import Any, Dict, List, Optional
 from dotenv import load_dotenv
 import chromadb
@@ -10,9 +13,6 @@ from data.models.event import Event
 from systems.contradiction_analysis import ContradictionAnalysis
 from data.models.economy import Economy
 from data.models.politics import Politics
-import chromadb
-from chromadb.config import Settings
-from sentence_transformers import SentenceTransformer
 
 def handle_event(event: Event, game_state: Dict[str, Any]) -> None:
     """Process and apply an event's effects to the game state.
@@ -112,6 +112,32 @@ def handle_event(event: Event, game_state: Dict[str, Any]) -> None:
         # Currently breaks immediately - replace with actual game logic
         break
 
+def cleanup_chroma(client: chromadb.Client) -> None:
+    """Cleanup ChromaDB resources gracefully.
+    
+    Args:
+        client: The ChromaDB client instance to cleanup
+    """
+    try:
+        # Persist any changes to disk
+        client.persist()
+        
+        # Reset the client (closes connections)
+        client.reset()
+        
+    except Exception as e:
+        print(f"Error during ChromaDB cleanup: {e}")
+
+def signal_handler(signum: int, frame: Any) -> None:
+    """Handle system signals for graceful shutdown.
+    
+    Args:
+        signum: Signal number
+        frame: Current stack frame
+    """
+    print(f"\nReceived signal {signum}. Initiating graceful shutdown...")
+    sys.exit(0)
+
 def main() -> None:
     """Main function to initialize and run the game loop.
     
@@ -132,7 +158,12 @@ def main() -> None:
         persist_directory=Config.CHROMADB_PERSIST_DIR
     ))
 
-    # Initialize the embedding model
+    # Register cleanup handlers
+    atexit.register(cleanup_chroma, chroma_client)
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+
+    # Initialize the embedding model 
     embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
 
     # Create or get the collection for entities
