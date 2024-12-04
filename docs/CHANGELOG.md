@@ -4,10 +4,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),  
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.2.0] - 2024-12-03
+
+### Breaking Changes
+- Introduced new database architecture requiring PostgreSQL
+- Added mandatory configuration for ChromaDB and vector storage
 
 ### Added
-- Initial commit adding census data files in various categories: demographics, economics, housing, and social data [COMMIT_EDITMSG].
+- Integrated PostgreSQL database system with SQLAlchemy ORM
+- Added ChromaDB vector database integration with DuckDB+Parquet backend
+- Implemented comprehensive metrics collection and analysis system
+- Added structured JSON logging with correlation IDs and multiple streams
+- Introduced custom exception hierarchy for error handling
+- Added backup and recovery system for ChromaDB
+- Implemented entity embedding using SentenceTransformer
 - Enhanced contradiction analysis system with visualization capabilities in `contradiction_analysis.py`:
   - Added network graph visualization for entity relationships
   - Added dialectical map visualization for contradictions

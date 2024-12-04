@@ -1,6 +1,6 @@
 [project]
 name = "babylon"
-version = "0.1.0"
+version = "0.2.0"
 description = "A game system modeling societal contradictions and power dynamics"
 requires-python = ">=3.12"
 dependencies = [
