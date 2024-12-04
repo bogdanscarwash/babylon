@@ -3,10 +3,9 @@
 Defines hierarchy of exceptions with standardized error codes and logging integration.
 See ERROR_CODES.md for detailed documentation of error code ranges and usage.
 """
-from typing import Optional, Dict, List, Any
+from typing import Optional, Dict, List, Any, Union, Type
 from datetime import datetime
 import logging
-"""
 
 class BabylonError(Exception):
     """Base exception class for all Babylon-specific errors.
@@ -58,6 +57,14 @@ class BabylonError(Exception):
         details: Optional[Dict[str, Any]] = None,
         correlation_id: Optional[str] = None
     ) -> None:
+        """Initialize a BabylonError.
+        
+        Args:
+            message: Human-readable error description
+            error_code: Machine-readable error code (e.g., "DB_001")
+            details: Additional error context
+            correlation_id: Request tracking ID
+        """
         self.message: str = message
         self.error_code: Optional[str] = error_code
         self.timestamp: datetime = datetime.now()
@@ -234,8 +241,14 @@ class EntityValidationError(EntityError):
         ENT_661: Invalid state transition
         ENT_681: Invalid relationship
     """
-    def __init__(self, message: str, error_code: str, field_name: Optional[str] = None,
-                 current_value: Any = None, allowed_values: Any = None):
+    def __init__(
+        self,
+        message: str,
+        error_code: str,
+        field_name: Optional[str] = None,
+        current_value: Any = None,
+        allowed_values: Union[List[Any], str, None] = None
+    ) -> None:
         super().__init__(message, error_code)
         self.field_name = field_name
         self.current_value = current_value
@@ -345,8 +358,14 @@ class GameStateError(BabylonError):
         GAME_061: System synchronization failure
         GAME_081: Resource integrity error
     """
-    def __init__(self, message: str, error_code: str, current_state: Optional[str] = None,
-                 expected_state: Optional[str] = None, affected_systems: Optional[List[str]] = None):
+    def __init__(
+        self,
+        message: str,
+        error_code: str,
+        current_state: Optional[str] = None,
+        expected_state: Optional[str] = None,
+        affected_systems: Optional[List[str]] = None
+    ) -> None:
         super().__init__(message, error_code)
         self.current_state = current_state
         self.expected_state = expected_state
@@ -357,8 +376,14 @@ class BackupError(BabylonError):
     """Raised when backup or restore operations fail.
     
     See ERROR_CODES.md for detailed documentation of error codes 6000-6999."""
-    def __init__(self, message: str, error_code: str, backup_path: Optional[str] = None,
-                 required_space: Optional[int] = None, available_space: Optional[int] = None):
+    def __init__(
+        self,
+        message: str,
+        error_code: str,
+        backup_path: Optional[str] = None,
+        required_space: Optional[int] = None,
+        available_space: Optional[int] = None
+    ) -> None:
         super().__init__(message, error_code)
         self.backup_path = backup_path
         self.required_space = required_space
