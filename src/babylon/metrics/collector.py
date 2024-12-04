@@ -10,26 +10,30 @@ from typing import Dict, List, Any, Optional
 class MetricsCollector:
     """Collects and analyzes performance metrics for object tracking."""
     
-    def __init__(self, log_dir: Optional[Path] = None):
+    def __init__(self, log_dir: Optional[Path] = None) -> None:
+        from collections import Counter, deque
+        from typing import Dict, List, Any, Deque
+
         # Set up logging directory, default to logs/metrics if not specified
         self.log_dir = log_dir or Path("logs/metrics")
         self.log_dir.mkdir(parents=True, exist_ok=True)
         
         # Initialize database session
         self.db = SessionLocal()
-        # Initialize metrics storage containers
-        self.metrics = {
-            'object_access': Counter(),  # Tracks access frequency per object
-            'token_usage': deque(maxlen=1000),  # Rolling window of token counts
+
+        # Initialize metrics storage containers with proper typing
+        self.metrics: Dict[str, Any] = {
+            'object_access': Counter[str](),  # Tracks access frequency per object
+            'token_usage': deque[int](maxlen=1000),  # Rolling window of token counts
             'cache_performance': {
-                'hits': Counter(),  # Successful cache retrievals by type
-                'misses': Counter()  # Failed cache lookups by type
+                'hits': Counter[str](),  # Successful cache retrievals by type
+                'misses': Counter[str]()  # Failed cache lookups by type
             },
             'latency': {
-                'db_queries': deque(maxlen=100),  # Database query response times
-                'context_switches': deque(maxlen=100)  # Context switch durations
+                'db_queries': deque[float](maxlen=100),  # Database query response times
+                'context_switches': deque[float](maxlen=100)  # Context switch durations
             },
-            'memory_usage': deque(maxlen=1000)  # Rolling window of memory samples
+            'memory_usage': deque[int](maxlen=1000)  # Rolling window of memory samples
         }
         
         # Track current session statistics
@@ -40,7 +44,14 @@ class MetricsCollector:
             'cached_objects': 0   # Objects currently in cache
         }
 
-    def record_metric(self, name: str, value: float, context: str = '', object_id: Optional[str] = None, context_level: Optional[str] = None) -> None:
+    def record_metric(
+        self,
+        name: str,
+        value: float,
+        context: str = '',
+        object_id: Optional[str] = None,
+        context_level: Optional[str] = None
+    ) -> None:
         """Record a metric in the database."""
         metric = Metric(name=name, value=value, context=context)
         self.db.add(metric)
@@ -97,7 +108,7 @@ class MetricsCollector:
         A higher hit rate indicates better cache efficiency.
         
         Returns:
-            Dict mapping cache type to hit rate (0.0 to 1.0)
+            Dict[str, float]: Mapping of cache type to hit rate (0.0 to 1.0)
         """
         rates = {}
         for cache_type in self.metrics['cache_performance']['hits']:
