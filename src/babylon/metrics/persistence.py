@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import List, Optional, Dict, Any
 from contextlib import contextmanager
 
-from .exceptions import (
+from ..exceptions import (
     DatabaseConnectionError,
     MetricsPersistenceError,
     LogRotationError
