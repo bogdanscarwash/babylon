@@ -7,7 +7,12 @@ from config.base import BaseConfig as Config
 
 logger = logging.getLogger(__name__)
 
-def backup_chroma(client: chromadb.Client, backup_dir: str) -> bool:
+from typing import Optional, Dict
+import json
+import tarfile
+from pathlib import Path
+
+def backup_chroma(client: chromadb.Client, backup_dir: str, max_backups: int = 5) -> bool:
     """Backup ChromaDB data to the specified backup directory.
     
     This function performs a complete backup of the ChromaDB instance:
@@ -39,45 +44,74 @@ def backup_chroma(client: chromadb.Client, backup_dir: str) -> bool:
         IOError: If disk space is insufficient
     """
     try:
-        # Check disk space
-        required_space = shutil.disk_usage(Config.CHROMADB_PERSIST_DIR).used
-        available_space = shutil.disk_usage(os.path.dirname(backup_dir)).free
-        if available_space < required_space * 1.1:  # 10% safety margin
+        persist_dir = Path(Config.CHROMADB_PERSIST_DIR)
+        backup_path = Path(backup_dir)
+        
+        # Validate persistence directory exists
+        if not persist_dir.exists():
+            logger.error("ChromaDB persistence directory does not exist")
+            return False
+            
+        # Check disk space (including space for compressed backup)
+        required_space = shutil.disk_usage(persist_dir).used
+        available_space = shutil.disk_usage(backup_path.parent).free
+        if available_space < required_space * 1.1:
             logger.error("Insufficient disk space for backup")
             return False
 
-        # Persist any changes to disk
+        # Create backup directory
+        backup_path.mkdir(parents=True, exist_ok=True)
+        
+        # Persist any in-memory changes
         try:
             client.persist()
         except Exception as e:
             logger.error(f"Error persisting ChromaDB data: {e}")
             return False
 
-        # Ensure backup directory exists
-        try:
-            os.makedirs(backup_dir, exist_ok=True)
-        except PermissionError:
-            logger.error(f"Permission denied creating backup directory: {backup_dir}")
-            return False
-
-        # Copy the persistence directory to the backup directory
-        if os.path.exists(Config.CHROMADB_PERSIST_DIR):
-            try:
-                shutil.copytree(Config.CHROMADB_PERSIST_DIR, backup_dir, dirs_exist_ok=True)
-                logger.info(f"ChromaDB backup completed to {backup_dir}")
-                return True
-            except (shutil.Error, PermissionError) as e:
-                logger.error(f"Error copying files during backup: {e}")
-                return False
-        else:
-            logger.error("ChromaDB persistence directory does not exist")
-            return False
+        # Create backup archive with timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        archive_name = f"chroma_backup_{timestamp}.tar.gz"
+        archive_path = backup_path / archive_name
+        
+        # Create backup metadata
+        metadata = {
+            "timestamp": timestamp,
+            "version": chromadb.__version__,
+            "size": required_space,
+            "checksum": None  # Will be updated after archive creation
+        }
+        
+        # Create compressed archive
+        with tarfile.open(archive_path, "w:gz") as tar:
+            tar.add(persist_dir, arcname="chroma_data")
+            
+        # Calculate checksum of archive
+        import hashlib
+        with open(archive_path, "rb") as f:
+            metadata["checksum"] = hashlib.sha256(f.read()).hexdigest()
+            
+        # Save metadata
+        with open(backup_path / f"{archive_name}.meta", "w") as f:
+            json.dump(metadata, f, indent=2)
+            
+        # Rotate old backups
+        backups = sorted(backup_path.glob("chroma_backup_*.tar.gz"))
+        if len(backups) > max_backups:
+            for old_backup in backups[:-max_backups]:
+                old_backup.unlink()
+                meta_file = backup_path / f"{old_backup.name}.meta"
+                if meta_file.exists():
+                    meta_file.unlink()
+                    
+        logger.info(f"ChromaDB backup completed: {archive_path}")
+        return True
 
     except Exception as e:
         logger.error(f"Error during ChromaDB backup: {e}")
         return False
 
-def restore_chroma(backup_dir: str) -> bool:
+def restore_chroma(backup_path: str) -> bool:
     """Restore ChromaDB data from the specified backup directory.
     
     This function performs a complete restoration of ChromaDB data:
@@ -109,35 +143,64 @@ def restore_chroma(backup_dir: str) -> bool:
         ValueError: If backup is corrupted or incomplete
     """
     try:
-        # Ensure backup directory exists
-        if not os.path.exists(backup_dir):
-            logger.error(f"Backup directory {backup_dir} does not exist")
+        backup_path = Path(backup_path)
+        persist_dir = Path(Config.CHROMADB_PERSIST_DIR)
+        
+        # Validate backup file exists and is a tar.gz
+        if not backup_path.exists() or not backup_path.name.endswith('.tar.gz'):
+            logger.error(f"Invalid backup file: {backup_path}")
             return False
-
+            
+        # Check for metadata file
+        meta_path = backup_path.parent / f"{backup_path.name}.meta"
+        if not meta_path.exists():
+            logger.error(f"Backup metadata not found: {meta_path}")
+            return False
+            
+        # Load and validate metadata
+        with open(meta_path) as f:
+            metadata = json.load(f)
+            
+        # Verify backup checksum
+        with open(backup_path, "rb") as f:
+            current_checksum = hashlib.sha256(f.read()).hexdigest()
+        if current_checksum != metadata["checksum"]:
+            logger.error("Backup checksum verification failed")
+            return False
+            
         # Check disk space
-        required_space = shutil.disk_usage(backup_dir).used
-        available_space = shutil.disk_usage(os.path.dirname(Config.CHROMADB_PERSIST_DIR)).free
-        if available_space < required_space * 1.1:  # 10% safety margin
+        required_space = metadata["size"]
+        available_space = shutil.disk_usage(persist_dir.parent).free
+        if available_space < required_space * 1.1:
             logger.error("Insufficient disk space for restore")
             return False
-
-        # Remove the existing persistence directory if it exists
-        if os.path.exists(Config.CHROMADB_PERSIST_DIR):
-            try:
-                shutil.rmtree(Config.CHROMADB_PERSIST_DIR)
-            except PermissionError:
-                logger.error(f"Permission denied removing existing persistence directory")
+            
+        # Create temporary extraction directory
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Extract backup to temporary directory
+            with tarfile.open(backup_path, "r:gz") as tar:
+                tar.extractall(temp_dir)
+                
+            # Validate extracted data
+            extracted_dir = Path(temp_dir) / "chroma_data"
+            if not extracted_dir.exists():
+                logger.error("Invalid backup structure")
                 return False
-
-        # Copy the backup directory to the persistence directory
-        try:
-            shutil.copytree(backup_dir, Config.CHROMADB_PERSIST_DIR)
-            logger.info(f"ChromaDB restored from backup in {backup_dir}")
-            return True
-        except (shutil.Error, PermissionError) as e:
-            logger.error(f"Error copying files during restore: {e}")
-            return False
-
+                
+            # Remove existing persistence directory if it exists
+            if persist_dir.exists():
+                # Create backup of current data
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                current_backup = persist_dir.parent / f"pre_restore_backup_{timestamp}"
+                shutil.copytree(persist_dir, current_backup)
+                shutil.rmtree(persist_dir)
+                
+            # Move extracted data to persistence directory
+            shutil.copytree(extracted_dir, persist_dir)
+            
+        logger.info(f"ChromaDB restored from backup: {backup_path}")
+        return True
+        
     except Exception as e:
         logger.error(f"Error during ChromaDB restore: {e}")
         return False
