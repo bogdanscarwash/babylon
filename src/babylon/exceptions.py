@@ -356,8 +356,7 @@ class GameStateError(BabylonError):
 class BackupError(BabylonError):
     """Raised when backup or restore operations fail.
     
-    See ERROR_CODES.md for detailed documentation of error codes 6000-6999.
-    """
+    See ERROR_CODES.md for detailed documentation of error codes 6000-6999."""
     def __init__(self, message: str, error_code: str, backup_path: Optional[str] = None,
                  required_space: Optional[int] = None, available_space: Optional[int] = None):
         super().__init__(message, error_code)
