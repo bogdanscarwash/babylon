@@ -10,6 +10,8 @@ logger = logging.getLogger(__name__)
 from typing import Optional, Dict
 import json
 import tarfile
+import hashlib
+import tempfile
 from pathlib import Path
 
 def backup_chroma(client: chromadb.Client, backup_dir: str, max_backups: int = 5) -> bool:
