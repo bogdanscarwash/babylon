@@ -31,6 +31,7 @@
 ### Prerequisites
 
 - Python 3.8 or higher
+- PostgreSQL 13 or higher
 - Virtual environment tool (optional but recommended)
 
 ### Installation Steps
@@ -55,7 +56,41 @@
    pip install -r requirements.txt
    ```
 
-4. **Validate XML Schemas (Optional but Recommended)**
+4. **Set Up the PostgreSQL Database**
+
+   - **Install PostgreSQL** if it's not already installed.
+
+     - **On Linux (Debian/Ubuntu):**
+       ```shell
+       sudo apt-get update
+       sudo apt-get install postgresql postgresql-contrib
+       ```
+
+     - **On macOS using Homebrew:**
+       ```shell
+       brew update
+       brew install postgresql
+       ```
+
+     - **On Windows:**
+       Download and install from [PostgreSQL Official Site](https://www.postgresql.org/download/windows/).
+
+   - **Create a new database for the project:**
+     ```shell
+     # Start the PostgreSQL service (if not already running)
+     sudo service postgresql start  # On Linux
+     brew services start postgresql # On macOS
+
+     # Switch to the postgres user and access the psql shell
+     sudo -u postgres psql  # On Linux
+     psql postgres          # On macOS
+
+     # In the psql shell, create the database
+     CREATE DATABASE babylon_db;
+     \q  # Exit the psql shell
+     ```
+
+5. **Validate XML Schemas (Optional but Recommended)**
 
    Ensure that all XML files conform to their schemas.
 

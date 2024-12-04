@@ -8,3 +8,5 @@ tk>=0.1.0
 pandas>=1.0.0
 chromadb>=0.4.5
 sentence-transformers>=2.2.2
+sqlalchemy>=1.4.0
+psycopg2-binary>=2.8.6
