@@ -1,37 +1,7 @@
 """Custom exceptions for the Babylon application.
 
-This module defines a comprehensive hierarchy of custom exceptions used throughout 
-the application. The hierarchy is designed to provide specific error types while 
-maintaining a common base class for all Babylon-specific errors.
-
-Exception Hierarchy:
-    BabylonError                  # Root exception for all Babylon errors
-    - DatabaseError               # Database operations and connectivity issues
-    - EntityError                 # Base class for entity-related errors
-        - EntityNotFoundError     # Entity lookup/access failures
-        - EntityValidationError   # Entity data validation failures
-    - ConfigurationError          # Configuration loading and validation issues
-    - GameStateError             # Game state consistency and transition errors
-    - BackupError                # Backup/restore operation failures
-
-Each exception includes:
-    - message: A human-readable error description
-    - error_code: A machine-readable error code (e.g., "DB_001")
-    - Additional context through inheritance and stack traces
-
-Error Code Convention:
-    - DB_XXX: Database-related errors
-    - ENT_XXX: Entity-related errors
-    - CFG_XXX: Configuration errors
-    - GAME_XXX: Game state errors
-    - BACKUP_XXX: Backup/restore errors
-
-Integration with Logging:
-    All exceptions integrate with the logging system to provide:
-    - Structured error information
-    - Error codes for filtering and analysis
-    - Stack traces for debugging
-    - Correlation IDs for request tracking
+Defines hierarchy of exceptions with standardized error codes and logging integration.
+See ERROR_CODES.md for detailed documentation of error code ranges and usage.
 """
 from typing import Optional, Dict, List, Any
 from datetime import datetime
