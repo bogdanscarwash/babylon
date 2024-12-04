@@ -1,8 +1,8 @@
 """Metric persistence module.
 
 Provides functionality to store and retrieve performance metrics using SQLite.
-Implements efficient storage and querying of time-series metric data with support
-for data retention policies and time-range queries.
+Implements efficient storage and querying of time-series metric data with 
+support for data retention policies and time-range queries.
 
 Classes:
     MetricsPersistence: Main class handling all database operations for metrics.
@@ -19,23 +19,24 @@ from .performance_metrics import SystemMetrics, AIMetrics, GameplayMetrics
 
 class MetricsPersistence:
     """Handles persistence of performance metrics to SQLite database.
-    
+
     This class provides methods to store and retrieve different types of metrics
-    (system, AI, gameplay) using SQLite as the backing store. It handles database
-    initialization, connection management, and data cleanup.
-    
+    (system, AI, gameplay) using SQLite as the backing store. It handles 
+    database initialization, connection management, and data cleanup.
+
     Attributes:
         db_path (str): Path to the SQLite database file
     """
     def __init__(self, db_path: str = "metrics.db"):
         """Initialize metrics persistence.
-        
+
         Args:
             db_path: Path to SQLite database file. Defaults to 'metrics.db'
                     in the current directory.
         """
         self.db_path = db_path
         self._init_db()
+
     def _init_db(self) -> None:
         """Initialize database schema if not exists."""
         with self._get_connection() as conn:
