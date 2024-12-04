@@ -1,5 +1,5 @@
 from collections import Counter, deque
-from .database import SessionLocal
+from babylon.data.database import SessionLocal  # Use full import path
 from .models import Metric
 from datetime import datetime
 import json

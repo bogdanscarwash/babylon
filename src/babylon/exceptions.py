@@ -168,7 +168,7 @@ class EntityNotFoundError(EntityError):
     Attributes:
         message (str): Detailed error description
         error_code (str): ENT_XXX format code
-        entity_id (Optional[str]): ID of the entity that wasn't found
+        entity_id (Optional[str]): ID of the entity that was not found
         
     Example:
         try:
