@@ -3,6 +3,13 @@
 This module defines a comprehensive hierarchy of custom exceptions used throughout 
 the application. The hierarchy is designed to provide specific error types while 
 maintaining a common base class for all Babylon-specific errors.
+"""
+
+from typing import Optional, Any, List
+
+This module defines a comprehensive hierarchy of custom exceptions used throughout 
+the application. The hierarchy is designed to provide specific error types while 
+maintaining a common base class for all Babylon-specific errors.
 
 Exception Hierarchy:
     BabylonError                  # Root exception for all Babylon errors
