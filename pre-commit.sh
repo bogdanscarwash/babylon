@@ -10,7 +10,7 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
-echo "${YELLOW}🐍 Running Python pre-comm1it checks...${NC}"
+echo "${YELLOW}🐍 Running Python pre-commit checks...${NC}"
 
 # Function to check if Python files were modified
 check_python_files() {
@@ -74,3 +74,4 @@ if [ -n "$python_files" ]; then
 fi
 
 echo "${GREEN}✅ All checks passed!${NC}"
+exit 0
