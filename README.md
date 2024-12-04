@@ -63,6 +63,17 @@
    # Command or script to validate XML files
    ```
 
+5. **Initialize Vector Database**
+
+   The game uses ChromaDB with DuckDB+Parquet backend for efficient vector storage:
+   - Automatic persistence directory creation
+   - Built-in backup and restore capabilities
+   - Optimized for local deployment
+
+   ```shell
+   mkdir -p backups
+   ```
+
 ### Environment Variables
 
    Create a `.env` file at the root of the project to store environment variables for local development:
@@ -97,6 +108,40 @@ python src/babylon/__main__.py
 Currently, the game is in a development state with placeholder mechanics. The initial game world is defined by the XML files in the `data/xml/` directory.
 
 **Note:** The game is terminal-based and interacts via text input and output.
+
+## Backup & Recovery
+
+The game implements a robust backup and recovery system for the vector database:
+
+### Automatic Backups
+- Scheduled backups during gameplay
+- Configurable backup retention (default: 5 backups)
+- Compressed storage with checksums
+- Metadata tracking for version control
+
+### Recovery Features
+- Point-in-time restoration
+- Backup integrity verification
+- Automatic pre-restore backup
+- Atomic restore operations
+
+### Performance
+- Backup compression for space efficiency
+- Incremental backup support
+- Memory-efficient operations
+- Minimal gameplay interruption
+
+### Usage
+
+To restore from a backup:
+
+```shell
+# The game will prompt for backup path on startup
+python src/babylon/__main__.py
+
+# Or specify backup directory directly
+BACKUP_DIR=backups/20231203_120000 python src/babylon/__main__.py
+```
 
 ## Game Mechanics
 
