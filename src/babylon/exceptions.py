@@ -389,3 +389,25 @@ class BackupError(BabylonError):
         self.required_space = required_space
         self.available_space = available_space
     pass
+"""Custom exceptions for the babylon game engine."""
+
+class BabylonError(Exception):
+    """Base exception for all babylon-related errors."""
+    pass
+
+# Metrics Subsystem Exceptions
+class MetricsError(BabylonError):
+    """Base exception for metrics-related errors."""
+    pass
+
+class DatabaseConnectionError(MetricsError):
+    """Raised when database connection fails."""
+    pass
+
+class MetricsPersistenceError(MetricsError):
+    """Raised when metrics cannot be saved/loaded."""
+    pass
+
+class LogRotationError(MetricsError):
+    """Raised when log rotation fails."""
+    pass
