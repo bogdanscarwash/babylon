@@ -14,7 +14,7 @@ from entities.entity import Entity
 from data.entity_registry import EntityRegistry
 from data.models.event import Event
 from systems.contradiction_analysis import ContradictionAnalysis
-from utils.backup import backup_chroma
+from utils.backup import backup_chroma, restore_chroma
 from data.models.economy import Economy
 from data.models.politics import Politics
 
@@ -160,6 +160,11 @@ def main() -> None:
        - Processes queued events
        - Visualizes the game state
     """
+    # Prompt user for backup directory
+    backup_dir = input("Enter the path to the backup directory (or press Enter to skip restore): ")
+    if backup_dir:
+        restore_chroma(backup_dir)
+
     # Initialize ChromaDB client with persistence directory
     chroma_client = chromadb.Client(Settings(
         chroma_db_impl="duckdb+parquet",

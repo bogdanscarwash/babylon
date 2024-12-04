@@ -27,3 +27,26 @@ def backup_chroma(client: chromadb.Client, backup_dir: str) -> None:
 
     except Exception as e:
         print(f"Error during ChromaDB backup: {e}")
+
+    def restore_chroma(backup_dir: str) -> None:
+        """Restore ChromaDB data from the specified backup directory.
+
+        Args:
+            backup_dir: The path to the backup directory
+        """
+        try:
+            # Ensure backup directory exists
+            if not os.path.exists(backup_dir):
+                print(f"Backup directory {backup_dir} does not exist.")
+                return
+
+            # Remove the existing persistence directory if it exists
+            if os.path.exists(Config.CHROMADB_PERSIST_DIR):
+                shutil.rmtree(Config.CHROMADB_PERSIST_DIR)
+
+            # Copy the backup directory to the persistence directory
+            shutil.copytree(backup_dir, Config.CHROMADB_PERSIST_DIR)
+            print(f"ChromaDB restored from backup in {backup_dir}")
+
+        except Exception as e:
+            print(f"Error during ChromaDB restore: {e}")
