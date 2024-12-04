@@ -148,19 +148,31 @@ class TestChromaDBIntegration(unittest.TestCase):
     def test_large_dataset(self):
         """Test performance with larger dataset"""
         start_time = time.time()
+        batch_size = 100
+        total_entities = 1000
         
-        # Create 100 entities
-        entities = []
-        for _ in range(100):
-            entity = self.entity_registry.create_entity(type='TestType', role='TestRole')
-            entities.append(entity)
+        # Create entities in batches
+        for i in range(0, total_entities, batch_size):
+            entities_batch = []
+            for _ in range(batch_size):
+                entity = self.entity_registry.create_entity(type='TestType', role='TestRole')
+                entities_batch.append(entity)
+            
+            # Batch verify
+            ids = [e.id for e in entities_batch]
+            results = self.collection.get(ids=ids)
+            self.assertEqual(len(results['ids']), batch_size)
             
         creation_time = time.time() - start_time
         self.metrics.record_operation_time('bulk_entity_creation', creation_time)
         
-        # Verify all entities exist
-        for entity in entities:
-            self.assertIsNotNone(self.entity_registry.get_entity(entity.id))
+        # Test similarity search
+        query_entity = entities_batch[0]
+        similar = self.collection.query(
+            query_embeddings=[query_entity.embedding],
+            n_results=5
+        )
+        self.assertEqual(len(similar['ids'][0]), 5)
 
     def test_persistence_across_restarts(self):
         """Test data persistence across application restarts"""
