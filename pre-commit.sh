@@ -31,44 +31,45 @@ if [ -n "$python_files" ]; then
     done
     
     if [ -n "$existing_files" ]; then
-    # Check virtual environment
-#    if [ ! -d "venv" ] && [ ! -d "env" ]; then
-#        echo "${RED}❌ Virtual environment not found. Please create one:${NC}"
-#        echo "python -m venv venv"
-#        exit 1
-#    fi
+        # Check virtual environment
+#        if [ ! -d "venv" ] && [ ! -d "env" ]; then
+#            echo "${RED}❌ Virtual environment not found. Please create one:${NC}"
+#            echo "python -m venv venv"
+#            exit 1
+#        fi
 
-    # Ensure dependencies are installed
-    echo "📦 Checking dependencies..."
-    pip install -q black flake8 pytest pytest-cov isort
+        # Ensure dependencies are installed
+        echo "📦 Checking dependencies..."
+        pip install -q black flake8 pytest pytest-cov isort
 
-    # Format code with Black
-    echo "🎨 Formatting code with Black..."
-    python -m black $existing_files
+        # Format code with Black
+        echo "🎨 Formatting code with Black..."
+        python -m black $existing_files
 
-    # Sort imports with isort
-    echo "📝 Sorting imports with isort..."
-    python -m isort $existing_files
+        # Sort imports with isort
+        echo "📝 Sorting imports with isort..."
+        python -m isort $existing_files
 
-    # Run Flake8
-    echo "🔍 Running Flake8..."
-    if ! python -m flake8 $existing_files; then
-        echo "${RED}❌ Flake8 check failed. Please fix the issues above.${NC}"
-        exit 1
-    fi
+        # Run Flake8
+        echo "🔍 Running Flake8..."
+        if ! python -m flake8 $existing_files; then
+            echo "${RED}❌ Flake8 check failed. Please fix the issues above.${NC}"
+            exit 1
+        fi
 
-    # Run tests related to changed files
-    echo "🧪 Running related tests..."
-    if ! python -m pytest $(check_python_files) -v; then
-        echo "${RED}❌ Tests failed. Please fix the failing tests.${NC}"
-        exit 1
-    fi
+        # Run tests related to changed files
+        echo "🧪 Running related tests..."
+        if ! python -m pytest $existing_files -v; then
+            echo "${RED}❌ Tests failed. Please fix the failing tests.${NC}"
+            exit 1
+        fi
 
-    # Check for sensitive information
-    echo "🔒 Checking for sensitive information..."
-    if git diff --cached | grep -i "password\|secret\|api_key\|token"; then
-        echo "${RED}❌ Warning: Possible sensitive information detected${NC}"
-        exit 1
+        # Check for sensitive information
+        echo "🔒 Checking for sensitive information..."
+        if git diff --cached | grep -i "password\|secret\|api_key\|token"; then
+            echo "${RED}❌ Warning: Possible sensitive information detected${NC}"
+            exit 1
+        fi
     fi
 fi
 
