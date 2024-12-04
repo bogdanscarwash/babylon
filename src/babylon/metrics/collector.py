@@ -1,6 +1,10 @@
 from collections import Counter, deque
-from babylon.data.database import SessionLocal  # Use full import path
-from .models import Metric
+try:
+    from babylon.data.database import SessionLocal
+    from .models import Metric
+    DB_AVAILABLE = True
+except ImportError:
+    DB_AVAILABLE = False
 from datetime import datetime
 import json
 import logging
@@ -20,8 +24,8 @@ class MetricsCollector:
         self.log_dir = log_dir or Path("logs/metrics")
         self.log_dir.mkdir(parents=True, exist_ok=True)
         
-        # Initialize database session
-        self.db = SessionLocal()
+        # Initialize database session if available
+        self.db = SessionLocal() if DB_AVAILABLE else None
 
         # Initialize metrics storage containers with proper typing
         self.metrics: Dict[str, Any] = {
@@ -54,10 +58,11 @@ class MetricsCollector:
         object_id: Optional[str] = None,
         context_level: Optional[str] = None
     ) -> None:
-        """Record a metric in the database."""
-        metric = Metric(name=name, value=value, context=context)
-        self.db.add(metric)
-        self.db.commit()
+        """Record a metric in the database if available."""
+        if DB_AVAILABLE and self.db is not None:
+            metric = Metric(name=name, value=value, context=context)
+            self.db.add(metric)
+            self.db.commit()
         
         # Record an object access event if object_id is provided
         if object_id is not None:
