@@ -8,6 +8,7 @@ Classes:
     MetricsPersistence: Main class handling all database operations for metrics.
 """
 
+import os
 import sqlite3
 import json
 import logging
