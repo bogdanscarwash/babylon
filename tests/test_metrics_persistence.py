@@ -21,22 +21,32 @@ class TestMetricsPersistence(unittest.TestCase):
         os.rmdir(self.temp_dir)
 
     def test_save_and_retrieve_system_metrics(self):
-        metrics = SystemMetrics(
-            timestamp=datetime.now().isoformat(),
-            cpu_percent=50.0,
-            memory_percent=60.0,
-            swap_percent=30.0,
-            disk_usage_percent=70.0,
-            gpu_utilization=40.0,
-            gpu_memory_percent=45.0
-        )
-        
-        self.persistence.save_system_metrics(metrics)
-        retrieved = self.persistence.get_system_metrics()
-        
-        self.assertEqual(len(retrieved), 1)
-        self.assertEqual(retrieved[0].cpu_percent, metrics.cpu_percent)
-        self.assertEqual(retrieved[0].memory_percent, metrics.memory_percent)
+        try:
+            metrics = SystemMetrics(
+                timestamp=datetime.now().isoformat(),
+                cpu_percent=50.0,
+                memory_percent=60.0,
+                swap_percent=30.0,
+                disk_usage_percent=70.0,
+                gpu_utilization=40.0,
+                gpu_memory_percent=45.0
+            )
+            
+            try:
+                self.persistence.save_system_metrics(metrics)
+            except Exception as e:
+                self.fail(f"Failed to save metrics: {str(e)}")
+                
+            try:
+                retrieved = self.persistence.get_system_metrics()
+                self.assertEqual(len(retrieved), 1)
+                self.assertEqual(retrieved[0].cpu_percent, metrics.cpu_percent)
+                self.assertEqual(retrieved[0].memory_percent, metrics.memory_percent)
+            except Exception as e:
+                self.fail(f"Failed to retrieve metrics: {str(e)}")
+                
+        except ValueError as e:
+            self.fail(f"Invalid metric values: {str(e)}")
 
     def test_save_and_retrieve_ai_metrics(self):
         metrics = AIMetrics(

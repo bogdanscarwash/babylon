@@ -42,16 +42,26 @@ class TestChromaDBIntegration(unittest.TestCase):
         self.client.reset()
 
     def test_add_entity(self):
-        # Create a test entity
-        entity = self.entity_registry.create_entity(type='TestType', role='TestRole')
+        try:
+            # Create a test entity
+            entity = self.entity_registry.create_entity(type='TestType', role='TestRole')
 
-        # Verify the entity is in the registry
-        self.assertIn(entity.id, self.entity_registry._entities)
+            # Verify the entity is in the registry
+            try:
+                self.assertIn(entity.id, self.entity_registry._entities)
+            except KeyError as e:
+                self.fail(f"Entity not found in registry: {str(e)}")
 
-        # Verify the entity is added to ChromaDB
-        results = self.collection.get(ids=[entity.id])
-        self.assertEqual(len(results['ids']), 1)
-        self.assertEqual(results['ids'][0], entity.id)
+            # Verify the entity is added to ChromaDB
+            try:
+                results = self.collection.get(ids=[entity.id])
+                self.assertEqual(len(results['ids']), 1)
+                self.assertEqual(results['ids'][0], entity.id)
+            except Exception as e:
+                self.fail(f"Failed to retrieve entity from ChromaDB: {str(e)}")
+                
+        except Exception as e:
+            self.fail(f"Failed to create entity: {str(e)}")
 
     def test_update_entity(self):
         # Create a test entity
