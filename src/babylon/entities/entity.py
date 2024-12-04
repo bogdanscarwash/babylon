@@ -2,7 +2,7 @@ from typing import Any, Dict, Optional
 from numpy.typing import NDArray
 import numpy as np
 from datetime import datetime
-from utils.retry import retry_on_exception
+from babylon.utils.retry import retry_on_exception
 import logging
 from babylon.exceptions import EntityError, EntityValidationError
 
