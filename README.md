@@ -195,6 +195,38 @@ Contributions are welcome! Please see the [CONTRIBUTING.md](CONTRIBUTING.md) fil
 - Create a `CONTRIBUTING.md` file outlining the contribution process.
 - Establish coding standards and pull request procedures.
 
+## Error Handling & Logging
+
+### Error Code System
+The application implements a comprehensive error handling system with structured error codes:
+
+- **Format**: `XXX_NNN` (e.g., DB_001)
+- **Subsystems**:
+  - `DB_XXX`: Database operations
+  - `ENT_XXX`: Entity management
+  - `CFG_XXX`: Configuration
+  - `GAME_XXX`: Game state
+  - `BACKUP_XXX`: Backup operations
+
+Each subsystem has dedicated ranges for specific error types. For full details, see [ERROR_CODES.md](docs/ERROR_CODES.md).
+
+### Logging System
+Features a robust JSON-structured logging system with:
+
+- **Multiple Log Streams**:
+  - Main application log (`babylon_YYYYMMDD.log`)
+  - Error log (`babylon_errors_YYYYMMDD.log`)
+  - Metrics log (`babylon_metrics_YYYYMMDD.log`)
+
+- **Key Features**:
+  - Correlation ID tracking
+  - Structured JSON format
+  - Automatic rotation (10MB, 5 backups)
+  - Performance metrics
+  - Error context capture
+
+For complete logging documentation, see [LOGGING.md](docs/LOGGING.md).
+
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
