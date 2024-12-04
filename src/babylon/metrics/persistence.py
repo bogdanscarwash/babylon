@@ -10,10 +10,20 @@ Classes:
 
 import sqlite3
 import json
+import logging
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from contextlib import contextmanager
+
+from .exceptions import (
+    DatabaseConnectionError,
+    MetricsPersistenceError,
+    LogRotationError
+)
+
+# Configure module logger
+logger = logging.getLogger(__name__)
 
 from .performance_metrics import SystemMetrics, AIMetrics, GameplayMetrics
 
@@ -83,12 +93,29 @@ class MetricsPersistence:
 
     @contextmanager
     def _get_connection(self):
-        """Context manager for database connections."""
-        conn = sqlite3.connect(self.db_path)
+        """Context manager for database connections.
+        
+        Provides safe database connection handling with proper error logging
+        and connection cleanup.
+        
+        Raises:
+            DatabaseConnectionError: If connection cannot be established
+        """
+        conn = None
         try:
+            conn = sqlite3.connect(self.db_path)
+            logger.debug(f"Established database connection to {self.db_path}")
             yield conn
+        except sqlite3.Error as e:
+            logger.error(f"Database connection error: {str(e)}")
+            raise DatabaseConnectionError(f"Failed to connect to database: {str(e)}")
         finally:
-            conn.close()
+            if conn:
+                try:
+                    conn.close()
+                    logger.debug("Database connection closed")
+                except sqlite3.Error as e:
+                    logger.warning(f"Error closing database connection: {str(e)}")
 
     def save_system_metrics(self, metrics: SystemMetrics) -> None:
         """Save system metrics to database.
@@ -254,31 +281,56 @@ class MetricsPersistence:
             max_age_days: Maximum age of log files in days
             max_size_mb: Maximum size of log files in MB
             compress: Whether to compress rotated logs
-        """
-        cutoff = datetime.now() - timedelta(days=max_age_days)
-        max_bytes = max_size_mb * 1024 * 1024
-        
-        for log_file in Path(self.db_path).parent.glob("*.log"):
-            stats = log_file.stat()
             
-            # Check age and size
-            if (datetime.fromtimestamp(stats.st_mtime) < cutoff or 
-                stats.st_size > max_bytes):
-                
-                # Rotate the file
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                rotated_name = f"{log_file.stem}_{timestamp}{log_file.suffix}"
-                rotated_path = log_file.with_name(rotated_name)
-                
-                # Compress if requested
-                if compress:
-                    import gzip
-                    with log_file.open('rb') as f_in:
-                        with gzip.open(f"{rotated_path}.gz", 'wb') as f_out:
-                            f_out.write(f_in.read())
-                    log_file.unlink()
-                else:
-                    log_file.rename(rotated_path)
+        Raises:
+            LogRotationError: If log rotation fails
+        """
+        logger.info(f"Starting log rotation (max age: {max_age_days} days, max size: {max_size_mb}MB)")
+        try:
+            cutoff = datetime.now() - timedelta(days=max_age_days)
+            max_bytes = max_size_mb * 1024 * 1024
+            
+            for log_file in Path(self.db_path).parent.glob("*.log"):
+                try:
+                    stats = log_file.stat()
+                    
+                    # Check age and size
+                    if (datetime.fromtimestamp(stats.st_mtime) < cutoff or 
+                        stats.st_size > max_bytes):
+                        
+                        logger.info(f"Rotating log file: {log_file}")
+                        
+                        # Rotate the file
+                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                        rotated_name = f"{log_file.stem}_{timestamp}{log_file.suffix}"
+                        rotated_path = log_file.with_name(rotated_name)
+                        
+                        # Compress if requested
+                        if compress:
+                            try:
+                                import gzip
+                                with log_file.open('rb') as f_in:
+                                    with gzip.open(f"{rotated_path}.gz", 'wb') as f_out:
+                                        f_out.write(f_in.read())
+                                log_file.unlink()
+                                logger.debug(f"Compressed and removed original: {log_file}")
+                            except (IOError, OSError) as e:
+                                raise LogRotationError(f"Failed to compress log file {log_file}: {str(e)}")
+                        else:
+                            try:
+                                log_file.rename(rotated_path)
+                                logger.debug(f"Renamed log file to: {rotated_path}")
+                            except OSError as e:
+                                raise LogRotationError(f"Failed to rename log file {log_file}: {str(e)}")
+                                
+                except OSError as e:
+                    logger.error(f"Error processing log file {log_file}: {str(e)}")
+                    continue
+                    
+        except Exception as e:
+            error_msg = f"Log rotation failed: {str(e)}"
+            logger.error(error_msg)
+            raise LogRotationError(error_msg)
 
     def cleanup_old_metrics(self, days_to_keep: int = 30) -> None:
         """Remove metrics older than specified days."""
