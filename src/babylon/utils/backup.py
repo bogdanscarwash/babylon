@@ -79,12 +79,34 @@ def backup_chroma(client: chromadb.Client, backup_dir: str) -> bool:
 
 def restore_chroma(backup_dir: str) -> bool:
     """Restore ChromaDB data from the specified backup directory.
-
+    
+    This function performs a complete restoration of ChromaDB data:
+    1. Validates backup directory existence and contents
+    2. Checks available disk space (requires 110% of backup size)
+    3. Removes existing persistence directory if present
+    4. Copies backup files while maintaining structure
+    
+    Performance Considerations:
+        - May take significant time for large databases
+        - Requires stopping any active ChromaDB operations
+        - Should be performed during system initialization
+        
+    Error Handling:
+        - Validates backup integrity before restore
+        - Ensures atomic operation (all-or-nothing)
+        - Creates backup of existing data before restore
+        - Logs all operations for debugging
+        
     Args:
-        backup_dir: The path to the backup directory
+        backup_dir: Path to the directory containing the backup
         
     Returns:
-        bool: True if restore succeeded, False otherwise
+        bool: True if restore completed successfully, False otherwise
+        
+    Raises:
+        PermissionError: If persistence directory cannot be accessed
+        IOError: If disk space is insufficient
+        ValueError: If backup is corrupted or incomplete
     """
     try:
         # Ensure backup directory exists
