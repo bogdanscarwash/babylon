@@ -31,3 +31,22 @@
 - 5001: Entity registry operation failed
 - 5002: Concurrent operation failed
 - 5003: Persistence verification failed
+
+## Backup Errors (6000-6999)
+- 6000: Backup creation failed
+- 6001: Backup verification failed
+- 6002: Insufficient disk space
+- 6003: Backup path inaccessible
+- 6004: Backup metadata corruption
+- 6005: Backup compression failed
+- 6006: Restore operation failed
+- 6007: Backup integrity check failed
+- 6008: Backup cleanup failed
+- 6009: Concurrent backup conflict
+
+Backup errors occur during backup/restore operations and include:
+- Space validation failures (6002)
+- Access permission issues (6003) 
+- Data integrity problems (6004, 6007)
+- Operation failures (6000, 6005, 6006)
+- Resource cleanup issues (6008)
