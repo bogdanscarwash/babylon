@@ -10,11 +10,31 @@ class ChromaManager:
     """Manages ChromaDB client lifecycle and operations.
     
     This class implements the Singleton pattern to ensure only one ChromaDB client
-    exists throughout the application lifecycle. It handles:
-    - Client initialization with proper settings
-    - Collection management
-    - Resource cleanup
-    - Persistence configuration
+    exists throughout the application lifecycle. It provides centralized management
+    of vector database operations for storing and retrieving entity embeddings.
+    
+    Implementation Details:
+        - Uses DuckDB+Parquet backend for efficient local storage and querying
+        - Implements lazy initialization to optimize resource usage
+        - Provides automatic persistence and backup capabilities
+        - Handles graceful cleanup during shutdown
+        
+    Key Features:
+        - Thread-safe singleton implementation
+        - Automatic connection management
+        - Collection creation and access
+        - Resource cleanup and persistence
+        
+    Performance Considerations:
+        - Maintains connection pool for efficient queries
+        - Implements caching for frequently accessed collections
+        - Uses batch operations for better throughput
+        - Handles memory management through lazy loading
+    
+    Usage Example:
+        manager = ChromaManager()
+        collection = manager.get_or_create_collection("entities")
+        collection.add(documents=[...], embeddings=[...])
     
     Attributes:
         _instance (Optional[ChromaManager]): Singleton instance of the manager

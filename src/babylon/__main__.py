@@ -157,16 +157,39 @@ def signal_handler(signum: int, frame: Any) -> None:
 def main() -> None:
     """Main function to initialize and run the game loop.
     
-    This function:
-    1. Loads configuration from environment variables
-    2. Initializes ChromaDB and embedding model
-    3. Initializes core game systems (entities, economy, politics)
-    4. Sets up the contradiction analysis system
-    5. Runs the main game loop which:
-       - Updates economic and political systems
-       - Analyzes and updates contradictions
-       - Processes queued events
-       - Visualizes the game state
+    This function orchestrates the game's core systems and database operations:
+    
+    Database Initialization:
+        1. Sets up ChromaDB with DuckDB+Parquet backend
+        2. Configures persistence directory and settings
+        3. Initializes embedding model for vector generation
+        4. Creates or connects to entity collection
+    
+    System Initialization:
+        1. Loads configuration from environment variables
+        2. Sets up core game systems (entities, economy, politics)
+        3. Initializes contradiction analysis system
+        4. Configures backup and recovery mechanisms
+    
+    Game Loop Operations:
+        1. Updates economic and political simulations
+        2. Analyzes and updates dialectical contradictions
+        3. Processes event queue and triggers
+        4. Updates entity embeddings and relationships
+        5. Performs periodic state persistence
+        6. Visualizes current game state
+    
+    Error Handling:
+        - Implements graceful shutdown on signals
+        - Ensures data persistence on exit
+        - Provides backup/restore capabilities
+        - Logs errors and system state
+    
+    Performance Considerations:
+        - Uses lazy loading for resource optimization
+        - Implements batch operations for database updates
+        - Manages memory through strategic persistence
+        - Optimizes query patterns for ChromaDB
     """
     setup_logging()
 

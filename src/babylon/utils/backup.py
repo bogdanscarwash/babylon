@@ -9,13 +9,34 @@ logger = logging.getLogger(__name__)
 
 def backup_chroma(client: chromadb.Client, backup_dir: str) -> bool:
     """Backup ChromaDB data to the specified backup directory.
-
+    
+    This function performs a complete backup of the ChromaDB instance:
+    1. Ensures sufficient disk space is available (requires 110% of current size)
+    2. Persists any in-memory changes to disk
+    3. Creates backup directory if it doesn't exist
+    4. Copies all database files while maintaining structure
+    
+    Performance Considerations:
+        - May take significant time for large databases
+        - Requires additional disk space during backup
+        - Should be run during low-activity periods
+    
+    Error Handling:
+        - Checks for disk space before starting
+        - Validates backup directory permissions
+        - Ensures data consistency through atomic operations
+        - Logs all errors for debugging
+    
     Args:
-        client: The ChromaDB client instance
-        backup_dir: The path to the backup directory
+        client: The ChromaDB client instance to backup
+        backup_dir: The path where backup will be stored
         
     Returns:
-        bool: True if backup succeeded, False otherwise
+        bool: True if backup completed successfully, False otherwise
+        
+    Raises:
+        PermissionError: If backup directory cannot be created/written to
+        IOError: If disk space is insufficient
     """
     try:
         # Check disk space
