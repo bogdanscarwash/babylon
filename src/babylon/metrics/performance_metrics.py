@@ -30,13 +30,30 @@ class SystemMetrics:
     gpu_memory_percent: Optional[float]
 
 @dataclass
+class PerformanceThresholds:
+    """Performance thresholds for monitoring."""
+    MAX_QUERY_LATENCY_MS: float = 100.0  # 100ms max query time
+    MAX_MEMORY_USAGE_GB: float = 2.0      # 2GB max memory usage
+    MIN_CACHE_HIT_RATE: float = 0.90      # 90% minimum cache hit rate
+
+@dataclass
 class AIMetrics:
     """AI system performance and behavior metrics."""
-    model_latency_ms: float
+    query_latency_ms: float
+    memory_usage_gb: float
     token_count: int
     embedding_dimension: int
     cache_hit_rate: float
     anomaly_score: float
+    
+    def check_thresholds(self) -> Dict[str, bool]:
+        """Check if metrics meet performance thresholds."""
+        thresholds = PerformanceThresholds()
+        return {
+            "query_latency": self.query_latency_ms <= thresholds.MAX_QUERY_LATENCY_MS,
+            "memory_usage": self.memory_usage_gb <= thresholds.MAX_MEMORY_USAGE_GB,
+            "cache_hit_rate": self.cache_hit_rate >= thresholds.MIN_CACHE_HIT_RATE
+        }
 
 @dataclass
 class GameplayMetrics:
@@ -79,17 +96,29 @@ class MetricsCollector:
 
         return metrics
 
-    def collect_ai_metrics(self, model_latency: float, token_count: int,
+    def collect_ai_metrics(self, query_time: float, token_count: int,
                          embedding_dim: int, cache_hits: int,
                          cache_total: int, anomaly_score: float) -> AIMetrics:
         """Collect AI system performance metrics."""
-        return AIMetrics(
-            model_latency_ms=model_latency * 1000,
+        memory_usage = psutil.Process().memory_info().rss / (1024 * 1024 * 1024)  # Convert to GB
+        cache_hit_rate = cache_hits / max(cache_total, 1)
+        
+        metrics = AIMetrics(
+            query_latency_ms=query_time * 1000,
+            memory_usage_gb=memory_usage,
             token_count=token_count,
             embedding_dimension=embedding_dim,
-            cache_hit_rate=cache_hits / max(cache_total, 1),
+            cache_hit_rate=cache_hit_rate,
             anomaly_score=anomaly_score
         )
+        
+        # Check if metrics meet thresholds
+        threshold_results = metrics.check_thresholds()
+        for metric, meets_threshold in threshold_results.items():
+            if not meets_threshold:
+                logger.warning(f"Performance threshold exceeded for {metric}")
+                
+        return metrics
 
     def collect_gameplay_metrics(self) -> GameplayMetrics:
         """Collect user gameplay metrics."""
