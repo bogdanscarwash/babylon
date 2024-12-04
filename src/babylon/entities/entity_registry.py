@@ -145,7 +145,11 @@ class EntityRegistry:
             query_params["where"] = filter_criteria
             
         # Execute search
-        results = self._chroma_collection.query(**query_params)
+        try:
+            results = self._chroma_collection.query(**query_params)
+        except Exception as e:
+            logger.error(f"Error querying ChromaDB for entity '{entity_id}': {e}")
+            return []  # Return an empty list or handle as appropriate
         
         # Process results
         similar_entities = []

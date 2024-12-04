@@ -1,6 +1,7 @@
 import signal
 import sys
 import atexit
+import logging
 from typing import Any, Dict, List, Optional
 from dotenv import load_dotenv
 import chromadb
@@ -18,7 +19,8 @@ from utils.backup import backup_chroma, restore_chroma
 from data.models.economy import Economy
 from data.models.politics import Politics
 
-def handle_event(event: Event, game_state: Dict[str, Any]) -> None:
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
     """Process and apply an event's effects to the game state.
     
     This function:
@@ -47,10 +49,14 @@ def handle_event(event: Event, game_state: Dict[str, Any]) -> None:
     if event.consequences:
         game_state['event_queue'].extend(event.consequences)
     # Initialize ChromaDB client with persistence directory from config
-    chroma_client = chromadb.Client(Settings(
-        chroma_db_impl="duckdb+parquet",
-        persist_directory=Config.CHROMADB_PERSIST_DIR
-    ))
+    try:
+        chroma_client = chromadb.Client(Settings(
+            chroma_db_impl="duckdb+parquet",
+            persist_directory=Config.CHROMADB_PERSIST_DIR
+        ))
+    except Exception as e:
+        logger.error(f"Failed to initialize ChromaDB client: {e}")
+        sys.exit(1)  # Exit or handle the error appropriately
 
     # Initialize the embedding model
     embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
@@ -229,4 +235,8 @@ def main() -> None:
         break
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        logger.error(f"An unexpected error occurred: {e}")
+        sys.exit(1)

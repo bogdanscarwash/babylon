@@ -92,12 +92,15 @@ class Entity:
         if self.embedding is None:
             raise ValueError("Embedding must be generated before adding to ChromaDB")
             
-        collection.add(
-            documents=[self.id],
-            embeddings=[self.embedding],
-            ids=[self.id],
-            metadatas=[self.get_metadata()]
-        )
+        try:
+            collection.add(
+                documents=[self.id],
+                embeddings=[self.embedding],
+                ids=[self.id],
+                metadatas=[self.get_metadata()]
+            )
+        except Exception as e:
+            logger.error(f"Error adding entity '{self.id}' to ChromaDB: {e}")
 
     def update_in_chromadb(self, collection: Any) -> None:
         """Update the entity's embedding and metadata in the ChromaDB collection.

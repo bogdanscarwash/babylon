@@ -13,7 +13,10 @@ def backup_chroma(client: chromadb.Client, backup_dir: str) -> None:
     """
     try:
         # Persist any changes to disk
-        client.persist()
+        try:
+            client.persist()
+        except Exception as e:
+            logger.error(f"Error persisting ChromaDB data: {e}")
 
         # Ensure backup directory exists
         os.makedirs(backup_dir, exist_ok=True)
