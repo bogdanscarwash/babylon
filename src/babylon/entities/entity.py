@@ -31,6 +31,9 @@ class Entity:
         self.type = type  # Entity classification (e.g., "Class", "Organization")
         self.role = role  # Dialectical role (e.g., "Oppressor", "Oppressed")
         
+        # Vector embedding (initialized as None)
+        self.embedding = None
+        
         # Quantitative attributes that influence contradictions
         self.freedom = 1.0   # Degree of autonomy and self-determination
         self.wealth = 1.0    # Economic and material resources
