@@ -6,6 +6,9 @@ from data.models.event import Event
 from systems.contradiction_analysis import ContradictionAnalysis
 from data.models.economy import Economy
 from data.models.politics import Politics
+import chromadb
+from chromadb.config import Settings
+from sentence_transformers import SentenceTransformer
 
 def handle_event(event: Event, game_state: Dict[str, Any]) -> None:
     """Process and apply an event's effects to the game state.
@@ -35,6 +38,16 @@ def handle_event(event: Event, game_state: Dict[str, Any]) -> None:
     # These can be either follow-up Events or direct Effects
     if event.consequences:
         game_state['event_queue'].extend(event.consequences)
+    # Initialize ChromaDB client and embedding model
+    chroma_client = chromadb.Client(Settings(
+        chroma_db_impl="duckdb+parquet",
+        persist_directory=Config.CHROMADB_PERSIST_DIR  # Ensure this is set in your config
+    ))
+    embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
+
+    # Create or get the collection for entities
+    collection = chroma_client.get_or_create_collection(name='entities')
+
     # Access configuration variables
     game_state['event_history'] = []  # Add this line
     secret_key: str = Config.SECRET_KEY

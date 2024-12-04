@@ -10,3 +10,4 @@ class BaseConfig:
    DATABASE_URL = os.getenv('DATABASE_URL', 'sqlite:///default.db')
    DEBUG = False
    TESTING = False
+   CHROMADB_PERSIST_DIR = os.getenv('CHROMADB_PERSIST_DIR', './chromadb')
