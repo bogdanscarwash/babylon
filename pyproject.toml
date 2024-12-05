@@ -1,27 +1,42 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
-name = "babylon"
+name = "fall-of-babylon"
 version = "0.2.0"
-description = "A game system modeling societal contradictions and power dynamics"
-requires-python = ">=3.11,<3.13"
+description = "A Marxist text-based role playing game powered on the backend by Claude 3.5 Sonnet. It aims to educate and entertain by turning the immortal science of dialectical materialism into a game engine."
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+license = "Apache-2.0"
+keywords = ["ai", "llm", "marxism", "rpg", "dystopian"]
+authors = [
+   {name = "Persephone Raskova", email = "percy@babylonrpg.com" },
+]
+classifiers = [
+
+]
+ [project.urls]
+ Documentation = "https://github.com/bogdanscarwash/babylon#readme"
+ Issues = "https://github.com/bogdanscarwash/babylon/issues"
+ Source = "https://github.com/bogdanscarwash/babylon"
+
+[tool.hatch.envs.default]
 dependencies = [
+   "chromadb>=0.5.21",
    "xmlschema>=2.0.0",
    "python-dotenv>=0.19.0",
+   "numpy==2.1.3",
    "matplotlib>=3.0.0",
    "networkx>=2.0.0",
    "pytest>=6.0.0",
    "pluggy>=1.5.0",
-   "chromadb>=0.5.21",
    "sentence-transformers>=2.2.2",
-   "tk>=0.1.0",
+   "gputil==1.4.0",
    "pandas>=1.0.0",
-   "sqlalchemy>=1.4.0",
-   "psycopg2-binary>=2.8.6"
+   "psycopg2-binary>=2.8.6",
+   "tokenizers<0.21,>=0.20"
 ]
-
-
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/babylon"]
@@ -32,7 +47,7 @@ testpaths = ["tests"]
 
 [tool.black]
 line-length = 88
-target-version = ['py311']
+target-version = ['py312']
 include = '\.pyi?$'
 
 [tool.isort]
@@ -40,12 +55,8 @@ profile = "black"
 multi_line_output = 3
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.12"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
 check_untyped_defs = true
-
-[project.urls]
-"Homepage" = "https://github.com/yourusername/babylon"
-"Bug Tracker" = "https://github.com/yourusername/babylon/issues"

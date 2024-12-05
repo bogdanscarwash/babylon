@@ -8,37 +8,37 @@ Classes:
     MetricsPersistence: Main class handling all database operations for metrics.
 """
 
-import os
-import sqlite3
 import json
 import logging
+import os
+import sqlite3
+from contextlib import contextmanager
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import List, Optional, Dict, Any
-from contextlib import contextmanager
 
 from ..exceptions import (
     DatabaseConnectionError,
+    LogRotationError,
     MetricsPersistenceError,
-    LogRotationError
 )
 
 # Configure module logger
 logger = logging.getLogger(__name__)
 
-from .performance_metrics import SystemMetrics, AIMetrics, GameplayMetrics
+from .performance_metrics import AIMetrics, GameplayMetrics, SystemMetrics
 
 
 class MetricsPersistence:
     """Handles persistence of performance metrics to SQLite database.
 
     This class provides methods to store and retrieve different types of metrics
-    (system, AI, gameplay) using SQLite as the backing store. It handles 
+    (system, AI, gameplay) using SQLite as the backing store. It handles
     database initialization, connection management, and data cleanup.
 
     Attributes:
         db_path (str): Path to the SQLite database file
     """
+
     def __init__(self, db_path: str = "metrics.db"):
         """Initialize metrics persistence.
 
@@ -55,7 +55,8 @@ class MetricsPersistence:
     def _init_db(self) -> None:
         """Initialize database schema if not exists."""
         with self._get_connection() as conn:
-            conn.executescript("""
+            conn.executescript(
+                """
                 PRAGMA foreign_keys = ON;
                 CREATE TABLE IF NOT EXISTS system_metrics (
                     timestamp TEXT PRIMARY KEY,
@@ -93,15 +94,16 @@ class MetricsPersistence:
                 ON ai_metrics(timestamp);
                 CREATE INDEX IF NOT EXISTS idx_gameplay_metrics_timestamp
                 ON gameplay_metrics(timestamp);
-            """)
+            """
+            )
 
     @contextmanager
     def _get_connection(self):
         """Context manager for database connections.
-        
+
         Provides safe database connection handling with proper error logging
         and connection cleanup.
-        
+
         Raises:
             DatabaseConnectionError: If connection cannot be established
         """
@@ -113,93 +115,100 @@ class MetricsPersistence:
             logger.debug(f"Established database connection to {self.db_path}")
             yield conn
         except sqlite3.Error as e:
-            logger.error(f"Database connection error: {str(e)}")
-            raise DatabaseConnectionError(f"Failed to connect to database: {str(e)}")
+            logger.error(f"Database connection error: {e!s}")
+            raise DatabaseConnectionError(f"Failed to connect to database: {e!s}")
         finally:
             if conn:
                 try:
                     conn.close()
                     logger.debug("Database connection closed")
                 except sqlite3.Error as e:
-                    logger.warning(f"Error closing database connection: {str(e)}")
+                    logger.warning(f"Error closing database connection: {e!s}")
 
     def save_system_metrics(self, metrics: SystemMetrics) -> None:
         """Save system metrics to database.
-        
+
         Args:
             metrics: SystemMetrics instance to save
         """
         with self._get_connection() as conn:
-            conn.execute("""
+            conn.execute(
+                """
                 INSERT OR REPLACE INTO system_metrics
                 VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (
-                metrics.timestamp,
-                metrics.cpu_percent,
-                metrics.memory_percent,
-                metrics.swap_percent,
-                metrics.disk_usage_percent,
-                metrics.gpu_utilization,
-                metrics.gpu_memory_percent
-            ))
+            """,
+                (
+                    metrics.timestamp,
+                    metrics.cpu_percent,
+                    metrics.memory_percent,
+                    metrics.swap_percent,
+                    metrics.disk_usage_percent,
+                    metrics.gpu_utilization,
+                    metrics.gpu_memory_percent,
+                ),
+            )
 
     def save_ai_metrics(self, metrics: AIMetrics) -> None:
         """Save AI metrics to database.
-        
+
         Args:
             metrics: AIMetrics instance to save
         """
         with self._get_connection() as conn:
-            conn.execute("""
+            conn.execute(
+                """
                 INSERT OR REPLACE INTO ai_metrics
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                datetime.now().isoformat(),
-                metrics.query_latency_ms,
-                metrics.memory_usage_gb,
-                metrics.token_count,
-                metrics.embedding_dimension,
-                metrics.cache_hit_rate,
-                metrics.anomaly_score,
-                json.dumps(metrics.threshold_violations)
-            ))
+            """,
+                (
+                    datetime.now().isoformat(),
+                    metrics.query_latency_ms,
+                    metrics.memory_usage_gb,
+                    metrics.token_count,
+                    metrics.embedding_dimension,
+                    metrics.cache_hit_rate,
+                    metrics.anomaly_score,
+                    json.dumps(metrics.threshold_violations),
+                ),
+            )
 
     def save_gameplay_metrics(self, metrics: GameplayMetrics) -> None:
         """Save gameplay metrics to database.
-        
+
         Args:
             metrics: GameplayMetrics instance to save
         """
         with self._get_connection() as conn:
-            conn.execute("""
+            conn.execute(
+                """
                 INSERT OR REPLACE INTO gameplay_metrics
                 VALUES (?, ?, ?, ?, ?, ?)
-            """, (
-                datetime.now().isoformat(),
-                metrics.session_duration,
-                metrics.actions_per_minute,
-                json.dumps(metrics.event_counts),
-                json.dumps(metrics.contradiction_intensities),
-                json.dumps(metrics.user_choices)
-            ))
+            """,
+                (
+                    datetime.now().isoformat(),
+                    metrics.session_duration,
+                    metrics.actions_per_minute,
+                    json.dumps(metrics.event_counts),
+                    json.dumps(metrics.contradiction_intensities),
+                    json.dumps(metrics.user_choices),
+                ),
+            )
 
     def get_system_metrics(
-        self,
-        start_time: Optional[str] = None,
-        end_time: Optional[str] = None
-    ) -> List[SystemMetrics]:
+        self, start_time: str | None = None, end_time: str | None = None
+    ) -> list[SystemMetrics]:
         """Retrieve system metrics within time range.
-        
+
         Args:
             start_time: ISO format timestamp for range start
             end_time: ISO format timestamp for range end
-            
+
         Returns:
             List of SystemMetrics instances
         """
         query = "SELECT * FROM system_metrics"
         params = []
-        
+
         if start_time or end_time:
             query += " WHERE "
             if start_time:
@@ -209,20 +218,18 @@ class MetricsPersistence:
                 query += " AND " if start_time else ""
                 query += "timestamp <= ?"
                 params.append(end_time)
-                
+
         with self._get_connection() as conn:
             cursor = conn.execute(query, params)
             return [SystemMetrics(*row) for row in cursor.fetchall()]
 
     def get_ai_metrics(
-        self,
-        start_time: Optional[str] = None,
-        end_time: Optional[str] = None
-    ) -> List[AIMetrics]:
+        self, start_time: str | None = None, end_time: str | None = None
+    ) -> list[AIMetrics]:
         """Retrieve AI metrics within time range."""
         query = "SELECT * FROM ai_metrics"
         params = []
-        
+
         if start_time or end_time:
             query += " WHERE "
             if start_time:
@@ -232,7 +239,7 @@ class MetricsPersistence:
                 query += " AND " if start_time else ""
                 query += "timestamp <= ?"
                 params.append(end_time)
-                
+
         with self._get_connection() as conn:
             cursor = conn.execute(query, params)
             return [
@@ -243,20 +250,18 @@ class MetricsPersistence:
                     embedding_dimension=row[4],
                     cache_hit_rate=row[5],
                     anomaly_score=row[6],
-                    threshold_violations=json.loads(row[7])
+                    threshold_violations=json.loads(row[7]),
                 )
                 for row in cursor.fetchall()
             ]
 
     def get_gameplay_metrics(
-        self,
-        start_time: Optional[str] = None,
-        end_time: Optional[str] = None
-    ) -> List[GameplayMetrics]:
+        self, start_time: str | None = None, end_time: str | None = None
+    ) -> list[GameplayMetrics]:
         """Retrieve gameplay metrics within time range."""
         query = "SELECT * FROM gameplay_metrics"
         params = []
-        
+
         if start_time or end_time:
             query += " WHERE "
             if start_time:
@@ -266,7 +271,7 @@ class MetricsPersistence:
                 query += " AND " if start_time else ""
                 query += "timestamp <= ?"
                 params.append(end_time)
-                
+
         with self._get_connection() as conn:
             cursor = conn.execute(query, params)
             return [
@@ -275,66 +280,79 @@ class MetricsPersistence:
                     actions_per_minute=row[2],
                     event_counts=json.loads(row[3]),
                     contradiction_intensities=json.loads(row[4]),
-                    user_choices=json.loads(row[5])
+                    user_choices=json.loads(row[5]),
                 )
                 for row in cursor.fetchall()
             ]
 
-    def rotate_logs(self, max_age_days: int = 30, max_size_mb: int = 10, compress: bool = False) -> None:
+    def rotate_logs(
+        self, max_age_days: int = 30, max_size_mb: int = 10, compress: bool = False
+    ) -> None:
         """Rotate log files based on age and size.
-        
+
         Args:
             max_age_days: Maximum age of log files in days
             max_size_mb: Maximum size of log files in MB
             compress: Whether to compress rotated logs
-            
+
         Raises:
             LogRotationError: If log rotation fails
         """
-        logger.info(f"Starting log rotation (max age: {max_age_days} days, max size: {max_size_mb}MB)")
+        logger.info(
+            f"Starting log rotation (max age: {max_age_days} days, max size: {max_size_mb}MB)"
+        )
         try:
             cutoff = datetime.now() - timedelta(days=max_age_days)
             max_bytes = max_size_mb * 1024 * 1024
-            
+
             for log_file in Path(self.db_path).parent.glob("*.log"):
                 try:
                     stats = log_file.stat()
-                    
+
                     # Check age and size
-                    if (datetime.fromtimestamp(stats.st_mtime) < cutoff or 
-                        stats.st_size > max_bytes):
-                        
+                    if (
+                        datetime.fromtimestamp(stats.st_mtime) < cutoff
+                        or stats.st_size > max_bytes
+                    ):
+
                         logger.info(f"Rotating log file: {log_file}")
-                        
+
                         # Rotate the file
                         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                         rotated_name = f"{log_file.stem}_{timestamp}{log_file.suffix}"
                         rotated_path = log_file.with_name(rotated_name)
-                        
+
                         # Compress if requested
                         if compress:
                             try:
                                 import gzip
-                                with log_file.open('rb') as f_in:
-                                    with gzip.open(f"{rotated_path}.gz", 'wb') as f_out:
+
+                                with log_file.open("rb") as f_in:
+                                    with gzip.open(f"{rotated_path}.gz", "wb") as f_out:
                                         f_out.write(f_in.read())
                                 log_file.unlink()
-                                logger.debug(f"Compressed and removed original: {log_file}")
-                            except (IOError, OSError) as e:
-                                raise LogRotationError(f"Failed to compress log file {log_file}: {str(e)}")
+                                logger.debug(
+                                    f"Compressed and removed original: {log_file}"
+                                )
+                            except OSError as e:
+                                raise LogRotationError(
+                                    f"Failed to compress log file {log_file}: {e!s}"
+                                )
                         else:
                             try:
                                 log_file.rename(rotated_path)
                                 logger.debug(f"Renamed log file to: {rotated_path}")
                             except OSError as e:
-                                raise LogRotationError(f"Failed to rename log file {log_file}: {str(e)}")
-                                
+                                raise LogRotationError(
+                                    f"Failed to rename log file {log_file}: {e!s}"
+                                )
+
                 except OSError as e:
-                    logger.error(f"Error processing log file {log_file}: {str(e)}")
+                    logger.error(f"Error processing log file {log_file}: {e!s}")
                     continue
-                    
+
         except Exception as e:
-            error_msg = f"Log rotation failed: {str(e)}"
+            error_msg = f"Log rotation failed: {e!s}"
             logger.error(error_msg)
             raise LogRotationError(error_msg)
 
@@ -343,21 +361,26 @@ class MetricsPersistence:
         try:
             cutoff = (datetime.now() - timedelta(days=days_to_keep)).isoformat()
             logger.info(f"Cleaning up metrics older than {cutoff}")
-            
+
             with self._get_connection() as conn:
-                for table in ['system_metrics', 'ai_metrics', 'gameplay_metrics']:
+                for table in ["system_metrics", "ai_metrics", "gameplay_metrics"]:
                     try:
-                        conn.execute(f"""
+                        conn.execute(
+                            f"""
                             DELETE FROM {table}
                             WHERE timestamp < ?
-                        """, (cutoff,))
+                        """,
+                            (cutoff,),
+                        )
                         logger.debug(f"Cleaned up old records from {table}")
                     except sqlite3.Error as e:
-                        error_msg = f"Failed to clean up old metrics from {table}: {str(e)}"
+                        error_msg = (
+                            f"Failed to clean up old metrics from {table}: {e!s}"
+                        )
                         logger.error(error_msg)
                         raise MetricsPersistenceError(error_msg)
-                        
+
         except Exception as e:
-            error_msg = f"Metrics cleanup failed: {str(e)}"
+            error_msg = f"Metrics cleanup failed: {e!s}"
             logger.error(error_msg)
             raise MetricsPersistenceError(error_msg)
