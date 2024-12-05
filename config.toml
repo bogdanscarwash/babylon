@@ -1,8 +1,13 @@
-baseURL = 'http://example.org/'
+baseURL = 'https://babylonrpg.com/'
 languageCode = 'en-us'
-title = 'Babylon'
+title = 'The Fall of Babylon'
 theme = 'babylon-theme'
 
 [params]
   description = "A dialectical materialist simulation game"
   featured_image = '/images/hero.jpg'
+  
+[module]
+  [[module.mounts]]
+    source = "static"
+    target = "static"
