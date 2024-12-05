@@ -39,7 +39,8 @@ dependencies = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/babylon"]
+packages = ["babylon"]
+src_paths = ["src"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]

@@ -16,7 +16,7 @@ from contextlib import contextmanager
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from ..exceptions import (
+from babylon.exceptions import (
     DatabaseConnectionError,
     LogRotationError,
     MetricsPersistenceError,

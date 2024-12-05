@@ -2,8 +2,8 @@ import logging
 from datetime import datetime
 from typing import Any
 
-from babylon.exceptions import EntityValidationError
-from babylon.utils.retry import retry_on_exception
+from ..exceptions import EntityValidationError
+from ..utils.retry import retry_on_exception
 from numpy.typing import NDArray
 
 logger = logging.getLogger(__name__)
