@@ -1,6 +1,7 @@
 from babylon.config.base import BaseConfig
 
 
+
 class TestingConfig(BaseConfig):
     """Testing configuration."""
 
