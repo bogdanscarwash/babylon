@@ -1,9 +1,10 @@
-import unittest
-import os
 import time
-from pathlib import Path
+import unittest
 from datetime import datetime, timedelta
+from pathlib import Path
+
 from babylon.metrics.persistence import MetricsPersistence
+
 
 class TestLogRotation(unittest.TestCase):
     def setUp(self):
@@ -30,7 +31,7 @@ class TestLogRotation(unittest.TestCase):
         # Verify only recent logs remain
         remaining_logs = list(self.log_dir.glob("metrics_*.log"))
         self.assertLessEqual(len(remaining_logs), 3)
-        
+
         # Verify oldest remaining log is within threshold
         oldest_log = min(remaining_logs, key=lambda p: p.stat().st_mtime)
         age_days = (time.time() - oldest_log.stat().st_mtime) / (24 * 3600)

@@ -16,15 +16,15 @@ Usage:
 import os
 
 # Get environment setting, defaulting to development
-environment = os.getenv('ENVIRONMENT', 'development').lower()
+environment = os.getenv("ENVIRONMENT", "development").lower()
 
 # Import appropriate config based on environment
-if environment == 'production':
+if environment == "production":
     from babylon.config.production import ProductionConfig as Config
-elif environment == 'testing':
+elif environment == "testing":
     from babylon.config.testing import TestingConfig as Config
 else:
     from babylon.config.development import DevelopmentConfig as Config
 
 # Export Config as the public interface
-__all__ = ['Config']
+__all__ = ["Config"]

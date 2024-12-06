@@ -1,8 +1,11 @@
 import logging
-from sqlalchemy.orm import Session
 from datetime import datetime
+
+from sqlalchemy.orm import Session
+
 from ..data.database import SessionLocal
 from ..data.models import LogEntry
+
 
 class DatabaseHandler(logging.Handler):
     def __init__(self):
@@ -15,7 +18,7 @@ class DatabaseHandler(logging.Handler):
             timestamp=datetime.utcnow(),
             message=record.getMessage(),
             module=record.module,
-            correlation_id=getattr(record, 'correlation_id', None)
+            correlation_id=getattr(record, "correlation_id", None),
         )
         self.db.add(log_entry)
         self.db.commit()
