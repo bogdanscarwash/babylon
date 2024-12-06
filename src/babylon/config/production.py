@@ -1,5 +1,6 @@
 from config.base import BaseConfig
 
+
 class ProductionConfig(BaseConfig):
     """Production configuration."""
 

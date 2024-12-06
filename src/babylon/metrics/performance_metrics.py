@@ -33,29 +33,30 @@ Usage:
 """
 
 # Standard library imports
-import json
 import logging
 import time
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
-from typing import Dict, Any, Optional, List, Tuple
+from typing import Any
+
+import GPUtil
 
 # Third-party imports
 import psutil
-import GPUtil
-from dataclasses import dataclass, asdict, field
 
 # Configure module logger
 logger = logging.getLogger(__name__)
 
 logger = logging.getLogger(__name__)
 
+
 @dataclass
 class SystemMetrics:
     """System performance metrics.
-    
+
     Tracks real-time system resource utilization including CPU, memory,
     disk, and GPU metrics when available.
-    
+
     Attributes:
         timestamp: ISO format timestamp of metric collection
         cpu_percent: CPU utilization percentage (0-100)
@@ -65,45 +66,53 @@ class SystemMetrics:
         gpu_utilization: GPU utilization percentage if available (0-100)
         gpu_memory_percent: GPU memory utilization if available (0-100)
     """
+
     timestamp: str
     cpu_percent: float
     memory_percent: float
     swap_percent: float
     disk_usage_percent: float
-    gpu_utilization: Optional[float] = None
-    gpu_memory_percent: Optional[float] = None
-    
+    gpu_utilization: float | None = None
+    gpu_memory_percent: float | None = None
+
     def __post_init__(self):
         """Validate metric ranges."""
-        for field_name in ['cpu_percent', 'memory_percent', 'swap_percent', 'disk_usage_percent']:
+        for field_name in [
+            "cpu_percent",
+            "memory_percent",
+            "swap_percent",
+            "disk_usage_percent",
+        ]:
             value = getattr(self, field_name)
             if not 0 <= value <= 100:
                 raise ValueError(f"{field_name} must be between 0 and 100")
-        
+
         # Validate GPU metrics if present
-        for field_name in ['gpu_utilization', 'gpu_memory_percent']:
+        for field_name in ["gpu_utilization", "gpu_memory_percent"]:
             value = getattr(self, field_name)
             if value is not None and not 0 <= value <= 100:
                 raise ValueError(f"{field_name} must be between 0 and 100")
 
+
 @dataclass
 class PerformanceThresholds:
     """Performance thresholds for monitoring.
-    
+
     Defines acceptable ranges for various performance metrics.
     Exceeding these thresholds triggers warnings/alerts.
-    
+
     Attributes:
         MAX_QUERY_LATENCY_MS: Maximum acceptable query response time
         MAX_MEMORY_USAGE_GB: Maximum acceptable memory usage
         MIN_CACHE_HIT_RATE: Minimum acceptable cache hit rate
         ALERT_INTERVAL_SEC: Minimum time between repeated alerts
     """
+
     MAX_QUERY_LATENCY_MS: float = 100.0
     MAX_MEMORY_USAGE_GB: float = 2.0
     MIN_CACHE_HIT_RATE: float = 0.90
     ALERT_INTERVAL_SEC: float = 300.0  # 5 minutes between repeated alerts
-    
+
     def __post_init__(self):
         """Validate threshold values."""
         if self.MAX_QUERY_LATENCY_MS <= 0:
@@ -115,13 +124,14 @@ class PerformanceThresholds:
         if self.ALERT_INTERVAL_SEC <= 0:
             raise ValueError("ALERT_INTERVAL_SEC must be positive")
 
+
 @dataclass
 class AIMetrics:
     """AI system performance and behavior metrics.
-    
+
     Tracks performance metrics related to AI model operations including
     query latency, memory usage, and cache efficiency.
-    
+
     Attributes:
         query_latency_ms: Query response time in milliseconds
         memory_usage_gb: Memory usage in gigabytes
@@ -131,14 +141,15 @@ class AIMetrics:
         anomaly_score: Anomaly detection score (0-1)
         threshold_violations: List of recent threshold violations
     """
+
     query_latency_ms: float
     memory_usage_gb: float
     token_count: int
     embedding_dimension: int
     cache_hit_rate: float
     anomaly_score: float
-    threshold_violations: List[Tuple[str, float]] = field(default_factory=list)
-    
+    threshold_violations: list[tuple[str, float]] = field(default_factory=list)
+
     def __post_init__(self):
         """Validate metric ranges."""
         if self.query_latency_ms < 0:
@@ -153,13 +164,13 @@ class AIMetrics:
             raise ValueError("cache_hit_rate must be between 0 and 1")
         if not 0 <= self.anomaly_score <= 1:
             raise ValueError("anomaly_score must be between 0 and 1")
-    
-    def check_thresholds(self) -> Dict[str, bool]:
+
+    def check_thresholds(self) -> dict[str, bool]:
         """Check if metrics meet performance thresholds.
-        
+
         Returns:
             Dict mapping metric names to boolean threshold compliance.
-            
+
         Side Effects:
             Records threshold violations in threshold_violations list.
         """
@@ -167,28 +178,36 @@ class AIMetrics:
         results = {
             "query_latency": self.query_latency_ms <= thresholds.MAX_QUERY_LATENCY_MS,
             "memory_usage": self.memory_usage_gb <= thresholds.MAX_MEMORY_USAGE_GB,
-            "cache_hit_rate": self.cache_hit_rate >= thresholds.MIN_CACHE_HIT_RATE
+            "cache_hit_rate": self.cache_hit_rate >= thresholds.MIN_CACHE_HIT_RATE,
         }
-        
+
         # Record violations with their values
         timestamp = datetime.now().isoformat()
         for metric, compliant in results.items():
             if not compliant:
-                value = getattr(self, f"{metric}_ms" if metric == "query_latency" else 
-                                    f"{metric}_gb" if metric == "memory_usage" else
-                                    metric)
+                value = getattr(
+                    self,
+                    (
+                        f"{metric}_ms"
+                        if metric == "query_latency"
+                        else f"{metric}_gb" if metric == "memory_usage" else metric
+                    ),
+                )
                 self.threshold_violations.append((timestamp, metric, value))
-        
+
         return results
+
 
 @dataclass
 class GameplayMetrics:
     """User gameplay and behavior metrics."""
+
     session_duration: float
     actions_per_minute: float
-    event_counts: Dict[str, int]
-    contradiction_intensities: Dict[str, float]
-    user_choices: Dict[str, Any]
+    event_counts: dict[str, int]
+    contradiction_intensities: dict[str, float]
+    user_choices: dict[str, Any]
+
 
 class MetricsCollector:
     """Collects and logs system, AI, and gameplay metrics."""
@@ -198,10 +217,11 @@ class MetricsCollector:
         self.action_count = 0
         self.event_counts = {}
         self.user_choices = {}
-        
+
         self.persist_metrics = persist_metrics
         if persist_metrics:
             from .persistence import MetricsPersistence
+
             self.persistence = MetricsPersistence(db_path)
 
     def collect_system_metrics(self) -> SystemMetrics:
@@ -211,9 +231,9 @@ class MetricsCollector:
             cpu_percent=psutil.cpu_percent(),
             memory_percent=psutil.virtual_memory().percent,
             swap_percent=psutil.swap_memory().percent,
-            disk_usage_percent=psutil.disk_usage('/').percent,
+            disk_usage_percent=psutil.disk_usage("/").percent,
             gpu_utilization=None,
-            gpu_memory_percent=None
+            gpu_memory_percent=None,
         )
 
         # Collect GPU metrics if available
@@ -227,28 +247,36 @@ class MetricsCollector:
 
         return metrics
 
-    def collect_ai_metrics(self, query_time: float, token_count: int,
-                         embedding_dim: int, cache_hits: int,
-                         cache_total: int, anomaly_score: float) -> AIMetrics:
+    def collect_ai_metrics(
+        self,
+        query_time: float,
+        token_count: int,
+        embedding_dim: int,
+        cache_hits: int,
+        cache_total: int,
+        anomaly_score: float,
+    ) -> AIMetrics:
         """Collect AI system performance metrics."""
-        memory_usage = psutil.Process().memory_info().rss / (1024 * 1024 * 1024)  # Convert to GB
+        memory_usage = psutil.Process().memory_info().rss / (
+            1024 * 1024 * 1024
+        )  # Convert to GB
         cache_hit_rate = cache_hits / max(cache_total, 1)
-        
+
         metrics = AIMetrics(
             query_latency_ms=query_time * 1000,
             memory_usage_gb=memory_usage,
             token_count=token_count,
             embedding_dimension=embedding_dim,
             cache_hit_rate=cache_hit_rate,
-            anomaly_score=anomaly_score
+            anomaly_score=anomaly_score,
         )
-        
+
         # Check if metrics meet thresholds
         threshold_results = metrics.check_thresholds()
         for metric, meets_threshold in threshold_results.items():
             if not meets_threshold:
                 logger.warning(f"Performance threshold exceeded for {metric}")
-                
+
         return metrics
 
     def collect_gameplay_metrics(self) -> GameplayMetrics:
@@ -261,22 +289,25 @@ class MetricsCollector:
             actions_per_minute=actions_per_minute,
             event_counts=self.event_counts.copy(),
             contradiction_intensities={},  # Populated by contradiction system
-            user_choices=self.user_choices.copy()
+            user_choices=self.user_choices.copy(),
         )
 
-    def log_metrics(self, system_metrics: Optional[SystemMetrics] = None,
-                   ai_metrics: Optional[AIMetrics] = None,
-                   gameplay_metrics: Optional[GameplayMetrics] = None) -> None:
+    def log_metrics(
+        self,
+        system_metrics: SystemMetrics | None = None,
+        ai_metrics: AIMetrics | None = None,
+        gameplay_metrics: GameplayMetrics | None = None,
+    ) -> None:
         """Log collected metrics in JSON format and persist if enabled."""
         metrics_data = {
             "timestamp": datetime.now().isoformat(),
             "system": asdict(system_metrics) if system_metrics else None,
             "ai": asdict(ai_metrics) if ai_metrics else None,
-            "gameplay": asdict(gameplay_metrics) if gameplay_metrics else None
+            "gameplay": asdict(gameplay_metrics) if gameplay_metrics else None,
         }
 
         logger.info("Performance metrics", extra={"metrics": metrics_data})
-        
+
         if self.persist_metrics:
             if system_metrics:
                 self.persistence.save_system_metrics(system_metrics)
@@ -294,7 +325,6 @@ class MetricsCollector:
         """Record a user's gameplay choice."""
         if context not in self.user_choices:
             self.user_choices[context] = []
-        self.user_choices[context].append({
-            "timestamp": datetime.now().isoformat(),
-            "choice": choice
-        })
+        self.user_choices[context].append(
+            {"timestamp": datetime.now().isoformat(), "choice": choice}
+        )
