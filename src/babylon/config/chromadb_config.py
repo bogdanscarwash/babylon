@@ -23,16 +23,20 @@ class ChromaDBConfig:
     DEFAULT_COLLECTION_NAME = "entities"
     DEFAULT_METADATA = {"source": "babylon"}
 
+
     # Backup settings
     BACKUP_DIR = BASE_DIR / "backups"
     MAX_BACKUPS = 5
+
 
     @classmethod
     def get_settings(cls, **overrides) -> chromadb.Settings:
         """Get ChromaDB settings with optional overrides.
 
+
         Args:
             **overrides: Override any default settings
+
 
         Returns:
             chromadb.Settings: ChromaDB settings instance

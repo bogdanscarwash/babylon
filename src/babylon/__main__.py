@@ -3,7 +3,12 @@ import logging
 import os
 import signal
 import sys
+import signal
+import sys
 from datetime import datetime
+from typing import Any
+
+import chromadb
 from typing import Any
 
 import chromadb
@@ -24,12 +29,15 @@ logger = logging.getLogger(__name__)
 
 
 def handle_event(event: Event, game_state: dict[str, Any]) -> None:
+
+def handle_event(event: Event, game_state: dict[str, Any]) -> None:
     """
     This function:
     1. Announces the event occurrence
     2. Applies all event effects to the game state
     3. Checks for event escalation conditions
     4. Processes any event consequences
+
 
     Args:
         event: The Event instance to process
@@ -45,13 +53,21 @@ def handle_event(event: Event, game_state: dict[str, Any]) -> None:
     for escalation_event in event.escalation_paths:
         if any(trigger.evaluate(game_state) for trigger in escalation_event.triggers):
             game_state["event_queue"].append(escalation_event)
+            game_state["event_queue"].append(escalation_event)
 
     # Process any immediate consequences of the event
     # These can be either follow-up Events or direct Effects
     if event.consequences:
         game_state["event_queue"].extend(event.consequences)
+        game_state["event_queue"].extend(event.consequences)
     # Initialize ChromaDB client with persistence directory from config
     try:
+        chroma_client = chromadb.Client(
+            Settings(
+                chroma_db_impl="duckdb+parquet",
+                persist_directory=Config.CHROMADB_PERSIST_DIR,
+            )
+        )
         chroma_client = chromadb.Client(
             Settings(
                 chroma_db_impl="duckdb+parquet",
@@ -64,11 +80,20 @@ def handle_event(event: Event, game_state: dict[str, Any]) -> None:
 
     # Initialize the embedding model
     embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
+    embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
 
     # Create or get the existing collection for entities
     collection = chroma_client.get_or_create_collection(name="entities")
+    collection = chroma_client.get_or_create_collection(name="entities")
 
     # Initialize core game systems
+    entity_registry: EntityRegistry = (
+        EntityRegistry()
+    )  # Central registry of all game entities
+    contradiction_analysis: ContradictionAnalysis = ContradictionAnalysis(
+        entity_registry
+    )  # Dialectical analysis system
+
     entity_registry: EntityRegistry = (
         EntityRegistry()
     )  # Central registry of all game entities
@@ -84,6 +109,13 @@ def handle_event(event: Event, game_state: dict[str, Any]) -> None:
         "event_queue": [],  # Queue of pending events to process
         "is_player_responsible": False,  # Flag for player vs AI decision making
         "event_history": [],  # History of processed events
+    game_state: dict[str, Any] = {
+        "entity_registry": entity_registry,  # Manages all game entities
+        "economy": Economy(),  # Handles economic simulation
+        "politics": Politics(),  # Manages political simulation
+        "event_queue": [],  # Queue of pending events to process
+        "is_player_responsible": False,  # Flag for player vs AI decision making
+        "event_history": [],  # History of processed events
     }
 
     logger.info(f"Running with SECRET_KEY={Config.SECRET_KEY}")
@@ -91,6 +123,7 @@ def handle_event(event: Event, game_state: dict[str, Any]) -> None:
     logger.info(f"Debug mode: {Config.DEBUG}")
 
     # Initialize all_events list
+    all_events: list[Event] = []  # Populate this list with Event instances
     all_events: list[Event] = []  # Populate this list with Event instances
 
     # Add entities to ChromaDB
@@ -103,7 +136,10 @@ def handle_event(event: Event, game_state: dict[str, Any]) -> None:
         # Update economic simulation (prices, production, trade, etc)
         game_state["economy"].update()
 
+        game_state["economy"].update()
+
         # Update political simulation (stability, factions, power relations)
+        game_state["politics"].update()
         game_state["politics"].update()
 
         # Analyze and update dialectical contradictions in society
@@ -117,11 +153,17 @@ def handle_event(event: Event, game_state: dict[str, Any]) -> None:
         # Evaluate triggers for all events
         for event in all_events:
             if event not in game_state["event_history"]:
+            if event not in game_state["event_history"]:
                 if all(trigger.evaluate(game_state) for trigger in event.triggers):
+                    game_state["event_queue"].append(event)
+                    game_state["event_history"].append(event)
                     game_state["event_queue"].append(event)
                     game_state["event_history"].append(event)
 
         # Process all pending events in the queue (protests, reforms, crises, etc)
+        while game_state["event_queue"]:
+            event = game_state["event_queue"].pop(0)  # Get next event
+            handle_event(event, game_state)  # Process its effects
         while game_state["event_queue"]:
             event = game_state["event_queue"].pop(0)  # Get next event
             handle_event(event, game_state)  # Process its effects
@@ -135,8 +177,10 @@ def handle_event(event: Event, game_state: dict[str, Any]) -> None:
     backup_chroma(chroma_client, backup_dir)
 
 
+
 def cleanup_chroma(client: chromadb.Client) -> None:
     """Cleanup ChromaDB resources gracefully.
+
 
     Args:
         client: The ChromaDB client instance to cleanup
@@ -145,15 +189,19 @@ def cleanup_chroma(client: chromadb.Client) -> None:
         # Persist any changes to disk
         client.persist()
 
+
         # Reset the client (closes connections)
         client.reset()
+
 
     except Exception as e:
         print(f"Error during ChromaDB cleanup: {e}")
 
 
+
 def signal_handler(signum: int, frame: Any) -> None:
     """Handle system signals for graceful shutdown.
+
 
     Args:
         signum: Signal number
@@ -163,10 +211,13 @@ def signal_handler(signum: int, frame: Any) -> None:
     sys.exit(0)
 
 
+
 def main() -> None:
     """Main function to initialize and run the game loop.
 
+
     This function orchestrates the game's core systems and database operations:
+
 
     Database Initialization:
         1. Sets up ChromaDB with DuckDB+Parquet backend
@@ -174,11 +225,13 @@ def main() -> None:
         3. Initializes embedding model for vector generation
         4. Creates or connects to entity collection
 
+
     System Initialization:
         1. Loads configuration from environment variables
         2. Sets up core game systems (entities, economy, politics)
         3. Initializes contradiction analysis system
         4. Configures backup and recovery mechanisms
+
 
     Game Loop Operations:
         1. Updates economic and political simulations
@@ -188,11 +241,13 @@ def main() -> None:
         5. Performs periodic state persistence
         6. Visualizes current game state
 
+
     Error Handling:
         - Implements graceful shutdown on signals
         - Ensures data persistence on exit
         - Provides backup/restore capabilities
         - Logs errors and system state
+
 
     Performance Considerations:
         - Uses lazy loading for resource optimization
@@ -206,11 +261,15 @@ def main() -> None:
     backup_dir = input(
         "Enter the path to the backup directory (or press Enter to skip restore): "
     )
+    backup_dir = input(
+        "Enter the path to the backup directory (or press Enter to skip restore): "
+    )
     if backup_dir:
         restore_chroma(backup_dir)
 
     # Initialize ChromaDB
     from babylon.data.chroma_manager import ChromaManager
+
 
     chroma_manager = ChromaManager()
     chroma_client = chroma_manager.client
@@ -222,8 +281,11 @@ def main() -> None:
 
     # Initialize the embedding model
     embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
+    # Initialize the embedding model
+    embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
 
     # Create or get the collection for entities
+    collection = chroma_client.get_or_create_collection(name="entities")
     collection = chroma_client.get_or_create_collection(name="entities")
 
     # Access configuration variables
@@ -238,7 +300,20 @@ def main() -> None:
         entity_registry
     )  # Dialectical analysis system
 
+    entity_registry: EntityRegistry = (
+        EntityRegistry()
+    )  # Central registry of all game entities
+    contradiction_analysis: ContradictionAnalysis = ContradictionAnalysis(
+        entity_registry
+    )  # Dialectical analysis system
+
     # Initialize the game state dictionary that tracks all game systems
+    game_state: dict[str, Any] = {
+        "entity_registry": entity_registry,  # Manages all game entities
+        "economy": Economy(),  # Handles economic simulation
+        "politics": Politics(),  # Manages political simulation
+        "event_queue": [],  # Queue of pending events to process
+        "is_player_responsible": False,  # Flag for player vs AI decision making
     game_state: dict[str, Any] = {
         "entity_registry": entity_registry,  # Manages all game entities
         "economy": Economy(),  # Handles economic simulation
@@ -256,7 +331,10 @@ def main() -> None:
         # Update economic simulation (prices, production, trade, etc)
         game_state["economy"].update()
 
+        game_state["economy"].update()
+
         # Update political simulation (stability, factions, power relations)
+        game_state["politics"].update()
         game_state["politics"].update()
 
         # Analyze and update dialectical contradictions in society
@@ -271,10 +349,14 @@ def main() -> None:
         while game_state["event_queue"]:
             event = game_state["event_queue"].pop(0)  # Get next event
             handle_event(event, game_state)  # Process its effects
+        while game_state["event_queue"]:
+            event = game_state["event_queue"].pop(0)  # Get next event
+            handle_event(event, game_state)  # Process its effects
 
         # TODO: Add proper game loop exit conditions
         # Currently breaks immediately - replace with actual game logic
         break
+
 
 
 if __name__ == "__main__":
@@ -286,6 +368,8 @@ if __name__ == "__main__":
     except BabylonError as e:
         logger.error(f"Game error occurred: {e.message} (Code: {e.error_code})")
         sys.exit(1)
+    except Exception:
+        logger.critical("Unexpected error occurred", exc_info=True)
     except Exception:
         logger.critical("Unexpected error occurred", exc_info=True)
         sys.exit(2)

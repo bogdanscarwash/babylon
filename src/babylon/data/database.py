@@ -4,6 +4,7 @@ Provides SQLAlchemy engine and session configuration for the application.
 See CONFIGURATION.md for detailed documentation of database settings.
 """
 
+
 from typing import Any
 
 from sqlalchemy import Engine, create_engine
@@ -24,13 +25,16 @@ engine: Engine = create_engine(Config.DATABASE_URL, **engine_args)
 
 # Configure session factory with explicit typing
 SessionLocal: Any = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+SessionLocal: Any = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 # Base class for declarative models
 Base = declarative_base()
 
 
+
 def get_db() -> Session:
     """Get a database session from the pool.
+
 
     Returns:
         Session: SQLAlchemy database session

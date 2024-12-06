@@ -4,6 +4,7 @@ from babylon.core.entity import Entity
 from babylon.metrics.collector import MetricsCollector
 
 
+
 class EntityRegistry:
     """Registry to maintain references to all game entities."""
 

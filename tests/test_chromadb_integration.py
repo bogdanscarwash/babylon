@@ -3,6 +3,7 @@ import shutil
 import tempfile
 import time
 import unittest
+import unittest
 from concurrent.futures import ThreadPoolExecutor
 
 import chromadb
@@ -28,6 +29,7 @@ class TestChromaDBIntegration(unittest.TestCase):
         self.collection = self.client.create_collection(
             name=ChromaDBConfig.DEFAULT_COLLECTION_NAME,
             metadata=ChromaDBConfig.DEFAULT_METADATA,
+            metadata=ChromaDBConfig.DEFAULT_METADATA,
         )
 
         # Initialize entity registry with mock metrics collector
@@ -44,11 +46,15 @@ class TestChromaDBIntegration(unittest.TestCase):
             entity = self.entity_registry.create_entity(
                 type="TestType", role="TestRole"
             )
+            entity = self.entity_registry.create_entity(
+                type="TestType", role="TestRole"
+            )
 
             # Verify the entity is in the registry
             try:
                 self.assertIn(entity.id, self.entity_registry._entities)
             except KeyError as e:
+                self.fail(f"Entity not found in registry: {e!s}")
                 self.fail(f"Entity not found in registry: {e!s}")
 
             # Verify the entity is added to ChromaDB
@@ -56,14 +62,20 @@ class TestChromaDBIntegration(unittest.TestCase):
                 results = self.collection.get(ids=[entity.id])
                 self.assertEqual(len(results["ids"]), 1)
                 self.assertEqual(results["ids"][0], entity.id)
+                self.assertEqual(len(results["ids"]), 1)
+                self.assertEqual(results["ids"][0], entity.id)
             except Exception as e:
+                self.fail(f"Failed to retrieve entity from ChromaDB: {e!s}")
+
                 self.fail(f"Failed to retrieve entity from ChromaDB: {e!s}")
 
         except Exception as e:
             self.fail(f"Failed to create entity: {e!s}")
+            self.fail(f"Failed to create entity: {e!s}")
 
     def test_update_entity(self):
         # Create a test entity
+        entity = self.entity_registry.create_entity(type="TestType", role="TestRole")
         entity = self.entity_registry.create_entity(type="TestType", role="TestRole")
 
         # Update the entity's attributes
@@ -79,9 +91,14 @@ class TestChromaDBIntegration(unittest.TestCase):
         metadata = results["metadatas"][0]
         self.assertEqual(metadata["freedom"], 0.5)
         self.assertEqual(metadata["wealth"], 0.8)
+        results = self.collection.get(ids=[entity.id], include=["metadatas"])
+        metadata = results["metadatas"][0]
+        self.assertEqual(metadata["freedom"], 0.5)
+        self.assertEqual(metadata["wealth"], 0.8)
 
     def test_delete_entity(self):
         # Create a test entity
+        entity = self.entity_registry.create_entity(type="TestType", role="TestRole")
         entity = self.entity_registry.create_entity(type="TestType", role="TestRole")
 
         # Delete the entity
@@ -115,7 +132,9 @@ class TestChromaDBIntegration(unittest.TestCase):
     def test_concurrent_operations(self):
         """Test concurrent entity operations"""
 
+
         def create_entity():
+            return self.entity_registry.create_entity(type="TestType", role="TestRole")
             return self.entity_registry.create_entity(type="TestType", role="TestRole")
 
         with ThreadPoolExecutor(max_workers=5) as executor:
@@ -193,5 +212,6 @@ class TestChromaDBIntegration(unittest.TestCase):
         self.assertEqual(len(results["ids"]), 1)
 
 
+if __name__ == "__main__":
 if __name__ == "__main__":
     unittest.main()
