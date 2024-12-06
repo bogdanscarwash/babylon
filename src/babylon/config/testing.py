@@ -1,4 +1,4 @@
-from config.base import BaseConfig
+from babylon.config.base import BaseConfig
 
 
 class TestingConfig(BaseConfig):
