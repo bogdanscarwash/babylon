@@ -1,5 +1,7 @@
 import pytest
 import os
+from babylon.utils.backup import backup_chroma, restore_chroma
+from babylon.config.chromadb_config import ChromaDBConfig
 
 class TestRestoreOperations:
     """Test suite for restore operations."""
