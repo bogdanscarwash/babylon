@@ -90,6 +90,9 @@ def backup_chroma(
         logger.info(f"ChromaDB backup completed: {archive_path}")
         return True
 
+    except OSError as e:
+        logger.error(f"Error during ChromaDB backup: {e}")
+        raise  # Re-raise OSError
     except Exception as e:
         logger.error(f"Error during ChromaDB backup: {e}")
         return False
