@@ -22,7 +22,7 @@ class TestBackupOperations:
                        if f.endswith('.tar.gz')]
         assert len(backup_files) == 1, "Should create exactly one backup file"
     
-    def test_backup_with_invalid_directory(self, populated_collection, chroma_client):
+    def test_backup_with_invalid_directory(self, test_environment, populated_collection, chroma_client):
         """Test backup behavior with invalid directory."""
         collection, _ = populated_collection
         
