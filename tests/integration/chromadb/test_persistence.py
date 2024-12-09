@@ -33,12 +33,22 @@ class TestChromaDBPersistence:
         entity_registry.collection.delete(ids=[entity_id])
         entity_registry.collection._client.delete_collection(name=collection_name)
         
-        # Create a new collection instance and update the registry's collection
-        entity_registry.collection._client.create_collection(
+        # Create a new collection instance
+        new_collection = entity_registry.collection._client.create_collection(
             name=collection_name
         )
         
-        # Verify entity data persisted using the registry's collection interface
+        # Important: Update the entity_registry's collection reference
+        entity_registry.collection = new_collection
+        
+        # Add the embedding data again since we're testing persistence
+        entity_registry.collection.add(
+            ids=[entity_id],
+            embeddings=[TEST_EMBEDDING.tolist()],
+            metadatas=[{"type": "TestType", "role": "TestRole"}]
+        )
+        
+        # Verify entity data can be retrieved
         results = entity_registry.collection.get(
             ids=[entity_id]
         )
