@@ -31,5 +31,5 @@ class TestBackupOperations:
             backup_chroma(
                 chroma_client,
                 "/nonexistent/directory",
-                persist_directory="C:/temp"  # Use a valid persist dir to isolate backup dir test
+                persist_directory="X:\_github\babylon\temp\chromadb"  # Use a valid persist dir to isolate backup dir test
             )
