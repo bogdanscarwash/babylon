@@ -22,13 +22,13 @@ class TestChromaDBIntegration(unittest.TestCase):
         os.chmod(self.temp_dir, 0o755)
 
         # Initialize ChromaDB client with settings that allow reset
-        settings = ChromaDBConfig.get_settings(
+        self.settings = ChromaDBConfig.get_settings(
             persist_directory=self.temp_dir,
             allow_reset=True,
             anonymized_telemetry=False,
             is_persistent=True  # Ensure persistence is enabled
         )
-        self.client = chromadb.PersistentClient(settings=settings)
+        self.client = chromadb.PersistentClient(settings=self.settings)
 
         # Create test collection
         self.collection = self.client.create_collection(
@@ -43,9 +43,8 @@ class TestChromaDBIntegration(unittest.TestCase):
     def tearDown(self):
         """Clean up temporary directories."""
         try:
-            # Close ChromaDB client to release file handles
             if hasattr(self, 'client'):
-                self.client.reset()  # Use reset() instead of _cleanup()
+                self.client.reset()
             time.sleep(0.1)  # Give OS time to release file handles
             if hasattr(self, 'temp_dir') and os.path.exists(self.temp_dir):
                 shutil.rmtree(self.temp_dir, ignore_errors=True)
@@ -168,36 +167,34 @@ class TestChromaDBIntegration(unittest.TestCase):
         # Add entities to ChromaDB
         entity = self.entity_registry.create_entity(type="TestType", role="TestRole")
         
-        # Ensure data is persisted before reset
-        self.client.persist()
-        
         # Get the entity ID and collection name for later verification
         entity_id = entity.id
         collection_name = self.collection.name
+
+        # Store current data for comparison
+        original_results = self.collection.get(ids=[entity_id])
+        self.assertEqual(len(original_results["ids"]), 1, "Entity should exist before reset")
 
         # Close and reopen client to simulate restart
         self.client.reset()
         time.sleep(0.1)  # Give OS time to release file handles
         
         # Reinitialize with same settings
-        settings = ChromaDBConfig.get_settings(
-            persist_directory=self.temp_dir,
-            allow_reset=True,
-            anonymized_telemetry=False,
-            is_persistent=True  # Ensure persistence is enabled
-        )
-        self.client = chromadb.PersistentClient(settings=settings)
+        self.client = chromadb.PersistentClient(settings=self.settings)
         
-        # Get the collection and verify it exists
+        # Recreate collection
         try:
-            collection = self.client.get_collection(name=collection_name)
+            self.collection = self.client.create_collection(
+                name=collection_name,
+                metadata=ChromaDBConfig.DEFAULT_METADATA
+            )
             
             # Verify entities are still present
-            results = collection.get(ids=[entity_id])
-            self.assertEqual(len(results["ids"]), 1)
-            self.assertEqual(results["ids"][0], entity_id)
+            results = self.collection.get(ids=[entity_id])
+            self.assertEqual(len(results["ids"]), 1, "Entity should exist after reset")
+            self.assertEqual(results["ids"][0], entity_id, "Entity ID should match")
         except Exception as e:
-            self.fail(f"Failed to retrieve collection or entity after restart: {e}")
+            self.fail(f"Failed to recreate collection or retrieve entity after restart: {e}")
 
     def test_concurrent_operations(self):
         """Test concurrent entity operations"""

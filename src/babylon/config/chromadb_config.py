@@ -22,22 +22,18 @@ class ChromaDBConfig:
     # Collection settings
     DEFAULT_COLLECTION_NAME = "entities"
     DEFAULT_METADATA = {"source": "babylon"}
-    CHROMADB_PERSIST_DIR = ""
-
 
     # Backup settings
     BACKUP_DIR = BASE_DIR / "backups"
     MAX_BACKUPS = 5
 
-
     @classmethod
-    def get_settings(cls, **overrides) -> chromadb.Settings:
+    def get_settings(cls, persist_directory=None, **overrides) -> chromadb.Settings:
         """Get ChromaDB settings with optional overrides.
 
-
         Args:
+            persist_directory: Directory for ChromaDB persistence
             **overrides: Override any default settings
-
 
         Returns:
             chromadb.Settings: ChromaDB settings instance
@@ -46,6 +42,7 @@ class ChromaDBConfig:
             "allow_reset": True,
             "anonymized_telemetry": False,
             "is_persistent": True,
+            "persist_directory": persist_directory or str(cls.BASE_DIR / "persist"),
         }
         settings_dict.update(overrides)
         return chromadb.Settings(**settings_dict)
@@ -55,3 +52,4 @@ class ChromaDBConfig:
         """Ensure required directories exist."""
         cls.BASE_DIR.mkdir(parents=True, exist_ok=True)
         cls.BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+        (cls.BASE_DIR / "persist").mkdir(parents=True, exist_ok=True)

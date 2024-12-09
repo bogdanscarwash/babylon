@@ -13,8 +13,8 @@ from babylon.exceptions import BackupError
 logger = logging.getLogger(__name__)
 
 def backup_chroma(
-    client: chromadb.Client, 
-    backup_dir: str, 
+    client: chromadb.Client,
+    backup_dir: str,
     persist_directory: str = None,
     max_backups: int = 5
 ) -> bool:
@@ -49,13 +49,6 @@ def backup_chroma(
         # Create backup directory
         backup_path.mkdir(parents=True, exist_ok=True)
 
-        # Persist any in-memory changes
-        try:
-            client.persist()
-        except Exception as e:
-            logger.error(f"Error persisting ChromaDB data: {e}")
-            return False
-
         # Create backup archive with timestamp
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         archive_name = f"chroma_backup_{timestamp}.tar.gz"
@@ -71,7 +64,8 @@ def backup_chroma(
 
         # Create compressed archive
         with tarfile.open(archive_path, "w:gz") as tar:
-            tar.add(persist_dir, arcname="chroma_data")
+            # Add the entire persist directory
+            tar.add(persist_dir, arcname=".")
 
         # Update metadata with actual file size
         metadata["size"] = archive_path.stat().st_size
@@ -112,7 +106,7 @@ def restore_chroma(backup_path: str, persist_directory: str = None) -> bool:
     """
     try:
         backup_path = Path(backup_path)
-        
+
         # Get persist directory
         if persist_directory is None:
             raise BackupError("No persistence directory specified", "BACKUP_003")
@@ -140,28 +134,20 @@ def restore_chroma(backup_path: str, persist_directory: str = None) -> bool:
             logger.error("Backup checksum verification failed")
             return False
 
-        # Create temporary extraction directory
-        with tempfile.TemporaryDirectory() as temp_dir:
-            # Extract backup to temporary directory
-            with tarfile.open(backup_path, "r:gz") as tar:
-                tar.extractall(temp_dir)
+        # Remove existing persistence directory if it exists
+        if persist_dir.exists():
+            # Create backup of current data
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            current_backup = persist_dir.parent / f"pre_restore_backup_{timestamp}"
+            shutil.copytree(persist_dir, current_backup)
+            shutil.rmtree(persist_dir)
 
-            # Validate extracted data
-            extracted_dir = Path(temp_dir) / "chroma_data"
-            if not extracted_dir.exists():
-                logger.error("Invalid backup structure")
-                return False
+        # Create persistence directory
+        persist_dir.mkdir(parents=True, exist_ok=True)
 
-            # Remove existing persistence directory if it exists
-            if persist_dir.exists():
-                # Create backup of current data
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                current_backup = persist_dir.parent / f"pre_restore_backup_{timestamp}"
-                shutil.copytree(persist_dir, current_backup)
-                shutil.rmtree(persist_dir)
-
-            # Move extracted data to persistence directory
-            shutil.copytree(extracted_dir, persist_dir)
+        # Extract backup directly to persistence directory
+        with tarfile.open(backup_path, "r:gz") as tar:
+            tar.extractall(persist_dir)
 
         logger.info(f"ChromaDB restored from backup: {backup_path}")
         return True
