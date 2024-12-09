@@ -3,6 +3,8 @@ import pytest
 import os
 
 # Test constants
+import chromadb
+
 EMBEDDING_DIMENSION = 384
 TEST_EMBEDDING = np.random.rand(EMBEDDING_DIMENSION)
 TEST_EMBEDDING = TEST_EMBEDDING / np.linalg.norm(TEST_EMBEDDING)
@@ -28,24 +30,22 @@ class TestChromaDBPersistence:
         # Get the entity ID for later verification
         entity_id = entity.id
         
-        # Delete all documents and recreate collection to test persistence
+        # Simulate client restart to test data persistence
         collection_name = entity_registry.collection.name
-        entity_registry.collection.delete(ids=[entity_id])
-        entity_registry.collection._client.delete_collection(name=collection_name)
-        
-        # Create a new collection instance
-        new_collection = entity_registry.collection._client.create_collection(
-            name=collection_name
+
+        # Close the current client
+        entity_registry.collection._client.reset()
+
+        # Re-initialize the client with the same settings
+        new_client = chromadb.Client(
+            chromadb.config.Settings(
+                persist_directory=entity_registry.collection._client._settings.persist_directory
+            )
         )
-        
-        # Important: Update the entity_registry's collection reference
-        entity_registry.collection = new_collection
-        
-        # Add the embedding data again since we're testing persistence
-        entity_registry.collection.add(
-            ids=[entity_id],
-            embeddings=[TEST_EMBEDDING.tolist()],
-            metadatas=[{"type": "TestType", "role": "TestRole"}]
+
+        # Update the entity_registry's collection reference
+        entity_registry.collection = new_client.get_collection(
+            name=collection_name
         )
         
         # Verify entity data can be retrieved
