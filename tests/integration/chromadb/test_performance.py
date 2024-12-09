@@ -49,3 +49,14 @@ class TestChromaDBPerformance:
         )
         
         return entities
+
+    def _verify_similarity_search(self, collection, query_embedding):
+        """Verify similarity search results."""
+        results = collection.query(
+            query_embeddings=[query_embedding.tolist()],
+            n_results=10
+        )
+        
+        assert len(results['ids'][0]) == 10, "Expected 10 results from similarity search"
+        assert all(isinstance(id, str) for id in results['ids'][0]), "All IDs should be strings"
+        assert all(isinstance(d, dict) for d in results['metadatas'][0]), "All metadata should be dicts"
