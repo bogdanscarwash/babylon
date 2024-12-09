@@ -31,7 +31,7 @@ dependencies = [
    "sqlalchemy>=1.4.0",
    "psycopg2-binary>=2.8.6",
    "tokenizers<0.21,>=0.20",
-   "psutil-6.1.0",
+   "psutil==6.1.0",
 ]
 
 [project.urls]
