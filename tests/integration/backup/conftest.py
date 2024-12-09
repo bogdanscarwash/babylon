@@ -12,6 +12,7 @@ def test_environment():
     backup_dir = os.path.join(temp_dir, "backups")
     persist_dir = os.path.join(temp_dir, "persist")
     os.makedirs(backup_dir, exist_ok=True)
+    os.makedirs(persist_dir, exist_ok=True)
     
     yield {
         "temp_dir": temp_dir,
