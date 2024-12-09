@@ -52,7 +52,13 @@ Documentation = "https://github.com/bogdanscarwash/babylon#readme"
 Issues = "https://github.com/bogdanscarwash/babylon/issues"
 Source = "https://github.com/bogdanscarwash/babylon"
 
+[tool.hatch.build]
+packages = ["src/babylon"]
+
 [tool.hatch.build.targets.wheel]
+packages = ["src/babylon"]
+
+[tool.hatch.build.targets.sdist]
 packages = ["src/babylon"]
 
 [tool.pytest.ini_options]
