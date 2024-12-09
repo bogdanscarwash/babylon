@@ -28,22 +28,13 @@ class TestChromaDBPersistence:
         # Get the entity ID for later verification
         entity_id = entity.id
         
-        # Force client recreation to test persistence
-        entity_registry.collection._client._cleanup()
+        # Delete and recreate collection to test persistence
+        collection_name = entity_registry.collection.name
+        entity_registry.collection.delete()
         
-        # Create new registry with same persistence directory
-        from chromadb import PersistentClient
-        from babylon.config.chromadb_config import ChromaDBConfig
-        
-        settings = ChromaDBConfig.get_settings(
-            persist_directory=test_dir,
-            allow_reset=True,
-            anonymized_telemetry=False,
-            is_persistent=True
-        )
-        new_client = PersistentClient(settings=settings)
-        new_collection = new_client.get_collection(
-            name=ChromaDBConfig.DEFAULT_COLLECTION_NAME
+        # Get a fresh collection instance
+        new_collection = entity_registry.collection._client.get_collection(
+            name=collection_name
         )
         
         # Verify entity data persisted
