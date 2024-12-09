@@ -29,7 +29,7 @@ class TestChromaDBPersistence:
         entity_id = entity.id
         
         # Force client recreation to test persistence
-        entity_registry.collection.client._cleanup()
+        entity_registry.collection._client._cleanup()
         
         # Create new registry with same persistence directory
         from chromadb import PersistentClient
