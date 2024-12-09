@@ -28,9 +28,10 @@ class TestChromaDBPersistence:
         # Get the entity ID for later verification
         entity_id = entity.id
         
-        # Delete and recreate collection to test persistence
+        # Delete all documents and recreate collection to test persistence
         collection_name = entity_registry.collection.name
-        entity_registry.collection.delete()
+        entity_registry.collection.delete(ids=[entity_id])
+        entity_registry.collection._client.delete_collection(name=collection_name)
         
         # Get a fresh collection instance
         new_collection = entity_registry.collection._client.get_collection(
