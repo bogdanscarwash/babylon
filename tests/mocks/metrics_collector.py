@@ -2,6 +2,7 @@ from typing import Dict, List, Optional
 from dataclasses import dataclass
 import os
 import pytest
+from statistics import mean
 
 @dataclass
 class PerformanceMetrics:
@@ -74,3 +75,56 @@ class MockMetricsCollector:
                 "peak": max(self.memory_usage) if self.memory_usage else 0
             }
         }
+
+def test_mock_metrics_collector_initialization():
+    collector = MockMetricsCollector()
+    assert collector.access_records == {}
+    assert collector.cache_hits == {"L1": 0, "L2": 0}
+    assert collector.cache_misses == {"L1": 0, "L2": 0}
+    assert collector.token_usage == []
+    assert collector.query_latencies == []
+    assert collector.memory_usage == []
+
+def test_record_object_access():
+    collector = MockMetricsCollector()
+    collector.record_object_access("obj1", "test")
+    collector.record_object_access("obj1", "test")
+    collector.record_object_access("obj2", "test")
+    
+    assert collector.access_records["obj1"] == 2
+    assert collector.access_records["obj2"] == 1
+
+def test_record_cache_events():
+    collector = MockMetricsCollector()
+    collector.record_cache_event("L1", True)
+    collector.record_cache_event("L1", False)
+    collector.record_cache_event("L2", True)
+    
+    assert collector.cache_hits["L1"] == 1
+    assert collector.cache_misses["L1"] == 1
+    assert collector.cache_hits["L2"] == 1
+    assert collector.cache_misses["L2"] == 0
+
+def test_analyze_performance():
+    collector = MockMetricsCollector()
+    
+    # Add some test data
+    collector.record_object_access("hot_obj", "test")
+    collector.record_object_access("hot_obj", "test")
+    collector.record_cache_event("L1", True)
+    collector.record_cache_event("L1", False)
+    collector.record_token_usage(100)
+    collector.record_token_usage(200)
+    collector.record_query_latency(0.1)
+    collector.record_query_latency(0.3)
+    collector.record_memory_usage(50.0)
+    collector.record_memory_usage(70.0)
+    
+    results = collector.analyze_performance()
+    
+    assert "hot_obj" in results["hot_objects"]
+    assert results["cache_hit_rate"]["L1"] == 0.5
+    assert results["avg_token_usage"] == 150.0
+    assert results["latency_stats"]["avg_latency"] == 0.2
+    assert results["memory_profile"]["avg"] == 60.0
+    assert results["memory_profile"]["peak"] == 70.0
