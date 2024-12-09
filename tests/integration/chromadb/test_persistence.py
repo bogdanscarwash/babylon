@@ -33,13 +33,13 @@ class TestChromaDBPersistence:
         # Simulate client restart to test data persistence
         collection_name = entity_registry.collection.name
 
-        # Close the current client
-        entity_registry.collection._client.reset()
+        # Get the persist_directory from the current client
+        persist_directory = entity_registry.collection._client._settings.persist_directory
 
-        # Re-initialize the client with the same settings
+        # Simulate client restart without deleting data
         new_client = chromadb.Client(
             chromadb.config.Settings(
-                persist_directory=entity_registry.collection._client._settings.persist_directory
+                persist_directory=persist_directory
             )
         )
 
