@@ -16,7 +16,7 @@ authors = [
 classifiers = []
 
 dependencies = [
-   "chromadb>=0.5.23",
+   "chromadb>=0.5.23,<0.6.0",
    "xmlschema>=3.4.3",
    "python-dotenv>=1.0.1",
    "numpy>=2.2.0",
@@ -40,7 +40,7 @@ dependencies = [
    "rich>=13.9.4",
    "coloredlogs>=15.0.1",
    "pyyaml>=6.0.2",
-   "jellyfish>=0.8.9",
+   "jellyfish>=0.8.9,<0.9.0",
    "us>=3.2.0",
    "networkx>=3.4.2",
    "matplotlib>=3.9.3",
