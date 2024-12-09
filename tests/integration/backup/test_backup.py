@@ -30,6 +30,6 @@ class TestBackupOperations:
         with pytest.raises(Exception):  # ChromaDB raises its own exception types
             backup_chroma(
                 chroma_client,
-                "/nonexistent/directory",
-                persist_directory="X:\_github\babylon\temp\chromadb"  # Use a valid persist dir to isolate backup dir test
+                "\\\\invalid\\:backup\\path",  # Invalid path with illegal characters
+                persist_directory=test_environment["persist_dir"]  # Use the fixture's persist dir
             )
