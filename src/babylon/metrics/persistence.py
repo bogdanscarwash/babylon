@@ -147,6 +147,7 @@ class MetricsPersistence:
                     metrics.gpu_memory_percent,
                 ),
             )
+            conn.commit()
 
     def save_ai_metrics(self, metrics: AIMetrics) -> None:
         """Save AI metrics to database.
@@ -171,6 +172,7 @@ class MetricsPersistence:
                     json.dumps(metrics.threshold_violations),
                 ),
             )
+            conn.commit()
 
     def save_gameplay_metrics(self, metrics: GameplayMetrics) -> None:
         """Save gameplay metrics to database.
@@ -193,6 +195,7 @@ class MetricsPersistence:
                     json.dumps(metrics.user_choices),
                 ),
             )
+            conn.commit()
 
     def get_system_metrics(
         self, start_time: str | None = None, end_time: str | None = None

@@ -41,7 +41,9 @@ dependencies = [
    "coloredlogs>=15.0.1",
    "pyyaml>=6.0.2",
    "jellyfish>=0.8.9",
-   "us>=3.2.0"
+   "us>=3.2.0",
+   "networkx>=3.4.2",
+   "matplotlib>=3.9.3",
 ]
 
 [project.urls]

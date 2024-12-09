@@ -12,6 +12,7 @@ class Event(Base):
     Events can have effects, triggers, and consequences.
     """
     __tablename__ = 'events'
+    __table_args__ = {'extend_existing': True}  # Added to handle table redefinition
 
     id = Column(Integer, primary_key=True)
     name = Column(String, nullable=False)

@@ -4,12 +4,12 @@ from typing import Any
 import matplotlib.pyplot as plt
 import networkx as nx
 
-from ..data.entity_registry import EntityRegistry
-from ..data.models.contradiction import Contradiction, Effect
-from ..data.models.event import Event
-from ..data.models.trigger import Trigger
-from ..entities.entity import Entity
-from ..metrics.collector import MetricsCollector
+from babylon.data.entity_registry import EntityRegistry
+from babylon.data.models.contradiction import Contradiction, Effect
+from babylon.data.models.event import Event
+from babylon.data.models.trigger import Trigger
+from babylon.core.entity import Entity  # Changed from ..entities.entity
+from babylon.metrics.collector import MetricsCollector
 
 
 class ContradictionAnalysis:
@@ -571,7 +571,7 @@ class ContradictionAnalysis:
         event_name = f"{contradiction.intensity} {contradiction.name}"
         event_description = (
             f"The contradiction '{contradiction.name}' involving "
-            f"{', '.join([entity.entity_id for entity in contradiction.entities])} "
+            f"{', '.join([entity.id for entity in contradiction.entities])} "
             f"is escalating."
         )
 

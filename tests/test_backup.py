@@ -5,8 +5,8 @@ import unittest
 
 import chromadb
 
-from src.babylon.config.chromadb_config import ChromaDBConfig
-from src.babylon.utils.backup import backup_chroma, restore_chroma
+from babylon.config.chromadb_config import ChromaDBConfig
+from babylon.utils.backup import backup_chroma, restore_chroma
 
 
 class TestChromaBackup(unittest.TestCase):
@@ -15,16 +15,17 @@ class TestChromaBackup(unittest.TestCase):
         # Create temporary directories
         self.temp_dir = tempfile.mkdtemp()
         self.backup_dir = os.path.join(self.temp_dir, "backups")
+        os.makedirs(self.backup_dir, exist_ok=True)
 
-        # Configure ChromaDB
+        # Configure ChromaDB with settings
         self.settings = ChromaDBConfig.get_settings(
             persist_directory=self.temp_dir,
             allow_reset=True,
             anonymized_telemetry=False,
         )
 
-        # Initialize client and collection
-        self.client = chromadb.Client(self.settings)
+        # Initialize client and collection with settings
+        self.client = chromadb.PersistentClient(settings=self.settings)
         self.collection = self.client.create_collection(
             name=ChromaDBConfig.DEFAULT_COLLECTION_NAME,
             metadata=ChromaDBConfig.DEFAULT_METADATA,
@@ -48,7 +49,12 @@ class TestChromaBackup(unittest.TestCase):
     def test_backup_restore(self):
         """Test backup creation and restoration."""
         # Create backup
-        self.assertTrue(backup_chroma(self.client, self.backup_dir))
+        backup_success = backup_chroma(
+            self.client, 
+            self.backup_dir,
+            persist_directory=self.temp_dir
+        )
+        self.assertTrue(backup_success, "Backup creation failed")
 
         # Reset client
         self.client.reset()
@@ -61,10 +67,19 @@ class TestChromaBackup(unittest.TestCase):
         self.assertEqual(len(results["ids"]), 0)
 
         # Restore from backup
-        backup_file = os.path.join(self.backup_dir, os.listdir(self.backup_dir)[0])
-        self.assertTrue(restore_chroma(backup_file))
+        backup_files = [f for f in os.listdir(self.backup_dir) if f.endswith('.tar.gz')]  # Changed from .zip to .tar.gz
+        self.assertTrue(backup_files, "No backup files found")
+        backup_file = os.path.join(self.backup_dir, backup_files[0])
+        
+        # Pass the temp_dir to restore function so it knows where to restore to
+        restore_success = restore_chroma(
+            backup_file, 
+            persist_directory=self.temp_dir
+        )
+        self.assertTrue(restore_success, "Restore operation failed")
 
-        # Verify data is restored
+        # Reinitialize client with same settings to access restored data
+        self.client = chromadb.PersistentClient(settings=self.settings)
         restored_collection = self.client.get_collection(
             name=ChromaDBConfig.DEFAULT_COLLECTION_NAME
         )

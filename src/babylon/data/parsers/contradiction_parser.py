@@ -1,6 +1,6 @@
 import xml.etree.ElementTree as ET
 
-from ..models.contradiction import Contradiction, Effect, Entity
+from core.contradiction import Contradiction, Effect, Entity
 
 
 def parse_contradictions(xml_file):

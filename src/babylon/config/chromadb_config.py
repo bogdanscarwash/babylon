@@ -22,6 +22,7 @@ class ChromaDBConfig:
     # Collection settings
     DEFAULT_COLLECTION_NAME = "entities"
     DEFAULT_METADATA = {"source": "babylon"}
+    CHROMADB_PERSIST_DIR = ""
 
 
     # Backup settings

@@ -1,16 +1,15 @@
 import unittest
-
-from src.babylon.data.models.contradiction import Contradiction, Effect, Entity
-from src.babylon.data.models.event import Event
-from src.babylon.systems.contradiction_analysis import ContradictionAnalysis
+from babylon.data.models.event import Event
+from babylon.data.models.contradiction import Contradiction, Effect, Entity
+from babylon.core.contradiction import ContradictionAnalysis
 
 
 class MockEntity:
     """Mock entity class for testing."""
 
-    def __init__(self, entity_id: str, entity_type: str) -> None:
-        self.entity_id: str = entity_id
-        self.entity_type: str = entity_type
+    def __init__(self, id: str, type: str) -> None:
+        self.id: str = id
+        self.type: str = type
         self.freedom: float = 1.0
         self.wealth: float = 1.0
         self.stability: float = 1.0
@@ -23,8 +22,11 @@ class MockEntityRegistry:
     def __init__(self) -> None:
         self.entities: dict[str, MockEntity] = {}
 
-    def register_entity(self, entity: MockEntity) -> None:
-        self.entities[entity.entity_id] = entity
+    def create_entity(self, type: str, role: str) -> MockEntity:
+        """Create and register a new entity."""
+        entity = MockEntity(f"{type.lower()}_{role.lower()}", type)
+        self.entities[entity.id] = entity
+        return entity
 
     def get_entity(self, entity_id: str) -> MockEntity | None:
         return self.entities.get(entity_id)
@@ -47,17 +49,16 @@ class TestContradictionAnalysis(unittest.TestCase):
         }
 
         # Add mock entities
-        upper_class = MockEntity("upper_class", "Class")
-        working_class = MockEntity("working_class", "Class")
-        self.entity_registry.register_entity(upper_class)
-        self.entity_registry.register_entity(working_class)
+        upper_class = self.entity_registry.create_entity("Class", "Oppressor")
+        working_class = self.entity_registry.create_entity("Class", "Oppressed")
 
         self.contradiction_analysis = ContradictionAnalysis(self.entity_registry)
 
     def _create_sample_contradiction(self) -> Contradiction:
         """Create a sample contradiction for testing."""
-        upper_class: Entity = Entity("upper_class", "Class", "Oppressor")
-        working_class: Entity = Entity("working_class", "Class", "Oppressed")
+        # Create entities with just type and role
+        upper_class = Entity("Class", "Oppressor")
+        working_class = Entity("Class", "Oppressed")
         entities: list[Entity] = [upper_class, working_class]
 
         return Contradiction(
@@ -77,10 +78,10 @@ class TestContradictionAnalysis(unittest.TestCase):
             conditions_for_transformation=["Revolutionary Movement"],
             resolution_methods={
                 "Reform": [
-                    Effect("upper_class", "wealth", "Decrease", 0.5, "Test effect")
+                    Effect(target_id=upper_class.id, attribute="wealth", operation="Decrease", magnitude=0.5, description="Test effect")
                 ],
                 "Revolution": [
-                    Effect("upper_class", "wealth", "Decrease", 1.0, "Test effect")
+                    Effect(target_id=upper_class.id, attribute="wealth", operation="Decrease", magnitude=1.0, description="Test effect")
                 ],
             },
             attributes={},
@@ -107,8 +108,16 @@ class TestContradictionAnalysis(unittest.TestCase):
         self.contradiction_analysis.add_contradiction(contradiction)
         self.game_state["economy"].gini_coefficient = 0.5
 
+        # Record initial intensity
+        initial_intensity = contradiction.intensity
+        
+        # Update contradictions
         self.contradiction_analysis.update_contradictions(self.game_state)
+        
+        # Verify intensity history was updated
         self.assertTrue(len(contradiction.intensity_history) > 0)
+        # Verify intensity changed
+        self.assertNotEqual(contradiction.intensity, initial_intensity)
 
     def test_generate_events(self) -> None:
         """Test event generation from contradictions."""
@@ -128,7 +137,8 @@ class TestContradictionAnalysis(unittest.TestCase):
         contradiction = self._create_sample_contradiction()
         self.contradiction_analysis.add_contradiction(contradiction)
 
-        upper_class = self.entity_registry.get_entity("upper_class")
+        # Get the entity from the registry using the correct ID
+        upper_class = self.entity_registry.get_entity("class_oppressor")
         initial_wealth = upper_class.wealth
 
         # Apply Reform resolution method effects

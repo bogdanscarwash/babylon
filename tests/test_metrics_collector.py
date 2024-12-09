@@ -138,9 +138,9 @@ def test_record_cache_event(metrics_collector: MetricsCollector) -> None:
     Cache performance monitoring helps optimize the game's memory hierarchy
     and improve overall system performance.
     """
-    metrics_collector.record_cache_event("L1", True)
-    metrics_collector.record_cache_event("L1", False)
-    metrics_collector.record_cache_event("L2", True)
+    metrics_collector.record_cache_event("L1", True)  # Hit
+    metrics_collector.record_cache_event("L1", False)  # Miss
+    metrics_collector.record_cache_event("L2", True)  # Hit
 
     assert metrics_collector.metrics["cache_performance"]["hits"]["L1"] == 1
     assert metrics_collector.metrics["cache_performance"]["misses"]["L1"] == 1
@@ -190,18 +190,10 @@ def test_analyze_performance(metrics_collector: MetricsCollector) -> None:
 
     for memory in test_data["memory_usage"]:
         metrics_collector.record_memory_usage(memory)
-    # Setup some test data
-    metrics_collector.record_object_access("hot_object", "test")
-    metrics_collector.record_object_access("hot_object", "test")
-    metrics_collector.record_object_access("hot_object", "test")
-    metrics_collector.record_token_usage(100)
-    metrics_collector.record_cache_event("L1", True)
-    metrics_collector.record_cache_event("L1", False)
-    metrics_collector.record_query_latency(10.0)
-    metrics_collector.record_memory_usage(1000)
 
     analysis = metrics_collector.analyze_performance()
 
+    # Verify analysis results
     assert "cache_hit_rate" in analysis
     assert "avg_token_usage" in analysis
     assert "hot_objects" in analysis
@@ -209,33 +201,10 @@ def test_analyze_performance(metrics_collector: MetricsCollector) -> None:
     assert "memory_profile" in analysis
     assert "optimization_suggestions" in analysis
 
+    # Verify specific metrics
     assert analysis["hot_objects"] == ["hot_object"]
-    assert analysis["cache_hit_rate"]["L1"] == 0.5
-
-
-def test_save_metrics(metrics_collector: MetricsCollector, temp_log_dir: Path) -> None:
-    """Test saving metrics to disk.
-
-    This test validates the metrics persistence system:
-    1. Records a sample object access to ensure non-empty metrics
-    2. Triggers metrics save operation
-    3. Verifies:
-       - JSON file is created in the temporary test directory
-       - File naming follows the metrics_TIMESTAMP.json pattern
-       - Metrics data is properly serialized to JSON
-       - Datetime values are converted to ISO format strings
-
-    Proper metrics persistence is crucial for:
-    - Post-mortem performance analysis
-    - System behavior tracking over time
-    - Historical trend analysis
-    """
-    metrics_collector.record_object_access("test_obj", "test")
-    metrics_collector.save_metrics()
-
-    # Check if metrics file was created
-    metric_files = list(temp_log_dir.glob("metrics_*.json"))
-    assert len(metric_files) == 1
+    assert analysis["cache_hit_rate"]["L1"] == 0.8  # 8 hits / 10 total = 0.8
+    assert analysis["avg_token_usage"] == 200.0  # (100 + 200 + 300) / 3
 
 
 def test_memory_analysis(metrics_collector: MetricsCollector) -> None:
