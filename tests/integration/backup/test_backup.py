@@ -26,10 +26,10 @@ class TestBackupOperations:
         """Test backup behavior with invalid directory."""
         collection, _ = populated_collection
         
-        # Test with invalid backup directory
+        # Test with invalid backup directory containing illegal characters
         with pytest.raises(OSError):  # Covers both Windows and other OS path errors
             backup_chroma(
                 chroma_client,
-                "\\\\invalid\\:backup\\path",  # Invalid path with illegal characters
-                persist_directory=test_environment["persist_dir"]  # Use the fixture's persist dir
+                "con:",  # 'con' is a reserved name in Windows, guaranteed to fail
+                persist_directory=test_environment["persist_dir"]
             )
