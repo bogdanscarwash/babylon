@@ -27,7 +27,7 @@ class TestBackupOperations:
         collection, _ = populated_collection
         
         # Test with invalid backup directory
-        with pytest.raises(WindowsError):  # Windows-specific path error
+        with pytest.raises(OSError):  # Covers both Windows and other OS path errors
             backup_chroma(
                 chroma_client,
                 "\\\\invalid\\:backup\\path",  # Invalid path with illegal characters
