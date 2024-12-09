@@ -33,13 +33,13 @@ class TestChromaDBPersistence:
         entity_registry.collection.delete(ids=[entity_id])
         entity_registry.collection._client.delete_collection(name=collection_name)
         
-        # Create a new collection instance
-        new_collection = entity_registry.collection._client.create_collection(
+        # Create a new collection instance and update the registry's collection
+        entity_registry.collection._client.create_collection(
             name=collection_name
         )
         
-        # Verify entity data persisted
-        results = new_collection.get(
+        # Verify entity data persisted using the registry's collection interface
+        results = entity_registry.collection.get(
             ids=[entity_id]
         )
         
