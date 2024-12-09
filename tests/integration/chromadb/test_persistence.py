@@ -48,4 +48,4 @@ class TestChromaDBPersistence:
         assert results['metadatas'][0]['role'] == "TestRole", "Entity metadata should persist"
         
         # Cleanup
-        new_client.reset()
+        entity_registry.collection._client.reset()
