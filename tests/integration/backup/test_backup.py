@@ -27,7 +27,7 @@ class TestBackupOperations:
         collection, _ = populated_collection
         
         # Test with invalid backup directory
-        with pytest.raises(Exception):  # ChromaDB raises its own exception types
+        with pytest.raises(WindowsError):  # Windows-specific path error
             backup_chroma(
                 chroma_client,
                 "\\\\invalid\\:backup\\path",  # Invalid path with illegal characters
