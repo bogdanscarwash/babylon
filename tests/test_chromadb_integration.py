@@ -22,7 +22,12 @@ class TestChromaDBIntegration(unittest.TestCase):
         os.chmod(self.temp_dir, 0o755)
 
         # Initialize ChromaDB client with settings that allow reset
-        settings = ChromaDBConfig.get_settings(persist_directory=self.temp_dir)
+        settings = ChromaDBConfig.get_settings(
+            persist_directory=self.temp_dir,
+            allow_reset=True,
+            anonymized_telemetry=False,
+            is_persistent=True  # Ensure persistence is enabled
+        )
         self.client = chromadb.PersistentClient(settings=settings)
 
         # Create test collection
@@ -162,20 +167,37 @@ class TestChromaDBIntegration(unittest.TestCase):
         """Test data persistence across application restarts"""
         # Add entities to ChromaDB
         entity = self.entity_registry.create_entity(type="TestType", role="TestRole")
+        
+        # Ensure data is persisted before reset
+        self.client.persist()
+        
+        # Get the entity ID and collection name for later verification
+        entity_id = entity.id
+        collection_name = self.collection.name
 
         # Close and reopen client to simulate restart
-        collection_name = self.collection.name
-        self.client.reset()  # Use reset() instead of _cleanup()
+        self.client.reset()
         time.sleep(0.1)  # Give OS time to release file handles
         
         # Reinitialize with same settings
-        settings = ChromaDBConfig.get_settings(persist_directory=self.temp_dir)
+        settings = ChromaDBConfig.get_settings(
+            persist_directory=self.temp_dir,
+            allow_reset=True,
+            anonymized_telemetry=False,
+            is_persistent=True  # Ensure persistence is enabled
+        )
         self.client = chromadb.PersistentClient(settings=settings)
-        collection = self.client.get_collection(name=collection_name)
-
-        # Verify entities are still present
-        results = collection.get(ids=[entity.id])
-        self.assertEqual(len(results["ids"]), 1)
+        
+        # Get the collection and verify it exists
+        try:
+            collection = self.client.get_collection(name=collection_name)
+            
+            # Verify entities are still present
+            results = collection.get(ids=[entity_id])
+            self.assertEqual(len(results["ids"]), 1)
+            self.assertEqual(results["ids"][0], entity_id)
+        except Exception as e:
+            self.fail(f"Failed to retrieve collection or entity after restart: {e}")
 
     def test_concurrent_operations(self):
         """Test concurrent entity operations"""

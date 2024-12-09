@@ -46,12 +46,6 @@ def backup_chroma(
                 "ChromaDB persistence directory does not exist", "BACKUP_001"
             )
 
-        # Check disk space
-        required_space = shutil.disk_usage(persist_dir).used
-        available_space = shutil.disk_usage(backup_path.parent).free
-        if available_space < required_space * 1.1:
-            raise BackupError("Insufficient disk space for backup", "BACKUP_002")
-
         # Create backup directory
         backup_path.mkdir(parents=True, exist_ok=True)
 
@@ -71,13 +65,16 @@ def backup_chroma(
         metadata = {
             "timestamp": timestamp,
             "version": chromadb.__version__,
-            "size": required_space,
+            "size": 0,  # Will be updated after archive creation
             "checksum": None,  # Will be updated after archive creation
         }
 
         # Create compressed archive
         with tarfile.open(archive_path, "w:gz") as tar:
             tar.add(persist_dir, arcname="chroma_data")
+
+        # Update metadata with actual file size
+        metadata["size"] = archive_path.stat().st_size
 
         # Calculate checksum of archive
         with open(archive_path, "rb") as f:
@@ -141,13 +138,6 @@ def restore_chroma(backup_path: str, persist_directory: str = None) -> bool:
             current_checksum = hashlib.sha256(f.read()).hexdigest()
         if current_checksum != metadata["checksum"]:
             logger.error("Backup checksum verification failed")
-            return False
-
-        # Check disk space
-        required_space = metadata["size"]
-        available_space = shutil.disk_usage(persist_dir.parent).free
-        if available_space < required_space * 1.1:
-            logger.error("Insufficient disk space for restore")
             return False
 
         # Create temporary extraction directory
