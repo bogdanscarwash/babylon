@@ -189,21 +189,21 @@ class LifecycleManager:
         
         # Adjust tier limits based on pressure
         if pressure >= 0.9:  # Extreme pressure
-            pressure_factor = max(0.2, 1.0 - pressure)  # Allow down to 20% capacity
-            self._immediate_limit = max(8, int(self._base_immediate_limit * pressure_factor))
-            self._active_limit = max(30, int(self._base_active_limit * pressure_factor))
-            self._background_limit = max(60, int(self._base_background_limit * pressure_factor))
+            pressure_factor = max(0.1, 1.0 - pressure)  # Allow down to 10% capacity
+            self._immediate_limit = max(4, int(self._base_immediate_limit * pressure_factor))
+            self._active_limit = max(20, int(self._base_active_limit * pressure_factor))
+            self._background_limit = max(40, int(self._base_background_limit * pressure_factor))
         elif pressure >= 0.8:  # High pressure
-            pressure_factor = max(0.2, 1.0 - pressure)  # Allow down to 20% capacity
-            self._immediate_limit = max(6, int(self._base_immediate_limit * pressure_factor))
-            self._active_limit = max(30, int(self._base_active_limit * pressure_factor))
-            self._background_limit = max(60, int(self._base_background_limit * pressure_factor))
+            pressure_factor = max(0.15, 1.0 - pressure)  # Allow down to 15% capacity
+            self._immediate_limit = max(5, int(self._base_immediate_limit * pressure_factor))
+            self._active_limit = max(25, int(self._base_active_limit * pressure_factor))
+            self._background_limit = max(50, int(self._base_background_limit * pressure_factor))
         else:  # Normal pressure
-            pressure_factor = 1.0 - (pressure * 0.2)  # Steeper reduction
-            recovery_boost = max(0, 0.8 - pressure)  # Much stronger recovery boost
-            self._immediate_limit = max(16, int(self._base_immediate_limit * (pressure_factor + recovery_boost)))
-            self._active_limit = max(50, int(self._base_active_limit * (pressure_factor + recovery_boost)))
-            self._background_limit = max(100, int(self._base_background_limit * (pressure_factor + recovery_boost)))
+            pressure_factor = 1.0 - (pressure * 0.15)  # Gentler reduction
+            recovery_boost = max(0, 1.2 - pressure)  # Stronger recovery boost
+            self._immediate_limit = max(20, int(self._base_immediate_limit * (pressure_factor + recovery_boost)))
+            self._active_limit = max(60, int(self._base_active_limit * (pressure_factor + recovery_boost)))
+            self._background_limit = max(120, int(self._base_background_limit * (pressure_factor + recovery_boost)))
         
         # Force rebalancing when pressure changes
         self._rebalance_all_tiers()
@@ -285,23 +285,16 @@ class LifecycleManager:
             self._last_state_check = 0
         
         # Check for objects in multiple contexts
-        all_objects: Set[str] = set()
-        duplicate_objects: Set[str] = set()
+        immediate_set = set(self._immediate_context.keys())
+        active_set = set(self._active_cache.keys())
+        background_set = set(self._background_context.keys())
         
-        for obj_id in self._immediate_context:
-            if obj_id in all_objects:
-                duplicate_objects.add(obj_id)
-            all_objects.add(obj_id)
-            
-        for obj_id in self._active_cache:
-            if obj_id in all_objects:
-                duplicate_objects.add(obj_id)
-            all_objects.add(obj_id)
-            
-        for obj_id in self._background_context:
-            if obj_id in all_objects:
-                duplicate_objects.add(obj_id)
-            all_objects.add(obj_id)
+        # Find any duplicates between contexts
+        duplicate_objects = (
+            (immediate_set & active_set) |
+            (immediate_set & background_set) |
+            (active_set & background_set)
+        )
             
         if duplicate_objects:
             raise CorruptStateError(
@@ -458,26 +451,24 @@ class LifecycleManager:
         age_threshold: Optional[float] = None
     ) -> Optional[str]:
         """Find the object that should be demoted from a context."""
-        lowest_priority = float('inf')
-        oldest_access = float('inf')
-        candidate = None
+        current_time = time.time()
+        candidates = []
         
         for obj_id in context:
             priority = self._priorities.get(obj_id, 0)
             last_access = self._last_accessed.get(obj_id, 0)
+            age = current_time - last_access
             
-            # If age threshold is provided and object is old enough, it's a candidate
-            if age_threshold and last_access < age_threshold:
+            # If age threshold is provided and object is old enough, it's a strong candidate
+            if age_threshold and age > age_threshold:
                 return obj_id
+                
+            # Score each object based on priority and age
+            access_score = age * (1.0 / (priority + 1))
+            candidates.append((obj_id, access_score))
             
-            # First check priority
-            if priority < lowest_priority:
-                lowest_priority = priority
-                oldest_access = last_access
-                candidate = obj_id
-            # If same priority, check access time
-            elif priority == lowest_priority and last_access < oldest_access:
-                oldest_access = last_access
-                candidate = obj_id
-        
-        return candidate or next(iter(context))  # Fallback to first object if no candidate
+        if not candidates:
+            return next(iter(context)) if context else None
+            
+        # Return object with highest score (oldest relative to priority)
+        return max(candidates, key=lambda x: x[1])[0]
