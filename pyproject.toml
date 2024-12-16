@@ -16,25 +16,26 @@ authors = [
 classifiers = []
 
 dependencies = [
-   "chromadb>=0.5.23,<0.6.0",
+   "aiohttp>=3.9.3",
+   "backoff>=2.2.1",
    "xmlschema>=3.4.3",
    "python-dotenv>=1.0.1",
-   "numpy>=2.2.0",
+   "numpy>=1.26.4",
    "psutil==6.1.0",
    "gputil==1.4.0",
    "pandas>=2.2.3",
    "sqlalchemy>=2.0.36",
    "psycopg2>=2.9.9",
-   "tokenizers>=0.20.3",
+   "tokenizers>=0.19.1",
    "pytest>=8.3.4",
    "pytest-mock>=3.14.0",
+   "pytest-asyncio>=0.25.0",
    "requests>=2.32.3",
    "census>=0.8.22",
    "openpyxl>=3.1.5",
    "fastapi>=0.115.6",
    "uvicorn>=0.32.1",
    "pydantic>=2.10.3",
-   "aiohttp>=3.11.9",
    "python-multipart>=0.0.19",
    "typer>=0.15.1",
    "rich>=13.9.4",
@@ -42,8 +43,11 @@ dependencies = [
    "pyyaml>=6.0.2",
    "jellyfish>=0.8.9,<0.9.0",
    "us>=3.2.0",
-   "networkx>=3.4.2",
+   "networkx>=3.2.1",
    "matplotlib>=3.9.3",
+   "certifi==2024.8.30",
+   "ratelimit>=2.2.1",
+   "async>=0.6.2"
 ]
 
 [project.urls]

@@ -1,16 +1,47 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.  
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),  
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
 ### Added
-- Added comprehensive @TODO.md to track project progress and priorities
+- OpenAI API integration for embeddings
+  - Added OpenAIConfig for API settings management
+  - Implemented retry logic with exponential backoff
+  - Added rate limiting for API requests
+  - Added async/await support for better performance
+- Concurrent operations support in EmbeddingManager
+  - Added thread-safe LRU cache
+  - Implemented request throttling
+  - Added batch processing with configurable sizes
+- Comprehensive metrics collection
+  - Added cache hit/miss tracking
+  - Added timing metrics for embedding operations
+  - Added memory usage monitoring
+  - Added batch processing metrics
+- Enhanced error handling
+  - Added specific error types for embedding failures
+  - Improved error recovery mechanisms
+  - Added detailed error logging
+- Cache memory management
+  - Implemented LRU eviction policy
+  - Added configurable cache size limits
+  - Added memory usage tracking
 
 ### Changed
-- No changes at this time
+- Updated EmbeddingManager to use real embeddings instead of mocks
+- Improved test coverage with async test cases
+- Enhanced configuration system with OpenAI settings
+- Updated requirements.txt with new dependencies
+
+### Dependencies Added
+- aiohttp==3.9.3 for async HTTP requests
+- backoff==2.2.1 for retry logic
+- ratelimit==2.2.1 for API rate limiting
+- pytest-asyncio==0.23.5 for testing async code
 
 ### Deprecated
 - No deprecations at this time
@@ -152,7 +183,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.0] - 2024-11-30
 
 ### Added
-- Initial shell structure for project setup, including the basic directory organization, libraries in `requirements.txt`, and `pyproject.toml` for configuration
+- Initial project structure
+- Basic ChromaDB integration
+- Core metrics collection system
+- Initial test infrastructure
+- Basic contradiction system
+- Logging system with correlation IDs
+- Backup and recovery system
+- Entity registry implementation
+- - Initial shell structure for project setup, including the basic directory organization, libraries in `requirements.txt`, and `pyproject.toml` for configuration
 
 ---
 
