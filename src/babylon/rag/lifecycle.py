@@ -189,21 +189,21 @@ class LifecycleManager:
         
         # Adjust tier limits based on pressure
         if pressure >= 0.9:  # Extreme pressure
-            pressure_factor = max(0.1, 1.0 - pressure)  # Allow down to 10% capacity
-            self._immediate_limit = max(4, int(self._base_immediate_limit * pressure_factor))
-            self._active_limit = max(20, int(self._base_active_limit * pressure_factor))
-            self._background_limit = max(40, int(self._base_background_limit * pressure_factor))
+            pressure_factor = max(0.2, 1.0 - pressure)  # Allow down to 20% capacity
+            self._immediate_limit = max(6, int(self._base_immediate_limit * pressure_factor))
+            self._active_limit = max(30, int(self._base_active_limit * pressure_factor))
+            self._background_limit = max(60, int(self._base_background_limit * pressure_factor))
         elif pressure >= 0.8:  # High pressure
-            pressure_factor = max(0.15, 1.0 - pressure)  # Allow down to 15% capacity
-            self._immediate_limit = max(5, int(self._base_immediate_limit * pressure_factor))
-            self._active_limit = max(25, int(self._base_active_limit * pressure_factor))
-            self._background_limit = max(50, int(self._base_background_limit * pressure_factor))
+            pressure_factor = max(0.3, 1.0 - pressure)  # Allow down to 30% capacity
+            self._immediate_limit = max(8, int(self._base_immediate_limit * pressure_factor))
+            self._active_limit = max(40, int(self._base_active_limit * pressure_factor))
+            self._background_limit = max(80, int(self._base_background_limit * pressure_factor))
         else:  # Normal pressure
-            pressure_factor = 1.0 - (pressure * 0.15)  # Gentler reduction
-            recovery_boost = max(0, 1.2 - pressure)  # Stronger recovery boost
-            self._immediate_limit = max(20, int(self._base_immediate_limit * (pressure_factor + recovery_boost)))
-            self._active_limit = max(60, int(self._base_active_limit * (pressure_factor + recovery_boost)))
-            self._background_limit = max(120, int(self._base_background_limit * (pressure_factor + recovery_boost)))
+            pressure_factor = 1.0 - (pressure * 0.1)  # Gentler reduction
+            recovery_boost = max(0, 1.5 - pressure)  # Stronger recovery boost
+            self._immediate_limit = max(25, int(self._base_immediate_limit * (pressure_factor + recovery_boost)))
+            self._active_limit = max(80, int(self._base_active_limit * (pressure_factor + recovery_boost)))
+            self._background_limit = max(150, int(self._base_background_limit * (pressure_factor + recovery_boost)))
         
         # Force rebalancing when pressure changes
         self._rebalance_all_tiers()
@@ -280,25 +280,33 @@ class LifecycleManager:
             
         self._last_state_check = current_time
         
-        # Force check on every operation when testing
-        if "pytest" in sys.modules:
-            self._last_state_check = 0
-        
         # Check for objects in multiple contexts
         immediate_set = set(self._immediate_context.keys())
         active_set = set(self._active_cache.keys())
         background_set = set(self._background_context.keys())
         
-        # Find any duplicates between contexts
-        duplicate_objects = (
-            (immediate_set & active_set) |
-            (immediate_set & background_set) |
-            (active_set & background_set)
-        )
+        # Find any duplicates between contexts using set operations
+        duplicates_immediate_active = immediate_set & active_set
+        duplicates_immediate_background = immediate_set & background_set
+        duplicates_active_background = active_set & background_set
+        
+        duplicate_objects = duplicates_immediate_active | duplicates_immediate_background | duplicates_active_background
             
         if duplicate_objects:
+            # Identify which contexts each duplicate is in
+            context_details = {}
+            for obj_id in duplicate_objects:
+                contexts = []
+                if obj_id in immediate_set:
+                    contexts.append("immediate")
+                if obj_id in active_set:
+                    contexts.append("active")
+                if obj_id in background_set:
+                    contexts.append("background")
+                context_details[obj_id] = contexts
+                
             raise CorruptStateError(
-                "Objects found in multiple contexts",
+                f"Objects found in multiple contexts: {context_details}",
                 error_code="RAG_161",
                 affected_objects=list(duplicate_objects)
             )
@@ -454,21 +462,37 @@ class LifecycleManager:
         current_time = time.time()
         candidates = []
         
+        # First pass: look for very old objects
+        if age_threshold:
+            for obj_id in context:
+                last_access = self._last_accessed.get(obj_id, 0)
+                age = current_time - last_access
+                if age > age_threshold:
+                    return obj_id
+        
+        # Second pass: score objects based on multiple factors
+        access_weight = 0.7  # Weight for access time
+        priority_weight = 0.3  # Weight for priority
+        
         for obj_id in context:
             priority = self._priorities.get(obj_id, 0)
             last_access = self._last_accessed.get(obj_id, 0)
             age = current_time - last_access
             
-            # If age threshold is provided and object is old enough, it's a strong candidate
-            if age_threshold and age > age_threshold:
-                return obj_id
-                
-            # Score each object based on priority and age
-            access_score = age * (1.0 / (priority + 1))
-            candidates.append((obj_id, access_score))
+            # Normalize age (assume max age of 1 hour for normalization)
+            normalized_age = min(age / 3600.0, 1.0)
+            # Normalize priority (assume max priority of 10 for normalization)
+            normalized_priority = min(priority / 10.0, 1.0)
+            
+            # Calculate weighted score
+            score = (
+                (normalized_age * access_weight) +
+                ((1.0 - normalized_priority) * priority_weight)
+            )
+            candidates.append((obj_id, score))
             
         if not candidates:
             return next(iter(context)) if context else None
             
-        # Return object with highest score (oldest relative to priority)
+        # Return object with highest score
         return max(candidates, key=lambda x: x[1])[0]
