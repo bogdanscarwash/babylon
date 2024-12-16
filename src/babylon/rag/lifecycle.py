@@ -224,8 +224,6 @@ class LifecycleManager:
                 obj.state = ObjectState.ACTIVE
                 self._active_cache[obj_id] = obj
                 self._tier_transitions += 1
-                # Reset access count
-                self._access_counts[obj_id] = 0
 
         # Promote high access count objects from active to immediate
         for obj_id in list(self._active_cache.keys()):
@@ -234,8 +232,6 @@ class LifecycleManager:
                 obj.state = ObjectState.IMMEDIATE
                 self._immediate_context[obj_id] = obj
                 self._tier_transitions += 1
-                # Reset access count
-                self._access_counts[obj_id] = 0
 
         # Demote low access count objects from active to background
         for obj_id in list(self._active_cache.keys()):
@@ -244,8 +240,6 @@ class LifecycleManager:
                 obj.state = ObjectState.BACKGROUND
                 self._background_context[obj_id] = obj
                 self._tier_transitions += 1
-                # Reset access count
-                self._access_counts[obj_id] = 0
 
         # Promote high access count objects from background to active
         for obj_id in list(self._background_context.keys()):
@@ -254,8 +248,6 @@ class LifecycleManager:
                 obj.state = ObjectState.ACTIVE
                 self._active_cache[obj_id] = obj
                 self._tier_transitions += 1
-                # Reset access count
-                self._access_counts[obj_id] = 0
 
         # Demote excess objects from immediate to active
         while len(self._immediate_context) > self._immediate_limit:
