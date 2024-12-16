@@ -219,6 +219,12 @@ class LifecycleManager:
     
     def _rebalance_all_tiers(self) -> None:
         """Rebalance tiers based on access counts."""
+        
+        # Decay access counts for all objects
+        for obj_id in self._access_counts:
+            self._access_counts[obj_id] -= 1  # Decrease access count by 1
+            # Ensure access counts don't go below a minimum threshold (e.g., -10)
+            self._access_counts[obj_id] = max(self._access_counts[obj_id], -10)
         # Demote low access count objects from immediate to active
         for obj_id in list(self._immediate_context.keys()):
             if self._access_counts.get(obj_id, 0) <= -5:
@@ -356,6 +362,13 @@ class LifecycleManager:
                 self._tier_transitions += 1
             # Log recovery action
             logger.warning(f"Recovered from corrupt state for objects: {duplicate_objects}")
+            
+            # Raise the CorruptStateError as expected
+            raise CorruptStateError(
+                message=f"Detected objects in multiple contexts: {duplicate_objects}",
+                error_code="RAG_201",
+                duplicate_objects=duplicate_objects
+            )
 
     def _validate_state_transition(self, obj: Any, target_state: ObjectState) -> None:
         """Validate that a state transition is allowed."""
@@ -541,7 +554,10 @@ class LifecycleManager:
         # Find the object ID with the lowest access count
         sorted_items = sorted(
             context.items(),
-            key=lambda item: self._access_counts.get(item[0], 0)
+            key=lambda item: (
+                -self._priorities.get(item[0], 0),  # Negative because higher priority should come first
+                self._access_counts.get(item[0], 0)
+            )
         )
         return sorted_items[0][0]  # Return the obj_id with lowest access count and priority
 
