@@ -219,79 +219,78 @@ class LifecycleManager:
         )
     
     def _rebalance_all_tiers(self) -> None:
-        """Rebalance tiers based on access counts."""
+        """Rebalance tiers based on access counts and priorities."""
         
         # Decay access counts for all objects
         for obj_id in self._access_counts:
-            self._access_counts[obj_id] -= 2  # Decrease access count by 2
-            # Ensure access counts don't go below a minimum threshold (e.g., -10)
-            self._access_counts[obj_id] = max(self._access_counts[obj_id], -10)
-        # Demote low access count objects from immediate to active
+            self._access_counts[obj_id] = max(self._access_counts[obj_id] - 2, -10)
+
+        # First handle immediate context overflow
+        while len(self._immediate_context) > self._immediate_limit:
+            obj_id = self._find_demotion_candidate(self._immediate_context)
+            obj = self._immediate_context.pop(obj_id)
+            # Don't demote high priority objects from immediate unless under extreme pressure
+            if self._priorities.get(obj_id, 0) > 0 and self._memory_pressure < 0.9:
+                continue
+            obj.state = ObjectState.ACTIVE
+            self._active_cache[obj_id] = obj
+            self._tier_transitions += 1
+
+        # Then handle active cache overflow
+        while len(self._active_cache) > self._active_limit:
+            obj_id = self._find_demotion_candidate(self._active_cache)
+            obj = self._active_cache.pop(obj_id)
+            # Only keep high priority objects in active under normal conditions
+            if self._priorities.get(obj_id, 0) > 0 and self._memory_pressure < 0.8:
+                continue
+            obj.state = ObjectState.BACKGROUND
+            self._background_context[obj_id] = obj
+            self._tier_transitions += 1
+
+        # Finally handle background context overflow
+        while len(self._background_context) > self._background_limit:
+            obj_id = self._find_demotion_candidate(self._background_context)
+            obj = self._background_context.pop(obj_id)
+            obj.state = ObjectState.INACTIVE
+            self._tier_transitions += 1
+
+        # Demote rarely accessed objects from immediate to active
         for obj_id in list(self._immediate_context.keys()):
-            if self._access_counts.get(obj_id, 0) <= 0:
+            if (self._access_counts.get(obj_id, 0) <= -5 and 
+                self._priorities.get(obj_id, 0) == 0):
                 obj = self._immediate_context.pop(obj_id)
                 obj.state = ObjectState.ACTIVE
                 self._active_cache[obj_id] = obj
                 self._tier_transitions += 1
 
-        # Promote high access count objects from active to immediate
+        # Demote rarely accessed objects from active to background
         for obj_id in list(self._active_cache.keys()):
-            if self._access_counts.get(obj_id, 0) >= 3:
-                obj = self._active_cache.pop(obj_id)
-                obj.state = ObjectState.IMMEDIATE
-                self._immediate_context[obj_id] = obj
-                self._tier_transitions += 1
-
-        # Demote low access count objects from active to background
-        for obj_id in list(self._active_cache.keys()):
-            if self._access_counts.get(obj_id, 0) <= -1:
+            if (self._access_counts.get(obj_id, 0) <= -8 and 
+                self._priorities.get(obj_id, 0) == 0):
                 obj = self._active_cache.pop(obj_id)
                 obj.state = ObjectState.BACKGROUND
                 self._background_context[obj_id] = obj
                 self._tier_transitions += 1
 
-        # Promote high access count objects from background to active
+        # Promote frequently accessed objects from background to active
         for obj_id in list(self._background_context.keys()):
-            if self._access_counts.get(obj_id, 0) >= 3 and len(self._active_cache) < self._active_limit:
+            if ((self._access_counts.get(obj_id, 0) >= 3 or 
+                 self._priorities.get(obj_id, 0) > 0) and 
+                len(self._active_cache) < self._active_limit):
                 obj = self._background_context.pop(obj_id)
                 obj.state = ObjectState.ACTIVE
                 self._active_cache[obj_id] = obj
                 self._tier_transitions += 1
 
-        # Demote excess objects from immediate to active
-        while len(self._immediate_context) > self._immediate_limit:
-            obj_id = self._find_demotion_candidate(self._immediate_context)
-            obj = self._immediate_context.pop(obj_id)
-            obj.state = ObjectState.ACTIVE
-            self._active_cache[obj_id] = obj
-            self._tier_transitions += 1
-            # Decrease access count to prioritize less frequently accessed objects
-            self._access_counts[obj_id] -= 1
-
-        # Demote excess objects from active to background
-        while len(self._active_cache) > self._active_limit:
-            obj_id = self._find_demotion_candidate(self._active_cache)
-            obj = self._active_cache.pop(obj_id)
-            obj.state = ObjectState.BACKGROUND
-            self._background_context[obj_id] = obj
-            self._tier_transitions += 1
-            # Reset access count
-            self._access_counts[obj_id] = 0
-
-        # Remove excess objects from background context
-        while len(self._background_context) > self._background_limit:
-            obj_id = self._find_demotion_candidate(self._background_context)
-            obj = self._background_context.pop(obj_id)
-            obj.state = ObjectState.INACTIVE
-            self._tier_transitions += 1
-        
-        
-        # Move excess objects from background to inactive
-        while len(self._background_context) > self._background_limit:
-            obj_id = self._find_demotion_candidate(self._background_context)
-            obj = self._background_context.pop(obj_id)
-            obj.state = ObjectState.INACTIVE
-            self._tier_transitions += 1
+        # Promote frequently accessed objects from active to immediate
+        for obj_id in list(self._active_cache.keys()):
+            if ((self._access_counts.get(obj_id, 0) >= 5 or 
+                 self._priorities.get(obj_id, 0) > 0) and 
+                len(self._immediate_context) < self._immediate_limit):
+                obj = self._active_cache.pop(obj_id)
+                obj.state = ObjectState.IMMEDIATE
+                self._immediate_context[obj_id] = obj
+                self._tier_transitions += 1
     
     def _validate_object(self, obj: Any) -> None:
         """Validate that an object has required attributes."""
@@ -368,7 +367,7 @@ class LifecycleManager:
             raise CorruptStateError(
                 message=f"Detected objects in multiple contexts: {duplicate_objects}",
                 error_code="RAG_201",
-                duplicate_objects=duplicate_objects
+                affected_objects=list(duplicate_objects)
             )
 
     def _validate_state_transition(self, obj: Any, target_state: ObjectState) -> None:
@@ -380,6 +379,17 @@ class LifecycleManager:
                 field_name="state",
                 current_value=obj.state
             )
+            
+        # Allow same-state transitions for certain operations
+        if obj.state == target_state:
+            # Only allow same-state for BACKGROUND and ACTIVE
+            if target_state not in {ObjectState.BACKGROUND, ObjectState.ACTIVE}:
+                raise StateTransitionError(
+                    f"Invalid same-state transition for state: {target_state}",
+                    current_state=str(obj.state),
+                    target_state=str(target_state)
+                )
+            return
             
         # Define valid transitions
         valid_transitions = {
@@ -407,7 +417,6 @@ class LifecycleManager:
             self._last_accessed[obj_id] = current_time
             # Update access counts
             self._access_counts[obj_id] = self._access_counts.get(obj_id, 0) + 1
-            self._rebalance_all_tiers()
             return obj
 
         if obj_id in self._active_cache:
@@ -442,7 +451,6 @@ class LifecycleManager:
             return obj
 
         self._cache_misses += 1
-        self._rebalance_all_tiers()
         return None
 
     def immediate_context_size(self) -> int:
@@ -552,15 +560,32 @@ class LifecycleManager:
         """Find the object that should be demoted from a context."""
         if not context:
             return None
-        # Find the object ID with the lowest access count
+        
+        # First try to find a low priority, rarely accessed object
+        candidates = [
+            (obj_id, obj) for obj_id, obj in context.items()
+            if self._priorities.get(obj_id, 0) == 0 and 
+               self._access_counts.get(obj_id, 0) <= 0
+        ]
+        
+        if candidates:
+            # Sort by access count (ascending)
+            sorted_candidates = sorted(
+                candidates,
+                key=lambda x: self._access_counts.get(x[0], 0)
+            )
+            return sorted_candidates[0][0]
+        
+        # If no good candidates, pick the least recently accessed
         sorted_items = sorted(
             context.items(),
             key=lambda item: (
-                -self._priorities.get(item[0], 0),  # Negative because higher priority should come first
-                self._access_counts.get(item[0], 0)
+                self._priorities.get(item[0], 0),  # Higher priority = less likely to be demoted
+                self._access_counts.get(item[0], 0),  # Higher access count = less likely to be demoted
+                -self._last_accessed.get(item[0], 0)  # Older access = more likely to be demoted
             )
         )
-        return sorted_items[0][0]  # Return the obj_id with lowest access count and priority
+        return sorted_items[0][0]
 
     def _find_promotion_candidate(
         self,
@@ -569,10 +594,13 @@ class LifecycleManager:
         """Find the object that should be promoted from a context."""
         if not context:
             return None
-        # Find the object ID with the highest access count
+        # Sort by priority (descending) and access count (descending)
         sorted_items = sorted(
             context.items(),
-            key=lambda item: self._access_counts.get(item[0], 0),
+            key=lambda item: (
+                self._priorities.get(item[0], 0),
+                self._access_counts.get(item[0], 0)
+            ),
             reverse=True
         )
-        return sorted_items[0][0]  # Return the obj_id with highest access count
+        return sorted_items[0][0]  # Return the obj_id with highest priority and access count
