@@ -41,6 +41,9 @@ def test_lifecycle_integration():
     manager.set_memory_pressure(0.8)
     assert manager.immediate_context_size() < 30
     
+    # Trigger rebalancing to ensure state transitions occur
+    manager._rebalance_all_tiers()
+
     # Test error handling during normal operations
     with pytest.raises(InvalidObjectError):
         manager.activate(InvalidMockObject(data="invalid"))
