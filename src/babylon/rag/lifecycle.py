@@ -87,6 +87,7 @@ class LifecycleManager:
         self._cache_hits = 0
         self._cache_misses = 0
         self._last_state_check = 0.0  # Track last consistency check
+        self._demotion_threshold = 0.1  # Demotion threshold in seconds
 
         # Base size limits for each tier
         self._base_immediate_limit = 30
@@ -219,7 +220,7 @@ class LifecycleManager:
     def _rebalance_all_tiers(self) -> None:
         """Force rebalancing of all tiers based on current limits."""
         current_time = time.time()
-        old_threshold = current_time - 300  # 5 minutes for testing, adjust in production
+        old_threshold = current_time - self._demotion_threshold  # Use demotion threshold
 
         # Promote objects to immediate context if space allows
         while len(self._immediate_context) < self._immediate_limit and self._active_cache:
@@ -244,6 +245,15 @@ class LifecycleManager:
             obj.state = ObjectState.ACTIVE
             self._active_cache[obj_id] = obj
             self._tier_transitions += 1
+
+        # Move old objects from immediate to active
+        for obj_id in list(self._immediate_context.keys()):
+            last_access = self._last_accessed.get(obj_id, 0)
+            if last_access < old_threshold:
+                obj = self._immediate_context.pop(obj_id)
+                self._active_cache[obj_id] = obj
+                obj.state = ObjectState.ACTIVE
+                self._tier_transitions += 1
 
         # Demote excess objects from active to background
         while len(self._active_cache) > self._active_limit:
