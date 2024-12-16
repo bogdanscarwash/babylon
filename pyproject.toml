@@ -68,6 +68,8 @@ packages = ["src/babylon"]
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
+asyncio_mode = "strict"
+asyncio_default_fixture_loop_scope = "function"
 
 [tool.black]
 line-length = 88

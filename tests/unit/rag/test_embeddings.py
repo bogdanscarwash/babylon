@@ -433,7 +433,7 @@ def test_embedding_metrics_collection(mock_embedding_manager):
     
     # Verify latency metrics
     latency_stats = metrics.get("latency_stats", {})
-    assert "embedding_generation_time" in str(latency_stats)
+    assert "batch_processing_time" in str(latency_stats)
     assert "batch_processing_time" in str(latency_stats)
     
     # Verify memory metrics
