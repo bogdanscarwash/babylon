@@ -28,7 +28,14 @@ class MetricsCollector:
         self.log_dir.mkdir(parents=True, exist_ok=True)
 
         # Initialize database session if available
-        self.db = SessionLocal() if DB_AVAILABLE else None
+        if DB_AVAILABLE:
+            try:
+                self.db = SessionLocal()
+            except OperationalError as e:
+                logging.warning(f"Failed to initialize database session: {e}")
+                self.db = None
+        else:
+            self.db = None
 
         # Initialize metrics storage containers with proper typing
         self.metrics: dict[str, Any] = {
@@ -81,6 +88,7 @@ class MetricsCollector:
                 self.db.commit()
             except OperationalError as e:
                 logging.warning(f"Failed to record metric '{name}': {e}")
+                self.db.rollback()
 
         # Record an object access event if object_id is provided
         if object_id is not None:
