@@ -260,14 +260,6 @@ class LifecycleManager:
             obj.state = ObjectState.INACTIVE
             self._tier_transitions += 1
         
-        # Move old objects from active to background
-        for obj_id in list(self._active_cache.keys()):
-            last_access = self._last_accessed.get(obj_id, 0)
-            if current_time - last_access > old_threshold:
-                obj = self._active_cache.pop(obj_id)
-                self._background_context[obj_id] = obj
-                obj.state = ObjectState.BACKGROUND
-                self._tier_transitions += 1
         
         # Move excess objects from background to inactive
         while len(self._background_context) > self._background_limit:
