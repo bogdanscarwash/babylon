@@ -207,6 +207,8 @@ class LifecycleManager:
         
         # Force rebalancing when pressure changes
         self._rebalance_all_tiers()
+        # Trigger promotion of objects based on updated limits
+        self._promote_objects_after_pressure()
         
         logger.info(
             f"Memory pressure set to {pressure:.2f}, "
@@ -219,7 +221,7 @@ class LifecycleManager:
         """Rebalance tiers based on access counts."""
         # Demote low access count objects from immediate to active
         for obj_id in list(self._immediate_context.keys()):
-            if self._access_counts.get(obj_id, 0) <= 0:
+            if self._access_counts.get(obj_id, 0) <= -5:
                 obj = self._immediate_context.pop(obj_id)
                 obj.state = ObjectState.ACTIVE
                 self._active_cache[obj_id] = obj
@@ -235,7 +237,7 @@ class LifecycleManager:
 
         # Demote low access count objects from active to background
         for obj_id in list(self._active_cache.keys()):
-            if self._access_counts.get(obj_id, 0) <= 0:
+            if self._access_counts.get(obj_id, 0) <= -2:
                 obj = self._active_cache.pop(obj_id)
                 obj.state = ObjectState.BACKGROUND
                 self._background_context[obj_id] = obj
@@ -256,8 +258,8 @@ class LifecycleManager:
             obj.state = ObjectState.ACTIVE
             self._active_cache[obj_id] = obj
             self._tier_transitions += 1
-            # Reset access count
-            self._access_counts[obj_id] = 0
+            # Decrease access count to prioritize less frequently accessed objects
+            self._access_counts[obj_id] -= 1
 
         # Demote excess objects from active to background
         while len(self._active_cache) > self._active_limit:
@@ -337,11 +339,23 @@ class LifecycleManager:
                     contexts.append("background")
                 context_details[obj_id] = contexts
                 
-            raise CorruptStateError(
-                f"Objects found in multiple contexts: {context_details}",
-                error_code="RAG_161",
-                affected_objects=list(duplicate_objects)
-            )
+            # Recover by keeping the highest priority context
+            for obj_id in duplicate_objects:
+                contexts = context_details[obj_id]
+                # Decide which context to keep (e.g., immediate > active > background)
+                if 'immediate' in contexts:
+                    # Remove from other contexts
+                    self._active_cache.pop(obj_id, None)
+                    self._background_context.pop(obj_id, None)
+                elif 'active' in contexts:
+                    self._immediate_context.pop(obj_id, None)
+                    self._background_context.pop(obj_id, None)
+                elif 'background' in contexts:
+                    self._immediate_context.pop(obj_id, None)
+                    self._active_cache.pop(obj_id, None)
+                self._tier_transitions += 1
+            # Log recovery action
+            logger.warning(f"Recovered from corrupt state for objects: {duplicate_objects}")
 
     def _validate_state_transition(self, obj: Any, target_state: ObjectState) -> None:
         """Validate that a state transition is allowed."""
@@ -500,6 +514,23 @@ class LifecycleManager:
             background_context_usage=len(self._background_context) / self._background_limit
         )
 
+    def _promote_objects_after_pressure(self) -> None:
+        """Promote objects to higher tiers after memory pressure reduction."""
+        # Promote from background to active
+        while len(self._active_cache) < self._active_limit and self._background_context:
+            obj_id = self._find_promotion_candidate(self._background_context)
+            obj = self._background_context.pop(obj_id)
+            obj.state = ObjectState.ACTIVE
+            self._active_cache[obj_id] = obj
+            self._tier_transitions += 1
+        # Promote from active to immediate
+        while len(self._immediate_context) < self._immediate_limit and self._active_cache:
+            obj_id = self._find_promotion_candidate(self._active_cache)
+            obj = self._active_cache.pop(obj_id)
+            obj.state = ObjectState.IMMEDIATE
+            self._immediate_context[obj_id] = obj
+            self._tier_transitions += 1
+
     def _find_demotion_candidate(
         self,
         context: OrderedDict
@@ -512,7 +543,7 @@ class LifecycleManager:
             context.items(),
             key=lambda item: self._access_counts.get(item[0], 0)
         )
-        return sorted_items[0][0]  # Return the obj_id with lowest access count
+        return sorted_items[0][0]  # Return the obj_id with lowest access count and priority
 
     def _find_promotion_candidate(
         self,
