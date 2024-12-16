@@ -216,14 +216,36 @@ class LifecycleManager:
         )
     
     def _rebalance_all_tiers(self) -> None:
-        """Force rebalancing of all tiers based on current limits."""
-        # Promote objects to immediate context if space allows
-        while len(self._immediate_context) < self._immediate_limit and self._active_cache:
-            obj_id = self._find_promotion_candidate(self._active_cache)
-            obj = self._active_cache.pop(obj_id)
-            obj.state = ObjectState.IMMEDIATE
-            self._immediate_context[obj_id] = obj
-            self._tier_transitions += 1
+        """Rebalance tiers based on access counts."""
+        # Demote low access count objects from immediate to active
+        for obj_id in list(self._immediate_context.keys()):
+            if self._access_counts.get(obj_id, 0) < 5:
+                obj = self._immediate_context.pop(obj_id)
+                obj.state = ObjectState.ACTIVE
+                self._active_cache[obj_id] = obj
+                self._tier_transitions += 1
+                # Reset access count
+                self._access_counts[obj_id] = 0
+
+        # Promote high access count objects from active to immediate
+        for obj_id in list(self._active_cache.keys()):
+            if self._access_counts.get(obj_id, 0) >= 5:
+                obj = self._active_cache.pop(obj_id)
+                obj.state = ObjectState.IMMEDIATE
+                self._immediate_context[obj_id] = obj
+                self._tier_transitions += 1
+                # Reset access count
+                self._access_counts[obj_id] = 0
+
+        # Demote low access count objects from active to background
+        for obj_id in list(self._active_cache.keys()):
+            if self._access_counts.get(obj_id, 0) < 2:
+                obj = self._active_cache.pop(obj_id)
+                obj.state = ObjectState.BACKGROUND
+                self._background_context[obj_id] = obj
+                self._tier_transitions += 1
+                # Reset access count
+                self._access_counts[obj_id] = 0
 
         # Promote objects to active cache if space allows
         while len(self._active_cache) < self._active_limit and self._background_context:
@@ -355,7 +377,7 @@ class LifecycleManager:
     def get_object(self, obj_id: str) -> Any:
         """Get an object by ID from any context."""
         current_time = time.time()
-
+    
         if obj_id in self._immediate_context:
             self._cache_hits += 1
             obj = self._immediate_context[obj_id]
@@ -363,6 +385,7 @@ class LifecycleManager:
             self._last_accessed[obj_id] = current_time
             # Update access counts
             self._access_counts[obj_id] = self._access_counts.get(obj_id, 0) + 1
+            self._rebalance_all_tiers()
             return obj
 
         if obj_id in self._active_cache:
@@ -397,6 +420,7 @@ class LifecycleManager:
             return obj
 
         self._cache_misses += 1
+        self._rebalance_all_tiers()
         return None
 
     def immediate_context_size(self) -> int:
