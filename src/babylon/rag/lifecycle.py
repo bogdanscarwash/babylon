@@ -83,6 +83,8 @@ class LifecycleManager:
         self._active_cache: OrderedDict[str, Any] = OrderedDict()
         self._background_context: OrderedDict[str, Any] = OrderedDict()
         self._priorities: Dict[str, int] = {}
+        self._cache_hits = 0
+        self._cache_misses = 0
         
         # Base size limits for each tier
         self._base_immediate_limit = 30
@@ -248,6 +250,86 @@ class LifecycleManager:
             obj.state = ObjectState.INACTIVE
             self._tier_transitions += 1
     
+    def _validate_object(self, obj: Any) -> None:
+        """Validate that an object has required attributes."""
+        if not hasattr(obj, 'id'):
+            raise InvalidObjectError("Object must have an 'id' attribute")
+        if not hasattr(obj, 'state'):
+            obj.state = ObjectState.INACTIVE
+        if not hasattr(obj, 'last_accessed'):
+            obj.last_accessed = None
+        if not hasattr(obj, 'last_modified'):
+            obj.last_modified = None
+
+    def immediate_context_size(self) -> int:
+        """Get the size of the immediate context."""
+        return len(self._immediate_context)
+
+    def active_cache_size(self) -> int:
+        """Get the size of the active cache."""
+        return len(self._active_cache)
+
+    def background_context_size(self) -> int:
+        """Get the size of the background context."""
+        return len(self._background_context)
+
+    @time_operation('activate')
+    def activate(self, obj: Any, priority: int = 0) -> None:
+        """Activate an object and move it to immediate context."""
+        self._validate_object(obj)
+        obj_id = str(obj.id)
+        current_time = time.time()
+
+        # Update metadata
+        self._priorities[obj_id] = priority
+        self._last_accessed[obj_id] = current_time
+        obj.last_accessed = current_time
+
+        # Remove from other contexts if present
+        self._active_cache.pop(obj_id, None)
+        self._background_context.pop(obj_id, None)
+
+        # Add to immediate context
+        obj.state = ObjectState.IMMEDIATE
+        self._immediate_context[obj_id] = obj
+        self._tier_transitions += 1
+
+        # Rebalance if needed
+        if len(self._immediate_context) > self._immediate_limit:
+            self._rebalance_all_tiers()
+
+    def add_to_background(self, obj: Any) -> None:
+        """Add an object directly to background context."""
+        self._validate_object(obj)
+        obj_id = str(obj.id)
+        current_time = time.time()
+
+        # Update metadata
+        self._last_accessed[obj_id] = current_time
+        obj.last_accessed = current_time
+
+        # Add to background context
+        obj.state = ObjectState.BACKGROUND
+        self._background_context[obj_id] = obj
+        self._tier_transitions += 1
+
+    def get_metrics(self) -> PerformanceMetrics:
+        """Get current performance metrics."""
+        return PerformanceMetrics(
+            activation_count=self._operation_counts.get('activate', 0),
+            deactivation_count=self._operation_counts.get('deactivate', 0),
+            cache_hit_count=self._cache_hits,
+            cache_miss_count=self._cache_misses,
+            tier_transition_count=self._tier_transitions,
+            avg_activation_time=mean(self._operation_times.get('activate', [0])),
+            avg_deactivation_time=mean(self._operation_times.get('deactivate', [0])),
+            avg_memory_pressure=mean(self._memory_pressure_history) if self._memory_pressure_history else 0.0,
+            peak_memory_pressure=self._peak_memory_pressure,
+            immediate_context_usage=len(self._immediate_context) / self._immediate_limit,
+            active_cache_usage=len(self._active_cache) / self._active_limit,
+            background_context_usage=len(self._background_context) / self._background_limit
+        )
+
     def _find_demotion_candidate(
         self,
         context: OrderedDict,
