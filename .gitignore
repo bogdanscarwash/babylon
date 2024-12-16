@@ -28,3 +28,6 @@
 
 #pycache
 *__pycache__*
+tests/unit/rag/scratch.py
+
+scratch.py

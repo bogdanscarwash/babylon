@@ -219,7 +219,7 @@ class LifecycleManager:
         """Rebalance tiers based on access counts."""
         # Demote low access count objects from immediate to active
         for obj_id in list(self._immediate_context.keys()):
-            if self._access_counts.get(obj_id, 0) < 5:
+            if self._access_counts.get(obj_id, 0) <= 0:
                 obj = self._immediate_context.pop(obj_id)
                 obj.state = ObjectState.ACTIVE
                 self._active_cache[obj_id] = obj
@@ -235,7 +235,7 @@ class LifecycleManager:
 
         # Demote low access count objects from active to background
         for obj_id in list(self._active_cache.keys()):
-            if self._access_counts.get(obj_id, 0) < 2:
+            if self._access_counts.get(obj_id, 0) <= 0:
                 obj = self._active_cache.pop(obj_id)
                 obj.state = ObjectState.BACKGROUND
                 self._background_context[obj_id] = obj
@@ -456,6 +456,7 @@ class LifecycleManager:
         obj.state = ObjectState.IMMEDIATE
         self._immediate_context[obj_id] = obj
         self._tier_transitions += 1
+        self._access_counts[obj_id] = 5  # Set initial access count
 
         # Rebalance if needed
         if len(self._immediate_context) > self._immediate_limit:
