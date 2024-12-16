@@ -170,13 +170,14 @@ class LifecycleManager:
             self._tier_transitions += 1
             self._last_accessed[obj_id] = current_time
         elif obj_id in self._background_context:
-            # Cannot mark inactive from background
-            raise StateTransitionError(
-                message="Cannot mark_inactive from BACKGROUND state",
-                error_code="RAG_123",
-                current_state=str(obj.state),
-                target_state=str(ObjectState.INACTIVE)
-            )
+            # Move from background to inactive
+            self._validate_state_transition(obj, ObjectState.INACTIVE)
+            obj = self._background_context.pop(obj_id)
+            obj.state = ObjectState.INACTIVE
+            self._tier_transitions += 1
+            # Clean up metadata
+            self._last_accessed.pop(obj_id, None)
+            self._access_counts.pop(obj_id, None)
     
     def set_memory_pressure(self, pressure: float) -> None:
         """Set the current memory pressure level and adjust limits."""
