@@ -87,8 +87,6 @@ class LifecycleManager:
         self._cache_hits = 0
         self._cache_misses = 0
         self._last_state_check = 0.0  # Track last consistency check
-        self._demotion_threshold = 0.1  # Demotion threshold in seconds
-
         # Base size limits for each tier
         self._base_immediate_limit = 30
         self._base_active_limit = 200
@@ -219,9 +217,6 @@ class LifecycleManager:
     
     def _rebalance_all_tiers(self) -> None:
         """Force rebalancing of all tiers based on current limits."""
-        current_time = time.time()
-        old_threshold = current_time - self._demotion_threshold  # Use demotion threshold
-
         # Promote objects to immediate context if space allows
         while len(self._immediate_context) < self._immediate_limit and self._active_cache:
             obj_id = self._find_promotion_candidate(self._active_cache)
@@ -245,15 +240,8 @@ class LifecycleManager:
             obj.state = ObjectState.ACTIVE
             self._active_cache[obj_id] = obj
             self._tier_transitions += 1
-
-        # Move old objects from immediate to active
-        for obj_id in list(self._immediate_context.keys()):
-            last_access = self._last_accessed.get(obj_id, 0)
-            if last_access < old_threshold:
-                obj = self._immediate_context.pop(obj_id)
-                self._active_cache[obj_id] = obj
-                obj.state = ObjectState.ACTIVE
-                self._tier_transitions += 1
+            # Reset access count
+            self._access_counts[obj_id] = 0
 
         # Demote excess objects from active to background
         while len(self._active_cache) > self._active_limit:
@@ -262,6 +250,8 @@ class LifecycleManager:
             obj.state = ObjectState.BACKGROUND
             self._background_context[obj_id] = obj
             self._tier_transitions += 1
+            # Reset access count
+            self._access_counts[obj_id] = 0
 
         # Remove excess objects from background context
         while len(self._background_context) > self._background_limit:
@@ -379,6 +369,8 @@ class LifecycleManager:
             obj = self._immediate_context[obj_id]
             obj.last_accessed = current_time
             self._last_accessed[obj_id] = current_time
+            # Update access counts
+            self._access_counts[obj_id] = self._access_counts.get(obj_id, 0) + 1
             return obj
 
         if obj_id in self._active_cache:
@@ -402,6 +394,8 @@ class LifecycleManager:
             obj = self._background_context[obj_id]
             obj.last_accessed = current_time
             self._last_accessed[obj_id] = current_time
+            # Update access counts
+            self._access_counts[obj_id] = self._access_counts.get(obj_id, 0) + 1
             # Promote to active if accessed
             if len(self._active_cache) < self._active_limit:
                 self._background_context.pop(obj_id)
@@ -500,7 +494,11 @@ class LifecycleManager:
         context: OrderedDict
     ) -> Optional[str]:
         """Find the object that should be demoted from a context."""
-        # Simple LRU demotion based on last accessed time
         if not context:
             return None
-        return next(iter(context))
+        # Find the object ID with the lowest access count
+        sorted_items = sorted(
+            context.items(),
+            key=lambda item: self._access_counts.get(item[0], 0)
+        )
+        return sorted_items[0][0]  # Return the obj_id with lowest access count

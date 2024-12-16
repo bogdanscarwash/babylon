@@ -19,15 +19,8 @@
   - [x] Immediate context (20-30 objects)
   - [x] Active cache (100-200 objects)
   - [x] Background context (300-500 objects)
+- [ ] Implement batch operations for lifecycle management
 
-### PostgreSQL Integration
-- [ ] Design and implement database schema
-- [ ] Complete SQLAlchemy ORM integration
-- [ ] Add error handling
-- [ ] Create migration scripts
-- [ ] Set up connection pooling
-- [ ] Implement data retention policies
-- [ ] Develop monitoring tools
 
 ## In Progress
 
@@ -84,6 +77,16 @@
 - [ ] Implement social effects system
 - [ ] Add social impact calculations
 - [ ] Develop social interaction models
+- [ ] Implement social effects for events
+
+### PostgreSQL Integration
+- [ ] Design and implement database schema
+- [ ] Complete SQLAlchemy ORM integration
+- [ ] Add error handling
+- [ ] Create migration scripts
+- [ ] Set up connection pooling
+- [ ] Implement data retention policies
+- [ ] Develop monitoring tools
 
 ## Technical Debt & Standards
 
