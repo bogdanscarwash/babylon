@@ -10,6 +10,7 @@ import json
 import logging
 from datetime import datetime
 from pathlib import Path
+from sqlalchemy.exc import OperationalError
 from typing import Any
 
 
@@ -74,9 +75,12 @@ class MetricsCollector:
     ) -> None:
         """Record a metric in the database if available."""
         if DB_AVAILABLE and self.db is not None:
-            metric = Metric(name=name, value=value, context=context)
-            self.db.add(metric)
-            self.db.commit()
+            try:
+                metric = Metric(name=name, value=value, context=context)
+                self.db.add(metric)
+                self.db.commit()
+            except OperationalError as e:
+                logging.warning(f"Failed to record metric '{name}': {e}")
 
         # Record an object access event if object_id is provided
         if object_id is not None:

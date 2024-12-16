@@ -6,7 +6,7 @@ import asyncio
 from typing import List, Optional
 from dataclasses import dataclass
 from babylon.rag.embeddings import EmbeddingManager, EmbeddingError
-
+import time
 
 @dataclass
 class MockEmbeddableObject:
@@ -219,14 +219,12 @@ def test_batch_debedding():
     assert all(obj.embedding is None for obj in debedded_objects)
 
 
-def test_embedding_with_custom_dimension():
-    """Test embedding with non-default dimension."""
-    manager = EmbeddingManager(embedding_dimension=512)
-    obj = MockEmbeddableObject(id="test1", content="This is a test document")
-    
-    embedded_obj = manager.embed(obj)
-    
-    assert len(embedded_obj.embedding) == 512
+def test_custom_embedding_dimension_validation():
+    """Test validation of custom embedding dimensions."""
+    # Should raise ValueError for custom dimension
+    with pytest.raises(ValueError) as exc_info:
+        EmbeddingManager(embedding_dimension=512)
+    assert "Custom embedding dimensions are not supported" in str(exc_info.value)
 
 
 def test_invalid_content_handling():

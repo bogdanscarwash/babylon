@@ -64,11 +64,21 @@ class EmbeddingManager:
             batch_size: Number of objects to embed in each batch (default: from OpenAIConfig)
             max_cache_size: Maximum number of embeddings to keep in cache (default: 1000)
             max_concurrent_requests: Maximum number of concurrent embedding requests (default: 4)
+            
+        Raises:
+            ValueError: If a custom embedding dimension is provided (not supported with OpenAI API)
         """
         # Validate OpenAI configuration
         OpenAIConfig.validate()
         
-        self.embedding_dimension = embedding_dimension or OpenAIConfig.get_model_dimensions()
+        # Custom dimensions are not supported with OpenAI API
+        if embedding_dimension is not None and embedding_dimension != OpenAIConfig.get_model_dimensions():
+            raise ValueError(
+                f"Custom embedding dimensions are not supported. The OpenAI API returns fixed-size embeddings "
+                f"({OpenAIConfig.get_model_dimensions()} dimensions for {OpenAIConfig.EMBEDDING_MODEL})"
+            )
+        
+        self.embedding_dimension = OpenAIConfig.get_model_dimensions()
         self.batch_size = batch_size or OpenAIConfig.BATCH_SIZE
         self.max_cache_size = max_cache_size
         self.max_concurrent_requests = max_concurrent_requests
