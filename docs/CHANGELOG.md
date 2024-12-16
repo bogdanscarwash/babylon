@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Implemented RAG (Retrieval Augmented Generation) system
+  - Added object lifecycle management with tiered contexts
+  - Integrated OpenAI API for real-time embeddings
+  - Implemented caching and memory management for embeddings
+  - Added performance metrics collection for embedding operations
+  - Enhanced error handling and recovery for embedding failures
+  - Supported concurrent operations with async/await
+  - Developed batch processing for efficient embedding generation
 - OpenAI API integration for embeddings
   - Added OpenAIConfig for API settings management
   - Implemented retry logic with exponential backoff
