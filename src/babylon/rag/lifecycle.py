@@ -87,25 +87,26 @@ class LifecycleManager:
         self._cache_hits = 0
         self._cache_misses = 0
         self._last_state_check = 0.0  # Track last consistency check
-        
+
         # Base size limits for each tier
         self._base_immediate_limit = 30
         self._base_active_limit = 200
         self._base_background_limit = 500
-        
+
         # Current size limits (adjusted by memory pressure)
         self._immediate_limit = self._base_immediate_limit
         self._active_limit = self._base_active_limit
         self._background_limit = self._base_background_limit
-        
+
         # Memory pressure tracking (0.0 to 1.0)
         self._memory_pressure = 0.0
         self._memory_pressure_history: List[float] = []
         self._peak_memory_pressure = 0.0
-        
+
         # Access timestamps
         self._last_accessed: Dict[str, float] = {}
-        
+        self._access_counts: Dict[str, int] = {}  # Track access counts for promotion
+
         # Performance metrics
         self._operation_times: Dict[str, List[float]] = {}
         self._operation_counts: Dict[str, int] = {}
@@ -219,21 +220,44 @@ class LifecycleManager:
         """Force rebalancing of all tiers based on current limits."""
         current_time = time.time()
         old_threshold = current_time - 300  # 5 minutes for testing, adjust in production
-        
-        # Move excess objects from immediate to active
+
+        # Promote objects to immediate context if space allows
+        while len(self._immediate_context) < self._immediate_limit and self._active_cache:
+            obj_id = self._find_promotion_candidate(self._active_cache)
+            obj = self._active_cache.pop(obj_id)
+            obj.state = ObjectState.IMMEDIATE
+            self._immediate_context[obj_id] = obj
+            self._tier_transitions += 1
+
+        # Promote objects to active cache if space allows
+        while len(self._active_cache) < self._active_limit and self._background_context:
+            obj_id = self._find_promotion_candidate(self._background_context)
+            obj = self._background_context.pop(obj_id)
+            obj.state = ObjectState.ACTIVE
+            self._active_cache[obj_id] = obj
+            self._tier_transitions += 1
+
+        # Demote excess objects from immediate to active
         while len(self._immediate_context) > self._immediate_limit:
             obj_id = self._find_demotion_candidate(self._immediate_context)
             obj = self._immediate_context.pop(obj_id)
             obj.state = ObjectState.ACTIVE
             self._active_cache[obj_id] = obj
             self._tier_transitions += 1
-        
-        # Move excess objects from active to background
+
+        # Demote excess objects from active to background
         while len(self._active_cache) > self._active_limit:
             obj_id = self._find_demotion_candidate(self._active_cache)
             obj = self._active_cache.pop(obj_id)
             obj.state = ObjectState.BACKGROUND
             self._background_context[obj_id] = obj
+            self._tier_transitions += 1
+
+        # Remove excess objects from background context
+        while len(self._background_context) > self._background_limit:
+            obj_id = self._find_demotion_candidate(self._background_context)
+            obj = self._background_context.pop(obj_id)
+            obj.state = ObjectState.INACTIVE
             self._tier_transitions += 1
         
         # Move old objects from active to background
@@ -339,36 +363,43 @@ class LifecycleManager:
     def get_object(self, obj_id: str) -> Any:
         """Get an object by ID from any context."""
         current_time = time.time()
-        
+
         if obj_id in self._immediate_context:
             self._cache_hits += 1
             obj = self._immediate_context[obj_id]
             obj.last_accessed = current_time
             self._last_accessed[obj_id] = current_time
             return obj
-            
+
         if obj_id in self._active_cache:
             self._cache_hits += 1
             obj = self._active_cache[obj_id]
-            # Promote to immediate if space allows
-            if len(self._immediate_context) < self._immediate_limit:
+            obj.last_accessed = current_time
+            self._last_accessed[obj_id] = current_time
+            # Promote to immediate if accessed frequently
+            access_count = self._access_counts.get(obj_id, 0) + 1
+            self._access_counts[obj_id] = access_count
+            if access_count >= 5 and len(self._immediate_context) < self._immediate_limit:
                 self._active_cache.pop(obj_id)
                 obj.state = ObjectState.IMMEDIATE
                 self._immediate_context[obj_id] = obj
                 self._tier_transitions += 1
+                self._access_counts[obj_id] = 0
             return obj
-            
+
         if obj_id in self._background_context:
             self._cache_hits += 1
             obj = self._background_context[obj_id]
-            # Promote to active if space allows
+            obj.last_accessed = current_time
+            self._last_accessed[obj_id] = current_time
+            # Promote to active if accessed
             if len(self._active_cache) < self._active_limit:
                 self._background_context.pop(obj_id)
                 obj.state = ObjectState.ACTIVE
                 self._active_cache[obj_id] = obj
                 self._tier_transitions += 1
             return obj
-            
+
         self._cache_misses += 1
         return None
 
@@ -456,57 +487,10 @@ class LifecycleManager:
 
     def _find_demotion_candidate(
         self,
-        context: OrderedDict,
-        age_threshold: Optional[float] = None
+        context: OrderedDict
     ) -> Optional[str]:
         """Find the object that should be demoted from a context."""
-        current_time = time.time()
-        candidates = []
-        
-        # First pass: look for very old objects
-        if age_threshold:
-            for obj_id in context:
-                last_access = self._last_accessed.get(obj_id, 0)
-                age = current_time - last_access
-                if age > age_threshold:
-                    return obj_id
-        
-        # Second pass: score objects based on multiple factors
-        access_weight = 0.6  # Weight for access time
-        frequency_weight = 0.3  # Weight for access frequency
-        priority_weight = 0.1  # Weight for priority
-        
-        access_counts = {}
-        max_count = 1
-        
-        # Calculate access frequencies
-        for obj_id in context:
-            access_counts[obj_id] = sum(
-                1 for t in self._operation_times.get('activate', [])
-                if self._last_accessed.get(obj_id, 0) > current_time - t
-            )
-            max_count = max(max_count, access_counts[obj_id])
-        
-        for obj_id in context:
-            priority = self._priorities.get(obj_id, 0)
-            last_access = self._last_accessed.get(obj_id, 0)
-            age = current_time - last_access
-            
-            # Normalize factors
-            normalized_age = min(age / 3600.0, 1.0)
-            normalized_priority = min(priority / 10.0, 1.0)
-            normalized_frequency = access_counts[obj_id] / max_count if max_count > 0 else 0
-            
-            # Calculate weighted score (higher score = more likely to be demoted)
-            score = (
-                (normalized_age * access_weight) +
-                ((1.0 - normalized_frequency) * frequency_weight) +
-                ((1.0 - normalized_priority) * priority_weight)
-            )
-            candidates.append((obj_id, score))
-            
-        if not candidates:
-            return next(iter(context)) if context else None
-            
-        # Return object with highest score
-        return max(candidates, key=lambda x: x[1])[0]
+        # Simple LRU demotion based on last accessed time
+        if not context:
+            return None
+        return next(iter(context))
