@@ -519,17 +519,17 @@ class LifecycleManager:
         )
         return sorted_items[0][0]  # Return the obj_id with lowest access count
 
-        def _find_promotion_candidate(
-            self,
-            context: OrderedDict
-        ) -> Optional[str]:
-            """Find the object that should be promoted from a context."""
-            if not context:
-                return None
-            # Find the object ID with the highest access count
-            sorted_items = sorted(
-                context.items(),
-                key=lambda item: self._access_counts.get(item[0], 0),
-                reverse=True
-            )
-            return sorted_items[0][0]  # Return the obj_id with highest access count
+    def _find_promotion_candidate(
+        self,
+        context: OrderedDict
+    ) -> Optional[str]:
+        """Find the object that should be promoted from a context."""
+        if not context:
+            return None
+        # Find the object ID with the highest access count
+        sorted_items = sorted(
+            context.items(),
+            key=lambda item: self._access_counts.get(item[0], 0),
+            reverse=True
+        )
+        return sorted_items[0][0]  # Return the obj_id with highest access count
