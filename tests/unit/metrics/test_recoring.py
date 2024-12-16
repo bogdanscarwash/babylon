@@ -8,13 +8,13 @@ class TestMetricsRecording:
         metrics_collector.record_object_access("test_obj", "test")
         
         # Verify count
-        assert metrics_collector.access_records["test_obj"] == 2, (
+        assert metrics_collector.metrics["object_access"]["test_obj"] == 2, (
             "Should correctly count multiple accesses to same object"
         )
         
         # Test new object
         metrics_collector.record_object_access("another_obj", "test")
-        assert len(metrics_collector.access_records) == 2, (
+        assert len(metrics_collector.metrics["object_access"]) == 2, (
             "Should track multiple distinct objects"
         )
     
@@ -26,9 +26,10 @@ class TestMetricsRecording:
         for tokens in test_tokens:
             metrics_collector.record_token_usage(tokens)
         
-        assert len(metrics_collector.token_usage) == len(test_tokens), (
+        token_usage_list = list(metrics_collector.metrics["token_usage"])
+        assert len(token_usage_list) == len(test_tokens), (
             "Should record all token usage entries"
         )
-        assert metrics_collector.token_usage == test_tokens, (
+        assert token_usage_list == test_tokens, (
             "Should preserve token usage values in order"
         )

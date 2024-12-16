@@ -3,13 +3,15 @@ from tests.mocks.metrics_collector import MockMetricsCollector
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any
-
-
+from babylon.core.contradiction import ContradictionAnalysis
+from babylon.data.entity_registry import EntityRegistry
+from babylon.data.models.contradiction import Contradiction, Effect
+from babylon.core.entity import Entity
 
 @pytest.fixture
-def metrics_collector():
+def metrics_collector(temp_log_dir):
     """Provide a fresh metrics collector for each test."""
-    return MockMetricsCollector()
+    return MockMetricsCollector(log_dir=temp_log_dir)
 
 @pytest.fixture
 def populated_collector():
@@ -42,9 +44,46 @@ def temp_log_dir(tmp_path: Path) -> Path:
     return tmp_path / "test_logs"
 
 @pytest.fixture
-def metrics_collector(temp_log_dir: Path) -> MockMetricsCollector:
-    """Provide fresh MetricsCollector instance."""
-    return MockMetricsCollector(log_dir=temp_log_dir)
+def entity_registry() -> EntityRegistry:
+    """Provide a fresh EntityRegistry instance."""
+    return EntityRegistry()
+
+@pytest.fixture
+def contradiction_analysis(entity_registry: EntityRegistry, metrics_collector: MockMetricsCollector) -> ContradictionAnalysis:
+    """Provide a fresh ContradictionAnalysis instance."""
+    return ContradictionAnalysis(entity_registry, metrics_collector)
+
+@pytest.fixture
+def sample_contradiction() -> Contradiction:
+    """Provide a sample contradiction for testing."""
+    upper_class = Entity("Class", "Oppressor")  # Fixed: removed extra argument
+    working_class = Entity("Class", "Oppressed")  # Fixed: removed extra argument
+    
+    return Contradiction(
+        id="economic_inequality",
+        name="Economic Inequality",
+        description="Growing disparity between rich and poor.",
+        entities=[upper_class, working_class],
+        universality="Universal",
+        particularity="Economic",
+        principal_contradiction=None,
+        principal_aspect=upper_class,
+        secondary_aspect=working_class,
+        antagonism="Antagonistic",
+        intensity="Medium",
+        state="Active",
+        potential_for_transformation="High",
+        conditions_for_transformation=["Revolutionary Movement"],
+        resolution_methods={
+            "Policy Reform": [
+                Effect("upper_class", "wealth", "Decrease", 0.5, "Implement reforms")
+            ],
+            "Revolution": [
+                Effect("upper_class", "wealth", "Decrease", 1.0, "Revolutionary change")
+            ],
+        },
+        attributes={},
+    )
 
 @pytest.fixture
 def sample_performance_data() -> Dict[str, Any]:

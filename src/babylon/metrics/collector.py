@@ -1,4 +1,3 @@
-
 try:
     from babylon.data.database import SessionLocal
 
@@ -157,17 +156,18 @@ class MetricsCollector:
             if count >= threshold
         ]
 
-    def _calculate_latency_stats(self) -> dict[str, dict[str, float]]:
+    def _calculate_latency_stats(self) -> dict[str, dict[str, Any]]:
         """Calculate latency statistics."""
         stats = {}
         for metric_type in ["db_queries", "context_switches"]:
             values = list(self.metrics["latency"][metric_type])
-            if values:
-                stats[metric_type] = {
-                    "avg": sum(values) / len(values),
-                    "min": min(values),
-                    "max": max(values),
-                }
+            # Always include the metric type, even if there are no values
+            stats[metric_type] = {
+                "avg": sum(values) / len(values) if values else 0.0,
+                "min": min(values) if values else 0.0,
+                "max": max(values) if values else 0.0,
+                "values": values
+            }
         return stats
 
     def _analyze_memory_usage(self) -> dict[str, float]:

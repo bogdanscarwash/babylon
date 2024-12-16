@@ -15,6 +15,7 @@ import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timedelta
 from pathlib import Path
+import shutil
 
 from babylon.exceptions import (
     DatabaseConnectionError,
@@ -47,9 +48,9 @@ class MetricsPersistence:
                     in the current directory.
         """
         self.db_path = db_path
-        # Ensure parent directory exists with proper permissions
+        # Ensure parent directory exists
         db_dir = os.path.dirname(os.path.abspath(db_path))
-        os.makedirs(db_dir, mode=0o755, exist_ok=True)
+        os.makedirs(db_dir, exist_ok=True)
         self._init_db()
 
     def _init_db(self) -> None:
@@ -99,19 +100,12 @@ class MetricsPersistence:
 
     @contextmanager
     def _get_connection(self):
-        """Context manager for database connections.
-
-        Provides safe database connection handling with proper error logging
-        and connection cleanup.
-
-        Raises:
-            DatabaseConnectionError: If connection cannot be established
-        """
+        """Context manager for database connections."""
         conn = None
         try:
             conn = sqlite3.connect(self.db_path, timeout=20)
-            conn.execute("PRAGMA journal_mode=WAL")  # Use Write-Ahead Logging
-            conn.execute("PRAGMA busy_timeout=10000")  # 10 second timeout
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA busy_timeout=10000")
             logger.debug(f"Established database connection to {self.db_path}")
             yield conn
         except sqlite3.Error as e:
@@ -125,12 +119,100 @@ class MetricsPersistence:
                 except sqlite3.Error as e:
                     logger.warning(f"Error closing database connection: {e!s}")
 
-    def save_system_metrics(self, metrics: SystemMetrics) -> None:
-        """Save system metrics to database.
-
+    def rotate_logs(
+        self, max_age_days: int = 30, max_size_mb: int = 10, compress: bool = False
+    ) -> None:
+        """Rotate database file based on age and size.
+        
         Args:
-            metrics: SystemMetrics instance to save
+            max_age_days: Maximum age of database in days before rotation
+            max_size_mb: Maximum size of database in MB before rotation
+            compress: Whether to compress rotated database files
+        
+        Raises:
+            LogRotationError: If rotation fails due to permissions or other IO errors
         """
+        logger.info(
+            f"Starting database rotation (max size: {max_size_mb}MB)"
+        )
+        try:
+            db_path = Path(self.db_path)
+            db_size = db_path.stat().st_size
+            max_bytes = max_size_mb * 1024 * 1024
+
+            if db_size > max_bytes:
+                # Create rotated filename with timestamp
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                rotated_name = f"{db_path.stem}_{timestamp}{db_path.suffix}"
+                rotated_path = db_path.with_name(rotated_name)
+
+                # Copy current database to rotated file
+                shutil.copy2(db_path, rotated_path)
+                logger.info(f"Created rotated database: {rotated_path}")
+
+                if compress:
+                    import gzip
+                    # Compress the rotated database
+                    with open(rotated_path, 'rb') as f_in:
+                        with gzip.open(f"{rotated_path}.gz", 'wb') as f_out:
+                            shutil.copyfileobj(f_in, f_out)
+                    # Remove uncompressed rotated file
+                    os.remove(rotated_path)
+                    logger.debug(f"Compressed rotated database: {rotated_path}.gz")
+
+                # Close any existing connections and vacuum the database
+                with self._get_connection() as conn:
+                    conn.execute("VACUUM")
+
+                # Create new empty database
+                if os.path.exists(db_path):
+                    os.remove(db_path)
+                self._init_db()
+                logger.info("Created new empty database")
+
+                # Keep most recent records in new database
+                with self._get_connection() as new_conn:
+                    # Copy recent records from rotated database
+                    cutoff_date = (datetime.now() - timedelta(days=7)).isoformat()
+                    for table in ["system_metrics", "ai_metrics", "gameplay_metrics"]:
+                        try:
+                            # Connect to rotated database
+                            rotated_conn = sqlite3.connect(str(rotated_path))
+                            # Copy recent records
+                            recent_records = rotated_conn.execute(
+                                f"SELECT * FROM {table} WHERE timestamp >= ?",
+                                (cutoff_date,)
+                            ).fetchall()
+                            if recent_records:
+                                placeholders = ",".join("?" * len(recent_records[0]))
+                                new_conn.executemany(
+                                    f"INSERT INTO {table} VALUES ({placeholders})",
+                                    recent_records
+                                )
+                            rotated_conn.close()
+                        except sqlite3.Error as e:
+                            logger.error(f"Error copying recent records from {table}: {e}")
+
+                # Cleanup old rotated files
+                cutoff = datetime.now() - timedelta(days=max_age_days)
+                for old_db in db_path.parent.glob(f"{db_path.stem}_*{db_path.suffix}*"):
+                    try:
+                        # Extract timestamp from filename
+                        timestamp_str = old_db.stem.split("_")[-1]
+                        file_date = datetime.strptime(timestamp_str, "%Y%m%d_%H%M%S")
+                        if file_date < cutoff:
+                            os.remove(old_db)
+                            logger.debug(f"Removed old rotated database: {old_db}")
+                    except (ValueError, OSError) as e:
+                        logger.warning(f"Error processing old database {old_db}: {e}")
+
+        except Exception as e:
+            error_msg = f"Database rotation failed: {e}"
+            logger.error(error_msg)
+            raise LogRotationError(error_msg) from e
+
+    def save_system_metrics(self, metrics: SystemMetrics) -> None:
+        """Save system metrics to database."""
         with self._get_connection() as conn:
             conn.execute(
                 """
@@ -150,11 +232,7 @@ class MetricsPersistence:
             conn.commit()
 
     def save_ai_metrics(self, metrics: AIMetrics) -> None:
-        """Save AI metrics to database.
-
-        Args:
-            metrics: AIMetrics instance to save
-        """
+        """Save AI metrics to database."""
         with self._get_connection() as conn:
             conn.execute(
                 """
@@ -175,11 +253,7 @@ class MetricsPersistence:
             conn.commit()
 
     def save_gameplay_metrics(self, metrics: GameplayMetrics) -> None:
-        """Save gameplay metrics to database.
-
-        Args:
-            metrics: GameplayMetrics instance to save
-        """
+        """Save gameplay metrics to database."""
         with self._get_connection() as conn:
             conn.execute(
                 """
@@ -201,14 +275,35 @@ class MetricsPersistence:
         self, start_time: str | None = None, end_time: str | None = None
     ) -> list[SystemMetrics]:
         """Retrieve system metrics within time range.
-
+        
         Args:
-            start_time: ISO format timestamp for range start
-            end_time: ISO format timestamp for range end
-
+            start_time: Optional ISO format timestamp for range start
+            end_time: Optional ISO format timestamp for range end
+            
         Returns:
-            List of SystemMetrics instances
+            List of SystemMetrics objects within the specified time range
+            
+        Raises:
+            ValueError: If timestamps are invalid or end_time is before start_time
         """
+        # Validate timestamp formats if provided
+        if start_time:
+            try:
+                start_dt = datetime.fromisoformat(start_time)
+            except ValueError:
+                raise ValueError("start_time must be in ISO format")
+                
+        if end_time:
+            try:
+                end_dt = datetime.fromisoformat(end_time)
+            except ValueError:
+                raise ValueError("end_time must be in ISO format")
+                
+        # Validate time range if both timestamps provided
+        if start_time and end_time:
+            if end_dt < start_dt:
+                raise ValueError("end_time cannot be before start_time")
+
         query = "SELECT * FROM system_metrics"
         params = []
 
@@ -288,77 +383,6 @@ class MetricsPersistence:
                 for row in cursor.fetchall()
             ]
 
-    def rotate_logs(
-        self, max_age_days: int = 30, max_size_mb: int = 10, compress: bool = False
-    ) -> None:
-        """Rotate log files based on age and size.
-
-        Args:
-            max_age_days: Maximum age of log files in days
-            max_size_mb: Maximum size of log files in MB
-            compress: Whether to compress rotated logs
-
-        Raises:
-            LogRotationError: If log rotation fails
-        """
-        logger.info(
-            f"Starting log rotation (max age: {max_age_days} days, max size: {max_size_mb}MB)"
-        )
-        try:
-            cutoff = datetime.now() - timedelta(days=max_age_days)
-            max_bytes = max_size_mb * 1024 * 1024
-
-            for log_file in Path(self.db_path).parent.glob("*.log"):
-                try:
-                    stats = log_file.stat()
-
-                    # Check age and size
-                    if (
-                        datetime.fromtimestamp(stats.st_mtime) < cutoff
-                        or stats.st_size > max_bytes
-                    ):
-
-                        logger.info(f"Rotating log file: {log_file}")
-
-                        # Rotate the file
-                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                        rotated_name = f"{log_file.stem}_{timestamp}{log_file.suffix}"
-                        rotated_path = log_file.with_name(rotated_name)
-
-                        # Compress if requested
-                        if compress:
-                            try:
-                                import gzip
-
-                                with log_file.open("rb") as f_in:
-                                    with gzip.open(f"{rotated_path}.gz", "wb") as f_out:
-                                        f_out.write(f_in.read())
-                                log_file.unlink()
-                                logger.debug(
-                                    f"Compressed and removed original: {log_file}"
-                                )
-                            except OSError as e:
-                                raise LogRotationError(
-                                    f"Failed to compress log file {log_file}: {e!s}"
-                                )
-                        else:
-                            try:
-                                log_file.rename(rotated_path)
-                                logger.debug(f"Renamed log file to: {rotated_path}")
-                            except OSError as e:
-                                raise LogRotationError(
-                                    f"Failed to rename log file {log_file}: {e!s}"
-                                )
-
-                except OSError as e:
-                    logger.error(f"Error processing log file {log_file}: {e!s}")
-                    continue
-
-        except Exception as e:
-            error_msg = f"Log rotation failed: {e!s}"
-            logger.error(error_msg)
-            raise LogRotationError(error_msg)
-
     def cleanup_old_metrics(self, days_to_keep: int = 30) -> None:
         """Remove metrics older than specified days."""
         try:
@@ -369,21 +393,17 @@ class MetricsPersistence:
                 for table in ["system_metrics", "ai_metrics", "gameplay_metrics"]:
                     try:
                         conn.execute(
-                            f"""
-                            DELETE FROM {table}
-                            WHERE timestamp < ?
-                        """,
+                            f"DELETE FROM {table} WHERE timestamp < ?",
                             (cutoff,),
                         )
+                        conn.commit()  # Added commit after each DELETE
                         logger.debug(f"Cleaned up old records from {table}")
                     except sqlite3.Error as e:
-                        error_msg = (
-                            f"Failed to clean up old metrics from {table}: {e!s}"
-                        )
+                        error_msg = f"Failed to clean up old metrics from {table}: {e}"
                         logger.error(error_msg)
                         raise MetricsPersistenceError(error_msg)
 
         except Exception as e:
-            error_msg = f"Metrics cleanup failed: {e!s}"
+            error_msg = f"Metrics cleanup failed: {e}"
             logger.error(error_msg)
             raise MetricsPersistenceError(error_msg)

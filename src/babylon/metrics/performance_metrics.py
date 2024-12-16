@@ -76,7 +76,13 @@ class SystemMetrics:
     gpu_memory_percent: float | None = None
 
     def __post_init__(self):
-        """Validate metric ranges."""
+        """Validate metric ranges and timestamp format."""
+        # Validate timestamp format
+        try:
+            datetime.fromisoformat(self.timestamp)
+        except ValueError:
+            raise ValueError("timestamp must be in ISO format")
+
         for field_name in [
             "cpu_percent",
             "memory_percent",
