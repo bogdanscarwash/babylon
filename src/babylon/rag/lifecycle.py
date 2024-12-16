@@ -85,6 +85,7 @@ class LifecycleManager:
         self._priorities: Dict[str, int] = {}
         self._cache_hits = 0
         self._cache_misses = 0
+        self._last_state_check = 0.0  # Track last consistency check
         
         # Base size limits for each tier
         self._base_immediate_limit = 30
@@ -256,10 +257,111 @@ class LifecycleManager:
             raise InvalidObjectError("Object must have an 'id' attribute")
         if not hasattr(obj, 'state'):
             obj.state = ObjectState.INACTIVE
+        elif not isinstance(obj.state, ObjectState):
+            raise InvalidObjectError(
+                f"Invalid state type: {type(obj.state)}",
+                error_code="RAG_102",
+                field_name="state",
+                current_value=obj.state
+            )
         if not hasattr(obj, 'last_accessed'):
             obj.last_accessed = None
         if not hasattr(obj, 'last_modified'):
             obj.last_modified = None
+
+    def _check_state_consistency(self) -> None:
+        """Check for state consistency across all contexts."""
+        current_time = time.time()
+        
+        # Only check every 0.1 seconds to avoid overhead
+        if current_time - self._last_state_check < 0.1:
+            return
+            
+        self._last_state_check = current_time
+        
+        # Check for objects in multiple contexts
+        all_objects: Set[str] = set()
+        duplicate_objects: Set[str] = set()
+        
+        for obj_id in self._immediate_context:
+            if obj_id in all_objects:
+                duplicate_objects.add(obj_id)
+            all_objects.add(obj_id)
+            
+        for obj_id in self._active_cache:
+            if obj_id in all_objects:
+                duplicate_objects.add(obj_id)
+            all_objects.add(obj_id)
+            
+        for obj_id in self._background_context:
+            if obj_id in all_objects:
+                duplicate_objects.add(obj_id)
+            all_objects.add(obj_id)
+            
+        if duplicate_objects:
+            raise CorruptStateError(
+                "Objects found in multiple contexts",
+                error_code="RAG_161",
+                affected_objects=list(duplicate_objects)
+            )
+
+    def _validate_state_transition(self, obj: Any, target_state: ObjectState) -> None:
+        """Validate that a state transition is allowed."""
+        if not isinstance(obj.state, ObjectState):
+            raise InvalidObjectError(
+                f"Invalid current state: {obj.state}",
+                error_code="RAG_102",
+                field_name="state",
+                current_value=obj.state
+            )
+            
+        # Define valid transitions
+        valid_transitions = {
+            ObjectState.INACTIVE: {ObjectState.IMMEDIATE, ObjectState.BACKGROUND},
+            ObjectState.BACKGROUND: {ObjectState.ACTIVE, ObjectState.IMMEDIATE, ObjectState.INACTIVE},
+            ObjectState.ACTIVE: {ObjectState.IMMEDIATE, ObjectState.BACKGROUND, ObjectState.INACTIVE},
+            ObjectState.IMMEDIATE: {ObjectState.ACTIVE, ObjectState.INACTIVE}
+        }
+        
+        if target_state not in valid_transitions[obj.state]:
+            raise StateTransitionError(
+                f"Invalid state transition: {obj.state} -> {target_state}",
+                current_state=str(obj.state),
+                target_state=str(target_state)
+            )
+
+    def get_object(self, obj_id: str) -> Any:
+        """Get an object by ID from any context."""
+        if obj_id in self._immediate_context:
+            self._cache_hits += 1
+            obj = self._immediate_context[obj_id]
+            obj.last_accessed = time.time()
+            return obj
+            
+        if obj_id in self._active_cache:
+            self._cache_hits += 1
+            obj = self._active_cache[obj_id]
+            # Promote to immediate if space allows
+            if len(self._immediate_context) < self._immediate_limit:
+                self._active_cache.pop(obj_id)
+                obj.state = ObjectState.IMMEDIATE
+                self._immediate_context[obj_id] = obj
+                self._tier_transitions += 1
+            return obj
+            
+        if obj_id in self._background_context:
+            self._cache_hits += 1
+            obj = self._background_context[obj_id]
+            # Promote to active if space allows
+            if len(self._active_cache) < self._active_limit:
+                self._background_context.pop(obj_id)
+                obj.state = ObjectState.ACTIVE
+                self._active_cache[obj_id] = obj
+                self._tier_transitions += 1
+            return obj
+            
+        self._cache_misses += 1
+        return None
 
     def immediate_context_size(self) -> int:
         """Get the size of the immediate context."""
