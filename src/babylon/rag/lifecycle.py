@@ -199,11 +199,11 @@ class LifecycleManager:
             self._active_limit = max(40, int(self._base_active_limit * pressure_factor))
             self._background_limit = max(80, int(self._base_background_limit * pressure_factor))
         else:  # Normal pressure
-            pressure_factor = 1.0 - (pressure * 0.1)  # Gentler reduction
-            recovery_boost = max(0, 1.5 - pressure)  # Stronger recovery boost
+            pressure_factor = 1.0 - (pressure * 0.2)  # More aggressive reduction
+            recovery_boost = max(0, 2.0 - pressure)  # Much stronger recovery boost
             self._immediate_limit = max(25, int(self._base_immediate_limit * (pressure_factor + recovery_boost)))
-            self._active_limit = max(80, int(self._base_active_limit * (pressure_factor + recovery_boost)))
-            self._background_limit = max(150, int(self._base_background_limit * (pressure_factor + recovery_boost)))
+            self._active_limit = max(100, int(self._base_active_limit * (pressure_factor + recovery_boost)))
+            self._background_limit = max(200, int(self._base_background_limit * (pressure_factor + recovery_boost)))
         
         # Force rebalancing when pressure changes
         self._rebalance_all_tiers()
@@ -388,6 +388,7 @@ class LifecycleManager:
     def activate(self, obj: Any, priority: int = 0) -> None:
         """Activate an object and move it to immediate context."""
         self._validate_object(obj)
+        self._check_state_consistency()  # Check before modification
         obj_id = str(obj.id)
         
         # Check if already in immediate context
@@ -471,22 +472,35 @@ class LifecycleManager:
                     return obj_id
         
         # Second pass: score objects based on multiple factors
-        access_weight = 0.7  # Weight for access time
-        priority_weight = 0.3  # Weight for priority
+        access_weight = 0.6  # Weight for access time
+        frequency_weight = 0.3  # Weight for access frequency
+        priority_weight = 0.1  # Weight for priority
+        
+        access_counts = {}
+        max_count = 1
+        
+        # Calculate access frequencies
+        for obj_id in context:
+            access_counts[obj_id] = sum(
+                1 for t in self._operation_times.get('activate', [])
+                if self._last_accessed.get(obj_id, 0) > current_time - t
+            )
+            max_count = max(max_count, access_counts[obj_id])
         
         for obj_id in context:
             priority = self._priorities.get(obj_id, 0)
             last_access = self._last_accessed.get(obj_id, 0)
             age = current_time - last_access
             
-            # Normalize age (assume max age of 1 hour for normalization)
+            # Normalize factors
             normalized_age = min(age / 3600.0, 1.0)
-            # Normalize priority (assume max priority of 10 for normalization)
             normalized_priority = min(priority / 10.0, 1.0)
+            normalized_frequency = access_counts[obj_id] / max_count if max_count > 0 else 0
             
-            # Calculate weighted score
+            # Calculate weighted score (higher score = more likely to be demoted)
             score = (
                 (normalized_age * access_weight) +
+                ((1.0 - normalized_frequency) * frequency_weight) +
                 ((1.0 - normalized_priority) * priority_weight)
             )
             candidates.append((obj_id, score))
