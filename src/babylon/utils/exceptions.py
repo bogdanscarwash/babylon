@@ -120,7 +120,6 @@ class DatabaseError(BabylonError):
     """
 
 
-
 class EntityError(BabylonError):
     """Base class for entity-related errors.
 
@@ -151,7 +150,6 @@ class EntityError(BabylonError):
         ENT_060: Validation failed
         ENT_080: Persistence failed
     """
-
 
 
 class EntityNotFoundError(EntityError):
@@ -197,7 +195,6 @@ class EntityNotFoundError(EntityError):
     def __init__(self, message: str, error_code: str, entity_id: str | None = None):
         super().__init__(message, error_code)
         self.entity_id = entity_id
-
 
 
 class EntityValidationError(EntityError):
@@ -264,7 +261,6 @@ class EntityValidationError(EntityError):
         self.allowed_values = allowed_values
 
 
-
 class ConfigurationError(BabylonError):
     """Raised when configuration loading or validation fails.
 
@@ -324,7 +320,6 @@ class ConfigurationError(BabylonError):
         self.setting_name = setting_name
         self.current_value = current_value
         self.required_type = required_type
-
 
 
 class GameStateError(BabylonError):
@@ -391,7 +386,6 @@ class GameStateError(BabylonError):
         self.affected_systems = affected_systems or []
 
 
-
 class BackupError(BabylonError):
     """Raised when backup or restore operations fail.
 
@@ -411,7 +405,6 @@ class BackupError(BabylonError):
         self.available_space = available_space
 
 
-
 """Custom exceptions for the babylon game engine."""
 
 
@@ -419,23 +412,18 @@ class BabylonError(Exception):
     """Base exception for all babylon-related errors."""
 
 
-
 # Metrics Subsystem Exceptions
 class MetricsError(BabylonError):
     """Base exception for metrics-related errors."""
-
 
 
 class DatabaseConnectionError(MetricsError):
     """Raised when database connection fails."""
 
 
-
 class MetricsPersistenceError(MetricsError):
     """Raised when metrics cannot be saved/loaded."""
 
 
-
 class LogRotationError(MetricsError):
     """Raised when log rotation fails."""
-

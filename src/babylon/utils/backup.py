@@ -12,11 +12,12 @@ from babylon.exceptions import BackupError
 
 logger = logging.getLogger(__name__)
 
+
 def backup_chroma(
     client: chromadb.Client,
     backup_dir: str,
     persist_directory: str = None,
-    max_backups: int = 5
+    max_backups: int = 5,
 ) -> bool:
     """Backup ChromaDB data to the specified backup directory.
 
@@ -32,7 +33,7 @@ def backup_chroma(
     try:
         # Get persist directory from client settings if not provided
         if persist_directory is None:
-            if hasattr(client, '_settings'):
+            if hasattr(client, "_settings"):
                 persist_directory = client._settings.persist_directory
             else:
                 raise BackupError("No persistence directory specified", "BACKUP_001")
@@ -96,6 +97,7 @@ def backup_chroma(
     except Exception as e:
         logger.error(f"Error during ChromaDB backup: {e}")
         return False
+
 
 def restore_chroma(backup_path: str, persist_directory: str = None) -> bool:
     """Restore ChromaDB data from the specified backup.
@@ -162,7 +164,9 @@ def restore_chroma(backup_path: str, persist_directory: str = None) -> bool:
                 for member in tar.getmembers():
                     member_path = os.path.join(path, member.name)
                     if not is_within_directory(path, member_path):
-                        raise BackupError("Attempted Path Traversal in Tar File", "BACKUP_004")
+                        raise BackupError(
+                            "Attempted Path Traversal in Tar File", "BACKUP_004"
+                        )
                 tar.extractall(path, members, numeric_owner=numeric_owner)
 
             safe_extract(tar, persist_dir)

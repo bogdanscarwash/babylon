@@ -7,15 +7,15 @@ from .census_api import (
     VariableError,
     QualityError,
     HOUSING_VARIABLES,
-    POPULATION_VARIABLES
+    POPULATION_VARIABLES,
 )
 
 __all__ = [
-    'CensusAPI',
-    'CensusAPIError',
-    'GeographyError', 
-    'VariableError',
-    'QualityError',
-    'HOUSING_VARIABLES',
-    'POPULATION_VARIABLES'
+    "CensusAPI",
+    "CensusAPIError",
+    "GeographyError",
+    "VariableError",
+    "QualityError",
+    "HOUSING_VARIABLES",
+    "POPULATION_VARIABLES",
 ]

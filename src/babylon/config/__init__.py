@@ -3,7 +3,7 @@
 This module determines which configuration to use based on the ENVIRONMENT
 environment variable. It supports three environments:
 - development (default)
-- testing 
+- testing
 - production
 
 The appropriate configuration class is imported and exposed as 'Config'.

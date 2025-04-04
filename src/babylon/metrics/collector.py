@@ -178,7 +178,7 @@ class MetricsCollector:
                 "avg": sum(values) / len(values) if values else 0.0,
                 "min": min(values) if values else 0.0,
                 "max": max(values) if values else 0.0,
-                "values": values
+                "values": values,
             }
         return stats
 

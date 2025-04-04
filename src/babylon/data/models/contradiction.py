@@ -3,25 +3,29 @@ from typing import Optional, Dict, List, Any
 
 from babylon.core.entity import Entity
 
+
 @dataclass
 class Effect:
     """Represents an effect that can be applied to an entity."""
+
     target_id: str
     attribute: str
     operation: str  # "Increase" or "Decrease"
     magnitude: float
     description: str
 
+
 @dataclass
 class Contradiction:
     """Represents a dialectical contradiction in the game system."""
+
     id: str
     name: str
     description: str
     entities: List[Entity]
     universality: str  # "Universal" or "Particular"
     particularity: str  # Domain specific (e.g., "Economic", "Political")
-    principal_contradiction: Optional['Contradiction']
+    principal_contradiction: Optional["Contradiction"]
     principal_aspect: Entity
     secondary_aspect: Entity
     antagonism: str  # "Primary" or "Secondary"
@@ -41,7 +45,7 @@ class Contradiction:
 
     def update_intensity(self, game_state: Dict[str, Any]) -> None:
         """Update contradiction intensity based on game state.
-        
+
         Args:
             game_state: Current game state containing relevant metrics
         """

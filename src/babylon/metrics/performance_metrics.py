@@ -11,10 +11,10 @@ Core Features:
 
 Usage:
     collector = MetricsCollector()
-    
+
     # System metrics
     sys_metrics = collector.collect_system_metrics()
-    
+
     # AI performance
     ai_metrics = collector.collect_ai_metrics(
         query_time=0.05,
@@ -24,7 +24,7 @@ Usage:
         cache_total=100,
         anomaly_score=0.1
     )
-    
+
     # Log all metrics
     collector.log_metrics(
         system_metrics=sys_metrics,

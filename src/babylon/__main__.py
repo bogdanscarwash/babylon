@@ -39,7 +39,7 @@ def handle_event(event: Event, game_state: dict[str, Any]) -> None:
     """
     logger.info(f"Event Occurred: {event.name}")
     logger.debug(f"Event Description: {event.description}")
-    
+
     for effect in event.effects:
         effect.apply(game_state)
 
@@ -105,7 +105,9 @@ def main() -> None:
 
     # Initialize core game systems
     entity_registry: EntityRegistry = EntityRegistry()
-    contradiction_analysis: ContradictionAnalysis = ContradictionAnalysis(entity_registry)
+    contradiction_analysis: ContradictionAnalysis = ContradictionAnalysis(
+        entity_registry
+    )
 
     # Initialize the game state dictionary that tracks all game systems
     game_state: dict[str, Any] = {

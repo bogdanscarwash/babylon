@@ -11,8 +11,9 @@ class Event(Base):
     Represents a game event that can occur based on certain conditions.
     Events can have effects, triggers, and consequences.
     """
-    __tablename__ = 'events'
-    __table_args__ = {'extend_existing': True}  # Added to handle table redefinition
+
+    __tablename__ = "events"
+    __table_args__ = {"extend_existing": True}  # Added to handle table redefinition
 
     id = Column(Integer, primary_key=True)
     name = Column(String, nullable=False)
@@ -31,7 +32,7 @@ class Event(Base):
         effects: Optional[List[dict[str, Any]]] = None,
         triggers: Optional[List[dict[str, Any]]] = None,
         consequences: Optional[List[dict[str, Any]]] = None,
-        escalation_paths: Optional[List[dict[str, Any]]] = None
+        escalation_paths: Optional[List[dict[str, Any]]] = None,
     ) -> None:
         """
         Initialize a new event.
@@ -62,34 +63,40 @@ class Event(Base):
             game_state: Current game state to modify
         """
         for effect in self.effects:
-            effect_type = effect.get('type')
-            if effect_type == 'economic':
+            effect_type = effect.get("type")
+            if effect_type == "economic":
                 self._apply_economic_effect(effect, game_state)
-            elif effect_type == 'political':
+            elif effect_type == "political":
                 self._apply_political_effect(effect, game_state)
-            elif effect_type == 'social':
+            elif effect_type == "social":
                 self._apply_social_effect(effect, game_state)
 
-    def _apply_economic_effect(self, effect: dict[str, Any], game_state: dict[str, Any]) -> None:
+    def _apply_economic_effect(
+        self, effect: dict[str, Any], game_state: dict[str, Any]
+    ) -> None:
         """Apply economic effects to the game state."""
-        if 'economy' in game_state:
-            economy = game_state['economy']
-            if 'gdp_change' in effect:
-                economy.gdp += effect['gdp_change']
-            if 'unemployment_change' in effect:
-                economy.unemployment_rate += effect['unemployment_change']
+        if "economy" in game_state:
+            economy = game_state["economy"]
+            if "gdp_change" in effect:
+                economy.gdp += effect["gdp_change"]
+            if "unemployment_change" in effect:
+                economy.unemployment_rate += effect["unemployment_change"]
 
-    def _apply_political_effect(self, effect: dict[str, Any], game_state: dict[str, Any]) -> None:
+    def _apply_political_effect(
+        self, effect: dict[str, Any], game_state: dict[str, Any]
+    ) -> None:
         """Apply political effects to the game state."""
-        if 'politics' in game_state:
-            politics = game_state['politics']
-            if 'stability_change' in effect:
-                politics.stability += effect['stability_change']
-            if 'policy_changes' in effect:
-                for policy in effect['policy_changes']:
+        if "politics" in game_state:
+            politics = game_state["politics"]
+            if "stability_change" in effect:
+                politics.stability += effect["stability_change"]
+            if "policy_changes" in effect:
+                for policy in effect["policy_changes"]:
                     politics.implement_policy(policy)
 
-    def _apply_social_effect(self, effect: dict[str, Any], game_state: dict[str, Any]) -> None:
+    def _apply_social_effect(
+        self, effect: dict[str, Any], game_state: dict[str, Any]
+    ) -> None:
         """Apply social effects to the game state."""
         # TODO: Implement social effects when social systems are added
         pass
@@ -104,9 +111,13 @@ class Event(Base):
         Returns:
             bool: True if all triggers are met, False otherwise
         """
-        return all(self._evaluate_trigger(trigger, game_state) for trigger in self.triggers)
+        return all(
+            self._evaluate_trigger(trigger, game_state) for trigger in self.triggers
+        )
 
-    def _evaluate_trigger(self, trigger: dict[str, Any], game_state: dict[str, Any]) -> bool:
+    def _evaluate_trigger(
+        self, trigger: dict[str, Any], game_state: dict[str, Any]
+    ) -> bool:
         """
         Evaluate a single trigger condition.
 
@@ -117,37 +128,47 @@ class Event(Base):
         Returns:
             bool: True if the trigger condition is met, False otherwise
         """
-        trigger_type = trigger.get('type')
-        if trigger_type == 'economic':
+        trigger_type = trigger.get("type")
+        if trigger_type == "economic":
             return self._evaluate_economic_trigger(trigger, game_state)
-        elif trigger_type == 'political':
+        elif trigger_type == "political":
             return self._evaluate_political_trigger(trigger, game_state)
         return False
 
-    def _evaluate_economic_trigger(self, trigger: dict[str, Any], game_state: dict[str, Any]) -> bool:
+    def _evaluate_economic_trigger(
+        self, trigger: dict[str, Any], game_state: dict[str, Any]
+    ) -> bool:
         """Evaluate economic trigger conditions."""
-        if 'economy' not in game_state:
+        if "economy" not in game_state:
             return False
-        economy = game_state['economy']
-        condition = trigger.get('condition', {})
-        
-        if 'min_gdp' in condition and economy.gdp < condition['min_gdp']:
+        economy = game_state["economy"]
+        condition = trigger.get("condition", {})
+
+        if "min_gdp" in condition and economy.gdp < condition["min_gdp"]:
             return False
-        if 'max_unemployment' in condition and economy.unemployment_rate > condition['max_unemployment']:
+        if (
+            "max_unemployment" in condition
+            and economy.unemployment_rate > condition["max_unemployment"]
+        ):
             return False
         return True
 
-    def _evaluate_political_trigger(self, trigger: dict[str, Any], game_state: dict[str, Any]) -> bool:
+    def _evaluate_political_trigger(
+        self, trigger: dict[str, Any], game_state: dict[str, Any]
+    ) -> bool:
         """Evaluate political trigger conditions."""
-        if 'politics' not in game_state:
+        if "politics" not in game_state:
             return False
-        politics = game_state['politics']
-        condition = trigger.get('condition', {})
-        
-        if 'min_stability' in condition and politics.stability < condition['min_stability']:
+        politics = game_state["politics"]
+        condition = trigger.get("condition", {})
+
+        if (
+            "min_stability" in condition
+            and politics.stability < condition["min_stability"]
+        ):
             return False
-        if 'required_policies' in condition:
-            required_policies = set(condition['required_policies'])
+        if "required_policies" in condition:
+            required_policies = set(condition["required_policies"])
             active_policies = set(politics.active_policies.keys())
             if not required_policies.issubset(active_policies):
                 return False

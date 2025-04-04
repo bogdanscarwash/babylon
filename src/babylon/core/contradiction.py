@@ -15,7 +15,9 @@ from babylon.metrics.collector import MetricsCollector
 class ContradictionAnalysis:
     """System for analyzing and managing dialectical contradictions in the game."""
 
-    def __init__(self, entity_registry: EntityRegistry, metrics: MetricsCollector) -> None:
+    def __init__(
+        self, entity_registry: EntityRegistry, metrics: MetricsCollector
+    ) -> None:
         self.entity_registry: EntityRegistry = entity_registry
         self.contradictions: list[Contradiction] = []
         self.metrics = metrics
@@ -35,11 +37,17 @@ class ContradictionAnalysis:
             self.metrics.record_metric("error:add_contradiction", 1.0, str(e))
             raise
 
-    def _update_contradiction(self, contradiction: Contradiction, game_state: dict[str, Any]) -> None:
+    def _update_contradiction(
+        self, contradiction: Contradiction, game_state: dict[str, Any]
+    ) -> None:
         """Update a single contradiction's state."""
         try:
             if contradiction is None:
-                self.metrics.record_metric("error:update_contradiction", 1.0, "update_nonexistent_contradiction")
+                self.metrics.record_metric(
+                    "error:update_contradiction",
+                    1.0,
+                    "update_nonexistent_contradiction",
+                )
                 raise AttributeError("Cannot update None contradiction")
 
             # Record context switch start
@@ -56,7 +64,9 @@ class ContradictionAnalysis:
                 contradiction.intensity_history.pop(0)
 
             # Record context switch duration
-            context_switch_duration = (datetime.now() - context_switch_start).total_seconds() * 1000
+            context_switch_duration = (
+                datetime.now() - context_switch_start
+            ).total_seconds() * 1000
             self.metrics.record_context_switch(context_switch_duration)
 
             # Log intensity changes
@@ -85,14 +95,18 @@ class ContradictionAnalysis:
             self.metrics.record_metric("error:link_entities", 1.0, str(e))
             raise
 
-    def detect_new_contradictions(self, game_state: dict[str, Any]) -> list[Contradiction]:
+    def detect_new_contradictions(
+        self, game_state: dict[str, Any]
+    ) -> list[Contradiction]:
         """Detect and create new contradictions based on the current game state."""
         try:
             new_contradictions: list[Contradiction] = []
 
             # Economic inequality check
             if self._check_economic_inequality(game_state):
-                contradiction = self._create_economic_inequality_contradiction(game_state)
+                contradiction = self._create_economic_inequality_contradiction(
+                    game_state
+                )
                 new_contradictions.append(contradiction)
 
             # Political unrest check
@@ -144,7 +158,9 @@ class ContradictionAnalysis:
             self.metrics.record_metric("error:check_contradiction_exists", 1.0, str(e))
             return False
 
-    def _check_resolution_conditions(self, contradiction: Contradiction, game_state: dict[str, Any]) -> bool:
+    def _check_resolution_conditions(
+        self, contradiction: Contradiction, game_state: dict[str, Any]
+    ) -> bool:
         """Check if resolution conditions are met."""
         try:
             if contradiction.id == "economic_inequality":
@@ -158,7 +174,9 @@ class ContradictionAnalysis:
             self.metrics.record_metric("error:check_resolution", 1.0, str(e))
             return False
 
-    def _check_transformation_conditions(self, contradiction: Contradiction, game_state: dict[str, Any]) -> bool:
+    def _check_transformation_conditions(
+        self, contradiction: Contradiction, game_state: dict[str, Any]
+    ) -> bool:
         """Check if transformation conditions are met."""
         try:
             for condition in contradiction.conditions_for_transformation:
@@ -178,23 +196,31 @@ class ContradictionAnalysis:
             self.metrics.record_metric("error:evaluate_condition", 1.0, str(e))
             return False
 
-    def _resolve_contradiction(self, contradiction: Contradiction, game_state: dict[str, Any]) -> None:
+    def _resolve_contradiction(
+        self, contradiction: Contradiction, game_state: dict[str, Any]
+    ) -> None:
         """Resolve a contradiction through the selected resolution method."""
         try:
-            resolution_method = self._select_resolution_method(contradiction, game_state)
+            resolution_method = self._select_resolution_method(
+                contradiction, game_state
+            )
             contradiction.selected_resolution_method = resolution_method
             contradiction.state = f"Resolved by {resolution_method}"
 
             effects = contradiction.resolution_methods.get(resolution_method, [])
             self._apply_effects(effects, game_state)
 
-            print(f"Contradiction '{contradiction.name}' resolved through {resolution_method}.")
+            print(
+                f"Contradiction '{contradiction.name}' resolved through {resolution_method}."
+            )
             self._post_resolution_check(contradiction, game_state)
         except Exception as e:
             self.metrics.record_metric("error:resolve_contradiction", 1.0, str(e))
             raise
 
-    def _transform_contradiction(self, contradiction: Contradiction, game_state: dict[str, Any]) -> None:
+    def _transform_contradiction(
+        self, contradiction: Contradiction, game_state: dict[str, Any]
+    ) -> None:
         """Transform a contradiction into a new qualitative state."""
         try:
             # Implement transformation logic
@@ -214,7 +240,9 @@ class ContradictionAnalysis:
             self.metrics.record_metric("error:apply_effects", 1.0, str(e))
             raise
 
-    def _select_resolution_method(self, contradiction: Contradiction, game_state: dict[str, Any]) -> str:
+    def _select_resolution_method(
+        self, contradiction: Contradiction, game_state: dict[str, Any]
+    ) -> str:
         """Determine the resolution method for a contradiction."""
         try:
             if game_state.get("is_player_responsible", False):
@@ -230,12 +258,20 @@ class ContradictionAnalysis:
             self.metrics.record_metric("error:select_resolution_method", 1.0, str(e))
             raise
 
-    def _ai_select_resolution_method(self, contradiction: Contradiction, game_state: dict[str, Any]) -> str:
+    def _ai_select_resolution_method(
+        self, contradiction: Contradiction, game_state: dict[str, Any]
+    ) -> str:
         """AI selects a resolution method based on strategy."""
         try:
-            if contradiction.intensity == "High" and "Revolution" in contradiction.resolution_methods:
+            if (
+                contradiction.intensity == "High"
+                and "Revolution" in contradiction.resolution_methods
+            ):
                 return "Revolution"
-            elif contradiction.intensity == "Medium" and "Reform" in contradiction.resolution_methods:
+            elif (
+                contradiction.intensity == "Medium"
+                and "Reform" in contradiction.resolution_methods
+            ):
                 return "Reform"
             elif "Suppression" in contradiction.resolution_methods:
                 return "Suppression"
@@ -244,17 +280,25 @@ class ContradictionAnalysis:
             self.metrics.record_metric("error:ai_select_resolution", 1.0, str(e))
             raise
 
-    def _post_resolution_check(self, contradiction: Contradiction, game_state: dict[str, Any]) -> None:
+    def _post_resolution_check(
+        self, contradiction: Contradiction, game_state: dict[str, Any]
+    ) -> None:
         """Handle side effects and potential new contradictions after resolution."""
         try:
             method = contradiction.selected_resolution_method
             if method == "Suppression":
-                print(f"Suppression of '{contradiction.name}' may lead to further unrest.")
+                print(
+                    f"Suppression of '{contradiction.name}' may lead to further unrest."
+                )
                 self._check_for_new_contradictions(contradiction, game_state)
             elif method == "Reform":
-                print(f"Reforms implemented for '{contradiction.name}'. Stability may improve.")
+                print(
+                    f"Reforms implemented for '{contradiction.name}'. Stability may improve."
+                )
             elif method == "Revolution":
-                print(f"Revolution occurred due to '{contradiction.name}'. Game state changed significantly.")
+                print(
+                    f"Revolution occurred due to '{contradiction.name}'. Game state changed significantly."
+                )
         except Exception as e:
             self.metrics.record_metric("error:post_resolution_check", 1.0, str(e))
             raise
@@ -271,12 +315,16 @@ class ContradictionAnalysis:
                 else:  # Change
                     new_value = effect.magnitude
                 setattr(target, effect.attribute, new_value)
-                print(f"{effect.description}: {target} {effect.operation}d {effect.attribute} by {effect.magnitude}.")
+                print(
+                    f"{effect.description}: {target} {effect.operation}d {effect.attribute} by {effect.magnitude}."
+                )
         except Exception as e:
             self.metrics.record_metric("error:modify_attribute", 1.0, str(e))
             raise
 
-    def _check_for_new_contradictions(self, contradiction: Contradiction, game_state: dict[str, Any]) -> None:
+    def _check_for_new_contradictions(
+        self, contradiction: Contradiction, game_state: dict[str, Any]
+    ) -> None:
         """Check for new contradictions that may arise from resolution."""
         try:
             # Implementation for checking new contradictions

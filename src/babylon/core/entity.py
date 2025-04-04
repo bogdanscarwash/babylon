@@ -17,7 +17,7 @@ class Entity:
         """
         # Generate a unique ID
         self.id = str(uuid.uuid4())
-        
+
         # Core identity attributes
         self.type = type
         self.role = role

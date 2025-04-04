@@ -78,9 +78,7 @@ class DataCollectionPolicy:
 
         return True
 
-    def collect_data(
-        self, data: dict[str, Any], user_id: str
-    ) -> dict[str, Any] | None:
+    def collect_data(self, data: dict[str, Any], user_id: str) -> dict[str, Any] | None:
         """Collect data according to policy and consent."""
         data_type = data.get("type")
 

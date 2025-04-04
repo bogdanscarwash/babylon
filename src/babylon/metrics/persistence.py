@@ -1,7 +1,7 @@
 """Metric persistence module.
 
 Provides functionality to store and retrieve performance metrics using SQLite.
-Implements efficient storage and querying of time-series metric data with 
+Implements efficient storage and querying of time-series metric data with
 support for data retention policies and time-range queries.
 
 Classes:
@@ -123,18 +123,16 @@ class MetricsPersistence:
         self, max_age_days: int = 30, max_size_mb: int = 10, compress: bool = False
     ) -> None:
         """Rotate database file based on age and size.
-        
+
         Args:
             max_age_days: Maximum age of database in days before rotation
             max_size_mb: Maximum size of database in MB before rotation
             compress: Whether to compress rotated database files
-        
+
         Raises:
             LogRotationError: If rotation fails due to permissions or other IO errors
         """
-        logger.info(
-            f"Starting database rotation (max size: {max_size_mb}MB)"
-        )
+        logger.info(f"Starting database rotation (max size: {max_size_mb}MB)")
         try:
             db_path = Path(self.db_path)
             db_size = db_path.stat().st_size
@@ -152,9 +150,10 @@ class MetricsPersistence:
 
                 if compress:
                     import gzip
+
                     # Compress the rotated database
-                    with open(rotated_path, 'rb') as f_in:
-                        with gzip.open(f"{rotated_path}.gz", 'wb') as f_out:
+                    with open(rotated_path, "rb") as f_in:
+                        with gzip.open(f"{rotated_path}.gz", "wb") as f_out:
                             shutil.copyfileobj(f_in, f_out)
                     # Remove uncompressed rotated file
                     os.remove(rotated_path)
@@ -181,17 +180,19 @@ class MetricsPersistence:
                             # Copy recent records
                             recent_records = rotated_conn.execute(
                                 f"SELECT * FROM {table} WHERE timestamp >= ?",
-                                (cutoff_date,)
+                                (cutoff_date,),
                             ).fetchall()
                             if recent_records:
                                 placeholders = ",".join("?" * len(recent_records[0]))
                                 new_conn.executemany(
                                     f"INSERT INTO {table} VALUES ({placeholders})",
-                                    recent_records
+                                    recent_records,
                                 )
                             rotated_conn.close()
                         except sqlite3.Error as e:
-                            logger.error(f"Error copying recent records from {table}: {e}")
+                            logger.error(
+                                f"Error copying recent records from {table}: {e}"
+                            )
 
                 # Cleanup old rotated files
                 cutoff = datetime.now() - timedelta(days=max_age_days)
@@ -275,14 +276,14 @@ class MetricsPersistence:
         self, start_time: str | None = None, end_time: str | None = None
     ) -> list[SystemMetrics]:
         """Retrieve system metrics within time range.
-        
+
         Args:
             start_time: Optional ISO format timestamp for range start
             end_time: Optional ISO format timestamp for range end
-            
+
         Returns:
             List of SystemMetrics objects within the specified time range
-            
+
         Raises:
             ValueError: If timestamps are invalid or end_time is before start_time
         """
@@ -292,13 +293,13 @@ class MetricsPersistence:
                 start_dt = datetime.fromisoformat(start_time)
             except ValueError:
                 raise ValueError("start_time must be in ISO format")
-                
+
         if end_time:
             try:
                 end_dt = datetime.fromisoformat(end_time)
             except ValueError:
                 raise ValueError("end_time must be in ISO format")
-                
+
         # Validate time range if both timestamps provided
         if start_time and end_time:
             if end_dt < start_dt:
