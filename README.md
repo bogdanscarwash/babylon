@@ -218,3 +218,5 @@ Contributions welcome! Guidelines coming soon in CONTRIBUTING.md.
 MIT License - see [LICENSE](LICENSE).
 
 For detailed progress and updates, see [CHANGELOG.md](docs/CHANGELOG.md).
+
+<!-- This is a test change for verification purposes -->
