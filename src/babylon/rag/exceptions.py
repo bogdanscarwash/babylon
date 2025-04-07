@@ -153,3 +153,24 @@ class ChunkingError(PreEmbeddingError):
         self.content_id = content_id
         details = {"content_id": content_id}
         super().__init__(message, error_code, details)
+
+
+class CacheError(PreEmbeddingError):
+    """Error raised during embedding cache operations.
+    
+    Common Error Codes:
+    - RAG_441: Cache initialization failed
+    - RAG_442: Cache persistence error
+    - RAG_443: Cache corruption
+    - RAG_444: Cache capacity exceeded
+    """
+    
+    def __init__(
+        self,
+        message: str,
+        error_code: str = "RAG_441",
+        cache_key: str | None = None,
+    ) -> None:
+        self.cache_key = cache_key
+        details = {"cache_key": cache_key}
+        super().__init__(message, error_code, details)
