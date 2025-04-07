@@ -132,3 +132,24 @@ class PreprocessingError(PreEmbeddingError):
         self.content_id = content_id
         details = {"content_id": content_id}
         super().__init__(message, error_code, details)
+
+
+class ChunkingError(PreEmbeddingError):
+    """Error raised during content chunking.
+    
+    Common Error Codes:
+    - RAG_421: Empty content
+    - RAG_422: Invalid chunk size
+    - RAG_423: Invalid chunking strategy
+    - RAG_424: Chunking failed
+    """
+    
+    def __init__(
+        self,
+        message: str,
+        error_code: str = "RAG_421",
+        content_id: str | None = None,
+    ) -> None:
+        self.content_id = content_id
+        details = {"content_id": content_id}
+        super().__init__(message, error_code, details)
