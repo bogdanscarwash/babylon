@@ -1,0 +1,37 @@
+# Virtual Environment
+.venv*
+.venv-babylon*
+
+# IDE
+.vscode*
+.aider*
+.continue*
+
+# Environment Variables & Secrets
+.env
+*.env
+.env.local
+.env.development
+.env.test
+.env.production
+.envrc
+
+# Logs and Databases
+*.log
+*.sqlite3
+
+# Tool Configuration
+.continue*
+.continuerules
+.continuerc.json
+
+*.pyc
+
+#pycache
+*__pycache__*
+<<<<<<< HEAD
+=======
+tests/unit/rag/scratch.py
+
+scratch.py
+>>>>>>> main

@@ -1,10 +1,11 @@
 # Virtual Environment
-.venv*
+.env*
 .venv-babylon*
 
 # IDE
 .vscode*
 .aider*
+.continue*
 
 # Environment Variables & Secrets
 .env
@@ -28,3 +29,6 @@
 
 #pycache
 *__pycache__*
+
+
+

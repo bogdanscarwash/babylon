@@ -1,25 +1,69 @@
-[project]
-name = "babylon"
-version = "0.1.0"
-description = "A game system modeling societal contradictions and power dynamics"
-requires-python = ">=3.12"
-dependencies = [
-   "xmlschema>=2.0.0",
-   "python-dotenv>=0.19.0",
-   "matplotlib>=3.0.0",
-   "networkx>=2.0.0",
-   "pytest>=8.3.3",
-   "pluggy>=1.5.0"
-]
-
-
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[project]
+name = "babylon"
+version = "0.2.0"
+description = "A Marxist text-based role playing game powered on the backend by Claude 3.5 Sonnet. It aims to educate and entertain by turning the immortal science of dialectical materialism into a game engine."
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+license = "Apache-2.0"
+keywords = ["ai", "llm", "marxism", "rpg", "dystopian"]
+authors = [
+   {name = "Persephone Raskova", email = "percy@babylonrpg.com" },
+]
+classifiers = []
+
+dependencies = [
+   "backoff>=2.2.1",
+   "xmlschema>=3.4.3",
+   "python-dotenv>=1.0.1",
+   "numpy>=1.26.4",
+   "psutil==6.1.0",
+   "gputil==1.4.0",
+   "pandas>=2.2.3",
+   "sqlalchemy>=2.0.36",
+   "psycopg2-binary>=2.9.9",
+   "tokenizers>=0.19.1",
+   "pytest>=8.3.4",
+   "pytest-mock>=3.14.0",
+   "pytest-asyncio>=0.25.0",
+   "requests>=2.32.3",
+   "census>=0.8.22",
+   "openpyxl>=3.1.5",
+   "fastapi>=0.115.6",
+   "uvicorn>=0.32.1",
+   "pydantic>=2.10.3",
+   "python-multipart>=0.0.19",
+   "typer>=0.15.1",
+   "rich>=13.9.4",
+   "coloredlogs>=15.0.1",
+   "pyyaml>=6.0.2",
+   "jellyfish>=0.8.9,<0.9.0",
+   "us>=3.2.0",
+   "networkx>=3.2.1",
+   "matplotlib>=3.9.3",
+   "certifi==2024.8.30",
+   "ratelimit>=2.2.1",
+   "async>=0.6.2",
+   "black==25.1.0"
+]
+
+[project.urls]
+"Homepage" = "https://babylonrpg.com"
+Documentation = "https://github.com/bogdanscarwash/babylon#readme"
+Issues = "https://github.com/bogdanscarwash/babylon/issues"
+Source = "https://github.com/bogdanscarwash/babylon"
+
+[tool.poetry]
+package-mode = false
+
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
+asyncio_mode = "strict"
+asyncio_default_fixture_loop_scope = "function"
 
 [tool.black]
 line-length = 88
@@ -36,7 +80,3 @@ warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
 check_untyped_defs = true
-
-[project.urls]
-"Homepage" = "https://github.com/yourusername/babylon"
-"Bug Tracker" = "https://github.com/yourusername/babylon/issues"

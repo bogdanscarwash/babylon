@@ -4,34 +4,68 @@
 
 ## Table of Contents
 
-- [Introduction](#introduction)
-- [Project Structure](#project-structure)
-- [Setup and Installation](#setup-and-installation)
-- [Usage Instructions](#usage-instructions)
-- [Game Mechanics](#game-mechanics)
-- [AI Integration](#ai-integration)
-- [Contributing](#contributing)
-- [License](#license)
+- [The Fall of Babylon](#the-fall-of-babylon)
+  - [Table of Contents](#table-of-contents)
+  - [Introduction](#introduction)
+  - [Project Structure](#project-structure)
+  - [Setup and Installation](#setup-and-installation)
+    - [Prerequisites](#prerequisites)
+    - [Installation Steps](#installation-steps)
+  - [Usage Instructions](#usage-instructions)
+  - [Game Mechanics](#game-mechanics)
+  - [AI Integration](#ai-integration)
+    - [ChromaDB Vector Database](#chromadb-vector-database)
+    - [Metrics Collection](#metrics-collection)
+    - [Current Features](#current-features)
+    - [Planned Features](#planned-features)
+  - [Error Handling \& Logging](#error-handling--logging)
+    - [Error Management](#error-management)
+    - [Logging System](#logging-system)
+  - [Contributing](#contributing)
+  - [License](#license)
 
 ## Introduction
 
-*The Fall of Babylon* aims to provide an immersive experience where players navigate a dynamically changing world shaped by their decisions and underlying societal contradictions. The game leverages AI for non-player character (NPC) behaviors and incorporates real-world data to enhance realism.
+*The Fall of Babylon* aims to provide an immersive experience where players navigate a dynamically changing world shaped by their decisions and underlying societal contradictions. The game leverages AI for non-player character (NPC) behaviors and incorporates real-time metrics collection and analysis to enhance gameplay dynamics.
 
 ## Project Structure
 
-- `docs/`: Contains documentation such as the [CHANGELOG](docs/CHANGELOG.md), [TODO](docs/TODO.md), [MECHANICS](docs/MECHANICS.md), and [IDEAS](docs/IDEAS.md) files.
-- `src/babylon/`: The main source code for the game.
-  - `data/xml/`: XML schemas and data defining game entities and mechanics.
-  - `ai/`: AI components and integrations (planned).
-  - `utils/`: Utility scripts and helper functions.
-- `pyproject.toml`: Project configuration file.
+- `docs/`: Documentation including:
+  - [CHANGELOG](docs/CHANGELOG.md): Version history and updates
+  - [TODO](docs/TODO.md): Planned features and improvements
+  - [MECHANICS](docs/MECHANICS.md): Game mechanics documentation
+  - [CHROMA](docs/CHROMA.md): ChromaDB integration details
+  - [ERROR_CODES](docs/ERROR_CODES.md): Error handling system
+  - [LOGGING](docs/LOGGING.md): Logging system documentation
+  - [CONFIGURATION](docs/CONFIGURATION.md): Configuration guide
+  - [ECONOMY](docs/ECONOMY.md): Economic system documentation
+- `src/babylon/`: Main source code
+  - `ai/`: AI components and ChromaDB integration
+  - `census/`: Census data integration and API
+  - `config/`: Configuration management
+  - `core/`: Core game systems (contradictions, economy, politics)
+  - `data/`: Data management and persistence
+    - `xml/`: Game entity and mechanics definitions
+    - `models/`: Data models and schemas
+    - `chromadb/`: Vector database storage
+  - `metrics/`: Performance and gameplay metrics collection
+  - `utils/`: Utility functions and helpers
+- `tests/`: Comprehensive test suite
+  - `unit/`: Unit tests
+  - `integration/`: Integration tests
+  - `fixtures/`: Test data and fixtures
+- `website/`: Game website and documentation
+- `pyproject.toml`: Project configuration
+- `logging.yaml`: Logging configuration
 
 ## Setup and Installation
 
 ### Prerequisites
 
 - Python 3.8 or higher
-- Virtual environment tool (optional but recommended)
+- PostgreSQL 13 or higher
+- Virtual environment tool (recommended)
+- Rust toolchain (for ChromaDB optimizations)
 
 ### Installation Steps
 
@@ -42,104 +76,152 @@
    cd fall-of-babylon
    ```
 
-2. **Create and Activate a Virtual Environment**
+2. **Set Up Directory Structure**
+
+   ```shell
+   mkdir -p data/metrics
+   mkdir -p logs/metrics
+   mkdir -p backups
+   mkdir -p chroma
+   ```
+
+3. **Create and Activate Virtual Environment**
 
    ```shell
    python -m venv venv
    source venv/bin/activate  # On Windows use venv\Scripts\activate
    ```
 
-3. **Install Dependencies**
+4. **Install Dependencies**
 
    ```shell
    pip install -r requirements.txt
    ```
 
-4. **Validate XML Schemas (Optional but Recommended)**
+5. **Configure Environment**
 
-   Ensure that all XML files conform to their schemas.
-
-   ```shell
-   # Command or script to validate XML files
-   ```
-
-### Environment Variables
-
-   Create a `.env` file at the root of the project to store environment variables for local development:
-
-   ```dotenv
-   ENVIRONMENT='development'
-   SECRET_KEY='your-secret-key'
-   DATABASE_URL='your-database-url'
-   DEBUG=True
-   ```
-
-   **Note:** The `.env` file is included in `.gitignore` and should not be committed to version control.
-
-   In production, set these variables in your environment instead of using a `.env` file.
-   
-   Copy the `.env.example` file to `.env`:
+   Copy `.env.example` to `.env`:
 
    ```shell
    cp .env.example .env
    ```
 
-   Then, update the values in `.env` with your own configuration.
+   Update the values in `.env` with your configuration.
+
+6. **Initialize Databases**
+
+   - Set up PostgreSQL database
+   - Initialize ChromaDB storage
+   - Configure metrics collection
+
+   Refer to [CONFIGURATION.md](docs/CONFIGURATION.md) for detailed setup instructions.
 
 ## Usage Instructions
 
-To start the game, run the main script:
+Start the game:
 
 ```shell
 python src/babylon/__main__.py
 ```
 
-Currently, the game is in a development state with placeholder mechanics. The initial game world is defined by the XML files in the `data/xml/` directory.
-
-**Note:** The game is terminal-based and interacts via text input and output.
+The game features:
+- Terminal-based interface
+- Real-time metrics collection
+- Automatic state persistence
+- Configurable logging levels
 
 ## Game Mechanics
 
 - **Contradiction Analysis System**: 
-  - Advanced engine modeling societal contradictions based on Marxist theory
-  - Network visualization of entity relationships
-  - Dialectical mapping interface for contradiction analysis
-  - Real-time intensity tracking and historical data
+  - Advanced engine modeling societal contradictions
+  - Network visualization of relationships
+  - Real-time intensity tracking
+  - Historical data analysis
 - **Event Generation System**:
-  - Procedural event generation based on contradiction states
-  - Dynamic consequence chains affecting the game world
-  - Escalation paths for major contradictions
-- **Supply and Demand**: Dynamic resource availability affecting prices and economy (planned).
-- **Combat System**: Placeholder schemas for combat mechanics are defined but not yet implemented.
-- **Political Systems**: Structures for elections, policies, and governance (in development).
+  - Procedural event generation
+  - Dynamic consequence chains
+  - Contradiction-based escalation
+- **Economic System**:
+  - Dynamic resource management
+  - Market simulation
+  - Supply chain modeling
+- **Political Systems**:
+  - Electoral processes
+  - Policy implementation
+  - Governance structures
 
-For more detailed information, refer to the [MECHANICS.md](docs/MECHANICS.md) and [IDEAS.md](docs/IDEAS.md) files.
+For details, see [MECHANICS.md](docs/MECHANICS.md).
 
 ## AI Integration
 
-The game currently incorporates AI models for:
+### ChromaDB Vector Database
 
-- **Contradiction Analysis**: AI-powered analysis of societal contradictions and their relationships
-- **Event Generation**: Smart event creation based on game state and historical patterns
-- **Visualization**: Intelligent layout and organization of network graphs and dialectical maps
+- **Entity Storage**: Efficient vector representations
+- **Similarity Search**: Fast kNN queries
+- **Persistence**: DuckDB+Parquet backend
+- **Performance**:
+  - Query response < 100ms
+  - Memory optimization
+  - Cache management
+  - Automatic backups
 
-Planned AI features include:
-- **NPC Behaviors**: More realistic and dynamic non-player character interactions
-- **Decision Making**: AI-driven events and responses based on game state
-- **Language Processing**: Understanding complex player commands
+### Metrics Collection
 
-For development status and upcoming features, see the [TODO.md](docs/TODO.md) file.
+- Real-time performance monitoring
+- Gameplay pattern analysis
+- System resource tracking
+- Cache performance optimization
+
+### Current Features
+
+- Entity embeddings via SentenceTransformer
+- Contradiction relationship analysis
+- Dynamic event generation
+- Performance metrics collection
+- Pre-embeddings system with:
+  - Content preprocessing and normalization
+  - Intelligent content chunking
+  - Embedding cache management
+  - Integration with lifecycle management
+
+### Planned Features
+
+- Enhanced NPC behaviors
+- Advanced decision systems
+- Natural language processing
+- Dynamic world generation
+- Context window management
+- Priority queuing for object lifecycle
+
+For implementation details, see [CHROMA.md](docs/CHROMA.md).
+
+## Error Handling & Logging
+
+### Error Management
+
+- Structured error codes by subsystem
+- Comprehensive error tracking
+- Automatic error recovery
+- Detailed error context
+
+### Logging System
+
+- JSON-structured logging
+- Multiple log streams
+- Automatic rotation
+- Performance metrics
+- Error context capture
+
+For complete documentation:
+- [ERROR_CODES.md](docs/ERROR_CODES.md)
+- [LOGGING.md](docs/LOGGING.md)
 
 ## Contributing
 
-Contributions are welcome! Please see the [CONTRIBUTING.md](CONTRIBUTING.md) file for guidelines on how to get involved.
-
-**To Do:**
-- Create a `CONTRIBUTING.md` file outlining the contribution process.
-- Establish coding standards and pull request procedures.
+Contributions welcome! Guidelines coming soon in CONTRIBUTING.md.
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT License - see [LICENSE](LICENSE).
 
-For a detailed list of changes and progress, refer to the [CHANGELOG.md](docs/CHANGELOG.md).
+For detailed progress and updates, see [CHANGELOG.md](docs/CHANGELOG.md).

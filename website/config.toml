@@ -1,21 +1,12 @@
-baseURL = 'http://example.org/'
+baseURL = 'https://babylonrpg.com/'
 languageCode = 'en-us'
-defaultContentLanguage = "en"
-title = 'Babylon'
+title = 'The Fall of Babylon'
 theme = 'babylon-theme'
-
-# Enable Git Info for lastmod
-enableGitInfo = true
-
-[languages]
-  [languages.en]
-    title = "Babylon"
-    weight = 1
-    contentDir = "content"
 
 [params]
   description = "A dialectical materialist simulation game"
   featured_image = '/images/hero.jpg'
+<<<<<<< HEAD
   mainSections = ["blog", "docs"]
   custom_css = ["css/custom.css"]
   favicon = "/images/favicon.png"
@@ -51,3 +42,10 @@ enableGitInfo = true
   [markup.goldmark]
     [markup.goldmark.renderer]
       unsafe = true
+=======
+  
+[module]
+  [[module.mounts]]
+    source = "static"
+    target = "static"
+>>>>>>> main
