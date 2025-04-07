@@ -178,6 +178,11 @@ For details, see [MECHANICS.md](docs/MECHANICS.md).
 - Contradiction relationship analysis
 - Dynamic event generation
 - Performance metrics collection
+- Pre-embeddings system with:
+  - Content preprocessing and normalization
+  - Intelligent content chunking
+  - Embedding cache management
+  - Integration with lifecycle management
 
 ### Planned Features
 
@@ -185,6 +190,8 @@ For details, see [MECHANICS.md](docs/MECHANICS.md).
 - Advanced decision systems
 - Natural language processing
 - Dynamic world generation
+- Context window management
+- Priority queuing for object lifecycle
 
 For implementation details, see [CHROMA.md](docs/CHROMA.md).
 
