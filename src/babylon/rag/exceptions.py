@@ -110,7 +110,13 @@ class PreEmbeddingError(RagError):
     - RAG_440 to RAG_459: Cache management errors
     """
     
-    pass
+    def __init__(
+        self,
+        message: str,
+        error_code: str = "RAG_400",
+        details: dict | None = None,
+    ) -> None:
+        super().__init__(message, error_code, details or {})
 
 
 class PreprocessingError(PreEmbeddingError):
