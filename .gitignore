@@ -5,6 +5,7 @@
 # IDE
 .vscode*
 .aider*
+.continue*
 
 # Environment Variables & Secrets
 .env
@@ -13,6 +14,7 @@
 .env.development
 .env.test
 .env.production
+.envrc
 
 # Logs and Databases
 *.log
@@ -27,3 +29,6 @@
 
 #pycache
 *__pycache__*
+tests/unit/rag/scratch.py
+
+scratch.py

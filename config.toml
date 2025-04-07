@@ -1,8 +1,0 @@
-baseURL = 'http://example.org/'
-languageCode = 'en-us'
-title = 'Babylon'
-theme = 'babylon-theme'
-
-[params]
-  description = "A dialectical materialist simulation game"
-  featured_image = '/images/hero.jpg'

@@ -4,7 +4,7 @@ description: "A groundbreaking simulation game exploring the forces of historica
 featured_image: '/images/hero.jpg'
 ---
 
-![A menacing picture of a rectangular tower, stretching to the sky](/home/percy/projects/babylon/website/static/images/A_menacing(1).jpeg)
+![A menacing picture of a rectangular tower, stretching to the sky](/images/A_menacing(1).jpeg)
 
 # Witness the Unfolding of History
 
