@@ -203,12 +203,33 @@ def parse_claude_response(response):
    - Validate AI outputs against game constraints
    - Maintain game stability if AI service is unavailable
 
+## Context Window Management
+
+The system implements a robust Context Window Management component to efficiently utilize Claude's 200k token context window:
+
+1. **ContextWindowManager**
+   - Tracks token usage across all content
+   - Prioritizes content based on importance scores
+   - Automatically optimizes context when reaching 75% capacity (configurable)
+   - Integrates with metrics collection for performance monitoring
+
+2. **Content Prioritization**
+   - Uses hybrid prioritization strategy (configurable)
+   - Considers content importance, recency, and access frequency
+   - Maintains priority queue for efficient content management
+   - Preserves most relevant content when optimization is needed
+
+3. **Integration**
+   - Works with MetricsCollector to track token usage
+   - Prepares for LifecycleManager integration
+   - Configurable through ContextWindowConfig
+
 ## Future Improvements
 
 1. **Enhanced Context Selection**
    - Improve vector similarity matching
    - Develop better context relevance scoring
-   - Implement dynamic context window sizing
+   - Enhance existing context window management with more sophisticated algorithms
 
 2. **Response Quality**
    - Fine-tune prompts based on response quality
