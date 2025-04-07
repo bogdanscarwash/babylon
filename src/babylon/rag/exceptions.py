@@ -15,6 +15,7 @@ class RagError(BabylonError):
     - RAG_100 to RAG_199: Lifecycle management errors
     - RAG_200 to RAG_299: Embedding errors
     - RAG_300 to RAG_399: Query/retrieval errors
+    - RAG_400 to RAG_499: Pre-embeddings errors
     """
 
     pass
@@ -97,4 +98,37 @@ class CorruptStateError(LifecycleError):
     ) -> None:
         self.affected_objects = affected_objects or []
         details = {"affected_objects": self.affected_objects}
+        super().__init__(message, error_code, details)
+
+
+class PreEmbeddingError(RagError):
+    """Base class for pre-embedding errors.
+    
+    Error Code Ranges:
+    - RAG_400 to RAG_419: Preprocessing errors
+    - RAG_420 to RAG_439: Chunking errors
+    - RAG_440 to RAG_459: Cache management errors
+    """
+    
+    pass
+
+
+class PreprocessingError(PreEmbeddingError):
+    """Error raised during content preprocessing.
+    
+    Common Error Codes:
+    - RAG_401: Content too short
+    - RAG_402: Content too long
+    - RAG_403: Invalid content format
+    - RAG_404: Language detection failed
+    """
+    
+    def __init__(
+        self,
+        message: str,
+        error_code: str = "RAG_401",
+        content_id: str | None = None,
+    ) -> None:
+        self.content_id = content_id
+        details = {"content_id": content_id}
         super().__init__(message, error_code, details)
