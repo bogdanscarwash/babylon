@@ -1,5 +1,5 @@
 # Virtual Environment
-.env*
+.venv*
 .venv-babylon*
 
 # IDE
@@ -29,6 +29,9 @@
 
 #pycache
 *__pycache__*
+<<<<<<< HEAD
+=======
+tests/unit/rag/scratch.py
 
-
-
+scratch.py
+>>>>>>> main
