@@ -7,13 +7,13 @@
 version: "2.0.0"
 schema:
   file: dist/data-artifacts/schema.sql
-  sha256: 3efe704b0662a2f5407f257c7662b2ad89c31c70be3432bb32ca903674ed61be
+  sha256: 9100357be267a93820a8ea0cee4bc11f2e5acd9a345a361e5d44dfc53f82c9b2
   tables: 78
   views: 8
-  indexes: 105
+  indexes: 104
 product:
   name: marxist-data-3NF.sqlite
-  sha256: 442f8ddee97dcf5848cc91e1ce7e00975161ecc09c59e1b7dd6e1e27715eff75
+  sha256: 153b753cb264554c935761c6b216c8f1476a08137f189b9a931c31508ad032ad
   page_size: 4096
   application_id: 1111573068
   user_version: 1

@@ -1272,10 +1272,7 @@ class FactAsmManufacturingAnnual(NormalizedBase):
     flag_payroll: Mapped[str | None] = mapped_column(String(2))
     flag_production_wages: Mapped[str | None] = mapped_column(String(2))
 
-    __table_args__ = (
-        Index("idx_asm_mfg_industry_time", "industry_id", "time_id"),
-        Index("idx_asm_mfg_time", "time_id"),
-    )
+    __table_args__ = (Index("idx_asm_mfg_time", "time_id"),)
 
 
 class DimHS2Commodity(NormalizedBase):

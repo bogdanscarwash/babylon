@@ -21,6 +21,20 @@ categories:
         granularity: County
         cadence: Annual
         class: Runtime
+      - id: CENSUS_ASM
+        agency: Census
+        dataset: Annual Survey of Manufactures (2022 Economic Census benchmark)
+        vintage: 2018-2021
+        granularity: National x NAICS
+        cadence: Annual
+        class: Runtime
+      - id: LEHD_QWI
+        agency: Census/LEHD
+        dataset: Quarterly Workforce Indicators (R2026Q3; Michigan coverage 2000Q3-2021Q4)
+        vintage: Quarterly vintage
+        granularity: County x NAICS
+        cadence: Quarterly
+        class: Runtime
       - id: BEA_TiVA
         agency: BEA
         dataset: Trade in Value Added
