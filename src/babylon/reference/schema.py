@@ -14,7 +14,7 @@ Dimensions (33 tables):
                   dim_rent_burden, dim_commute_mode, dim_poverty_category
     Energy: dim_energy_table, dim_energy_series
     FRED: dim_wealth_class, dim_asset_category, dim_fred_series
-    Commodities: dim_commodity, dim_commodity_metric, dim_sctg_commodity
+    Commodities: dim_commodity, dim_commodity_metric, dim_sctg_commodity, dim_hs2_commodity
     Metadata: dim_time, dim_gender, dim_data_source, dim_race
     Coercive: dim_coercive_type
     Employment: dim_employment_area
@@ -1275,6 +1275,144 @@ class FactAsmManufacturingAnnual(NormalizedBase):
     __table_args__ = (
         Index("idx_asm_mfg_industry_time", "industry_id", "time_id"),
         Index("idx_asm_mfg_time", "time_id"),
+    )
+
+
+class DimHS2Commodity(NormalizedBase):
+    """Harmonized System 2-digit commodity chapters (BTS TransBorder COMMODITY2).
+
+    The TransBorder raw files classify commodities at HS2 (chapters 01-98,
+    plus 99 observed in data), per the pinned codes PDF — NOT SCTG (that
+    dimension, ``dim_sctg_commodity``, serves FAF/CFS). The two
+    classifications are related by public concordance but are not the same
+    axis; do not join one to the other without a governed bridge.
+    """
+
+    __tablename__ = "dim_hs2_commodity"
+
+    hs2_id: Mapped[int] = mapped_column(primary_key=True)
+    hs2_code: Mapped[str] = mapped_column(String(2), unique=True, nullable=False)
+    chapter_title: Mapped[str] = mapped_column(String(300), nullable=False)
+
+
+class FactTransborderPortCommodity(NormalizedBase):
+    """BTS TransBorder freight, port x commodity x mode x month (PER-31).
+
+    One row per port/district (DEPE) x HS2 commodity chapter x mode x trade
+    type x domestic/foreign x container code x month, from the monthly raw
+    files (dot3 part) 2019-01 through 2024-12. The observed
+    commodity-by-crossing layer for the Detroit-Windsor circuit: FAF gives
+    zone-grain flows, this gives per-crossing operations.
+
+    Codes follow the BTS TransBorder raw-data dictionary (codes PDF pinned in
+    the trove): trade_type 1=export/2=import; mode 1=vessel, 3=air, 4=mail,
+    5=truck, 6=rail, 7=pipeline, 8=other, 9=FTZ; domestic_foreign '1'=US-
+    produced/'2'=foreign-produced; container_code X/0/1 as published. Blank
+    domestic_foreign/container_code cells are stored as '' (empty string) so
+    the primary key stays total — the file's full classifying axis (port x
+    commodity x mode x trade type x df x container x country x month) is
+    unique, and NULLs in a composite PK would silently allow duplicates on
+    reload. Values in current USD; shipwt_kg in kilograms. Empty measures are
+    stored NULL; nothing is imputed. ``port_code`` is the Census/BTS
+    district-port code as a string (no port dimension yet — the Detroit
+    district is 38XX: 3801 Detroit, 3802 Port Huron, 3803 Sault Ste. Marie,
+    3807 Detroit Metro Airport).
+    """
+
+    __tablename__ = "fact_transborder_port_commodity"
+
+    port_code: Mapped[str] = mapped_column(String(4), primary_key=True)
+    hs2_id: Mapped[int] = mapped_column(ForeignKey("dim_hs2_commodity.hs2_id"), primary_key=True)
+    mode_code: Mapped[int] = mapped_column(primary_key=True)
+    trade_type: Mapped[int] = mapped_column(primary_key=True)
+    domestic_foreign: Mapped[str] = mapped_column(String(1), primary_key=True)
+    container_code: Mapped[str] = mapped_column(String(1), primary_key=True)
+    country: Mapped[str] = mapped_column(String(4), primary_key=True)
+    time_id: Mapped[int] = mapped_column(ForeignKey("dim_time.time_id"), primary_key=True)
+    source_id: Mapped[int] = mapped_column(ForeignKey("dim_data_source.source_id"), nullable=False)
+
+    value_usd: Mapped[int | None] = mapped_column()
+    shipwt_kg: Mapped[int | None] = mapped_column()
+    freight_charges_usd: Mapped[int | None] = mapped_column()
+
+    __table_args__ = (
+        Index("idx_tbpc_port_time", "port_code", "time_id"),
+        Index("idx_tbpc_hs2_time", "hs2_id", "time_id"),
+    )
+
+
+class FactTransborderStatePort(NormalizedBase):
+    """BTS TransBorder freight, state x port x mode x month (PER-31).
+
+    One row per U.S. state x port/district (DEPE) x mode x trade type x
+    domestic/foreign x container code x border province/state x month, from
+    the monthly raw files (dot1 part) 2019-01 through 2024-12. The
+    crossing-throughput-in-dollars layer without commodity detail (dot2,
+    state x commodity without port, remains in the raw trove files for a
+    later governed consumer). ``border_region_code`` carries CANPROV (XO =
+    Ontario, ...) or MEXSTATE — required for row uniqueness — with ''
+    when blank.
+
+    Codes and units match :class:`FactTransborderPortCommodity`.
+    """
+
+    __tablename__ = "fact_transborder_state_port"
+
+    state_id: Mapped[int] = mapped_column(ForeignKey("dim_state.state_id"), primary_key=True)
+    port_code: Mapped[str] = mapped_column(String(4), primary_key=True)
+    mode_code: Mapped[int] = mapped_column(primary_key=True)
+    trade_type: Mapped[int] = mapped_column(primary_key=True)
+    domestic_foreign: Mapped[str] = mapped_column(String(1), primary_key=True)
+    container_code: Mapped[str] = mapped_column(String(1), primary_key=True)
+    country: Mapped[str] = mapped_column(String(4), primary_key=True)
+    #: Canadian province (XO=Ontario, ...) or Mexican state code, '' when blank
+    border_region_code: Mapped[str] = mapped_column(String(2), primary_key=True)
+    time_id: Mapped[int] = mapped_column(ForeignKey("dim_time.time_id"), primary_key=True)
+    source_id: Mapped[int] = mapped_column(ForeignKey("dim_data_source.source_id"), nullable=False)
+
+    value_usd: Mapped[int | None] = mapped_column()
+    shipwt_kg: Mapped[int | None] = mapped_column()
+    freight_charges_usd: Mapped[int | None] = mapped_column()
+
+    __table_args__ = (
+        Index("idx_tbsp_state_time", "state_id", "time_id"),
+        Index("idx_tbsp_port_time", "port_code", "time_id"),
+    )
+
+
+class FactBorderCrossingThroughput(NormalizedBase):
+    """BTS Border Crossing Entry Data: vehicles/persons by port x measure x month.
+
+    One row per land port x measure (Personal Vehicles, Trucks, Rail
+    Containers, Buses, Pedestrians, ...) x month, both U.S. borders, from the
+    keg4-3bc2 Socrata snapshot (through 2026-03). This is crossing
+    THROUGHPUT (counts of conveyances/persons), distinct from TransBorder's
+    dollar/tonnage flows — the two measure different quantities and are kept
+    as separate tables. ``port_code`` matches the TransBorder DEPE codes
+    where the ports overlap.
+
+    Eleven port x measure x month keys carry multiple source rows (identical
+    coordinates, different values — source-internal revision artifacts, e.g.
+    Sasabe Feb 2021 Bus Passengers: 0 and 2,175). They are kept losslessly
+    with ``revision_seq`` numbering in snapshot file order; consumers should
+    treat revision_seq > 1 as a same-key sibling, not a series break.
+    """
+
+    __tablename__ = "fact_border_crossing_throughput"
+
+    port_code: Mapped[str] = mapped_column(String(4), primary_key=True)
+    measure: Mapped[str] = mapped_column(String(60), primary_key=True)
+    time_id: Mapped[int] = mapped_column(ForeignKey("dim_time.time_id"), primary_key=True)
+    revision_seq: Mapped[int] = mapped_column(primary_key=True)
+    source_id: Mapped[int] = mapped_column(ForeignKey("dim_data_source.source_id"), nullable=False)
+
+    port_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    border: Mapped[str] = mapped_column(String(30), nullable=False)
+    value: Mapped[int | None] = mapped_column()
+
+    __table_args__ = (
+        Index("idx_bct_port_time", "port_code", "time_id"),
+        Index("idx_bct_measure", "measure"),
     )
 
 
