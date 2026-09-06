@@ -80,15 +80,25 @@ inputs:
     # product (sha 442f8dde..., 78 tables, 61,802,612 rows) as
     # reference-subset-20260905c-v8.sqlite (double-build byte-identical,
     # 14,195,487 rows kept). tiger tarball unchanged from v3.
+    # v8 in-place refresh (2026-09-05, PER-31): fact_transborder_port_commodity
+    # (1,242,684 rows), fact_transborder_state_port (1,977,346),
+    # fact_border_crossing_throughput (275,901) and dim_hs2_commodity (99)
+    # populated — fact tables subset policy skip; subset-visible deltas are
+    # dim_data_source 24 -> 26 (BTS_TRANSBORDER + BTS_BORDER_CROSSING),
+    # dim_time 523 -> 710 (monthly rows extended back to 1996 and forward
+    # to 2026-07) and full-scoped dim_hs2_commodity (99 rows). Rebuilt from
+    # the restamped product (sha ff5293d0..., 82 tables, 65,298,831 rows) as
+    # reference-subset-20260905d-v8.sqlite (double-build byte-identical,
+    # 14,195,775 rows kept). tiger tarball unchanged from v3.
     default: ci-data-v8
   asset:
     description: Asset filename within the release
     required: false
-    default: reference-subset-20260905c-v8.sqlite
+    default: reference-subset-20260905d-v8.sqlite
   sha256:
     description: Expected sha256 of the asset (pin — bump with the tag)
     required: false
-    default: f84012c29680cfd3800a3fe1d4e7c0516547980a1eb4dfd19579bd112abce754
+    default: 525a55fdffaf5ef2f3b7e448e6b33f41dfcf6884e36f7a656cd4789de2ec493a
   tiger-asset:
     description: TIGER county-shapefile tarball within the release (the
       headless runner reads data/tiger/county/tl_2024_us_county.shp — proving

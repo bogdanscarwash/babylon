@@ -7,13 +7,13 @@
 version: "2.0.0"
 schema:
   file: dist/data-artifacts/schema.sql
-  sha256: 9100357be267a93820a8ea0cee4bc11f2e5acd9a345a361e5d44dfc53f82c9b2
-  tables: 78
+  sha256: 3a2883445df2a259cefb50e50ae3ac07da3ab197fdf38618bf1453ea3b7a6be0
+  tables: 82
   views: 8
-  indexes: 104
+  indexes: 111
 product:
   name: marxist-data-3NF.sqlite
-  sha256: 153b753cb264554c935761c6b216c8f1476a08137f189b9a931c31508ad032ad
+  sha256: ff5293d041cb0ebbdac066333ba3682f8ba6645894022b311bf88aa6c4e22a9a
   page_size: 4096
   application_id: 1111573068
   user_version: 1
@@ -290,8 +290,8 @@ artifacts:
     source_table: dim_data_source
     generator: tools/make_data_artifacts.py
     mode: generate
-    rows: 24
-    sha256: 1d333eae5f0c293c51fe6dfa4d001fd1f1c3cd77b571e86ed7f277e884e1597f
+    rows: 26
+    sha256: 43e5758a26640b9353c4048c9ac22ec92b149857680a6e09e3a25b880efb792c
     home: dist/data-artifacts/dim_data_source.parquet
     material_relation: >-
       provenance registry (agency/dataset per fact table) — the traceability backbone every
@@ -374,6 +374,18 @@ artifacts:
     material_relation: >-
       owner/renter housing-tenure taxonomy — the classification behind fact_census_housing's
       renter_share feeding the tick pipeline's housing-precarity signal.
+  - name: dim_hs2_commodity
+    format: parquet
+    source_table: dim_hs2_commodity
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 99
+    sha256: 4959bd9baf0dee7b4f1922d7f8da909392ad71e92fa8980d4e82b59b91190020
+    home: dist/data-artifacts/dim_hs2_commodity.parquet
+    material_relation: >-
+      Harmonized System 2-digit commodity chapters — the classification axis of
+      fact_transborder_port_commodity (TransBorder COMMODITY2 is HS2, not SCTG; see the pinned
+      codes PDF).
   - name: dim_import_source
     format: parquet
     source_table: dim_import_source
@@ -500,8 +512,8 @@ artifacts:
     source_table: dim_time
     generator: tools/make_data_artifacts.py
     mode: generate
-    rows: 523
-    sha256: c3170f2279fd37fb11d5080a71fcd82b322e092b237585c50e37d0ae5f9c685e
+    rows: 710
+    sha256: 3bb6f2311761302049ce683590c3a7ed3ac6d8874ae7212e10b9bf740bf03c56
     home: dist/data-artifacts/dim_time.parquet
     material_relation: >-
       the universal year/granularity time dimension every ingest pipeline
@@ -608,6 +620,18 @@ artifacts:
     material_relation: >-
       county-level BLS LAUS U-3 unemployment decomposition — wired into the tick pipeline's
       per-county unemployment_rate.
+  - name: fact_border_crossing_throughput
+    format: parquet
+    source_table: fact_border_crossing_throughput
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 275901
+    sha256: 822e3d41865754b57407bbc18f42d39a3874d587962df4c3a16521664faa623e
+    home: dist/data-artifacts/fact_border_crossing_throughput.parquet
+    material_relation: >-
+      BTS Border Crossing Entry Data — conveyance/person counts by port x measure x month (both
+      U.S. land borders, through 2026-07); crossing THROUGHPUT, a different quantity than
+      TransBorder's dollar/tonnage flows.
   - name: fact_broadband_coverage
     format: parquet
     source_table: fact_broadband_coverage
@@ -1001,6 +1025,29 @@ artifacts:
     material_relation: >-
       monthly bilateral country import/export values — the trade-balance data behind the
       core/periphery unequal-exchange ratio (view_unequal_exchange).
+  - name: fact_transborder_port_commodity
+    format: parquet
+    source_table: fact_transborder_port_commodity
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 1242684
+    sha256: a60fa749b2b151cca18cba08d74ca18f0162942d006ec761eac96666b5781093
+    home: dist/data-artifacts/fact_transborder_port_commodity.parquet
+    material_relation: >-
+      BTS TransBorder port x HS2 commodity chapter x mode x month freight
+      value/weight/freight-charges — the observed commodity-by-crossing layer for the
+      Detroit-Windsor productive and freight circuit (PER-31).
+  - name: fact_transborder_state_port
+    format: parquet
+    source_table: fact_transborder_state_port
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 1977346
+    sha256: 25ed337f72962947409b5efa55dfb2befecb2679c7063c7dc9f9025f66d0e40d
+    home: dist/data-artifacts/fact_transborder_state_port.parquet
+    material_relation: >-
+      BTS TransBorder state x port x mode x month freight value/weight/freight-charges —
+      crossing-level dollar throughput without commodity detail (dot1 part).
   - name: lodes_xwalk_tri_county_hex
     format: csv.gz
     source_table: N/A — no sqlite table; hex-res LODES crosswalk (see fact_lodes_commuter_flow, bridge_lodes_block)

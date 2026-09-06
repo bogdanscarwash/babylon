@@ -227,6 +227,20 @@ categories:
         granularity: Port/County
         cadence: Monthly
         class: Runtime
+      - id: BTS_TRANSBORDER
+        agency: DOT/BTS
+        dataset: TransBorder Freight Raw Data
+        vintage: Monthly
+        granularity: Port x HS2 Commodity (and State x Port)
+        cadence: Monthly
+        class: Runtime
+      - id: BTS_BORDER_CROSSING
+        agency: DOT/BTS
+        dataset: Border Crossing Entry Data (keg4-3bc2)
+        vintage: Monthly
+        granularity: Port x Measure
+        cadence: Monthly
+        class: Runtime
       - id: FCC_BDC
         agency: FCC
         dataset: Broadband Data Collection
@@ -817,6 +831,19 @@ tables:
       — the freight-commodity dimension FK'd by fact_faf_commodity_flow (KEEP).
     notes: 100% placeholder '{code}' names; FK of a KEEP table so cannot be dropped
       outright.
+  - name: dim_hs2_commodity
+    kind: table
+    source: BTS_TRANSBORDER
+    extractor: babylon-data src/babylon_data/bts_transborder/ (2026-09-05, PER-31)
+    disposition: keep
+    subset_policy: full
+    material_relation: Harmonized System 2-digit commodity chapters — the
+      classification axis of fact_transborder_port_commodity (TransBorder
+      COMMODITY2 is HS2, not SCTG; see the pinned codes PDF).
+    notes: "99 rows (chapters 01-98 per the codes PDF + 99 observed in data).
+      Titles transcribed from the pinned PDF into the loader's HS2_CHAPTERS
+      constant. HS2 and SCTG require a governed concordance bridge before any
+      cross-join with FAF/CFS."
   - name: dim_state
     kind: table
     source: Census_ACS
@@ -901,6 +928,49 @@ tables:
       2024 rows. Empty measures are NULL with the ASM annotation flag in flag_*;
       RSE columns remain in the raw file. subset_policy skip: staged, no runtime
       consumer yet."
+  - name: fact_transborder_port_commodity
+    kind: table
+    source: BTS_TRANSBORDER
+    extractor: babylon-data src/babylon_data/bts_transborder/ (2026-09-05, PER-31)
+    disposition: keep
+    subset_policy: skip
+    material_relation: BTS TransBorder port x HS2 commodity chapter x mode x month
+      freight value/weight/freight-charges — the observed commodity-by-crossing
+      layer for the Detroit-Windsor productive and freight circuit (PER-31).
+    notes: "Monthly raw files (dot3 part), 2019-01..2024-12, acquired via the
+      BTS raw-data page (Akamai-gated; browser-session download). COMMODITY2 is
+      HS2 (FK dim_hs2_commodity), NOT SCTG — do not join to FAF/CFS without a
+      governed concordance. Blank domestic_foreign/container_code stored as ''
+      to keep the composite PK total. Detroit district ports: 3801/3802/3803/3807.
+      dot2 (state x commodity, no port) remains in the raw files for a later
+      consumer. Covers the 2019 baseline, COVID window AND the 2024 thin slice.
+      subset_policy skip: staged, no runtime consumer yet."
+  - name: fact_transborder_state_port
+    kind: table
+    source: BTS_TRANSBORDER
+    extractor: babylon-data src/babylon_data/bts_transborder/ (2026-09-05, PER-31)
+    disposition: keep
+    subset_policy: skip
+    material_relation: BTS TransBorder state x port x mode x month freight
+      value/weight/freight-charges — crossing-level dollar throughput without
+      commodity detail (dot1 part).
+    notes: "Same vintage/coverage/codes as fact_transborder_port_commodity.
+      Rows with USASTATE=DU ('Unknown' state aggregate, per the codes PDF —
+      11,581 rows, ~0.6%) have no dim_state home and are skipped loudly.
+      subset_policy skip: staged, no runtime consumer yet."
+  - name: fact_border_crossing_throughput
+    kind: table
+    source: BTS_BORDER_CROSSING
+    extractor: babylon-data src/babylon_data/bts_transborder/ (2026-09-05, PER-31)
+    disposition: keep
+    subset_policy: skip
+    material_relation: BTS Border Crossing Entry Data — conveyance/person counts
+      by port x measure x month (both U.S. land borders, through 2026-07);
+      crossing THROUGHPUT, a different quantity than TransBorder's dollar/tonnage
+      flows.
+    notes: "Socrata keg4-3bc2 snapshot (public-domain download, no key).
+      port_code matches TransBorder DEPE codes where ports overlap.
+      subset_policy skip: staged, no runtime consumer yet."
   - name: fact_bea_county_gdp
     kind: table
     source: BEA_GDP
