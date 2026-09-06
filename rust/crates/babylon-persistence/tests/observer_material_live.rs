@@ -256,6 +256,20 @@ fn live_michigan_all_county_cards_keep_public_source_and_quiet_restart_freshness
     SemanticArchiveStoreV1::new(&target.writer)
         .install_schema()
         .unwrap();
+    // A fresh campaign must remain searchable before automatic statistics
+    // maintenance. Keep this disposable fixture cold through the full drain;
+    // otherwise autovacuum timing can hide repeated whole-Archive validation.
+    target
+        .writer
+        .connect(NoTls)
+        .unwrap()
+        .batch_execute(
+            "ALTER TABLE babylon_meta.archive_page_revision_v2 SET (autovacuum_enabled = false); \
+             ALTER TABLE babylon_meta.archive_revision_grant_v2 SET (autovacuum_enabled = false); \
+             ALTER TABLE babylon_meta.archive_revision_atom_v2 SET (autovacuum_enabled = false); \
+             ALTER TABLE babylon_meta.archive_knowledge_grant_v1 SET (autovacuum_enabled = false)",
+        )
+        .unwrap();
     let preset = MichiganDeliveryPresetV1::Standard;
     let mut runtime = DurableMaterialRuntimeV3::create(
         &target.writer,

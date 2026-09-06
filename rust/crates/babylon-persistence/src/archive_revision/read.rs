@@ -442,13 +442,22 @@ fn search_hits(
             AND known.subject_id=v_archive_revision_index_v2.subject_id) \
         OR (NOT EXISTS(SELECT 1 FROM public.v_archive_tick_knowledge_v2 \
             WHERE campaign_id=$1 AND resolve_tick=$2))) ORDER BY subject_kind,subject_id,effective_tick DESC,origin DESC";
+    // The security-barrier view validates complete grant and atom membership.
+    // Evaluate that scoped set once, even before a fresh campaign has planner
+    // statistics; a nested loop must not repeat every revision's validation
+    // for each latest subject. The existing view remains the authority.
+    let scoped = format!(
+        "WITH latest AS ({latest}), eligible AS MATERIALIZED (\
+         SELECT campaign_id,subject_kind,subject_id,effective_tick,origin,revision_sha256,search_text \
+         FROM public.v_archive_revision_known_v2 WHERE campaign_id=$1 AND effective_tick<=$2)"
+    );
     let integrity = client
         .query_one(
             &format!(
-                "WITH latest AS ({latest}) SELECT \
+                "{scoped} SELECT \
         COALESCE(bool_or(NOT latest.has_emission_witness),FALSE), \
         COALESCE(bool_or(latest.has_emission_witness AND page.campaign_id IS NULL),FALSE) \
-        FROM latest LEFT JOIN public.v_archive_revision_known_v2 page \
+        FROM latest LEFT JOIN eligible page \
         USING(campaign_id,subject_kind,subject_id,effective_tick,origin)"
             ),
             &[campaign.as_uuid(), &signed(scope.tick())?],
@@ -461,13 +470,23 @@ fn search_hits(
         result.state =
             ArchiveSearchStateV2::Pending(ArchiveDossierPendingV2::EmissionWitnessRequired);
     }
-    let rows=client.query(&format!("WITH latest AS ({latest}) SELECT page.subject_kind,page.subject_id, \
-        page.effective_tick,page.origin,page.revision_sha256 FROM latest JOIN public.v_archive_revision_known_v2 page \
+    let rows = client
+        .query(
+            &format!(
+                "{scoped} SELECT page.subject_kind,page.subject_id, \
+        page.effective_tick,page.origin,page.revision_sha256 FROM latest JOIN eligible page \
         USING(campaign_id,subject_kind,subject_id,effective_tick,origin) \
         WHERE pg_catalog.strpos(pg_catalog.lower(page.search_text),pg_catalog.lower($3))>0 \
-        ORDER BY page.subject_kind,page.subject_id LIMIT $4"),
-        &[campaign.as_uuid(),&signed(scope.tick())?,&query,&(i64::from(limit)+1)])
-        .map_err(|error| database("search scoped retained Archive text",&error))?;
+        ORDER BY page.subject_kind,page.subject_id LIMIT $4"
+            ),
+            &[
+                campaign.as_uuid(),
+                &signed(scope.tick())?,
+                &query,
+                &(i64::from(limit) + 1),
+            ],
+        )
+        .map_err(|error| database("search scoped retained Archive text", &error))?;
     result.truncated =
         rows.len() > usize::try_from(limit).map_err(|_| SemanticArchiveErrorV1::CollectionBound)?;
     for row in rows
