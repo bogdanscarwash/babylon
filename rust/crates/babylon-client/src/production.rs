@@ -1536,13 +1536,6 @@ fn describe_staffing_accounts(
         } else {
             value.push_str("Opening workforce; no completed staffing week.\n");
         }
-        writeln!(
-            value,
-            "Next opening (week {}): {} labor-hours (Derived)",
-            account.next_opening_week,
-            grouped(account.next_opening_hours),
-        )
-        .expect("String write");
     }
     if disclosed {
         value.push_str("Observed QCEW jobs are separate; these accounts record no payments.\n");
@@ -2211,6 +2204,22 @@ mod tests {
         let mut unrelated = staffing_account("b");
         unrelated.employed = 987;
         snapshot.staffing_accounts = vec![staffing_account("a"), unrelated];
+        snapshot
+            .labor_accounts
+            .push(babylon_persistence::ProductionLaborAccountV1 {
+                site_id: "a".into(),
+                unit_id: "labor-hours".into(),
+                unit: "labor-hours".into(),
+                next_opening_week: 6,
+                next_opening_available: 80,
+                completed: Some(babylon_persistence::CompletedProductionLaborV1 {
+                    week: 5,
+                    opening: 160,
+                    planned: 40,
+                    used: 40,
+                    unused: 120,
+                }),
+            });
         let text = describe(&snapshot.sites[0], &snapshot);
         assert!(text.contains("MODELED WORKFORCE / DERIVED"));
         assert!(text.contains("2 employed + 2 reserve = 4 people"));
@@ -2221,6 +2230,7 @@ mod tests {
         assert!(text.contains("Work request: 40 hours | prior week: 80 hours"));
         assert!(text.contains("One-week retention: 80 hours"));
         assert!(text.contains("Next opening (week 6): 80 labor-hours (Derived)"));
+        assert_eq!(text.matches("Next opening").count(), 1);
         assert!(
             text.contains("Observed QCEW jobs are separate; these accounts record no payments.")
         );
@@ -2235,12 +2245,24 @@ mod tests {
         account.next_opening_week = 1;
         account.completed = None;
         snapshot.staffing_accounts.push(account);
+        snapshot
+            .labor_accounts
+            .push(babylon_persistence::ProductionLaborAccountV1 {
+                site_id: "a".into(),
+                unit_id: "labor-hours".into(),
+                unit: "labor-hours".into(),
+                next_opening_week: 1,
+                next_opening_available: 80,
+                completed: None,
+            });
         let foundation = describe(&snapshot.sites[0], &snapshot);
         assert!(foundation.contains("Opening workforce; no completed staffing week."));
         assert!(foundation.contains("MODELED WORKFORCE / DESIGNED"));
         assert!(!foundation.contains("MODELED WORKFORCE / DERIVED"));
         assert!(!foundation.contains("Hires:"));
         assert!(!foundation.contains("STAFFING / WEEK"));
+        assert!(foundation.contains("Next opening (week 1): 80 labor-hours (Derived)"));
+        assert_eq!(foundation.matches("Next opening").count(), 1);
         let missing = describe(&snapshot.sites[2], &snapshot);
         assert!(missing.contains("No workforce account disclosed for this subject."));
         assert!(!missing.contains("0 employed"));
@@ -2253,9 +2275,21 @@ mod tests {
                 separations: 0,
                 ..completed
             });
+        snapshot.staffing_accounts[0].next_opening_week = 6;
+        snapshot.labor_accounts[0].next_opening_week = 6;
+        snapshot.labor_accounts[0].completed =
+            Some(babylon_persistence::CompletedProductionLaborV1 {
+                week: 5,
+                opening: 80,
+                planned: 40,
+                used: 40,
+                unused: 40,
+            });
         let quiet = describe(&snapshot.sites[0], &snapshot);
         assert!(quiet.contains("Hires: 0 | separations: 0"));
         assert!(!quiet.contains("no completed staffing week"));
+        assert!(quiet.contains("Next opening (week 6): 80 labor-hours (Derived)"));
+        assert_eq!(quiet.matches("Next opening").count(), 1);
     }
 
     fn attributed_snapshot() -> ProductionSnapshotV1 {
