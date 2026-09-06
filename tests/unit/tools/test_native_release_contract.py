@@ -156,7 +156,7 @@ def test_publication_requires_main_lineage_and_verified_native_download() -> Non
 
 
 def test_native_artifact_upload_requires_unpacked_runtime_exercise() -> None:
-    steps = _steps("native-package.yml", "linux")
+    steps = _steps("main.yml", "native-package")
     smoke = next(
         index for index, step in enumerate(steps) if "./babylon --smoke" in step.get("run", "")
     )
@@ -171,6 +171,44 @@ def test_native_artifact_upload_requires_unpacked_runtime_exercise() -> None:
     assert "if" not in steps[upload]
     assert not any("continue-on-error" in step for step in steps)
     assert steps[upload]["with"]["if-no-files-found"] == "error"
+
+
+def test_native_package_has_no_arbitrary_checkout_input() -> None:
+    assert not (ROOT / ".github/workflows/native-package.yml").exists()
+    workflow = yaml.safe_load((ROOT / ".github/workflows/main.yml").read_text())
+    job = workflow["jobs"]["native-package"]
+    assert "uses" not in job
+    assert job["name"] == "Main Qualification / Native Download / Linux x86_64"
+    assert workflow["permissions"] == {"contents": "read"}
+
+
+def test_native_package_separates_pr_heads_from_dispatch_cache_scope() -> None:
+    workflow = yaml.safe_load((ROOT / ".github/workflows/main.yml").read_text())
+    job = workflow["jobs"]["native-package"]
+    guard = " ".join(job["if"].split())
+    assert guard == (
+        "(github.event_name == 'pull_request' && "
+        "github.event.pull_request.head.repo.full_name == github.repository && "
+        "github.event.pull_request.base.ref == 'main') || "
+        "(github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/dev')"
+    )
+    checkouts = [
+        step for step in job["steps"] if step.get("uses", "").startswith("actions/checkout@")
+    ]
+    assert len(checkouts) == 2
+    pr, dispatch = checkouts
+    assert pr["if"] == "github.event_name == 'pull_request'"
+    assert pr["with"]["ref"] == "${{ github.event.pull_request.head.sha }}"
+    assert dispatch["if"] == "github.event_name == 'workflow_dispatch'"
+    assert "ref" not in dispatch["with"]
+    assert all(step["with"]["persist-credentials"] is False for step in checkouts)
+    identity = next(step for step in job["steps"] if step.get("id") == "identity")
+    assert identity["env"]["SOURCE_SHA"] == (
+        "${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha "
+        "|| github.sha }}"
+    )
+    assert 'test "$(git rev-parse HEAD)" = "$SOURCE_SHA"' in identity["run"]
+    assert 'echo "sha=$SOURCE_SHA" >> "$GITHUB_OUTPUT"' in identity["run"]
 
 
 def test_weekly_rebuild_uses_exact_native_interpreter_and_compares_product_bytes() -> None:
