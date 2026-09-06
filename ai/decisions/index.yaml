@@ -1190,3 +1190,8 @@ decisions:
     status: accepted
     date: '2026-09-06'
     file: ADR255_graph_owned_staffing_composition.yaml
+  ADR256_same_window_campaign_lifecycle:
+    title: One window and runtime-owned campaign switching
+    status: proposed
+    date: '2026-09-06'
+    file: ADR256_same_window_campaign_lifecycle.yaml

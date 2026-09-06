@@ -1,5 +1,5 @@
 use super::*;
-use crate::runtime_session::RuntimeSessionTailV2;
+use crate::runtime_session::RuntimeSessionTailV3;
 use std::cell::Cell;
 use std::io::{self, Cursor, Read};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -24,9 +24,9 @@ struct Driver {
 }
 
 impl ArchiveControl for Driver {
-    fn refresh(&self, request_id: u64) -> Result<(), RuntimeSessionErrorCodeV2> {
+    fn refresh(&self, request_id: u64) -> Result<(), RuntimeSessionErrorCodeV3> {
         if self.refresh_full {
-            return Err(RuntimeSessionErrorCodeV2::StorageBusy);
+            return Err(RuntimeSessionErrorCodeV3::StorageBusy);
         }
         self.state.refreshes.lock().unwrap().push(request_id);
         if let Some(sink) = self.state.sink.lock().unwrap().as_ref() {
@@ -52,14 +52,14 @@ impl ArchiveControl for Driver {
         self.finishing_checks.set(remaining.saturating_sub(1));
         remaining == 0
     }
-    fn join_finished(&mut self) -> Result<(), RuntimeSessionErrorCodeV2> {
+    fn join_finished(&mut self) -> Result<(), RuntimeSessionErrorCodeV3> {
         assert!(
             self.finished(),
             "never join an unfinished synchronous driver"
         );
         self.state.joined.store(true, Ordering::SeqCst);
         if self.join_fails {
-            Err(RuntimeSessionErrorCodeV2::ArchiveRefused)
+            Err(RuntimeSessionErrorCodeV3::ArchiveRefused)
         } else {
             Ok(())
         }
@@ -74,21 +74,21 @@ struct Backend {
 }
 
 impl SessionBackend for Backend {
-    fn tail(&self) -> RuntimeSessionTailV2 {
-        RuntimeSessionTailV2 {
+    fn tail(&self) -> RuntimeSessionTailV3 {
+        RuntimeSessionTailV3 {
             resolve_tick: self.tick,
             tick_content_hash: (self.tick > 0).then(|| format!("{:064x}", self.tick)),
         }
     }
     fn advance(
         &mut self,
-        expected: &RuntimeSessionTailV2,
-    ) -> Result<RuntimeSessionTailV2, RuntimeSessionErrorCodeV2> {
+        expected: &RuntimeSessionTailV3,
+    ) -> Result<RuntimeSessionTailV3, RuntimeSessionErrorCodeV3> {
         if expected != &self.tail() {
-            return Err(RuntimeSessionErrorCodeV2::StaleExpectedTail);
+            return Err(RuntimeSessionErrorCodeV3::StaleExpectedTail);
         }
         if self.fail_commit {
-            return Err(RuntimeSessionErrorCodeV2::CommitRefused);
+            return Err(RuntimeSessionErrorCodeV3::CommitRefused);
         }
         self.tick += 1;
         self.state.tick.store(self.tick, Ordering::SeqCst);
@@ -134,35 +134,35 @@ fn progress(
     }
 }
 
-fn advance() -> RuntimeSessionRequestV2 {
-    RuntimeSessionRequestV2::Advance {
-        protocol_version: 2,
-        campaign_id: "campaign".into(),
+fn advance() -> RuntimeSessionRequestV3 {
+    RuntimeSessionRequestV3::Advance {
+        protocol_version: 3,
+        scope: scope(1, A),
         request_id: 1,
-        expected_tail: RuntimeSessionTailV2 {
+        expected_tail: RuntimeSessionTailV3 {
             resolve_tick: 0,
             tick_content_hash: None,
         },
     }
 }
 
-fn stop() -> RuntimeSessionRequestV2 {
-    RuntimeSessionRequestV2::Stop {
-        protocol_version: 2,
-        campaign_id: "campaign".into(),
+fn stop() -> RuntimeSessionRequestV3 {
+    RuntimeSessionRequestV3::Stop {
+        protocol_version: 3,
+        scope: scope(1, A),
         request_id: 8,
     }
 }
 
-fn refresh() -> RuntimeSessionRequestV2 {
-    RuntimeSessionRequestV2::RefreshArchive {
-        protocol_version: 2,
-        campaign_id: "campaign".into(),
+fn refresh() -> RuntimeSessionRequestV3 {
+    RuntimeSessionRequestV3::RefreshArchive {
+        protocol_version: 3,
+        scope: scope(1, A),
         request_id: 31,
     }
 }
 
-fn wire(requests: &[RuntimeSessionRequestV2]) -> Vec<u8> {
+fn wire(requests: &[RuntimeSessionRequestV3]) -> Vec<u8> {
     let mut bytes = Vec::new();
     for request in requests {
         serde_json::to_writer(&mut bytes, request).unwrap();
@@ -171,7 +171,7 @@ fn wire(requests: &[RuntimeSessionRequestV2]) -> Vec<u8> {
     bytes
 }
 
-fn responses(output: &[u8]) -> Vec<RuntimeSessionResponseV2> {
+fn wire_responses(output: &[u8]) -> Vec<RuntimeSessionResponseV3> {
     output
         .split(|byte| *byte == b'\n')
         .filter(|line| !line.is_empty())
@@ -179,23 +179,94 @@ fn responses(output: &[u8]) -> Vec<RuntimeSessionResponseV2> {
         .collect()
 }
 
+const A: &str = "00000000-0000-0000-0000-000000000001";
+const B: &str = "00000000-0000-0000-0000-000000000002";
+fn scope(epoch: u64, campaign: &str) -> RuntimeSessionScopeV3 {
+    RuntimeSessionScopeV3 {
+        epoch,
+        campaign_id: Some(campaign.into()),
+    }
+}
+fn switching(
+    previous: RuntimeSessionScopeV3,
+    campaign: &str,
+    request_id: u64,
+) -> RuntimeSessionRequestV3 {
+    RuntimeSessionRequestV3::Switch {
+        protocol_version: 3,
+        request_id,
+        scope: previous,
+        target: RuntimeSessionTargetV3::Open {
+            campaign_id: campaign.into(),
+        },
+    }
+}
+fn responses(output: &[u8]) -> Vec<RuntimeSessionResponseV3> {
+    wire_responses(output)
+        .into_iter()
+        .filter(|row| {
+            !matches!(
+                row,
+                RuntimeSessionResponseV3::Hello { .. } | RuntimeSessionResponseV3::Switching { .. }
+            )
+        })
+        .collect()
+}
+impl SessionBackend for &mut Backend {
+    fn tail(&self) -> RuntimeSessionTailV3 {
+        (**self).tail()
+    }
+    fn advance(
+        &mut self,
+        expected: &RuntimeSessionTailV3,
+    ) -> Result<RuntimeSessionTailV3, RuntimeSessionErrorCodeV3> {
+        (**self).advance(expected)
+    }
+}
+fn active_coordinator<'a, 'b, W: Write>(
+    output: &'a mut W,
+    backend: &'b mut Backend,
+    archive: Driver,
+) -> Coordinator<'a, W, &'b mut Backend, Driver> {
+    Coordinator {
+        output,
+        scope: scope(1, A),
+        active: Some(Active::new(backend, archive)),
+    }
+}
+fn serve_open<I: BufRead + Send + 'static, W: Write>(
+    input: I,
+    output: &mut W,
+    backend: &mut Backend,
+    start: impl FnOnce(ArchiveEventSink) -> Result<Driver, RuntimeSessionErrorCodeV3>,
+) -> Result<(), RuntimeSessionErrorCodeV3> {
+    let input =
+        Cursor::new(wire(&[switching(RuntimeSessionScopeV3::default(), A, 100)])).chain(input);
+    let mut backend = Some(backend);
+    let mut start = Some(start);
+    serve(
+        input,
+        output,
+        |_| {
+            Ok((
+                backend.take().expect("one fixture admission"),
+                "digest".into(),
+            ))
+        },
+        |_, sink| start.take().expect("one fixture driver")(sink),
+    )
+}
+
 fn run(
     input: Vec<u8>,
     backend: &mut Backend,
     output: &mut impl Write,
-) -> Result<(), RuntimeSessionErrorCodeV2> {
+) -> Result<(), RuntimeSessionErrorCodeV3> {
     let shared = Arc::clone(&backend.state);
-    serve(
-        Cursor::new(input),
-        output,
-        backend,
-        "campaign",
-        "digest".into(),
-        move |sink| {
-            *shared.sink.lock().unwrap() = Some(sink);
-            Ok(driver(&shared))
-        },
-    )
+    serve_open(Cursor::new(input), output, backend, move |sink| {
+        *shared.sink.lock().unwrap() = Some(sink);
+        Ok(driver(&shared))
+    })
 }
 
 #[test]
@@ -211,14 +282,14 @@ fn completion_queued_inside_advance_cannot_precede_committed_acknowledgement() {
     .unwrap();
     let rows = responses(&output);
     assert_eq!(rows.len(), 4);
-    assert!(matches!(rows[0], RuntimeSessionResponseV2::Ready { .. }));
+    assert!(matches!(rows[0], RuntimeSessionResponseV3::Ready { .. }));
     assert!(matches!(
         rows[1],
-        RuntimeSessionResponseV2::Committed { request_id: 1, .. }
+        RuntimeSessionResponseV3::Committed { request_id: 1, .. }
     ));
     assert!(matches!(
         rows[2],
-        RuntimeSessionResponseV2::ArchiveProgress {
+        RuntimeSessionResponseV3::ArchiveProgress {
             request_id: None,
             durable_tick: 1,
             verified_tick: 1,
@@ -227,7 +298,7 @@ fn completion_queued_inside_advance_cannot_precede_committed_acknowledgement() {
     ));
     assert!(matches!(
         rows[3],
-        RuntimeSessionResponseV2::Stopped { request_id: 8 }
+        RuntimeSessionResponseV3::Stopped { request_id: 8, .. }
     ));
     assert_eq!(backend.tick, 1);
     assert!(
@@ -242,12 +313,10 @@ fn ready_precedes_archive_completion_queued_during_driver_start() {
     let mut backend = backend();
     let state = Arc::clone(&backend.state);
     let mut output = Vec::new();
-    serve(
+    serve_open(
         Cursor::new(wire(&[stop()])),
         &mut output,
         &mut backend,
-        "campaign",
-        "digest".into(),
         move |sink| {
             assert!(sink(progress(None, 0, 0)));
             Ok(driver(&state))
@@ -255,10 +324,10 @@ fn ready_precedes_archive_completion_queued_during_driver_start() {
     )
     .unwrap();
     let rows = responses(&output);
-    assert!(matches!(rows[0], RuntimeSessionResponseV2::Ready { .. }));
+    assert!(matches!(rows[0], RuntimeSessionResponseV3::Ready { .. }));
     assert!(matches!(
         rows[1],
-        RuntimeSessionResponseV2::ArchiveProgress {
+        RuntimeSessionResponseV3::ArchiveProgress {
             durable_tick: 0,
             ..
         }
@@ -275,7 +344,7 @@ fn explicit_refresh_uses_the_driver_and_preserves_its_request_identity() {
     assert_eq!(backend.tick, 0);
     assert!(responses(&output).iter().any(|row| matches!(
         row,
-        RuntimeSessionResponseV2::ArchiveProgress {
+        RuntimeSessionResponseV3::ArchiveProgress {
             request_id: Some(31),
             durable_tick: 0,
             ..
@@ -293,24 +362,24 @@ fn failed_commit_and_duplicate_tail_never_publish_a_second_week() {
         let rows = responses(&output);
         assert_eq!(
             rows.iter()
-                .filter(|row| matches!(row, RuntimeSessionResponseV2::Committed { .. }))
+                .filter(|row| matches!(row, RuntimeSessionResponseV3::Committed { .. }))
                 .count(),
             usize::from(!failed)
         );
         assert_eq!(backend.tick, u64::from(!failed));
         assert!(backend.state.refreshes.lock().unwrap().is_empty());
         let expected = if failed {
-            RuntimeSessionErrorCodeV2::CommitRefused
+            RuntimeSessionErrorCodeV3::CommitRefused
         } else {
-            RuntimeSessionErrorCodeV2::StaleExpectedTail
+            RuntimeSessionErrorCodeV3::StaleExpectedTail
         };
         assert!(rows.iter().any(
-            |row| matches!(row, RuntimeSessionResponseV2::Error { code, .. } if *code == expected)
+            |row| matches!(row, RuntimeSessionResponseV3::Error { code, .. } if *code == expected)
         ));
         assert!(
             !rows
                 .iter()
-                .any(|row| matches!(row, RuntimeSessionResponseV2::Stopped { .. })),
+                .any(|row| matches!(row, RuntimeSessionResponseV3::Stopped { .. })),
             "EOF does not manufacture Stop"
         );
     }
@@ -318,42 +387,47 @@ fn failed_commit_and_duplicate_tail_never_publish_a_second_week() {
 
 #[test]
 fn malformed_actions_versions_campaigns_and_overlong_frames_cannot_advance() {
-    assert!(serde_json::from_str::<RuntimeSessionRequestV2>(r#"{"type":"advance","protocol_version":2,"campaign_id":"campaign","request_id":1,"expected_tail":{"resolve_tick":0,"tick_content_hash":null},"actions":[1]}"#).is_err());
+    assert!(serde_json::from_str::<RuntimeSessionRequestV3>(r#"{"type":"advance","protocol_version":2,"campaign_id":"campaign","request_id":1,"expected_tail":{"resolve_tick":0,"tick_content_hash":null},"actions":[1]}"#).is_err());
     for (version, campaign, expected) in [
-        (1, "campaign", RuntimeSessionErrorCodeV2::UnsupportedVersion),
-        (3, "campaign", RuntimeSessionErrorCodeV2::UnsupportedVersion),
-        (2, "other", RuntimeSessionErrorCodeV2::CampaignMismatch),
+        (1, "campaign", RuntimeSessionErrorCodeV3::UnsupportedVersion),
+        (2, "campaign", RuntimeSessionErrorCodeV3::UnsupportedVersion),
+        (4, "campaign", RuntimeSessionErrorCodeV3::UnsupportedVersion),
+        (3, "other", RuntimeSessionErrorCodeV3::SessionMismatch),
     ] {
         let mut request = advance();
-        if let RuntimeSessionRequestV2::Advance {
+        if let RuntimeSessionRequestV3::Advance {
             protocol_version,
-            campaign_id,
+            scope,
             ..
         } = &mut request
         {
             *protocol_version = version;
-            *campaign_id = campaign.into();
+            scope.campaign_id = Some(if campaign == "campaign" {
+                A.into()
+            } else {
+                campaign.into()
+            });
         }
         let mut backend = backend();
         let mut output = Vec::new();
         run(wire(&[request]), &mut backend, &mut output).unwrap();
         assert_eq!(backend.tick, 0);
         assert!(
-            matches!(responses(&output)[1], RuntimeSessionResponseV2::Error { code, .. } if code == expected)
+            matches!(responses(&output)[1], RuntimeSessionResponseV3::Error { code, .. } if code == expected)
         );
     }
     let mut backend = backend();
     let mut output = Vec::new();
     assert_eq!(
         run(
-            vec![b' '; super::super::RUNTIME_SESSION_MAX_LINE_BYTES_V2 + 1],
+            vec![b' '; super::super::RUNTIME_SESSION_MAX_LINE_BYTES_V3 + 1],
             &mut backend,
             &mut output
         ),
-        Err(RuntimeSessionErrorCodeV2::InvalidRequest)
+        Err(RuntimeSessionErrorCodeV3::InvalidRequest)
     );
     assert_eq!(backend.tick, 0);
-    assert!(serde_json::from_str::<RuntimeSessionResponseV2>(r#"{"type":"archive_progress","request_id":0,"campaign_id":"campaign","durable_tick":1,"verified_tick":1}"#).is_err());
+    assert!(serde_json::from_str::<RuntimeSessionResponseV3>(r#"{"type":"archive_progress","request_id":0,"campaign_id":"campaign","durable_tick":1,"verified_tick":1}"#).is_err());
 }
 
 #[test]
@@ -363,20 +437,33 @@ fn old_future_and_invalid_progress_never_relabel_the_current_durable_tail() {
     let archive = driver(&backend.state);
     let mut output = Vec::new();
     {
-        let mut coordinator = Coordinator::new(&mut output, &mut backend, archive, "campaign");
-        coordinator.ready("digest".into()).unwrap();
-        coordinator.archive_event(&progress(None, 2, 2)).unwrap();
-        coordinator.archive_event(&progress(Some(7), 2, 2)).unwrap();
-        coordinator.archive_event(&progress(None, 4, 4)).unwrap();
-        coordinator.archive_event(&progress(None, 3, 4)).unwrap();
-        coordinator.archive_event(&progress(None, 3, 2)).unwrap();
-        coordinator.archive_event(&progress(None, 3, 1)).unwrap();
-        coordinator.archive_event(&progress(None, 3, 2)).unwrap();
+        let mut coordinator = active_coordinator(&mut output, &mut backend, archive);
+        coordinator
+            .archive_event(&scope(1, A), &progress(None, 2, 2))
+            .unwrap();
+        coordinator
+            .archive_event(&scope(1, A), &progress(Some(7), 2, 2))
+            .unwrap();
+        coordinator
+            .archive_event(&scope(1, A), &progress(None, 4, 4))
+            .unwrap();
+        coordinator
+            .archive_event(&scope(1, A), &progress(None, 3, 4))
+            .unwrap();
+        coordinator
+            .archive_event(&scope(1, A), &progress(None, 3, 2))
+            .unwrap();
+        coordinator
+            .archive_event(&scope(1, A), &progress(None, 3, 1))
+            .unwrap();
+        coordinator
+            .archive_event(&scope(1, A), &progress(None, 3, 2))
+            .unwrap();
     }
     let rows = responses(&output);
     let progresses: Vec<_> = rows
         .iter()
-        .filter(|row| matches!(row, RuntimeSessionResponseV2::ArchiveProgress { .. }))
+        .filter(|row| matches!(row, RuntimeSessionResponseV3::ArchiveProgress { .. }))
         .collect();
     assert_eq!(
         progresses.len(),
@@ -385,7 +472,7 @@ fn old_future_and_invalid_progress_never_relabel_the_current_durable_tail() {
     );
     assert!(progresses.iter().all(|row| matches!(
         row,
-        RuntimeSessionResponseV2::ArchiveProgress {
+        RuntimeSessionResponseV3::ArchiveProgress {
             durable_tick: 3,
             verified_tick: 2,
             ..
@@ -395,8 +482,8 @@ fn old_future_and_invalid_progress_never_relabel_the_current_durable_tail() {
         rows.iter()
             .filter(|row| matches!(
                 row,
-                RuntimeSessionResponseV2::Error {
-                    code: RuntimeSessionErrorCodeV2::StaleExpectedTail,
+                RuntimeSessionResponseV3::Error {
+                    code: RuntimeSessionErrorCodeV3::StaleExpectedTail,
                     ..
                 }
             ))
@@ -407,8 +494,8 @@ fn old_future_and_invalid_progress_never_relabel_the_current_durable_tail() {
         rows.iter()
             .filter(|row| matches!(
                 row,
-                RuntimeSessionResponseV2::Error {
-                    code: RuntimeSessionErrorCodeV2::ArchiveRefused,
+                RuntimeSessionResponseV3::Error {
+                    code: RuntimeSessionErrorCodeV3::ArchiveRefused,
                     ..
                 }
             ))
@@ -427,19 +514,19 @@ fn timeout_refuses_stopped_and_never_joins_an_unfinished_driver() {
     let mut output = Vec::new();
     let (_sender, receiver) = mpsc::sync_channel(1);
     {
-        let mut coordinator = Coordinator::new(&mut output, &mut backend, archive, "campaign");
+        let mut coordinator = active_coordinator(&mut output, &mut backend, archive);
         assert_eq!(
             coordinator.shutdown(&receiver, Some(8), Duration::ZERO),
-            Err(RuntimeSessionErrorCodeV2::StorageCanceled)
+            Err(RuntimeSessionErrorCodeV3::StorageCanceled)
         );
     }
     assert!(state.stopped.load(Ordering::SeqCst));
     assert!(!state.joined.load(Ordering::SeqCst));
     assert!(matches!(
         responses(&output).as_slice(),
-        [RuntimeSessionResponseV2::Error {
+        [RuntimeSessionResponseV3::Error {
             request_id: Some(8),
-            code: RuntimeSessionErrorCodeV2::StorageCanceled,
+            code: RuntimeSessionErrorCodeV3::StorageCanceled,
             ..
         }]
     ));
@@ -452,13 +539,16 @@ fn finished_worker_drains_full_event_queue_without_accepting_queued_advance() {
     let archive = driver(&backend.state);
     let (sender, receiver) = mpsc::sync_channel(2);
     sender
-        .send(SessionEvent::Archive(progress(None, 0, 0)))
+        .send(SessionEvent::Archive {
+            scope: scope(1, A),
+            event: progress(None, 0, 0),
+        })
         .unwrap();
     sender
         .send(SessionEvent::Input(InputEvent::Frame(wire(&[advance()]))))
         .unwrap();
     {
-        let mut coordinator = Coordinator::new(&mut output, &mut backend, archive, "campaign");
+        let mut coordinator = active_coordinator(&mut output, &mut backend, archive);
         coordinator
             .shutdown(&receiver, Some(8), Duration::from_secs(1))
             .unwrap();
@@ -467,19 +557,25 @@ fn finished_worker_drains_full_event_queue_without_accepting_queued_advance() {
     assert!(matches!(
         responses(&output).as_slice(),
         [
-            RuntimeSessionResponseV2::ArchiveProgress { .. },
-            RuntimeSessionResponseV2::Stopped { request_id: 8 }
+            RuntimeSessionResponseV3::ArchiveProgress { .. },
+            RuntimeSessionResponseV3::Stopped { request_id: 8, .. }
         ]
     ));
 }
 
-struct BrokenOutput;
+struct BrokenOutput {
+    successful_records: usize,
+}
 impl Write for BrokenOutput {
-    fn write(&mut self, _: &[u8]) -> io::Result<usize> {
+    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+        if self.successful_records < 2 {
+            self.successful_records += 1;
+            return Ok(bytes.len());
+        }
         Err(io::ErrorKind::BrokenPipe.into())
     }
     fn flush(&mut self) -> io::Result<()> {
-        Err(io::ErrorKind::BrokenPipe.into())
+        Ok(())
     }
 }
 
@@ -489,15 +585,15 @@ fn broken_output_requests_stop_without_waiting_for_sync_driver_teardown() {
     let state = Arc::clone(&backend.state);
     let mut archive = driver(&state);
     archive.finishes_on_stop = false;
-    let result = serve(
+    let result = serve_open(
         Cursor::new(Vec::new()),
-        &mut BrokenOutput,
+        &mut BrokenOutput {
+            successful_records: 0,
+        },
         &mut backend,
-        "campaign",
-        "digest".into(),
         |_| Ok(archive),
     );
-    assert_eq!(result, Err(RuntimeSessionErrorCodeV2::PipeFailure));
+    assert_eq!(result, Err(RuntimeSessionErrorCodeV3::PipeFailure));
     assert!(state.stopped.load(Ordering::SeqCst));
     assert!(!state.joined.load(Ordering::SeqCst));
     assert_eq!(backend.tick, 0);
@@ -509,17 +605,23 @@ fn full_refresh_queue_refuses_the_request_without_fabricating_progress() {
     let mut output = Vec::new();
     let mut archive = driver(&backend.state);
     archive.refresh_full = true;
-    {
-        let mut coordinator = Coordinator::new(&mut output, &mut backend, archive, "campaign");
-        coordinator.request(&wire(&[refresh()])).unwrap();
-    }
+    serve_open(
+        Cursor::new(wire(&[refresh()])),
+        &mut output,
+        &mut backend,
+        |_| Ok(archive),
+    )
+    .unwrap();
     assert!(matches!(
         responses(&output).as_slice(),
-        [RuntimeSessionResponseV2::Error {
-            request_id: Some(31),
-            code: RuntimeSessionErrorCodeV2::StorageBusy,
-            ..
-        }]
+        [
+            RuntimeSessionResponseV3::Ready { .. },
+            RuntimeSessionResponseV3::Error {
+                request_id: Some(31),
+                code: RuntimeSessionErrorCodeV3::StorageBusy,
+                ..
+            }
+        ]
     ));
     assert!(backend.state.refreshes.lock().unwrap().is_empty());
 }
@@ -529,26 +631,24 @@ fn unexpected_driver_stop_refuses_active_session_before_queued_advance() {
     let mut backend = backend();
     let state = Arc::clone(&backend.state);
     let mut output = Vec::new();
-    let result = serve(
+    let result = serve_open(
         Cursor::new(wire(&[advance()])),
         &mut output,
         &mut backend,
-        "campaign",
-        "digest".into(),
         move |sink| {
             assert!(sink(ArchiveDriverEventV1::Stopped));
             Ok(driver(&state))
         },
     );
-    assert_eq!(result, Err(RuntimeSessionErrorCodeV2::ArchiveRefused));
+    assert_eq!(result, Err(RuntimeSessionErrorCodeV3::ArchiveRefused));
     assert_eq!(backend.tick, 0);
     assert!(matches!(
         responses(&output).as_slice(),
         [
-            RuntimeSessionResponseV2::Ready { .. },
-            RuntimeSessionResponseV2::Error {
+            RuntimeSessionResponseV3::Ready { .. },
+            RuntimeSessionResponseV3::Error {
                 request_id: None,
-                code: RuntimeSessionErrorCodeV2::ArchiveRefused,
+                code: RuntimeSessionErrorCodeV3::ArchiveRefused,
                 ..
             }
         ]
@@ -561,27 +661,32 @@ fn retrying_manual_failure_keeps_correlation_without_claiming_success() {
     let archive = driver(&backend.state);
     let mut output = Vec::new();
     {
-        let mut coordinator = Coordinator::new(&mut output, &mut backend, archive, "campaign");
+        let mut coordinator = active_coordinator(&mut output, &mut backend, archive);
         for request_id in [Some(31), None] {
             coordinator
-                .archive_event(&ArchiveDriverEventV1::Failure {
-                    request_id,
-                    failure: crate::archive_driver::ArchiveDriverFailureV1::Disconnected,
-                    retrying: true,
-                })
+                .archive_event(
+                    &scope(1, A),
+                    &ArchiveDriverEventV1::Failure {
+                        request_id,
+                        failure: crate::archive_driver::ArchiveDriverFailureV1::Disconnected,
+                        retrying: true,
+                    },
+                )
                 .unwrap();
         }
-        coordinator.archive_event(&progress(None, 0, 0)).unwrap();
+        coordinator
+            .archive_event(&scope(1, A), &progress(None, 0, 0))
+            .unwrap();
     }
     assert!(matches!(
         responses(&output).as_slice(),
         [
-            RuntimeSessionResponseV2::Error {
+            RuntimeSessionResponseV3::Error {
                 request_id: Some(31),
-                code: RuntimeSessionErrorCodeV2::ArchiveRefused,
+                code: RuntimeSessionErrorCodeV3::ArchiveRefused,
                 ..
             },
-            RuntimeSessionResponseV2::ArchiveProgress {
+            RuntimeSessionResponseV3::ArchiveProgress {
                 request_id: None,
                 ..
             }
@@ -614,39 +719,38 @@ fn silent_driver_panic_refuses_while_input_remains_open() {
     let state = Arc::clone(&backend.state);
     let (started, entered) = mpsc::sync_channel(1);
     let (release, waiting) = mpsc::sync_channel(1);
-    let mut output = Vec::new();
-    let result = serve(
+    let (sender, _receiver) = mpsc::sync_channel(1);
+    let mut input = SessionInput::start(
         OpenInput {
             started,
             release: waiting,
         },
-        &mut output,
-        &mut backend,
-        "campaign",
-        "digest".into(),
-        |_| {
-            state.exited.store(true, Ordering::SeqCst);
-            let mut archive = driver(&state);
-            archive.join_fails = true;
-            Ok(archive)
-        },
-    );
-    // The owned input was genuinely blocked, not an EOF that stopped the worker.
+        sender,
+    )
+    .unwrap();
     entered.recv_timeout(Duration::from_secs(1)).unwrap();
+    state.exited.store(true, Ordering::SeqCst);
+    let mut archive = driver(&state);
+    archive.join_fails = true;
+    let mut output = Vec::new();
+    {
+        let mut coordinator = active_coordinator(&mut output, &mut backend, archive);
+        assert_eq!(
+            coordinator.check_active_driver(),
+            Err(RuntimeSessionErrorCodeV3::ArchiveRefused)
+        );
+    }
+    input.stop();
     drop(release);
-    assert_eq!(result, Err(RuntimeSessionErrorCodeV2::ArchiveRefused));
     assert!(state.joined.load(Ordering::SeqCst));
     assert_eq!(backend.tick, 0);
     assert!(matches!(
         responses(&output).as_slice(),
-        [
-            RuntimeSessionResponseV2::Ready { .. },
-            RuntimeSessionResponseV2::Error {
-                request_id: None,
-                code: RuntimeSessionErrorCodeV2::ArchiveRefused,
-                ..
-            }
-        ]
+        [RuntimeSessionResponseV3::Error {
+            request_id: None,
+            code: RuntimeSessionErrorCodeV3::ArchiveRefused,
+            ..
+        }]
     ));
 }
 
@@ -660,7 +764,7 @@ fn cooperative_shutdown_waits_for_completion_after_last_sender_drops() {
     drop(sender);
     let mut output = Vec::new();
     {
-        let mut coordinator = Coordinator::new(&mut output, &mut backend, archive, "campaign");
+        let mut coordinator = active_coordinator(&mut output, &mut backend, archive);
         coordinator
             .shutdown(&receiver, Some(8), Duration::from_secs(1))
             .unwrap();
@@ -668,6 +772,8 @@ fn cooperative_shutdown_waits_for_completion_after_last_sender_drops() {
     assert!(state.joined.load(Ordering::SeqCst));
     assert!(matches!(
         responses(&output).as_slice(),
-        [RuntimeSessionResponseV2::Stopped { request_id: 8 }]
+        [RuntimeSessionResponseV3::Stopped { request_id: 8, .. }]
     ));
 }
+
+mod lifecycle;

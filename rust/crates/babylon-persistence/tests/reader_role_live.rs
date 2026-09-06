@@ -26,7 +26,9 @@ use babylon_persistence::material_runtime::{DurableMaterialRuntimeV3, MaterialRu
 use babylon_persistence::michigan_content::MichiganContentPresetV1;
 use babylon_persistence::michigan_material::MichiganDeliveryPresetV1;
 use babylon_persistence::runtime_session::{
-    run_runtime_session_v2, RuntimeSessionRequestV2, RuntimeSessionResponseV2, RuntimeSessionTailV2,
+    run_runtime_session_v3, RuntimeSessionRequestV3, RuntimeSessionResponseV3,
+    RuntimeSessionScopeV3, RuntimeSessionTailV3, RuntimeSessionTargetV3,
+    RUNTIME_SESSION_PROTOCOL_VERSION_V3,
 };
 use babylon_persistence::{
     install_observer_economy_schema_v1, michigan_observer_foundation_v1, ObserverEconomyErrorV1,
@@ -1471,59 +1473,75 @@ fn assert_material_stdio_advance(
     observer: &ObserverEconomyReaderV1,
     uninterrupted: &IdentifiedMaterialTickV3,
 ) {
-    let request = RuntimeSessionRequestV2::Advance {
-        protocol_version: babylon_persistence::RUNTIME_SESSION_PROTOCOL_VERSION_V2,
-        campaign_id: campaign.as_uuid().to_string(),
+    let scope = RuntimeSessionScopeV3 {
+        epoch: 1,
+        campaign_id: Some(campaign.as_uuid().to_string()),
+    };
+    let open = RuntimeSessionRequestV3::Switch {
+        protocol_version: RUNTIME_SESSION_PROTOCOL_VERSION_V3,
+        request_id: 6,
+        scope: RuntimeSessionScopeV3 {
+            epoch: 0,
+            campaign_id: None,
+        },
+        target: RuntimeSessionTargetV3::Open {
+            campaign_id: campaign.as_uuid().to_string(),
+        },
+    };
+    let request = RuntimeSessionRequestV3::Advance {
+        protocol_version: RUNTIME_SESSION_PROTOCOL_VERSION_V3,
+        scope: scope.clone(),
         request_id: 7,
-        expected_tail: RuntimeSessionTailV2 {
+        expected_tail: RuntimeSessionTailV3 {
             resolve_tick: 2,
             tick_content_hash: Some(babylon_tick::hex(
                 uninterrupted.tick_content_hash().as_bytes(),
             )),
         },
     };
-    let stop = RuntimeSessionRequestV2::Stop {
-        protocol_version: babylon_persistence::RUNTIME_SESSION_PROTOCOL_VERSION_V2,
-        campaign_id: campaign.as_uuid().to_string(),
+    let stop = RuntimeSessionRequestV3::Stop {
+        protocol_version: RUNTIME_SESSION_PROTOCOL_VERSION_V3,
+        scope,
         request_id: 8,
     };
-    let mut input = serde_json::to_vec(&request).unwrap();
+    let mut input = serde_json::to_vec(&open).unwrap();
+    input.push(b'\n');
+    input.extend(serde_json::to_vec(&request).unwrap());
     input.push(b'\n');
     input.extend(serde_json::to_vec(&stop).unwrap());
     input.push(b'\n');
     let mut output = Vec::new();
-    run_runtime_session_v2(
-        config,
-        campaign,
-        None,
-        std::io::Cursor::new(input),
-        &mut output,
-    )
-    .unwrap();
-    let responses: Vec<RuntimeSessionResponseV2> = output
+    run_runtime_session_v3(config, std::io::Cursor::new(input), &mut output).unwrap();
+    let responses: Vec<RuntimeSessionResponseV3> = output
         .split(|byte| *byte == b'\n')
         .filter(|line| !line.is_empty())
         .map(|line| serde_json::from_slice(line).unwrap())
         .collect();
     assert!(
-        matches!(&responses[0],RuntimeSessionResponseV2::Ready{tail,..} if tail.resolve_tick==2)
+        matches!(&responses[0],RuntimeSessionResponseV3::Hello{scope,..} if scope.epoch==0 && scope.campaign_id.is_none())
+    );
+    assert!(
+        matches!(&responses[2],RuntimeSessionResponseV3::Ready{tail,..} if tail.resolve_tick==2)
     );
     assert!(responses.iter().any(|response| matches!(
         response,
-        RuntimeSessionResponseV2::Committed { request_id: 7, tail, .. }
+        RuntimeSessionResponseV3::Committed { request_id: 7, tail, .. }
             if tail.resolve_tick == 3
     )));
     let mut acknowledged_tick = 2;
     for response in &responses {
         match response {
-            RuntimeSessionResponseV2::Ready { tail, .. }
-            | RuntimeSessionResponseV2::Committed { tail, .. } => {
+            RuntimeSessionResponseV3::Ready { tail, .. }
+            | RuntimeSessionResponseV3::Committed { tail, .. } => {
                 acknowledged_tick = tail.resolve_tick;
             }
-            RuntimeSessionResponseV2::ArchiveProgress { durable_tick, .. } => {
+            RuntimeSessionResponseV3::ArchiveProgress { durable_tick, .. } => {
                 assert_eq!(*durable_tick, acknowledged_tick);
             }
-            RuntimeSessionResponseV2::Error { .. } | RuntimeSessionResponseV2::Stopped { .. } => {}
+            RuntimeSessionResponseV3::Hello { .. }
+            | RuntimeSessionResponseV3::Switching { .. }
+            | RuntimeSessionResponseV3::Error { .. }
+            | RuntimeSessionResponseV3::Stopped { .. } => {}
         }
     }
     assert_eq!(observer.snapshot(campaign, 3).unwrap().resolve_tick, 3);

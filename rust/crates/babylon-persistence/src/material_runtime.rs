@@ -92,6 +92,7 @@ pub enum MaterialRuntimeErrorV3 {
     FoundationMismatch,
     LegacyCampaign,
     MissingCampaign,
+    AlreadyExists,
     TailConflict,
     InvalidCheckpoint,
     Bounds,
@@ -287,6 +288,22 @@ impl DurableMaterialRuntimeV3 {
         campaign: CampaignId,
         foundation: MaterialRuntimeFoundationV2,
     ) -> Result<Self, MaterialRuntimeErrorV3> {
+        Self::create_with_admission(config, campaign, foundation, false)
+    }
+    /// Lifecycle New requires absence under the same founding lock/transaction.
+    pub(crate) fn create_new(
+        config: &Config,
+        campaign: CampaignId,
+        foundation: MaterialRuntimeFoundationV2,
+    ) -> Result<Self, MaterialRuntimeErrorV3> {
+        Self::create_with_admission(config, campaign, foundation, true)
+    }
+    fn create_with_admission(
+        config: &Config,
+        campaign: CampaignId,
+        foundation: MaterialRuntimeFoundationV2,
+        require_absent: bool,
+    ) -> Result<Self, MaterialRuntimeErrorV3> {
         let bounded = bounded_material_writer_config_v3(config)?;
         install_material_runtime_schema_v3(config)?;
         crate::install_territory_county_map_schema_v1(config)
@@ -304,6 +321,9 @@ impl DurableMaterialRuntimeV3 {
             &[&crate::SCHEMA_ADVISORY_LOCK_KEY],
         )?;
         let existed=tx.query_opt("SELECT campaign_id FROM babylon_state.campaign WHERE campaign_id=$1::uuid FOR UPDATE",&[campaign.as_uuid()])?.is_some();
+        if existed && require_absent {
+            return Err(MaterialRuntimeErrorV3::AlreadyExists);
+        }
         if existed {
             let stored = hydrate_material_foundation_v2(&mut tx, campaign, foundation.digest())?;
             if stored.canonical_bytes() != foundation.canonical_bytes() {

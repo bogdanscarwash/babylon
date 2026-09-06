@@ -834,10 +834,11 @@ fn invalidate_navigation(
         Option<(
             babylon_persistence::CampaignId,
             crate::observer::Perspective,
+            Option<u64>,
         )>,
     >,
 ) {
-    let current = (state.campaign, state.perspective);
+    let current = (state.campaign, state.perspective, state.lifecycle_epoch());
     if scope.as_ref() != Some(&current) {
         navigation.selected_site = None;
         navigation.details_open = false;

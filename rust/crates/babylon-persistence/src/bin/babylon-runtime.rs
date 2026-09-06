@@ -170,9 +170,7 @@ enum Command {
         restart_every: Option<u64>,
     },
     Probe,
-    Session {
-        preset: Option<babylon_persistence::michigan_material::MichiganDeliveryPresetV1>,
-    },
+    Session,
     ObserverSchema,
     Archive,
     ArchiveWorker,
@@ -185,7 +183,7 @@ enum Command {
 fn main() -> ExitCode {
     let Ok(command) = parse_command(std::env::args_os().skip(1)) else {
         eprintln!(
-            "babylon-runtime: expected activate, bootstrap, preflight, diagnostic run --ticks N [--report-jsonl PATH] [--choice-receipts-jsonl PATH] [--restart-every N], probe, archive, archive-worker --once, diagnostic michigan-smoke [--report-jsonl PATH] [--choice-receipts-jsonl PATH], observer-schema, or session --stdio [--preset standard|delayed]"
+            "babylon-runtime: expected activate, bootstrap, preflight, diagnostic run --ticks N [--report-jsonl PATH] [--choice-receipts-jsonl PATH] [--restart-every N], probe, archive, archive-worker --once, diagnostic michigan-smoke [--report-jsonl PATH] [--choice-receipts-jsonl PATH], observer-schema, or session --stdio"
         );
         return ExitCode::from(2);
     };
@@ -277,8 +275,8 @@ fn execute(command: Command, config: &Config) -> Result<(), String> {
                 choice_receipt_writer.as_mut(),
             )?;
         }
-        Command::Session { preset } => {
-            babylon_persistence::run_runtime_session_stdio_v2(config, campaign_id()?, preset)
+        Command::Session => {
+            babylon_persistence::run_runtime_session_stdio_v3(config)
                 .map_err(|error| error.to_string())?;
         }
         Command::ObserverSchema => {
@@ -1230,19 +1228,10 @@ fn parse_command(mut args: impl Iterator<Item = OsString>) -> Result<Command, ()
             if args.next() != Some(OsString::from("--stdio")) {
                 return Err(());
             }
-            let preset=match args.next() {
-                None=>None,
-                Some(flag) if flag==OsStr::new("--preset")=>Some(match args.next().as_deref() {
-                    Some(value) if value==OsStr::new("standard")=>babylon_persistence::michigan_material::MichiganDeliveryPresetV1::Standard,
-                    Some(value) if value==OsStr::new("delayed")=>babylon_persistence::michigan_material::MichiganDeliveryPresetV1::Delayed,
-                    _=>return Err(()),
-                }),
-                _=>return Err(()),
-            };
             if args.next().is_some() {
                 return Err(());
             }
-            Ok(Command::Session { preset })
+            Ok(Command::Session)
         }
         value if value == OsStr::new("observer-schema") && args.next().is_none() => {
             Ok(Command::ObserverSchema)

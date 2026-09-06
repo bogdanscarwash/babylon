@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Launch one durable Michigan observer campaign with separate read capabilities."""
+"""Launch one persistent Michigan observer session with separate read capabilities."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ import sys
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from tempfile import NamedTemporaryFile
+from typing import Literal
 from uuid import UUID, uuid4
 
 import psycopg
@@ -20,10 +20,6 @@ from psycopg.conninfo import conninfo_to_dict, make_conninfo
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_RUNTIME_DSN = "host=127.0.0.1 port=5433 dbname=babylon_test user=test password=test"
-NEW_CAMPAIGN_EXIT = 20
-REOPEN_CAMPAIGN_EXIT = 21
-NEW_DELAYED_CAMPAIGN_EXIT = 22
-OPEN_SELECTED_CAMPAIGN_EXIT = 23
 OBSERVER_CAPTURE_FILTER = "session=debug,babylon_client=debug"
 # The runtime's database statement timeout is 120 seconds. EOF/Stop gets time
 # to finish a transaction before any exact-child termination is attempted.
@@ -66,47 +62,55 @@ def preference_path(environment: Mapping[str, str]) -> Path:
     return base / "babylon" / "observer-campaign"
 
 
-def select_campaign(
+@dataclass(frozen=True)
+class NewCampaignTarget:
+    """An explicit request to found one absent campaign after the runtime Hello."""
+
+    campaign: UUID
+    preset: Literal["standard", "delayed"]
+
+
+@dataclass(frozen=True)
+class OpenCampaignTarget:
+    """An explicit existing-only campaign request; it never authorizes founding."""
+
+    campaign: UUID
+
+
+def _new_target(campaign: UUID, preset: str | None) -> NewCampaignTarget:
+    if preset is None or preset == "standard":
+        return NewCampaignTarget(campaign, "standard")
+    if preset == "delayed":
+        return NewCampaignTarget(campaign, "delayed")
+    raise ObserverLaunchError("unknown material scenario preset")
+
+
+def select_initial_target(
     environment: Mapping[str, str],
     *,
     state_file: Path,
     explicit: str | None = None,
     new: bool = False,
-) -> UUID:
-    """Select an exact campaign without replacing a prior campaign or preference."""
+    preset: str | None = None,
+) -> NewCampaignTarget | OpenCampaignTarget:
+    """Choose New or Open without writing the saved continuation pointer."""
     if new:
-        return uuid4()
+        if explicit is not None:
+            raise ObserverLaunchError("new and existing campaign targets are mutually exclusive")
+        return _new_target(uuid4(), preset)
     selected = explicit if explicit is not None else environment.get("BABYLON_CAMPAIGN_ID")
-    if selected is not None:
-        return _campaign(selected)
-    try:
-        if state_file.stat().st_size > 64:
-            raise ObserverLaunchError("saved campaign preference is oversized")
-        return _campaign(state_file.read_text(encoding="ascii").strip())
-    except FileNotFoundError:
-        return uuid4()
-    except (OSError, UnicodeError) as error:
-        raise ObserverLaunchError("cannot read saved campaign preference") from error
-
-
-def save_campaign(state_file: Path, campaign: UUID) -> None:
-    """Atomically replace the continuation pointer; campaign data stays in Postgres."""
-    temporary: Path | None = None
-    try:
-        state_file.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-        with NamedTemporaryFile(
-            mode="w", encoding="ascii", dir=state_file.parent, delete=False
-        ) as output:
-            temporary = Path(output.name)
-            output.write(f"{campaign}\n")
-            output.flush()
-            os.fsync(output.fileno())
-        os.replace(temporary, state_file)
-    except OSError as error:
-        raise ObserverLaunchError("cannot save campaign continuation preference") from error
-    finally:
-        if temporary is not None:
-            temporary.unlink(missing_ok=True)
+    if selected is None:
+        try:
+            if state_file.stat().st_size > 64:
+                raise ObserverLaunchError("saved campaign preference is oversized")
+            selected = state_file.read_text(encoding="ascii").strip()
+        except FileNotFoundError:
+            return _new_target(uuid4(), preset)
+        except (OSError, UnicodeError) as error:
+            raise ObserverLaunchError("cannot read saved campaign preference") from error
+    if preset is not None:
+        raise ObserverLaunchError("--preset applies only to a new campaign; use --new")
+    return OpenCampaignTarget(_campaign(selected))
 
 
 def _clean_environment(environment: Mapping[str, str]) -> dict[str, str]:
@@ -120,6 +124,7 @@ def _clean_environment(environment: Mapping[str, str]) -> dict[str, str]:
             "BABYLON_OBSERVER_DSN",
             "BABYLON_READER_DSN",
             "BABYLON_SESSION_STDIO",
+            "BABYLON_CAMPAIGN_ID",
             "BABYLON_DOSSIER_DEMO_PASSWORD",
         }
     }
@@ -127,12 +132,10 @@ def _clean_environment(environment: Mapping[str, str]) -> dict[str, str]:
 
 def child_environments(
     environment: Mapping[str, str],
-    campaign: UUID,
     credentials: ReaderCredentials,
 ) -> tuple[dict[str, str], dict[str, str]]:
-    """Bind the same campaign to a writer child and a separate read-only client."""
+    """Separate writer and reader authority; only client arguments select a target."""
     common = _clean_environment(environment)
-    common["BABYLON_CAMPAIGN_ID"] = str(campaign)
     runtime = {
         **common,
         "BABYLON_RUNTIME_DSN": environment.get("BABYLON_RUNTIME_DSN", DEFAULT_RUNTIME_DSN),
@@ -341,7 +344,7 @@ def run_pair(
     runtime_environment: Mapping[str, str],
     client_environment: Mapping[str, str],
     *,
-    preset: str | None = None,
+    initial_target: NewCampaignTarget | OpenCampaignTarget,
 ) -> int:
     """Cross-connect two anonymous pipes; the parent never reads or forwards protocol bytes."""
     descriptors: list[int] = []
@@ -353,13 +356,8 @@ def run_pair(
         descriptors.extend(requests)
         responses = os.pipe()
         descriptors.extend(responses)
-        runtime_args = [str(runtime_binary), "session", "--stdio"]
-        if preset is not None:
-            if preset not in {"standard", "delayed"}:
-                raise ObserverLaunchError("unknown material scenario preset")
-            runtime_args.extend(["--preset", preset])
         runtime = subprocess.Popen(
-            runtime_args,
+            [str(runtime_binary), "session", "--stdio"],
             cwd=root / "rust",
             env=dict(runtime_environment),
             stdin=requests[0],
@@ -367,8 +365,18 @@ def run_pair(
             stderr=None,
             close_fds=True,
         )
+        if isinstance(initial_target, NewCampaignTarget):
+            client_args = [
+                str(client_binary),
+                "--new-campaign",
+                str(initial_target.campaign),
+                "--preset",
+                initial_target.preset,
+            ]
+        else:
+            client_args = [str(client_binary), "--campaign", str(initial_target.campaign)]
         client = subprocess.Popen(
-            [str(client_binary)],
+            client_args,
             cwd=root / "rust",
             env=dict(client_environment),
             stdin=responses[0],
@@ -398,41 +406,6 @@ def run_pair(
                 _finish_runtime(runtime)
 
 
-def run_campaigns(
-    runtime_binary: Path,
-    client_binary: Path,
-    root: Path,
-    campaign: UUID,
-    state_file: Path,
-    environment: Mapping[str, str],
-    credentials: ReaderCredentials,
-    *,
-    preset: str | None = None,
-) -> int:
-    """Honor in-game New Campaign without overwriting any prior campaign."""
-    while True:
-        save_campaign(state_file, campaign)
-        runtime, client = child_environments(environment, campaign, credentials)
-        # Never echo the raw ambient filter: field selectors may contain private values.
-        print(f"Observer log targets enabled: {OBSERVER_CAPTURE_FILTER}", file=sys.stderr)
-        result = run_pair(runtime_binary, client_binary, root, runtime, client, preset=preset)
-        if result in {NEW_CAMPAIGN_EXIT, NEW_DELAYED_CAMPAIGN_EXIT}:
-            campaign = uuid4()
-            preset = "delayed" if result == NEW_DELAYED_CAMPAIGN_EXIT else "standard"
-        elif result == REOPEN_CAMPAIGN_EXIT:
-            # The runtime discovers the durable preset and reconciles its tail.
-            preset = None
-        elif result == OPEN_SELECTED_CAMPAIGN_EXIT:
-            # The native catalog writes only this user-local continuation pointer.
-            # Ignore a launch-time campaign environment override after selection.
-            if not state_file.is_file():
-                raise ObserverLaunchError("selected campaign preference is absent")
-            campaign = select_campaign({}, state_file=state_file)
-            preset = None
-        else:
-            return result
-
-
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     identity = parser.add_mutually_exclusive_group()
@@ -444,25 +417,30 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--preset",
         choices=("standard", "delayed"),
-        help="choose a new world's delivery preset; an existing world must match exactly",
+        help="choose a new world's delivery preset; requires New rather than Open",
     )
     args = parser.parse_args(argv)
     try:
         environment = dict(os.environ)
         state_file = preference_path(environment)
-        campaign = select_campaign(
-            environment, state_file=state_file, explicit=args.campaign, new=args.new
+        initial_target = select_initial_target(
+            environment,
+            state_file=state_file,
+            explicit=args.campaign,
+            new=args.new,
+            preset=args.preset,
         )
         runtime, client, credentials = prepare(ROOT, environment, no_build=args.no_build)
-        return run_campaigns(
+        writer_environment, reader_environment = child_environments(environment, credentials)
+        # Never echo the ambient filter: field selectors may contain private values.
+        print(f"Observer log targets enabled: {OBSERVER_CAPTURE_FILTER}", file=sys.stderr)
+        return run_pair(
             runtime,
             client,
             ROOT,
-            campaign,
-            state_file,
-            environment,
-            credentials,
-            preset=args.preset,
+            writer_environment,
+            reader_environment,
+            initial_target=initial_target,
         )
     except ObserverLaunchError as error:
         print(f"Observer launch refused: {error}", file=sys.stderr)
