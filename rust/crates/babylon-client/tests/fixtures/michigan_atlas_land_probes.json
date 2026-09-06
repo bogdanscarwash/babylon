@@ -1,0 +1,141 @@
+{
+  "source": "Verified TIGER2023 COUNTY minus matching AREAWATER, EPSG5070; source land/water assertions precede atlas assertions. Coordinates are Designed regression probes, not data estimates.",
+  "source_pins": [
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/COUNTY/tl_2023_us_county.zip",
+      "dest": "tiger/county/tl_2023_us_county.zip",
+      "sha256": "692e12c30c83adcaabdbac0d3954fafa55e1c89a24b36d95e72e02dff938652e"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26029_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26029_areawater.zip",
+      "sha256": "2ae9d03ccea096cc7ca5ddee3e5ae46b3dc230c548a4fbcd2884989cdabf3028"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26065_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26065_areawater.zip",
+      "sha256": "35be333a89feebe720c56523375e78dacf66c25e47a2a084a567b9067bf397d5"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26069_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26069_areawater.zip",
+      "sha256": "376e22e8e8d2872bebddddbe8c12c8aec503693a32ddf3cd87f5af4c3b1ae24e"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26083_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26083_areawater.zip",
+      "sha256": "476723ca7b17e8e0968d04e66a181f9f0835d7935e67339575104ab08f0f0e46"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26101_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26101_areawater.zip",
+      "sha256": "9f57962f143f375030518ba0c80a5ab44d4d30c97f754c0357a7575093ee5842"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26143_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26143_areawater.zip",
+      "sha256": "eafa613ce01bd88dd456711b118b7f6e879b4011db825fed72df626f4b3ea867"
+    }
+  ],
+  "atlas_sha256": "0039951dbcc15c928e40fa38295117133e95f0a054bf98874652bb6960841854",
+  "probes": [
+    {
+      "label": "Lake Michigan",
+      "epsg4269": [
+        -86.5,
+        44.5
+      ],
+      "epsg5070": [
+        752370.7932840947,
+        2427686.7057371982
+      ],
+      "county_fips": null,
+      "legal_county_fips": "26101",
+      "source_land_boundary_distance_m": 19986.856866612947
+    },
+    {
+      "label": "Lake Huron",
+      "epsg4269": [
+        -83.0,
+        44.5
+      ],
+      "epsg5070": [
+        1028063.4513725094,
+        2460476.4271646985
+      ],
+      "county_fips": null,
+      "legal_county_fips": "26069",
+      "source_land_boundary_distance_m": 25133.702334511967
+    },
+    {
+      "label": "Lake Superior",
+      "epsg4269": [
+        -87.5,
+        47.5
+      ],
+      "epsg5070": [
+        643659.7586984086,
+        2751778.979000147
+      ],
+      "county_fips": null,
+      "legal_county_fips": "26083",
+      "source_land_boundary_distance_m": 11024.3687244563
+    },
+    {
+      "label": "Beaver Island",
+      "epsg4269": [
+        -85.57524427910995,
+        45.67789960184542
+      ],
+      "epsg5070": [
+        810981.5724262126,
+        2565618.9277067557
+      ],
+      "county_fips": "26029",
+      "legal_county_fips": "26029",
+      "source_land_boundary_distance_m": 2160.537163469695
+    },
+    {
+      "label": "Isle Royale",
+      "epsg4269": [
+        -88.85,
+        48.0
+      ],
+      "epsg5070": [
+        537494.4554054355,
+        2798391.382481229
+      ],
+      "county_fips": "26083",
+      "legal_county_fips": "26083",
+      "source_land_boundary_distance_m": 511.78062743626737
+    },
+    {
+      "label": "Lansing mainland",
+      "epsg4269": [
+        -84.57117571694012,
+        42.73776743169057
+      ],
+      "epsg5070": [
+        928045.3012136957,
+        2249273.7811442986
+      ],
+      "county_fips": "26065",
+      "legal_county_fips": "26065",
+      "source_land_boundary_distance_m": 1755.8140574653262
+    },
+    {
+      "label": "Houghton Lake",
+      "epsg4269": [
+        -84.75,
+        44.33
+      ],
+      "epsg5070": [
+        892605.1831943013,
+        2424002.9924600166
+      ],
+      "county_fips": null,
+      "legal_county_fips": "26143",
+      "source_land_boundary_distance_m": 1488.0194879278386
+    }
+  ]
+}

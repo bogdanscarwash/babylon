@@ -4,15 +4,15 @@
 //! storage note): every `is_hole == false` ring opens a new polygon, and
 //! the `is_hole == true` rings after it belong to that polygon — a county
 //! may hold more than one polygon (islands, exclaves). This module groups
-//! rings back into polygons and hands each one to `earcutr`, exterior
+//! rings back into polygons and hands each one to `earcut`, exterior
 //! first then holes, per the earcut convention.
 
 // File-scoped (Task 1's pedantic-debt fix pass, plan §Task 1 Step 1.2's
 // named sanctioned escape for this file): every flagged cast here is a
 // vertex/ring/triangle INDEX (`usize` -> `u32`/`u16`) bounded by the
-// committed atlas's real geometry — 360,064 vertices, 3,386 rings, at most
-// a few hundred thousand triangles, all far under `u32::MAX` — or the
-// deliberate f64->f32 handoff from earcutr's f64 working precision into
+// committed atlas's real geometry — bounded by its 3 MiB artifact budget,
+// far under `u32::MAX` — or the
+// deliberate f64->f32 handoff from earcut's f64 working precision into
 // Bevy's f32 vertex format (same handoff `atlas.rs` allows inline), or a
 // usize->i64 diagnostic-only delta in a test assertion. None of the ~19
 // sites is a computation whose overflow would be silently wrong; each
@@ -44,16 +44,15 @@ pub struct Tessellation {
 /// Tessellate every county in `atlas` into one merged triangle set.
 ///
 /// # Panics
-/// If `earcutr` fails to triangulate a county's polygon — a malformed atlas
-/// (a build-time defect, since this parse runs once at Startup) is the
-/// loud-failure posture this crate takes throughout, not a silent hole in
-/// the map (see `tessellate_polygon`'s own comment).
+/// If polygon hole indices violate the triangulator's bounds. Atlas parsing
+/// and the exterior-first grouping below establish those bounds before use.
 #[must_use]
 pub fn tessellate(atlas: &CountyAtlas) -> Tessellation {
     let mut positions = Vec::new();
     let mut indices = Vec::new();
     let mut vertex_county = Vec::new();
     let mut county_vertex_range = Vec::with_capacity(atlas.len());
+    let mut triangulator = earcut::Earcut::new();
 
     for county_index in 0..atlas.len() {
         let county = atlas
@@ -78,6 +77,7 @@ pub fn tessellate(atlas: &CountyAtlas) -> Tessellation {
                 polygon_end += 1;
             }
             tessellate_polygon(
+                &mut triangulator,
                 atlas,
                 county_index as u32,
                 &county.rings[polygon_start..polygon_end],
@@ -104,6 +104,7 @@ pub fn tessellate(atlas: &CountyAtlas) -> Tessellation {
 /// grouped by the caller) and append its vertices and triangle indices to
 /// the shared buffers.
 fn tessellate_polygon(
+    triangulator: &mut earcut::Earcut<f64>,
     atlas: &CountyAtlas,
     county_index: u32,
     rings: &[Ring],
@@ -118,7 +119,7 @@ fn tessellate_polygon(
 
     for (i, ring) in rings.iter().enumerate() {
         if i > 0 {
-            // earcutr's hole_indices count POINTS (x,y pairs), not flat
+            // earcut's hole_indices count POINTS (x,y pairs), not flat
             // coordinate slots.
             hole_indices.push(point_count);
         }
@@ -137,14 +138,15 @@ fn tessellate_polygon(
         vertex_county.push(county_index);
     }
 
-    // A malformed polygon here means the atlas (Task 1's build-time
-    // simplification/quantization) shipped a defect, and this parse runs
-    // once at Startup — panicking is the loud-failure posture Task 6 takes
-    // for the whole map (a client that opens with a broken county is the
-    // loud-failure case, not a silent hole in the map).
-    let triangles = earcutr::earcut(&flat, &hole_indices, 2).unwrap_or_else(|e| {
-        panic!("earcut failed to triangulate county index {county_index}: {e:?}")
-    });
+    // The maintained earcut port handles the densely holed Michigan land
+    // polygons; earcutr 0.5 filled up to 5.14% extra area in this atlas.
+    // Keep one triangulator, with the per-county area property as its gate.
+    let mut triangles: Vec<usize> = Vec::new();
+    triangulator.earcut(
+        flat.chunks_exact(2).map(|point| [point[0], point[1]]),
+        &hole_indices,
+        &mut triangles,
+    );
     for idx in triangles {
         indices.push(base + idx as u32);
     }
@@ -396,18 +398,8 @@ mod tests {
             !county_triangles.is_empty(),
             "the holed square must not vanish"
         );
-        // AS-BUILT deviation from the plan's literal wording: Task 5 Step 1
-        // says "the holed square's triangle count equals n - 2 for its
-        // combined ring vertex count" (n=8 => 6). That is not what earcutr
-        // actually returns for an exterior-plus-hole polygon: bridging the
-        // hole into the outer ring adds two point-uses back into the
-        // ear-clipping walk, so the real count is n - 2 + 2h = 8 for one
-        // hole (confirmed empirically against the compiled earcutr 0.5
-        // crate, not re-derived from theory alone). The area-matching
-        // assertion below is the property that actually proves correctness
-        // regardless of the exact count; this assertion additionally pins
-        // the real observed number so a future earcutr upgrade that changes
-        // it is visible.
+        // One exterior and one hole: V - 2E + 2H = 8. The independent
+        // area assertion below also detects gaps and overlapping triangles.
         assert_eq!(county_triangles.len(), 8);
 
         let triangle_area_sum: f64 = county_triangles
@@ -466,21 +458,27 @@ mod tests {
             "counties with zero triangles (simplification bug): {vanished:?}"
         );
 
-        // The plan's own AS-BUILT note: "the whole atlas to vertex_count -
-        // 2 * ring_count" is a rough estimate (it undercounts by 2 per
-        // hole, since a hole's bridge does not remove a triangle the way
-        // an extra exterior ring boundary does) — assert "near", not
-        // exact, as Task 5 Step 4 asks. ring_count is summed from the
-        // atlas's own county->rings data (F8: no hardcoded literal —
-        // every ring belongs to exactly one county, so this sum equals
-        // the atlas's total ring_count without atlas.rs needing to
-        // expose that count directly).
+        // The ideal count is V - 2E + 2H. Treating holes as exteriors
+        // undercounts by four triangles per hole, which is no longer a small
+        // error in Michigan's land mask. Collinear vertices can reduce it;
+        // the independent area property below remains the correctness gate.
         let vertex_count = atlas.vertices().len();
         let ring_count: usize = (0..atlas.len())
             .map(|i| atlas.county(i).expect("index in range").rings.len())
             .sum();
+        let hole_count: usize = (0..atlas.len())
+            .map(|i| {
+                atlas
+                    .county(i)
+                    .expect("index in range")
+                    .rings
+                    .iter()
+                    .filter(|r| r.is_hole)
+                    .count()
+            })
+            .sum();
         let total_triangles = tess.indices.len() / 3;
-        let rough_estimate = vertex_count as i64 - 2 * ring_count as i64;
+        let rough_estimate = vertex_count as i64 - 2 * ring_count as i64 + 4 * hole_count as i64;
         let deviation = (total_triangles as i64 - rough_estimate).unsigned_abs();
         assert!(
             deviation < rough_estimate.unsigned_abs() / 20,

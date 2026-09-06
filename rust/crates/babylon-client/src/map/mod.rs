@@ -1,5 +1,5 @@
 //! The county map render lane (B1 Tasks 6-7, B2 Phase C Tasks 8-12):
-//! `MapPlugin` ties the embedded atlas, `earcutr` tessellation,
+//! `MapPlugin` ties the embedded atlas, `earcut` tessellation,
 //! mesh-building, the bounded pan/zoom camera, county hover/selection and
 //! the 3-way lens picker together.
 //!
@@ -31,7 +31,7 @@ pub use camera::{
     zoom_speed_for_range, MapBounds, MapCamera,
 };
 pub use hud::{lens_cycle_footer, AbsenceBanner, CountyHudText, HudTick};
-pub use mesh::{spawn_map_surface, MapBorders, MapFill, MapSurface, EXPECTED_VERTEX_COUNT};
+pub use mesh::{spawn_map_surface, MapBorders, MapFill, MapSurface};
 pub use pick::{CountyIndex, CursorWorldPosition, HoveredCounty, SelectedCounty};
 
 pub(crate) use bands::recolor_on_lens_changed;

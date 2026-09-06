@@ -26,8 +26,8 @@ fn map_plugin_builds_the_fill_mesh_headless() {
         mesh.attribute(Mesh::ATTRIBUTE_COLOR).is_some(),
         "choropleth needs vertex colors"
     );
-    assert_eq!(
-        mesh.count_vertices(),
-        babylon_client::map::EXPECTED_VERTEX_COUNT,
-    );
+    // Startup already loaded this exact atlas. Assert that every source
+    // vertex reached the spawned mesh without another parse or tessellation.
+    let atlas = world.resource::<babylon_client::atlas::CountyAtlas>();
+    assert_eq!(mesh.count_vertices(), atlas.vertices().len());
 }

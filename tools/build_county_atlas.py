@@ -1,9 +1,10 @@
 """Build the county atlas the Bevy client renders (Program 28 B1, Phase A).
 
-Turns the sha-pinned ``dim_county_geometry`` parquet (TIGER/Line 2024 county
-boundaries, EPSG:4269) plus the committed ``county_adjacency.json`` into ONE
-content-hashed binary at
-``assets/map/county_atlas.bin``.
+Builds ONE content-hashed binary at ``assets/map/county_atlas.bin``.
+Michigan uses Derived land from checked TIGER/Line 2023 COUNTY minus matching
+2023 AREAWATER. Other counties retain the reference TIGER/Line 2024 legal
+boundaries. This mixed-vintage presentation changes no legal county identity,
+name, adjacency, H3 authority, or economic geography.
 
 Why a build-time artifact at all: Amendment AF (i)/(iv) ships the game as a
 pure Rust binary, so the deleted Ratatui client's "ask Python for WKT over
@@ -28,7 +29,12 @@ Usage::
 Sources resolve to ``dist/data-artifacts/`` when it exists (rebuild it with
 ``mise run data:artifacts``), otherwise the pinned drive snapshot at
 ``/media/user/data/babylon-data/backups/data-artifacts-v7/``. The tool prints
-the sha256 of every input it read -- put that in the commit body.
+the sha256 of every input it read -- put that in the commit body. Michigan
+also requires the existing checked county and 83 AREAWATER archives named by
+``county_place_h3_overlap_v1_fetch_manifest.json`` and
+``phase0d/fetch_manifest.json``. Missing or changed sources refuse the build;
+there is no unmasked Michigan fallback. The source admission and land operation
+reuse ``make_county_place_h3_overlap_artifacts`` without rebuilding overlaps.
 
 Binary format, version 1. All integers little-endian. The Rust reader checks
 every offset and count against the file length BEFORE any loop uses it
@@ -57,7 +63,7 @@ out of a file)::
       ring_count  u16
       flags       u16        bit 0 = has at least one adjacency neighbour
       bbox        [u16; 4]   min_x, min_y, max_x, max_y in grid units
-      centroid    [u16; 2]   grid units
+      centroid    [u16; 2]   grid units (Michigan: interior land display anchor)
       pad         [u8; 2]    reconciles the field list to the 28-byte stride
     ring table      (ring_count x 12 bytes)
       vertex_start u32,  vertex_count u32,  is_hole u8,  pad [u8; 3]
@@ -67,9 +73,9 @@ out of a file)::
     name blob       u32 length, then UTF-8 "<county_name>, <state_abbrev>\\n"
                     per county in order
 
-Rings are stored WITHOUT the WKT closing duplicate vertex, so a ring of ``n``
-stored vertices tessellates to ``n - 2`` triangles and the whole atlas to
-``vertex_count - 2 * ring_count``. A county's rings run in polygon order:
+Rings are stored WITHOUT the WKT closing duplicate vertex. The ideal triangle
+count is ``vertices - 2 * exterior_rings + 2 * hole_rings``; collinear vertices
+can reduce it. A county's rings run in polygon order:
 every ``is_hole == 0`` ring opens a new polygon and the ``is_hole == 1`` rings
 that follow belong to it, which is exactly the grouping ``earcut`` needs.
 
@@ -92,9 +98,12 @@ from array import array
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import make_county_place_h3_overlap_artifacts as land_source  # type: ignore[import-not-found]
 import pyarrow.parquet as pq  # type: ignore[import-untyped]
 from pyproj import Transformer
+from shapely import set_precision  # type: ignore[import-untyped]
 from shapely import wkt as shapely_wkt  # type: ignore[import-untyped]
+from shapely.geometry import MultiPolygon, Point, Polygon  # type: ignore[import-untyped]
 from shapely.geometry.base import BaseGeometry  # type: ignore[import-untyped]
 
 from babylon.domain.geography.adjacency import ARTIFACT_PATH, load_adjacency_pairs
@@ -134,6 +143,21 @@ AREA_OUTLIER_FRACTION = 0.02
 
 #: CONUS projection: NAD83 / Conus Albers, equal-area, metres.
 CONUS_EPSG = 5070
+
+# Designed drawing tolerance in the admitted land's projected coordinates.
+# Simplifying in degrees and projecting its new long chords can cut through
+# otherwise valid water holes. Keep Michigan in one coordinate plane.
+MICHIGAN_SIMPLIFY_TOLERANCE_M = 70.0
+
+PRESENTATION_GEOMETRY_SOURCES = (
+    "Michigan: Derived land from TIGER/Line 2023 COUNTY minus 2023 AREAWATER",
+    "Other counties: TIGER/Line 2024 legal boundaries, without water subtraction",
+    "Identity and adjacency: existing county dimensions and county_adjacency.json",
+    "Designed presentation: Michigan 70 m; other counties 0.001 degree simplification; "
+    "u16 grid; no mechanics change",
+    "Michigan grid: valid-output precision reduction; features narrower than a grid unit "
+    "may collapse, split, or merge; no source geometry repair",
+)
 
 #: Gap between CONUS and the inset row, and between insets, as a fraction of
 #: the CONUS bounding-box width.
@@ -209,10 +233,12 @@ class Report:
     inputs: list[tuple[str, str]] = field(default_factory=list)
     county_count: int = 0
     ring_count: int = 0
+    hole_count: int = 0
     vertex_count: int = 0
     dropped_rings: list[str] = field(default_factory=list)
     byte_size: int = 0
     worst_quantization_error_m: float = 0.0
+    land_precision_changes: list[tuple[str, int, int, float]] = field(default_factory=list)
     affines: list[str] = field(default_factory=list)
     dropped_pairs: list[tuple[str, str]] = field(default_factory=list)
     csr_nnz: int = 0
@@ -392,6 +418,136 @@ def project_counties(rows: list[CountyRow]) -> list[ProjectedCounty]:
     return projected
 
 
+def _read_michigan_land(report: Report) -> dict[str, BaseGeometry]:
+    """Admit the existing 2023 sources before deriving county land in EPSG:5070."""
+    land_source.verify_toolchain()
+    pin = land_source.county_source_pin()
+    archive = land_source.TROVE / pin["dest"]
+    land_source.verify_source_archive(archive, pin["sha256"])
+    source = land_source.load_county_source(archive)
+    if source.all_rows != 3235 or len(source.geometries) != 83:
+        raise ValueError("Michigan land requires the checked 3235-row source and all 83 counties")
+    pins = land_source.load_areawater_pins(set(source.geometries))
+    land = land_source.load_county_land_geometries(source, pins)
+    # The reused loader verifies each archive's hash before decoding it. Stamp
+    # those admitted hashes only after the complete land derivation succeeds.
+    report.inputs.extend(
+        (
+            (str(land_source.FETCH_MANIFEST), sha256_file(land_source.FETCH_MANIFEST)),
+            (str(land_source.PHASE0D_MANIFEST), sha256_file(land_source.PHASE0D_MANIFEST)),
+            (str(archive), pin["sha256"]),
+        )
+    )
+    report.inputs.extend(
+        (str(land_source.TROVE / pins[fips]["dest"]), pins[fips]["sha256"]) for fips in sorted(pins)
+    )
+    return land
+
+
+def _apply_michigan_land(counties: list[ProjectedCounty], land: dict[str, BaseGeometry]) -> None:
+    """Replace only Michigan drawing geometry, preserving every county identity."""
+    michigan = [county for county in counties if county.fips.startswith("26")]
+    if len({county.fips for county in michigan}) != len(michigan) or {
+        county.fips for county in michigan
+    } != set(land):
+        raise ValueError("Michigan land source and atlas county identities disagree")
+    for county in michigan:
+        geometry = land[county.fips]
+        if geometry.is_empty or not geometry.is_valid or geometry.area <= 0:
+            raise ValueError(f"county {county.fips} has invalid land geometry")
+        drawn = geometry.simplify(MICHIGAN_SIMPLIFY_TOLERANCE_M, preserve_topology=True)
+        if drawn.is_empty or not drawn.is_valid or drawn.area <= 0:
+            raise ValueError(f"county {county.fips} has invalid simplified land geometry")
+        county.rings = _rings_of(drawn)
+        # This field is only a build-report area comparison. It must compare
+        # drawn land with Derived land, not the old legal land-plus-water area.
+        county.area_sq_km = float(geometry.area) / 1e6
+        centre = drawn.representative_point()
+        county.centroid = (float(centre.x), float(centre.y))
+
+
+def _land_geometry(fips: str, rings: list[FloatRing] | list[GridRing]) -> MultiPolygon:
+    """Reconstruct land while preserving exterior/hole ownership; refuse invalid input."""
+    polygons: list[BaseGeometry] = []
+    exterior = []
+    holes = []
+    for ring, is_hole in rings:
+        if not is_hole:
+            if exterior:
+                polygons.append(Polygon(exterior, holes))
+            exterior, holes = ring, []
+        else:
+            if not exterior:
+                raise ValueError(f"county {fips} has an orphaned land hole")
+            holes.append(ring)
+    if exterior:
+        polygons.append(Polygon(exterior, holes))
+    geometry = MultiPolygon(polygons)
+    if geometry.is_empty or not geometry.is_valid or geometry.area <= 0:
+        raise ValueError(f"county {fips} has invalid land geometry")
+    return geometry
+
+
+def _land_grid_anchor(fips: str, rings: list[GridRing]) -> tuple[int, int]:
+    """Choose a strictly interior integer anchor from the final land polygons.
+
+    Recheck after quantization: rounding a floating representative point can
+    put it on a coast or in a hole. Never substitute a water centroid when the
+    grid cannot represent a suitable interior anchor.
+    """
+    geometry = _land_geometry(fips, rings)
+    for polygon in sorted(geometry.geoms, key=lambda item: -item.area):
+        centre = polygon.representative_point()
+        x, y = round(centre.x), round(centre.y)
+        candidates = sorted(
+            ((x + dx, y + dy) for dx in (-1, 0, 1) for dy in (-1, 0, 1)),
+            key=lambda point: ((point[0] - centre.x) ** 2 + (point[1] - centre.y) ** 2, point),
+        )
+        for candidate in candidates:
+            if geometry.contains(Point(candidate)):
+                return candidate
+    raise ValueError(f"county {fips} has no representable interior land anchor near its point")
+
+
+def _quantize_land(
+    county: ProjectedCounty, origin: tuple[float, float], scale: float, report: Report
+) -> list[GridRing]:
+    """Reduce valid land directly to the display grid, including its topology.
+
+    Pointwise rounding can turn narrow water inlets into self-intersections.
+    GEOS valid-output precision reduction removes collapsed sections and nodes
+    the remaining boundaries. Apply it to valid floating geometry, never as a
+    repair fallback for a previously rounded, invalid polygon. Narrow features
+    may disappear even when long; report ring counts and changed area explicitly.
+    """
+    floating: list[FloatRing] = [
+        ([((x - origin[0]) / scale, (y - origin[1]) / scale) for x, y in ring], hole)
+        for ring, hole in county.rings
+    ]
+    original = _land_geometry(county.fips, floating)
+    reduced = set_precision(original, 1.0, mode="valid_output")
+    if reduced.is_empty:
+        raise ValueError(f"county {county.fips} lost every ring to quantization")
+    rings: list[GridRing] = []
+    for ring, hole in _rings_of(reduced):
+        if any(
+            x != int(x) or y != int(y) or not (0 <= x <= GRID_MAX and 0 <= y <= GRID_MAX)
+            for x, y in ring
+        ):
+            raise ValueError(f"county {county.fips} has an unrepresentable land grid vertex")
+        rings.append(([(int(x), int(y)) for x, y in ring], hole))
+    _land_geometry(county.fips, rings)
+    report.land_precision_changes.append(
+        (
+            county.fips,
+            len(floating),
+            len(rings),
+            original.symmetric_difference(reduced).area / original.area,
+        )
+    )
+    return rings
+
+
 def _bounds_of(counties: list[ProjectedCounty]) -> tuple[float, float, float, float]:
     """Bounding box over every ring vertex of a county subset.
 
@@ -501,10 +657,9 @@ def _quantize_ring(
 def quantize(counties: list[ProjectedCounty], report: Report) -> tuple[float, float, float]:
     """Snap every vertex onto the u16 grid and prove the error stays honest.
 
-    A ring that collapses is a sub-pixel exclave or enclave -- at this grid
-    the whole shape is smaller than one unit, so it could not have been drawn.
-    Dropping it is honest; keeping a degenerate ring would hand ``earcut`` a
-    zero-area polygon. When an EXTERIOR collapses its holes go with it: a hole
+    Michigan uses valid-output precision reduction; thin features may collapse
+    or separate. Other counties retain their original pointwise encoding.
+    When an EXTERIOR collapses its holes go with it: a hole
     with no exterior to belong to would silently re-group under the previous
     polygon and punch a void through a neighbouring shape.
 
@@ -518,6 +673,13 @@ def quantize(counties: list[ProjectedCounty], report: Report) -> tuple[float, fl
     scale = max(max_x - min_x, max_y - min_y) / GRID_MAX
     worst = 0.0
     for county in counties:
+        if county.fips.startswith("26"):
+            for ring, _ in county.rings:
+                _, ring_worst = _quantize_ring(ring, (min_x, min_y), scale)
+                worst = max(worst, ring_worst)
+            county.grid_rings = _quantize_land(county, (min_x, min_y), scale, report)
+            county.grid_centroid = _land_grid_anchor(county.fips, county.grid_rings)
+            continue
         kept: list[GridRing] = []
         polygon_open = False
         for ring, is_hole in county.rings:
@@ -688,6 +850,7 @@ def encode(
 
     report.county_count = len(counties)
     report.ring_count = len(ring_bytes) // 12
+    report.hole_count = sum(hole for county in counties for _, hole in county.grid_rings)
     report.vertex_count = len(vertices) // 2
 
     body = (
@@ -739,6 +902,7 @@ def build(sources: Path) -> tuple[bytes, Report]:
     rows = read_counties(sources, report)
     report.inputs.append((str(ARTIFACT_PATH), sha256_file(ARTIFACT_PATH)))
     counties = project_counties(rows)
+    _apply_michigan_land(counties, _read_michigan_land(report))
     place_insets(counties, report)
     origin_x, origin_y, scale = quantize(counties, report)
     csr = build_csr(counties, report)
@@ -754,6 +918,8 @@ def print_report(report: Report) -> None:
     :param report: the populated report.
     """
     print("county atlas build report")
+    for description in PRESENTATION_GEOMETRY_SOURCES:
+        print(f"  geometry    {description}")
     for path, digest in report.inputs:
         print(f"  input       {path}  sha256={digest}")
     for line in report.affines:
@@ -761,10 +927,13 @@ def print_report(report: Report) -> None:
     print(f"  counties    {report.county_count}")
     print(f"  rings       {report.ring_count}")
     print(f"  vertices    {report.vertex_count}")
-    print(f"  triangles   {report.vertex_count - 2 * report.ring_count} (earcut expectation)")
+    ideal_triangles = report.vertex_count - 2 * report.ring_count + 4 * report.hole_count
+    print(f"  triangles   {ideal_triangles} (before collinear vertex elimination)")
     print(f"  csr_nnz     {report.csr_nnz}")
     print(f"  bytes       {report.byte_size} ({report.byte_size / 1024 / 1024:.2f} MiB)")
-    print(f"  worst quantization error  {report.worst_quantization_error_m:.2f} m")
+    print(f"  worst per-axis vertex rounding error  {report.worst_quantization_error_m:.2f} m")
+    for fips, before, after, changed in report.land_precision_changes:
+        print(f"  land grid {fips}: rings {before}->{after}; changed area {changed:.6%}")
     print(f"  dropped rings   {len(report.dropped_rings)}: {report.dropped_rings[:20]}")
     print(f"  dropped pairs   {len(report.dropped_pairs)}: {report.dropped_pairs[:20]}")
     print(f"  isolated counties  {len(report.isolated)}: {report.isolated}")

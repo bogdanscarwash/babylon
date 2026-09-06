@@ -1214,6 +1214,55 @@ mod tests {
     }
 
     #[test]
+    fn michigan_land_probes_hit_island_and_mainland_prisms_but_not_water() {
+        let atlas = CountyAtlas::parse(include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../../assets/map/county_atlas.bin"
+        )))
+        .expect("committed atlas");
+        let triangles = crate::tessellate::tessellate(&atlas);
+        let probes = crate::atlas::land_probes::load();
+        for index in 0..atlas.len() {
+            let county = atlas.county(index).expect("county");
+            if !county.fips.starts_with("26") {
+                continue;
+            }
+            let origin = county.centroid;
+            let (body, _) = county_prism(&atlas, &triangles, index, origin);
+            let Some(VertexAttributeValues::Float32x3(positions)) =
+                body.attribute(Mesh::ATTRIBUTE_POSITION)
+            else {
+                panic!("prism positions");
+            };
+            for probe in &probes {
+                let point = scene_point(Vec2::from_array(probe.epsg5070), origin, 1.0);
+                let point = Vec2::new(point.x, point.z);
+                let hit = positions.chunks_exact(3).any(|triangle| {
+                    if !triangle.iter().all(|p| p[1].to_bits() == 1.0_f32.to_bits()) {
+                        return false;
+                    }
+                    let a = Vec2::new(triangle[0][0], triangle[0][2]);
+                    let b = Vec2::new(triangle[1][0], triangle[1][2]);
+                    let c = Vec2::new(triangle[2][0], triangle[2][2]);
+                    let sides = [
+                        (b - a).perp_dot(point - a),
+                        (c - b).perp_dot(point - b),
+                        (a - c).perp_dot(point - c),
+                    ];
+                    sides.iter().all(|side| *side >= 0.0) || sides.iter().all(|side| *side <= 0.0)
+                });
+                assert_eq!(
+                    hit,
+                    probe.county_fips.as_deref() == Some(county.fips),
+                    "{} in {}",
+                    probe.label,
+                    county.fips
+                );
+            }
+        }
+    }
+
+    #[test]
     fn all_michigan_counties_have_finite_closed_geometry_on_the_real_projection() {
         let atlas = CountyAtlas::parse(include_bytes!(concat!(
             env!("CARGO_MANIFEST_DIR"),
