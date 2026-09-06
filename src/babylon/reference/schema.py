@@ -1382,7 +1382,7 @@ class FactBorderCrossingThroughput(NormalizedBase):
 
     One row per land port x measure (Personal Vehicles, Trucks, Rail
     Containers, Buses, Pedestrians, ...) x month, both U.S. borders, from the
-    keg4-3bc2 Socrata snapshot (through 2026-03). This is crossing
+    keg4-3bc2 Socrata snapshot (through 2026-07). This is crossing
     THROUGHPUT (counts of conveyances/persons), distinct from TransBorder's
     dollar/tonnage flows — the two measure different quantities and are kept
     as separate tables. ``port_code`` matches the TransBorder DEPE codes

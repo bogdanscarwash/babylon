@@ -951,7 +951,7 @@ tables:
     disposition: keep
     subset_policy: skip
     material_relation: BTS Border Crossing Entry Data — conveyance/person counts
-      by port x measure x month (both U.S. land borders, through 2026-03);
+      by port x measure x month (both U.S. land borders, through 2026-07);
       crossing THROUGHPUT, a different quantity than TransBorder's dollar/tonnage
       flows.
     notes: "Socrata keg4-3bc2 snapshot (public-domain download, no key).
