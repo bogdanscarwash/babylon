@@ -13,11 +13,59 @@ from tools import run_observer_session as launcher
 CAMPAIGN = UUID("81b979ee-a9c1-48fd-8835-06cbfe594675")
 
 
+@pytest.mark.parametrize("exit_code", [20, 21, 22, 23])
+def test_session_exit_never_cycles_the_native_process_pair(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, exit_code: int
+) -> None:
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
+    monkeypatch.delenv("BABYLON_CAMPAIGN_ID", raising=False)
+    calls: list[dict[str, Any]] = []
+
+    def pair(*_args: Any, **kwargs: Any) -> int:
+        calls.append(kwargs)
+        return exit_code if len(calls) == 1 else 0
+
+    monkeypatch.setattr(launcher, "run_pair", pair)
+    monkeypatch.setattr(
+        launcher,
+        "prepare",
+        lambda *_args, **_kwargs: (
+            tmp_path / "runtime",
+            tmp_path / "client",
+            launcher.ReaderCredentials("observer", "known"),
+        ),
+    )
+    assert launcher.main(["--new", "--no-build"]) == exit_code
+    assert len(calls) == 1
+
+
+def test_unadmitted_initial_target_never_replaces_the_saved_pointer(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
+    state = tmp_path / "babylon" / "observer-campaign"
+    state.parent.mkdir()
+    state.write_text(f"{CAMPAIGN}\n")
+    monkeypatch.setattr(launcher, "run_pair", lambda *_args, **_kwargs: 1)
+    monkeypatch.setattr(
+        launcher,
+        "prepare",
+        lambda *_args, **_kwargs: (
+            tmp_path / "runtime",
+            tmp_path / "client",
+            launcher.ReaderCredentials("observer", "known"),
+        ),
+    )
+    assert launcher.main(["--new", "--no-build"]) == 1
+    assert state.read_text() == f"{CAMPAIGN}\n"
+
+
 def test_child_environments_do_not_inherit_writer_or_pg_authority() -> None:
     environment = {
         "PATH": "/usr/bin",
         "DISPLAY": ":0",
         "BABYLON_RUNTIME_DSN": "writer-secret",
+        "BABYLON_CAMPAIGN_ID": str(CAMPAIGN),
         "PGPASSWORD": "other-secret",
         "PGSERVICEFILE": "/private/service",
         "BABYLON_OBSERVER_DSN": "stale-observer",
@@ -25,7 +73,7 @@ def test_child_environments_do_not_inherit_writer_or_pg_authority() -> None:
         "RUST_LOG": "warn",
     }
     credentials = launcher.ReaderCredentials("observer-capability", "known-capability")
-    runtime, client = launcher.child_environments(environment, CAMPAIGN, credentials)
+    runtime, client = launcher.child_environments(environment, credentials)
     assert runtime["BABYLON_RUNTIME_DSN"] == "writer-secret"
     assert "BABYLON_RUNTIME_DSN" not in client
     assert all(not key.upper().startswith("PG") for key in runtime | client)
@@ -33,7 +81,7 @@ def test_child_environments_do_not_inherit_writer_or_pg_authority() -> None:
     assert client["BABYLON_OBSERVER_DSN"] == "observer-capability"
     assert client["BABYLON_READER_DSN"] == "known-capability"
     assert client["BABYLON_SESSION_STDIO"] == "1"
-    assert runtime["BABYLON_CAMPAIGN_ID"] == client["BABYLON_CAMPAIGN_ID"] == str(CAMPAIGN)
+    assert "BABYLON_CAMPAIGN_ID" not in runtime and "BABYLON_CAMPAIGN_ID" not in client
     assert client["DISPLAY"] == ":0"
     assert client["RUST_LOG"] == "warn,session=debug,babylon_client=debug"
     assert runtime["RUST_LOG"] == "warn"
@@ -58,7 +106,7 @@ def test_observer_capture_targets_override_exact_ambient_filters_only_for_client
 ) -> None:
     environment = {} if ambient is None else {"RUST_LOG": ambient}
     runtime, client = launcher.child_environments(
-        environment, CAMPAIGN, launcher.ReaderCredentials("observer", "known")
+        environment, launcher.ReaderCredentials("observer", "known")
     )
     assert client["RUST_LOG"] == effective
     assert runtime.get("RUST_LOG") == ambient
@@ -67,33 +115,40 @@ def test_observer_capture_targets_override_exact_ambient_filters_only_for_client
 
 def test_campaign_selection_and_new_preserve_existing_preference(tmp_path: Path) -> None:
     state = tmp_path / "campaign"
-    first = launcher.select_campaign({}, state_file=state)
-    launcher.save_campaign(state, first)
-    assert launcher.select_campaign({}, state_file=state) == first
-    assert launcher.select_campaign({}, state_file=state, explicit=str(CAMPAIGN)) == CAMPAIGN
-    assert launcher.select_campaign({}, state_file=state, new=True) != first
-    assert state.read_text().strip() == str(first)
+    first = launcher.select_initial_target({}, state_file=state)
+    assert isinstance(first, launcher.NewCampaignTarget)
+    assert first.preset == "standard" and first.campaign.int != 0
+    assert not state.exists()
+    state.write_text(f"{first.campaign}\n")
+    assert launcher.select_initial_target({}, state_file=state) == launcher.OpenCampaignTarget(
+        first.campaign
+    )
+    assert launcher.select_initial_target(
+        {}, state_file=state, explicit=str(CAMPAIGN)
+    ) == launcher.OpenCampaignTarget(CAMPAIGN)
+    second = launcher.select_initial_target({}, state_file=state, new=True, preset="delayed")
+    assert isinstance(second, launcher.NewCampaignTarget)
+    assert second.campaign != first.campaign and second.preset == "delayed"
+    assert state.read_text() == f"{first.campaign}\n"
 
 
 def test_log_capture_notice_is_bounded_and_never_echoes_environment_secrets(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
+    monkeypatch.setenv("BABYLON_RUNTIME_DSN", "writer-secret")
+    monkeypatch.setenv("RUST_LOG", 'warn,engine[span{key="private-filter"}]=trace')
     monkeypatch.setattr(launcher, "run_pair", lambda *_args, **_kwargs: 0)
-    assert (
-        launcher.run_campaigns(
+    monkeypatch.setattr(
+        launcher,
+        "prepare",
+        lambda *_args, **_kwargs: (
             tmp_path / "runtime",
             tmp_path / "client",
-            tmp_path,
-            CAMPAIGN,
-            tmp_path / "campaign",
-            {
-                "BABYLON_RUNTIME_DSN": "writer-secret",
-                "RUST_LOG": 'warn,engine[span{key="private-filter"}]=trace',
-            },
             launcher.ReaderCredentials("observer-secret", "known-secret"),
-        )
-        == 0
+        ),
     )
+    assert launcher.main(["--new", "--no-build"]) == 0
     captured = capsys.readouterr()
     assert captured.out == ""
     assert captured.err == "Observer log targets enabled: session=debug,babylon_client=debug\n"
@@ -102,19 +157,20 @@ def test_log_capture_notice_is_bounded_and_never_echoes_environment_secrets(
 @pytest.mark.parametrize("value", ["not-a-uuid", "", "0" * 32, str(CAMPAIGN).upper()])
 def test_invalid_explicit_campaign_refuses(value: str, tmp_path: Path) -> None:
     with pytest.raises(launcher.ObserverLaunchError, match="campaign"):
-        launcher.select_campaign({}, state_file=tmp_path / "campaign", explicit=value)
+        launcher.select_initial_target({}, state_file=tmp_path / "campaign", explicit=value)
 
 
 def test_corrupt_saved_campaign_refuses_without_replacing_it(tmp_path: Path) -> None:
     state = tmp_path / "campaign"
     state.write_text("damaged")
     with pytest.raises(launcher.ObserverLaunchError, match="campaign"):
-        launcher.select_campaign({}, state_file=state)
+        launcher.select_initial_target({}, state_file=state)
     assert state.read_text() == "damaged"
 
 
+@pytest.mark.parametrize("preset", [None, "standard", "delayed"])
 def test_two_anonymous_pipes_connect_children_without_parent_forwarding(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, preset: str | None
 ) -> None:
     children: list[dict[str, Any]] = []
     fds: list[int] = []
@@ -142,13 +198,23 @@ def test_two_anonymous_pipes_connect_children_without_parent_forwarding(
         tmp_path / "runtime",
         tmp_path / "client",
         tmp_path,
-        {"BABYLON_RUNTIME_DSN": "writer", "BABYLON_CAMPAIGN_ID": str(CAMPAIGN)},
-        {"BABYLON_SESSION_STDIO": "1", "BABYLON_CAMPAIGN_ID": str(CAMPAIGN)},
+        {"BABYLON_RUNTIME_DSN": "writer"},
+        {"BABYLON_SESSION_STDIO": "1"},
+        initial_target=(
+            launcher.OpenCampaignTarget(CAMPAIGN)
+            if preset is None
+            else launcher._new_target(CAMPAIGN, preset)
+        ),
     )
     assert code == 0
     assert len(fds) == 4 and len(children) == 2
     runtime, client = children
     assert runtime["args"] == [str(tmp_path / "runtime"), "session", "--stdio"]
+    assert client["args"] == (
+        [str(tmp_path / "client"), "--campaign", str(CAMPAIGN)]
+        if preset is None
+        else [str(tmp_path / "client"), "--new-campaign", str(CAMPAIGN), "--preset", preset]
+    )
     assert runtime["stdin"] == fds[0] and client["stdout"] == fds[1]
     assert client["stdin"] == fds[2] and runtime["stdout"] == fds[3]
     assert runtime["stderr"] is None and client["stderr"] is None
@@ -204,10 +270,12 @@ def test_runtime_shutdown_allows_commit_grace_before_bounded_exact_child_stop(
     monkeypatch.setattr(launcher.subprocess, "Popen", lambda *_args, **_kwargs: next(children))
     arguments = (tmp_path / "runtime", tmp_path / "client", tmp_path, {}, {})
     if behavior == "graceful":
-        assert launcher.run_pair(*arguments) == 0
+        assert (
+            launcher.run_pair(*arguments, initial_target=launcher.OpenCampaignTarget(CAMPAIGN)) == 0
+        )
     else:
         with pytest.raises(launcher.ObserverLaunchError, match="runtime shutdown deadline"):
-            launcher.run_pair(*arguments)
+            launcher.run_pair(*arguments, initial_target=launcher.OpenCampaignTarget(CAMPAIGN))
     # A normal game session has no time limit; shutdown starts after client EOF.
     assert client.calls == [("wait", None)]
     expected: list[tuple[str, float | None]] = [("wait", 150)]
@@ -241,7 +309,14 @@ def test_interrupted_startup_closes_pipes_and_preserves_runtime_grace(
     monkeypatch.setattr(launcher.subprocess, "Popen", child)
     monkeypatch.setattr(launcher.os, "pipe", pipe)
     with pytest.raises(launcher.ObserverLaunchError, match="cannot start observer processes"):
-        launcher.run_pair(tmp_path / "runtime", tmp_path / "client", tmp_path, {}, {})
+        launcher.run_pair(
+            tmp_path / "runtime",
+            tmp_path / "client",
+            tmp_path,
+            {},
+            {},
+            initial_target=launcher.OpenCampaignTarget(CAMPAIGN),
+        )
     assert runtime.calls == [("wait", 150)]
     assert len(descriptors) == 4
     for descriptor in descriptors:
@@ -259,73 +334,6 @@ def test_child_shutdown_has_a_deadline_even_after_kill() -> None:
         ("kill", None),
         ("wait", 10),
     ]
-
-
-def test_in_game_new_campaign_restarts_with_fresh_identity(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    campaigns: list[str] = []
-
-    def pair(
-        runtime: Path,
-        client: Path,
-        root: Path,
-        writer_env: dict[str, str],
-        reader_env: dict[str, str],
-        *,
-        preset: str | None = None,
-    ) -> int:
-        assert writer_env["BABYLON_CAMPAIGN_ID"] == reader_env["BABYLON_CAMPAIGN_ID"]
-        campaigns.append(writer_env["BABYLON_CAMPAIGN_ID"])
-        return 20 if len(campaigns) == 1 else 0
-
-    monkeypatch.setattr(launcher, "run_pair", pair)
-    state = tmp_path / "campaign"
-    result = launcher.run_campaigns(
-        tmp_path / "runtime",
-        tmp_path / "client",
-        tmp_path,
-        CAMPAIGN,
-        state,
-        {"BABYLON_RUNTIME_DSN": "writer"},
-        launcher.ReaderCredentials("observer", "known"),
-    )
-    assert result == 0
-    assert campaigns[0] == str(CAMPAIGN)
-    assert len(set(campaigns)) == 2
-    assert state.read_text().strip() == campaigns[1]
-
-
-def test_deliberate_reopen_preserves_campaign_and_failure_does_not_retry(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    campaigns: list[str] = []
-
-    def pair(
-        runtime: Path,
-        client: Path,
-        root: Path,
-        writer_env: dict[str, str],
-        reader_env: dict[str, str],
-        *,
-        preset: str | None = None,
-    ) -> int:
-        campaigns.append(writer_env["BABYLON_CAMPAIGN_ID"])
-        return 21 if len(campaigns) == 1 else 1
-
-    monkeypatch.setattr(launcher, "run_pair", pair)
-    result = launcher.run_campaigns(
-        tmp_path / "runtime",
-        tmp_path / "client",
-        tmp_path,
-        CAMPAIGN,
-        tmp_path / "campaign",
-        {"BABYLON_RUNTIME_DSN": "writer"},
-        launcher.ReaderCredentials("observer", "known"),
-    )
-    assert result == 1
-    assert campaigns == [str(CAMPAIGN), str(CAMPAIGN)]
 
 
 @pytest.mark.parametrize("fresh", [True, False])
@@ -445,81 +453,36 @@ def test_bootstrap_probe_is_read_only_and_requires_active_marker(
     assert all(statement.startswith("SELECT") for statement in statements[1:])
 
 
-def test_delayed_new_world_and_resume_preserve_durable_preset(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
+@pytest.mark.parametrize("preset", ["standard", "delayed"])
+def test_first_launch_has_an_explicit_new_preset_but_saved_resume_cannot_override_it(
+    tmp_path: Path, preset: str
 ) -> None:
-    calls: list[tuple[str, str | None]] = []
-
-    def pair(
-        runtime: Path,
-        client: Path,
-        root: Path,
-        writer_env: dict[str, str],
-        reader_env: dict[str, str],
-        *,
-        preset: str | None = None,
-    ) -> int:
-        calls.append((writer_env["BABYLON_CAMPAIGN_ID"], preset))
-        return [22, 21, 0][len(calls) - 1]
-
-    monkeypatch.setattr(launcher, "run_pair", pair)
-    assert (
-        launcher.run_campaigns(
-            tmp_path / "runtime",
-            tmp_path / "client",
-            tmp_path,
-            CAMPAIGN,
-            tmp_path / "campaign",
-            {},
-            launcher.ReaderCredentials("observer", "known"),
-        )
-        == 0
+    state = tmp_path / "campaign"
+    target = launcher.select_initial_target({}, state_file=state, preset=preset)
+    assert isinstance(target, launcher.NewCampaignTarget) and target.preset == preset
+    state.write_text(f"{CAMPAIGN}\n")
+    with pytest.raises(launcher.ObserverLaunchError, match="--preset applies only"):
+        launcher.select_initial_target({}, state_file=state, preset=preset)
+    assert launcher.select_initial_target({}, state_file=state) == launcher.OpenCampaignTarget(
+        CAMPAIGN
     )
-    assert calls[0] == (str(CAMPAIGN), None)
-    assert calls[1][0] != str(CAMPAIGN)
-    assert calls[1][1] == "delayed"
-    assert calls[2] == (calls[1][0], None)
+    assert state.read_text() == f"{CAMPAIGN}\n"
 
 
-def test_catalog_selection_reloads_exact_saved_uuid_without_environment_override(
-    monkeypatch: pytest.MonkeyPatch,
+def test_explicit_open_overrides_environment_and_saved_target_without_writing(
     tmp_path: Path,
 ) -> None:
     selected = UUID("fc7d28a0-a29a-49ea-bf3b-ef07ee163cd4")
     state = tmp_path / "campaign"
-    campaigns: list[str] = []
-
-    def pair(
-        runtime: Path,
-        client: Path,
-        root: Path,
-        writer_env: dict[str, str],
-        reader_env: dict[str, str],
-        *,
-        preset: str | None = None,
-    ) -> int:
-        campaigns.append(writer_env["BABYLON_CAMPAIGN_ID"])
-        if len(campaigns) == 1:
-            launcher.save_campaign(state, selected)
-            return 23
-        assert preset is None
-        return 0
-
-    monkeypatch.setattr(launcher, "run_pair", pair)
-    assert (
-        launcher.run_campaigns(
-            tmp_path / "runtime",
-            tmp_path / "client",
-            tmp_path,
-            CAMPAIGN,
-            state,
-            {"BABYLON_CAMPAIGN_ID": str(CAMPAIGN)},
-            launcher.ReaderCredentials("observer", "known"),
-        )
-        == 0
-    )
-    assert campaigns == [str(CAMPAIGN), str(selected)]
+    state.write_text(f"{selected}\n")
+    environment = {"BABYLON_CAMPAIGN_ID": str(CAMPAIGN)}
+    assert launcher.select_initial_target(
+        environment, state_file=state
+    ) == launcher.OpenCampaignTarget(CAMPAIGN)
+    assert launcher.select_initial_target(
+        environment, state_file=state, explicit=str(selected)
+    ) == launcher.OpenCampaignTarget(selected)
+    assert state.read_text() == f"{selected}\n"
 
 
 @pytest.mark.parametrize("available_after_start", [True, False])

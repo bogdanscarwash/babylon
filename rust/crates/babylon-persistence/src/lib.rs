@@ -32,6 +32,7 @@ pub mod michigan_economy;
 pub mod migration_manifest;
 pub(crate) mod observer_material;
 pub mod observer_reader;
+mod observer_tick_components;
 mod place_producer;
 mod postgres_diagnostic;
 pub(crate) mod production_projection;
@@ -205,7 +206,7 @@ pub use territory_county_map::{
 };
 
 mod production_evidence;
-pub use production_evidence::ProductionEvidenceDigestV3;
+pub use production_evidence::ProductionEvidenceDigestV4;
 pub use production_projection::material_balance::{
     CompletedMaterialBalanceV1, ProductionMaterialBalanceRowV1,
 };

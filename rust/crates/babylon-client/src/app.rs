@@ -18,10 +18,10 @@ use crate::{logging, map, session_log, ui, visual_assets};
 /// Which executable shape [`build_app`] assembles.
 #[derive(Clone, Debug)]
 pub enum AppMode {
-    /// The windowed observer of one durable campaign.
+    /// The persistent observer with one initial lifecycle destination.
     Windowed {
-        /// The canonical campaign identity.
-        campaign_id: babylon_persistence::CampaignId,
+        /// Explicit New or existing-only Open, submitted after runtime Hello.
+        initial_target: babylon_persistence::RuntimeSessionTargetV3,
     },
     /// One headless dossier command: JSONL on stdout, logs on stderr,
     /// process exit after the first update.
@@ -37,10 +37,15 @@ pub enum AppMode {
 /// `DefaultPlugins` estate (file + stderr logging, window title); headless
 /// rides `MinimalPlugins` plus the pinned `LogPlugin` alone — no window,
 /// no render, no visual plugins — and runs exactly one Startup system.
-pub fn build_app(mode: AppMode) -> App {
+///
+/// # Errors
+/// Refuses an invalid initial lifecycle target before creating a window.
+pub fn build_app(mode: AppMode) -> Result<App, String> {
     let mut app = App::new();
     match mode {
-        AppMode::Windowed { campaign_id } => {
+        AppMode::Windowed { initial_target } => {
+            let session = ObserverSession::with_initial_target(initial_target)?;
+            let campaign_id = session.campaign;
             app.add_plugins(
                 DefaultPlugins
                     .set(LogPlugin {
@@ -86,7 +91,7 @@ pub fn build_app(mode: AppMode) -> App {
                 // exactly what the card renderer saw.
                 .add_plugins(session_log::SessionLogPlugin)
                 .insert_resource(crate::production::PrimaryView::Map)
-                .insert_resource(ObserverSession::new(campaign_id))
+                .insert_resource(session)
                 .insert_resource(ui::dossier_card::DossierCampaignId(campaign_id))
                 .insert_resource(ClearColor(crate::observer_theme::INK));
         }
@@ -108,7 +113,7 @@ pub fn build_app(mode: AppMode) -> App {
                 .add_systems(Startup, run_headless_command);
         }
     }
-    app
+    Ok(app)
 }
 
 #[cfg(test)]
@@ -116,6 +121,16 @@ mod tests {
     use super::*;
     use crate::cli::CliCommand;
     use uuid::Uuid;
+
+    #[test]
+    fn invalid_initial_target_refuses_before_window_construction() {
+        let result = build_app(AppMode::Windowed {
+            initial_target: babylon_persistence::RuntimeSessionTargetV3::Open {
+                campaign_id: "not-a-campaign".into(),
+            },
+        });
+        assert!(result.is_err());
+    }
 
     #[test]
     fn headless_mode_builds_a_minimal_app_that_exits_after_startup() {
@@ -128,7 +143,8 @@ mod tests {
         let mut app = build_app(AppMode::Headless {
             command: CliCommand::TickStatus,
             campaign_id: babylon_persistence::CampaignId::from_uuid(Uuid::nil()),
-        });
+        })
+        .expect("headless mode needs no initial lifecycle target");
         assert!(!app.is_plugin_added::<ObserverFocusPlugin>());
         assert!(app
             .world()

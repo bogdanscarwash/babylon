@@ -830,7 +830,7 @@ fn assert_revision_resume(
     assert_material_accounts(&observer.snapshot(campaign, 3).unwrap());
     assert_eq!(observer.snapshot(campaign, 1).unwrap(), history);
     assert_known_material_absence(&known.snapshot(campaign, 3).unwrap());
-    assert_session_admits_stored_revision(config, campaign, preset, observer);
+    assert_session_admits_stored_revision(config, campaign, observer);
     assert_eq!(observer.snapshot(campaign, 1).unwrap(), history);
     *runtime = reopened;
 }
@@ -838,28 +838,43 @@ fn assert_revision_resume(
 fn assert_session_admits_stored_revision(
     config: &Config,
     campaign: CampaignId,
-    preset: babylon_persistence::michigan_content::MichiganContentPresetV1,
     observer: &ObserverEconomyReaderV1,
 ) {
     use babylon_persistence::runtime_session::{
-        run_runtime_session_v2, RuntimeSessionRequestV2, RuntimeSessionResponseV2,
-        RuntimeSessionTailV2, RUNTIME_SESSION_PROTOCOL_VERSION_V2,
+        run_runtime_session_v3, RuntimeSessionRequestV3, RuntimeSessionResponseV3,
+        RuntimeSessionScopeV3, RuntimeSessionTailV3, RuntimeSessionTargetV3,
+        RUNTIME_SESSION_PROTOCOL_VERSION_V3,
     };
     let current = observer.snapshot(campaign, 3).unwrap();
+    let scope = RuntimeSessionScopeV3 {
+        epoch: 1,
+        campaign_id: Some(campaign.as_uuid().to_string()),
+    };
     let requests = [
-        RuntimeSessionRequestV2::Advance {
-            protocol_version: RUNTIME_SESSION_PROTOCOL_VERSION_V2,
-            campaign_id: campaign.as_uuid().to_string(),
+        RuntimeSessionRequestV3::Switch {
+            protocol_version: RUNTIME_SESSION_PROTOCOL_VERSION_V3,
             request_id: 1,
-            expected_tail: RuntimeSessionTailV2 {
+            scope: RuntimeSessionScopeV3 {
+                epoch: 0,
+                campaign_id: None,
+            },
+            target: RuntimeSessionTargetV3::Open {
+                campaign_id: campaign.as_uuid().to_string(),
+            },
+        },
+        RuntimeSessionRequestV3::Advance {
+            protocol_version: RUNTIME_SESSION_PROTOCOL_VERSION_V3,
+            scope: scope.clone(),
+            request_id: 2,
+            expected_tail: RuntimeSessionTailV3 {
                 resolve_tick: 3,
                 tick_content_hash: current.tick_content_hash,
             },
         },
-        RuntimeSessionRequestV2::Stop {
-            protocol_version: RUNTIME_SESSION_PROTOCOL_VERSION_V2,
-            campaign_id: campaign.as_uuid().to_string(),
-            request_id: 2,
+        RuntimeSessionRequestV3::Stop {
+            protocol_version: RUNTIME_SESSION_PROTOCOL_VERSION_V3,
+            scope,
+            request_id: 3,
         },
     ];
     let mut lines = Vec::new();
@@ -868,24 +883,21 @@ fn assert_session_admits_stored_revision(
         lines.push(b'\n');
     }
     let mut output = Vec::new();
-    run_runtime_session_v2(
-        config,
-        campaign,
-        Some(preset.delivery()),
-        std::io::Cursor::new(lines),
-        &mut output,
-    )
-    .unwrap();
+    run_runtime_session_v3(config, std::io::Cursor::new(lines), &mut output).unwrap();
     let responses = std::str::from_utf8(&output)
         .unwrap()
         .lines()
-        .map(|line| serde_json::from_str::<RuntimeSessionResponseV2>(line).unwrap())
+        .map(|line| serde_json::from_str::<RuntimeSessionResponseV3>(line).unwrap())
         .collect::<Vec<_>>();
     assert!(
-        matches!(&responses[0], RuntimeSessionResponseV2::Ready { foundation_digest, tail, .. }
+        matches!(&responses[0], RuntimeSessionResponseV3::Hello { protocol_version: 3, scope }
+        if scope.epoch == 0 && scope.campaign_id.is_none())
+    );
+    assert!(
+        matches!(&responses[2], RuntimeSessionResponseV3::Ready { foundation_digest, tail, .. }
         if foundation_digest == &current.foundation_digest && tail.resolve_tick == 3)
     );
-    assert!(responses.iter().any(|response| matches!(response, RuntimeSessionResponseV2::Committed { tail, .. } if tail.resolve_tick == 4)));
+    assert!(responses.iter().any(|response| matches!(response, RuntimeSessionResponseV3::Committed { tail, .. } if tail.resolve_tick == 4)));
     assert_eq!(
         observer.snapshot(campaign, 4).unwrap().foundation_digest,
         current.foundation_digest
@@ -1474,5 +1486,11 @@ mod campaign_writer_ownership {
 #[path = "observer_material_live/runtime_process.rs"]
 mod runtime_process;
 
+#[path = "observer_material_live/tick_components.rs"]
+mod tick_components;
+
 #[path = "observer_material_live/staffing_admission.rs"]
 mod staffing_admission;
+
+#[path = "observer_material_live/staffing_history.rs"]
+mod staffing_history;

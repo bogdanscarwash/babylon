@@ -1,5 +1,10 @@
 //! Explicit V3 durable material campaign, marker-last and checkpoint-complete.
 
+mod component_identity;
+pub(crate) use component_identity::MaterialComponentIdentityV1;
+
+use crate::stored_tick::{StoredEventV2, StoredTickReadSourceV1, StoredTickRelationV1};
+
 use crate::{
     checkpoint::{CommittedFullCheckpointV1, CommittedResolveTickV1},
     committed_tick_envelope::CommittedTickRowFamiliesV2,
@@ -87,6 +92,7 @@ pub enum MaterialRuntimeErrorV3 {
     FoundationMismatch,
     LegacyCampaign,
     MissingCampaign,
+    AlreadyExists,
     TailConflict,
     InvalidCheckpoint,
     Bounds,
@@ -282,6 +288,22 @@ impl DurableMaterialRuntimeV3 {
         campaign: CampaignId,
         foundation: MaterialRuntimeFoundationV2,
     ) -> Result<Self, MaterialRuntimeErrorV3> {
+        Self::create_with_admission(config, campaign, foundation, false)
+    }
+    /// Lifecycle New requires absence under the same founding lock/transaction.
+    pub(crate) fn create_new(
+        config: &Config,
+        campaign: CampaignId,
+        foundation: MaterialRuntimeFoundationV2,
+    ) -> Result<Self, MaterialRuntimeErrorV3> {
+        Self::create_with_admission(config, campaign, foundation, true)
+    }
+    fn create_with_admission(
+        config: &Config,
+        campaign: CampaignId,
+        foundation: MaterialRuntimeFoundationV2,
+        require_absent: bool,
+    ) -> Result<Self, MaterialRuntimeErrorV3> {
         let bounded = bounded_material_writer_config_v3(config)?;
         install_material_runtime_schema_v3(config)?;
         crate::install_territory_county_map_schema_v1(config)
@@ -299,6 +321,9 @@ impl DurableMaterialRuntimeV3 {
             &[&crate::SCHEMA_ADVISORY_LOCK_KEY],
         )?;
         let existed=tx.query_opt("SELECT campaign_id FROM babylon_state.campaign WHERE campaign_id=$1::uuid FOR UPDATE",&[campaign.as_uuid()])?.is_some();
+        if existed && require_absent {
+            return Err(MaterialRuntimeErrorV3::AlreadyExists);
+        }
         if existed {
             let stored = hydrate_material_foundation_v2(&mut tx, campaign, foundation.digest())?;
             if stored.canonical_bytes() != foundation.canonical_bytes() {
@@ -357,7 +382,7 @@ impl DurableMaterialRuntimeV3 {
                 &stored.graph,
                 &stored.material,
                 &stored.sections[1],
-                &stored.register,
+                stored.register.canonical_bytes(),
             )?;
             if session.current_world_hash()? != stored.identity.result_world_hash() {
                 return Err(MaterialRuntimeErrorV3::InvalidCheckpoint);
@@ -468,6 +493,7 @@ impl DurableMaterialRuntimeV3 {
             .result_stable_graph()
             .scenario_scope()
             .to_owned();
+        let components = MaterialComponentIdentityV1::from_session(self.session.graph_session());
         let (ack,_)=self.session.commit_prepared_and_publish(sink,candidate,|_|{
             // The marker is the final durable statement. Publication capacity is already reserved.
             tx.execute("INSERT INTO babylon_state.tick_commit (campaign_id,resolve_tick,envelope_layout_version,tick_content_hash,envelope_digest) VALUES ($1::uuid,$2,3,$3,$4)",&[campaign.as_uuid(),&tick_sql,&&identity.tick_content_hash().as_bytes()[..],&&envelope.digest()[..]])?;
@@ -475,8 +501,8 @@ impl DurableMaterialRuntimeV3 {
                 let mut retry_client=config.connect(NoTls)?;
                 let mut retry=retry_client.transaction()?;
                 crate::foundation_content_schema::lock_foundation_content_layout_v2(&mut retry,campaign,content_layout)?;
-                if !marker_matches(&mut retry,campaign,&identity,&envelope)? {return Err(error.into());}
-                let stored=read_stored_material_tick_rows(&mut retry,campaign,identity.resolve_tick(),&scope)?;
+                if !marker_matches(&mut retry,StoredTickReadSourceV1::Runtime,campaign,&identity,&envelope)? {return Err(error.into());}
+                let stored=read_authenticated_material_tick_v3(&mut retry,StoredTickReadSourceV1::Runtime,campaign,identity.resolve_tick(),&scope,identity.foundation_digest(),&components)?;
                 if stored.identity!=identity || stored.envelope.canonical_bytes()!=envelope.canonical_bytes(){return Err(MaterialRuntimeErrorV3::TailConflict);}
                 Ok(ReplayCommitDispositionV1::ReconciledAfterAmbiguousCommit)
             }}
@@ -631,13 +657,14 @@ fn read_tail_tick(
 }
 fn marker_matches(
     client: &mut impl GenericClient,
+    source: StoredTickReadSourceV1,
     campaign: CampaignId,
     identity: &IdentifiedMaterialTickV3,
     envelope: &CommittedMaterialTickEnvelopeV3,
 ) -> Result<bool, MaterialRuntimeErrorV3> {
     let tick =
         i64::try_from(identity.resolve_tick()).map_err(|_| MaterialRuntimeErrorV3::Bounds)?;
-    let Some(row)=client.query_opt("SELECT envelope_layout_version,tick_content_hash,envelope_digest FROM babylon_state.tick_commit WHERE campaign_id=$1::uuid AND resolve_tick=$2",&[campaign.as_uuid(),&tick])? else{return Ok(false);};
+    let Some(row)=client.query_opt(&format!("SELECT envelope_layout_version,tick_content_hash,envelope_digest FROM {} WHERE campaign_id=$1::uuid AND resolve_tick=$2", source.relation(StoredTickRelationV1::TickCommit)),&[campaign.as_uuid(),&tick])? else{return Ok(false);};
     if row.try_get::<_, i16>(0)? != 3
         || row.try_get::<_, Vec<u8>>(1)? != identity.tick_content_hash().as_bytes()
         || row.try_get::<_, Vec<u8>>(2)? != envelope.digest()
@@ -647,14 +674,38 @@ fn marker_matches(
     Ok(true)
 }
 
-struct StoredMaterialTickV3 {
-    identity: IdentifiedMaterialTickV3,
+/// A fully authenticated committed material tick, never a partial checkpoint read.
+pub(crate) struct StoredMaterialTickV3 {
+    pub(crate) identity: IdentifiedMaterialTickV3,
     envelope: CommittedMaterialTickEnvelopeV3,
-    graph: babylon_graph::stable_state::StableGraphStateV1,
+    pub(crate) graph: babylon_graph::stable_state::StableGraphStateV1,
     material: babylon_tick::material_state::MaterialStateRowsV1,
     sections: Vec<Vec<u8>>,
-    register: Vec<u8>,
+    pub(crate) register: MaterialWorldRegisterV2,
+    pub(crate) events: Vec<StoredEventV2>,
 }
+
+/// Uses the same complete decoder and envelope proof as durable reconciliation.
+/// The caller retains its role confinement and repeatable-read transaction.
+pub(crate) fn read_observer_material_tick_v3(
+    client: &mut impl GenericClient,
+    campaign: CampaignId,
+    tick: u64,
+    scope: &str,
+    foundation_digest: [u8; 32],
+    components: &MaterialComponentIdentityV1,
+) -> Result<StoredMaterialTickV3, MaterialRuntimeErrorV3> {
+    read_authenticated_material_tick_v3(
+        client,
+        StoredTickReadSourceV1::FullObserver,
+        campaign,
+        tick,
+        scope,
+        foundation_digest,
+        components,
+    )
+}
+
 fn read_stored_material_tick(
     client: &mut impl GenericClient,
     campaign: CampaignId,
@@ -667,49 +718,75 @@ fn read_stored_material_tick(
         .map_err(MaterialReplayErrorV3::Graph)?
         .scenario_scope()
         .to_owned();
-    let stored = read_stored_material_tick_rows(client, campaign, tick, &scope)?;
-    if stored.identity.foundation_digest() != session.foundation_digest() {
+    let components = MaterialComponentIdentityV1::from_session(session.graph_session());
+    read_authenticated_material_tick_v3(
+        client,
+        StoredTickReadSourceV1::Runtime,
+        campaign,
+        tick,
+        &scope,
+        session.foundation_digest(),
+        &components,
+    )
+}
+
+fn read_authenticated_material_tick_v3(
+    client: &mut impl GenericClient,
+    source: StoredTickReadSourceV1,
+    campaign: CampaignId,
+    tick: u64,
+    scope: &str,
+    foundation_digest: [u8; 32],
+    components: &MaterialComponentIdentityV1,
+) -> Result<StoredMaterialTickV3, MaterialRuntimeErrorV3> {
+    let stored = read_stored_material_tick_rows(client, source, campaign, tick, scope)?;
+    if stored.identity.foundation_digest() != foundation_digest {
         return Err(MaterialRuntimeErrorV3::InvalidCheckpoint);
     }
-    validate_component_identity(client, campaign, tick, session, &stored.sections)?;
+    validate_component_identity(client, source, campaign, tick, components, &stored.sections)?;
     Ok(stored)
 }
+
 fn read_stored_material_tick_rows(
     client: &mut impl GenericClient,
+    source: StoredTickReadSourceV1,
     campaign: CampaignId,
     tick: u64,
     scope: &str,
 ) -> Result<StoredMaterialTickV3, MaterialRuntimeErrorV3> {
     let tick_sql = i64::try_from(tick).map_err(|_| MaterialRuntimeErrorV3::Bounds)?;
-    let row=client.query_opt("SELECT identity_bytes,register_bytes,receipt_bytes FROM babylon_state.material_tick_v3 WHERE campaign_id=$1::uuid AND resolve_tick=$2",&[campaign.as_uuid(),&tick_sql])?.ok_or(MaterialRuntimeErrorV3::InvalidCheckpoint)?;
+    let row=client.query_opt(&format!("SELECT identity_bytes,register_bytes,receipt_bytes FROM {} WHERE campaign_id=$1::uuid AND resolve_tick=$2", source.relation(StoredTickRelationV1::MaterialTickV3)),&[campaign.as_uuid(),&tick_sql])?.ok_or(MaterialRuntimeErrorV3::InvalidCheckpoint)?;
     let identity = IdentifiedMaterialTickV3::decode(&row.try_get::<_, Vec<u8>>(0)?)?;
     let register: Vec<u8> = row.try_get(1)?;
     let receipts: Vec<u8> = row.try_get(2)?;
-    if identity.resolve_tick() != tick
-        || MaterialWorldRegisterV2::decode(&register)?.completed_tick() != tick
-    {
+    let decoded_register = MaterialWorldRegisterV2::decode(&register)?;
+    if identity.resolve_tick() != tick || decoded_register.completed_tick() != tick {
         return Err(MaterialRuntimeErrorV3::InvalidCheckpoint);
     }
-    let graph = stored_tick::read_graph_state(client, campaign, tick_sql, scope)?;
-    let material = stored_tick::read_material_rows(client, campaign, tick_sql)?;
-    let (checkpoint, sections) =
-        stored_tick::read_checkpoint_rows(client, campaign, tick, tick_sql, &graph, &material)?;
+    let graph = stored_tick::read_graph_state(client, source, campaign, tick_sql, scope)?;
+    let material = stored_tick::read_material_rows(client, source, campaign, tick_sql)?;
+    let (checkpoint, sections) = stored_tick::read_checkpoint_rows(
+        client, source, campaign, tick, tick_sql, &graph, &material,
+    )?;
     let (graph_rows, _) =
         compose_graph_rows_with_encoder_v1(graph.rows(), &mut |row: StableGraphRowRefV1<'_>| {
             row.encode()
         })?;
+    let events = stored_tick::read_event_rows(client, source, campaign, tick_sql)?;
     let families = CommittedTickRowFamiliesV2 {
         graph: graph_rows,
         state: compose_material_state_rows_v1(&material)?,
-        event: stored_tick::read_event_rows(client, campaign, tick_sql)?,
-        choice_receipt: stored_tick::read_choice_receipt_rows(client, campaign, tick_sql)?,
+        event: events.encoded,
+        choice_receipt: stored_tick::read_choice_receipt_rows(client, source, campaign, tick_sql)?,
         checkpoint,
-        archive_dirty_receipt: stored_tick::read_archive_receipt(client, campaign, tick_sql)?,
+        archive_dirty_receipt: stored_tick::read_archive_receipt(
+            client, source, campaign, tick_sql,
+        )?,
     };
     let envelope = CommittedMaterialTickEnvelopeV3::compose(
         campaign, &identity, families, &register, &receipts,
     )?;
-    if !marker_matches(client, campaign, &identity, &envelope)? {
+    if !marker_matches(client, source, campaign, &identity, &envelope)? {
         return Err(MaterialRuntimeErrorV3::InvalidCheckpoint);
     }
     Ok(StoredMaterialTickV3 {
@@ -718,49 +795,36 @@ fn read_stored_material_tick_rows(
         graph,
         material,
         sections,
-        register,
+        register: decoded_register,
+        events: events.decoded,
     })
 }
 fn validate_component_identity(
     client: &mut impl GenericClient,
+    source: StoredTickReadSourceV1,
     campaign: CampaignId,
     tick: u64,
-    session: &MaterialReplaySessionV3<HypergraphStore>,
+    components: &MaterialComponentIdentityV1,
     sections: &[Vec<u8>],
 ) -> Result<(), MaterialRuntimeErrorV3> {
-    let graph = session.graph_session();
-    let seed = graph.rng_seed().to_be_bytes();
-    let reference = graph.reference_digest();
-    let mut content = [0_u8; 64];
-    content[..32].copy_from_slice(&graph.content_digest().defines_hash);
-    content[32..].copy_from_slice(&graph.content_digest().rules_hash);
-    let expected = [
-        graph.resolver_manifest_bytes(),
-        graph.prepared_environment_bytes(),
-        graph.session_identity().as_bytes(),
-        seed.as_slice(),
-        content.as_slice(),
-        reference.as_bytes().as_slice(),
-    ];
-    if sections.len() != 9
-        || expected
-            .iter()
-            .enumerate()
-            .any(|(index, bytes)| sections[index + 2].as_slice() != *bytes)
-    {
-        return Err(MaterialRuntimeErrorV3::InvalidCheckpoint);
-    }
-    let actions = OrderedPracticeActionBatchV1::empty(graph.session_identity().clone(), tick)
-        .map_err(|_| MaterialRuntimeErrorV3::InvalidCheckpoint)?;
+    components.validate_sections(sections)?;
     let tick_sql = i64::try_from(tick).map_err(|_| MaterialRuntimeErrorV3::Bounds)?;
-    let row=client.query_one("SELECT layout_version,action_batch_digest,exact_action_batch_bytes FROM babylon_state.tick_action_batch_v1 WHERE campaign_id=$1::uuid AND resolve_tick=$2",&[campaign.as_uuid(),&tick_sql])?;
-    if row.try_get::<_, i16>(0)? != 1
-        || row.try_get::<_, Vec<u8>>(1)? != actions.digest().as_bytes()
-        || row.try_get::<_, Vec<u8>>(2)? != actions.canonical_bytes()
-    {
-        return Err(MaterialRuntimeErrorV3::InvalidCheckpoint);
-    }
-    Ok(())
+    let row = client
+        .query_opt(
+            &format!(
+                "SELECT layout_version,action_batch_digest,exact_action_batch_bytes FROM {} \
+            WHERE campaign_id=$1::uuid AND resolve_tick=$2",
+                source.relation(StoredTickRelationV1::TickActionBatchV1)
+            ),
+            &[campaign.as_uuid(), &tick_sql],
+        )?
+        .ok_or(MaterialRuntimeErrorV3::InvalidCheckpoint)?;
+    components.validate_actions(
+        tick,
+        row.try_get(0)?,
+        &row.try_get::<_, Vec<u8>>(1)?,
+        &row.try_get::<_, Vec<u8>>(2)?,
+    )
 }
 
 #[cfg(test)]

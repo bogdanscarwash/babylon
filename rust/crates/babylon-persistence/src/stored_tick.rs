@@ -1,5 +1,9 @@
 //! Canonical typed-row reader shared by retry reconciliation and restart.
 
+mod source;
+
+pub(crate) use source::{StoredTickReadSourceV1, StoredTickRelationV1};
+
 use std::collections::BTreeMap;
 
 use babylon_bsl::identity_codec::StableBslValueV1;
@@ -26,6 +30,19 @@ use crate::semantic_batches::{
 };
 use crate::semantic_codec;
 use crate::tick_commit_claim::TickCommitClaimV1;
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct StoredEventV2 {
+    pub(crate) emitting_rule: String,
+    pub(crate) choice_receipt_ordinal: Option<u32>,
+    pub(crate) event_type: String,
+    pub(crate) fields: Vec<(String, StableBslValueV1)>,
+}
+
+pub(crate) struct StoredEventRowsV2 {
+    pub(crate) encoded: Vec<CommittedTickRowV2>,
+    pub(crate) decoded: Vec<StoredEventV2>,
+}
 
 pub(crate) struct StoredTypedTickV2 {
     envelope: CommittedTickEnvelopeV2,
@@ -75,13 +92,17 @@ pub(crate) fn read_stored_typed_tick_v2(
     resolve_tick: u64,
     scenario_scope: &str,
 ) -> Result<Option<StoredTypedTickV2>, RustPersistenceRuntimeErrorV2> {
+    let source = StoredTickReadSourceV1::Runtime;
     let resolve_tick_sql =
         i64::try_from(resolve_tick).map_err(|_| RustPersistenceRuntimeErrorV2::CampaignConflict)?;
     let Some(marker) = client
         .query_opt(
-            "SELECT envelope_layout_version, tick_content_hash, envelope_digest \
-             FROM babylon_state.tick_commit \
+            &format!(
+                "SELECT envelope_layout_version, tick_content_hash, envelope_digest \
+             FROM {tick_commit} \
              WHERE campaign_id = $1::uuid AND resolve_tick = $2",
+                tick_commit = source.relation(StoredTickRelationV1::TickCommit)
+            ),
             &[campaign_id.as_uuid(), &resolve_tick_sql],
         )
         .map_err(|error| {
@@ -99,9 +120,12 @@ pub(crate) fn read_stored_typed_tick_v2(
 
     let action = client
         .query_opt(
-            "SELECT layout_version, action_batch_digest, exact_action_batch_bytes \
-             FROM babylon_state.tick_action_batch_v1 \
+            &format!(
+                "SELECT layout_version, action_batch_digest, exact_action_batch_bytes \
+             FROM {tick_action_batch_v1} \
              WHERE campaign_id = $1::uuid AND resolve_tick = $2",
+                tick_action_batch_v1 = source.relation(StoredTickRelationV1::TickActionBatchV1)
+            ),
             &[campaign_id.as_uuid(), &resolve_tick_sql],
         )
         .map_err(|error| {
@@ -115,24 +139,31 @@ pub(crate) fn read_stored_typed_tick_v2(
         return Err(RustPersistenceRuntimeErrorV2::CampaignConflict);
     }
 
-    let graph_state = read_graph_state(client, campaign_id, resolve_tick_sql, scenario_scope)?;
+    let graph_state = read_graph_state(
+        client,
+        source,
+        campaign_id,
+        resolve_tick_sql,
+        scenario_scope,
+    )?;
     let (graph, _) =
         compose_graph_rows_with_encoder_v1(graph_state.rows(), &mut |row: StableGraphRowRefV1<
             '_,
         >| row.encode())?;
-    let material_rows = read_material_rows(client, campaign_id, resolve_tick_sql)?;
+    let material_rows = read_material_rows(client, source, campaign_id, resolve_tick_sql)?;
     let state = compose_material_state_rows_v1(&material_rows)?;
-    let choice_receipt = read_choice_receipt_rows(client, campaign_id, resolve_tick_sql)?;
-    let event = read_event_rows(client, campaign_id, resolve_tick_sql)?;
+    let choice_receipt = read_choice_receipt_rows(client, source, campaign_id, resolve_tick_sql)?;
+    let event = read_event_rows(client, source, campaign_id, resolve_tick_sql)?.encoded;
     let (checkpoint, checkpoint_sections) = read_checkpoint_rows(
         client,
+        source,
         campaign_id,
         resolve_tick,
         resolve_tick_sql,
         &graph_state,
         &material_rows,
     )?;
-    let receipt = read_archive_receipt(client, campaign_id, resolve_tick_sql)?;
+    let receipt = read_archive_receipt(client, source, campaign_id, resolve_tick_sql)?;
     let claim = TickCommitClaimV1::compose(
         campaign_id,
         resolve_tick,
@@ -166,6 +197,7 @@ pub(crate) fn read_stored_typed_tick_v2(
 
 pub(crate) fn read_graph_state(
     client: &mut impl GenericClient,
+    source: StoredTickReadSourceV1,
     campaign_id: CampaignId,
     resolve_tick: i64,
     scenario_scope: &str,
@@ -173,13 +205,13 @@ pub(crate) fn read_graph_state(
     compose_stable_graph_state_from_rows_v1(
         scenario_scope,
         StableGraphStateRowsInputV1 {
-            nodes: read_graph_nodes(client, campaign_id, resolve_tick)?,
-            node_f64: read_graph_node_f64(client, campaign_id, resolve_tick)?,
-            edges: read_graph_edges(client, campaign_id, resolve_tick)?,
-            hyperedges: read_graph_hyperedges(client, campaign_id, resolve_tick)?,
-            edge_f64: read_graph_edge_f64(client, campaign_id, resolve_tick)?,
-            node_currency: read_graph_node_currency(client, campaign_id, resolve_tick)?,
-            hyperedge_f64: read_graph_hyperedge_f64(client, campaign_id, resolve_tick)?,
+            nodes: read_graph_nodes(client, source, campaign_id, resolve_tick)?,
+            node_f64: read_graph_node_f64(client, source, campaign_id, resolve_tick)?,
+            edges: read_graph_edges(client, source, campaign_id, resolve_tick)?,
+            hyperedges: read_graph_hyperedges(client, source, campaign_id, resolve_tick)?,
+            edge_f64: read_graph_edge_f64(client, source, campaign_id, resolve_tick)?,
+            node_currency: read_graph_node_currency(client, source, campaign_id, resolve_tick)?,
+            hyperedge_f64: read_graph_hyperedge_f64(client, source, campaign_id, resolve_tick)?,
         },
     )
     .map_err(|_| RustPersistenceRuntimeErrorV2::ReplaySource)
@@ -195,13 +227,17 @@ type GraphHyperedgeF64RowsV1 = Vec<(String, String, u64)>;
 
 fn read_graph_nodes(
     client: &mut impl GenericClient,
+    source: StoredTickReadSourceV1,
     campaign_id: CampaignId,
     resolve_tick: i64,
 ) -> Result<GraphNodeRowsV1, RustPersistenceRuntimeErrorV2> {
     client
         .query(
-            "SELECT local_name, node_type FROM babylon_state.graph_node_v1 \
+            &format!(
+                "SELECT local_name, node_type FROM {graph_node_v1} \
              WHERE campaign_id = $1::uuid AND resolve_tick = $2 ORDER BY local_name",
+                graph_node_v1 = source.relation(StoredTickRelationV1::GraphNodeV1)
+            ),
             &[campaign_id.as_uuid(), &resolve_tick],
         )
         .map_err(|error| database("read stored graph nodes", &error))?
@@ -212,13 +248,17 @@ fn read_graph_nodes(
 
 fn read_graph_node_f64(
     client: &mut impl GenericClient,
+    source: StoredTickReadSourceV1,
     campaign_id: CampaignId,
     resolve_tick: i64,
 ) -> Result<GraphNodeF64RowsV1, RustPersistenceRuntimeErrorV2> {
     client
         .query(
-            "SELECT local_name, qname, value_bits FROM babylon_state.graph_node_f64_v1 \
+            &format!(
+                "SELECT local_name, qname, value_bits FROM {graph_node_f64_v1} \
              WHERE campaign_id = $1::uuid AND resolve_tick = $2 ORDER BY local_name, qname",
+                graph_node_f64_v1 = source.relation(StoredTickRelationV1::GraphNodeF64V1)
+            ),
             &[campaign_id.as_uuid(), &resolve_tick],
         )
         .map_err(|error| database("read stored graph node f64", &error))?
@@ -236,15 +276,19 @@ fn read_graph_node_f64(
 
 fn read_graph_edges(
     client: &mut impl GenericClient,
+    source: StoredTickReadSourceV1,
     campaign_id: CampaignId,
     resolve_tick: i64,
 ) -> Result<GraphEdgeRowsV1, RustPersistenceRuntimeErrorV2> {
     client
         .query(
-            "SELECT edge_type, source_local_name, target_local_name, strength_bits \
-             FROM babylon_state.graph_edge_v1 \
+            &format!(
+                "SELECT edge_type, source_local_name, target_local_name, strength_bits \
+             FROM {graph_edge_v1} \
              WHERE campaign_id = $1::uuid AND resolve_tick = $2 \
              ORDER BY edge_type, source_local_name, target_local_name",
+                graph_edge_v1 = source.relation(StoredTickRelationV1::GraphEdgeV1)
+            ),
             &[campaign_id.as_uuid(), &resolve_tick],
         )
         .map_err(|error| database("read stored graph edges", &error))?
@@ -263,22 +307,28 @@ fn read_graph_edges(
 
 fn read_graph_hyperedges(
     client: &mut impl GenericClient,
+    source: StoredTickReadSourceV1,
     campaign_id: CampaignId,
     resolve_tick: i64,
 ) -> Result<GraphHyperedgeRowsV1, RustPersistenceRuntimeErrorV2> {
     client
         .query(
-            "SELECT edge.local_name, edge.hyperedge_type, \
-                    ARRAY(SELECT member.position FROM babylon_state.graph_hyperedge_member_v1 AS member \
+            &format!(
+                "SELECT edge.local_name, edge.hyperedge_type, \
+                    ARRAY(SELECT member.position FROM {graph_hyperedge_member_v1} AS member \
                           WHERE member.campaign_id = edge.campaign_id \
                             AND member.resolve_tick = edge.resolve_tick \
                             AND member.local_name = edge.local_name ORDER BY member.position), \
-                    ARRAY(SELECT member.member FROM babylon_state.graph_hyperedge_member_v1 AS member \
+                    ARRAY(SELECT member.member FROM {graph_hyperedge_member_v1} AS member \
                           WHERE member.campaign_id = edge.campaign_id \
                             AND member.resolve_tick = edge.resolve_tick \
                             AND member.local_name = edge.local_name ORDER BY member.position) \
-             FROM babylon_state.graph_hyperedge_v1 AS edge \
+             FROM {graph_hyperedge_v1} AS edge \
              WHERE edge.campaign_id = $1::uuid AND edge.resolve_tick = $2 ORDER BY edge.local_name",
+                graph_hyperedge_member_v1 =
+                    source.relation(StoredTickRelationV1::GraphHyperedgeMemberV1),
+                graph_hyperedge_v1 = source.relation(StoredTickRelationV1::GraphHyperedgeV1)
+            ),
             &[campaign_id.as_uuid(), &resolve_tick],
         )
         .map_err(|error| database("read stored graph hyperedges", &error))?
@@ -294,26 +344,26 @@ fn read_graph_hyperedges(
             {
                 return Err(RustPersistenceRuntimeErrorV2::CampaignConflict);
             }
-            Ok((
-                decode_column(row, 0)?,
-                decode_column(row, 1)?,
-                members,
-            ))
+            Ok((decode_column(row, 0)?, decode_column(row, 1)?, members))
         })
         .collect()
 }
 
 fn read_graph_edge_f64(
     client: &mut impl GenericClient,
+    source: StoredTickReadSourceV1,
     campaign_id: CampaignId,
     resolve_tick: i64,
 ) -> Result<GraphEdgeF64RowsV1, RustPersistenceRuntimeErrorV2> {
     client
         .query(
-            "SELECT edge_type, source_local_name, target_local_name, qname, value_bits \
-             FROM babylon_state.graph_edge_f64_v1 \
+            &format!(
+                "SELECT edge_type, source_local_name, target_local_name, qname, value_bits \
+             FROM {graph_edge_f64_v1} \
              WHERE campaign_id = $1::uuid AND resolve_tick = $2 \
              ORDER BY edge_type, source_local_name, target_local_name, qname",
+                graph_edge_f64_v1 = source.relation(StoredTickRelationV1::GraphEdgeF64V1)
+            ),
             &[campaign_id.as_uuid(), &resolve_tick],
         )
         .map_err(|error| database("read stored graph edge f64", &error))?
@@ -333,14 +383,18 @@ fn read_graph_edge_f64(
 
 fn read_graph_node_currency(
     client: &mut impl GenericClient,
+    source: StoredTickReadSourceV1,
     campaign_id: CampaignId,
     resolve_tick: i64,
 ) -> Result<GraphNodeCurrencyRowsV1, RustPersistenceRuntimeErrorV2> {
     client
         .query(
-            "SELECT local_name, qname, micro_units::text \
-             FROM babylon_state.graph_node_currency_v1 \
+            &format!(
+                "SELECT local_name, qname, micro_units::text \
+             FROM {graph_node_currency_v1} \
              WHERE campaign_id = $1::uuid AND resolve_tick = $2 ORDER BY local_name, qname",
+                graph_node_currency_v1 = source.relation(StoredTickRelationV1::GraphNodeCurrencyV1)
+            ),
             &[campaign_id.as_uuid(), &resolve_tick],
         )
         .map_err(|error| database("read stored graph Currency", &error))?
@@ -360,14 +414,18 @@ fn read_graph_node_currency(
 
 fn read_graph_hyperedge_f64(
     client: &mut impl GenericClient,
+    source: StoredTickReadSourceV1,
     campaign_id: CampaignId,
     resolve_tick: i64,
 ) -> Result<GraphHyperedgeF64RowsV1, RustPersistenceRuntimeErrorV2> {
     client
         .query(
-            "SELECT local_name, qname, value_bits \
-             FROM babylon_state.graph_hyperedge_f64_v1 \
+            &format!(
+                "SELECT local_name, qname, value_bits \
+             FROM {graph_hyperedge_f64_v1} \
              WHERE campaign_id = $1::uuid AND resolve_tick = $2 ORDER BY local_name, qname",
+                graph_hyperedge_f64_v1 = source.relation(StoredTickRelationV1::GraphHyperedgeF64V1)
+            ),
             &[campaign_id.as_uuid(), &resolve_tick],
         )
         .map_err(|error| database("read stored graph hyperedge f64", &error))?
@@ -385,15 +443,16 @@ fn read_graph_hyperedge_f64(
 
 pub(crate) fn read_material_rows(
     client: &mut impl GenericClient,
+    source: StoredTickReadSourceV1,
     campaign_id: CampaignId,
     resolve_tick: i64,
 ) -> Result<MaterialStateRowsV1, RustPersistenceRuntimeErrorV2> {
     let world_registers = client
         .query(
-            "SELECT register_name, value_tag, int_value, currency_value::text, real_bits, \
+            &format!("SELECT register_name, value_tag, int_value, currency_value::text, real_bits, \
                     ratio_bits, ratio_min_bits, ratio_max_bits, bool_value, enum_type, enum_member, stable_key \
-             FROM babylon_state.world_register_v1 \
-             WHERE campaign_id = $1::uuid AND resolve_tick = $2 ORDER BY register_name",
+             FROM {world_register_v1} \
+             WHERE campaign_id = $1::uuid AND resolve_tick = $2 ORDER BY register_name", world_register_v1 = source.relation(StoredTickRelationV1::WorldRegisterV1)),
             &[campaign_id.as_uuid(), &resolve_tick],
         )
         .map_err(|error| database("read stored world registers", &error))?
@@ -403,14 +462,17 @@ pub(crate) fn read_material_rows(
                 .map_err(|_| RustPersistenceRuntimeErrorV2::ReplaySource)
         })
         .collect::<Result<Vec<_>, RustPersistenceRuntimeErrorV2>>()?;
-    let territories = read_territories(client, campaign_id, resolve_tick)?;
+    let territories = read_territories(client, source, campaign_id, resolve_tick)?;
     let dynamic_hexes = client
         .query(
-            "SELECT cell_id, c_bits, v_bits, s_bits, k_bits, biocapacity_stock_bits, \
+            &format!(
+                "SELECT cell_id, c_bits, v_bits, s_bits, k_bits, biocapacity_stock_bits, \
                     energy_stock_bits, raw_material_stock_bits, internet_access_pct_bits, \
                     surveillance_coupling_bits \
-             FROM babylon_state.hex_state_delta_v1 \
+             FROM {hex_state_delta_v1} \
              WHERE campaign_id = $1::uuid AND resolve_tick = $2 ORDER BY cell_id",
+                hex_state_delta_v1 = source.relation(StoredTickRelationV1::HexStateDeltaV1)
+            ),
             &[campaign_id.as_uuid(), &resolve_tick],
         )
         .map_err(|error| database("read stored dynamic hex state", &error))?
@@ -434,7 +496,7 @@ pub(crate) fn read_material_rows(
                 .map_err(|_| RustPersistenceRuntimeErrorV2::ReplaySource)
         })
         .collect::<Result<Vec<_>, RustPersistenceRuntimeErrorV2>>()?;
-    let organizations = read_organizations(client, campaign_id, resolve_tick)?;
+    let organizations = read_organizations(client, source, campaign_id, resolve_tick)?;
     MaterialStateRowsV1::try_from_rows(MaterialStateRowsInputV1 {
         world_registers,
         territories,
@@ -448,18 +510,19 @@ type NamedStableValues = BTreeMap<Vec<u8>, Vec<(String, StableBslValueV1)>>;
 
 fn read_territories(
     client: &mut impl GenericClient,
+    source: StoredTickReadSourceV1,
     campaign_id: CampaignId,
     resolve_tick: i64,
 ) -> Result<Vec<TerritoryStateRowV1>, RustPersistenceRuntimeErrorV2> {
     let mut fields: NamedStableValues = BTreeMap::new();
     for row in client
         .query(
-            "SELECT territory_id, position, field_name, value_tag, int_value, currency_value::text, \
+            &format!("SELECT territory_id, position, field_name, value_tag, int_value, currency_value::text, \
                     real_bits, ratio_bits, ratio_min_bits, ratio_max_bits, bool_value, enum_type, \
                     enum_member, stable_key \
-             FROM babylon_state.territory_state_field_v1 \
+             FROM {territory_state_field_v1} \
              WHERE campaign_id = $1::uuid AND resolve_tick = $2 \
-             ORDER BY territory_id, position",
+             ORDER BY territory_id, position", territory_state_field_v1 = source.relation(StoredTickRelationV1::TerritoryStateFieldV1)),
             &[campaign_id.as_uuid(), &resolve_tick],
         )
         .map_err(|error| database("read stored territory fields", &error))?
@@ -473,8 +536,11 @@ fn read_territories(
     let mut output = Vec::new();
     for row in client
         .query(
-            "SELECT territory_id FROM babylon_state.territory_state_v1 \
+            &format!(
+                "SELECT territory_id FROM {territory_state_v1} \
              WHERE campaign_id = $1::uuid AND resolve_tick = $2 ORDER BY territory_id",
+                territory_state_v1 = source.relation(StoredTickRelationV1::TerritoryStateV1)
+            ),
             &[campaign_id.as_uuid(), &resolve_tick],
         )
         .map_err(|error| database("read stored territory state", &error))?
@@ -496,16 +562,21 @@ type StableKeyLists = BTreeMap<Vec<u8>, Vec<StableElementKeyV1>>;
 
 fn read_organizations(
     client: &mut impl GenericClient,
+    source: StoredTickReadSourceV1,
     campaign_id: CampaignId,
     resolve_tick: i64,
 ) -> Result<Vec<OrganizationStateRowV1>, RustPersistenceRuntimeErrorV2> {
     let mut territories: StableKeyLists = BTreeMap::new();
     for row in client
         .query(
-            "SELECT organization_id, position, territory_id \
-             FROM babylon_state.organization_territory_v1 \
+            &format!(
+                "SELECT organization_id, position, territory_id \
+             FROM {organization_territory_v1} \
              WHERE campaign_id = $1::uuid AND resolve_tick = $2 \
              ORDER BY organization_id, position",
+                organization_territory_v1 =
+                    source.relation(StoredTickRelationV1::OrganizationTerritoryV1)
+            ),
             &[campaign_id.as_uuid(), &resolve_tick],
         )
         .map_err(|error| database("read stored organization territories", &error))?
@@ -520,12 +591,16 @@ fn read_organizations(
     let mut fields: NamedStableValues = BTreeMap::new();
     for row in client
         .query(
-            "SELECT organization_id, position, field_name, value_tag, int_value, \
+            &format!(
+                "SELECT organization_id, position, field_name, value_tag, int_value, \
                     currency_value::text, real_bits, ratio_bits, ratio_min_bits, ratio_max_bits, \
                     bool_value, enum_type, enum_member, stable_key \
-             FROM babylon_state.organization_state_field_v1 \
+             FROM {organization_state_field_v1} \
              WHERE campaign_id = $1::uuid AND resolve_tick = $2 \
              ORDER BY organization_id, position",
+                organization_state_field_v1 =
+                    source.relation(StoredTickRelationV1::OrganizationStateFieldV1)
+            ),
             &[campaign_id.as_uuid(), &resolve_tick],
         )
         .map_err(|error| database("read stored organization fields", &error))?
@@ -539,14 +614,17 @@ fn read_organizations(
     let mut output = Vec::new();
     for row in client
         .query(
-            "SELECT organization_id, organization_kind_tag, organization_kind_int, \
+            &format!(
+                "SELECT organization_id, organization_kind_tag, organization_kind_int, \
                     organization_kind_currency::text, organization_kind_real_bits, \
                     organization_kind_ratio_bits, organization_kind_ratio_min_bits, \
                     organization_kind_ratio_max_bits, organization_kind_bool, \
                     organization_kind_enum_type, organization_kind_enum_member, \
                     organization_kind_stable_key \
-             FROM babylon_state.organization_state_v1 \
+             FROM {organization_state_v1} \
              WHERE campaign_id = $1::uuid AND resolve_tick = $2 ORDER BY organization_id",
+                organization_state_v1 = source.relation(StoredTickRelationV1::OrganizationStateV1)
+            ),
             &[campaign_id.as_uuid(), &resolve_tick],
         )
         .map_err(|error| database("read stored organization state", &error))?
@@ -570,17 +648,18 @@ fn read_organizations(
 
 pub(crate) fn read_event_rows(
     client: &mut impl GenericClient,
+    source: StoredTickReadSourceV1,
     campaign_id: CampaignId,
     resolve_tick: i64,
-) -> Result<Vec<CommittedTickRowV2>, RustPersistenceRuntimeErrorV2> {
+) -> Result<StoredEventRowsV2, RustPersistenceRuntimeErrorV2> {
     let mut fields: BTreeMap<i64, Vec<(String, StableBslValueV1)>> = BTreeMap::new();
     for row in client
         .query(
-            "SELECT ordinal, position, field_name, value_tag, int_value, currency_value::text, \
+            &format!("SELECT ordinal, position, field_name, value_tag, int_value, currency_value::text, \
                     real_bits, ratio_bits, ratio_min_bits, ratio_max_bits, bool_value, enum_type, \
                     enum_member, stable_key \
-             FROM babylon_state.tick_event_field_v2 \
-             WHERE campaign_id = $1::uuid AND resolve_tick = $2 ORDER BY ordinal, position",
+             FROM {tick_event_field_v2} \
+             WHERE campaign_id = $1::uuid AND resolve_tick = $2 ORDER BY ordinal, position", tick_event_field_v2 = source.relation(StoredTickRelationV1::TickEventFieldV2)),
             &[campaign_id.as_uuid(), &resolve_tick],
         )
         .map_err(|error| database("read stored event fields", &error))?
@@ -592,11 +671,15 @@ pub(crate) fn read_event_rows(
         target.push((decode_column(&row, 2)?, decode_bsl_value(&row, 3)?));
     }
     let mut output = Vec::new();
+    let mut decoded = Vec::new();
     for row in client
         .query(
-            "SELECT ordinal, event_type, emitting_rule, choice_receipt_ordinal \
-             FROM babylon_state.tick_event_v2 \
+            &format!(
+                "SELECT ordinal, event_type, emitting_rule, choice_receipt_ordinal \
+             FROM {tick_event_v2} \
              WHERE campaign_id = $1::uuid AND resolve_tick = $2 ORDER BY ordinal",
+                tick_event_v2 = source.relation(StoredTickRelationV1::TickEventV2)
+            ),
             &[campaign_id.as_uuid(), &resolve_tick],
         )
         .map_err(|error| database("read stored events", &error))?
@@ -608,31 +691,51 @@ pub(crate) fn read_event_rows(
             return Err(RustPersistenceRuntimeErrorV2::CampaignConflict);
         }
         let owned = fields.remove(&ordinal).unwrap_or_default();
-        let borrowed = owned
-            .iter()
-            .map(|(name, value)| (name.as_str(), value))
-            .collect::<Vec<_>>();
-        output.push(semantic_codec::encode_successful_event(
-            ordinal_u32,
-            &decode_column::<String>(&row, 2)?,
-            decode_column::<Option<i64>>(&row, 3)?
+        let event = StoredEventV2 {
+            emitting_rule: decode_column(&row, 2)?,
+            choice_receipt_ordinal: decode_column::<Option<i64>>(&row, 3)?
                 .map(|value| {
                     u32::try_from(value)
                         .map_err(|_| RustPersistenceRuntimeErrorV2::CampaignConflict)
                 })
                 .transpose()?,
-            &decode_column::<String>(&row, 1)?,
-            &borrowed,
-        )?);
+            event_type: decode_column(&row, 1)?,
+            fields: owned,
+        };
+        output.push(encode_stored_event(ordinal_u32, &event)?);
+        decoded.push(event);
     }
     if !fields.is_empty() {
         return Err(RustPersistenceRuntimeErrorV2::CampaignConflict);
     }
-    Ok(output)
+    Ok(StoredEventRowsV2 {
+        encoded: output,
+        decoded,
+    })
+}
+
+fn encode_stored_event(
+    ordinal: u32,
+    event: &StoredEventV2,
+) -> Result<CommittedTickRowV2, RustPersistenceRuntimeErrorV2> {
+    let borrowed = event
+        .fields
+        .iter()
+        .map(|(name, value)| (name.as_str(), value))
+        .collect::<Vec<_>>();
+    semantic_codec::encode_successful_event(
+        ordinal,
+        &event.emitting_rule,
+        event.choice_receipt_ordinal,
+        &event.event_type,
+        &borrowed,
+    )
+    .map_err(Into::into)
 }
 
 pub(crate) fn read_choice_receipt_rows(
     client: &mut impl GenericClient,
+    source: StoredTickReadSourceV1,
     campaign_id: CampaignId,
     resolve_tick: i64,
 ) -> Result<Vec<CommittedTickRowV2>, RustPersistenceRuntimeErrorV2> {
@@ -640,11 +743,15 @@ pub(crate) fn read_choice_receipt_rows(
         BTreeMap::new();
     for row in client
         .query(
-            "SELECT encounter_ordinal, position, outcome_member, mass_nanounits::text, \
+            &format!(
+                "SELECT encounter_ordinal, position, outcome_member, mass_nanounits::text, \
                     ticket_start::text, ticket_end_exclusive::text, ticket_count::text \
-             FROM babylon_state.tick_choice_receipt_branch_v1 \
+             FROM {tick_choice_receipt_branch_v1} \
              WHERE campaign_id = $1::uuid AND resolve_tick = $2 \
              ORDER BY encounter_ordinal, position",
+                tick_choice_receipt_branch_v1 =
+                    source.relation(StoredTickRelationV1::TickChoiceReceiptBranchV1)
+            ),
             &[campaign_id.as_uuid(), &resolve_tick],
         )
         .map_err(|error| database("read stored choice receipt branches", &error))?
@@ -665,10 +772,14 @@ pub(crate) fn read_choice_receipt_rows(
     let mut carriers: BTreeMap<i64, Vec<StableElementKeyV1>> = BTreeMap::new();
     for row in client
         .query(
-            "SELECT encounter_ordinal, position, stable_element \
-             FROM babylon_state.tick_choice_receipt_carrier_element_v1 \
+            &format!(
+                "SELECT encounter_ordinal, position, stable_element \
+             FROM {tick_choice_receipt_carrier_element_v1} \
              WHERE campaign_id = $1::uuid AND resolve_tick = $2 \
              ORDER BY encounter_ordinal, position",
+                tick_choice_receipt_carrier_element_v1 =
+                    source.relation(StoredTickRelationV1::TickChoiceReceiptCarrierElementV1)
+            ),
             &[campaign_id.as_uuid(), &resolve_tick],
         )
         .map_err(|error| database("read stored choice receipt carriers", &error))?
@@ -684,11 +795,14 @@ pub(crate) fn read_choice_receipt_rows(
     let mut output = Vec::new();
     for row in client
         .query(
-            "SELECT encounter_ordinal, rule_id, sample, slot, outcome_enum, stable_carrier, \
+            &format!(
+                "SELECT encounter_ordinal, rule_id, sample, slot, outcome_enum, stable_carrier, \
                     draw_ticket::text, selected_outcome, allocation_digest, instance_digest \
-             FROM babylon_state.tick_choice_receipt_v1 \
+             FROM {tick_choice_receipt_v1} \
              WHERE campaign_id = $1::uuid AND resolve_tick = $2 \
              ORDER BY encounter_ordinal",
+                tick_choice_receipt_v1 = source.relation(StoredTickRelationV1::TickChoiceReceiptV1)
+            ),
             &[campaign_id.as_uuid(), &resolve_tick],
         )
         .map_err(|error| database("read stored choice receipts", &error))?
@@ -724,6 +838,7 @@ pub(crate) fn read_choice_receipt_rows(
 
 pub(crate) fn read_checkpoint_rows(
     client: &mut impl GenericClient,
+    source: StoredTickReadSourceV1,
     campaign_id: CampaignId,
     resolve_tick: u64,
     resolve_tick_sql: i64,
@@ -732,9 +847,12 @@ pub(crate) fn read_checkpoint_rows(
 ) -> Result<(Vec<CommittedTickRowV2>, Vec<Vec<u8>>), RustPersistenceRuntimeErrorV2> {
     let manifest = client
         .query_opt(
-            "SELECT completeness_tag, manifest_bytes, manifest_sha256 \
-             FROM babylon_state.checkpoint_manifest \
+            &format!(
+                "SELECT completeness_tag, manifest_bytes, manifest_sha256 \
+             FROM {checkpoint_manifest} \
              WHERE campaign_id = $1::uuid AND resolve_tick = $2",
+                checkpoint_manifest = source.relation(StoredTickRelationV1::CheckpointManifest)
+            ),
             &[campaign_id.as_uuid(), &resolve_tick_sql],
         )
         .map_err(|error| database("read stored checkpoint manifest", &error))?
@@ -747,9 +865,12 @@ pub(crate) fn read_checkpoint_rows(
     }
     let stored = client
         .query(
-            "SELECT section_tag, ordinal, exact_section_bytes \
-             FROM babylon_state.checkpoint_section_v1 \
+            &format!(
+                "SELECT section_tag, ordinal, exact_section_bytes \
+             FROM {checkpoint_section_v1} \
              WHERE campaign_id = $1::uuid AND resolve_tick = $2 ORDER BY section_tag, ordinal",
+                checkpoint_section_v1 = source.relation(StoredTickRelationV1::CheckpointSectionV1)
+            ),
             &[campaign_id.as_uuid(), &resolve_tick_sql],
         )
         .map_err(|error| database("read stored checkpoint sections", &error))?;
@@ -794,13 +915,18 @@ pub(crate) fn read_checkpoint_rows(
 
 pub(crate) fn read_archive_receipt(
     client: &mut impl GenericClient,
+    source: StoredTickReadSourceV1,
     campaign_id: CampaignId,
     resolve_tick: i64,
 ) -> Result<CommittedTickRowV2, RustPersistenceRuntimeErrorV2> {
     let row = client
         .query_opt(
-            "SELECT tick_content_hash FROM babylon_state.archive_dirty_receipt_v1 \
+            &format!(
+                "SELECT tick_content_hash FROM {archive_dirty_receipt_v1} \
              WHERE campaign_id = $1::uuid AND resolve_tick = $2",
+                archive_dirty_receipt_v1 =
+                    source.relation(StoredTickRelationV1::ArchiveDirtyReceiptV1)
+            ),
             &[campaign_id.as_uuid(), &resolve_tick],
         )
         .map_err(|error| database("read stored archive receipt", &error))?

@@ -5,8 +5,9 @@ use std::sync::{mpsc, Mutex};
 
 use babylon_persistence::{
     ObserverEconomyReaderV1, ObserverEconomySnapshotV1, ObserverVisibilityV1,
-    RuntimeSessionRequestV2, RuntimeSessionResponseV2, RuntimeSessionTailV2,
-    RUNTIME_SESSION_MAX_LINE_BYTES_V2, RUNTIME_SESSION_PROTOCOL_VERSION_V2,
+    RuntimeSessionPresetV3, RuntimeSessionRequestV3, RuntimeSessionResponseV3,
+    RuntimeSessionScopeV3, RuntimeSessionTailV3, RuntimeSessionTargetV3,
+    RUNTIME_SESSION_MAX_LINE_BYTES_V3, RUNTIME_SESSION_PROTOCOL_VERSION_V3,
 };
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
@@ -15,20 +16,17 @@ use bevy::tasks::{block_on, AsyncComputeTaskPool, Task};
 use crate::observer::{ObservationContext, ObserverSession, Perspective, SessionPhase};
 use crate::observer_controls::{availability, ControlAvailability};
 use crate::observer_ui::{ObserverCommand, ObserverFeedback, ObserverFrame, ObserverUiState};
-use crate::ui::dossier_card::DossierRefresh;
+use crate::ui::dossier_card::{
+    ActiveCountyDossier, DossierCampaignId, DossierFetchState, DossierPageView, DossierRefresh,
+};
 
-/// Launcher consumes this exit as a request to preserve this campaign and open a new one.
-pub const NEW_CAMPAIGN_EXIT: u8 = 20;
-/// Reconcile the same durable campaign after a disconnected runtime.
-pub const REOPEN_CAMPAIGN_EXIT: u8 = 21;
-/// Start the separate delayed-delivery scenario without changing this campaign.
-pub const DELAYED_CAMPAIGN_EXIT: u8 = 22;
+#[cfg(test)]
+#[path = "observer_io/lifecycle_tests.rs"]
+mod lifecycle_tests;
 
 pub(crate) const LAUNCHER_REQUIRED: &str =
     "This window has no launcher connection. Close it and start Babylon through its launcher.";
 
-// Stop is a control request, separate from the monotonically numbered advances.
-const STOP_REQUEST_ID: u64 = 0;
 // Allows the bounded 120-second storage statement to finish before recovery cleanup.
 const SHUTDOWN_TIMEOUT_SECS: f64 = 150.0;
 
@@ -42,8 +40,8 @@ pub enum ObserverSet {
 
 #[derive(Resource)]
 pub(crate) struct RuntimePipe {
-    requests: mpsc::SyncSender<RuntimeSessionRequestV2>,
-    responses: Mutex<mpsc::Receiver<Result<RuntimeSessionResponseV2, String>>>,
+    requests: mpsc::SyncSender<RuntimeSessionRequestV3>,
+    responses: Mutex<mpsc::Receiver<Result<RuntimeSessionResponseV3, String>>>,
 }
 
 #[cfg(test)]
@@ -78,14 +76,26 @@ struct ShutdownProgress {
     exit_sent: bool,
 }
 
+#[derive(Resource)]
+struct ContinuationPreference(std::path::PathBuf);
+
 fn start_pipe(mut commands: Commands, mut state: ResMut<ObserverSession>) {
     if std::env::var("BABYLON_SESSION_STDIO").as_deref() != Ok("1") {
         state.fail("Open this campaign with mise run play to connect its durable runtime.".into());
         return;
     }
-    let (request_tx, request_rx) = mpsc::sync_channel::<RuntimeSessionRequestV2>(1);
+    match crate::campaign_browser::preference_path() {
+        Ok(path) => {
+            commands.insert_resource(ContinuationPreference(path));
+        }
+        Err(error) => {
+            state.fail(error);
+            return;
+        }
+    }
+    let (request_tx, request_rx) = mpsc::sync_channel::<RuntimeSessionRequestV3>(1);
     let (response_tx, response_rx) =
-        mpsc::sync_channel::<Result<RuntimeSessionResponseV2, String>>(8);
+        mpsc::sync_channel::<Result<RuntimeSessionResponseV3, String>>(8);
     let errors = response_tx.clone();
     let writer = std::thread::Builder::new()
         .name("observer-control-writer".into())
@@ -95,7 +105,7 @@ fn start_pipe(mut commands: Commands, mut state: ResMut<ObserverSession>) {
                 let result = serde_json::to_vec(&request)
                     .map_err(|error| error.to_string())
                     .and_then(|mut bytes| {
-                        if bytes.len() >= RUNTIME_SESSION_MAX_LINE_BYTES_V2 {
+                        if bytes.len() >= RUNTIME_SESSION_MAX_LINE_BYTES_V3 {
                             return Err("Runtime request exceeds protocol bound".into());
                         }
                         bytes.push(b'\n');
@@ -121,7 +131,7 @@ fn start_pipe(mut commands: Commands, mut state: ResMut<ObserverSession>) {
             loop {
                 let mut line = Vec::new();
                 let result = (&mut input)
-                    .take((RUNTIME_SESSION_MAX_LINE_BYTES_V2 + 1) as u64)
+                    .take((RUNTIME_SESSION_MAX_LINE_BYTES_V3 + 1) as u64)
                     .read_until(b'\n', &mut line);
                 match result {
                     Ok(0) => {
@@ -132,7 +142,7 @@ fn start_pipe(mut commands: Commands, mut state: ResMut<ObserverSession>) {
                         break;
                     }
                     Ok(size)
-                        if size <= RUNTIME_SESSION_MAX_LINE_BYTES_V2 && line.ends_with(b"\n") =>
+                        if size <= RUNTIME_SESSION_MAX_LINE_BYTES_V3 && line.ends_with(b"\n") =>
                     {
                         let response = serde_json::from_slice(&line)
                             .map_err(|error| format!("Invalid runtime response: {error}"));
@@ -166,11 +176,14 @@ fn send_advance(pipe: &RuntimePipe, state: &mut ObserverSession) {
     let Some(request_id) = state.begin_advance() else {
         return;
     };
-    let request = RuntimeSessionRequestV2::Advance {
-        protocol_version: RUNTIME_SESSION_PROTOCOL_VERSION_V2,
-        campaign_id: state.campaign.as_uuid().to_string(),
+    let request = RuntimeSessionRequestV3::Advance {
+        protocol_version: RUNTIME_SESSION_PROTOCOL_VERSION_V3,
+        scope: state
+            .runtime_scope()
+            .expect("admitted runtime scope")
+            .clone(),
         request_id,
-        expected_tail: RuntimeSessionTailV2 {
+        expected_tail: RuntimeSessionTailV3 {
             resolve_tick: state.durable_tick,
             tick_content_hash: state.content_hash.clone(),
         },
@@ -181,8 +194,8 @@ fn send_advance(pipe: &RuntimePipe, state: &mut ObserverSession) {
 }
 
 fn next_response(
-    receiver: &mpsc::Receiver<Result<RuntimeSessionResponseV2, String>>,
-) -> Result<Option<RuntimeSessionResponseV2>, String> {
+    receiver: &mpsc::Receiver<Result<RuntimeSessionResponseV3, String>>,
+) -> Result<Option<RuntimeSessionResponseV3>, String> {
     match receiver.try_recv() {
         Ok(response) => response.map(Some),
         Err(mpsc::TryRecvError::Disconnected) => {
@@ -192,110 +205,209 @@ fn next_response(
     }
 }
 
+#[derive(SystemParam)]
+struct CampaignReset<'w> {
+    preference: Option<Res<'w, ContinuationPreference>>,
+    frame: Option<ResMut<'w, ObserverFrame>>,
+    pending: Option<ResMut<'w, PendingObservation>>,
+    campaign: Option<ResMut<'w, DossierCampaignId>>,
+    dossier: Option<ResMut<'w, ActiveCountyDossier>>,
+    fetch: Option<ResMut<'w, DossierFetchState>>,
+    view: Option<ResMut<'w, DossierPageView>>,
+    ui: Option<ResMut<'w, ObserverUiState>>,
+}
+
+impl CampaignReset<'_> {
+    fn clear(&mut self, state: &ObserverSession) {
+        if let Some(frame) = &mut self.frame {
+            frame.0 = None;
+        }
+        if let Some(pending) = &mut self.pending {
+            pending.0 = None;
+        }
+        if let Some(campaign) = &mut self.campaign {
+            campaign.0 = state.campaign;
+        }
+        if let Some(dossier) = &mut self.dossier {
+            dossier.0 = None;
+        }
+        if let Some(fetch) = &mut self.fetch {
+            **fetch = DossierFetchState::WaitingForObservation;
+        }
+        if let Some(view) = &mut self.view {
+            **view = DossierPageView::Card;
+        }
+        if let Some(ui) = &mut self.ui {
+            ui.comparison_open = false;
+        }
+    }
+}
+
 fn receive(
     pipe: Option<Res<RuntimePipe>>,
     mut state: ResMut<ObserverSession>,
     mut refresh: ResMut<DossierRefresh>,
+    mut reset: CampaignReset,
 ) {
-    if state.phase == SessionPhase::Closed {
+    if state.phase == SessionPhase::Closed || state.runtime_disconnected() {
         return;
     }
     let Some(pipe) = pipe else {
         return;
     };
     let Ok(receiver) = pipe.responses.lock() else {
-        if state.phase != SessionPhase::Failed {
-            state.fail("Runtime response lock failed".into());
-        }
+        state.disconnect("Runtime response lock failed".into());
         return;
     };
-    // Channel bound is eight: bounded UI work even after a busy render frame.
     for _ in 0..8 {
         let response = match next_response(&receiver) {
             Ok(Some(response)) => response,
             Ok(None) => break,
             Err(error) => {
-                if state.phase != SessionPhase::Failed {
-                    state.fail(error);
-                }
+                state.disconnect(error);
                 break;
             }
         };
-        match response {
-            RuntimeSessionResponseV2::Ready {
-                protocol_version,
-                campaign_id,
-                foundation_digest,
-                tail,
-            } => {
-                if protocol_version != RUNTIME_SESSION_PROTOCOL_VERSION_V2
-                    || campaign_id != state.campaign.as_uuid().to_string()
-                {
-                    state.fail("Runtime handshake identity/version mismatch".into());
-                    break;
-                }
-                state.foundation_digest = Some(foundation_digest);
-                state.ready(tail.resolve_tick, tail.tick_content_hash);
-                refresh.bump();
+        if let Err(error) = apply_response(response, &mut state, &mut refresh, &mut reset) {
+            state.disconnect(error);
+            break;
+        }
+        if state.phase == SessionPhase::Closed {
+            break;
+        }
+    }
+}
+
+fn response_scope(response: &RuntimeSessionResponseV3) -> &RuntimeSessionScopeV3 {
+    match response {
+        RuntimeSessionResponseV3::Hello { scope, .. }
+        | RuntimeSessionResponseV3::Switching { scope, .. }
+        | RuntimeSessionResponseV3::Ready { scope, .. }
+        | RuntimeSessionResponseV3::Committed { scope, .. }
+        | RuntimeSessionResponseV3::ArchiveProgress { scope, .. }
+        | RuntimeSessionResponseV3::Error { scope, .. }
+        | RuntimeSessionResponseV3::Stopped { scope, .. } => scope,
+    }
+}
+
+fn admits_response_scope(
+    response: &RuntimeSessionResponseV3,
+    state: &ObserverSession,
+) -> Result<bool, String> {
+    let scope = response_scope(response);
+    if let Some(current) = state.runtime_scope() {
+        if scope.epoch < current.epoch
+            && !matches!(response, RuntimeSessionResponseV3::Hello { .. })
+        {
+            log::debug!("Discarded an earlier runtime lifecycle response");
+            return Ok(false);
+        }
+        if !matches!(response, RuntimeSessionResponseV3::Switching { .. }) && scope != current {
+            return Err("Runtime response lifecycle identity mismatch".into());
+        }
+    } else if !matches!(response, RuntimeSessionResponseV3::Hello { .. }) {
+        return Err("Runtime did not begin with Hello".into());
+    }
+    Ok(true)
+}
+
+fn apply_response(
+    response: RuntimeSessionResponseV3,
+    state: &mut ObserverSession,
+    refresh: &mut DossierRefresh,
+    reset: &mut CampaignReset,
+) -> Result<(), String> {
+    if !admits_response_scope(&response, state)? {
+        return Ok(());
+    }
+    match response {
+        RuntimeSessionResponseV3::Hello {
+            protocol_version,
+            scope,
+        } => {
+            if protocol_version != RUNTIME_SESSION_PROTOCOL_VERSION_V3 {
+                return Err("Runtime protocol version mismatch".into());
             }
-            RuntimeSessionResponseV2::Committed {
-                request_id,
-                campaign_id,
-                tail,
-            } => {
-                if campaign_id != state.campaign.as_uuid().to_string()
-                    || !state.acknowledge(request_id, tail.resolve_tick, tail.tick_content_hash)
-                {
-                    state.fail("Unexpected committed acknowledgement; reopen the campaign.".into());
-                    break;
-                }
-                refresh.bump();
-            }
-            RuntimeSessionResponseV2::ArchiveProgress {
-                campaign_id,
-                durable_tick,
-                verified_tick,
-                ..
-            } => {
-                if campaign_id != state.campaign.as_uuid().to_string()
-                    || durable_tick != state.durable_tick
-                    || verified_tick > durable_tick
-                    || verified_tick < state.archive_verified_tick
-                {
-                    state.fail("Archive progress identity or watermark mismatch".into());
-                    break;
-                }
-                if state.archive_verified_tick != verified_tick {
-                    state.archive_verified_tick = verified_tick;
-                }
-                // A pushed partial publication can change a held page without
-                // moving this prefix, including at foundation or the horizon.
-                // Neither progress nor its retention flag certifies that page:
-                // only the freshly scoped reader can do so.
-                refresh.bump();
-            }
-            RuntimeSessionResponseV2::Error { code, tail, .. } => {
-                if code == babylon_persistence::RuntimeSessionErrorCodeV2::HorizonComplete
-                    && tail.resolve_tick == state.durable_tick
-                    && tail.tick_content_hash == state.content_hash
-                {
-                    state.complete();
-                } else {
-                    state.fail(code.to_string());
+            state.hello(scope)?;
+        }
+        RuntimeSessionResponseV3::Switching {
+            request_id,
+            previous_scope,
+            scope,
+        } => {
+            state.switching(request_id, &previous_scope, scope)?;
+            reset.clear(state);
+            refresh.bump();
+        }
+        RuntimeSessionResponseV3::Ready {
+            request_id,
+            foundation_digest,
+            tail,
+            ..
+        } => {
+            state.admitted(request_id, foundation_digest, tail)?;
+            refresh.bump();
+            if let Some(preference) = &reset.preference {
+                if let Err(error) = crate::campaign_browser::write_preference(
+                    &preference.0,
+                    state.campaign,
+                    state.generation,
+                ) {
+                    log::warn!("Campaign opened, but its continuation preference could not be saved: {error}");
                 }
             }
-            RuntimeSessionResponseV2::Stopped { request_id } => {
-                if state.quit_requested && request_id == STOP_REQUEST_ID && !state.advance_pending()
-                {
-                    state.playing = false;
-                    state.phase = SessionPhase::Closed;
-                } else {
-                    state.fail("Unexpected shutdown acknowledgement; reopen the campaign.".into());
-                }
-                break;
+        }
+        RuntimeSessionResponseV3::Committed {
+            request_id, tail, ..
+        } => {
+            if !state.acknowledge(request_id, tail.resolve_tick, tail.tick_content_hash) {
+                return Err("Unexpected committed acknowledgement; reopen the campaign.".into());
+            }
+            refresh.bump();
+        }
+        RuntimeSessionResponseV3::ArchiveProgress {
+            durable_tick,
+            verified_tick,
+            ..
+        } => {
+            if state.foundation_digest.is_none()
+                || durable_tick != state.durable_tick
+                || verified_tick > durable_tick
+                || verified_tick < state.archive_verified_tick
+            {
+                return Err("Archive progress did not match the acknowledged campaign tail".into());
+            }
+            if state.archive_verified_tick != verified_tick {
+                state.archive_verified_tick = verified_tick;
+            }
+            refresh.bump();
+        }
+        RuntimeSessionResponseV3::Error {
+            request_id,
+            code,
+            tail,
+            ..
+        } => {
+            let complete = code == babylon_persistence::RuntimeSessionErrorCodeV3::HorizonComplete
+                && tail.as_ref().is_some_and(|tail| {
+                    tail.resolve_tick == state.durable_tick
+                        && tail.tick_content_hash == state.content_hash
+                });
+            log::warn!("Runtime campaign request was refused: {code}");
+            if !state.refuse_request(request_id, code) {
+                return Err("Runtime refusal did not match an outstanding request".into());
+            }
+            if complete {
+                state.complete();
+            }
+        }
+        RuntimeSessionResponseV3::Stopped { request_id, .. } => {
+            if !state.stopped(request_id) {
+                return Err("Unexpected shutdown acknowledgement; reopen the campaign.".into());
             }
         }
     }
+    Ok(())
 }
 
 #[derive(SystemParam)]
@@ -306,7 +418,6 @@ struct CommandContext<'w> {
     frame: Res<'w, ObserverFrame>,
     refresh: ResMut<'w, DossierRefresh>,
     ui_scale: ResMut<'w, UiScale>,
-    exits: MessageWriter<'w, AppExit>,
     audio: ResMut<'w, crate::observer_audio::ObserverAudioSettings>,
     feedback: ResMut<'w, ObserverFeedback>,
     time: Res<'w, Time>,
@@ -337,7 +448,6 @@ fn apply_command(command: ObserverCommand, context: &mut CommandContext) {
         ui,
         pipe,
         refresh,
-        exits,
         feedback,
         time,
         ..
@@ -404,14 +514,22 @@ fn apply_command(command: ObserverCommand, context: &mut CommandContext) {
                 return;
             }
             state.cancel_month();
-            let code = match command {
-                ObserverCommand::NewCampaign => NEW_CAMPAIGN_EXIT,
-                ObserverCommand::ReopenCampaign => REOPEN_CAMPAIGN_EXIT,
-                _ => DELAYED_CAMPAIGN_EXIT,
+            let target = match command {
+                ObserverCommand::ReopenCampaign => RuntimeSessionTargetV3::Open {
+                    campaign_id: state.campaign.as_uuid().to_string(),
+                },
+                _ => RuntimeSessionTargetV3::New {
+                    campaign_id: uuid::Uuid::new_v4().to_string(),
+                    preset: if command == ObserverCommand::NewDelayedCampaign {
+                        RuntimeSessionPresetV3::Delayed
+                    } else {
+                        RuntimeSessionPresetV3::Standard
+                    },
+                },
             };
-            exits.write(AppExit::Error(
-                std::num::NonZeroU8::new(code).expect("reserved nonzero exit"),
-            ));
+            if let Err(error) = state.queue_campaign(target) {
+                state.fail(error);
+            }
         }
         _ => apply_presentation_command(command, context),
     }
@@ -639,6 +757,25 @@ fn playback(
     }
 }
 
+fn send_campaign_switch(pipe: Option<Res<RuntimePipe>>, mut state: ResMut<ObserverSession>) {
+    let Some(pipe) = pipe else {
+        return;
+    };
+    if !state.switch_send_due() {
+        return;
+    }
+    let Some(request) = state.pending_switch_request() else {
+        return;
+    };
+    match pipe.requests.try_send(request) {
+        Ok(()) => state.switch_sent(),
+        Err(mpsc::TrySendError::Full(_)) => {}
+        Err(mpsc::TrySendError::Disconnected(_)) => {
+            state.disconnect("Runtime disconnected; close and relaunch Babylon.".into());
+        }
+    }
+}
+
 fn finish_shutdown(
     pipe: Option<Res<RuntimePipe>>,
     mut state: ResMut<ObserverSession>,
@@ -649,12 +786,16 @@ fn finish_shutdown(
     if !state.quit_requested || shutdown.exit_sent {
         return;
     }
-    state.playing = false;
+    if state.playing {
+        state.playing = false;
+    }
     let started = *shutdown.started_at.get_or_insert(time.elapsed_secs_f64());
     if time.elapsed_secs_f64() - started >= SHUTDOWN_TIMEOUT_SECS {
-        state.fail("Runtime shutdown timed out; reopen to reconcile committed progress.".into());
+        state.disconnect(
+            "Runtime shutdown timed out; reopen to reconcile committed progress.".into(),
+        );
     }
-    if pipe.is_none() || matches!(state.phase, SessionPhase::Failed | SessionPhase::Closed) {
+    if pipe.is_none() || state.runtime_disconnected() || state.phase == SessionPhase::Closed {
         shutdown.exit_sent = true;
         exits.write(AppExit::Success);
         return;
@@ -662,22 +803,21 @@ fn finish_shutdown(
     if shutdown.stop_sent {
         return;
     }
-    let request = RuntimeSessionRequestV2::Stop {
-        protocol_version: RUNTIME_SESSION_PROTOCOL_VERSION_V2,
-        campaign_id: state.campaign.as_uuid().to_string(),
-        request_id: STOP_REQUEST_ID,
+    let Some(request) = state.pending_stop_request() else {
+        return;
     };
-    // The runtime handles Stop after the current commit and its Archive sweep.
-    // A full channel still contains earlier work; retry without cancelling it.
     match pipe
         .expect("connection checked above")
         .requests
         .try_send(request)
     {
-        Ok(()) => shutdown.stop_sent = true,
+        Ok(()) => {
+            state.stop_sent();
+            shutdown.stop_sent = true;
+        }
         Err(mpsc::TrySendError::Full(_)) => {}
         Err(mpsc::TrySendError::Disconnected(_)) => {
-            state.fail("Runtime disconnected during shutdown; reopen to reconcile.".into());
+            state.disconnect("Runtime disconnected during shutdown; reopen to reconcile.".into());
             shutdown.exit_sent = true;
             exits.write(AppExit::Success);
         }
@@ -703,7 +843,12 @@ impl Plugin for ObserverIoPlugin {
             .add_systems(Startup, start_pipe)
             .add_systems(
                 Update,
-                (receive, handle_commands, finish_shutdown)
+                (
+                    receive,
+                    handle_commands,
+                    send_campaign_switch,
+                    finish_shutdown,
+                )
                     .chain()
                     .in_set(ObserverSet::Receive),
             )
@@ -717,15 +862,17 @@ impl Plugin for ObserverIoPlugin {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::observer_audio::ObserverAudioSettings;
     use crate::observer_ui::ObserverDisclosure;
     use babylon_persistence::CampaignId;
 
-    fn command_app() -> (App, mpsc::Receiver<RuntimeSessionRequestV2>) {
+    fn command_app() -> (App, mpsc::Receiver<RuntimeSessionRequestV3>) {
         let mut state = ObserverSession::new(CampaignId::from_uuid(uuid::Uuid::from_u128(1)));
         state.ready(3, None);
+        state.connected_fixture();
+        state.foundation_digest = Some("foundation".into());
         assert!(state.installed(&state.context()));
         let (requests, receiver) = mpsc::sync_channel(1);
         let (_, responses) = mpsc::channel();
@@ -749,7 +896,10 @@ mod tests {
             .init_resource::<ShutdownProgress>()
             .add_message::<ObserverCommand>()
             .add_message::<AppExit>()
-            .add_systems(Update, (handle_commands, finish_shutdown).chain());
+            .add_systems(
+                Update,
+                (handle_commands, send_campaign_switch, finish_shutdown).chain(),
+            );
         (app, receiver)
     }
 
@@ -762,15 +912,67 @@ mod tests {
         app.update();
     }
 
-    type ResponseSender = mpsc::Sender<Result<RuntimeSessionResponseV2, String>>;
+    fn test_scope(campaign_id: String) -> RuntimeSessionScopeV3 {
+        RuntimeSessionScopeV3 {
+            epoch: 1,
+            campaign_id: Some(campaign_id),
+        }
+    }
 
-    fn quit_app() -> (App, mpsc::Receiver<RuntimeSessionRequestV2>, ResponseSender) {
+    type ResponseSender = mpsc::Sender<Result<RuntimeSessionResponseV3, String>>;
+
+    pub(crate) fn quit_app() -> (App, mpsc::Receiver<RuntimeSessionRequestV3>, ResponseSender) {
         let (mut app, requests) = command_app();
         let (responses, receiver) = mpsc::channel();
         app.world_mut().resource_mut::<RuntimePipe>().responses = Mutex::new(receiver);
         app.init_resource::<PlaybackClock>()
             .add_systems(Update, receive.before(handle_commands));
         (app, requests, responses)
+    }
+
+    pub(crate) fn refuse_initial_switch(
+        app: &mut App,
+        requests: &mpsc::Receiver<RuntimeSessionRequestV3>,
+        responses: &ResponseSender,
+    ) -> CampaignId {
+        let previous_scope = RuntimeSessionScopeV3::default();
+        responses
+            .send(Ok(RuntimeSessionResponseV3::Hello {
+                protocol_version: RUNTIME_SESSION_PROTOCOL_VERSION_V3,
+                scope: previous_scope.clone(),
+            }))
+            .unwrap();
+        app.update();
+        let RuntimeSessionRequestV3::Switch {
+            request_id, target, ..
+        } = requests.try_recv().unwrap()
+        else {
+            panic!("initial campaign switch");
+        };
+        let (RuntimeSessionTargetV3::New { campaign_id, .. }
+        | RuntimeSessionTargetV3::Open { campaign_id }) = target;
+        let campaign = CampaignId::from_uuid(uuid::Uuid::parse_str(&campaign_id).unwrap());
+        let scope = RuntimeSessionScopeV3 {
+            epoch: 1,
+            campaign_id: Some(campaign_id),
+        };
+        responses
+            .send(Ok(RuntimeSessionResponseV3::Switching {
+                request_id,
+                previous_scope,
+                scope: scope.clone(),
+            }))
+            .unwrap();
+        responses
+            .send(Ok(RuntimeSessionResponseV3::Error {
+                request_id: Some(request_id),
+                scope,
+                code: babylon_persistence::RuntimeSessionErrorCodeV3::StorageRefused,
+                tail: None,
+            }))
+            .unwrap();
+        app.update();
+        campaign
     }
 
     fn exit_count(app: &App) -> usize {
@@ -859,24 +1061,87 @@ mod tests {
     }
 
     #[test]
-    fn launcher_handoff_with_pipe_preserves_recovery_exit_codes_after_failure() {
-        for (command, expected_code) in [
-            (ObserverCommand::NewCampaign, NEW_CAMPAIGN_EXIT),
-            (ObserverCommand::NewDelayedCampaign, DELAYED_CAMPAIGN_EXIT),
-            (ObserverCommand::ReopenCampaign, REOPEN_CAMPAIGN_EXIT),
+    fn campaign_choices_after_admission_failure_request_switch_without_exiting() {
+        for command in [
+            ObserverCommand::NewCampaign,
+            ObserverCommand::NewDelayedCampaign,
+            ObserverCommand::ReopenCampaign,
         ] {
-            let (mut app, _) = command_app();
-            let mut session = app.world_mut().resource_mut::<ObserverSession>();
-            if command == ObserverCommand::ReopenCampaign {
-                session.begin_advance().unwrap();
-            }
-            session.fail("Lost runtime acknowledgement".into());
+            let (mut app, requests) = command_app();
+            app.world_mut()
+                .resource_mut::<ObserverSession>()
+                .fail("Admission refused".into());
             dispatch(&mut app, &[command]);
-            assert!(matches!(
-                app.world_mut().resource_mut::<Messages<AppExit>>().drain().collect::<Vec<_>>().as_slice(),
-                [AppExit::Error(code)] if code.get() == expected_code
-            ));
+            assert_eq!(exit_count(&app), 0);
+            let RuntimeSessionRequestV3::Switch { scope, target, .. } =
+                requests.try_recv().unwrap()
+            else {
+                panic!("one campaign switch");
+            };
+            assert_eq!(scope, test_scope(uuid::Uuid::from_u128(1).to_string()));
+            match (command, target) {
+                (ObserverCommand::ReopenCampaign, RuntimeSessionTargetV3::Open { campaign_id }) => {
+                    assert_eq!(campaign_id, uuid::Uuid::from_u128(1).to_string());
+                }
+                (
+                    ObserverCommand::NewCampaign,
+                    RuntimeSessionTargetV3::New {
+                        preset: RuntimeSessionPresetV3::Standard,
+                        ..
+                    },
+                )
+                | (
+                    ObserverCommand::NewDelayedCampaign,
+                    RuntimeSessionTargetV3::New {
+                        preset: RuntimeSessionPresetV3::Delayed,
+                        ..
+                    },
+                ) => {}
+                _ => panic!("campaign choice changed its target or preset"),
+            }
         }
+    }
+
+    #[test]
+    fn new_before_ready_keeps_transport_and_failed_ui_recoverable() {
+        let (mut app, requests, responses) = quit_app();
+        let campaign = app.world().resource::<ObserverSession>().campaign;
+        app.insert_resource(ObserverSession::new(campaign));
+
+        dispatch(&mut app, &[ObserverCommand::NewCampaign]);
+        assert_eq!(
+            exit_count(&app),
+            0,
+            "New closed the runtime response pipe before Ready"
+        );
+        assert!(app.world().contains_resource::<RuntimePipe>());
+        assert_eq!(app.world().resource::<ObserverSession>().campaign, campaign);
+
+        let admitted_target = refuse_initial_switch(&mut app, &requests, &responses);
+
+        assert_eq!(
+            exit_count(&app),
+            0,
+            "Startup failure closed the recovery UI"
+        );
+        assert!(app.world().contains_resource::<RuntimePipe>());
+        assert!(app.world().resource::<ObserverUiState>().menu_open);
+        let state = app.world().resource::<ObserverSession>();
+        assert_eq!(state.phase, SessionPhase::Failed);
+        assert_eq!(state.campaign, admitted_target);
+        assert_eq!(state.durable_tick, 0);
+        assert_eq!(
+            state.error.as_deref(),
+            Some(
+                babylon_persistence::RuntimeSessionErrorCodeV3::StorageRefused
+                    .to_string()
+                    .as_str()
+            )
+        );
+        assert_eq!(
+            availability(ObserverCommand::ReopenCampaign, state),
+            ControlAvailability::Enabled
+        );
     }
 
     #[test]
@@ -918,7 +1183,7 @@ mod tests {
         assert!(app.world().resource::<ObserverSession>().quit_requested);
         assert!(matches!(
             requests.try_recv().unwrap(),
-            RuntimeSessionRequestV2::Stop { .. }
+            RuntimeSessionRequestV3::Stop { .. }
         ));
     }
 
@@ -952,20 +1217,15 @@ mod tests {
     #[test]
     fn obsolete_runtime_handshake_is_refused_before_any_archive_or_advance_work() {
         let (mut app, requests, responses) = quit_app();
-        let campaign_id = app
-            .world()
-            .resource::<ObserverSession>()
-            .campaign
-            .as_uuid()
-            .to_string();
+        app.world_mut()
+            .resource_mut::<ObserverSession>()
+            .foundation_digest = None;
         responses
-            .send(Ok(RuntimeSessionResponseV2::Ready {
-                protocol_version: 1,
-                campaign_id,
-                foundation_digest: "obsolete-foundation".into(),
-                tail: RuntimeSessionTailV2 {
-                    resolve_tick: 3,
-                    tick_content_hash: None,
+            .send(Ok(RuntimeSessionResponseV3::Hello {
+                protocol_version: 2,
+                scope: RuntimeSessionScopeV3 {
+                    epoch: 0,
+                    campaign_id: None,
                 },
             }))
             .unwrap();
@@ -1015,8 +1275,8 @@ mod tests {
             .as_uuid()
             .to_string();
         responses
-            .send(Ok(RuntimeSessionResponseV2::ArchiveProgress {
-                campaign_id,
+            .send(Ok(RuntimeSessionResponseV3::ArchiveProgress {
+                scope: test_scope(campaign_id),
                 durable_tick: 3,
                 verified_tick: 1,
                 retention_ready: true,
@@ -1076,9 +1336,9 @@ mod tests {
             // flag are unchanged. Every genuine push invalidates the held read.
             for (index, retention_ready) in [false, false, true].into_iter().enumerate() {
                 responses
-                    .send(Ok(RuntimeSessionResponseV2::ArchiveProgress {
+                    .send(Ok(RuntimeSessionResponseV3::ArchiveProgress {
                         request_id: None,
-                        campaign_id: campaign_id.clone(),
+                        scope: test_scope(campaign_id.clone()),
                         durable_tick: tick,
                         verified_tick: tick,
                         retention_ready,
@@ -1129,9 +1389,9 @@ mod tests {
             };
             let context = state.context();
             responses
-                .send(Ok(RuntimeSessionResponseV2::ArchiveProgress {
+                .send(Ok(RuntimeSessionResponseV3::ArchiveProgress {
                     request_id: None,
-                    campaign_id,
+                    scope: test_scope(campaign_id),
                     durable_tick,
                     verified_tick,
                     retention_ready: true,
@@ -1195,9 +1455,9 @@ mod tests {
         assert!(active.for_observer(state, &frame, 0, "26163").is_some());
         app.insert_resource(frame).insert_resource(active);
         responses
-            .send(Ok(RuntimeSessionResponseV2::ArchiveProgress {
+            .send(Ok(RuntimeSessionResponseV3::ArchiveProgress {
                 request_id: None,
-                campaign_id: campaign.as_uuid().to_string(),
+                scope: test_scope(campaign.as_uuid().to_string()),
                 durable_tick: 3,
                 verified_tick: 2,
                 retention_ready: true,
@@ -1225,18 +1485,17 @@ mod tests {
     fn archive_push_during_an_advance_never_substitutes_for_its_commit_ack() {
         let (mut app, requests, responses) = quit_app();
         dispatch(&mut app, &[ObserverCommand::Step]);
-        let RuntimeSessionRequestV2::Advance {
-            request_id,
-            campaign_id,
-            ..
+        let RuntimeSessionRequestV3::Advance {
+            request_id, scope, ..
         } = requests.try_recv().unwrap()
         else {
             panic!("one explicit advance request");
         };
+        let campaign_id = scope.campaign_id.unwrap();
         responses
-            .send(Ok(RuntimeSessionResponseV2::ArchiveProgress {
+            .send(Ok(RuntimeSessionResponseV3::ArchiveProgress {
                 request_id: None,
-                campaign_id: campaign_id.clone(),
+                scope: test_scope(campaign_id.clone()),
                 durable_tick: 3,
                 verified_tick: 2,
                 retention_ready: false,
@@ -1248,19 +1507,19 @@ mod tests {
         assert_eq!(state.phase, SessionPhase::Advancing);
         assert_eq!(state.durable_tick, 3);
         responses
-            .send(Ok(RuntimeSessionResponseV2::Committed {
+            .send(Ok(RuntimeSessionResponseV3::Committed {
                 request_id,
-                campaign_id: campaign_id.clone(),
-                tail: RuntimeSessionTailV2 {
+                scope: test_scope(campaign_id.clone()),
+                tail: RuntimeSessionTailV3 {
                     resolve_tick: 4,
                     tick_content_hash: Some("4".repeat(64)),
                 },
             }))
             .unwrap();
         responses
-            .send(Ok(RuntimeSessionResponseV2::ArchiveProgress {
+            .send(Ok(RuntimeSessionResponseV3::ArchiveProgress {
                 request_id: None,
-                campaign_id,
+                scope: test_scope(campaign_id),
                 durable_tick: 4,
                 verified_tick: 3,
                 retention_ready: true,
@@ -1290,7 +1549,7 @@ mod tests {
             .advance_by(std::time::Duration::from_secs(1));
         dispatch(&mut app, &[ObserverCommand::TogglePlay]);
         for expected_week in [4, 5] {
-            let RuntimeSessionRequestV2::Advance {
+            let RuntimeSessionRequestV3::Advance {
                 request_id,
                 expected_tail,
                 ..
@@ -1330,7 +1589,7 @@ mod tests {
         );
     }
 
-    fn snapshot_with_event(
+    pub(super) fn snapshot_with_event(
         state: &ObserverSession,
         kind: &str,
         week: u64,
@@ -1347,6 +1606,7 @@ mod tests {
             production: Some(babylon_persistence::ProductionSnapshotV1 {
                 material_balance: None,
                 labor_accounts: Vec::new(),
+                staffing_accounts: Vec::new(),
                 scenario_label: "bounded observer fixture".into(),
                 horizon_week: 16,
                 sites: Vec::new(),
@@ -1433,15 +1693,12 @@ mod tests {
         dispatch(&mut app, &[ObserverCommand::Step]);
         assert!(matches!(
             requests.try_recv().unwrap(),
-            RuntimeSessionRequestV2::Advance { .. }
+            RuntimeSessionRequestV3::Advance { .. }
         ));
         dispatch(&mut app, &[ObserverCommand::Quit]);
         assert!(matches!(
             requests.try_recv().unwrap(),
-            RuntimeSessionRequestV2::Stop {
-                request_id: STOP_REQUEST_ID,
-                ..
-            }
+            RuntimeSessionRequestV3::Stop { request_id: 2, .. }
         ));
         assert_eq!(exit_count(&app), 0);
         assert!(app.world().resource::<ObserverSession>().advance_pending());
@@ -1452,15 +1709,15 @@ mod tests {
         assert!(!app.world().resource::<ObserverSession>().playing);
         assert!(requests.try_recv().is_err());
         responses
-            .send(Ok(RuntimeSessionResponseV2::Committed {
+            .send(Ok(RuntimeSessionResponseV3::Committed {
                 request_id: 1,
-                campaign_id: app
+                scope: app
                     .world()
                     .resource::<ObserverSession>()
-                    .campaign
-                    .as_uuid()
-                    .to_string(),
-                tail: RuntimeSessionTailV2 {
+                    .runtime_scope()
+                    .unwrap()
+                    .clone(),
+                tail: RuntimeSessionTailV3 {
                     resolve_tick: 4,
                     tick_content_hash: Some("committed".into()),
                 },
@@ -1470,8 +1727,14 @@ mod tests {
         assert_eq!(app.world().resource::<ObserverSession>().durable_tick, 4);
         assert_eq!(exit_count(&app), 0);
         responses
-            .send(Ok(RuntimeSessionResponseV2::Stopped {
-                request_id: STOP_REQUEST_ID,
+            .send(Ok(RuntimeSessionResponseV3::Stopped {
+                request_id: 2,
+                scope: app
+                    .world()
+                    .resource::<ObserverSession>()
+                    .runtime_scope()
+                    .unwrap()
+                    .clone(),
             }))
             .unwrap();
         drop(responses);
@@ -1493,12 +1756,12 @@ mod tests {
         assert!(!app.world().resource::<ShutdownProgress>().stop_sent);
         assert!(matches!(
             requests.try_recv().unwrap(),
-            RuntimeSessionRequestV2::Advance { .. }
+            RuntimeSessionRequestV3::Advance { .. }
         ));
         app.update();
         assert!(matches!(
             requests.try_recv().unwrap(),
-            RuntimeSessionRequestV2::Stop { .. }
+            RuntimeSessionRequestV3::Stop { .. }
         ));
         dispatch(&mut app, &[ObserverCommand::Quit]);
         assert!(requests.try_recv().is_err());
@@ -1549,9 +1812,9 @@ mod tests {
         dispatch(&mut app, &[ObserverCommand::Step, ObserverCommand::Step]);
         assert!(matches!(
             receiver.try_recv().unwrap(),
-            RuntimeSessionRequestV2::Advance {
+            RuntimeSessionRequestV3::Advance {
                 request_id: 1,
-                expected_tail: RuntimeSessionTailV2 {
+                expected_tail: RuntimeSessionTailV3 {
                     resolve_tick: 3,
                     ..
                 },

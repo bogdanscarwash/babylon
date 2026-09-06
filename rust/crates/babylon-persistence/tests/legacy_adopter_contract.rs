@@ -20,7 +20,6 @@ use std::process::Command;
 
 const ZERO_DIGEST: &str = "0000000000000000000000000000000000000000000000000000000000000000";
 const LEGACY_CENSUS_V1_ARCHIVE: &str = include_str!("../src/fixtures/legacy_adopter_census_v1.txt");
-const EXPECTED_RUNNER_LINES: usize = 588;
 const MAX_WORKFLOW_JOB_BOUNDARY_CANDIDATES: usize = 128;
 const MAX_SQL_LITERAL_SEGMENTS: usize = 8_192;
 const MAX_SQL_STATEMENT_BYTES: usize = 262_144;
@@ -2644,26 +2643,38 @@ fn live_runner_bounds_every_docker_control_plane_call() {
         assert!(runner.contains(bounded_inspect));
     }
 
-    let runner_lines = runner
-        .lines()
-        .take(EXPECTED_RUNNER_LINES + 1)
-        .collect::<Vec<_>>();
-    assert_eq!(runner_lines.len(), EXPECTED_RUNNER_LINES);
+    assert_eq!(bounded_docker_call_count(runner), Ok(12));
+}
+
+fn bounded_docker_call_count(runner: &str) -> Result<usize, &str> {
+    // Scan the complete immutable source: unrelated shell edits must neither
+    // invalidate the census nor leave later control-plane calls unchecked.
     let mut docker_calls = 0_usize;
-    for (line_index, line) in runner_lines.iter().enumerate().take(EXPECTED_RUNNER_LINES) {
-        if !line.contains("docker ") {
-            continue;
+    let mut previous = "";
+    for line in runner.lines() {
+        if line.contains("docker ") {
+            if !line.contains("timeout --signal=TERM")
+                && !previous.contains("timeout --signal=TERM")
+            {
+                return Err(line);
+            }
+            docker_calls += 1;
         }
-        docker_calls += 1;
-        let previous = line_index
-            .checked_sub(1)
-            .map_or("", |previous_index| runner_lines[previous_index]);
-        assert!(
-            line.contains("timeout --signal=TERM") || previous.contains("timeout --signal=TERM"),
-            "unbounded Docker call: {line}"
-        );
+        previous = line;
     }
-    assert_eq!(docker_calls, 12);
+    Ok(docker_calls)
+}
+
+#[test]
+fn live_runner_docker_census_checks_calls_after_unrelated_source_growth() {
+    let runner = include_str!("../../../../tools/run_rust_legacy_adopter_pg.sh");
+    let extended = format!("{runner}\n# Additional non-Docker phase.\n\n");
+    assert_eq!(bounded_docker_call_count(&extended), Ok(12));
+    let unbounded = format!("{extended}docker inspect future-container\n");
+    assert_eq!(
+        bounded_docker_call_count(&unbounded),
+        Err("docker inspect future-container")
+    );
 }
 
 #[test]

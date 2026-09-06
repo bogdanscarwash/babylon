@@ -222,6 +222,123 @@ def test_non_h3_economic_observation_is_admitted_only_for_its_exact_owner() -> N
             inspect_sql_literal(contract, foreign_path, foreign_sql)
 
 
+@pytest.mark.parametrize(
+    "view",
+    [
+        "v_observer_graph_node_v1",
+        "v_observer_hex_state_delta_v1",
+        "v_observer_tick_event_field_v2",
+        "v_observer_checkpoint_manifest",
+        "v_observer_tick_action_batch_v1",
+        "v_observer_material_state_v1",
+    ],
+)
+def test_committed_component_reads_require_exact_owners_and_public_schema(view: str) -> None:
+    contract = load_reader_cutover_contract(CONTRACT)
+    sql = f"SELECT campaign_id FROM public.{view} WHERE resolve_tick=$1"
+    for relative in ("src/reader.rs", "src/observer_reader.rs", "src/stored_tick/source.rs"):
+        owner = Path("rust/crates/babylon-persistence") / relative
+        assert inspect_sql_literal(contract, owner, sql) == []
+        for rejected in (sql.replace("public.", ""), sql.replace("public.", "other.")):
+            with pytest.raises(H3ReaderCutoverRefusal, match="compatibility_read"):
+                inspect_sql_literal(contract, owner, rejected)
+    for relative in ("src/stored_tick/unreviewed.rs", "tests/unreviewed.rs"):
+        with pytest.raises(H3ReaderCutoverRefusal, match="compatibility_read"):
+            inspect_sql_literal(contract, Path("rust/crates/babylon-persistence") / relative, sql)
+    with pytest.raises(H3ReaderCutoverRefusal, match="compatibility_read"):
+        inspect_sql_literal(
+            contract,
+            Path("rust/crates/babylon-persistence/src/stored_tick/source.rs"),
+            sql.replace(view, f"{view}_unreviewed"),
+        )
+
+
+def test_committed_component_admission_still_refuses_legacy_h3_identity_conversion() -> None:
+    contract = load_reader_cutover_contract(CONTRACT)
+    with pytest.raises(H3ReaderCutoverRefusal, match="legacy_identity_read"):
+        inspect_sql_literal(
+            contract,
+            Path("rust/crates/babylon-persistence/src/stored_tick/source.rs"),
+            "SELECT hex.h3_index::bigint FROM public.v_observer_hex_state_delta_v1 component "
+            "JOIN public.dynamic_hex_state hex ON hex.resolve_tick=component.resolve_tick",
+        )
+
+
+@pytest.mark.parametrize(
+    "sql",
+    [
+        "SELECT campaign_id FROM public.v_observer_{relation}",
+        "GRANT SELECT ON public.v_observer_{relation} TO babylon_reader",
+    ],
+)
+def test_committed_component_owner_cannot_construct_an_unbounded_view_name(sql: str) -> None:
+    contract = load_reader_cutover_contract(CONTRACT)
+    with pytest.raises(H3ReaderCutoverRefusal, match="compatibility_read"):
+        inspect_sql_literal(
+            contract,
+            Path("rust/crates/babylon-persistence/tests/observer_material_live/tick_components.rs"),
+            sql,
+        )
+
+
+def _copy_observer_migrations(tmp_path: Path) -> Path:
+    migration_root = Path("rust/crates/babylon-persistence/migrations")
+    destination = tmp_path / migration_root
+    destination.mkdir(parents=True)
+    for name in (
+        "observer_economy_v1.sql",
+        "observer_material_v1.sql",
+        "observer_tick_components_v1.sql",
+    ):
+        (destination / name).write_text((ROOT / migration_root / name).read_text())
+    return destination
+
+
+@pytest.mark.parametrize(
+    ("before", "after", "code"),
+    [
+        ("FROM babylon_state.graph_node_v1", "FROM public.dynamic_hex_state", "compatibility_read"),
+        (
+            "FROM babylon_state.graph_node_v1",
+            "FROM babylon_state.unreviewed_state",
+            "observer_definition_drift",
+        ),
+        (
+            "SELECT component.*\nFROM babylon_state.hex_state_delta_v1",
+            "SELECT component.cell_id::text AS cell_id\nFROM babylon_state.hex_state_delta_v1",
+            "observer_definition_drift",
+        ),
+        ("JOIN babylon_state.tick_commit", "JOIN public.tick_commit", "observer_definition_drift"),
+        (
+            "marker.envelope_layout_version = 3",
+            "marker.envelope_layout_version = 2",
+            "observer_definition_drift",
+        ),
+        (
+            "marker.campaign_id = component.campaign_id",
+            "marker.resolve_tick = component.resolve_tick",
+            "observer_definition_drift",
+        ),
+        (
+            "CREATE VIEW public.v_observer_graph_node_v1",
+            "CREATE VIEW public.v_observer_unreviewed_v1",
+            "observer_declaration_drift",
+        ),
+    ],
+)
+def test_committed_component_definition_admission_cannot_hide_other_reads(
+    tmp_path: Path, before: str, after: str, code: str
+) -> None:
+    migration = _copy_observer_migrations(tmp_path) / "observer_tick_components_v1.sql"
+    source = migration.read_text()
+    assert before in source
+    migration.write_text(source.replace(before, after, 1))
+    parent = load_reader_cutover_contract(ROOT / "contracts/h3_estate_contract_v1.yaml")
+    with pytest.raises(H3ReaderCutoverRefusal) as error:
+        verify_non_h3_observer_surfaces(parent, tmp_path)
+    assert error.value.code == code
+
+
 def test_economic_observer_admission_cannot_hide_a_legacy_h3_join() -> None:
     contract = load_reader_cutover_contract(CONTRACT)
     with pytest.raises(H3ReaderCutoverRefusal, match="legacy_identity_read"):
@@ -235,19 +352,16 @@ def test_economic_observer_admission_cannot_hide_a_legacy_h3_join() -> None:
 
 @pytest.mark.parametrize("drift", ["legacy_dependency", "unknown_view"])
 def test_non_h3_observer_definition_cannot_become_an_h3_adapter(tmp_path: Path, drift: str) -> None:
-    migration_root = Path("rust/crates/babylon-persistence/migrations")
-    (tmp_path / migration_root).mkdir(parents=True)
-    for name in ("observer_economy_v1.sql", "observer_material_v1.sql"):
-        source = (ROOT / migration_root / name).read_text()
-        if name == "observer_material_v1.sql":
-            if drift == "legacy_dependency":
-                source = source.replace(
-                    "FROM babylon_state.material_campaign_foundation_v2",
-                    "FROM public.dynamic_hex_state",
-                )
-            else:
-                source += "\nCREATE VIEW public.v_observer_extra_v1 AS SELECT 1;\n"
-        (tmp_path / migration_root / name).write_text(source)
+    migration = _copy_observer_migrations(tmp_path) / "observer_material_v1.sql"
+    source = migration.read_text()
+    if drift == "legacy_dependency":
+        source = source.replace(
+            "FROM babylon_state.material_campaign_foundation_v2",
+            "FROM public.dynamic_hex_state",
+        )
+    else:
+        source += "\nCREATE VIEW public.v_observer_extra_v1 AS SELECT 1;\n"
+    migration.write_text(source)
     parent = load_reader_cutover_contract(ROOT / "contracts/h3_estate_contract_v1.yaml")
     with pytest.raises(H3ReaderCutoverRefusal) as error:
         verify_non_h3_observer_surfaces(parent, tmp_path)

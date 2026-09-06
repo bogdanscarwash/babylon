@@ -97,6 +97,11 @@ pub(crate) fn availability(
     if state.quit_requested {
         return CLOSING;
     }
+    if matches!(command, NewCampaign | NewDelayedCampaign | ReopenCampaign)
+        && state.runtime_disconnected()
+    {
+        return Disabled("Runtime connection unavailable; close and relaunch Babylon");
+    }
 
     // A lost acknowledgement retains the pending request. Deliberate reopen is
     // the recovery path; it reconciles durability before any further advance.
@@ -105,12 +110,7 @@ pub(crate) fn availability(
     {
         return Enabled;
     }
-    if state.advance_pending()
-        && matches!(
-            command,
-            Step | NewCampaign | NewDelayedCampaign | ReopenCampaign
-        )
-    {
+    if state.advance_pending() && command == Step {
         return if matches!(state.phase, SessionPhase::Failed | SessionPhase::Closed) {
             Disabled("Reopen the campaign to reconcile committed progress")
         } else {
@@ -118,6 +118,9 @@ pub(crate) fn availability(
         };
     }
     match command {
+        Step | TogglePlay if state.lifecycle_pending() => {
+            Disabled("Waiting for the selected campaign to open")
+        }
         TogglePlay if state.playing => Enabled,
         TogglePlay => {
             let advance = advance_availability(state);
@@ -194,13 +197,26 @@ fn turn_status(state: &ObserverSession) -> String {
         };
     }
     if state.phase == SessionPhase::Failed {
-        return "Connection failed. Reopen to reconcile.".into();
+        return if state.runtime_disconnected() {
+            state.uncertain_campaign_id().map_or_else(
+                || "Runtime connection closed. Close and relaunch Babylon.".into(),
+                |campaign| format!("Runtime connection closed. Relaunch and Open requested campaign {campaign} to reconcile."),
+            )
+        } else {
+            state
+                .admission_notice()
+                .unwrap_or("Campaign unavailable. Choose a campaign or Reopen to reconcile.")
+                .into()
+        };
     }
     if state.phase == SessionPhase::Closed {
         return "Campaign closed. Reopen to continue.".into();
     }
     if state.advance_pending() || state.phase == SessionPhase::Advancing {
         return pending_status(state);
+    }
+    if state.lifecycle_pending() {
+        return "Opening the selected campaign...".into();
     }
     let historical = state.viewed_tick < state.durable_tick;
     match state.phase {
@@ -486,11 +502,15 @@ mod tests {
             ObserverCommand::PreviousWeek,
             ObserverCommand::NextWeek,
             ObserverCommand::Live,
+        ] {
+            assert_eq!(availability(command, &state), PENDING);
+        }
+        for command in [
             ObserverCommand::NewCampaign,
             ObserverCommand::NewDelayedCampaign,
             ObserverCommand::ReopenCampaign,
         ] {
-            assert_eq!(availability(command, &state), PENDING);
+            assert_eq!(availability(command, &state), ControlAvailability::Enabled);
         }
         state.fail("lost acknowledgement".into());
         assert!(state.advance_pending());

@@ -124,7 +124,7 @@ mise run play -- --new --preset delayed
 ```
 
 Use `--campaign UUID` to open a supported saved campaign. The runtime recovers
-its stored scenario. It refuses an explicit `--preset` that differs.
+its stored scenario. `--preset` applies only to a new campaign.
 
 Older development saves with unsupported content versions cannot reopen.
 Use `mise run play -- --new` to start a new campaign and keep those saves.
@@ -137,6 +137,8 @@ The continuation pointer is a plain UUID in
 `$XDG_STATE_HOME/babylon/observer-campaign`, or
 `~/.local/state/babylon/observer-campaign` by default.
 The pointer is a personal preference. Campaign data stays in Postgres.
+The client updates the pointer after the runtime successfully opens or creates
+a campaign. A failed New or Open request leaves the previous pointer intact.
 
 For a dedicated local database, set `BABYLON_RUNTIME_DSN` to an explicit
 local host, port, database, user, and password before launch. Create that

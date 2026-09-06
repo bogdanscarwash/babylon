@@ -2,6 +2,8 @@
 //! UI interactions schedule reads or one empty-action tick; they never own
 //! a simulation session or mutate material state.
 
+mod lifecycle;
+
 use babylon_persistence::CampaignId;
 use bevy::prelude::*;
 
@@ -66,6 +68,7 @@ pub struct ObserverSession {
     month_plan: Option<CampaignMonth>,
     pending_request: Option<u64>,
     next_request: u64,
+    pub(crate) lifecycle: lifecycle::LifecycleState,
 }
 
 impl ObserverSession {
@@ -89,6 +92,7 @@ impl ObserverSession {
             month_plan: None,
             pending_request: None,
             next_request: 1,
+            lifecycle: lifecycle::LifecycleState::new(),
         }
     }
 
@@ -221,12 +225,12 @@ impl ObserverSession {
         if self.phase != SessionPhase::Ready
             || self.quit_requested
             || self.pending_request.is_some()
+            || self.lifecycle_pending()
             || self.viewed_tick != self.durable_tick
         {
             return None;
         }
-        let request = self.next_request;
-        self.next_request = self.next_request.checked_add(1)?;
+        let request = self.next_control_request()?;
         self.pending_request = Some(request);
         self.phase = SessionPhase::Advancing;
         Some(request)

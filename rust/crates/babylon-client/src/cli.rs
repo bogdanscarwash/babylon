@@ -7,7 +7,7 @@
 use std::ffi::OsString;
 use std::fmt;
 
-use babylon_persistence::CampaignId;
+use babylon_persistence::{CampaignId, RuntimeSessionPresetV3, RuntimeSessionTargetV3};
 use uuid::Uuid;
 
 /// The `--headless` flag: run exactly one dossier command against the
@@ -16,6 +16,10 @@ pub const HEADLESS_FLAG: &str = "--headless";
 /// The canonical campaign identity for the connected window or headless read.
 /// Falls back to [`CAMPAIGN_ENV`].
 pub const CAMPAIGN_FLAG: &str = "--campaign";
+/// Request a new campaign with an explicit identity; never reinterpret an Open.
+pub const NEW_CAMPAIGN_FLAG: &str = "--new-campaign";
+/// Delivery preset, valid only alongside [`NEW_CAMPAIGN_FLAG`].
+pub const PRESET_FLAG: &str = "--preset";
 /// Environment fallback for the campaign identity when `--campaign` is
 /// absent.
 pub const CAMPAIGN_ENV: &str = "BABYLON_CAMPAIGN_ID";
@@ -40,6 +44,7 @@ babylon-client — the Babylon viewer and headless dossier CLI
 
 usage:
   babylon-client --campaign <uuid>
+  babylon-client --new-campaign <uuid> [--preset standard|delayed]
   babylon-client --headless [--campaign <uuid>] <command>
 
 commands:
@@ -62,7 +67,9 @@ commands:
 
 options:
   --headless    run one command against the fog-safe reader and exit.
-  --campaign    canonical campaign UUID; falls back to BABYLON_CAMPAIGN_ID.
+  --campaign    open an existing canonical campaign UUID; falls back to BABYLON_CAMPAIGN_ID.
+  --new-campaign create an absent campaign with this canonical UUID.
+  --preset      new campaign delivery preset: standard (default) or delayed.
   Open the connected window with `mise run play`.
 ";
 
@@ -194,10 +201,10 @@ pub enum HelpTopic {
 /// command, or a help topic that `main` renders and exits 0.
 #[derive(Clone, Debug)]
 pub enum CliRequest {
-    /// Open the observer window for one durable campaign.
+    /// Open one persistent observer window with an explicit initial target.
     Windowed {
-        /// The canonical campaign identity.
-        campaign_id: CampaignId,
+        /// Submitted through the normal lifecycle Switch path after Hello.
+        initial_target: RuntimeSessionTargetV3,
     },
     /// Run exactly one headless dossier command.
     Headless {
@@ -250,19 +257,16 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<CliRequest, Cli
     let words = into_words(args)?;
     let mut headless = false;
     let mut campaign: Option<String> = None;
+    let mut new_campaign: Option<String> = None;
+    let mut preset: Option<String> = None;
     let mut rest: Vec<String> = Vec::new();
     let mut iter = words.into_iter();
     while let Some(word) = iter.next() {
         match word.as_str() {
             HEADLESS_FLAG => headless = true,
-            CAMPAIGN_FLAG => {
-                campaign = Some(iter.next().ok_or_else(|| {
-                    CliError::at(
-                        concat!(file!(), ":", line!()),
-                        format!("{CAMPAIGN_FLAG} requires a value"),
-                    )
-                })?);
-            }
+            CAMPAIGN_FLAG => read_flag_value(&mut campaign, &word, &mut iter)?,
+            NEW_CAMPAIGN_FLAG => read_flag_value(&mut new_campaign, &word, &mut iter)?,
+            PRESET_FLAG => read_flag_value(&mut preset, &word, &mut iter)?,
             "--" => {
                 rest.extend(iter);
                 break;
@@ -276,8 +280,14 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<CliRequest, Cli
                 format!("windowed mode observes one durable campaign; use {HEADLESS_FLAG} for commands; demo stories are conformance-only")));
         }
         return Ok(CliRequest::Windowed {
-            campaign_id: resolve_campaign(campaign)?,
+            initial_target: windowed_target(campaign, new_campaign, preset)?,
         });
+    }
+    if new_campaign.is_some() || preset.is_some() {
+        return Err(CliError::at(
+            concat!(file!(), ":", line!()),
+            "New campaign and preset flags require windowed mode".into(),
+        ));
     }
     if rest.iter().any(|word| word == STORY_FLAG) {
         return Err(CliError::at(
@@ -293,6 +303,64 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<CliRequest, Cli
     Ok(CliRequest::Headless {
         command,
         campaign_id,
+    })
+}
+
+fn read_flag_value(
+    destination: &mut Option<String>,
+    flag: &str,
+    words: &mut impl Iterator<Item = String>,
+) -> Result<(), CliError> {
+    if destination.is_some() {
+        return Err(CliError::at(
+            concat!(file!(), ":", line!()),
+            format!("{flag} may be specified only once"),
+        ));
+    }
+    *destination = Some(words.next().ok_or_else(|| {
+        CliError::at(
+            concat!(file!(), ":", line!()),
+            format!("{flag} requires a value"),
+        )
+    })?);
+    Ok(())
+}
+
+fn windowed_target(
+    campaign: Option<String>,
+    new_campaign: Option<String>,
+    preset: Option<String>,
+) -> Result<RuntimeSessionTargetV3, CliError> {
+    if let Some(raw) = new_campaign {
+        if campaign.is_some() {
+            return Err(CliError::at(
+                concat!(file!(), ":", line!()),
+                "New and Open campaign flags are mutually exclusive".into(),
+            ));
+        }
+        let preset = match preset.as_deref() {
+            None | Some("standard") => RuntimeSessionPresetV3::Standard,
+            Some("delayed") => RuntimeSessionPresetV3::Delayed,
+            Some(_) => {
+                return Err(CliError::at(
+                    concat!(file!(), ":", line!()),
+                    "new campaign preset must be standard or delayed".into(),
+                ))
+            }
+        };
+        return Ok(RuntimeSessionTargetV3::New {
+            campaign_id: resolve_campaign(Some(raw))?.as_uuid().to_string(),
+            preset,
+        });
+    }
+    if preset.is_some() {
+        return Err(CliError::at(
+            concat!(file!(), ":", line!()),
+            "--preset applies only to --new-campaign".into(),
+        ));
+    }
+    Ok(RuntimeSessionTargetV3::Open {
+        campaign_id: resolve_campaign(campaign)?.as_uuid().to_string(),
     })
 }
 
@@ -504,9 +572,57 @@ mod tests {
     fn campaign_flag_opens_the_durable_window() {
         let request = parse(os(&[CAMPAIGN_FLAG, CAMPAIGN])).expect("campaign admits");
         assert!(
-            matches!(request, CliRequest::Windowed { campaign_id } if campaign_id == campaign()),
-            "the window binds the declared campaign"
+            matches!(request, CliRequest::Windowed { initial_target: RuntimeSessionTargetV3::Open { campaign_id } } if campaign_id == CAMPAIGN),
+            "the window explicitly opens the existing campaign"
         );
+    }
+
+    #[test]
+    fn new_campaign_flag_queues_the_exact_uuid_and_selected_preset() {
+        for (flags, expected) in [
+            (
+                vec!["--new-campaign", CAMPAIGN],
+                RuntimeSessionPresetV3::Standard,
+            ),
+            (
+                vec!["--preset", "delayed", "--new-campaign", CAMPAIGN],
+                RuntimeSessionPresetV3::Delayed,
+            ),
+        ] {
+            let request = parse(os(&flags)).expect("explicit New target admits");
+            assert!(matches!(request,
+                CliRequest::Windowed { initial_target: RuntimeSessionTargetV3::New { campaign_id, preset } }
+                if campaign_id == CAMPAIGN && preset == expected
+            ));
+        }
+    }
+
+    #[test]
+    fn lifecycle_flags_refuse_ambiguous_or_noncanonical_targets() {
+        for flags in [
+            vec!["--new-campaign"],
+            vec!["--new-campaign", "not-a-uuid"],
+            vec!["--new-campaign", "00000000-0000-0000-0000-000000000000"],
+            vec!["--new-campaign", CAMPAIGN, "--campaign", CAMPAIGN],
+            vec!["--campaign", CAMPAIGN, "--new-campaign", CAMPAIGN],
+            vec!["--campaign", CAMPAIGN, "--preset", "standard"],
+            vec!["--new-campaign", CAMPAIGN, "--preset"],
+            vec!["--new-campaign", CAMPAIGN, "--preset", "guessed"],
+            vec!["--new-campaign", CAMPAIGN, "--new-campaign", CAMPAIGN],
+            vec!["--campaign", CAMPAIGN, "--campaign", CAMPAIGN],
+            vec!["--headless", "--new-campaign", CAMPAIGN, "tick", "status"],
+            vec![
+                "--headless",
+                "--campaign",
+                CAMPAIGN,
+                "--preset",
+                "delayed",
+                "tick",
+                "status",
+            ],
+        ] {
+            assert!(parse(os(&flags)).is_err(), "must refuse {flags:?}");
+        }
     }
 
     #[test]

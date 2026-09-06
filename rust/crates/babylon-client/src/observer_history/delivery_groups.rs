@@ -395,6 +395,7 @@ mod tests {
             events: vec![],
             material_balance: None,
             labor_accounts: vec![],
+            staffing_accounts: Vec::new(),
             observed_contexts: vec![],
             process_attributions: vec![],
             provenance: vec![],

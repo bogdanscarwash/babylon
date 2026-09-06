@@ -108,8 +108,34 @@ EXPECTED_FOUNDATION_BINDING: Final = {
 }
 RESULT_DOMAIN: Final = b"babylon.h3-reader-parity-result.v1\0"
 CORPUS_DOMAIN: Final = b"babylon.h3-reader-parity-vectors.v1\0"
-# ADR251's economic observations do not expose the retired H3 estate. Keep
-# this exact ownership census separate from the default-deny adapter prefix.
+# These native observations do not expose the retired H3 estate. Keep this
+# exact ownership census separate from the default-deny adapter prefix.
+COMMITTED_COMPONENT_RELATIONS: Final = (
+    "graph_node_v1",
+    "graph_node_f64_v1",
+    "graph_edge_v1",
+    "graph_hyperedge_v1",
+    "graph_hyperedge_member_v1",
+    "graph_edge_f64_v1",
+    "graph_node_currency_v1",
+    "graph_hyperedge_f64_v1",
+    "world_register_v1",
+    "hex_state_delta_v1",
+    "territory_state_v1",
+    "territory_state_field_v1",
+    "organization_state_v1",
+    "organization_state_field_v1",
+    "organization_territory_v1",
+    "tick_event_v2",
+    "tick_event_field_v2",
+    "tick_choice_receipt_v1",
+    "tick_choice_receipt_branch_v1",
+    "tick_choice_receipt_carrier_element_v1",
+    "checkpoint_manifest",
+    "checkpoint_section_v1",
+    "archive_dirty_receipt_v1",
+    "tick_action_batch_v1",
+)
 NON_H3_OBSERVER_SURFACES: Final = {
     "v_observer_economy_foundation_v1": (
         "observer_economy_v1.sql",
@@ -126,10 +152,25 @@ NON_H3_OBSERVER_SURFACES: Final = {
                 "src/observer_material.rs",
                 "src/observer_reader.rs",
                 "src/reader.rs",
+                "src/stored_tick/source.rs",
                 "tests/observer_material_live.rs",  # proves raw-view denial for known preview
             }
         ),
     ),
+    **{
+        f"v_observer_{relation}": (
+            "observer_tick_components_v1.sql",
+            frozenset(
+                {
+                    "src/observer_reader.rs",
+                    "src/reader.rs",
+                    "src/stored_tick/source.rs",
+                    "tests/observer_material_live/tick_components.rs",
+                }
+            ),
+        )
+        for relation in COMMITTED_COMPONENT_RELATIONS
+    },
 }
 LEGACY_IDENTITY_FIELDS: Final = {
     "h3_index",
@@ -1175,8 +1216,31 @@ def _verify_contract_shape(contract: dict[str, Any]) -> None:
         raise H3ReaderCutoverRefusal("contract_shape", "terminal_disposition")
 
 
+def _verify_committed_component_definitions(source: str, migration: str) -> None:
+    """Admit only native component rows gated by their exact V3 commit marker."""
+    definitions = dict(
+        re.findall(
+            r"\bCREATE\s+VIEW\s+public\.(v_observer_[a-z0-9_]+)\s+AS\s+(.*?);",
+            source,
+            re.IGNORECASE | re.DOTALL,
+        )
+    )
+    for relation in COMMITTED_COMPONENT_RELATIONS:
+        name = f"v_observer_{relation}"
+        expected = (
+            f"SELECT component.* FROM babylon_state.{relation} AS component "
+            "JOIN babylon_state.tick_commit AS marker "
+            "ON marker.campaign_id = component.campaign_id "
+            "AND marker.resolve_tick = component.resolve_tick "
+            "WHERE marker.envelope_layout_version = 3"
+        )
+        actual = " ".join(definitions.get(name, "").split())
+        if actual.lower() != expected.lower():
+            raise H3ReaderCutoverRefusal("observer_definition_drift", f"{migration}: {name}")
+
+
 def verify_non_h3_observer_surfaces(parent: dict[str, Any], root: Path) -> None:
-    """Prove the exact economic view declarations cannot read the retired H3 estate."""
+    """Prove exact native view declarations cannot read the retired H3 estate."""
     migration_root = root / "rust/crates/babylon-persistence/migrations"
     retired_relations = _parent_relation_names(parent)
     for migration in sorted({entry[0] for entry in NON_H3_OBSERVER_SURFACES.values()}):
@@ -1192,6 +1256,8 @@ def verify_non_h3_observer_surfaces(parent: dict[str, Any], root: Path) -> None:
         for relation in sorted(retired_relations):
             if re.search(rf"\b{re.escape(relation)}\b", source, re.IGNORECASE):
                 raise H3ReaderCutoverRefusal("compatibility_read", f"{migration}: {relation}")
+        if migration == "observer_tick_components_v1.sql":
+            _verify_committed_component_definitions(source, migration)
 
 
 def verify_reader_cutover_contract(contract: dict[str, Any], root: Path) -> list[tuple[str, str]]:

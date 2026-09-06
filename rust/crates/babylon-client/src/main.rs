@@ -46,7 +46,7 @@ fn main() {
             print!("{}", cli::render_help(topic));
             return;
         }
-        CliRequest::Windowed { campaign_id } => AppMode::Windowed { campaign_id },
+        CliRequest::Windowed { initial_target } => AppMode::Windowed { initial_target },
         CliRequest::Headless {
             command,
             campaign_id,
@@ -55,7 +55,12 @@ fn main() {
             campaign_id,
         },
     };
-    let exit = build_app(mode).run();
+    let exit = build_app(mode)
+        .unwrap_or_else(|error| {
+            eprintln!("babylon-client startup refused: {error}");
+            std::process::exit(2);
+        })
+        .run();
     std::process::exit(match exit {
         AppExit::Success => 0,
         AppExit::Error(code) => i32::from(code.get()),

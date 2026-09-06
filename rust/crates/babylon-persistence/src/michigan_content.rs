@@ -5,11 +5,14 @@
 
 use std::sync::OnceLock;
 
+use babylon_graph::stable_state::StableGraphStateV1;
 use babylon_kernel::sha256_of;
 use babylon_tick::material_world::MaterialWorldRegisterV2;
+use babylon_tick::{material_replay::MaterialLaborV1, material_staffing::StaffingCompositionV1};
 
 use crate::{
-    material_runtime::MaterialRuntimeFoundationV2, michigan_cohorts::MICHIGAN_COHORT_SCENARIO_V2,
+    material_runtime::{MaterialComponentIdentityV1, MaterialRuntimeFoundationV2},
+    michigan_cohorts::MICHIGAN_COHORT_SCENARIO_V2,
     michigan_material::MichiganDeliveryPresetV1,
 };
 
@@ -117,15 +120,35 @@ impl MichiganContentPresetV1 {
     fn capture_admission(self) -> Result<MichiganContentAdmissionV1, MichiganContentErrorV1> {
         let foundation = self.build_foundation()?;
         let graph = foundation.graph_foundation();
+        let component_identity = MaterialComponentIdentityV1::from_foundation(graph);
+        let graph_digest = sha256_of(graph.canonical_bytes());
+        let scenario_digest = sha256_of(graph.content_bundle().scenario_source_bytes());
+        let MaterialLaborV1::Staffed(staffing) = foundation.labor().clone() else {
+            return Err(MichiganContentErrorV1::Foundation);
+        };
+        let horizon_ticks = foundation.spec().horizon_ticks;
+        let content_digest = foundation.spec().content_digest;
+        let digest = foundation.digest();
+        let canonical_bytes = foundation.canonical_bytes().to_vec();
+        let register = foundation.initial_register().clone();
+        let foundation_graph = foundation
+            .into_session()
+            .map_err(|_| MichiganContentErrorV1::Foundation)?
+            .graph_session()
+            .stable_graph_state()
+            .map_err(|_| MichiganContentErrorV1::Foundation)?;
         Ok(MichiganContentAdmissionV1 {
             preset: self,
-            horizon_ticks: foundation.spec().horizon_ticks,
-            content_digest: foundation.spec().content_digest,
-            digest: foundation.digest(),
-            graph_digest: sha256_of(graph.canonical_bytes()),
-            scenario_digest: sha256_of(graph.content_bundle().scenario_source_bytes()),
-            canonical_bytes: foundation.canonical_bytes().to_vec(),
-            register: foundation.initial_register().clone(),
+            horizon_ticks,
+            content_digest,
+            digest,
+            graph_digest,
+            scenario_digest,
+            canonical_bytes,
+            register,
+            foundation_graph,
+            staffing,
+            component_identity,
             physical_projection: MichiganPhysicalProjectionV1::FiveProcessV1,
         })
     }
@@ -141,6 +164,9 @@ pub struct MichiganContentAdmissionV1 {
     pub(crate) scenario_digest: [u8; 32],
     pub(crate) canonical_bytes: Vec<u8>,
     pub(crate) register: MaterialWorldRegisterV2,
+    pub(crate) foundation_graph: StableGraphStateV1,
+    pub(crate) staffing: StaffingCompositionV1,
+    pub(crate) component_identity: MaterialComponentIdentityV1,
     pub(crate) physical_projection: MichiganPhysicalProjectionV1,
 }
 impl MichiganContentAdmissionV1 {

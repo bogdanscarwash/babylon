@@ -572,6 +572,7 @@ mod tests {
             production: Some(ProductionSnapshotV1 {
                 material_balance: None,
                 labor_accounts: Vec::new(),
+                staffing_accounts: Vec::new(),
                 scenario_label: "Designed telemetry fixture".into(),
                 horizon_week: 16,
                 sites: vec![ProductionSiteV1 {

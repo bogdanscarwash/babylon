@@ -27,8 +27,6 @@ use crate::observer_ui::{
     ObserverCampaignCatalog, ObserverCommand, ObserverFontRole, ObserverFrame, ObserverUiState,
 };
 
-const OPEN_SELECTED_EXIT: u8 = 23;
-
 #[derive(Message, Clone, Copy, Debug)]
 pub enum CampaignBrowserCommand {
     Previous,
@@ -396,7 +394,6 @@ fn commands(
     mut browser: ResMut<CampaignBrowserState>,
     mut session: ResMut<ObserverSession>,
     mut ui: ResMut<ObserverUiState>,
-    mut exits: MessageWriter<AppExit>,
     pipe: Option<Res<RuntimePipe>>,
 ) {
     for command in messages.read() {
@@ -423,7 +420,7 @@ fn commands(
                 browser.comparison_target = None;
             }
             CampaignBrowserCommand::Open => {
-                open_selected_campaign(&mut browser, &mut session, pipe.as_deref(), &mut exits);
+                open_selected_campaign(&mut browser, &mut session, pipe.as_deref());
             }
             CampaignBrowserCommand::Compare => {
                 let Some(selected) = browser.catalog.get(browser.selected) else {
@@ -483,7 +480,6 @@ fn open_selected_campaign(
     browser: &mut CampaignBrowserState,
     session: &mut ObserverSession,
     pipe: Option<&RuntimePipe>,
-    exits: &mut MessageWriter<AppExit>,
 ) {
     if let ControlAvailability::Disabled(reason) =
         availability(ObserverCommand::NewCampaign, session)
@@ -505,13 +501,10 @@ fn open_selected_campaign(
             return;
         }
     };
-    session.playing = false;
-    match preference_path().and_then(|path| write_preference(&path, campaign, browser.generation)) {
-        Ok(()) => {
-            exits.write(AppExit::Error(
-                std::num::NonZeroU8::new(OPEN_SELECTED_EXIT).expect("reserved launcher control"),
-            ));
-        }
+    match session.queue_campaign(babylon_persistence::RuntimeSessionTargetV3::Open {
+        campaign_id: campaign.as_uuid().to_string(),
+    }) {
+        Ok(()) => browser.status = "Opening the selected campaign...".into(),
         Err(error) => browser.status = error,
     }
 }
@@ -662,7 +655,7 @@ fn comparison_text(
         }
         output.push('\n');
     }
-    output.push_str("Designed labor-hours stay separate from observed QCEW jobs. Terminal goods are unsold on-hand stocks.");
+    output.push_str("Modeled labor-hours stay separate from observed QCEW jobs. Terminal goods are unsold on-hand stocks.");
     output
 }
 
@@ -809,7 +802,7 @@ fn parse_campaign(value: &str) -> Result<CampaignId, String> {
     Ok(CampaignId::from_uuid(id))
 }
 
-fn preference_path() -> Result<PathBuf, String> {
+pub(crate) fn preference_path() -> Result<PathBuf, String> {
     let base =
         if let Some(path) = std::env::var_os("XDG_STATE_HOME").filter(|path| !path.is_empty()) {
             PathBuf::from(path)
@@ -825,7 +818,11 @@ fn preference_path() -> Result<PathBuf, String> {
     Ok(base.join("babylon/observer-campaign"))
 }
 
-fn write_preference(path: &Path, campaign: CampaignId, generation: u64) -> Result<(), String> {
+pub(crate) fn write_preference(
+    path: &Path,
+    campaign: CampaignId,
+    generation: u64,
+) -> Result<(), String> {
     let parent = path
         .parent()
         .ok_or_else(|| "Personal campaign preference directory is unavailable.".to_owned())?;
@@ -897,7 +894,8 @@ mod tests {
         let campaign = CampaignId::from_uuid(uuid::Uuid::from_u128(1));
         let selected = CampaignId::from_uuid(uuid::Uuid::from_u128(2));
         let mut session = ObserverSession::new(campaign);
-        session.fail("Runtime disconnected".into());
+        session.fail("Campaign admission refused".into());
+        session.connected_fixture();
         let mut app = App::new();
         app.insert_resource(session)
             .insert_resource(CampaignBrowserState {
@@ -954,7 +952,7 @@ mod tests {
     }
 
     #[test]
-    fn launcher_handoff_catalog_with_pipe_writes_selected_campaign_after_failure() {
+    fn catalog_after_failed_admission_queues_open_without_saving_or_exiting() {
         let environment = crate::test_support::EnvVarGuard::lock("XDG_STATE_HOME");
         let directory = std::env::temp_dir().join(format!(
             "babylon-connected-handoff-{}",
@@ -966,15 +964,81 @@ mod tests {
             .resource_mut::<Messages<CampaignBrowserCommand>>()
             .write(CampaignBrowserCommand::Open);
         app.update();
-        assert!(matches!(
-            app.world_mut().resource_mut::<Messages<AppExit>>().drain().collect::<Vec<_>>().as_slice(),
-            [AppExit::Error(code)] if code.get() == OPEN_SELECTED_EXIT
-        ));
-        assert_eq!(
-            fs::read_to_string(preference_path().unwrap()).unwrap(),
-            format!("{}\n", selected.as_uuid())
+        assert!(app.world().resource::<Messages<AppExit>>().is_empty());
+        let request = app
+            .world_mut()
+            .resource_mut::<ObserverSession>()
+            .pending_switch_request()
+            .unwrap();
+        assert!(
+            matches!(request, babylon_persistence::RuntimeSessionRequestV3::Switch {
+            target: babylon_persistence::RuntimeSessionTargetV3::Open { campaign_id }, ..
+        } if campaign_id == selected.as_uuid().to_string())
         );
-        fs::remove_dir_all(directory).unwrap();
+        assert!(
+            !preference_path().unwrap().exists(),
+            "An unadmitted target became the saved continuation"
+        );
+    }
+
+    #[test]
+    fn open_before_ready_keeps_transport_and_failed_ui_recoverable() {
+        let environment = crate::test_support::EnvVarGuard::lock("XDG_STATE_HOME");
+        let directory = std::env::temp_dir().join(format!(
+            "babylon-connecting-handoff-{}",
+            uuid::Uuid::new_v4()
+        ));
+        environment.set(directory.to_str().unwrap());
+        let (mut catalog, _) = catalog_handoff_app(false);
+        let browser = catalog
+            .world_mut()
+            .remove_resource::<CampaignBrowserState>()
+            .unwrap();
+        let (mut app, requests, responses) = crate::observer_io::tests::quit_app();
+        let campaign = app.world().resource::<ObserverSession>().campaign;
+        app.insert_resource(ObserverSession::new(campaign))
+            .insert_resource(browser)
+            .add_message::<CampaignBrowserCommand>()
+            .add_systems(PreUpdate, commands);
+        app.world_mut()
+            .resource_mut::<Messages<CampaignBrowserCommand>>()
+            .write(CampaignBrowserCommand::Open);
+        app.update();
+        let exited_before_ready = !app.world().resource::<Messages<AppExit>>().is_empty();
+        assert!(app.world().contains_resource::<RuntimePipe>());
+
+        let admitted_target =
+            crate::observer_io::tests::refuse_initial_switch(&mut app, &requests, &responses);
+        if directory.exists() {
+            fs::remove_dir_all(directory).unwrap();
+        }
+
+        assert!(
+            !exited_before_ready,
+            "Open closed the runtime response pipe before Ready"
+        );
+        assert!(
+            app.world().resource::<Messages<AppExit>>().is_empty(),
+            "Startup failure closed the recovery UI"
+        );
+        assert!(app.world().contains_resource::<RuntimePipe>());
+        assert!(app.world().resource::<ObserverUiState>().menu_open);
+        let state = app.world().resource::<ObserverSession>();
+        assert_eq!(state.phase, crate::observer::SessionPhase::Failed);
+        assert_eq!(state.campaign, admitted_target);
+        assert_eq!(state.durable_tick, 0);
+        assert_eq!(
+            state.error.as_deref(),
+            Some(
+                babylon_persistence::RuntimeSessionErrorCodeV3::StorageRefused
+                    .to_string()
+                    .as_str()
+            )
+        );
+        assert_eq!(
+            availability(ObserverCommand::ReopenCampaign, state),
+            ControlAvailability::Enabled
+        );
     }
 
     fn ready_catalog_handoff_app() -> (App, CampaignId) {
@@ -993,7 +1057,7 @@ mod tests {
     }
 
     #[test]
-    fn catalog_handoff_pending_commit_refuses_queued_and_stale_enabled_open() {
+    fn catalog_handoff_pending_commit_queues_without_abandoning_ack_or_saving_target() {
         let environment = crate::test_support::EnvVarGuard::lock("XDG_STATE_HOME");
         let directory =
             std::env::temp_dir().join(format!("babylon-pending-handoff-{}", uuid::Uuid::new_v4()));
@@ -1047,12 +1111,13 @@ mod tests {
             assert_eq!(fs::read_dir(path.parent().unwrap()).unwrap().count(), 1);
             assert_eq!(
                 app.world().resource::<CampaignBrowserState>().status,
-                if failed {
-                    "Reopen the campaign to reconcile committed progress"
-                } else {
-                    "Wait for the current week to finish committing"
-                }
+                "Opening the selected campaign..."
             );
+            assert!(app
+                .world_mut()
+                .resource_mut::<ObserverSession>()
+                .pending_switch_request()
+                .is_none());
             assert!(app
                 .world_mut()
                 .resource_mut::<ObserverSession>()
@@ -1061,20 +1126,27 @@ mod tests {
                 .resource_mut::<Messages<CampaignBrowserCommand>>()
                 .write(CampaignBrowserCommand::Open);
             app.update();
-            assert!(matches!(
-                app.world_mut().resource_mut::<Messages<AppExit>>().drain().collect::<Vec<_>>().as_slice(),
-                [AppExit::Error(code)] if code.get() == OPEN_SELECTED_EXIT
-            ));
+            assert!(app.world().resource::<Messages<AppExit>>().is_empty());
+            let request = app
+                .world_mut()
+                .resource_mut::<ObserverSession>()
+                .pending_switch_request()
+                .unwrap();
+            assert!(
+                matches!(request, babylon_persistence::RuntimeSessionRequestV3::Switch {
+                target: babylon_persistence::RuntimeSessionTargetV3::Open { campaign_id }, ..
+            } if campaign_id == selected.as_uuid().to_string())
+            );
             assert_eq!(
                 fs::read_to_string(&path).unwrap(),
-                format!("{}\n", selected.as_uuid())
+                format!("{}\n", active.as_uuid())
             );
         }
         fs::remove_dir_all(directory).unwrap();
     }
 
     #[test]
-    fn catalog_open_presentation_disables_pending_commit_without_pointer_motion() {
+    fn catalog_open_remains_queueable_during_pending_commit_without_pointer_motion() {
         let (mut app, _) = ready_catalog_handoff_app();
         app.add_systems(PreUpdate, sync_focus_targets)
             .add_systems(Update, paint_buttons.after(commands));
@@ -1105,14 +1177,14 @@ mod tests {
             .unwrap();
         app.update();
         assert!(
-            !app.world()
+            app.world()
                 .get::<ObserverFocusTarget>(button)
                 .unwrap()
                 .available
         );
         assert_eq!(
             *app.world().get::<BorderColor>(button).unwrap(),
-            BorderColor::all(theme::GRAY)
+            BorderColor::all(theme::YELLOW)
         );
         assert_eq!(
             *app.world().get::<Interaction>(button).unwrap(),
