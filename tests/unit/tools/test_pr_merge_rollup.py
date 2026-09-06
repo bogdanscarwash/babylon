@@ -22,17 +22,7 @@ if _SPEC is None or _SPEC.loader is None:
 pr_merge = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(pr_merge)
 
-DEV_BLOCKING_CHECKS = (
-    "Fast Gate (hygiene, lint, format, imports, types, lock)",
-    "Unit Tests (xdist, coverage gate)",
-    "Determinism Gate (byte-identical dense goldens)",
-    "Secret Scan (gitleaks, full history)",
-    "IaC Config Scan (trivy, HIGH+CRITICAL blocking)",
-    "Security Audit (pip-audit policy — blocking since item-41)",
-    "Rust Gate (fmt, clippy, test, doc — rust/ workspace)",
-    "Baseline Ceremony Gate (§6.5 provenance)",
-    "Postgres Integration Tier (PG 17, pinned runtime)",
-)
+DEV_BLOCKING_CHECKS = ("CI Gate",)
 OPTIONAL_DEPENDABOT_CHECKS = (
     "Classify Dependabot update",
     "Dependabot Eligibility",

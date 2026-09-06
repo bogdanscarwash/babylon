@@ -284,60 +284,6 @@ fn complete_emission_witness_validates_the_actual_renderer_without_rewriting_ret
 }
 
 #[test]
-fn ordinary_retained_head_recovers_only_after_exact_forward_proof() {
-    let mut record = witnessed();
-    let original = record.clone();
-    record.emission = None;
-    assert_eq!(
-        super::super::recovery::recover(&record).unwrap(),
-        original.emission
-    );
-    assert_eq!(record.markdown, original.markdown);
-    assert_eq!(record.atoms, original.atoms);
-    record.search_text.push('!');
-    assert_eq!(super::super::recovery::recover(&record).unwrap(), None);
-}
-
-#[test]
-fn ambiguous_legal_question_is_retained_opaque_without_inferred_sections_or_labels() {
-    let mut record = witnessed();
-    let previous = record.emission.as_ref().unwrap();
-    let emission = ArchiveEmissionManifestV2::try_new(
-        previous.subject_citation().clone(),
-        "A question\n## Related\n- [](subject:county/26099)\n## Signals\nStill a question"
-            .to_owned(),
-        previous.signals().to_vec(),
-        previous.links().to_vec(),
-    )
-    .unwrap();
-    let page = crate::FogSafeArchiveRendererV1::new()
-        .unwrap()
-        .render_emission(
-            &crate::ArchiveSubjectV1::try_new(
-                record.subject.kind(),
-                record.subject.id().to_owned(),
-                record.title.clone(),
-            )
-            .unwrap(),
-            record.source.tick(),
-            &record.source.tick_content_hash().unwrap(),
-            &emission,
-        )
-        .unwrap();
-    record.markdown = page.markdown().to_owned();
-    record.search_text = page.search_text().to_owned();
-    record.provenance_json = serde_json::to_string(page.citations()).unwrap();
-    record.content_sha256 = page.sha256();
-    record.emission = Some(emission);
-    record.validate().unwrap();
-    record.emission = None;
-    let opaque = record.clone();
-    record.validate().unwrap();
-    assert_eq!(super::super::recovery::recover(&record).unwrap(), None);
-    assert_eq!(record, opaque);
-}
-
-#[test]
 fn emitted_field_without_matching_atom_and_grant_cannot_be_a_witness() {
     let mut record = witnessed();
     record.atoms.remove(1);

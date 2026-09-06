@@ -1,4 +1,4 @@
-//! Explicit durable content-layout admission without changing frozen foundation DDL.
+//! Current durable content-layout admission; existing unversioned saves are refused.
 
 use babylon_kernel::sha256_of;
 use postgres::{Client, GenericClient};
@@ -10,7 +10,7 @@ use crate::runtime::RustPersistenceRuntimeErrorV2;
 const SCHEMA: &str = include_str!("../migrations/foundation_content_v2.sql");
 
 /// The caller has already established active authority on this exact connection.
-/// Historical layout assignment occurs once, under the foundation writer lock.
+/// Initial schema creation requires an empty foundation table under its writer lock.
 pub(crate) fn install_foundation_content_schema_v2(
     client: &mut Client,
 ) -> Result<(), RustPersistenceRuntimeErrorV2> {
@@ -34,6 +34,19 @@ pub(crate) fn install_foundation_content_schema_v2(
                 "LOCK TABLE babylon_state.campaign_foundation IN SHARE ROW EXCLUSIVE MODE",
             )
             .map_err(|error| storage(&error))?;
+            let occupied: bool = tx
+                .query_one(
+                    "SELECT EXISTS(SELECT 1 FROM babylon_state.campaign_foundation)",
+                    &[],
+                )
+                .map_err(|error| storage(&error))?
+                .try_get(0)
+                .map_err(|error| storage(&error))?;
+            if occupied {
+                return Err(
+                    RustPersistenceRuntimeErrorV2::FoundationSchemaAbsentForExistingCampaigns,
+                );
+            }
             tx.batch_execute(SCHEMA).map_err(|error| storage(&error))?;
             tx.execute(
                 "INSERT INTO babylon_meta.foundation_content_schema_v2 VALUES (true, $1)",

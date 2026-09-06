@@ -17,7 +17,6 @@ from urllib.parse import quote
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from tools.pr_policy import (  # noqa: E402
-    BASELINE_CEREMONY_CONTEXT,
     DEV_BLOCKING_CONTEXTS,
     DEV_CHECK_MANIFEST,
     MAIN_BLOCKING_CONTEXTS,
@@ -57,9 +56,7 @@ DEV_PUSH_ATTESTATION_MANIFEST: Final[tuple[CheckRequirement, ...]] = tuple(
     CheckRequirement(
         requirement.context,
         requirement.kind,
-        frozenset({"success", "skipped"})
-        if requirement.context == BASELINE_CEREMONY_CONTEXT
-        else frozenset({"success"}),
+        frozenset({"success"}),
         requirement.producer,
     )
     for requirement in DEV_CHECK_MANIFEST

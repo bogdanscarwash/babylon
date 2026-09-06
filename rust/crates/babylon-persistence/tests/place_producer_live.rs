@@ -10,9 +10,6 @@
 
 use std::str::FromStr;
 
-#[path = "support/legacy_archive.rs"]
-mod legacy_archive;
-
 use babylon_bsl::rule_pipeline::split_content;
 use babylon_bsl::rules_hash_of;
 use babylon_bsl::structural_verbs::CollectingSink;
@@ -777,98 +774,6 @@ fn live_staged_batch_refuses_tampered_consumption_claim() {
         refused,
         Err(SemanticArchiveErrorV1::ReceiptConflict),
         "a stage retry reconciles the stored claim digests and refuses a mismatch"
-    );
-    target.finish();
-}
-
-#[test]
-#[ignore = "requires the task-owned disposable PostgreSQL runtime and committed ticks"]
-fn live_installer_upgrades_the_legacy_page_provenance_anchor() {
-    let target = LivePlaceTarget::create(
-        "legacyfkupgrade",
-        0x2200_0000_0000_0000_0000_0000_0000_00c4,
-        1,
-    );
-
-    legacy_archive::restore_legacy_heads(&target.config);
-
-    // Re-anchor the page provenance at the consumption marker, exactly the
-    // pre-PER-318 shape, to prove the installer upgrades an installed schema.
-    let legacy_fk_targets_consumption: bool = target
-        .config
-        .connect(NoTls)
-        .expect("legacy anchor connection")
-        .query_one(
-            "SELECT pg_catalog.pg_get_constraintdef(oid) LIKE '%archive_receipt_consumption_v1%' \
-             FROM pg_catalog.pg_constraint \
-             WHERE conname = 'archive_page_v1_campaign_id_source_resolve_tick_fkey' \
-               AND conrelid = 'babylon_meta.archive_page_v1'::pg_catalog.regclass",
-            &[],
-        )
-        .expect("legacy anchor lookup")
-        .try_get(0)
-        .expect("legacy anchor decodes");
-    assert!(
-        !legacy_fk_targets_consumption,
-        "a fresh template already anchors pages at the durable dirty receipt"
-    );
-    target
-        .config
-        .connect(NoTls)
-        .expect("legacy anchor connection")
-        .batch_execute(
-            "ALTER TABLE babylon_meta.archive_page_v1 \
-             DROP CONSTRAINT archive_page_v1_campaign_id_source_resolve_tick_fkey; \
-             ALTER TABLE babylon_meta.archive_page_v1 \
-             ADD CONSTRAINT archive_page_v1_campaign_id_source_resolve_tick_fkey \
-             FOREIGN KEY (campaign_id, source_resolve_tick) \
-             REFERENCES babylon_meta.archive_receipt_consumption_v1(campaign_id, resolve_tick) \
-             ON DELETE CASCADE",
-        )
-        .expect("legacy consumption anchor applies");
-
-    let store = SemanticArchiveStoreV1::new(&target.config);
-    assert_eq!(
-        store
-            .install_schema()
-            .expect("installer upgrades the legacy anchor"),
-        ArchiveSchemaDispositionV1::Installed,
-        "re-anchoring the page provenance reports an installed change"
-    );
-    let upgraded: bool = target
-        .config
-        .connect(NoTls)
-        .expect("upgrade check connection")
-        .query_one(
-            "SELECT confrelid = 'babylon_state.archive_dirty_receipt_v1'::pg_catalog.regclass \
-             FROM pg_catalog.pg_constraint \
-             WHERE conname = 'archive_page_v1_campaign_id_source_resolve_tick_fkey' \
-               AND conrelid = 'babylon_meta.archive_page_retired_v1'::pg_catalog.regclass",
-            &[],
-        )
-        .expect("upgrade check lookup")
-        .try_get(0)
-        .expect("upgrade check decodes");
-    assert!(
-        upgraded,
-        "the upgraded schema anchors pages at the durable dirty receipt"
-    );
-
-    // The upgraded schema stages a paged drain batch the legacy anchor refused.
-    let producer = PlaceDossierProducerV1::try_new(&target.config).expect("pinned products load");
-    let mut worker = ArchiveWorkerV1::new(&target.config);
-    let report = worker
-        .sweep_once(target.campaign_id, &producer)
-        .expect("upgraded schema stages the bootstrap head");
-    assert_eq!(
-        dispositions(&report),
-        vec![(1, ArchiveReceiptDispositionV1::Paged)]
-    );
-    assert_eq!(place_page_count(&target.config, target.campaign_id), 256);
-    assert_eq!(
-        receipt_consumption_count(&target.config, target.campaign_id),
-        0,
-        "staging still claims nothing after the upgrade"
     );
     target.finish();
 }

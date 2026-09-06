@@ -1140,6 +1140,8 @@ pub enum RustPersistenceRuntimeErrorV2 {
     },
     /// A requested campaign foundation is absent.
     FoundationAbsent,
+    /// Existing campaigns lack the current foundation schema and cannot be upgraded.
+    FoundationSchemaAbsentForExistingCampaigns,
     /// Durable campaign bytes differ from the requested exact foundation.
     CampaignConflict,
     /// The content bundle's scenario does not reproduce the session's captured graph.
@@ -1536,11 +1538,7 @@ impl DurableReplayRuntimeV2<HypergraphStore> {
             .map(std::str::from_utf8)
             .transpose()
             .map_err(|_| RustPersistenceRuntimeErrorV2::ReplaySource)?;
-        // Upgrade path for campaigns founded before the declared mapping
-        // existed: install the additive schema and reconcile the rows
-        // idempotently. Divergence between stored and declared rows refuses
-        // loudly; durable rows are never overwritten.
-        crate::territory_county_map::reconcile_territory_county_map_v1(
+        crate::territory_county_map::verify_territory_county_map_v1(
             config,
             campaign_id,
             scenario,
@@ -3678,7 +3676,6 @@ mod live_tests {
     use std::sync::atomic::Ordering;
     use std::sync::{Arc, Barrier};
     use std::thread;
-    use std::time::{Duration, Instant};
 
     use babylon_bsl::rule_pipeline::split_content;
     use babylon_bsl::rules_hash_of;
@@ -3806,30 +3803,6 @@ mod live_tests {
             "COPY rows retain the enclosing transaction's rollback boundary"
         );
         database.cleanup();
-    }
-
-    fn wait_for_access_exclusive_lock(config: &Config, relation_name: &str, timeout_message: &str) {
-        let mut observer = config.connect(NoTls).expect("lock observer connection");
-        let deadline = Instant::now() + Duration::from_secs(10);
-        loop {
-            let access_exclusive_waiting: bool = observer
-                .query_one(
-                    "SELECT EXISTS (\
-                       SELECT 1 FROM pg_catalog.pg_locks AS requested \
-                        WHERE requested.relation = pg_catalog.to_regclass($1) \
-                          AND requested.mode = 'AccessExclusiveLock' \
-                          AND NOT requested.granted)",
-                    &[&relation_name],
-                )
-                .expect("lock wait query")
-                .try_get(0)
-                .expect("lock wait decodes");
-            if access_exclusive_waiting {
-                return;
-            }
-            assert!(Instant::now() < deadline, "{timeout_message}");
-            thread::sleep(Duration::from_millis(10));
-        }
     }
 
     #[test]
@@ -3961,202 +3934,6 @@ mod live_tests {
             .expect("reference installation absent"));
         assert_eq!(proof.try_get::<_, i64>(3).expect("game rows remain"), 2);
         assert_eq!(proof.try_get::<_, i64>(4).expect("event rows remain"), 1);
-        database.cleanup();
-    }
-
-    #[test]
-    #[ignore = "requires the task-owned disposable PG17 runtime"]
-    fn live_epoch_nine_locks_opaque_rows_before_empty_inventory_and_drop() {
-        let base = validated_base_config();
-        let database = TestDatabase::create(&base, "vopaquelock");
-        let config = database.config(&base);
-        bootstrap_h3_reader_epoch_v1(&config).expect("reader predecessor bootstraps");
-        let prepared = PredecessorAuthorityLedgerRowV2::prepared().expect("prepared row composes");
-        let active =
-            PredecessorAuthorityLedgerRowV2::active(&prepared).expect("active row composes");
-        let mut preparation = config.connect(NoTls).expect("preparation connection");
-        execute_predecessor_migration_v2(
-            &mut preparation,
-            MIGRATION_0008_SQL,
-            &prepared,
-            "migration 8 opaque-lock fixture",
-        )
-        .expect("epoch 8 preparation commits");
-        preparation
-            .batch_execute(
-                "INSERT INTO babylon_state.campaign (\
-                     campaign_id, replay_layout_version, rng_layout_version, replay_session_id, \
-                     rng_seed, defines_hash, rules_hash, ref_digest\
-                 ) SELECT \
-                     '00000000-0000-0000-0000-000000000009'::pg_catalog.uuid, \
-                     1, 2, 'epoch-nine-opaque-race', 0, \
-                     pg_catalog.decode(pg_catalog.repeat('00', 32), 'hex'), \
-                     pg_catalog.decode(pg_catalog.repeat('00', 32), 'hex'), \
-                     ref_digest \
-                 FROM babylon_ref.h3_reference_cohort \
-                 ORDER BY ref_digest \
-                 LIMIT 1; \
-                 INSERT INTO babylon_state.tick_commit (\
-                     campaign_id, resolve_tick, envelope_layout_version, \
-                     tick_content_hash, envelope_digest\
-                 ) VALUES (\
-                     '00000000-0000-0000-0000-000000000009'::pg_catalog.uuid, \
-                     0, 1, \
-                     pg_catalog.decode(pg_catalog.repeat('00', 32), 'hex'), \
-                     pg_catalog.decode(pg_catalog.repeat('00', 32), 'hex')\
-                 )",
-            )
-            .expect("opaque row parent fixture exists");
-
-        let mut holder = config.connect(NoTls).expect("opaque writer connection");
-        let mut holder_transaction = holder.transaction().expect("opaque writer transaction");
-        holder_transaction
-            .batch_execute("LOCK TABLE babylon_state.tick_graph_row IN ROW EXCLUSIVE MODE")
-            .expect("opaque writer lock held");
-
-        let worker_config = config.clone();
-        let worker = thread::spawn(move || {
-            let mut client = worker_config
-                .connect(NoTls)
-                .expect("epoch 9 opaque worker connection");
-            execute_predecessor_migration_v2(
-                &mut client,
-                MIGRATION_0009_SQL,
-                &active,
-                "migration 9 opaque lock race",
-            )
-        });
-
-        wait_for_access_exclusive_lock(
-            &config,
-            "babylon_state.tick_graph_row",
-            "epoch 9 never requested ACCESS EXCLUSIVE on the opaque predecessor table",
-        );
-
-        holder_transaction
-            .execute(
-                "INSERT INTO babylon_state.tick_graph_row (\
-                     campaign_id, resolve_tick, row_ordinal, row_key, row_payload\
-                 ) VALUES (\
-                     '00000000-0000-0000-0000-000000000009'::pg_catalog.uuid, \
-                     0, 0, '\\x01'::pg_catalog.bytea, '\\x'::pg_catalog.bytea\
-                 )",
-                &[],
-            )
-            .expect("concurrent opaque writer inserts while retaining its lock");
-        holder_transaction
-            .commit()
-            .expect("concurrent opaque writer commits");
-        let Err(RustPersistenceActivationErrorV2::Database {
-            operation: "migration 9 opaque lock race",
-            diagnostic: Some(_),
-        }) = worker.join().expect("epoch 9 opaque worker joins")
-        else {
-            panic!("epoch 9 opaque lock race must retain its server diagnostic");
-        };
-
-        let proof = config
-            .connect(NoTls)
-            .expect("opaque lock-race proof connection")
-            .query_one(
-                "SELECT \
-                     pg_catalog.to_regclass('babylon_state.tick_graph_row') IS NOT NULL, \
-                     (SELECT pg_catalog.count(*) FROM babylon_state.tick_graph_row), \
-                     (SELECT pg_catalog.count(*) \
-                        FROM babylon_meta.persistence_authority_ledger \
-                       WHERE state_tag = 2)",
-                &[],
-            )
-            .expect("opaque lock-race refusal proof");
-        assert!(proof.try_get::<_, bool>(0).expect("opaque table remains"));
-        assert_eq!(proof.try_get::<_, i64>(1).expect("opaque row remains"), 1);
-        assert_eq!(proof.try_get::<_, i64>(2).expect("active row absent"), 0);
-        database.cleanup();
-    }
-
-    #[test]
-    #[ignore = "requires the task-owned disposable PG17 runtime"]
-    fn live_epoch_eleven_locks_before_its_serializable_inventory_snapshot() {
-        let base = validated_base_config();
-        let database = TestDatabase::create(&base, "velevenlock");
-        let config = database.config(&base);
-        establish_predecessor_authority_v2(&config).expect("epoch 9 predecessor activates");
-        let expected = expected_v2_activation_report().expect("V2 authority rows compose");
-        let migrations = compiled_committed_tick_v2_activation_migrations()
-            .expect("V2 activation registry composes");
-        let mut preparation = config.connect(NoTls).expect("V2 preparation connection");
-        execute_v2_activation_migration(
-            &mut preparation,
-            migrations[0],
-            &expected.prepared_row,
-            "migration 10 lock fixture",
-        )
-        .expect("epoch 10 preparation commits");
-
-        let mut holder = config.connect(NoTls).expect("V1 event writer connection");
-        let mut holder_transaction = holder.transaction().expect("V1 event writer transaction");
-        holder_transaction
-            .batch_execute("LOCK TABLE babylon_state.tick_event_v1 IN ROW EXCLUSIVE MODE")
-            .expect("V1 event writer lock held");
-
-        let worker_config = config.clone();
-        let active_row = expected.active_row.clone();
-        let worker = thread::spawn(move || {
-            let mut client = worker_config
-                .connect(NoTls)
-                .expect("epoch 11 worker connection");
-            execute_v2_activation_migration(
-                &mut client,
-                migrations[1],
-                &active_row,
-                "migration 11 lock race",
-            )
-        });
-
-        wait_for_access_exclusive_lock(
-            &config,
-            "babylon_state.tick_event_v1",
-            "epoch 11 never requested ACCESS EXCLUSIVE before its inventory snapshot",
-        );
-
-        holder_transaction
-            .execute(
-                "INSERT INTO babylon_state.tick_event_v1 (\
-                     campaign_id, resolve_tick, ordinal, event_type\
-                 ) VALUES (\
-                     '00000000-0000-0000-0000-000000000011'::pg_catalog.uuid, \
-                     1, 0, 'EPOCH_ELEVEN_RACE'\
-                 )",
-                &[],
-            )
-            .expect("concurrent V1 writer inserts while retaining its lock");
-        holder_transaction
-            .commit()
-            .expect("concurrent V1 writer commits");
-        let Err(RustPersistenceActivationErrorV2::Database {
-            operation: "migration 11 lock race",
-            diagnostic: Some(_),
-        }) = worker.join().expect("epoch 11 worker joins")
-        else {
-            panic!("epoch 11 lock race must retain its server diagnostic");
-        };
-
-        let proof = config
-            .connect(NoTls)
-            .expect("epoch 11 lock-race proof connection")
-            .query_one(
-                "SELECT \
-                     pg_catalog.to_regclass('babylon_state.tick_event_v1') IS NOT NULL, \
-                     (SELECT pg_catalog.count(*) FROM babylon_state.tick_event_v1), \
-                     (SELECT pg_catalog.count(*) \
-                        FROM babylon_meta.committed_tick_v2_authority_ledger \
-                       WHERE state_tag = 2)",
-                &[],
-            )
-            .expect("epoch 11 lock-race refusal proof");
-        assert!(proof.try_get::<_, bool>(0).expect("V1 event table remains"));
-        assert_eq!(proof.try_get::<_, i64>(1).expect("V1 event row remains"), 1);
-        assert_eq!(proof.try_get::<_, i64>(2).expect("active row absent"), 0);
         database.cleanup();
     }
 
@@ -4769,13 +4546,48 @@ mod live_tests {
 
     #[test]
     #[ignore = "requires the task-owned disposable PG17 runtime"]
-    fn live_territory_county_map_backfills_when_opening_a_pre_feature_campaign() {
-        // An already-founded campaign whose mapping rows are absent (a
-        // pre-feature foundation) must gain them idempotently on open,
-        // without overwriting any existing row.
+    fn live_open_refuses_unversioned_foundation_without_schema_backfill() {
         let base = validated_base_config();
         let template = validated_template_name();
-        let database = TestDatabase::create_from_template(&base, &template, "countymapbackfill");
+        let database =
+            TestDatabase::create_from_template(&base, &template, "unversionedfoundation");
+        let config = database.config(&base);
+        let campaign_id =
+            CampaignId::from_uuid(Uuid::from_u128(0x2810_0000_0000_0000_0000_0000_0000_00c5));
+        let (session, bundle) = runtime_fixture();
+        let runtime = DurableReplayRuntimeV2::create(&config, campaign_id, session, bundle)
+            .expect("current foundation creates its layout metadata");
+        drop(runtime);
+        let mut admin = config
+            .connect(NoTls)
+            .expect("owned incomplete-schema fixture");
+        admin.batch_execute(
+            "DROP TABLE babylon_state.campaign_foundation_content_layout_v2;              DROP TABLE babylon_meta.foundation_content_schema_v2",
+        ).expect("remove only the owned scratch layout metadata");
+        let Err(error) = DurableReplayRuntimeV2::open(&config, campaign_id) else {
+            panic!("an unversioned foundation must refuse open");
+        };
+        assert_eq!(
+            error,
+            RustPersistenceRuntimeErrorV2::FoundationSchemaAbsentForExistingCampaigns
+        );
+        let row = admin.query_one(
+            "SELECT (SELECT pg_catalog.count(*) FROM babylon_state.campaign_foundation),              pg_catalog.to_regclass('babylon_state.campaign_foundation_content_layout_v2') IS NULL,              pg_catalog.to_regclass('babylon_meta.foundation_content_schema_v2') IS NULL",
+            &[],
+        ).expect("refusal preserves the existing foundation and missing schema");
+        assert_eq!(row.get::<_, i64>(0), 1);
+        assert!(row.get::<_, bool>(1));
+        assert!(row.get::<_, bool>(2));
+        database.cleanup();
+    }
+
+    #[test]
+    #[ignore = "requires the task-owned disposable PG17 runtime"]
+    fn live_territory_county_map_open_refuses_missing_rows_without_repair() {
+        // An incomplete development save is refused rather than silently repaired.
+        let base = validated_base_config();
+        let template = validated_template_name();
+        let database = TestDatabase::create_from_template(&base, &template, "countymapmissing");
         let config = database.config(&base);
         let campaign_id =
             CampaignId::from_uuid(Uuid::from_u128(0x2810_0000_0000_0000_0000_0000_0000_00c4));
@@ -4783,34 +4595,31 @@ mod live_tests {
         let runtime = DurableReplayRuntimeV2::create(&config, campaign_id, session, bundle)
             .expect("runtime constructs after activation");
         drop(runtime);
-        // Simulate the pre-feature state: the campaign exists, the rows do not.
+        // Simulate the incomplete state: the campaign exists, the rows do not.
         let deleted = config
             .connect(NoTls)
-            .expect("pre-feature simulation connection")
+            .expect("incomplete simulation connection")
             .execute(
                 "DELETE FROM babylon_meta.territory_county_map_v1 WHERE campaign_id = $1::uuid",
                 &[campaign_id.as_uuid()],
             )
-            .expect("pre-feature rows removed");
+            .expect("incomplete rows removed");
         assert_eq!(deleted, 1);
         assert!(county_map_rows(&config, campaign_id).is_empty());
 
-        let reopened = DurableReplayRuntimeV2::open(&config, campaign_id)
-            .expect("open backfills the declared mapping");
-        assert_eq!(reopened.last_committed_tick(), None);
-        assert_eq!(
-            county_map_rows(&config, campaign_id),
-            [("wayne".to_owned(), "26163".to_owned())]
-        );
-        // A second open reconciles against identical rows without writing or
-        // refusing.
-        let reopened_again = DurableReplayRuntimeV2::open(&config, campaign_id)
-            .expect("a second open reconciles idempotently");
-        assert_eq!(reopened_again.last_committed_tick(), None);
-        assert_eq!(
-            county_map_rows(&config, campaign_id),
-            [("wayne".to_owned(), "26163".to_owned())]
-        );
+        let Err(error) = DurableReplayRuntimeV2::open(&config, campaign_id) else {
+            panic!("a missing declared mapping must refuse open");
+        };
+        assert!(matches!(
+            error,
+            RustPersistenceRuntimeErrorV2::TerritoryCountyMap(
+                crate::territory_county_map::TerritoryCountyMapErrorV1::StoredMappingDiverged {
+                    stored_rows: 0,
+                    declared_rows: 1,
+                }
+            )
+        ));
+        assert!(county_map_rows(&config, campaign_id).is_empty());
         database.cleanup();
     }
 

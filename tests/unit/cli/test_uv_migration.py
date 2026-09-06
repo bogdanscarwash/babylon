@@ -32,8 +32,7 @@ def test_mise_has_no_poetry_invocations() -> None:
     assert "uv = " in MISE
 
 
-def test_precommit_lock_hook_is_uv() -> None:
-    assert "uv lock --check" in PRECOMMIT
+def test_precommit_has_no_poetry_invocations() -> None:
     assert "poetry check --lock" not in PRECOMMIT
     assert "poetry run" not in PRECOMMIT
 

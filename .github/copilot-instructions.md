@@ -1,6 +1,6 @@
 # Babylon code review
 
-Read `CLAUDE.md` for current boundaries. `CONSTITUTION.md` v4.1.0 governs
+Read `CLAUDE.md` for current boundaries. `CONSTITUTION.md` governs
 game law; `NORTH_STAR.md` describes intended play. Linear owns current scope.
 
 Review changed behavior from its real input through authoritative Rust state,
@@ -16,6 +16,9 @@ code location and a small reproducer or concrete example.
   restart behavior, reader privileges, visibility, and campaign isolation.
 - Trace allocations, repeated serialization, database round trips, and query
   plans when changes affect tick or observer latency.
+- Authored Michigan values live in `content/scenarios/michigan/defines.toml`.
+  Check units, validation, one 28-day tick, and the saved campaign identity.
+  Editing the file must not change the parameters of an existing campaign.
 - BSL rules need material causes and governed evidence. Flag a new primitive,
   fixed response curve, or downstream outcome imposed by an external event.
 - Delete obsolete implementations and their coupled tests. Keep something only

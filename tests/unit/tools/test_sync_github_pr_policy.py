@@ -23,17 +23,7 @@ _SPEC.loader.exec_module(policy_tool)
 
 POLICY_PATH = Path(__file__).resolve().parents[3] / ".github" / "settings" / "pr-policy.json"
 
-DEV_BLOCKING_CHECKS = (
-    "Fast Gate (hygiene, lint, format, imports, types, lock)",
-    "Unit Tests (xdist, coverage gate)",
-    "Determinism Gate (byte-identical dense goldens)",
-    "Secret Scan (gitleaks, full history)",
-    "IaC Config Scan (trivy, HIGH+CRITICAL blocking)",
-    "Security Audit (pip-audit policy — blocking since item-41)",
-    "Rust Gate (fmt, clippy, test, doc — rust/ workspace)",
-    "Baseline Ceremony Gate (§6.5 provenance)",
-    "Postgres Integration Tier (PG 17, pinned runtime)",
-)
+DEV_BLOCKING_CHECKS = ("CI Gate",)
 GITHUB_ACTIONS_APP_ID = 15368
 GITHUB_ACTIONS_APP_SLUG = "github-actions"
 CODEQL_PROTECTION = {
@@ -53,7 +43,6 @@ MAIN_QUALIFICATION_CHECKS = (
     "Main Qualification / Reference-Data Contracts",
     "Main Qualification / Release Documentation",
     "Main Qualification / Container Image Scan",
-    "Main Qualification / AI Tests (advisory)",
 )
 
 
@@ -67,7 +56,7 @@ def _ruleset(
     contexts = (
         DEV_BLOCKING_CHECKS
         if branch == "dev"
-        else (*DEV_BLOCKING_CHECKS, *MAIN_QUALIFICATION_CHECKS[:6])
+        else (*DEV_BLOCKING_CHECKS, *MAIN_QUALIFICATION_CHECKS)
     )
     return {
         "id": ruleset_id,
@@ -199,7 +188,7 @@ class FakeApi:
                 "name": context,
                 "head_sha": self.dev_sha,
                 "status": "completed",
-                "conclusion": "neutral" if "(advisory)" in context else "success",
+                "conclusion": "success",
                 "started_at": "2026-08-26T00:00:00Z",
                 "app": {
                     "id": GITHUB_ACTIONS_APP_ID,
@@ -434,14 +423,28 @@ def test_ruleset_readback_compares_the_required_check_producer() -> None:
     assert "dev ruleset differs" in policy_tool.check_policy(api, _policy())
 
 
-def test_settings_policy_must_match_the_complete_typed_dev_manifest() -> None:
+@pytest.mark.parametrize(
+    ("replacement", "message"),
+    [
+        (None, "at least one required status check"),
+        ("Unregistered aggregate", "complete dev check manifest"),
+    ],
+    ids=["missing", "wrong-context"],
+)
+def test_settings_policy_requires_the_exact_dev_aggregate(
+    replacement: str | None, message: str
+) -> None:
     policy = _policy()
     status_rule = next(
         rule for rule in policy["dev_ruleset"]["rules"] if rule["type"] == "required_status_checks"
     )
-    status_rule["parameters"]["required_status_checks"].pop()
+    checks = status_rule["parameters"]["required_status_checks"]
+    if replacement is None:
+        checks.clear()
+    else:
+        checks[0]["context"] = replacement
 
-    with pytest.raises(policy_tool.PolicyError, match="complete dev check manifest"):
+    with pytest.raises(policy_tool.PolicyError, match=message):
         policy_tool._validate_policy(policy)
 
 
@@ -459,7 +462,7 @@ def test_settings_policy_must_match_the_complete_typed_main_manifest() -> None:
 def test_settings_policy_context_order_is_not_authoritative() -> None:
     policy = _policy()
     status_rule = next(
-        rule for rule in policy["dev_ruleset"]["rules"] if rule["type"] == "required_status_checks"
+        rule for rule in policy["main_ruleset"]["rules"] if rule["type"] == "required_status_checks"
     )
     status_rule["parameters"]["required_status_checks"].reverse()
 
@@ -669,32 +672,6 @@ def test_apply_refuses_moved_dev_or_non_green_checks_before_mutation(tmp_path: P
     assert all(method == "GET" for method, _endpoint, _payload in red.calls)
 
 
-def test_apply_accepts_the_pr_only_baseline_gate_skipped_on_dev_push(tmp_path: Path) -> None:
-    api = FakeApi()
-    baseline = next(
-        run for run in api.check_runs if run["name"] == "Baseline Ceremony Gate (§6.5 provenance)"
-    )
-    baseline["conclusion"] = "skipped"
-
-    policy_tool.apply_policy(api, _policy(), api.dev_sha, tmp_path / "before.json")
-
-    assert policy_tool.check_policy(api, _policy()) == []
-
-
-@pytest.mark.parametrize("advisory_name", MAIN_QUALIFICATION_CHECKS[-1:])
-def test_apply_accepts_an_explicit_qualification_advisory_failure(
-    tmp_path: Path,
-    advisory_name: str,
-) -> None:
-    api = FakeApi()
-    advisory = next(run for run in api.check_runs if run["name"] == advisory_name)
-    advisory["conclusion"] = "failure"
-
-    policy_tool.apply_policy(api, _policy(), api.dev_sha, tmp_path / "before.json")
-
-    assert policy_tool.check_policy(api, _policy()) == []
-
-
 @pytest.mark.parametrize("conclusion", [None, "failure"])
 def test_apply_requires_green_container_scan_before_ruleset_transition(
     tmp_path: Path,
@@ -714,7 +691,7 @@ def test_apply_requires_green_container_scan_before_ruleset_transition(
     assert all(method == "GET" for method, _endpoint, _payload in api.calls)
 
 
-def test_apply_refuses_any_other_skipped_dev_push_check(tmp_path: Path) -> None:
+def test_apply_refuses_skipped_dev_aggregate(tmp_path: Path) -> None:
     api = FakeApi()
     api.check_runs[0]["conclusion"] = "skipped"
 

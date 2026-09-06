@@ -47,17 +47,6 @@ const ARCHIVE_SCHEMA_MARKERS_SQL_V1: &str = "SELECT \
           AND conrelid = pg_catalog.to_regclass('babylon_meta.archive_page_v1') \
           AND confrelid = pg_catalog.to_regclass('babylon_state.archive_dirty_receipt_v1')\
     )";
-/// PER-318 upgrade: an installed base schema whose page provenance still
-/// anchors at the consumption marker cannot stage a paged drain batch, so
-/// the installer re-anchors the exact constraint at the durable dirty
-/// receipt before reporting the schema current.
-const ARCHIVE_SCHEMA_PAGE_FK_UPGRADE_SQL_V1: &str = "ALTER TABLE babylon_meta.archive_page_v1 \
-    DROP CONSTRAINT archive_page_v1_campaign_id_source_resolve_tick_fkey; \
-    ALTER TABLE babylon_meta.archive_page_v1 \
-    ADD CONSTRAINT archive_page_v1_campaign_id_source_resolve_tick_fkey \
-    FOREIGN KEY (campaign_id, source_resolve_tick) \
-    REFERENCES babylon_state.archive_dirty_receipt_v1(campaign_id, resolve_tick) \
-    ON DELETE CASCADE";
 const ARCHIVE_ATOM_SCHEMA_MARKERS_SQL_V1: &str = "SELECT \
     pg_catalog.to_regclass('babylon_meta.archive_atom_schema_v1') IS NOT NULL, \
     pg_catalog.to_regclass('babylon_meta.archive_atom_v1') IS NOT NULL, \
@@ -1258,6 +1247,7 @@ impl SemanticArchiveStoreV1 {
                 },
             );
         }
+        crate::archive_revision::schema::require_empty_campaigns(&mut client)?;
         let mut disposition = self.install_base_schema()?;
         if self.install_atom_schema()? == ArchiveSchemaDispositionV1::Installed {
             disposition = ArchiveSchemaDispositionV1::Installed;
@@ -1366,24 +1356,10 @@ impl SemanticArchiveStoreV1 {
                 if contract_id != ARCHIVE_SCHEMA_CONTRACT_ID {
                     return Err(SemanticArchiveErrorV1::SchemaMismatch);
                 }
-                if page_fk_current {
-                    Ok(ArchiveSchemaDispositionV1::AlreadyCurrent)
-                } else {
-                    let mut transaction = client
-                        .build_transaction()
-                        .isolation_level(IsolationLevel::Serializable)
-                        .start()
-                        .map_err(|error| database("begin Archive schema upgrade", &error))?;
-                    transaction
-                        .batch_execute(ARCHIVE_SCHEMA_PAGE_FK_UPGRADE_SQL_V1)
-                        .map_err(|error| {
-                            database("upgrade Archive page provenance anchor", &error)
-                        })?;
-                    transaction
-                        .commit()
-                        .map_err(|error| database("commit Archive schema upgrade", &error))?;
-                    Ok(ArchiveSchemaDispositionV1::Installed)
+                if !page_fk_current {
+                    return Err(SemanticArchiveErrorV1::SchemaMismatch);
                 }
+                Ok(ArchiveSchemaDispositionV1::AlreadyCurrent)
             } else {
                 Err(SemanticArchiveErrorV1::PartialSchema)
             }
@@ -2011,6 +1987,8 @@ pub enum SemanticArchiveErrorV1 {
     PartialSchema,
     /// The Archive schema marker or unlock result was not exact.
     SchemaMismatch,
+    /// Existing campaigns lack the current revision schema and cannot be adopted.
+    RevisionSchemaAbsentForExistingCampaigns,
     /// A stored page, digest, kind, tick, or provenance row was malformed.
     StoredPageMismatch,
     /// A pinned reference-artifact digest diverged from its contract-pinned value.

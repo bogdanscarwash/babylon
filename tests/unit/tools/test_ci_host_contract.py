@@ -262,14 +262,27 @@ def test_postgres_action_builds_the_ci_override_with_buildkit_cache() -> None:
 
 def test_ci_cargo_caches_track_git_sources_and_toolchain() -> None:
     """Pinned Git sources and compiler changes invalidate the right caches."""
-    workflow = (WORKFLOWS_DIR / "ci.yml").read_text()
-    persistence_bootstrap = (ACTIONS_DIR / "bootstrap-persistence" / "action.yml").read_text()
-    assert "uses: ./.github/actions/bootstrap-persistence" in workflow
-    cache_contracts = f"{workflow}\n{persistence_bootstrap}"
-
-    assert cache_contracts.count("~/.cargo/git") >= 2
+    workflow = yaml.safe_load((WORKFLOWS_DIR / "ci.yml").read_text())
+    persistence_bootstrap = yaml.safe_load(
+        (ACTIONS_DIR / "bootstrap-persistence" / "action.yml").read_text()
+    )
+    assert any(
+        step.get("uses") == "./.github/actions/bootstrap-persistence"
+        for job in workflow["jobs"].values()
+        for step in job.get("steps", [])
+    )
     profile_key = "hashFiles('rust/Cargo.lock', 'rust/rust-toolchain.toml', 'rust/Cargo.toml')"
-    assert cache_contracts.count(profile_key) >= 2
+    for steps in (
+        workflow["jobs"]["rust-gate"]["steps"],
+        persistence_bootstrap["runs"]["steps"],
+    ):
+        cache = next(step for step in steps if step.get("id") == "cargo-cache")["with"]
+        assert any(
+            path == "~/.cargo/git" or path.startswith("~/.cargo/git/")
+            for path in cache["path"].splitlines()
+        )
+        assert profile_key in cache["key"]
+        assert all(profile_key in key for key in cache["restore-keys"].splitlines())
 
 
 def test_ci_debug_profile_reaches_every_persistence_consumer_and_cache(tmp_path: Path) -> None:
