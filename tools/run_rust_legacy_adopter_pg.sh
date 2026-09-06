@@ -473,15 +473,20 @@ if [ "$status" -eq 0 ] && [ "$LIVE_FOCUS" = "archive_worker" ]; then
 fi
 
 if [ "$status" -eq 0 ] && [ "$LIVE_FOCUS" = "reader_role" ]; then
-  timeout --signal=TERM --kill-after=10s 900s \
-    env \
-      BABYLON_LEGACY_ADOPTER_TEST_DSN="postgresql://test:test@127.0.0.1:$PORT/postgres" \
-      BABYLON_LEGACY_ADOPTER_DISPOSABLE_ACK="$TEST_HARNESS_ACK" \
-      BABYLON_LEGACY_ADOPTER_DISPOSABLE_CANARY="$CANARY" \
-      BABYLON_RUNTIME_TEMPLATE_DB="$RUNTIME_TEMPLATE" \
-      CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$REPO_ROOT/rust/target}" \
-    cargo test -p babylon-persistence --test reader_role_live --test observer_material_live \
-      --locked -- --nocapture --ignored --test-threads=1 || status=$?
+  # Each independently owned test binary keeps its deadline. The growing
+  # observer suite must not consume the reader suite's entire execution budget.
+  for reader_suite in reader_role_live observer_material_live; do
+    timeout --signal=TERM --kill-after=10s 900s \
+      env \
+        BABYLON_LEGACY_ADOPTER_TEST_DSN="postgresql://test:test@127.0.0.1:$PORT/postgres" \
+        BABYLON_LEGACY_ADOPTER_DISPOSABLE_ACK="$TEST_HARNESS_ACK" \
+        BABYLON_LEGACY_ADOPTER_DISPOSABLE_CANARY="$CANARY" \
+        BABYLON_RUNTIME_TEMPLATE_DB="$RUNTIME_TEMPLATE" \
+        CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$REPO_ROOT/rust/target}" \
+      cargo test -p babylon-persistence --test "$reader_suite" \
+        --locked -- --nocapture --ignored --test-threads=1 || status=$?
+    [ "$status" -eq 0 ] || break
+  done
 fi
 
 # PER-23 Slice 3 (ADR249 R10-R11): the headless dossier CLI driven as a

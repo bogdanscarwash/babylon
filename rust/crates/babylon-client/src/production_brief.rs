@@ -361,7 +361,7 @@ mod tests {
                 })
                 .collect(),
             labor: vec![ProductionLaborV1 {
-                unit: "Designed labor-hours".into(),
+                unit: "labor-hours".into(),
                 available: 7,
                 quantity_per_batch: 2,
             }],
@@ -371,6 +371,7 @@ mod tests {
         ProductionSnapshotV1 {
             material_balance: None,
             labor_accounts: Vec::new(),
+            staffing_accounts: Vec::new(),
             scenario_label: "Designed test chain".into(),
             horizon_week: 16,
             sites: vec![site("a", &[]), site("b", &["a"]), site("c", &["b"])],

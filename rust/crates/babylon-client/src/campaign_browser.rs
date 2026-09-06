@@ -662,7 +662,7 @@ fn comparison_text(
         }
         output.push('\n');
     }
-    output.push_str("Designed labor-hours stay separate from observed QCEW jobs. Terminal goods are unsold on-hand stocks.");
+    output.push_str("Modeled labor-hours stay separate from observed QCEW jobs. Terminal goods are unsold on-hand stocks.");
     output
 }
 

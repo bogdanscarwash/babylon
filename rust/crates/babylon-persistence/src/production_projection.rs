@@ -3,6 +3,7 @@
 pub(crate) mod context;
 mod labor;
 pub(crate) mod material_balance;
+pub(crate) mod staffing;
 
 use babylon_material_circuit::{MaterialCircuitStateV2, OrderIdV1, ProcessIdV1, SiteIdV1};
 use babylon_tick::material_world::{MaterialTickReceiptsV3, MaterialWorldRegisterV2};
@@ -95,7 +96,7 @@ pub(crate) fn project_material_observation_v1(
             MichiganDeliveryPresetV1::Delayed => "Michigan: delayed sheet delivery",
         }.to_owned(),
         horizon_week: preset.horizon_ticks(), sites, routes, freight, events, labor_accounts, material_balance,
-        observed_contexts: Vec::new(), process_attributions: Vec::new(),
+        staffing_accounts: Vec::new(), observed_contexts: Vec::new(), process_attributions: Vec::new(),
         provenance: vec![
             "Designed 16-week physical demonstration: county-industry aggregates; no factory locations.".to_owned(),
             "Recipes, opening stock, orders, labor-hours, capacity and route delays are Designed.".to_owned(),
@@ -147,7 +148,7 @@ fn project_sites(
                     })
                     .map_or(0, |row| row.available);
                 ProductionLaborV1 {
-                    unit: "Designed labor-hours".to_owned(),
+                    unit: "labor-hours".to_owned(),
                     available,
                     quantity_per_batch: coefficient.quantity_per_batch,
                 }

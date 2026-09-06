@@ -10,7 +10,7 @@ use babylon_tick::{
 use postgres::{Config, GenericClient, NoTls};
 
 use crate::{
-    material_runtime::install_material_runtime_schema_v3,
+    material_runtime::{install_material_runtime_schema_v3, read_observer_material_tick_v3},
     michigan_content::{
         admit_michigan_content_v1, MichiganContentAdmissionV1, MichiganPhysicalProjectionV1,
     },
@@ -173,7 +173,7 @@ pub(crate) fn material_observation(
             opening = Some(previous);
         }
     }
-    let production = match expected.physical_projection {
+    let mut production = match expected.physical_projection {
         MichiganPhysicalProjectionV1::FiveProcessV1 => project_material_observation_v1(
             expected.preset.delivery(),
             &register,
@@ -182,11 +182,80 @@ pub(crate) fn material_observation(
         ),
     }
     .map_err(|_| ObserverEconomyErrorV1::InvalidProjection)?;
+    production.staffing_accounts = authenticated_staffing(
+        transaction,
+        campaign,
+        expected,
+        &register,
+        opening.as_ref(),
+        prior_world,
+    )?;
     Ok(MaterialObservationV1 {
         foundation_digest: digest_hex(&expected.digest),
         production: Some(attribute_production(production, expected, visibility)?),
         nominal_world_hash: prior_world.map(|hash| digest_hex(&hash)),
     })
+}
+
+fn authenticated_staffing(
+    transaction: &mut impl GenericClient,
+    campaign: CampaignId,
+    expected: &MichiganContentAdmissionV1,
+    register: &MaterialWorldRegisterV2,
+    opening: Option<&MaterialWorldRegisterV2>,
+    result_world: Option<[u8; 32]>,
+) -> Result<Vec<crate::ProductionStaffingAccountV1>, ObserverEconomyErrorV1> {
+    use crate::production_projection::staffing::project_staffing_accounts_v1;
+    let tick = register.completed_tick();
+    if tick == 0 {
+        return project_staffing_accounts_v1(
+            &expected.staffing,
+            &expected.foundation_graph,
+            register,
+            None,
+            &[],
+        )
+        .map_err(|_| ObserverEconomyErrorV1::InvalidProjection);
+    }
+    let mut read = |tick| {
+        read_observer_material_tick_v3(
+            transaction,
+            campaign,
+            tick,
+            expected.foundation_graph.scenario_scope(),
+            expected.digest,
+            &expected.component_identity,
+        )
+        .map_err(|_| ObserverEconomyErrorV1::InvalidProjection)
+    };
+    let current = read(tick)?;
+    if current.register != *register || Some(current.identity.result_world_hash()) != result_world {
+        return Err(ObserverEconomyErrorV1::InvalidProjection);
+    }
+    let previous = if tick > 1 {
+        Some(read(tick - 1)?)
+    } else {
+        None
+    };
+    let (prior_graph, prior_register) = if let Some(previous) = &previous {
+        if previous.identity.result_world_hash() != current.identity.prior_world_hash() {
+            return Err(ObserverEconomyErrorV1::InvalidProjection);
+        }
+        (&previous.graph, &previous.register)
+    } else {
+        (&expected.foundation_graph, &expected.register)
+    };
+    if Some(prior_register) != opening {
+        return Err(ObserverEconomyErrorV1::InvalidProjection);
+    }
+    project_staffing_accounts_v1(
+        &expected.staffing,
+        &current.graph,
+        register,
+        Some(prior_graph),
+        &current.events,
+    )
+    .map_err(|_| ObserverEconomyErrorV1::InvalidProjection)
 }
 
 fn attribute_production(
@@ -263,7 +332,8 @@ pub(crate) fn install_observer_material_schema_v1(
         )
         .map_err(|_| ObserverEconomyErrorV1::Database)?;
     }
-    tx.commit().map_err(|_| ObserverEconomyErrorV1::Database)
+    tx.commit().map_err(|_| ObserverEconomyErrorV1::Database)?;
+    crate::observer_tick_components::install_observer_tick_components_schema_v1(config)
 }
 
 fn view_definitions(tx: &mut impl GenericClient) -> Result<Vec<String>, ObserverEconomyErrorV1> {

@@ -60,7 +60,7 @@ pub(super) fn project_labor_accounts(
             Ok(ProductionLaborAccountV1 {
                 site_id: digest_hex(&key.0.as_bytes()),
                 unit_id: digest_hex(&key.1.as_bytes()),
-                unit: "Designed labor-hours".to_owned(),
+                unit: "labor-hours".to_owned(),
                 next_opening_week: state.week,
                 next_opening_available: next.get(&key).copied().unwrap_or(0),
                 completed,

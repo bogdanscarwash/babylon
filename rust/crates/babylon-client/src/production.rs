@@ -1318,12 +1318,13 @@ fn describe(site: &ProductionSiteV1, snapshot: &ProductionSnapshotV1) -> String 
         .expect("String write");
     }
     describe_material_balance(&mut value, site, snapshot);
+    describe_staffing_accounts(&mut value, site, snapshot);
     describe_labor_accounts(&mut value, site, snapshot);
-    value.push_str("\nLABOR BUDGET / DESIGNED\n");
+    value.push_str("\nLABOR BUDGET / DERIVED\n");
     for labor in &site.labor {
         writeln!(
             &mut value,
-            "{} {} available | {} / batch",
+            "{} {} available | {} / batch (Designed)",
             grouped(labor.available),
             labor.unit,
             grouped(labor.quantity_per_batch)
@@ -1491,6 +1492,65 @@ fn describe_sector_context(
     }
 }
 
+fn describe_staffing_accounts(
+    value: &mut String,
+    site: &ProductionSiteV1,
+    snapshot: &ProductionSnapshotV1,
+) {
+    let mut disclosed = false;
+    for account in snapshot
+        .staffing_accounts
+        .iter()
+        .filter(|account| account.site_id == site.id)
+    {
+        disclosed = true;
+        value.push_str(if account.completed.is_some() {
+            "\nMODELED WORKFORCE / DERIVED\n"
+        } else {
+            "\nMODELED WORKFORCE / DESIGNED\n"
+        });
+        writeln!(
+            value,
+            "{} employed + {} reserve = {} people\n{} hours per person / week (Designed)",
+            grouped(account.employed),
+            grouped(account.reserve),
+            grouped(account.labor_force),
+            grouped(account.hours_per_person),
+        )
+        .expect("String write");
+        if let Some(completed) = &account.completed {
+            writeln!(
+                value,
+                "STAFFING / WEEK {}\nOpening: {} employed, {} reserve\nHires: {} | separations: {} | target: {} employed\nWork request: {} hours | prior week: {} hours\nOne-week retention: {} hours",
+                completed.week,
+                grouped(completed.opening_employed),
+                grouped(completed.opening_reserve),
+                grouped(completed.hires),
+                grouped(completed.separations),
+                grouped(completed.target_employed),
+                grouped(completed.current_unretained_hours),
+                grouped(completed.previous_unretained_hours),
+                grouped(completed.retained_hours),
+            )
+            .expect("String write");
+        } else {
+            value.push_str("Opening workforce; no completed staffing week.\n");
+        }
+        writeln!(
+            value,
+            "Next opening (week {}): {} labor-hours (Derived)",
+            account.next_opening_week,
+            grouped(account.next_opening_hours),
+        )
+        .expect("String write");
+    }
+    if disclosed {
+        value.push_str("Observed QCEW jobs are separate; these accounts record no payments.\n");
+    } else {
+        value.push_str("\nMODELED WORKFORCE\nNo workforce account disclosed for this subject.\n");
+    }
+}
+
 fn describe_labor_accounts(
     value: &mut String,
     site: &ProductionSiteV1,
@@ -1504,7 +1564,7 @@ fn describe_labor_accounts(
         if let Some(completed) = &account.completed {
             writeln!(
                 value,
-                "\nCOMMITTED WORK TIME / WEEK {}\n{} used + {} unused = {} available\nPlanned: {} {}",
+                "\nCOMMITTED WORK TIME / WEEK {} / DERIVED\n{} used + {} unused = {} available\nPlanned: {} {}",
                 completed.week,
                 grouped(completed.used),
                 grouped(completed.unused),
@@ -1517,7 +1577,7 @@ fn describe_labor_accounts(
         }
         writeln!(
             value,
-            "Next opening (week {}): {} {}",
+            "Next opening (week {}): {} {} (Derived)",
             account.next_opening_week,
             grouped(account.next_opening_available),
             account.unit,
@@ -1966,6 +2026,7 @@ mod tests {
         ProductionSnapshotV1 {
             material_balance: None,
             labor_accounts: Vec::new(),
+            staffing_accounts: Vec::new(),
             observed_contexts: Vec::new(),
             process_attributions: Vec::new(),
             scenario_label: "Navigation fixture".into(),
@@ -2063,7 +2124,7 @@ mod tests {
             ProductionLaborAccountV1 {
                 site_id: "a".into(),
                 unit_id: "hours".into(),
-                unit: "Designed labor-hours".into(),
+                unit: "labor-hours".into(),
                 next_opening_week: 6,
                 next_opening_available: 160,
                 completed: Some(CompletedProductionLaborV1 {
@@ -2084,10 +2145,10 @@ mod tests {
             },
         ];
         let text = describe(&snapshot.sites[0], &snapshot);
-        assert!(text.contains("COMMITTED WORK TIME / WEEK 5"));
+        assert!(text.contains("COMMITTED WORK TIME / WEEK 5 / DERIVED"));
         assert!(text.contains("80 used + 40 unused = 120 available"));
-        assert!(text.contains("Planned: 100 Designed labor-hours"));
-        assert!(text.contains("Next opening (week 6): 160 Designed labor-hours"));
+        assert!(text.contains("Planned: 100 labor-hours"));
+        assert!(text.contains("Next opening (week 6): 160 labor-hours (Derived)"));
         assert!(!text.contains("private work time"));
         assert!(!text.contains("987"));
         assert!(text.contains("Time accounts do not measure job losses."));
@@ -2101,14 +2162,100 @@ mod tests {
         snapshot.labor_accounts = vec![ProductionLaborAccountV1 {
             site_id: "a".into(),
             unit_id: "hours".into(),
-            unit: "Designed labor-hours".into(),
+            unit: "labor-hours".into(),
             next_opening_week: 1,
             next_opening_available: 120,
             completed: None,
         }];
         let text = describe(&snapshot.sites[0], &snapshot);
         assert!(!text.contains("COMMITTED WORK TIME"));
-        assert!(text.contains("Next opening (week 1): 120 Designed labor-hours"));
+        assert!(text.contains("Next opening (week 1): 120 labor-hours (Derived)"));
+    }
+
+    fn staffing_account(site_id: &str) -> babylon_persistence::ProductionStaffingAccountV1 {
+        use babylon_persistence::{
+            CompletedProductionStaffingV1, ProductionStaffingAccountV1, ProductionStaffingSubjectV1,
+        };
+        ProductionStaffingAccountV1 {
+            pool_id: format!("pool-{site_id}"),
+            site_id: site_id.into(),
+            unit_id: "labor-hours".into(),
+            subject: ProductionStaffingSubjectV1 {
+                scenario: "fixture".into(),
+                local_name: format!("workers-{site_id}"),
+            },
+            hours_per_person: 40,
+            labor_force: 4,
+            employed: 2,
+            reserve: 2,
+            previous_unretained_hours: 40,
+            next_opening_week: 6,
+            next_opening_hours: 80,
+            completed: Some(CompletedProductionStaffingV1 {
+                week: 5,
+                opening_employed: 4,
+                opening_reserve: 0,
+                previous_unretained_hours: 80,
+                current_unretained_hours: 40,
+                retained_hours: 80,
+                target_employed: 2,
+                hires: 0,
+                separations: 2,
+            }),
+        }
+    }
+
+    #[test]
+    fn workforce_readings_use_exact_people_and_retention_for_only_the_selected_site() {
+        let mut snapshot = snapshot();
+        let mut unrelated = staffing_account("b");
+        unrelated.employed = 987;
+        snapshot.staffing_accounts = vec![staffing_account("a"), unrelated];
+        let text = describe(&snapshot.sites[0], &snapshot);
+        assert!(text.contains("MODELED WORKFORCE / DERIVED"));
+        assert!(text.contains("2 employed + 2 reserve = 4 people"));
+        assert!(text.contains("40 hours per person / week (Designed)"));
+        assert!(text.contains("STAFFING / WEEK 5"));
+        assert!(text.contains("Opening: 4 employed, 0 reserve"));
+        assert!(text.contains("Hires: 0 | separations: 2 | target: 2 employed"));
+        assert!(text.contains("Work request: 40 hours | prior week: 80 hours"));
+        assert!(text.contains("One-week retention: 80 hours"));
+        assert!(text.contains("Next opening (week 6): 80 labor-hours (Derived)"));
+        assert!(
+            text.contains("Observed QCEW jobs are separate; these accounts record no payments.")
+        );
+        assert!(!text.contains("987"));
+        assert!(!text.contains("workers-b"));
+    }
+
+    #[test]
+    fn workforce_foundation_absence_and_zero_completed_flows_remain_distinct() {
+        let mut snapshot = snapshot();
+        let mut account = staffing_account("a");
+        account.next_opening_week = 1;
+        account.completed = None;
+        snapshot.staffing_accounts.push(account);
+        let foundation = describe(&snapshot.sites[0], &snapshot);
+        assert!(foundation.contains("Opening workforce; no completed staffing week."));
+        assert!(foundation.contains("MODELED WORKFORCE / DESIGNED"));
+        assert!(!foundation.contains("MODELED WORKFORCE / DERIVED"));
+        assert!(!foundation.contains("Hires:"));
+        assert!(!foundation.contains("STAFFING / WEEK"));
+        let missing = describe(&snapshot.sites[2], &snapshot);
+        assert!(missing.contains("No workforce account disclosed for this subject."));
+        assert!(!missing.contains("0 employed"));
+        let completed = staffing_account("a").completed.unwrap();
+        snapshot.staffing_accounts[0].completed =
+            Some(babylon_persistence::CompletedProductionStaffingV1 {
+                opening_employed: 2,
+                opening_reserve: 2,
+                hires: 0,
+                separations: 0,
+                ..completed
+            });
+        let quiet = describe(&snapshot.sites[0], &snapshot);
+        assert!(quiet.contains("Hires: 0 | separations: 0"));
+        assert!(!quiet.contains("no completed staffing week"));
     }
 
     fn attributed_snapshot() -> ProductionSnapshotV1 {
@@ -3137,7 +3284,7 @@ mod tests {
             app.world().get::<Node>(group).unwrap().display,
             Display::Flex
         );
-        assert!(panel_text::<ProductionDetails>(&mut app).contains("LABOR BUDGET / DESIGNED"));
+        assert!(panel_text::<ProductionDetails>(&mut app).contains("LABOR BUDGET / DERIVED"));
         press_site(&mut app, "a");
         app.update();
         assert!(app.world().resource::<ProductionNavigation>().details_open);

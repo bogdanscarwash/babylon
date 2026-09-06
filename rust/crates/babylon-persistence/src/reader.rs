@@ -92,7 +92,19 @@ pub(crate) const READER_PRIVILEGE_CENSUS_SQL_V1: &str = "WITH RECURSIVE role_clo
     'v_observer_county_economy_v1', 'v_material_campaign_identity_v1', \
     'v_observer_material_state_v1','v_archive_revision_known_v2','v_archive_revision_index_v2', \
     'v_archive_revision_atom_v2','v_archive_revision_grant_v2','v_archive_retention_v2', \
-    'v_archive_subject_grant_v2','v_archive_tick_knowledge_v2','v_archive_revision_scope_v2'))), \
+    'v_archive_subject_grant_v2','v_archive_tick_knowledge_v2','v_archive_revision_scope_v2', \
+    'v_observer_graph_node_v1', 'v_observer_graph_node_f64_v1', \
+    'v_observer_graph_edge_v1', 'v_observer_graph_hyperedge_v1', \
+    'v_observer_graph_hyperedge_member_v1', 'v_observer_graph_edge_f64_v1', \
+    'v_observer_graph_node_currency_v1', 'v_observer_graph_hyperedge_f64_v1', \
+    'v_observer_world_register_v1', 'v_observer_hex_state_delta_v1', \
+    'v_observer_territory_state_v1', 'v_observer_territory_state_field_v1', \
+    'v_observer_organization_state_v1', 'v_observer_organization_state_field_v1', \
+    'v_observer_organization_territory_v1', 'v_observer_tick_event_v2', \
+    'v_observer_tick_event_field_v2', 'v_observer_tick_choice_receipt_v1', \
+    'v_observer_tick_choice_receipt_branch_v1', 'v_observer_tick_choice_receipt_carrier_element_v1', \
+    'v_observer_checkpoint_manifest', 'v_observer_checkpoint_section_v1', \
+    'v_observer_archive_dirty_receipt_v1', 'v_observer_tick_action_batch_v1'))), \
     held AS (\
     SELECT restricted.nspname || '.' || restricted.relname || ':' || acl.privilege_type || \
     CASE WHEN acl.is_grantable THEN ' (grantable)' ELSE '' END AS entry \

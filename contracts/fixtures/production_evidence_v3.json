@@ -1,0 +1,70 @@
+{
+  "schema_version": 3,
+  "purpose": "Frozen historical evidence; no live V3 encoder",
+  "snapshot": {
+    "campaign_id": "c",
+    "resolve_tick": 7,
+    "foundation_digest": "f",
+    "tick_content_hash": "t",
+    "envelope_digest": null,
+    "nominal_world_hash": "w",
+    "visibility": "full_observer",
+    "counties": [],
+    "production": {
+      "scenario_label": "s",
+      "horizon_week": 16,
+      "sites": [],
+      "routes": [],
+      "freight": [],
+      "events": [
+        {
+          "id": "e",
+          "week": 7,
+          "subject_site_ids": [
+            "b",
+            "a"
+          ],
+          "kind": "arrival",
+          "description": "intact",
+          "receipt_digest": "d",
+          "delivery_evidence": {
+            "stage": "Arrival",
+            "order_id": "o",
+            "route_id": "r",
+            "good_id": "g",
+            "unit_id": "u",
+            "quantity": 11
+          }
+        }
+      ],
+      "labor_accounts": [],
+      "observed_contexts": [],
+      "process_attributions": [],
+      "provenance": [
+        "z",
+        "a"
+      ],
+      "material_balance": {
+        "week": 7,
+        "rows": [
+          {
+            "site_id": "b",
+            "good_id": "g",
+            "unit_id": "u",
+            "good": "steel\u0000sheet",
+            "unit": "kg",
+            "opening": 2,
+            "arrivals": 11,
+            "produced": 3,
+            "consumed": 5,
+            "dispatched": 7,
+            "closing": 4
+          }
+        ]
+      }
+    }
+  },
+  "byte_length": 442,
+  "canonical_hex": "626162796c6f6e2e70726f64756374696f6e2d6f62736572766174696f6e2d65766964656e63652e76330000000003000000000000000163000000000000000700000000000000016601000000000000000174000100000000000000017700000000000000000173000000000000001000000000000000000000000000000000000000000000000000000000000000010000000000000001650000000000000007000000000000000200000000000000016100000000000000016200000000000000076172726976616c0000000000000006696e74616374000000000000000164010100000000000000016f000000000000000172000000000000000167000000000000000175000000000000000b000000000000000000000000000000000000000000000000000000000000000200000000000000016100000000000000017a0100000000000000070000000000000001000000000000000162000000000000000167000000000000000175000000000000000b737465656c00736865657400000000000000026b670000000000000002000000000000000b0000000000000003000000000000000500000000000000070000000000000004",
+  "sha256": "4e5e6efd36f6e9ec5e052cf95815e4f4f33dc6a8a49eb15df5448fb1ecc140fe"
+}

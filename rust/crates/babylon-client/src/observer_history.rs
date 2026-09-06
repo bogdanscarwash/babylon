@@ -988,6 +988,7 @@ mod tests {
             counties: vec![],
             production: Some(ProductionSnapshotV1 {
                 labor_accounts: Vec::new(),
+                staffing_accounts: Vec::new(),
                 scenario_label: "Designed test campaign".into(),
                 horizon_week: 16,
                 sites: vec![],

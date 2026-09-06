@@ -19,6 +19,9 @@ pub struct ProductionSnapshotV1 {
     pub events: Vec<ProductionEventV1>,
     /// Each exact site/unit labor principal occurs once, across all its processes.
     pub labor_accounts: Vec<ProductionLaborAccountV1>,
+    /// Exact graph-owned modeled people and retained work requests at this scope.
+    /// A missing account is not an observed zero; foundation has no completed event.
+    pub staffing_accounts: Vec<ProductionStaffingAccountV1>,
     /// Exact completed-week stock accounting; absent at foundation.
     pub material_balance: Option<crate::CompletedMaterialBalanceV1>,
     /// Deduplicated public 2024 source cells, never current modeled employment.
@@ -151,6 +154,48 @@ pub struct CompletedProductionLaborV1 {
     pub planned: u64,
     pub used: u64,
     pub unused: u64,
+}
+
+/// Stable `SOCIAL_CLASS` subject of an admitted Designed workforce pool.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ProductionStaffingSubjectV1 {
+    pub scenario: String,
+    pub local_name: String,
+}
+
+/// Modeled population stocks at the selected committed week, separate from QCEW jobs.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ProductionStaffingAccountV1 {
+    pub pool_id: String,
+    pub site_id: String,
+    pub unit_id: String,
+    pub subject: ProductionStaffingSubjectV1,
+    pub hours_per_person: u64,
+    pub labor_force: u64,
+    pub employed: u64,
+    pub reserve: u64,
+    pub previous_unretained_hours: u64,
+    pub next_opening_week: u64,
+    pub next_opening_hours: u64,
+    /// Absent at foundation; present only with exact committed staffing evidence.
+    pub completed: Option<CompletedProductionStaffingV1>,
+}
+
+/// Completed staffing decision. Closing E/R stocks belong to the enclosing account.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CompletedProductionStaffingV1 {
+    pub week: u64,
+    pub opening_employed: u64,
+    pub opening_reserve: u64,
+    pub previous_unretained_hours: u64,
+    pub current_unretained_hours: u64,
+    pub retained_hours: u64,
+    pub target_employed: u64,
+    pub hires: u64,
+    pub separations: u64,
 }
 
 /// A real supplier relation with its declared physical route and order account.

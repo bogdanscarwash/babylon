@@ -1,17 +1,26 @@
 use std::{process::Command, sync::OnceLock};
 
 use babylon_bsl::structural_verbs::CollectingSink;
+use babylon_graph::{hypergraph_store::HypergraphStore, stable_state::StableGraphStateV1};
 use babylon_practice_contract::ordered_action_v1::OrderedPracticeActionBatchV1;
 use babylon_tick::{
-    material_world::decode_material_receipts_v3, replay_session::ReplayCommitDispositionV1,
+    material_replay::{MaterialLaborV1, PreparedMaterialTickV3},
+    material_staffing::StaffingCompositionV1,
+    material_world::decode_material_receipts_v3,
+    replay_session::ReplayCommitDispositionV1,
 };
 use serde_json::Value;
 
 use super::*;
 use crate::{
-    material_envelope::CommittedMaterialTickEnvelopeV3, michigan_content::MichiganContentPresetV1,
-    michigan_economy::digest_hex, michigan_material::MichiganDeliveryPresetV1,
-    production_projection::project_material_observation_v1, runtime::prepare_committed_tick_v2,
+    material_envelope::CommittedMaterialTickEnvelopeV3,
+    michigan_content::MichiganContentPresetV1,
+    michigan_economy::digest_hex,
+    michigan_material::MichiganDeliveryPresetV1,
+    production_projection::{
+        project_material_observation_v1, staffing::project_staffing_accounts_v1,
+    },
+    runtime::prepare_committed_tick_v2,
     CampaignId,
 };
 
@@ -25,6 +34,9 @@ fn published_observations() -> &'static [ObserverEconomySnapshotV1] {
             .create_foundation()
             .unwrap();
         let foundation_digest = foundation.digest();
+        let MaterialLaborV1::Staffed(composition) = foundation.labor().clone() else {
+            panic!("current Michigan foundation is staffed");
+        };
         let mut session = foundation.into_session().unwrap();
         let campaign = CampaignId::from_uuid(uuid::Uuid::from_u128(293));
         let mut observation = ObserverEconomySnapshotV1 {
@@ -40,6 +52,14 @@ fn published_observations() -> &'static [ObserverEconomySnapshotV1] {
                 project_material_observation_v1(preset, session.material(), None, &[]).unwrap(),
             ),
         };
+        observation.production.as_mut().unwrap().staffing_accounts = project_staffing_accounts_v1(
+            &composition,
+            &session.graph_session().stable_graph_state().unwrap(),
+            session.material(),
+            None,
+            &[],
+        )
+        .unwrap();
         let mut result = vec![observation.clone()];
         let mut history = Vec::new();
         let mut sink = CollectingSink::default();
@@ -50,7 +70,9 @@ fn published_observations() -> &'static [ObserverEconomySnapshotV1] {
             )
             .unwrap();
             let opening = session.material().clone();
+            let opening_graph = session.graph_session().stable_graph_state().unwrap();
             let prepared = session.prepare_advance(&actions).unwrap();
+            let staffing = prepared_staffing(&composition, &opening_graph, &prepared);
             let identity = *prepared.identity();
             let receipt = decode_material_receipts_v3(prepared.material().receipt_bytes()).unwrap();
             let families = prepare_committed_tick_v2(prepared.graph_report())
@@ -84,10 +106,40 @@ fn published_observations() -> &'static [ObserverEconomySnapshotV1] {
                 )
                 .unwrap(),
             );
+            observation.production.as_mut().unwrap().staffing_accounts = staffing;
             result.push(observation.clone());
         }
         result
     })
+}
+
+fn prepared_staffing(
+    composition: &StaffingCompositionV1,
+    opening: &StableGraphStateV1,
+    prepared: &PreparedMaterialTickV3<HypergraphStore>,
+) -> Vec<crate::ProductionStaffingAccountV1> {
+    let report = prepared.graph_report();
+    let events = report
+        .successful_event_batch()
+        .events()
+        .iter()
+        .map(|event| crate::stored_tick::StoredEventV2 {
+            emitting_rule: event.emitting_rule().to_owned(),
+            choice_receipt_ordinal: event
+                .choice_receipt()
+                .map(babylon_tick::choice_receipt::ChoiceReceiptRefV1::encounter_ordinal),
+            event_type: event.event_type().to_owned(),
+            fields: event.fields().to_vec(),
+        })
+        .collect::<Vec<_>>();
+    project_staffing_accounts_v1(
+        composition,
+        report.result_stable_graph(),
+        prepared.material().register(),
+        Some(opening),
+        &events,
+    )
+    .unwrap()
 }
 
 fn committed() -> ObserverEconomySnapshotV1 {
@@ -97,6 +149,7 @@ fn committed() -> ObserverEconomySnapshotV1 {
 fn reverse_unordered(snapshot: &mut ProductionSnapshotV1) {
     snapshot.sites.reverse();
     snapshot.labor_accounts.reverse();
+    snapshot.staffing_accounts.reverse();
     if let Some(balance) = &mut snapshot.material_balance {
         balance.rows.reverse();
     }
@@ -339,6 +392,9 @@ fn every_disclosed_production_scalar_including_catalog_provenance_is_bound() {
         .iter()
         .any(|path| path.starts_with("/labor_accounts/")));
     assert!(paths.iter().any(|path| path.starts_with("/provenance/")));
+    assert!(paths
+        .iter()
+        .any(|path| path.starts_with("/staffing_accounts/")));
     assert!(paths
         .iter()
         .any(|path| path.starts_with("/material_balance/rows/")));
@@ -603,40 +659,205 @@ fn material_balance_row_multiplicity_and_presence_are_bound() {
     );
 }
 
+fn fixture_wire(vector: &Value) -> Vec<u8> {
+    let hex = vector["canonical_hex"].as_str().unwrap();
+    assert_eq!(hex.len() % 2, 0);
+    hex.as_bytes()
+        .chunks_exact(2)
+        .map(|pair| u8::from_str_radix(std::str::from_utf8(pair).unwrap(), 16).unwrap())
+        .collect()
+}
+
 #[test]
-fn v3_independent_wire_vector_binds_delivery_and_completed_material_account() {
-    // Independently encoded with Python struct.pack('>I', 3), struct.pack('>Q', n),
-    // UTF-8 byte lengths and explicit option/stage tags, then hashlib.sha256.
-    // The 442-byte vector includes reordered subjects/provenance, a NUL in a
-    // material label, every balance component and typed Arrival evidence.
-    let snapshot: ObserverEconomySnapshotV1 = serde_json::from_value(serde_json::json!({
-        "campaign_id": "c", "resolve_tick": 7, "foundation_digest": "f",
-        "tick_content_hash": "t", "envelope_digest": null, "nominal_world_hash": "w",
-        "visibility": "full_observer", "counties": [],
-        "production": {
-            "scenario_label": "s", "horizon_week": 16,
-            "sites": [], "routes": [], "freight": [],
-            "events": [{
-                "id": "e", "week": 7, "subject_site_ids": ["b", "a"],
-                "kind": "arrival", "description": "intact", "receipt_digest": "d",
-                "delivery_evidence": {
-                    "stage": "Arrival", "order_id": "o", "route_id": "r",
-                    "good_id": "g", "unit_id": "u", "quantity": 11
-                }
-            }],
-            "labor_accounts": [], "observed_contexts": [], "process_attributions": [],
-            "provenance": ["z", "a"],
-            "material_balance": { "week": 7, "rows": [{
-                "site_id": "b", "good_id": "g", "unit_id": "u",
-                "good": "steel\0sheet", "unit": "kg",
-                "opening": 2, "arrivals": 11, "produced": 3,
-                "consumed": 5, "dispatched": 7, "closing": 4
-            }] }
-        }
-    }))
+fn historical_v3_wire_vector_keeps_its_exact_bytes_without_a_live_encoder() {
+    let vector: Value = serde_json::from_str(include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../../contracts/fixtures/production_evidence_v3.json"
+    )))
     .unwrap();
+    let wire = fixture_wire(&vector);
+    assert_eq!(vector["schema_version"], 3);
+    assert_eq!(wire.len(), 442);
+    assert_eq!(vector["byte_length"], 442);
+    assert!(wire.starts_with(b"babylon.production-observation-evidence.v3\0\0\0\0\x03"));
+    let expected = "4e5e6efd36f6e9ec5e052cf95815e4f4f33dc6a8a49eb15df5448fb1ecc140fe";
+    assert_eq!(vector["sha256"], expected);
+    assert_eq!(digest_hex(&Sha256::digest(&wire)), expected);
+    assert!(vector["snapshot"]["production"]
+        .get("staffing_accounts")
+        .is_none());
+    assert!(
+        serde_json::from_value::<ObserverEconomySnapshotV1>(vector["snapshot"].clone()).is_err()
+    );
+}
+
+#[test]
+fn v4_independent_wire_vectors_bind_staffing_options_order_and_exact_integers() {
+    let fixture: Value = serde_json::from_str(include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../../contracts/fixtures/production_evidence_v4.json"
+    )))
+    .unwrap();
+    assert_eq!(fixture["schema_version"], 4);
+    let vectors = fixture["vectors"].as_array().unwrap();
+    assert_eq!(vectors.len(), 2);
+    for vector in vectors {
+        let snapshot: ObserverEconomySnapshotV1 =
+            serde_json::from_value(vector["snapshot"].clone()).unwrap();
+        let wire = fixture_wire(vector);
+        assert!(wire.starts_with(b"babylon.production-observation-evidence.v4\0\0\0\0\x04"));
+        assert_eq!(vector["byte_length"], wire.len());
+        let expected = vector["sha256"].as_str().unwrap();
+        assert_eq!(digest_hex(&Sha256::digest(&wire)), expected);
+        assert_eq!(
+            snapshot.production_evidence_digest().unwrap().to_hex(),
+            expected
+        );
+        let mut twin = snapshot.clone();
+        reverse_unordered(twin.production.as_mut().unwrap());
+        assert_eq!(
+            snapshot.production_evidence_digest(),
+            twin.production_evidence_digest()
+        );
+    }
+}
+
+#[test]
+fn staffing_shape_is_required_and_unknown_fields_are_refused() {
+    let original = serde_json::to_value(staffing_observation()).unwrap();
+    let mut missing = original.clone();
+    missing["production"]
+        .as_object_mut()
+        .unwrap()
+        .remove("staffing_accounts");
+    assert!(serde_json::from_value::<ObserverEconomySnapshotV1>(missing).is_err());
+    for pointer in [
+        "/production/staffing_accounts/0",
+        "/production/staffing_accounts/0/subject",
+        "/production/staffing_accounts/0/completed",
+    ] {
+        let mut changed = original.clone();
+        changed
+            .pointer_mut(pointer)
+            .unwrap()
+            .as_object_mut()
+            .unwrap()
+            .insert("unsupported".into(), Value::Bool(true));
+        assert!(
+            serde_json::from_value::<ObserverEconomySnapshotV1>(changed).is_err(),
+            "{pointer}"
+        );
+    }
+}
+
+fn staffing_observation() -> ObserverEconomySnapshotV1 {
+    use crate::production_observation::{
+        CompletedProductionStaffingV1, ProductionStaffingAccountV1, ProductionStaffingSubjectV1,
+    };
+    let mut value = committed();
+    value.production.as_mut().unwrap().staffing_accounts = vec![ProductionStaffingAccountV1 {
+        pool_id: "pool-a".into(),
+        site_id: "site-a".into(),
+        unit_id: "labor-hour".into(),
+        subject: ProductionStaffingSubjectV1 {
+            scenario: "fixture/workforce".into(),
+            local_name: "workers-a".into(),
+        },
+        hours_per_person: 40,
+        labor_force: 4,
+        employed: 2,
+        reserve: 2,
+        previous_unretained_hours: 80,
+        next_opening_week: 2,
+        next_opening_hours: 80,
+        completed: Some(CompletedProductionStaffingV1 {
+            week: 1,
+            opening_employed: 4,
+            opening_reserve: 0,
+            previous_unretained_hours: 40,
+            current_unretained_hours: 80,
+            retained_hours: 80,
+            target_employed: 2,
+            hires: 0,
+            separations: 2,
+        }),
+    }];
+    value
+}
+
+#[test]
+fn every_staffing_scalar_is_bound() {
+    let original = staffing_observation();
+    let value = serde_json::to_value(original.production.as_ref().unwrap()).unwrap();
+    let mut paths = Vec::new();
+    scalar_paths(
+        &value["staffing_accounts"],
+        "/staffing_accounts",
+        &mut paths,
+    );
+    assert_eq!(paths.len(), 21);
+    for path in paths {
+        let mut changed = value.clone();
+        let field = changed.pointer_mut(&path).unwrap();
+        *field = changed_production_scalar(field, &path);
+        let mut twin = original.clone();
+        twin.production = Some(serde_json::from_value(changed).unwrap());
+        assert_ne!(
+            original.production_evidence_digest(),
+            twin.production_evidence_digest(),
+            "{path}"
+        );
+    }
+}
+
+#[test]
+fn staffing_order_multiplicity_and_completed_absence_are_distinct() {
+    let mut original = staffing_observation();
+    let rows = &mut original.production.as_mut().unwrap().staffing_accounts;
+    let mut second = rows[0].clone();
+    second.pool_id = "pool-b".into();
+    second.completed = None;
+    rows.push(second);
+    let mut reordered = original.clone();
+    reordered
+        .production
+        .as_mut()
+        .unwrap()
+        .staffing_accounts
+        .reverse();
     assert_eq!(
-        snapshot.production_evidence_digest().unwrap().to_hex(),
-        "4e5e6efd36f6e9ec5e052cf95815e4f4f33dc6a8a49eb15df5448fb1ecc140fe"
+        original.production_evidence_digest(),
+        reordered.production_evidence_digest()
+    );
+    let mut duplicated = original.clone();
+    let rows = &mut duplicated.production.as_mut().unwrap().staffing_accounts;
+    rows.push(rows[0].clone());
+    assert_ne!(
+        original.production_evidence_digest(),
+        duplicated.production_evidence_digest()
+    );
+    let mut absent = original.clone();
+    absent.production.as_mut().unwrap().staffing_accounts[0].completed = None;
+    assert_ne!(
+        original.production_evidence_digest(),
+        absent.production_evidence_digest()
+    );
+    let mut zero = absent.clone();
+    zero.production.as_mut().unwrap().staffing_accounts[0].completed = Some(
+        crate::production_observation::CompletedProductionStaffingV1 {
+            week: 0,
+            opening_employed: 0,
+            opening_reserve: 0,
+            previous_unretained_hours: 0,
+            current_unretained_hours: 0,
+            retained_hours: 0,
+            target_employed: 0,
+            hires: 0,
+            separations: 0,
+        },
+    );
+    assert_ne!(
+        zero.production_evidence_digest(),
+        absent.production_evidence_digest()
     );
 }

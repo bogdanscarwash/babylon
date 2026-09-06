@@ -148,6 +148,7 @@ fn production_observation() -> babylon_persistence::ProductionSnapshotV1 {
     ProductionSnapshotV1 {
         material_balance: None,
         labor_accounts: Vec::new(),
+        staffing_accounts: Vec::new(),
         scenario_label: "Read-only surface fixture".into(),
         horizon_week: 16,
         sites: vec![site("source"), site("destination")],

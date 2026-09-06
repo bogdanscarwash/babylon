@@ -1,16 +1,20 @@
 //! Presentation identity for the already-authorized production observation.
 //!
-//! V3 uses a fixed domain/version, big-endian u64 quantities and lengths,
+//! V4 uses a fixed domain/version, big-endian u64 quantities and lengths,
 //! length-prefixed UTF-8, and explicit 0/1 option tags. Unordered rows sort by
 //! their complete typed fields (including exact good/unit identities), after
 //! nested collections have been sorted. Duplicates retain their multiplicity.
 //! Events retain their supplied sequence; their subject sets and provenance
-//! declarations are unordered. V3 appends optional typed delivery evidence to
-//! each event (stage tags 1 arrival, 2 delivery, 3 quantity realization), and an
+//! declarations are unordered. Each event includes optional typed delivery evidence
+//! (stage tags 1 arrival, 2 delivery, 3 quantity realization), and an
 //! optional completed material balance after provenance. Each balance encodes
 //! week, row count, then site/good/unit identities and labels followed by
-//! opening/arrivals/produced/consumed/dispatched/closing quantities. V1 and V2
-//! identities retain their historical meaning; V3 is the sole live encoder.
+//! opening/arrivals/produced/consumed/dispatched/closing quantities. V1, V2,
+//! and V3 identities retain their historical meaning; V4 is the sole live encoder.
+//! After the material balance, V4 appends the staffing-account count and rows.
+//! Each row follows its DTO field order: pool/site/unit, stable subject strings,
+//! seven u64 stocks/policy/opening values, then an optional completed account
+//! containing its nine u64 values. None and completed zero flows remain distinct.
 //! Changing this layout requires a new version.
 //!
 //! This is neither a world hash nor an authorization proof. It commits to what
@@ -26,13 +30,13 @@ use crate::{
     ProductionStockV1,
 };
 
-const DOMAIN: &[u8] = b"babylon.production-observation-evidence.v3\0";
+const DOMAIN: &[u8] = b"babylon.production-observation-evidence.v4\0";
 
 /// SHA-256 of one scope-bound production presentation, distinct from world identity.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct ProductionEvidenceDigestV3([u8; 32]);
+pub struct ProductionEvidenceDigestV4([u8; 32]);
 
-impl ProductionEvidenceDigestV3 {
+impl ProductionEvidenceDigestV4 {
     #[must_use]
     pub const fn as_bytes(&self) -> &[u8; 32] {
         &self.0
@@ -53,11 +57,11 @@ impl ObserverEconomySnapshotV1 {
     /// session; the digest does not validate provenance or confer read authority.
     /// Compute on observation installation or evidence disclosure, not per frame.
     #[must_use]
-    pub fn production_evidence_digest(&self) -> Option<ProductionEvidenceDigestV3> {
+    pub fn production_evidence_digest(&self) -> Option<ProductionEvidenceDigestV4> {
         let production = canonical_production(self.production.as_ref()?);
         let mut encoder = EvidenceEncoder(Sha256::new());
         encoder.0.update(DOMAIN);
-        encoder.0.update(3_u32.to_be_bytes());
+        encoder.0.update(4_u32.to_be_bytes());
         encoder.text(&self.campaign_id);
         encoder.number(self.resolve_tick);
         encoder.text(&self.foundation_digest);
@@ -69,7 +73,7 @@ impl ObserverEconomySnapshotV1 {
             ObserverVisibilityV1::KnownPreview => 1,
         }]);
         encoder.production(&production);
-        Some(ProductionEvidenceDigestV3(encoder.0.finalize().into()))
+        Some(ProductionEvidenceDigestV4(encoder.0.finalize().into()))
     }
 }
 
@@ -85,6 +89,7 @@ fn canonical_production(source: &ProductionSnapshotV1) -> ProductionSnapshotV1 {
     }
     rows.sites.sort_unstable();
     rows.labor_accounts.sort_unstable();
+    rows.staffing_accounts.sort_unstable();
     if let Some(balance) = &mut rows.material_balance {
         balance.rows.sort_unstable();
     }
@@ -189,6 +194,52 @@ impl EvidenceEncoder {
         }
         self.strings(&rows.provenance);
         self.material_balance(rows.material_balance.as_ref());
+        self.count(rows.staffing_accounts.len());
+        for account in &rows.staffing_accounts {
+            self.staffing_account(account);
+        }
+    }
+
+    fn staffing_account(
+        &mut self,
+        account: &crate::production_observation::ProductionStaffingAccountV1,
+    ) {
+        for value in [
+            &account.pool_id,
+            &account.site_id,
+            &account.unit_id,
+            &account.subject.scenario,
+            &account.subject.local_name,
+        ] {
+            self.text(value);
+        }
+        for value in [
+            account.hours_per_person,
+            account.labor_force,
+            account.employed,
+            account.reserve,
+            account.previous_unretained_hours,
+            account.next_opening_week,
+            account.next_opening_hours,
+        ] {
+            self.number(value);
+        }
+        self.0.update([u8::from(account.completed.is_some())]);
+        if let Some(completed) = &account.completed {
+            for value in [
+                completed.week,
+                completed.opening_employed,
+                completed.opening_reserve,
+                completed.previous_unretained_hours,
+                completed.current_unretained_hours,
+                completed.retained_hours,
+                completed.target_employed,
+                completed.hires,
+                completed.separations,
+            ] {
+                self.number(value);
+            }
+        }
     }
 
     fn material_balance(&mut self, balance: Option<&crate::CompletedMaterialBalanceV1>) {

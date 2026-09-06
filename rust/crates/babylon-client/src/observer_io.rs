@@ -1347,6 +1347,7 @@ mod tests {
             production: Some(babylon_persistence::ProductionSnapshotV1 {
                 material_balance: None,
                 labor_accounts: Vec::new(),
+                staffing_accounts: Vec::new(),
                 scenario_label: "bounded observer fixture".into(),
                 horizon_week: 16,
                 sites: Vec::new(),
