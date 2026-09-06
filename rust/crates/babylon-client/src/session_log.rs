@@ -2,7 +2,7 @@
 //! Bevy tracing sink. These legacy observers cover the in-process viewer's
 //! resources; they do not describe the durable observer clock or camera.
 //!
-//! Observer composition uses [`crate::observer_session_log`] instead: scoped
+//! Observer composition uses the internal `observer_session_log` module: scoped
 //! requests, applied state, acknowledgements and bounded camera checkpoints.
 //! Neither stream records every input or proves that a person understood it.
 //! Value snapshots suppress repeated events from spurious change marks.
