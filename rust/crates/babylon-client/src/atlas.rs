@@ -56,6 +56,34 @@ const RING_ENTRY_BYTES: usize = 12;
 const VERTEX_ENTRY_BYTES: usize = 4;
 const CSR_ENTRY_BYTES: usize = 4;
 
+#[cfg(test)]
+pub(crate) mod land_probes {
+    /// Source-verified points shared by the CPU picker and rendered-mesh tests.
+    pub(crate) struct Probe {
+        pub label: String,
+        pub epsg5070: [f32; 2],
+        pub county_fips: Option<String>,
+    }
+
+    pub(crate) fn load() -> Vec<Probe> {
+        let fixture: serde_json::Value = serde_json::from_str(include_str!(
+            "../tests/fixtures/michigan_atlas_land_probes.json"
+        ))
+        .expect("source-verified land probes");
+        fixture["probes"]
+            .as_array()
+            .expect("probe array")
+            .iter()
+            .map(|row| Probe {
+                label: row["label"].as_str().expect("probe label").to_owned(),
+                epsg5070: serde_json::from_value(row["epsg5070"].clone()).expect("projected point"),
+                county_fips: serde_json::from_value(row["county_fips"].clone())
+                    .expect("land owner"),
+            })
+            .collect()
+    }
+}
+
 /// Every way a `CountyAtlas::parse` call can reject its input. Each variant
 /// names the specific check that failed — a reader that folds every failure
 /// into one opaque error would make the rejection tests (Task 4 Step 1)
@@ -559,6 +587,34 @@ mod tests {
         bytes[16..48].copy_from_slice(&digest);
     }
 
+    struct CommittedTableOffsets {
+        county_count: usize,
+        csr_offsets: usize,
+        csr_neighbors: usize,
+        names: usize,
+    }
+
+    /// Locate mutation targets from the trusted fixture header, so a new
+    /// geometry payload cannot redirect a corruption test into another table.
+    fn committed_table_offsets() -> CommittedTableOffsets {
+        let [county_count, ring_count, vertex_count, csr_nnz] = [72, 76, 80, 84].map(|offset| {
+            usize::try_from(read_u32(ATLAS_BYTES, offset).expect("committed header count"))
+                .expect("committed count fits usize")
+        });
+        let csr_offsets = HEADER_BYTES
+            + county_count * COUNTY_ENTRY_BYTES
+            + ring_count * RING_ENTRY_BYTES
+            + vertex_count * VERTEX_ENTRY_BYTES;
+        let csr_neighbors = csr_offsets + (county_count + 1) * CSR_ENTRY_BYTES;
+        let names = csr_neighbors + csr_nnz * CSR_ENTRY_BYTES + 4;
+        CommittedTableOffsets {
+            county_count,
+            csr_offsets,
+            csr_neighbors,
+            names,
+        }
+    }
+
     #[test]
     fn parses_the_committed_atlas() {
         let atlas = CountyAtlas::parse(ATLAS_BYTES).expect("committed atlas parses");
@@ -692,11 +748,9 @@ mod tests {
     #[test]
     fn rejects_csr_offsets_running_backwards() {
         let mut bytes = ATLAS_BYTES.to_vec();
-        // csr_offsets starts at 128 + 3222*28 + 3386*12 + 360064*4 =
-        // 1,571,232. Set offsets[2] below offsets[1] (originally 5), which
-        // makes county index 1's row run backwards.
-        let csr_offsets_off = 128 + 3222 * 28 + 3386 * 12 + 360_064 * 4;
-        let entry2 = csr_offsets_off + 2 * 4;
+        // Set offsets[2] below offsets[1] (originally 5), which makes
+        // county index 1's row run backwards. Legal adjacency is unchanged.
+        let entry2 = committed_table_offsets().csr_offsets + 2 * CSR_ENTRY_BYTES;
         bytes[entry2..entry2 + 4].copy_from_slice(&1u32.to_le_bytes());
         recompute_hash(&mut bytes);
         assert_eq!(
@@ -713,8 +767,8 @@ mod tests {
     #[test]
     fn rejects_csr_offsets_whose_final_entry_disagrees_with_csr_nnz() {
         let mut bytes = ATLAS_BYTES.to_vec();
-        let csr_offsets_off = 128 + 3222 * 28 + 3386 * 12 + 360_064 * 4;
-        let last_entry = csr_offsets_off + 3222 * 4; // csr_offsets[county_count]
+        let offsets = committed_table_offsets();
+        let last_entry = offsets.csr_offsets + offsets.county_count * CSR_ENTRY_BYTES;
         bytes[last_entry..last_entry + 4].copy_from_slice(&4_000_000u32.to_le_bytes());
         recompute_hash(&mut bytes);
         assert_eq!(
@@ -730,8 +784,7 @@ mod tests {
     #[test]
     fn rejects_a_csr_neighbor_naming_a_county_past_county_count() {
         let mut bytes = ATLAS_BYTES.to_vec();
-        let csr_offsets_off = 128 + 3222 * 28 + 3386 * 12 + 360_064 * 4;
-        let csr_neighbors_off = csr_offsets_off + 3223 * 4;
+        let csr_neighbors_off = committed_table_offsets().csr_neighbors;
         bytes[csr_neighbors_off..csr_neighbors_off + 4].copy_from_slice(&999_999u32.to_le_bytes());
         recompute_hash(&mut bytes);
         assert_eq!(
@@ -747,7 +800,7 @@ mod tests {
     #[test]
     fn rejects_a_swapped_newline_in_the_name_blob() {
         let mut bytes = ATLAS_BYTES.to_vec();
-        let name_blob_off = 128 + 3222 * 28 + 3386 * 12 + 360_064 * 4 + 3223 * 4 + 18954 * 4 + 4;
+        let name_blob_off = committed_table_offsets().names;
         let newline_pos = bytes[name_blob_off..]
             .iter()
             .position(|&b| b == b'\n')

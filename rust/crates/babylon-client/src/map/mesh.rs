@@ -18,12 +18,6 @@ const ATLAS_BYTES: &[u8] = include_bytes!(concat!(
     "/../../../assets/map/county_atlas.bin"
 ));
 
-/// The exact fill-mesh vertex count the committed atlas tessellates to —
-/// `atlas.vertices().len()`, since `tessellate::tessellate` appends every
-/// ring's vertices exactly once. Pinned here so Task 6's headless test can
-/// assert the real mesh without re-tessellating inside the test.
-pub const EXPECTED_VERTEX_COUNT: usize = 360_064;
-
 /// Marks the choropleth fill mesh entity.
 #[derive(Component)]
 pub struct MapFill;

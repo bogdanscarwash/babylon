@@ -334,6 +334,27 @@ mod tests {
         CountyAtlas::parse(ATLAS_BYTES).expect("committed atlas parses")
     }
 
+    #[test]
+    fn michigan_land_probes_pick_islands_and_mainland_but_not_water() {
+        let atlas = atlas();
+        let index = build(&atlas);
+        for probe in crate::atlas::land_probes::load() {
+            let found = index
+                .county_at(Vec2::from_array(probe.epsg5070))
+                .map(|i| atlas.county(i).expect("picked county").fips);
+            assert_eq!(found, probe.county_fips.as_deref(), "{}", probe.label);
+        }
+        let mut michigan = 0;
+        for i in 0..atlas.len() {
+            let county = atlas.county(i).expect("county");
+            if county.fips.starts_with("26") {
+                michigan += 1;
+                assert_eq!(index.county_at(county.centroid), Some(i), "{}", county.fips);
+            }
+        }
+        assert_eq!(michigan, 83);
+    }
+
     /// Every county's own centroid resolves to itself, measured as a FLOOR
     /// rather than claimed as 100% — a centroid can legitimately fall
     /// outside a crescent-shaped or multi-polygon county. Pinned from a

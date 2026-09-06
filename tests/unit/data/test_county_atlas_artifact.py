@@ -1,7 +1,8 @@
 """Pins for the committed county atlas the Bevy client renders (B1 Phase A).
 
-The atlas is a content-hashed binary derived from pinned TIGER 2024 geometry
-plus the committed ``county_adjacency.json`` — these tests are the tripwire
+The atlas uses checked TIGER 2023 COUNTY minus AREAWATER for Michigan land,
+TIGER 2024 legal geometry elsewhere, and committed ``county_adjacency.json``.
+These tests are the tripwire
 that catches a hand-edited or half-regenerated artifact before the Rust reader
 ever sees it. They read only the committed file: never the reference DB, never
 ``dist/data-artifacts``, never the data drive.
@@ -38,11 +39,10 @@ EXPECTED_COUNTY_COUNT = 3222
 #: dropped — every FIPS in the adjacency artifact has a geometry row.
 EXPECTED_CSR_NNZ = 2 * 9477
 
-#: Rings and vertices at the 0.001 deg simplification the tool records. Two of
-#: the 3,388 source rings are sub-pixel Denver/Jefferson exclaves that collapse
-#: on the u16 grid; the rest survive.
-EXPECTED_RING_COUNT = 3386
-EXPECTED_VERTEX_COUNT = 360064
+#: Measured from two byte-identical builds: Michigan land simplified at 70 m
+#: and reduced to a valid u16 grid; other counties retain 0.001 degree geometry.
+EXPECTED_RING_COUNT = 38309
+EXPECTED_VERTEX_COUNT = 538184
 
 
 class Header:
@@ -99,6 +99,15 @@ class TestArtifactIntegrity:
         # the rest of the header as well as the whole body.
         recomputed = hashlib.sha256(atlas_bytes[48:]).digest()
         assert recomputed == header.content_hash
+
+    def test_land_probe_evidence_matches_the_committed_atlas(self, atlas_bytes: bytes) -> None:
+        evidence = json.loads(
+            (
+                ATLAS_PATH.parents[2] / "rust/crates/babylon-client/tests/fixtures/"
+                "michigan_atlas_land_probes.json"
+            ).read_text(encoding="utf-8")
+        )
+        assert hashlib.sha256(atlas_bytes).hexdigest() == evidence["atlas_sha256"]
 
     def test_a_tampered_byte_breaks_the_stamp(self, atlas_bytes: bytes, header: Header) -> None:
         # The tripwire only earns its place if it bites. Flip one vertex byte

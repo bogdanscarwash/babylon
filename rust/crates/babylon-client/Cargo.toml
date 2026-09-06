@@ -40,7 +40,7 @@ babylon-bsl = { path = "../babylon-bsl" }
 # fog-safe reader surface — the confined read-only Archive projection, never
 # game state, and never a writer path.
 babylon-persistence = { path = "../babylon-persistence" }
-earcutr = "0.5"
+earcut = "0.4.11"
 serde_json = "1"
 uuid = "1.24"
 # Client logging estate (Director directive 2026-07-28 for location +

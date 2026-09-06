@@ -385,7 +385,7 @@ dependencies = [
  "babylon-practice-contract",
  "babylon-tick",
  "bevy",
- "earcutr",
+ "earcut",
  "log",
  "postgres",
  "serde_json",
@@ -454,8 +454,8 @@ version = "0.1.0"
 dependencies = [
  "babylon-bsl",
  "babylon-graph",
- "babylon-material-circuit",
  "babylon-kernel",
+ "babylon-material-circuit",
  "babylon-practice-contract",
  "babylon-tick",
  "fallible-iterator",
@@ -492,8 +492,8 @@ version = "0.1.0"
 dependencies = [
  "babylon-bsl",
  "babylon-graph",
- "babylon-material-circuit",
  "babylon-kernel",
+ "babylon-material-circuit",
  "babylon-practice-contract",
  "serde",
  "serde_json",
@@ -2551,12 +2551,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d8b14ccef22fc6f5a8f4d7d768562a182c04ce9a3b3157b91390b52ddfdf1a76"
 
 [[package]]
-name = "earcutr"
-version = "0.5.0"
+name = "earcut"
+version = "0.4.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "afc28d89ac6cb489f679fcf51aaa62b4667bb0fb73a30f1d4d23949069707c07"
+checksum = "9f03dd5350900133e14471c90d513eb5ba264004cd833adecab7dfa5fb5a2974"
 dependencies = [
- "itertools 0.14.0",
  "num-traits",
 ]
 
