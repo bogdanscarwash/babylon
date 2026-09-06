@@ -6,8 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     michigan_content::{
-        admit_michigan_content_v1, MichiganContentAdmissionV1, MichiganContentPresetV1,
-        MICHIGAN_CONTENT_PRESETS_V1,
+        admit_michigan_content_v1, MichiganContentAdmissionV1, MICHIGAN_CONTENT_PRESETS_V1,
     },
     michigan_economy::{digest_hex, michigan_economy_v1, MichiganCountyEconomyV1},
     validate_legacy_connection_target, CampaignId,
@@ -362,15 +361,33 @@ fn validate_observer_graph(
     graph: &[u8],
     scenario: &[u8],
 ) -> Result<(), ObserverEconomyErrorV1> {
-    let expected = match material {
-        Some(admitted) => admitted,
-        None => MichiganContentPresetV1::BaselineStandardV1
-            .admitted()
-            .map_err(|_| ObserverEconomyErrorV1::Reference)?,
-    };
-    expected
-        .validate_graph(graph, scenario)
-        .map_err(|_| ObserverEconomyErrorV1::ScenarioMismatch)
+    if let Some(admitted) = material {
+        return admitted
+            .validate_graph(graph, scenario)
+            .map_err(|_| ObserverEconomyErrorV1::ScenarioMismatch);
+    }
+    // A graph-only observer has its own explicit foundation. It never borrows
+    // a material preset or admits a predecessor staffed campaign.
+    let (expected_graph, expected_scenario) = graph_only_observer_identity()?;
+    if graph != expected_graph || scenario != expected_scenario {
+        return Err(ObserverEconomyErrorV1::ScenarioMismatch);
+    }
+    Ok(())
+}
+
+fn graph_only_observer_identity() -> Result<([u8; 32], [u8; 32]), ObserverEconomyErrorV1> {
+    type Identity = Result<([u8; 32], [u8; 32]), ObserverEconomyErrorV1>;
+    static IDENTITY: std::sync::OnceLock<Identity> = std::sync::OnceLock::new();
+    *IDENTITY.get_or_init(|| {
+        let (session, bundle) = crate::michigan_economy::michigan_observer_foundation_v1()
+            .map_err(|_| ObserverEconomyErrorV1::Reference)?;
+        let foundation = crate::CampaignFoundationV1::capture(&session, bundle)
+            .map_err(|_| ObserverEconomyErrorV1::Reference)?;
+        Ok((
+            sha256_of(foundation.canonical_bytes()),
+            sha256_of(foundation.content_bundle().scenario_source_bytes()),
+        ))
+    })
 }
 
 /// Read the complete county family through the admitted role's fixed view.
@@ -681,7 +698,9 @@ fn view_definitions(
 mod tests {
     use super::*;
     #[test]
-    fn material_headers_bind_the_matching_graph_and_baseline_only_is_explicit_v1() {
+    fn material_headers_bind_the_matching_graph_and_graph_only_is_separate() {
+        let (graph, scenario) = graph_only_observer_identity().unwrap();
+        assert!(validate_observer_graph(None, &graph, &scenario).is_ok());
         for preset in MICHIGAN_CONTENT_PRESETS_V1 {
             let entry = preset.admitted().unwrap();
             assert!(validate_observer_graph(
@@ -692,14 +711,7 @@ mod tests {
             .is_ok());
             let baseline_only =
                 validate_observer_graph(None, &entry.graph_digest, &entry.scenario_digest);
-            assert_eq!(
-                baseline_only.is_ok(),
-                matches!(
-                    preset,
-                    MichiganContentPresetV1::BaselineStandardV1
-                        | MichiganContentPresetV1::BaselineDelayedV1
-                )
-            );
+            assert_eq!(baseline_only, Err(ObserverEconomyErrorV1::ScenarioMismatch));
             for other in MICHIGAN_CONTENT_PRESETS_V1 {
                 let other = other.admitted().unwrap();
                 assert_eq!(
@@ -720,20 +732,16 @@ mod tests {
         assert_eq!(
             bindings.presets,
             [
-                "michigan-material-standard-v1",
-                "michigan-material-delayed-v1",
-                "michigan-material-standard-v2",
-                "michigan-material-delayed-v2",
-                "michigan-material-standard-v3",
-                "michigan-material-delayed-v3",
+                "michigan-material-standard-v4",
+                "michigan-material-delayed-v4",
             ]
         );
-        assert_eq!(bindings.horizons, [16; 6]);
-        assert_eq!(bindings.content.len(), 6);
-        assert_eq!(bindings.foundations.len(), 6);
-        assert_eq!(bindings.graphs.len(), 6);
-        assert_eq!(bindings.scenarios.len(), 6);
-        for index in 0..6 {
+        assert_eq!(bindings.horizons, [16; 2]);
+        assert_eq!(bindings.content.len(), 2);
+        assert_eq!(bindings.foundations.len(), 2);
+        assert_eq!(bindings.graphs.len(), 2);
+        assert_eq!(bindings.scenarios.len(), 2);
+        for index in 0..2 {
             let entry = admit_michigan_content_v1(
                 &bindings.presets[index],
                 bindings.horizons[index],

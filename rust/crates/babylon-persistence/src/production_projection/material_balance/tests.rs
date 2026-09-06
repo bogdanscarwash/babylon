@@ -7,7 +7,12 @@ use babylon_material_circuit::{
 use babylon_tick::material_world::{decode_material_receipts_v3, MaterialWorldRegisterV2};
 
 use super::*;
-use crate::michigan_material::{michigan_material_foundation_v1, MichiganDeliveryPresetV1};
+use crate::{
+    michigan_content::MichiganContentPresetV1, michigan_material::MichiganDeliveryPresetV1,
+};
+use babylon_bsl::structural_verbs::CollectingSink;
+use babylon_practice_contract::ordered_action_v1::OrderedPracticeActionBatchV1;
+use babylon_tick::replay_session::ReplayCommitDispositionV1;
 
 type Pair = (
     MaterialCircuitStateV2,
@@ -466,11 +471,32 @@ fn arrival_family_retains_multiplicity_without_counting_delivery_or_realization_
 }
 
 fn michigan_week(preset: MichiganDeliveryPresetV1, week: u64) -> Pair {
-    let mut state = michigan_material_foundation_v1(preset).unwrap();
-    for _ in 1..week {
-        state = pair(state).1;
+    let mut session = MichiganContentPresetV1::new_campaign(preset)
+        .create_foundation()
+        .unwrap()
+        .into_session()
+        .unwrap();
+    for tick in 1..=week {
+        let actions = OrderedPracticeActionBatchV1::empty(
+            session.graph_session().session_identity().clone(),
+            tick,
+        )
+        .unwrap();
+        let next = session.prepare_advance(&actions).unwrap();
+        if tick == week {
+            return (
+                session.material().state().clone(),
+                next.material().register().state().clone(),
+                decode_material_receipts_v3(next.material().receipt_bytes()).unwrap(),
+            );
+        }
+        session
+            .commit_prepared_and_publish(&mut CollectingSink::default(), next, |_| {
+                Ok::<_, ()>(ReplayCommitDispositionV1::Committed)
+            })
+            .unwrap();
     }
-    pair(state)
+    panic!("fixture requires a completed week");
 }
 
 #[test]
@@ -517,7 +543,7 @@ fn delivery_twins_explain_downstream_input_use_and_preserve_unrelated_food() {
     conserved(&b);
     // Reading a later pair does not alter a historical account or its inputs.
     let original = standard.clone();
-    let later = pair(standard.1.clone());
+    let later = michigan_week(MichiganDeliveryPresetV1::Standard, 4);
     conserved(&complete(&later));
     assert_eq!(standard, original);
     assert_eq!(

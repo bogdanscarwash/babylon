@@ -26,6 +26,20 @@ struct ProductionResourceRequest {
     requested: u128,
 }
 
+#[derive(Clone, Copy)]
+enum ProductionResources {
+    InputsOnly,
+    InputsAndLabor,
+}
+
+/// Complete process demand before labor capacity constrains next-week planning.
+pub(crate) struct ProcessLaborRequest {
+    pub(crate) process_id: ProcessIdV1,
+    pub(crate) site_id: SiteIdV1,
+    pub(crate) unit_id: UnitIdV1,
+    pub(crate) hours: u64,
+}
+
 fn process_output(
     state: &MaterialCircuitStateV1,
     process: ProcessIdV1,
@@ -503,6 +517,7 @@ fn production_resource_groups(
     state: &MaterialCircuitStateV1,
     commitments: &[crate::ProductionCommitmentV1],
     allocations: &[u64],
+    resources: ProductionResources,
 ) -> Result<BTreeMap<ProductionResourceKey, Vec<ProductionResourceRequest>>, MaterialCircuitErrorV1>
 {
     let mut groups = BTreeMap::new();
@@ -513,13 +528,15 @@ fn production_resource_groups(
     {
         let labor = labor_coefficient(state, commitment.process_id)
             .ok_or(MaterialCircuitErrorV1::ProcessInvariant)?;
-        add_production_request(
-            &mut groups,
-            ProductionResourceKey::Labor(commitment.site_id, labor.unit_id),
-            index,
-            labor.quantity_per_batch,
-            allocations[index],
-        )?;
+        if matches!(resources, ProductionResources::InputsAndLabor) {
+            add_production_request(
+                &mut groups,
+                ProductionResourceKey::Labor(commitment.site_id, labor.unit_id),
+                index,
+                labor.quantity_per_batch,
+                allocations[index],
+            )?;
+        }
         for input in input_coefficients(state, commitment.process_id)
             .iter()
             .take(MAX_MATERIAL_CIRCUIT_ROWS_V1 + 1)
@@ -625,9 +642,10 @@ fn allocate_production_batches(
     inventory: &InventoryLedger,
     commitments: &[crate::ProductionCommitmentV1],
     week: u64,
+    resources: ProductionResources,
 ) -> Result<Vec<u64>, MaterialCircuitErrorV1> {
     let mut allocations = initial_production_allocations(state, commitments, week)?;
-    let groups = production_resource_groups(state, commitments, &allocations)?;
+    let groups = production_resource_groups(state, commitments, &allocations, resources)?;
     apply_production_resource_limits(state, inventory, week, &groups, &mut allocations)?;
     Ok(allocations)
 }
@@ -638,7 +656,13 @@ fn execute_production(
     receipts: &mut Vec<ProductionReceiptV1>,
 ) -> Result<(), MaterialCircuitErrorV1> {
     let commitments = std::mem::take(&mut state.production_commitments);
-    let allocations = allocate_production_batches(state, inventory, &commitments, state.week)?;
+    let allocations = allocate_production_batches(
+        state,
+        inventory,
+        &commitments,
+        state.week,
+        ProductionResources::InputsAndLabor,
+    )?;
     debit_production_allocations(state, inventory, &commitments, &allocations)?;
     credit_production_allocations(state, inventory, commitments, &allocations, receipts)
 }
@@ -910,12 +934,11 @@ fn rebuild_backlog(state: &mut MaterialCircuitStateV1) {
         .collect();
 }
 
-fn derive_next_week_production(
-    state: &mut MaterialCircuitStateV1,
-    inventory: &InventoryLedger,
+fn next_week_candidates(
+    state: &MaterialCircuitStateV1,
     next_week: u64,
-) -> Result<(), MaterialCircuitErrorV1> {
-    let candidates: Vec<_> = state
+) -> Vec<crate::ProductionCommitmentV1> {
+    state
         .process_outputs
         .iter()
         .take(MAX_MATERIAL_CIRCUIT_ROWS_V1 + 1)
@@ -925,8 +948,22 @@ fn derive_next_week_production(
             week: next_week,
             planned_batches: process_capacity(state, output.process_id, output.site_id, next_week),
         })
-        .collect();
-    let allocations = allocate_production_batches(state, inventory, &candidates, next_week)?;
+        .collect()
+}
+
+fn derive_next_week_production(
+    state: &mut MaterialCircuitStateV1,
+    inventory: &InventoryLedger,
+    next_week: u64,
+) -> Result<(), MaterialCircuitErrorV1> {
+    let candidates = next_week_candidates(state, next_week);
+    let allocations = allocate_production_batches(
+        state,
+        inventory,
+        &candidates,
+        next_week,
+        ProductionResources::InputsAndLabor,
+    )?;
     for (index, candidate) in candidates
         .into_iter()
         .enumerate()
@@ -945,6 +982,43 @@ fn derive_next_week_production(
         }
     }
     Ok(())
+}
+
+/// Uses the same simultaneous shared-input allocation without a labor resource group.
+/// This reads the closed inventory and returns zeros too; it does not publish plans.
+pub(crate) fn derive_shared_labor_requests_v1(
+    state: &MaterialCircuitStateV1,
+    next_week: u64,
+) -> Result<Vec<ProcessLaborRequest>, MaterialCircuitErrorV1> {
+    let inventory = state
+        .inventory
+        .iter()
+        .map(|row| ((row.site_id, row.good_id, row.unit_id), row.quantity))
+        .collect();
+    let candidates = next_week_candidates(state, next_week);
+    let allocations = allocate_production_batches(
+        state,
+        &inventory,
+        &candidates,
+        next_week,
+        ProductionResources::InputsOnly,
+    )?;
+    candidates
+        .iter()
+        .zip(allocations)
+        .map(|(candidate, batches)| {
+            let coefficient = labor_coefficient(state, candidate.process_id)
+                .ok_or(MaterialCircuitErrorV1::ProcessInvariant)?;
+            Ok(ProcessLaborRequest {
+                process_id: candidate.process_id,
+                site_id: candidate.site_id,
+                unit_id: coefficient.unit_id,
+                hours: batches
+                    .checked_mul(coefficient.quantity_per_batch)
+                    .ok_or(MaterialCircuitErrorV1::Arithmetic)?,
+            })
+        })
+        .collect()
 }
 
 pub(crate) fn derive_shared_production_v1(

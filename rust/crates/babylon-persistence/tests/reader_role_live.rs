@@ -22,9 +22,8 @@ use babylon_persistence::archive_revision::{
     ArchiveDossierBoundsV2, ArchiveDossierPageV2, ArchiveDossierPendingV2, ArchiveDossierReadV2,
     ArchiveDossierStateV2, ArchiveDossierUnavailableV2, ArchiveReadScopeV2, ArchiveSearchStateV2,
 };
-use babylon_persistence::material_runtime::{
-    michigan_material_runtime_foundation_v2, DurableMaterialRuntimeV3, MaterialRuntimeErrorV3,
-};
+use babylon_persistence::material_runtime::{DurableMaterialRuntimeV3, MaterialRuntimeErrorV3};
+use babylon_persistence::michigan_content::MichiganContentPresetV1;
 use babylon_persistence::michigan_material::MichiganDeliveryPresetV1;
 use babylon_persistence::runtime_session::{
     run_runtime_session_v2, RuntimeSessionRequestV2, RuntimeSessionResponseV2, RuntimeSessionTailV2,
@@ -1404,7 +1403,8 @@ fn assert_material_restart_reconciliation(
     let mut reopened = DurableMaterialRuntimeV3::open(
         config,
         campaign,
-        michigan_material_runtime_foundation_v2(MichiganDeliveryPresetV1::Standard)
+        MichiganContentPresetV1::new_campaign(MichiganDeliveryPresetV1::Standard)
+            .create_foundation()
             .unwrap()
             .digest(),
     )
@@ -1431,7 +1431,8 @@ fn assert_material_restart_reconciliation(
         DurableMaterialRuntimeV3::open(
             config,
             campaign,
-            michigan_material_runtime_foundation_v2(MichiganDeliveryPresetV1::Delayed)
+            MichiganContentPresetV1::new_campaign(MichiganDeliveryPresetV1::Delayed)
+                .create_foundation()
                 .unwrap()
                 .digest()
         ),
@@ -1455,7 +1456,8 @@ fn assert_material_corruption_refused(
     assert!(DurableMaterialRuntimeV3::open(
         config,
         campaign,
-        michigan_material_runtime_foundation_v2(MichiganDeliveryPresetV1::Standard)
+        MichiganContentPresetV1::new_campaign(MichiganDeliveryPresetV1::Standard)
+            .create_foundation()
             .unwrap()
             .digest()
     )
@@ -1537,7 +1539,9 @@ fn live_material_runtime_v3_atomic_restart_identity_and_observer_projection() {
     let campaign =
         CampaignId::from_uuid(Uuid::from_u128(0x3190_0000_0000_0000_0000_0000_0000_0003));
     let preset = MichiganDeliveryPresetV1::Standard;
-    let foundation = michigan_material_runtime_foundation_v2(preset).unwrap();
+    let foundation = MichiganContentPresetV1::new_campaign(preset)
+        .create_foundation()
+        .unwrap();
     let digest = foundation.digest();
     let mut runtime = DurableMaterialRuntimeV3::create(&config, campaign, foundation).unwrap();
     install_reader_role_v1(&config).unwrap();

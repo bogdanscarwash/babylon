@@ -1,4 +1,5 @@
-//! Executable causal-role and audit-receipt contracts (PER-19 / ADR224).
+//! Executable causal-role and audit-receipt contracts for built-in BSL rules
+//! and native compositions (PER-19 / ADR224 / ADR255).
 
 use babylon_bsl::causal_contract::{
     effect_footprint, parse_rule_contract, validate_governed_attribution, AllowedEffect,
@@ -10,6 +11,7 @@ use babylon_bsl::{read_all, Atom, SExpr};
 use babylon_graph::hypergraph_store::HypergraphStore;
 use babylon_graph::state_hash::CanonicalState;
 use babylon_graph::substrate::{GraphSubstrate, NodeId};
+use babylon_tick::material_staffing::STAFFING_COMPOSITION_ID_V1;
 use babylon_tick::run_once_into;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
@@ -455,6 +457,10 @@ fn every_production_rule_identity_is_governed_independently_of_its_content() {
         parsed_rule_count,
         production_ids.len(),
         "duplicate production rule ID"
+    );
+    assert!(
+        production_ids.insert(STAFFING_COMPOSITION_ID_V1.to_owned()),
+        "native staffing composition duplicates a production BSL rule ID"
     );
     assert_eq!(production_ids, governed_ids);
     let mut governed_effect_sets = governed_restricted_effects();

@@ -102,8 +102,9 @@ By default, the launcher connects to `babylon_test` on `127.0.0.1:5433`.
 
 The runtime initializes a new database, installs the observer read roles,
 and connects to Bevy through anonymous pipes. The window receives read
-credentials. New campaigns start at week zero. When you open a saved
-campaign, the runtime reconciles its committed checkpoint before a new week.
+credentials. New campaigns start at week zero. The runtime can reopen a
+supported save from the same campaign content version. It reconciles the
+committed checkpoint before a new week.
 
 The campaign menu has controls to continue, start, open, or compare campaigns.
 It includes a scenario with longer `sheet-transfer` durations. The map shows 83
@@ -122,8 +123,12 @@ mise run play -- --new
 mise run play -- --new --preset delayed
 ```
 
-Use `--campaign UUID` to open a specific saved campaign. The runtime recovers
+Use `--campaign UUID` to open a supported saved campaign. The runtime recovers
 its stored scenario. It refuses an explicit `--preset` that differs.
+
+Older development saves with unsupported content versions cannot reopen.
+Use `mise run play -- --new` to start a new campaign and keep those saves.
+
 The launcher builds native binaries. The `--no-build` option uses the native
 binaries on disk.
 Use `mise run play` to connect the client to its runtime.

@@ -147,6 +147,17 @@ impl MaterialWorldRegisterV2 {
     /// Refuses any circuit or receipt encoding failure without changing this owner.
     pub fn prepare_next(&self) -> Result<PreparedMaterialWorldV3, MaterialWorldErrorV2> {
         let transition = advance_material_circuit_v2(&self.state)?;
+        self.prepare_transition(transition)
+    }
+
+    /// Seal the result of the shared closed-week planner on this exact opening.
+    pub(crate) fn prepare_transition(
+        &self,
+        transition: MaterialCircuitTransitionV2,
+    ) -> Result<PreparedMaterialWorldV3, MaterialWorldErrorV2> {
+        if self.state.week.checked_add(1) != Some(transition.state.week) {
+            return Err(MaterialWorldErrorV2::WeekMismatch);
+        }
         let receipts = encode_material_receipts_v3(self.state.week, &transition)?;
         let next = self
             .completed_tick

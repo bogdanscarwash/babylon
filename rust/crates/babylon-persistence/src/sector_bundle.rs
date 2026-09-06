@@ -1,12 +1,13 @@
 //! Executable, immutable bundles for the four active Michigan manufacturing cohorts.
 //!
-//! This content successor preserves the existing V1/V2 campaign factories. Each
-//! bundle owns exact material rows, not observed jobs or an inferred factory.
+//! Each bundle owns exact material rows, separate from observed jobs or an
+//! inferred factory. Staffing closes its labor account at the material boundary.
 //! The existing V2 transition remains the sole production adjudicator.
 
 mod codec;
 pub(crate) mod foundation;
 mod michigan;
+mod staffing;
 mod validate;
 
 use babylon_graph::stable_element::StableElementKeyV1;

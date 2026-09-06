@@ -1,4 +1,5 @@
-//! Role-sensitive causal composition for BSL rules (PER-19 / ADR224).
+//! Role-sensitive causal composition for BSL rules and built-in native
+//! compositions (PER-19 / ADR224 / ADR255).
 
 use crate::reader::{Atom, SExpr};
 use crate::write_log::{Write, WriteRecord};
@@ -224,10 +225,10 @@ impl EvidenceClass {
     }
 }
 
-/// The complete role/evidence attribution parsed from one rule.
+/// The complete role/evidence attribution of one BSL rule or native composition.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RuleContract {
-    /// The rule's `<system>/<rule>` qualified identifier.
+    /// The BSL rule's qualified identifier or an admitted native composition ID.
     pub rule_id: String,
     /// Its causal role.
     pub role: RuleRole,
@@ -270,7 +271,7 @@ const fn governed_attribution(rule_id: &'static str, role: RuleRole) -> Governed
     }
 }
 
-/// Exact ADR224 role/evidence assignments for every production BSL rule.
+/// Governed role/evidence assignments for built-in BSL rules and native compositions.
 ///
 /// Unknown fixture and mod rule IDs remain self-declared. The production
 /// corpus sentinel independently proves that no built-in rule is absent from
@@ -317,6 +318,14 @@ pub const GOVERNED_RULE_ATTRIBUTIONS: &[GovernedRuleAttribution] = &[
     governed_attribution("decomposition/p06-la-deactivate", RuleRole::Mechanic),
     governed_attribution("dispossession/territory-transfer", RuleRole::Mechanic),
     governed_attribution("economics/fundamental-theorem", RuleRole::Mechanic),
+    GovernedRuleAttribution {
+        rule_id: "g4-workforce-staffing",
+        role: RuleRole::Mechanic,
+        evidence: EvidenceClass::Designed,
+        owner: "Director",
+        date: "2026-09-05",
+        adr: "ADR255",
+    },
     governed_attribution("imperial-rent/r00-tick-reset", RuleRole::Mechanic),
     governed_attribution("imperial-rent/r01-extraction", RuleRole::Mechanic),
     governed_attribution("imperial-rent/r02-extraction-credit", RuleRole::Mechanic),
@@ -1457,6 +1466,41 @@ mod tests {
     }
 
     #[test]
+    fn native_staffing_receipts_reject_forged_role_or_evidence() {
+        let rule_id = "g4-workforce-staffing";
+        let admitted = RuleContract {
+            rule_id: rule_id.to_owned(),
+            role: RuleRole::Mechanic,
+            evidence: EvidenceClass::Designed,
+        };
+        assert_eq!(reduce_audit_receipts(&admitted, &[], &[]), Ok(vec![]));
+        for (role, evidence) in [
+            (RuleRole::Recognizer, EvidenceClass::Designed),
+            (RuleRole::ExternalEvent, EvidenceClass::Designed),
+            (RuleRole::Intent, EvidenceClass::Designed),
+            (RuleRole::Mechanic, EvidenceClass::Observed),
+            (RuleRole::Mechanic, EvidenceClass::Derived),
+            (RuleRole::Mechanic, EvidenceClass::Calibrated),
+        ] {
+            let forged = RuleContract {
+                rule_id: rule_id.to_owned(),
+                role,
+                evidence,
+            };
+            assert_eq!(
+                reduce_audit_receipts(&forged, &[], &[]).unwrap_err(),
+                ContractError::GovernedAttributionMismatch {
+                    rule_id: rule_id.to_owned(),
+                    expected_role: RuleRole::Mechanic,
+                    actual_role: role,
+                    expected_evidence: EvidenceClass::Designed,
+                    actual_evidence: evidence,
+                }
+            );
+        }
+    }
+
+    #[test]
     fn effect_allowances_name_matching_pinned_restricted_assignments() {
         for allowance in GOVERNED_EFFECT_ALLOWANCES {
             let attribution = GOVERNED_RULE_ATTRIBUTIONS
@@ -1592,13 +1636,13 @@ mod tests {
 
     #[test]
     fn governed_attribution_rows_carry_the_required_provenance() {
-        assert_eq!(GOVERNED_RULE_ATTRIBUTIONS.len(), 67);
+        assert_eq!(GOVERNED_RULE_ATTRIBUTIONS.len(), 68);
         assert_eq!(
             GOVERNED_RULE_ATTRIBUTIONS
                 .iter()
                 .filter(|row| row.role == RuleRole::Mechanic)
                 .count(),
-            64
+            65
         );
         assert_eq!(
             GOVERNED_RULE_ATTRIBUTIONS
@@ -1612,7 +1656,11 @@ mod tests {
             .all(|rows| rows[0].rule_id < rows[1].rule_id));
         for row in GOVERNED_RULE_ATTRIBUTIONS {
             assert_eq!(row.owner, "Director");
-            if row.rule_id == "struggle/spark-mechanic" {
+            if row.rule_id == "g4-workforce-staffing" {
+                assert_eq!(row.evidence, EvidenceClass::Designed);
+                assert_eq!(row.date, "2026-09-05");
+                assert_eq!(row.adr, "ADR255");
+            } else if row.rule_id == "struggle/spark-mechanic" {
                 assert_eq!(row.evidence, EvidenceClass::Designed);
                 assert_eq!(row.date, "2026-09-01");
                 assert_eq!(row.adr, "ADR248");

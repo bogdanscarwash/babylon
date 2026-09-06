@@ -3,7 +3,7 @@
 use crate::{
     checkpoint::{CommittedFullCheckpointV1, CommittedResolveTickV1},
     committed_tick_envelope::CommittedTickRowFamiliesV2,
-    foundation::{CampaignFoundationV1, FoundationContentBundleV1, FoundationContentBundleV2},
+    foundation::{CampaignFoundationV1, FoundationContentBundleV2},
     identity::CampaignId,
     material_envelope::CommittedMaterialTickEnvelopeV3,
     runtime::{
@@ -72,6 +72,7 @@ pub struct MaterialRuntimeFoundationV2 {
     spec: MaterialFoundationSpecV2,
     bytes: Vec<u8>,
     digest: [u8; 32],
+    labor: babylon_tick::material_replay::MaterialLaborV1,
 }
 /// Precise successor refusal classes. No fallback to a graph-only campaign.
 #[derive(Debug)]
@@ -146,21 +147,6 @@ fn validate_foundation_spec(spec: &MaterialFoundationSpecV2) -> Result<(), Mater
 }
 
 impl MaterialRuntimeFoundationV2 {
-    /// Capture a complete new foundation. Substantive source metadata is pinned in `spec`.
-    /// # Errors
-    /// Refuses any nonzero session, invalid circuit, label, horizon or allocation bound.
-    pub fn capture(
-        graph: ReplayTickSession<HypergraphStore>,
-        bundle: FoundationContentBundleV1,
-        state: MaterialCircuitStateV2,
-        spec: MaterialFoundationSpecV2,
-    ) -> Result<Self, MaterialRuntimeErrorV3> {
-        validate_foundation_spec(&spec)?;
-        let graph_foundation = CampaignFoundationV1::capture(&graph, bundle)?;
-        let register = MaterialWorldRegisterV2::try_new(0, state)?;
-        Self::from_parts(graph, graph_foundation, register, spec)
-    }
-
     /// Capture a foundation whose content explicitly uses the V2 source encoding.
     /// # Errors
     /// Refuses invalid graph, material register, spec or aggregate bounds.
@@ -188,6 +174,12 @@ impl MaterialRuntimeFoundationV2 {
         if graph.completed_tick() != 0 || register.completed_tick() != 0 {
             return Err(MaterialRuntimeErrorV3::FoundationMismatch);
         }
+        let labor = crate::sector_bundle::foundation::validate_stored_material_authority(
+            &graph_foundation,
+            &register,
+            &spec,
+        )
+        .map_err(|_| MaterialRuntimeErrorV3::FoundationMismatch)?;
         let length = FOUNDATION_DOMAIN
             .len()
             .checked_add(4 + 8 + 32 + 3 * 8)
@@ -229,6 +221,7 @@ impl MaterialRuntimeFoundationV2 {
             spec,
             bytes,
             digest,
+            labor,
         })
     }
     #[must_use]
@@ -251,7 +244,15 @@ impl MaterialRuntimeFoundationV2 {
     pub const fn graph_foundation(&self) -> &CampaignFoundationV1 {
         &self.graph_foundation
     }
-    fn into_session(
+    /// Exact labor authority decoded from the admitted stored definitions.
+    #[must_use]
+    pub const fn labor(&self) -> &babylon_tick::material_replay::MaterialLaborV1 {
+        &self.labor
+    }
+    /// Consume the exact foundation into its admitted graph and labor authority.
+    /// # Errors
+    /// Refuses invalid initial clocks or material replay bounds.
+    pub fn into_session(
         self,
     ) -> Result<MaterialReplaySessionV3<HypergraphStore>, MaterialRuntimeErrorV3> {
         Ok(MaterialReplaySessionV3::new(
@@ -259,6 +260,7 @@ impl MaterialRuntimeFoundationV2 {
             self.register,
             self.digest,
             self.spec.horizon_ticks,
+            self.labor,
         )?)
     }
 }
@@ -311,12 +313,15 @@ impl DurableMaterialRuntimeV3 {
                 .map_err(|_| MaterialRuntimeErrorV3::Bounds)?;
             tx.execute("INSERT INTO babylon_state.material_campaign_foundation_v2 (campaign_id,preset_id,horizon_ticks,content_sha256,initial_register_bytes,foundation_bytes,foundation_sha256) VALUES ($1::uuid,$2,$3,$4,$5,$6,$7)",&[campaign.as_uuid(),&foundation.spec.preset_id,&horizon,&&foundation.spec.content_digest[..],&foundation.register.canonical_bytes(),&foundation.canonical_bytes(),&&foundation.digest[..]])?;
         }
-        tx.commit()?;
         let content_layout = foundation.graph_foundation.content_bundle().layout();
+        // Staffed rule ownership is fallible: refuse before any founding rows
+        // become durable, so dropping this transaction also removes enrollment.
+        let session = foundation.into_session()?;
+        tx.commit()?;
         Ok(Self {
             config: bounded,
             campaign,
-            session: foundation.into_session()?,
+            session,
             tail: None,
             content_layout,
         })
@@ -756,35 +761,6 @@ fn validate_component_identity(
         return Err(MaterialRuntimeErrorV3::InvalidCheckpoint);
     }
     Ok(())
-}
-
-/// Exact shared Michigan graph and material foundation, with no implicit advance.
-/// # Errors
-/// Refuses source digest/shape failures, invalid designed content or aggregate bounds.
-pub fn michigan_material_runtime_foundation_v2(
-    preset: crate::michigan_material::MichiganDeliveryPresetV1,
-) -> Result<MaterialRuntimeFoundationV2, MaterialRuntimeErrorV3> {
-    use crate::michigan_material::{
-        michigan_material_foundation_v1, MICHIGAN_INDUSTRY_BASELINE_SHA256_V1,
-        MICHIGAN_MATERIAL_SCENARIO_SHA256_V1,
-    };
-    let (graph, bundle) = crate::michigan_economy::michigan_observer_foundation_v1()
-        .map_err(MaterialRuntimeErrorV3::MichiganEconomy)?;
-    let state = michigan_material_foundation_v1(preset)
-        .map_err(MaterialRuntimeErrorV3::MichiganMaterial)?;
-    let mut bytes = Vec::from(&b"babylon.michigan-material-content.v1\0"[..]);
-    bytes.extend_from_slice(MICHIGAN_MATERIAL_SCENARIO_SHA256_V1.as_bytes());
-    bytes.extend_from_slice(MICHIGAN_INDUSTRY_BASELINE_SHA256_V1.as_bytes());
-    MaterialRuntimeFoundationV2::capture(
-        graph,
-        bundle,
-        state,
-        MaterialFoundationSpecV2 {
-            preset_id: preset.id().to_owned(),
-            horizon_ticks: preset.horizon_ticks(),
-            content_digest: sha256_of(&bytes),
-        },
-    )
 }
 
 #[cfg(test)]

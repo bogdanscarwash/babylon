@@ -5,14 +5,15 @@ use std::collections::{BTreeMap, BTreeSet};
 use babylon_kernel::sha256_of;
 
 use crate::transition::{
-    canonical_state_v1, derive_shared_production_v1, execute_shared_production_v1,
-    proportional_floor,
+    canonical_state_v1, derive_shared_labor_requests_v1, derive_shared_production_v1,
+    execute_shared_production_v1, proportional_floor,
 };
 use crate::{
     ArrivalReceiptV1, BacklogRowV1, CorridorIdV2, DeliveryReceiptV1, FreightLossReceiptV2,
-    FreightLotIdV2, GoodIdV1, InventoryRowV1, MaterialCircuitErrorV2, MaterialCircuitStateV1,
-    MaterialCircuitStateV2, MaterialCircuitTransitionV2, OrderIdV1, RealizationReceiptV1,
-    RouteIdV2, RouteLegV2, RoutedDispatchReceiptV2, RoutedFreightLotV2, SiteIdV1, UnitIdV1,
+    FreightLotIdV2, GoodIdV1, InventoryRowV1, LaborCapacityRowV1, MaterialCircuitErrorV2,
+    MaterialCircuitStateV1, MaterialCircuitStateV2, MaterialCircuitTransitionV2, OrderIdV1,
+    RealizationReceiptV1, RouteIdV2, RouteLegV2, RoutedDispatchReceiptV2, RoutedFreightLotV2,
+    SiteIdV1, StaffingPoolBindingV1, StaffingWorkRequestV1, UnitIdV1,
     FREIGHT_LOSS_PARTS_PER_MILLION_V2, MAX_FREIGHT_RESOURCE_GROUPS_V2,
     MAX_MATERIAL_CIRCUIT_ROWS_V1, MAX_ROUTE_LEGS_PER_ROUTE_V2,
 };
@@ -791,6 +792,165 @@ fn prune_corridor_capacity(state: &mut MaterialCircuitStateV2, next_week: u64) {
         .collect();
 }
 
+/// Detached physical close before next-opening labor and production planning.
+///
+/// This is not a canonical opening register: newly dispatched freight still
+/// shares its closing week. Only successful final planning yields a successor.
+/// Private fields prevent callers from replacing closed inventory or receipts.
+#[derive(Debug)]
+pub struct ClosedMaterialWeekV2 {
+    transition: MaterialCircuitTransitionV2,
+    next_week: u64,
+}
+
+impl ClosedMaterialWeekV2 {
+    /// The interval whose arrivals, production and dispatch have completed.
+    #[must_use]
+    pub const fn closing_week(&self) -> u64 {
+        self.transition.state.week
+    }
+
+    /// The opening interval being requested and planned.
+    #[must_use]
+    pub const fn next_week(&self) -> u64 {
+        self.next_week
+    }
+
+    /// Exact closing stock after dispatch, without a second inventory owner.
+    #[must_use]
+    pub fn inventory(&self) -> &[InventoryRowV1] {
+        &self.transition.state.inventory
+    }
+
+    /// Request next-opening work from shared inputs and process capacity only.
+    ///
+    /// Every process has one request, including zero. The request's `week` is
+    /// this closing interval, as required by staffing; its work is for the next
+    /// opening. Neither current employment nor any scheduled hours limit it.
+    ///
+    /// # Errors
+    /// Refuses incomplete, duplicate or foreign pool bindings, row bounds and
+    /// hours that cannot be represented exactly as `u64`.
+    pub fn staffing_requests(
+        &self,
+        bindings: &[StaffingPoolBindingV1],
+    ) -> Result<Vec<StaffingWorkRequestV1>, MaterialCircuitErrorV2> {
+        let owners = staffing_process_owners(bindings)?;
+        let requests = derive_shared_labor_requests_v1(
+            &production_state(&self.transition.state),
+            self.next_week,
+        )?;
+        if owners.len() != requests.len() {
+            return Err(MaterialCircuitErrorV2::ProcessInvariant);
+        }
+        requests
+            .into_iter()
+            .map(|request| {
+                let binding = owners
+                    .get(&request.process_id)
+                    .ok_or(MaterialCircuitErrorV2::ProcessInvariant)?;
+                if binding.site_id() != request.site_id || binding.unit_id() != request.unit_id {
+                    return Err(MaterialCircuitErrorV2::ProcessInvariant);
+                }
+                Ok(StaffingWorkRequestV1::new(
+                    self.closing_week(),
+                    binding.pool_id(),
+                    request.process_id,
+                    request.site_id,
+                    request.unit_id,
+                    request.hours,
+                ))
+            })
+            .collect()
+    }
+
+    /// Replace the labor schedule with one exact next-opening row per principal.
+    ///
+    /// Zero hours are explicit. No preseeded future row survives this staffing
+    /// ownership transfer. The normal planner still bounds commitments by both
+    /// shared inputs and supplied labor; requests do not become commitments.
+    ///
+    /// # Errors
+    /// Refuses missing/foreign/duplicate principals, wrong weeks, row bounds,
+    /// arithmetic and any invalid final circuit. No partial successor escapes.
+    pub fn finish_with_labor(
+        mut self,
+        mut next_labor: Vec<LaborCapacityRowV1>,
+    ) -> Result<MaterialCircuitTransitionV2, MaterialCircuitErrorV2> {
+        validate_next_labor(&self.transition.state, self.next_week, &next_labor)?;
+        // The allocator performs binary searches before final canonicalization.
+        next_labor.sort_unstable_by_key(|row| (row.week, row.site_id, row.unit_id));
+        self.transition.state.labor = next_labor;
+        self.finish()
+    }
+
+    fn finish(mut self) -> Result<MaterialCircuitTransitionV2, MaterialCircuitErrorV2> {
+        let state = &mut self.transition.state;
+        derive_next_production(state, self.next_week)?;
+        prune_corridor_capacity(state, self.next_week);
+        state.week = self.next_week;
+        *state = canonical_state_v2(state)?;
+        Ok(self.transition)
+    }
+}
+
+fn staffing_process_owners(
+    bindings: &[StaffingPoolBindingV1],
+) -> Result<BTreeMap<crate::ProcessIdV1, &StaffingPoolBindingV1>, MaterialCircuitErrorV2> {
+    if bindings.len() > MAX_MATERIAL_CIRCUIT_ROWS_V1 {
+        return Err(MaterialCircuitErrorV2::RowLimit);
+    }
+    let mut owners = BTreeMap::new();
+    let mut pools = BTreeSet::new();
+    let mut principals = BTreeSet::new();
+    for binding in bindings {
+        if !pools.insert(binding.pool_id())
+            || !principals.insert((binding.site_id(), binding.unit_id()))
+        {
+            return Err(MaterialCircuitErrorV2::DuplicateRow);
+        }
+        for process in binding.processes() {
+            if owners.insert(*process, binding).is_some() {
+                return Err(MaterialCircuitErrorV2::DuplicateRow);
+            }
+            if owners.len() > MAX_MATERIAL_CIRCUIT_ROWS_V1 {
+                return Err(MaterialCircuitErrorV2::RowLimit);
+            }
+        }
+    }
+    Ok(owners)
+}
+
+fn validate_next_labor(
+    state: &MaterialCircuitStateV2,
+    next_week: u64,
+    rows: &[LaborCapacityRowV1],
+) -> Result<(), MaterialCircuitErrorV2> {
+    if rows.len() > MAX_MATERIAL_CIRCUIT_ROWS_V1 {
+        return Err(MaterialCircuitErrorV2::RowLimit);
+    }
+    // The detached close preserves the checked, process-sorted recipe roster.
+    let expected: BTreeSet<_> = state
+        .process_outputs
+        .iter()
+        .zip(&state.labor_coefficients)
+        .map(|(output, coefficient)| (output.site_id, coefficient.unit_id))
+        .collect();
+    let mut actual = BTreeSet::new();
+    for row in rows {
+        if row.week != next_week {
+            return Err(MaterialCircuitErrorV2::WeekInvariant);
+        }
+        if !actual.insert((row.site_id, row.unit_id)) {
+            return Err(MaterialCircuitErrorV2::DuplicateRow);
+        }
+    }
+    if actual != expected {
+        return Err(MaterialCircuitErrorV2::CapacityInvariant);
+    }
+    Ok(())
+}
+
 /// Close one routed week atomically and return its canonical successor state.
 ///
 /// # Errors
@@ -798,6 +958,20 @@ fn prune_corridor_capacity(state: &mut MaterialCircuitStateV2, next_week: u64) {
 pub fn advance_material_circuit_v2(
     opening: &MaterialCircuitStateV2,
 ) -> Result<MaterialCircuitTransitionV2, MaterialCircuitErrorV2> {
+    close_material_week_v2(opening)?.finish()
+}
+
+/// Execute due freight, prior production commitments and dispatch exactly once.
+///
+/// The result borrows no mutable opening state and cannot become a world
+/// register until next-opening labor and normal planning have been resolved.
+///
+/// # Errors
+/// Returns the same schema, route, conservation, bound or arithmetic refusals
+/// as the one-shot transition, leaving the opening state unchanged.
+pub fn close_material_week_v2(
+    opening: &MaterialCircuitStateV2,
+) -> Result<ClosedMaterialWeekV2, MaterialCircuitErrorV2> {
     let mut state = canonical_state_v2(opening)?;
     let mut inventory = take_inventory(&mut state);
     let mut losses = Vec::new();
@@ -823,18 +997,17 @@ pub fn advance_material_circuit_v2(
         .week
         .checked_add(1)
         .ok_or(MaterialCircuitErrorV2::Arithmetic)?;
-    derive_next_production(&mut state, next_week)?;
-    prune_corridor_capacity(&mut state, next_week);
-    state.week = next_week;
-    state = canonical_state_v2(&state)?;
-    Ok(MaterialCircuitTransitionV2 {
-        state,
-        production,
-        dispatches,
-        losses,
-        arrivals,
-        deliveries,
-        realizations,
+    Ok(ClosedMaterialWeekV2 {
+        next_week,
+        transition: MaterialCircuitTransitionV2 {
+            state,
+            production,
+            dispatches,
+            losses,
+            arrivals,
+            deliveries,
+            realizations,
+        },
     })
 }
 

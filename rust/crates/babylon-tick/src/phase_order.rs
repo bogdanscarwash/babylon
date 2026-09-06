@@ -516,6 +516,28 @@ pub(crate) fn compile(rule_forms: &[(String, SExpr)]) -> Result<RuleOrderPlan, S
 }
 
 impl RuleOrderPlan {
+    /// Locate one already-admitted native composition at the boundary after
+    /// metabolism, among the BSL rules in this plan's execution order.
+    ///
+    /// The composition shares rank 30 with BSL boundary anchors and follows
+    /// their D16 ID-byte tie-break. Its identity must not name any BSL rule,
+    /// even at a different rank. This does not add a governed system slot.
+    pub(crate) fn native_material_composition_index(
+        &self,
+        composition_id: &str,
+    ) -> Result<usize, ScheduleError> {
+        if self.rules.iter().any(|row| row.id == composition_id) {
+            return Err(ScheduleError::Plan {
+                rule_id: Some(composition_id.to_owned()),
+                message: "a native material composition id also names a BSL rule".to_owned(),
+            });
+        }
+        Ok(self.rules.partition_point(|row| {
+            (usize::from(row.key.0), row.id.as_bytes())
+                < (AFTER_MATERIAL_BASE_RANK, composition_id.as_bytes())
+        }))
+    }
+
     /// Pair each source form with this plan's resolved execution rank without
     /// consuming the plan.
     ///
@@ -837,6 +859,93 @@ mod tests {
     fn one_position_ties_by_rule_id_bytes() {
         let input = vec![rule("vitality/z", ""), rule("vitality/a", "")];
         assert_eq!(ids(&compile(&input).unwrap()), ["vitality/a", "vitality/z"]);
+    }
+
+    #[test]
+    fn native_material_composition_has_an_insertion_point_without_bsl_rules() {
+        let plan = compile(&[]).unwrap();
+        assert_eq!(
+            plan.native_material_composition_index("native/staffing"),
+            Ok(0)
+        );
+    }
+
+    #[test]
+    fn native_material_composition_follows_material_base_and_precedes_action() {
+        for (input, expected) in [
+            (vec![rule("metabolism/z", "")], 1),
+            (vec![rule("ooda/a", "")], 0),
+            (
+                vec![
+                    rule("ooda/a", ""),
+                    rule("metabolism/z", ""),
+                    rule("vitality/a", ""),
+                ],
+                2,
+            ),
+        ] {
+            let plan = compile(&input).unwrap();
+            assert_eq!(
+                plan.native_material_composition_index("native/staffing"),
+                Ok(expected)
+            );
+        }
+    }
+
+    #[test]
+    fn native_material_composition_ties_follow_id_bytes_across_source_permutations() {
+        let boundary_rules = [
+            rule("mods/a-10", "(anchor :after metabolism)"),
+            rule("mods/a-3", "(anchor :before ooda)"),
+            rule("mods/z", "(anchor :after metabolism)"),
+        ];
+        for order in [
+            [0, 1, 2],
+            [0, 2, 1],
+            [1, 0, 2],
+            [1, 2, 0],
+            [2, 0, 1],
+            [2, 1, 0],
+        ] {
+            let input = vec![
+                rule("ooda/a", ""),
+                boundary_rules[order[0]].clone(),
+                boundary_rules[order[1]].clone(),
+                boundary_rules[order[2]].clone(),
+                rule("metabolism/z", ""),
+            ];
+            let plan = compile(&input).unwrap();
+            let index = plan.native_material_composition_index("mods/a-2").unwrap();
+            assert_eq!(index, 2);
+            let mut combined = ids(&plan);
+            combined.insert(index, "mods/a-2");
+            assert_eq!(
+                combined,
+                [
+                    "metabolism/z",
+                    "mods/a-10",
+                    "mods/a-2",
+                    "mods/a-3",
+                    "mods/z",
+                    "ooda/a"
+                ]
+            );
+        }
+    }
+
+    #[test]
+    fn native_material_composition_refuses_a_bsl_identity_at_any_rank() {
+        for (id, anchor) in [
+            ("mods/staffing", "(anchor :after metabolism)"),
+            ("metabolism/staffing", ""),
+            ("ooda/staffing", ""),
+        ] {
+            let plan = compile(&[rule(id, anchor)]).unwrap();
+            assert!(matches!(
+                plan.native_material_composition_index(id),
+                Err(ScheduleError::Plan { rule_id: Some(conflict), .. }) if conflict == id
+            ));
+        }
     }
 
     #[test]

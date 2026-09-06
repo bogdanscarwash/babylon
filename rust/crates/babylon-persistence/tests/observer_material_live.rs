@@ -7,7 +7,8 @@ use babylon_persistence::archive_revision::{
 };
 use babylon_persistence::{
     install_observer_economy_schema_v1, install_reader_role_v1,
-    material_runtime::{michigan_material_runtime_foundation_v2, DurableMaterialRuntimeV3},
+    material_runtime::DurableMaterialRuntimeV3,
+    michigan_content::MichiganContentPresetV1,
     michigan_economy::{
         michigan_economy_v1, MichiganCountyEconomyV1, QCEW_ECONOMICS_ARTIFACT_SHA256_V1,
         QCEW_ECONOMICS_FIELD_KEYS_V1, QCEW_ECONOMICS_SOURCE_ID_V1,
@@ -274,7 +275,9 @@ fn live_michigan_all_county_cards_keep_public_source_and_quiet_restart_freshness
     let mut runtime = DurableMaterialRuntimeV3::create(
         &target.writer,
         campaign,
-        michigan_material_runtime_foundation_v2(preset).unwrap(),
+        MichiganContentPresetV1::new_campaign(preset)
+            .create_foundation()
+            .unwrap(),
     )
     .unwrap();
     install_reader_role_v1(&target.writer).unwrap();
@@ -330,7 +333,8 @@ fn assert_restart_drains_and_verifies_quiet_weeks(
     let mut runtime = DurableMaterialRuntimeV3::open(
         &target.writer,
         campaign,
-        michigan_material_runtime_foundation_v2(MichiganDeliveryPresetV1::Standard)
+        MichiganContentPresetV1::new_campaign(MichiganDeliveryPresetV1::Standard)
+            .create_foundation()
             .unwrap()
             .digest(),
     )
@@ -406,7 +410,8 @@ fn assert_restart_drains_and_verifies_quiet_weeks(
         runtime = DurableMaterialRuntimeV3::open(
             &target.writer,
             campaign,
-            michigan_material_runtime_foundation_v2(MichiganDeliveryPresetV1::Standard)
+            MichiganContentPresetV1::new_campaign(MichiganDeliveryPresetV1::Standard)
+                .create_foundation()
                 .unwrap()
                 .digest(),
         )
@@ -501,7 +506,9 @@ fn live_material_observer_preserves_history_and_denies_preview_blob_authority() 
     let mut runtime = DurableMaterialRuntimeV3::create(
         &target.writer,
         campaign,
-        michigan_material_runtime_foundation_v2(preset).unwrap(),
+        MichiganContentPresetV1::new_campaign(preset)
+            .create_foundation()
+            .unwrap(),
     )
     .unwrap();
     install_reader_role_v1(&target.writer).unwrap();
@@ -547,7 +554,8 @@ fn live_material_observer_preserves_history_and_denies_preview_blob_authority() 
             runtime = DurableMaterialRuntimeV3::open(
                 &target.writer,
                 campaign,
-                michigan_material_runtime_foundation_v2(preset)
+                MichiganContentPresetV1::new_campaign(preset)
+                    .create_foundation()
                     .unwrap()
                     .digest(),
             )
@@ -748,7 +756,7 @@ fn live_content_revisions_resume_exactly_and_catalog_filters_before_its_limit() 
         );
     }
     let before = observer.campaigns().unwrap();
-    assert_eq!(before.len(), 6);
+    assert_eq!(before.len(), 2);
     assert_eq!(
         before
             .iter()
@@ -896,7 +904,7 @@ fn insert_unadmitted_catalog_rows(config: &Config, source: CampaignId) -> Vec<Ca
         tx.execute("INSERT INTO babylon_state.campaign (campaign_id,replay_layout_version,rng_layout_version,replay_session_id,rng_seed,defines_hash,rules_hash,ref_digest) SELECT $1,replay_layout_version,rng_layout_version,replay_session_id,rng_seed,defines_hash,rules_hash,ref_digest FROM babylon_state.campaign WHERE campaign_id=$2", &[campaign.as_uuid(), source.as_uuid()]).unwrap();
         tx.execute("INSERT INTO babylon_state.campaign_foundation (campaign_id,stable_graph,world_registers,resolver_manifest,prepared_environment,replay_session_id,rng_seed,defines_hash,rules_hash,ref_digest,scenario_source,prelude_source,rule_source,defines_bytes,reference_manifest_bytes,foundation_sha256) SELECT $1,stable_graph,world_registers,resolver_manifest,prepared_environment,replay_session_id,rng_seed,defines_hash,rules_hash,ref_digest,scenario_source,prelude_source,rule_source,defines_bytes,reference_manifest_bytes,foundation_sha256 FROM babylon_state.campaign_foundation WHERE campaign_id=$2", &[campaign.as_uuid(), source.as_uuid()]).unwrap();
         let preset = if number == 66 {
-            "michigan-material-standard-v1"
+            MichiganContentPresetV1::new_campaign(MichiganDeliveryPresetV1::Standard).id()
         } else {
             "unadmitted-fixture-v1"
         };
@@ -922,41 +930,53 @@ mod foundation_content_layout {
 
     #[test]
     #[ignore = "requires the existing disposable PostgreSQL harness; serial clone ownership"]
-    fn live_explicit_content_layout_preserves_old_saves_and_refuses_metadata_reinterpretation() {
+    fn live_current_content_layout_refuses_corruption_and_reopens_exactly() {
         let target = DisposableTarget::create();
-        let old = CampaignId::from_uuid(Uuid::from_u128(21_001));
-        let new = CampaignId::from_uuid(Uuid::from_u128(21_002));
-        let old_preset = MichiganContentPresetV1::BaselineStandardV1;
-        let new_preset = MichiganContentPresetV1::CohortsStandardV2;
-        let mut old_runtime = DurableMaterialRuntimeV3::create(
+        let standard = CampaignId::from_uuid(Uuid::from_u128(21_001));
+        let delayed = CampaignId::from_uuid(Uuid::from_u128(21_002));
+        let standard_preset =
+            MichiganContentPresetV1::new_campaign(MichiganDeliveryPresetV1::Standard);
+        let delayed_preset =
+            MichiganContentPresetV1::new_campaign(MichiganDeliveryPresetV1::Delayed);
+        assert_ne!(standard_preset, delayed_preset);
+        let mut standard_runtime = DurableMaterialRuntimeV3::create(
             &target.writer,
-            old,
-            old_preset.create_foundation().unwrap(),
+            standard,
+            standard_preset.create_foundation().unwrap(),
         )
         .unwrap();
-        advance_material_week(&mut old_runtime);
-        assert_historical_first_install(&target, old, old_preset);
-        let mut new_runtime = DurableMaterialRuntimeV3::create(
+        let mut delayed_runtime = DurableMaterialRuntimeV3::create(
             &target.writer,
-            new,
-            new_preset.create_foundation().unwrap(),
+            delayed,
+            delayed_preset.create_foundation().unwrap(),
         )
         .unwrap();
-        advance_material_week(&mut new_runtime);
-        assert_missing_layout_is_not_healed(&target, old, old_preset, new, new_preset);
-        assert_unknown_layout_is_refused(&target, old, old_preset);
-        assert_valid_but_wrong_layout_is_refused(&target, old, old_preset, new, new_preset);
-        for (campaign, preset, runtime, layout) in [
-            (old, old_preset, &old_runtime, FoundationContentLayout::V1),
-            (new, new_preset, &new_runtime, FoundationContentLayout::V2),
+        advance_material_week(&mut standard_runtime);
+        advance_material_week(&mut delayed_runtime);
+        assert_missing_layout_is_not_healed(
+            &target,
+            standard,
+            standard_preset,
+            delayed,
+            delayed_preset,
+        );
+        for (campaign, preset, runtime) in [
+            (standard, standard_preset, &standard_runtime),
+            (delayed, delayed_preset, &delayed_runtime),
         ] {
+            let before = foundation_bytes(&target.writer, campaign);
+            assert_unknown_layout_is_refused(&target, campaign, preset);
+            assert_valid_but_wrong_layout_is_refused(&target, campaign, preset);
+            install_material_runtime_schema_v3(&target.writer).unwrap();
+            install_material_runtime_schema_v3(&target.writer).unwrap();
             assert_eq!(
                 hydrate_campaign_foundation_v1(&target.writer, campaign)
                     .unwrap()
                     .content_bundle()
                     .layout(),
-                layout
+                FoundationContentLayout::V2
             );
+            assert_eq!(foundation_bytes(&target.writer, campaign), before);
             assert_next_commit_survives_reopen(&target.writer, campaign, preset, runtime);
         }
     }
@@ -971,13 +991,13 @@ mod foundation_content_layout {
             let mut runtime = DurableMaterialRuntimeV3::create(
                 &target.writer,
                 campaign,
-                MichiganContentPresetV1::BaselineStandardV1
+                MichiganContentPresetV1::new_campaign(MichiganDeliveryPresetV1::Standard)
                     .create_foundation()
                     .unwrap(),
             )
             .unwrap();
             let world = runtime.session().current_world_hash().unwrap();
-            corrupt_open_layout(&target.writer, campaign, missing);
+            corrupt_open_layout(&target.writer, campaign, missing, 1);
             let actions = OrderedPracticeActionBatchV1::empty(
                 runtime.session().graph_session().session_identity().clone(),
                 1,
@@ -1010,7 +1030,7 @@ mod foundation_content_layout {
             let mut runtime =
                 DurableReplayRuntimeV2::create(&target.writer, campaign, session, bundle).unwrap();
             let graph = runtime.observe_current_stable_graph_state_v1().unwrap();
-            corrupt_open_layout(&target.writer, campaign, missing);
+            corrupt_open_layout(&target.writer, campaign, missing, 2);
             let mut sink = CollectingSink::default();
             let result = runtime.advance_and_commit(&mut sink, &actions);
             assert!(
@@ -1030,20 +1050,20 @@ mod foundation_content_layout {
         }
     }
 
-    fn corrupt_open_layout(config: &Config, campaign: CampaignId, missing: bool) {
-        let command = if missing {
-            "DELETE FROM babylon_state.campaign_foundation_content_layout_v2 WHERE campaign_id=$1::uuid"
+    fn corrupt_open_layout(config: &Config, campaign: CampaignId, missing: bool, wrong: i16) {
+        let mut client = config.connect(NoTls).unwrap();
+        let affected = if missing {
+            client.execute(
+                "DELETE FROM babylon_state.campaign_foundation_content_layout_v2 WHERE campaign_id=$1::uuid",
+                &[campaign.as_uuid()],
+            ).unwrap()
         } else {
-            "UPDATE babylon_state.campaign_foundation_content_layout_v2 SET content_layout_version=2 WHERE campaign_id=$1::uuid"
+            client.execute(
+                "UPDATE babylon_state.campaign_foundation_content_layout_v2 SET content_layout_version=$2 WHERE campaign_id=$1::uuid",
+                &[campaign.as_uuid(), &wrong],
+            ).unwrap()
         };
-        assert_eq!(
-            config
-                .connect(NoTls)
-                .unwrap()
-                .execute(command, &[campaign.as_uuid()])
-                .unwrap(),
-            1
-        );
+        assert_eq!(affected, 1);
     }
 
     fn assert_no_committed_tick(config: &Config, campaign: CampaignId) {
@@ -1074,64 +1094,19 @@ mod foundation_content_layout {
         (row.get(0), row.get(1), row.get(2))
     }
 
-    fn assert_historical_first_install(
+    fn assert_missing_layout_is_not_healed(
         target: &DisposableTarget,
         campaign: CampaignId,
         preset: MichiganContentPresetV1,
+        sibling: CampaignId,
+        sibling_preset: MichiganContentPresetV1,
     ) {
         let before = foundation_bytes(&target.writer, campaign);
-        let graph = hydrate_campaign_foundation_v1(&target.writer, campaign).unwrap();
-        // This recreates the exact pre-successor schema boundary in the owned clone;
-        // the historical foundation and its committed tick are never rewritten.
-        let mut sql = target.writer.connect(NoTls).unwrap();
-        assert_eq!(
-            sql.query_one("SELECT current_database()", &[])
-                .unwrap()
-                .get::<_, String>(0),
-            target.database
-        );
-        sql.batch_execute(
-            "DROP TABLE babylon_state.campaign_foundation_content_layout_v2; \
-             DROP TABLE babylon_meta.foundation_content_schema_v2",
-        )
-        .unwrap();
-        let reopened = DurableMaterialRuntimeV3::open(
-            &target.writer,
-            campaign,
-            preset.admitted().unwrap().digest(),
-        )
-        .unwrap();
-        assert_eq!(reopened.session().completed_tick(), 1);
-        let after = hydrate_campaign_foundation_v1(&target.writer, campaign).unwrap();
-        assert_eq!(after.content_bundle().layout(), FoundationContentLayout::V1);
-        assert_eq!(after.canonical_bytes(), graph.canonical_bytes());
-        assert_eq!(foundation_bytes(&target.writer, campaign), before);
-        install_material_runtime_schema_v3(&target.writer).unwrap();
-        install_material_runtime_schema_v3(&target.writer).unwrap();
-        let count: i64 = sql
-            .query_one(
-                "SELECT count(*) FROM babylon_state.campaign_foundation_content_layout_v2 \
-             WHERE campaign_id = $1::uuid AND content_layout_version = 1",
-                &[campaign.as_uuid()],
-            )
-            .unwrap()
-            .get(0);
-        assert_eq!(count, 1);
-    }
-
-    fn assert_missing_layout_is_not_healed(
-        target: &DisposableTarget,
-        old: CampaignId,
-        old_preset: MichiganContentPresetV1,
-        new: CampaignId,
-        new_preset: MichiganContentPresetV1,
-    ) {
-        let before = foundation_bytes(&target.writer, old);
         let mut sql = target.writer.connect(NoTls).unwrap();
         assert_eq!(
             sql.execute(
                 &format!("DELETE FROM {LAYOUT_TABLE} WHERE campaign_id=$1::uuid"),
-                &[old.as_uuid()]
+                &[campaign.as_uuid()]
             )
             .unwrap(),
             1
@@ -1142,8 +1117,8 @@ mod foundation_content_layout {
         assert!(matches!(
             DurableMaterialRuntimeV3::open(
                 &target.writer,
-                old,
-                old_preset.admitted().unwrap().digest()
+                campaign,
+                preset.admitted().unwrap().digest()
             ),
             Err(MaterialRuntimeErrorV3::Graph(
                 RustPersistenceRuntimeErrorV2::FoundationAbsent
@@ -1152,8 +1127,8 @@ mod foundation_content_layout {
         assert!(matches!(
             DurableMaterialRuntimeV3::create(
                 &target.writer,
-                old,
-                old_preset.create_foundation().unwrap()
+                campaign,
+                preset.create_foundation().unwrap()
             ),
             Err(MaterialRuntimeErrorV3::Graph(
                 RustPersistenceRuntimeErrorV2::FoundationAbsent
@@ -1162,7 +1137,7 @@ mod foundation_content_layout {
         let missing: i64 = sql
             .query_one(
                 &format!("SELECT count(*) FROM {LAYOUT_TABLE} WHERE campaign_id=$1::uuid"),
-                &[old.as_uuid()],
+                &[campaign.as_uuid()],
             )
             .unwrap()
             .get(0);
@@ -1170,18 +1145,18 @@ mod foundation_content_layout {
         assert_eq!(
             DurableMaterialRuntimeV3::open(
                 &target.writer,
-                new,
-                new_preset.admitted().unwrap().digest()
+                sibling,
+                sibling_preset.admitted().unwrap().digest()
             )
             .unwrap()
             .session()
             .completed_tick(),
             1
         );
-        assert_eq!(foundation_bytes(&target.writer, old), before);
+        assert_eq!(foundation_bytes(&target.writer, campaign), before);
         sql.execute(
-            &format!("INSERT INTO {LAYOUT_TABLE} VALUES ($1::uuid, 1)"),
-            &[old.as_uuid()],
+            &format!("INSERT INTO {LAYOUT_TABLE} VALUES ($1::uuid, 2)"),
+            &[campaign.as_uuid()],
         )
         .unwrap();
     }
@@ -1241,7 +1216,7 @@ mod foundation_content_layout {
         ));
         sql.execute(
             &format!(
-                "UPDATE {LAYOUT_TABLE} SET content_layout_version=1 WHERE campaign_id=$1::uuid"
+                "UPDATE {LAYOUT_TABLE} SET content_layout_version=2 WHERE campaign_id=$1::uuid"
             ),
             &[campaign.as_uuid()],
         )
@@ -1251,40 +1226,36 @@ mod foundation_content_layout {
 
     fn assert_valid_but_wrong_layout_is_refused(
         target: &DisposableTarget,
-        old: CampaignId,
-        old_preset: MichiganContentPresetV1,
-        new: CampaignId,
-        new_preset: MichiganContentPresetV1,
+        campaign: CampaignId,
+        preset: MichiganContentPresetV1,
     ) {
         let mut sql = target.writer.connect(NoTls).unwrap();
-        for (campaign, preset, wrong, actual) in
-            [(old, old_preset, 2_i16, 1_i16), (new, new_preset, 1, 2)]
-        {
-            let before = foundation_bytes(&target.writer, campaign);
-            sql.execute(&format!("UPDATE {LAYOUT_TABLE} SET content_layout_version=$2 WHERE campaign_id=$1::uuid"), &[campaign.as_uuid(), &wrong]).unwrap();
-            let refusal = DurableMaterialRuntimeV3::open(
+        let before = foundation_bytes(&target.writer, campaign);
+        sql.execute(
+            &format!(
+                "UPDATE {LAYOUT_TABLE} SET content_layout_version=1 WHERE campaign_id=$1::uuid"
+            ),
+            &[campaign.as_uuid()],
+        )
+        .unwrap();
+        assert!(matches!(
+            DurableMaterialRuntimeV3::open(
                 &target.writer,
                 campaign,
                 preset.admitted().unwrap().digest(),
-            );
-            if wrong == 2 {
-                assert!(matches!(
-                    refusal,
-                    Err(MaterialRuntimeErrorV3::Graph(
-                        RustPersistenceRuntimeErrorV2::ReplaySource
-                    ))
-                ));
-            } else {
-                assert!(matches!(
-                    refusal,
-                    Err(MaterialRuntimeErrorV3::Graph(
-                        RustPersistenceRuntimeErrorV2::SemanticCodec
-                    ))
-                ));
-            }
-            assert_eq!(foundation_bytes(&target.writer, campaign), before);
-            sql.execute(&format!("UPDATE {LAYOUT_TABLE} SET content_layout_version=$2 WHERE campaign_id=$1::uuid"), &[campaign.as_uuid(), &actual]).unwrap();
-        }
+            ),
+            Err(MaterialRuntimeErrorV3::Graph(
+                RustPersistenceRuntimeErrorV2::SemanticCodec
+            ))
+        ));
+        assert_eq!(foundation_bytes(&target.writer, campaign), before);
+        sql.execute(
+            &format!(
+                "UPDATE {LAYOUT_TABLE} SET content_layout_version=2 WHERE campaign_id=$1::uuid"
+            ),
+            &[campaign.as_uuid()],
+        )
+        .unwrap();
     }
 
     fn assert_next_commit_survives_reopen(
@@ -1349,7 +1320,9 @@ mod campaign_writer_ownership {
         let material = DurableMaterialRuntimeV3::create(
             &target.writer,
             campaign,
-            michigan_material_runtime_foundation_v2(MichiganDeliveryPresetV1::Standard).unwrap(),
+            MichiganContentPresetV1::new_campaign(MichiganDeliveryPresetV1::Standard)
+                .create_foundation()
+                .unwrap(),
         )
         .unwrap();
         let (graph, bundle) = michigan_observer_foundation_v1().unwrap();
@@ -1421,15 +1394,17 @@ mod campaign_writer_ownership {
             DurableMaterialRuntimeV3::create(
                 &target.writer,
                 warm,
-                michigan_material_runtime_foundation_v2(MichiganDeliveryPresetV1::Standard)
+                MichiganContentPresetV1::new_campaign(MichiganDeliveryPresetV1::Standard)
+                    .create_foundation()
                     .unwrap(),
             )
             .unwrap(),
         );
         let campaign = CampaignId::from_uuid(Uuid::from_u128(31_003));
         let (graph, bundle) = michigan_observer_foundation_v1().unwrap();
-        let material =
-            michigan_material_runtime_foundation_v2(MichiganDeliveryPresetV1::Standard).unwrap();
+        let material = MichiganContentPresetV1::new_campaign(MichiganDeliveryPresetV1::Standard)
+            .create_foundation()
+            .unwrap();
         let mut graph_config = target.writer.clone();
         graph_config.application_name("g4-owner-race-graph");
         let mut material_config = target.writer.clone();
@@ -1498,3 +1473,6 @@ mod campaign_writer_ownership {
 
 #[path = "observer_material_live/runtime_process.rs"]
 mod runtime_process;
+
+#[path = "observer_material_live/staffing_admission.rs"]
+mod staffing_admission;

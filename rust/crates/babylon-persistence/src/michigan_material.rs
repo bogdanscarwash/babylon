@@ -9,21 +9,17 @@ use std::sync::OnceLock;
 use babylon_bsl::causal_contract::EvidenceClass;
 use babylon_kernel::sha256_of;
 use babylon_material_circuit::{
-    decode_material_circuit_state_v2, encode_material_circuit_state_v2, BacklogRowV1,
-    CapacityRowV1, CorridorCapacityV2, CorridorIdV2, GoodIdV1, InputOutputCoefficientV1,
-    InventoryRowV1, LaborCapacityRowV1, LaborCoefficientV1, LogisticsNodeIdV2,
-    MaterialCircuitErrorV2, MaterialCircuitStateV2, OrderAccessModeV1, OrderIdV1, OrderRowV2,
-    ProcessIdV1, ProcessOutputV1, ProductionCommitmentV1, RouteIdV2, RouteLegV2, SiteIdV1,
-    SiteLogisticsNodeV2, SupplierRouteV2, UnitIdV1,
+    CorridorIdV2, GoodIdV1, LogisticsNodeIdV2, MaterialCircuitErrorV2, OrderIdV1, ProcessIdV1,
+    RouteIdV2, SiteIdV1, UnitIdV1,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 /// Exact observed five-row public industry source artifact.
 pub const MICHIGAN_INDUSTRY_BASELINE_SHA256_V1: &str =
     "eb486d7e11b8b63fc58c53ab918eff84b341b293a66faf422ddb9304fb2b553e";
 /// Exact Designed content artifact, shared by both delay presets.
 pub const MICHIGAN_MATERIAL_SCENARIO_SHA256_V1: &str =
-    "5e09fa210c34cd1033d35bf9cc626bd06b3b536e016b005ed53e27421ff9b5ca";
+    "4a0005706af4acbe5bae5389358aa30142fde7daff1c8c944b3580f985938c66";
 const INDUSTRY_BYTES: &[u8] =
     include_bytes!("../../../../contracts/fixtures/michigan_industry_baseline_v1.json");
 const SCENARIO_BYTES: &[u8] =
@@ -41,8 +37,8 @@ impl MichiganDeliveryPresetV1 {
     #[must_use]
     pub const fn id(self) -> &'static str {
         match self {
-            Self::Standard => "michigan-material-standard-v1",
-            Self::Delayed => "michigan-material-delayed-v1",
+            Self::Standard => "michigan-material-standard-v4",
+            Self::Delayed => "michigan-material-delayed-v4",
         }
     }
     #[must_use]
@@ -52,8 +48,8 @@ impl MichiganDeliveryPresetV1 {
     #[must_use]
     pub fn from_id(id: &str) -> Option<Self> {
         match id {
-            "michigan-material-standard-v1" => Some(Self::Standard),
-            "michigan-material-delayed-v1" => Some(Self::Delayed),
+            "michigan-material-standard-v4" => Some(Self::Standard),
+            "michigan-material-delayed-v4" => Some(Self::Delayed),
             _ => None,
         }
     }
@@ -148,6 +144,35 @@ impl MichiganMaterialProcessV1 {
     }
 }
 
+/// Explicit Designed workforce seeds; these are not QCEW employment.
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct MichiganWorkforceSeedV1 {
+    pub process_key: String,
+    pub employed: u64,
+    pub reserve: u64,
+    pub previous_unretained_hours: u64,
+}
+impl MichiganWorkforceSeedV1 {
+    #[must_use]
+    pub fn local_name(&self) -> String {
+        format!("workforce-{}", self.process_key)
+    }
+}
+
+/// Closed policy and placement of the admitted native staffing composition.
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct MichiganStaffingDesignV1 {
+    pub composition_id: String,
+    pub role: String,
+    pub evidence_class: String,
+    pub placement: String,
+    pub hours_per_worker_week: u64,
+    pub retention_weeks: u8,
+    pub pools: Vec<MichiganWorkforceSeedV1>,
+}
+
 /// Designed aggregate transfer, without an invented real supplier or road.
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -208,6 +233,7 @@ struct IndustryArtifact {
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct ScenarioArtifact {
+    staffing: MichiganStaffingDesignV1,
     schema: String,
     evidence_class: String,
     horizon_ticks: u64,
@@ -229,6 +255,10 @@ pub struct MichiganMaterialCatalogV1 {
     scenario: ScenarioArtifact,
 }
 impl MichiganMaterialCatalogV1 {
+    #[must_use]
+    pub fn staffing(&self) -> &MichiganStaffingDesignV1 {
+        &self.scenario.staffing
+    }
     #[must_use]
     pub fn sites(&self) -> &[MichiganMaterialSiteV1] {
         &self.scenario.sites
@@ -350,7 +380,42 @@ fn validate_catalog(catalog: &MichiganMaterialCatalogV1) -> Result<(), MichiganM
     validate_industry_rows(source)?;
     validate_sites_and_goods(catalog)?;
     validate_processes(catalog)?;
+    validate_staffing(catalog)?;
     validate_routes(catalog)
+}
+
+fn validate_staffing(catalog: &MichiganMaterialCatalogV1) -> Result<(), MichiganMaterialErrorV1> {
+    let design = catalog.staffing();
+    if design.composition_id != "g4-workforce-staffing"
+        || design.role != "Mechanic"
+        || design.evidence_class != "Designed"
+        || design.placement != "after-metabolism-material-base"
+        || design.hours_per_worker_week != 40
+        || design.retention_weeks != 1
+        || design.pools.len() != catalog.processes().len()
+        || design
+            .pools
+            .windows(2)
+            .any(|pair| pair[0].process_key >= pair[1].process_key)
+    {
+        return Err(MichiganMaterialErrorV1::ContentValue);
+    }
+    for seed in &design.pools {
+        let process = catalog
+            .processes()
+            .iter()
+            .find(|p| p.key == seed.process_key)
+            .ok_or(MichiganMaterialErrorV1::ContentReference)?;
+        if seed.reserve != 0
+            || seed.employed == 0
+            || seed.employed.checked_mul(40) != Some(process.labor_capacity_hours_per_week)
+            || seed.previous_unretained_hours != process.labor_capacity_hours_per_week
+            || seed.previous_unretained_hours > (1_u64 << 53)
+        {
+            return Err(MichiganMaterialErrorV1::ContentValue);
+        }
+    }
+    Ok(())
 }
 
 fn validate_industry_rows(source: &IndustryArtifact) -> Result<(), MichiganMaterialErrorV1> {
@@ -510,178 +575,6 @@ pub fn michigan_material_catalog_v1(
         })
         .as_ref()
         .map_err(|error| *error)
-}
-
-/// Construct one canonical opening state. The session enforces the 16-week horizon.
-/// # Errors
-/// Refuses source/content defects or the exact V2 circuit validation failure.
-pub fn michigan_material_foundation_v1(
-    preset: MichiganDeliveryPresetV1,
-) -> Result<MaterialCircuitStateV2, MichiganMaterialErrorV1> {
-    let catalog = michigan_material_catalog_v1()?;
-    let mut state = MaterialCircuitStateV2 {
-        week: 1,
-        site_logistics_nodes: Vec::new(),
-        process_outputs: Vec::new(),
-        input_coefficients: Vec::new(),
-        labor_coefficients: Vec::new(),
-        supplier_routes: Vec::new(),
-        route_legs: Vec::new(),
-        inventory: Vec::new(),
-        orders: Vec::new(),
-        backlog: Vec::new(),
-        freight: Vec::new(),
-        corridor_capacities: Vec::new(),
-        capacities: Vec::new(),
-        labor: Vec::new(),
-        production_commitments: Vec::new(),
-    };
-    for site in catalog.sites() {
-        state.site_logistics_nodes.push(SiteLogisticsNodeV2 {
-            site_id: site.id(),
-            node_id: site.node_id(),
-        });
-    }
-    for process in catalog.processes() {
-        add_process(&mut state, catalog, process, preset.horizon_ticks())?;
-    }
-    for route in catalog.routes() {
-        add_route(&mut state, catalog, route, preset)?;
-    }
-    let bytes =
-        encode_material_circuit_state_v2(&state).map_err(MichiganMaterialErrorV1::Circuit)?;
-    decode_material_circuit_state_v2(&bytes).map_err(MichiganMaterialErrorV1::Circuit)
-}
-
-fn add_process(
-    state: &mut MaterialCircuitStateV2,
-    catalog: &MichiganMaterialCatalogV1,
-    process: &MichiganMaterialProcessV1,
-    horizon: u64,
-) -> Result<(), MichiganMaterialErrorV1> {
-    let input = catalog
-        .good(&process.input_good_key)
-        .ok_or(MichiganMaterialErrorV1::ContentReference)?;
-    let output = catalog
-        .good(&process.output_good_key)
-        .ok_or(MichiganMaterialErrorV1::ContentReference)?;
-    let site_id = process.site_id();
-    let process_id = process.id();
-    let labor_unit = UnitIdV1::from_bytes(identity("unit", "labor-hour"));
-    state.process_outputs.push(ProcessOutputV1 {
-        process_id,
-        site_id,
-        good_id: output.id(),
-        unit_id: output.unit_id(),
-        quantity_per_batch: process.output_quantity_per_batch,
-    });
-    state.input_coefficients.push(InputOutputCoefficientV1 {
-        process_id,
-        good_id: input.id(),
-        unit_id: input.unit_id(),
-        quantity_per_batch: process.input_quantity_per_batch,
-    });
-    state.labor_coefficients.push(LaborCoefficientV1 {
-        process_id,
-        unit_id: labor_unit,
-        quantity_per_batch: process.labor_hours_per_batch,
-    });
-    state.inventory.extend([
-        InventoryRowV1 {
-            site_id,
-            good_id: input.id(),
-            unit_id: input.unit_id(),
-            quantity: process.opening_input_quantity,
-        },
-        InventoryRowV1 {
-            site_id,
-            good_id: output.id(),
-            unit_id: output.unit_id(),
-            quantity: 0,
-        },
-    ]);
-    for week in 1..=horizon {
-        state.capacities.push(CapacityRowV1 {
-            process_id,
-            site_id,
-            week,
-            available_batches: process.capacity_batches_per_week,
-        });
-        state.labor.push(LaborCapacityRowV1 {
-            site_id,
-            unit_id: labor_unit,
-            week,
-            available: process.labor_capacity_hours_per_week,
-        });
-    }
-    if process.opening_planned_batches > 0 {
-        state.production_commitments.push(ProductionCommitmentV1 {
-            process_id,
-            site_id,
-            week: 1,
-            planned_batches: process.opening_planned_batches,
-        });
-    }
-    Ok(())
-}
-
-fn add_route(
-    state: &mut MaterialCircuitStateV2,
-    catalog: &MichiganMaterialCatalogV1,
-    route: &MichiganMaterialRouteV1,
-    preset: MichiganDeliveryPresetV1,
-) -> Result<(), MichiganMaterialErrorV1> {
-    let supplier = catalog
-        .site(&route.supplier_site_key)
-        .ok_or(MichiganMaterialErrorV1::ContentReference)?;
-    let buyer = catalog
-        .site(&route.buyer_site_key)
-        .ok_or(MichiganMaterialErrorV1::ContentReference)?;
-    let good = catalog
-        .good(&route.good_key)
-        .ok_or(MichiganMaterialErrorV1::ContentReference)?;
-    state.supplier_routes.push(SupplierRouteV2 {
-        buyer_site_id: buyer.id(),
-        supplier_site_id: supplier.id(),
-        good_id: good.id(),
-        unit_id: good.unit_id(),
-        route_id: route.id(),
-    });
-    state.route_legs.push(RouteLegV2 {
-        route_id: route.id(),
-        leg_index: 0,
-        corridor_id: route.corridor_id(),
-        from_node_id: supplier.node_id(),
-        to_node_id: buyer.node_id(),
-        travel_weeks: catalog.travel_weeks(route, preset),
-        loss_ppm: 0,
-    });
-    state.orders.push(OrderRowV2 {
-        order_id: route.order_id(),
-        access_mode: OrderAccessModeV1::CommoditySale,
-        buyer_site_id: buyer.id(),
-        supplier_site_id: supplier.id(),
-        good_id: good.id(),
-        unit_id: good.unit_id(),
-        ordered: route.ordered_quantity,
-        shipped: 0,
-        lost: 0,
-        delivered: 0,
-        realized: 0,
-    });
-    state.backlog.push(BacklogRowV1 {
-        order_id: route.order_id(),
-        quantity: route.ordered_quantity,
-    });
-    for week in 1..=preset.horizon_ticks() {
-        state.corridor_capacities.push(CorridorCapacityV2 {
-            corridor_id: route.corridor_id(),
-            unit_id: good.unit_id(),
-            week,
-            available: route.capacity_quantity_per_week,
-        });
-    }
-    Ok(())
 }
 
 #[cfg(test)]

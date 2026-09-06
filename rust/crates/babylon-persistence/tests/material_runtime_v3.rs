@@ -1,9 +1,8 @@
 use babylon_bsl::structural_verbs::CollectingSink;
 use babylon_graph::{hypergraph_store::HypergraphStore, state_hash::CanonicalState};
-use babylon_kernel::sha256_of;
 use babylon_persistence::{
-    michigan_economy::michigan_observer_foundation_v1,
-    michigan_material::{michigan_material_foundation_v1, MichiganDeliveryPresetV1},
+    michigan_content::MichiganContentPresetV1, michigan_economy::michigan_observer_foundation_v1,
+    michigan_material::MichiganDeliveryPresetV1,
 };
 use babylon_practice_contract::ordered_action_v1::OrderedPracticeActionBatchV1;
 use babylon_tick::{
@@ -13,17 +12,11 @@ use babylon_tick::{
 };
 
 fn session(preset: MichiganDeliveryPresetV1) -> MaterialReplaySessionV3<HypergraphStore> {
-    let (graph, _) = michigan_observer_foundation_v1().unwrap();
-    let material =
-        MaterialWorldRegisterV2::try_new(0, michigan_material_foundation_v1(preset).unwrap())
-            .unwrap();
-    MaterialReplaySessionV3::new(
-        graph,
-        material,
-        sha256_of(preset.id().as_bytes()),
-        preset.horizon_ticks(),
-    )
-    .unwrap()
+    MichiganContentPresetV1::new_campaign(preset)
+        .create_foundation()
+        .unwrap()
+        .into_session()
+        .unwrap()
 }
 fn actions(session: &MaterialReplaySessionV3<HypergraphStore>) -> OrderedPracticeActionBatchV1 {
     OrderedPracticeActionBatchV1::empty(
@@ -62,7 +55,7 @@ fn material_commit_failure_leaves_graph_circuit_world_time_and_sink_unchanged() 
         .unwrap();
     assert_eq!(session.completed_tick(), 1);
     assert_eq!(session.graph_session().completed_tick(), 1);
-    assert_eq!(session.graph_session().graph().state_hash().unwrap(), graph);
+    assert_ne!(session.graph_session().graph().state_hash().unwrap(), graph);
     assert_ne!(session.current_world_hash().unwrap(), world);
     assert_eq!(
         ack.result_world_hash(),
@@ -72,7 +65,12 @@ fn material_commit_failure_leaves_graph_circuit_world_time_and_sink_unchanged() 
 #[test]
 fn material_transition_failure_abandons_prepared_graph_and_identity() {
     let (graph, _) = michigan_observer_foundation_v1().unwrap();
-    let mut initial = michigan_material_foundation_v1(MichiganDeliveryPresetV1::Standard).unwrap();
+    let mut initial = MichiganContentPresetV1::StaffedStandardV4
+        .create_foundation()
+        .unwrap()
+        .initial_register()
+        .state()
+        .clone();
     let source = initial
         .production_commitments
         .iter()
@@ -101,7 +99,14 @@ fn material_transition_failure_abandons_prepared_graph_and_identity() {
             });
     }
     let register = MaterialWorldRegisterV2::try_new(0, initial).unwrap();
-    let session = MaterialReplaySessionV3::new(graph, register, [7; 32], 16).unwrap();
+    let session = MaterialReplaySessionV3::new(
+        graph,
+        register,
+        [7; 32],
+        16,
+        babylon_tick::material_replay::MaterialLaborV1::Scheduled,
+    )
+    .unwrap();
     let bytes = session.material().canonical_bytes().to_vec();
     let hash = session.current_world_hash().unwrap();
     assert!(session.prepare_advance(&actions(&session)).is_err());
@@ -111,7 +116,7 @@ fn material_transition_failure_abandons_prepared_graph_and_identity() {
     assert_eq!(session.current_world_hash().unwrap(), hash);
 }
 #[test]
-fn arrival_feeds_following_commitments_and_delay_changes_only_circuit_world() {
+fn staffed_arrival_feeds_following_commitments_through_the_full_horizon() {
     let mut fast = session(MichiganDeliveryPresetV1::Standard);
     let mut slow = session(MichiganDeliveryPresetV1::Delayed);
     assert_eq!(

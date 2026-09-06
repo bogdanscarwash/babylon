@@ -1185,3 +1185,8 @@ decisions:
     status: accepted
     date: '2026-09-04'
     file: ADR251_durable_g4_observer_and_material_activation.yaml
+  ADR255_graph_owned_staffing_composition:
+    title: Graph-owned staffing in the detached material close
+    status: accepted
+    date: '2026-09-06'
+    file: ADR255_graph_owned_staffing_composition.yaml

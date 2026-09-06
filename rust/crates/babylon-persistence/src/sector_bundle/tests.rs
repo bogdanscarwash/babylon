@@ -1,10 +1,11 @@
 use std::collections::BTreeSet;
 
 use super::*;
-use crate::michigan_material::{
-    michigan_material_catalog_v1, michigan_material_foundation_v1, MichiganDeliveryPresetV1,
+use crate::michigan_material::{michigan_material_catalog_v1, MichiganDeliveryPresetV1};
+use babylon_material_circuit::{
+    advance_material_circuit_v2, advance_staffing_v1, close_material_week_v2,
+    MaterialCircuitTransitionV2, StaffingPoolStateV1, StaffingStateV1,
 };
-use babylon_material_circuit::{advance_material_circuit_v2, MaterialCircuitTransitionV2};
 
 fn rebuild(
     bundle: &SectorBundleV1,
@@ -32,9 +33,31 @@ fn macomb(values: &[SectorBundleV1]) -> usize {
 }
 
 fn trace(mut state: MaterialCircuitStateV2, weeks: usize) -> Vec<MaterialCircuitTransitionV2> {
+    // Pure bundle causality uses the real staffing core. Durable tests separately
+    // prove graph-owned retention and reconstruction through the replay boundary.
+    let authority = staffing::StoredStaffingV1::authored().unwrap();
+    let composition = authority.composition().unwrap();
+    let bindings: Vec<_> = composition
+        .bindings()
+        .iter()
+        .map(|binding| binding.pool().clone())
+        .collect();
+    let pools = composition.bindings().iter().map(|binding| {
+        let seed = authority.design().pools.iter().find(|seed| {
+            matches!(binding.subject(), StableElementKeyV1::Node {local_name,..} if *local_name == seed.local_name())
+        }).unwrap();
+        StaffingPoolStateV1::try_new(binding.pool().clone(), seed.employed, seed.reserve, seed.previous_unretained_hours).unwrap()
+    }).collect();
+    let mut staffing = StaffingStateV1::try_new(1, pools).unwrap();
     (0..weeks)
         .map(|_| {
-            let result = advance_material_circuit_v2(&state).unwrap();
+            let closed = close_material_week_v2(&state).unwrap();
+            let requests = closed.staffing_requests(&bindings).unwrap();
+            let staffed = advance_staffing_v1(&staffing, &requests).unwrap();
+            let result = closed
+                .finish_with_labor(staffed.next_labor().to_vec())
+                .unwrap();
+            staffing = staffed.into_state();
             state = result.state.clone();
             result
         })
@@ -74,7 +97,14 @@ fn four_nonempty_bundles_own_five_processes_without_merging_wayne_resources() {
             .filter(|row| row.week == week)
             .map(|row| row.available)
             .collect();
-        assert_eq!(budgets, BTreeSet::from([16, 80]));
+        assert_eq!(
+            budgets,
+            if week == 1 {
+                BTreeSet::from([160, 800])
+            } else {
+                BTreeSet::new()
+            }
+        );
     }
     for bundle in bundles {
         assert_eq!(bundle.owner.sector_code, "31-33");
@@ -91,18 +121,38 @@ fn four_nonempty_bundles_own_five_processes_without_merging_wayne_resources() {
 }
 
 #[test]
-fn compiled_rows_equal_both_existing_physical_foundations_byte_for_byte() {
+fn compiled_opening_resources_preserve_exact_authored_coefficients() {
+    let catalog = michigan_material_catalog_v1().unwrap();
     for preset in [
         MichiganDeliveryPresetV1::Standard,
         MichiganDeliveryPresetV1::Delayed,
     ] {
-        let actual = compile_sector_bundles_v1(&bundles(), preset).unwrap();
-        let legacy = michigan_material_foundation_v1(preset).unwrap();
-        assert_eq!(actual, legacy);
-        assert_eq!(
-            encode_material_circuit_state_v2(&actual).unwrap(),
-            encode_material_circuit_state_v2(&legacy).unwrap()
-        );
+        let state = compile_sector_bundles_v1(&bundles(), preset).unwrap();
+        for process in catalog.processes() {
+            let output = state
+                .process_outputs
+                .iter()
+                .find(|row| row.process_id == process.id())
+                .unwrap();
+            assert_eq!(output.quantity_per_batch, process.output_quantity_per_batch);
+            let coefficient = state
+                .labor_coefficients
+                .iter()
+                .find(|row| row.process_id == process.id())
+                .unwrap();
+            assert_eq!(
+                coefficient.quantity_per_batch,
+                process.labor_hours_per_batch
+            );
+            let labor = state
+                .labor
+                .iter()
+                .filter(|row| row.site_id == process.site_id())
+                .collect::<Vec<_>>();
+            assert_eq!(labor.len(), 1);
+            assert_eq!(labor[0].week, 1);
+            assert_eq!(labor[0].available, process.labor_capacity_hours_per_week);
+        }
     }
 }
 
@@ -241,7 +291,7 @@ fn missing_input_and_weekly_resource_rows_are_not_silent_zeroes() {
     rows.inventory.retain(|row| row.good_id != input);
     assert_eq!(rebuild(original, &rows), Err(SectorBundleErrorV1::GoodUnit));
     let mut rows = original.rows.clone();
-    rows.labor.retain(|row| row.week != 16);
+    rows.labor.retain(|row| row.week != 1);
     assert_eq!(rebuild(original, &rows), Err(SectorBundleErrorV1::Resource));
     let mut rows = original.rows.clone();
     rows.capacities.retain(|row| row.week != 16);
@@ -377,7 +427,7 @@ fn bundle_recipe_and_labor_coefficients_change_actual_production_not_just_metada
         let mut changed = originals.clone();
         let mut rows = changed[index].rows.clone();
         if change_labor {
-            rows.labor_coefficients[0].quantity_per_batch = 4;
+            rows.labor_coefficients[0].quantity_per_batch = 40;
         } else {
             rows.input_coefficients[0].quantity_per_batch = 20;
         }

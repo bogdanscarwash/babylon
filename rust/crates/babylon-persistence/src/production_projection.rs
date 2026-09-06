@@ -489,16 +489,22 @@ fn emit_route_event(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::michigan_material::michigan_material_foundation_v1;
+    use crate::michigan_content::MichiganContentPresetV1;
+    use babylon_bsl::structural_verbs::CollectingSink;
     use babylon_kernel::sha256_of;
+    use babylon_practice_contract::ordered_action_v1::OrderedPracticeActionBatchV1;
     use babylon_tick::material_world::decode_material_receipts_v3;
+    use babylon_tick::replay_session::ReplayCommitDispositionV1;
 
     #[test]
     fn projection_uses_exact_committed_state_and_refuses_future_history() {
         let preset = MichiganDeliveryPresetV1::Standard;
-        let opening =
-            MaterialWorldRegisterV2::try_new(0, michigan_material_foundation_v1(preset).unwrap())
-                .unwrap();
+        let session = MichiganContentPresetV1::new_campaign(preset)
+            .create_foundation()
+            .unwrap()
+            .into_session()
+            .unwrap();
+        let opening = session.material().clone();
         let initial = project_material_observation_v1(preset, &opening, None, &[]).unwrap();
         assert!(initial.freight.is_empty());
         assert!(initial.events.is_empty());
@@ -512,7 +518,13 @@ mod tests {
             .sites
             .iter()
             .all(|site| site.produced_batches.is_none()));
-        let next = opening.prepare_next().unwrap();
+        let actions = OrderedPracticeActionBatchV1::empty(
+            session.graph_session().session_identity().clone(),
+            1,
+        )
+        .unwrap();
+        let prepared = session.prepare_advance(&actions).unwrap();
+        let next = prepared.material();
         let receipt = decode_material_receipts_v3(next.receipt_bytes()).unwrap();
         let history = vec![(receipt, sha256_of(next.receipt_bytes()))];
         let snapshot =
@@ -558,20 +570,33 @@ mod tests {
     }
 
     fn week_three(preset: MichiganDeliveryPresetV1) -> ProductionSnapshotV1 {
-        let mut register =
-            MaterialWorldRegisterV2::try_new(0, michigan_material_foundation_v1(preset).unwrap())
-                .unwrap();
+        let mut session = MichiganContentPresetV1::new_campaign(preset)
+            .create_foundation()
+            .unwrap()
+            .into_session()
+            .unwrap();
         let mut history = Vec::new();
         let mut opening = None;
-        for _ in 0..3 {
-            let next = register.prepare_next().unwrap();
+        for tick in 1..=3 {
+            let actions = OrderedPracticeActionBatchV1::empty(
+                session.graph_session().session_identity().clone(),
+                tick,
+            )
+            .unwrap();
+            let next = session.prepare_advance(&actions).unwrap();
             history.push((
-                decode_material_receipts_v3(next.receipt_bytes()).unwrap(),
-                sha256_of(next.receipt_bytes()),
+                decode_material_receipts_v3(next.material().receipt_bytes()).unwrap(),
+                sha256_of(next.material().receipt_bytes()),
             ));
-            opening = Some(std::mem::replace(&mut register, next.register().clone()));
+            opening = Some(session.material().clone());
+            session
+                .commit_prepared_and_publish(&mut CollectingSink::default(), next, |_| {
+                    Ok::<_, ()>(ReplayCommitDispositionV1::Committed)
+                })
+                .unwrap();
         }
-        project_material_observation_v1(preset, &register, opening.as_ref(), &history).unwrap()
+        project_material_observation_v1(preset, session.material(), opening.as_ref(), &history)
+            .unwrap()
     }
 
     #[test]
@@ -628,7 +653,7 @@ mod tests {
     }
 
     #[test]
-    fn delivery_delay_changes_used_time_with_equal_budgets_and_unaffected_food() {
+    fn delivery_delay_changes_staffed_time_budgets_and_preserves_unaffected_food() {
         let standard = week_three(MichiganDeliveryPresetV1::Standard);
         let delayed = week_three(MichiganDeliveryPresetV1::Delayed);
         for account in &standard.labor_accounts {
@@ -640,8 +665,6 @@ mod tests {
             let a = account.completed.as_ref().unwrap();
             let b = twin.completed.as_ref().unwrap();
             assert_eq!(a.week, 3);
-            assert_eq!(a.opening, b.opening);
-            assert_eq!(account.next_opening_available, twin.next_opening_available);
             assert_eq!(a.used.checked_add(a.unused), Some(a.opening));
             assert_eq!(b.used.checked_add(b.unused), Some(b.opening));
             let site = standard
@@ -653,7 +676,8 @@ mod tests {
                 assert_eq!(a.used, 8 * site.labor[0].quantity_per_batch);
                 assert!(a.used > b.used);
                 assert_eq!(b.used, 0);
-                assert!(a.unused < b.unused);
+                assert!(a.opening > b.opening);
+                assert_eq!((a.unused, b.unused), (0, 0));
             } else if site.industry_code == "311" {
                 assert_eq!(account, twin);
             }
