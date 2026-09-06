@@ -227,6 +227,20 @@ categories:
         granularity: Port/County
         cadence: Monthly
         class: Runtime
+      - id: BTS_TRANSBORDER
+        agency: DOT/BTS
+        dataset: TransBorder Freight Raw Data
+        vintage: Monthly
+        granularity: Port x HS2 Commodity (and State x Port)
+        cadence: Monthly
+        class: Runtime
+      - id: BTS_BORDER_CROSSING
+        agency: DOT/BTS
+        dataset: Border Crossing Entry Data (keg4-3bc2)
+        vintage: Monthly
+        granularity: Port x Measure
+        cadence: Monthly
+        class: Runtime
       - id: FCC_BDC
         agency: FCC
         dataset: Broadband Data Collection
