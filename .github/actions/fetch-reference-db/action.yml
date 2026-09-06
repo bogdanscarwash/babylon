@@ -73,15 +73,22 @@ inputs:
     # from the restamped product (sha f4310cce..., 77 tables, 61,800,019 rows)
     # as reference-subset-20260905b-v8.sqlite (double-build byte-identical,
     # 14,195,486 rows kept). tiger tarball unchanged from v3.
+    # v8 in-place refresh (2026-09-05, PER-30): fact_asm_manufacturing_annual
+    # populated (2,592 ASM 2022-benchmark national x NAICS x year rows,
+    # 2018-2021) — subset policy skip; the only subset-visible delta is
+    # dim_data_source 23 -> 24 (CENSUS_ASM row). Rebuilt from the restamped
+    # product (sha 442f8dde..., 78 tables, 61,802,612 rows) as
+    # reference-subset-20260905c-v8.sqlite (double-build byte-identical,
+    # 14,195,487 rows kept). tiger tarball unchanged from v3.
     default: ci-data-v8
   asset:
     description: Asset filename within the release
     required: false
-    default: reference-subset-20260905b-v8.sqlite
+    default: reference-subset-20260905c-v8.sqlite
   sha256:
     description: Expected sha256 of the asset (pin — bump with the tag)
     required: false
-    default: 2cb7a6410256c8dd7e6a9f86bf61c2b3bb4f9bb06a93337ec5dbf7a0836ea657
+    default: f84012c29680cfd3800a3fe1d4e7c0516547980a1eb4dfd19579bd112abce754
   tiger-asset:
     description: TIGER county-shapefile tarball within the release (the
       headless runner reads data/tiger/county/tl_2024_us_county.shp — proving

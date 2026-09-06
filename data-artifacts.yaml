@@ -7,13 +7,13 @@
 version: "2.0.0"
 schema:
   file: dist/data-artifacts/schema.sql
-  sha256: cb1e815b9085ccb6e0e5facf0463384cd1c2da185798e1875b70c4342efd496c
-  tables: 77
+  sha256: 9100357be267a93820a8ea0cee4bc11f2e5acd9a345a361e5d44dfc53f82c9b2
+  tables: 78
   views: 8
-  indexes: 103
+  indexes: 104
 product:
   name: marxist-data-3NF.sqlite
-  sha256: f4310cce01f64e603d6991ae9056173209f21ee3775090a91c357b4caf7f5b1f
+  sha256: 153b753cb264554c935761c6b216c8f1476a08137f189b9a931c31508ad032ad
   page_size: 4096
   application_id: 1111573068
   user_version: 1
@@ -290,8 +290,8 @@ artifacts:
     source_table: dim_data_source
     generator: tools/make_data_artifacts.py
     mode: generate
-    rows: 23
-    sha256: fd0468f0b93e956930c0a186f845d0ce031753fb62c259c344d01c34752df66f
+    rows: 24
+    sha256: 1d333eae5f0c293c51fe6dfa4d001fd1f1c3cd77b571e86ed7f277e884e1597f
     home: dist/data-artifacts/dim_data_source.parquet
     material_relation: >-
       provenance registry (agency/dataset per fact table) — the traceability backbone every
@@ -529,6 +529,19 @@ artifacts:
     material_relation: >-
       ACS class-of-worker taxonomy annotated with marxian_class — the classification behind
       fact_census_worker_class's Marxian class-composition breakdown.
+  - name: fact_asm_manufacturing_annual
+    format: parquet
+    source_table: fact_asm_manufacturing_annual
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 2592
+    sha256: 4126d61d03c83065c72d49bad36940035e3368c749b870670f98725199c3a659
+    home: dist/data-artifacts/fact_asm_manufacturing_annual.parquet
+    material_relation: >-
+      ASM manufacturing general statistics — inventory STOCKS by stage of fabrication
+      (materials/WIP/finished/total, begin+end of year), shipments, total cost of materials,
+      value added, employment and production-worker hours; the productive circuit's
+      inventory/turnover substrate (PER-30).
   - name: fact_bea_county_gdp
     format: parquet
     source_table: fact_bea_county_gdp

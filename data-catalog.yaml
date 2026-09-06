@@ -21,6 +21,20 @@ categories:
         granularity: County
         cadence: Annual
         class: Runtime
+      - id: CENSUS_ASM
+        agency: Census
+        dataset: Annual Survey of Manufactures (2022 Economic Census benchmark)
+        vintage: 2018-2021
+        granularity: National x NAICS
+        cadence: Annual
+        class: Runtime
+      - id: LEHD_QWI
+        agency: Census/LEHD
+        dataset: Quarterly Workforce Indicators (R2026Q3; Michigan coverage 2000Q3-2021Q4)
+        vintage: Quarterly vintage
+        granularity: County x NAICS
+        cadence: Quarterly
+        class: Runtime
       - id: BEA_TiVA
         agency: BEA
         dataset: Trade in Value Added
@@ -867,6 +881,26 @@ tables:
     material_relation: ACS class-of-worker taxonomy annotated with marxian_class — the
       classification behind fact_census_worker_class's Marxian class-composition breakdown.
     notes: 18/22 marxian_class rows populated; view_class_composition written but unconsumed.
+  - name: fact_asm_manufacturing_annual
+    kind: table
+    source: CENSUS_ASM
+    extractor: babylon-data src/babylon_data/asm/ (2026-09-05, PER-30)
+    disposition: keep
+    subset_policy: skip
+    material_relation: ASM manufacturing general statistics — inventory STOCKS by
+      stage of fabrication (materials/WIP/finished/total, begin+end of year),
+      shipments, total cost of materials, value added, employment and
+      production-worker hours; the productive circuit's inventory/turnover
+      substrate (PER-30).
+    notes: "National x NAICS2017 (sector 31-33 + 3-6 digit leaves, nested
+      aggregates kept as distinct published observations) x year, 2022 Economic
+      Census benchmark vintage (2018-2021 revised) from AM2231GS1. ASM publishes
+      no county/state inventory-by-stage product: county inventory is an
+      explicitly derived quantity (national ratios x county QCEW shares), never
+      an observation. Covers the 2019 baseline and 2020-2021 COVID window; no
+      2024 rows. Empty measures are NULL with the ASM annotation flag in flag_*;
+      RSE columns remain in the raw file. subset_policy skip: staged, no runtime
+      consumer yet."
   - name: fact_bea_county_gdp
     kind: table
     source: BEA_GDP

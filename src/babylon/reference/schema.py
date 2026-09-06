@@ -1206,6 +1206,75 @@ class FactQwiCountyFlow(NormalizedBase):
     )
 
 
+class FactAsmManufacturingAnnual(NormalizedBase):
+    """ASM manufacturing general statistics, national x NAICS x year (PER-30).
+
+    One row per NAICS 2017 industry (sector '31-33' plus 3-6 digit
+    manufacturing leaves — nested aggregates are distinct published
+    observations, each kept) per year, from the 2022 Economic Census
+    benchmark vintage (AM2231GS1: 2018-2021 revised). NATIONAL grain: ASM
+    publishes no county/state inventory-by-stage product, so county-level
+    inventory in Babylon is an explicitly derived quantity (national ratios
+    x county QCEW shares), never an observation.
+
+    Carries the inventory STOCKS the estate previously lacked (BEA holds
+    value added; NIPA changes-in-private-inventories are flows): materials
+    & supplies, work-in-process, finished goods and total, each beginning
+    and end of year, in thousands of current USD. Plus shipments, total
+    cost of materials, value added, employment, production-worker
+    headcount/hours (thousands)/wages and annual payroll — the
+    production-worker series are the observed variable-capital split.
+
+    Empty measures are stored NULL with the ASM annotation flag preserved
+    in the companion ``flag_*`` column; relative standard errors remain in
+    the raw file. Nothing is imputed.
+    """
+
+    __tablename__ = "fact_asm_manufacturing_annual"
+
+    industry_id: Mapped[int] = mapped_column(
+        ForeignKey("dim_industry.industry_id"), primary_key=True
+    )
+    time_id: Mapped[int] = mapped_column(ForeignKey("dim_time.time_id"), primary_key=True)
+    source_id: Mapped[int] = mapped_column(ForeignKey("dim_data_source.source_id"), nullable=False)
+
+    inventories_total_begin_kusd: Mapped[int | None] = mapped_column()
+    inventories_total_end_kusd: Mapped[int | None] = mapped_column()
+    inventories_materials_begin_kusd: Mapped[int | None] = mapped_column()
+    inventories_materials_end_kusd: Mapped[int | None] = mapped_column()
+    inventories_wip_begin_kusd: Mapped[int | None] = mapped_column()
+    inventories_wip_end_kusd: Mapped[int | None] = mapped_column()
+    inventories_finished_begin_kusd: Mapped[int | None] = mapped_column()
+    inventories_finished_end_kusd: Mapped[int | None] = mapped_column()
+    shipments_kusd: Mapped[int | None] = mapped_column()
+    cost_materials_kusd: Mapped[int | None] = mapped_column()
+    value_added_kusd: Mapped[int | None] = mapped_column()
+    employment: Mapped[int | None] = mapped_column()
+    production_workers: Mapped[int | None] = mapped_column()
+    production_hours_thousands: Mapped[int | None] = mapped_column()
+    payroll_kusd: Mapped[int | None] = mapped_column()
+    production_wages_kusd: Mapped[int | None] = mapped_column()
+
+    flag_inventories_total_begin: Mapped[str | None] = mapped_column(String(2))
+    flag_inventories_total_end: Mapped[str | None] = mapped_column(String(2))
+    flag_inventories_materials_begin: Mapped[str | None] = mapped_column(String(2))
+    flag_inventories_materials_end: Mapped[str | None] = mapped_column(String(2))
+    flag_inventories_wip_begin: Mapped[str | None] = mapped_column(String(2))
+    flag_inventories_wip_end: Mapped[str | None] = mapped_column(String(2))
+    flag_inventories_finished_begin: Mapped[str | None] = mapped_column(String(2))
+    flag_inventories_finished_end: Mapped[str | None] = mapped_column(String(2))
+    flag_shipments: Mapped[str | None] = mapped_column(String(2))
+    flag_cost_materials: Mapped[str | None] = mapped_column(String(2))
+    flag_value_added: Mapped[str | None] = mapped_column(String(2))
+    flag_employment: Mapped[str | None] = mapped_column(String(2))
+    flag_production_workers: Mapped[str | None] = mapped_column(String(2))
+    flag_production_hours: Mapped[str | None] = mapped_column(String(2))
+    flag_payroll: Mapped[str | None] = mapped_column(String(2))
+    flag_production_wages: Mapped[str | None] = mapped_column(String(2))
+
+    __table_args__ = (Index("idx_asm_mfg_time", "time_id"),)
+
+
 class FactProductivityAnnual(NormalizedBase):
     """BLS productivity data for surplus value analysis."""
 
