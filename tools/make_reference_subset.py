@@ -194,6 +194,7 @@ TABLE: dict[str, TablePolicy] = {
     "dim_race": TablePolicy("full", _DIM_BRIDGE_REASON),
     "dim_rent_burden": TablePolicy("full", _DIM_BRIDGE_REASON),
     "dim_sctg_commodity": TablePolicy("full", _DIM_BRIDGE_REASON),
+    "dim_hs2_commodity": TablePolicy("full", _DIM_BRIDGE_REASON),
     "dim_state": TablePolicy(
         "full", "52 rows; resolves michigan_state_id in Michigan-scoped tests."
     ),
@@ -288,6 +289,31 @@ TABLE: dict[str, TablePolicy] = {
         "cross-border commuting into Michigan survives the cut "
         "(69,419 of 2,645,347 rows).",
         county_columns=("home_county_id", "work_county_id"),
+    ),
+    "fact_asm_manufacturing_annual": TablePolicy(
+        "skip",
+        "PER-30 staged data (2026-09-05): ASM 2022-benchmark national x NAICS "
+        "manufacturing rows (2,592; inventories by stage, shipments, cost of "
+        "materials, hours) — staged for the Gate 4 productive circuit, not "
+        "yet read by any system or CI-relevant test. " + _UNREFERENCED_REASON,
+    ),
+    "fact_transborder_port_commodity": TablePolicy(
+        "skip",
+        "PER-31 staged data (2026-09-05): BTS TransBorder port x HS2 x mode x "
+        "month freight (2019-2024) for the Detroit-Windsor circuit — staged, "
+        "not yet read by any system or CI-relevant test. " + _UNREFERENCED_REASON,
+    ),
+    "fact_transborder_state_port": TablePolicy(
+        "skip",
+        "PER-31 staged data (2026-09-05): BTS TransBorder state x port x mode "
+        "x month freight (2019-2024) — staged, not yet read by any system or "
+        "CI-relevant test. " + _UNREFERENCED_REASON,
+    ),
+    "fact_border_crossing_throughput": TablePolicy(
+        "skip",
+        "PER-31 staged data (2026-09-05): BTS Border Crossing Entry Data "
+        "port x measure x month counts — staged, not yet read by any system "
+        "or CI-relevant test. " + _UNREFERENCED_REASON,
     ),
     # -- fact_* — BLOCKED-FULL (national test assertions). --
     "fact_bea_county_gdp": TablePolicy(
