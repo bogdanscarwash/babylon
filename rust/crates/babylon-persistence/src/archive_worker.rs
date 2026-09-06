@@ -655,7 +655,7 @@ impl ArchiveWorkerV1 {
     /// [`SemanticArchiveStoreV1::materialize_receipt`], which binds the worker
     /// identity via [`crate::archive_worker_contract_sha256_v1`]: a receipt
     /// whose producer reports an undrained remainder is staged in
-    /// [`ArchiveMaterializeModeV1::Stage`] mode — its pages write, its
+    /// [`crate::ArchiveMaterializeModeV1::Stage`] mode — its pages write, its
     /// consumption row stays absent, and the disposition reports
     /// [`ArchiveReceiptDispositionV1::Paged`] — so the receipt stays pending
     /// and `verified_tick` honestly stalls behind the draining backlog. The
