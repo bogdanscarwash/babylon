@@ -583,10 +583,16 @@ fn persisted_delivery_twins_reconcile_and_restart_at_dispatch_transit_and_arriva
     for pair in [&standard, &delayed] {
         assert!(subassembly_stock(&pair.history.last().unwrap()[0]) > 0);
         pair.assert_held_history(&observer);
-        eprintln!("PER-325 {:?}: campaigns {}/{}, first downstream output period {}, restart periods {:?}, final world {}",
-            pair.preset, pair.uninterrupted.campaign_id().as_uuid(), pair.restarted.campaign_id().as_uuid(),
-            first[usize::from(pair.preset == MichiganDeliveryPresetV1::Delayed)].unwrap(), pair.restart_periods,
-            pair.history.last().unwrap()[0].nominal_world_hash.as_deref().unwrap());
+        eprintln!(
+            "PER-325 {:?}: first downstream output period {}, restart periods {:?}, final world {}",
+            pair.preset,
+            first[usize::from(pair.preset == MichiganDeliveryPresetV1::Delayed)].unwrap(),
+            pair.restart_periods,
+            pair.history.last().unwrap()[0]
+                .nominal_world_hash
+                .as_deref()
+                .unwrap()
+        );
     }
     assert_eq!(observer.campaigns().unwrap().len(), 4);
     assert!(observer

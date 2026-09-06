@@ -1,6 +1,6 @@
 //! Live `PostgreSQL` contracts for the Michigan H3 reference-bundle installer.
 
-use super::{assert_lock_released, database_user, ScratchDatabase, OWNER_PASSWORD};
+use super::{assert_lock_released, database_user, ScratchDatabase};
 use babylon_kernel::tick_content_hash::RefDigestV1;
 use babylon_persistence::{
     compiled_schema_migrations, install_michigan_h3_reference_bundle_v1,
@@ -66,13 +66,13 @@ struct ProductSnapshot {
     denominator: Option<String>,
 }
 
-pub(super) fn verify_h3_reference_installer(base: &Config, owner: &str) {
+pub(super) fn verify_h3_reference_installer(base: &Config, owner: &str, owner_password: &str) {
     let cohort = representative_cohort();
     verify_connection_failure_redacts_credentials(&cohort);
     verify_exact_epoch_install_and_retry(base, &cohort);
     verify_fresh_refusal(base, &cohort);
     verify_lock_refusal(base, &cohort);
-    verify_non_owner_refusal(base, owner, &cohort);
+    verify_non_owner_refusal(base, owner, owner_password, &cohort);
     verify_installed_state_conflicts(base, &cohort);
     verify_preflight_artifact_identity_conflict(base, &cohort);
 }
@@ -167,9 +167,14 @@ fn verify_lock_refusal(base: &Config, cohort: &H3ReferenceCohort) {
     database.cleanup();
 }
 
-fn verify_non_owner_refusal(base: &Config, owner: &str, cohort: &H3ReferenceCohort) {
+fn verify_non_owner_refusal(
+    base: &Config,
+    owner: &str,
+    owner_password: &str,
+    cohort: &H3ReferenceCohort,
+) {
     let database = ScratchDatabase::empty(base, "h3_installer_non_owner", owner);
-    let owner_config = database.config_as(base, owner, OWNER_PASSWORD);
+    let owner_config = database.config_as(base, owner, owner_password);
     let report =
         migrate_schema_epoch(&owner_config).expect("database owner must establish current epoch");
     assert_eq!(report.final_applied, current_schema_epoch());

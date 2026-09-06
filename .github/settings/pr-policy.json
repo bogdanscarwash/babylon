@@ -141,6 +141,10 @@
             {
               "context": "Main Qualification / Container Image Scan",
               "integration_id": 15368
+            },
+            {
+              "context": "Main Qualification / Native Download / Linux x86_64",
+              "integration_id": 15368
             }
           ]
         }

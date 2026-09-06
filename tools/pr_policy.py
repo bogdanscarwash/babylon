@@ -32,6 +32,19 @@ GITHUB_ACTIONS_PRODUCER: Final[CheckProducer] = CheckProducer(
     slug="github-actions",
 )
 
+# These jobs may skip only when their owning successful CI Gate accepted scope.
+# GitHub may display a skipped matrix parent before expanding its focus value.
+SCOPED_CI_CHECKS: Final[frozenset[str]] = frozenset(
+    {
+        "Rust Validation",
+        "Python Tooling Tests",
+        "Security Audit (pip-audit policy — blocking since item-41)",
+        "PostgreSQL Contract",
+        "PostgreSQL Contract ()",
+        "PostgreSQL Contract (runtime_smoke)",
+    }
+)
+
 
 DEV_CHECK_MANIFEST: Final[tuple[CheckRequirement, ...]] = (
     CheckRequirement(
@@ -43,6 +56,12 @@ DEV_CHECK_MANIFEST: Final[tuple[CheckRequirement, ...]] = (
 )
 
 MAIN_QUALIFICATION_CHECK_MANIFEST: Final[tuple[CheckRequirement, ...]] = (
+    CheckRequirement(
+        "Main Qualification / Native Download / Linux x86_64",
+        "blocking",
+        frozenset({"SUCCESS"}),
+        GITHUB_ACTIONS_PRODUCER,
+    ),
     CheckRequirement(
         "Main Qualification / Event Contract",
         "blocking",

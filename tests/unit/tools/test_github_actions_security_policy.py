@@ -144,8 +144,12 @@ def test_source_release_has_no_distribution_secrets_or_inline_secret_shell_expan
     for step in steps:
         assert "${{ secrets." not in step.get("run", "")
     secret_environments = [
-        step["env"]
+        {key: value for key, value in step["env"].items() if "${{ secrets." in str(value)}
         for step in steps
         if any("${{ secrets." in str(value) for value in step.get("env", {}).values())
     ]
-    assert secret_environments == [{"GITHUB_TOKEN": "${{ secrets.GITHUB_TOKEN }}"}]
+    assert secret_environments
+    assert all(
+        environment == {"GH_TOKEN": "${{ secrets.GITHUB_TOKEN }}"}
+        for environment in secret_environments
+    )

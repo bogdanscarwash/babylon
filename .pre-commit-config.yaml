@@ -2,6 +2,7 @@
 # Install: mise run hooks
 # Run manually: uv run pre-commit run --all-files
 
+minimum_pre_commit_version: "4.6.2"
 default_stages: [pre-commit]
 default_install_hook_types: [pre-commit, commit-msg, pre-push]
 

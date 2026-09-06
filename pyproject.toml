@@ -1,6 +1,6 @@
 [project]
 name = "babylon"
-version = "0.3.0"
+version = "0.4.0"
 description = "Reference data preparation and operator tools for the Babylon Rust game."
 readme = "README.md"
 license = "AGPL-3.0-or-later"
@@ -292,10 +292,17 @@ warn_required_dynamic_aliases = true
 
 [tool.commitizen]
 name = "cz_conventional_commits"
-version = "0.3.0"
+version_provider = "uv"
+version_scheme = "semver"
+major_version_zero = true
 tag_format = "v$version"
-version_files = ["pyproject.toml:version"]
 update_changelog_on_bump = true
+
+[tool.babylon.versioning]
+# Native cutover baseline; older canonical tags are on disconnected history.
+# Once v0.4.0 is reachable, release tags supply the version and commit counter.
+bootstrap_commit = "947699e40fe75a65e603e3302d425643f416e917"
+bootstrap_version = "0.3.0"
 
 [tool.rstcheck]
 report_level = "WARNING"

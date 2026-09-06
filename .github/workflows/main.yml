@@ -117,10 +117,16 @@ jobs:
       - uses: ./.github/actions/bootstrap-python
         with:
           docs: "true"
-      - name: Build the release manual (advisory until warning debt closes)
-        continue-on-error: true
+      - name: Build the release manual
         working-directory: docs
         run: timeout 480 uv run sphinx-build -b html . _build/html
+
+  native-package:
+    name: Main Qualification / Native Download
+    needs: [event-contract]
+    uses: ./.github/workflows/native-package.yml
+    with:
+      source-ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
   trivy-image:
     name: Main Qualification / Container Image Scan

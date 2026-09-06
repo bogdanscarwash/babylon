@@ -124,6 +124,55 @@ def test_source_release_runs_locked_environment_smoke_before_publish() -> None:
     assert all(step.get("run") != "mise run qa:regression" for step in steps)
 
 
+def test_publication_requires_main_lineage_and_verified_native_download() -> None:
+    workflow = yaml.safe_load((ROOT / ".github/workflows/release.yml").read_text())
+    triggers = workflow.get("on", workflow.get(True))
+    assert triggers["push"] == {"tags": ["v*"]}
+    assert workflow["permissions"] == {"contents": "read"}
+    jobs = workflow["jobs"]
+    identity = jobs["identity"]
+    identity_runs = "\n".join(step.get("run", "") for step in identity["steps"])
+    for guard in (
+        "tools/check_release_tag.py",
+        "tools/release_lineage.py verify",
+        "tools/release_version.py --release-tag",
+    ):
+        assert guard in identity_runs
+    release = jobs["release"]
+    assert release["needs"] == ["identity"]
+    assert release["permissions"] == {"contents": "write", "actions": "read"}
+    assert not any("continue-on-error" in job for job in jobs.values())
+    for job in (identity, release):
+        assert not any("continue-on-error" in step for step in job["steps"])
+    publish = next(step for step in release["steps"] if step.get("name") == "Create GitHub Release")
+    promotion = next(
+        step for step in release["steps"] if "tools/release_artifact.py" in step.get("run", "")
+    )
+    assert release["steps"].index(promotion) < release["steps"].index(publish)
+    assert "--output-dir release-download" in promotion["run"]
+    assert "--verify-tag --draft" in publish["run"]
+    assert "--clobber" not in publish["run"]
+    assert publish["run"].index("gh release upload") < publish["run"].index("--draft=false")
+
+
+def test_native_artifact_upload_requires_unpacked_runtime_exercise() -> None:
+    steps = _steps("native-package.yml", "linux")
+    smoke = next(
+        index for index, step in enumerate(steps) if "./babylon --smoke" in step.get("run", "")
+    )
+    upload = next(
+        index
+        for index, step in enumerate(steps)
+        if step.get("uses", "").startswith("actions/upload-artifact@")
+    )
+    assert smoke < upload
+    assert "sha256sum --check" in steps[smoke]["run"]
+    assert "tar --extract" in steps[smoke]["run"]
+    assert "if" not in steps[upload]
+    assert not any("continue-on-error" in step for step in steps)
+    assert steps[upload]["with"]["if-no-files-found"] == "error"
+
+
 def test_weekly_rebuild_uses_exact_native_interpreter_and_compares_product_bytes() -> None:
     path = ROOT / ".github" / "workflows" / "weekly-rebuild-verify.yml"
     workflow = yaml.safe_load(path.read_text())

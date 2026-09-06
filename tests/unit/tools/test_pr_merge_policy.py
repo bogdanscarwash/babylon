@@ -45,6 +45,7 @@ MAIN_BLOCKING_CHECKS = (
     "Main Qualification / Reference-Data Contracts",
     "Main Qualification / Release Documentation",
     "Main Qualification / Container Image Scan",
+    "Main Qualification / Native Download / Linux x86_64",
 )
 
 
@@ -492,6 +493,84 @@ def _run_pr_merge(
         else []
     )
     return result, calls
+
+
+def _scoped_ci_scenario() -> dict[str, object]:
+    scenario = _default_scenario()
+    base_url = f"https://github.com/percy-raskova/babylon/actions/runs/{SOURCE_RUN_ID}/job"
+    gate = scenario["manifest_check_runs"]["check_runs"][0]
+    gate.update({"details_url": f"{base_url}/1", "check_suite": {"id": SOURCE_SUITE_ID}})
+    skipped = _manifest_check_run("Rust Validation", run_id=2, conclusion="skipped")
+    skipped.update({"details_url": f"{base_url}/2", "check_suite": {"id": SOURCE_SUITE_ID}})
+    scenario["manifest_check_runs"]["check_runs"].append(skipped)
+    scenario["manifest_check_runs"]["total_count"] = 2
+    entry = _check("Rust Validation", conclusion="SKIPPED")
+    entry["detailsUrl"] = f"{base_url}/2"
+    scenario["view"]["statusCheckRollup"].append(entry)
+    return scenario
+
+
+def test_verified_ci_scope_can_skip_a_native_job_without_fabricating_success(
+    tmp_path: Path,
+) -> None:
+    result, calls = _run_pr_merge(tmp_path, "--verify-only", scenario=_scoped_ci_scenario())
+
+    assert result.returncode == 0, result.stderr
+    assert not any(call[:2] == ["pr", "merge"] for call in calls)
+
+
+@pytest.mark.parametrize("fault", ["workflow", "head", "suite", "app", "run", "unknown", "gate"])
+def test_scoped_skips_require_the_exact_successful_ci_workflow(tmp_path: Path, fault: str) -> None:
+    scenario = _scoped_ci_scenario()
+    skipped = scenario["manifest_check_runs"]["check_runs"][1]
+    if fault == "workflow":
+        scenario["source_run"]["workflow_id"] = 9
+    elif fault == "head":
+        scenario["source_run"]["head_sha"] = OTHER_SHA
+    elif fault == "suite":
+        skipped["check_suite"]["id"] = 9
+    elif fault == "app":
+        skipped["app"]["id"] = 9
+    elif fault == "run":
+        skipped["details_url"] = skipped["details_url"].replace(str(SOURCE_RUN_ID), "9")
+    elif fault == "unknown":
+        skipped["name"] = "Unregistered Optional Check"
+        scenario["view"]["statusCheckRollup"][1]["name"] = skipped["name"]
+    else:
+        scenario["manifest_check_runs"]["check_runs"][0]["conclusion"] = "failure"
+
+    result, calls = _run_pr_merge(tmp_path, scenario=scenario)
+
+    assert result.returncode == 1, result.stderr
+    assert not any(call[:2] == ["pr", "merge"] for call in calls)
+
+
+def test_policy_migration_can_require_workflow_identity_without_skipped_jobs(
+    tmp_path: Path,
+) -> None:
+    scenario = _scoped_ci_scenario()
+    scenario["view"]["statusCheckRollup"] = scenario["view"]["statusCheckRollup"][:1]
+    scenario["source_run"]["workflow_id"] = 9
+
+    result, calls = _run_pr_merge(
+        tmp_path, "--verify-only", "--require-ci-workflow", scenario=scenario
+    )
+
+    assert result.returncode == 1, result.stderr
+    assert not any(call[:2] == ["pr", "merge"] for call in calls)
+
+
+def test_newer_scoped_failure_invalidates_an_older_skip_receipt(tmp_path: Path) -> None:
+    scenario = _scoped_ci_scenario()
+    newer = copy.deepcopy(scenario["manifest_check_runs"]["check_runs"][1])
+    newer.update({"id": 3, "conclusion": "failure"})
+    scenario["manifest_check_runs"]["check_runs"].append(newer)
+    scenario["manifest_check_runs"]["total_count"] = 3
+
+    result, calls = _run_pr_merge(tmp_path, scenario=scenario)
+
+    assert result.returncode == 1, result.stderr
+    assert not any(call[:2] == ["pr", "merge"] for call in calls)
 
 
 def _view(scenario: dict[str, object]) -> dict[str, object]:

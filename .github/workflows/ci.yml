@@ -44,7 +44,21 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
       - uses: ./.github/actions/bootstrap-python
+      - name: Validate installed hook configuration and commit conventions
+        env:
+          COMMIT_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          COMMIT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          uv run --frozen pre-commit validate-config
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            COMMIT_BASE="$(git rev-parse "${COMMIT_HEAD}^")"
+          fi
+          uv run --frozen python tools/release_version.py \
+            --check-commits "$COMMIT_BASE" "$COMMIT_HEAD"
+          python3 tools/release_version.py --json
       - name: Static checks
         run: mise run check:static
 

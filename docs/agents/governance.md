@@ -124,15 +124,18 @@ contains the previous protected `main` merge:
 git merge-base --is-ancestor origin/main origin/dev
 ```
 
-Prove the merged qualification workflow on that exact `dev` head:
+Open the `dev` to `main` release PR. It must produce the complete combined
+manifest on its exact source SHA. The PR runs full CI and adds uniquely named
+release-only qualification checks, including the native download.
+
+For optional diagnostics, run:
 
 ```bash
 gh workflow run main.yml --ref dev
 ```
 
-The main PR must produce the complete combined manifest. It reruns ordinary CI
-and adds uniquely named release-only qualification checks. After exact-head
-acceptance, only the Director runs:
+The main PR supplies the authoritative evidence. A preliminary manual run is
+not mandatory. After exact-head acceptance, only the Director runs:
 
 ```bash
 mise run pr:merge -- N --director-main

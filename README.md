@@ -8,6 +8,13 @@ Determinism proves computational identity, not scientific truth. Historical
 cases test causal signatures and counterfactual behavior. The Bevy client
 observes the campaign. Player interventions belong to Gate 5.
 
+## Download the native preview
+
+The [0.4.0 release](https://github.com/percy-raskova/babylon/releases/tag/v0.4.0)
+provides the native observer for Ubuntu 24.04 x86_64. Read the
+[download instructions](tools/release/DOWNLOAD.md) for prerequisites and controls.
+Unpack the archive and run `./babylon`; you do not need to compile the game.
+
 The four executable gates are:
 
 <!-- Vale: each protected item is a governed gate name. -->

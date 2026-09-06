@@ -1,4 +1,22 @@
-## Unreleased
+## v0.4.0 (2026-09-06)
+
+### Native preview
+
+- Package the Bevy viewer and Rust runtime for Ubuntu 24.04 x86_64, with a local
+  PostgreSQL launcher, editable simulation parameters, and release checksums.
+- Advance the simulation by one four-week period per tick; inspect production,
+  staffing, held history, and saved-campaign comparisons.
+- Keep current-format campaign save/reopen and retire obsolete development
+  session upgrades and duplicate Python mechanics.
+- Integrate reviewed reference data and reduce Python tests and development CI
+  while retaining full qualification before a public main release.
+- Validate Conventional Commits locally and in CI; identify each development
+  build by release distance and Git SHA.
+
+This is an administrative simulation viewer. It has no player action loop.
+See `tools/release/DOWNLOAD.md` for runtime prerequisites and launch instructions.
+
+## Historical development before the native cutover
 
 ### Feat
 

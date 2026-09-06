@@ -1,4 +1,4 @@
-# The release version contract
+# Versions and native releases
 
 <!-- Vale: this reference preserves literal Git, release, and semantic-versioning terms. -->
 <!-- vale Vale.Spelling = NO -->
@@ -7,83 +7,140 @@
 <!-- vale ste.NounClusters = NO -->
 <!-- vale ste.Gerunds = NO -->
 
-Owner-ratified 2026-07-20 (spec: docs/superpowers/specs/2026-07-20-versioning-rigor-design.md).
-Commitizen enforces commit form. This document defines version meaning and the release process.
+Director decision, 2026-09-06: `dev` is the fast integration branch. Full
+qualification makes `main` the source for public downloads. Commitizen validates Conventional Commits and
+prepares the changelog and release version. Publication remains a separate,
+Director-authorized action from qualified `main` history.
 
-**Supersession note (2026-07-29, Amendment AE / ADR172):** ADR172 defines v1.0
-as the **Rust engine's** release under Program 27. It replaces the earlier
-Python "playable archive" release and resets save-compatibility semver. The
-policy and ceremony below apply to the Rust engine release.
+## Version meaning
 
-## The axis: player saves
+The native preview series uses `0.x.y`:
 
-- **MAJOR** — an existing campaign cannot load without migration. Examples
-  include Ledger schema breaks and Archive embedding-column binding changes.
-- **MINOR** — new features. Old campaigns load clean.
-- **PATCH** — fixes. The behavior contract does not change.
-- **Pre-1.0:** a 0.x MINOR cannot break saves.
+- `x` increases by one for each deliberate public release. Each release resets `y` to zero.
+- Between releases, `y` counts newly reachable commits since the nearest canonical release tag.
+- Development builds append `+g<12-character-SHA>` to distinguish branches with equal commit counts.
+- Releases include a version, tag, source SHA, download assets, and SHA-256 checksums.
 
-`1.0.0` is a promise-keeping event, not a semantics change.
+A merge includes the incoming commits and the merge commit itself. This avoids a
+generated version-bump commit for every edit. Dirty builds also append a hash of
+their changed bytes.
 
-## Commit scopes (controlled vocabulary)
+These are semantic-version-shaped development identifiers, not a promise that
+pre-1.0 saves remain compatible. The runtime supports current-format save/reopen.
+Developers can retire obsolete development formats. Declaring the native product stable
+is a future Director decision. The historical `v1.0.0` release and its tag already
+exist and must not be overwritten or republished.
 
-`cli`, `intelligence`, `engine`, `persistence`, `render`, `web`, `data`, `deps`, `ci`,
-`docs`, `plans`, `ai`, `specs`, `tooling`, `hygiene`, `packaging`.
-babylon-infra additionally: `tf`, `ansible`, `cloudflare`, `secrets`, `tasks`.
-Add new scopes here before use.
+`[project].version` in `pyproject.toml` is the sole planned release version.
+Commitizen's `uv` provider updates it and the matching package row in `uv.lock`
+together, without upgrading dependencies. Cargo's internal crate versions do not
+identify a public Babylon build.
 
-## The release ceremony (owner-run)
+`mise run release:version` prints the development identity. Use
+`python3 tools/release_version.py --json` for its source SHA, anchor, commit count,
+and dirty status. `--release-version` prints the planned public version.
+`--release-tag vX.Y.Z` additionally refuses a mismatched version, wrong commit,
+shallow history, or dirty checkout. A separate guard checks main ancestry.
 
-1. Run `mise run release:bump` for the checked dry-run.
-2. Run `mise run release:bump -- --yes` to create the untagged `dev` commit.
-3. Push `dev` and open its release PR to `main`.
-4. Retrieve both protected branches.
-5. Run `git merge-base --is-ancestor origin/main origin/dev`.
-6. Refuse the release when current `main` is absent from `dev`.
-7. Run `gh workflow run main.yml --ref dev`.
-8. Pin the green qualification run to the exact `dev` SHA.
-9. The Director runs `mise run pr:merge -- N --director-main` after acceptance.
-10. Create a sanctioned lane at exact `origin/main`.
-11. Run `mise run release:prepare-dev-sync -- vX.Y.Z N`.
-12. Commit its lineage record and open that lane's PR to `dev`.
-13. Merge the lineage PR with the ordinary sanctioned command.
-14. Update the local `main` checkout to exact `origin/main`.
-15. Run `mise run release:tag -- --yes`.
+The native cutover starts from commit
+`947699e40fe75a65e603e3302d425643f416e917` at development version `0.3.0`.
+Only tags descended from that native cutover can reset the counter. Returning
+historical main ancestry cannot revive a pre-native release. That bootstrap
+appears in `[tool.babylon.versioning]` because the older canonical tags are on
+disconnected history. It applies only until the first reachable canonical
+release tag.
 
-The tag task refuses until the lineage PR is in `origin/dev`. The task creates
-and pushes `vX.Y.Z` on the qualified main merge commit. The tag starts
-`release.yml`.
+Preparing `0.4.0` does not relabel earlier
+builds. Development continues as `0.3.y`. After `v0.4.0`, the next commit is
+`0.4.1+g<sha>`. Missing anchors and shallow clones fail loudly.
 
-The tag task proves that its target is exact protected `main`. It also proves
-that the main commit returned to protected `dev`. Each publishing workflow
-independently rejects a tag outside protected `main` history.
+## Commit and hook policy
 
-## Releases pin their environment
+Use Conventional Commits, for example `feat(runtime): add campaign comparison` or
+`fix(persistence): reject an incomplete save`. Scopes describe the changed part
+of the code. Commitizen also accepts its standard merge and revert prefixes.
 
-ADR252 makes native Debian, mise, rustup, and uv the development toolchain.
-`.mise.toml`, `mise.lock`, `.python-version`, `rust/rust-toolchain.toml`, `uv.lock`, and
-`rust/Cargo.lock` pin the language tools and dependencies at each tag.
-`tools/check_release_pins.sh` checks their consistency offline.
+Run `mise run hooks` after setup. It installs the configured `pre-commit`,
+`commit-msg`, and `pre-push` hooks. `uv.lock` pins `pre-commit`.
+The Commitizen hook uses the same pinned version as the project CLI.
 
-Exact reference-data builds use the ordinary project interpreter. `mise.lock`
-records its official standalone build URL and checksum for Linux x64. The
-release check validates the locked tool versions, download sources, and hashes.
-It also compares `PINNED_SQLITE_VERSION` with the `data-artifacts.yaml` product
-block. The builder refuses a runtime SQLite version that differs from the pin.
-The weekly rebuild verifies the resulting database's exact product SHA.
+Normal commits
+run applicable formatting, source, lock, and contract checks. The message hook
+runs Commitizen. The pre-push gate uses the reduced Rust development selection.
 
-The ceremony and `release.yml` run the pin check. Before publication, the
-workflow installs the locked Python environment and runs source smoke and
-regression checks. Native source installation uses `mise run setup` and
-`mise run play`. ADR252 retires the obsolete binary-cache installer and publisher.
-Historical releases and their architecture records remain unchanged. The
-babylon-infra repository versions its operations surface independently.
+CI independently validates the exact commit range with
+`uv run --frozen python tools/release_version.py --check-commits BASE_SHA HEAD_SHA`.
+Both endpoints must be full commit SHAs and the base must be an ancestor of the
+head. For the first promotion of accumulated historical work, the checker starts
+at the explicit native cutover commit. The checker validates later ranges in full. This
+preserves history while enforcing the policy on every new commit.
 
-## Tag namespace
+## Release procedure
 
-`v*` is only for releases. Historical and narrative tags live under `archive/`.
-Owner-run cleanup 2026-07-20 deleted the abandoned `v1.0.0` tag.
-`v0.2.3-rent-trinity` and `v0.3.7.1-george-jackson-validated` moved to `archive/`.
+Source now declares the `0.4.0` native preview. The bump task updates files
+without creating a commit or tag. It refuses direct work on `dev` or `main`.
+For later releases:
+
+1. Create an ordinary lane from current `dev` after retrieving full history and tags.
+2. Run `mise run release:bump` to preview the next explicit MINOR increment.
+3. Run `mise run release:bump -- --yes` to update the version, lock, and changelog.
+4. Review those changes, stage them, and commit with `mise run commit`.
+5. Merge the lane's qualified PR to `dev` through `mise run pr:merge -- N`.
+
+For publication:
+
+1. Retrieve both protected branches. Prove
+   `git merge-base --is-ancestor origin/main origin/dev`.
+2. Open the `dev` to `main` release PR. Pin its complete successful qualification
+   manifest to the exact source SHA.
+3. After review and qualification, run the Director-authorized merge:
+   `mise run pr:merge -- N --director-main`.
+4. Create a sanctioned lane at exact `origin/main` and run
+   `mise run release:prepare-dev-sync -- vX.Y.Z N`.
+5. Commit its lineage record, open its PR to `dev`, and merge with the sanctioned
+   command. This returns exact `main` ancestry to protected `dev`.
+6. Update a clean local `main` checkout to exact `origin/main` and run
+   `mise run release:tag -- --yes`.
+
+The main PR runs full CI and `main.yml`, including native package validation.
+That PR supplies the authoritative qualification evidence. The optional
+`gh workflow run main.yml --ref dev` command helps diagnose release-only checks.
+
+The tag task refuses an existing tag and checks the canonical version and
+lineage before publication. The tag starts `release.yml`, which independently
+verifies the main-reachable tag, version, and returned lineage. A manual retry
+must identify the same tag. No dev push publishes a release.
+
+The main PR builds and exercises the unpacked native archive once. Publication
+promotes that exact archive after checking the merged PR, identical source tree,
+successful qualification run, GitHub artifact digest, and package checksum.
+It refuses expired or mismatched artifacts and does not rebuild during tagging.
+`release-provenance.json` links the qualified source commit to the main release
+commit. A partial draft upload requires explicit recovery; retries cannot
+overwrite an existing release.
+
+## Downloads and qualification
+
+GitHub Actions stores temporary qualification artifacts. Persistent public
+download assets live in GitHub Releases. Versions `0.x.0` use GitHub's prerelease
+label. Link directly to the preview tag because the latest-stable link can still
+select the historical `v1.0.0` release.
+
+The first native preview targets
+Ubuntu 24.04 x86_64 desktops. The archive includes both Rust binaries, runtime
+assets, editable `defines.toml`, and the launcher. Unpack it and run `./babylon`.
+
+Install Python 3.12+, local Docker Engine with Compose, libpq, and the desktop
+graphics libraries. The first launch needs internet to build its pinned
+Postgres image. See `tools/release/DOWNLOAD.md` for exact prerequisites and
+controls. This preview is an administrative simulation viewer with no player
+commands.
+
+`.mise.toml`, `mise.lock`, `.python-version`, `rust/rust-toolchain.toml`, `uv.lock`,
+and `rust/Cargo.lock` pin each release environment. The release pin check and
+full `main.yml` qualification preserve the deeper validation beyond the fast
+dev gate. Download manifests and checksums identify the qualified build.
+Historical releases and architecture records remain unchanged.
 
 <!-- vale ste.Gerunds = YES -->
 <!-- vale ste.NounClusters = YES -->

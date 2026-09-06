@@ -210,3 +210,11 @@ class TestRollupFailuresLatestPerCheck:
         ]
         failures = pr_merge._rollup_failures(rollup)
         assert any("Unregistered Optional Check" in failure for failure in failures)
+
+    def test_scoped_skip_without_evidence_stays_pending_for_dependabot(self) -> None:
+        findings = pr_merge._rollup_findings(
+            [_entry("Rust Validation", "SKIPPED", "2026-08-26T02:48:05Z")],
+            allow_pending=True,
+        )
+        assert findings.hard == []
+        assert findings.pending == ["Rust Validation: awaiting exact CI scope evidence"]

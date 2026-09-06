@@ -148,7 +148,13 @@ def test_retired_ai_suite_has_no_qualification_job() -> None:
 
 def test_workflow_emits_every_qualification_context_once() -> None:
     jobs = _workflow()["jobs"]
-    names = [job["name"] for job in jobs.values()]
+    names = []
+    for job in jobs.values():
+        if "uses" in job:
+            called = yaml.safe_load((ROOT / job["uses"]).read_text(encoding="utf-8"))
+            names.extend(f"{job['name']} / {child['name']}" for child in called["jobs"].values())
+        else:
+            names.append(job["name"])
     expected = [requirement.context for requirement in MAIN_QUALIFICATION_CHECK_MANIFEST]
 
     assert len(names) == len(set(names))

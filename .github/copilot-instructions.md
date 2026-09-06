@@ -27,6 +27,10 @@ code location and a small reproducer or concrete example.
 - For CI, check changed-input selection, deleted paths, failure propagation,
   trusted cache publication, and complete release qualification. A skipped
   prerequisite must not turn the required result green.
+- Public downloads require a qualified main release and exact source evidence.
+  Check the unpacked launcher, saved-state reopen, asset notices, checksums,
+  and artifact provenance. Dev pushes must not publish a release. Commitizen
+  validates new commit messages; development versions derive from Git history.
 
 Skip formatting, naming preferences, speculative abstractions, compatibility
 layers, and requests to restore deleted code without a current consumer.

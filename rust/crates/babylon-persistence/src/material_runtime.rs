@@ -467,7 +467,7 @@ impl DurableMaterialRuntimeV3 {
                 })
                 .map_err(commit_error)?;
             self.tail = Some(ack);
-            record_advance_timing(self.campaign, ack.resolve_tick(), timing);
+            record_advance_timing(ack.resolve_tick(), timing);
             return Ok(ack);
         }
         if durable != self.session.completed_tick() {
@@ -513,22 +513,17 @@ impl DurableMaterialRuntimeV3 {
             }}
         }).map_err(commit_error)?;
         self.tail = Some(ack);
-        record_advance_timing(self.campaign, ack.resolve_tick(), timing);
+        record_advance_timing(ack.resolve_tick(), timing);
         Ok(ack)
     }
 }
 
 // Operator diagnostics only: clocks never enter state, hashes, receipts or the
 // protocol. Emit one bounded record after successful durable publication.
-fn record_advance_timing(
-    campaign: CampaignId,
-    period: u64,
-    [started, adjudicated, prepared]: [Instant; 3],
-) {
+fn record_advance_timing(period: u64, [started, adjudicated, prepared]: [Instant; 3]) {
     if std::env::var("BABYLON_TIMINGS").as_deref() == Ok("1") {
         eprintln!(
-            "babylon-timing campaign={} period={period} simulation_us={} preparation_us={} durable_write_publish_us={} total_us={}",
-            campaign.as_uuid(),
+            "babylon-timing period={period} simulation_us={} preparation_us={} durable_write_publish_us={} total_us={}",
             adjudicated.duration_since(started).as_micros(),
             prepared.duration_since(adjudicated).as_micros(),
             prepared.elapsed().as_micros(),

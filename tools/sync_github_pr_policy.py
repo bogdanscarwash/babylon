@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import argparse
+import base64
+import binascii
 import json
 import os
 import re
@@ -759,23 +761,141 @@ def _apply_label(api: Api, desired: dict[str, object], current: object) -> None:
         )
 
 
+def _verify_migration_pr_checks(pr: int, head_sha: str) -> None:
+    """Reuse the sanctioned verifier without attempting a merge."""
+    try:
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(Path(__file__).with_name("pr_merge.py")),
+                str(pr),
+                "--verify-only",
+                "--expected-head",
+                head_sha,
+                "--require-ci-workflow",
+            ],
+            cwd=Path(__file__).resolve().parents[1],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=180,
+        )
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise PolicyError(f"migration PR verification could not complete: {error}") from error
+    if result.returncode != 0:
+        detail = (result.stderr.strip() or result.stdout.strip())[:2000]
+        raise PolicyError(f"migration PR verification refused: {detail}")
+
+
+def _verify_migration_refs(api: Api, pr: int, dev_sha: str, head_sha: str) -> None:
+    """Bind the migration to a conflict-free, same-repository, exact-head dev PR."""
+    if _dev_sha(api) != dev_sha:
+        raise PolicyError("dev moved during policy migration")
+    pull = _object(api.get_json(f"{REPOSITORY_ENDPOINT}/pulls/{pr}"), "migration PR")
+    if pull.get("number") != pr or pull.get("state") != "open" or pull.get("draft") is not False:
+        raise PolicyError("migration PR must be open and ready for review")
+    if pull.get("mergeable") is not True:
+        raise PolicyError("migration PR must have resolved mergeability without conflicts")
+    for side, expected_sha in (("base", dev_sha), ("head", head_sha)):
+        ref = _object(pull.get(side), f"migration PR {side}")
+        repository = _object(ref.get("repo"), f"migration PR {side} repository")
+        if repository.get("full_name") != REPOSITORY:
+            raise PolicyError(f"migration PR {side} must belong to {REPOSITORY}")
+        if ref.get("sha") != expected_sha:
+            raise PolicyError(f"migration PR {side} moved from {expected_sha}")
+        if side == "base" and ref.get("ref") != "dev":
+            raise PolicyError("migration PR must target dev")
+
+
+def _verify_migration_contents(
+    api: Api, policy: dict[str, object], dev_sha: str, head_sha: str
+) -> None:
+    comparison = _object(
+        api.get_json(f"{REPOSITORY_ENDPOINT}/compare/{dev_sha}...{head_sha}"),
+        "migration ancestry",
+    )
+    merge_base = _object(comparison.get("merge_base_commit"), "migration merge base")
+    if merge_base.get("sha") != dev_sha:
+        raise PolicyError("migration PR must contain exact current dev ancestry")
+    content = _object(
+        api.get_json(
+            f"{REPOSITORY_ENDPOINT}/contents/.github/settings/pr-policy.json?ref={head_sha}"
+        ),
+        "migration policy content",
+    )
+    encoded = content.get("content")
+    if content.get("encoding") != "base64" or not isinstance(encoded, str):
+        raise PolicyError("migration policy content must be complete base64")
+    try:
+        committed = json.loads(base64.b64decode("".join(encoded.split()), validate=True))
+    except (binascii.Error, ValueError, UnicodeError) as error:
+        raise PolicyError(f"migration policy content is invalid: {error}") from error
+    if committed != policy:
+        raise PolicyError("desired policy differs from the exact reviewed migration PR head")
+
+
+def _verify_checks_only_migration(before: dict[str, object], policy: dict[str, object]) -> None:
+    """A workflow rename cannot change any other repository protection."""
+    for component in ("repository", "actions_permissions"):
+        if before[component] != policy[component]:
+            raise PolicyError("policy migration may change only required status checks")
+    label = before["automerge_label"]
+    if (
+        label is None
+        or normalize_label(_object(label, "current label")) != policy["automerge_label"]
+    ):
+        raise PolicyError("policy migration may change only required status checks")
+    for branch in ("dev", "main"):
+        current = deepcopy(_object(before[f"{branch}_ruleset"], f"current {branch} ruleset"))
+        desired = normalize_ruleset(
+            _object(policy[f"{branch}_ruleset"], f"desired {branch} ruleset")
+        )
+        for ruleset in (current, desired):
+            for rule in _objects(ruleset["rules"], f"{branch} rules", MAX_RULESETS):
+                if rule.get("type") == "required_status_checks":
+                    parameters = _object(rule.get("parameters"), f"{branch} check parameters")
+                    parameters["required_status_checks"] = []
+        if current != desired:
+            raise PolicyError("policy migration may change only required status checks")
+
+
 def apply_policy(
     api: Api,
     policy: dict[str, object],
     expected_dev_sha: str,
     snapshot_path: Path,
+    *,
+    migration_pr: int | None = None,
+    expected_pr_head: str | None = None,
 ) -> None:
     """Apply one coherent policy transaction and roll it back on any mismatch."""
     if SHA_PATTERN.fullmatch(expected_dev_sha) is None:
         raise PolicyError("--expected-dev-sha must be one canonical 40-hex SHA")
     _validate_policy(policy)
-    _verify_green_dev(api, expected_dev_sha)
+    if migration_pr is None:
+        if expected_pr_head is not None:
+            raise PolicyError("--expected-pr-head requires --migration-pr")
+        _verify_green_dev(api, expected_dev_sha)
+    else:
+        if type(migration_pr) is not int or migration_pr <= 0:
+            raise PolicyError("--migration-pr must be one positive PR number")
+        if expected_pr_head is None or SHA_PATTERN.fullmatch(expected_pr_head) is None:
+            raise PolicyError("--migration-pr requires one canonical --expected-pr-head")
+        _verify_migration_refs(api, migration_pr, expected_dev_sha, expected_pr_head)
+        _verify_migration_contents(api, policy, expected_dev_sha, expected_pr_head)
+        _verify_migration_pr_checks(migration_pr, expected_pr_head)
     before = _current_state(api)
+    if migration_pr is not None:
+        _verify_checks_only_migration(before, policy)
     _write_snapshot(snapshot_path, before, expected_dev_sha)
+    if migration_pr is not None and expected_pr_head is not None:
+        _verify_migration_pr_checks(migration_pr, expected_pr_head)
     if _state_identity(_current_state(api)) != _state_identity(before):
         raise PolicyError("GitHub settings changed after snapshot; no mutation was attempted")
     if _dev_sha(api) != expected_dev_sha:
         raise PolicyError("dev moved after green evidence; no mutation was attempted")
+    if migration_pr is not None and expected_pr_head is not None:
+        _verify_migration_refs(api, migration_pr, expected_dev_sha, expected_pr_head)
 
     desired_repository = normalize_repository(_object(policy["repository"], "repository policy"))
     desired_actions_permissions = normalize_actions_permissions(
@@ -832,6 +952,8 @@ def apply_policy(
             raise PolicyError("GitHub policy readback mismatch: " + "; ".join(drift))
         if _dev_sha(api) != expected_dev_sha:
             raise PolicyError("dev moved during policy apply")
+        if migration_pr is not None and expected_pr_head is not None:
+            _verify_migration_refs(api, migration_pr, expected_dev_sha, expected_pr_head)
     except (GitHubApiError, PolicyError, OSError) as primary_error:
         try:
             _restore_snapshot(
@@ -911,7 +1033,13 @@ def main() -> int:
     parser.add_argument("--policy", type=Path, default=DEFAULT_POLICY_PATH)
     parser.add_argument("--expected-dev-sha")
     parser.add_argument("--snapshot", type=Path)
+    parser.add_argument(
+        "--migration-pr", type=int, help="Reviewed dev PR replacing required checks"
+    )
+    parser.add_argument("--expected-pr-head", help="Exact reviewed migration PR head SHA")
     args = parser.parse_args()
+    if (args.migration_pr is not None or args.expected_pr_head is not None) and not args.apply:
+        parser.error("migration evidence is valid only with --apply")
 
     api = GhApi()
     try:
@@ -927,7 +1055,14 @@ def main() -> int:
             return 1 if drift else 0
         if args.expected_dev_sha is None or args.snapshot is None:
             parser.error("--apply requires --expected-dev-sha and --snapshot")
-        apply_policy(api, policy, args.expected_dev_sha, args.snapshot)
+        apply_policy(
+            api,
+            policy,
+            args.expected_dev_sha,
+            args.snapshot,
+            migration_pr=args.migration_pr,
+            expected_pr_head=args.expected_pr_head,
+        )
         print(f"github-pr-policy: applied at dev {args.expected_dev_sha}")
         print(f"github-pr-policy: rollback snapshot retained at {args.snapshot}")
         return 0

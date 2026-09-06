@@ -833,43 +833,36 @@ run = "uv run pre-commit run --all-files"
 # VERSIONING
 # =============================================================================
 
-[tasks.bump]
-description = "Compatibility dry-run for the owner release ceremony; use release:bump -- --yes to create the untagged dev bump commit"
-run = "mise run release:bump"
-
-[tasks."bump:dry"]
-description = "Preview version bump without changes"
-run = "uv run cz bump --dry-run"
+[tasks."release:version"]
+description = "Print the Git-derived development version; --release-version prints the planned release"
+run = "python3 tools/release_version.py"
 
 [tasks."release:bump"]
-description = "OWNER-RUN dev ceremony: pin check + cz dry-run; --yes creates the bump commit without publishing a tag"
+description = "Preview the next MINOR release; --yes updates version/lock/changelog on an ordinary lane"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
 [ -z "$(git status --porcelain)" ] || { echo "release:bump: refuse — dirty tree" >&2; exit 1; }
-[ "$(git branch --show-current)" = "dev" ] || { echo "release:bump: refuse — not on dev" >&2; exit 1; }
+case "$(git branch --show-current)" in
+  feature/*|fix/*|docs/*|refactor/*|test/*|codex/*) ;;
+  *) echo "release:bump: refuse — use an ordinary lane, never dev/main or detached HEAD" >&2; exit 1 ;;
+esac
+case "${1:-}" in
+  ""|--yes) ;;
+  *) echo "release:bump: expected --yes or no arguments" >&2; exit 1 ;;
+esac
 tools/check_release_pins.sh
-uv run cz bump --dry-run
+VERSION="$(python3 tools/release_version.py --release-version)"
+git merge-base --is-ancestor "refs/tags/v$VERSION" HEAD || {
+  echo "release:bump: refuse — current version v$VERSION is not a completed reachable release" >&2; exit 1;
+}
 if [ "${1:-}" = "--yes" ]; then
-  OLD_VERSION="$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')"
-  uv run cz bump --version-files-only --yes
-  NEW_VERSION="$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')"
-  [ "$OLD_VERSION" != "$NEW_VERSION" ] || { echo "release:bump: refuse — version did not advance" >&2; exit 1; }
-  uv lock --offline
-  uv lock --offline --check
-  [ -z "$(git diff --name-only -- . ':(exclude)pyproject.toml' ':(exclude)CHANGELOG.md' ':(exclude)uv.lock')" ] || {
-    echo "release:bump: refuse — version bump changed an unexpected tracked file" >&2; exit 1;
-  }
-  [ -z "$(git ls-files --others --exclude-standard)" ] || {
-    echo "release:bump: refuse — Commitizen created an unexpected untracked file" >&2; exit 1;
-  }
-  git add -- pyproject.toml CHANGELOG.md uv.lock
-  mise run commit -- "bump: version $OLD_VERSION → $NEW_VERSION"
-  echo "release:bump: committed $NEW_VERSION on dev without a tag."
-  echo "OWNER: push dev, open the dev-to-main release PR, qualify it, and use the Director merge."
-  echo "After main merges, return its ancestry through the dev-sync PR before release:tag."
+  uv run --frozen cz bump --version-files-only --increment MINOR --yes
+  env -u UV_FROZEN uv lock --offline --check
+  echo "release:bump: updated the planned version, uv.lock, and changelog without a commit or tag."
+  echo "Review, stage, and use mise run commit; then open this lane's PR to dev."
 else
-  echo "release:bump: dry-run only. Execute with: mise run release:bump -- --yes"
+  uv run --frozen cz bump --increment MINOR --dry-run
 fi
 """
 
@@ -886,7 +879,7 @@ git fetch --tags origin \
 HEAD_SHA="$(git rev-parse HEAD)"
 MAIN_SHA="$(git rev-parse refs/remotes/origin/main)"
 [ "$HEAD_SHA" = "$MAIN_SHA" ] || { echo "release:tag: refuse — HEAD is not exact origin/main" >&2; exit 1; }
-VERSION="$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')"
+VERSION="$(python3 tools/release_version.py --release-version)"
 TAG="v$VERSION"
 git merge-base --is-ancestor "$MAIN_SHA" refs/remotes/origin/dev || {
   echo "release:tag: refuse — exact main has not returned to dev through its lineage PR" >&2; exit 1;
@@ -908,6 +901,7 @@ if [ "${1:-}" != "--yes" ]; then
   exit 0
 fi
 git tag --annotate "$TAG" --message "$TAG" HEAD
+python3 tools/release_version.py --release-tag "$TAG"
 python3 tools/check_release_tag.py --tag "$TAG"
 git push origin "refs/tags/$TAG"
 echo "release:tag: published $TAG from qualified main commit $HEAD_SHA"

@@ -22,7 +22,6 @@ const DISPOSABLE_ACK_VALUE: &str =
     "I_UNDERSTAND_THIS_DISPOSABLE_RUNTIME_DROPS_ITS_SCRATCH_DATABASES_AND_ROLES";
 const DISPOSABLE_CANARY_ENV: &str = "BABYLON_POSTGRES_DISPOSABLE_CANARY";
 const VALID_DISPOSABLE_CANARY: &str = "0123456789abcdef0123456789abcdef";
-const OWNER_PASSWORD: &str = "native-reference-owner-password";
 
 #[test]
 #[ignore = "requires an owned disposable runtime in BABYLON_POSTGRES_TEST_DSN"]
@@ -30,7 +29,11 @@ fn live_reference_bundle_integrity() {
     let base = config_from_env();
     preflight_disposable_harness(&base);
     let owner = ScratchRole::create(&base);
-    h3_reference_installer_postgres::verify_h3_reference_installer(&base, owner.name());
+    h3_reference_installer_postgres::verify_h3_reference_installer(
+        &base,
+        owner.name(),
+        owner.password(),
+    );
     owner.cleanup();
 }
 
@@ -221,6 +224,7 @@ impl Drop for ScratchDatabase {
 
 struct ScratchRole {
     name: String,
+    password: String,
     admin: Config,
     active: bool,
 }
@@ -246,18 +250,23 @@ impl ScratchRole {
         let name = scratch_name("owner");
         let admin = admin_config(base);
         let mut client = admin.connect(NoTls).unwrap();
+        let password: String = client
+            .query_one("SELECT pg_catalog.gen_random_uuid()::text", &[])
+            .unwrap()
+            .get(0);
         client
             .batch_execute(
                 format!(
                     "CREATE ROLE {} LOGIN PASSWORD '{}' NOSUPERUSER NOCREATEDB NOCREATEROLE",
                     quote_identifier(&name),
-                    OWNER_PASSWORD
+                    password
                 )
                 .as_str(),
             )
             .unwrap();
         Self {
             name,
+            password,
             admin,
             active: true,
         }
@@ -265,6 +274,10 @@ impl ScratchRole {
 
     fn name(&self) -> &str {
         &self.name
+    }
+
+    fn password(&self) -> &str {
+        &self.password
     }
 
     fn cleanup(mut self) {
