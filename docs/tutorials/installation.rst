@@ -65,8 +65,9 @@ From the repository root:
 
    mise run play
 
-The launcher builds the runtime and Bevy client with native Cargo, reuses a
-reachable local database, and opens the saved campaign at its durable week.
+The launcher builds the runtime and Bevy client with native Cargo.
+It reuses a reachable local database. It reopens a supported save from the
+same campaign content version at its durable week.
 On first use it creates a new campaign at week zero. The in-game menu provides
 new and saved campaigns. It can compare committed weeks and start a scenario
 with longer ``sheet-transfer`` durations. The window observes the durable runtime.
@@ -82,7 +83,10 @@ To keep saved worlds and open a new campaign:
    mise run play -- --new
    mise run play -- --new --preset delayed
 
-Use ``--campaign UUID`` to reopen an exact campaign, or ``--no-build`` after
+Older development saves with unsupported content versions cannot reopen.
+Use ``mise run play -- --new`` to start a new campaign and keep those saves.
+
+Use ``--campaign UUID`` to reopen a supported campaign, or ``--no-build`` after
 building the current source. The default database is ``babylon_test`` on
 ``127.0.0.1:5433``. A custom ``BABYLON_RUNTIME_DSN`` must point to a
 reachable local database. The launcher passes writer credentials only to the

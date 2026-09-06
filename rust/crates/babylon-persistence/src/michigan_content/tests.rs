@@ -1,64 +1,63 @@
 use super::*;
+use babylon_tick::material_replay::MaterialLaborV1;
 
 #[test]
-fn standard_v1_matches_foundations_saved_before_cohort_content_evolution() {
-    // Independently read from three pre-existing native QA saves on 2026-09-05,
-    // before the V2 content format was installed. Do not regenerate these pins
-    // from the current factory: they protect continuation of those old worlds.
-    let baseline = MichiganContentPresetV1::BaselineStandardV1
-        .admitted()
-        .unwrap();
-    assert_eq!(
-        crate::michigan_economy::digest_hex(&baseline.digest),
-        "6c24dfb1cdd1ca2b6fe19f99a5c44c8f413043c4ee61dbead816285de84e0695"
-    );
-    assert_eq!(
-        crate::michigan_economy::digest_hex(&baseline.graph_digest),
-        "a5b141825fa5199eddc27a0f0e4f58a30b11a70facac3544c5d646a01fb319f3"
-    );
-}
-
-#[test]
-fn old_and_new_graphs_keep_exact_v1_foundations_and_the_same_physical_catalog() {
-    for (old, new) in [
-        (
-            MichiganContentPresetV1::BaselineStandardV1,
-            MichiganContentPresetV1::CohortsStandardV2,
-        ),
-        (
-            MichiganContentPresetV1::BaselineDelayedV1,
-            MichiganContentPresetV1::CohortsDelayedV2,
-        ),
-    ] {
-        let legacy = michigan_material_runtime_foundation_v2(old.delivery()).unwrap();
-        let baseline = old.admitted().unwrap();
-        let cohorts = new.admitted().unwrap();
-        assert_eq!(baseline.canonical_bytes, legacy.canonical_bytes());
-        assert_eq!(baseline.digest, legacy.digest());
-        assert_eq!(baseline.register, cohorts.register);
-        assert_eq!(baseline.horizon_ticks, 16);
-        assert_eq!(cohorts.horizon_ticks, 16);
+fn current_staffed_foundation_keeps_observed_cohorts_separate_from_five_designed_pools() {
+    for preset in MICHIGAN_CONTENT_PRESETS_V1 {
+        let foundation = preset.create_foundation().unwrap();
+        let expected = preset.admitted().unwrap();
+        assert_eq!(foundation.canonical_bytes(), expected.canonical_bytes);
+        assert_eq!(foundation.initial_register(), &expected.register);
+        assert_eq!(expected.horizon_ticks, 16);
         assert_eq!(
-            cohorts.physical_projection,
+            expected.physical_projection,
             MichiganPhysicalProjectionV1::FiveProcessV1
         );
-        assert_ne!(baseline.digest, cohorts.digest);
-        assert_ne!(baseline.content_digest, cohorts.content_digest);
-        assert_ne!(baseline.graph_digest, cohorts.graph_digest);
-        assert_ne!(baseline.scenario_digest, cohorts.scenario_digest);
-        let created = new.create_foundation().unwrap();
-        assert_eq!(created.canonical_bytes(), cohorts.canonical_bytes);
-        assert_eq!(created.initial_register(), &baseline.register);
         let source = std::str::from_utf8(
-            created
+            foundation
                 .graph_foundation()
                 .content_bundle()
                 .scenario_source_bytes(),
         )
         .unwrap();
-        assert!(source.starts_with(&format!("(scenario {}\n", new.scenario())));
         assert_eq!(source.matches("(node business-").count(), 1_603);
         assert_eq!(source.matches("(hyperedge sector-").count(), 19);
+        assert_eq!(source.matches("(node workforce-").count(), 5);
+        assert_eq!(source.matches("(deffield social-class/").count(), 3);
+        assert!(!crate::michigan_cohorts::michigan_cohorts_v2()
+            .unwrap()
+            .scenario_source()
+            .contains("SOCIAL_CLASS"));
+        let MaterialLaborV1::Staffed(composition) = foundation.labor() else {
+            panic!("staffed authority required")
+        };
+        assert_eq!(composition.bindings().len(), 5);
+        assert_eq!(foundation.initial_register().state().labor.len(), 5);
+        assert!(foundation
+            .initial_register()
+            .state()
+            .labor
+            .iter()
+            .all(|row| row.week == 1));
+        assert_eq!(foundation.initial_register().state().capacities.len(), 80);
+        assert_eq!(
+            MichiganContentPresetV1::new_campaign(preset.delivery()),
+            preset
+        );
+    }
+}
+
+#[test]
+fn unsupported_michigan_saves_are_refused_without_a_predecessor_factory() {
+    for version in 1..=3 {
+        for delivery in ["standard", "delayed"] {
+            let id = format!("michigan-material-{delivery}-v{version}");
+            assert_eq!(MichiganContentPresetV1::from_id(&id), None);
+            assert!(matches!(
+                admit_michigan_content_v1(&id, 16, &[0; 32], &[0; 32], 0),
+                Err(MichiganContentErrorV1::UnknownPreset)
+            ));
+        }
     }
 }
 
@@ -117,7 +116,7 @@ fn admission_refuses_mixed_headers_graphs_and_unadmitted_versions() {
             }
         }
         assert!(admit_michigan_content_v1(
-            "michigan-material-standard-v4",
+            "michigan-material-standard-v5",
             16,
             &expected.content_digest,
             &expected.digest,
@@ -141,71 +140,4 @@ fn admission_refuses_mixed_headers_graphs_and_unadmitted_versions() {
         )
         .is_err());
     }
-}
-
-#[test]
-fn executable_bundles_change_content_identity_without_rewriting_v2_sources_or_physics() {
-    use crate::sector_bundle::foundation::decode_stored_bundle_defines_v1;
-    for (previous, current) in [
-        (
-            MichiganContentPresetV1::CohortsStandardV2,
-            MichiganContentPresetV1::BundlesStandardV3,
-        ),
-        (
-            MichiganContentPresetV1::CohortsDelayedV2,
-            MichiganContentPresetV1::BundlesDelayedV3,
-        ),
-    ] {
-        let old = previous.create_foundation().unwrap();
-        let new = current.create_foundation().unwrap();
-        let old_bundle = old.graph_foundation().content_bundle();
-        let new_bundle = new.graph_foundation().content_bundle();
-        let decoded = decode_stored_bundle_defines_v1(
-            new_bundle.defines_bytes(),
-            new.graph_foundation().content_digest().defines_hash,
-        )
-        .unwrap();
-        assert_eq!(decoded.observed_defines(), old_bundle.defines_bytes());
-        assert_eq!(
-            new_bundle.scenario_source_bytes(),
-            old_bundle.scenario_source_bytes()
-        );
-        assert_eq!(
-            new_bundle.reference_bundle_manifest_bytes(),
-            old_bundle.reference_bundle_manifest_bytes()
-        );
-        assert_eq!(new.initial_register(), old.initial_register());
-        assert_ne!(new.digest(), old.digest());
-        assert_ne!(new.spec().content_digest, old.spec().content_digest);
-        assert_ne!(
-            new.graph_foundation().canonical_bytes(),
-            old.graph_foundation().canonical_bytes()
-        );
-        assert_eq!(decoded.bundles().len(), 4);
-        // The same observed scenario identifies every cohort in both revisions.
-        assert_eq!(
-            current.admitted().unwrap().scenario_digest,
-            previous.admitted().unwrap().scenario_digest
-        );
-        assert_eq!(
-            previous.create_foundation().unwrap().canonical_bytes(),
-            old.canonical_bytes()
-        );
-    }
-}
-
-#[test]
-fn new_creation_and_old_identity_are_distinct_from_logical_delivery() {
-    for preset in MICHIGAN_CONTENT_PRESETS_V1 {
-        assert_eq!(MichiganContentPresetV1::from_id(preset.id()), Some(preset));
-        let new = MichiganContentPresetV1::new_campaign(preset.delivery());
-        assert_eq!(new.delivery(), preset.delivery());
-        assert_eq!(new.scenario(), MICHIGAN_COHORT_SCENARIO_V2);
-        assert!(new.id().ends_with("-v3"));
-    }
-    assert_eq!(MichiganContentPresetV1::from_id("standard"), None);
-    assert_eq!(
-        MichiganContentPresetV1::from_id("michigan-material-standard-v01"),
-        None
-    );
 }

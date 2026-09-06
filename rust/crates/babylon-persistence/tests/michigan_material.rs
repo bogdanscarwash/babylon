@@ -1,11 +1,52 @@
+use babylon_bsl::structural_verbs::CollectingSink;
+use babylon_graph::hypergraph_store::HypergraphStore;
 use babylon_material_circuit::{
-    advance_material_circuit_v2, decode_material_circuit_state_v2,
-    encode_material_circuit_state_v2, MaterialCircuitStateV2,
+    decode_material_circuit_state_v2, encode_material_circuit_state_v2, MaterialCircuitStateV2,
 };
+use babylon_persistence::michigan_content::MichiganContentPresetV1;
 use babylon_persistence::michigan_material::{
-    michigan_material_catalog_v1, michigan_material_foundation_v1, MichiganDeliveryPresetV1,
-    MichiganMaterialSiteV1,
+    michigan_material_catalog_v1, MichiganDeliveryPresetV1, MichiganMaterialSiteV1,
 };
+use babylon_practice_contract::ordered_action_v1::OrderedPracticeActionBatchV1;
+use babylon_tick::{
+    material_replay::{MaterialReplaySessionV3, PreparedMaterialTickV3},
+    material_world::{decode_material_receipts_v3, MaterialTickReceiptsV3},
+    replay_session::ReplayCommitDispositionV1,
+};
+
+type Session = MaterialReplaySessionV3<HypergraphStore>;
+
+fn session(preset: MichiganDeliveryPresetV1) -> Session {
+    MichiganContentPresetV1::new_campaign(preset)
+        .create_foundation()
+        .unwrap()
+        .into_session()
+        .unwrap()
+}
+
+fn prepare(session: &Session) -> PreparedMaterialTickV3<HypergraphStore> {
+    let actions = OrderedPracticeActionBatchV1::empty(
+        session.graph_session().session_identity().clone(),
+        session.completed_tick() + 1,
+    )
+    .unwrap();
+    session.prepare_advance(&actions).unwrap()
+}
+
+fn commit(session: &mut Session, candidate: PreparedMaterialTickV3<HypergraphStore>) {
+    session
+        .commit_prepared_and_publish(&mut CollectingSink::default(), candidate, |_| {
+            Ok::<_, ()>(ReplayCommitDispositionV1::Committed)
+        })
+        .unwrap();
+}
+
+fn advance(session: &mut Session) -> MaterialTickReceiptsV3 {
+    let candidate = prepare(session);
+    let receipts = decode_material_receipts_v3(candidate.material().receipt_bytes()).unwrap();
+    commit(session, candidate);
+    receipts
+}
 
 fn inventory(state: &MaterialCircuitStateV2, site: &str, good: &str) -> u64 {
     let catalog = michigan_material_catalog_v1().unwrap();
@@ -92,8 +133,18 @@ fn assert_second_week_delivery_delay(
 
 #[test]
 fn presets_share_exact_setup_except_the_single_declared_delay() {
-    let standard = michigan_material_foundation_v1(MichiganDeliveryPresetV1::Standard).unwrap();
-    let mut delayed = michigan_material_foundation_v1(MichiganDeliveryPresetV1::Delayed).unwrap();
+    let standard = MichiganContentPresetV1::new_campaign(MichiganDeliveryPresetV1::Standard)
+        .create_foundation()
+        .unwrap()
+        .initial_register()
+        .state()
+        .clone();
+    let mut delayed = MichiganContentPresetV1::new_campaign(MichiganDeliveryPresetV1::Delayed)
+        .create_foundation()
+        .unwrap()
+        .initial_register()
+        .state()
+        .clone();
     let catalog = michigan_material_catalog_v1().unwrap();
     let route = catalog
         .routes()
@@ -113,7 +164,37 @@ fn presets_share_exact_setup_except_the_single_declared_delay() {
     );
     assert_eq!(standard.week, 1);
     assert_eq!(standard.capacities.len(), 5 * 16);
-    assert_eq!(standard.labor.len(), 5 * 16);
+    // Only current opening hours are authored. Following openings come from
+    // the graph-owned workforce through the real Staffed composition.
+    assert_eq!(standard.labor.len(), 5);
+    assert!(standard.labor.iter().all(|row| row.week == 1));
+    assert_eq!(catalog.staffing().hours_per_worker_week, 40);
+    for (key, hours) in [
+        ("sheet-rolling", 800),
+        ("panel-forming", 160),
+        ("subassembly-making", 160),
+        ("meal-milling", 40),
+        ("meal-packaging", 80),
+    ] {
+        let process = catalog
+            .processes()
+            .iter()
+            .find(|row| row.key == key)
+            .unwrap();
+        let row = standard
+            .labor
+            .iter()
+            .find(|row| row.site_id == process.site_id())
+            .unwrap();
+        assert_eq!(row.available, hours, "{key}");
+        let seed = catalog
+            .staffing()
+            .pools
+            .iter()
+            .find(|pool| pool.process_key == key)
+            .unwrap();
+        assert_eq!(row.available, seed.employed * 40);
+    }
     assert_eq!(standard.corridor_capacities.len(), 3 * 16);
     assert_eq!(catalog.terminal_output_disposition(), "on_hand_unsold");
     for site in catalog.sites() {
@@ -124,8 +205,12 @@ fn presets_share_exact_setup_except_the_single_declared_delay() {
     }
 }
 
-#[test]
-fn delivery_delay_changes_following_week_output_with_food_causally_disconnected() {
+fn assert_food_disconnected(
+    standard: &MaterialCircuitStateV2,
+    a: &MaterialTickReceiptsV3,
+    delayed: &MaterialCircuitStateV2,
+    b: &MaterialTickReceiptsV3,
+) {
     let catalog = michigan_material_catalog_v1().unwrap();
     let food_sites: Vec<_> = catalog
         .sites()
@@ -138,74 +223,91 @@ fn delivery_delay_changes_following_week_output_with_food_causally_disconnected(
         .iter()
         .find(|route| route.key == "food-transfer")
         .unwrap();
-    let mut standard = michigan_material_foundation_v1(MichiganDeliveryPresetV1::Standard).unwrap();
-    let mut delayed = michigan_material_foundation_v1(MichiganDeliveryPresetV1::Delayed).unwrap();
+    assert_eq!(
+        a.production
+            .iter()
+            .filter(|row| food_sites.contains(&row.site_id))
+            .collect::<Vec<_>>(),
+        b.production
+            .iter()
+            .filter(|row| food_sites.contains(&row.site_id))
+            .collect::<Vec<_>>(),
+    );
+    assert_eq!(
+        standard
+            .inventory
+            .iter()
+            .filter(|row| food_sites.contains(&row.site_id))
+            .collect::<Vec<_>>(),
+        delayed
+            .inventory
+            .iter()
+            .filter(|row| food_sites.contains(&row.site_id))
+            .collect::<Vec<_>>(),
+    );
+    assert_eq!(
+        standard
+            .freight
+            .iter()
+            .filter(|row| row.route_id == food_route.id())
+            .collect::<Vec<_>>(),
+        delayed
+            .freight
+            .iter()
+            .filter(|row| row.route_id == food_route.id())
+            .collect::<Vec<_>>(),
+    );
+    assert_eq!(
+        standard
+            .orders
+            .iter()
+            .find(|row| row.order_id == food_route.order_id()),
+        delayed
+            .orders
+            .iter()
+            .find(|row| row.order_id == food_route.order_id()),
+    );
+    assert_eq!(
+        standard
+            .labor
+            .iter()
+            .filter(|row| food_sites.contains(&row.site_id))
+            .collect::<Vec<_>>(),
+        delayed
+            .labor
+            .iter()
+            .filter(|row| food_sites.contains(&row.site_id))
+            .collect::<Vec<_>>(),
+    );
+}
+
+#[test]
+fn delivery_delay_changes_following_week_output_with_food_causally_disconnected() {
+    let mut standard = session(MichiganDeliveryPresetV1::Standard);
+    let mut delayed = session(MichiganDeliveryPresetV1::Delayed);
     let mut first_standard_output = None;
     let mut first_delayed_output = None;
     for week in 1..=MichiganDeliveryPresetV1::Standard.horizon_ticks() {
-        let a = advance_material_circuit_v2(&standard).unwrap();
-        let b = advance_material_circuit_v2(&delayed).unwrap();
-        assert_eq!(
-            a.production
-                .iter()
-                .filter(|row| food_sites.contains(&row.site_id))
-                .collect::<Vec<_>>(),
-            b.production
-                .iter()
-                .filter(|row| food_sites.contains(&row.site_id))
-                .collect::<Vec<_>>()
-        );
-        assert_eq!(
-            a.state
-                .inventory
-                .iter()
-                .filter(|row| food_sites.contains(&row.site_id))
-                .collect::<Vec<_>>(),
-            b.state
-                .inventory
-                .iter()
-                .filter(|row| food_sites.contains(&row.site_id))
-                .collect::<Vec<_>>()
-        );
-        assert_eq!(
-            a.state
-                .freight
-                .iter()
-                .filter(|row| row.route_id == food_route.id())
-                .collect::<Vec<_>>(),
-            b.state
-                .freight
-                .iter()
-                .filter(|row| row.route_id == food_route.id())
-                .collect::<Vec<_>>()
-        );
-        assert_eq!(
-            a.state
-                .orders
-                .iter()
-                .find(|row| row.order_id == food_route.order_id()),
-            b.state
-                .orders
-                .iter()
-                .find(|row| row.order_id == food_route.order_id())
-        );
-        standard = a.state;
-        delayed = b.state;
-        assert_material_conserved(&standard);
-        assert_material_conserved(&delayed);
-        if inventory(&standard, "wayne-vehicle-parts", "subassembly") > 0 {
+        let a = advance(&mut standard);
+        let b = advance(&mut delayed);
+        let standard = standard.material().state();
+        let delayed = delayed.material().state();
+        assert_food_disconnected(standard, &a, delayed, &b);
+        assert_material_conserved(standard);
+        assert_material_conserved(delayed);
+        if inventory(standard, "wayne-vehicle-parts", "subassembly") > 0 {
             first_standard_output.get_or_insert(week);
         }
-        if inventory(&delayed, "wayne-vehicle-parts", "subassembly") > 0 {
+        if inventory(delayed, "wayne-vehicle-parts", "subassembly") > 0 {
             first_delayed_output.get_or_insert(week);
         }
         if week == 2 {
-            assert_second_week_delivery_delay(&standard, &delayed);
+            assert_second_week_delivery_delay(standard, delayed);
         }
     }
     assert_eq!(first_standard_output, Some(5));
     assert_eq!(first_delayed_output, Some(7));
-    for state in [&standard, &delayed] {
+    for state in [standard.material().state(), delayed.material().state()] {
         assert_eq!(inventory(state, "wayne-vehicle-parts", "subassembly"), 30);
         assert_eq!(inventory(state, "oakland-food", "packaged-meal"), 200);
         assert!(state.freight.is_empty());
@@ -225,14 +327,53 @@ fn every_dispatch_transit_arrival_restart_reproduces_exact_continuation() {
         MichiganDeliveryPresetV1::Standard,
         MichiganDeliveryPresetV1::Delayed,
     ] {
-        let mut state = michigan_material_foundation_v1(preset).unwrap();
-        for _ in 0..preset.horizon_ticks() {
-            let bytes = encode_material_circuit_state_v2(&state).unwrap();
-            let reopened = decode_material_circuit_state_v2(&bytes).unwrap();
-            let expected = advance_material_circuit_v2(&state).unwrap();
-            let actual = advance_material_circuit_v2(&reopened).unwrap();
-            assert_eq!(actual, expected);
-            state = actual.state;
+        let mut uninterrupted = session(preset);
+        for week in 1..=preset.horizon_ticks() {
+            let candidate = prepare(&uninterrupted);
+            // Restore the complete graph+register checkpoint, including people
+            // and retention. The physical state alone is no longer an owner.
+            let mut restored = session(preset);
+            restored
+                .restore_full_checkpoint(
+                    candidate.graph_report().result_stable_graph(),
+                    candidate.graph_report().material_state_rows(),
+                    candidate
+                        .graph_report()
+                        .result_registers()
+                        .canonical_bytes(),
+                    candidate.material().register().canonical_bytes(),
+                )
+                .unwrap();
+            let encoded =
+                encode_material_circuit_state_v2(candidate.material().register().state()).unwrap();
+            assert_eq!(
+                decode_material_circuit_state_v2(&encoded).unwrap(),
+                *restored.material().state()
+            );
+            commit(&mut uninterrupted, candidate);
+            assert_eq!(
+                restored.current_world_hash().unwrap(),
+                uninterrupted.current_world_hash().unwrap()
+            );
+            assert_eq!(restored.material(), uninterrupted.material());
+            if week < preset.horizon_ticks() {
+                let expected = prepare(&uninterrupted);
+                let actual = prepare(&restored);
+                assert_eq!(actual.identity(), expected.identity());
+                assert_eq!(
+                    actual.graph_report().successful_event_batch(),
+                    expected.graph_report().successful_event_batch()
+                );
+                assert_eq!(
+                    actual.graph_report().report().audit_receipts,
+                    expected.graph_report().report().audit_receipts
+                );
+                assert_eq!(actual.material().register(), expected.material().register());
+                assert_eq!(
+                    actual.material().receipt_bytes(),
+                    expected.material().receipt_bytes()
+                );
+            }
         }
     }
 }

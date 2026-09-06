@@ -1,9 +1,13 @@
 //! Explicit V3 successor owner for atomic graph and routed-material replay.
 //!
-//! Graph adjudication is an unchanged component. The active world's register,
-//! nominal identity and tick content identity are the versioned combined values.
+//! Physical closing and admitted staffing join the detached graph transaction
+//! before identity finalization. One acknowledgement publishes both owners.
 
 use crate::{
+    material_staffing::{
+        apply_material_staffing_v1, MaterialStaffingErrorV1, StaffingCompositionV1,
+        StaffingEffectContextV1, StaffingEffectsV1,
+    },
     material_state::MaterialStateRowsV1,
     material_world::{
         nominal_material_world_hash_v2, MaterialWorldErrorV2, MaterialWorldRegisterV2,
@@ -20,10 +24,99 @@ use babylon_graph::{
     substrate::GraphSubstrate, working_copy::DetachedCopy,
 };
 use babylon_kernel::{sha256_of, tick_content_hash::TickContentHashV1};
+use babylon_material_circuit::{close_material_week_v2, MaterialCircuitErrorV2};
 use babylon_practice_contract::ordered_action_v1::OrderedPracticeActionBatchV1;
 
 const TICK_DOMAIN: &[u8] = b"babylon.material-tick-content.v3\0";
 const TICK_IDENTITY_BYTES_V3: usize = TICK_DOMAIN.len() + 12 + 7 * 32;
+
+/// Explicit labor authority selected by the pinned foundation content.
+#[derive(Debug, Clone)]
+pub enum MaterialLaborV1 {
+    /// The physical register owns the authored labor schedule.
+    Scheduled,
+    /// Graph-owned workforce accounts derive every next-opening labor row.
+    Staffed(StaffingCompositionV1),
+}
+
+/// Typed refusal inside the detached material-base composition.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MaterialBaseErrorV1 {
+    World(MaterialWorldErrorV2),
+    Staffing(MaterialStaffingErrorV1),
+    /// A BSL rule could overwrite a graph field owned by native staffing.
+    StaffingFieldOwner {
+        rule_id: String,
+        field: String,
+    },
+    /// The existing bounded effect analyzer refused the retained rule AST.
+    StaffingEffectAnalysis {
+        rule_id: String,
+        error: babylon_bsl::causal_contract::ContractError,
+    },
+    Week,
+    MissingCandidate,
+    MissingResolver,
+}
+impl std::fmt::Display for MaterialBaseErrorV1 {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "material-base composition refused: {self:?}")
+    }
+}
+impl std::error::Error for MaterialBaseErrorV1 {}
+impl From<MaterialWorldErrorV2> for MaterialBaseErrorV1 {
+    fn from(error: MaterialWorldErrorV2) -> Self {
+        Self::World(error)
+    }
+}
+impl From<MaterialCircuitErrorV2> for MaterialBaseErrorV1 {
+    fn from(error: MaterialCircuitErrorV2) -> Self {
+        Self::World(error.into())
+    }
+}
+impl From<MaterialStaffingErrorV1> for MaterialBaseErrorV1 {
+    fn from(error: MaterialStaffingErrorV1) -> Self {
+        Self::Staffing(error)
+    }
+}
+
+pub(crate) struct MaterialBaseInputs<'a> {
+    pub(crate) opening: &'a MaterialWorldRegisterV2,
+    pub(crate) labor: &'a MaterialLaborV1,
+}
+impl MaterialBaseInputs<'_> {
+    pub(crate) fn prepare(
+        self,
+        graph: &mut impl GraphSubstrate,
+        context: StaffingEffectContextV1<'_>,
+        tick: i64,
+    ) -> Result<(PreparedMaterialWorldV3, Option<StaffingEffectsV1>), MaterialBaseErrorV1> {
+        if u64::try_from(tick).ok() != self.opening.completed_tick().checked_add(1) {
+            return Err(MaterialBaseErrorV1::Week);
+        }
+        match self.labor {
+            MaterialLaborV1::Scheduled => Ok((self.opening.prepare_next()?, None)),
+            MaterialLaborV1::Staffed(composition) => {
+                let closed = close_material_week_v2(self.opening.state())?;
+                let bindings = composition
+                    .bindings()
+                    .iter()
+                    .map(|row| row.pool().clone())
+                    .collect::<Vec<_>>();
+                let requests = closed.staffing_requests(&bindings)?;
+                let effects = apply_material_staffing_v1(
+                    graph,
+                    context,
+                    composition,
+                    closed.closing_week(),
+                    &requests,
+                )?;
+                let transition = closed.finish_with_labor(effects.next_labor().to_vec())?;
+                Ok((self.opening.prepare_transition(transition)?, Some(effects)))
+            }
+        }
+    }
+}
 
 /// Closed errors at the material session boundary.
 #[derive(Debug)]
@@ -197,6 +290,7 @@ pub struct MaterialReplaySessionV3<G> {
     material: MaterialWorldRegisterV2,
     foundation_digest: [u8; 32],
     horizon: u64,
+    labor: MaterialLaborV1,
 }
 /// Fully prepared candidate; dropping it publishes nothing.
 pub struct PreparedMaterialTickV3<G> {
@@ -230,12 +324,14 @@ impl<G: GraphSubstrate + CanonicalState + AllocatorState + DetachedCopy>
 {
     /// Bind a new foundation at tick zero. Existing graph sessions cannot acquire mechanics.
     /// # Errors
-    /// Refuses nonzero component clocks, an empty horizon or invalid state.
+    /// Refuses nonzero component clocks, an empty horizon, invalid state, or
+    /// BSL writes to staffing-owned fields when staffed labor is selected.
     pub fn new(
         graph: ReplayTickSession<G>,
         material: MaterialWorldRegisterV2,
         foundation_digest: [u8; 32],
         horizon: u64,
+        labor: MaterialLaborV1,
     ) -> Result<Self, MaterialReplayErrorV3> {
         if graph.completed_tick() != 0 || material.completed_tick() != 0 {
             return Err(MaterialReplayErrorV3::FoundationTick);
@@ -243,11 +339,15 @@ impl<G: GraphSubstrate + CanonicalState + AllocatorState + DetachedCopy>
         if horizon == 0 || horizon > i64::MAX as u64 {
             return Err(MaterialReplayErrorV3::Horizon);
         }
+        if matches!(labor, MaterialLaborV1::Staffed(_)) {
+            graph.validate_staffing_ownership()?;
+        }
         Ok(Self {
             graph,
             material,
             foundation_digest,
             horizon,
+            labor,
         })
     }
     #[must_use]
@@ -298,8 +398,13 @@ impl<G: GraphSubstrate + CanonicalState + AllocatorState + DetachedCopy>
         if self.completed_tick() >= self.horizon {
             return Err(MaterialReplayErrorV3::Horizon);
         }
-        let graph = self.graph.prepare_advance(actions)?;
-        let material = self.material.prepare_next()?;
+        let (graph, material) = self.graph.prepare_material_advance(
+            actions,
+            MaterialBaseInputs {
+                opening: &self.material,
+                labor: &self.labor,
+            },
+        )?;
         let identity = IdentifiedMaterialTickV3::compose(
             self.foundation_digest,
             graph.report(),

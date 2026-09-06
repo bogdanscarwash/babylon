@@ -81,6 +81,8 @@ pub enum ReplayTickError {
     },
     /// Tick-owned material source identity or projection refused publication.
     MaterialState(MaterialStateErrorV1),
+    /// Coupled physical closing or graph-owned staffing refused before publication.
+    MaterialBase(crate::material_replay::MaterialBaseErrorV1),
     /// Stable graph or resolver identity refused the graph.
     Stable(StableIdentityError),
     /// The fixed outer preimage could not be composed.
@@ -184,6 +186,7 @@ impl std::fmt::Display for ReplayTickError {
                 "replay event {event_type} repeated retained field {field}"
             ),
             Self::MaterialState(error) => write!(formatter, "material state refused: {error:?}"),
+            Self::MaterialBase(error) => write!(formatter, "{error}"),
             Self::Stable(error) => write!(formatter, "stable identity refused: {error:?}"),
             Self::Outer(error) => write!(formatter, "tick-content preimage refused: {error:?}"),
             Self::Allocation { field, requested } => {
@@ -732,6 +735,37 @@ impl<G: GraphSubstrate + CanonicalState + AllocatorState + DetachedCopy> ReplayT
         })
     }
 
+    /// Admit the immutable prepared rules for native staffing ownership once.
+    /// The normal effect scanner includes every possible guarded/loop write;
+    /// scheduled labor does not call this additional composition check.
+    pub(crate) fn validate_staffing_ownership(&self) -> Result<(), ReplayTickError> {
+        use crate::material_replay::MaterialBaseErrorV1;
+        use crate::material_staffing::STAFFING_FIELDS_V1;
+        use babylon_bsl::causal_contract::{effect_footprint, EffectSignature};
+
+        for (rule_id, loaded) in &self.prepared.rules {
+            let effects = effect_footprint(&loaded.rule).map_err(|error| {
+                ReplayTickError::MaterialBase(MaterialBaseErrorV1::StaffingEffectAnalysis {
+                    rule_id: rule_id.clone(),
+                    error,
+                })
+            })?;
+            for effect in effects {
+                if let EffectSignature::NodeField(field) = effect {
+                    if STAFFING_FIELDS_V1.contains(&field.as_str()) {
+                        return Err(ReplayTickError::MaterialBase(
+                            MaterialBaseErrorV1::StaffingFieldOwner {
+                                rule_id: rule_id.clone(),
+                                field,
+                            },
+                        ));
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
     /// Execute and atomically publish the next fully identified tick.
     ///
     /// # Errors
@@ -760,6 +794,39 @@ impl<G: GraphSubstrate + CanonicalState + AllocatorState + DetachedCopy> ReplayT
         &self,
         actions: &OrderedPracticeActionBatchV1,
     ) -> Result<PreparedReplayTickV1<G>, ReplayTickError> {
+        self.prepare_with_material(actions, None)
+            .map(|(graph, _)| graph)
+    }
+
+    pub(crate) fn prepare_material_advance(
+        &self,
+        actions: &OrderedPracticeActionBatchV1,
+        material: crate::material_replay::MaterialBaseInputs<'_>,
+    ) -> Result<
+        (
+            PreparedReplayTickV1<G>,
+            crate::material_world::PreparedMaterialWorldV3,
+        ),
+        ReplayTickError,
+    > {
+        let (graph, material) = self.prepare_with_material(actions, Some(material))?;
+        let material = material.ok_or(ReplayTickError::MaterialBase(
+            crate::material_replay::MaterialBaseErrorV1::MissingCandidate,
+        ))?;
+        Ok((graph, material))
+    }
+
+    fn prepare_with_material(
+        &self,
+        actions: &OrderedPracticeActionBatchV1,
+        material: Option<crate::material_replay::MaterialBaseInputs<'_>>,
+    ) -> Result<
+        (
+            PreparedReplayTickV1<G>,
+            Option<crate::material_world::PreparedMaterialWorldV3>,
+        ),
+        ReplayTickError,
+    > {
         let next_tick = self
             .completed_tick
             .checked_add(1)
@@ -784,22 +851,26 @@ impl<G: GraphSubstrate + CanonicalState + AllocatorState + DetachedCopy> ReplayT
             material_state: &candidate_material,
             material_allocation: &ProductionMaterialAllocationGate,
         };
-        let report = crate::run_prepared_replay_tick(
+        let (report, material) = crate::run_prepared_replay_tick(
             &self.prepared,
             &mut candidate_graph,
             &mut candidate_sink,
             next_tick,
             execution,
+            material,
         )?;
-        Ok(PreparedReplayTickV1 {
-            source_session: self.session.clone(),
-            prepared_after: self.completed_tick,
-            resolve_tick: next_tick,
-            graph: candidate_graph,
-            material_state: candidate_material,
-            events: candidate_sink.events,
-            report,
-        })
+        Ok((
+            PreparedReplayTickV1 {
+                source_session: self.session.clone(),
+                prepared_after: self.completed_tick,
+                resolve_tick: next_tick,
+                graph: candidate_graph,
+                material_state: candidate_material,
+                events: candidate_sink.events,
+                report,
+            },
+            material,
+        ))
     }
 
     /// Publish one detached candidate after exact durable acknowledgement.
@@ -963,12 +1034,13 @@ impl<G: GraphSubstrate + CanonicalState + AllocatorState + DetachedCopy> ReplayT
             material_state: &candidate_material,
             material_allocation,
         };
-        let identified = crate::run_prepared_replay_tick(
+        let (identified, _) = crate::run_prepared_replay_tick(
             &self.prepared,
             &mut self.graph,
             sink,
             next_tick,
             execution,
+            None,
         )?;
         self.material_state = candidate_material;
         self.completed_tick = next_tick;
@@ -1799,6 +1871,7 @@ mod tests {
             &mut sink,
             1,
             execution,
+            None,
         )
         .unwrap_err();
         assert!(matches!(error, ReplayTickError::Composer { .. }));
@@ -2211,6 +2284,7 @@ mod tests {
             &crate::ExecutionIdentity::Replay(execution),
             1,
             |_boundary, graph: &MemoryGraph| graph.state_hash(),
+            None,
         );
 
         assert!(result.is_err());

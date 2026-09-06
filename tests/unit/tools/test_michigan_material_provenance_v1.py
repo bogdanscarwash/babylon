@@ -54,3 +54,33 @@ def test_design_does_not_turn_observed_jobs_or_wages_into_material_quantities() 
         "h3" not in site and "latitude" not in site and "longitude" not in site
         for site in designed["sites"]
     )
+
+
+def test_workforce_seeds_and_recipe_hours_are_explicit_designed_content() -> None:
+    designed = json.loads(
+        (ROOT / "contracts/fixtures/michigan_material_scenario_v1.json").read_text()
+    )
+    staffing = designed["staffing"]
+    assert staffing["composition_id"] == "g4-workforce-staffing"
+    assert staffing["role"] == "Mechanic"
+    assert staffing["evidence_class"] == "Designed"
+    assert staffing["placement"] == "after-metabolism-material-base"
+    assert staffing["hours_per_worker_week"] == 40
+    assert staffing["retention_weeks"] == 1
+    expected = {
+        "sheet-rolling": (20, 800, 100),
+        "panel-forming": (4, 160, 20),
+        "subassembly-making": (4, 160, 40),
+        "meal-milling": (1, 40, 10),
+        "meal-packaging": (2, 80, 20),
+    }
+    seeds = {row["process_key"]: row for row in staffing["pools"]}
+    assert set(seeds) == set(expected)
+    for process in designed["processes"]:
+        employed, opening, coefficient = expected[process["key"]]
+        seed = seeds[process["key"]]
+        assert seed["employed"] == employed
+        assert seed["reserve"] == 0
+        assert seed["previous_unretained_hours"] == opening == employed * 40
+        assert process["labor_capacity_hours_per_week"] == opening
+        assert process["labor_hours_per_batch"] == coefficient

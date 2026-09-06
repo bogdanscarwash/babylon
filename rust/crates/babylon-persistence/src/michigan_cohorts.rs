@@ -149,12 +149,23 @@ fn append_sectors(
 }
 
 fn build_cohorts() -> Result<MichiganCohortsV2, MichiganCohortsErrorV1> {
+    build_cohorts_with_workforce(&[])
+}
+
+fn build_cohorts_with_workforce(
+    workforce: &[crate::michigan_material::MichiganWorkforceSeedV1],
+) -> Result<MichiganCohortsV2, MichiganCohortsErrorV1> {
     let economy = michigan_economy_v1().map_err(MichiganCohortsErrorV1::Economy)?;
     let sectors = michigan_county_sectors_v1().map_err(MichiganCohortsErrorV1::Sectors)?;
     if sectors.rows().len() != 1_603 {
         return Err(MichiganCohortsErrorV1::Coverage);
     }
-    let mut source = format!("(scenario {MICHIGAN_COHORT_SCENARIO_V2}\n  (defvocabulary NodeType (TERRITORY ORGANIZATION))\n  (defvocabulary HyperedgeType (ECONOMIC_SECTOR))\n  (deffield territory/county-fips int extensive)\n");
+    let workforce_type = if workforce.is_empty() {
+        ""
+    } else {
+        " SOCIAL_CLASS"
+    };
+    let mut source = format!("(scenario {MICHIGAN_COHORT_SCENARIO_V2}\n  (defvocabulary NodeType (TERRITORY ORGANIZATION{workforce_type}))\n  (defvocabulary HyperedgeType (ECONOMIC_SECTOR))\n  (deffield territory/county-fips int extensive)\n");
     append_county_observations(&mut source, economy.counties());
     source.push_str("  (defenum OrgKind (STATE_APPARATUS BUSINESS POLITICAL_FACTION CIVIL_SOCIETY))\n  (deffield organization/kind enum OrgKind)\n  (deffield organization/county-fips int intensive)\n");
     for (field, quantity) in BUSINESS_FIELDS {
@@ -168,12 +179,27 @@ fn build_cohorts() -> Result<MichiganCohortsV2, MichiganCohortsErrorV1> {
         append_business(&mut source, row)?;
     }
     append_sectors(&mut source, sectors)?;
+    if !workforce.is_empty() {
+        for field in babylon_tick::material_staffing::STAFFING_FIELDS_V1 {
+            writeln!(&mut source, "  (deffield {field} int extensive)").expect("String write");
+        }
+        for seed in workforce {
+            writeln!(&mut source, "  (node {} NodeType/SOCIAL_CLASS (social-class/employed-population {}) (social-class/reserve-population {}) (social-class/previous-unretained-labor-hours {}))", seed.local_name(), seed.employed, seed.reserve, seed.previous_unretained_hours).expect("String write");
+        }
+    }
     source.push_str(")\n");
     let defines = format!("{{\"qcew_vintage\":2024,\"county_artifact_sha256\":\"{QCEW_ECONOMICS_ARTIFACT_SHA256_V1}\",\"sector_artifact_sha256\":\"{QCEW_SECTORS_ARTIFACT_SHA256_V1}\",\"sector_semantic_sha256\":\"{QCEW_SECTORS_SEMANTIC_SHA256_V1}\",\"cohort_composition_version\":2}}").into_bytes();
     Ok(MichiganCohortsV2 {
         scenario_source: source,
         defines,
     })
+}
+
+/// Material-only graph composition. The observed foundation has no workforce seeds.
+pub(crate) fn michigan_staffed_scenario_v1(
+    workforce: &[crate::michigan_material::MichiganWorkforceSeedV1],
+) -> Result<String, MichiganCohortsErrorV1> {
+    Ok(build_cohorts_with_workforce(workforce)?.scenario_source)
 }
 
 /// Construct only from the two admitted, digest-pinned observed artifacts.

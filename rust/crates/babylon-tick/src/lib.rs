@@ -56,6 +56,7 @@ pub mod committed_event;
 pub mod h3_runtime;
 pub mod kernel_slot;
 pub mod material_replay;
+pub mod material_staffing;
 pub mod material_state;
 pub mod material_world;
 mod phase_order;
@@ -235,6 +236,7 @@ pub fn run_once_with_prelude(
 #[derive(Debug)]
 pub(crate) struct PreparedRules {
     pub rules: Vec<(String, LoadedRule)>,
+    material_base_index: usize,
     /// Parsed rule forms retained so replay preparation can independently
     /// recompute the canonical rules hash over what this engine loaded.
     pub rule_forms: Vec<SExpr>,
@@ -436,7 +438,7 @@ fn prepare_error_from_schedule(error: phase_order::ScheduleError) -> PrepareErro
 fn enforce_ranked_composition(
     plan: &phase_order::RuleOrderPlan,
     rule_forms: &[(String, SExpr)],
-) -> Result<(), PrepareError> {
+) -> Result<usize, PrepareError> {
     let ranked = plan
         .ranked_rules(rule_forms)
         .map_err(prepare_error_from_schedule)?;
@@ -448,7 +450,10 @@ fn enforce_ranked_composition(
                 error: LoadError::SameTickOrder(error),
             })?;
     }
-    Ok(())
+    // Keep diagnostics, probability loading and execution on the same
+    // schedule admission, including the native composition's identity.
+    plan.native_material_composition_index(material_staffing::STAFFING_COMPOSITION_ID_V1)
+        .map_err(prepare_error_from_schedule)
 }
 
 fn hydrate_scenario<G: GraphSubstrate>(
@@ -1660,7 +1665,7 @@ fn prepare_rules_with_kernel_slots<G: GraphSubstrate + CanonicalState>(
         .map(|rule| (rule.rule_id.clone(), rule.form.clone()))
         .collect::<Vec<_>>();
     let rule_order = phase_order::compile(&phase_forms).map_err(prepare_error_from_schedule)?;
-    enforce_ranked_composition(&rule_order, &phase_forms)?;
+    let material_base_index = enforce_ranked_composition(&rule_order, &phase_forms)?;
     let rules = rule_order
         .apply(rules)
         .map_err(prepare_error_from_schedule)?;
@@ -1688,6 +1693,7 @@ fn prepare_rules_with_kernel_slots<G: GraphSubstrate + CanonicalState>(
 
     Ok(PreparedRules {
         rules,
+        material_base_index,
         rule_forms: rule_forms.into_iter().map(|rule| rule.form).collect(),
         types: inputs.types,
         intrinsics,
@@ -1861,6 +1867,7 @@ impl<C> ExecutionIdentity<'_, C> {
 struct TickTransactionResult {
     report: TickReport,
     replay: Option<replay_session::ReplayIdentityArtifactsV2>,
+    material: Option<material_world::PreparedMaterialWorldV3>,
 }
 
 struct TransactionPrelude {
@@ -1880,6 +1887,7 @@ struct ExecutedRules<G> {
     audit_receipts: Vec<AuditReceipt>,
     choice_receipts: Vec<choice_receipt::ChoiceReceiptV1>,
     committed_events: Vec<committed_event::CommittedEventV2>,
+    material: Option<material_world::PreparedMaterialWorldV3>,
 }
 
 enum TickTransactionError {
@@ -1917,7 +1925,7 @@ where
             rng_seed,
             stable_resolver,
         };
-    run_prepared_tick_transaction(prepared, graph, sink, &identity, tick, state_hash)
+    run_prepared_tick_transaction(prepared, graph, sink, &identity, tick, state_hash, None)
         .map(|result| result.report)
         .map_err(|error| match error {
             TickTransactionError::Current(message) => message,
@@ -1931,7 +1939,14 @@ pub(crate) fn run_prepared_replay_tick<G, C>(
     sink: &mut CollectingSink,
     tick: i64,
     execution: replay_session::ReplayExecutionInputs<'_, C>,
-) -> Result<IdentifiedTickReportV2, ReplayTickError>
+    material_base: Option<material_replay::MaterialBaseInputs<'_>>,
+) -> Result<
+    (
+        IdentifiedTickReportV2,
+        Option<material_world::PreparedMaterialWorldV3>,
+    ),
+    ReplayTickError,
+>
 where
     G: GraphSubstrate + CanonicalState + AllocatorState + DetachedCopy,
     C: replay_session::ReplayIdentityComposer,
@@ -1944,6 +1959,7 @@ where
         &identity,
         tick,
         |_boundary, candidate| candidate.state_hash(),
+        material_base,
     )
     .map_err(|error| match error {
         TickTransactionError::Current(message) => ReplayTickError::Execution { message },
@@ -1952,7 +1968,10 @@ where
     let artifacts = result.replay.ok_or_else(|| ReplayTickError::Composer {
         message: "replay transaction returned no identity artifacts".to_owned(),
     })?;
-    Ok(replay_session::identified_report(result.report, artifacts))
+    Ok((
+        replay_session::identified_report(result.report, artifacts),
+        result.material,
+    ))
 }
 
 fn run_prepared_tick_transaction<G, B, H, C>(
@@ -1962,6 +1981,7 @@ fn run_prepared_tick_transaction<G, B, H, C>(
     identity: &ExecutionIdentity<'_, C>,
     tick: i64,
     mut state_hash: H,
+    material_base: Option<material_replay::MaterialBaseInputs<'_>>,
 ) -> Result<TickTransactionResult, TickTransactionError>
 where
     G: GraphSubstrate + CanonicalState + AllocatorState + DetachedCopy,
@@ -1970,7 +1990,7 @@ where
     C: replay_session::ReplayIdentityComposer,
 {
     let prelude = prepare_tick_transaction(graph, identity, tick, &mut state_hash)?;
-    let executed = execute_prepared_rules(prepared, graph, identity, tick)?;
+    let executed = execute_prepared_rules(prepared, graph, identity, tick, material_base)?;
     complete_tick_transaction(
         prepared,
         graph,
@@ -2038,6 +2058,7 @@ fn execute_prepared_rules<G, C>(
     graph: &G,
     identity: &ExecutionIdentity<'_, C>,
     tick: i64,
+    mut material_base: Option<material_replay::MaterialBaseInputs<'_>>,
 ) -> Result<ExecutedRules<G>, TickTransactionError>
 where
     G: GraphSubstrate + CanonicalState + AllocatorState + DetachedCopy,
@@ -2050,7 +2071,42 @@ where
     let mut choice_receipts = Vec::new();
     let mut committed_events = Vec::new();
     let mut choice_by_sample_subject = HashMap::new();
-    for (id, loaded) in &prepared.rules {
+    let mut material = None;
+    for position in 0..=prepared.rules.len() {
+        if position == prepared.material_base_index {
+            if let Some(inputs) = material_base.take() {
+                let resolver = identity.stable_resolver().ok_or({
+                    TickTransactionError::Replay(ReplayTickError::MaterialBase(
+                        material_replay::MaterialBaseErrorV1::MissingResolver,
+                    ))
+                })?;
+                let context = material_staffing::StaffingEffectContextV1 {
+                    types: &prepared.types,
+                    enums: &prepared.enums,
+                    vocabulary: prepared.vocabulary.as_ref(),
+                    resolver,
+                };
+                let (candidate, effects) = inputs
+                    .prepare(&mut working_graph, context, tick)
+                    .map_err(|error| {
+                        TickTransactionError::Replay(ReplayTickError::MaterialBase(error))
+                    })?;
+                if let Some(effects) = effects {
+                    working_sink.events.extend(
+                        effects
+                            .committed_events()
+                            .iter()
+                            .map(committed_event::CommittedEventV2::sink_record),
+                    );
+                    audit_receipts.extend_from_slice(effects.audit_receipts());
+                    committed_events.extend_from_slice(effects.committed_events());
+                }
+                material = Some(candidate);
+            }
+        }
+        let Some((id, loaded)) = prepared.rules.get(position) else {
+            break;
+        };
         let event_start = working_sink.events.len();
         let mut write_log = CollectingWriteLog::new();
         let outcome = run_tick_observed(
@@ -2202,6 +2258,7 @@ where
         audit_receipts,
         choice_receipts,
         committed_events,
+        material,
     })
 }
 
@@ -2276,7 +2333,11 @@ where
     *graph = executed.graph;
     sink.commit_prepared(executed.sink.events);
 
-    Ok(TickTransactionResult { report, replay })
+    Ok(TickTransactionResult {
+        report,
+        replay,
+        material: executed.material,
+    })
 }
 
 /// One rule's declared-vs-computed fuel bound (Task W3, BSL Hygiene

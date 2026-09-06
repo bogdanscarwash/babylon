@@ -7,6 +7,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use babylon_persistence::michigan_content::MichiganContentPresetV1;
+use babylon_persistence::michigan_material::MichiganDeliveryPresetV1;
 use babylon_persistence::runtime_session::{
     RuntimeSessionRequestV2, RuntimeSessionResponseV2, RUNTIME_SESSION_MAX_LINE_BYTES_V2,
     RUNTIME_SESSION_PROTOCOL_VERSION_V2,
@@ -223,7 +224,7 @@ fn live_runtime_child_pipe_failure_and_orderly_exit_preserve_committed_world() {
     let target = DisposableTarget::create();
     let campaign =
         CampaignId::from_uuid(Uuid::from_u128(0x0044_0000_0000_0000_0000_0000_0000_007f));
-    let preset = MichiganContentPresetV1::BundlesStandardV3;
+    let preset = MichiganContentPresetV1::new_campaign(MichiganDeliveryPresetV1::Standard);
     let admitted = preset.admitted().unwrap();
     let mut runtime = DurableMaterialRuntimeV3::create(
         &target.writer,

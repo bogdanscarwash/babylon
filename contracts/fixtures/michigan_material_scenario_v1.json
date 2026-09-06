@@ -47,8 +47,8 @@
       "input_good_key": "billet",
       "input_quantity_per_batch": 10,
       "key": "sheet-rolling",
-      "labor_capacity_hours_per_week": 80,
-      "labor_hours_per_batch": 10,
+      "labor_capacity_hours_per_week": 800,
+      "labor_hours_per_batch": 100,
       "opening_input_quantity": 600,
       "opening_planned_batches": 8,
       "output_good_key": "sheet",
@@ -60,8 +60,8 @@
       "input_good_key": "sheet",
       "input_quantity_per_batch": 10,
       "key": "panel-forming",
-      "labor_capacity_hours_per_week": 16,
-      "labor_hours_per_batch": 2,
+      "labor_capacity_hours_per_week": 160,
+      "labor_hours_per_batch": 20,
       "opening_input_quantity": 0,
       "opening_planned_batches": 0,
       "output_good_key": "panel",
@@ -73,8 +73,8 @@
       "input_good_key": "panel",
       "input_quantity_per_batch": 2,
       "key": "subassembly-making",
-      "labor_capacity_hours_per_week": 16,
-      "labor_hours_per_batch": 4,
+      "labor_capacity_hours_per_week": 160,
+      "labor_hours_per_batch": 40,
       "opening_input_quantity": 0,
       "opening_planned_batches": 0,
       "output_good_key": "subassembly",
@@ -86,8 +86,8 @@
       "input_good_key": "grain",
       "input_quantity_per_batch": 5,
       "key": "meal-milling",
-      "labor_capacity_hours_per_week": 4,
-      "labor_hours_per_batch": 1,
+      "labor_capacity_hours_per_week": 40,
+      "labor_hours_per_batch": 10,
       "opening_input_quantity": 200,
       "opening_planned_batches": 4,
       "output_good_key": "meal",
@@ -99,8 +99,8 @@
       "input_good_key": "meal",
       "input_quantity_per_batch": 5,
       "key": "meal-packaging",
-      "labor_capacity_hours_per_week": 8,
-      "labor_hours_per_batch": 2,
+      "labor_capacity_hours_per_week": 80,
+      "labor_hours_per_batch": 20,
       "opening_input_quantity": 0,
       "opening_planned_batches": 0,
       "output_good_key": "packaged-meal",
@@ -170,6 +170,46 @@
       "naics": "311"
     }
   ],
+  "staffing": {
+    "composition_id": "g4-workforce-staffing",
+    "evidence_class": "Designed",
+    "hours_per_worker_week": 40,
+    "placement": "after-metabolism-material-base",
+    "pools": [
+      {
+        "employed": 1,
+        "previous_unretained_hours": 40,
+        "process_key": "meal-milling",
+        "reserve": 0
+      },
+      {
+        "employed": 2,
+        "previous_unretained_hours": 80,
+        "process_key": "meal-packaging",
+        "reserve": 0
+      },
+      {
+        "employed": 4,
+        "previous_unretained_hours": 160,
+        "process_key": "panel-forming",
+        "reserve": 0
+      },
+      {
+        "employed": 20,
+        "previous_unretained_hours": 800,
+        "process_key": "sheet-rolling",
+        "reserve": 0
+      },
+      {
+        "employed": 4,
+        "previous_unretained_hours": 160,
+        "process_key": "subassembly-making",
+        "reserve": 0
+      }
+    ],
+    "retention_weeks": 1,
+    "role": "Mechanic"
+  },
   "standard_travel_weeks": 1,
   "terminal_output_disposition": "on_hand_unsold"
 }

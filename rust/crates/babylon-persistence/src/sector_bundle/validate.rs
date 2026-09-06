@@ -102,9 +102,9 @@ fn validate_resources(value: &SectorBundleV1) -> Result<(), SectorBundleErrorV1>
         if labor.len() != 1 || labor[0].unit_id != value.labor_unit {
             return Err(SectorBundleErrorV1::Resource);
         }
+        expected_labor.insert((output.site_id, value.labor_unit, 1));
         for week in 1..=HORIZON_TICKS {
             expected_capacities.insert((output.process_id, output.site_id, week));
-            expected_labor.insert((output.site_id, value.labor_unit, week));
         }
     }
     let capacities: BTreeSet<_> = rows

@@ -276,13 +276,13 @@ fn append_process(
             week,
             available_batches: process.capacity_batches_per_week,
         });
-        state.labor.push(LaborCapacityRowV1 {
-            site_id,
-            unit_id: labor_unit,
-            week,
-            available: process.labor_capacity_hours_per_week,
-        });
     }
+    state.labor.push(LaborCapacityRowV1 {
+        site_id,
+        unit_id: labor_unit,
+        week: 1,
+        available: process.labor_capacity_hours_per_week,
+    });
     if process.opening_planned_batches > 0 {
         state.production_commitments.push(ProductionCommitmentV1 {
             process_id,

@@ -3,19 +3,15 @@ use std::{process::Command, sync::OnceLock};
 use babylon_bsl::structural_verbs::CollectingSink;
 use babylon_practice_contract::ordered_action_v1::OrderedPracticeActionBatchV1;
 use babylon_tick::{
-    material_replay::MaterialReplaySessionV3, material_world::decode_material_receipts_v3,
-    replay_session::ReplayCommitDispositionV1,
+    material_world::decode_material_receipts_v3, replay_session::ReplayCommitDispositionV1,
 };
 use serde_json::Value;
 
 use super::*;
 use crate::{
-    material_envelope::CommittedMaterialTickEnvelopeV3,
-    material_runtime::michigan_material_runtime_foundation_v2,
-    michigan_economy::{digest_hex, michigan_observer_foundation_v1},
-    michigan_material::MichiganDeliveryPresetV1,
-    production_projection::project_material_observation_v1,
-    runtime::prepare_committed_tick_v2,
+    material_envelope::CommittedMaterialTickEnvelopeV3, michigan_content::MichiganContentPresetV1,
+    michigan_economy::digest_hex, michigan_material::MichiganDeliveryPresetV1,
+    production_projection::project_material_observation_v1, runtime::prepare_committed_tick_v2,
     CampaignId,
 };
 
@@ -25,20 +21,16 @@ fn published_observations() -> &'static [ObserverEconomySnapshotV1] {
     static OBSERVATIONS: OnceLock<Vec<ObserverEconomySnapshotV1>> = OnceLock::new();
     OBSERVATIONS.get_or_init(|| {
         let preset = MichiganDeliveryPresetV1::Standard;
-        let foundation = michigan_material_runtime_foundation_v2(preset).unwrap();
-        let (graph, _) = michigan_observer_foundation_v1().unwrap();
-        let mut session = MaterialReplaySessionV3::new(
-            graph,
-            foundation.initial_register().clone(),
-            foundation.digest(),
-            preset.horizon_ticks(),
-        )
-        .unwrap();
+        let foundation = MichiganContentPresetV1::new_campaign(preset)
+            .create_foundation()
+            .unwrap();
+        let foundation_digest = foundation.digest();
+        let mut session = foundation.into_session().unwrap();
         let campaign = CampaignId::from_uuid(uuid::Uuid::from_u128(293));
         let mut observation = ObserverEconomySnapshotV1 {
             campaign_id: campaign.as_uuid().to_string(),
             resolve_tick: 0,
-            foundation_digest: digest_hex(&foundation.digest()),
+            foundation_digest: digest_hex(&foundation_digest),
             nominal_world_hash: None,
             tick_content_hash: None,
             envelope_digest: None,
@@ -423,12 +415,11 @@ fn digest_is_identical_in_two_fresh_processes() {
     );
 }
 
-// The two graph revisions have byte-identical physical catalogs. Reuse the
-// actual committed physical reading above to isolate the added presentation
-// family's identity; live tests separately qualify V2 graph admission.
+// Reuse the current staffed campaign reading to isolate the observed
+// context presentation family; no source totals allocate modeled workers.
 fn contextual_observation() -> ObserverEconomySnapshotV1 {
     let mut snapshot = published_observations()[2].clone();
-    let admitted = crate::michigan_content::MichiganContentPresetV1::CohortsStandardV2
+    let admitted = crate::michigan_content::MichiganContentPresetV1::StaffedStandardV4
         .admitted()
         .unwrap();
     snapshot.foundation_digest = digest_hex(&admitted.digest());

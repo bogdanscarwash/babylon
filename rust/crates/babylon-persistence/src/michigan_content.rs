@@ -9,28 +9,15 @@ use babylon_kernel::sha256_of;
 use babylon_tick::material_world::MaterialWorldRegisterV2;
 
 use crate::{
-    material_runtime::{
-        michigan_material_runtime_foundation_v2, MaterialFoundationSpecV2,
-        MaterialRuntimeFoundationV2,
-    },
-    michigan_cohorts::{michigan_cohort_foundation_v2, MICHIGAN_COHORT_SCENARIO_V2},
-    michigan_economy::{MICHIGAN_OBSERVER_SCENARIO_V1, QCEW_ECONOMICS_ARTIFACT_SHA256_V1},
-    michigan_material::{
-        michigan_material_foundation_v1, MichiganDeliveryPresetV1,
-        MICHIGAN_INDUSTRY_BASELINE_SHA256_V1, MICHIGAN_MATERIAL_SCENARIO_SHA256_V1,
-    },
-    michigan_sectors::{QCEW_SECTORS_ARTIFACT_SHA256_V1, QCEW_SECTORS_SEMANTIC_SHA256_V1},
+    material_runtime::MaterialRuntimeFoundationV2, michigan_cohorts::MICHIGAN_COHORT_SCENARIO_V2,
+    michigan_material::MichiganDeliveryPresetV1,
 };
 
 /// Graph content revisions are separate from the logical delivery choice.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MichiganContentPresetV1 {
-    BaselineStandardV1,
-    BaselineDelayedV1,
-    CohortsStandardV2,
-    CohortsDelayedV2,
-    BundlesStandardV3,
-    BundlesDelayedV3,
+    StaffedStandardV4,
+    StaffedDelayedV4,
 }
 
 /// All admitted content revisions retain this exact bounded physical projection.
@@ -54,32 +41,24 @@ impl std::fmt::Display for MichiganContentErrorV1 {
 }
 impl std::error::Error for MichiganContentErrorV1 {}
 
-pub const MICHIGAN_CONTENT_PRESETS_V1: [MichiganContentPresetV1; 6] = [
-    MichiganContentPresetV1::BaselineStandardV1,
-    MichiganContentPresetV1::BaselineDelayedV1,
-    MichiganContentPresetV1::CohortsStandardV2,
-    MichiganContentPresetV1::CohortsDelayedV2,
-    MichiganContentPresetV1::BundlesStandardV3,
-    MichiganContentPresetV1::BundlesDelayedV3,
+pub const MICHIGAN_CONTENT_PRESETS_V1: [MichiganContentPresetV1; 2] = [
+    MichiganContentPresetV1::StaffedStandardV4,
+    MichiganContentPresetV1::StaffedDelayedV4,
 ];
 
 impl MichiganContentPresetV1 {
     #[must_use]
     pub const fn new_campaign(delivery: MichiganDeliveryPresetV1) -> Self {
         match delivery {
-            MichiganDeliveryPresetV1::Standard => Self::BundlesStandardV3,
-            MichiganDeliveryPresetV1::Delayed => Self::BundlesDelayedV3,
+            MichiganDeliveryPresetV1::Standard => Self::StaffedStandardV4,
+            MichiganDeliveryPresetV1::Delayed => Self::StaffedDelayedV4,
         }
     }
     #[must_use]
     pub const fn id(self) -> &'static str {
         match self {
-            Self::BaselineStandardV1 => "michigan-material-standard-v1",
-            Self::BaselineDelayedV1 => "michigan-material-delayed-v1",
-            Self::CohortsStandardV2 => "michigan-material-standard-v2",
-            Self::CohortsDelayedV2 => "michigan-material-delayed-v2",
-            Self::BundlesStandardV3 => "michigan-material-standard-v3",
-            Self::BundlesDelayedV3 => "michigan-material-delayed-v3",
+            Self::StaffedStandardV4 => "michigan-material-standard-v4",
+            Self::StaffedDelayedV4 => "michigan-material-delayed-v4",
         }
     }
     #[must_use]
@@ -91,47 +70,29 @@ impl MichiganContentPresetV1 {
     #[must_use]
     pub const fn delivery(self) -> MichiganDeliveryPresetV1 {
         match self {
-            Self::BaselineStandardV1 | Self::CohortsStandardV2 | Self::BundlesStandardV3 => {
-                MichiganDeliveryPresetV1::Standard
-            }
-            Self::BaselineDelayedV1 | Self::CohortsDelayedV2 | Self::BundlesDelayedV3 => {
-                MichiganDeliveryPresetV1::Delayed
-            }
+            Self::StaffedStandardV4 => MichiganDeliveryPresetV1::Standard,
+            Self::StaffedDelayedV4 => MichiganDeliveryPresetV1::Delayed,
         }
     }
     #[must_use]
     pub const fn scenario(self) -> &'static str {
-        match self {
-            Self::BaselineStandardV1 | Self::BaselineDelayedV1 => MICHIGAN_OBSERVER_SCENARIO_V1,
-            Self::CohortsStandardV2
-            | Self::CohortsDelayedV2
-            | Self::BundlesStandardV3
-            | Self::BundlesDelayedV3 => MICHIGAN_COHORT_SCENARIO_V2,
-        }
+        MICHIGAN_COHORT_SCENARIO_V2
     }
     #[must_use]
     pub const fn label(self) -> &'static str {
         match self {
-            Self::BaselineStandardV1 => "Michigan: standard delivery (county baseline)",
-            Self::BaselineDelayedV1 => "Michigan: delayed sheet delivery (county baseline)",
-            Self::CohortsStandardV2 => "Michigan: standard delivery (industry cohorts)",
-            Self::CohortsDelayedV2 => "Michigan: delayed sheet delivery (industry cohorts)",
-            Self::BundlesStandardV3 => "Michigan: standard delivery (four active cohorts)",
-            Self::BundlesDelayedV3 => "Michigan: delayed sheet delivery (four active cohorts)",
+            Self::StaffedStandardV4 => "Michigan: standard delivery (four active cohorts)",
+            Self::StaffedDelayedV4 => "Michigan: delayed sheet delivery (four active cohorts)",
         }
     }
     /// # Errors
     /// Refuses any changed source or foundation construction failure.
     pub fn admitted(self) -> Result<&'static MichiganContentAdmissionV1, MichiganContentErrorV1> {
-        static ENTRIES: [OnceLock<Result<MichiganContentAdmissionV1, MichiganContentErrorV1>>; 6] =
-            [const { OnceLock::new() }; 6];
+        static ENTRIES: [OnceLock<Result<MichiganContentAdmissionV1, MichiganContentErrorV1>>; 2] =
+            [const { OnceLock::new() }; 2];
         let index = match self {
-            Self::BaselineStandardV1 => 0,
-            Self::BaselineDelayedV1 => 1,
-            Self::CohortsStandardV2 => 2,
-            Self::CohortsDelayedV2 => 3,
-            Self::BundlesStandardV3 => 4,
-            Self::BundlesDelayedV3 => 5,
+            Self::StaffedStandardV4 => 0,
+            Self::StaffedDelayedV4 => 1,
         };
         ENTRIES[index]
             .get_or_init(|| self.capture_admission())
@@ -150,42 +111,8 @@ impl MichiganContentPresetV1 {
         Ok(foundation)
     }
     fn build_foundation(self) -> Result<MaterialRuntimeFoundationV2, MichiganContentErrorV1> {
-        if matches!(self, Self::BundlesStandardV3 | Self::BundlesDelayedV3) {
-            return crate::sector_bundle::foundation::create_bundle_foundation_v3(
-                self.id(),
-                self.delivery(),
-            )
-            .map_err(|_| MichiganContentErrorV1::Foundation);
-        }
-        if matches!(self, Self::BaselineStandardV1 | Self::BaselineDelayedV1) {
-            return michigan_material_runtime_foundation_v2(self.delivery())
-                .map_err(|_| MichiganContentErrorV1::Foundation);
-        }
-        let (graph, bundle) =
-            michigan_cohort_foundation_v2().map_err(|_| MichiganContentErrorV1::ObservedSource)?;
-        let state = michigan_material_foundation_v1(self.delivery())
-            .map_err(|_| MichiganContentErrorV1::MaterialSource)?;
-        let mut bytes = Vec::from(&b"babylon.michigan-material-content.v2\0"[..]);
-        for digest in [
-            QCEW_ECONOMICS_ARTIFACT_SHA256_V1,
-            QCEW_SECTORS_ARTIFACT_SHA256_V1,
-            QCEW_SECTORS_SEMANTIC_SHA256_V1,
-            MICHIGAN_MATERIAL_SCENARIO_SHA256_V1,
-            MICHIGAN_INDUSTRY_BASELINE_SHA256_V1,
-        ] {
-            bytes.extend_from_slice(digest.as_bytes());
-        }
-        MaterialRuntimeFoundationV2::capture_v2(
-            graph,
-            bundle,
-            state,
-            MaterialFoundationSpecV2 {
-                preset_id: self.id().to_owned(),
-                horizon_ticks: self.delivery().horizon_ticks(),
-                content_digest: sha256_of(&bytes),
-            },
-        )
-        .map_err(|_| MichiganContentErrorV1::Foundation)
+        crate::sector_bundle::foundation::create_bundle_foundation_v4(self.id(), self.delivery())
+            .map_err(|_| MichiganContentErrorV1::Foundation)
     }
     fn capture_admission(self) -> Result<MichiganContentAdmissionV1, MichiganContentErrorV1> {
         let foundation = self.build_foundation()?;

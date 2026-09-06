@@ -9,7 +9,7 @@ artifacts:
     sha256: eb486d7e11b8b63fc58c53ab918eff84b341b293a66faf422ddb9304fb2b553e
     evidence_class: Observed
   - path: contracts/fixtures/michigan_material_scenario_v1.json
-    sha256: 5e09fa210c34cd1033d35bf9cc626bd06b3b536e016b005ed53e27421ff9b5ca
+    sha256: 4a0005706af4acbe5bae5389358aa30142fde7daff1c8c944b3580f985938c66
     evidence_class: Designed
 
 classifications:
@@ -18,9 +18,9 @@ classifications:
   transition_receipts_and_committed_inventory: Derived
 
 presets:
-  - id: michigan-material-standard-v1
+  - id: michigan-material-standard-v4
     sheet_transfer_travel_weeks: 1
-  - id: michigan-material-delayed-v1
+  - id: michigan-material-delayed-v4
     sheet_transfer_travel_weeks: 3
 horizon_ticks: 16
 id_domain: babylon.michigan-material.v1
@@ -30,8 +30,13 @@ invariants:
   - Both presets have byte-identical initial material states after replacing
     the sheet-transfer route duration. Inventories, recipes, capacities,
     labor budgets, demand, identities and other routes are equal.
-  - Capacities and labor budgets are declared for weeks 1 through 16. The
-    authoritative session refuses advances beyond this finite horizon.
+  - Capacities span weeks 1 through 16. Labor is seeded only at week 1.
+    The staffing composition supplies the next week from a closed workforce.
+    The authoritative session refuses advances beyond this finite horizon.
+  - Five Designed pools use 40 hours per worker and one week of retention.
+    Opening employed counts are 20, 4, 4, 1 and 2 with zero reserves.
+    Previous unretained hours equal opening labor hours in each pool.
+    Stored content pins policy, placement, seeds and exact process ownership.
   - Sites represent county-industry aggregates. Logistics nodes are abstract
     accounts attached to these sites, without factory coordinates or H3 cells.
   - The five private-industry rows are unsuppressed QCEW annual 2024 records.

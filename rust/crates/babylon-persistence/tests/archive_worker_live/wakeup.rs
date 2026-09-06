@@ -4,6 +4,7 @@ use babylon_persistence::archive_driver::{ArchiveDriverEventV1, ArchiveDriverV1}
 use babylon_persistence::{
     material_runtime::{DurableMaterialRuntimeV3, MaterialRuntimeErrorV3},
     michigan_content::MichiganContentPresetV1,
+    michigan_material::MichiganDeliveryPresetV1,
     ArchiveWorkerCancellationV1, ARCHIVE_WAKEUP_CHANNEL_V1,
 };
 use postgres::fallible_iterator::FallibleIterator as _;
@@ -435,7 +436,7 @@ fn live_notification_failure_rolls_back_material_commit_and_preserves_memory_bef
     let config = database.config(&base);
     let campaign =
         CampaignId::from_uuid(Uuid::from_u128(0x2200_0000_0000_0000_0000_0000_0000_00f5));
-    let foundation = MichiganContentPresetV1::BundlesStandardV3
+    let foundation = MichiganContentPresetV1::new_campaign(MichiganDeliveryPresetV1::Standard)
         .create_foundation()
         .expect("admitted material foundation");
     let foundation_digest = foundation.digest();

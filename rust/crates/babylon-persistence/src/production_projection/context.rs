@@ -8,7 +8,7 @@ use babylon_graph::stable_element::StableElementKeyV1;
 use super::ProductionProjectionErrorV1;
 use crate::{
     michigan_cohorts::michigan_business_subject_v2,
-    michigan_content::{MichiganContentAdmissionV1, MichiganContentPresetV1},
+    michigan_content::MichiganContentAdmissionV1,
     michigan_economy::digest_hex,
     michigan_material::{
         michigan_material_catalog_v1, MichiganIndustryBaselineRowV1, MichiganMaterialCatalogV1,
@@ -66,22 +66,14 @@ type ContextRows = (
     Vec<DesignedProcessAttributionV1>,
 );
 
-/// Called only after the snapshot's shared content/graph admission. Older graphs
-/// have no cohort subjects; preview grants do not authorize organization facts.
+/// Called only after the snapshot's shared content/graph admission.
+/// Preview grants do not authorize organization facts.
 pub(crate) fn attach_observed_context_v1(
-    admitted: &MichiganContentAdmissionV1,
+    _admitted: &MichiganContentAdmissionV1,
     visibility: ObserverVisibilityV1,
     snapshot: &mut ProductionSnapshotV1,
 ) -> Result<(), ProductionProjectionErrorV1> {
-    if visibility != ObserverVisibilityV1::FullObserver
-        || !matches!(
-            admitted.preset(),
-            MichiganContentPresetV1::CohortsStandardV2
-                | MichiganContentPresetV1::CohortsDelayedV2
-                | MichiganContentPresetV1::BundlesStandardV3
-                | MichiganContentPresetV1::BundlesDelayedV3
-        )
-    {
+    if visibility != ObserverVisibilityV1::FullObserver {
         snapshot.observed_contexts.clear();
         snapshot.process_attributions.clear();
         return Ok(());

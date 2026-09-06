@@ -1,20 +1,16 @@
 use super::*;
+use crate::michigan_content::MichiganContentPresetV1;
 use crate::{
     michigan_material::MichiganDeliveryPresetV1,
     production_projection::project_material_observation_v1,
 };
-use babylon_tick::material_world::MaterialWorldRegisterV2;
 
 fn opening() -> ProductionSnapshotV1 {
     let preset = MichiganDeliveryPresetV1::Standard;
-    let state = crate::michigan_material::michigan_material_foundation_v1(preset).unwrap();
-    project_material_observation_v1(
-        preset,
-        &MaterialWorldRegisterV2::try_new(0, state).unwrap(),
-        None,
-        &[],
-    )
-    .unwrap()
+    let foundation = MichiganContentPresetV1::new_campaign(preset)
+        .create_foundation()
+        .unwrap();
+    project_material_observation_v1(preset, foundation.initial_register(), None, &[]).unwrap()
 }
 
 #[test]
@@ -22,7 +18,7 @@ fn five_designed_processes_share_four_cited_observed_contexts_without_allocating
     let mut snapshot = opening();
     let before = snapshot.clone();
     attach_observed_context_v1(
-        MichiganContentPresetV1::CohortsStandardV2
+        MichiganContentPresetV1::StaffedStandardV4
             .admitted()
             .unwrap(),
         ObserverVisibilityV1::FullObserver,
@@ -113,7 +109,7 @@ fn source_identity_mismatch_or_missing_subject_refuses_without_partial_publicati
     absent.sites.pop();
     let unchanged = absent.clone();
     assert!(attach_observed_context_v1(
-        MichiganContentPresetV1::CohortsStandardV2
+        MichiganContentPresetV1::StaffedStandardV4
             .admitted()
             .unwrap(),
         ObserverVisibilityV1::FullObserver,
@@ -124,12 +120,13 @@ fn source_identity_mismatch_or_missing_subject_refuses_without_partial_publicati
 }
 
 #[test]
-fn v1_and_preview_clear_context_and_cannot_borrow_v2_subjects() {
+fn preview_clears_context_for_both_current_staffed_presets() {
     let mut disclosed = opening();
-    let v2 = MichiganContentPresetV1::CohortsStandardV2
+    let admitted = MichiganContentPresetV1::StaffedStandardV4
         .admitted()
         .unwrap();
-    attach_observed_context_v1(v2, ObserverVisibilityV1::FullObserver, &mut disclosed).unwrap();
+    attach_observed_context_v1(admitted, ObserverVisibilityV1::FullObserver, &mut disclosed)
+        .unwrap();
     for preset in crate::michigan_content::MICHIGAN_CONTENT_PRESETS_V1 {
         for visibility in [
             ObserverVisibilityV1::FullObserver,
@@ -138,14 +135,7 @@ fn v1_and_preview_clear_context_and_cannot_borrow_v2_subjects() {
             let mut candidate = disclosed.clone();
             attach_observed_context_v1(preset.admitted().unwrap(), visibility, &mut candidate)
                 .unwrap();
-            let allowed = visibility == ObserverVisibilityV1::FullObserver
-                && matches!(
-                    preset,
-                    MichiganContentPresetV1::CohortsStandardV2
-                        | MichiganContentPresetV1::CohortsDelayedV2
-                        | MichiganContentPresetV1::BundlesStandardV3
-                        | MichiganContentPresetV1::BundlesDelayedV3
-                );
+            let allowed = visibility == ObserverVisibilityV1::FullObserver;
             assert_eq!(
                 candidate.observed_contexts.len(),
                 if allowed { 4 } else { 0 }
@@ -159,33 +149,21 @@ fn v1_and_preview_clear_context_and_cannot_borrow_v2_subjects() {
 }
 
 #[test]
-fn executable_bundles_retain_the_exact_observed_context_without_allocating_jobs() {
-    for (previous, current) in [
-        (
-            MichiganContentPresetV1::CohortsStandardV2,
-            MichiganContentPresetV1::BundlesStandardV3,
-        ),
-        (
-            MichiganContentPresetV1::CohortsDelayedV2,
-            MichiganContentPresetV1::BundlesDelayedV3,
-        ),
+fn delivery_presets_share_observed_context_without_assigning_jobs() {
+    let mut standard = opening();
+    let mut delayed = standard.clone();
+    for (preset, snapshot) in [
+        (MichiganContentPresetV1::StaffedStandardV4, &mut standard),
+        (MichiganContentPresetV1::StaffedDelayedV4, &mut delayed),
     ] {
-        let mut old = opening();
-        let mut new = old.clone();
         attach_observed_context_v1(
-            previous.admitted().unwrap(),
+            preset.admitted().unwrap(),
             ObserverVisibilityV1::FullObserver,
-            &mut old,
+            snapshot,
         )
         .unwrap();
-        attach_observed_context_v1(
-            current.admitted().unwrap(),
-            ObserverVisibilityV1::FullObserver,
-            &mut new,
-        )
-        .unwrap();
-        assert_eq!(new, old);
     }
+    assert_eq!(standard, delayed);
 }
 
 #[test]

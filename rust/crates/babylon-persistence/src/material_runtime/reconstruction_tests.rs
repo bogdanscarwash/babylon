@@ -44,20 +44,13 @@ fn stored_copy(original: &MaterialRuntimeFoundationV2) -> StoredMaterialFoundati
 }
 
 fn alternate_foundation() -> MaterialRuntimeFoundationV2 {
-    let original = michigan_material_runtime_foundation_v2(
-        crate::michigan_material::MichiganDeliveryPresetV1::Standard,
-    )
-    .unwrap();
+    let original = crate::michigan_content::MichiganContentPresetV1::StaffedStandardV4
+        .create_foundation()
+        .unwrap();
     let bundle = original.graph_foundation.content_bundle();
-    let source = std::str::from_utf8(bundle.scenario_source_bytes())
-        .unwrap()
-        .replace(
-            "production/michigan-observer-v1",
-            "fixture/stored-content-v2",
-        );
-    assert_ne!(source.as_bytes(), bundle.scenario_source_bytes());
+    let source = std::str::from_utf8(bundle.scenario_source_bytes()).unwrap();
     let graph = ReplayTickSession::new(
-        &source,
+        source,
         None,
         "",
         HypergraphStore::new(),
@@ -68,28 +61,25 @@ fn alternate_foundation() -> MaterialRuntimeFoundationV2 {
         MaterialStateV1::try_new(crate::michigan_dynamic_hex_foundation_v1().unwrap()).unwrap(),
     )
     .unwrap();
-    let revised_bundle = FoundationContentBundleV1::try_new(
-        &source,
+    let revised_bundle = FoundationContentBundleV2::try_new(
+        source,
         None,
         "",
         bundle.defines_bytes(),
         bundle.reference_bundle_manifest_bytes(),
     )
     .unwrap();
-    MaterialRuntimeFoundationV2::capture(
+    MaterialRuntimeFoundationV2::capture_v2(
         graph,
         revised_bundle,
         original.register.state().clone(),
-        MaterialFoundationSpecV2 {
-            content_digest: sha256_of(b"fixture/stored-content-v2"),
-            ..original.spec.clone()
-        },
+        original.spec.clone(),
     )
     .unwrap()
 }
 
 #[test]
-fn stored_content_reconstructs_without_the_current_scenario_seed_or_preset_factory() {
+fn stored_content_reconstructs_exact_alternate_session_and_seed_without_factory_substitution() {
     let original = alternate_foundation();
     let stored = stored_copy(&original);
     let digest = original.digest();
@@ -131,10 +121,9 @@ fn stored_content_reconstructs_without_the_current_scenario_seed_or_preset_facto
 
 #[test]
 fn reconstruction_refuses_component_changes_and_an_unadmitted_expected_identity() {
-    let original = michigan_material_runtime_foundation_v2(
-        crate::michigan_material::MichiganDeliveryPresetV1::Standard,
-    )
-    .unwrap();
+    let original = crate::michigan_content::MichiganContentPresetV1::StaffedStandardV4
+        .create_foundation()
+        .unwrap();
     let expected = original.digest();
     for mutation in 0..6 {
         let mut stored = stored_copy(&original);
@@ -168,10 +157,9 @@ fn reconstruction_refuses_component_changes_and_an_unadmitted_expected_identity(
 
 #[test]
 fn reconstruction_rejects_a_different_valid_graph_and_a_nonzero_initial_register() {
-    let original = michigan_material_runtime_foundation_v2(
-        crate::michigan_material::MichiganDeliveryPresetV1::Standard,
-    )
-    .unwrap();
+    let original = crate::michigan_content::MichiganContentPresetV1::StaffedStandardV4
+        .create_foundation()
+        .unwrap();
     let alternate = alternate_foundation();
     let mut mixed = stored_copy(&original);
     mixed.graph_foundation_digest = sha256_of(alternate.graph_foundation().canonical_bytes());
@@ -204,15 +192,41 @@ fn reconstruction_rejects_a_different_valid_graph_and_a_nonzero_initial_register
 }
 
 #[test]
-fn persisted_layout_is_exact_even_when_both_encoders_accept_the_source() {
+fn persisted_layout_is_exact_and_unknown_layouts_are_refused() {
     let original = alternate_foundation();
+    let content = original.graph_foundation().content_bundle();
+    // The current staffed source exceeds V1's field bound, so its wrong-layout
+    // decode refuses before reaching the whole-foundation digest comparison.
+    assert!(content.scenario_source_bytes().len() > 65_535);
     assert!(matches!(
+        crate::semantic_codec::encode_foundation_content(
+            std::str::from_utf8(content.scenario_source_bytes()).unwrap(),
+            None,
+            "",
+            content.defines_bytes(),
+            content.reference_bundle_manifest_bytes(),
+        ),
+        Err(crate::semantic_codec::SemanticCodecErrorV1::Refusal(
+            crate::semantic_codec::SemanticRefusalCodeV1::FieldByteBound
+        ))
+    ));
+    assert_eq!(
         persisted_graph_with_layout(
             original.graph_foundation(),
-            crate::FoundationContentLayout::V2
-        ),
+            crate::FoundationContentLayout::V1
+        )
+        .map(|_| ()),
+        Err(RustPersistenceRuntimeErrorV2::SemanticCodec)
+    );
+    // A smaller graph-only foundation fits both source formats. Its encoded
+    // layout still participates in the identity and cannot be substituted.
+    let (graph, content) = crate::michigan_economy::michigan_observer_foundation_v1().unwrap();
+    let small = CampaignFoundationV1::capture(&graph, content).unwrap();
+    assert!(small.content_bundle().scenario_source_bytes().len() <= 65_535);
+    assert_eq!(
+        persisted_graph_with_layout(&small, crate::FoundationContentLayout::V2).map(|_| ()),
         Err(RustPersistenceRuntimeErrorV2::ReplaySource)
-    ));
+    );
     assert_eq!(
         crate::FoundationContentLayout::from_persisted(1).unwrap(),
         crate::FoundationContentLayout::V1
@@ -231,7 +245,7 @@ fn persisted_layout_is_exact_even_when_both_encoders_accept_the_source() {
 
 #[test]
 fn large_v2_stored_sources_reconstruct_the_same_circuit_without_factory_substitution() {
-    let original = crate::michigan_content::MichiganContentPresetV1::CohortsStandardV2
+    let original = crate::michigan_content::MichiganContentPresetV1::StaffedStandardV4
         .create_foundation()
         .unwrap();
     assert_eq!(
@@ -278,8 +292,8 @@ fn large_v2_stored_sources_reconstruct_the_same_circuit_without_factory_substitu
 fn admitted_bundle_foundations_reconstruct_exactly_through_dispatch_transit_and_arrival() {
     use crate::michigan_content::MichiganContentPresetV1;
     for preset in [
-        MichiganContentPresetV1::BundlesStandardV3,
-        MichiganContentPresetV1::BundlesDelayedV3,
+        MichiganContentPresetV1::StaffedStandardV4,
+        MichiganContentPresetV1::StaffedDelayedV4,
     ] {
         let original = preset.create_foundation().unwrap();
         let restored = reconstruct_material_foundation_v2(
@@ -305,6 +319,17 @@ fn admitted_bundle_foundations_reconstruct_exactly_through_dispatch_transit_and_
             .unwrap();
             let left = continued.prepare_advance(&actions).unwrap();
             let right = reopened.prepare_advance(&actions).unwrap();
+            assert_eq!(
+                left.graph_report().successful_event_batch().events(),
+                right.graph_report().successful_event_batch().events()
+            );
+            if week == 1 {
+                assert_workforce_seed_evidence(&left);
+            }
+            if preset == MichiganContentPresetV1::StaffedDelayedV4 {
+                assert_delayed_panel_retention(&left, week);
+            }
+            let checkpoint = matches!(week, 2..=4).then(|| reconstructed_checkpoint(preset, &left));
             assert_eq!(left.identity(), right.identity());
             assert_eq!(
                 left.material().register().canonical_bytes(),
@@ -324,6 +349,9 @@ fn admitted_bundle_foundations_reconstruct_exactly_through_dispatch_transit_and_
                     Ok::<_, ()>(ReplayCommitDispositionV1::Committed)
                 })
                 .unwrap();
+            if let Some(checkpoint) = checkpoint {
+                reopened = checkpoint;
+            }
         }
     }
 }
@@ -331,14 +359,11 @@ fn admitted_bundle_foundations_reconstruct_exactly_through_dispatch_transit_and_
 #[test]
 fn bundle_reconstruction_refuses_alternate_content_and_individually_valid_changed_stock() {
     use crate::michigan_content::MichiganContentPresetV1;
-    let preset = MichiganContentPresetV1::BundlesStandardV3;
+    let preset = MichiganContentPresetV1::StaffedStandardV4;
     let original = preset.create_foundation().unwrap();
     let expected = preset.admitted().unwrap().digest();
-    let previous = MichiganContentPresetV1::CohortsStandardV2
-        .create_foundation()
-        .unwrap();
-    // The old graph has the same subjects and opening material, but lacks the
-    // independently admitted executable bundle content and cannot replace it.
+    let previous = alternate_foundation();
+    // A valid graph with a different seed/session cannot replace the admitted one.
     let mut changed = stored_copy(&original);
     changed.graph_foundation_digest = sha256_of(previous.graph_foundation().canonical_bytes());
     assert!(matches!(
@@ -373,4 +398,145 @@ fn bundle_reconstruction_refuses_alternate_content_and_individually_valid_change
         ),
         Err(MaterialRuntimeErrorV3::FoundationMismatch)
     ));
+}
+
+fn assert_delayed_panel_retention(
+    candidate: &babylon_tick::material_replay::PreparedMaterialTickV3<HypergraphStore>,
+    week: u64,
+) {
+    use babylon_bsl::identity_codec::StableBslValueV1;
+    use babylon_graph::stable_element::StableElementKeyV1;
+    let events = candidate.graph_report().successful_event_batch().events();
+    assert_eq!(events.len(), 5);
+    let panel = events.iter().find(|event| event.fields().iter().any(|(key,value)| {
+        key == "subject" && matches!(value, StableBslValueV1::Node(StableElementKeyV1::Node{local_name,..}) if local_name == "workforce-panel-forming")
+    })).unwrap();
+    let field = |name| match &panel
+        .fields()
+        .iter()
+        .find(|(key, _)| key == name)
+        .unwrap()
+        .1
+    {
+        StableBslValueV1::Int(value) => *value,
+        _ => panic!("staffing evidence must be exact integer"),
+    };
+    assert_eq!(field("closing-employed") + field("closing-reserve"), 4);
+    if week == 1 {
+        assert_eq!(field("previous-unretained-hours"), 160);
+        assert_eq!(field("current-unretained-hours"), 0);
+        assert_eq!(field("closing-employed"), 4);
+    } else if week == 2 {
+        assert_eq!(field("previous-unretained-hours"), 0);
+        assert_eq!(field("closing-employed"), 0);
+        assert_eq!(field("separations"), 4);
+    } else if week == 4 {
+        assert_eq!(field("current-unretained-hours"), 160);
+        assert_eq!(field("closing-employed"), 4);
+        assert_eq!(field("hires"), 4);
+    }
+}
+
+#[test]
+fn unwrapped_definitions_and_changed_opening_workforce_are_not_scheduled_fallbacks() {
+    let current = crate::michigan_content::MichiganContentPresetV1::StaffedStandardV4
+        .create_foundation()
+        .unwrap();
+    let original = current.graph_foundation().content_bundle();
+    for change_seed in [false, true] {
+        let source = std::str::from_utf8(original.scenario_source_bytes()).unwrap();
+        let changed_source = source.replace(
+            "(social-class/employed-population 20)",
+            "(social-class/employed-population 19)",
+        );
+        let source = if change_seed {
+            changed_source.as_str()
+        } else {
+            source
+        };
+        let defines = if change_seed {
+            original.defines_bytes()
+        } else {
+            b"{}"
+        };
+        let bundle = FoundationContentBundleV2::try_new(
+            source,
+            None,
+            "",
+            defines,
+            original.reference_bundle_manifest_bytes(),
+        )
+        .unwrap();
+        let graph = ReplayTickSession::new(
+            source,
+            None,
+            "",
+            HypergraphStore::new(),
+            ReplaySessionIdV1::try_from("fixture/unsupported-authority").unwrap(),
+            ReplaySeed::new(319),
+            bundle.content_digest().clone(),
+            bundle.reference_digest(),
+            MaterialStateV1::try_new(crate::michigan_dynamic_hex_foundation_v1().unwrap()).unwrap(),
+        )
+        .unwrap();
+        assert!(matches!(
+            MaterialRuntimeFoundationV2::capture_v2(
+                graph,
+                bundle,
+                current.register.state().clone(),
+                current.spec.clone()
+            ),
+            Err(MaterialRuntimeErrorV3::FoundationMismatch)
+        ));
+    }
+}
+
+fn reconstructed_checkpoint(
+    preset: crate::michigan_content::MichiganContentPresetV1,
+    candidate: &babylon_tick::material_replay::PreparedMaterialTickV3<HypergraphStore>,
+) -> MaterialReplaySessionV3<HypergraphStore> {
+    let stored = preset.create_foundation().unwrap();
+    let mut restored = reconstruct_material_foundation_v2(
+        stored_copy(&stored),
+        persisted_graph_copy(stored.graph_foundation()),
+        preset.admitted().unwrap().digest(),
+    )
+    .unwrap()
+    .into_session()
+    .unwrap();
+    let graph = candidate.graph_report();
+    restored
+        .restore_full_checkpoint(
+            graph.result_stable_graph(),
+            graph.material_state_rows(),
+            graph.result_registers().canonical_bytes(),
+            candidate.material().register().canonical_bytes(),
+        )
+        .unwrap();
+    restored
+}
+
+fn assert_workforce_seed_evidence(
+    candidate: &babylon_tick::material_replay::PreparedMaterialTickV3<HypergraphStore>,
+) {
+    use babylon_bsl::identity_codec::StableBslValueV1;
+    use babylon_graph::stable_element::StableElementKeyV1;
+    let catalog = crate::michigan_material::michigan_material_catalog_v1().unwrap();
+    let events = candidate.graph_report().successful_event_batch().events();
+    assert_eq!(events.len(), 5);
+    for seed in &catalog.staffing().pools {
+        let event = events.iter().find(|event| event.fields().iter().any(|(key,value)| {
+            key == "subject" && matches!(value, StableBslValueV1::Node(StableElementKeyV1::Node{local_name,..}) if *local_name == seed.local_name())
+        })).unwrap();
+        for (field, value) in [
+            ("opening-employed", seed.employed),
+            ("opening-reserve", seed.reserve),
+            ("previous-unretained-hours", seed.previous_unretained_hours),
+        ] {
+            assert!(event.fields().contains(&(
+                field.to_owned(),
+                StableBslValueV1::Int(i64::try_from(value).unwrap())
+            )));
+        }
+    }
 }
