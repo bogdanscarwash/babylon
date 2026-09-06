@@ -1,45 +1,42 @@
 # Native Archive quiet-week and restart evidence
 
 This receipt covers PER-320's visible quiet-week refresh and restart behavior.
-It does not establish overall G4 comprehension or performance acceptance.
+It does not prove G4 comprehension or performance acceptance.
 
 ## Source and session
 
 - Native binaries built from commit
-  `1f8eb154cc5c226d4af0972add92b4e5ab9c6a1b` before the subsequent request-ID
-  review regression was added.
+  `1f8eb154cc5c226d4af0972add92b4e5ab9c6a1b` before the agent added the
+  command-ID review regression.
 - Standard Michigan campaign:
   `e89c3b3e-bf6f-4637-97c8-0666c80d9feb`.
 - Dedicated QA database: `babylon_g4_ui_qa_b90d_20260904_v2`.
-- County: Wayne, `26163`; full observer; actual window `1366×768`.
+- County: Wayne, `26163`. Full observer. Actual window: `1366×768`.
 - The Director explicitly requested restarting the application and testing it.
   The earlier user-operated session in `launch.log` is separate from this proof.
-- Test client PID `1827492`, launcher PID `1826105`; restart client PID
-  `1890047`, launcher PID `1888638`. Input was confined to the verified client
-  executable, window PID, and launcher parent.
+- Test client PID `1827492`, launcher PID `1826105`.
+- Restart client PID `1890047`, launcher PID `1888638`.
+- The input helper verified the client executable, window PID, and launcher parent.
 - Both test launchers exited with status zero. No failed session state appeared.
 
 ## Observed sequence
 
 1. Reopen the Standard campaign at week zero. Open Wayne's cited Archive.
-2. Activate WORLD to release control focus without closing the Archive. Advance
-   once to week one. The held card progresses from unavailable through pending
-   publication to verified; no county reselection or Archive reopening occurs.
-3. At `11:32:41.234436Z`, the card installs content from week one, verified
-   through week one. Capture the visible card and the confined dossier CLI row.
-4. Advance once more at `11:36:13.674993Z`, keeping the same card open. The
-   durable acknowledgement reaches week two at `11:36:23.664036Z`.
-5. At `11:36:27.565657Z`, the card installs its existing week-one content with
-   verification through week two. The screenshot shows both facts explicitly.
-6. Close the owned window through its normal window-manager close event.
-   Reopen the same campaign without advancing, and open Wayne's Archive.
-   The card again shows week two, verification through two, and content from one.
-7. Compare confined CLI receipts before and after restart: the entire JSONL
-   output is byte-identical, including scope, citations, content, and freshness.
+2. Activate WORLD to release control focus without closing the Archive.
+3. Advance once to week one. The held card moves from unavailable through pending publication to verified.
+4. Keep Wayne selected and the Archive open throughout both advances.
+5. At `11:32:41.234436Z`, the card installs week-one content, verified through week one.
+6. Capture the visible card and the confined dossier CLI row.
+7. Advance at `11:36:13.674993Z`, keeping the card open. The durable acknowledgement reaches week two at `11:36:23.664036Z`.
+8. At `11:36:27.565657Z`, the card installs existing week-one content with verification through week two. The screenshot shows both facts.
+9. Close the owned window through its normal window-manager close event.
+10. Reopen the same campaign without advancing, and open Wayne's Archive.
+11. The card shows week two, verification through two, and content from one.
+12. Before and after restart, complete CLI output bytes match, including scope, citations, content, and freshness.
 
 ## Exact checks
 
-The week-one and week-two `page` objects are equal, including all 39 atoms,
+The week-one and week-two `page` objects match, including all 39 atoms,
 links, citations, changes, and rendered content. Their committed tick scopes
 differ. Durable, processed, and verified ticks advance from `(1, 1, 1)` to
 `(2, 2, 2)` without creating a page revision.
@@ -54,8 +51,8 @@ differ. Durable, processed, and verified ticks advance from `(1, 1, 1)` to
 - Week-two and restarted JSONL SHA-256:
   `97aebf757430d0d66633da1b3059386a50d8834e7c806238df7ff4cbd92545c0`.
 
-The CLI used the launcher's existing confined Archive login and did not
-reprovision roles. Credentials were passed only in its child environment.
+The CLI used the launcher's existing confined Archive login without changing
+roles. The launcher passed credentials only in its child environment.
 
 ## Retained local evidence
 
@@ -76,10 +73,10 @@ The requested resize to `1920×1080` remained `1366×768`, verified by
 `07-week2-1920.png` and `08-week2-after-resize.png` do not qualify the larger
 resolution. The display mode was not changed in this session.
 
-The quiet advance took about 9.99 seconds to durable acknowledgement, 12.99
-seconds to the refreshed observer, and 13.89 seconds to the caught-up card.
+The quiet advance took about 9.99 seconds to durable acknowledgement.
+The observer refreshed after 12.99 seconds, and the card caught up after 13.89 seconds.
 Rendering remained approximately 60 FPS. These measurements include scheduling
-and read work; they do not isolate SQL or simulation time.
+and read work. They do not isolate SQL or simulation time.
 
 Window-manager close establishes orderly shutdown, not keyboard-only Quit.
 This operator-run check does not substitute for the Director's uninterrupted
