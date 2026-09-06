@@ -4,31 +4,76 @@ use super::*;
 use babylon_persistence::SemanticArchiveReaderErrorV1;
 use postgres::GenericClient;
 
-const RELATIONS: [&str; 24] = [
-    "graph_node_v1",
-    "graph_node_f64_v1",
-    "graph_edge_v1",
-    "graph_hyperedge_v1",
-    "graph_hyperedge_member_v1",
-    "graph_edge_f64_v1",
-    "graph_node_currency_v1",
-    "graph_hyperedge_f64_v1",
-    "world_register_v1",
-    "hex_state_delta_v1",
-    "territory_state_v1",
-    "territory_state_field_v1",
-    "organization_state_v1",
-    "organization_state_field_v1",
-    "organization_territory_v1",
-    "tick_event_v2",
-    "tick_event_field_v2",
-    "tick_choice_receipt_v1",
-    "tick_choice_receipt_branch_v1",
-    "tick_choice_receipt_carrier_element_v1",
-    "checkpoint_manifest",
-    "checkpoint_section_v1",
-    "archive_dirty_receipt_v1",
-    "tick_action_batch_v1",
+const RELATIONS: [(&str, &str); 24] = [
+    ("graph_node_v1", "public.v_observer_graph_node_v1"),
+    ("graph_node_f64_v1", "public.v_observer_graph_node_f64_v1"),
+    ("graph_edge_v1", "public.v_observer_graph_edge_v1"),
+    ("graph_hyperedge_v1", "public.v_observer_graph_hyperedge_v1"),
+    (
+        "graph_hyperedge_member_v1",
+        "public.v_observer_graph_hyperedge_member_v1",
+    ),
+    ("graph_edge_f64_v1", "public.v_observer_graph_edge_f64_v1"),
+    (
+        "graph_node_currency_v1",
+        "public.v_observer_graph_node_currency_v1",
+    ),
+    (
+        "graph_hyperedge_f64_v1",
+        "public.v_observer_graph_hyperedge_f64_v1",
+    ),
+    ("world_register_v1", "public.v_observer_world_register_v1"),
+    ("hex_state_delta_v1", "public.v_observer_hex_state_delta_v1"),
+    ("territory_state_v1", "public.v_observer_territory_state_v1"),
+    (
+        "territory_state_field_v1",
+        "public.v_observer_territory_state_field_v1",
+    ),
+    (
+        "organization_state_v1",
+        "public.v_observer_organization_state_v1",
+    ),
+    (
+        "organization_state_field_v1",
+        "public.v_observer_organization_state_field_v1",
+    ),
+    (
+        "organization_territory_v1",
+        "public.v_observer_organization_territory_v1",
+    ),
+    ("tick_event_v2", "public.v_observer_tick_event_v2"),
+    (
+        "tick_event_field_v2",
+        "public.v_observer_tick_event_field_v2",
+    ),
+    (
+        "tick_choice_receipt_v1",
+        "public.v_observer_tick_choice_receipt_v1",
+    ),
+    (
+        "tick_choice_receipt_branch_v1",
+        "public.v_observer_tick_choice_receipt_branch_v1",
+    ),
+    (
+        "tick_choice_receipt_carrier_element_v1",
+        "public.v_observer_tick_choice_receipt_carrier_element_v1",
+    ),
+    (
+        "checkpoint_manifest",
+        "public.v_observer_checkpoint_manifest",
+    ),
+    (
+        "checkpoint_section_v1",
+        "public.v_observer_checkpoint_section_v1",
+    ),
+    (
+        "archive_dirty_receipt_v1",
+        "public.v_observer_archive_dirty_receipt_v1",
+    ),
+    (
+        "tick_action_batch_v1",
+        "public.v_observer_tick_action_batch_v1",
+    ),
 ];
 
 const FOUNDATION_CAMPAIGN: u128 = 41_003;
@@ -89,12 +134,11 @@ fn exact_rows_require_the_matching_v3_commit_marker() {
     let mut observer = observer_config.connect(NoTls).unwrap();
     let mut writer = target.writer.connect(NoTls).unwrap();
     let mut populated = 0;
-    for relation in RELATIONS {
+    for (relation, view) in RELATIONS {
         let raw = format!("babylon_state.{relation}");
-        let view = format!("public.v_observer_{relation}");
         let expected = rows(&mut writer, &raw, campaign);
         populated += usize::from(!expected.is_empty());
-        assert_eq!(rows(&mut observer, &view, campaign), expected, "{relation}");
+        assert_eq!(rows(&mut observer, view, campaign), expected, "{relation}");
         let raw_columns = writer.prepare(&format!("SELECT * FROM {raw}")).unwrap();
         let view_columns = observer.prepare(&format!("SELECT * FROM {view}")).unwrap();
         let describe = |statement: &postgres::Statement| {
@@ -129,9 +173,9 @@ fn exact_rows_require_the_matching_v3_commit_marker() {
         let mut tx = writer.transaction().unwrap();
         tx.batch_execute("SET CONSTRAINTS ALL DEFERRED").unwrap();
         assert_eq!(tx.execute(mutation, &[campaign.as_uuid()]).unwrap(), 1);
-        for relation in RELATIONS {
+        for (relation, view) in RELATIONS {
             assert!(
-                rows(&mut tx, &format!("public.v_observer_{relation}"), campaign).is_empty(),
+                rows(&mut tx, view, campaign).is_empty(),
                 "{relation} exposed rows with a mismatched marker: {mutation}"
             );
         }
@@ -166,9 +210,9 @@ fn assert_preview_refused(
     let SemanticArchiveReaderErrorV1::WriterAuthorityRefused(held) = error else {
         panic!("expected exact Archive privilege refusal, got {error:?}");
     };
-    for relation in RELATIONS {
+    for (relation, view) in RELATIONS {
         assert!(
-            held.contains(&format!("public.v_observer_{relation}:SELECT")),
+            held.contains(&format!("{view}:SELECT")),
             "Archive census missed {relation}"
         );
     }
@@ -198,12 +242,11 @@ fn full_observer_requires_every_view_and_preview_refuses_all_grant_paths() {
         Err(ObserverEconomyErrorV1::CampaignAbsent)
     );
     assert_eq!(archive.committed_tick_status(absent).unwrap(), None);
-    for relation in RELATIONS {
+    for (relation, view) in RELATIONS {
         let raw = format!("babylon_state.{relation}");
-        let view = format!("public.v_observer_{relation}");
         assert_sql_denied(&observer_config, &raw);
         assert_sql_denied(&known_config, &raw);
-        assert_sql_denied(&known_config, &view);
+        assert_sql_denied(&known_config, view);
         writer
             .batch_execute(&format!("REVOKE SELECT ON {view} FROM babylon_observer"))
             .unwrap();
@@ -227,19 +270,15 @@ fn full_observer_requires_every_view_and_preview_refuses_all_grant_paths() {
         ),
         ("PUBLIC".to_owned(), ""),
     ] {
-        for relation in RELATIONS {
+        for (_, view) in RELATIONS {
             writer
-                .batch_execute(&format!(
-                    "GRANT SELECT{columns} ON public.v_observer_{relation} TO {grantee}"
-                ))
+                .batch_execute(&format!("GRANT SELECT{columns} ON {view} TO {grantee}"))
                 .unwrap();
         }
         assert_preview_refused(&known, &archive, absent);
-        for relation in RELATIONS {
+        for (_, view) in RELATIONS {
             writer
-                .batch_execute(&format!(
-                    "REVOKE SELECT{columns} ON public.v_observer_{relation} FROM {grantee}"
-                ))
+                .batch_execute(&format!("REVOKE SELECT{columns} ON {view} FROM {grantee}"))
                 .unwrap();
         }
         assert_eq!(
