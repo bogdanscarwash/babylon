@@ -17,7 +17,7 @@ pub enum StaffingErrorV1 {
     DuplicateSiteUnit = 5,
     DuplicateProcess = 6,
     PopulationInvariant = 7,
-    WeekInvariant = 8,
+    PeriodInvariant = 8,
     Arithmetic = 9,
     UnknownRequest = 10,
     RequestBinding = 11,
@@ -33,7 +33,7 @@ impl std::fmt::Display for StaffingErrorV1 {
 }
 impl std::error::Error for StaffingErrorV1 {}
 
-/// An explicit schedule under V1's one-week retention rule.
+/// An explicit schedule under V1's one-period retention rule.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct StaffingPolicyV1 {
     hours_per_person: u64,
@@ -42,7 +42,7 @@ impl StaffingPolicyV1 {
     /// Retain the larger of current and preceding unretained work requests.
     /// # Errors
     /// Refuses a zero work schedule; no default schedule is inferred.
-    pub const fn one_week(hours_per_person: u64) -> Result<Self, StaffingErrorV1> {
+    pub const fn one_period(hours_per_person: u64) -> Result<Self, StaffingErrorV1> {
         if hours_per_person == 0 {
             return Err(StaffingErrorV1::ZeroSchedule);
         }
@@ -177,19 +177,19 @@ impl StaffingPoolStateV1 {
 /// Complete immutable opening staffing state, ordered by pool identity.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StaffingStateV1 {
-    week: u64,
+    period: u64,
     pools: Vec<StaffingPoolStateV1>,
 }
 impl StaffingStateV1 {
     /// Validate one owner per pool, site/unit and process across the state.
     /// # Errors
-    /// Refuses week zero, row bounds or overlapping ownership.
+    /// Refuses period zero, row bounds or overlapping ownership.
     pub fn try_new(
-        week: u64,
+        period: u64,
         mut pools: Vec<StaffingPoolStateV1>,
     ) -> Result<Self, StaffingErrorV1> {
-        if week == 0 {
-            return Err(StaffingErrorV1::WeekInvariant);
+        if period == 0 {
+            return Err(StaffingErrorV1::PeriodInvariant);
         }
         if pools.len() > MAX_MATERIAL_CIRCUIT_ROWS_V1 {
             return Err(StaffingErrorV1::RowLimit);
@@ -216,11 +216,11 @@ impl StaffingStateV1 {
                 }
             }
         }
-        Ok(Self { week, pools })
+        Ok(Self { period, pools })
     }
     #[must_use]
-    pub const fn week(&self) -> u64 {
-        self.week
+    pub const fn period(&self) -> u64 {
+        self.period
     }
     #[must_use]
     pub fn pools(&self) -> &[StaffingPoolStateV1] {
@@ -231,7 +231,7 @@ impl StaffingStateV1 {
 /// One explicit process request, including an explicit zero for no work.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct StaffingWorkRequestV1 {
-    week: u64,
+    period: u64,
     pool_id: StaffingPoolIdV1,
     process_id: ProcessIdV1,
     site_id: SiteIdV1,
@@ -241,7 +241,7 @@ pub struct StaffingWorkRequestV1 {
 impl StaffingWorkRequestV1 {
     #[must_use]
     pub const fn new(
-        week: u64,
+        period: u64,
         pool_id: StaffingPoolIdV1,
         process_id: ProcessIdV1,
         site_id: SiteIdV1,
@@ -249,7 +249,7 @@ impl StaffingWorkRequestV1 {
         hours: u64,
     ) -> Self {
         Self {
-            week,
+            period,
             pool_id,
             process_id,
             site_id,
@@ -258,8 +258,8 @@ impl StaffingWorkRequestV1 {
         }
     }
     #[must_use]
-    pub const fn week(self) -> u64 {
-        self.week
+    pub const fn period(self) -> u64 {
+        self.period
     }
     #[must_use]
     pub const fn pool_id(self) -> StaffingPoolIdV1 {
@@ -286,7 +286,7 @@ impl StaffingWorkRequestV1 {
 /// Exact completed account; V1 has no mortality, migration or inactivity flows.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StaffingReceiptV1 {
-    week: u64,
+    period: u64,
     binding: StaffingPoolBindingV1,
     opening_employed: u64,
     opening_reserve: u64,
@@ -302,7 +302,7 @@ pub struct StaffingReceiptV1 {
 }
 impl StaffingReceiptV1 {
     pub(super) fn from_transition(
-        week: u64,
+        period: u64,
         opening: &StaffingPoolStateV1,
         closing: &StaffingPoolStateV1,
         current_unretained_hours: u64,
@@ -316,7 +316,7 @@ impl StaffingReceiptV1 {
             (0, opening.employed - closing.employed)
         };
         Self {
-            week,
+            period,
             binding: opening.binding.clone(),
             opening_employed: opening.employed,
             opening_reserve: opening.reserve,
@@ -332,8 +332,8 @@ impl StaffingReceiptV1 {
         }
     }
     #[must_use]
-    pub const fn week(&self) -> u64 {
-        self.week
+    pub const fn period(&self) -> u64 {
+        self.period
     }
     #[must_use]
     pub const fn binding(&self) -> &StaffingPoolBindingV1 {
@@ -412,7 +412,7 @@ impl StaffingTransitionV1 {
     pub fn receipts(&self) -> &[StaffingReceiptV1] {
         &self.receipts
     }
-    /// Proposed exact budgets, ordered by site/unit, for the following week.
+    /// Proposed exact budgets, ordered by site/unit, for the following period.
     #[must_use]
     pub fn next_labor(&self) -> &[LaborCapacityRowV1] {
         &self.labor

@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use super::SectorBundleErrorV1;
 use crate::michigan_cohorts::MICHIGAN_COHORT_SCENARIO_V2;
-use crate::michigan_material::{michigan_material_catalog_v1, MichiganStaffingDesignV1};
+use crate::michigan_material::{MichiganMaterialCatalogV1, MichiganStaffingDesignV1};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -33,8 +33,9 @@ pub(super) struct StoredStaffingV1 {
 }
 
 impl StoredStaffingV1 {
-    pub(super) fn authored() -> Result<Self, SectorBundleErrorV1> {
-        let catalog = michigan_material_catalog_v1().map_err(|_| SectorBundleErrorV1::Source)?;
+    pub(super) fn authored(
+        catalog: &MichiganMaterialCatalogV1,
+    ) -> Result<Self, SectorBundleErrorV1> {
         let mut bindings = Vec::new();
         for seed in &catalog.staffing().pools {
             let process = catalog
@@ -69,7 +70,10 @@ impl StoredStaffingV1 {
         serde_json::to_vec(self).map_err(|_| SectorBundleErrorV1::WireNoncanonical)
     }
 
-    pub(super) fn decode(bytes: &[u8]) -> Result<Self, SectorBundleErrorV1> {
+    pub(super) fn decode(
+        bytes: &[u8],
+        catalog: &MichiganMaterialCatalogV1,
+    ) -> Result<Self, SectorBundleErrorV1> {
         let value: Self =
             serde_json::from_slice(bytes).map_err(|_| SectorBundleErrorV1::WireNoncanonical)?;
         if value.encode()? != bytes {
@@ -77,7 +81,7 @@ impl StoredStaffingV1 {
         }
         // Exact source admission also proves seeds, policy, placement, principal
         // bindings and canonical ordering. A self-hash cannot grant authority.
-        if value != Self::authored()? {
+        if value != Self::authored(catalog)? {
             return Err(SectorBundleErrorV1::Source);
         }
         value.composition()?;
@@ -98,7 +102,7 @@ impl StoredStaffingV1 {
                     SiteIdV1::from_bytes(binding.site_id),
                     UnitIdV1::from_bytes(binding.unit_id),
                     binding.labor_force,
-                    StaffingPolicyV1::one_week(self.design.hours_per_worker_week)
+                    StaffingPolicyV1::one_period(self.design.hours_per_worker_period)
                         .map_err(|_| SectorBundleErrorV1::Resource)?,
                     binding
                         .process_ids
@@ -127,17 +131,17 @@ mod tests {
 
     #[test]
     fn stored_authority_refuses_policy_placement_seed_and_every_principal_mutation() {
-        let original = StoredStaffingV1::authored().unwrap();
+        let original = StoredStaffingV1::authored(&crate::test_support::catalog()).unwrap();
         let bytes = original.encode().unwrap();
-        let decoded = StoredStaffingV1::decode(&bytes).unwrap();
+        let decoded = StoredStaffingV1::decode(&bytes, &crate::test_support::catalog()).unwrap();
         assert_eq!(decoded, original);
         assert_eq!(decoded.composition().unwrap().bindings().len(), 5);
         for change in 0..11 {
             let mut changed = original.clone();
             match change {
                 0 => changed.authority = "Scheduled".to_owned(),
-                1 => changed.design.hours_per_worker_week = 39,
-                2 => changed.design.retention_weeks = 2,
+                1 => changed.design.hours_per_worker_period = 39,
+                2 => changed.design.retention_periods = 2,
                 3 => changed.design.placement = "before-metabolism".to_owned(),
                 4 => changed.design.pools[0].previous_unretained_hours += 1,
                 5 => changed.bindings[0].pool_id[0] ^= 1,
@@ -148,10 +152,13 @@ mod tests {
                 _ => changed.design.composition_id.push('x'),
             }
             assert_eq!(
-                StoredStaffingV1::decode(&changed.encode().unwrap()),
+                StoredStaffingV1::decode(
+                    &changed.encode().unwrap(),
+                    &crate::test_support::catalog()
+                ),
                 Err(SectorBundleErrorV1::Source)
             );
         }
-        assert!(StoredStaffingV1::decode(b"{}").is_err());
+        assert!(StoredStaffingV1::decode(b"{}", &crate::test_support::catalog()).is_err());
     }
 }

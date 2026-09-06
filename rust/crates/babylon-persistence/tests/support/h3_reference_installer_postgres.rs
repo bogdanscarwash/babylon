@@ -1,28 +1,22 @@
 //! Live `PostgreSQL` contracts for the Michigan H3 reference-bundle installer.
 
-use super::{
-    assert_lock_released, authority_snapshot, database_user, repository_root, AuthoritySnapshot,
-    ScratchDatabase, LIVE_TASK_SECONDS, MAX_LEGACY_CENSUS_ROWS, OWNER_PASSWORD,
-};
+use super::{assert_lock_released, database_user, ScratchDatabase, OWNER_PASSWORD};
 use babylon_kernel::tick_content_hash::RefDigestV1;
 use babylon_persistence::{
-    adopt_legacy_schema, compiled_schema_migrations, install_michigan_h3_reference_bundle_v1,
+    compiled_schema_migrations, install_michigan_h3_reference_bundle_v1,
     michigan_dynamic_hex_foundation_v1, migrate_schema_epoch,
-    representative_h3_reference_cohort_v1, H3ReferenceCohort, H3ReferenceInstallConflict,
-    H3ReferenceInstallDisposition, H3ReferenceInstallError, H3ReferenceInstallOperation,
-    H3ReferenceInstallReport, LegacyAdopterError, SchemaEpochError, SchemaEpochOrigin,
+    representative_h3_reference_cohort_v1, CatalogError, H3ReferenceCohort,
+    H3ReferenceInstallConflict, H3ReferenceInstallDisposition, H3ReferenceInstallError,
+    H3ReferenceInstallOperation, H3ReferenceInstallReport, SchemaEpochError, SchemaEpochOrigin,
     SCHEMA_ADVISORY_LOCK_KEY,
 };
 use postgres::{Config, NoTls};
-use std::path::PathBuf;
-use std::process::{Command, Stdio};
 
 const CLOSURE_COUNT: usize = 59_849;
 const SOURCE_COUNT: usize = 48_764;
 const R8_CHILD_COUNT: usize = 319_004;
 const MAX_COHORT_SNAPSHOT_ROWS: usize = 2;
 const MAX_EPOCH_CATALOG_ROWS: usize = 16;
-const MAX_LEDGER_ROWS: usize = 3;
 const ARTIFACT_DIGEST_HEX: &str =
     "e60d93a43d6c66e84f1e53ecaf633af5911bd5b48b0ef0ad6a012f6d9f5b13a9";
 const REF_DIGEST_HEX: &str = "92b21ff325bde67f26565f52882d3664daacd6d51423f2a588344da012fd4161";
@@ -30,9 +24,6 @@ const R8_SECTION_DIGEST_HEX: &str =
     "b5ebf405140f6f79ddbc44fa1005b195bed0bc28e0eacf2d8e1697cd9c839491";
 const REFERENCE_BUNDLE_DIGEST_HEX: &str =
     "84bbffa9b2388aa168c065e710a61313fbd46522d2022b628f0919ecffec9831";
-const BRIDGE_PARQUET_ENV: &str = "BABYLON_PER62_BRIDGE_PARQUET";
-const LAND_MASK_PARQUET_ENV: &str = "BABYLON_PER62_LAND_MASK_PARQUET";
-const P27_ARCHIVE_ROOT_ENV: &str = "BABYLON_PER62_P27_ARCHIVE_ROOT";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct ReferenceSnapshot {
@@ -75,137 +66,15 @@ struct ProductSnapshot {
     denominator: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct V2Snapshot {
-    catalog: Vec<(String, String)>,
-    ledger: Vec<(i64, String)>,
-    h3_cell_count: i64,
-}
-
-pub(super) fn verify_h3_reference_installer(base: &Config, legacy_template: &str, owner: &str) {
+pub(super) fn verify_h3_reference_installer(base: &Config, owner: &str) {
     let cohort = representative_cohort();
     verify_connection_failure_redacts_credentials(&cohort);
-    verify_frozen_legacy_migration_install(base, legacy_template, &cohort);
     verify_exact_epoch_install_and_retry(base, &cohort);
     verify_fresh_refusal(base, &cohort);
-    verify_exact_vtwo_refusal(base, &cohort);
     verify_lock_refusal(base, &cohort);
     verify_non_owner_refusal(base, owner, &cohort);
     verify_installed_state_conflicts(base, &cohort);
     verify_preflight_artifact_identity_conflict(base, &cohort);
-}
-
-pub(super) fn verify_h3_reference_installed_mutations(base: &Config) {
-    let cohort = representative_cohort();
-    verify_installed_state_conflicts(base, &cohort);
-}
-
-pub(super) fn verify_h3_reference_release_equivalence(base: &Config) {
-    let repository = repository_root();
-    let bridge = required_path(BRIDGE_PARQUET_ENV);
-    let land_mask = required_path(LAND_MASK_PARQUET_ENV);
-    let p27_root = required_path(P27_ARCHIVE_ROOT_ENV);
-    let verifier = repository.join("tools/verify_h3_reference_release.py");
-    let fixture =
-        repository.join("rust/crates/babylon-persistence/src/fixtures/h3_reference_source_v1.bin");
-    let status = Command::new("timeout")
-        .args([
-            "--signal=TERM",
-            "--kill-after=5s",
-            LIVE_TASK_SECONDS,
-            "uv",
-            "run",
-            "--frozen",
-            "--no-sync",
-            "python",
-        ])
-        .arg(verifier)
-        .arg("--bridge")
-        .arg(bridge)
-        .arg("--land-mask")
-        .arg(land_mask)
-        .arg("--p27-archive-root")
-        .arg(p27_root)
-        .arg("--source-fixture")
-        .arg(fixture)
-        .current_dir(&repository)
-        .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit())
-        .status()
-        .expect("PER-62 release verifier must launch");
-    assert!(status.success(), "PER-62 release verifier must succeed");
-
-    let cohort = representative_cohort();
-    let (database, config) = exact_epoch_database(base, "h3_release_equivalence");
-    let installed = install_reference_bundle(&config, &cohort)
-        .expect("release-proved cohort must install into the exact current epoch");
-    assert_exact_report(&installed, H3ReferenceInstallDisposition::Installed, 1);
-    let installed_snapshot = reference_snapshot(&config);
-    assert_eq!(installed_snapshot, expected_installed_snapshot());
-    let retry = install_reference_bundle(&config, &cohort)
-        .expect("release-proved cohort retry must be idempotent");
-    assert_exact_report(&retry, H3ReferenceInstallDisposition::AlreadyPresent, 0);
-    assert_eq!(reference_snapshot(&config), installed_snapshot);
-    assert_lock_released(&config);
-    database.cleanup();
-}
-
-fn required_path(name: &'static str) -> PathBuf {
-    std::env::var_os(name).map_or_else(
-        || panic!("{name} must name the pinned PER-62 artifact"),
-        PathBuf::from,
-    )
-}
-
-fn verify_frozen_legacy_migration_install(
-    base: &Config,
-    legacy_template: &str,
-    cohort: &H3ReferenceCohort,
-) {
-    let database = ScratchDatabase::from_template(base, legacy_template, "h3_installer_legacy");
-    let config = database.config(base);
-    let adoption = adopt_legacy_schema(&config).expect("frozen legacy database must adopt");
-    assert_eq!(
-        (adoption.expected_objects, adoption.matched_objects),
-        (102, 102)
-    );
-    assert!(adoption.transaction_verified);
-    let pre_migration_snapshot = frozen_legacy_snapshot(&config);
-    assert!(pre_migration_snapshot.authority_schemas.is_empty());
-
-    let migration = migrate_schema_epoch(&config).expect("adopted legacy database must migrate");
-    assert_eq!(migration.origin, SchemaEpochOrigin::ExactLegacy);
-    assert_eq!((migration.prior_applied, migration.final_applied), (0, 6));
-    assert_eq!(migration.applied_versions.len(), 6);
-    assert_eq!(migration.legacy_adoption.as_ref(), Some(&adoption));
-    // A successful migration has already run `verify_post_epoch_census`, which proves the
-    // governed epoch-owned rows and the unchanged frozen legacy census before returning.
-    let post_migration_snapshot = frozen_legacy_snapshot(&config);
-    assert_eq!(
-        post_migration_snapshot.stamps,
-        pre_migration_snapshot.stamps
-    );
-    assert_eq!(
-        post_migration_snapshot.authority_schemas,
-        vec!["babylon_ref".to_owned(), "babylon_state".to_owned()]
-    );
-    assert!(pre_migration_snapshot.census.len() <= MAX_LEGACY_CENSUS_ROWS);
-    assert!(post_migration_snapshot.census.len() <= MAX_LEGACY_CENSUS_ROWS);
-
-    let installed = install_reference_bundle(&config, cohort)
-        .expect("migrated frozen legacy database must install the exact cohort");
-    assert_exact_report(&installed, H3ReferenceInstallDisposition::Installed, 1);
-    let installed_snapshot = reference_snapshot(&config);
-    assert_eq!(installed_snapshot, expected_installed_snapshot());
-    assert_eq!(frozen_legacy_snapshot(&config), post_migration_snapshot);
-
-    let retry = install_reference_bundle(&config, cohort)
-        .expect("identical legacy-migrated cohort install must be idempotent");
-    assert_exact_report(&retry, H3ReferenceInstallDisposition::AlreadyPresent, 0);
-    assert_eq!(reference_snapshot(&config), installed_snapshot);
-    assert_eq!(frozen_legacy_snapshot(&config), post_migration_snapshot);
-    assert_lock_released(&config);
-    database.cleanup();
 }
 
 fn verify_exact_epoch_install_and_retry(base: &Config, cohort: &H3ReferenceCohort) {
@@ -253,39 +122,17 @@ fn verify_fresh_refusal(base: &Config, cohort: &H3ReferenceCohort) {
     let before = babylon_catalog_snapshot(&config);
     match install_reference_bundle(&config, cohort) {
         Err(H3ReferenceInstallError::ExactSchemaEpochRequired {
-            allowed,
+            expected,
             actual,
             origin,
         }) => {
-            assert_eq!(allowed, [6, current_schema_epoch()]);
+            assert_eq!(expected, current_schema_epoch());
             assert_eq!(actual, 0);
             assert_eq!(origin, SchemaEpochOrigin::Fresh);
         }
         _ => panic!("fresh database must refuse without migration"),
     }
     assert_eq!(babylon_catalog_snapshot(&config), before);
-    assert_lock_released(&config);
-    database.cleanup();
-}
-
-fn verify_exact_vtwo_refusal(base: &Config, cohort: &H3ReferenceCohort) {
-    let database = ScratchDatabase::empty(base, "h3_installer_vtwo", database_user(base));
-    let config = database.config(base);
-    establish_vtwo_prefix(&config);
-    let before = vtwo_snapshot(&config);
-    match install_reference_bundle(&config, cohort) {
-        Err(H3ReferenceInstallError::ExactSchemaEpochRequired {
-            allowed,
-            actual,
-            origin,
-        }) => {
-            assert_eq!(allowed, [6, current_schema_epoch()]);
-            assert_eq!(actual, 2);
-            assert_eq!(origin, SchemaEpochOrigin::ExistingRustPrefix);
-        }
-        _ => panic!("exact epoch 2 must refuse without migration"),
-    }
-    assert_eq!(vtwo_snapshot(&config), before);
     assert_lock_released(&config);
     database.cleanup();
 }
@@ -304,9 +151,7 @@ fn verify_lock_refusal(base: &Config, cohort: &H3ReferenceCohort) {
     let before = reference_snapshot(&config);
     assert!(matches!(
         install_reference_bundle(&config, cohort),
-        Err(H3ReferenceInstallError::Lock(
-            LegacyAdopterError::LockUnavailable
-        ))
+        Err(H3ReferenceInstallError::Lock(CatalogError::LockUnavailable))
     ));
     assert_eq!(reference_snapshot(&config), before);
     let unlocked: bool = blocker
@@ -601,11 +446,6 @@ fn mutate_missing_r8_product(config: &Config) {
     assert_eq!(changed, 1);
 }
 
-fn frozen_legacy_snapshot(config: &Config) -> AuthoritySnapshot {
-    let mut client = config.connect(NoTls).unwrap();
-    authority_snapshot(&mut client)
-}
-
 fn assert_exact_report(
     report: &H3ReferenceInstallReport,
     disposition: H3ReferenceInstallDisposition,
@@ -651,25 +491,6 @@ fn current_schema_epoch() -> usize {
     compiled_schema_migrations()
         .expect("compiled migration registry must validate")
         .len()
-}
-
-fn establish_vtwo_prefix(config: &Config) {
-    let compiled = compiled_schema_migrations().expect("compiled migration registry must validate");
-    let mut client = config.connect(NoTls).unwrap();
-    let mut transaction = client.transaction().unwrap();
-    for migration in compiled.iter().take(2) {
-        let version = migration.version().as_i64();
-        let checksum = migration.checksum();
-        let checksum_bytes = checksum.as_bytes().as_slice();
-        transaction.batch_execute(migration.sql()).unwrap();
-        transaction
-            .execute(
-                "INSERT INTO babylon_state.schema_migration (version, checksum) VALUES ($1, $2)",
-                &[&version, &checksum_bytes],
-            )
-            .unwrap();
-    }
-    transaction.commit().unwrap();
 }
 
 fn seed_conflicting_artifact_identity(config: &Config) {
@@ -822,32 +643,6 @@ fn expected_installed_snapshot() -> ReferenceSnapshot {
             measure_unit: Some("identity".into()),
             denominator: None,
         }],
-    }
-}
-
-fn vtwo_snapshot(config: &Config) -> V2Snapshot {
-    let mut client = config.connect(NoTls).unwrap();
-    let limit = i64::try_from(MAX_LEDGER_ROWS + 1).unwrap();
-    let rows = client
-        .query(
-            "SELECT version, pg_catalog.encode(checksum, 'hex') \
-             FROM babylon_state.schema_migration ORDER BY version LIMIT $1",
-            &[&limit],
-        )
-        .unwrap();
-    assert!(rows.len() <= MAX_LEDGER_ROWS);
-    let h3_cell_count = client
-        .query_one("SELECT pg_catalog.count(*) FROM babylon_ref.h3_cell", &[])
-        .unwrap()
-        .get(0);
-    V2Snapshot {
-        catalog: babylon_catalog_snapshot(config),
-        ledger: rows
-            .iter()
-            .take(MAX_LEDGER_ROWS)
-            .map(|row| (row.get(0), row.get(1)))
-            .collect(),
-        h3_cell_count,
     }
 }
 

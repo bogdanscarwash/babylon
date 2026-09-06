@@ -23,7 +23,7 @@ fn michigan_observer_foundation_seeds_all_83_exact_county_baselines() {
 }
 
 #[test]
-fn empty_economy_program_commits_a_quiet_week_without_material_changes() {
+fn empty_economy_program_commits_a_quiet_period_without_material_changes() {
     use babylon_bsl::identity_codec::StableBslValueV1;
     use babylon_bsl::structural_verbs::CollectingSink;
     use babylon_graph::stable_element::StableElementKeyV1;
@@ -35,7 +35,7 @@ fn empty_economy_program_commits_a_quiet_week_without_material_changes() {
     let mut sink = CollectingSink::default();
     let report = session
         .advance(&mut sink, &actions)
-        .expect("empty program advances the weekly interval");
+        .expect("empty program advances the four-week interval");
     assert_eq!(report.report().fired, 0);
     assert_eq!(report.report().considered, 0);
     assert!(report.report().audit_receipts.is_empty());

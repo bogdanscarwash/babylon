@@ -28,8 +28,6 @@ jobs:
           ref: dev
       - uses: ./.github/actions/bootstrap-python
       - uses: ./.github/actions/fetch-reference-db
-      - name: Catalog sentinel (DB probe — catalog↔DB reconciliation)
-        run: uv run python tools/sentinel_check.py catalog --check
       - name: Run requires_reference_db suites
         run: >-
           uv run pytest tests -m requires_reference_db

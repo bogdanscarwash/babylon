@@ -59,10 +59,10 @@ fn hex(bytes: [u8; 32]) -> String {
 fn capacity_rows() -> Vec<CapacityRowV1> {
     [1, 2, 3]
         .into_iter()
-        .map(|week| CapacityRowV1 {
+        .map(|period| CapacityRowV1 {
             process_id: process(BAKERY),
             site_id: site(FACTORY),
-            week,
+            period,
             available_batches: 3,
         })
         .collect()
@@ -71,10 +71,10 @@ fn capacity_rows() -> Vec<CapacityRowV1> {
 fn labor_rows() -> Vec<LaborCapacityRowV1> {
     [1, 2, 3]
         .into_iter()
-        .map(|week| LaborCapacityRowV1 {
+        .map(|period| LaborCapacityRowV1 {
             site_id: site(FACTORY),
             unit_id: unit(LABOR_UNIT),
-            week,
+            period,
             available: 12,
         })
         .collect()
@@ -82,7 +82,7 @@ fn labor_rows() -> Vec<LaborCapacityRowV1> {
 
 fn base_state() -> MaterialCircuitStateV1 {
     MaterialCircuitStateV1 {
-        week: 1,
+        period: 1,
         process_outputs: vec![ProcessOutputV1 {
             process_id: process(BAKERY),
             site_id: site(FACTORY),
@@ -106,7 +106,7 @@ fn base_state() -> MaterialCircuitStateV1 {
             supplier_site_id: site(SUPPLIER),
             good_id: good(GRAIN),
             unit_id: unit(GOODS_UNIT),
-            transit_delay_weeks: 1,
+            transit_delay_periods: 1,
         }],
         inventory: vec![
             InventoryRowV1 {
@@ -162,8 +162,8 @@ fn inventory_quantity(state: &MaterialCircuitStateV1, site_byte: u8, good_byte: 
 
 #[test]
 fn shipment_precedes_arrival_and_realization() {
-    let first = advance_material_circuit_v1(&base_state()).expect("week one must close");
-    assert_eq!(first.state.week, 2);
+    let first = advance_material_circuit_v1(&base_state()).expect("period one must close");
+    assert_eq!(first.state.period, 2);
     assert_eq!(first.dispatches.len(), 1);
     assert!(first.arrivals.is_empty());
     assert!(first.realizations.is_empty());
@@ -174,28 +174,28 @@ fn shipment_precedes_arrival_and_realization() {
     assert_eq!(inventory_quantity(&first.state, SUPPLIER, GRAIN), 4);
     assert_eq!(inventory_quantity(&first.state, FACTORY, GRAIN), 0);
 
-    let second = advance_material_circuit_v1(&first.state).expect("week two must close");
-    assert_eq!(second.state.week, 3);
+    let second = advance_material_circuit_v1(&first.state).expect("period two must close");
+    assert_eq!(second.state.period, 3);
     assert_eq!(second.arrivals.len(), 1);
     assert_eq!(second.deliveries.len(), 1);
     assert_eq!(second.realizations.len(), 1);
     assert_eq!(second.state.orders[0].delivered, 6);
     assert_eq!(second.state.orders[0].realized, 6);
     assert_eq!(inventory_quantity(&second.state, FACTORY, GRAIN), 6);
-    assert_eq!(second.state.production_commitments[0].week, 3);
+    assert_eq!(second.state.production_commitments[0].period, 3);
     assert_eq!(second.state.production_commitments[0].planned_batches, 2);
 }
 
 #[test]
-fn delivered_inputs_feed_the_following_week_not_the_arrival_week() {
-    let first = advance_material_circuit_v1(&base_state()).expect("week one must close");
+fn delivered_inputs_feed_the_following_period_not_the_arrival_period() {
+    let first = advance_material_circuit_v1(&base_state()).expect("period one must close");
     assert!(first.state.production_commitments.is_empty());
 
-    let second = advance_material_circuit_v1(&first.state).expect("week two must close");
+    let second = advance_material_circuit_v1(&first.state).expect("period two must close");
     assert_eq!(second.state.production_commitments[0].planned_batches, 2);
     assert!(second.production.is_empty());
 
-    let third = advance_material_circuit_v1(&second.state).expect("week three must close");
+    let third = advance_material_circuit_v1(&second.state).expect("period three must close");
     assert_eq!(third.production[0].planned_batches, 2);
     assert_eq!(third.production[0].produced_batches, 2);
     assert_eq!(inventory_quantity(&third.state, FACTORY, GRAIN), 0);
@@ -213,7 +213,7 @@ fn severed_supplier_relation_causes_backlog_without_creating_goods() {
     assert_eq!(first.state.backlog[0].quantity, 6);
     assert_eq!(inventory_quantity(&first.state, SUPPLIER, GRAIN), 10);
 
-    let second = advance_material_circuit_v1(&first.state).expect("week two must close");
+    let second = advance_material_circuit_v1(&first.state).expect("period two must close");
     assert!(second.arrivals.is_empty());
     assert!(second.state.production_commitments.is_empty());
 }
@@ -226,12 +226,12 @@ fn missing_stock_and_labor_are_material_shortages_not_engine_errors() {
         .labor
         .into_iter()
         .take(babylon_material_circuit::MAX_MATERIAL_CIRCUIT_ROWS_V1 + 1)
-        .filter(|row| row.week != 1)
+        .filter(|row| row.period != 1)
         .collect();
     state.production_commitments = vec![ProductionCommitmentV1 {
         process_id: process(BAKERY),
         site_id: site(FACTORY),
-        week: 1,
+        period: 1,
         planned_batches: 3,
     }];
 
@@ -253,7 +253,7 @@ fn leontief_output_is_bounded_by_labor_capacity_and_inputs() {
     state.production_commitments = vec![ProductionCommitmentV1 {
         process_id: process(BAKERY),
         site_id: site(FACTORY),
-        week: 1,
+        period: 1,
         planned_batches: 10,
     }];
 
@@ -274,7 +274,7 @@ fn production_debits_all_inputs_before_crediting_any_output() {
     let goods_unit = unit(6);
     let labor_unit = unit(7);
     let state = MaterialCircuitStateV1 {
-        week: 1,
+        period: 1,
         process_outputs: vec![
             ProcessOutputV1 {
                 process_id: producer,
@@ -323,33 +323,33 @@ fn production_debits_all_inputs_before_crediting_any_output() {
             CapacityRowV1 {
                 process_id: producer,
                 site_id: production_site,
-                week: 1,
+                period: 1,
                 available_batches: 1,
             },
             CapacityRowV1 {
                 process_id: consumer,
                 site_id: production_site,
-                week: 1,
+                period: 1,
                 available_batches: 1,
             },
         ],
         labor: vec![LaborCapacityRowV1 {
             site_id: production_site,
             unit_id: labor_unit,
-            week: 1,
+            period: 1,
             available: 2,
         }],
         production_commitments: vec![
             ProductionCommitmentV1 {
                 process_id: producer,
                 site_id: production_site,
-                week: 1,
+                period: 1,
                 planned_batches: 1,
             },
             ProductionCommitmentV1 {
                 process_id: consumer,
                 site_id: production_site,
-                week: 1,
+                period: 1,
                 planned_batches: 1,
             },
         ],
@@ -386,7 +386,7 @@ fn production_state_for_numeric_boundary() -> MaterialCircuitStateV1 {
     let labor_unit = unit(5);
     let process_id = process(6);
     MaterialCircuitStateV1 {
-        week: 1,
+        period: 1,
         process_outputs: vec![ProcessOutputV1 {
             process_id,
             site_id: production_site,
@@ -426,19 +426,19 @@ fn production_state_for_numeric_boundary() -> MaterialCircuitStateV1 {
         capacities: vec![CapacityRowV1 {
             process_id,
             site_id: production_site,
-            week: 1,
+            period: 1,
             available_batches: 1,
         }],
         labor: vec![LaborCapacityRowV1 {
             site_id: production_site,
             unit_id: labor_unit,
-            week: 1,
+            period: 1,
             available: 1,
         }],
         production_commitments: vec![ProductionCommitmentV1 {
             process_id,
             site_id: production_site,
-            week: 1,
+            period: 1,
             planned_batches: 1,
         }],
     }
@@ -460,7 +460,7 @@ fn zero_production_does_not_create_an_empty_inventory_row() {
         })
         .collect();
     let state = MaterialCircuitStateV1 {
-        week: 1,
+        period: 1,
         process_outputs: vec![ProcessOutputV1 {
             process_id,
             site_id: production_site,
@@ -484,7 +484,7 @@ fn zero_production_does_not_create_an_empty_inventory_row() {
         production_commitments: vec![ProductionCommitmentV1 {
             process_id,
             site_id: production_site,
-            week: 1,
+            period: 1,
             planned_batches: 1,
         }],
     };
@@ -548,26 +548,26 @@ fn proportional_stock_allocation_has_no_order_priority() {
 #[test]
 fn arithmetic_refusal_does_not_publish_a_partial_state() {
     let mut state = base_state();
-    state.week = 2;
+    state.period = 2;
     state.capacities = state
         .capacities
         .into_iter()
         .take(babylon_material_circuit::MAX_MATERIAL_CIRCUIT_ROWS_V1 + 1)
-        .filter(|row| row.week >= 2)
+        .filter(|row| row.period >= 2)
         .collect();
     state.labor = state
         .labor
         .into_iter()
         .take(babylon_material_circuit::MAX_MATERIAL_CIRCUIT_ROWS_V1 + 1)
-        .filter(|row| row.week >= 2)
+        .filter(|row| row.period >= 2)
         .collect();
     state.inventory[1].quantity = u64::MAX;
     state.orders[0].shipped = 6;
     state.backlog[0].quantity = 0;
     state.transit.push(babylon_material_circuit::TransitLotV1 {
         order_id: order(GRAIN_ORDER),
-        dispatch_week: 1,
-        arrival_week: 2,
+        dispatch_period: 1,
+        arrival_period: 2,
         source_site_id: site(SUPPLIER),
         destination_site_id: site(FACTORY),
         good_id: good(GRAIN),
@@ -694,17 +694,17 @@ fn every_refusal_code_round_trips_and_the_registry_is_closed() {
 }
 
 #[test]
-fn duplicate_dispatch_identity_is_rejected_even_when_arrival_weeks_differ() {
+fn duplicate_dispatch_identity_is_rejected_even_when_arrival_periods_differ() {
     let mut state = base_state();
-    state.week = 2;
+    state.period = 2;
     state.orders[0].shipped = 6;
     state.backlog[0].quantity = 0;
     state.transit = [2_u64, 3]
         .into_iter()
-        .map(|arrival_week| babylon_material_circuit::TransitLotV1 {
+        .map(|arrival_period| babylon_material_circuit::TransitLotV1 {
             order_id: order(GRAIN_ORDER),
-            dispatch_week: 1,
-            arrival_week,
+            dispatch_period: 1,
+            arrival_period,
             source_site_id: site(SUPPLIER),
             destination_site_id: site(FACTORY),
             good_id: good(GRAIN),

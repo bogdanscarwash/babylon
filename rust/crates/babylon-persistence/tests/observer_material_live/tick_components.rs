@@ -87,7 +87,7 @@ fn prepared_target() -> DisposableTarget {
             &target.writer,
             CampaignId::from_uuid(Uuid::from_u128(FOUNDATION_CAMPAIGN)),
             MichiganContentPresetV1::new_campaign(MichiganDeliveryPresetV1::Standard)
-                .create_foundation()
+                .create_foundation(&crate::test_support::catalog())
                 .unwrap(),
         )
         .unwrap(),
@@ -116,7 +116,7 @@ fn rows(client: &mut impl GenericClient, relation: &str, campaign: CampaignId) -
 }
 
 #[test]
-#[ignore = "requires the disposable PostgreSQL harness; serial clone ownership"]
+#[ignore = "requires the disposable PostgreSQL harness; independent clone ownership"]
 fn exact_rows_require_the_matching_v3_commit_marker() {
     let mut target = prepared_target();
     let campaign = CampaignId::from_uuid(Uuid::from_u128(41_001));
@@ -124,12 +124,12 @@ fn exact_rows_require_the_matching_v3_commit_marker() {
         &target.writer,
         campaign,
         MichiganContentPresetV1::new_campaign(MichiganDeliveryPresetV1::Standard)
-            .create_foundation()
+            .create_foundation(&crate::test_support::catalog())
             .unwrap(),
     )
     .unwrap();
     install(&target);
-    advance_material_week(&mut runtime);
+    advance_material_period(&mut runtime);
     let observer_config = target.login("babylon_observer", "components");
     let mut observer = observer_config.connect(NoTls).unwrap();
     let mut writer = target.writer.connect(NoTls).unwrap();
@@ -219,7 +219,7 @@ fn assert_preview_refused(
 }
 
 #[test]
-#[ignore = "requires the disposable PostgreSQL harness; serial clone ownership"]
+#[ignore = "requires the disposable PostgreSQL harness; independent clone ownership"]
 fn full_observer_requires_every_view_and_preview_refuses_all_grant_paths() {
     let mut target = prepared_target();
     install(&target);
@@ -290,7 +290,7 @@ fn full_observer_requires_every_view_and_preview_refuses_all_grant_paths() {
 }
 
 #[test]
-#[ignore = "requires the disposable PostgreSQL harness; serial clone ownership"]
+#[ignore = "requires the disposable PostgreSQL harness; independent clone ownership"]
 fn schema_identity_rejects_source_definition_and_partial_install_drift() {
     let target = prepared_target();
     install(&target);

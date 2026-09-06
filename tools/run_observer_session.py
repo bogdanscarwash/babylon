@@ -19,6 +19,7 @@ from psycopg import sql
 from psycopg.conninfo import conninfo_to_dict, make_conninfo
 
 ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_DEFINES = ROOT / "content" / "scenarios" / "michigan" / "defines.toml"
 DEFAULT_RUNTIME_DSN = "host=127.0.0.1 port=5433 dbname=babylon_test user=test password=test"
 OBSERVER_CAPTURE_FILTER = "session=debug,babylon_client=debug"
 # The runtime's database statement timeout is 120 seconds. EOF/Stop gets time
@@ -344,6 +345,7 @@ def run_pair(
     runtime_environment: Mapping[str, str],
     client_environment: Mapping[str, str],
     *,
+    defines_path: Path,
     initial_target: NewCampaignTarget | OpenCampaignTarget,
 ) -> int:
     """Cross-connect two anonymous pipes; the parent never reads or forwards protocol bytes."""
@@ -357,7 +359,7 @@ def run_pair(
         responses = os.pipe()
         descriptors.extend(responses)
         runtime = subprocess.Popen(
-            [str(runtime_binary), "session", "--stdio"],
+            [str(runtime_binary), "session", "--stdio", "--defines", str(defines_path)],
             cwd=root / "rust",
             env=dict(runtime_environment),
             stdin=requests[0],
@@ -415,6 +417,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--no-build", action="store_true", help="use existing native binaries")
     parser.add_argument(
+        "--defines",
+        type=Path,
+        default=DEFAULT_DEFINES,
+        help="TOML values for new campaigns; existing campaigns use their saved parameters",
+    )
+    parser.add_argument(
         "--preset",
         choices=("standard", "delayed"),
         help="choose a new world's delivery preset; requires New rather than Open",
@@ -440,6 +448,7 @@ def main(argv: list[str] | None = None) -> int:
             ROOT,
             writer_environment,
             reader_environment,
+            defines_path=args.defines.expanduser().resolve(),
             initial_target=initial_target,
         )
     except ObserverLaunchError as error:

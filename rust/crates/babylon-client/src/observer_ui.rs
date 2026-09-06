@@ -30,7 +30,7 @@ pub(crate) const OBSERVER_PANEL_BOTTOM: f32 = 56.0;
 pub struct ObserverFrame(pub Option<ObserverEconomySnapshotV1>);
 
 impl ObserverFrame {
-    /// Returns only the exact installed week and capability for this session.
+    /// Returns only the exact installed period and capability for this session.
     /// Async generation is checked before installation by the IO task.
     #[must_use]
     pub fn for_session(&self, session: &ObserverSession) -> Option<&ObserverEconomySnapshotV1> {
@@ -121,8 +121,8 @@ pub enum ObserverCommand {
     Step,
     Speed,
     Perspective,
-    PreviousWeek,
-    NextWeek,
+    PreviousPeriod,
+    NextPeriod,
     Live,
     Lens(EconomyMetric),
     MaterialLens(MaterialLensKind),
@@ -368,7 +368,7 @@ fn spawn_hud(commands: &mut Commands) {
                     flex_grow: 1.0,
                     ..default()
                 });
-                button(bar, "Run month", ObserverCommand::TogglePlay);
+                button(bar, "Advance period", ObserverCommand::Step);
                 button(
                     bar,
                     "Time +",
@@ -522,8 +522,8 @@ fn spawn_footer(commands: &mut Commands) {
             button(bar, "Trends [H]", ObserverCommand::History);
             bar.spawn((row(), HistoryControls))
                 .with_children(|controls| {
-                    button(controls, "< Week", ObserverCommand::PreviousWeek);
-                    button(controls, "Week >", ObserverCommand::NextWeek);
+                    button(controls, "< Period", ObserverCommand::PreviousPeriod);
+                    button(controls, "Period >", ObserverCommand::NextPeriod);
                     button(controls, "Return Live", ObserverCommand::Live);
                 });
             bar.spawn((row(), MapLensControls))
@@ -571,38 +571,82 @@ fn spawn_drawers(commands: &mut Commands) {
             display: Display::None,
             ..default()
         };
-        commands.spawn((node, BackgroundColor(theme::INK), BorderColor::all(theme::YELLOW),
-            ZIndex(12), TabGroup::new(50), ControlDrawer(disclosure), DeclaredSurface::new(SurfaceId::ObserverShell),
-        )).with_children(|panel| {
-            panel.spawn(row()).with_children(|bar| {
-                bar.spawn(label(if disclosure == ObserverDisclosure::Time { "CAMPAIGN TIME" } else { "MAP LENS" }, 17.0, theme::YELLOW));
-                bar.spawn(Node { flex_grow: 1.0, ..default() });
-                button(bar, "Close", ObserverCommand::Disclosure(disclosure));
+        commands
+            .spawn((
+                node,
+                BackgroundColor(theme::INK),
+                BorderColor::all(theme::YELLOW),
+                ZIndex(12),
+                TabGroup::new(50),
+                ControlDrawer(disclosure),
+                DeclaredSurface::new(SurfaceId::ObserverShell),
+            ))
+            .with_children(|panel| {
+                panel.spawn(row()).with_children(|bar| {
+                    bar.spawn(label(
+                        if disclosure == ObserverDisclosure::Time {
+                            "CAMPAIGN TIME"
+                        } else {
+                            "MAP LENS"
+                        },
+                        17.0,
+                        theme::YELLOW,
+                    ));
+                    bar.spawn(Node {
+                        flex_grow: 1.0,
+                        ..default()
+                    });
+                    button(bar, "Close", ObserverCommand::Disclosure(disclosure));
+                });
+                if disclosure == ObserverDisclosure::Time {
+                    panel.spawn(block_label(
+                        crate::observer_controls::period_advance_help(),
+                        14.0,
+                        theme::PAPER,
+                    ));
+                    panel.spawn(row()).with_children(|bar| {
+                        button(bar, "Play", ObserverCommand::TogglePlay);
+                        button(bar, "Speed", ObserverCommand::Speed);
+                        button(bar, "Stop on delivery", ObserverCommand::StopOnDelivery);
+                    });
+                    panel.spawn(block_label(
+                        "Space: play / pause     Enter: advance four weeks     H: inspect trends",
+                        12.0,
+                        theme::GRAY,
+                    ));
+                } else {
+                    button(panel, "Relationships", ObserverCommand::Relationships);
+                    panel.spawn(row()).with_children(|bar| {
+                        for (kind, title) in [
+                            (MaterialLensKind::ProducedThisPeriod, "Production [5]"),
+                            (MaterialLensKind::OnHand, "Inventory [6]"),
+                            (MaterialLensKind::InboundInTransit, "Inbound [7]"),
+                        ] {
+                            button(bar, title, ObserverCommand::MaterialLens(kind));
+                        }
+                    });
+                    panel.spawn(block_label(
+                        "Observed county context / BLS QCEW 2024",
+                        12.0,
+                        theme::GRAY,
+                    ));
+                    panel.spawn(row()).with_children(|bar| {
+                        for (metric, title) in EconomyMetric::ALL.into_iter().zip([
+                            "Jobs [1]",
+                            "Payroll [2]",
+                            "Weekly wage [3]",
+                            "Establishments [4]",
+                        ]) {
+                            button(bar, title, ObserverCommand::Lens(metric));
+                        }
+                    });
+                    panel.spawn(block_label(
+                        crate::observer_map3d::MAP_VIEW_HELP,
+                        12.0,
+                        theme::GRAY,
+                    ));
+                }
             });
-            if disclosure == ObserverDisclosure::Time {
-                panel.spawn(block_label(crate::observer_controls::MONTH_ADVANCE_HELP, 14.0, theme::PAPER));
-                panel.spawn(row()).with_children(|bar| {
-                    button(bar, "Advance one week", ObserverCommand::Step);
-                    button(bar, "Speed", ObserverCommand::Speed);
-                    button(bar, "Stop on delivery", ObserverCommand::StopOnDelivery);
-                });
-                panel.spawn(block_label("Space: run / pause month     Enter: advance one week     H: inspect trends", 12.0, theme::GRAY));
-            } else {
-                button(panel, "Relationships", ObserverCommand::Relationships);
-                panel.spawn(row()).with_children(|bar| {
-                    for (kind, title) in [(MaterialLensKind::ProducedThisWeek,"Production [5]"), (MaterialLensKind::OnHand,"Inventory [6]"), (MaterialLensKind::InboundInTransit,"Inbound [7]")] {
-                        button(bar, title, ObserverCommand::MaterialLens(kind));
-                    }
-                });
-                panel.spawn(block_label("Observed county context / BLS QCEW 2024", 12.0, theme::GRAY));
-                panel.spawn(row()).with_children(|bar| {
-                    for (metric, title) in EconomyMetric::ALL.into_iter().zip(["Jobs [1]","Payroll [2]","Weekly wage [3]","Establishments [4]"]) {
-                        button(bar, title, ObserverCommand::Lens(metric));
-                    }
-                });
-                panel.spawn(block_label(crate::observer_map3d::MAP_VIEW_HELP, 12.0, theme::GRAY));
-            }
-        });
     }
 }
 
@@ -646,7 +690,7 @@ fn spawn_menu(commands: &mut Commands) {
                 });
             panel.spawn(row()).with_children(|bar| {
                 bar.spawn(label(
-                    "Committed weeks are saved automatically.",
+                    "Committed periods are saved automatically.",
                     12.0,
                     theme::GRAY,
                 ));
@@ -874,7 +918,7 @@ fn button_visible(
     }
     let map = view == crate::production::PrimaryView::Map;
     match button.command {
-        ObserverCommand::Step | ObserverCommand::Speed | ObserverCommand::StopOnDelivery => {
+        ObserverCommand::TogglePlay | ObserverCommand::Speed | ObserverCommand::StopOnDelivery => {
             ui.disclosure == Some(ObserverDisclosure::Time)
         }
         ObserverCommand::Relationships
@@ -887,7 +931,7 @@ fn button_visible(
                 && session.viewed_tick == session.durable_tick
                 && matches!(ui.lens, MapLens::Material { .. })
         }
-        ObserverCommand::PreviousWeek | ObserverCommand::NextWeek | ObserverCommand::Live => {
+        ObserverCommand::PreviousPeriod | ObserverCommand::NextPeriod | ObserverCommand::Live => {
             ui.history_open || session.viewed_tick < session.durable_tick
         }
         ObserverCommand::EconomicDetails | ObserverCommand::Archive => {
@@ -1044,7 +1088,7 @@ fn caption(
             "Quit game [Q]"
         }
         .to_owned(),
-        ObserverCommand::Speed => format!("Speed: {} week(s) / sec", state.weeks_per_second),
+        ObserverCommand::Speed => format!("Speed: {} period(s) / sec", state.periods_per_second),
         ObserverCommand::StopOnDelivery => format!(
             "Stop on delivery: {}",
             if ui.stop_on_delivery { "ON" } else { "OFF" }
@@ -1261,15 +1305,15 @@ fn keyboard(
     for (key, command) in [
         (KeyCode::Space, ObserverCommand::TogglePlay),
         (KeyCode::Enter, ObserverCommand::Step),
-        (KeyCode::BracketLeft, ObserverCommand::PreviousWeek),
-        (KeyCode::BracketRight, ObserverCommand::NextWeek),
+        (KeyCode::BracketLeft, ObserverCommand::PreviousPeriod),
+        (KeyCode::BracketRight, ObserverCommand::NextPeriod),
         (KeyCode::KeyK, ObserverCommand::Perspective),
         (KeyCode::KeyI, ObserverCommand::Archive),
         (KeyCode::KeyT, ObserverCommand::Speed),
         (KeyCode::KeyH, ObserverCommand::History),
         (
             KeyCode::Digit5,
-            ObserverCommand::MaterialLens(MaterialLensKind::ProducedThisWeek),
+            ObserverCommand::MaterialLens(MaterialLensKind::ProducedThisPeriod),
         ),
         (
             KeyCode::Digit6,
@@ -1397,19 +1441,19 @@ fn local_relationships(
 
 fn county_developments(snapshot: Option<&ObserverEconomySnapshotV1>, county: &str) -> String {
     let Some(snapshot) = snapshot else {
-        return "Awaiting this week's observation.".into();
+        return "Awaiting this period's observation.".into();
     };
     let Some(production) = snapshot.production.as_ref() else {
         return "Material developments are not disclosed in this observation.".into();
     };
     if snapshot.resolve_tick == 0 {
-        return "Opening week. No completed production week yet.".into();
+        return "Opening period. No completed production period yet.".into();
     }
     let records = production
         .events
         .iter()
         .filter(|event| {
-            event.week == snapshot.resolve_tick
+            event.period == snapshot.resolve_tick
                 && event.subject_site_ids.iter().any(|id| {
                     production
                         .sites
@@ -1418,7 +1462,7 @@ fn county_developments(snapshot: Option<&ObserverEconomySnapshotV1>, county: &st
                 })
         })
         .count();
-    format!("Week {}: {records} committed records for this county. Open History to inspect the evidence.", snapshot.resolve_tick)
+    format!("Period {}: {records} committed records for this county. Open History to inspect the evidence.", snapshot.resolve_tick)
 }
 
 #[derive(SystemParam)]
@@ -1467,7 +1511,7 @@ fn archive_page_status(
         Some(ArchiveDossierStateV2::Ready {
             verified_through_tick,
             ..
-        }) => format!("Archive verified for week {verified_through_tick}"),
+        }) => format!("Archive verified for period {verified_through_tick}"),
         Some(ArchiveDossierStateV2::Pending { .. }) => "Archive pending".into(),
         Some(ArchiveDossierStateV2::Unavailable(_)) => "Archive unavailable".into(),
         None if read_failed => "Archive read failed".into(),
@@ -1547,9 +1591,9 @@ fn repaint(
             ObserverText::Hover if matches!(ui.lens, MapLens::Relationships) => hovered.0.and_then(|index| atlas.county(index)).map_or_else(String::new, |county| county.name.to_owned()),
             ObserverText::Hover => hovered.0.and_then(|index| atlas.county(index)).filter(|county| county.fips.starts_with("26")).map_or_else(String::new, |county| format!("{}\n{}\n{}", county.name, lens.label, format_lens_reading(lens.county(county.fips), &lens.unit))),
             ObserverText::Audio => format!("{} | music {:.0}% | effects {:.0}%\nReduced motion: {} | Stop on delivery: {}", if audio.track==0 {"PHI"}else{"PANOPTICON"},audio.music_volume*100.0,audio.effects_volume*100.0,if ui.reduced_motion {"ON"}else{"OFF"},if ui.stop_on_delivery {"ON"}else{"OFF"}),
-            ObserverText::Evidence => format!("Viewing week {} / Archive processed through {}\n{}", state.viewed_tick, state.archive_verified_tick, archive_detail),
+            ObserverText::Evidence => format!("Viewing period {} / Archive processed through {}\n{}", state.viewed_tick, state.archive_verified_tick, archive_detail),
             ObserverText::EvidenceDetails => installed.map_or_else(String::new, |snapshot| {
-                let mut evidence = format!("CAMPAIGN\n{}\n\nCOMMITTED EVIDENCE / WEEK {}\n{}\n\nWORLD IDENTITY\n{}", wrapped_identity(&snapshot.campaign_id), snapshot.resolve_tick, wrapped_identity(snapshot.tick_content_hash.as_deref().unwrap_or(&snapshot.foundation_digest)), snapshot.nominal_world_hash.as_deref().map_or_else(|| "Unavailable in this observation".to_owned(), wrapped_identity));
+                let mut evidence = format!("CAMPAIGN\n{}\n\nCOMMITTED EVIDENCE / PERIOD {}\n{}\n\nWORLD IDENTITY\n{}", wrapped_identity(&snapshot.campaign_id), snapshot.resolve_tick, wrapped_identity(snapshot.tick_content_hash.as_deref().unwrap_or(&snapshot.foundation_digest)), snapshot.nominal_world_hash.as_deref().map_or_else(|| "Unavailable in this observation".to_owned(), wrapped_identity));
                 if let Some(digest) = snapshot.production_evidence_digest() {
                     let _ = write!(evidence, "\n\nPRODUCTION OBSERVATION\n{}", wrapped_identity(&digest.to_hex()));
                 }
@@ -1558,7 +1602,7 @@ fn repaint(
             ObserverText::Source => match &ui.lens {
                 MapLens::Relationships => "County geography anchors aggregates. Supply links are schematic; they do not locate factories or physical routes.".into(),
                 MapLens::Qcew(_) => "OBSERVED | BLS QCEW | 2024 annual\nJobs are annual averages; weekly wages are means. Monetary values are dollars, not physical output.".into(),
-                MapLens::Material {kind, ..} => format!("{}\n{}\nZero is a measured account; unavailable and unmodeled counties have no numeric reading.", lens.evidence, match kind {MaterialLensKind::ProducedThisWeek => "Output in the selected week; foundation has no production receipt.",MaterialLensKind::OnHand => "Stock held at the end of the selected week. Terminal goods remain unsold on hand.",MaterialLensKind::InboundInTransit => "Actual lots destined for this county, counted once. This is not traffic passing through the county."}),
+                MapLens::Material {kind, ..} => format!("{}\n{}\nZero is a measured account; unavailable and unmodeled counties have no numeric reading.", lens.evidence, match kind {MaterialLensKind::ProducedThisPeriod => "Output in the selected period; foundation has no production receipt.",MaterialLensKind::OnHand => "Stock held at the end of the selected period. Terminal goods remain unsold on hand.",MaterialLensKind::InboundInTransit => "Actual lots destined for this county, counted once. This is not traffic passing through the county."}),
             },
             ObserverText::Developments => county.as_ref().map_or_else(String::new, |county| county_developments(installed, county.fips)),
             ObserverText::Production => installed.and_then(|snapshot| snapshot.production.as_ref())
@@ -1895,7 +1939,7 @@ mod tests {
         };
         assert_eq!(
             archive_page_status(Some(&read), true, false),
-            "Archive verified for week 3"
+            "Archive verified for period 3"
         );
         assert_eq!(
             archive_page_status(None, true, false),
@@ -2035,7 +2079,7 @@ mod tests {
 
     #[test]
     fn dismissed_time_drawer_refuses_both_late_pointer_and_keyboard_requests() {
-        let (mut app, _, target) = focused_shell(false, ObserverCommand::Step);
+        let (mut app, _, target) = focused_shell(false, ObserverCommand::TogglePlay);
         app.world_mut().resource_mut::<ObserverUiState>().disclosure = None;
         app.world_mut().trigger(ObserverKeyboardActivate {
             entity: target,
@@ -2149,7 +2193,7 @@ mod tests {
                     kind: MaterialLensKind::OnHand,
                     good: None,
                 },
-                Some("Wait for the current week to finish."),
+                Some("Wait for the current period to finish."),
                 Display::Flex,
             ),
             (MapLens::default(), None, Display::None),
@@ -2168,15 +2212,15 @@ mod tests {
         }
 
         // Updating a visible explanation changes its text without dirtying its layout node.
-        app.world_mut().resource_mut::<ObserverFeedback>().message = Some("Loading week.");
+        app.world_mut().resource_mut::<ObserverFeedback>().message = Some("Loading period.");
         app.update();
         assert_eq!(app.world().resource::<ChangedButtonNodes>().0, [nodes[2]]);
-        app.world_mut().resource_mut::<ObserverFeedback>().message = Some("Finishing week.");
+        app.world_mut().resource_mut::<ObserverFeedback>().message = Some("Finishing period.");
         app.update();
         assert!(app.world().resource::<ChangedButtonNodes>().0.is_empty());
         assert_eq!(
             app.world().get::<Text>(nodes[2]).unwrap().0,
-            "Finishing week."
+            "Finishing period."
         );
     }
 

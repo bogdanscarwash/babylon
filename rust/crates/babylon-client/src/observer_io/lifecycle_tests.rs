@@ -63,14 +63,14 @@ fn switching(app: &mut App, responses: &Replies, switch: &Switch) {
     app.update();
 }
 
-fn admitted(app: &mut App, responses: &Replies, switch: &Switch, week: u64) {
+fn admitted(app: &mut App, responses: &Replies, switch: &Switch, period: u64) {
     responses
         .send(Ok(RuntimeSessionResponseV3::Ready {
             request_id: switch.request_id,
             scope: switch.scope.clone(),
             foundation_digest: "foundation".into(),
             tail: RuntimeSessionTailV3 {
-                resolve_tick: week,
+                resolve_tick: period,
                 tick_content_hash: None,
             },
         }))
@@ -242,7 +242,7 @@ fn lifecycle_switch_waits_for_commit_ack_then_clears_scoped_observations() {
         request_id, scope, ..
     } = requests.try_recv().unwrap()
     else {
-        panic!("one weekly advance");
+        panic!("one period advance");
     };
     enqueue(&mut app, open(2));
     assert!(requests.try_recv().is_err());
@@ -433,7 +433,7 @@ fn lifecycle_request_ids_remain_unique_across_switch_advance_and_stop() {
         ..
     } = requests.try_recv().unwrap()
     else {
-        panic!("weekly advance");
+        panic!("period advance");
     };
     assert_eq!(request_id, switch.request_id + 1);
     assert_eq!(scope, switch.scope);

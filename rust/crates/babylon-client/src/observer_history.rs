@@ -10,7 +10,6 @@ use bevy::tasks::{block_on, AsyncComputeTaskPool, Task};
 
 use crate::decision_surface::{DeclaredSurface, SurfaceId};
 use crate::observer::{ObservationContext, ObserverSession, Perspective};
-use crate::observer_calendar::CampaignMonth;
 use crate::observer_controls::{inspection_availability, ControlAvailability};
 use crate::observer_focus::{ObserverFocusSystems, ObserverFocusTarget, ObserverKeyboardActivate};
 use crate::observer_io::ObserverSet;
@@ -25,7 +24,7 @@ use delivery_groups::{
     delivery_log_entries, DeliveryGroup, DeliveryGroupKey, DeliveryLog, DeliveryLogEntry,
 };
 
-const CHART_WEEKS: u64 = 12;
+const CHART_PERIODS: u64 = babylon_kernel::clock::TICKS_PER_YEAR;
 const LOG_ENTRIES: usize = 160;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -35,14 +34,14 @@ struct HistoryScope {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-struct WeeklyOutput {
-    week: u64,
+struct PeriodOutput {
+    period: u64,
     planned: Option<u64>,
     produced: Option<u64>,
 }
 
-impl WeeklyOutput {
-    fn from_site(week: u64, site: &ProductionSiteV1) -> Result<Self, String> {
+impl PeriodOutput {
+    fn from_site(period: u64, site: &ProductionSiteV1) -> Result<Self, String> {
         let quantity = |batches: Option<u64>| {
             batches
                 .map(|batches| {
@@ -53,20 +52,20 @@ impl WeeklyOutput {
                 .transpose()
         };
         Ok(Self {
-            week,
+            period,
             planned: quantity(site.planned_batches)?,
             produced: quantity(site.produced_batches)?,
         })
     }
 }
 
-type HistoryTask = Task<Result<Vec<WeeklyOutput>, String>>;
+type HistoryTask = Task<Result<Vec<PeriodOutput>, String>>;
 
 #[derive(Resource, Default)]
 struct HistoryState {
     scope: Option<HistoryScope>,
     pending: Option<HistoryTask>,
-    points: Vec<WeeklyOutput>,
+    points: Vec<PeriodOutput>,
     error: Option<String>,
     selected_event: Option<(ObservationContext, ProductionEventV1)>,
     focus_selected_event: bool,
@@ -83,9 +82,9 @@ struct HistoryHint;
 struct HistoryKeyboardActions(Vec<HistoryButton>);
 #[derive(Component, Clone)]
 enum HistoryButton {
-    Week {
+    Period {
         context: ObservationContext,
-        week: u64,
+        period: u64,
     },
     Event {
         context: ObservationContext,
@@ -164,10 +163,10 @@ fn button_availability(
     delivery_log: Option<&DeliveryLog<'_>>,
 ) -> ControlAvailability {
     use ControlAvailability::{Disabled, Enabled};
-    let (context, week) = match button {
-        HistoryButton::Week { context, week } => (context, *week),
-        HistoryButton::Event { context, event } => (context, event.week),
-        HistoryButton::DeliveryEvidence { context, group } => (context, group.week),
+    let (context, period) = match button {
+        HistoryButton::Period { context, period } => (context, *period),
+        HistoryButton::Event { context, event } => (context, event.period),
+        HistoryButton::DeliveryEvidence { context, group } => (context, group.period),
     };
     if !session.accepts(context) {
         return Disabled("History changed; wait for its current observation");
@@ -176,12 +175,12 @@ fn button_availability(
     if available != Enabled {
         return available;
     }
-    if week > session.durable_tick {
-        return Disabled("That week has not committed");
+    if period > session.durable_tick {
+        return Disabled("That period has not committed");
     }
     match button {
-        HistoryButton::Week { .. } if week == session.viewed_tick => {
-            Disabled("Already viewing this committed week")
+        HistoryButton::Period { .. } if period == session.viewed_tick => {
+            Disabled("Already viewing this committed period")
         }
         HistoryButton::Event { event, .. } => {
             let valid = frame
@@ -194,7 +193,7 @@ fn button_availability(
                 Disabled("This event is unavailable in the current observation")
             }
         }
-        HistoryButton::Week { .. } => Enabled,
+        HistoryButton::Period { .. } => Enabled,
         HistoryButton::DeliveryEvidence { group, .. } => {
             if delivery_log.is_some_and(|log| log.contains_group(group)) {
                 Enabled
@@ -220,7 +219,7 @@ struct HistoryInput<'w> {
 
 fn history_button_context(button: &HistoryButton) -> &ObservationContext {
     match button {
-        HistoryButton::Week { context, .. }
+        HistoryButton::Period { context, .. }
         | HistoryButton::Event { context, .. }
         | HistoryButton::DeliveryEvidence { context, .. } => context,
     }
@@ -237,11 +236,11 @@ fn history_control_visibility(
     if ui.menu_open || ui.splash_visible || ui.comparison_open {
         return Disabled("Close the menu to inspect history");
     }
-    if matches!(button, HistoryButton::Week { .. }) {
+    if matches!(button, HistoryButton::Period { .. }) {
         if ui.history_open {
             Enabled
         } else {
-            Disabled("Open Trends to inspect a committed week")
+            Disabled("Open Trends to inspect a committed period")
         }
     } else if !ui.history_open {
         Disabled("Open History to inspect committed developments")
@@ -320,20 +319,20 @@ fn apply_history_action(button: &HistoryButton, context: &mut HistoryInput) {
         };
         return;
     }
-    let week = match button {
-        HistoryButton::Week { week, .. } => *week,
-        HistoryButton::Event { event, .. } => event.week,
+    let period = match button {
+        HistoryButton::Period { period, .. } => *period,
+        HistoryButton::Event { event, .. } => event.period,
         HistoryButton::DeliveryEvidence { .. } => return,
     };
-    session.pause_month();
-    if session.viewed_tick != week {
-        session.inspect_tick(week);
+    session.pause_playback();
+    if session.viewed_tick != period {
+        session.inspect_tick(period);
         refresh.bump();
     }
-    // The committed evidence is revalidated after this week loads.
+    // The committed evidence is revalidated after this period loads.
     history.selected_event = match button {
         HistoryButton::Event { event, .. } => Some((session.context(), event.clone())),
-        HistoryButton::Week { .. } | HistoryButton::DeliveryEvidence { .. } => None,
+        HistoryButton::Period { .. } | HistoryButton::DeliveryEvidence { .. } => None,
     };
     history.focus_selected_event = history.selected_event.is_some();
 }
@@ -397,7 +396,7 @@ fn focus_eligibility(
     }
 }
 
-fn fetch(scope: &HistoryScope) -> Result<Vec<WeeklyOutput>, String> {
+fn fetch(scope: &HistoryScope) -> Result<Vec<PeriodOutput>, String> {
     let Some(site_id) = &scope.site else {
         return Ok(Vec::new());
     };
@@ -407,9 +406,9 @@ fn fetch(scope: &HistoryScope) -> Result<Vec<WeeklyOutput>, String> {
     }
     .map_err(|error| error.to_string())?;
     let mut points = Vec::new();
-    for week in scope.context.tick.saturating_sub(CHART_WEEKS - 1)..=scope.context.tick {
+    for period in scope.context.tick.saturating_sub(CHART_PERIODS - 1)..=scope.context.tick {
         let frame = reader
-            .snapshot(scope.context.campaign, week)
+            .snapshot(scope.context.campaign, period)
             .map_err(|error| error.to_string())?;
         let Some(site) = frame
             .production
@@ -418,7 +417,7 @@ fn fetch(scope: &HistoryScope) -> Result<Vec<WeeklyOutput>, String> {
         else {
             return Err("Production history is not disclosed by this read capability.".into());
         };
-        points.push(WeeklyOutput::from_site(week, site)?);
+        points.push(PeriodOutput::from_site(period, site)?);
     }
     Ok(points)
 }
@@ -582,7 +581,7 @@ fn paint_buttons(
         })
         .flatten();
     let mut hint = match inspection_availability(&session) {
-        ControlAvailability::Enabled => "Select a committed week or event to inspect.",
+        ControlAvailability::Enabled => "Select a committed period or event to inspect.",
         ControlAvailability::Disabled(reason) => reason,
     };
     for mut item in &mut buttons {
@@ -657,22 +656,22 @@ fn paint(
         };
         if let Some((scope, event)) = &history.selected_event {
             if session.accepts(scope) && snapshot.events.iter().any(|current| current == event) {
-                panel.spawn(label(format!("SELECTED / WEEK {} / {}\n{}\nRECEIPT {}", event.week, event.kind, event.description, event.receipt_digest), 12.0, theme::YELLOW));
+                panel.spawn(label(format!("SELECTED / PERIOD {} / {}\n{}\nRECEIPT {}", event.period, event.kind, event.description, event.receipt_digest), 12.0, theme::YELLOW));
             }
         }
         let site=navigation.selected_site.as_ref().and_then(|id|snapshot.sites.iter().find(|site|site.id==*id));
         if let Some(site)=site {
-            panel.spawn(label(format!("{} / {} {} per week | P planned / D produced",site.name,site.output_unit,site.output_good),13.0,theme::YELLOW));
+            panel.spawn(label(format!("{} / {} {} per period | P planned / D produced",site.name,site.output_unit,site.output_good),13.0,theme::YELLOW));
             if let Some(error)=&history.error {panel.spawn(label(error,13.0,theme::RED));}
-            else if history.points.is_empty() {panel.spawn(label("Reading committed weeks...",13.0,theme::GRAY));}
+            else if history.points.is_empty() {panel.spawn(label("Reading committed periods...",13.0,theme::GRAY));}
             else {
                 let maximum=history.points.iter().flat_map(|point|[point.planned,point.produced]).flatten().max().unwrap_or(1);
                 panel.spawn(Node{column_gap:px(5),align_items:AlignItems::End,flex_shrink:0.0,overflow:Overflow::scroll_x(),..default()}).with_children(|chart| {
                     for point in &history.points {
-                        chart.spawn((Button, ObserverFocusTarget::action(Some(context.clone())), HistoryButton::Week{context:context.clone(),week:point.week},
+                        chart.spawn((Button, ObserverFocusTarget::action(Some(context.clone())), HistoryButton::Period{context:context.clone(),period:point.period},
                             Node{min_width:px(48),padding:UiRect::all(px(3)),row_gap:px(3),flex_direction:FlexDirection::Column,
                                 border:UiRect::bottom(px(2)),..default()},
-                            BorderColor::all(if point.week==session.viewed_tick {theme::YELLOW}else{theme::GRAY}),
+                            BorderColor::all(if point.period==session.viewed_tick {theme::YELLOW}else{theme::GRAY}),
                             BackgroundColor(theme::PANEL),
                             DeclaredSurface::new(SurfaceId::ObserverProduction)))
                         .with_children(|column| {
@@ -680,11 +679,11 @@ fn paint(
                                 bars.spawn((Node{width:px(16),height:px(bar_height(point.planned,maximum)),..default()},BackgroundColor(theme::GRAY)));
                                 bars.spawn((Node{width:px(16),height:px(bar_height(point.produced,maximum)),..default()},BackgroundColor(theme::YELLOW)));
                             });
-                            column.spawn(label(format!("P {}\nD {}\nW{:02}",point.planned.map_or_else(||"-".into(),grouped),point.produced.map_or_else(||"-".into(),grouped),point.week),11.0,theme::PAPER));
+                            column.spawn(label(format!("P {}\nD {}\nP{:02}",point.planned.map_or_else(||"-".into(),grouped),point.produced.map_or_else(||"-".into(),grouped),point.period),11.0,theme::PAPER));
                         });
                     }
                 });
-                panel.spawn(label(format!("Scale 0-{} {} | - means no production receipt at foundation. Click a week to inspect.",grouped(maximum),site.output_unit),11.0,theme::GRAY));
+                panel.spawn(label(format!("Scale 0-{} {} | - means no production receipt at foundation. Click a period to inspect.",grouped(maximum),site.output_unit),11.0,theme::GRAY));
             }
         } else {panel.spawn(label("Select a producer to chart its committed output. The log locates affected subjects.",13.0,theme::YELLOW));}
 
@@ -756,11 +755,11 @@ fn paint_log(
         if let Some((scope, event)) = &history.selected_event {
             if session.accepts(scope) && snapshot.events.iter().any(|current| current == event) {
                 panel.spawn(label(format!("EXAMINING / {}\n{}", event.kind.to_uppercase(), event.description), 13.0, theme::YELLOW));
-                panel.spawn(label(format!("Committed week {}. Follow the affected subjects in the world. Receipt details are in Trends [H].", event.week), 11.0, theme::GRAY));
+                panel.spawn(label(format!("Committed period {}. Follow the affected subjects in the world. Receipt details are in Trends [H].", event.period), 11.0, theme::GRAY));
             }
         }
         if snapshot.events.is_empty() {
-            panel.spawn(label("No developments are recorded through this point in the campaign. Run a month from the live edge to follow production and deliveries.", 14.0, theme::PAPER));
+            panel.spawn(label("No developments are recorded through this point in the campaign. Advance a period from the live edge to follow production and deliveries.", 14.0, theme::PAPER));
             return;
         }
         spawn_log_entries(panel, snapshot, &context, &history);
@@ -784,22 +783,18 @@ fn spawn_log_entries(
         "Latest {} of {} developments / {} original evidence entries. Expand a delivery to inspect its committed evidence.",
         log.entries.len(), log.total_entries, log.evidence_entries
     ), 11.0, theme::GRAY));
-    let mut previous_month = None;
+    let mut previous_period = None;
     for entry in log.entries {
-        let month = CampaignMonth::at_week(entry.week()).number;
-        if previous_month != Some(month) {
+        let period = entry.period();
+        if previous_period != Some(period) {
             panel
-                .spawn(label(
-                    format!("CAMPAIGN MONTH {month}"),
-                    12.0,
-                    theme::YELLOW,
-                ))
+                .spawn(label(format!("PERIOD {period}"), 12.0, theme::YELLOW))
                 .insert(Node {
                     margin: UiRect::top(px(8)),
                     flex_shrink: 0.0,
                     ..default()
                 });
-            previous_month = Some(month);
+            previous_period = Some(period);
         }
         match entry {
             DeliveryLogEntry::Event(event) => spawn_event_entry(panel, event, context),
@@ -844,7 +839,7 @@ fn spawn_event_entry(
             entry.spawn(label(event.kind.to_uppercase(), 11.0, theme::BLUE));
             entry.spawn(label(&event.description, 13.0, theme::PAPER));
             entry.spawn(label(
-                format!("Week {} / inspect consequence", event.week),
+                format!("Period {} / inspect consequence", event.period),
                 10.0,
                 theme::GRAY,
             ));
@@ -876,8 +871,8 @@ fn spawn_delivery_entry(
             entry.spawn(label(group.headline(), 14.0, theme::PAPER));
             entry.spawn(label(
                 format!(
-                    "Week {} / {} -> {}",
-                    group.key.week, group.supplier.name, group.buyer.name
+                    "Period {} / {} -> {}",
+                    group.key.period, group.supplier.name, group.buyer.name
                 ),
                 11.0,
                 theme::GRAY,
@@ -960,10 +955,10 @@ mod tests {
         CampaignId, ObserverEconomySnapshotV1, ObserverVisibilityV1, ProductionSnapshotV1,
     };
 
-    fn event(week: u64) -> ProductionEventV1 {
+    fn event(period: u64) -> ProductionEventV1 {
         ProductionEventV1 {
-            id: format!("delivery-{week}"),
-            week,
+            id: format!("delivery-{period}"),
+            period,
             subject_site_ids: vec!["producer".into()],
             kind: "delivery".into(),
             description: "Committed input delivery".into(),
@@ -990,7 +985,7 @@ mod tests {
                 labor_accounts: Vec::new(),
                 staffing_accounts: Vec::new(),
                 scenario_label: "Designed test campaign".into(),
-                horizon_week: 16,
+                horizon_period: 16,
                 sites: vec![],
                 routes: vec![],
                 freight: vec![],
@@ -1119,7 +1114,7 @@ mod tests {
                 })
                 .expect("a grouped delivery has an expansion control")
         };
-        let week = app.world().resource::<ObserverSession>().viewed_tick;
+        let period = app.world().resource::<ObserverSession>().viewed_tick;
         let generation = app.world().resource::<DossierRefresh>().0;
         app.world_mut().trigger(ObserverKeyboardActivate {
             entity,
@@ -1131,7 +1126,10 @@ mod tests {
             .resource::<HistoryState>()
             .expanded_delivery
             .is_some());
-        assert_eq!(app.world().resource::<ObserverSession>().viewed_tick, week);
+        assert_eq!(
+            app.world().resource::<ObserverSession>().viewed_tick,
+            period
+        );
         assert_eq!(app.world().resource::<DossierRefresh>().0, generation);
     }
 
@@ -1156,11 +1154,11 @@ mod tests {
         }
     }
 
-    fn delivery_app(parts: usize, week: u64) -> App {
+    fn delivery_app(parts: usize, period: u64) -> App {
         use babylon_persistence::{
             ProductionDeliveryEvidenceV1, ProductionDeliveryStageV1, ProductionRouteV1,
         };
-        let (mut app, _) = history_app(event(week));
+        let (mut app, _) = history_app(event(period));
         app.world_mut()
             .resource_mut::<ObserverUiState>()
             .history_open = true;
@@ -1178,7 +1176,7 @@ mod tests {
             unit_id: "tonnes".into(),
             good: "Sheet metal".into(),
             unit: "tonnes".into(),
-            travel_weeks: 1,
+            travel_periods: 1,
             ordered: 10_000,
             shipped: 999,
             delivered: 333,
@@ -1197,7 +1195,7 @@ mod tests {
                 .enumerate()
                 .map(move |(index, stage)| ProductionEventV1 {
                     id: format!("part-{part}-stage-{index}"),
-                    week,
+                    period,
                     subject_site_ids: vec!["supplier".into(), "buyer".into()],
                     kind: format!("Original stage {index}"),
                     description: format!("Original part {part} stage {index}"),
@@ -1262,7 +1260,7 @@ mod tests {
         let session = app.world().resource::<ObserverSession>();
         assert_eq!(session.context(), context);
         assert_eq!((session.durable_tick, session.viewed_tick), (3, 3));
-        assert!(session.playing, "expansion must not even pause the month");
+        assert!(session.playing, "expansion must not even pause playback");
         assert_eq!(app.world().resource::<DossierRefresh>().0, 0);
         assert!(app
             .world()
@@ -1702,7 +1700,7 @@ mod tests {
         }
         let context = app.world().resource::<ObserverSession>().context();
         *app.world_mut().get_mut::<HistoryButton>(entity).unwrap() =
-            HistoryButton::Week { context, week: 2 };
+            HistoryButton::Period { context, period: 2 };
         app.update();
         assert_eq!(app.world().resource::<ButtonPaintPasses>().0, 4);
         app.world_mut().resource_mut::<ObserverFrame>().0 = None;
@@ -1727,7 +1725,7 @@ mod tests {
         let context = app.world().resource::<ObserverSession>().context();
         spawn_button(
             &mut app,
-            HistoryButton::Week { context, week: 1 },
+            HistoryButton::Period { context, period: 1 },
             Interaction::None,
         );
         app.update();
@@ -1803,7 +1801,7 @@ mod tests {
     }
 
     #[test]
-    fn pending_week_and_event_buttons_explain_refusal_without_selecting_evidence() {
+    fn pending_period_and_event_buttons_explain_refusal_without_selecting_evidence() {
         for choose_event in [false, true] {
             let event = event(3);
             let (mut app, _) = history_app(event.clone());
@@ -1815,7 +1813,7 @@ mod tests {
             let button = if choose_event {
                 HistoryButton::Event { context, event }
             } else {
-                HistoryButton::Week { context, week: 2 }
+                HistoryButton::Period { context, period: 2 }
             };
             let entity = spawn_button(&mut app, button, Interaction::Pressed);
             app.update();
@@ -1831,7 +1829,7 @@ mod tests {
             assert_eq!(app.world().resource::<DossierRefresh>().0, 0);
             assert_eq!(
                 app.world().resource::<ObserverFeedback>().message,
-                Some("Wait for the current week to finish committing")
+                Some("Wait for the current period to finish committing")
             );
             assert_eq!(
                 app.world().get::<BackgroundColor>(entity).unwrap().0,
@@ -1850,14 +1848,14 @@ mod tests {
         };
         spawn_button(
             &mut app,
-            HistoryButton::Week { context, week: 2 },
+            HistoryButton::Period { context, period: 2 },
             Interaction::Hovered,
         );
         app.update();
         app.update();
         assert_eq!(
             app.world().get::<Text>(hint).unwrap().0,
-            "Wait for the current week to finish committing"
+            "Wait for the current period to finish committing"
         );
         assert_eq!(app.world().resource::<ObserverFeedback>().revision, 0);
         assert!(app.world().resource::<ObserverFeedback>().message.is_none());
@@ -2039,18 +2037,18 @@ mod tests {
             inputs: vec![],
             labor: vec![],
         };
-        assert_eq!(WeeklyOutput::from_site(0, &site).unwrap().produced, None);
+        assert_eq!(PeriodOutput::from_site(0, &site).unwrap().produced, None);
         site.planned_batches = Some(8);
         site.produced_batches = Some(0);
         assert_eq!(
-            WeeklyOutput::from_site(1, &site).unwrap(),
-            WeeklyOutput {
-                week: 1,
+            PeriodOutput::from_site(1, &site).unwrap(),
+            PeriodOutput {
+                period: 1,
                 planned: Some(80),
                 produced: Some(0)
             }
         );
         site.produced_batches = Some(u64::MAX);
-        assert!(WeeklyOutput::from_site(2, &site).is_err());
+        assert!(PeriodOutput::from_site(2, &site).is_err());
     }
 }

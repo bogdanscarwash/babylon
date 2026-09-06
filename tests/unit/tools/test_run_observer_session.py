@@ -200,6 +200,7 @@ def test_two_anonymous_pipes_connect_children_without_parent_forwarding(
         tmp_path,
         {"BABYLON_RUNTIME_DSN": "writer"},
         {"BABYLON_SESSION_STDIO": "1"},
+        defines_path=tmp_path / "custom values.toml",
         initial_target=(
             launcher.OpenCampaignTarget(CAMPAIGN)
             if preset is None
@@ -209,7 +210,13 @@ def test_two_anonymous_pipes_connect_children_without_parent_forwarding(
     assert code == 0
     assert len(fds) == 4 and len(children) == 2
     runtime, client = children
-    assert runtime["args"] == [str(tmp_path / "runtime"), "session", "--stdio"]
+    assert runtime["args"] == [
+        str(tmp_path / "runtime"),
+        "session",
+        "--stdio",
+        "--defines",
+        str(tmp_path / "custom values.toml"),
+    ]
     assert client["args"] == (
         [str(tmp_path / "client"), "--campaign", str(CAMPAIGN)]
         if preset is None
@@ -271,11 +278,20 @@ def test_runtime_shutdown_allows_commit_grace_before_bounded_exact_child_stop(
     arguments = (tmp_path / "runtime", tmp_path / "client", tmp_path, {}, {})
     if behavior == "graceful":
         assert (
-            launcher.run_pair(*arguments, initial_target=launcher.OpenCampaignTarget(CAMPAIGN)) == 0
+            launcher.run_pair(
+                *arguments,
+                defines_path=tmp_path / "defines.toml",
+                initial_target=launcher.OpenCampaignTarget(CAMPAIGN),
+            )
+            == 0
         )
     else:
         with pytest.raises(launcher.ObserverLaunchError, match="runtime shutdown deadline"):
-            launcher.run_pair(*arguments, initial_target=launcher.OpenCampaignTarget(CAMPAIGN))
+            launcher.run_pair(
+                *arguments,
+                defines_path=tmp_path / "defines.toml",
+                initial_target=launcher.OpenCampaignTarget(CAMPAIGN),
+            )
     # A normal game session has no time limit; shutdown starts after client EOF.
     assert client.calls == [("wait", None)]
     expected: list[tuple[str, float | None]] = [("wait", 150)]
@@ -315,6 +331,7 @@ def test_interrupted_startup_closes_pipes_and_preserves_runtime_grace(
             tmp_path,
             {},
             {},
+            defines_path=tmp_path / "defines.toml",
             initial_target=launcher.OpenCampaignTarget(CAMPAIGN),
         )
     assert runtime.calls == [("wait", 150)]

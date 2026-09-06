@@ -1,33 +1,12 @@
-# Shared Postgres bring-up (Program 15, Phase 2). The babylon-pg compose
-# service BUILDS docker/postgres/Dockerfile (postgis + pgvector — a stock
-# postgis image lacks pgvector and fails the pinned runtime contract), so
-# every job that needs it pays an image build. This composite routes the
-# build through buildx with a GitHub-Actions layer cache, then starts the
-# service. Cache is speed only: a cold build reproduces the pinned base and
-# checksum-pinned source runtime contract; derived OCI metadata need not be identical.
+# Share the pinned image build with the disposable PostgreSQL test runner.
 name: Postgres Up
 description: Build babylon-pg with GHA layer cache, then compose up --wait
 
 runs:
   using: composite
   steps:
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4
-
-    - name: Build babylon-pg (GHA layer cache)
-      uses: docker/bake-action@d3418bd7d0e9324001bca92fa8ba175ea7e6dc9b # v7
-      env:
-        BABYLON_PG_DATA: babylon-pg-ci
-      with:
-        source: .
-        files: |
-          docker-compose.yml
-          docker-compose.ci.yml
-        targets: babylon-pg
-        load: true
-        set: |
-          babylon-pg.cache-from=type=gha,scope=babylon-pg
-          babylon-pg.cache-to=type=gha,scope=babylon-pg,mode=max
+    - name: Build PostgreSQL
+      uses: ./.github/actions/build-postgres
 
     - name: Start Postgres (compose, port 5433)
       shell: bash

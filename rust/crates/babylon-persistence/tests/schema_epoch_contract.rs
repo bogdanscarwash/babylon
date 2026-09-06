@@ -195,54 +195,6 @@ fn compiled_registry_itself_must_start_at_one_and_be_contiguous() {
 }
 
 #[test]
-fn production_epoch_has_no_runtime_activation_or_caller_supplied_sql_path() {
-    let source = include_str!("../src/schema_epoch.rs");
-    let production = source
-        .split_once("#[cfg(test)]\n#[path = \"../tests/support/legacy_epoch_fixture.rs\"]")
-        .expect("shared test support follows the complete production epoch")
-        .0;
-
-    assert!(production.contains("pub fn migrate_schema_epoch(config: &Config)"));
-    assert!(production.contains("include_str!(\"../migrations/0001_owned_schema_epoch.sql\")"));
-    assert!(production.contains("include_str!(\"../migrations/0002_h3_cell.sql\")"));
-    assert!(production.contains("include_str!(\"../migrations/0003_h3_reference_cohort.sql\")"));
-    assert!(production.contains("include_str!(\"../migrations/0004_committed_tick_storage.sql\")"));
-    assert!(
-        production.contains("include_str!(\"../migrations/0005_spatial_reference_products.sql\")")
-    );
-    assert!(production.contains("include_str!(\"../migrations/0006_h3_shadow_keys.sql\")"));
-    assert!(production.contains("include_str!(\"../migrations/0007_h3_canonical_readers.sql\")"));
-    for stage in [
-        "map_err(SchemaEpochError::ConnectionTarget)",
-        "map_err(SchemaEpochError::Lock)",
-        "map_err(SchemaEpochError::LegacyAdoption)",
-        "map_err(SchemaEpochError::Census)",
-        "map_err(SchemaEpochError::Unlock)",
-    ] {
-        assert!(
-            production.contains(stage),
-            "schema epoch loses operational stage {stage:?}"
-        );
-    }
-    assert!(!production.contains("impl From<LegacyAdopterError>"));
-    assert!(!production.contains("adopt_legacy_schema"));
-    for forbidden in [
-        "std::env",
-        "option_env!",
-        "feature =",
-        "RustWriterAuthority",
-        "CommittedTickEnvelope",
-        "archive_outbox",
-        "persist_committed_tick",
-    ] {
-        assert!(
-            !production.contains(forbidden),
-            "schema epoch exposes forbidden runtime surface {forbidden:?}"
-        );
-    }
-}
-
-#[test]
 fn migration_executes_exact_ddl_verification_marker_then_commit() {
     let source = include_str!("../src/schema_epoch.rs");
     let attempt = source
@@ -265,170 +217,21 @@ fn migration_executes_exact_ddl_verification_marker_then_commit() {
 }
 
 #[test]
-fn v2_prefix_has_an_independent_shape_and_census_contract() {
-    let source = include_str!("../src/schema_epoch.rs");
-    let v2_verifier = source
-        .split_once("fn verify_v2_prefix_client(")
-        .unwrap()
-        .1
-        .split_once("fn verify_post_epoch_census_client(")
-        .unwrap()
-        .0;
-
-    assert!(v2_verifier.contains("EPOCH_V2_SHAPE_SQL"));
-    assert!(v2_verifier.contains("SchemaEpochPrefix::V2"));
-    assert!(!v2_verifier.contains("verify_v1_prefix"));
-    assert!(!v2_verifier.contains("EPOCH_V1_SHAPE_SQL"));
-}
-
-#[test]
-fn v3_prefix_has_an_independent_shape_and_census_contract() {
-    let source = include_str!("../src/schema_epoch.rs");
-    let v3_verifier = source
-        .split_once("fn verify_v3_prefix_client(")
-        .unwrap()
-        .1
-        .split_once("fn verify_post_epoch_census_client(")
-        .unwrap()
-        .0;
-
-    assert!(v3_verifier.contains("EPOCH_V3_SHAPE_SQL"));
-    assert!(v3_verifier.contains("SchemaEpochPrefix::V3"));
-    assert!(!v3_verifier.contains("verify_v2_prefix"));
-    assert!(!v3_verifier.contains("EPOCH_V2_SHAPE_SQL"));
-}
-
-#[test]
-fn v4_prefix_has_an_independent_shape_and_census_contract() {
-    let source = include_str!("../src/schema_epoch.rs");
-    let v4_verifier = source
-        .split_once("fn verify_v4_prefix_client(")
-        .unwrap()
-        .1
-        .split_once("fn verify_post_epoch_census_client(")
-        .unwrap()
-        .0;
-
-    assert!(v4_verifier.contains("EPOCH_V4_SHAPE_SQL"));
-    assert!(v4_verifier.contains("SchemaEpochPrefix::V4"));
-    assert!(!v4_verifier.contains("verify_v3_prefix"));
-    assert!(!v4_verifier.contains("EPOCH_V3_SHAPE_SQL"));
-}
-
-#[test]
-fn v5_prefix_has_an_independent_shape_and_census_contract() {
-    let source = include_str!("../src/schema_epoch.rs");
-    let v5_verifier = source
-        .split_once("fn verify_v5_prefix_client(")
-        .unwrap()
-        .1
-        .split_once("fn verify_post_epoch_census_client(")
-        .unwrap()
-        .0;
-
-    assert!(v5_verifier.contains("EPOCH_V5_SHAPE_SQL"));
-    assert!(v5_verifier.contains("SchemaEpochPrefix::V5"));
-    assert!(!v5_verifier.contains("verify_v4_prefix"));
-    assert!(!v5_verifier.contains("EPOCH_V4_SHAPE_SQL"));
-}
-
-#[test]
-fn v6_prefix_has_an_independent_shape_and_census_contract() {
-    let source = include_str!("../src/schema_epoch.rs");
-    let v6_verifier = source
-        .split_once("fn verify_v6_prefix_client(")
-        .unwrap()
-        .1
-        .split_once("fn verify_post_epoch_census_client(")
-        .unwrap()
-        .0;
-
-    assert!(v6_verifier.contains("EPOCH_V6_SHAPE_SQL"));
-    assert!(v6_verifier.contains("SchemaEpochPrefix::V6"));
-    assert!(!v6_verifier.contains("verify_v5_prefix"));
-}
-
-#[test]
-fn v7_prefix_keeps_the_v6_shape_and_adds_an_independent_reader_contract() {
-    let source = include_str!("../src/schema_epoch.rs");
-    let v7_verifier = source
-        .split_once("fn verify_v7_prefix_client(")
-        .unwrap()
-        .1
-        .split_once("fn verify_post_epoch_census_client(")
-        .unwrap()
-        .0;
-
-    let v6_shape = v7_verifier.find("EPOCH_V6_SHAPE_SQL").unwrap();
-    let v7_shape = v7_verifier.find("EPOCH_V7_SHAPE_SQL").unwrap();
-    let census = v7_verifier.find("SchemaEpochPrefix::V7").unwrap();
-    assert!(v6_shape < v7_shape);
-    assert!(v7_shape < census);
-    assert!(!v7_verifier.contains("verify_v6_prefix"));
-}
-
-#[test]
-fn epoch_seven_census_dispatch_is_exact_for_both_origins() {
-    let source = include_str!("../src/schema_epoch.rs");
-    for required in [
-        "(SchemaEpochPrefix::V7, true) => EPOCH_OWNED_CENSUS_V7",
-        "(SchemaEpochPrefix::V7, false) => EPOCH_OWNED_FRESH_CENSUS_V7",
-    ] {
-        assert!(
-            source.contains(required),
-            "epoch-seven census dispatch omits {required:?}"
-        );
-    }
-    let capacity = source
-        .split_once("let epoch_capacity =")
-        .expect("epoch census must declare a bounded capacity")
-        .1
-        .split_once("let mut epoch =")
-        .expect("epoch census must allocate its bounded rows")
-        .0;
-    assert!(capacity.contains("prefix == SchemaEpochPrefix::V7 && legacy_origin"));
-    assert!(capacity.contains("49"));
-    assert!(capacity.contains("25"));
-    for view in [
-        "v_county_value_aggregate",
-        "v_hex_aid",
-        "v_hex_economic",
-        "v_hex_heat",
-        "v_hex_intel",
-        "v_hex_mobilize",
-        "v_hex_state_asof",
-        "v_national_value_aggregate",
-        "v_state_value_aggregate",
-        "view_runtime_trace_emission",
-    ] {
-        assert!(source.contains(view), "epoch-seven census omits {view}");
-    }
-    assert!(!source.contains("\"v_global_phi_balance\""));
-}
-
-#[test]
 fn fresh_and_owned_census_fixtures_are_bounded_and_exactly_sorted() {
     let fixtures = [
-        include_str!("../src/fixtures/fresh_schema_epoch_census_v1.txt"),
-        include_str!("../src/fixtures/fresh_schema_epoch_census_with_intel_v1.txt"),
-        include_str!("../src/fixtures/schema_epoch_owned_census_v1.txt"),
+        include_str!("../src/fixtures/fresh_schema_epoch_census_v2.txt"),
+        include_str!("../src/fixtures/fresh_schema_epoch_census_with_intel_v2.txt"),
         include_str!("../src/fixtures/schema_epoch_owned_fresh_census_v1.txt"),
-        include_str!("../src/fixtures/schema_epoch_owned_census_v2.txt"),
         include_str!("../src/fixtures/schema_epoch_owned_fresh_census_v2.txt"),
-        include_str!("../src/fixtures/schema_epoch_owned_census_v3.txt"),
         include_str!("../src/fixtures/schema_epoch_owned_fresh_census_v3.txt"),
-        include_str!("../src/fixtures/schema_epoch_owned_census_v4.txt"),
         include_str!("../src/fixtures/schema_epoch_owned_fresh_census_v4.txt"),
-        include_str!("../src/fixtures/schema_epoch_owned_census_v5.txt"),
         include_str!("../src/fixtures/schema_epoch_owned_fresh_census_v5.txt"),
-        include_str!("../src/fixtures/schema_epoch_owned_census_v6.txt"),
         include_str!("../src/fixtures/schema_epoch_owned_fresh_census_v6.txt"),
-        include_str!("../src/fixtures/schema_epoch_owned_census_v7.txt"),
         include_str!("../src/fixtures/schema_epoch_owned_fresh_census_v7.txt"),
     ];
-    let expected_counts = [7, 8, 3, 4, 4, 5, 6, 7, 16, 17, 24, 25, 39, 25, 49, 25];
+    let expected_counts = [7, 8, 4, 5, 7, 17, 25, 25, 25];
     for (fixture, expected) in fixtures.iter().zip(expected_counts) {
-        let parsed = babylon_persistence::parse_legacy_census_fixture(fixture).unwrap();
+        let parsed = babylon_persistence::parse_catalog_census(fixture).unwrap();
         assert_eq!(parsed.entries().len(), expected);
         assert!(fixture.len() <= 65_536);
         assert!(fixture.ends_with('\n'));

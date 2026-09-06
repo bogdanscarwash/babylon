@@ -31,7 +31,6 @@ pub mod map;
 pub mod map_economy_lens;
 pub mod narration;
 pub mod observer;
-pub mod observer_calendar;
 pub(crate) mod observer_controls;
 pub(crate) mod observer_focus;
 pub mod observer_io;

@@ -45,16 +45,16 @@ pub struct RouteLegV2 {
     pub corridor_id: CorridorIdV2,
     pub from_node_id: LogisticsNodeIdV2,
     pub to_node_id: LogisticsNodeIdV2,
-    pub travel_weeks: u16,
+    pub travel_periods: u16,
     pub loss_ppm: u32,
 }
 
-/// Available, unreserved exact capacity for one corridor departure week.
+/// Available, unreserved exact capacity for one corridor departure period.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct CorridorCapacityV2 {
     pub corridor_id: CorridorIdV2,
     pub unit_id: UnitIdV1,
-    pub week: u64,
+    pub period: u64,
     pub available: u64,
 }
 
@@ -80,9 +80,9 @@ pub struct RoutedFreightLotV2 {
     pub lot_id: FreightLotIdV2,
     pub order_id: OrderIdV1,
     pub route_id: RouteIdV2,
-    pub dispatch_week: u64,
+    pub dispatch_period: u64,
     pub current_leg_index: u16,
-    pub leg_arrival_week: u64,
+    pub leg_arrival_period: u64,
     pub source_site_id: SiteIdV1,
     pub destination_site_id: SiteIdV1,
     pub good_id: crate::GoodIdV1,
@@ -90,10 +90,10 @@ pub struct RoutedFreightLotV2 {
     pub quantity: u64,
 }
 
-/// Complete V2 auxiliary-register state at the opening of `week`.
+/// Complete V2 auxiliary-register state at the opening of `period`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MaterialCircuitStateV2 {
-    pub week: u64,
+    pub period: u64,
     pub site_logistics_nodes: Vec<SiteLogisticsNodeV2>,
     pub process_outputs: Vec<ProcessOutputV1>,
     pub input_coefficients: Vec<InputOutputCoefficientV1>,
@@ -121,7 +121,7 @@ pub enum MaterialCircuitErrorV2 {
     BacklogInvariant = 5,
     FreightInvariant = 6,
     ProcessInvariant = 7,
-    WeekInvariant = 8,
+    PeriodInvariant = 8,
     Arithmetic = 9,
     RouteInvariant = 10,
     CapacityInvariant = 11,
@@ -150,7 +150,7 @@ impl TryFrom<u16> for MaterialCircuitErrorV2 {
             5 => Ok(Self::BacklogInvariant),
             6 => Ok(Self::FreightInvariant),
             7 => Ok(Self::ProcessInvariant),
-            8 => Ok(Self::WeekInvariant),
+            8 => Ok(Self::PeriodInvariant),
             9 => Ok(Self::Arithmetic),
             10 => Ok(Self::RouteInvariant),
             11 => Ok(Self::CapacityInvariant),
@@ -182,7 +182,7 @@ impl From<crate::MaterialCircuitErrorV1> for MaterialCircuitErrorV2 {
             crate::MaterialCircuitErrorV1::BacklogInvariant => Self::BacklogInvariant,
             crate::MaterialCircuitErrorV1::TransitInvariant => Self::FreightInvariant,
             crate::MaterialCircuitErrorV1::ProcessInvariant => Self::ProcessInvariant,
-            crate::MaterialCircuitErrorV1::WeekInvariant => Self::WeekInvariant,
+            crate::MaterialCircuitErrorV1::PeriodInvariant => Self::PeriodInvariant,
             crate::MaterialCircuitErrorV1::Arithmetic => Self::Arithmetic,
             crate::MaterialCircuitErrorV1::WireLimit => Self::WireLimit,
             crate::MaterialCircuitErrorV1::WireDomain => Self::WireDomain,
@@ -202,7 +202,7 @@ pub struct RoutedDispatchReceiptV2 {
     pub order_id: OrderIdV1,
     pub route_id: RouteIdV2,
     pub quantity: u64,
-    pub final_arrival_week: u64,
+    pub final_arrival_period: u64,
 }
 
 /// Exact goods lost when one route leg completes.
@@ -214,7 +214,7 @@ pub struct FreightLossReceiptV2 {
     pub quantity: u64,
 }
 
-/// Atomic result of closing one routed material-circuit week.
+/// Atomic result of closing one routed material-circuit period.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MaterialCircuitTransitionV2 {
     pub state: MaterialCircuitStateV2,

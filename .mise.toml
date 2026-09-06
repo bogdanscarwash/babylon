@@ -7,13 +7,10 @@
 #   dev:*         - Development environment diagnostics and maintenance
 #   test:*        - Test runners by scope
 #   sim:*         - Rust simulation execution and observability
-#   reference:*   - Frozen Python reference-engine tools
-#   analysis:*    - Development-only Python analysis
 #   qa:*          - Quality assurance and verification
 #   demo:*        - Integration demos and persona testing
 #   data:*        - Data pipeline operations
 #   docs:*        - Documentation building
-#   mutate:*      - Mutation testing
 #   midi:*        - Music generation
 
 # Hosted CI installs the current mise release through mise-action.
@@ -24,7 +21,6 @@ locked = true
 
 [task_config]
 includes = [
-  ".mise/tasks/analysis.toml",
   ".mise/tasks/devtools.toml",
   ".mise/tasks/simulation.toml",
 ]
@@ -75,7 +71,7 @@ description = "serial Dependabot merge conveyor: classify + merge CLEAN PRs via 
 run = "python3 tools/dependabot_conveyor.py"
 
 [tasks."check:worktree-contract"]
-description = "worktree contract (ADR181 R9c): venv interpreter pin, ops extra, data/ symlinks, .env, uv.lock unmodified"
+description = "Validate the pinned worktree interpreter, staged dependency inputs and resolved dependency lock"
 run = "python3 tools/check_worktree_contract.py"
 
 [tasks."check:env-contract"]
@@ -107,7 +103,7 @@ if [ ! -f data/sqlite/marxist-data-3NF.sqlite ]; then
   echo "      (reference-data tooling needs it; see project/04-data-program-098.md)"
 fi
 echo ""
-echo "Setup complete. Smoke-test with: mise run test:int-pg"
+echo "Setup complete. Validate a disposable database with: mise run test:rust-postgres"
 """
 
 # =============================================================================
@@ -142,25 +138,17 @@ run = "uv run yamllint -c .yamllint.yaml ."
 description = "Lint Markdown files"
 run = "npx markdownlint --config .markdownlint.yaml '**/*.md' --ignore 'CHANGELOG.md' --ignore 'brainstorm/**' --ignore '.venv/**'"
 
-[tasks."lint:complexity"]
-description = "Show code complexity report (radon)"
-run = "uv run radon cc src/ -a -s --show-complexity"
-
-[tasks."lint:complexity-check"]
-description = "Run complexity gate (xenon) - fails if CC > 15"
-run = "uv run xenon --max-absolute C src/"
-
 [tasks.check]
 description = "Canonical non-mutating local gate: hosted static checks plus governance, ADR catalog, and unit tests"
 depends = ["check:static", "check:governance-mass", "check:adr-catalog", "test:unit"]
 
 [tasks."check:static"]
 description = "Hosted Fast Gate leaves, reusable locally without source rewrites or reference data"
-depends = ["check:hygiene", "check:dynamic-linking-fence", "check:sentinels-static", "check:surface", "lint:check", "format:check", "lint:imports", "typecheck", "check:lock"]
+depends = ["check:hygiene", "check:dynamic-linking-fence", "check:h3-readers", "check:rust-persistence-cutover", "lint:check", "format:check", "typecheck", "check:lock"]
 
 [tasks."check:full-local"]
 description = "Canonical check plus workstation data-path and reference-catalog probes"
-depends = ["check", "data:doctor", "check:catalog"]
+depends = ["check", "data:doctor"]
 
 [tasks."data:doctor"]
 description = "Loud data-pathway gate: trove mount + repo symlinks + Postgres bind on the data drive (clean skip off the dev box); heal = sudo tools/heal_data_mount.sh"
@@ -210,74 +198,6 @@ arg "[head]" help="Head ref" default="HEAD"
 '''
 run = "uv run python tools/generate_pr_body.py --base ${usage_base} --head ${usage_head}"
 
-[tasks."check:seam-algebra"]
-description = "Seam-algebra sentinel (T1.1 U3): static Lawvere co-Heyting boundary (dL) over the unified construct-to-expected-consumer registry -- disconnected-subsystem gate (static)"
-run = "uv run --frozen python tools/sentinel_check.py seam-algebra --check"
-
-[tasks."check:coverage"]
-description = "Data-coverage sentinel: every declared reference-data source class exists (static gate)"
-run = "uv run --frozen python tools/sentinel_check.py coverage --check"
-
-[tasks."check:vocabulary"]
-description = "Node-type vocabulary sentinel: no invented _node_type strings; every production query has a producer"
-run = "uv run --frozen python tools/sentinel_check.py vocabulary --check"
-
-[tasks."check:reachability"]
-description = "Reachability sentinel (Standard §9 W.3.2): every EndgameDetector gate operand has a runtime writer or a cited ledger disposition (static gate)"
-run = "uv run --frozen python tools/sentinel_check.py reachability --check"
-
-[tasks."check:fallback-coverage"]
-description = "Fallback-coverage sentinel (ADR176 ruling 25): every EventType has a bus builder + bespoke chronicle summary, or a cited disposition row (static gate)"
-run = "uv run --frozen python tools/sentinel_check.py fallback-coverage --check"
-
-[tasks."check:inert"]
-description = "Inert-construct sentinel: every declared store's writer and every declared producer has a real production caller (static gate)"
-run = "uv run --frozen python tools/sentinel_check.py inert --check"
-
-[tasks."check:dangling"]
-description = "Dangling-reference sentinel (dual of inert): every typed-receiver getattr() call names a real member of a watched class (static gate)"
-run = "uv run --frozen python tools/sentinel_check.py dangling --check"
-
-[tasks."check:unconsumed"]
-description = "Unconsumed-value sentinel: every declared computed dict key has a real production reader (static gate)"
-run = "uv run --frozen python tools/sentinel_check.py unconsumed --check"
-
-[tasks."check:formula-registration"]
-description = "Dead-formula-registration sentinel (Vol I U7): every declared FormulaRegistry entry has a real production caller other than its own registration call, or a cited exemption (static gate)"
-run = "uv run --frozen python tools/sentinel_check.py formula_registration --check"
-
-[tasks."check:defines-passthrough"]
-description = "Defines-passthrough sentinel (task #42): every formulas-layer call declaring an optional `defines` param must pass the run's live defines, not silently fall back to schema defaults (static gate)"
-run = "uv run --frozen python tools/sentinel_check.py defines_passthrough --check"
-
-[tasks."check:catalog"]
-description = "Data-catalog sentinel: reference-DB objects reconcile with data-catalog.yaml — no undeclared objects, phantom rows, or dark KEEP objects (DB probe)"
-run = "uv run python tools/sentinel_check.py catalog --check"
-
-[tasks."check:partition"]
-description = "Partition sentinel (ADR070): seeded-vs-derived class evidence; hard violations gate, agreement metrics stay advisory (dynamic)"
-run = "uv run --frozen python tools/sentinel_check.py partition --check"
-
-[tasks."check:synthetic"]
-description = "Synthetic-data sentinel: every declared synthetic source's source + guard symbols exist (static gate)"
-run = "uv run --frozen python tools/sentinel_check.py synthetic --check"
-
-[tasks."check:superstructure"]
-description = "Superstructure-direction sentinel (I-ORD, P25 U9/ADR135): declared write ownership over the political-superstructure graph registers; no material-base file writes the superstructure (static gate)"
-run = "uv run --frozen python tools/sentinel_check.py superstructure --check"
-
-[tasks."check:absence"]
-description = "Absence sentinel (task #64): every sqlite3.connect/create_engine(sqlite) site carries a cited disposition — auto-create must never mask a missing reference DB (static gate)"
-run = "uv run --frozen python tools/sentinel_check.py absence --check"
-
-[tasks."check:sentinels"]
-description = "The 18 static sentinels plus the local reference-database catalog probe"
-depends = ["check:sentinels-static", "check:catalog"]
-
-[tasks."check:sentinels-static"]
-description = "The 18 static sentinels (no reference DB needed); the catalog DB probe runs in its reference-data lane"
-depends = ["check:seam-algebra", "check:coverage", "check:vocabulary", "check:reachability", "check:fallback-coverage", "check:h3-readers", "check:rust-persistence-cutover", "check:inert", "check:dangling", "check:unconsumed", "check:partition", "check:synthetic", "check:defines-passthrough", "check:gate-coverage", "check:absence", "check:formula-registration", "check:tutorial-coverage", "check:superstructure"]
-
 [tasks."check:h3-readers"]
 description = "PER-280 canonical H3 reader inventory: schema-qualified BIGINT reads only"
 run = "uv run --frozen python tools/verify_h3_reader_cutover_v1.py"
@@ -285,34 +205,6 @@ run = "uv run --frozen python tools/verify_h3_reader_cutover_v1.py"
 [tasks."check:rust-persistence-cutover"]
 description = "PER-311 active PostgreSQL 17 persistence V2 authority, envelope, and receipt contract"
 run = "uv run --frozen python tools/verify_rust_persistence_cutover_v2.py"
-
-[tasks."check:surface"]
-description = "Sentinel: __all__ vs its pinned baseline frozenset (public-surface baseline blindness gate)"
-run = "uv run --frozen python tools/sentinel_check.py surface --check"
-
-[tasks."check:tutorial-coverage"]
-description = "Tutorial option-coverage sentinel (T6): every declared TUI Binding is exercised by an authored TutorialStep or carries a cited exemption (static gate)"
-run = "uv run --frozen python tools/sentinel_check.py tutorial-coverage --check"
-
-[tasks."check:gate-coverage"]
-description = "Sentinel: qa:regression estate declaration is complete over all 30 engine systems (gate-blindness gate)"
-run = "uv run --frozen python tools/sentinel_check.py gate-coverage --check"
-
-[tasks."check:gate-coverage-truth"]
-description = "Dynamic gate-coverage truth probe: every declared SystemEvidence actually occurs in its scenario (runs the engine, ~one gate-length)"
-run = "uv run python tools/sentinel_check.py gate-coverage-truth --check"
-
-[tasks."check:liveness"]
-description = "Liveness sentinel (ADVISORY, local): correct-but-inert + computed-but-never-consumed"
-run = "uv run python tools/sentinel_check.py liveness"
-
-[tasks."check:aggregation-intensive"]
-description = "Intensive-aggregation sentinel (ADVISORY, local): no unweighted mean of a rate/ratio/balance"
-run = "uv run python tools/sentinel_check.py aggregation-intensive"
-
-[tasks."check:coupling"]
-description = "Coupling sentinel (ADVISORY, local): declared coupling edges vs real dependencies, both directions"
-run = "uv run python tools/sentinel_check.py coupling"
 
 [tasks.cap]
 description = "Run a command under a HARD memory+CPU cgroup cap (can't freeze the machine). Use for any heavy run: mise run cap -- mise run test:unit"
@@ -325,10 +217,6 @@ run = "tools/capped.sh mise run test:unit"
 [tasks."mcp:reap"]
 description = "Reap leaked chroma-mcp servers (claude-mem backend leaks ~1GB each on long sessions; 77 = 28GB once nearly froze the box). Safe: Chroma data is on disk, a fresh server respawns on next use. Run when they pile up."
 run = "tools/reap_chroma.sh"
-
-[tasks."lint:imports"]
-description = "Import-boundary contracts: kernel < models/formulas < domain < engine (program 14)"
-run = "uv run --frozen lint-imports"
 
 [tasks."ci:local"]
 description = "Run a GitHub Actions job locally via gh-act (program 15) — e.g. mise run ci:local -- -W .github/workflows/ci.yml -j fast-gate. Install once: gh extension install https://github.com/nektos/gh-act"
@@ -347,87 +235,35 @@ run = "uv run --frozen ruff check ."
 description = "Ruff format check, no rewrites (CI parity; the rewriting variant is tasks.format)"
 run = "uv run --frozen ruff format --check ."
 
-# CI pytest flag rationale (both test:*-ci tasks):
-#   -o addopts="" is LOAD-BEARING: pyproject addopts inject --cov-report=html,
-#     and pytest-cov's clear-reports special case (--cov-report=) only fires
-#     when it is the SOLE occurrence across addopts+CLI — without the strip,
-#     every CI run silently writes htmlcov/. Wanted addopts are re-added below.
-#   Maximum verbosity by owner ruling (2026-07-11): CI logs are read by AI
-#     agents, so -vv/-ra/-l/--tb=long/--durations=0 — finest granularity wins.
-#   No --color=yes: CI is non-TTY, so pytest emits plain text — ANSI codes
-#     inside FAILED tokens break machine grep (bitten during Phase 0).
-#   Coverage (owner ruling 2026-07-11): MEASURE the whole tree (term-missing
-#     table + coverage.xml/json artifacts); GATE only engine/systems >= 80,
-#     enforced by a report-time --include filter on the same .coverage data —
-#     one pytest invocation, metrics and gate separated.
 [tasks."test:unit-ci"]
-description = "CI unit shard (program 15): xdist -n4 loadscope, max-verbosity output, full-tree coverage artifacts, excludes slow/red_phase/requires_reference_db, gates engine/systems cov >= 80"
+description = "Retained Python data and repository tooling unit contracts"
 run = """
 set -e
 mkdir -p reports/test-results/unit-ci
-# timeout -s INT: a wedged run (2026-07-16 incident: worker crash + loadscope
-# stranded its queue -> scheduler futex-wait at 99%) self-salvages with a full
-# summary + junit instead of burning the job's timeout-minutes and dying mute.
-# --max-worker-restart=2: repeated worker death fails the session loudly.
-# tests/unit/ai is NOT ignored (2026-07-16 re-tier): the mock-based ai-suite
-# tests run here in ~3s — the `ai` marker on them is taxonomy, not an
-# LLM-server dependency; local test:unit always ran them, CI matches. The
-# 2026-07-19 G6 entailment eval added the directory's FIRST genuinely
-# live-LLM tests — those carry `requires_ollama` and are excluded from every
-# fast gate (they run via `mise run test:ai` on a box with the daemon).
-timeout --signal=INT --kill-after=120 15m \
-uv run pytest tests/unit \
-  -o addopts="" -vv -ra -l --tb=long --durations=0 \
-  -m 'not red_phase and not slow and not requires_reference_db and not requires_ollama' \
-  -n 4 --dist loadscope --max-worker-restart=2 \
-  --cov=src/babylon \
-  --cov-report=term-missing:skip-covered \
-  --cov-report=xml:reports/test-results/unit-ci/coverage.xml \
-  --cov-report=json:reports/test-results/unit-ci/coverage.json \
+uv run --frozen pytest tests/unit -o addopts="" -q -ra --tb=short --durations=20 \
+  -m 'not slow and not requires_reference_db and not requires_ollama' \
+  -n 4 --dist worksteal --max-worker-restart=2 \
   --junit-xml=reports/test-results/unit-ci/junit.xml
-echo '=== Coverage gate: src/babylon/engine/systems >= 80% ==='
-uv run coverage report --include='src/babylon/engine/systems/*' --fail-under=80
 """
 
 [tasks."test:rest-ci"]
-description = "CI heavy shard (program 15): everything outside tests/unit, plus slow-marked tests/unit tests; excludes red_phase/requires_reference_db"
-# NO coverage on this shard (program 15, 2026-07-11): pytest-cov under
-# `-n 4` xdist instruments all of src/babylon in every worker, and stacked on
-# the memory-heavy integration/property suites it OOM-killed a worker on the
-# hosted runner — a silent SIGKILL ("sh exited with non-zero status: no exit
-# status", no traceback), at a DIFFERENT test each attempt (cumulative memory,
-# not a test bug: every test passes standalone). The coverage GATE is unaffected
-# — it lives on the unit shard (test:unit-ci, engine/systems >=80). This shard's
-# full-tree coverage was non-gating artifact only; restoring it needs a proper
-# per-worker memory budget (owner item 54).
+description = "Release remainder: non-unit contracts and slow units; reference-data contracts run separately"
 run = """
 set -e
 mkdir -p reports/test-results/rest-ci
-# timeout -s INT + --max-worker-restart=2: wedge/crash-loop guards (2026-07-16
-# incident — see test:unit-ci comment; loadscope does NOT redistribute a
-# crashed worker's queued scopes, so a crash can hang the scheduler forever).
-# CI sets the tight caps via env (sized under nightly's 35-min job budget);
-# local defaults are generous — the dev box runs this shard in ~50-90 min
-# (2026-07-16 benchmark) and the cap exists to kill WEDGES, not slowness.
-# HYPOTHESIS_PROFILE: this is the only shard running tests/property — default
-# to the registered 'ci' profile (500 examples); nightly overrides via env.
-export HYPOTHESIS_PROFILE="${HYPOTHESIS_PROFILE:-ci}"
-# R8 fix (2026-07-27): --ignore=tests/integration/web dropped — that
-# directory no longer exists (Django test estate removal), so the flag was a
-# dead no-op.
-timeout --signal=INT --kill-after=120 "${BABYLON_REST_SHARD_TIMEOUT:-100m}" \
-uv run pytest tests --ignore=tests/unit \
-  -o addopts="" -vv -ra -l --tb=long --durations=0 \
-  -m 'not red_phase and not requires_reference_db' \
-  -n 4 --dist loadscope --max-worker-restart=2 \
-  --junit-xml=reports/test-results/rest-ci/junit.xml
-echo '=== slow-marked tests/unit tests (excluded from the test:unit-ci fast shard) ==='
-timeout --signal=INT --kill-after=120 "${BABYLON_SLOWUNIT_TIMEOUT:-30m}" \
-uv run pytest tests/unit --ignore=tests/unit/ai \
-  -o addopts="" -vv -ra -l --tb=long --durations=0 \
-  -m 'slow and not red_phase and not requires_reference_db' \
-  -n 4 --dist loadscope --max-worker-restart=2 \
-  --junit-xml=reports/test-results/rest-ci/junit-slow-unit.xml
+uv run --frozen pytest tests --ignore=tests/unit -o addopts="" -q -ra --tb=short --durations=20 \
+  -m 'not requires_reference_db and not requires_ollama' \
+  -n 4 --dist worksteal --max-worker-restart=2 \
+  --junit-xml=reports/test-results/rest-ci/non-unit.xml
+# Fast units already ran in ci.yml. This shard may be empty after retirement.
+slow_unit_status=0
+uv run --frozen pytest tests/unit -o addopts="" -q -ra --tb=short --durations=20 \
+  -m 'slow and not requires_reference_db and not requires_ollama' \
+  -n 4 --dist worksteal --max-worker-restart=2 \
+  --junit-xml=reports/test-results/rest-ci/slow-unit.xml || slow_unit_status=$?
+if [ "$slow_unit_status" -ne 0 ] && [ "$slow_unit_status" -ne 5 ]; then
+  exit "$slow_unit_status"
+fi
 """
 
 [tasks."security:pip-audit"]
@@ -575,49 +411,15 @@ uv run pytest tests/integration -p no:randomly \
   --html=reports/test-results/int/report.html --self-contained-html
 """
 
-[tasks."test:scenario"]
-description = "Scenario tests (slow, full arcs) → reports/test-results/scenario/"
-run = """
-mkdir -p reports/test-results/scenario
-uv run pytest tests/scenarios \
-  -vv --tb=long --showlocals --show-capture=all --capture=tee-sys -r aR --durations=25 \
-  --junit-xml=reports/test-results/scenario/junit.xml \
-  --json-report --json-report-file=reports/test-results/scenario/report.json --json-report-indent=2 \
-  --html=reports/test-results/scenario/report.html --self-contained-html
-"""
-
-[tasks."test:render"]
-description = "Render seam unit + snapshot tests (ADR097) → reports/test-results/render/"
-run = """
-mkdir -p reports/test-results/render
-uv run pytest tests/unit/render \
-  -vv --tb=long --showlocals --show-capture=all --capture=tee-sys -r aR --durations=25 \
-  --junit-xml=reports/test-results/render/junit.xml \
-  --json-report --json-report-file=reports/test-results/render/report.json --json-report-indent=2 \
-  --html=reports/test-results/render/report.html --self-contained-html
-"""
-
 [tasks."test:all"]
 description = "All non-AI tests → reports/test-results/all/"
 run = """
 mkdir -p reports/test-results/all
 uv run pytest \
-  --ignore=tests/unit/ai \
   -vv --tb=long --showlocals --show-capture=all --capture=tee-sys -r aR --durations=25 \
   --junit-xml=reports/test-results/all/junit.xml \
   --json-report --json-report-file=reports/test-results/all/report.json --json-report-indent=2 \
   --html=reports/test-results/all/report.html --self-contained-html
-"""
-
-[tasks."test:ai"]
-description = "AI/narrative evaluation tests (slow) → reports/test-results/ai/"
-run = """
-mkdir -p reports/test-results/ai
-uv run pytest tests/unit/ai \
-  -vv --tb=long --showlocals --show-capture=all --capture=tee-sys -r aR --durations=25 \
-  --junit-xml=reports/test-results/ai/junit.xml \
-  --json-report --json-report-file=reports/test-results/ai/report.json --json-report-indent=2 \
-  --html=reports/test-results/ai/report.html --self-contained-html
 """
 
 [tasks."test:cov"]
@@ -625,7 +427,6 @@ description = "Tests + coverage (XML + JSON + HTML) → reports/test-results/cov
 run = """
 mkdir -p reports/test-results/cov
 uv run pytest \
-  --ignore=tests/unit/ai \
   -vv --tb=long --showlocals --show-capture=all --capture=tee-sys -r aR --durations=25 \
   --cov=src/babylon --cov-branch \
   --cov-report=xml:reports/test-results/cov/coverage.xml \
@@ -636,29 +437,6 @@ uv run pytest \
   --json-report --json-report-file=reports/test-results/cov/report.json --json-report-indent=2 \
   --html=reports/test-results/cov/report.html --self-contained-html
 """
-
-[tasks."test:doctest"]
-description = "Doctest examples in formulas module → reports/test-results/doctest/"
-run = """
-mkdir -p reports/test-results/doctest
-uv run pytest --doctest-modules src/babylon/formulas \
-  -vv --tb=long --showlocals --show-capture=all --capture=tee-sys -r aR --durations=25 \
-  --junit-xml=reports/test-results/doctest/junit.xml \
-  --json-report --json-report-file=reports/test-results/doctest/report.json --json-report-indent=2 \
-  --html=reports/test-results/doctest/report.html --self-contained-html
-"""
-
-# R8 fix (2026-07-27): "test:pg" (Postgres-backed contract tests) deleted —
-# its sole target, tests/integration/web/test_pg_contract.py, was removed
-# with the rest of the Django test estate (Director ruling, "test(web):
-# remove the legacy Django test estate"), and no other in-repo suite targets
-# this task's own name/shape closely enough to retarget it honestly. Not
-# referenced by any workflow (grep-verified) — the deletion is a pure
-# dead-task prune, no CI seam to update alongside it.
-
-# -----------------------------------------------------------------------------
-# Test report helpers
-# -----------------------------------------------------------------------------
 
 [tasks."test:q"]
 description = "Quiet scoped pytest for the inner loop (kept cache => --lf works); use: mise run test:q -- <paths>"
@@ -736,10 +514,6 @@ if fails:
 # QA (Namespaced)
 # =============================================================================
 
-[tasks."qa:verify"]
-description = "Verify formula correctness"
-run = "uv run python tools/verify_math_divergence.py"
-
 [tasks."qa:schemas"]
 description = "Validate JSON schemas"
 run = "uv run python tools/validate_schemas.py"
@@ -747,34 +521,6 @@ run = "uv run python tools/validate_schemas.py"
 [tasks."qa:security"]
 description = "Run security audit on dependencies"
 run = "uv run pip-audit"
-
-[tasks."qa:regression"]
-description = "Regression test against stored baselines"
-run = "uv run python tools/regression_test.py compare"
-
-[tasks."qa:vault-regression"]
-description = "Golden-vault byte-gate for the retained in-process single_county and org_probe projection scenarios"
-run = "uv run python tools/vault_regression.py compare"
-
-[tasks."qa:vault-regression-generate"]
-description = "Seed/regenerate golden-vault manifests (committing tests/baselines/vault/** is a §6.5 ceremony — Baselines: blessed(<slug>) trailer required)"
-run = "uv run python tools/vault_regression.py generate"
-
-[tasks."qa:regression-generate"]
-description = "Generate regression baselines (after intentional changes)"
-run = "uv run python tools/regression_test.py generate --force"
-
-[tasks."qa:regression-generate-dense"]
-description = "Generate dense per-tick golden trace CSVs for the 5 regression scenarios (Program 13 item 2; also regenerates the sampled-checkpoint JSONs)"
-run = "uv run python tools/regression_test.py generate --force --dense"
-
-[tasks."archive:record-fixtures"]
-description = "Program 24 P1 keel item 5 (WO-6): harvest the Wayne (26163) county projection fixture from a small deterministic in-process run"
-run = "uv run python tools/record_projection_fixtures.py"
-
-[tasks."archive:record-fixtures-community"]
-description = "Program 24 P2 (WO-24): harvest the SETTLER community projection fixture from a small deterministic in-process run (honestly all-absent — no scenario wires a community_memberships producer)"
-run = "uv run python tools/record_community_fixture.py"
 
 [tasks."qa:hexagon-isolation"]
 description = "Verify hexagon UI isolation from database layer (SC-002)"
@@ -805,27 +551,6 @@ echo "Audit complete. Run quarterly or after major dependency changes."
 
 # =============================================================================
 # DEMO (Namespaced)
-# =============================================================================
-
-[tasks."demo:slice"]
-description = "Full pipeline demo (Engine -> RAG -> LLM)"
-run = "uv run python tools/vertical_slice.py"
-
-[tasks."demo:persona"]
-description = "Test Persephone persona voice"
-run = "uv run python tools/interview_persona.py"
-
-[tasks."demo:narrative"]
-description = "Narrative U-curve sweep"
-run = "uv run python tools/narrative_sweep.py"
-
-[tasks."demo:narrative-mock"]
-description = "Narrative U-curve sweep with MockLLM"
-run = "uv run python tools/narrative_sweep.py --mock"
-
-# =============================================================================
-# DATA (Namespaced)
-# ETL loaders moved to babylon-data package. Only local utilities remain.
 # =============================================================================
 
 [tasks."data:query"]
@@ -1002,12 +727,8 @@ run = """
 uv run python tools/ingest_tiger_geometry.py --h3-state ${usage_h3_state}
 """
 
-[tasks."qa:audit-consciousness"]
-description = "AST audit for direct .r/.l/.f mutations bypassing spec-043 routing formula."
-run = "uv run python tools/audit_simplex_bypasses.py"
-
 [tasks."qa:michigan-rollover-smoke"]
-description = "Commit and restart the Rust Michigan Phi/class-accumulation path across tick 52"
+description = "Commit and restart the Rust Michigan Phi/class-accumulation path across period 13"
 run = """
 export BABYLON_RUNTIME_DSN="${BABYLON_RUNTIME_DSN:-host=127.0.0.1 port=5433 dbname=babylon_test user=test password=test}"
 smoke_campaign_id="$(python3 tools/devtools/worktree_campaign.py --purpose qa-michigan-rollover-smoke --fresh)" || exit
@@ -1031,9 +752,9 @@ docker exec babylon-pg-isolated psql -U test -d postgres -tc "SELECT pg_size_pre
 df -h /var | tail -1
 """
 
-[tasks."test:rust-legacy-adopter-pg"]
-description = "Run the bounded PER-20 Rust legacy-adopter proof in a task-owned PostgreSQL runtime"
-run = "tools/run_rust_legacy_adopter_pg.sh"
+[tasks."test:rust-postgres"]
+description = "Validate the current Rust runtime in a task-owned fresh PostgreSQL instance"
+run = "tools/run_rust_postgres.sh"
 
 [tasks."db:bootstrap"]
 description = "Bootstrap the complete Rust-owned schema and activate sole persistence authority"
@@ -1041,7 +762,7 @@ run = """
 export BABYLON_RUNTIME_DSN="${BABYLON_RUNTIME_DSN:-host=127.0.0.1 port=5433 dbname=babylon_test user=test password=test}"
 unset PGHOST PGHOSTADDR PGPORT PGDATABASE PGOPTIONS PGSERVICE PGSERVICEFILE PGSYSCONFDIR
 (cd rust && CARGO_BUILD_JOBS=4 cargo build -p babylon-persistence --bin babylon-runtime --locked)
-export PATH="$PWD/rust/target/debug:$PATH"
+export PATH="${CARGO_TARGET_DIR:-$PWD/rust/target}/debug:$PATH"
 babylon-runtime bootstrap
 """
 
@@ -1096,29 +817,6 @@ make all-pdf
 # MUTATION TESTING (Namespaced)
 # =============================================================================
 
-[tasks."mutate:full"]
-description = "Run mutation testing (incremental — skips cached results), then generate report"
-run = """
-uv run python tools/run_mutmut.py
-uv run python tools/mutmut_report.py report
-"""
-
-[tasks."mutate:report"]
-description = "Parse mutation results and print summary (--diff for baseline comparison)"
-run = "uv run python tools/mutmut_report.py report $@"
-
-[tasks."mutate:baseline"]
-description = "Snapshot current mutation scores as baseline"
-run = "uv run python tools/mutmut_report.py baseline"
-
-[tasks."mutate:clear"]
-description = "Clear all mutation testing results"
-run = 'rm -rf mutants/ && echo "Mutation results cleared."'
-
-# =============================================================================
-# CI / HOOKS
-# =============================================================================
-
 [tasks.ci]
 description = "Legacy local aggregate (same as check); hosted CI jobs use explicit ci:* entry points."
 depends = ["check"]
@@ -1157,13 +855,15 @@ if [ "${1:-}" = "--yes" ]; then
   uv run cz bump --version-files-only --yes
   NEW_VERSION="$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')"
   [ "$OLD_VERSION" != "$NEW_VERSION" ] || { echo "release:bump: refuse — version did not advance" >&2; exit 1; }
-  [ -z "$(git diff --name-only -- . ':(exclude)pyproject.toml' ':(exclude)CHANGELOG.md')" ] || {
-    echo "release:bump: refuse — Commitizen changed an unexpected tracked file" >&2; exit 1;
+  uv lock --offline
+  uv lock --offline --check
+  [ -z "$(git diff --name-only -- . ':(exclude)pyproject.toml' ':(exclude)CHANGELOG.md' ':(exclude)uv.lock')" ] || {
+    echo "release:bump: refuse — version bump changed an unexpected tracked file" >&2; exit 1;
   }
   [ -z "$(git ls-files --others --exclude-standard)" ] || {
     echo "release:bump: refuse — Commitizen created an unexpected untracked file" >&2; exit 1;
   }
-  git add -- pyproject.toml CHANGELOG.md
+  git add -- pyproject.toml CHANGELOG.md uv.lock
   mise run commit -- "bump: version $OLD_VERSION → $NEW_VERSION"
   echo "release:bump: committed $NEW_VERSION on dev without a tag."
   echo "OWNER: push dev, open the dev-to-main release PR, qualify it, and use the Director merge."
@@ -1323,22 +1023,9 @@ run = "echo \"Current: $SOUNDFONT\" && ls -lh \"$SOUNDFONT\""
 # VISUALIZATION (Namespaced)
 # =============================================================================
 
-[tasks."viz:necropolis"]
-description = "Watch the 100-year trajectory into stable necropolis (The Red Pill)"
-usage = '''
-arg "[years]" help="Simulation length in years" default="100"
-arg "[interval]" help="Report interval in years" default="10"
-'''
-run = """
-uv run python tools/necropolis_viewer.py \
-  --years ${usage_years} \
-  --interval ${usage_interval}
-"""
-
-# ── Rust client (the raster cutover, Amendment AC / ADR150) ──────────────────
-
 [tasks."rust:check-no-docs"]
-description = "Canonical non-documentation Rust gate: format:check + one workspace Clippy pass + one reported non-doctest pass + the preserved doctest pass + the bsl-lint repo-relationship sentinel. Selected manifests opt into the existing pedantic boundary. This is the local/agent gate and the non-doc prefix of rust:check; sequential because one cargo target directory has one file lock."
+description = "Canonical Rust gate: format, all-target Clippy, one reported test pass, doctests and BSL sentinels. Full workspace tests by default; --dev selects the inexpensive suites and current integration boundaries. Sequential; no documentation generation."
+usage = 'flag "--dev" help="Select dev integration contracts; full workspace tests are the default"'
 dir = "rust"
 run = """
 set -e
@@ -1351,7 +1038,11 @@ cargo clippy --workspace --all-targets --locked -- -D warnings -D clippy::cognit
 # nextest owns ordinary test execution and stable JUnit. It cannot execute
 # doctests, so the following Cargo leg is a distinct compile-fail/doc contract,
 # not a duplicate package test pass.
-python3 ../tools/rust_test_report.py run --profile ci --workspace
+set --
+if [ "${usage_dev:-false}" = true ]; then
+  set -- --dev
+fi
+python3 ../tools/rust_test_report.py run --profile ci --workspace "$@"
 cargo test --workspace --doc --locked
 # Explicit non-Clippy/test exception: bsl-lint checks repository relationships
 # (frozen citations, namespaces, authority, and non-authorability) that Cargo's
@@ -1406,27 +1097,23 @@ mise run rust:check-no-docs
 RUSTDOCFLAGS='-D warnings' cargo doc --workspace --no-deps --locked
 """
 
-[tasks."rust:check"]
-description = "Compatibility alias for ci:rust. New CI configuration must use the ci:* namespace."
-run = "mise run ci:rust"
-
 [tasks."rust:format"]
 description = "Rust format (rewrites; the CI-parity check variant runs inside rust:check-no-docs)"
 dir = "rust"
 run = "cargo fmt --all"
 
 [tasks."rust:lock-refresh"]
-description = "Refresh rust/Cargo.lock after workspace-member or dependency changes (build WITHOUT --locked: preserves existing pins, adds only the new entries; rust:check stays --locked as the gate)"
+description = "Refresh rust/Cargo.lock after workspace-member or dependency changes (build WITHOUT --locked: preserves existing pins, adds only the new entries; ci:rust stays --locked as the gate)"
 dir = "rust"
 run = "cargo build --workspace"
 
 [tasks."check:bsl-sentinels"]
-description = "bsl-lint's four repo-relationship checks: citation-drift, namespace-unique, rust-contract-authority, and sfs-non-authorability. The authority check refuses retired Python gameplay-contract paths. The non-authorability check is a bounded dependency-direction and tracked/staged/untracked production-source exact-token check; it does not claim universal disguised-name recognition. Wired into rust:check-no-docs and therefore rust:check (static gate, no reference DB, no engine run)."
+description = "bsl-lint's four repo-relationship checks: citation-drift, namespace-unique, rust-contract-authority, and sfs-non-authorability. The authority check refuses retired Python gameplay-contract paths. The non-authorability check is a bounded dependency-direction and tracked/staged/untracked production-source exact-token check; it does not claim universal disguised-name recognition. Wired into rust:check-no-docs and therefore ci:rust (static gate, no reference DB, no engine run)."
 dir = "rust"
 run = "cargo run -p bsl-lint --locked -- all"
 
 [tasks."bsl:fuel-check"]
-description = "The fuel-bound REPORT mode (BSL hygiene knock-out train, W3): for every rule in every landed content set (15 packs, each solo-loaded against its own canonical scenario — content-sets.toml does not exist on this branch, see bsl_fuel_report.rs's own module doc), prints `rule-id declared=<n> computed=<m> headroom=<n-m>` sorted by rule-id byte order — the load-time bound bound_checker::check_rule already computes on success, surfaced without the red-run ritual. This is a REPORT, not a gate: NOT wired into rust:check. Non-zero exit only if a rule's declared budget is under its computed bound — E-LOAD-040 already refuses that at load, so this is a documented, honest redundancy, not new gating."
+description = "The fuel-bound REPORT mode (BSL hygiene knock-out train, W3): for every rule in every landed content set (15 packs, each solo-loaded against its own canonical scenario — content-sets.toml does not exist on this branch, see bsl_fuel_report.rs's own module doc), prints `rule-id declared=<n> computed=<m> headroom=<n-m>` sorted by rule-id byte order — the load-time bound bound_checker::check_rule already computes on success, surfaced without the red-run ritual. This is a REPORT, not a gate: NOT wired into ci:rust. Non-zero exit only if a rule's declared budget is under its computed bound — E-LOAD-040 already refuses that at load, so this is a documented, honest redundancy, not new gating."
 dir = "rust"
 run = "cargo run -p babylon-tick --bin bsl-fuel-report --locked"
 

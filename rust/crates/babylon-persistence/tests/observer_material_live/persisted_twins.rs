@@ -1,0 +1,597 @@
+//! PER-325: independently committed delivery twins and restart controls.
+
+use std::collections::{BTreeMap, BTreeSet};
+
+use super::{
+    advance_material_period, assert_material_accounts, identity_hex,
+    install_observer_economy_schema_v1, install_reader_role_v1, CampaignId, DisposableTarget,
+    DurableMaterialRuntimeV3, MichiganContentPresetV1, MichiganDeliveryPresetV1, NoTls,
+    ObserverEconomyReaderV1, ObserverVisibilityV1, Uuid,
+};
+use babylon_kernel::sha256_of;
+use babylon_persistence::{ObserverEconomySnapshotV1, ProductionSnapshotV1};
+use babylon_tick::material_world::{decode_material_receipts_v3, MaterialTickReceiptsV3};
+use postgres::Client;
+
+// Both downstream onset periods and their following continuation are inside this
+// live proof. Existing Michigan replay tests cover the complete 16-period horizon.
+const PROOF_PERIODS: u64 = 8;
+
+struct RunPair {
+    preset: MichiganDeliveryPresetV1,
+    uninterrupted: DurableMaterialRuntimeV3,
+    restarted: DurableMaterialRuntimeV3,
+    foundation_digest: [u8; 32],
+    history: Vec<[ObserverEconomySnapshotV1; 2]>,
+    restart_periods: Vec<u64>,
+}
+
+impl RunPair {
+    fn create(target: &DisposableTarget, preset: MichiganDeliveryPresetV1, id: u128) -> Self {
+        let foundation = MichiganContentPresetV1::new_campaign(preset)
+            .create_foundation(&crate::test_support::catalog())
+            .unwrap();
+        let foundation_digest = foundation.digest();
+        let uninterrupted = DurableMaterialRuntimeV3::create(
+            &target.writer,
+            CampaignId::from_uuid(Uuid::from_u128(id)),
+            foundation,
+        )
+        .unwrap();
+        let restarted = DurableMaterialRuntimeV3::create(
+            &target.writer,
+            CampaignId::from_uuid(Uuid::from_u128(id + 1)),
+            MichiganContentPresetV1::new_campaign(preset)
+                .create_foundation(&crate::test_support::catalog())
+                .unwrap(),
+        )
+        .unwrap();
+        Self {
+            preset,
+            uninterrupted,
+            restarted,
+            foundation_digest,
+            history: Vec::new(),
+            restart_periods: Vec::new(),
+        }
+    }
+
+    fn snapshots(&self, observer: &ObserverEconomyReaderV1) -> [ObserverEconomySnapshotV1; 2] {
+        [&self.uninterrupted, &self.restarted].map(|runtime| {
+            observer
+                .snapshot(runtime.campaign_id(), runtime.session().completed_tick())
+                .unwrap()
+        })
+    }
+
+    fn advance(
+        &mut self,
+        target: &DisposableTarget,
+        observer: &ObserverEconomyReaderV1,
+        connection: &mut Client,
+    ) {
+        advance_material_period(&mut self.uninterrupted);
+        advance_material_period(&mut self.restarted);
+        self.assert_exact_continuation();
+        let current = self.snapshots(observer);
+        assert_eq!(current[0].production, current[1].production);
+        assert_eq!(current[0].nominal_world_hash, current[1].nominal_world_hash);
+        assert_eq!(current[0].tick_content_hash, current[1].tick_content_hash);
+        // The envelope, unlike the content identity, includes the campaign UUID.
+        assert_ne!(current[0].campaign_id, current[1].campaign_id);
+        assert_ne!(current[0].envelope_digest, current[1].envelope_digest);
+        let receipts = authenticated_receipts(connection, &self.uninterrupted, &current[0]);
+        assert_eq!(
+            receipts,
+            authenticated_receipts(connection, &self.restarted, &current[1])
+        );
+        for (prior, next) in self.history.last().unwrap().iter().zip(&current) {
+            assert_reconciled(prior, next, &receipts);
+        }
+        let tick = current[0].resolve_tick;
+        if is_restart_boundary(self.preset, tick, &current[1], &receipts) {
+            self.restarted = DurableMaterialRuntimeV3::open(
+                &target.writer,
+                self.restarted.campaign_id(),
+                self.foundation_digest,
+            )
+            .unwrap();
+            self.assert_exact_continuation();
+            assert_eq!(self.snapshots(observer), current);
+            self.restart_periods.push(tick);
+        }
+        self.history.push(current);
+    }
+
+    fn assert_exact_continuation(&self) {
+        assert_eq!(self.uninterrupted.tail(), self.restarted.tail());
+        assert_eq!(
+            self.uninterrupted.session().material().canonical_bytes(),
+            self.restarted.session().material().canonical_bytes()
+        );
+        assert_eq!(
+            self.uninterrupted.session().current_world_hash().unwrap(),
+            self.restarted.session().current_world_hash().unwrap()
+        );
+    }
+
+    fn assert_held_history(&self, observer: &ObserverEconomyReaderV1) {
+        for tick in [0, 1, 2, 4, 5, 7, 8] {
+            for (runtime, held) in [&self.uninterrupted, &self.restarted]
+                .into_iter()
+                .zip(&self.history[tick])
+            {
+                assert_eq!(
+                    observer
+                        .snapshot(runtime.campaign_id(), held.resolve_tick)
+                        .unwrap(),
+                    *held
+                );
+            }
+        }
+    }
+}
+
+fn authenticated_receipts(
+    connection: &mut Client,
+    runtime: &DurableMaterialRuntimeV3,
+    snapshot: &ObserverEconomySnapshotV1,
+) -> MaterialTickReceiptsV3 {
+    let tail = runtime.tail().unwrap();
+    let tick = i64::try_from(tail.resolve_tick()).unwrap();
+    let bytes: Vec<u8> = connection
+        .query_one(
+            "SELECT receipt_bytes FROM public.v_observer_material_state_v1 \
+             WHERE campaign_id=$1::uuid AND resolve_tick=$2",
+            &[runtime.campaign_id().as_uuid(), &tick],
+        )
+        .unwrap()
+        .get(0);
+    assert_eq!(sha256_of(&bytes), tail.receipt_digest());
+    assert_eq!(snapshot.resolve_tick, tail.resolve_tick());
+    assert_eq!(
+        snapshot.campaign_id,
+        runtime.campaign_id().as_uuid().to_string()
+    );
+    assert_eq!(
+        snapshot.foundation_digest,
+        identity_hex(tail.foundation_digest())
+    );
+    assert_eq!(
+        snapshot.tick_content_hash,
+        Some(identity_hex(*tail.tick_content_hash().as_bytes()))
+    );
+    assert_eq!(
+        snapshot.nominal_world_hash,
+        Some(identity_hex(tail.result_world_hash()))
+    );
+    assert!(snapshot.envelope_digest.is_some());
+    assert!(snapshot.production_evidence_digest().is_some());
+    let receipts = decode_material_receipts_v3(&bytes).unwrap();
+    assert_eq!(receipts.resolve_tick, snapshot.resolve_tick);
+    receipts
+}
+
+fn production(snapshot: &ObserverEconomySnapshotV1) -> &ProductionSnapshotV1 {
+    snapshot.production.as_ref().unwrap()
+}
+
+fn stock(rows: &ProductionSnapshotV1, site: &str, good: &str, unit: &str) -> u64 {
+    rows.sites
+        .iter()
+        .find(|row| row.id == site)
+        .unwrap()
+        .inventory
+        .iter()
+        .find(|row| row.good_id == good && row.unit_id == unit)
+        .map_or(0, |row| row.quantity)
+}
+
+fn assert_reconciled(
+    prior: &ObserverEconomySnapshotV1,
+    current: &ObserverEconomySnapshotV1,
+    receipts: &MaterialTickReceiptsV3,
+) {
+    assert_material_accounts(current);
+    assert_eq!(prior.resolve_tick + 1, current.resolve_tick);
+    let before = production(prior);
+    let after = production(current);
+    assert_inventory(before, after, receipts);
+    assert_labor(before, after, current.resolve_tick);
+    assert_freight(before, after, receipts);
+}
+
+fn assert_inventory(
+    before: &ProductionSnapshotV1,
+    after: &ProductionSnapshotV1,
+    receipts: &MaterialTickReceiptsV3,
+) {
+    let catalog = crate::test_support::catalog();
+    let stock_key = |site_key: &str, good_key: &str| {
+        let good = catalog.good(good_key).unwrap();
+        (
+            identity_hex(catalog.site(site_key).unwrap().id().as_bytes()),
+            identity_hex(good.id().as_bytes()),
+            identity_hex(good.unit_id().as_bytes()),
+        )
+    };
+    let mut dispatches = BTreeMap::new();
+    for receipt in &receipts.dispatches {
+        let route = catalog
+            .routes()
+            .iter()
+            .find(|route| route.id() == receipt.route_id)
+            .unwrap();
+        assert_eq!(receipt.order_id, route.order_id());
+        *dispatches
+            .entry(stock_key(&route.supplier_site_key, &route.good_key))
+            .or_insert(0_u128) += u128::from(receipt.quantity);
+    }
+    let mut arrivals = BTreeMap::new();
+    for receipt in &receipts.arrivals {
+        let route = catalog
+            .routes()
+            .iter()
+            .find(|route| route.order_id() == receipt.order_id)
+            .unwrap();
+        *arrivals
+            .entry(stock_key(&route.buyer_site_key, &route.good_key))
+            .or_insert(0_u128) += u128::from(receipt.quantity);
+    }
+    for row in &after.material_balance.as_ref().unwrap().rows {
+        let key = (
+            row.site_id.clone(),
+            row.good_id.clone(),
+            row.unit_id.clone(),
+        );
+        assert_eq!(
+            u128::from(row.dispatched),
+            dispatches.remove(&key).unwrap_or(0)
+        );
+        assert_eq!(u128::from(row.arrivals), arrivals.remove(&key).unwrap_or(0));
+        assert_eq!(
+            row.opening,
+            stock(before, &row.site_id, &row.good_id, &row.unit_id)
+        );
+        let site = after
+            .sites
+            .iter()
+            .find(|site| site.id == row.site_id)
+            .unwrap();
+        let batches = u128::from(site.produced_batches.unwrap());
+        let produced = if site.output_good_id == row.good_id && site.output_unit_id == row.unit_id {
+            batches * u128::from(site.output_per_batch)
+        } else {
+            0
+        };
+        let consumed: u128 = site
+            .inputs
+            .iter()
+            .filter(|input| input.good_id == row.good_id && input.unit_id == row.unit_id)
+            .map(|input| batches * u128::from(input.quantity_per_batch))
+            .sum();
+        assert_eq!(u128::from(row.produced), produced);
+        assert_eq!(u128::from(row.consumed), consumed);
+    }
+    assert!(
+        dispatches.is_empty(),
+        "every dispatch debits its source stock"
+    );
+    assert!(
+        arrivals.is_empty(),
+        "every arrival credits its destination stock"
+    );
+    for site in &after.sites {
+        let receipt = receipts
+            .production
+            .iter()
+            .find(|row| identity_hex(row.site_id.as_bytes()) == site.id);
+        assert_eq!(
+            site.produced_batches,
+            Some(receipt.map_or(0, |row| row.produced_batches))
+        );
+        assert_eq!(
+            site.planned_batches,
+            Some(receipt.map_or(0, |row| row.planned_batches))
+        );
+    }
+}
+
+fn assert_labor(before: &ProductionSnapshotV1, after: &ProductionSnapshotV1, tick: u64) {
+    for labor in &after.labor_accounts {
+        let completed = labor.completed.as_ref().unwrap();
+        let previous = before
+            .labor_accounts
+            .iter()
+            .find(|row| row.site_id == labor.site_id && row.unit_id == labor.unit_id)
+            .unwrap();
+        let site = after
+            .sites
+            .iter()
+            .find(|site| site.id == labor.site_id)
+            .unwrap();
+        let per_batch: u128 = site
+            .labor
+            .iter()
+            .map(|row| u128::from(row.quantity_per_batch))
+            .sum();
+        assert_eq!(site.labor.len(), 1);
+        assert_eq!(completed.period, tick);
+        assert_eq!(completed.opening, previous.next_opening_available);
+        assert_eq!(
+            u128::from(completed.used) + u128::from(completed.unused),
+            u128::from(completed.opening)
+        );
+        assert!(completed.used <= completed.planned && completed.planned <= completed.opening);
+        assert_eq!(
+            u128::from(completed.used),
+            u128::from(site.produced_batches.unwrap()) * per_batch
+        );
+    }
+    for pool in &after.staffing_accounts {
+        assert_eq!(pool.hours_per_person, 160);
+        assert_eq!(pool.employed + pool.reserve, pool.labor_force);
+        assert_eq!(pool.next_opening_hours, pool.employed * 160);
+    }
+}
+
+fn assert_freight(
+    before: &ProductionSnapshotV1,
+    after: &ProductionSnapshotV1,
+    receipts: &MaterialTickReceiptsV3,
+) {
+    let mut lots = BTreeSet::new();
+    assert!(after.freight.iter().all(|lot| lots.insert(&lot.id)));
+    for route in &after.routes {
+        let previous = before.routes.iter().find(|row| row.id == route.id).unwrap();
+        let catalog = crate::test_support::catalog();
+        let source = catalog
+            .routes()
+            .iter()
+            .find(|row| identity_hex(row.id().as_bytes()) == route.id)
+            .unwrap();
+        let dispatched: u128 = receipts
+            .dispatches
+            .iter()
+            .filter(|row| row.route_id == source.id())
+            .map(|row| u128::from(row.quantity))
+            .sum();
+        let delivered: u128 = receipts
+            .deliveries
+            .iter()
+            .filter(|row| row.order_id == source.order_id())
+            .map(|row| u128::from(row.quantity))
+            .sum();
+        assert_eq!(
+            u128::from(route.shipped),
+            u128::from(previous.shipped) + dispatched
+        );
+        assert_eq!(
+            u128::from(route.delivered),
+            u128::from(previous.delivered) + delivered
+        );
+        assert_eq!(route.lost, 0);
+        let in_transit: u128 = after
+            .freight
+            .iter()
+            .filter(|lot| lot.route_id == route.id)
+            .map(|lot| u128::from(lot.quantity))
+            .sum();
+        assert!(route.shipped <= route.ordered);
+        assert_eq!(
+            u128::from(route.shipped),
+            u128::from(route.delivered) + u128::from(route.lost) + in_transit
+        );
+        assert_eq!(route.realized, route.delivered);
+    }
+}
+
+fn is_restart_boundary(
+    preset: MichiganDeliveryPresetV1,
+    tick: u64,
+    snapshot: &ObserverEconomySnapshotV1,
+    receipts: &MaterialTickReceiptsV3,
+) -> bool {
+    let catalog = crate::test_support::catalog();
+    let sheet = catalog
+        .routes()
+        .iter()
+        .find(|route| route.key == "sheet-transfer")
+        .unwrap();
+    let arrival = if preset == MichiganDeliveryPresetV1::Standard {
+        2
+    } else {
+        4
+    };
+    if tick == 1 {
+        assert!(receipts
+            .dispatches
+            .iter()
+            .any(|row| row.route_id == sheet.id() && row.quantity > 0));
+        assert!(production(snapshot)
+            .freight
+            .iter()
+            .any(|lot| lot.route_id == identity_hex(sheet.id().as_bytes())
+                && lot.dispatch_period == tick
+                && lot.arrival_period == arrival));
+    } else if tick == arrival {
+        assert!(receipts
+            .arrivals
+            .iter()
+            .any(|row| row.order_id == sheet.order_id() && row.quantity > 0));
+    } else if tick == 2 {
+        assert_eq!(preset, MichiganDeliveryPresetV1::Delayed);
+        assert!(production(snapshot)
+            .freight
+            .iter()
+            .any(|lot| lot.route_id == identity_hex(sheet.id().as_bytes())
+                && lot.dispatch_period == 1
+                && lot.arrival_period == 4));
+    } else {
+        return false;
+    }
+    true
+}
+
+fn assert_food_disconnected(standard: &ProductionSnapshotV1, delayed: &ProductionSnapshotV1) {
+    let food: BTreeSet<_> = standard
+        .sites
+        .iter()
+        .filter(|site| site.industry_code == "311")
+        .map(|site| site.id.as_str())
+        .collect();
+    assert_eq!(food.len(), 2);
+    assert_eq!(
+        standard
+            .sites
+            .iter()
+            .filter(|site| food.contains(site.id.as_str()))
+            .collect::<Vec<_>>(),
+        delayed
+            .sites
+            .iter()
+            .filter(|site| food.contains(site.id.as_str()))
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(
+        standard
+            .labor_accounts
+            .iter()
+            .filter(|row| food.contains(row.site_id.as_str()))
+            .collect::<Vec<_>>(),
+        delayed
+            .labor_accounts
+            .iter()
+            .filter(|row| food.contains(row.site_id.as_str()))
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(
+        standard
+            .staffing_accounts
+            .iter()
+            .filter(|row| food.contains(row.site_id.as_str()))
+            .collect::<Vec<_>>(),
+        delayed
+            .staffing_accounts
+            .iter()
+            .filter(|row| food.contains(row.site_id.as_str()))
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(
+        standard
+            .freight
+            .iter()
+            .filter(|lot| food.contains(lot.source_site_id.as_str()))
+            .collect::<Vec<_>>(),
+        delayed
+            .freight
+            .iter()
+            .filter(|lot| food.contains(lot.source_site_id.as_str()))
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(
+        standard
+            .routes
+            .iter()
+            .filter(|route| food.contains(route.supplier_site_id.as_str()))
+            .collect::<Vec<_>>(),
+        delayed
+            .routes
+            .iter()
+            .filter(|route| food.contains(route.supplier_site_id.as_str()))
+            .collect::<Vec<_>>()
+    );
+}
+
+fn subassembly_stock(snapshot: &ObserverEconomySnapshotV1) -> u64 {
+    let catalog = crate::test_support::catalog();
+    stock(
+        production(snapshot),
+        &identity_hex(catalog.site("wayne-vehicle-parts").unwrap().id().as_bytes()),
+        &identity_hex(catalog.good("subassembly").unwrap().id().as_bytes()),
+        &identity_hex(catalog.good("subassembly").unwrap().unit_id().as_bytes()),
+    )
+}
+
+#[test]
+#[ignore = "requires the task-owned disposable PostgreSQL harness; serial persisted twin proof"]
+fn persisted_delivery_twins_reconcile_and_restart_at_dispatch_transit_and_arrival() {
+    let mut target = DisposableTarget::create();
+    let mut standard = RunPair::create(&target, MichiganDeliveryPresetV1::Standard, 325_001);
+    let mut delayed = RunPair::create(&target, MichiganDeliveryPresetV1::Delayed, 325_003);
+    let initial = standard.uninterrupted.session().material().state();
+    let mut normalized = delayed.uninterrupted.session().material().state().clone();
+    let catalog = crate::test_support::catalog();
+    let sheet = catalog
+        .routes()
+        .iter()
+        .find(|route| route.key == "sheet-transfer")
+        .unwrap();
+    let delayed_leg = normalized
+        .route_legs
+        .iter_mut()
+        .find(|leg| leg.route_id == sheet.id())
+        .unwrap();
+    assert_eq!(delayed_leg.travel_periods, 3);
+    delayed_leg.travel_periods = 1;
+    assert_eq!(*initial, normalized);
+    let capacities = initial.capacities.clone();
+    assert_eq!(
+        initial.labor.iter().map(|row| row.available).sum::<u64>(),
+        4960
+    );
+    install_reader_role_v1(&target.writer).unwrap();
+    install_observer_economy_schema_v1(&target.writer).unwrap();
+    let observer_config = target.login("babylon_observer", "persistedtwins");
+    let observer =
+        ObserverEconomyReaderV1::connect(&observer_config, ObserverVisibilityV1::FullObserver)
+            .unwrap();
+    let mut connection = observer_config.connect(NoTls).unwrap();
+    for pair in [&mut standard, &mut delayed] {
+        pair.history.push(pair.snapshots(&observer));
+    }
+    let mut first = [None, None];
+    for tick in 1..=PROOF_PERIODS {
+        standard.advance(&target, &observer, &mut connection);
+        delayed.advance(&target, &observer, &mut connection);
+        for (index, pair) in [&standard, &delayed].into_iter().enumerate() {
+            assert_eq!(
+                pair.uninterrupted
+                    .session()
+                    .material()
+                    .state()
+                    .capacities
+                    .iter()
+                    .collect::<Vec<_>>(),
+                capacities
+                    .iter()
+                    .filter(|row| row.period > tick)
+                    .collect::<Vec<_>>()
+            );
+            if subassembly_stock(&pair.history.last().unwrap()[0]) > 0 {
+                first[index].get_or_insert(tick);
+            }
+        }
+        assert_food_disconnected(
+            production(&standard.history.last().unwrap()[0]),
+            production(&delayed.history.last().unwrap()[0]),
+        );
+    }
+    assert_eq!(first, [Some(5), Some(7)]);
+    assert_eq!(standard.restart_periods, [1, 2]);
+    assert_eq!(delayed.restart_periods, [1, 2, 4]);
+    for pair in [&standard, &delayed] {
+        assert!(subassembly_stock(&pair.history.last().unwrap()[0]) > 0);
+        pair.assert_held_history(&observer);
+        eprintln!("PER-325 {:?}: campaigns {}/{}, first downstream output period {}, restart periods {:?}, final world {}",
+            pair.preset, pair.uninterrupted.campaign_id().as_uuid(), pair.restarted.campaign_id().as_uuid(),
+            first[usize::from(pair.preset == MichiganDeliveryPresetV1::Delayed)].unwrap(), pair.restart_periods,
+            pair.history.last().unwrap()[0].nominal_world_hash.as_deref().unwrap());
+    }
+    assert_eq!(observer.campaigns().unwrap().len(), 4);
+    assert!(observer
+        .campaigns()
+        .unwrap()
+        .iter()
+        .all(|campaign| campaign.durable_tick == PROOF_PERIODS));
+}

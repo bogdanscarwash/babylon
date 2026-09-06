@@ -106,7 +106,7 @@ from shapely import wkt as shapely_wkt  # type: ignore[import-untyped]
 from shapely.geometry import MultiPolygon, Point, Polygon  # type: ignore[import-untyped]
 from shapely.geometry.base import BaseGeometry  # type: ignore[import-untyped]
 
-from babylon.domain.geography.adjacency import ARTIFACT_PATH, load_adjacency_pairs
+from babylon.data.adjacency import ARTIFACT_PATH, load_adjacency_pairs
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 

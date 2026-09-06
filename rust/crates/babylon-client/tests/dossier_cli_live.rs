@@ -26,7 +26,7 @@ use babylon_kernel::sha256_of;
 use babylon_kernel::tick_content_hash::RefDigestV1;
 use babylon_kernel::ContentDigest;
 use babylon_persistence::{
-    install_reader_role_v1, michigan_dynamic_hex_foundation_v1, validate_legacy_connection_target,
+    install_reader_role_v1, michigan_dynamic_hex_foundation_v1, validate_connection_target,
     ArchiveCitationV1, ArchiveDirtyBatchV1, ArchiveKnowledgeGrantV1, ArchiveMaterializeModeV1,
     ArchivePageInputV1, ArchivePageRefV1, ArchiveSchemaDispositionV1, ArchiveSignalV1,
     ArchiveSubjectKindV1, ArchiveSubjectV1, ArchiveWorkerV1, CampaignId, DurableReplayRuntimeV2,
@@ -41,10 +41,10 @@ use postgres::{Config, NoTls};
 use serde_json::Value;
 use uuid::Uuid;
 
-const DSN_ENV: &str = "BABYLON_LEGACY_ADOPTER_TEST_DSN";
-const ACK_ENV: &str = "BABYLON_LEGACY_ADOPTER_DISPOSABLE_ACK";
-const ACK: &str = "I_UNDERSTAND_PER20_DROPS_SCRATCH_DATABASES_ROLES_AND_CREATED_BABYLON_INTEL";
-const CANARY_ENV: &str = "BABYLON_LEGACY_ADOPTER_DISPOSABLE_CANARY";
+const DSN_ENV: &str = "BABYLON_POSTGRES_TEST_DSN";
+const ACK_ENV: &str = "BABYLON_POSTGRES_DISPOSABLE_ACK";
+const ACK: &str = "I_UNDERSTAND_THIS_DISPOSABLE_RUNTIME_DROPS_ITS_SCRATCH_DATABASES_AND_ROLES";
+const CANARY_ENV: &str = "BABYLON_POSTGRES_DISPOSABLE_CANARY";
 const TEMPLATE_DB_ENV: &str = "BABYLON_RUNTIME_TEMPLATE_DB";
 const READER_DSN_ENV: &str = "BABYLON_READER_DSN";
 const DEFINES: &[u8] = br#"{"alpha":1}"#;
@@ -64,7 +64,7 @@ fn validated_base_config() -> Config {
     );
     assert!(std::env::var(CANARY_ENV).is_ok());
     let config: Config = dsn.parse().expect("runner DSN parses");
-    validate_legacy_connection_target(&config).expect("runner DSN validates as a loopback target");
+    validate_connection_target(&config).expect("runner DSN validates as a loopback target");
     config
 }
 
@@ -250,7 +250,7 @@ impl ReaderTarget {
         let template = validated_template_name();
         let database = TestDatabase::create_from_template(&base, &template, label);
         let config = database.config(&base);
-        // Enroll this new campaign at foundation: history at weeks 1 and 2
+        // Enroll this new campaign at foundation: history at periods 1 and 2
         // must be retained, not inferred from a later adopted head.
         let store = SemanticArchiveStoreV1::new(&config);
         match store

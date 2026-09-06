@@ -87,9 +87,6 @@ jobs:
           uv run --frozen python -c "import babylon"
           uv run --frozen babylon --help
 
-      - name: Regression gate against committed baselines
-        run: mise run qa:regression
-
       - name: Extract release notes for this tag
         id: notes
         env:

@@ -48,7 +48,7 @@ if TYPE_CHECKING:
     # _catalog_by_name's runtime-lazy import below (no reason to pay the
     # babylon package import cost for every make_data_artifacts.py CLI
     # invocation, including plain --check runs that never touch the catalog).
-    from babylon.sentinels.coverage.catalog import CatalogTable
+    from babylon.data.catalog import CatalogTable
 
 _DEFAULT_DB = Path("data/sqlite/marxist-data-3NF.sqlite")
 _ENV_OVERRIDE = "BABYLON_NORMALIZED_DB_PATH"
@@ -326,7 +326,7 @@ def governed_db_tables(conn: sqlite3.Connection) -> list[str]:
     ``staging_*`` — no catalog row, no parquet source, no place in the build
     product; the boundary is ``GOVERNED_PREFIXES``, the same scope the
     catalog sentinel probes)."""
-    from babylon.sentinels.coverage.catalog import GOVERNED_PREFIXES
+    from babylon.data.catalog import GOVERNED_PREFIXES
 
     rows = conn.execute(
         "SELECT name FROM sqlite_master "
@@ -345,7 +345,7 @@ def _catalog_by_name() -> dict[str, CatalogTable]:
 
     :returns: mapping of table name to its :class:`CatalogTable` row.
     """
-    from babylon.sentinels.coverage.catalog import load_catalog_tables
+    from babylon.data.catalog import load_catalog_tables
 
     return {t.name: t for t in load_catalog_tables()}
 

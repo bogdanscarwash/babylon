@@ -44,7 +44,7 @@ def audit_report_paths() -> tuple[Path, Path]:
     if pair is None:
         pytest.skip(
             "no audit report produced yet; run "
-            "`poetry run python tools/normalize_qcew_rollups.py --apply` first"
+            "`mise exec -- uv run --frozen python tools/normalize_qcew_rollups.py --apply` first"
         )
     return pair
 

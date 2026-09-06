@@ -105,8 +105,10 @@ fn durable_tail(
 pub(super) fn open(
     config: &Config,
     target: &RuntimeSessionTargetV3,
+    defines_path: &std::path::Path,
 ) -> Result<(DurableBackend, String), RuntimeSessionErrorCodeV3> {
     let campaign = target.campaign()?;
+    let requested_catalog = catalog_for_target(target, defines_path)?;
     let bounded = crate::material_runtime::bounded_material_writer_config_v3(config)
         .map_err(|_| RuntimeSessionErrorCodeV3::StorageRefused)?;
     crate::material_runtime::install_material_runtime_schema_v3(config)
@@ -117,33 +119,32 @@ pub(super) fn open(
     crate::install_reader_role_v1(config).map_err(|_| RuntimeSessionErrorCodeV3::StorageRefused)?;
     crate::install_observer_economy_schema_v1(config)
         .map_err(|_| RuntimeSessionErrorCodeV3::StorageRefused)?;
-    let preset = match target {
-        RuntimeSessionTargetV3::New { preset, .. } => {
-            MichiganContentPresetV1::new_campaign(preset.delivery())
-        }
-        RuntimeSessionTargetV3::Open { .. } => runtime_content(
-            &mut bounded
-                .connect(NoTls)
-                .map_err(|_| RuntimeSessionErrorCodeV3::StorageRefused)?,
-            campaign,
-        )?,
-    };
-    let admitted = preset
-        .admitted()
-        .map_err(|_| RuntimeSessionErrorCodeV3::ScenarioMismatch)?;
-    let foundation_digest = digest_hex(&admitted.digest());
-    let runtime = match target {
+    let (runtime, foundation_digest) = match target {
         RuntimeSessionTargetV3::Open { .. } => {
-            DurableMaterialRuntimeV3::open(config, campaign, admitted.digest())
+            let mut client = bounded
+                .connect(NoTls)
+                .map_err(|_| RuntimeSessionErrorCodeV3::StorageRefused)?;
+            let admitted = runtime_content(&mut client, campaign)?;
+            (
+                DurableMaterialRuntimeV3::open(config, campaign, admitted.digest()),
+                digest_hex(&admitted.digest()),
+            )
         }
-        RuntimeSessionTargetV3::New { .. } => {
-            let foundation = preset
-                .create_foundation()
+        RuntimeSessionTargetV3::New { preset, .. } => {
+            let catalog = requested_catalog
+                .as_ref()
+                .ok_or(RuntimeSessionErrorCodeV3::DefinesInvalid)?;
+            let foundation = MichiganContentPresetV1::new_campaign(preset.delivery())
+                .create_foundation(catalog)
                 .map_err(|_| RuntimeSessionErrorCodeV3::ScenarioMismatch)?;
-            DurableMaterialRuntimeV3::create_new(config, campaign, foundation)
+            let digest = digest_hex(&foundation.digest());
+            (
+                DurableMaterialRuntimeV3::create_new(config, campaign, foundation),
+                digest,
+            )
         }
-    }
-    .map_err(|error| match error {
+    };
+    let runtime = runtime.map_err(|error| match error {
         MaterialRuntimeErrorV3::AlreadyExists => RuntimeSessionErrorCodeV3::CampaignAlreadyExists,
         MaterialRuntimeErrorV3::MissingCampaign => RuntimeSessionErrorCodeV3::CampaignAbsent,
         MaterialRuntimeErrorV3::LegacyCampaign | MaterialRuntimeErrorV3::FoundationMismatch => {
@@ -166,11 +167,35 @@ pub(super) fn open(
     ))
 }
 
+fn catalog_for_target(
+    target: &RuntimeSessionTargetV3,
+    defines_path: &std::path::Path,
+) -> Result<Option<crate::michigan_material::MichiganMaterialCatalogV1>, RuntimeSessionErrorCodeV3>
+{
+    if matches!(target, RuntimeSessionTargetV3::Open { .. }) {
+        return Ok(None);
+    }
+    // Load for each New request. Open never touches the mutable source file.
+    let catalog = crate::michigan_material::MichiganMaterialCatalogV1::load_defines(defines_path)
+        .map_err(|error| {
+        eprintln!("{error}");
+        match error {
+            crate::MichiganDefinesErrorV1::Read(_) => RuntimeSessionErrorCodeV3::DefinesMissing,
+            crate::MichiganDefinesErrorV1::TooLarge => RuntimeSessionErrorCodeV3::DefinesTooLarge,
+            crate::MichiganDefinesErrorV1::Toml(_) | crate::MichiganDefinesErrorV1::Utf8(_) => {
+                RuntimeSessionErrorCodeV3::DefinesMalformed
+            }
+            _ => RuntimeSessionErrorCodeV3::DefinesInvalid,
+        }
+    })?;
+    Ok(Some(catalog))
+}
+
 fn runtime_content(
     client: &mut impl postgres::GenericClient,
     campaign: CampaignId,
-) -> Result<MichiganContentPresetV1, RuntimeSessionErrorCodeV3> {
-    let row = client.query_opt("SELECT f.preset_id,f.horizon_ticks,f.content_sha256,f.foundation_sha256,g.foundation_sha256,pg_catalog.sha256(pg_catalog.convert_to(g.scenario_source,'UTF8')) FROM babylon_state.material_campaign_foundation_v2 f JOIN babylon_state.campaign_foundation g USING(campaign_id) WHERE campaign_id=$1::uuid", &[campaign.as_uuid()])
+) -> Result<crate::michigan_content::MichiganContentAdmissionV1, RuntimeSessionErrorCodeV3> {
+    let row = client.query_opt("SELECT f.preset_id,f.horizon_ticks,f.content_sha256,f.foundation_sha256,g.foundation_sha256,pg_catalog.sha256(pg_catalog.convert_to(g.scenario_source,'UTF8')),f.foundation_bytes FROM babylon_state.material_campaign_foundation_v2 f JOIN babylon_state.campaign_foundation g USING(campaign_id) WHERE campaign_id=$1::uuid", &[campaign.as_uuid()])
         .map_err(|_| RuntimeSessionErrorCodeV3::StorageRefused)?;
     let Some(row) = row else {
         return Err(RuntimeSessionErrorCodeV3::CampaignAbsent);
@@ -193,10 +218,58 @@ fn runtime_content(
     let scenario: Vec<u8> = row
         .try_get(5)
         .map_err(|_| RuntimeSessionErrorCodeV3::StorageRefused)?;
-    let admitted = admit_michigan_content_v1(&id, horizon, &content, &foundation, 0)
+    let bytes: Vec<u8> = row
+        .try_get(6)
+        .map_err(|_| RuntimeSessionErrorCodeV3::StorageRefused)?;
+    let admitted = admit_michigan_content_v1(&id, horizon, &content, &foundation, 0, &bytes)
         .map_err(|_| RuntimeSessionErrorCodeV3::ScenarioMismatch)?;
     admitted
         .validate_graph(&graph, &scenario)
         .map_err(|_| RuntimeSessionErrorCodeV3::ScenarioMismatch)?;
-    Ok(admitted.preset())
+    Ok(admitted)
+}
+
+#[cfg(test)]
+mod defines_tests {
+    use super::*;
+    #[test]
+    fn new_reloads_config_while_open_never_reads_it() {
+        let path =
+            std::env::temp_dir().join(format!("babylon-defines-{}.toml", std::process::id()));
+        let new = RuntimeSessionTargetV3::New {
+            campaign_id: uuid::Uuid::from_u128(17).to_string(),
+            preset: super::super::RuntimeSessionPresetV3::Standard,
+        };
+        let open = RuntimeSessionTargetV3::Open {
+            campaign_id: uuid::Uuid::from_u128(17).to_string(),
+        };
+        assert!(catalog_for_target(&open, &path).unwrap().is_none());
+        assert!(matches!(
+            catalog_for_target(&new, &path),
+            Err(RuntimeSessionErrorCodeV3::DefinesMissing)
+        ));
+        let source = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../../content/scenarios/michigan/defines.toml"
+        ));
+        std::fs::write(&path, source).unwrap();
+        let first = catalog_for_target(&new, &path).unwrap().unwrap();
+        std::fs::write(
+            &path,
+            source.replace(
+                "WORK_HOURS_PER_PERSON_WEEK = 40",
+                "WORK_HOURS_PER_PERSON_WEEK = 45",
+            ),
+        )
+        .unwrap();
+        let second = catalog_for_target(&new, &path).unwrap().unwrap();
+        assert_ne!(first.defines_hash(), second.defines_hash());
+        std::fs::write(&path, "malformed = [").unwrap();
+        assert!(matches!(
+            catalog_for_target(&new, &path),
+            Err(RuntimeSessionErrorCodeV3::DefinesMalformed)
+        ));
+        assert!(catalog_for_target(&open, &path).unwrap().is_none());
+        std::fs::remove_file(path).unwrap();
+    }
 }

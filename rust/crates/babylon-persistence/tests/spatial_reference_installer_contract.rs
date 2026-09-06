@@ -6,7 +6,7 @@ const SOURCE: &str = include_str!("../src/spatial_reference_installer.rs");
 fn installer_is_exact_epoch_locked_transactional_and_reconciled() {
     for required in [
         "pub fn install_michigan_spatial_reference_products(",
-        "validate_legacy_connection_target(config)",
+        "validate_connection_target(config)",
         "acquire_lock(&mut client)",
         "inspect_schema_epoch_under_lock(client)",
         "actual == CURRENT_SCHEMA_EPOCH",

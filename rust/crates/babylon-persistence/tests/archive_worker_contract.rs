@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 use babylon_persistence::{
     archive_batch_matches_receipt_v1, archive_contiguous_watermark_v1, classify_archive_receipt_v1,
     classify_archive_sweep_v1, model_archive_sweep_pages_v1,
@@ -8,14 +6,10 @@ use babylon_persistence::{
     ArchiveProducerOutcomeV1, ArchiveReceiptDispositionV1, ArchiveReceiptPlanV1, ArchiveSignalV1,
     ArchiveSubjectKindV1, ArchiveSubjectV1, ArchiveWorkerSweepReportV1,
     CompositeArchiveDossierProducerV1, NullArchiveDossierProducerV1, PendingArchiveReceiptV1,
-    SemanticArchiveErrorV1, SemanticArchiveStoreV1, ARCHIVE_PENDING_RECEIPTS_SQL_V1,
-    ARCHIVE_SWEEP_MAX_RECEIPTS_V1, ARCHIVE_SWEEP_MAX_SCAN_V1, ARCHIVE_SWEEP_WATERMARK_SQL_V1,
+    SemanticArchiveErrorV1, ARCHIVE_PENDING_RECEIPTS_SQL_V1, ARCHIVE_SWEEP_MAX_RECEIPTS_V1,
+    ARCHIVE_SWEEP_MAX_SCAN_V1, ARCHIVE_SWEEP_WATERMARK_SQL_V1,
 };
-use postgres::{Config, NoTls};
 use uuid::Uuid;
-
-const LIVE_DSN_ENV: &str = "BABYLON_LEGACY_ADOPTER_TEST_DSN";
-const LIVE_CANARY_ENV: &str = "BABYLON_LEGACY_ADOPTER_DISPOSABLE_CANARY";
 
 fn county_subject() -> ArchiveSubjectV1 {
     ArchiveSubjectV1::try_new(
@@ -710,50 +704,4 @@ fn composite_still_refuses_a_producer_that_ignores_the_page_budget() {
         Err(SemanticArchiveErrorV1::CollectionBound),
         "the batch bound refuses a budget-ignoring producer; paging never truncates"
     );
-}
-
-#[test]
-#[ignore = "requires the task-owned disposable PostgreSQL runtime and one committed tick"]
-fn live_worker_consumes_every_evaluated_empty_receipt() {
-    let (config, campaign_id) = live_contract_target();
-    SemanticArchiveStoreV1::new(&config)
-        .install_schema()
-        .expect("schema install");
-    let mut worker = babylon_persistence::ArchiveWorkerV1::new(&config);
-    let report = worker
-        .sweep_once(campaign_id, &NullArchiveDossierProducerV1::new())
-        .expect("null sweep succeeds");
-
-    assert_eq!(report.applied_count(), report.dispositions().len());
-    assert_eq!(report.already_consumed_count(), 0);
-    for (_, disposition) in report.dispositions() {
-        assert_eq!(*disposition, ArchiveReceiptDispositionV1::Applied);
-    }
-}
-
-fn live_contract_target() -> (Config, babylon_persistence::CampaignId) {
-    let dsn = std::env::var(LIVE_DSN_ENV).expect("disposable live DSN");
-    let expected_canary = std::env::var(LIVE_CANARY_ENV).expect("disposable canary");
-    let config = Config::from_str(&dsn).expect("live DSN parses");
-    let mut client = config
-        .clone()
-        .connect(NoTls)
-        .expect("live preflight connects");
-    let actual_canary: String = client
-        .query_one(
-            "SELECT pg_catalog.current_setting('babylon.per20_disposable', true)",
-            &[],
-        )
-        .expect("live canary query")
-        .try_get(0)
-        .expect("live canary decode");
-    assert_eq!(actual_canary, expected_canary);
-
-    let campaign_uuid =
-        Uuid::parse_str(&std::env::var("BABYLON_ARCHIVE_TEST_CAMPAIGN_ID").expect("live campaign"))
-            .expect("live campaign UUID");
-    (
-        config,
-        babylon_persistence::CampaignId::from_uuid(campaign_uuid),
-    )
 }

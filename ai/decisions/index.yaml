@@ -1195,3 +1195,13 @@ decisions:
     status: proposed
     date: '2026-09-06'
     file: ADR256_same_window_campaign_lifecycle.yaml
+  ADR257_four_week_simulation_interval:
+    title: Amendment AK makes one four-week period the simulation tick
+    status: accepted
+    date: '2026-09-06'
+    file: ADR257_four_week_simulation_interval.yaml
+  ADR258_authored_campaign_parameters:
+    title: Typed authored parameters belong to each committed campaign
+    status: accepted
+    date: '2026-09-06'
+    file: ADR258_authored_campaign_parameters.yaml

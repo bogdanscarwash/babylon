@@ -9,7 +9,7 @@ export BABYLON_RUNTIME_DSN="${BABYLON_RUNTIME_DSN:-host=127.0.0.1 port=5433 dbna
 sim_campaign_id="$(python3 tools/devtools/worktree_campaign.py --purpose michigan-e2e --fresh)" || exit
 export BABYLON_CAMPAIGN_ID="$sim_campaign_id"
 export PATH="$PWD/rust/target/debug:$PATH"
-babylon-runtime run --ticks 520
+babylon-runtime run --ticks 130
 """
 
 ["sim:e2e-bg"]
@@ -24,7 +24,7 @@ sim_campaign_id="$(python3 tools/devtools/worktree_campaign.py --purpose michiga
 export BABYLON_CAMPAIGN_ID="$sim_campaign_id"
 export PATH="$PWD/rust/target/debug:$PATH"
 printf '%s\n' "$sim_campaign_id" > .sim-pids/e2e.campaign-id
-nohup babylon-runtime run --ticks 520 > .sim-pids/e2e.log 2>&1 &
+nohup babylon-runtime run --ticks 130 > .sim-pids/e2e.log 2>&1 &
 echo $! > .sim-pids/e2e.pid
 echo "started PID $(cat .sim-pids/e2e.pid) — log .sim-pids/e2e.log"
 '''
@@ -150,7 +150,7 @@ echo "campaign: $sim_campaign_id"
 ["sim:report"]
 description = "Diagnose the embedded Michigan Rust persistence slice with post-commit evidence and resource telemetry"
 usage = '''
-arg "[ticks]" help="Number of Rust simulation ticks" default="60"
+arg "[ticks]" help="Number of four-week simulation periods" default="15"
 arg "[timeout_seconds]" help="Runtime wall-clock timeout" default="3000"
 arg "[database_scope]" help="Database attribution scope: shared or exclusive" default="shared"
 '''

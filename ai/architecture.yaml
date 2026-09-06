@@ -4,7 +4,7 @@ meta:
   version: "4.3.0"
   updated: "2026-09-01"
   role: current_and_planned_architecture
-  authority: CONSTITUTION.md v4.1.0
+  authority: CONSTITUTION.md v4.2.0
   interpretation: >-
     Entries marked implemented_current describe evidence in this checkout.
     Entries marked planned describe acceptance-gated work, not shipped behavior.
@@ -191,7 +191,7 @@ implementation_status:
       status: implemented_current
       scope:
         - canonical_graph_hash
-        - completed_weekly_tick
+        - completed_four_week_tick
         - node_and_hyperedge_allocator_cursors
         - governed_phase_schedule_digest
         - versioned_tagged_big_endian_layout
@@ -214,17 +214,6 @@ implementation_status:
       limitation: no_player_decision_loop
       evidence:
         - rust/crates/babylon-client/src/ui/admin.rs
-
-    frozen_python_engine:
-      status: implemented_current
-      estate: frozen_reference_and_port_source
-      scope:
-        - 34_reference_systems
-        - player_action_and_resolver_machinery
-        - observers_and_endgame
-      evidence:
-        - src/babylon/engine/simulation_engine.py
-        - src/babylon/engine/actions/__init__.py
 
     rust_postgresql_persistence:
       status: implemented_current
@@ -249,18 +238,18 @@ implementation_status:
         - rust/crates/babylon-persistence/migrations/0011_committed_tick_v2_activation.sql
         - contracts/rust_persistence_cutover_v2.yaml
 
-    python_persistence_periphery:
+    python_reference_tools:
       status: implemented_current
-      estate: non_authoritative_periphery
+      estate: reference_preparation_and_operator_tools
       scope:
-        - mutable_local_sqlite
-        - enforced_read_only_postgresql
-        - dedicated_vector_store
+        - source_acquisition
+        - deterministic_sqlite_and_parquet_builds
+        - repository_and_operator_cli
       not_game_authority: true
       evidence:
-        - src/babylon/persistence/runtime_db.py
-        - src/babylon/persistence/protocols.py
-        - src/babylon/persistence/postgres_reference.py
+        - src/babylon/reference/database.py
+        - src/babylon/reference/schema.py
+        - src/babylon/cli/__init__.py
 
     legacy_h3_text_keys:
       status: retired_by_epoch_9
@@ -456,7 +445,6 @@ persistence_writer:
     - deterministic_data_acquisition_and_reference_builds
     - external_api_adapters
     - ai_and_document_periphery
-    - in_memory_optimization_periphery
     - cli_periphery
   transition_observers:
     access: none
@@ -482,9 +470,9 @@ reference_data:
       - deterministic_sqlite_reference_database
     mutability: immutable_install_global_reference
   mutable_python_runtime_sqlite:
-    status: implemented_legacy
-    role: frozen_predecessor_campaign_state
-    v4_disposition: requires_slice_specific_migration_or_retirement
+    status: retired
+    preserved_evidence: p27-python-freeze
+    unique_data: preserved_outside_the_deleted_runtime
 
 port_policy:
   dispositions:
@@ -493,7 +481,7 @@ port_policy:
     - Replace
     - Retire
   selection: playable_causal_slice
-  frozen_python_systems: reference_and_port_source_not_a_preplay_gate
+  frozen_python_systems: retired_source_preserved_at_p27_python_freeze
   completion_rule: each_system_eventually_receives_one_disposition
 
 data_intake:

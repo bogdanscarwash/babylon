@@ -28,72 +28,33 @@ def test_doctor_reports_config_dir_and_lane(monkeypatch, tmp_path) -> None:  # t
     assert "config.toml" in result.stdout
 
 
-def test_doctor_prints_the_declared_assumptions_ledger(monkeypatch, tmp_path) -> None:  # type: ignore[no-untyped-def]
-    """T1.2 keel (K5): ``doctor`` prints the declared-assumptions ledger."""
-    monkeypatch.setenv("BABYLON_CONFIG_DIR", str(tmp_path))
-    monkeypatch.setattr(doctor_mod, "resolve_provider", lambda: MuteProvider())
-    monkeypatch.setattr(doctor_mod, "check_database", lambda _dsn: (False, "no DSN configured"))
-    result = runner.invoke(app, ["doctor"])
-    assert result.exit_code == 0
-    assert "declared assumptions" in result.stdout
-    assert "economics_employment_default" in result.stdout
-
-
 def test_check_database_handles_missing_dsn() -> None:
     ok, detail = doctor_mod.check_database(None)
     assert ok is False
     assert "DSN" in detail or "dsn" in detail
 
 
-def test_doctor_resolves_dsn_through_the_config_seam(monkeypatch, tmp_path) -> None:  # type: ignore[no-untyped-def]
-    """T1.2 keel: ``doctor`` reads the DSN via ``babylon.config.dsn.resolve_dsn``
-    (canonical ``BABYLON_DSN`` > legacy ``BABYLON_DATABASE_URL``), not
-    ``os.environ`` directly."""
+def test_doctor_probes_the_current_runtime_dsn(monkeypatch, tmp_path) -> None:  # type: ignore[no-untyped-def]
     monkeypatch.setenv("BABYLON_CONFIG_DIR", str(tmp_path))
     monkeypatch.setattr(doctor_mod, "resolve_provider", lambda: MuteProvider())
-    monkeypatch.delenv("BABYLON_DSN", raising=False)
-    monkeypatch.setenv("BABYLON_DATABASE_URL", "postgresql://legacy/db")
-
+    monkeypatch.delenv("BABYLON_RUNTIME_DSN", raising=False)
+    for name in ("BABYLON_DSN", "BABYLON_DATABASE_URL", "BABYLON_PG_DSN", "BABYLON_TEST_PG_DSN"):
+        monkeypatch.setenv(name, "postgresql://retired/db")
     seen_dsns: list[str | None] = []
 
-    def _spy_check_database(dsn: str | None) -> tuple[bool, str]:
+    def probe(dsn: str | None) -> tuple[bool, str]:
         seen_dsns.append(dsn)
         return (False, "no DSN configured")
 
-    monkeypatch.setattr(doctor_mod, "check_database", _spy_check_database)
+    monkeypatch.setattr(doctor_mod, "check_database", probe)
     result = runner.invoke(app, ["doctor"])
     assert result.exit_code == 0
-    assert seen_dsns == ["postgresql://legacy/db"]
+    assert seen_dsns == [None]
 
-    seen_dsns.clear()
-    monkeypatch.setenv("BABYLON_DSN", "postgresql://canonical/db")
+    monkeypatch.setenv("BABYLON_RUNTIME_DSN", "host=/var/run/postgresql dbname=campaign")
     result = runner.invoke(app, ["doctor"])
     assert result.exit_code == 0
-    assert seen_dsns == ["postgresql://canonical/db"]
-
-
-def test_doctor_db_probe_honors_runner_legacy_pg_dsn(monkeypatch, tmp_path) -> None:  # type: ignore[no-untyped-def]
-    """``doctor`` must probe the SAME DSN the game boot (``open_runtime``) and
-    headless runner would use: the deprecated ``BABYLON_PG_DSN`` /
-    ``BABYLON_TEST_PG_DSN`` count as configured — a box where the game boots
-    must never be told "no DSN configured"."""
-    monkeypatch.setenv("BABYLON_CONFIG_DIR", str(tmp_path))
-    monkeypatch.setattr(doctor_mod, "resolve_provider", lambda: MuteProvider())
-    monkeypatch.delenv("BABYLON_DSN", raising=False)
-    monkeypatch.delenv("BABYLON_DATABASE_URL", raising=False)
-    monkeypatch.delenv("BABYLON_TEST_PG_DSN", raising=False)
-    monkeypatch.setenv("BABYLON_PG_DSN", "host=runner-legacy dbname=babylon_test")
-
-    seen_dsns: list[str | None] = []
-
-    def _spy_check_database(dsn: str | None) -> tuple[bool, str]:
-        seen_dsns.append(dsn)
-        return (False, "no DSN configured")
-
-    monkeypatch.setattr(doctor_mod, "check_database", _spy_check_database)
-    result = runner.invoke(app, ["doctor"])
-    assert result.exit_code == 0
-    assert seen_dsns == ["host=runner-legacy dbname=babylon_test"]
+    assert seen_dsns[-1] == "host=/var/run/postgresql dbname=campaign"
 
 
 def test_doctor_provision_reports_gated_result(monkeypatch, tmp_path) -> None:  # type: ignore[no-untyped-def]

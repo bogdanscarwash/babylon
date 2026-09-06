@@ -1,41 +1,20 @@
 """Generate the deterministic USScenario county-seed artifact.
 
-Owner ruling 2026-07-19 (Amendment U / #39 T4 blocker adjudication): re-keying
-``USScenario``'s territories from res-3 H3 hexes to counties needs real
-per-county population + geography, never fabricated numbers -- but the
-scenario builder (``engine/scenarios/_legacy.py::_create_us_territories``)
-must stay reference-DB-free at build/test time (measured cost: ~6.6s per
-national-scope population lookup via
-:class:`babylon.data.reference_data_cache.ReferenceDataCache`,
-paid at >130 call sites across the test suite if done live -- e.g.
-``tests/unit/web/test_engine_bridge.py``'s ``_make_mock_persistence()``).
-Per the deterministic-data-artifacts doctrine (CI never touches the data
-drive) -- the SAME doctrine that motivated
-``src/babylon/data/game/business_seeds.json`` /
-``tools/generate_business_seeds.py`` for the QCEW business seeds -- this
-``tools/`` script precomputes the per-county rows from
-``data/sqlite/marxist-data-3NF.sqlite`` into a committed, hash-stamped JSON
-artifact (``src/babylon/data/game/us_county_territories.json``) that
-``babylon.engine.scenarios.us_county_data`` reads at runtime.
+This data-periphery tool reads the reference SQLite database and writes
+``src/babylon/data/game/us_county_territories.json``. Reference-scope and
+incidence-artifact builders consume its FIPS-sorted county universe. The
+artifact contains reference data; it does not instantiate game state.
 
 **Scope**: the canonical Python data-periphery county universe
 (:func:`babylon.data.reference_scope._load_national_fips` --
 state fips < '60', excludes the synthetic ``{state}999`` rest-of-state
 placeholders), FIPS-sorted.
 
-**Population policy (follows the house consumer, byte-for-byte)**: Census
-``fact_census_income`` household-count SUM is primary; QCEW
-``fact_qcew_annual`` employment SUM x 0.33 is the fallback -- this is
-literally :class:`~babylon.data.reference_data_cache.
-ReferenceDataCache`'s own resolution rule, reused directly (not
-reimplemented) so the artifact can never drift from what
-``WorldStateBridge`` already treats as the real per-county population.
-``population_year`` is 2010: it matches ``WorldStateBridge.hydrate_initial``'s
-default ``start_year`` and empirically has the best coverage of the national
-scope among the years checked (2010/2015/2018/2019/2020) -- the exact
-counties Census/QCEW genuinely never covers (AK/CT post-1990 geography
-splits) are named in the committed artifact's own ``gaps`` list, not
-restated here to avoid drift.
+**Population policy**: reuse ``ReferenceDataCache``'s Census household-count
+SUM, with QCEW employment SUM x 0.33 as its fallback. The artifact preserves
+this historical estimate and identifies missing counties in ``gaps``.
+The default year is 2010. These estimates are not an authored campaign's
+population parameters or a runtime population authority.
 
 **Centroid policy**: ``dim_county_geometry.centroid_lat``/``centroid_lon``,
 real TIGER centroids (NOT the fabricated hex-cell centroids the old h3 grid
@@ -77,24 +56,16 @@ The raw reference-scope universe carries the same latent double/triple count.
 That data-periphery concern remains outside this artifact's declared
 deduplication rule.
 
-Only the RAW reference-derived fields are baked into the artifact
-(``fips``, ``county_name``, ``state_abbrev``, ``centroid_lat``/``lon``,
-``population``, ``raw_material_value_millions``). The pure, in-memory
-sector/rent/biocapacity/region classification (``_classify_hex``/
-``_compute_metro_influence``/``_get_region_name`` in ``_legacy.py``) stays
-runtime logic -- it needs no DB access and predates this artifact (Wayne's
-untouched precedent uses the identical hand-authored classification style),
-so precomputing its output here would only bloat the artifact without
-adding real data.
+Only reference-derived fields are baked into the artifact: ``fips``,
+``county_name``, ``state_abbrev``, ``centroid_lat``/``lon``, ``population``,
+and ``raw_material_value_millions``. The retired Python engine's scenario
+classification is preserved in Git history.
 
 **Raw-material value policy (2026-07-20, #39 T6, schema_version 2)**:
 ``fact_state_minerals.value_millions`` (USGS Mineral Commodity Summaries,
-Program 22 Wave 1, 50 states -- no energy or biocapacity reference-data
-source exists, see ``engine/systems/substrate.py``) allocated state -> county
+Program 22 Wave 1, 50 states) allocated state -> county
 by land-area share: ``county_share = area_sq_km / Σ(area_sq_km over the
-state's scoped counties with a geometry row)``. This is the same
-apportionment key ``persistence/hex_hydrator.py`` already uses for
-raw-material stocks ("follows AREA -- where mining + extraction happens").
+state's scoped counties with a geometry row)``. This is a declared derived allocation, not an observation of county mining.
 A county's ``raw_material_value_millions`` is ``None`` (recorded in
 ``gaps``) when its state has no ``fact_state_minerals`` row (DC, PR -- USGS
 covers the 50 states only) or the county itself has no
@@ -125,9 +96,7 @@ from babylon.data.reference_scope import DEFAULT_SQLITE_PATH, _load_national_fip
 from babylon.reference.database import get_normalized_session_factory
 from babylon.reference.schema import DimCounty, DimCountyGeometry, DimState, FactStateMinerals
 
-#: Matches WorldStateBridge.hydrate_initial's default start_year (bridge.py)
-#: and empirically has the best national-scope Census/QCEW coverage among
-#: the years checked at generation time (2010/2015/2018/2019/2020).
+#: Reference year used by the committed county-universe artifact.
 DEFAULT_POPULATION_YEAR = 2010
 
 #: Retired FIPS -> modern successor FIPS for the SAME physical county, both

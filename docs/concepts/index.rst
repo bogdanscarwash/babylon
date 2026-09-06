@@ -2,7 +2,7 @@ Concepts
 ========
 
 These pages explain Babylon systems and their rationale. ``CONSTITUTION.md``
-v4.1.0 is the authority. ``NORTH_STAR.md`` gives the live game direction.
+v4.2.0 is the authority. ``NORTH_STAR.md`` gives the live game direction.
 
 Some pages explain frozen Python mechanics or an earlier architecture. They
 keep useful rationale but do not override the live authority.

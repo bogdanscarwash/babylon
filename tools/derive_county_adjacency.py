@@ -21,7 +21,7 @@ Usage::
 
     uv run python tools/derive_county_adjacency.py
 
-Then commit the artifact; ``babylon.domain.geography.adjacency`` verifies the
+Then commit the artifact; ``babylon.data.adjacency`` verifies the
 stamp at load and fails loud on drift.
 """
 

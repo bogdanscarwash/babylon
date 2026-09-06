@@ -4,8 +4,7 @@
 freezes at the `p27-python-freeze` executable pin, reference-only after."
 Chartered as Program 27 Phase 0 Task 17
 (`docs/superpowers/plans/2026-07-29-program-27-phase-0-contracts-and-evidence.md`);
-Phase 0 is complete at this document's merge plus the first green
-`frozen-engine` run.
+The original Phase 0 acceptance included a green `frozen-engine` run.
 
 ## What the tag pins
 
@@ -53,14 +52,9 @@ UV_FROZEN=1 mise run qa:regression           # canon scenarios, byte-identical
 UV_FROZEN=1 mise run qa:vault-regression     # golden-vault byte-gate
 ```
 
-## The `frozen-engine` CI job
+## Current use
 
-`.github/workflows/frozen-engine.yml` runs weekly (Monday 06:00 UTC) and on
-dispatch (`gh workflow run frozen-engine`). It checks out the tag and runs
-the same byte-gates as `ci.yml`'s qa-regression job, step-for-step.
-
-**A red `frozen-engine` run is a red gate** (spec §4): the frozen reference
-has rotted — a runner-image drift, a dependency yank, or an accidental
-force-move of the tag — and every cutover comparison is unsound until it is
-repaired. STOP and diagnose; repairing the frozen engine requires Director
-sign-off, and the tag is never silently re-cut.
+The Python engine and the `frozen-engine` CI job have been retired. The tag
+preserves recoverable historical evidence and frozen BSL citation inputs.
+Current mechanics and persistence checks run against Rust. The commands above
+belong to the tagged checkout and are not current-branch validation commands.

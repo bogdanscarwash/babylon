@@ -66,7 +66,7 @@ const CONTRACT_SCHEMA: &[u8] = include_bytes!("../../../../contracts/material_ci
 
 fn base_state() -> MaterialCircuitStateV2 {
     MaterialCircuitStateV2 {
-        week: 1,
+        period: 1,
         site_logistics_nodes: vec![
             SiteLogisticsNodeV2 {
                 site_id: site(SUPPLIER),
@@ -93,7 +93,7 @@ fn base_state() -> MaterialCircuitStateV2 {
             corridor_id: corridor(CORRIDOR),
             from_node_id: node(SUPPLIER_NODE),
             to_node_id: node(BUYER_NODE),
-            travel_weeks: 1,
+            travel_periods: 1,
             loss_ppm: 0,
         }],
         inventory: vec![
@@ -131,7 +131,7 @@ fn base_state() -> MaterialCircuitStateV2 {
         corridor_capacities: vec![CorridorCapacityV2 {
             corridor_id: corridor(CORRIDOR),
             unit_id: unit(GOODS_UNIT),
-            week: 1,
+            period: 1,
             available: 4,
         }],
         capacities: Vec::new(),
@@ -163,7 +163,7 @@ fn two_leg_state(second_leg_capacity: u64) -> MaterialCircuitStateV2 {
             corridor_id: corridor(11),
             from_node_id: middle,
             to_node_id: node(BUYER_NODE),
-            travel_weeks: 1,
+            travel_periods: 1,
             loss_ppm: 0,
         },
     ];
@@ -175,7 +175,7 @@ fn two_leg_state(second_leg_capacity: u64) -> MaterialCircuitStateV2 {
         CorridorCapacityV2 {
             corridor_id: corridor(11),
             unit_id: unit(GOODS_UNIT),
-            week: 2,
+            period: 2,
             available: second_leg_capacity,
         },
     ];
@@ -206,7 +206,7 @@ fn two_route_state() -> MaterialCircuitStateV2 {
         corridor_id: corridor(16),
         from_node_id: node(SUPPLIER_NODE),
         to_node_id: second_node,
-        travel_weeks: 1,
+        travel_periods: 1,
         loss_ppm: 0,
     });
     state.inventory.push(InventoryRowV1 {
@@ -235,7 +235,7 @@ fn two_route_state() -> MaterialCircuitStateV2 {
     state.corridor_capacities.push(CorridorCapacityV2 {
         corridor_id: corridor(16),
         unit_id: unit(GOODS_UNIT),
-        week: 1,
+        period: 1,
         available: 4,
     });
     state
@@ -258,7 +258,7 @@ fn route_depth_state(leg_count: usize) -> MaterialCircuitStateV2 {
             } else {
                 node(20 + u8::try_from(index).expect("test node must fit"))
             },
-            travel_weeks: 1,
+            travel_periods: 1,
             loss_ppm: 0,
         })
         .collect();
@@ -268,7 +268,7 @@ fn route_depth_state(leg_count: usize) -> MaterialCircuitStateV2 {
         .map(|leg| CorridorCapacityV2 {
             corridor_id: leg.corridor_id,
             unit_id: unit(GOODS_UNIT),
-            week: 1 + u64::from(leg.leg_index),
+            period: 1 + u64::from(leg.leg_index),
             available: 4,
         })
         .collect();
@@ -285,9 +285,9 @@ fn shipped_for(state: &MaterialCircuitStateV2, order_id: OrderIdV1) -> u64 {
 
 #[test]
 fn corridor_capacity_bounds_routed_dispatch() {
-    let outcome = advance_material_circuit_v2(&base_state()).expect("week one must close");
+    let outcome = advance_material_circuit_v2(&base_state()).expect("period one must close");
 
-    assert_eq!(outcome.state.week, 2);
+    assert_eq!(outcome.state.period, 2);
     assert_eq!(outcome.state.orders[0].shipped, 4);
     assert_eq!(outcome.state.orders[0].delivered, 0);
     assert_eq!(outcome.state.orders[0].realized, 0);
@@ -299,13 +299,13 @@ fn corridor_capacity_bounds_routed_dispatch() {
     assert_eq!(outcome.state.freight.len(), 1);
     assert_eq!(outcome.state.freight[0].quantity, 4);
     assert_eq!(outcome.state.freight[0].current_leg_index, 0);
-    assert_eq!(outcome.state.freight[0].leg_arrival_week, 2);
+    assert_eq!(outcome.state.freight[0].leg_arrival_period, 2);
 }
 
 #[test]
 fn final_route_arrival_credits_inventory_before_realization() {
-    let first = advance_material_circuit_v2(&base_state()).expect("week one must close");
-    let second = advance_material_circuit_v2(&first.state).expect("week two must close");
+    let first = advance_material_circuit_v2(&base_state()).expect("period one must close");
+    let second = advance_material_circuit_v2(&first.state).expect("period two must close");
 
     assert!(second.state.freight.is_empty());
     assert_eq!(inventory_quantity(&second.state, site(BUYER)), 4);
@@ -337,7 +337,7 @@ fn capacity_for_an_unknown_corridor_refuses() {
     state.corridor_capacities.push(CorridorCapacityV2 {
         corridor_id: corridor(99),
         unit_id: unit(GOODS_UNIT),
-        week: 1,
+        period: 1,
         available: 1,
     });
 
@@ -348,8 +348,8 @@ fn capacity_for_an_unknown_corridor_refuses() {
 }
 
 #[test]
-fn freight_lot_identity_must_bind_order_and_dispatch_week() {
-    let first = advance_material_circuit_v2(&base_state()).expect("week one must close");
+fn freight_lot_identity_must_bind_order_and_dispatch_period() {
+    let first = advance_material_circuit_v2(&base_state()).expect("period one must close");
     let mut state = first.state;
     state.freight[0].lot_id = babylon_material_circuit::FreightLotIdV2::from_bytes([77; 32]);
 
@@ -361,9 +361,9 @@ fn freight_lot_identity_must_bind_order_and_dispatch_week() {
 
 #[test]
 fn freight_leg_arrival_must_match_the_reserved_route_schedule() {
-    let first = advance_material_circuit_v2(&base_state()).expect("week one must close");
+    let first = advance_material_circuit_v2(&base_state()).expect("period one must close");
     let mut state = first.state;
-    state.freight[0].leg_arrival_week = 3;
+    state.freight[0].leg_arrival_period = 3;
 
     assert_eq!(
         advance_material_circuit_v2(&state),
@@ -378,16 +378,16 @@ fn future_leg_capacity_limits_origin_dispatch() {
     assert_eq!(outcome.state.orders[0].shipped, 2);
     assert_eq!(outcome.state.backlog[0].quantity, 4);
     assert_eq!(outcome.state.freight[0].quantity, 2);
-    assert_eq!(outcome.dispatches[0].final_arrival_week, 3);
+    assert_eq!(outcome.dispatches[0].final_arrival_period, 3);
     assert_eq!(inventory_quantity(&outcome.state, site(SUPPLIER)), 8);
-    assert_eq!(outcome.state.corridor_capacities[0].week, 2);
+    assert_eq!(outcome.state.corridor_capacities[0].period, 2);
     assert_eq!(outcome.state.corridor_capacities[0].available, 0);
 }
 
 #[test]
 fn completed_leg_loss_remains_attributed_before_final_delivery() {
-    let first = advance_material_circuit_v2(&two_leg_state(4)).expect("week one must close");
-    let second = advance_material_circuit_v2(&first.state).expect("week two must close");
+    let first = advance_material_circuit_v2(&two_leg_state(4)).expect("period one must close");
+    let second = advance_material_circuit_v2(&first.state).expect("period two must close");
 
     assert_eq!(second.losses.len(), 1);
     assert_eq!(second.losses[0].quantity, 1);
@@ -395,9 +395,9 @@ fn completed_leg_loss_remains_attributed_before_final_delivery() {
     assert_eq!(second.state.orders[0].delivered, 0);
     assert_eq!(second.state.freight[0].quantity, 3);
     assert_eq!(second.state.freight[0].current_leg_index, 1);
-    assert_eq!(second.state.freight[0].leg_arrival_week, 3);
+    assert_eq!(second.state.freight[0].leg_arrival_period, 3);
 
-    let third = advance_material_circuit_v2(&second.state).expect("week three must close");
+    let third = advance_material_circuit_v2(&second.state).expect("period three must close");
     assert!(third.state.freight.is_empty());
     assert_eq!(third.state.orders[0].shipped, 4);
     assert_eq!(third.state.orders[0].lost, 1);
@@ -407,7 +407,7 @@ fn completed_leg_loss_remains_attributed_before_final_delivery() {
 }
 
 #[test]
-fn final_arrival_can_form_and_execute_following_week_production() {
+fn final_arrival_can_form_and_execute_following_period_production() {
     let mut state = base_state();
     state.process_outputs.push(ProcessOutputV1 {
         process_id: process(18),
@@ -430,23 +430,23 @@ fn final_arrival_can_form_and_execute_following_week_production() {
     state.capacities.push(CapacityRowV1 {
         process_id: process(18),
         site_id: site(BUYER),
-        week: 3,
+        period: 3,
         available_batches: 2,
     });
     state.labor.push(LaborCapacityRowV1 {
         site_id: site(BUYER),
         unit_id: unit(20),
-        week: 3,
+        period: 3,
         available: 2,
     });
 
-    let dispatch = advance_material_circuit_v2(&state).expect("dispatch week must close");
+    let dispatch = advance_material_circuit_v2(&state).expect("dispatch period must close");
     assert!(dispatch.state.production_commitments.is_empty());
-    let arrival = advance_material_circuit_v2(&dispatch.state).expect("arrival week must close");
+    let arrival = advance_material_circuit_v2(&dispatch.state).expect("arrival period must close");
     assert_eq!(arrival.state.production_commitments.len(), 1);
     assert_eq!(arrival.state.production_commitments[0].planned_batches, 2);
     let production =
-        advance_material_circuit_v2(&arrival.state).expect("production week must close");
+        advance_material_circuit_v2(&arrival.state).expect("production period must close");
 
     assert_eq!(production.production.len(), 1);
     assert_eq!(production.production[0].produced_batches, 2);
@@ -474,7 +474,7 @@ fn route_depth_accepts_the_designed_maximum_and_refuses_plus_one() {
 
 #[test]
 fn arrival_overflow_refuses_atomically_without_mutating_the_opening_state() {
-    let dispatch = advance_material_circuit_v2(&base_state()).expect("dispatch week must close");
+    let dispatch = advance_material_circuit_v2(&base_state()).expect("dispatch period must close");
     let mut opening = dispatch.state;
     let buyer_inventory = opening
         .inventory

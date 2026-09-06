@@ -104,27 +104,24 @@ def test_retired_channel_has_no_live_installer_or_workflow() -> None:
     assert [path for path in retired if (ROOT / path).exists()] == []
 
 
-def test_source_release_runs_locked_environment_smoke_and_regression_before_publish() -> None:
+def test_source_release_runs_locked_environment_smoke_before_publish() -> None:
     steps = _steps("release.yml", "release")
     bootstrap = next(
         index
         for index, step in enumerate(steps)
         if step.get("uses") == "./.github/actions/bootstrap-python"
     )
-    regression = next(
-        index for index, step in enumerate(steps) if step.get("run") == "mise run qa:regression"
-    )
     smoke = next(index for index, step in enumerate(steps) if step.get("name") == "Source smoke")
     lock = next(index for index, step in enumerate(steps) if step.get("run") == "uv lock --check")
     publish = next(
         index for index, step in enumerate(steps) if step.get("name") == "Create GitHub Release"
     )
-    assert bootstrap < lock < regression < publish
     assert bootstrap < lock < smoke < publish
     assert "uv run --frozen python -c" in steps[smoke]["run"]
     assert "uv run --frozen babylon --help" in steps[smoke]["run"]
-    assert "continue-on-error" not in steps[regression]
     assert "continue-on-error" not in steps[smoke]
+    assert not (ROOT / "tools" / "run_regression.py").exists()
+    assert all(step.get("run") != "mise run qa:regression" for step in steps)
 
 
 def test_weekly_rebuild_uses_exact_native_interpreter_and_compares_product_bytes() -> None:

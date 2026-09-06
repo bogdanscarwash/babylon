@@ -35,7 +35,7 @@ use babylon_tick::{
     replay_session::{ReplayCommitDispositionV1, ReplayTickSession},
 };
 use postgres::{Config, GenericClient, NoTls};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 const SCHEMA: &str = include_str!("../migrations/material_runtime_v3.sql");
 const FOUNDATION_DOMAIN: &[u8] = b"babylon.material-campaign-foundation.v2\0";
@@ -52,7 +52,7 @@ pub(crate) fn bounded_material_writer_config_v3(
 ) -> Result<Config, MaterialRuntimeErrorV3> {
     // Validate the caller before introducing trusted startup settings. Never
     // accept caller options merely because they resemble our timeout values.
-    crate::validate_legacy_connection_target(config)
+    crate::validate_connection_target(config)
         .map_err(|_| RustPersistenceRuntimeErrorV2::ActivationRequired)?;
     let mut bounded = config.clone();
     bounded
@@ -418,7 +418,9 @@ impl DurableMaterialRuntimeV3 {
         sink: &mut CollectingSink,
         actions: &OrderedPracticeActionBatchV1,
     ) -> Result<IdentifiedMaterialTickV3, MaterialRuntimeErrorV3> {
+        let started = Instant::now();
         let candidate = self.session.prepare_advance(actions)?;
+        let adjudicated = Instant::now();
         let identity = *candidate.identity();
         let tick = CommittedResolveTickV1::try_from(identity.resolve_tick())
             .map_err(|_| MaterialRuntimeErrorV3::Bounds)?;
@@ -433,6 +435,8 @@ impl DurableMaterialRuntimeV3 {
             candidate.material().register().canonical_bytes(),
             candidate.material().receipt_bytes(),
         )?;
+        let prepared = Instant::now();
+        let timing = [started, adjudicated, prepared];
         let mut client = self.config.connect(NoTls)?;
         let mut tx = client.transaction()?;
         tx.batch_execute(
@@ -463,6 +467,7 @@ impl DurableMaterialRuntimeV3 {
                 })
                 .map_err(commit_error)?;
             self.tail = Some(ack);
+            record_advance_timing(self.campaign, ack.resolve_tick(), timing);
             return Ok(ack);
         }
         if durable != self.session.completed_tick() {
@@ -508,9 +513,30 @@ impl DurableMaterialRuntimeV3 {
             }}
         }).map_err(commit_error)?;
         self.tail = Some(ack);
+        record_advance_timing(self.campaign, ack.resolve_tick(), timing);
         Ok(ack)
     }
 }
+
+// Operator diagnostics only: clocks never enter state, hashes, receipts or the
+// protocol. Emit one bounded record after successful durable publication.
+fn record_advance_timing(
+    campaign: CampaignId,
+    period: u64,
+    [started, adjudicated, prepared]: [Instant; 3],
+) {
+    if std::env::var("BABYLON_TIMINGS").as_deref() == Ok("1") {
+        eprintln!(
+            "babylon-timing campaign={} period={period} simulation_us={} preparation_us={} durable_write_publish_us={} total_us={}",
+            campaign.as_uuid(),
+            adjudicated.duration_since(started).as_micros(),
+            prepared.duration_since(adjudicated).as_micros(),
+            prepared.elapsed().as_micros(),
+            started.elapsed().as_micros(),
+        );
+    }
+}
+
 fn commit_error(error: MaterialCommitErrorV3<MaterialRuntimeErrorV3>) -> MaterialRuntimeErrorV3 {
     match error {
         MaterialCommitErrorV3::Preflight(error) => error.into(),
@@ -856,7 +882,7 @@ mod writer_bounds_tests {
         );
         assert_eq!(bounded.get_options(), Some(WRITER_STARTUP_OPTIONS));
         assert_eq!(caller.get_options(), None);
-        crate::validate_legacy_connection_target(&caller).unwrap();
+        crate::validate_connection_target(&caller).unwrap();
         assert!(!WRITER_STARTUP_OPTIONS.contains("default_transaction_read_only=on"));
     }
 

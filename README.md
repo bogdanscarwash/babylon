@@ -27,7 +27,7 @@ The four executable gates are:
 
 ## What Babylon is
 
-Babylon is a causal sandbox with a fixed weekly tick. Conditions, choices, and
+Babylon is a causal sandbox with a fixed four-week tick. Conditions, choices, and
 feedback change a shared world. The engine applies rules and produces a stable
 tick report.
 
@@ -41,23 +41,27 @@ level, the live engine has:
 - typed world data
 - ordered causal rules
 - committed Rust tick reports and checkpoints
-- a frozen Python reference for retained reference tests
+- reproducible reference-data artifacts
 
 The planned decision cycle adds player and AI intent plus views limited by
 player knowledge.
 
 Read [`NORTH_STAR.md`](NORTH_STAR.md) for the full system model. Read
-[`CONSTITUTION.md`](CONSTITUTION.md) v4.1.0 for the constitutional law.
+[`CONSTITUTION.md`](CONSTITUTION.md) v4.2.0 for the constitutional law.
 
 ## Live system
 
 The Bevy window observes one durable Michigan campaign with 83 county QCEW
 baselines. It has a county map, an inspector, and a production display with
 3D cohort columns and a compact 2D option. The physical scenario contains
-five Designed county-industry cohorts for 16 weeks. Two committed presets
-compare the same productive configuration with different `sheet-transfer` durations.
+five Designed county-industry cohorts. The supplied parameters cover 16 four-week
+periods (64 weeks); each campaign can select a shorter horizon. Standard and
+delayed delivery use the route durations in that campaign's authored parameters.
+The comparison shows the same committed period in two saved campaigns. Each
+campaign retains its own parameters, so their differences can extend beyond
+route duration.
 
-The runtime commits weekly changes to Postgres. The window receives read
+The runtime commits four-week changes to Postgres. The window receives read
 capabilities and controls pause, step, and speed through anonymous pipes.
 Full observer and player-knowledge preview use different database roles.
 The preview displays only granted facts. It has no material grants.
@@ -67,29 +71,25 @@ The live Rust path uses these crates:
 - `babylon-kernel` for deterministic types
 - `babylon-graph` for relations and world data
 - `babylon-bsl` for the BSL language
-- `babylon-tick` for weekly judgment
+- `babylon-tick` for four-week judgment
 - `babylon-material-circuit` for physical production and routed freight
 - `babylon-persistence` for the durable runtime and restricted readers
 - `babylon-client` for the Bevy viewer
 
-The Python engine is a frozen behavioral reference. Its tests, traces, and
-goldens specify that behavior. Rust ports must keep it or record a replacement
-decision. Python also prepares data and runs other periphery.
+Rust owns mechanics and their executable contracts. The Python engine is
+retired; retained source datasets, language-neutral vectors, and Git history
+preserve its evidence. Python prepares reference data and runs operator tools.
 
 <!-- Vale: this paragraph preserves literal persistence and schema identifiers. -->
 <!-- vale ste.UnapprovedWords = NO -->
 <!-- vale ste.NounClusters = NO -->
-Deterministic reference SQLite is a build artifact. The frozen Python reference
-retains a separate mutable `RuntimeDatabase` SQLite store. Rust owns authoritative game-managed
+Deterministic reference SQLite is a build artifact. Rust owns authoritative game-managed
 Postgres and marker-last committed envelopes. Archive verification can lag
-the durable week. The window shows that lag.
+the durable period. The window shows that lag.
 
-Python retains data tooling and
-the frozen reference. It does not write the campaign shown in Bevy.
+Python tooling does not write the campaign shown in Bevy.
 <!-- vale ste.NounClusters = YES -->
 <!-- vale ste.UnapprovedWords = YES -->
-
-The Django browser client in `web/` is legacy. Its failures do not gate v1.
 
 ## Install and check
 
@@ -102,12 +102,6 @@ uv installs Python dependencies from the committed lock.
 ```bash
 mise trust
 mise run setup
-```
-
-Run the frozen Python reference smoke test:
-
-```bash
-mise run reference:python-smoke
 ```
 
 Run the repository check:
@@ -123,16 +117,16 @@ mise run play
 ```
 
 The launcher builds the runtime and client, reuses a reachable local database,
-and starts at the campaign's durable week. New campaigns start at week zero.
+and starts at the campaign's durable period. New campaigns start at period zero.
 Use the in-game menu to start a new campaign, reopen a saved campaign, or
 compare two committed scenarios. Saved campaigns stay in the database.
 See [`SETUP_GUIDE.md`](SETUP_GUIDE.md) for launch options and host requirements.
 
 ## Why Python tests continue
 
-The Rust port does not make all Python tests obsolete. Python owns data builds,
-periphery, and the frozen reference. Its behavioral tests can prove that a Rust
-port kept the same external result.
+Python tests protect the retained data builders, repository commands, provider
+integrations, and operator tools. Rust tests own mechanics, persistence, and
+replay. Tests of the retired Python engine have been removed.
 
 Use the smallest applicable test first. Then run the full gate for the changed
 area:
@@ -150,13 +144,12 @@ durable replacement contract exists.
 ## Repository map
 
 - `rust/crates/` contains the shipping engine and Bevy client.
-- `src/babylon/` contains the frozen reference and Python periphery.
+- `src/babylon/` contains data and operator tooling.
 - `tests/` contains unit, integration, scenario, and contract tests.
 - `data/` contains source artifacts and the reference data artifact.
 - `ai/decisions/` contains architecture decision records.
 - `docs/` contains the Sphinx manual.
 - `project/` contains non-live context from earlier plans.
-- `web/` contains the legacy browser, which uses Django.
 
 <!-- Vale: the next sentence preserves exact control-surface terminology. -->
 <!-- vale ste.UnapprovedWords = NO -->

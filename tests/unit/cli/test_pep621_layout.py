@@ -48,7 +48,6 @@ def test_retired_web_dependencies_are_absent_from_every_dependency_set() -> None
         *DATA["project"]["optional-dependencies"]["ops"],
         *DATA["dependency-groups"]["dev"],
         *DATA["dependency-groups"]["docs"],
-        *DATA["dependency-groups"]["mutation"],
     ]
     assert _names(requirements).isdisjoint(
         {
@@ -71,8 +70,9 @@ def test_ci_xdist_plugin_is_a_direct_dev_dependency() -> None:
 
 def test_core_stays_in_default_deps() -> None:
     core = _names(DATA["project"]["dependencies"])
-    for pkg in ("pydantic", "typer", "rich", "rustworkx", "openai"):
+    for pkg in ("pydantic", "typer", "rich", "openai"):
         assert pkg in core
+    assert "rustworkx" not in core
 
 
 def test_build_backend_is_hatchling() -> None:

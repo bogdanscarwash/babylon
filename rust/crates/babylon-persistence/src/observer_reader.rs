@@ -6,10 +6,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     michigan_content::{
-        admit_michigan_content_v1, MichiganContentAdmissionV1, MICHIGAN_CONTENT_PRESETS_V1,
+        validate_michigan_header_v1, MichiganContentAdmissionV1, MICHIGAN_CONTENT_PRESETS_V1,
     },
     michigan_economy::{digest_hex, michigan_economy_v1, MichiganCountyEconomyV1},
-    validate_legacy_connection_target, CampaignId,
+    validate_connection_target, CampaignId,
 };
 
 pub const OBSERVER_DSN_ENV_V1: &str = "BABYLON_OBSERVER_DSN";
@@ -117,8 +117,7 @@ impl ObserverEconomyReaderV1 {
         config: &Config,
         visibility: ObserverVisibilityV1,
     ) -> Result<Self, ObserverEconomyErrorV1> {
-        validate_legacy_connection_target(config)
-            .map_err(|_| ObserverEconomyErrorV1::ConnectionTarget)?;
+        validate_connection_target(config).map_err(|_| ObserverEconomyErrorV1::ConnectionTarget)?;
         Ok(Self {
             config: config.clone(),
             visibility,
@@ -135,9 +134,9 @@ impl ObserverEconomyReaderV1 {
     pub fn campaigns(&self) -> Result<Vec<CampaignSummaryV1>, ObserverEconomyErrorV1> {
         let mut config = self.config.clone();
         config
-            .connect_timeout(crate::LEGACY_ADOPTER_CONNECT_TIMEOUT)
-            .tcp_user_timeout(crate::LEGACY_ADOPTER_TCP_USER_TIMEOUT)
-            .options(crate::LEGACY_ADOPTER_STARTUP_OPTIONS);
+            .connect_timeout(crate::CATALOG_CONNECT_TIMEOUT)
+            .tcp_user_timeout(crate::CATALOG_TCP_USER_TIMEOUT)
+            .options(crate::CATALOG_STARTUP_OPTIONS);
         let mut client = config
             .connect(NoTls)
             .map_err(|_| ObserverEconomyErrorV1::Database)?;
@@ -148,19 +147,9 @@ impl ObserverEconomyReaderV1 {
             .read_only(true)
             .start()
             .map_err(|_| ObserverEconomyErrorV1::Database)?;
-        let bindings = CampaignCatalogBindings::admitted()?;
+        let presets: Vec<_> = MICHIGAN_CONTENT_PRESETS_V1.iter().map(|p| p.id()).collect();
         let rows = transaction
-            .query(
-                CAMPAIGN_CATALOG_SQL,
-                &[
-                    &bindings.presets,
-                    &bindings.horizons,
-                    &bindings.content,
-                    &bindings.foundations,
-                    &bindings.graphs,
-                    &bindings.scenarios,
-                ],
-            )
+            .query(CAMPAIGN_CATALOG_SQL, &[&presets])
             .map_err(|_| ObserverEconomyErrorV1::Database)?;
         let result = rows
             .iter()
@@ -185,9 +174,9 @@ impl ObserverEconomyReaderV1 {
         let tick = i64::try_from(expected_tick).map_err(|_| ObserverEconomyErrorV1::TickAbsent)?;
         let mut config = self.config.clone();
         config
-            .connect_timeout(crate::LEGACY_ADOPTER_CONNECT_TIMEOUT)
-            .tcp_user_timeout(crate::LEGACY_ADOPTER_TCP_USER_TIMEOUT)
-            .options(crate::LEGACY_ADOPTER_STARTUP_OPTIONS);
+            .connect_timeout(crate::CATALOG_CONNECT_TIMEOUT)
+            .tcp_user_timeout(crate::CATALOG_TCP_USER_TIMEOUT)
+            .options(crate::CATALOG_STARTUP_OPTIONS);
         let mut client = config
             .connect(NoTls)
             .map_err(|_| ObserverEconomyErrorV1::Database)?;
@@ -212,27 +201,28 @@ impl ObserverEconomyReaderV1 {
             .try_get(2)
             .map_err(|_| ObserverEconomyErrorV1::InvalidProjection)?;
         let economy = michigan_economy_v1().map_err(|_| ObserverEconomyErrorV1::Reference)?;
-        let admission = crate::observer_material::read_material_header(
+        let material_header = crate::observer_material::read_material_header(
             &mut transaction,
             campaign,
             expected_tick,
+            self.visibility,
         )?;
-        validate_observer_graph(admission, &foundation_hash, &scenario_hash)?;
-        let (tick_content_hash, envelope_digest) = if expected_tick == 0 {
-            (None, None)
-        } else {
-            let marker = transaction.query_opt("SELECT tick_content_hash, envelope_digest FROM public.v_committed_tick_status_v1 WHERE campaign_id = $1 AND resolve_tick = $2", &[campaign.as_uuid(), &tick]).map_err(|_| ObserverEconomyErrorV1::Database)?.ok_or(ObserverEconomyErrorV1::TickAbsent)?;
-            let content: Vec<u8> = marker
-                .try_get(0)
-                .map_err(|_| ObserverEconomyErrorV1::InvalidProjection)?;
-            let envelope: Vec<u8> = marker
-                .try_get(1)
-                .map_err(|_| ObserverEconomyErrorV1::InvalidProjection)?;
-            if content.len() != 32 || envelope.len() != 32 {
-                return Err(ObserverEconomyErrorV1::InvalidProjection);
+        let admission = material_header
+            .as_ref()
+            .and_then(|header| header.admission.as_ref());
+        if material_header.is_some() && admission.is_none() {
+            if foundation_hash.len() != 32
+                || scenario_hash.len() != 32
+                || foundation_hash.iter().all(|b| *b == 0)
+                || scenario_hash.iter().all(|b| *b == 0)
+            {
+                return Err(ObserverEconomyErrorV1::ScenarioMismatch);
             }
-            (Some(digest_hex(&content)), Some(digest_hex(&envelope)))
-        };
+        } else {
+            validate_observer_graph(admission, &foundation_hash, &scenario_hash)?;
+        }
+        let (tick_content_hash, envelope_digest) =
+            read_commit_identity(&mut transaction, campaign, tick, material_header.is_some())?;
         let counties = read_committed_counties(
             &mut transaction,
             campaign,
@@ -249,10 +239,16 @@ impl ObserverEconomyReaderV1 {
                 admission,
             )?
         } else {
-            // Explicitly admitted baseline-only V1 conformance campaigns have no
-            // material family. V2 graphs without a material header fail above.
+            // Baseline conformance has no material family. Restricted preview
+            // keeps material content opaque and publishes no material facts.
             crate::observer_material::MaterialObservationV1 {
-                foundation_digest: digest_hex(&foundation_hash),
+                foundation_digest: digest_hex(
+                    material_header
+                        .as_ref()
+                        .map_or(foundation_hash.as_slice(), |header| {
+                            header.foundation_digest.as_slice()
+                        }),
+                ),
                 production: None,
                 nominal_world_hash: None,
             }
@@ -274,53 +270,49 @@ impl ObserverEconomyReaderV1 {
     }
 }
 
-// The admission JOIN precedes the result limit. Unrelated or corrupt rows
-// cannot consume a catalog slot or force construction from database metadata.
-const CAMPAIGN_CATALOG_SQL: &str = "WITH admitted AS (
- SELECT * FROM unnest($1::text[], $2::bigint[], $3::bytea[], $4::bytea[], $5::bytea[], $6::bytea[])
- AS entry(preset_id,horizon_ticks,content_sha256,foundation_sha256,graph_sha256,scenario_sha256)
-)
-SELECT header.campaign_id, header.preset_id, header.horizon_ticks, header.content_sha256,
- header.foundation_sha256, COALESCE(max(marker.resolve_tick),0)::bigint AS durable_tick
+fn read_commit_identity(
+    transaction: &mut impl postgres::GenericClient,
+    campaign: CampaignId,
+    tick: i64,
+    material: bool,
+) -> Result<(Option<String>, Option<String>), ObserverEconomyErrorV1> {
+    if tick == 0 {
+        return Ok((None, None));
+    }
+    let marker = transaction.query_opt("SELECT tick_content_hash, envelope_digest, envelope_layout_version FROM public.v_committed_tick_status_v1 WHERE campaign_id = $1 AND resolve_tick = $2", &[campaign.as_uuid(), &tick]).map_err(|_| ObserverEconomyErrorV1::Database)?.ok_or(ObserverEconomyErrorV1::TickAbsent)?;
+    let content: Vec<u8> = marker
+        .try_get(0)
+        .map_err(|_| ObserverEconomyErrorV1::InvalidProjection)?;
+    let envelope: Vec<u8> = marker
+        .try_get(1)
+        .map_err(|_| ObserverEconomyErrorV1::InvalidProjection)?;
+    let layout: i16 = marker
+        .try_get(2)
+        .map_err(|_| ObserverEconomyErrorV1::InvalidProjection)?;
+    if (material && layout != 3) || content.len() != 32 || envelope.len() != 32 {
+        return Err(ObserverEconomyErrorV1::InvalidProjection);
+    }
+    Ok((Some(digest_hex(&content)), Some(digest_hex(&envelope))))
+}
+
+// Catalog rows expose only safe identities. Dynamic material configuration is
+// opaque here; full observation independently reconstructs its stored content.
+const CAMPAIGN_CATALOG_SQL: &str = "SELECT header.campaign_id,header.preset_id,header.horizon_ticks,header.content_sha256,
+ header.foundation_sha256,COALESCE(max(marker.resolve_tick),0)::bigint AS durable_tick
 FROM public.v_material_campaign_identity_v1 AS header
-JOIN admitted USING(preset_id,horizon_ticks,content_sha256,foundation_sha256)
-JOIN public.v_observer_economy_foundation_v1 AS graph ON graph.campaign_id=header.campaign_id
- AND graph.foundation_sha256=admitted.graph_sha256 AND graph.scenario_sha256=admitted.scenario_sha256
+JOIN public.v_observer_economy_foundation_v1 AS graph USING(campaign_id)
 LEFT JOIN public.v_committed_tick_status_v1 AS marker ON marker.campaign_id=header.campaign_id
-WHERE header.campaign_id <> '00000000-0000-0000-0000-000000000000'::uuid
+WHERE header.preset_id=ANY($1::text[])
+ AND header.campaign_id <> '00000000-0000-0000-0000-000000000000'::uuid
+ AND header.horizon_ticks BETWEEN 1 AND 16
+ AND octet_length(header.content_sha256)=32 AND header.content_sha256<>decode(repeat('00',32),'hex')
+ AND octet_length(header.foundation_sha256)=32 AND header.foundation_sha256<>decode(repeat('00',32),'hex')
+ AND octet_length(graph.foundation_sha256)=32 AND graph.foundation_sha256<>decode(repeat('00',32),'hex')
+ AND octet_length(graph.scenario_sha256)=32 AND graph.scenario_sha256<>decode(repeat('00',32),'hex')
 GROUP BY header.campaign_id,header.preset_id,header.horizon_ticks,header.content_sha256,header.foundation_sha256
 HAVING COALESCE(max(marker.resolve_tick),0) BETWEEN 0 AND header.horizon_ticks
+ AND bool_and(marker.envelope_layout_version IS NULL OR marker.envelope_layout_version=3)
 ORDER BY header.campaign_id LIMIT 64";
-
-#[derive(Default)]
-struct CampaignCatalogBindings {
-    presets: Vec<String>,
-    horizons: Vec<i64>,
-    content: Vec<Vec<u8>>,
-    foundations: Vec<Vec<u8>>,
-    graphs: Vec<Vec<u8>>,
-    scenarios: Vec<Vec<u8>>,
-}
-impl CampaignCatalogBindings {
-    fn admitted() -> Result<Self, ObserverEconomyErrorV1> {
-        let mut bindings = Self::default();
-        for preset in MICHIGAN_CONTENT_PRESETS_V1 {
-            let entry = preset
-                .admitted()
-                .map_err(|_| ObserverEconomyErrorV1::Reference)?;
-            bindings.presets.push(preset.id().to_owned());
-            bindings.horizons.push(
-                i64::try_from(entry.horizon_ticks)
-                    .map_err(|_| ObserverEconomyErrorV1::Reference)?,
-            );
-            bindings.content.push(entry.content_digest.to_vec());
-            bindings.foundations.push(entry.digest.to_vec());
-            bindings.graphs.push(entry.graph_digest.to_vec());
-            bindings.scenarios.push(entry.scenario_digest.to_vec());
-        }
-        Ok(bindings)
-    }
-}
 
 fn campaign_summary(row: &postgres::Row) -> Result<CampaignSummaryV1, ObserverEconomyErrorV1> {
     let campaign: uuid::Uuid = row
@@ -343,7 +335,7 @@ fn campaign_summary(row: &postgres::Row) -> Result<CampaignSummaryV1, ObserverEc
             .map_err(|_| ObserverEconomyErrorV1::InvalidProjection)?,
     )
     .map_err(|_| ObserverEconomyErrorV1::InvalidProjection)?;
-    let entry = admit_michigan_content_v1(&preset_id, horizon, &content, &foundation, tick)
+    let entry = validate_michigan_header_v1(&preset_id, horizon, &content, &foundation, tick)
         .map_err(|_| ObserverEconomyErrorV1::ScenarioMismatch)?;
     if campaign.is_nil() {
         return Err(ObserverEconomyErrorV1::InvalidProjection);
@@ -351,7 +343,7 @@ fn campaign_summary(row: &postgres::Row) -> Result<CampaignSummaryV1, ObserverEc
     Ok(CampaignSummaryV1 {
         id: campaign.to_string(),
         preset: preset_id,
-        label: entry.preset.label().to_owned(),
+        label: entry.label().to_owned(),
         durable_tick: tick,
     })
 }
@@ -601,8 +593,7 @@ fn confine_authority(
 /// # Errors
 /// Refuses role attributes, partial installation, changed definitions or database failure.
 pub fn install_observer_economy_schema_v1(config: &Config) -> Result<(), ObserverEconomyErrorV1> {
-    validate_legacy_connection_target(config)
-        .map_err(|_| ObserverEconomyErrorV1::ConnectionTarget)?;
+    validate_connection_target(config).map_err(|_| ObserverEconomyErrorV1::ConnectionTarget)?;
     crate::install_territory_county_map_schema_v1(config)
         .map_err(|_| ObserverEconomyErrorV1::Database)?;
     let mut client = config
@@ -709,9 +700,9 @@ mod tests {
         let (graph, scenario) = graph_only_observer_identity().unwrap();
         assert!(validate_observer_graph(None, &graph, &scenario).is_ok());
         for preset in MICHIGAN_CONTENT_PRESETS_V1 {
-            let entry = preset.admitted().unwrap();
+            let entry = preset.admitted(&crate::test_support::catalog()).unwrap();
             assert!(validate_observer_graph(
-                Some(entry),
+                Some(&entry),
                 &entry.graph_digest,
                 &entry.scenario_digest
             )
@@ -720,10 +711,10 @@ mod tests {
                 validate_observer_graph(None, &entry.graph_digest, &entry.scenario_digest);
             assert_eq!(baseline_only, Err(ObserverEconomyErrorV1::ScenarioMismatch));
             for other in MICHIGAN_CONTENT_PRESETS_V1 {
-                let other = other.admitted().unwrap();
+                let other = other.admitted(&crate::test_support::catalog()).unwrap();
                 assert_eq!(
                     validate_observer_graph(
-                        Some(entry),
+                        Some(&entry),
                         &other.graph_digest,
                         &other.scenario_digest
                     )
@@ -733,36 +724,6 @@ mod tests {
             }
         }
     }
-    #[test]
-    fn catalog_query_bindings_keep_each_complete_admission_tuple_aligned() {
-        let bindings = CampaignCatalogBindings::admitted().unwrap();
-        assert_eq!(
-            bindings.presets,
-            [
-                "michigan-material-standard-v4",
-                "michigan-material-delayed-v4",
-            ]
-        );
-        assert_eq!(bindings.horizons, [16; 2]);
-        assert_eq!(bindings.content.len(), 2);
-        assert_eq!(bindings.foundations.len(), 2);
-        assert_eq!(bindings.graphs.len(), 2);
-        assert_eq!(bindings.scenarios.len(), 2);
-        for index in 0..2 {
-            let entry = admit_michigan_content_v1(
-                &bindings.presets[index],
-                bindings.horizons[index],
-                &bindings.content[index],
-                &bindings.foundations[index],
-                0,
-            )
-            .unwrap();
-            entry
-                .validate_graph(&bindings.graphs[index], &bindings.scenarios[index])
-                .unwrap();
-        }
-    }
-
     #[test]
     fn foundation_grants_mask_individual_fields_before_values_exist() {
         let baseline = &michigan_economy_v1().unwrap().counties()[0];

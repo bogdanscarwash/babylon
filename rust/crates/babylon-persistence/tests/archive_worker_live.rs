@@ -24,14 +24,13 @@ use babylon_kernel::sha256_of;
 use babylon_kernel::tick_content_hash::RefDigestV1;
 use babylon_kernel::ContentDigest;
 use babylon_persistence::{
-    michigan_dynamic_hex_foundation_v1, seed_foundation_grants_v1,
-    validate_legacy_connection_target, ArchiveCitationV1, ArchiveDirtyBatchV1,
-    ArchiveDossierProducerV1, ArchiveKnowledgeGrantV1, ArchivePageInputV1, ArchivePageRefV1,
-    ArchiveProducerOutcomeV1, ArchiveReceiptDispositionV1, ArchiveSchemaDispositionV1,
-    ArchiveSignalV1, ArchiveSubjectKindV1, ArchiveSubjectV1, ArchiveWorkerV1, CampaignId,
-    DurableReplayRuntimeV2, FoundationContentBundleV1, FoundationGrantsErrorV1,
-    NullArchiveDossierProducerV1, PendingArchiveReceiptV1, SemanticArchiveErrorV1,
-    SemanticArchiveStoreV1,
+    michigan_dynamic_hex_foundation_v1, seed_foundation_grants_v1, validate_connection_target,
+    ArchiveCitationV1, ArchiveDirtyBatchV1, ArchiveDossierProducerV1, ArchiveKnowledgeGrantV1,
+    ArchivePageInputV1, ArchivePageRefV1, ArchiveProducerOutcomeV1, ArchiveReceiptDispositionV1,
+    ArchiveSchemaDispositionV1, ArchiveSignalV1, ArchiveSubjectKindV1, ArchiveSubjectV1,
+    ArchiveWorkerV1, CampaignId, DurableReplayRuntimeV2, FoundationContentBundleV1,
+    FoundationGrantsErrorV1, NullArchiveDossierProducerV1, PendingArchiveReceiptV1,
+    SemanticArchiveErrorV1, SemanticArchiveStoreV1,
 };
 use babylon_practice_contract::ordered_action_v1::OrderedPracticeActionBatchV1;
 use babylon_tick::material_state::MaterialStateV1;
@@ -39,10 +38,10 @@ use babylon_tick::replay_session::ReplayTickSession;
 use postgres::{Config, NoTls};
 use uuid::Uuid;
 
-const DSN_ENV: &str = "BABYLON_LEGACY_ADOPTER_TEST_DSN";
-const ACK_ENV: &str = "BABYLON_LEGACY_ADOPTER_DISPOSABLE_ACK";
-const ACK: &str = "I_UNDERSTAND_PER20_DROPS_SCRATCH_DATABASES_ROLES_AND_CREATED_BABYLON_INTEL";
-const CANARY_ENV: &str = "BABYLON_LEGACY_ADOPTER_DISPOSABLE_CANARY";
+const DSN_ENV: &str = "BABYLON_POSTGRES_TEST_DSN";
+const ACK_ENV: &str = "BABYLON_POSTGRES_DISPOSABLE_ACK";
+const ACK: &str = "I_UNDERSTAND_THIS_DISPOSABLE_RUNTIME_DROPS_ITS_SCRATCH_DATABASES_AND_ROLES";
+const CANARY_ENV: &str = "BABYLON_POSTGRES_DISPOSABLE_CANARY";
 const TEMPLATE_DB_ENV: &str = "BABYLON_RUNTIME_TEMPLATE_DB";
 const DEFINES: &[u8] = br#"{"alpha":1}"#;
 const REFERENCE_BUNDLE_DOMAIN: &[u8] = b"babylon.h3.reference-bundle-composite.v1\0";
@@ -333,14 +332,14 @@ fn validated_base_config() -> Config {
     assert_eq!(canary.len(), 32);
     let dsn = std::env::var(DSN_ENV).expect("runner supplies the disposable DSN");
     let config = Config::from_str(&dsn).expect("runner DSN parses");
-    validate_legacy_connection_target(&config).expect("loopback target");
+    validate_connection_target(&config).expect("loopback target");
     assert_eq!(config.get_user(), Some("test"));
     assert_eq!(config.get_dbname(), Some("postgres"));
     let actual: Option<String> = config
         .connect(NoTls)
         .expect("canary connection")
         .query_one(
-            "SELECT pg_catalog.current_setting('babylon.per20_disposable', true)",
+            "SELECT pg_catalog.current_setting('babylon.disposable_runtime', true)",
             &[],
         )
         .expect("canary query")
@@ -1209,3 +1208,6 @@ fn live_foundation_grants_seed_at_campaign_foundation_and_reconcile_exactly() {
     );
     target.finish();
 }
+
+#[path = "support/material_config.rs"]
+mod test_support;

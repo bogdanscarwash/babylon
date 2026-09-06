@@ -1,6 +1,6 @@
 //! Delivery summaries over one already-scoped committed observation.
 //! Individual events remain evidence. A summary represents an order's activity
-//! during a week, never a particular freight lot, a whole completed order, or money.
+//! during a period, never a particular freight lot, a whole completed order, or money.
 
 use std::collections::BTreeMap;
 
@@ -13,7 +13,7 @@ use babylon_persistence::{
 /// A key identifies evidence inside an observation, not a read capability.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(super) struct DeliveryGroupKey {
-    pub week: u64,
+    pub period: u64,
     pub receipt_digest: String,
     pub order_id: String,
     pub route_id: String,
@@ -24,7 +24,7 @@ pub(super) struct DeliveryGroupKey {
 impl DeliveryGroupKey {
     fn new(event: &ProductionEventV1, evidence: &ProductionDeliveryEvidenceV1) -> Self {
         Self {
-            week: event.week,
+            period: event.period,
             receipt_digest: event.receipt_digest.clone(),
             order_id: evidence.order_id.clone(),
             route_id: evidence.route_id.clone(),
@@ -117,8 +117,8 @@ impl<'a> DeliveryGroup<'a> {
             None => format!("{label}: no evidence entry"),
         };
         format!(
-            "Week {} / {} -> {}\n{}\n{}\n{}\n{} evidence entries",
-            self.key.week,
+            "Period {} / {} -> {}\n{}\n{}\n{}\n{} evidence entries",
+            self.key.period,
             self.supplier.name,
             self.buyer.name,
             stage("Arrived", self.arrivals),
@@ -136,10 +136,10 @@ pub(super) enum DeliveryLogEntry<'a> {
 }
 
 impl DeliveryLogEntry<'_> {
-    pub(super) fn week(&self) -> u64 {
+    pub(super) fn period(&self) -> u64 {
         match self {
-            Self::Event(event) => event.week,
-            Self::Delivery(group) => group.key.week,
+            Self::Event(event) => event.period,
+            Self::Delivery(group) => group.key.period,
         }
     }
 }
@@ -187,7 +187,7 @@ struct DisclosedRoute<'a> {
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 struct OrderReceiptKey<'a> {
-    week: u64,
+    period: u64,
     receipt_digest: &'a str,
     order_id: &'a str,
 }
@@ -215,7 +215,7 @@ impl<'a> OrderBindings<'a> {
         disclosed: &DisclosedRoute<'a>,
     ) -> Result<(), DeliveryGroupingError> {
         let key = OrderReceiptKey {
-            week: event.week,
+            period: event.period,
             receipt_digest: &event.receipt_digest,
             order_id: &evidence.order_id,
         };
@@ -267,7 +267,7 @@ impl<'a> DisclosedRoutes<'a> {
             .routes
             .get(evidence.route_id.as_str())
             .ok_or(DeliveryGroupingError::RouteUnavailable)?;
-        if event.week == 0
+        if event.period == 0
             || evidence.order_id.is_empty()
             || event.receipt_digest.is_empty()
             || route.good_id != evidence.good_id
@@ -370,7 +370,7 @@ mod tests {
     fn snapshot() -> ProductionSnapshotV1 {
         ProductionSnapshotV1 {
             scenario_label: "Designed delivery evidence fixture".into(),
-            horizon_week: 16,
+            horizon_period: 16,
             sites: vec![
                 site("supplier", "Wayne metal"),
                 site("buyer", "Macomb parts"),
@@ -383,7 +383,7 @@ mod tests {
                 unit_id: "tonnes".into(),
                 good: "Sheet metal".into(),
                 unit: "tonnes".into(),
-                travel_weeks: 1,
+                travel_periods: 1,
                 ordered: 1_000,
                 shipped: 30,
                 delivered: 12,
@@ -407,15 +407,15 @@ mod tests {
         stage: ProductionDeliveryStageV1,
         quantity: u64,
         order: &str,
-        week: u64,
+        period: u64,
     ) -> ProductionEventV1 {
         ProductionEventV1 {
             id: id.into(),
-            week,
+            period,
             subject_site_ids: vec!["supplier".into(), "buyer".into()],
             kind: "Display text is not an identity".into(),
             description: "Preserve this original committed description.".into(),
-            receipt_digest: format!("receipt-{week}"),
+            receipt_digest: format!("receipt-{period}"),
             delivery_evidence: Some(ProductionDeliveryEvidenceV1 {
                 stage,
                 order_id: order.into(),
@@ -427,7 +427,7 @@ mod tests {
         }
     }
 
-    fn triplet(order: &str, week: u64, quantity: u64) -> Vec<ProductionEventV1> {
+    fn triplet(order: &str, period: u64, quantity: u64) -> Vec<ProductionEventV1> {
         [
             ProductionDeliveryStageV1::Arrival,
             ProductionDeliveryStageV1::Delivery,
@@ -437,11 +437,11 @@ mod tests {
         .enumerate()
         .map(|(index, stage)| {
             event(
-                &format!("{order}-{week}-{index}"),
+                &format!("{order}-{period}-{index}"),
                 stage,
                 quantity,
                 order,
-                week,
+                period,
             )
         })
         .collect()
@@ -477,7 +477,7 @@ mod tests {
         assert_eq!(group.headline(), "Sheet metal delivered to Macomb parts");
         assert_eq!(
             group.details(),
-            "Week 3 / Wayne metal -> Macomb parts\nArrived: 10 tonnes\nDelivered: 10 tonnes\nQuantity realized: 10 tonnes\n3 evidence entries"
+            "Period 3 / Wayne metal -> Macomb parts\nArrived: 10 tonnes\nDelivered: 10 tonnes\nQuantity realized: 10 tonnes\n3 evidence entries"
         );
     }
 
@@ -552,7 +552,7 @@ mod tests {
             panic!("display text must not turn an unannotated event into a group")
         };
         assert!(std::ptr::eq(*actual, &raw const snapshot.events[0]));
-        assert_eq!(log.entries[0].week(), 1);
+        assert_eq!(log.entries[0].period(), 1);
     }
 
     #[test]
@@ -601,7 +601,7 @@ mod tests {
     }
 
     #[test]
-    fn order_week_and_receipt_identity_keep_equal_labels_apart() {
+    fn order_period_and_receipt_identity_keep_equal_labels_apart() {
         let mut snapshot = snapshot();
         snapshot.events.extend(triplet("a", 2, 3));
         snapshot.events.extend(triplet("b", 2, 3));
@@ -614,9 +614,9 @@ mod tests {
         let log = delivery_log_entries(&snapshot, 160).unwrap();
         assert_eq!((log.total_entries, log.evidence_entries), (4, 12));
         assert_eq!(group(&log, 0).key.receipt_digest, "another-receipt-family");
-        assert_eq!(group(&log, 1).key.week, 3);
+        assert_eq!(group(&log, 1).key.period, 3);
         assert_eq!(group(&log, 2).key.order_id, "b");
-        assert_eq!(group(&log, 3).key.week, 2);
+        assert_eq!(group(&log, 3).key.period, 2);
     }
 
     #[test]
@@ -724,7 +724,7 @@ mod tests {
             delivery_log_entries(&duplicate_site, 160).unwrap_err(),
             DeliveryGroupingError::SiteUnavailable
         );
-        for field in ["good", "unit", "subject", "week"] {
+        for field in ["good", "unit", "subject", "period"] {
             let mut mismatch = original.clone();
             let event = &mut mismatch.events[0];
             match field {
@@ -738,7 +738,7 @@ mod tests {
                     event.subject_site_ids.pop();
                 }
                 _ => {
-                    event.week = 0;
+                    event.period = 0;
                 }
             }
             assert_eq!(

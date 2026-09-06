@@ -94,7 +94,7 @@ impl ArchiveDriverV1 {
         campaign: CampaignId,
         sink: impl Fn(ArchiveDriverEventV1) -> bool + Send + 'static,
     ) -> Result<Self, ArchiveDriverStartErrorV1> {
-        crate::validate_legacy_connection_target(config)
+        crate::validate_connection_target(config)
             .map_err(|_| ArchiveDriverStartErrorV1::InvalidTarget)?;
         let config = run::bounded_config(config);
         let cancellation = ArchiveWorkerCancellationV1::default();

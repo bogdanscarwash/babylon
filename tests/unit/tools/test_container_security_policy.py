@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+import json
+import os
 import stat
 import subprocess
+import sys
 from pathlib import Path
+
+import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
 DOCKERFILE_PATH = ROOT / "docker" / "postgres" / "Dockerfile"
@@ -13,10 +18,284 @@ COMPOSE_PATH = ROOT / "docker-compose.yml"
 GOTCHAS_PATH = ROOT / "docs" / "agents" / "gotchas.md"
 MISE_PATH = ROOT / ".mise.toml"
 TRIVYIGNORE_PATH = ROOT / ".trivyignore"
-LEGACY_ADOPTER_LIVE_PATH = (
-    ROOT / "rust" / "crates" / "babylon-persistence" / "tests" / "legacy_adopter_postgres.rs"
+POSTGRES_RUNNER_PATH = ROOT / "tools" / "run_rust_postgres.sh"
+
+
+def _run_with_mock_image(
+    tmp_path: Path, requested_id: str | None, tag_id: str
+) -> tuple[subprocess.CompletedProcess[str], list[str]]:
+    """Stop before container creation; no command can reach the real Docker daemon."""
+    log = tmp_path / "docker.log"
+    docker = tmp_path / "docker"
+    docker.write_text(
+        "#!/usr/bin/env bash\n"
+        'printf "%s\\n" "$*" >> "$MOCK_DOCKER_LOG"\n'
+        'case "$1 $2" in\n'
+        '  "container inspect") exit 1 ;;\n'
+        '  "image inspect")\n'
+        '    [ -n "$MOCK_TAG_IMAGE_ID" ] || exit 1\n'
+        '    printf "%s\\n" "$MOCK_TAG_IMAGE_ID" ;;\n'
+        '  "build --tag") exit 0 ;;\n'
+        '  "run --detach") exit 70 ;;\n'
+        '  "inspect --format") exit 1 ;;\n'
+        "  *) exit 99 ;;\n"
+        "esac\n",
+        encoding="utf-8",
+    )
+    docker.chmod(0o755)
+    psql = tmp_path / "psql"
+    psql.write_text("#!/usr/bin/env bash\nexit 99\n", encoding="utf-8")
+    psql.chmod(0o755)
+    env = {
+        **os.environ,
+        "PATH": f"{tmp_path}:{os.environ['PATH']}",
+        "MOCK_DOCKER_LOG": str(log),
+        "MOCK_TAG_IMAGE_ID": tag_id,
+        "BABYLON_POSTGRES_LIVE_FOCUS": "runtime_smoke",
+    }
+    env.pop("BABYLON_POSTGRES_IMAGE_ID", None)
+    if requested_id is not None:
+        env["BABYLON_POSTGRES_IMAGE_ID"] = requested_id
+    result = subprocess.run(
+        ["bash", str(POSTGRES_RUNNER_PATH)],
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=False,
+    )
+    return result, log.read_text().splitlines() if log.exists() else []
+
+
+@pytest.mark.parametrize("requested_id", ["", "latest", "sha256:1234", "sha256:" + "A" * 64])
+def test_prebuilt_postgres_rejects_malformed_identity_before_docker(
+    tmp_path: Path, requested_id: str
+) -> None:
+    result, calls = _run_with_mock_image(tmp_path, requested_id, "sha256:" + "a" * 64)
+
+    assert result.returncode == 2
+    assert "BABYLON_POSTGRES_IMAGE_ID must be a complete sha256 image ID" in result.stderr
+    assert calls == []
+
+
+@pytest.mark.parametrize("tag_id", ["", "sha256:1234", "sha256:" + "b" * 64])
+def test_prebuilt_postgres_rejects_missing_invalid_or_retagged_image(
+    tmp_path: Path, tag_id: str
+) -> None:
+    result, calls = _run_with_mock_image(tmp_path, "sha256:" + "a" * 64, tag_id)
+
+    assert result.returncode == 2
+    assert "task-owned container did not start" not in result.stderr
+    assert any(
+        call == "image inspect --format {{.Id}} babylon-postgres-runtime:local" for call in calls
+    )
+    assert not any(call.startswith(("build ", "run ")) for call in calls)
+
+
+def test_local_postgres_rejects_invalid_built_image_identity(tmp_path: Path) -> None:
+    result, calls = _run_with_mock_image(tmp_path, None, "sha256:1234")
+
+    assert result.returncode == 2
+    assert "PostgreSQL image tag did not resolve to a complete sha256 image ID" in result.stderr
+    assert len([call for call in calls if call.startswith("build ")]) == 1
+    assert not any(call.startswith("run ") for call in calls)
+
+
+@pytest.mark.parametrize("prebuilt", [False, True])
+def test_postgres_starts_by_verified_immutable_image_id(tmp_path: Path, prebuilt: bool) -> None:
+    image_id = "sha256:" + "a" * 64
+    result, calls = _run_with_mock_image(tmp_path, image_id if prebuilt else None, image_id)
+
+    assert result.returncode == 2
+    assert "task-owned container did not start" in result.stderr
+    builds = [call for call in calls if call.startswith("build ")]
+    assert len(builds) == (0 if prebuilt else 1)
+    starts = [call for call in calls if call.startswith("run ")]
+    assert len(starts) == 1
+    assert f" {image_id} postgres " in starts[0]
+    assert " babylon-postgres-runtime:local postgres " not in starts[0]
+
+
+def _run_mock_runtime(
+    tmp_path: Path, focus: str, fault: str = ""
+) -> tuple[subprocess.CompletedProcess[str], list[dict[str, object]]]:
+    """Exercise runner control flow with no real database, compiler, or Docker access."""
+    command = r"""
+import json
+import os
+import sys
+from pathlib import Path
+
+name = Path(sys.argv[0]).name
+args = sys.argv[1:]
+state_path = Path(os.environ["MOCK_STATE"])
+state = json.loads(state_path.read_text()) if state_path.exists() else {}
+fault = os.environ["MOCK_FAULT"]
+with Path(os.environ["MOCK_LOG"]).open("a") as log:
+    log.write(json.dumps({"name": name, "args": args}) + "\n")
+
+def save():
+    state_path.write_text(json.dumps(state))
+
+if name == "docker":
+    if args[:2] == ["container", "inspect"]:
+        sys.exit(0 if state.get("container") else 1)
+    if args[:2] == ["volume", "inspect"]:
+        sys.exit(0 if state.get("volume") else 1)
+    if args[:2] == ["image", "inspect"]:
+        print("sha256:" + "a" * 64)
+    elif args[0] == "run":
+        state.update(container=True, volume=True, canary=args[args.index("--label") + 1].split("=", 1)[1])
+        save()
+        print("b" * 64)
+    elif args[0] == "inspect":
+        if "Config.Labels" in args[2]:
+            canary = "foreign" if fault == "foreign_owner" else state["canary"]
+            print("b" * 64 + "|" + canary)
+        else:
+            print("owned-anonymous-volume")
+    elif args[0] == "port":
+        print("0.0.0.0:54321" if fault == "wildcard_port" else "127.0.0.1:54321")
+    elif args[0] == "exec":
+        if "|| '|' || pg_catalog.current_setting('server_version')" in args[-1]:
+            print("16|16.9" if fault == "wrong_version" else "17|17.9")
+        else:
+            print("t")
+    elif args[0] == "logs":
+        print("mock PostgreSQL diagnostic")
+    elif args[0] == "rm":
+        assert args[-1] == "b" * 64, "cleanup must use the proved immutable container ID"
+        if fault == "cleanup_failure":
+            sys.exit(47)
+        state["container"] = False
+        state["volume"] = fault == "volume_survives"
+        save()
+    else:
+        sys.exit(99)
+elif name == "psql":
+    query = args[-1]
+    if query.startswith("SELECT 1,"):
+        print("1|" + state["canary"])
+    elif "committed_tick_v2_authority_ledger" in query:
+        print("1:1:8,2:2:9|1:1:10|0|true|true" if fault == "partial_activation" else "1:1:8,2:2:9|1:1:10,2:2:11|0|true|true")
+    elif "pg_catalog.pg_database" in query:
+        print("0")
+    elif "pg_catalog.pg_class" in query:
+        print("100")
+elif name == "babylon-runtime":
+    assert "?options=" in os.environ["BABYLON_RUNTIME_DSN"]
+    sys.exit(1)
+elif name == "mise":
+    if fault == "bootstrap_failure" and args == ["run", "db:bootstrap"]:
+        sys.exit(42)
+elif name == "cargo":
+    assert os.environ["BABYLON_POSTGRES_DISPOSABLE_CANARY"] == state["canary"]
+    assert os.environ["BABYLON_POSTGRES_TEST_DSN"] == "postgresql://test:test@127.0.0.1:54321/postgres"
+    if any("material_runtime::writer_bounds_tests::" in arg for arg in args):
+        assert os.environ["BABYLON_RUNTIME_DSN"] == "postgresql://test:test@127.0.0.1:54321/babylon_test"
+else:
+    sys.exit(99)
+"""
+    commands = tmp_path / "bin"
+    commands.mkdir()
+    for name in ("docker", "psql", "cargo", "mise", "babylon-runtime"):
+        executable = commands / name
+        executable.write_text(f"#!{sys.executable}\n" + command)
+        executable.chmod(0o755)
+    log = tmp_path / "commands.jsonl"
+    result = subprocess.run(
+        ["bash", str(POSTGRES_RUNNER_PATH)],
+        env={
+            **os.environ,
+            "PATH": f"{commands}:{os.environ['PATH']}",
+            "CARGO_TARGET_DIR": str(tmp_path / "target"),
+            "BABYLON_POSTGRES_IMAGE_ID": "sha256:" + "a" * 64,
+            "BABYLON_POSTGRES_LIVE_FOCUS": focus,
+            "MOCK_STATE": str(tmp_path / "state.json"),
+            "MOCK_LOG": str(log),
+            "MOCK_FAULT": fault,
+        },
+        capture_output=True,
+        text=True,
+        timeout=20,
+        check=False,
+    )
+    return result, [
+        json.loads(line) for line in log.read_text().splitlines()
+    ] if log.exists() else []
+
+
+@pytest.mark.parametrize(
+    "focus", ["runtime_smoke", "reference_integrity", "runtime", "archive", "reader", "client"]
 )
-LEGACY_ADOPTER_RUNNER_PATH = ROOT / "tools" / "run_rust_legacy_adopter_pg.sh"
+def test_current_runtime_focuses_finish_with_checked_owned_cleanup(
+    tmp_path: Path, focus: str
+) -> None:
+    result, calls = _run_mock_runtime(tmp_path, focus)
+    assert result.returncode == 0, result.stderr
+    assert "Rust PostgreSQL cleanup verified:" in result.stdout
+    assert "phase complete:" in result.stdout
+    removals = [call for call in calls if call["name"] == "docker" and call["args"][0] == "rm"]
+    assert len(removals) == 1
+    assert removals[0]["args"][-1] == "b" * 64
+    assert any(call["args"][:2] == ["volume", "inspect"] for call in calls)
+    writer_probes = [
+        call
+        for call in calls
+        if call["name"] == "cargo"
+        and "material_runtime::writer_bounds_tests::live_bounded_writer_verifies_authority_and_timeouts_in_read_only_transaction"
+        in call["args"]
+    ]
+    assert len(writer_probes) == (1 if focus == "runtime" else 0)
+    if focus == "reference_integrity":
+        assert not any(call["name"] == "mise" for call in calls)
+        assert any(
+            "reference_integrity" in call["args"] for call in calls if call["name"] == "cargo"
+        )
+
+
+@pytest.mark.parametrize(
+    "fault",
+    [
+        "wildcard_port",
+        "wrong_version",
+        "partial_activation",
+        "bootstrap_failure",
+        "cleanup_failure",
+        "volume_survives",
+    ],
+)
+def test_runtime_refusals_preserve_failure_and_cleanup_only_the_owned_id(
+    tmp_path: Path, fault: str
+) -> None:
+    result, calls = _run_mock_runtime(tmp_path, "runtime", fault)
+    assert result.returncode != 0
+    assert (
+        "cleanup verified:" not in result.stdout
+        or "status=42" in result.stdout
+        or "status=1" in result.stdout
+    )
+    removals = [call for call in calls if call["name"] == "docker" and call["args"][0] == "rm"]
+    assert removals
+    assert all(call["args"][-1] == "b" * 64 for call in removals)
+
+
+def test_unproved_container_owner_is_never_removed(tmp_path: Path) -> None:
+    result, calls = _run_mock_runtime(tmp_path, "runtime", "foreign_owner")
+    assert result.returncode != 0
+    assert "created container identity was not proved" in result.stderr
+    assert not any(call["args"][0] == "rm" for call in calls if call["name"] == "docker")
+
+
+@pytest.mark.parametrize(
+    "focus", ["", "pr", "schema_epoch_matrix", "runtime_census_v2", "h3_shadow_backfill", "unknown"]
+)
+def test_retired_or_unknown_focus_is_refused_before_docker(tmp_path: Path, focus: str) -> None:
+    result, calls = _run_mock_runtime(tmp_path, focus)
+    assert result.returncode == 2
+    assert "unsupported live focus" in result.stderr
+    assert calls == []
+
 
 POSTGIS_ALPINE = (
     "postgis/postgis:17-3.5-alpine@"
@@ -473,75 +752,3 @@ def test_trivy_policy_retains_only_the_root_bootstrap_shape_exception() -> None:
     ]
 
     assert active_entries == ["DS-0002"]
-
-
-def test_current_census_export_is_one_explicit_bounded_v2_path() -> None:
-    live = LEGACY_ADOPTER_LIVE_PATH.read_text(encoding="utf-8")
-    runner = LEGACY_ADOPTER_RUNNER_PATH.read_text(encoding="utf-8")
-
-    assert 'const CURRENT_CENSUS_V2_FOCUS: &str = "runtime_census_v2";' in live
-    assert (
-        "const CURRENT_CENSUS_V2_EXPORT_DIR_ENV: &str = "
-        '"BABYLON_CURRENT_CENSUS_V2_EXPORT_DIR";' in live
-    )
-    assert "MAX_CURRENT_CENSUS_V2_DRIFT_ROWS" in live
-    assert "MAX_CURRENT_CENSUS_V2_REPORT_BYTES" in live
-    assert ".create_new(true)" in live
-    assert "legacy_adopter_census_v2.txt" in live
-    assert "fresh_schema_epoch_census_v2.txt" in live
-    assert "fresh_schema_epoch_census_with_intel_v2.txt" in live
-    assert "current_census_v2_drift_report.txt" in live
-    assert "BABYLON_LEGACY_ADOPTER_CENSUS_EXPORT" not in live
-
-    assert "runtime_census_v2" in runner
-    assert "BABYLON_CURRENT_CENSUS_V2_EXPORT_DIR" in runner
-    assert "current-census-v2 output directory must be absolute" in runner
-    assert "current-census-v2 export directory is accepted only" in runner
-
-
-def test_current_census_export_uses_independent_pairs_and_blocks_unexplained_drift() -> None:
-    live = LEGACY_ADOPTER_LIVE_PATH.read_text(encoding="utf-8")
-    exporter_start = live.index("fn export_current_census_v2(")
-    exporter_end = live.index("\nfn verify_pinned_postgres_runtime", exporter_start)
-    exporter = live[exporter_start:exporter_end]
-
-    for receipt in (
-        "assert_eq!(fresh_without_intel_first, fresh_without_intel_second)",
-        "assert_eq!(legacy_first, legacy_second)",
-        "assert_eq!(fresh_with_intel_first, fresh_with_intel_second)",
-        "hardened_authority_snapshot(first_config)",
-        "hardened_authority_snapshot(second_config)",
-        "validated_current_stamp_definitions(&legacy_first)",
-        "validated_current_stamp_definitions(&legacy_second)",
-        "current_census_v2_runtime_provenance(first_config)",
-        "current_census_v2_runtime_provenance(second_config)",
-        "current_census_sql_sha256()",
-        'snapshot.authority_schemas.join(",")',
-        "parse_legacy_census_fixture(fixture_text)",
-        "blocked_pending_exact_payload_comparison",
-        "conservation_audit_log",
-        "census_payloads_for_drift",
-        "JOIN ROWS FROM",
-        "MAX_CURRENT_CENSUS_V2_INLINE_PAYLOAD_BYTES",
-        "'mode', 'inline'",
-        "'mode', 'structural'",
-        "'payload_bytes'",
-        "'payload_sha256'",
-        "'collections'",
-    ):
-        assert receipt in exporter
-    assert "JOIN pg_catalog.unnest(" not in exporter
-    assert exporter.count("ScratchDatabase::empty(") == 2
-    assert exporter.count("legacy_epoch_fixture::build_frozen_python_estate(") == 2
-    assert exporter.index("let fresh_payloads =") < exporter.index(
-        "legacy_epoch_fixture::build_frozen_python_estate("
-    )
-    assert "run_python_repair(" not in exporter
-    assert "std::fs::write" not in exporter
-    assert "LEGACY_CENSUS_FIXTURE.find" not in exporter
-
-    writer_start = exporter.index("fn current_census_v2_fixture_bytes(")
-    writer_end = exporter.index("\nfn current_census_drift(", writer_start)
-    writer = exporter[writer_start:writer_end]
-    assert "validated_current_stamp_definitions(snapshot)" in writer
-    assert "LEGACY_STAMP_CATALOG.iter().take(LEGACY_STAMP_CATALOG.len())" not in writer

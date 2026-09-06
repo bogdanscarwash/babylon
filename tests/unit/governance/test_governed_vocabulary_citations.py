@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import re
 import tomllib
-from itertools import islice
 from pathlib import Path
 from typing import Final
 
@@ -55,24 +54,12 @@ _RESISTANCE_SOUND_NAMES: Final[tuple[str, ...]] = (
     "resistance_clandestine",
 )
 
-AUTHORITY_CONTEXT_CHARS: Final[int] = 256
-MAX_ARTICLE_V_MATCHES_PER_FILE: Final[int] = 32
 MAX_SOUND_ROWS: Final[int] = 128
 MAX_BSL_LINES: Final[int] = 12_000
 MAX_NORMATIVE_BLOCK_LINES: Final[int] = 16
 MAX_D82_BLOCK_LINES: Final[int] = 24
 
 _ARTICLE_V: Final[re.Pattern[str]] = re.compile(r"\barticle[ _-]+v\b", re.IGNORECASE)
-_ROSTER_CONTEXT: Final[re.Pattern[str]] = re.compile(
-    r"\b(?:verbs?|roster|matrix|closure)\b|\baction[ _-]+registry\b",
-    re.IGNORECASE,
-)
-_ARCHITECTURE_CONTEXT: Final[re.Pattern[str]] = re.compile(
-    r"\b(?:atomicity|adjudicat(?:e|es|ed|ing|ion)|rollback)\b|"
-    r"\bworking[ _-]+copy\b|\bdirect[ _-]+(?:graph[ _-]+)?mutation\b|"
-    r"\bdeterministic[ _-]+architecture\b",
-    re.IGNORECASE,
-)
 _NORMATIVE_START: Final[str] = "- *Why a verb at all, given Amendment AG (iii).*"
 _NORMATIVE_END: Final[str] = "**[draft ruling — Phase 1 review, Amendment AG (i)]**"
 _D82_START: Final[str] = "   * - D82"
@@ -118,13 +105,6 @@ def _extract_bounded_block(
     return "\n".join(block_lines)
 
 
-def _authority_context(text: str, match: re.Match[str]) -> str:
-    """Return a fixed-radius authority context around one Article V match."""
-    start = max(0, match.start() - AUTHORITY_CONTEXT_CHARS)
-    end = min(len(text), match.end() + AUTHORITY_CONTEXT_CHARS)
-    return text[start:end]
-
-
 def test_v_player_transition_resolves_to_accepted_governed_destination() -> None:
     """ADR221 resolves the live roster to ADR177 and its two canonical sources."""
     adr221 = _yaml_mapping(_ADR221_PATH)["ADR221_game_first_refoundation_v4"]
@@ -142,26 +122,22 @@ def test_v_player_transition_resolves_to_accepted_governed_destination() -> None
     assert len(parts) == len(_GOVERNED_DESTINATIONS)
     actual_destinations = (parts[0].strip(), parts[1].strip(), parts[2].strip())
     assert actual_destinations == _GOVERNED_DESTINATIONS
-    for relative_path in _GOVERNED_DESTINATIONS:
-        assert (_ROOT / relative_path).is_file(), f"missing governed destination: {relative_path}"
+    assert (_ROOT / _GOVERNED_DESTINATIONS[0]).is_file()
+    for relative_path in _GOVERNED_DESTINATIONS[1:]:
+        assert not (_ROOT / relative_path).exists(), (
+            f"retired Python authority survived: {relative_path}"
+        )
     adr177 = _yaml_mapping(_ADR177_PATH)["ADR177_verb_matrix_ratified_main_ruleset"]
     assert isinstance(adr177, dict)
     assert adr177["status"] == "accepted"
 
 
-def test_active_vocabulary_authority_cites_adr177() -> None:
-    """Living roster copy cites ADR177 without misusing Article V authority."""
+def test_retired_python_vocabulary_has_no_active_paths() -> None:
+    """Historical ADR citations do not require a second executable Python roster."""
     for relative_path in _ACTIVE_VOCABULARY_PATHS:
-        text = (_ROOT / relative_path).read_text(encoding="utf-8")
-        assert "ADR177" in text, f"{relative_path}: missing ADR177 authority"
-        matches = tuple(islice(_ARTICLE_V.finditer(text), MAX_ARTICLE_V_MATCHES_PER_FILE + 1))
-        assert len(matches) <= MAX_ARTICLE_V_MATCHES_PER_FILE, relative_path
-        for match in matches[:MAX_ARTICLE_V_MATCHES_PER_FILE]:
-            context = _authority_context(text, match)
-            if _ROSTER_CONTEXT.search(context) is not None:
-                assert _ARCHITECTURE_CONTEXT.search(context) is not None, (
-                    f"{relative_path}: Article V still claims vocabulary authority: {context!r}"
-                )
+        assert not (_ROOT / relative_path).exists(), (
+            f"retired Python vocabulary survived: {relative_path}"
+        )
 
 
 def test_resistance_sound_hints_cite_governed_vocabulary() -> None:
@@ -220,15 +196,9 @@ def test_bsl_distinguishes_live_authority_from_frozen_d82_history() -> None:
         assert destination in supersession
 
 
-def test_article_v_architecture_citations_remain_legal() -> None:
-    """Current Article V citations remain classified as architecture authority."""
+def test_retired_python_submitter_is_not_an_architecture_authority() -> None:
+    """Rust owns submission and publication; the Python path stays retired."""
     for relative_path in _ARCHITECTURE_AUTHORITY_PATHS:
-        text = (_ROOT / relative_path).read_text(encoding="utf-8")
-        matches = tuple(islice(_ARTICLE_V.finditer(text), MAX_ARTICLE_V_MATCHES_PER_FILE + 1))
-        assert matches, f"{relative_path}: expected an Article V architecture citation"
-        assert len(matches) <= MAX_ARTICLE_V_MATCHES_PER_FILE, relative_path
-        for match in matches[:MAX_ARTICLE_V_MATCHES_PER_FILE]:
-            context = _authority_context(text, match)
-            assert _ARCHITECTURE_CONTEXT.search(context) is not None, (
-                f"{relative_path}: Article V citation is not architecture context: {context!r}"
-            )
+        assert not (_ROOT / relative_path).exists(), (
+            f"retired Python submitter survived: {relative_path}"
+        )

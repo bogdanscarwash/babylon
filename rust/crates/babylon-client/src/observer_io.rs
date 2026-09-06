@@ -189,7 +189,7 @@ fn send_advance(pipe: &RuntimePipe, state: &mut ObserverSession) {
         },
     };
     if let Err(error) = pipe.requests.try_send(request) {
-        state.fail(format!("Cannot request next week: {error}"));
+        state.fail(format!("Cannot request next period: {error}"));
     }
 }
 
@@ -454,23 +454,23 @@ fn apply_command(command: ObserverCommand, context: &mut CommandContext) {
     } = context;
     match command {
         ObserverCommand::Quit => {
-            state.cancel_month();
+            state.pause_playback();
             state.quit_requested = true;
             ui.menu_open = true;
             ui.disclosure = None;
         }
         ObserverCommand::TogglePlay => {
             if state.playing {
-                state.pause_month();
-            } else if !state.run_or_resume_month() {
+                state.pause_playback();
+            } else if !state.start_playback() {
                 feedback.reject(
-                    "Cannot schedule this campaign month; reopen to reconcile progress.",
+                    "Cannot start playback; reopen to reconcile progress.",
                     time.elapsed_secs_f64(),
                 );
             }
         }
         ObserverCommand::Step => {
-            state.cancel_month();
+            state.pause_playback();
             if let Some(pipe) = pipe {
                 send_advance(pipe, state);
             } else {
@@ -481,7 +481,7 @@ fn apply_command(command: ObserverCommand, context: &mut CommandContext) {
             }
         }
         ObserverCommand::Speed => {
-            state.weeks_per_second = match state.weeks_per_second {
+            state.periods_per_second = match state.periods_per_second {
                 1.0 => 2.0,
                 2.0 => 5.0,
                 _ => 1.0,
@@ -497,10 +497,10 @@ fn apply_command(command: ObserverCommand, context: &mut CommandContext) {
             ui.evidence_open = false;
             refresh.bump();
         }
-        ObserverCommand::PreviousWeek | ObserverCommand::NextWeek | ObserverCommand::Live => {
+        ObserverCommand::PreviousPeriod | ObserverCommand::NextPeriod | ObserverCommand::Live => {
             let tick = match command {
-                ObserverCommand::PreviousWeek => state.viewed_tick.saturating_sub(1),
-                ObserverCommand::NextWeek => state.viewed_tick.saturating_add(1),
+                ObserverCommand::PreviousPeriod => state.viewed_tick.saturating_sub(1),
+                ObserverCommand::NextPeriod => state.viewed_tick.saturating_add(1),
                 _ => state.durable_tick,
             };
             state.inspect_tick(tick);
@@ -513,7 +513,7 @@ fn apply_command(command: ObserverCommand, context: &mut CommandContext) {
                 feedback.reject(LAUNCHER_REQUIRED, time.elapsed_secs_f64());
                 return;
             }
-            state.cancel_month();
+            state.pause_playback();
             let target = match command {
                 ObserverCommand::ReopenCampaign => RuntimeSessionTargetV3::Open {
                     campaign_id: state.campaign.as_uuid().to_string(),
@@ -573,7 +573,7 @@ fn apply_presentation_command(command: ObserverCommand, context: &mut CommandCon
         ObserverCommand::Menu => {
             ui.menu_open = !ui.menu_open;
             ui.disclosure = None;
-            state.pause_month();
+            state.pause_playback();
         }
         ObserverCommand::UiScale => ui_scale.0 = if ui_scale.0 < 1.1 { 1.15 } else { 1.0 },
         ObserverCommand::ReducedMotion => ui.reduced_motion = !ui.reduced_motion,
@@ -601,7 +601,7 @@ fn apply_presentation_command(command: ObserverCommand, context: &mut CommandCon
             if ui.history_open {
                 ui.archive_open = false;
                 ui.disclosure = None;
-                state.pause_month();
+                state.pause_playback();
             }
         }
         ObserverCommand::StopOnDelivery => ui.stop_on_delivery = !ui.stop_on_delivery,
@@ -639,14 +639,25 @@ fn start_observation(
     let context = state.context();
     let requested = context.clone();
     let task = AsyncComputeTaskPool::get().spawn(async move {
+        let started = std::time::Instant::now();
         let reader = match requested.perspective {
             Perspective::FullObserver => ObserverEconomyReaderV1::from_observer_env(),
             Perspective::PlayerKnowledge => ObserverEconomyReaderV1::from_known_env(),
         }
         .map_err(|error| error.to_string())?;
-        reader
+        let result = reader
             .snapshot(requested.campaign, requested.tick)
-            .map_err(|error| error.to_string())
+            .map_err(|error| error.to_string());
+        bevy::log::info!(target: "babylon_client::timing",
+            stage = "authenticated_observer_read",
+            campaign = %requested.campaign.as_uuid(),
+            tick = requested.tick,
+            generation = requested.generation,
+            perspective = ?requested.perspective,
+            elapsed_us = started.elapsed().as_micros(),
+            success = result.is_ok(),
+            "observer read completed");
+        result
     });
     pending.0 = Some((context, task));
 }
@@ -706,22 +717,22 @@ fn install_observation(
         return;
     }
     if let Some(production) = &snapshot.production {
-        state.horizon_tick = Some(production.horizon_week);
+        state.horizon_tick = Some(production.horizon_period);
     }
     if state.installed(context) {
-        // Only newly installed, disclosed events from this committed week can
+        // Only newly installed, disclosed events from this committed period can
         // interrupt transport. Historical and hidden material cannot pause it.
         if state.playing
             && state.viewed_tick == state.durable_tick
             && snapshot.production.as_ref().is_some_and(|production| {
                 production.events.iter().any(|event| {
-                    event.week == snapshot.resolve_tick
+                    event.period == snapshot.resolve_tick
                         && (event.kind == "freight loss"
                             || (stop_on_delivery && event.kind == "delivery"))
                 })
             })
         {
-            state.pause_month();
+            state.pause_playback();
         }
         frame.0 = Some(snapshot);
     }
@@ -742,13 +753,13 @@ fn playback(
     };
     if ui.splash_visible {
         if state.playing {
-            state.pause_month();
+            state.pause_playback();
         }
         clock.elapsed = 0.0;
     }
-    if !ui.splash_visible && state.month_advance_due() {
+    if !ui.splash_visible && state.playback_due() {
         clock.elapsed += time.delta_secs_f64();
-        if clock.elapsed >= state.weeks_per_second.recip() {
+        if clock.elapsed >= state.periods_per_second.recip() {
             clock.elapsed = 0.0;
             send_advance(&pipe, &mut state);
         }
@@ -980,7 +991,7 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn opening_history_takes_the_subject_rail_from_archive_without_requesting_a_week() {
+    fn opening_history_takes_the_subject_rail_from_archive_without_requesting_a_period() {
         let (mut app, requests) = command_app();
         {
             let mut ui = app.world_mut().resource_mut::<ObserverUiState>();
@@ -1196,7 +1207,7 @@ pub(crate) mod tests {
         assert!(app
             .world_mut()
             .resource_mut::<ObserverSession>()
-            .run_or_resume_month());
+            .start_playback());
         app.insert_resource(PlaybackClock { elapsed: 10.0 })
             .add_systems(Update, playback.after(handle_commands));
         app.world_mut()
@@ -1540,24 +1551,27 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn monthly_playback_waits_for_each_ack_and_observation_then_stops_at_its_boundary() {
+    fn playback_waits_for_each_period_ack_and_observation_then_stops_at_the_horizon() {
         let (mut app, requests) = command_app();
         app.init_resource::<PlaybackClock>()
             .add_systems(Update, playback.after(handle_commands));
         app.world_mut()
             .resource_mut::<Time>()
             .advance_by(std::time::Duration::from_secs(1));
+        app.world_mut()
+            .resource_mut::<ObserverSession>()
+            .horizon_tick = Some(5);
         dispatch(&mut app, &[ObserverCommand::TogglePlay]);
-        for expected_week in [4, 5] {
+        for expected_period in [4, 5] {
             let RuntimeSessionRequestV3::Advance {
                 request_id,
                 expected_tail,
                 ..
             } = requests.try_recv().unwrap()
             else {
-                panic!("month transport must send one weekly advance");
+                panic!("playback must send one period advance");
             };
-            assert_eq!(expected_tail.resolve_tick, expected_week - 1);
+            assert_eq!(expected_tail.resolve_tick, expected_period - 1);
             app.update();
             assert!(
                 requests.try_recv().is_err(),
@@ -1565,7 +1579,7 @@ pub(crate) mod tests {
             );
             {
                 let mut state = app.world_mut().resource_mut::<ObserverSession>();
-                assert!(state.acknowledge(request_id, expected_week, None));
+                assert!(state.acknowledge(request_id, expected_period, None));
             }
             app.update();
             assert!(
@@ -1582,17 +1596,16 @@ pub(crate) mod tests {
         let state = app.world().resource::<ObserverSession>();
         assert_eq!(state.durable_tick, 5);
         assert!(!state.playing);
-        assert_eq!(state.month_target_tick(), Some(5));
         assert!(
             requests.try_recv().is_err(),
-            "month boundary cannot overrun"
+            "scenario horizon cannot overrun"
         );
     }
 
     pub(super) fn snapshot_with_event(
         state: &ObserverSession,
         kind: &str,
-        week: u64,
+        period: u64,
     ) -> ObserverEconomySnapshotV1 {
         ObserverEconomySnapshotV1 {
             campaign_id: state.campaign.as_uuid().to_string(),
@@ -1608,7 +1621,7 @@ pub(crate) mod tests {
                 labor_accounts: Vec::new(),
                 staffing_accounts: Vec::new(),
                 scenario_label: "bounded observer fixture".into(),
-                horizon_week: 16,
+                horizon_period: 16,
                 sites: Vec::new(),
                 routes: Vec::new(),
                 freight: Vec::new(),
@@ -1617,7 +1630,7 @@ pub(crate) mod tests {
                 provenance: Vec::new(),
                 events: vec![babylon_persistence::ProductionEventV1 {
                     id: "committed-event".into(),
-                    week,
+                    period,
                     subject_site_ids: Vec::new(),
                     kind: kind.into(),
                     description: "disclosed committed development".into(),
@@ -1629,8 +1642,8 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn month_interruptions_use_only_newly_installed_disclosed_commit_events() {
-        for (kind, event_week, delivery_stop, stays_running) in [
+    fn playback_interruptions_use_only_newly_installed_disclosed_commit_events() {
+        for (kind, event_period, delivery_stop, stays_running) in [
             ("delivery", 3, false, true),
             ("delivery", 3, true, false),
             ("freight loss", 3, false, false),
@@ -1641,9 +1654,9 @@ pub(crate) mod tests {
             let mut state = ObserverSession::new(CampaignId::from_uuid(uuid::Uuid::from_u128(1)));
             state.ready(3, None);
             state.foundation_digest = Some("foundation".into());
-            assert!(state.run_or_resume_month());
+            assert!(state.start_playback());
             let context = state.context();
-            let snapshot = snapshot_with_event(&state, kind, event_week);
+            let snapshot = snapshot_with_event(&state, kind, event_period);
             let mut frame = ObserverFrame::default();
             install_observation(
                 &mut state,
@@ -1652,10 +1665,12 @@ pub(crate) mod tests {
                 &mut frame,
                 delivery_stop,
             );
-            assert_eq!(state.playing, stays_running, "{kind} at week {event_week}");
-            assert_eq!(state.month_target_tick(), Some(5));
+            assert_eq!(
+                state.playing, stays_running,
+                "{kind} at period {event_period}"
+            );
             assert!(frame.0.is_some());
-            assert!(state.run_or_resume_month());
+            assert!(state.start_playback());
             install_observation(&mut state, &context, snapshot, &mut frame, delivery_stop);
             assert!(
                 state.playing,
@@ -1665,14 +1680,14 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn stale_and_known_observations_cannot_interrupt_or_install_hidden_month_events() {
+    fn stale_and_known_observations_cannot_interrupt_or_install_hidden_period_events() {
         let mut state = ObserverSession::new(CampaignId::from_uuid(uuid::Uuid::from_u128(1)));
         state.ready(3, None);
         state.foundation_digest = Some("foundation".into());
         let stale_context = state.context();
         let stale_snapshot = snapshot_with_event(&state, "freight loss", 3);
         state.set_perspective(Perspective::PlayerKnowledge);
-        assert!(state.run_or_resume_month());
+        assert!(state.start_playback());
         let mut frame = ObserverFrame::default();
         install_observation(&mut state, &stale_context, stale_snapshot, &mut frame, true);
         assert!(state.playing);
@@ -1683,7 +1698,6 @@ pub(crate) mod tests {
         known.production = None;
         install_observation(&mut state, &context, known, &mut frame, true);
         assert!(state.playing);
-        assert_eq!(state.month_target_tick(), Some(5));
         assert!(frame.0.as_ref().unwrap().production.is_none());
     }
 
@@ -1807,8 +1821,14 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn second_step_is_explained_without_sending_another_request() {
+    fn manual_period_advance_sends_once_commits_once_and_remains_paused() {
         let (mut app, receiver) = command_app();
+        app.init_resource::<PlaybackClock>()
+            .add_systems(Update, playback.after(handle_commands));
+        assert!(app
+            .world_mut()
+            .resource_mut::<ObserverSession>()
+            .start_playback());
         dispatch(&mut app, &[ObserverCommand::Step, ObserverCommand::Step]);
         assert!(matches!(
             receiver.try_recv().unwrap(),
@@ -1832,10 +1852,30 @@ pub(crate) mod tests {
         let feedback = app.world().resource::<ObserverFeedback>();
         assert_eq!(
             feedback.message,
-            Some("Wait for the current week to finish committing")
+            Some("Wait for the current period to finish committing")
         );
         assert_eq!(feedback.revision, 1);
         assert!((feedback.expires_at - 4.0).abs() < f64::EPSILON);
+        {
+            let mut state = app.world_mut().resource_mut::<ObserverSession>();
+            assert!(state.acknowledge(1, 4, None));
+            let context = state.context();
+            assert!(state.installed(&context));
+        }
+        app.world_mut()
+            .resource_mut::<Time>()
+            .advance_by(std::time::Duration::from_secs(1));
+        for _ in 0..5 {
+            app.update();
+        }
+        let state = app.world().resource::<ObserverSession>();
+        assert_eq!(state.durable_tick, 4);
+        assert!(!state.playing);
+        assert!(!state.advance_pending());
+        assert!(
+            receiver.try_recv().is_err(),
+            "one four-week advance cannot schedule extra commits"
+        );
     }
 
     #[test]
@@ -1861,7 +1901,7 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn history_disclosure_pauses_further_play_without_cancelling_the_week() {
+    fn history_disclosure_pauses_further_play_without_cancelling_the_period() {
         let (mut app, receiver) = command_app();
         dispatch(&mut app, &[ObserverCommand::Step]);
         receiver.try_recv().unwrap();

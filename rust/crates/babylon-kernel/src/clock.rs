@@ -6,6 +6,13 @@
 //! function of `(session_id, tick)`, so two replays of the same session
 //! produce identical log correlation — which is the point.
 
+/// Designed simulation interval in weeks: one adjudication and one committed tick.
+pub const WEEKS_PER_TICK: u64 = 4;
+/// Designed simulation interval in days, with no internal weekly substeps.
+pub const DAYS_PER_TICK: u64 = 28;
+/// Four-week periods in one 52-week campaign year; this is not a civil calendar.
+pub const TICKS_PER_YEAR: u64 = 13;
+
 /// Opaque session identifier — a validated non-empty string, not a raw
 /// `String`, so an empty session id is a construction-time error (III.11).
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -44,7 +51,7 @@ impl SessionId {
     }
 }
 
-/// The tick clock: monotonic, no wall-clock reads, no randomness.
+/// The four-week tick clock: monotonic, no wall-clock reads, no randomness.
 #[derive(Debug, Clone)]
 pub struct SimClock {
     session_id: SessionId,
@@ -61,11 +68,11 @@ impl SimClock {
         }
     }
 
-    /// Advance one tick; returns the new tick number.
+    /// Advance one four-week tick; returns the new period ordinal.
     ///
     /// # Panics
     /// Panics on u64 overflow — unreachable for any campaign (a 10-year
-    /// campaign is 520 ticks; u64 holds 1.8e19), but checked rather than
+    /// campaign is 130 ticks; u64 holds 1.8e19), but checked rather than
     /// wrapped because a silently restarted tick counter would corrupt
     /// every downstream correlation (III.11).
     pub fn advance(&mut self) -> u64 {

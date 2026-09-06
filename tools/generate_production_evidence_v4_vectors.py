@@ -35,7 +35,7 @@ def optional_text(value: str | None) -> bytes:
 
 @dataclass(frozen=True, order=True)
 class Completed:
-    week: int
+    period: int
     opening_employed: int
     opening_reserve: int
     previous_unretained_hours: int
@@ -47,7 +47,7 @@ class Completed:
 
     def values(self) -> tuple[int, ...]:
         return (
-            self.week,
+            self.period,
             self.opening_employed,
             self.opening_reserve,
             self.previous_unretained_hours,
@@ -76,7 +76,7 @@ class Account:
     employed: int
     reserve: int
     previous_unretained_hours: int
-    next_opening_week: int
+    next_opening_period: int
     next_opening_hours: int
     completed: Completed | None
 
@@ -96,7 +96,7 @@ class Account:
             self.employed,
             self.reserve,
             self.previous_unretained_hours,
-            self.next_opening_week,
+            self.next_opening_period,
             self.next_opening_hours,
         )
 
@@ -134,13 +134,13 @@ def completed_material() -> tuple[dict[str, object], bytes]:
     wire = b"\1" + number(7) + number(1)
     wire += b"".join(text(value) for value in ("b", "g", "u", "steel\0sheet", "kg"))
     wire += b"".join(number(value) for value in (2, 11, 3, 5, 7, 4))
-    return {"week": 7, "rows": [row]}, wire
+    return {"period": 7, "rows": [row]}, wire
 
 
 def arrival() -> tuple[dict[str, object], bytes]:
     event: dict[str, object] = {
         "id": "e",
-        "week": 7,
+        "period": 7,
         "subject_site_ids": ["b", "a"],
         "kind": "arrival",
         "description": "intact",
@@ -161,12 +161,12 @@ def arrival() -> tuple[dict[str, object], bytes]:
 
 
 def vector(name: str, accounts: list[Account], *, foundation: bool) -> dict[str, object]:
-    week = 0 if foundation else 7
+    period = 0 if foundation else 7
     event, event_wire = arrival()
     balance, balance_wire = completed_material()
     snapshot: dict[str, object] = {
         "campaign_id": "c",
-        "resolve_tick": week,
+        "resolve_tick": period,
         "foundation_digest": "f",
         "tick_content_hash": None if foundation else "t",
         "envelope_digest": None,
@@ -175,7 +175,7 @@ def vector(name: str, accounts: list[Account], *, foundation: bool) -> dict[str,
         "counties": [],
         "production": {
             "scenario_label": "s",
-            "horizon_week": 16,
+            "horizon_period": 16,
             "sites": [],
             "routes": [],
             "freight": [],
@@ -188,7 +188,7 @@ def vector(name: str, accounts: list[Account], *, foundation: bool) -> dict[str,
             "staffing_accounts": [asdict(account) for account in accounts],
         },
     }
-    wire = DOMAIN + struct.pack(">I", 4) + text("c") + number(week) + text("f")
+    wire = DOMAIN + struct.pack(">I", 4) + text("c") + number(period) + text("f")
     wire += optional_text(None if foundation else "t") + optional_text(None)
     wire += optional_text(None if foundation else "w") + b"\0"
     wire += text("s") + number(16) + number(0) * 3  # sites, routes, freight
@@ -241,7 +241,7 @@ def fixture_bytes() -> bytes:
                     employed=4,
                     reserve=0,
                     previous_unretained_hours=160,
-                    next_opening_week=1,
+                    next_opening_period=1,
                     next_opening_hours=160,
                     completed=None,
                 )

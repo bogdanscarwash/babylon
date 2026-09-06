@@ -1,7 +1,7 @@
 //! Completed physical accounts from verified adjacent registers and receipts.
 //!
 //! This projection never allocates batches, routes freight, or advances a world.
-//! It reports actual receipt quantities using the recipe that governed the week.
+//! It reports actual receipt quantities using the recipe that governed the period.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -12,14 +12,14 @@ use babylon_tick::material_world::MaterialTickReceiptsV3;
 use serde::{Deserialize, Serialize};
 
 use super::ProductionProjectionErrorV1;
-use crate::{michigan_economy::digest_hex, michigan_material::michigan_material_catalog_v1};
+use crate::{michigan_economy::digest_hex, michigan_material::material_topology};
 
-/// One complete committed week's local inventory accounts. Absent at foundation.
+/// One complete committed period's local inventory accounts. Absent at foundation.
 /// The enclosing authorized observation binds campaign, perspective and evidence.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CompletedMaterialBalanceV1 {
-    pub week: u64,
+    pub period: u64,
     pub rows: Vec<ProductionMaterialBalanceRowV1>,
 }
 
@@ -89,8 +89,7 @@ pub(super) fn project_material_balance(
     prior: Option<&MaterialCircuitStateV2>,
     receipt: Option<&MaterialTickReceiptsV3>,
 ) -> Result<Option<CompletedMaterialBalanceV1>, ProductionProjectionErrorV1> {
-    let catalog =
-        michigan_material_catalog_v1().map_err(|_| ProductionProjectionErrorV1::Content)?;
+    let catalog = material_topology().map_err(|_| ProductionProjectionErrorV1::Content)?;
     project_with_labels(current, prior, receipt, |good, unit| {
         catalog
             .goods()
@@ -107,11 +106,11 @@ fn project_with_labels(
     labels: impl Fn(GoodIdV1, UnitIdV1) -> Option<(String, String)>,
 ) -> Result<Option<CompletedMaterialBalanceV1>, ProductionProjectionErrorV1> {
     let (prior, receipt) = match (prior, receipt) {
-        (None, None) if current.week == 1 => return Ok(None),
+        (None, None) if current.period == 1 => return Ok(None),
         (Some(prior), Some(receipt))
-            if prior.week > 0
-                && prior.week.checked_add(1) == Some(current.week)
-                && receipt.resolve_tick == prior.week =>
+            if prior.period > 0
+                && prior.period.checked_add(1) == Some(current.period)
+                && receipt.resolve_tick == prior.period =>
         {
             (prior, receipt)
         }
@@ -130,7 +129,7 @@ fn project_with_labels(
         .map(|(key, amounts)| finish_row(key, &amounts, &labels))
         .collect::<Result<_, _>>()?;
     Ok(Some(CompletedMaterialBalanceV1 {
-        week: receipt.resolve_tick,
+        period: receipt.resolve_tick,
         rows,
     }))
 }
@@ -230,7 +229,7 @@ fn add_production(
         let process = processes
             .get(&row.process_id)
             .ok_or(ProductionProjectionErrorV1::State)?;
-        if row.week != prior.week
+        if row.period != prior.period
             || row.site_id != process.output.0
             || plans.insert(row.process_id, row.planned_batches).is_some()
         {
@@ -367,13 +366,13 @@ fn add_dispatches(
             .ok_or(ProductionProjectionErrorV1::State)?;
         if row.quantity == 0
             || !seen.insert(row.lot_id)
-            || row.final_arrival_week <= receipt.resolve_tick
+            || row.final_arrival_period <= receipt.resolve_tick
             || lot.order_id != row.order_id
             || lot.route_id != row.route_id
             || lot.quantity != row.quantity
-            || lot.dispatch_week != receipt.resolve_tick
+            || lot.dispatch_period != receipt.resolve_tick
             || lot.current_leg_index != 0
-            || lot.leg_arrival_week <= receipt.resolve_tick
+            || lot.leg_arrival_period <= receipt.resolve_tick
             || (
                 lot.source_site_id,
                 lot.destination_site_id,
@@ -426,7 +425,7 @@ fn add_losses(
             || !seen.insert(row.lot_id)
             || !orders.contains_key(&row.order_id)
             || lot.order_id != row.order_id
-            || lot.leg_arrival_week != receipt.resolve_tick
+            || lot.leg_arrival_period != receipt.resolve_tick
             || leg.corridor_id != row.corridor_id
         {
             return Err(ProductionProjectionErrorV1::State);

@@ -2,7 +2,7 @@
 //! fog-safe committed-tick status view (ADR249 R8).
 
 use babylon_persistence::{
-    CommittedTickStatusV1, LegacyConnectionTargetRejection, ReaderRoleDispositionV1,
+    CommittedTickStatusV1, ConnectionTargetRejection, ReaderRoleDispositionV1,
     SemanticArchiveErrorV1, SemanticArchiveReaderErrorV1, SemanticArchiveReaderV1,
     ARCHIVE_ATOM_SCHEMA_V1_SQL, COMMITTED_TICK_STATUS_SQL_V1, READER_DSN_ENV_V1,
     READER_ROLE_CREATE_SQL_V1, READER_ROLE_NAME_V1, READER_ROLE_SCHEMA_V1_SQL,
@@ -336,14 +336,12 @@ fn from_dsn_admits_only_validated_loopback_targets() {
     );
     assert_eq!(
         refusal("postgresql://reader:secret@203.0.113.10:5432/babylon"),
-        SemanticArchiveReaderErrorV1::ConnectionTarget(
-            LegacyConnectionTargetRejection::NonLoopbackTcp
-        )
+        SemanticArchiveReaderErrorV1::ConnectionTarget(ConnectionTargetRejection::NonLoopbackTcp)
     );
     assert_eq!(
         refusal("postgresql://reader@127.0.0.1:5432/babylon?options=-c%20search_path%3Dredirected"),
         SemanticArchiveReaderErrorV1::ConnectionTarget(
-            LegacyConnectionTargetRejection::StartupOptionsOverride
+            ConnectionTargetRejection::StartupOptionsOverride
         )
     );
     assert_eq!(
@@ -351,7 +349,7 @@ fn from_dsn_admits_only_validated_loopback_targets() {
         SemanticArchiveReaderErrorV1::ConnectionTarget(
             // The driver expands one default port per named host, so the
             // redundant port list is reported before the host count.
-            LegacyConnectionTargetRejection::MultiplePorts
+            ConnectionTargetRejection::MultiplePorts
         )
     );
 

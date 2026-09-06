@@ -40,8 +40,8 @@ struct PublishedFixture {
 fn fixture() -> &'static PublishedFixture {
     static FIXTURE: OnceLock<PublishedFixture> = OnceLock::new();
     FIXTURE.get_or_init(|| {
-        let foundation = MichiganContentPresetV1::StaffedStandardV4
-            .create_foundation()
+        let foundation = MichiganContentPresetV1::FourWeekStandardV5
+            .create_foundation(&crate::test_support::catalog())
             .unwrap();
         let MaterialLaborV1::Staffed(composition) = foundation.labor().clone() else {
             panic!("admitted Michigan staffing");
@@ -183,9 +183,9 @@ fn foundation_reports_modeled_people_without_a_completed_staffing_event() {
         assert_eq!(account.labor_force, pool.labor_force());
     }
     for account in accounts {
-        assert_eq!(account.hours_per_person, 40);
-        assert_eq!(account.next_opening_week, 1);
-        assert_eq!(account.next_opening_hours, account.employed * 40);
+        assert_eq!(account.hours_per_person, 160);
+        assert_eq!(account.next_opening_period, 1);
+        assert_eq!(account.next_opening_hours, account.employed * 160);
         assert_eq!(account.labor_force, account.employed + account.reserve);
     }
     let mut invented = foundation.clone();
@@ -212,15 +212,15 @@ fn published_windows_keep_all_pools_exact_and_disclose_retention_release_and_reh
         let accounts = window.project().unwrap();
         assert_eq!(accounts.len(), 5);
         for account in accounts {
-            assert_eq!(account.hours_per_person, 40);
+            assert_eq!(account.hours_per_person, 160);
             assert_eq!(account.employed + account.reserve, account.labor_force);
             assert_eq!(
-                account.next_opening_week,
+                account.next_opening_period,
                 window.register.completed_tick() + 1
             );
-            assert_eq!(account.next_opening_hours, account.employed * 40);
+            assert_eq!(account.next_opening_hours, account.employed * 160);
             let completed = account.completed.unwrap();
-            assert_eq!(completed.week, window.register.completed_tick());
+            assert_eq!(completed.period, window.register.completed_tick());
             assert_eq!(
                 account.previous_unretained_hours,
                 completed.current_unretained_hours
@@ -503,7 +503,9 @@ fn next_labor_budget_and_pool_conservation_cannot_be_invented() {
         .labor
         .iter_mut()
         .find(|row| {
-            row.site_id == pool.site_id() && row.unit_id == pool.unit_id() && row.week == state.week
+            row.site_id == pool.site_id()
+                && row.unit_id == pool.unit_id()
+                && row.period == state.period
         })
         .unwrap()
         .available += 1;

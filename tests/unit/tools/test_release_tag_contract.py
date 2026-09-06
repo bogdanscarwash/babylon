@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import os
+import shutil
 import subprocess
+import sys
+import tomllib
 from pathlib import Path
 from typing import Any
 
@@ -115,6 +119,102 @@ def test_bump_commit_and_main_tag_are_separate_owner_actions() -> None:
     assert "tools/release_lineage.py verify" in tag
     assert "git tag --annotate" in tag
     assert 'git push origin "refs/tags/$TAG"' in tag
+
+
+def test_bump_commits_matching_project_and_lock_versions_without_upgrading_dependencies(
+    tmp_path: Path,
+) -> None:
+    """Run the real bump shell and uv resolver, substituting only owner commands."""
+    uv = shutil.which("uv")
+    assert uv is not None, "release tests require the project-pinned uv executable"
+    repo = tmp_path / "release"
+    repo.mkdir()
+    (repo / "pyproject.toml").write_text(
+        '[project]\nname = "release-fixture"\nversion = "0.3.0"\n'
+        'requires-python = ">=3.12"\ndependencies = ["fixture-dependency==1.0.0"]\n'
+        '[tool.uv.sources]\nfixture-dependency = { path = "dependency" }\n',
+        encoding="utf-8",
+    )
+    (repo / "dependency").mkdir()
+    (repo / "dependency/pyproject.toml").write_text(
+        '[project]\nname = "fixture-dependency"\nversion = "1.0.0"\n', encoding="utf-8"
+    )
+    (repo / "CHANGELOG.md").write_text("0.3.0\n", encoding="utf-8")
+    binaries = repo / "commands"
+    binaries.mkdir()
+    environment = {
+        **os.environ,
+        "UV_PYTHON": sys.executable,
+        "UV_CACHE_DIR": str(tmp_path / "uv-cache"),
+        "RELEASE_COMMIT_MARKER": str(tmp_path / "committed"),
+    }
+    subprocess.run(
+        (uv, "lock", "--offline"),
+        cwd=repo,
+        env=environment,
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=20,
+    )
+    original_lock = tomllib.loads((repo / "uv.lock").read_text(encoding="utf-8"))
+
+    def executable(path: Path, source: str) -> None:
+        path.write_text(f"#!{sys.executable}\n{source}", encoding="utf-8")
+        path.chmod(0o755)
+
+    executable(
+        binaries / "uv",
+        "import os, sys\nfrom pathlib import Path\n"
+        "if sys.argv[1:] == ['run', 'cz', 'bump', '--dry-run']:\n"
+        "    pass\n"
+        "elif sys.argv[1:] == ['run', 'cz', 'bump', '--version-files-only', '--yes']:\n"
+        "    p = Path('pyproject.toml')\n"
+        "    p.write_text(p.read_text().replace('0.3.0', '0.4.0'))\n"
+        "    Path('CHANGELOG.md').write_text('0.4.0\\n')\n"
+        "else:\n"
+        f"    os.execv({uv!r}, [{uv!r}, *sys.argv[1:]])\n",
+    )
+    executable(
+        binaries / "mise",
+        "import os, subprocess, sys, tomllib\nfrom pathlib import Path\n"
+        "assert sys.argv[1:3] == ['run', 'commit']\n"
+        "def staged(path):\n"
+        "    return subprocess.check_output(['git', 'show', ':' + path], text=True)\n"
+        "version = tomllib.loads(staged('pyproject.toml'))['project']['version']\n"
+        "lock = tomllib.loads(staged('uv.lock'))\n"
+        "locked = next(p['version'] for p in lock['package'] if p['name'] == 'release-fixture')\n"
+        "assert version == locked, 'release commit would contain a stale lock'\n"
+        "names = subprocess.check_output(['git', 'diff', '--cached', '--name-only'], text=True)\n"
+        "assert set(names.splitlines()) == {'pyproject.toml', 'uv.lock', 'CHANGELOG.md'}\n"
+        "Path(os.environ['RELEASE_COMMIT_MARKER']).write_text(version)\n",
+    )
+    (repo / "tools").mkdir()
+    executable(repo / "tools/check_release_pins.sh", "pass\n")
+    _git(repo, "init", "--initial-branch=dev")
+    _git(repo, "config", "user.name", "Release Contract")
+    _git(repo, "config", "user.email", "release-contract@example.invalid")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-m", "test: release bump fixture")
+    environment["PATH"] = f"{binaries}{os.pathsep}{environment.get('PATH', '')}"
+    script = tomllib.loads(MISE_PATH.read_text(encoding="utf-8"))["tasks"]["release:bump"]["run"]
+    result = subprocess.run(
+        ("bash", "-s", "--", "--yes"),
+        input=script,
+        cwd=repo,
+        env=environment,
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert (tmp_path / "committed").read_text(encoding="utf-8") == "0.4.0"
+    changed_lock = tomllib.loads((repo / "uv.lock").read_text(encoding="utf-8"))
+    assert [p for p in changed_lock["package"] if p["name"] != "release-fixture"] == [
+        p for p in original_lock["package"] if p["name"] != "release-fixture"
+    ]
 
 
 @pytest.mark.parametrize("path", RELEASE_WORKFLOWS)

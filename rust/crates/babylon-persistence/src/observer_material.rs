@@ -12,7 +12,8 @@ use postgres::{Config, GenericClient, NoTls};
 use crate::{
     material_runtime::{install_material_runtime_schema_v3, read_observer_material_tick_v3},
     michigan_content::{
-        admit_michigan_content_v1, MichiganContentAdmissionV1, MichiganPhysicalProjectionV1,
+        admit_michigan_content_v1, validate_michigan_header_v1, MichiganContentAdmissionV1,
+        MichiganPhysicalProjectionV1,
     },
     michigan_economy::digest_hex,
     observer_reader::{ObserverEconomyErrorV1, ObserverVisibilityV1},
@@ -54,11 +55,17 @@ fn decode_material_row(row: &postgres::Row) -> Result<MaterialObservationRow, po
     })
 }
 
+pub(crate) struct MaterialHeaderV1 {
+    pub(crate) foundation_digest: Vec<u8>,
+    pub(crate) admission: Option<MichiganContentAdmissionV1>,
+}
+
 pub(crate) fn read_material_header(
     transaction: &mut impl GenericClient,
     campaign: CampaignId,
     tick: u64,
-) -> Result<Option<&'static MichiganContentAdmissionV1>, ObserverEconomyErrorV1> {
+    visibility: ObserverVisibilityV1,
+) -> Result<Option<MaterialHeaderV1>, ObserverEconomyErrorV1> {
     let header = transaction.query_opt("SELECT campaign_id, preset_id, horizon_ticks, content_sha256, foundation_sha256 FROM public.v_material_campaign_identity_v1 WHERE campaign_id=$1", &[campaign.as_uuid()]).map_err(|_| ObserverEconomyErrorV1::Database)?;
     let Some(header) = header else {
         return Ok(None);
@@ -78,13 +85,38 @@ pub(crate) fn read_material_header(
     let foundation_digest: Vec<u8> = header
         .try_get(4)
         .map_err(|_| ObserverEconomyErrorV1::InvalidProjection)?;
-    let expected =
-        admit_michigan_content_v1(&preset_id, horizon, &content, &foundation_digest, tick)
-            .map_err(|_| ObserverEconomyErrorV1::ScenarioMismatch)?;
+    validate_michigan_header_v1(&preset_id, horizon, &content, &foundation_digest, tick)
+        .map_err(|_| ObserverEconomyErrorV1::ScenarioMismatch)?;
     if &row_campaign != campaign.as_uuid() {
         return Err(ObserverEconomyErrorV1::ScenarioMismatch);
     }
-    Ok(Some(expected))
+    let admission = if visibility == ObserverVisibilityV1::FullObserver {
+        let row = transaction.query_opt("SELECT foundation_bytes FROM public.v_observer_material_state_v1 WHERE campaign_id=$1 AND resolve_tick=0", &[campaign.as_uuid()])
+            .map_err(|_| ObserverEconomyErrorV1::Database)?.ok_or(ObserverEconomyErrorV1::ScenarioMismatch)?;
+        let bytes: Vec<u8> = row
+            .try_get(0)
+            .map_err(|_| ObserverEconomyErrorV1::InvalidProjection)?;
+        Some(
+            admit_michigan_content_v1(
+                &preset_id,
+                horizon,
+                &content,
+                &foundation_digest,
+                tick,
+                &bytes,
+            )
+            .map_err(|_| ObserverEconomyErrorV1::ScenarioMismatch)?,
+        )
+    } else {
+        // Public header shape is valid. Config, seed quantities and material
+        // identities remain opaque to this capability; no independent admission
+        // of those hidden values is claimed.
+        None
+    };
+    Ok(Some(MaterialHeaderV1 {
+        foundation_digest,
+        admission,
+    }))
 }
 
 /// Header reads are safe for preview. Complete material reads are never issued for preview.
@@ -173,14 +205,14 @@ pub(crate) fn material_observation(
             opening = Some(previous);
         }
     }
-    let mut production = match expected.physical_projection {
-        MichiganPhysicalProjectionV1::FiveProcessV1 => project_material_observation_v1(
-            expected.preset.delivery(),
-            &register,
-            opening.as_ref(),
-            &history,
-        ),
-    }
+    let MichiganPhysicalProjectionV1::FiveProcessV1 = expected.physical_projection;
+    let mut production = project_material_observation_v1(
+        &expected.catalog,
+        expected.preset.delivery(),
+        &register,
+        opening.as_ref(),
+        &history,
+    )
     .map_err(|_| ObserverEconomyErrorV1::InvalidProjection)?;
     production.staffing_accounts = authenticated_staffing(
         transaction,

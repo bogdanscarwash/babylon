@@ -67,7 +67,7 @@ pub struct SupplierCandidateV1 {
     pub supplier_site_id: SiteIdV1,
     pub good_id: GoodIdV1,
     pub unit_id: UnitIdV1,
-    pub transit_delay_weeks: u16,
+    pub transit_delay_periods: u16,
 }
 
 /// Exact on-hand inventory at one site.
@@ -112,8 +112,8 @@ pub struct BacklogRowV1 {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct TransitLotV1 {
     pub order_id: OrderIdV1,
-    pub dispatch_week: u64,
-    pub arrival_week: u64,
+    pub dispatch_period: u64,
+    pub arrival_period: u64,
     pub source_site_id: SiteIdV1,
     pub destination_site_id: SiteIdV1,
     pub good_id: GoodIdV1,
@@ -121,21 +121,21 @@ pub struct TransitLotV1 {
     pub quantity: u64,
 }
 
-/// Available process batches at one site and week.
+/// Available process batches at one site and period.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct CapacityRowV1 {
     pub process_id: ProcessIdV1,
     pub site_id: SiteIdV1,
-    pub week: u64,
+    pub period: u64,
     pub available_batches: u64,
 }
 
-/// Available attributed labor-time at one site and week.
+/// Available attributed labor-time at one site and period.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct LaborCapacityRowV1 {
     pub site_id: SiteIdV1,
     pub unit_id: UnitIdV1,
-    pub week: u64,
+    pub period: u64,
     pub available: u64,
 }
 
@@ -144,14 +144,14 @@ pub struct LaborCapacityRowV1 {
 pub struct ProductionCommitmentV1 {
     pub process_id: ProcessIdV1,
     pub site_id: SiteIdV1,
-    pub week: u64,
+    pub period: u64,
     pub planned_batches: u64,
 }
 
-/// Complete V1 auxiliary register state at the opening of `week`.
+/// Complete V1 auxiliary register state at the opening of `period`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MaterialCircuitStateV1 {
-    pub week: u64,
+    pub period: u64,
     pub process_outputs: Vec<ProcessOutputV1>,
     pub input_coefficients: Vec<InputOutputCoefficientV1>,
     pub labor_coefficients: Vec<LaborCoefficientV1>,
@@ -176,7 +176,7 @@ pub enum MaterialCircuitErrorV1 {
     BacklogInvariant = 5,
     TransitInvariant = 6,
     ProcessInvariant = 7,
-    WeekInvariant = 8,
+    PeriodInvariant = 8,
     Arithmetic = 9,
     WireLimit = 10,
     WireDomain = 11,
@@ -203,7 +203,7 @@ impl TryFrom<u16> for MaterialCircuitErrorV1 {
             5 => Ok(Self::BacklogInvariant),
             6 => Ok(Self::TransitInvariant),
             7 => Ok(Self::ProcessInvariant),
-            8 => Ok(Self::WeekInvariant),
+            8 => Ok(Self::PeriodInvariant),
             9 => Ok(Self::Arithmetic),
             10 => Ok(Self::WireLimit),
             11 => Ok(Self::WireDomain),
@@ -237,7 +237,7 @@ pub struct ProductionReceiptV1 {
 pub struct DispatchReceiptV1 {
     pub order_id: OrderIdV1,
     pub quantity: u64,
-    pub arrival_week: u64,
+    pub arrival_period: u64,
 }
 
 /// One lot credited to destination inventory.
@@ -261,7 +261,7 @@ pub struct RealizationReceiptV1 {
     pub quantity: u64,
 }
 
-/// Atomic result of closing one material-circuit week.
+/// Atomic result of closing one material-circuit period.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MaterialCircuitTransitionV1 {
     pub state: MaterialCircuitStateV1,

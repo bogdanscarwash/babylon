@@ -43,6 +43,13 @@ pub(super) fn pin(
         if inserted != u64::try_from(count).map_err(|_|SemanticArchiveErrorV1::CollectionBound)? {
             return Err(SemanticArchiveErrorV1::StoredPageMismatch);
         }
+        // Readers authenticate the complete grant cohort immediately after this
+        // bulk load. Supply current row counts before their first query instead
+        // of waiting for autovacuum: an empty-table estimate turns the late-grant
+        // anti join into a quadratic scan of a newly populated cohort.
+        client.batch_execute("ANALYZE babylon_meta.archive_knowledge_grant_v1; \
+            ANALYZE babylon_meta.archive_tick_knowledge_member_v2")
+            .map_err(|error|database("refresh pinned Archive knowledge statistics",&error))?;
     }
     load(client, scope)
 }

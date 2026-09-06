@@ -1,9 +1,9 @@
 use std::collections::BTreeSet;
 
 use super::*;
-use crate::michigan_material::{michigan_material_catalog_v1, MichiganDeliveryPresetV1};
+use crate::michigan_material::MichiganDeliveryPresetV1;
 use babylon_material_circuit::{
-    advance_material_circuit_v2, advance_staffing_v1, close_material_week_v2,
+    advance_material_circuit_v2, advance_staffing_v1, close_material_period_v2,
     MaterialCircuitTransitionV2, StaffingPoolStateV1, StaffingStateV1,
 };
 
@@ -22,7 +22,7 @@ fn rebuild(
 }
 
 fn bundles() -> Vec<SectorBundleV1> {
-    michigan_sector_bundles_v1().unwrap().to_vec()
+    michigan_sector_bundles_v1(&crate::test_support::catalog()).unwrap()
 }
 
 fn macomb(values: &[SectorBundleV1]) -> usize {
@@ -32,10 +32,10 @@ fn macomb(values: &[SectorBundleV1]) -> usize {
         .unwrap()
 }
 
-fn trace(mut state: MaterialCircuitStateV2, weeks: usize) -> Vec<MaterialCircuitTransitionV2> {
+fn trace(mut state: MaterialCircuitStateV2, periods: usize) -> Vec<MaterialCircuitTransitionV2> {
     // Pure bundle causality uses the real staffing core. Durable tests separately
     // prove graph-owned retention and reconstruction through the replay boundary.
-    let authority = staffing::StoredStaffingV1::authored().unwrap();
+    let authority = staffing::StoredStaffingV1::authored(&crate::test_support::catalog()).unwrap();
     let composition = authority.composition().unwrap();
     let bindings: Vec<_> = composition
         .bindings()
@@ -49,9 +49,9 @@ fn trace(mut state: MaterialCircuitStateV2, weeks: usize) -> Vec<MaterialCircuit
         StaffingPoolStateV1::try_new(binding.pool().clone(), seed.employed, seed.reserve, seed.previous_unretained_hours).unwrap()
     }).collect();
     let mut staffing = StaffingStateV1::try_new(1, pools).unwrap();
-    (0..weeks)
+    (0..periods)
         .map(|_| {
-            let closed = close_material_week_v2(&state).unwrap();
+            let closed = close_material_period_v2(&state).unwrap();
             let requests = closed.staffing_requests(&bindings).unwrap();
             let staffed = advance_staffing_v1(&staffing, &requests).unwrap();
             let result = closed
@@ -66,7 +66,7 @@ fn trace(mut state: MaterialCircuitStateV2, weeks: usize) -> Vec<MaterialCircuit
 
 #[test]
 fn four_nonempty_bundles_own_five_processes_without_merging_wayne_resources() {
-    let bundles = michigan_sector_bundles_v1().unwrap();
+    let bundles = michigan_sector_bundles_v1(&crate::test_support::catalog()).unwrap();
     assert_eq!(bundles.len(), 4);
     assert_eq!(
         bundles
@@ -89,18 +89,18 @@ fn four_nonempty_bundles_own_five_processes_without_merging_wayne_resources() {
         .unwrap();
     assert_eq!(wayne.processes.len(), 2);
     assert_eq!(wayne.rows.site_logistics_nodes.len(), 2);
-    for week in 1..=HORIZON_TICKS {
+    for period in 1..=MICHIGAN_MAX_HORIZON_PERIODS_V1 {
         let budgets: BTreeSet<_> = wayne
             .rows
             .labor
             .iter()
-            .filter(|row| row.week == week)
+            .filter(|row| row.period == period)
             .map(|row| row.available)
             .collect();
         assert_eq!(
             budgets,
-            if week == 1 {
-                BTreeSet::from([160, 800])
+            if period == 1 {
+                BTreeSet::from([640, 3200])
             } else {
                 BTreeSet::new()
             }
@@ -115,19 +115,20 @@ fn four_nonempty_bundles_own_five_processes_without_merging_wayne_resources() {
         assert_eq!(bundle.horizon_ticks(), 16);
         assert_eq!(
             SectorBundleV1::decode(bundle.canonical_bytes(), bundle.sha256()).unwrap(),
-            *bundle
+            bundle
         );
     }
 }
 
 #[test]
 fn compiled_opening_resources_preserve_exact_authored_coefficients() {
-    let catalog = michigan_material_catalog_v1().unwrap();
+    let catalog = crate::test_support::catalog();
     for preset in [
         MichiganDeliveryPresetV1::Standard,
         MichiganDeliveryPresetV1::Delayed,
     ] {
-        let state = compile_sector_bundles_v1(&bundles(), preset).unwrap();
+        let state =
+            compile_sector_bundles_v1(&bundles(), preset, &crate::test_support::catalog()).unwrap();
         for process in catalog.processes() {
             let output = state
                 .process_outputs
@@ -150,8 +151,8 @@ fn compiled_opening_resources_preserve_exact_authored_coefficients() {
                 .filter(|row| row.site_id == process.site_id())
                 .collect::<Vec<_>>();
             assert_eq!(labor.len(), 1);
-            assert_eq!(labor[0].week, 1);
-            assert_eq!(labor[0].available, process.labor_capacity_hours_per_week);
+            assert_eq!(labor[0].period, 1);
+            assert_eq!(labor[0].available, process.labor_capacity_hours_per_period);
         }
     }
 }
@@ -186,9 +187,18 @@ fn row_and_bundle_insertion_order_cannot_change_canonical_identity_or_execution(
         assert_eq!(*bundle, original);
     }
     reordered.reverse();
-    let expected =
-        compile_sector_bundles_v1(&bundles(), MichiganDeliveryPresetV1::Standard).unwrap();
-    let actual = compile_sector_bundles_v1(&reordered, MichiganDeliveryPresetV1::Standard).unwrap();
+    let expected = compile_sector_bundles_v1(
+        &bundles(),
+        MichiganDeliveryPresetV1::Standard,
+        &crate::test_support::catalog(),
+    )
+    .unwrap();
+    let actual = compile_sector_bundles_v1(
+        &reordered,
+        MichiganDeliveryPresetV1::Standard,
+        &crate::test_support::catalog(),
+    )
+    .unwrap();
     assert_eq!(expected, actual);
     assert_eq!(trace(expected, 4), trace(actual, 4));
 }
@@ -266,12 +276,20 @@ fn source_and_owner_mismatches_refuse_without_replacing_observed_identity() {
 fn incomplete_and_duplicate_bundle_ownership_refuse() {
     let mut values = bundles();
     assert_eq!(
-        compile_sector_bundles_v1(&values[..3], MichiganDeliveryPresetV1::Standard),
+        compile_sector_bundles_v1(
+            &values[..3],
+            MichiganDeliveryPresetV1::Standard,
+            &crate::test_support::catalog()
+        ),
         Err(SectorBundleErrorV1::Coverage)
     );
     values[1] = values[0].clone();
     assert_eq!(
-        compile_sector_bundles_v1(&values, MichiganDeliveryPresetV1::Standard),
+        compile_sector_bundles_v1(
+            &values,
+            MichiganDeliveryPresetV1::Standard,
+            &crate::test_support::catalog()
+        ),
         Err(SectorBundleErrorV1::ProcessOwnership)
     );
     let mut empty = bundles().remove(0);
@@ -283,7 +301,7 @@ fn incomplete_and_duplicate_bundle_ownership_refuse() {
 }
 
 #[test]
-fn missing_input_and_weekly_resource_rows_are_not_silent_zeroes() {
+fn missing_input_and_period_resource_rows_are_not_silent_zeroes() {
     let values = bundles();
     let original = &values[macomb(&values)];
     let mut rows = original.rows.clone();
@@ -291,10 +309,10 @@ fn missing_input_and_weekly_resource_rows_are_not_silent_zeroes() {
     rows.inventory.retain(|row| row.good_id != input);
     assert_eq!(rebuild(original, &rows), Err(SectorBundleErrorV1::GoodUnit));
     let mut rows = original.rows.clone();
-    rows.labor.retain(|row| row.week != 1);
+    rows.labor.retain(|row| row.period != 1);
     assert_eq!(rebuild(original, &rows), Err(SectorBundleErrorV1::Resource));
     let mut rows = original.rows.clone();
-    rows.capacities.retain(|row| row.week != 16);
+    rows.capacities.retain(|row| row.period != 16);
     assert_eq!(rebuild(original, &rows), Err(SectorBundleErrorV1::Resource));
 }
 
@@ -335,7 +353,7 @@ fn produced(transition: &MaterialCircuitTransitionV2, process: ProcessIdV1) -> u
 }
 
 fn assert_food_equal(left: &MaterialCircuitTransitionV2, right: &MaterialCircuitTransitionV2) {
-    let catalog = michigan_material_catalog_v1().unwrap();
+    let catalog = crate::test_support::catalog();
     let sites: BTreeSet<_> = catalog
         .sites()
         .iter()
@@ -419,10 +437,15 @@ fn bundle_recipe_and_labor_coefficients_change_actual_production_not_just_metada
     let index = macomb(&originals);
     let process = originals[index].processes[0].process_id;
     let baseline = trace(
-        compile_sector_bundles_v1(&originals, MichiganDeliveryPresetV1::Standard).unwrap(),
+        compile_sector_bundles_v1(
+            &originals,
+            MichiganDeliveryPresetV1::Standard,
+            &crate::test_support::catalog(),
+        )
+        .unwrap(),
         8,
     );
-    assert_eq!(produced(&baseline[2], process), 8);
+    assert_eq!(produced(&baseline[2], process), 32);
     for change_labor in [false, true] {
         let mut changed = originals.clone();
         let mut rows = changed[index].rows.clone();
@@ -442,10 +465,15 @@ fn bundle_recipe_and_labor_coefficients_change_actual_production_not_just_metada
         assert_eq!(changed[index].owner, originals[index].owner);
         assert_eq!(changed[index].sources, originals[index].sources);
         let changed = trace(
-            compile_sector_bundles_v1(&changed, MichiganDeliveryPresetV1::Standard).unwrap(),
+            compile_sector_bundles_v1(
+                &changed,
+                MichiganDeliveryPresetV1::Standard,
+                &crate::test_support::catalog(),
+            )
+            .unwrap(),
             8,
         );
-        assert_eq!(produced(&changed[2], process), 4);
+        assert_eq!(produced(&changed[2], process), 16);
         assert_ne!(
             encode_material_circuit_state_v2(&changed[2].state).unwrap(),
             encode_material_circuit_state_v2(&baseline[2].state).unwrap()
@@ -457,10 +485,20 @@ fn bundle_recipe_and_labor_coefficients_change_actual_production_not_just_metada
 }
 
 #[test]
-fn delay_twins_keep_bundle_identity_and_capacity_and_change_following_week_output() {
+fn delay_twins_keep_bundle_identity_and_capacity_and_change_following_period_output() {
     let values = bundles();
-    let standard = compile_sector_bundles_v1(&values, MichiganDeliveryPresetV1::Standard).unwrap();
-    let delayed = compile_sector_bundles_v1(&values, MichiganDeliveryPresetV1::Delayed).unwrap();
+    let standard = compile_sector_bundles_v1(
+        &values,
+        MichiganDeliveryPresetV1::Standard,
+        &crate::test_support::catalog(),
+    )
+    .unwrap();
+    let delayed = compile_sector_bundles_v1(
+        &values,
+        MichiganDeliveryPresetV1::Delayed,
+        &crate::test_support::catalog(),
+    )
+    .unwrap();
     assert_eq!(standard.capacities, delayed.capacities);
     assert_eq!(standard.labor, delayed.labor);
     let mut normalized = delayed.clone();
@@ -470,9 +508,9 @@ fn delay_twins_keep_bundle_identity_and_capacity_and_change_following_week_outpu
     let delayed = trace(delayed, 16);
     let process = values[macomb(&values)].processes[0].process_id;
     assert_eq!(produced(&standard[1], process), 0);
-    assert_eq!(produced(&standard[2], process), 8);
+    assert_eq!(produced(&standard[2], process), 32);
     assert_eq!(produced(&delayed[2], process), 0);
-    assert_eq!(produced(&delayed[4], process), 8);
+    assert_eq!(produced(&delayed[4], process), 32);
     for (left, right) in standard.iter().zip(&delayed) {
         assert_food_equal(left, right);
     }
@@ -485,7 +523,12 @@ fn exact_bundle_and_register_decode_preserve_dispatch_transit_arrival_continuati
         .iter()
         .map(|bundle| SectorBundleV1::decode(bundle.canonical_bytes(), bundle.sha256()).unwrap())
         .collect();
-    let opening = compile_sector_bundles_v1(&decoded, MichiganDeliveryPresetV1::Delayed).unwrap();
+    let opening = compile_sector_bundles_v1(
+        &decoded,
+        MichiganDeliveryPresetV1::Delayed,
+        &crate::test_support::catalog(),
+    )
+    .unwrap();
     let history = trace(opening, 5);
     for frame in &history[..4] {
         let bytes = encode_material_circuit_state_v2(&frame.state).unwrap();

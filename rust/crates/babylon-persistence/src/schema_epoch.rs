@@ -2,12 +2,11 @@
 
 use postgres::{Client, Config, IsolationLevel, NoTls, Row, Transaction};
 
-use crate::legacy_adopter::{
-    acquire_lock, catalog_census_under_lock, compare_legacy_census, parse_legacy_census_fixture,
-    read_census_rows, release_lock, validate_legacy_connection_target, verify_under_lock,
-    LegacyAdopterError, LegacyAdoptionReport, LegacyCensusEntry, LegacyCensusParseError,
-    LegacyObjectKind, LEGACY_ADOPTER_CONNECT_TIMEOUT, LEGACY_ADOPTER_STARTUP_OPTIONS,
-    LEGACY_ADOPTER_TCP_USER_TIMEOUT, MAX_LEGACY_CENSUS_ROWS,
+use crate::postgres_catalog::{
+    acquire_lock, catalog_census_under_lock, compare_catalog_census, parse_catalog_census,
+    read_census_rows, release_lock, validate_connection_target, CatalogCensusEntry,
+    CatalogCensusParseError, CatalogError, CatalogObjectKind, CATALOG_CONNECT_TIMEOUT,
+    CATALOG_STARTUP_OPTIONS, CATALOG_TCP_USER_TIMEOUT, MAX_CATALOG_CENSUS_ROWS,
 };
 use crate::postgres_diagnostic::PostgresDiagnosticV1;
 use crate::schema_migration::{
@@ -19,7 +18,6 @@ pub const MAX_SCHEMA_MIGRATIONS: usize = 256;
 /// Maximum commit/reconciliation attempts for one version.
 pub const MAX_COMMIT_ATTEMPTS_PER_VERSION: usize = 2;
 pub(crate) const CURRENT_SCHEMA_EPOCH: usize = 7;
-pub(crate) const LEGACY_H3_CUTOVER_INPUT_EPOCH: usize = 6;
 
 const MIGRATION_0001_SQL: &str = include_str!("../migrations/0001_owned_schema_epoch.sql");
 const MIGRATION_0002_SQL: &str = include_str!("../migrations/0002_h3_cell.sql");
@@ -35,25 +33,18 @@ const MIGRATION_0011_SQL: &str =
 const FRESH_CENSUS: &str = include_str!("fixtures/fresh_schema_epoch_census_v2.txt");
 const FRESH_CENSUS_WITH_INTEL: &str =
     include_str!("fixtures/fresh_schema_epoch_census_with_intel_v2.txt");
-const EPOCH_OWNED_CENSUS_V1: &str = include_str!("fixtures/schema_epoch_owned_census_v1.txt");
 const EPOCH_OWNED_FRESH_CENSUS_V1: &str =
     include_str!("fixtures/schema_epoch_owned_fresh_census_v1.txt");
-const EPOCH_OWNED_CENSUS_V2: &str = include_str!("fixtures/schema_epoch_owned_census_v2.txt");
 const EPOCH_OWNED_FRESH_CENSUS_V2: &str =
     include_str!("fixtures/schema_epoch_owned_fresh_census_v2.txt");
-const EPOCH_OWNED_CENSUS_V3: &str = include_str!("fixtures/schema_epoch_owned_census_v3.txt");
 const EPOCH_OWNED_FRESH_CENSUS_V3: &str =
     include_str!("fixtures/schema_epoch_owned_fresh_census_v3.txt");
-const EPOCH_OWNED_CENSUS_V4: &str = include_str!("fixtures/schema_epoch_owned_census_v4.txt");
 const EPOCH_OWNED_FRESH_CENSUS_V4: &str =
     include_str!("fixtures/schema_epoch_owned_fresh_census_v4.txt");
-const EPOCH_OWNED_CENSUS_V5: &str = include_str!("fixtures/schema_epoch_owned_census_v5.txt");
 const EPOCH_OWNED_FRESH_CENSUS_V5: &str =
     include_str!("fixtures/schema_epoch_owned_fresh_census_v5.txt");
-const EPOCH_OWNED_CENSUS_V6: &str = include_str!("fixtures/schema_epoch_owned_census_v6.txt");
 const EPOCH_OWNED_FRESH_CENSUS_V6: &str =
     include_str!("fixtures/schema_epoch_owned_fresh_census_v6.txt");
-const EPOCH_OWNED_CENSUS_V7: &str = include_str!("fixtures/schema_epoch_owned_census_v7.txt");
 const EPOCH_OWNED_FRESH_CENSUS_V7: &str =
     include_str!("fixtures/schema_epoch_owned_fresh_census_v7.txt");
 const OWNER_SQL: &str = "SELECT database_row.datdba = role_row.oid \
@@ -65,14 +56,10 @@ const MARKERS_SQL: &str = "SELECT \
     pg_catalog.to_regnamespace('babylon_state') IS NOT NULL, \
     pg_catalog.to_regnamespace('babylon_meta') IS NOT NULL, \
     ledger.oid IS NOT NULL, \
-    coalesce(ledger.relkind = 'r' AND ledger.relpersistence = 'p', false), \
-    stamp.oid IS NOT NULL, \
-    coalesce(stamp.relkind = 'r' AND stamp.relpersistence = 'p', false) \
+    coalesce(ledger.relkind = 'r' AND ledger.relpersistence = 'p', false) \
     FROM (SELECT 1) AS singleton \
     LEFT JOIN pg_catalog.pg_class AS ledger \
-      ON ledger.oid = pg_catalog.to_regclass('babylon_state.schema_migration') \
-    LEFT JOIN pg_catalog.pg_class AS stamp \
-      ON stamp.oid = pg_catalog.to_regclass('public._babylon_schema_stamp')";
+      ON ledger.oid = pg_catalog.to_regclass('babylon_state.schema_migration')";
 const FRESH_SENTINELS_SQL: &str = "SELECT \
     NOT EXISTS (SELECT 1 FROM pg_catalog.pg_default_acl LIMIT 1), \
     NOT EXISTS (SELECT 1 FROM pg_catalog.pg_seclabel LIMIT 1), \
@@ -108,8 +95,6 @@ const EPOCH_V7_SHAPE_SQL: &str = include_str!("schema_epoch_v7_shape.sql");
 pub enum SchemaEpochOrigin {
     /// Pinned extension template with no Babylon objects.
     Fresh,
-    /// Exact frozen Python estate.
-    ExactLegacy,
     /// Existing exact Rust migration prefix.
     ExistingRustPrefix,
 }
@@ -127,8 +112,6 @@ pub struct SchemaEpochReport {
     pub applied_versions: Vec<MigrationVersion>,
     /// Versions whose ambiguous commit was reconciled as committed.
     pub reconciled_versions: Vec<MigrationVersion>,
-    /// Legacy verification receipt when first adopting the frozen estate.
-    pub legacy_adoption: Option<LegacyAdoptionReport>,
 }
 
 /// Closed database operations used in safe failures.
@@ -155,7 +138,6 @@ pub enum SchemaEpochOperation {
 pub struct SchemaEpochObservation {
     pub schemas: SchemaEpochSchemas,
     pub ledger: SchemaEpochRelation,
-    pub legacy_stamp: SchemaEpochRelation,
 }
 
 /// Presence of the three owned schema markers.
@@ -221,17 +203,15 @@ pub enum SchemaEpochError {
     /// The built-in migration registry is malformed.
     CompiledMigration(SchemaMigrationError),
     /// A frozen census fixture was malformed in this binary.
-    CensusFixture(LegacyCensusParseError),
+    CensusFixture(CatalogCensusParseError),
     /// The supplied maintenance target violated the local-only connection contract.
-    ConnectionTarget(LegacyAdopterError),
+    ConnectionTarget(CatalogError),
     /// Schema-lock acquisition failed before epoch inspection.
-    Lock(LegacyAdopterError),
-    /// Exact legacy adoption refused under the retained session lock.
-    LegacyAdoption(LegacyAdopterError),
+    Lock(CatalogError),
     /// A fresh or recorded-prefix census operation failed.
-    Census(LegacyAdopterError),
+    Census(CatalogError),
     /// Explicit schema-lock release failed.
-    Unlock(LegacyAdopterError),
+    Unlock(CatalogError),
     /// A database operation failed with an optional secret-safe driver diagnostic.
     Database {
         operation: SchemaEpochOperation,
@@ -245,8 +225,8 @@ pub enum SchemaEpochError {
     UnrecordedRustEpoch,
     /// Neither exact pinned fresh census variant matched.
     FreshCensusMismatch {
-        without_intel: Box<LegacyAdopterError>,
-        with_intel: Box<LegacyAdopterError>,
+        without_intel: Box<CatalogError>,
+        with_intel: Box<CatalogError>,
     },
     /// Database-local default privileges or security labels were present.
     AuthoritySentinelResidue,
@@ -288,8 +268,8 @@ impl From<SchemaMigrationError> for SchemaEpochError {
     }
 }
 
-impl From<LegacyCensusParseError> for SchemaEpochError {
-    fn from(error: LegacyCensusParseError) -> Self {
+impl From<CatalogCensusParseError> for SchemaEpochError {
+    fn from(error: CatalogCensusParseError) -> Self {
         Self::CensusFixture(error)
     }
 }
@@ -316,7 +296,7 @@ impl PersistedMigration {
 /// Returns [`SchemaEpochError`] when the target is not admitted, the bounded connection
 /// fails, or the connected principal is not exactly the current database owner.
 pub fn preflight_schema_epoch(config: &Config) -> Result<(), SchemaEpochError> {
-    validate_legacy_connection_target(config).map_err(SchemaEpochError::ConnectionTarget)?;
+    validate_connection_target(config).map_err(SchemaEpochError::ConnectionTarget)?;
     let mut client = bounded_config(config)
         .connect(NoTls)
         .map_err(|error| postgres_database_error(SchemaEpochOperation::Connect, &error))?;
@@ -331,48 +311,22 @@ pub fn preflight_schema_epoch(config: &Config) -> Result<(), SchemaEpochError> {
 /// Returns [`SchemaEpochError`] for any target, authority, census, prefix,
 /// transaction, commit-reconciliation, or cleanup failure.
 pub fn migrate_schema_epoch(config: &Config) -> Result<SchemaEpochReport, SchemaEpochError> {
-    validate_legacy_connection_target(config).map_err(SchemaEpochError::ConnectionTarget)?;
+    validate_connection_target(config).map_err(SchemaEpochError::ConnectionTarget)?;
     let bounded = bounded_config(config);
     let mut session = LockedSession::connect(&bounded)?;
     let result = migrate_locked(&bounded, &mut session);
     session.finish(result)
 }
 
-/// Advance only as far as the exact H3 reader bootstrap handoff requires.
-///
-/// Fresh databases and already-current databases still advance to the compiled terminal epoch.
-/// Exact legacy databases, including interrupted legacy-origin prefixes, stop at epoch 6 so the
-/// canonical cohort installer and closed shadow backfill can run before migration 7 replaces the
-/// reader views.
-///
-/// # Errors
-/// Returns [`SchemaEpochError`] under the same closed target, authority, prefix, transaction, and
-/// reconciliation laws as [`migrate_schema_epoch`].
-pub(crate) fn migrate_schema_epoch_to_h3_handoff(
-    config: &Config,
-) -> Result<SchemaEpochReport, SchemaEpochError> {
-    validate_legacy_connection_target(config).map_err(SchemaEpochError::ConnectionTarget)?;
-    let bounded = bounded_config(config);
-    let mut session = LockedSession::connect(&bounded)?;
-    let compiled = compiled_schema_epoch_migrations()?;
-    let result = migrate_locked_with_registry_for_goal(
-        &bounded,
-        &mut session,
-        &compiled,
-        MigrationGoal::H3ReaderBootstrap,
-    );
-    session.finish(result)
-}
-
 pub(crate) fn bounded_config(config: &Config) -> Config {
-    bounded_config_with_options(config, LEGACY_ADOPTER_STARTUP_OPTIONS)
+    bounded_config_with_options(config, CATALOG_STARTUP_OPTIONS)
 }
 
 fn bounded_config_with_options(config: &Config, startup_options: &str) -> Config {
     let mut bounded = config.clone();
     bounded
-        .connect_timeout(LEGACY_ADOPTER_CONNECT_TIMEOUT)
-        .tcp_user_timeout(LEGACY_ADOPTER_TCP_USER_TIMEOUT)
+        .connect_timeout(CATALOG_CONNECT_TIMEOUT)
+        .tcp_user_timeout(CATALOG_TCP_USER_TIMEOUT)
         .options(startup_options);
     bounded
 }
@@ -422,9 +376,9 @@ impl LockedSession {
     }
 }
 
-type ClientPrefixVerifier = fn(&mut Client, bool) -> Result<(), SchemaEpochError>;
+type ClientPrefixVerifier = fn(&mut Client) -> Result<(), SchemaEpochError>;
 type TransactionPrefixVerifier =
-    for<'transaction> fn(&mut Transaction<'transaction>, bool) -> Result<(), SchemaEpochError>;
+    for<'transaction> fn(&mut Transaction<'transaction>) -> Result<(), SchemaEpochError>;
 
 #[derive(Clone, Copy)]
 struct SchemaPrefixContract {
@@ -510,42 +464,6 @@ fn compiled_schema_epoch_migrations(
         SchemaEpochMigration::new(migration_v6, PREFIX_V6),
         SchemaEpochMigration::new(migration_v7, PREFIX_V7),
     ])
-}
-
-fn legacy_h3_cutover_handoff_target(
-    origin: SchemaEpochOrigin,
-    candidate: &[SchemaEpochMigration],
-) -> Result<Option<usize>, SchemaMigrationError> {
-    if origin != SchemaEpochOrigin::ExactLegacy || !is_canonical_schema_epoch_registry(candidate)? {
-        return Ok(None);
-    }
-    Ok(Some(LEGACY_H3_CUTOVER_INPUT_EPOCH))
-}
-
-fn h3_reader_bootstrap_handoff_target(
-    legacy_origin: bool,
-    prior_applied: usize,
-    candidate: &[SchemaEpochMigration],
-) -> Result<Option<usize>, SchemaMigrationError> {
-    if !legacy_origin
-        || prior_applied > LEGACY_H3_CUTOVER_INPUT_EPOCH
-        || !is_canonical_schema_epoch_registry(candidate)?
-    {
-        return Ok(None);
-    }
-    Ok(Some(LEGACY_H3_CUTOVER_INPUT_EPOCH))
-}
-
-fn is_canonical_schema_epoch_registry(
-    candidate: &[SchemaEpochMigration],
-) -> Result<bool, SchemaMigrationError> {
-    let canonical = compiled_schema_epoch_migrations()?;
-    Ok(candidate.len() == canonical.len()
-        && candidate.iter().zip(canonical.iter()).all(|(left, right)| {
-            left.migration.version() == right.migration.version()
-                && left.migration.checksum() == right.migration.checksum()
-                && left.migration.sql() == right.migration.sql()
-        }))
 }
 
 /// Build the checked-in migration registry from exact SQL bytes.
@@ -679,9 +597,7 @@ fn one_based_version(zero_based: usize) -> i64 {
 
 struct InspectedEpoch {
     origin: SchemaEpochOrigin,
-    legacy_origin: bool,
     persisted: Vec<PersistedMigration>,
-    legacy_adoption: Option<LegacyAdoptionReport>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -703,25 +619,9 @@ fn migrate_locked_with_registry(
     session: &mut LockedSession,
     compiled: &[SchemaEpochMigration],
 ) -> Result<SchemaEpochReport, SchemaEpochError> {
-    migrate_locked_with_registry_for_goal(config, session, compiled, MigrationGoal::Normal)
+    migrate_locked_with_registry_using(config, session, compiled, &mut attempt_migration)
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum MigrationGoal {
-    Normal,
-    H3ReaderBootstrap,
-}
-
-fn migrate_locked_with_registry_for_goal(
-    config: &Config,
-    session: &mut LockedSession,
-    compiled: &[SchemaEpochMigration],
-    goal: MigrationGoal,
-) -> Result<SchemaEpochReport, SchemaEpochError> {
-    migrate_locked_with_registry_using_goal(config, session, compiled, goal, &mut attempt_migration)
-}
-
-#[cfg(test)]
 fn migrate_locked_with_registry_using<Attempt>(
     config: &Config,
     session: &mut LockedSession,
@@ -729,56 +629,19 @@ fn migrate_locked_with_registry_using<Attempt>(
     attempt_migration_fn: &mut Attempt,
 ) -> Result<SchemaEpochReport, SchemaEpochError>
 where
-    Attempt: FnMut(
-        &mut Client,
-        SchemaEpochMigration,
-        bool,
-    ) -> Result<MigrationAttempt, SchemaEpochError>,
-{
-    migrate_locked_with_registry_using_goal(
-        config,
-        session,
-        compiled,
-        MigrationGoal::Normal,
-        attempt_migration_fn,
-    )
-}
-
-fn migrate_locked_with_registry_using_goal<Attempt>(
-    config: &Config,
-    session: &mut LockedSession,
-    compiled: &[SchemaEpochMigration],
-    goal: MigrationGoal,
-    attempt_migration_fn: &mut Attempt,
-) -> Result<SchemaEpochReport, SchemaEpochError>
-where
-    Attempt: FnMut(
-        &mut Client,
-        SchemaEpochMigration,
-        bool,
-    ) -> Result<MigrationAttempt, SchemaEpochError>,
+    Attempt: FnMut(&mut Client, SchemaEpochMigration) -> Result<MigrationAttempt, SchemaEpochError>,
 {
     validate_registry_prefix(compiled, &[])?;
     let initial = inspect_epoch(session.client(), compiled)?;
     let prior_applied = validate_registry_prefix(compiled, &initial.persisted)?;
-    let legacy_origin = initial.legacy_origin;
     let mut report = SchemaEpochReport {
         origin: initial.origin,
         prior_applied,
         final_applied: prior_applied,
         applied_versions: Vec::with_capacity(compiled.len()),
         reconciled_versions: Vec::with_capacity(compiled.len()),
-        legacy_adoption: initial.legacy_adoption,
     };
-    let target_applied = match goal {
-        MigrationGoal::Normal => {
-            legacy_h3_cutover_handoff_target(initial.origin, compiled)?.unwrap_or(compiled.len())
-        }
-        MigrationGoal::H3ReaderBootstrap => {
-            h3_reader_bootstrap_handoff_target(legacy_origin, prior_applied, compiled)?
-                .unwrap_or(compiled.len())
-        }
-    };
+    let target_applied = compiled.len();
     let mut next_pending = prior_applied;
     for _attempt in 0..MAX_SCHEMA_MIGRATIONS {
         if next_pending == target_applied {
@@ -792,7 +655,6 @@ where
             session,
             compiled,
             migration,
-            legacy_origin,
             &mut report,
             attempt_migration_fn,
         )?;
@@ -819,21 +681,16 @@ fn apply_with_reconciliation_using<Attempt>(
     session: &mut LockedSession,
     compiled: &[SchemaEpochMigration],
     migration: SchemaEpochMigration,
-    legacy_origin: bool,
     report: &mut SchemaEpochReport,
     attempt_migration_fn: &mut Attempt,
 ) -> Result<usize, SchemaEpochError>
 where
-    Attempt: FnMut(
-        &mut Client,
-        SchemaEpochMigration,
-        bool,
-    ) -> Result<MigrationAttempt, SchemaEpochError>,
+    Attempt: FnMut(&mut Client, SchemaEpochMigration) -> Result<MigrationAttempt, SchemaEpochError>,
 {
     let target_index = usize::try_from(migration.migration.version().as_i64() - 1)
         .expect("positive bounded migration version fits usize");
     for attempt in 0..MAX_COMMIT_ATTEMPTS_PER_VERSION {
-        match attempt_migration_fn(session.client(), migration, legacy_origin)? {
+        match attempt_migration_fn(session.client(), migration)? {
             MigrationAttempt::Committed => {
                 report.applied_versions.push(migration.migration.version());
                 return Ok(target_index + 1);
@@ -888,32 +745,17 @@ fn inspect_epoch(
             verify_fresh_epoch(client)?;
             Ok(InspectedEpoch {
                 origin: SchemaEpochOrigin::Fresh,
-                legacy_origin: false,
                 persisted: Vec::new(),
-                legacy_adoption: None,
-            })
-        }
-        SchemaEpochOrigin::ExactLegacy => {
-            let legacy_adoption =
-                verify_under_lock(client).map_err(SchemaEpochError::LegacyAdoption)?;
-            Ok(InspectedEpoch {
-                origin: SchemaEpochOrigin::ExactLegacy,
-                legacy_origin: true,
-                persisted: Vec::new(),
-                legacy_adoption: Some(legacy_adoption),
             })
         }
         SchemaEpochOrigin::ExistingRustPrefix => {
             let persisted = read_ledger(client, compiled.len())?;
             require_recorded_rust_prefix(&persisted)?;
             let applied = validate_registry_prefix(compiled, &persisted)?;
-            let legacy_origin = observation.legacy_stamp == SchemaEpochRelation::ExactTable;
-            verify_recorded_prefix_client(client, compiled, applied, legacy_origin)?;
+            verify_recorded_prefix_client(client, compiled, applied)?;
             Ok(InspectedEpoch {
                 origin: SchemaEpochOrigin::ExistingRustPrefix,
-                legacy_origin,
                 persisted,
-                legacy_adoption: None,
             })
         }
     }
@@ -941,7 +783,6 @@ fn verify_recorded_prefix_client(
     client: &mut Client,
     compiled: &[SchemaEpochMigration],
     applied: usize,
-    legacy_origin: bool,
 ) -> Result<(), SchemaEpochError> {
     let prefix_index = applied
         .checked_sub(1)
@@ -950,7 +791,7 @@ fn verify_recorded_prefix_client(
         .get(prefix_index)
         .ok_or(SchemaEpochError::EpochShapeMismatch)?
         .prefix_contract;
-    (contract.verify_client)(client, legacy_origin)
+    (contract.verify_client)(client)
 }
 
 fn verify_database_owner(client: &mut Client) -> Result<(), SchemaEpochError> {
@@ -979,7 +820,6 @@ fn read_observation(client: &mut Client) -> Result<SchemaEpochObservation, Schem
             babylon_meta: decode_bool(&row, 2, SchemaEpochOperation::Classify)?,
         },
         ledger: decode_relation_marker(&row, 3, 4)?,
-        legacy_stamp: decode_relation_marker(&row, 5, 6)?,
     })
 }
 
@@ -989,22 +829,14 @@ fn classify_observation(
     let no_authority = !observation.schemas.babylon_ref && !observation.schemas.babylon_state;
     let fresh = no_authority
         && !observation.schemas.babylon_meta
-        && observation.ledger == SchemaEpochRelation::Absent
-        && observation.legacy_stamp == SchemaEpochRelation::Absent;
+        && observation.ledger == SchemaEpochRelation::Absent;
     if fresh {
         return Ok(SchemaEpochOrigin::Fresh);
-    }
-    let legacy = no_authority
-        && observation.ledger == SchemaEpochRelation::Absent
-        && observation.legacy_stamp == SchemaEpochRelation::ExactTable;
-    if legacy {
-        return Ok(SchemaEpochOrigin::ExactLegacy);
     }
     let rust_prefix = observation.schemas.babylon_ref
         && observation.schemas.babylon_state
         && observation.schemas.babylon_meta
-        && observation.ledger == SchemaEpochRelation::ExactTable
-        && observation.legacy_stamp != SchemaEpochRelation::WrongShape;
+        && observation.ledger == SchemaEpochRelation::ExactTable;
     if rust_prefix {
         return Ok(SchemaEpochOrigin::ExistingRustPrefix);
     }
@@ -1031,14 +863,14 @@ fn verify_fresh_epoch(client: &mut Client) -> Result<(), SchemaEpochError> {
     compare_fresh_census(actual.as_slice())
 }
 
-fn compare_fresh_census(actual: &[LegacyCensusEntry]) -> Result<(), SchemaEpochError> {
-    let without_intel = parse_legacy_census_fixture(FRESH_CENSUS)?;
-    let Err(without_intel) = compare_legacy_census(&without_intel, actual) else {
+fn compare_fresh_census(actual: &[CatalogCensusEntry]) -> Result<(), SchemaEpochError> {
+    let without_intel = parse_catalog_census(FRESH_CENSUS)?;
+    let Err(without_intel) = compare_catalog_census(&without_intel, actual) else {
         return Ok(());
     };
-    let with_intel = parse_legacy_census_fixture(FRESH_CENSUS_WITH_INTEL)?;
-    match compare_legacy_census(&with_intel, actual) {
-        Ok(_) => Ok(()),
+    let with_intel = parse_catalog_census(FRESH_CENSUS_WITH_INTEL)?;
+    match compare_catalog_census(&with_intel, actual) {
+        Ok(()) => Ok(()),
         Err(with_intel) => Err(SchemaEpochError::FreshCensusMismatch {
             without_intel: Box::new(without_intel),
             with_intel: Box::new(with_intel),
@@ -1046,196 +878,122 @@ fn compare_fresh_census(actual: &[LegacyCensusEntry]) -> Result<(), SchemaEpochE
     }
 }
 
-fn verify_v1_prefix_client(
-    client: &mut Client,
-    legacy_origin: bool,
-) -> Result<(), SchemaEpochError> {
+fn verify_v1_prefix_client(client: &mut Client) -> Result<(), SchemaEpochError> {
     verify_epoch_shape_client(client, EPOCH_V1_SHAPE_SQL)?;
-    verify_post_epoch_census_client(client, legacy_origin, SchemaEpochPrefix::V1)
+    verify_post_epoch_census_client(client, SchemaEpochPrefix::V1)
 }
 
-fn verify_v1_prefix_transaction(
-    transaction: &mut Transaction<'_>,
-    legacy_origin: bool,
-) -> Result<(), SchemaEpochError> {
+fn verify_v1_prefix_transaction(transaction: &mut Transaction<'_>) -> Result<(), SchemaEpochError> {
     verify_epoch_shape_transaction(transaction, EPOCH_V1_SHAPE_SQL)?;
-    verify_post_epoch_census_transaction(transaction, legacy_origin, SchemaEpochPrefix::V1)
+    verify_post_epoch_census_transaction(transaction, SchemaEpochPrefix::V1)
 }
 
-fn verify_v2_prefix_client(
-    client: &mut Client,
-    legacy_origin: bool,
-) -> Result<(), SchemaEpochError> {
+fn verify_v2_prefix_client(client: &mut Client) -> Result<(), SchemaEpochError> {
     verify_epoch_shape_client(client, EPOCH_V2_SHAPE_SQL)?;
-    verify_post_epoch_census_client(client, legacy_origin, SchemaEpochPrefix::V2)
+    verify_post_epoch_census_client(client, SchemaEpochPrefix::V2)
 }
 
-fn verify_v2_prefix_transaction(
-    transaction: &mut Transaction<'_>,
-    legacy_origin: bool,
-) -> Result<(), SchemaEpochError> {
+fn verify_v2_prefix_transaction(transaction: &mut Transaction<'_>) -> Result<(), SchemaEpochError> {
     verify_epoch_shape_transaction(transaction, EPOCH_V2_SHAPE_SQL)?;
-    verify_post_epoch_census_transaction(transaction, legacy_origin, SchemaEpochPrefix::V2)
+    verify_post_epoch_census_transaction(transaction, SchemaEpochPrefix::V2)
 }
 
-fn verify_v3_prefix_client(
-    client: &mut Client,
-    legacy_origin: bool,
-) -> Result<(), SchemaEpochError> {
+fn verify_v3_prefix_client(client: &mut Client) -> Result<(), SchemaEpochError> {
     verify_epoch_shape_client(client, EPOCH_V3_SHAPE_SQL)?;
-    verify_post_epoch_census_client(client, legacy_origin, SchemaEpochPrefix::V3)
+    verify_post_epoch_census_client(client, SchemaEpochPrefix::V3)
 }
 
-fn verify_v3_prefix_transaction(
-    transaction: &mut Transaction<'_>,
-    legacy_origin: bool,
-) -> Result<(), SchemaEpochError> {
+fn verify_v3_prefix_transaction(transaction: &mut Transaction<'_>) -> Result<(), SchemaEpochError> {
     verify_epoch_shape_transaction(transaction, EPOCH_V3_SHAPE_SQL)?;
-    verify_post_epoch_census_transaction(transaction, legacy_origin, SchemaEpochPrefix::V3)
+    verify_post_epoch_census_transaction(transaction, SchemaEpochPrefix::V3)
 }
 
-fn verify_v4_prefix_client(
-    client: &mut Client,
-    legacy_origin: bool,
-) -> Result<(), SchemaEpochError> {
+fn verify_v4_prefix_client(client: &mut Client) -> Result<(), SchemaEpochError> {
     verify_epoch_shape_client(client, EPOCH_V4_SHAPE_SQL)?;
-    verify_post_epoch_census_client(client, legacy_origin, SchemaEpochPrefix::V4)
+    verify_post_epoch_census_client(client, SchemaEpochPrefix::V4)
 }
 
-fn verify_v4_prefix_transaction(
-    transaction: &mut Transaction<'_>,
-    legacy_origin: bool,
-) -> Result<(), SchemaEpochError> {
+fn verify_v4_prefix_transaction(transaction: &mut Transaction<'_>) -> Result<(), SchemaEpochError> {
     verify_epoch_shape_transaction(transaction, EPOCH_V4_SHAPE_SQL)?;
-    verify_post_epoch_census_transaction(transaction, legacy_origin, SchemaEpochPrefix::V4)
+    verify_post_epoch_census_transaction(transaction, SchemaEpochPrefix::V4)
 }
 
-fn verify_v5_prefix_client(
-    client: &mut Client,
-    legacy_origin: bool,
-) -> Result<(), SchemaEpochError> {
+fn verify_v5_prefix_client(client: &mut Client) -> Result<(), SchemaEpochError> {
     verify_epoch_shape_client(client, EPOCH_V5_SHAPE_SQL)?;
-    verify_post_epoch_census_client(client, legacy_origin, SchemaEpochPrefix::V5)
+    verify_post_epoch_census_client(client, SchemaEpochPrefix::V5)
 }
 
-fn verify_v5_prefix_transaction(
-    transaction: &mut Transaction<'_>,
-    legacy_origin: bool,
-) -> Result<(), SchemaEpochError> {
+fn verify_v5_prefix_transaction(transaction: &mut Transaction<'_>) -> Result<(), SchemaEpochError> {
     verify_epoch_shape_transaction(transaction, EPOCH_V5_SHAPE_SQL)?;
-    verify_post_epoch_census_transaction(transaction, legacy_origin, SchemaEpochPrefix::V5)
+    verify_post_epoch_census_transaction(transaction, SchemaEpochPrefix::V5)
 }
 
-fn verify_v6_prefix_client(
-    client: &mut Client,
-    legacy_origin: bool,
-) -> Result<(), SchemaEpochError> {
+fn verify_v6_prefix_client(client: &mut Client) -> Result<(), SchemaEpochError> {
     verify_epoch_shape_client(client, EPOCH_V6_SHAPE_SQL)?;
-    verify_post_epoch_census_client(client, legacy_origin, SchemaEpochPrefix::V6)
+    verify_post_epoch_census_client(client, SchemaEpochPrefix::V6)
 }
 
-fn verify_v6_prefix_transaction(
-    transaction: &mut Transaction<'_>,
-    legacy_origin: bool,
-) -> Result<(), SchemaEpochError> {
+fn verify_v6_prefix_transaction(transaction: &mut Transaction<'_>) -> Result<(), SchemaEpochError> {
     verify_epoch_shape_transaction(transaction, EPOCH_V6_SHAPE_SQL)?;
-    verify_post_epoch_census_transaction(transaction, legacy_origin, SchemaEpochPrefix::V6)
+    verify_post_epoch_census_transaction(transaction, SchemaEpochPrefix::V6)
 }
 
-fn verify_v7_prefix_client(
-    client: &mut Client,
-    legacy_origin: bool,
-) -> Result<(), SchemaEpochError> {
+fn verify_v7_prefix_client(client: &mut Client) -> Result<(), SchemaEpochError> {
     verify_epoch_shape_client(client, EPOCH_V6_SHAPE_SQL)?;
     verify_epoch_shape_client(client, EPOCH_V7_SHAPE_SQL)?;
-    verify_post_epoch_census_client(client, legacy_origin, SchemaEpochPrefix::V7)
+    verify_post_epoch_census_client(client, SchemaEpochPrefix::V7)
 }
 
-fn verify_v7_prefix_transaction(
-    transaction: &mut Transaction<'_>,
-    legacy_origin: bool,
-) -> Result<(), SchemaEpochError> {
+fn verify_v7_prefix_transaction(transaction: &mut Transaction<'_>) -> Result<(), SchemaEpochError> {
     verify_epoch_shape_transaction(transaction, EPOCH_V6_SHAPE_SQL)?;
     verify_epoch_shape_transaction(transaction, EPOCH_V7_SHAPE_SQL)?;
-    verify_post_epoch_census_transaction(transaction, legacy_origin, SchemaEpochPrefix::V7)
+    verify_post_epoch_census_transaction(transaction, SchemaEpochPrefix::V7)
 }
 
 fn verify_post_epoch_census_client(
     client: &mut Client,
-    legacy_origin: bool,
     prefix: SchemaEpochPrefix,
 ) -> Result<(), SchemaEpochError> {
     verify_authority_sentinels_client(client)?;
     let actual = catalog_census_under_lock(client, false).map_err(SchemaEpochError::Census)?;
-    verify_post_epoch_census(actual.as_slice(), legacy_origin, prefix)
+    verify_post_epoch_census(actual.as_slice(), prefix)
 }
 
 fn verify_post_epoch_census_transaction(
     transaction: &mut Transaction<'_>,
-    legacy_origin: bool,
     prefix: SchemaEpochPrefix,
 ) -> Result<(), SchemaEpochError> {
     verify_authority_sentinels_transaction(transaction)?;
     let actual = read_census_rows(transaction).map_err(SchemaEpochError::Census)?;
-    verify_post_epoch_census(actual.as_slice(), legacy_origin, prefix)
+    verify_post_epoch_census(actual.as_slice(), prefix)
 }
 
 fn verify_post_epoch_census(
-    actual: &[LegacyCensusEntry],
-    legacy_origin: bool,
+    actual: &[CatalogCensusEntry],
     prefix: SchemaEpochPrefix,
 ) -> Result<(), SchemaEpochError> {
     let mut baseline = Vec::with_capacity(actual.len());
-    let epoch_capacity = if prefix == SchemaEpochPrefix::V7 && legacy_origin {
-        49
-    } else {
-        25
-    };
-    let mut epoch = Vec::with_capacity(epoch_capacity);
-    for entry in actual.iter().take(MAX_LEGACY_CENSUS_ROWS) {
-        if is_epoch_entry(entry, legacy_origin, prefix) {
+    let mut epoch = Vec::with_capacity(25);
+    for entry in actual.iter().take(MAX_CATALOG_CENSUS_ROWS) {
+        if is_epoch_entry(entry, prefix) {
             epoch.push(entry.clone());
         } else {
             baseline.push(entry.clone());
         }
     }
-    let epoch_fixture = match (prefix, legacy_origin) {
-        (SchemaEpochPrefix::V1, true) => EPOCH_OWNED_CENSUS_V1,
-        (SchemaEpochPrefix::V1, false) => EPOCH_OWNED_FRESH_CENSUS_V1,
-        (SchemaEpochPrefix::V2, true) => EPOCH_OWNED_CENSUS_V2,
-        (SchemaEpochPrefix::V2, false) => EPOCH_OWNED_FRESH_CENSUS_V2,
-        (SchemaEpochPrefix::V3, true) => EPOCH_OWNED_CENSUS_V3,
-        (SchemaEpochPrefix::V3, false) => EPOCH_OWNED_FRESH_CENSUS_V3,
-        (SchemaEpochPrefix::V4, true) => EPOCH_OWNED_CENSUS_V4,
-        (SchemaEpochPrefix::V4, false) => EPOCH_OWNED_FRESH_CENSUS_V4,
-        (SchemaEpochPrefix::V5, true) => EPOCH_OWNED_CENSUS_V5,
-        (SchemaEpochPrefix::V5, false) => EPOCH_OWNED_FRESH_CENSUS_V5,
-        (SchemaEpochPrefix::V6, true) => EPOCH_OWNED_CENSUS_V6,
-        (SchemaEpochPrefix::V6, false) => EPOCH_OWNED_FRESH_CENSUS_V6,
-        (SchemaEpochPrefix::V7, true) => EPOCH_OWNED_CENSUS_V7,
-        (SchemaEpochPrefix::V7, false) => EPOCH_OWNED_FRESH_CENSUS_V7,
+    let epoch_fixture = match prefix {
+        SchemaEpochPrefix::V1 => EPOCH_OWNED_FRESH_CENSUS_V1,
+        SchemaEpochPrefix::V2 => EPOCH_OWNED_FRESH_CENSUS_V2,
+        SchemaEpochPrefix::V3 => EPOCH_OWNED_FRESH_CENSUS_V3,
+        SchemaEpochPrefix::V4 => EPOCH_OWNED_FRESH_CENSUS_V4,
+        SchemaEpochPrefix::V5 => EPOCH_OWNED_FRESH_CENSUS_V5,
+        SchemaEpochPrefix::V6 => EPOCH_OWNED_FRESH_CENSUS_V6,
+        SchemaEpochPrefix::V7 => EPOCH_OWNED_FRESH_CENSUS_V7,
     };
-    let expected_epoch = parse_legacy_census_fixture(epoch_fixture)?;
-    compare_legacy_census(&expected_epoch, epoch.as_slice())
+    let expected_epoch = parse_catalog_census(epoch_fixture)?;
+    compare_catalog_census(&expected_epoch, epoch.as_slice())
         .map_err(|_| SchemaEpochError::EpochCensusMismatch)?;
-    if legacy_origin {
-        let expected = crate::legacy_adopter::expected_legacy_census()?;
-        // Objects changed by this migration are governed by the epoch fixture above. Restore
-        // their frozen pre-migration entries only for the baseline comparison so every other
-        // legacy object remains exact without requiring the changed objects twice.
-        baseline.extend(
-            expected
-                .entries()
-                .iter()
-                .filter(|entry| is_epoch_entry(entry, true, prefix))
-                .cloned(),
-        );
-        compare_legacy_census(&expected, baseline.as_slice())
-            .map(|_| ())
-            .map_err(|_| SchemaEpochError::EpochCensusMismatch)
-    } else {
-        compare_fresh_census(baseline.as_slice())
-    }
+    compare_fresh_census(baseline.as_slice())
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1249,13 +1007,9 @@ enum SchemaEpochPrefix {
     V7,
 }
 
-fn is_epoch_entry(
-    entry: &LegacyCensusEntry,
-    legacy_origin: bool,
-    prefix: SchemaEpochPrefix,
-) -> bool {
+fn is_epoch_entry(entry: &CatalogCensusEntry, prefix: SchemaEpochPrefix) -> bool {
     let key = entry.key();
-    let migration_relation = key.kind() == LegacyObjectKind::Relation
+    let migration_relation = key.kind() == CatalogObjectKind::Relation
         && key.schema() == "babylon_state"
         && key.name() == "schema_migration";
     let h3_relation = matches!(
@@ -1266,7 +1020,7 @@ fn is_epoch_entry(
             | SchemaEpochPrefix::V5
             | SchemaEpochPrefix::V6
             | SchemaEpochPrefix::V7
-    ) && key.kind() == LegacyObjectKind::Relation
+    ) && key.kind() == CatalogObjectKind::Relation
         && key.schema() == "babylon_ref"
         && key.name() == "h3_cell";
     let h3_cohort_relation = matches!(
@@ -1276,7 +1030,7 @@ fn is_epoch_entry(
             | SchemaEpochPrefix::V5
             | SchemaEpochPrefix::V6
             | SchemaEpochPrefix::V7
-    ) && key.kind() == LegacyObjectKind::Relation
+    ) && key.kind() == CatalogObjectKind::Relation
         && key.schema() == "babylon_ref"
         && matches!(
             key.name(),
@@ -1288,7 +1042,7 @@ fn is_epoch_entry(
             | SchemaEpochPrefix::V5
             | SchemaEpochPrefix::V6
             | SchemaEpochPrefix::V7
-    ) && key.kind() == LegacyObjectKind::Relation
+    ) && key.kind() == CatalogObjectKind::Relation
         && key.schema() == "babylon_state"
         && matches!(
             key.name(),
@@ -1303,17 +1057,16 @@ fn is_epoch_entry(
                 | "tick_checkpoint_row"
                 | "tick_archive_dirty_receipt_row"
         );
-    let owned_schema = key.kind() == LegacyObjectKind::Schema
+    let owned_schema = key.kind() == CatalogObjectKind::Schema
         && key.schema() == "pg_namespace"
         && matches!(key.name(), "babylon_ref" | "babylon_state");
-    let fresh_meta = !legacy_origin
-        && key.kind() == LegacyObjectKind::SchemaGrant
+    let fresh_meta = key.kind() == CatalogObjectKind::SchemaGrant
         && key.schema() == "pg_namespace"
         && key.name() == "babylon_meta";
     let spatial_reference_relation = matches!(
         prefix,
         SchemaEpochPrefix::V5 | SchemaEpochPrefix::V6 | SchemaEpochPrefix::V7
-    ) && key.kind() == LegacyObjectKind::Relation
+    ) && key.kind() == CatalogObjectKind::Relation
         && key.schema() == "babylon_ref"
         && matches!(
             key.name(),
@@ -1326,75 +1079,13 @@ fn is_epoch_entry(
                 | "county_h3_land_area"
                 | "county_place_h3_land_area"
         );
-    let h3_shadow_relation = is_h3_shadow_epoch_entry(entry, legacy_origin, prefix);
-    let canonical_reader_view = is_canonical_reader_epoch_entry(entry, legacy_origin, prefix);
     migration_relation
         || h3_relation
         || h3_cohort_relation
         || committed_tick_relation
         || spatial_reference_relation
-        || h3_shadow_relation
-        || canonical_reader_view
         || owned_schema
         || fresh_meta
-}
-
-fn is_h3_shadow_epoch_entry(
-    entry: &LegacyCensusEntry,
-    legacy_origin: bool,
-    prefix: SchemaEpochPrefix,
-) -> bool {
-    let key = entry.key();
-    legacy_origin
-        && matches!(prefix, SchemaEpochPrefix::V6 | SchemaEpochPrefix::V7)
-        && matches!(
-            key.kind(),
-            LegacyObjectKind::Relation | LegacyObjectKind::PartitionedTable
-        )
-        && key.schema() == "public"
-        && matches!(
-            key.name(),
-            "dynamic_hex_state"
-                | "hex_activity"
-                | "hex_cell"
-                | "hex_latest"
-                | "hex_map"
-                | "hex_r8_linear_features_reference"
-                | "hex_r8_reference"
-                | "hex_spatial_map"
-                | "hex_state"
-                | "hex_substrate"
-                | "hex_terrain_state"
-                | "immutable_reference_lodes_od_matrix"
-                | "infrastructure_link_state"
-                | "org_snapshot"
-                | "tick_event"
-        )
-}
-
-fn is_canonical_reader_epoch_entry(
-    entry: &LegacyCensusEntry,
-    legacy_origin: bool,
-    prefix: SchemaEpochPrefix,
-) -> bool {
-    let key = entry.key();
-    legacy_origin
-        && prefix == SchemaEpochPrefix::V7
-        && key.kind() == LegacyObjectKind::View
-        && key.schema() == "public"
-        && matches!(
-            key.name(),
-            "v_county_value_aggregate"
-                | "v_hex_aid"
-                | "v_hex_economic"
-                | "v_hex_heat"
-                | "v_hex_intel"
-                | "v_hex_mobilize"
-                | "v_hex_state_asof"
-                | "v_national_value_aggregate"
-                | "v_state_value_aggregate"
-                | "view_runtime_trace_emission"
-        )
 }
 
 fn verify_authority_sentinels_client(client: &mut Client) -> Result<(), SchemaEpochError> {
@@ -1462,10 +1153,9 @@ fn decode_ledger_rows(
 fn attempt_migration(
     client: &mut Client,
     migration: SchemaEpochMigration,
-    legacy_origin: bool,
 ) -> Result<MigrationAttempt, SchemaEpochError> {
     let mut transaction = begin_migration_transaction(client)?;
-    execute_migration_before_marker(&mut transaction, migration, legacy_origin)?;
+    execute_migration_before_marker(&mut transaction, migration)?;
     insert_ledger_marker(&mut transaction, migration.migration)?;
     commit_migration(transaction)
 }
@@ -1493,13 +1183,12 @@ fn begin_migration_transaction(client: &mut Client) -> Result<Transaction<'_>, S
 fn execute_migration_before_marker(
     transaction: &mut Transaction<'_>,
     migration: SchemaEpochMigration,
-    legacy_origin: bool,
 ) -> Result<(), SchemaEpochError> {
     prepare_migration_transaction(transaction)?;
     transaction
         .batch_execute(migration.migration.sql())
         .map_err(|error| postgres_database_error(SchemaEpochOperation::ExecuteMigration, &error))?;
-    (migration.prefix_contract.verify_transaction)(transaction, legacy_origin)
+    (migration.prefix_contract.verify_transaction)(transaction)
 }
 
 fn prepare_migration_transaction(
@@ -1602,197 +1291,70 @@ fn postgres_database_error(
 }
 
 #[cfg(test)]
-#[path = "../tests/support/legacy_epoch_fixture.rs"]
-pub(crate) mod legacy_epoch_fixture;
-
-#[cfg(test)]
 mod pure_tests {
     use super::*;
+    use crate::postgres_catalog::CatalogObjectKey;
 
     #[test]
-    fn compiled_registry_binds_each_migration_to_a_prefix_contract() {
-        let compiled = compiled_schema_epoch_migrations().unwrap();
-
-        assert_eq!(compiled.len(), 7);
-        assert_eq!(compiled[0].migration.version().as_i64(), 1);
-        assert_eq!(compiled[1].migration.version().as_i64(), 2);
-        assert_eq!(compiled[2].migration.version().as_i64(), 3);
-        assert_eq!(compiled[3].migration.version().as_i64(), 4);
-        assert_eq!(compiled[4].migration.version().as_i64(), 5);
-        assert_eq!(compiled[5].migration.version().as_i64(), 6);
-        assert_eq!(compiled[6].migration.version().as_i64(), 7);
-    }
-
-    #[test]
-    fn only_the_exact_canonical_registry_has_the_legacy_epoch_six_handoff() {
-        let canonical = compiled_schema_epoch_migrations().unwrap();
+    fn empty_and_current_authority_are_the_only_bootstrap_shapes() {
+        let fresh = SchemaEpochObservation {
+            schemas: SchemaEpochSchemas {
+                babylon_ref: false,
+                babylon_state: false,
+                babylon_meta: false,
+            },
+            ledger: SchemaEpochRelation::Absent,
+        };
+        assert_eq!(classify_observation(fresh), Ok(SchemaEpochOrigin::Fresh));
+        let partial = SchemaEpochObservation {
+            schemas: SchemaEpochSchemas {
+                babylon_ref: false,
+                babylon_state: false,
+                babylon_meta: true,
+            },
+            ledger: SchemaEpochRelation::Absent,
+        };
         assert_eq!(
-            legacy_h3_cutover_handoff_target(SchemaEpochOrigin::ExactLegacy, &canonical).unwrap(),
-            Some(LEGACY_H3_CUTOVER_INPUT_EPOCH)
+            classify_observation(partial),
+            Err(SchemaEpochError::PartialAuthorityEpoch {
+                observation: partial
+            })
         );
+        let current = SchemaEpochObservation {
+            schemas: SchemaEpochSchemas {
+                babylon_ref: true,
+                babylon_state: true,
+                babylon_meta: true,
+            },
+            ledger: SchemaEpochRelation::ExactTable,
+        };
         assert_eq!(
-            legacy_h3_cutover_handoff_target(SchemaEpochOrigin::Fresh, &canonical).unwrap(),
-            None
+            classify_observation(current),
+            Ok(SchemaEpochOrigin::ExistingRustPrefix)
         );
-        assert_eq!(
-            legacy_h3_cutover_handoff_target(SchemaEpochOrigin::ExistingRustPrefix, &canonical,)
-                .unwrap(),
-            None
-        );
-
-        let mut altered_sql = canonical;
-        altered_sql[6] = SchemaEpochMigration::new(
-            SchemaMigration::new(
-                MigrationVersion::try_from(7).unwrap(),
-                "SELECT 'not the canonical epoch seven';\n",
-            )
-            .unwrap(),
-            PREFIX_V7,
-        );
-        assert_eq!(
-            legacy_h3_cutover_handoff_target(SchemaEpochOrigin::ExactLegacy, &altered_sql).unwrap(),
-            None
-        );
-
-        assert_eq!(
-            legacy_h3_cutover_handoff_target(SchemaEpochOrigin::ExactLegacy, &canonical[..6])
-                .unwrap(),
-            None
-        );
-    }
-
-    #[test]
-    fn bootstrap_handoff_recovers_every_legacy_origin_prefix_through_epoch_six() {
-        let canonical = compiled_schema_epoch_migrations().unwrap();
-        for applied in 0..=LEGACY_H3_CUTOVER_INPUT_EPOCH {
-            assert_eq!(
-                h3_reader_bootstrap_handoff_target(true, applied, &canonical).unwrap(),
-                Some(LEGACY_H3_CUTOVER_INPUT_EPOCH)
-            );
-        }
-        assert_eq!(
-            h3_reader_bootstrap_handoff_target(
-                true,
-                LEGACY_H3_CUTOVER_INPUT_EPOCH + 1,
-                &canonical,
-            )
-            .unwrap(),
-            None
-        );
-        assert_eq!(
-            h3_reader_bootstrap_handoff_target(false, 0, &canonical).unwrap(),
-            None
-        );
-        assert_eq!(
-            h3_reader_bootstrap_handoff_target(true, 0, &canonical[..6]).unwrap(),
-            None
-        );
-    }
-
-    #[test]
-    fn epoch_seven_classification_is_cumulative_and_owns_only_the_reader_cutover_views() {
-        let h3_cell = census_entry("relation", "babylon_ref", "h3_cell");
-        let spatial_product = census_entry("relation", "babylon_ref", "reference_product");
-        let shadow_table = census_entry("relation", "public", "hex_latest");
-        let reader_view = census_entry("view", "public", "v_hex_aid");
-
-        for entry in [&h3_cell, &spatial_product, &shadow_table] {
-            assert!(is_epoch_entry(entry, true, SchemaEpochPrefix::V7));
-        }
-        assert!(is_epoch_entry(&reader_view, true, SchemaEpochPrefix::V7));
-        assert!(!is_epoch_entry(&reader_view, true, SchemaEpochPrefix::V6));
-        assert!(!is_epoch_entry(&reader_view, false, SchemaEpochPrefix::V7));
-    }
-
-    fn census_entry(kind: &str, schema: &str, name: &str) -> LegacyCensusEntry {
-        let fixture = format!("{kind}|{schema}|{name}|{}\n", "0".repeat(64));
-        parse_legacy_census_fixture(&fixture).unwrap().entries()[0].clone()
-    }
-
-    #[test]
-    fn marker_state_machine_accepts_only_complete_lane_candidates() {
-        assert_eq!(
-            classify_observation(observation(
-                [false, false, false],
-                SchemaEpochRelation::Absent,
-                SchemaEpochRelation::Absent,
-            )),
-            Ok(SchemaEpochOrigin::Fresh)
-        );
-        assert_eq!(
-            classify_observation(observation(
-                [false, false, true],
-                SchemaEpochRelation::Absent,
-                SchemaEpochRelation::ExactTable,
-            )),
-            Ok(SchemaEpochOrigin::ExactLegacy)
-        );
-        for stamp in [SchemaEpochRelation::Absent, SchemaEpochRelation::ExactTable] {
-            assert_eq!(
-                classify_observation(observation(
-                    [true, true, true],
-                    SchemaEpochRelation::ExactTable,
-                    stamp,
-                )),
-                Ok(SchemaEpochOrigin::ExistingRustPrefix)
-            );
-        }
-    }
-
-    #[test]
-    fn partial_or_wrong_shape_markers_refuse_with_the_exact_observation() {
-        let cases = [
-            observation(
-                [true, false, false],
-                SchemaEpochRelation::Absent,
-                SchemaEpochRelation::Absent,
-            ),
-            observation(
-                [true, true, true],
-                SchemaEpochRelation::Absent,
-                SchemaEpochRelation::Absent,
-            ),
-            observation(
-                [true, true, true],
-                SchemaEpochRelation::WrongShape,
-                SchemaEpochRelation::Absent,
-            ),
-            observation(
-                [true, true, true],
-                SchemaEpochRelation::ExactTable,
-                SchemaEpochRelation::WrongShape,
-            ),
-        ];
-        for observation in cases {
-            assert_eq!(
-                classify_observation(observation),
-                Err(SchemaEpochError::PartialAuthorityEpoch { observation })
-            );
-        }
-    }
-
-    #[test]
-    fn an_existing_rust_epoch_requires_a_recorded_prefix() {
         assert_eq!(
             require_recorded_rust_prefix(&[]),
             Err(SchemaEpochError::UnrecordedRustEpoch)
         );
     }
 
-    fn observation(
-        schemas: [bool; 3],
-        ledger: SchemaEpochRelation,
-        legacy_stamp: SchemaEpochRelation,
-    ) -> SchemaEpochObservation {
-        SchemaEpochObservation {
-            schemas: SchemaEpochSchemas {
-                babylon_ref: schemas[0],
-                babylon_state: schemas[1],
-                babylon_meta: schemas[2],
-            },
-            ledger,
-            legacy_stamp,
-        }
+    #[test]
+    fn unexpected_public_objects_cannot_enter_the_fresh_bootstrap() {
+        let mut entries = parse_catalog_census(FRESH_CENSUS)
+            .unwrap()
+            .entries()
+            .to_vec();
+        let extra = CatalogObjectKey::new(
+            CatalogObjectKind::Relation,
+            "public",
+            "unexpected_game_state",
+        )
+        .unwrap();
+        entries.push(CatalogCensusEntry::new(extra, &"0".repeat(64)).unwrap());
+        assert!(matches!(
+            compare_fresh_census(&entries),
+            Err(SchemaEpochError::FreshCensusMismatch { .. })
+        ));
     }
 }
 
@@ -1805,45 +1367,29 @@ mod live_rollback_tests {
 
     use super::*;
 
-    const DSN_ENV: &str = "BABYLON_LEGACY_ADOPTER_TEST_DSN";
-    const ACK_ENV: &str = "BABYLON_LEGACY_ADOPTER_DISPOSABLE_ACK";
-    const ACK: &str = "I_UNDERSTAND_PER20_DROPS_SCRATCH_DATABASES_ROLES_AND_CREATED_BABYLON_INTEL";
-    const CANARY_ENV: &str = "BABYLON_LEGACY_ADOPTER_DISPOSABLE_CANARY";
+    const DSN_ENV: &str = "BABYLON_POSTGRES_TEST_DSN";
+    const ACK_ENV: &str = "BABYLON_POSTGRES_DISPOSABLE_ACK";
+    const ACK: &str = "I_UNDERSTAND_THIS_DISPOSABLE_RUNTIME_DROPS_ITS_SCRATCH_DATABASES_AND_ROLES";
+    const CANARY_ENV: &str = "BABYLON_POSTGRES_DISPOSABLE_CANARY";
     const BACKEND_TERMINATION_TIMEOUT_MILLIS: i64 = 5_000;
 
     #[test]
-    #[ignore = "requires the task-owned disposable PER-20 PostgreSQL runtime"]
+    #[ignore = "requires the task-owned disposable PostgreSQL runtime"]
     fn rollback_and_ambiguous_commit_reconciliation_are_atomic() {
         let base = validated_base_config();
         verify_unsupported_startup_setting_diagnostic(&base);
+        verify_authentication_diagnostic(&base);
         verify_post_ddl_rollback(&base);
         verify_definite_commit_failure(&base);
         verify_killed_commit_retry(&base);
         verify_committed_reconciliation(&base);
-        verify_multi_version_upgrade_and_idempotence(&base);
-        verify_v2_pre_marker_rollback(&base);
-        verify_v2_marker_rollback(&base);
-        verify_v2_killed_commit_retry(&base);
-        verify_v2_committed_reconciliation(&base);
-        verify_v3_pre_marker_rollback(&base);
-        verify_v3_marker_rollback(&base);
-        verify_v3_killed_commit_retry(&base);
-        verify_v3_committed_reconciliation(&base);
-        verify_v4_pre_marker_rollback(&base);
-        verify_v4_marker_rollback(&base);
-        verify_v4_killed_commit_retry(&base);
-        verify_v4_committed_reconciliation(&base);
-        verify_v5_pre_marker_rollback(&base);
-        verify_v5_marker_rollback(&base);
-        verify_v5_killed_commit_retry(&base);
-        verify_v5_committed_reconciliation(&base);
-        verify_v6_pre_marker_rollback(&base);
-        verify_v6_marker_rollback(&base);
-        verify_v6_killed_commit_retry(&base);
-        verify_v6_committed_reconciliation(&base);
-        verify_v7_fault_matrix(&base);
-        verify_leap_ahead_reconciliation(&base);
-        verify_h3_installer_commit_protocol(&base);
+        let spatial = TestDatabase::create(&base, "spatialproducts");
+        let config = spatial.config(&base);
+        migrate_schema_epoch(&config).unwrap();
+        crate::spatial_reference_installer::live_postgres_tests::verify_commit_protocol(
+            &config, &base,
+        );
+        spatial.cleanup();
     }
 
     fn verify_unsupported_startup_setting_diagnostic(base: &Config) {
@@ -1907,63 +1453,14 @@ mod live_rollback_tests {
     }
 
     #[test]
-    #[ignore = "requires the task-owned disposable PER-20 PostgreSQL runtime"]
-    fn migration_four_rollback_and_ambiguous_commit_reconciliation_are_atomic() {
-        let base = validated_base_config();
-        verify_unsupported_startup_setting_diagnostic(&base);
-        verify_authentication_diagnostic(&base);
-        verify_v4_pre_marker_rollback(&base);
-        verify_v4_marker_rollback(&base);
-        verify_v4_killed_commit_retry(&base);
-        verify_v4_committed_reconciliation(&base);
-    }
-
-    #[test]
-    #[ignore = "requires the task-owned disposable PER-278 PostgreSQL runtime"]
-    fn migration_five_rollback_and_ambiguous_commit_reconciliation_are_atomic() {
-        let base = validated_base_config();
-        verify_v5_pre_marker_rollback(&base);
-        verify_v5_marker_rollback(&base);
-        verify_v5_killed_commit_retry(&base);
-        verify_v5_committed_reconciliation(&base);
-        let database = TestDatabase::create(&base, "spatialproducts");
-        let config = database.config(&base);
-        assert_eq!(
-            migrate_schema_epoch(&config).unwrap().final_applied,
-            CURRENT_SCHEMA_EPOCH
-        );
-        crate::spatial_reference_installer::live_postgres_tests::verify_commit_protocol(
-            &config, &base,
-        );
-        database.cleanup();
-    }
-
-    #[test]
-    #[ignore = "requires the task-owned disposable PER-279 PostgreSQL runtime"]
-    fn migration_six_rollback_and_ambiguous_commit_reconciliation_are_atomic() {
-        let base = validated_base_config();
-        verify_v6_pre_marker_rollback(&base);
-        verify_v6_marker_rollback(&base);
-        verify_v6_killed_commit_retry(&base);
-        verify_v6_committed_reconciliation(&base);
-    }
-
-    #[test]
-    #[ignore = "requires the task-owned disposable PER-280 PostgreSQL runtime"]
-    fn migration_seven_rollback_and_ambiguous_commit_reconciliation_are_atomic() {
-        let base = validated_base_config();
-        verify_v7_fault_matrix(&base);
-    }
-
-    #[test]
-    #[ignore = "requires the task-owned disposable PER-20 PostgreSQL runtime"]
+    #[ignore = "requires the task-owned disposable PostgreSQL runtime"]
     fn h3_installer_rollback_and_ambiguous_commit_reconciliation_are_atomic() {
         let base = validated_base_config();
         verify_h3_installer_commit_protocol(&base);
     }
 
     #[test]
-    #[ignore = "requires the task-owned disposable PER-20 PostgreSQL runtime"]
+    #[ignore = "requires the task-owned disposable PostgreSQL runtime"]
     fn h3_installer_membership_cardinality_is_bounded() {
         let base = validated_base_config();
         let database = TestDatabase::create(&base, "hcardinality");
@@ -2021,7 +1518,7 @@ mod live_rollback_tests {
         assert_eq!(initial.origin, SchemaEpochOrigin::Fresh);
 
         let mut transaction = begin_migration_transaction(session.client()).unwrap();
-        execute_migration_before_marker(&mut transaction, compiled[0], false).unwrap();
+        execute_migration_before_marker(&mut transaction, compiled[0]).unwrap();
         let failure = transaction.batch_execute("SELECT 1 / 0").unwrap_err();
         assert_eq!(failure.code(), Some(&SqlState::DIVISION_BY_ZERO));
         transaction.rollback().unwrap();
@@ -2044,7 +1541,7 @@ mod live_rollback_tests {
         let bounded = bounded_config(&config);
         let mut session = LockedSession::connect(&bounded).unwrap();
         let mut transaction = begin_migration_transaction(session.client()).unwrap();
-        execute_migration_before_marker(&mut transaction, compiled[0], false).unwrap();
+        execute_migration_before_marker(&mut transaction, compiled[0]).unwrap();
         transaction
             .batch_execute(
                 "CREATE TEMP TABLE deferred_collision (\
@@ -2081,21 +1578,19 @@ mod live_rollback_tests {
         let mut session = LockedSession::connect(&bounded).unwrap();
         let mut report = empty_report();
         let mut first_attempt = true;
-        let mut attempt =
-            |client: &mut Client, migration: SchemaEpochMigration, legacy_origin: bool| {
-                if first_attempt {
-                    first_attempt = false;
-                    killed_before_commit_attempt(client, migration, legacy_origin, base)
-                } else {
-                    attempt_migration(client, migration, legacy_origin)
-                }
-            };
+        let mut attempt = |client: &mut Client, migration: SchemaEpochMigration| {
+            if first_attempt {
+                first_attempt = false;
+                killed_before_commit_attempt(client, migration, base)
+            } else {
+                attempt_migration(client, migration)
+            }
+        };
         apply_with_reconciliation_using(
             &bounded,
             &mut session,
             &compiled,
             compiled[0],
-            false,
             &mut report,
             &mut attempt,
         )
@@ -2120,8 +1615,8 @@ mod live_rollback_tests {
         let mut session = LockedSession::connect(&bounded).unwrap();
         let mut report = empty_report();
         let mut first_attempt = true;
-        let mut attempt = |client: &mut Client, migration, legacy_origin| {
-            let outcome = attempt_migration(client, migration, legacy_origin)?;
+        let mut attempt = |client: &mut Client, migration| {
+            let outcome = attempt_migration(client, migration)?;
             if first_attempt {
                 first_attempt = false;
                 assert_eq!(outcome, MigrationAttempt::Committed);
@@ -2135,7 +1630,6 @@ mod live_rollback_tests {
             &mut session,
             &compiled,
             compiled[0],
-            false,
             &mut report,
             &mut attempt,
         )
@@ -2152,1148 +1646,9 @@ mod live_rollback_tests {
         database.cleanup();
     }
 
-    fn verify_multi_version_upgrade_and_idempotence(base: &Config) {
-        let database = TestDatabase::create(base, "vupgrade");
-        let config = database.config(base);
-        establish_v1(&config);
-        let registry = production_registry();
-        let current_registry = compiled_schema_epoch_migrations().unwrap();
-        assert_v1_prefix(&config, &registry);
-
-        let first = migrate_schema_epoch(&config).unwrap();
-        assert_eq!(first.origin, SchemaEpochOrigin::ExistingRustPrefix);
-        assert_eq!(first.prior_applied, 1);
-        assert_eq!(first.final_applied, CURRENT_SCHEMA_EPOCH);
-        assert_eq!(
-            first.applied_versions,
-            vec![
-                registry[1].migration.version(),
-                registry[2].migration.version(),
-                registry[3].migration.version(),
-                registry[4].migration.version(),
-                registry[5].migration.version(),
-                current_registry[6].migration.version()
-            ]
-        );
-        assert!(first.reconciled_versions.is_empty());
-        let before = v6_snapshot(&config, &registry);
-
-        let second = migrate_schema_epoch(&config).unwrap();
-        assert_eq!(second.prior_applied, CURRENT_SCHEMA_EPOCH);
-        assert_eq!(second.final_applied, CURRENT_SCHEMA_EPOCH);
-        assert!(second.applied_versions.is_empty());
-        assert!(second.reconciled_versions.is_empty());
-        assert_eq!(v6_snapshot(&config, &registry), before);
-        database.cleanup();
-    }
-
-    fn verify_v2_pre_marker_rollback(base: &Config) {
-        let database = TestDatabase::create(base, "vprerollback");
-        let config = database.config(base);
-        establish_v1(&config);
-        let registry = production_registry();
-        let bounded = bounded_config(&config);
-        let mut session = LockedSession::connect(&bounded).unwrap();
-        let mut transaction = begin_migration_transaction(session.client()).unwrap();
-        execute_migration_before_marker(&mut transaction, registry[1], false).unwrap();
-        force_transaction_rollback(&mut transaction);
-        transaction.rollback().unwrap();
-        session.finish(Ok(())).unwrap();
-
-        assert_v1_prefix(&config, &registry);
-        assert_eq!(
-            migrate_schema_epoch(&config).unwrap().final_applied,
-            CURRENT_SCHEMA_EPOCH
-        );
-        database.cleanup();
-    }
-
-    fn verify_v2_marker_rollback(base: &Config) {
-        let database = TestDatabase::create(base, "vmarkerrollback");
-        let config = database.config(base);
-        establish_v1(&config);
-        let registry = production_registry();
-        let bounded = bounded_config(&config);
-        let mut session = LockedSession::connect(&bounded).unwrap();
-        let mut transaction = begin_migration_transaction(session.client()).unwrap();
-        execute_migration_before_marker(&mut transaction, registry[1], false).unwrap();
-        insert_ledger_marker(&mut transaction, registry[1].migration).unwrap();
-        force_transaction_rollback(&mut transaction);
-        transaction.rollback().unwrap();
-        session.finish(Ok(())).unwrap();
-
-        assert_v1_prefix(&config, &registry);
-        assert_eq!(
-            migrate_schema_epoch(&config).unwrap().final_applied,
-            CURRENT_SCHEMA_EPOCH
-        );
-        database.cleanup();
-    }
-
-    fn verify_v2_killed_commit_retry(base: &Config) {
-        let database = TestDatabase::create(base, "vkilled");
-        let config = database.config(base);
-        establish_v1(&config);
-        let registry = production_registry();
-        let bounded = bounded_config(&config);
-        let mut session = LockedSession::connect(&bounded).unwrap();
-        let mut report = v2_report();
-        let mut first_attempt = true;
-        let mut attempt = |client: &mut Client, migration, legacy_origin| {
-            if first_attempt {
-                first_attempt = false;
-                killed_before_commit_attempt(client, migration, legacy_origin, base)
-            } else {
-                attempt_migration(client, migration, legacy_origin)
-            }
-        };
-        apply_with_reconciliation_using(
-            &bounded,
-            &mut session,
-            &registry,
-            registry[1],
-            false,
-            &mut report,
-            &mut attempt,
-        )
-        .unwrap();
-        session.finish(Ok(())).unwrap();
-        assert_eq!(
-            report.applied_versions,
-            vec![registry[1].migration.version()]
-        );
-        assert!(report.reconciled_versions.is_empty());
-        let completed = migrate_schema_epoch(&config).unwrap();
-        assert_eq!(completed.prior_applied, 2);
-        assert_eq!(completed.final_applied, CURRENT_SCHEMA_EPOCH);
-        database.cleanup();
-    }
-
-    fn verify_v2_committed_reconciliation(base: &Config) {
-        let database = TestDatabase::create(base, "vreconciled");
-        let config = database.config(base);
-        establish_v1(&config);
-        let registry = production_registry();
-        let bounded = bounded_config(&config);
-        let mut session = LockedSession::connect(&bounded).unwrap();
-        let mut report = v2_report();
-        let mut first_attempt = true;
-        let mut attempt = |client: &mut Client, migration, legacy_origin| {
-            let outcome = attempt_migration(client, migration, legacy_origin)?;
-            if first_attempt {
-                first_attempt = false;
-                assert_eq!(outcome, MigrationAttempt::Committed);
-                Ok(MigrationAttempt::Ambiguous)
-            } else {
-                Ok(outcome)
-            }
-        };
-        apply_with_reconciliation_using(
-            &bounded,
-            &mut session,
-            &registry,
-            registry[1],
-            false,
-            &mut report,
-            &mut attempt,
-        )
-        .unwrap();
-        session.finish(Ok(())).unwrap();
-        assert!(report.applied_versions.is_empty());
-        assert_eq!(
-            report.reconciled_versions,
-            vec![registry[1].migration.version()]
-        );
-        let completed = migrate_schema_epoch(&config).unwrap();
-        assert_eq!(completed.prior_applied, 2);
-        assert_eq!(completed.final_applied, CURRENT_SCHEMA_EPOCH);
-        database.cleanup();
-    }
-
-    fn verify_v3_pre_marker_rollback(base: &Config) {
-        let database = TestDatabase::create(base, "vthreeprerollback");
-        let config = database.config(base);
-        establish_v2(&config);
-        let registry = production_registry();
-        let bounded = bounded_config(&config);
-        let mut session = LockedSession::connect(&bounded).unwrap();
-        let mut transaction = begin_migration_transaction(session.client()).unwrap();
-        execute_migration_before_marker(&mut transaction, registry[2], false).unwrap();
-        force_transaction_rollback(&mut transaction);
-        transaction.rollback().unwrap();
-        session.finish(Ok(())).unwrap();
-
-        assert_v2_prefix(&config, &registry);
-        assert_eq!(
-            migrate_schema_epoch(&config).unwrap().final_applied,
-            CURRENT_SCHEMA_EPOCH
-        );
-        database.cleanup();
-    }
-
-    fn verify_v3_marker_rollback(base: &Config) {
-        let database = TestDatabase::create(base, "vthreerollback");
-        let config = database.config(base);
-        establish_v2(&config);
-        let registry = production_registry();
-        let bounded = bounded_config(&config);
-        let mut session = LockedSession::connect(&bounded).unwrap();
-        let mut transaction = begin_migration_transaction(session.client()).unwrap();
-        execute_migration_before_marker(&mut transaction, registry[2], false).unwrap();
-        insert_ledger_marker(&mut transaction, registry[2].migration).unwrap();
-        force_transaction_rollback(&mut transaction);
-        transaction.rollback().unwrap();
-        session.finish(Ok(())).unwrap();
-
-        assert_v2_prefix(&config, &registry);
-        assert_eq!(
-            migrate_schema_epoch(&config).unwrap().final_applied,
-            CURRENT_SCHEMA_EPOCH
-        );
-        database.cleanup();
-    }
-
-    fn verify_v3_killed_commit_retry(base: &Config) {
-        let database = TestDatabase::create(base, "vthreekilled");
-        let config = database.config(base);
-        establish_v2(&config);
-        let registry = production_registry();
-        let bounded = bounded_config(&config);
-        let mut session = LockedSession::connect(&bounded).unwrap();
-        let mut report = v3_report();
-        let mut first_attempt = true;
-        let mut attempt = |client: &mut Client, migration, legacy_origin| {
-            if first_attempt {
-                first_attempt = false;
-                killed_before_commit_attempt(client, migration, legacy_origin, base)
-            } else {
-                attempt_migration(client, migration, legacy_origin)
-            }
-        };
-        apply_with_reconciliation_using(
-            &bounded,
-            &mut session,
-            &registry,
-            registry[2],
-            false,
-            &mut report,
-            &mut attempt,
-        )
-        .unwrap();
-        session.finish(Ok(())).unwrap();
-        assert_eq!(
-            report.applied_versions,
-            vec![registry[2].migration.version()]
-        );
-        assert!(report.reconciled_versions.is_empty());
-        assert_eq!(migrate_schema_epoch(&config).unwrap().prior_applied, 3);
-        database.cleanup();
-    }
-
-    fn verify_v3_committed_reconciliation(base: &Config) {
-        let database = TestDatabase::create(base, "vthreereconciled");
-        let config = database.config(base);
-        establish_v2(&config);
-        let registry = production_registry();
-        let bounded = bounded_config(&config);
-        let mut session = LockedSession::connect(&bounded).unwrap();
-        let mut report = v3_report();
-        let mut first_attempt = true;
-        let mut attempt = |client: &mut Client, migration, legacy_origin| {
-            let outcome = attempt_migration(client, migration, legacy_origin)?;
-            if first_attempt {
-                first_attempt = false;
-                assert_eq!(outcome, MigrationAttempt::Committed);
-                Ok(MigrationAttempt::Ambiguous)
-            } else {
-                Ok(outcome)
-            }
-        };
-        apply_with_reconciliation_using(
-            &bounded,
-            &mut session,
-            &registry,
-            registry[2],
-            false,
-            &mut report,
-            &mut attempt,
-        )
-        .unwrap();
-        session.finish(Ok(())).unwrap();
-        assert!(report.applied_versions.is_empty());
-        assert_eq!(
-            report.reconciled_versions,
-            vec![registry[2].migration.version()]
-        );
-        assert_eq!(migrate_schema_epoch(&config).unwrap().prior_applied, 3);
-        database.cleanup();
-    }
-
-    fn verify_v4_pre_marker_rollback(base: &Config) {
-        let database = TestDatabase::create(base, "vfourprerollback");
-        let config = database.config(base);
-        establish_v3(&config);
-        let registry = production_registry();
-        let bounded = bounded_config(&config);
-        let mut session = LockedSession::connect(&bounded).unwrap();
-        let mut transaction = begin_migration_transaction(session.client()).unwrap();
-        execute_migration_before_marker(&mut transaction, registry[3], false).unwrap();
-        force_transaction_rollback(&mut transaction);
-        transaction.rollback().unwrap();
-        session.finish(Ok(())).unwrap();
-
-        assert_v3_prefix(&config, &registry);
-        assert_eq!(
-            migrate_schema_epoch(&config).unwrap().final_applied,
-            CURRENT_SCHEMA_EPOCH
-        );
-        database.cleanup();
-    }
-
-    fn verify_v4_marker_rollback(base: &Config) {
-        let database = TestDatabase::create(base, "vfourmarkerrollback");
-        let config = database.config(base);
-        establish_v3(&config);
-        let registry = production_registry();
-        let bounded = bounded_config(&config);
-        let mut session = LockedSession::connect(&bounded).unwrap();
-        let mut transaction = begin_migration_transaction(session.client()).unwrap();
-        execute_migration_before_marker(&mut transaction, registry[3], false).unwrap();
-        insert_ledger_marker(&mut transaction, registry[3].migration).unwrap();
-        force_transaction_rollback(&mut transaction);
-        transaction.rollback().unwrap();
-        session.finish(Ok(())).unwrap();
-
-        assert_v3_prefix(&config, &registry);
-        assert_eq!(
-            migrate_schema_epoch(&config).unwrap().final_applied,
-            CURRENT_SCHEMA_EPOCH
-        );
-        database.cleanup();
-    }
-
-    fn verify_v4_killed_commit_retry(base: &Config) {
-        let database = TestDatabase::create(base, "vfourkilled");
-        let config = database.config(base);
-        establish_v3(&config);
-        let registry = production_registry();
-        let bounded = bounded_config(&config);
-        let mut session = LockedSession::connect(&bounded).unwrap();
-        let mut report = v4_report();
-        let mut first_attempt = true;
-        let mut attempt = |client: &mut Client, migration, legacy_origin| {
-            if first_attempt {
-                first_attempt = false;
-                killed_before_commit_attempt(client, migration, legacy_origin, base)
-            } else {
-                attempt_migration(client, migration, legacy_origin)
-            }
-        };
-        apply_with_reconciliation_using(
-            &bounded,
-            &mut session,
-            &registry,
-            registry[3],
-            false,
-            &mut report,
-            &mut attempt,
-        )
-        .unwrap();
-        session.finish(Ok(())).unwrap();
-        assert_eq!(
-            report.applied_versions,
-            vec![registry[3].migration.version()]
-        );
-        assert!(report.reconciled_versions.is_empty());
-        assert_eq!(migrate_schema_epoch(&config).unwrap().prior_applied, 4);
-        database.cleanup();
-    }
-
-    fn verify_v4_committed_reconciliation(base: &Config) {
-        let database = TestDatabase::create(base, "vfourreconciled");
-        let config = database.config(base);
-        establish_v3(&config);
-        let registry = production_registry();
-        let bounded = bounded_config(&config);
-        let mut session = LockedSession::connect(&bounded).unwrap();
-        let mut report = v4_report();
-        let mut first_attempt = true;
-        let mut attempt = |client: &mut Client, migration, legacy_origin| {
-            let outcome = attempt_migration(client, migration, legacy_origin)?;
-            if first_attempt {
-                first_attempt = false;
-                assert_eq!(outcome, MigrationAttempt::Committed);
-                Ok(MigrationAttempt::Ambiguous)
-            } else {
-                Ok(outcome)
-            }
-        };
-        apply_with_reconciliation_using(
-            &bounded,
-            &mut session,
-            &registry,
-            registry[3],
-            false,
-            &mut report,
-            &mut attempt,
-        )
-        .unwrap();
-        session.finish(Ok(())).unwrap();
-        assert!(report.applied_versions.is_empty());
-        assert_eq!(
-            report.reconciled_versions,
-            vec![registry[3].migration.version()]
-        );
-        assert_eq!(migrate_schema_epoch(&config).unwrap().prior_applied, 4);
-        database.cleanup();
-    }
-
-    fn verify_v5_pre_marker_rollback(base: &Config) {
-        let database = TestDatabase::create(base, "vfiveprerollback");
-        let config = database.config(base);
-        establish_v4(&config);
-        let registry = production_registry();
-        let bounded = bounded_config(&config);
-        let mut session = LockedSession::connect(&bounded).unwrap();
-        let mut transaction = begin_migration_transaction(session.client()).unwrap();
-        execute_migration_before_marker(&mut transaction, registry[4], false).unwrap();
-        force_transaction_rollback(&mut transaction);
-        transaction.rollback().unwrap();
-        session.finish(Ok(())).unwrap();
-
-        assert_v4_prefix(&config, &registry);
-        assert_eq!(
-            migrate_schema_epoch(&config).unwrap().final_applied,
-            CURRENT_SCHEMA_EPOCH
-        );
-        database.cleanup();
-    }
-
-    fn verify_v5_marker_rollback(base: &Config) {
-        let database = TestDatabase::create(base, "vfivemarkerrollback");
-        let config = database.config(base);
-        establish_v4(&config);
-        let registry = production_registry();
-        let bounded = bounded_config(&config);
-        let mut session = LockedSession::connect(&bounded).unwrap();
-        let mut transaction = begin_migration_transaction(session.client()).unwrap();
-        execute_migration_before_marker(&mut transaction, registry[4], false).unwrap();
-        insert_ledger_marker(&mut transaction, registry[4].migration).unwrap();
-        force_transaction_rollback(&mut transaction);
-        transaction.rollback().unwrap();
-        session.finish(Ok(())).unwrap();
-
-        assert_v4_prefix(&config, &registry);
-        assert_eq!(
-            migrate_schema_epoch(&config).unwrap().final_applied,
-            CURRENT_SCHEMA_EPOCH
-        );
-        database.cleanup();
-    }
-
-    fn verify_v5_killed_commit_retry(base: &Config) {
-        let database = TestDatabase::create(base, "vfivekilled");
-        let config = database.config(base);
-        establish_v4(&config);
-        let registry = production_registry();
-        let bounded = bounded_config(&config);
-        let mut session = LockedSession::connect(&bounded).unwrap();
-        let mut report = v5_report();
-        let mut first_attempt = true;
-        let mut attempt = |client: &mut Client, migration, legacy_origin| {
-            if first_attempt {
-                first_attempt = false;
-                killed_before_commit_attempt(client, migration, legacy_origin, base)
-            } else {
-                attempt_migration(client, migration, legacy_origin)
-            }
-        };
-        apply_with_reconciliation_using(
-            &bounded,
-            &mut session,
-            &registry,
-            registry[4],
-            false,
-            &mut report,
-            &mut attempt,
-        )
-        .unwrap();
-        session.finish(Ok(())).unwrap();
-        assert_eq!(
-            report.applied_versions,
-            vec![registry[4].migration.version()]
-        );
-        assert!(report.reconciled_versions.is_empty());
-        assert_eq!(migrate_schema_epoch(&config).unwrap().prior_applied, 5);
-        database.cleanup();
-    }
-
-    fn verify_v5_committed_reconciliation(base: &Config) {
-        let database = TestDatabase::create(base, "vfivereconciled");
-        let config = database.config(base);
-        establish_v4(&config);
-        let registry = production_registry();
-        let bounded = bounded_config(&config);
-        let mut session = LockedSession::connect(&bounded).unwrap();
-        let mut report = v5_report();
-        let mut first_attempt = true;
-        let mut attempt = |client: &mut Client, migration, legacy_origin| {
-            let outcome = attempt_migration(client, migration, legacy_origin)?;
-            if first_attempt {
-                first_attempt = false;
-                assert_eq!(outcome, MigrationAttempt::Committed);
-                Ok(MigrationAttempt::Ambiguous)
-            } else {
-                Ok(outcome)
-            }
-        };
-        apply_with_reconciliation_using(
-            &bounded,
-            &mut session,
-            &registry,
-            registry[4],
-            false,
-            &mut report,
-            &mut attempt,
-        )
-        .unwrap();
-        session.finish(Ok(())).unwrap();
-        assert!(report.applied_versions.is_empty());
-        assert_eq!(
-            report.reconciled_versions,
-            vec![registry[4].migration.version()]
-        );
-        assert_eq!(migrate_schema_epoch(&config).unwrap().prior_applied, 5);
-        database.cleanup();
-    }
-
-    fn verify_v6_pre_marker_rollback(base: &Config) {
-        let database = TestDatabase::create(base, "vsixprerollback");
-        let config = database.config(base);
-        establish_v5(&config);
-        let registry = production_registry();
-        let bounded = bounded_config(&config);
-        let mut session = LockedSession::connect(&bounded).unwrap();
-        let mut transaction = begin_migration_transaction(session.client()).unwrap();
-        execute_migration_before_marker(&mut transaction, registry[5], false).unwrap();
-        force_transaction_rollback(&mut transaction);
-        transaction.rollback().unwrap();
-        session.finish(Ok(())).unwrap();
-
-        assert_v5_prefix(&config, &registry);
-        assert_eq!(
-            migrate_schema_epoch(&config).unwrap().final_applied,
-            CURRENT_SCHEMA_EPOCH
-        );
-        database.cleanup();
-    }
-
-    fn verify_v6_marker_rollback(base: &Config) {
-        let database = TestDatabase::create(base, "vsixmarkerrollback");
-        let config = database.config(base);
-        establish_v5(&config);
-        let registry = production_registry();
-        let bounded = bounded_config(&config);
-        let mut session = LockedSession::connect(&bounded).unwrap();
-        let mut transaction = begin_migration_transaction(session.client()).unwrap();
-        execute_migration_before_marker(&mut transaction, registry[5], false).unwrap();
-        insert_ledger_marker(&mut transaction, registry[5].migration).unwrap();
-        force_transaction_rollback(&mut transaction);
-        transaction.rollback().unwrap();
-        session.finish(Ok(())).unwrap();
-
-        assert_v5_prefix(&config, &registry);
-        assert_eq!(
-            migrate_schema_epoch(&config).unwrap().final_applied,
-            CURRENT_SCHEMA_EPOCH
-        );
-        database.cleanup();
-    }
-
-    fn verify_v6_killed_commit_retry(base: &Config) {
-        let database = TestDatabase::create(base, "vsixkilled");
-        let config = database.config(base);
-        establish_v5(&config);
-        let registry = production_registry();
-        let bounded = bounded_config(&config);
-        let mut session = LockedSession::connect(&bounded).unwrap();
-        let mut report = v6_report();
-        let mut first_attempt = true;
-        let mut attempt = |client: &mut Client, migration, legacy_origin| {
-            if first_attempt {
-                first_attempt = false;
-                killed_before_commit_attempt(client, migration, legacy_origin, base)
-            } else {
-                attempt_migration(client, migration, legacy_origin)
-            }
-        };
-        apply_with_reconciliation_using(
-            &bounded,
-            &mut session,
-            &registry,
-            registry[5],
-            false,
-            &mut report,
-            &mut attempt,
-        )
-        .unwrap();
-        session.finish(Ok(())).unwrap();
-        assert_eq!(
-            report.applied_versions,
-            vec![registry[5].migration.version()]
-        );
-        assert!(report.reconciled_versions.is_empty());
-        assert_eq!(migrate_schema_epoch(&config).unwrap().prior_applied, 6);
-        database.cleanup();
-    }
-
-    fn verify_v6_committed_reconciliation(base: &Config) {
-        let database = TestDatabase::create(base, "vsixreconciled");
-        let config = database.config(base);
-        establish_v5(&config);
-        let registry = production_registry();
-        let bounded = bounded_config(&config);
-        let mut session = LockedSession::connect(&bounded).unwrap();
-        let mut report = v6_report();
-        let mut first_attempt = true;
-        let mut attempt = |client: &mut Client, migration, legacy_origin| {
-            let outcome = attempt_migration(client, migration, legacy_origin)?;
-            if first_attempt {
-                first_attempt = false;
-                assert_eq!(outcome, MigrationAttempt::Committed);
-                Ok(MigrationAttempt::Ambiguous)
-            } else {
-                Ok(outcome)
-            }
-        };
-        apply_with_reconciliation_using(
-            &bounded,
-            &mut session,
-            &registry,
-            registry[5],
-            false,
-            &mut report,
-            &mut attempt,
-        )
-        .unwrap();
-        session.finish(Ok(())).unwrap();
-        assert!(report.applied_versions.is_empty());
-        assert_eq!(
-            report.reconciled_versions,
-            vec![registry[5].migration.version()]
-        );
-        assert_eq!(migrate_schema_epoch(&config).unwrap().prior_applied, 6);
-        database.cleanup();
-    }
-
-    fn verify_v7_fault_matrix(base: &Config) {
-        let template = TestDatabase::create(base, "vseventemplate");
-        let template_config = template.config(base);
-        prepare_legacy_v6_cutover_input(&template_config);
-        verify_v7_pre_marker_rollback(base, template.name.as_str());
-        verify_v7_marker_rollback(base, template.name.as_str());
-        verify_v7_killed_commit_retry(base, template.name.as_str());
-        verify_v7_committed_reconciliation(base, template.name.as_str());
-        template.cleanup();
-    }
-
-    fn prepare_legacy_v6_cutover_input(config: &Config) {
-        legacy_epoch_fixture::build_frozen_python_estate(config);
-        crate::legacy_adopter::adopt_legacy_schema(config)
-            .expect("the frozen Python estate must adopt exactly");
-        let prefix = migrate_schema_epoch(config)
-            .expect("the exact adopted estate must stop at the epoch-6 cutover input");
-        assert_eq!((prefix.prior_applied, prefix.final_applied), (0, 6));
-        let cohort = crate::h3_reference_cohort::representative_h3_reference_cohort_v1()
-            .expect("the sole embedded H3 cohort must validate");
-        let foundation =
-            crate::michigan_dynamic_hex_foundation::michigan_dynamic_hex_foundation_v1()
-                .expect("the sole checked Michigan foundation fixture must validate");
-        crate::h3_reference_installer::install_michigan_h3_reference_bundle_v1(
-            config, cohort, foundation,
-        )
-        .expect("the exact epoch-6 estate must install the canonical Michigan H3 bundle");
-        crate::h3_shadow_backfill::backfill_legacy_h3_shadow_keys(config)
-            .expect("the exact epoch-6 estate must complete every H3 shadow");
-        let registry = compiled_schema_epoch_migrations().unwrap();
-        assert_v6_prefix(config, &registry);
-    }
-
-    fn verify_v7_pre_marker_rollback(base: &Config, template: &str) {
-        let database = TestDatabase::create_from_template(base, template, "vsevenprerollback");
-        let config = database.config(base);
-        let registry = compiled_schema_epoch_migrations().unwrap();
-        let bounded = bounded_config(&config);
-        let mut session = LockedSession::connect(&bounded).unwrap();
-        let mut transaction = begin_migration_transaction(session.client()).unwrap();
-        execute_migration_before_marker(&mut transaction, registry[6], true).unwrap();
-        force_transaction_rollback(&mut transaction);
-        transaction.rollback().unwrap();
-        session.finish(Ok(())).unwrap();
-
-        assert_v6_prefix(&config, &registry);
-        assert_v7_retry_applies_once_then_is_idempotent(&config);
-        database.cleanup();
-    }
-
-    fn verify_v7_marker_rollback(base: &Config, template: &str) {
-        let database = TestDatabase::create_from_template(base, template, "vsevenmarkerrollback");
-        let config = database.config(base);
-        let registry = compiled_schema_epoch_migrations().unwrap();
-        let bounded = bounded_config(&config);
-        let mut session = LockedSession::connect(&bounded).unwrap();
-        let mut transaction = begin_migration_transaction(session.client()).unwrap();
-        execute_migration_before_marker(&mut transaction, registry[6], true).unwrap();
-        insert_ledger_marker(&mut transaction, registry[6].migration).unwrap();
-        force_transaction_rollback(&mut transaction);
-        transaction.rollback().unwrap();
-        session.finish(Ok(())).unwrap();
-
-        assert_v6_prefix(&config, &registry);
-        assert_v7_retry_applies_once_then_is_idempotent(&config);
-        database.cleanup();
-    }
-
-    fn verify_v7_killed_commit_retry(base: &Config, template: &str) {
-        let database = TestDatabase::create_from_template(base, template, "vsevenkilled");
-        let config = database.config(base);
-        let registry = compiled_schema_epoch_migrations().unwrap();
-        let bounded = bounded_config(&config);
-        let mut session = LockedSession::connect(&bounded).unwrap();
-        let mut report = v7_report();
-        let mut first_attempt = true;
-        let mut attempt = |client: &mut Client, migration, legacy_origin| {
-            if first_attempt {
-                first_attempt = false;
-                killed_before_commit_attempt(client, migration, legacy_origin, base)
-            } else {
-                attempt_migration(client, migration, legacy_origin)
-            }
-        };
-        apply_with_reconciliation_using(
-            &bounded,
-            &mut session,
-            &registry,
-            registry[6],
-            true,
-            &mut report,
-            &mut attempt,
-        )
-        .unwrap();
-        session.finish(Ok(())).unwrap();
-        assert_eq!(
-            report.applied_versions,
-            vec![registry[6].migration.version()]
-        );
-        assert!(report.reconciled_versions.is_empty());
-        assert_v7_idempotent(&config);
-        database.cleanup();
-    }
-
-    fn verify_v7_committed_reconciliation(base: &Config, template: &str) {
-        let database = TestDatabase::create_from_template(base, template, "vsevenreconciled");
-        let config = database.config(base);
-        let registry = compiled_schema_epoch_migrations().unwrap();
-        let bounded = bounded_config(&config);
-        let mut session = LockedSession::connect(&bounded).unwrap();
-        let mut report = v7_report();
-        let mut first_attempt = true;
-        let mut attempt = |client: &mut Client, migration, legacy_origin| {
-            let outcome = attempt_migration(client, migration, legacy_origin)?;
-            if first_attempt {
-                first_attempt = false;
-                assert_eq!(outcome, MigrationAttempt::Committed);
-                Ok(MigrationAttempt::Ambiguous)
-            } else {
-                Ok(outcome)
-            }
-        };
-        apply_with_reconciliation_using(
-            &bounded,
-            &mut session,
-            &registry,
-            registry[6],
-            true,
-            &mut report,
-            &mut attempt,
-        )
-        .unwrap();
-        session.finish(Ok(())).unwrap();
-        assert!(report.applied_versions.is_empty());
-        assert_eq!(
-            report.reconciled_versions,
-            vec![registry[6].migration.version()]
-        );
-        assert_v7_idempotent(&config);
-        database.cleanup();
-    }
-
-    fn assert_v7_retry_applies_once_then_is_idempotent(config: &Config) {
-        let retry = migrate_schema_epoch(config).unwrap();
-        assert_eq!((retry.prior_applied, retry.final_applied), (6, 7));
-        assert_eq!(retry.applied_versions.len(), 1);
-        assert_eq!(retry.applied_versions[0].as_i64(), 7);
-        assert!(retry.reconciled_versions.is_empty());
-        assert_v7_idempotent(config);
-    }
-
-    fn assert_v7_idempotent(config: &Config) {
-        let idempotent = migrate_schema_epoch(config).unwrap();
-        assert_eq!((idempotent.prior_applied, idempotent.final_applied), (7, 7));
-        assert!(idempotent.applied_versions.is_empty());
-        assert!(idempotent.reconciled_versions.is_empty());
-    }
-
-    fn verify_leap_ahead_reconciliation(base: &Config) {
-        let database = TestDatabase::create(base, "vleapahead");
-        let config = database.config(base);
-        let registry = production_registry();
-        let leap_registry = registry;
-        let bounded = bounded_config(&config);
-        let mut session = LockedSession::connect(&bounded).unwrap();
-        let mut attempt_calls = 0_usize;
-        let mut attempt =
-            |client: &mut Client, migration: SchemaEpochMigration, legacy_origin: bool| {
-                attempt_calls += 1;
-                assert_eq!(migration.migration.version().as_i64(), 1);
-                assert_eq!(
-                    attempt_migration(client, leap_registry[0], legacy_origin)?,
-                    MigrationAttempt::Committed
-                );
-                assert_eq!(
-                    attempt_migration(client, leap_registry[1], legacy_origin)?,
-                    MigrationAttempt::Committed
-                );
-                assert_eq!(
-                    attempt_migration(client, leap_registry[2], legacy_origin)?,
-                    MigrationAttempt::Committed
-                );
-                assert_eq!(
-                    attempt_migration(client, leap_registry[3], legacy_origin)?,
-                    MigrationAttempt::Committed
-                );
-                assert_eq!(
-                    attempt_migration(client, leap_registry[4], legacy_origin)?,
-                    MigrationAttempt::Committed
-                );
-                assert_eq!(
-                    attempt_migration(client, leap_registry[5], legacy_origin)?,
-                    MigrationAttempt::Committed
-                );
-                Ok(MigrationAttempt::Ambiguous)
-            };
-        let report =
-            migrate_locked_with_registry_using(&bounded, &mut session, &registry, &mut attempt)
-                .unwrap();
-        session.finish(Ok(())).unwrap();
-
-        assert_eq!(attempt_calls, 1);
-        assert_eq!(report.prior_applied, 0);
-        assert_eq!(report.final_applied, 6);
-        assert!(report.applied_versions.is_empty());
-        assert_eq!(
-            report.reconciled_versions,
-            vec![registry[0].migration.version()]
-        );
-        v6_snapshot(&config, &registry);
-        database.cleanup();
-    }
-
-    fn establish_v1(config: &Config) {
-        let registry = production_registry();
-        let bounded = bounded_config(config);
-        let mut session = LockedSession::connect(&bounded).unwrap();
-        assert_eq!(
-            attempt_migration(session.client(), registry[0], false).unwrap(),
-            MigrationAttempt::Committed
-        );
-        session.finish(Ok(())).unwrap();
-        assert_v1_prefix(config, &registry);
-    }
-
-    fn assert_v1_prefix(config: &Config, registry: &[SchemaEpochMigration]) {
-        let bounded = bounded_config(config);
-        let mut session = LockedSession::connect(&bounded).unwrap();
-        let inspected = inspect_epoch(session.client(), registry).unwrap();
-        assert_eq!(inspected.origin, SchemaEpochOrigin::ExistingRustPrefix);
-        assert_eq!(
-            validate_registry_prefix(registry, &inspected.persisted),
-            Ok(1)
-        );
-        session.finish(Ok(())).unwrap();
-    }
-
-    fn establish_v2(config: &Config) {
-        establish_v1(config);
-        let registry = production_registry();
-        let bounded = bounded_config(config);
-        let mut session = LockedSession::connect(&bounded).unwrap();
-        assert_eq!(
-            attempt_migration(session.client(), registry[1], false).unwrap(),
-            MigrationAttempt::Committed
-        );
-        session.finish(Ok(())).unwrap();
-        assert_v2_prefix(config, &registry);
-    }
-
-    fn assert_v2_prefix(config: &Config, registry: &[SchemaEpochMigration]) {
-        let bounded = bounded_config(config);
-        let mut session = LockedSession::connect(&bounded).unwrap();
-        let inspected = inspect_epoch(session.client(), registry).unwrap();
-        assert_eq!(inspected.origin, SchemaEpochOrigin::ExistingRustPrefix);
-        assert_eq!(
-            validate_registry_prefix(registry, &inspected.persisted),
-            Ok(2)
-        );
-        session.finish(Ok(())).unwrap();
-    }
-
-    fn establish_v3(config: &Config) {
-        establish_v2(config);
-        let registry = production_registry();
-        let bounded = bounded_config(config);
-        let mut session = LockedSession::connect(&bounded).unwrap();
-        assert_eq!(
-            attempt_migration(session.client(), registry[2], false).unwrap(),
-            MigrationAttempt::Committed
-        );
-        session.finish(Ok(())).unwrap();
-        assert_v3_prefix(config, &registry);
-    }
-
-    fn assert_v3_prefix(config: &Config, registry: &[SchemaEpochMigration]) {
-        let bounded = bounded_config(config);
-        let mut session = LockedSession::connect(&bounded).unwrap();
-        let inspected = inspect_epoch(session.client(), registry).unwrap();
-        assert_eq!(inspected.origin, SchemaEpochOrigin::ExistingRustPrefix);
-        assert_eq!(
-            validate_registry_prefix(registry, &inspected.persisted),
-            Ok(3)
-        );
-        session.finish(Ok(())).unwrap();
-    }
-
-    fn establish_v4(config: &Config) {
-        establish_v3(config);
-        let registry = production_registry();
-        let bounded = bounded_config(config);
-        let mut session = LockedSession::connect(&bounded).unwrap();
-        assert_eq!(
-            attempt_migration(session.client(), registry[3], false).unwrap(),
-            MigrationAttempt::Committed
-        );
-        session.finish(Ok(())).unwrap();
-        assert_v4_prefix(config, &registry);
-    }
-
-    fn assert_v4_prefix(config: &Config, registry: &[SchemaEpochMigration]) {
-        let bounded = bounded_config(config);
-        let mut session = LockedSession::connect(&bounded).unwrap();
-        let inspected = inspect_epoch(session.client(), registry).unwrap();
-        assert_eq!(inspected.origin, SchemaEpochOrigin::ExistingRustPrefix);
-        assert_eq!(
-            validate_registry_prefix(registry, &inspected.persisted),
-            Ok(4)
-        );
-        session.finish(Ok(())).unwrap();
-    }
-
-    fn establish_v5(config: &Config) {
-        establish_v4(config);
-        let registry = production_registry();
-        let bounded = bounded_config(config);
-        let mut session = LockedSession::connect(&bounded).unwrap();
-        assert_eq!(
-            attempt_migration(session.client(), registry[4], false).unwrap(),
-            MigrationAttempt::Committed
-        );
-        session.finish(Ok(())).unwrap();
-        assert_v5_prefix(config, &registry);
-    }
-
-    fn assert_v5_prefix(config: &Config, registry: &[SchemaEpochMigration]) {
-        let bounded = bounded_config(config);
-        let mut session = LockedSession::connect(&bounded).unwrap();
-        let inspected = inspect_epoch(session.client(), registry).unwrap();
-        assert_eq!(inspected.origin, SchemaEpochOrigin::ExistingRustPrefix);
-        assert_eq!(
-            validate_registry_prefix(registry, &inspected.persisted),
-            Ok(5)
-        );
-        session.finish(Ok(())).unwrap();
-    }
-
-    fn assert_v6_prefix(config: &Config, registry: &[SchemaEpochMigration]) {
-        let bounded = bounded_config(config);
-        let mut session = LockedSession::connect(&bounded).unwrap();
-        let inspected = inspect_epoch(session.client(), registry).unwrap();
-        assert_eq!(inspected.origin, SchemaEpochOrigin::ExistingRustPrefix);
-        assert!(inspected.legacy_origin);
-        assert_eq!(
-            validate_registry_prefix(registry, &inspected.persisted),
-            Ok(6)
-        );
-        session.finish(Ok(())).unwrap();
-    }
-
-    fn force_transaction_rollback(transaction: &mut Transaction<'_>) {
-        let failure = transaction.batch_execute("SELECT 1 / 0").unwrap_err();
-        assert_eq!(failure.code(), Some(&SqlState::DIVISION_BY_ZERO));
-    }
-
-    // Test-only prefix used to keep the established v1-v6 rollback laws isolated from v7.
-    fn production_registry() -> [SchemaEpochMigration; 6] {
-        let compiled = compiled_schema_epoch_migrations().unwrap();
-        [
-            compiled[0],
-            compiled[1],
-            compiled[2],
-            compiled[3],
-            compiled[4],
-            compiled[5],
-        ]
-    }
-
-    fn v2_report() -> SchemaEpochReport {
-        SchemaEpochReport {
-            origin: SchemaEpochOrigin::ExistingRustPrefix,
-            prior_applied: 1,
-            final_applied: 1,
-            applied_versions: Vec::new(),
-            reconciled_versions: Vec::new(),
-            legacy_adoption: None,
-        }
-    }
-
-    fn v3_report() -> SchemaEpochReport {
-        SchemaEpochReport {
-            origin: SchemaEpochOrigin::ExistingRustPrefix,
-            prior_applied: 2,
-            final_applied: 2,
-            applied_versions: Vec::new(),
-            reconciled_versions: Vec::new(),
-            legacy_adoption: None,
-        }
-    }
-
-    fn v4_report() -> SchemaEpochReport {
-        SchemaEpochReport {
-            origin: SchemaEpochOrigin::ExistingRustPrefix,
-            prior_applied: 3,
-            final_applied: 3,
-            applied_versions: Vec::new(),
-            reconciled_versions: Vec::new(),
-            legacy_adoption: None,
-        }
-    }
-
-    fn v5_report() -> SchemaEpochReport {
-        SchemaEpochReport {
-            origin: SchemaEpochOrigin::ExistingRustPrefix,
-            prior_applied: 4,
-            final_applied: 4,
-            applied_versions: Vec::new(),
-            reconciled_versions: Vec::new(),
-            legacy_adoption: None,
-        }
-    }
-
-    fn v6_report() -> SchemaEpochReport {
-        SchemaEpochReport {
-            origin: SchemaEpochOrigin::ExistingRustPrefix,
-            prior_applied: 5,
-            final_applied: 5,
-            applied_versions: Vec::new(),
-            reconciled_versions: Vec::new(),
-            legacy_adoption: None,
-        }
-    }
-
-    fn v7_report() -> SchemaEpochReport {
-        SchemaEpochReport {
-            origin: SchemaEpochOrigin::ExistingRustPrefix,
-            prior_applied: 6,
-            final_applied: 6,
-            applied_versions: Vec::new(),
-            reconciled_versions: Vec::new(),
-            legacy_adoption: None,
-        }
-    }
-
-    fn v6_snapshot(config: &Config, registry: &[SchemaEpochMigration; 6]) -> Vec<(i64, Vec<u8>)> {
-        let mut client = config.connect(NoTls).unwrap();
-        let relations = client
-            .query_one(
-                "SELECT pg_catalog.to_regclass('babylon_ref.h3_cell')::pg_catalog.text, \
-                        pg_catalog.to_regclass('babylon_ref.h3_reference_cohort')::pg_catalog.text, \
-                        pg_catalog.to_regclass('babylon_ref.h3_reference_membership')::pg_catalog.text, \
-                        pg_catalog.to_regclass('babylon_state.campaign')::pg_catalog.text, \
-                        pg_catalog.to_regclass('babylon_state.tick_commit')::pg_catalog.text, \
-                        pg_catalog.to_regclass( \
-                            'babylon_state.tick_archive_dirty_receipt_row' \
-                        )::pg_catalog.text, \
-                        pg_catalog.to_regclass( \
-                            'babylon_ref.reference_product' \
-                        )::pg_catalog.text",
-                &[],
-            )
-            .unwrap();
-        let expected_relations = [
-            "babylon_ref.h3_cell",
-            "babylon_ref.h3_reference_cohort",
-            "babylon_ref.h3_reference_membership",
-            "babylon_state.campaign",
-            "babylon_state.tick_commit",
-            "babylon_state.tick_archive_dirty_receipt_row",
-            "babylon_ref.reference_product",
-        ];
-        for (index, expected) in expected_relations.iter().enumerate() {
-            let actual = relations.try_get::<_, Option<String>>(index).unwrap();
-            assert_eq!(actual.as_deref(), Some(*expected));
-        }
-        let counts = client
-            .query_one(
-                "SELECT (SELECT pg_catalog.count(*) FROM babylon_ref.h3_cell), \
-                        (SELECT pg_catalog.count(*) FROM babylon_ref.h3_reference_cohort), \
-                        (SELECT pg_catalog.count(*) FROM babylon_ref.h3_reference_membership)",
-                &[],
-            )
-            .unwrap();
-        for column in 0..3 {
-            assert_eq!(counts.try_get::<_, i64>(column).unwrap(), 0);
-        }
-        let rows = client
-            .query(
-                "SELECT version, checksum FROM babylon_state.schema_migration \
-                 ORDER BY version LIMIT 6",
-                &[],
-            )
-            .unwrap();
-        let snapshot = rows
-            .iter()
-            .take(6)
-            .map(|row| {
-                (
-                    row.try_get::<_, i64>(0).unwrap(),
-                    row.try_get::<_, Vec<u8>>(1).unwrap(),
-                )
-            })
-            .collect::<Vec<_>>();
-        assert_eq!(snapshot.len(), 6);
-        for (index, row) in snapshot.iter().enumerate().take(6) {
-            assert_eq!(row.0, one_based_version(index));
-            assert_eq!(
-                row.1.as_slice(),
-                registry[index].migration.checksum().as_bytes()
-            );
-        }
-        snapshot
-    }
-
     fn killed_before_commit_attempt(
         client: &mut Client,
         migration: SchemaEpochMigration,
-        legacy_origin: bool,
         admin: &Config,
     ) -> Result<MigrationAttempt, SchemaEpochError> {
         let backend_pid: i32 = client
@@ -3302,7 +1657,7 @@ mod live_rollback_tests {
             .try_get(0)
             .unwrap();
         let mut transaction = begin_migration_transaction(client)?;
-        execute_migration_before_marker(&mut transaction, migration, legacy_origin)?;
+        execute_migration_before_marker(&mut transaction, migration)?;
         insert_ledger_marker(&mut transaction, migration.migration)?;
         let terminated: bool = admin
             .connect(NoTls)
@@ -3326,7 +1681,6 @@ mod live_rollback_tests {
             final_applied: 0,
             applied_versions: Vec::new(),
             reconciled_versions: Vec::new(),
-            legacy_adoption: None,
         }
     }
 
@@ -3336,13 +1690,13 @@ mod live_rollback_tests {
         assert_eq!(canary.len(), 32);
         let dsn = std::env::var(DSN_ENV).expect("runner supplies the disposable DSN");
         let config = Config::from_str(&dsn).expect("runner DSN parses");
-        validate_legacy_connection_target(&config).unwrap();
+        validate_connection_target(&config).unwrap();
         assert_eq!(config.get_user(), Some("test"));
         assert_eq!(config.get_dbname(), Some("postgres"));
         let mut client = config.connect(NoTls).unwrap();
         let actual: Option<String> = client
             .query_one(
-                "SELECT pg_catalog.current_setting('babylon.per20_disposable', true)",
+                "SELECT pg_catalog.current_setting('babylon.disposable_runtime', true)",
                 &[],
             )
             .unwrap()
@@ -3360,7 +1714,6 @@ mod live_rollback_tests {
                 babylon_meta: false,
             },
             ledger: SchemaEpochRelation::Absent,
-            legacy_stamp: SchemaEpochRelation::Absent,
         }
     }
 
@@ -3373,7 +1726,7 @@ mod live_rollback_tests {
     impl TestDatabase {
         fn create(base: &Config, label: &str) -> Self {
             assert!(label.bytes().all(|byte| byte.is_ascii_lowercase()));
-            let name = format!("per20_epoch_{label}_{}", std::process::id());
+            let name = format!("native_epoch_{label}_{}", std::process::id());
             let mut admin = base.clone();
             admin.dbname("postgres");
             let sql = format!("CREATE DATABASE \"{name}\" OWNER test TEMPLATE template1");
@@ -3389,23 +1742,6 @@ mod live_rollback_tests {
             let mut config = base.clone();
             config.dbname(&self.name);
             config
-        }
-
-        fn create_from_template(base: &Config, template: &str, label: &str) -> Self {
-            assert!(label.bytes().all(|byte| byte.is_ascii_lowercase()));
-            assert!(template
-                .bytes()
-                .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_'));
-            let name = format!("per20_epoch_{label}_{}", std::process::id());
-            let mut admin = base.clone();
-            admin.dbname("postgres");
-            let sql = format!("CREATE DATABASE \"{name}\" OWNER test TEMPLATE \"{template}\"");
-            admin.connect(NoTls).unwrap().batch_execute(&sql).unwrap();
-            Self {
-                name,
-                admin,
-                active: true,
-            }
         }
 
         fn cleanup(mut self) {

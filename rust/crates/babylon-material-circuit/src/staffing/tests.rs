@@ -11,7 +11,7 @@ fn binding(key: u8, labor_force: u64, schedule: u64, process_keys: &[u8]) -> Sta
         SiteIdV1::from_bytes([key; 32]),
         UnitIdV1::from_bytes([9; 32]),
         labor_force,
-        StaffingPolicyV1::one_week(schedule).expect("explicit positive schedule"),
+        StaffingPolicyV1::one_period(schedule).expect("explicit positive schedule"),
         process_keys
             .iter()
             .map(|key| ProcessIdV1::from_bytes([*key; 32]))
@@ -30,13 +30,13 @@ fn request(binding: &StaffingPoolBindingV1, process: u8, hours: u64) -> Staffing
 }
 
 fn request_at(
-    week: u64,
+    period: u64,
     binding: &StaffingPoolBindingV1,
     process: u8,
     hours: u64,
 ) -> StaffingWorkRequestV1 {
     StaffingWorkRequestV1::new(
-        week,
+        period,
         binding.pool_id(),
         ProcessIdV1::from_bytes([process; 32]),
         binding.site_id(),
@@ -76,7 +76,7 @@ fn conservation(receipt: &StaffingReceiptV1) {
 }
 
 #[test]
-fn one_empty_week_is_retained_but_a_second_releases_then_recovery_rehires() {
+fn one_empty_period_is_retained_but_a_second_releases_then_recovery_rehires() {
     let owned = binding(1, 7, 3, &[1]);
     let opening = state(vec![pool(owned.clone(), 5, 15)]);
     let brief = advance_staffing_v1(&opening, &[request(&owned, 1, 0)]).expect("brief shortage");
@@ -84,7 +84,7 @@ fn one_empty_week_is_retained_but_a_second_releases_then_recovery_rehires() {
     assert_eq!(brief.state().pools()[0].previous_unretained_hours(), 0);
     assert_eq!(brief.receipts()[0].retained_hours(), 15);
     assert_eq!(brief.receipts()[0].separations(), 0);
-    assert_eq!(brief.next_labor()[0].week, 2);
+    assert_eq!(brief.next_labor()[0].period, 2);
     assert_eq!(brief.next_labor()[0].available, 15);
     conservation(&brief.receipts()[0]);
 
@@ -103,17 +103,17 @@ fn one_empty_week_is_retained_but_a_second_releases_then_recovery_rehires() {
     assert_eq!(recovered.state().pools()[0].reserve(), 3);
     assert_eq!(recovered.receipts()[0].hires(), 4);
     assert_eq!(recovered.next_labor()[0].available, 12);
-    assert_eq!(recovered.next_labor()[0].week, 4);
+    assert_eq!(recovered.next_labor()[0].period, 4);
     assert_eq!(opening.pools()[0].employed(), 5, "original owner untouched");
     conservation(&recovered.receipts()[0]);
 }
 
 #[test]
-fn forty_hour_week_pools_before_rounding_and_remembers_only_current_work() {
+fn forty_hour_period_pools_before_rounding_and_remembers_only_current_work() {
     let owned = binding(1, 4, 40, &[1, 2]);
     let opening = state(vec![pool(owned.clone(), 3, 120)]);
     let first = advance_staffing_v1(&opening, &[request(&owned, 1, 20), request(&owned, 2, 20)])
-        .expect("one week of retained staffing under the explicit forty-hour schedule");
+        .expect("one period of retained staffing under the explicit forty-hour schedule");
     assert_eq!(first.receipts()[0].current_unretained_hours(), 40);
     assert_eq!(first.receipts()[0].retained_hours(), 120);
     assert_eq!(first.state().pools()[0].previous_unretained_hours(), 40);
@@ -135,7 +135,7 @@ fn forty_hour_week_pools_before_rounding_and_remembers_only_current_work() {
         second.state(),
         &[request_at(3, &owned, 1, 20), request_at(3, &owned, 2, 21)],
     )
-    .expect("forty-one pooled hours require two people for the following week");
+    .expect("forty-one pooled hours require two people for the following period");
     assert_eq!(third.receipts()[0].current_unretained_hours(), 41);
     assert_eq!(third.receipts()[0].retained_hours(), 41);
     assert_eq!(third.state().pools()[0].previous_unretained_hours(), 41);
@@ -143,7 +143,7 @@ fn forty_hour_week_pools_before_rounding_and_remembers_only_current_work() {
     assert_eq!(third.state().pools()[0].employed(), 2);
     assert_eq!(third.state().pools()[0].reserve(), 2);
     assert_eq!(third.next_labor()[0].available, 80);
-    assert_eq!(third.next_labor()[0].week, 4);
+    assert_eq!(third.next_labor()[0].period, 4);
     for receipt in [
         &first.receipts()[0],
         &second.receipts()[0],
@@ -232,7 +232,7 @@ fn zero_population_and_empty_world_are_explicit_valid_states() {
     assert!(empty_world.state().pools().is_empty());
     assert!(empty_world.receipts().is_empty());
     assert!(empty_world.next_labor().is_empty());
-    assert_eq!(empty_world.state().week(), 2);
+    assert_eq!(empty_world.state().period(), 2);
 }
 
 fn refusal(
@@ -332,7 +332,7 @@ fn overflow_at_request_sum_or_late_pool_publishes_no_partial_transition() {
 }
 
 #[test]
-fn next_schedule_overflow_and_week_overflow_refuse_without_mutation() {
+fn next_schedule_overflow_and_period_overflow_refuse_without_mutation() {
     let owned = binding(1, 2, u64::MAX / 2 + 1, &[1]);
     let opening = state(vec![pool(owned.clone(), 0, 0)]);
     refusal(
@@ -340,10 +340,10 @@ fn next_schedule_overflow_and_week_overflow_refuse_without_mutation() {
         &[request(&owned, 1, u64::MAX)],
         StaffingErrorV1::Arithmetic,
     );
-    let last_week = StaffingStateV1::try_new(u64::MAX, vec![pool(owned.clone(), 0, 0)])
-        .expect("representable current week");
+    let last_period = StaffingStateV1::try_new(u64::MAX, vec![pool(owned.clone(), 0, 0)])
+        .expect("representable current period");
     refusal(
-        &last_week,
+        &last_period,
         &[request_at(u64::MAX, &owned, 1, 0)],
         StaffingErrorV1::Arithmetic,
     );
@@ -352,7 +352,7 @@ fn next_schedule_overflow_and_week_overflow_refuse_without_mutation() {
 #[test]
 fn missing_schedule_or_nonconserved_person_inputs_refuse() {
     assert_eq!(
-        StaffingPolicyV1::one_week(0),
+        StaffingPolicyV1::one_period(0),
         Err(StaffingErrorV1::ZeroSchedule)
     );
     let owned = binding(1, 5, 2, &[1]);
@@ -367,7 +367,7 @@ fn missing_schedule_or_nonconserved_person_inputs_refuse() {
     );
     assert_eq!(
         StaffingStateV1::try_new(0, vec![]),
-        Err(StaffingErrorV1::WeekInvariant)
+        Err(StaffingErrorV1::PeriodInvariant)
     );
 }
 
@@ -444,23 +444,23 @@ fn empty_or_overbound_process_membership_and_requests_refuse() {
 }
 
 #[test]
-fn a_request_from_another_week_is_not_current_work() {
+fn a_request_from_another_period_is_not_current_work() {
     let owned = binding(1, 5, 3, &[1]);
     let opening = state(vec![pool(owned.clone(), 0, 0)]);
     refusal(
         &opening,
         &[request_at(0, &owned, 1, 3)],
-        StaffingErrorV1::WeekInvariant,
+        StaffingErrorV1::PeriodInvariant,
     );
     refusal(
         &opening,
         &[request_at(2, &owned, 1, 3)],
-        StaffingErrorV1::WeekInvariant,
+        StaffingErrorV1::PeriodInvariant,
     );
     let second = advance_staffing_v1(&opening, &[request(&owned, 1, 3)]).expect("current request");
     refusal(
         second.state(),
         &[request(&owned, 1, 3)],
-        StaffingErrorV1::WeekInvariant,
+        StaffingErrorV1::PeriodInvariant,
     );
 }

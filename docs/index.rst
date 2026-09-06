@@ -34,7 +34,7 @@ Read the repository ``CONSTITUTION.md`` v4.1.0 for the law. Read
 System overview
 ---------------
 
-Babylon is a causal sandbox with a fixed weekly tick. Typed world data, rules,
+Babylon is a causal sandbox with a fixed four-week tick. Typed world data, rules,
 and feedback produce a new world, an in-memory Rust ``TickReport``, and a stable
 hash. Persisted replay remains in the frozen Python path.
 

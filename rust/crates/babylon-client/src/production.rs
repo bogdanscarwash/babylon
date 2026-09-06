@@ -899,7 +899,7 @@ type InspectorScrolls<'w, 's> = Query<
     Or<(With<ProductionPanel>, With<ProductionReadingBody>)>,
 >;
 
-/// New subjects start at their brief; a new week preserves the reader's place.
+/// New subjects start at their brief; a new period preserves the reader's place.
 fn reset_inspector_scroll(
     state: Res<ObserverSession>,
     navigation: Res<ProductionNavigation>,
@@ -1231,7 +1231,10 @@ fn freight_markers(
 ) -> Vec<Vec3> {
     let mut groups = std::collections::BTreeMap::<(&str, &str), Vec<_>>::new();
     for lot in &snapshot.freight {
-        if lot.quantity == 0 || lot.dispatch_week > viewed_tick || lot.arrival_week <= viewed_tick {
+        if lot.quantity == 0
+            || lot.dispatch_period > viewed_tick
+            || lot.arrival_period <= viewed_tick
+        {
             continue;
         }
         if !snapshot.routes.iter().any(|route| {
@@ -1301,7 +1304,7 @@ fn describe(site: &ProductionSiteV1, snapshot: &ProductionSnapshotV1) -> String 
     }
     writeln!(
         &mut value,
-        "{} {} / batch\nNext-week capacity: {} batches\n\nINPUTS / ON HAND",
+        "{} {} / batch\nNext-period capacity: {} batches\n\nINPUTS / ON HAND",
         grouped(site.output_per_batch),
         site.output_unit,
         grouped(site.available_batches)
@@ -1370,9 +1373,9 @@ fn describe(site: &ProductionSiteV1, snapshot: &ProductionSnapshotV1) -> String 
             .map_or(other.as_str(), |site| site.name.as_str());
         writeln!(
             &mut value,
-            "{} | {} weeks\n{} / {} {} delivered | {} unshipped",
+            "{} | {} periods\n{} / {} {} delivered | {} unshipped",
             name,
-            route.travel_weeks,
+            route.travel_periods,
             grouped(route.delivered),
             grouped(route.ordered),
             route.unit,
@@ -1402,7 +1405,7 @@ fn describe_material_balance(
         value.push_str("\nNo stock-movement account disclosed for this subject.\n");
         return;
     }
-    writeln!(value, "\nSTOCK MOVEMENT / WEEK {}", balance.week).expect("String write");
+    writeln!(value, "\nSTOCK MOVEMENT / PERIOD {}", balance.period).expect("String write");
     for row in rows {
         writeln!(
             value,
@@ -1512,7 +1515,7 @@ fn describe_staffing_accounts(
         });
         writeln!(
             value,
-            "{} employed + {} reserve = {} people\n{} hours per person / week (Designed)",
+            "{} employed + {} reserve = {} people\n{} hours per person / period (Designed)",
             grouped(account.employed),
             grouped(account.reserve),
             grouped(account.labor_force),
@@ -1522,8 +1525,8 @@ fn describe_staffing_accounts(
         if let Some(completed) = &account.completed {
             writeln!(
                 value,
-                "STAFFING / WEEK {}\nOpening: {} employed, {} reserve\nHires: {} | separations: {} | target: {} employed\nWork request: {} hours | prior week: {} hours\nOne-week retention: {} hours",
-                completed.week,
+                "STAFFING / PERIOD {}\nOpening: {} employed, {} reserve\nHires: {} | separations: {} | target: {} employed\nWork request: {} hours | prior period: {} hours\nOne-period retention: {} hours",
+                completed.period,
                 grouped(completed.opening_employed),
                 grouped(completed.opening_reserve),
                 grouped(completed.hires),
@@ -1535,7 +1538,7 @@ fn describe_staffing_accounts(
             )
             .expect("String write");
         } else {
-            value.push_str("Opening workforce; no completed staffing week.\n");
+            value.push_str("Opening workforce; no completed staffing period.\n");
         }
     }
     if disclosed {
@@ -1558,8 +1561,8 @@ fn describe_labor_accounts(
         if let Some(completed) = &account.completed {
             writeln!(
                 value,
-                "\nCOMMITTED WORK TIME / WEEK {} / DERIVED\n{} used + {} unused = {} available\nPlanned: {} {}",
-                completed.week,
+                "\nCOMMITTED WORK TIME / PERIOD {} / DERIVED\n{} used + {} unused = {} available\nPlanned: {} {}",
+                completed.period,
                 grouped(completed.used),
                 grouped(completed.unused),
                 grouped(completed.opening),
@@ -1571,8 +1574,8 @@ fn describe_labor_accounts(
         }
         writeln!(
             value,
-            "Next opening (week {}): {} {} (Derived)",
-            account.next_opening_week,
+            "Next opening (period {}): {} {} (Derived)",
+            account.next_opening_period,
             grouped(account.next_opening_available),
             account.unit,
         )
@@ -1929,7 +1932,7 @@ fn paint_readings(
                 (Some(snapshot), Some(site), true) => describe_brief(site, snapshot),
                 (Some(snapshot), Some(site), false) if navigation.details_open => describe(site, snapshot),
                 (Some(snapshot), None, true) => describe_overview(snapshot),
-                (None, _, true) => "No production relationships are disclosed at this week and perspective. Open Geography to explore the information available to you.".into(),
+                (None, _, true) => "No production relationships are disclosed at this period and perspective. Open Geography to explore the information available to you.".into(),
                 _ => String::new(),
             };
         }
@@ -2024,7 +2027,7 @@ mod tests {
             observed_contexts: Vec::new(),
             process_attributions: Vec::new(),
             scenario_label: "Navigation fixture".into(),
-            horizon_week: 8,
+            horizon_period: 8,
             sites: vec![
                 site("a", &[]),
                 site("b", &["a", "withheld"]),
@@ -2038,7 +2041,7 @@ mod tests {
                 unit_id: "b".repeat(64),
                 good: "steel".into(),
                 unit: "kg".into(),
-                travel_weeks: 1,
+                travel_periods: 1,
                 ordered: 20,
                 shipped: 10,
                 delivered: 10,
@@ -2092,12 +2095,12 @@ mod tests {
             ..kilograms.clone()
         };
         snapshot.material_balance = Some(CompletedMaterialBalanceV1 {
-            week: 5,
+            period: 5,
             rows: vec![kilograms, tonnes, unrelated],
         });
         value.clear();
         describe_material_balance(&mut value, &selected, &snapshot);
-        assert!(value.contains("STOCK MOVEMENT / WEEK 5"));
+        assert!(value.contains("STOCK MOVEMENT / PERIOD 5"));
         assert!(value.contains(
             "Ore / kg\nOpened 10 + arrived 5 + produced 4\n= consumed 3 + dispatched 6 + closed 10"
         ));
@@ -2119,10 +2122,10 @@ mod tests {
                 site_id: "a".into(),
                 unit_id: "hours".into(),
                 unit: "labor-hours".into(),
-                next_opening_week: 6,
+                next_opening_period: 6,
                 next_opening_available: 160,
                 completed: Some(CompletedProductionLaborV1 {
-                    week: 5,
+                    period: 5,
                     opening: 120,
                     planned: 100,
                     used: 80,
@@ -2133,23 +2136,23 @@ mod tests {
                 site_id: "b".into(),
                 unit_id: "other-hours".into(),
                 unit: "other site's private work time".into(),
-                next_opening_week: 6,
+                next_opening_period: 6,
                 next_opening_available: 987,
                 completed: None,
             },
         ];
         let text = describe(&snapshot.sites[0], &snapshot);
-        assert!(text.contains("COMMITTED WORK TIME / WEEK 5 / DERIVED"));
+        assert!(text.contains("COMMITTED WORK TIME / PERIOD 5 / DERIVED"));
         assert!(text.contains("80 used + 40 unused = 120 available"));
         assert!(text.contains("Planned: 100 labor-hours"));
-        assert!(text.contains("Next opening (week 6): 160 labor-hours (Derived)"));
+        assert!(text.contains("Next opening (period 6): 160 labor-hours (Derived)"));
         assert!(!text.contains("private work time"));
         assert!(!text.contains("987"));
         assert!(text.contains("Time accounts do not measure job losses."));
     }
 
     #[test]
-    fn foundation_labor_account_does_not_invent_a_completed_work_week() {
+    fn foundation_labor_account_does_not_invent_a_completed_work_period() {
         use babylon_persistence::ProductionLaborAccountV1;
 
         let mut snapshot = snapshot();
@@ -2157,13 +2160,13 @@ mod tests {
             site_id: "a".into(),
             unit_id: "hours".into(),
             unit: "labor-hours".into(),
-            next_opening_week: 1,
+            next_opening_period: 1,
             next_opening_available: 120,
             completed: None,
         }];
         let text = describe(&snapshot.sites[0], &snapshot);
         assert!(!text.contains("COMMITTED WORK TIME"));
-        assert!(text.contains("Next opening (week 1): 120 labor-hours (Derived)"));
+        assert!(text.contains("Next opening (period 1): 120 labor-hours (Derived)"));
     }
 
     fn staffing_account(site_id: &str) -> babylon_persistence::ProductionStaffingAccountV1 {
@@ -2183,10 +2186,10 @@ mod tests {
             employed: 2,
             reserve: 2,
             previous_unretained_hours: 40,
-            next_opening_week: 6,
+            next_opening_period: 6,
             next_opening_hours: 80,
             completed: Some(CompletedProductionStaffingV1 {
-                week: 5,
+                period: 5,
                 opening_employed: 4,
                 opening_reserve: 0,
                 previous_unretained_hours: 80,
@@ -2211,10 +2214,10 @@ mod tests {
                 site_id: "a".into(),
                 unit_id: "labor-hours".into(),
                 unit: "labor-hours".into(),
-                next_opening_week: 6,
+                next_opening_period: 6,
                 next_opening_available: 80,
                 completed: Some(babylon_persistence::CompletedProductionLaborV1 {
-                    week: 5,
+                    period: 5,
                     opening: 160,
                     planned: 40,
                     used: 40,
@@ -2224,13 +2227,13 @@ mod tests {
         let text = describe(&snapshot.sites[0], &snapshot);
         assert!(text.contains("MODELED WORKFORCE / DERIVED"));
         assert!(text.contains("2 employed + 2 reserve = 4 people"));
-        assert!(text.contains("40 hours per person / week (Designed)"));
-        assert!(text.contains("STAFFING / WEEK 5"));
+        assert!(text.contains("40 hours per person / period (Designed)"));
+        assert!(text.contains("STAFFING / PERIOD 5"));
         assert!(text.contains("Opening: 4 employed, 0 reserve"));
         assert!(text.contains("Hires: 0 | separations: 2 | target: 2 employed"));
-        assert!(text.contains("Work request: 40 hours | prior week: 80 hours"));
-        assert!(text.contains("One-week retention: 80 hours"));
-        assert!(text.contains("Next opening (week 6): 80 labor-hours (Derived)"));
+        assert!(text.contains("Work request: 40 hours | prior period: 80 hours"));
+        assert!(text.contains("One-period retention: 80 hours"));
+        assert!(text.contains("Next opening (period 6): 80 labor-hours (Derived)"));
         assert_eq!(text.matches("Next opening").count(), 1);
         assert!(
             text.contains("Observed QCEW jobs are separate; these accounts record no payments.")
@@ -2243,7 +2246,7 @@ mod tests {
     fn workforce_foundation_absence_and_zero_completed_flows_remain_distinct() {
         let mut snapshot = snapshot();
         let mut account = staffing_account("a");
-        account.next_opening_week = 1;
+        account.next_opening_period = 1;
         account.completed = None;
         snapshot.staffing_accounts.push(account);
         snapshot
@@ -2252,17 +2255,17 @@ mod tests {
                 site_id: "a".into(),
                 unit_id: "labor-hours".into(),
                 unit: "labor-hours".into(),
-                next_opening_week: 1,
+                next_opening_period: 1,
                 next_opening_available: 80,
                 completed: None,
             });
         let foundation = describe(&snapshot.sites[0], &snapshot);
-        assert!(foundation.contains("Opening workforce; no completed staffing week."));
+        assert!(foundation.contains("Opening workforce; no completed staffing period."));
         assert!(foundation.contains("MODELED WORKFORCE / DESIGNED"));
         assert!(!foundation.contains("MODELED WORKFORCE / DERIVED"));
         assert!(!foundation.contains("Hires:"));
-        assert!(!foundation.contains("STAFFING / WEEK"));
-        assert!(foundation.contains("Next opening (week 1): 80 labor-hours (Derived)"));
+        assert!(!foundation.contains("STAFFING / PERIOD"));
+        assert!(foundation.contains("Next opening (period 1): 80 labor-hours (Derived)"));
         assert_eq!(foundation.matches("Next opening").count(), 1);
         let missing = describe(&snapshot.sites[2], &snapshot);
         assert!(missing.contains("No workforce account disclosed for this subject."));
@@ -2276,11 +2279,11 @@ mod tests {
                 separations: 0,
                 ..completed
             });
-        snapshot.staffing_accounts[0].next_opening_week = 6;
-        snapshot.labor_accounts[0].next_opening_week = 6;
+        snapshot.staffing_accounts[0].next_opening_period = 6;
+        snapshot.labor_accounts[0].next_opening_period = 6;
         snapshot.labor_accounts[0].completed =
             Some(babylon_persistence::CompletedProductionLaborV1 {
-                week: 5,
+                period: 5,
                 opening: 80,
                 planned: 40,
                 used: 40,
@@ -2288,8 +2291,8 @@ mod tests {
             });
         let quiet = describe(&snapshot.sites[0], &snapshot);
         assert!(quiet.contains("Hires: 0 | separations: 0"));
-        assert!(!quiet.contains("no completed staffing week"));
-        assert!(quiet.contains("Next opening (week 6): 80 labor-hours (Derived)"));
+        assert!(!quiet.contains("no completed staffing period"));
+        assert!(quiet.contains("Next opening (period 6): 80 labor-hours (Derived)"));
         assert_eq!(quiet.matches("Next opening").count(), 1);
     }
 
@@ -3608,7 +3611,7 @@ mod tests {
             Some(reading),
             "the long readings follow their 3D/2D control before the next panel"
         );
-        let week = app.world().resource::<ObserverSession>().viewed_tick;
+        let period = app.world().resource::<ObserverSession>().viewed_tick;
         readings_key(&mut app, window, KeyCode::PageDown);
         assert!(app.world().get::<ScrollPosition>(body).unwrap().0.y > 0.0);
         readings_key(&mut app, window, KeyCode::End);
@@ -3627,14 +3630,17 @@ mod tests {
             Vec2::ZERO
         );
         readings_key(&mut app, window, KeyCode::Enter);
-        assert_eq!(app.world().resource::<ObserverSession>().viewed_tick, week);
+        assert_eq!(
+            app.world().resource::<ObserverSession>().viewed_tick,
+            period
+        );
         assert!(app.world().resource::<ProductionNavigation>().details_open);
         readings_key(&mut app, window, KeyCode::Tab);
         assert_eq!(app.world().resource::<InputFocus>().get(), Some(footer));
     }
 
     #[test]
-    fn repainted_reading_scope_reenters_tab_order_after_a_committed_week_refresh() {
+    fn repainted_reading_scope_reenters_tab_order_after_a_committed_period_refresh() {
         use crate::observer_focus::ObserverFocusPolicy;
         use bevy::input_focus::tab_navigation::TabIndex;
         let ReadingsFocusFixture {
@@ -3804,8 +3810,8 @@ mod tests {
             good: "steel".into(),
             unit: "kg".into(),
             quantity: 10,
-            dispatch_week: 1,
-            arrival_week: 4,
+            dispatch_period: 1,
+            arrival_period: 4,
         };
         snapshot.freight.push(lot.clone());
         let first = freight_markers(&snapshot, &layout, 1);

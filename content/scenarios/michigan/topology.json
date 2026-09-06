@@ -1,0 +1,123 @@
+{
+  "goods": [
+    {
+      "key": "billet",
+      "label": "Metal billet",
+      "unit_key": "kg"
+    },
+    {
+      "key": "sheet",
+      "label": "Sheet metal",
+      "unit_key": "kg"
+    },
+    {
+      "key": "panel",
+      "label": "Metal panel",
+      "unit_key": "panel"
+    },
+    {
+      "key": "subassembly",
+      "label": "Metal subassembly",
+      "unit_key": "subassembly"
+    },
+    {
+      "key": "grain",
+      "label": "Food grain",
+      "unit_key": "kg"
+    },
+    {
+      "key": "meal",
+      "label": "Milled meal",
+      "unit_key": "kg"
+    },
+    {
+      "key": "packaged-meal",
+      "label": "Packaged meal",
+      "unit_key": "kg"
+    }
+  ],
+  "processes": [
+    {
+      "input_good_key": "billet",
+      "key": "sheet-rolling",
+      "output_good_key": "sheet",
+      "site_key": "wayne-primary-metal"
+    },
+    {
+      "input_good_key": "sheet",
+      "key": "panel-forming",
+      "output_good_key": "panel",
+      "site_key": "macomb-fabricated-metal"
+    },
+    {
+      "input_good_key": "panel",
+      "key": "subassembly-making",
+      "output_good_key": "subassembly",
+      "site_key": "wayne-vehicle-parts"
+    },
+    {
+      "input_good_key": "grain",
+      "key": "meal-milling",
+      "output_good_key": "meal",
+      "site_key": "washtenaw-food"
+    },
+    {
+      "input_good_key": "meal",
+      "key": "meal-packaging",
+      "output_good_key": "packaged-meal",
+      "site_key": "oakland-food"
+    }
+  ],
+  "routes": [
+    {
+      "buyer_site_key": "macomb-fabricated-metal",
+      "good_key": "sheet",
+      "key": "sheet-transfer",
+      "supplier_site_key": "wayne-primary-metal"
+    },
+    {
+      "buyer_site_key": "wayne-vehicle-parts",
+      "good_key": "panel",
+      "key": "panel-transfer",
+      "supplier_site_key": "macomb-fabricated-metal"
+    },
+    {
+      "buyer_site_key": "oakland-food",
+      "good_key": "meal",
+      "key": "food-transfer",
+      "supplier_site_key": "washtenaw-food"
+    }
+  ],
+  "sites": [
+    {
+      "county_geoid": "26163",
+      "key": "wayne-primary-metal",
+      "label": "Wayne primary-metal cohort",
+      "naics": "331"
+    },
+    {
+      "county_geoid": "26099",
+      "key": "macomb-fabricated-metal",
+      "label": "Macomb fabricated-metal cohort",
+      "naics": "332"
+    },
+    {
+      "county_geoid": "26163",
+      "key": "wayne-vehicle-parts",
+      "label": "Wayne vehicle-parts cohort",
+      "naics": "3363"
+    },
+    {
+      "county_geoid": "26161",
+      "key": "washtenaw-food",
+      "label": "Washtenaw food-processing cohort",
+      "naics": "311"
+    },
+    {
+      "county_geoid": "26125",
+      "key": "oakland-food",
+      "label": "Oakland food-packaging cohort",
+      "naics": "311"
+    }
+  ]
+}

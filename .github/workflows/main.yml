@@ -1,12 +1,8 @@
 name: Main Qualification
 
-# A pull request to main already runs ci.yml. This workflow adds only the
-# release-only legs, under unique check names, so the combined manifest is the
-# full pre-merge qualification without rerunning or racing the ordinary gates.
-#
-# workflow_dispatch is the proof path required before the Director opens a
-# release PR. It is accepted only on dev. A push to main never starts this
-# workflow because qualification must finish before main advances.
+# Main PRs run full ci.yml validation plus these release contracts.
+# Manual dev qualification is optional diagnostics; a release PR is the
+# authoritative pre-merge proof, so no duplicate preliminary run is required.
 
 on:
   pull_request:
@@ -64,6 +60,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/bootstrap-python
       - uses: ./.github/actions/bootstrap-persistence
+        id: persistence-cache
+        with:
+          cache-key: rollover
       - uses: ./.github/actions/postgres-up
       - name: Activate the Rust-owned canonical schema
         run: mise run db:bootstrap
@@ -72,6 +71,26 @@ jobs:
       - name: Stop Postgres
         if: always()
         run: tools/ci_postgres_compose.sh down
+
+      - name: Save successful persistence cache
+        if: >-
+          success() && github.event_name != 'pull_request' &&
+          (github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/main') &&
+          steps.persistence-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          key: ${{ steps.persistence-cache.outputs.cache-key }}
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            rust/target/.rustc_info.json
+            rust/target/debug/.cargo-lock
+            rust/target/debug/.fingerprint
+            rust/target/debug/build
+            rust/target/debug/deps
+            rust/target/debug/babylon-runtime
+            rust/target/debug/babylon-runtime.d
 
   refdata-tests:
     name: Main Qualification / Reference-Data Contracts
@@ -83,8 +102,6 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/bootstrap-python
       - uses: ./.github/actions/fetch-reference-db
-      - name: Catalog-to-database reconciliation
-        run: uv run python tools/sentinel_check.py catalog --check
       - name: Run reference-data contracts
         run: >-
           uv run pytest tests -m requires_reference_db
@@ -100,29 +117,10 @@ jobs:
       - uses: ./.github/actions/bootstrap-python
         with:
           docs: "true"
-      - name: Run formula doctest examples
-        run: >-
-          uv run pytest --doctest-modules src/babylon/formulas
-          -o addopts="" -vv -ra --tb=long
       - name: Build the release manual (advisory until warning debt closes)
         continue-on-error: true
         working-directory: docs
         run: timeout 480 uv run sphinx-build -b html . _build/html
-
-  ai-tests:
-    name: Main Qualification / AI Tests (advisory)
-    needs: [event-contract]
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    continue-on-error: true
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: ./.github/actions/bootstrap-python
-      - name: Run AI unit tests
-        run: >-
-          uv run pytest tests/unit/ai
-          -o addopts="" -m "not requires_ollama"
-          -vv -ra -l --tb=long --durations=0
 
   trivy-image:
     name: Main Qualification / Container Image Scan

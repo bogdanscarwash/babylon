@@ -21,8 +21,8 @@ from pathlib import Path
 
 import pytest
 
-from babylon.domain.geography.adjacency import ARTIFACT_PATH as ADJACENCY_PATH
-from babylon.domain.geography.adjacency import load_adjacency_pairs
+from babylon.data.adjacency import ARTIFACT_PATH as ADJACENCY_PATH
+from babylon.data.adjacency import load_adjacency_pairs
 
 ATLAS_PATH = Path(__file__).resolve().parents[3] / "assets" / "map" / "county_atlas.bin"
 

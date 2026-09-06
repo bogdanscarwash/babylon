@@ -1,6 +1,6 @@
 //! One canonical, scoped Archive observation composed into a native card.
 //!
-//! Async reads bind the exact installed week, commit identity, capability and
+//! Async reads bind the exact installed period, commit identity, capability and
 //! geographic selection. The same typed read feeds headless JSONL. Retained
 //! publications stay explicitly pending until the reader verifies them; no
 //! current-page search or global progress counter fills missing historical data.
@@ -99,7 +99,7 @@ pub struct InstalledDossier {
 pub struct ActiveCountyDossier(pub Option<InstalledDossier>);
 
 impl ActiveCountyDossier {
-    /// Admit one exact observed week, capability, selection and refresh generation.
+    /// Admit one exact observed period, capability, selection and refresh generation.
     #[must_use]
     pub fn for_observer(
         &self,
@@ -583,7 +583,24 @@ fn drive_dossier_fetch(
     projection.0 = None;
     let cursor = presentation.cursor.clone();
     let request = scope.clone();
-    let task = AsyncComputeTaskPool::get().spawn(async move { fetch_dossier(request, cursor) });
+    let task = AsyncComputeTaskPool::get().spawn(async move {
+        let started = std::time::Instant::now();
+        let campaign = request.campaign;
+        let tick = request.read_scope.tick();
+        let generation = request.refresh_generation;
+        let perspective = request.observer.as_ref().map(|context| context.perspective);
+        let result = fetch_dossier(request, cursor);
+        bevy::log::info!(target: "babylon_client::timing",
+            stage = "authenticated_archive_card_read",
+            campaign = %campaign.as_uuid(),
+            tick,
+            generation,
+            perspective = ?perspective,
+            elapsed_us = started.elapsed().as_micros(),
+            success = result.is_ok(),
+            "Archive card read completed");
+        result
+    });
     *state = DossierFetchState::InFlight { scope, task };
 }
 
@@ -1202,7 +1219,7 @@ fn paint_zones(
                 page.map_or_else(
                     || {
                         if context.ui.is_some() {
-                            "Which cited observations are available at this week?".into()
+                            "Which cited observations are available at this period?".into()
                         } else {
                             DOSSIER_DECISION_QUESTION.into()
                         }
@@ -1261,7 +1278,7 @@ fn evidence_rows(read: &ArchiveDossierReadV2) -> Vec<Vec<DossierSegment>> {
     rows.extend(page.changes.changes.iter().map(chronicle_row_segments));
     rows.push(vec![DossierSegment {
         text: format!(
-            "Content observed at week {}; published at week {}.\nRevision {}\nContent SHA256 {}",
+            "Content observed at period {}; published at period {}.\nRevision {}\nContent SHA256 {}",
             page.content_source.tick(),
             page.effective_tick,
             crate::dossier::hex_bytes(page.revision_id),
@@ -1293,7 +1310,7 @@ fn status_segments(
                 DossierTone::Dim,
             ),
             DossierFetchState::WaitingForObservation => (
-                "Waiting for the selected week's committed observation.".into(),
+                "Waiting for the selected period's committed observation.".into(),
                 DossierTone::Dim,
             ),
             DossierFetchState::InFlight { .. } => {
@@ -1309,7 +1326,7 @@ fn status_segments(
     let verified = verified_tick(read);
     let mut segments = vec![DossierSegment {
         text: format!(
-            "Viewing week {} · durable week {}\n{}",
+            "Viewing period {} · durable period {}\n{}",
             read.scope.tick(),
             read.durable_tick,
             availability_label(read)
@@ -1328,7 +1345,7 @@ fn status_segments(
     }
     if let Some(page) = retained_page(read) {
         segments.push(DossierSegment {
-            text: format!("\nContent last published at week {}", page.effective_tick),
+            text: format!("\nContent last published at period {}", page.effective_tick),
             tone: DossierTone::Dim,
         });
     }
@@ -1770,7 +1787,7 @@ mod tests {
     }
 
     #[test]
-    fn back_recovers_from_a_failed_link_read_without_changing_the_week() {
+    fn back_recovers_from_a_failed_link_read_without_changing_the_period() {
         let (mut app, entity, request) = chip_app();
         app.world_mut().trigger(ObserverKeyboardActivate {
             entity,
@@ -1822,7 +1839,7 @@ mod tests {
     }
 
     #[test]
-    fn historical_admission_uses_the_installed_week_hash_and_preserves_pending() {
+    fn historical_admission_uses_the_installed_period_hash_and_preserves_pending() {
         let mut session = ObserverSession::new(CampaignId::from_uuid(uuid::Uuid::nil()));
         session.ready(2, Some("b".repeat(64)));
         session.inspect_tick(1);

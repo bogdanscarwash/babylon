@@ -102,6 +102,12 @@ FNR == 1 { buf = ""; joinstart = 0 }
     start = joinstart
     joinstart = 0
 
+    # This exact, single physical YAML run command only audits dependencies.
+    # Anchor the complete command: shell operators, substitutions, comments,
+    # extra arguments and continued lines must still pass the activation scan.
+    # Never exempt .mise task lines or a substring inside another command.
+    if (MODE != "line" && start == FNR && logical ~ /^[[:space:]]*run:[[:space:]]+cargo-deny --log-level warn --manifest-path rust\/Cargo\.toml --all-features check advisories bans licenses sources[[:space:]]*$/) next
+
     hit = 0
     if (index(logical, "--all-features") > 0) hit = 1
 

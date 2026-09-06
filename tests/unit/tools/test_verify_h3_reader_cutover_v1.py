@@ -405,7 +405,7 @@ def test_repository_gate_runs_the_canonical_reader_sentinel() -> None:
     mise = (ROOT / ".mise.toml").read_text(encoding="utf-8")
 
     assert '[tasks."check:h3-readers"]' in mise
-    static_gate = mise.split('[tasks."check:sentinels-static"]', 1)[1].split("\n[", 1)[0]
+    static_gate = mise.split('[tasks."check:static"]', 1)[1].split("\n[", 1)[0]
     assert '"check:h3-readers"' in static_gate
 
 

@@ -437,7 +437,7 @@ fn live_notification_failure_rolls_back_material_commit_and_preserves_memory_bef
     let campaign =
         CampaignId::from_uuid(Uuid::from_u128(0x2200_0000_0000_0000_0000_0000_0000_00f5));
     let foundation = MichiganContentPresetV1::new_campaign(MichiganDeliveryPresetV1::Standard)
-        .create_foundation()
+        .create_foundation(&crate::test_support::catalog())
         .expect("admitted material foundation");
     let foundation_digest = foundation.digest();
     let mut runtime = DurableMaterialRuntimeV3::create(&config, campaign, foundation)

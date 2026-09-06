@@ -11,8 +11,8 @@ use crate::{
     michigan_content::MichiganContentAdmissionV1,
     michigan_economy::digest_hex,
     michigan_material::{
-        michigan_material_catalog_v1, MichiganIndustryBaselineRowV1, MichiganMaterialCatalogV1,
-        MICHIGAN_INDUSTRY_BASELINE_SHA256_V1, MICHIGAN_MATERIAL_SCENARIO_SHA256_V1,
+        MichiganIndustryBaselineRowV1, MichiganMaterialCatalogV1,
+        MICHIGAN_INDUSTRY_BASELINE_SHA256_V1,
     },
     michigan_sectors::{
         michigan_county_sectors_v1, MichiganCountySectorV1, QCEW_SECTORS_ARTIFACT_SHA256_V1,
@@ -69,7 +69,7 @@ type ContextRows = (
 /// Called only after the snapshot's shared content/graph admission.
 /// Preview grants do not authorize organization facts.
 pub(crate) fn attach_observed_context_v1(
-    _admitted: &MichiganContentAdmissionV1,
+    admitted: &MichiganContentAdmissionV1,
     visibility: ObserverVisibilityV1,
     snapshot: &mut ProductionSnapshotV1,
 ) -> Result<(), ProductionProjectionErrorV1> {
@@ -78,8 +78,7 @@ pub(crate) fn attach_observed_context_v1(
         snapshot.process_attributions.clear();
         return Ok(());
     }
-    let catalog =
-        michigan_material_catalog_v1().map_err(|_| ProductionProjectionErrorV1::Content)?;
+    let catalog = &admitted.catalog;
     let sectors = michigan_county_sectors_v1().map_err(|_| ProductionProjectionErrorV1::Content)?;
     let (contexts, links) = context_rows(catalog, sectors.rows(), snapshot)?;
     snapshot.observed_contexts = contexts;
@@ -140,7 +139,7 @@ fn context_rows(
             site_id,
             industry_code: binding.industry.to_owned(),
             cohort_subject: subject,
-            scenario_artifact_sha256: MICHIGAN_MATERIAL_SCENARIO_SHA256_V1.to_owned(),
+            scenario_artifact_sha256: digest_hex(&catalog.defines_hash()),
             industry_artifact_sha256: MICHIGAN_INDUSTRY_BASELINE_SHA256_V1.to_owned(),
             evidence_class: ArchiveEvidenceClassV1::Designed,
         });

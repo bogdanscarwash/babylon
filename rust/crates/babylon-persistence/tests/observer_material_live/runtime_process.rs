@@ -15,7 +15,7 @@ use babylon_persistence::runtime_session::{
 };
 
 use super::{
-    advance_material_week, validate_legacy_connection_target, CampaignId, Config, DisposableTarget,
+    advance_material_period, validate_connection_target, CampaignId, Config, DisposableTarget,
     DurableMaterialRuntimeV3, Uuid,
 };
 
@@ -31,7 +31,15 @@ impl RuntimeChild {
         let diagnostics = Arc::new(Mutex::new(Vec::new()));
         let mut runtime = Self(
             Command::new(env!("CARGO_BIN_EXE_babylon-runtime"))
-                .args(["session", "--stdio"])
+                .args([
+                    "session",
+                    "--stdio",
+                    "--defines",
+                    concat!(
+                        env!("CARGO_MANIFEST_DIR"),
+                        "/../../../content/scenarios/michigan/defines.toml"
+                    ),
+                ])
                 .current_dir(env!("CARGO_MANIFEST_DIR"))
                 .env_clear()
                 .env("BABYLON_RUNTIME_DSN", dsn)
@@ -437,10 +445,12 @@ fn live_runtime_child_switch_failure_retry_and_epoch_isolation_preserve_campaign
     let mut durable = DurableMaterialRuntimeV3::create(
         &target.writer,
         first,
-        preset.create_foundation().unwrap(),
+        preset
+            .create_foundation(&crate::test_support::catalog())
+            .unwrap(),
     )
     .unwrap();
-    advance_material_week(&mut durable);
+    advance_material_period(&mut durable);
     let original_tail = durable.tail().copied();
     let original_world = durable.session().current_world_hash().unwrap();
     drop(durable);
@@ -493,9 +503,15 @@ fn live_runtime_child_switch_failure_retry_and_epoch_isolation_preserve_campaign
         "switch must retain the runtime process"
     );
     assert_switch_stop(&mut child, input, &reopened_scope);
-    let reopened =
-        DurableMaterialRuntimeV3::open(&target.writer, first, preset.admitted().unwrap().digest())
-            .unwrap();
+    let reopened = DurableMaterialRuntimeV3::open(
+        &target.writer,
+        first,
+        preset
+            .admitted(&crate::test_support::catalog())
+            .unwrap()
+            .digest(),
+    )
+    .unwrap();
     assert_eq!(reopened.tail(), original_tail.as_ref());
     assert_eq!(
         reopened.session().current_world_hash().unwrap(),
@@ -505,7 +521,7 @@ fn live_runtime_child_switch_failure_retry_and_epoch_isolation_preserve_campaign
         &target.writer,
         second,
         MichiganContentPresetV1::new_campaign(MichiganDeliveryPresetV1::Delayed)
-            .admitted()
+            .admitted(&crate::test_support::catalog())
             .unwrap()
             .digest(),
     )
@@ -526,14 +542,16 @@ fn live_runtime_child_pipe_failure_and_orderly_exit_preserve_committed_world() {
     let campaign =
         CampaignId::from_uuid(Uuid::from_u128(0x0044_0000_0000_0000_0000_0000_0000_007f));
     let preset = MichiganContentPresetV1::new_campaign(MichiganDeliveryPresetV1::Standard);
-    let admitted = preset.admitted().unwrap();
+    let admitted = preset.admitted(&crate::test_support::catalog()).unwrap();
     let mut runtime = DurableMaterialRuntimeV3::create(
         &target.writer,
         campaign,
-        preset.create_foundation().unwrap(),
+        preset
+            .create_foundation(&crate::test_support::catalog())
+            .unwrap(),
     )
     .unwrap();
-    advance_material_week(&mut runtime);
+    advance_material_period(&mut runtime);
     let expected_tail = runtime.tail().copied();
     let expected_world = runtime.session().current_world_hash().unwrap();
     drop(runtime);
@@ -555,7 +573,7 @@ fn live_runtime_child_pipe_failure_and_orderly_exit_preserve_committed_world() {
 }
 
 fn child_dsn(config: &Config) -> String {
-    validate_legacy_connection_target(config).unwrap();
+    validate_connection_target(config).unwrap();
     let [postgres::config::Host::Tcp(host)] = config.get_hosts() else {
         panic!("runtime process fixture requires one validated local TCP host");
     };
@@ -602,7 +620,7 @@ fn runtime_child_dsn_selects_owned_database_from_uri_and_keyword_configs() {
         // Exercise exact libpq quoting without using or printing real credentials.
         config.password("fixture ' quote \\ slash");
         let parsed: Config = child_dsn(&config).parse().unwrap();
-        validate_legacy_connection_target(&parsed).unwrap();
+        validate_connection_target(&parsed).unwrap();
         assert_eq!(
             parsed.get_dbname(),
             Some("per281_runtime_materialobserver_42")

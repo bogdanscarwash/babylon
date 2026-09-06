@@ -1,11 +1,4 @@
-"""`babylon doctor` — diagnose the local install: config, provider lane, DB.
-
-Report-only skeleton (ADR095 D1). Extended by 096 (``--provision``), 097
-(render-capability probe writing ``[render] tier`` into config.toml), and
-T1.2 keel unit K5 (the declared-assumptions ledger — see
-:mod:`babylon.sentinels.assumptions`). Reuses the §A8 seam's config-dir
-precedence and provider resolution rather than reinventing them.
-"""
+"""Report operator configuration, provider availability, and database reachability."""
 
 from __future__ import annotations
 
@@ -14,7 +7,6 @@ import os
 import typer
 from rich.console import Console
 
-from babylon.config.dsn import resolve_dsn
 from babylon.intelligence.model_manifest import load_bundled_manifest
 from babylon.intelligence.providers import (
     ProviderError,
@@ -23,9 +15,6 @@ from babylon.intelligence.providers import (
     resolve_provider,
 )
 from babylon.intelligence.provision import default_models_dir, provision_models
-from babylon.render.config import render_config_path
-from babylon.render.doctor import run_render_probe
-from babylon.sentinels.assumptions.registry import DECLARED_ASSUMPTIONS, ledger_lines
 
 #: soft_wrap avoids Rich's default 80-column word-wrap splitting long config
 #: paths (e.g. deep tmp_path fixtures, nested XDG dirs) across lines; disabling
@@ -41,8 +30,7 @@ def check_database(dsn: str | None) -> tuple[bool, str]:
     if not dsn:
         return (
             False,
-            "no DSN configured (set BABYLON_DSN; deprecated fallbacks: "
-            "BABYLON_DATABASE_URL, BABYLON_PG_DSN, BABYLON_TEST_PG_DSN)",
+            "no DSN configured (set BABYLON_RUNTIME_DSN)",
         )
     try:
         import psycopg
@@ -64,7 +52,7 @@ def doctor(
     ),
 ) -> None:
     """Diagnose the local Babylon install (config, provider lane, database,
-    declared assumptions)."""
+    model provisioning)."""
     cfg_dir = _config_dir(os.environ)
     config_toml = cfg_dir / "config.toml"
     credentials = cfg_dir / "credentials"
@@ -89,18 +77,8 @@ def doctor(
     mark = "ok" if health.ok else "degraded"
     console.print(f"[bold]provider lane:[/bold] {lane} ({mark}: {health.detail})")
 
-    # Probe the union of every legacy scheme a Babylon process boots from —
-    # doctor's own historical var first, then the runner/game-boot pair — so
-    # doctor's verdict matches what `babylon play` will actually do.
-    db_ok, db_detail = check_database(
-        resolve_dsn(legacy_env=("BABYLON_DATABASE_URL", "BABYLON_PG_DSN", "BABYLON_TEST_PG_DSN"))
-    )
+    db_ok, db_detail = check_database(os.environ.get("BABYLON_RUNTIME_DSN"))
     console.print(f"[bold]database:[/bold] {'ok' if db_ok else 'unavailable'} — {db_detail}")
-
-    # --- T1.2 keel (K5): declared assumptions ledger ---
-    console.print(f"[bold]declared assumptions:[/bold] {len(DECLARED_ASSUMPTIONS)}")
-    for line in ledger_lines(DECLARED_ASSUMPTIONS):
-        console.print(f"  [yellow]{line}[/yellow]")
 
     if provision:
         console.print("[bold]provisioning models:[/bold]")
@@ -112,9 +90,5 @@ def doctor(
         for result in results:
             style = "yellow" if result.status == "gated" else "green"
             console.print(f"  [{style}]{result.name}: {result.status}[/{style}] — {result.detail}")
-
-    # --- ADR097: render capability probe (probe-once; runtime never re-probes) ---
-    for render_line in run_render_probe(os.environ, config_path=render_config_path(os.environ)):
-        console.print(render_line)
 
     raise typer.Exit(code=0)

@@ -25,17 +25,8 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
-
-      - name: Sync dependencies (dev + ops)
-        run: uv sync --frozen --extra ops
-
-      - name: Install mise (task runner)
-        uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4
-        with:
-          version: 2026.9.1
-          install: true
+      - name: Bootstrap pinned tools and dependencies
+        uses: ./.github/actions/bootstrap-python
 
       - name: Install pre-commit hooks
         run: uv run --frozen pre-commit install --install-hooks

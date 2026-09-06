@@ -4,8 +4,8 @@ use babylon_kernel::tick_content_hash::RefDigestV1;
 use babylon_kernel::H3CellId;
 use postgres::{Client, Config, GenericClient, IsolationLevel, NoTls, Row, Transaction};
 
-use crate::legacy_adopter::{
-    acquire_lock, release_lock, validate_legacy_connection_target, LegacyAdopterError,
+use crate::postgres_catalog::{
+    acquire_lock, release_lock, validate_connection_target, CatalogError,
 };
 use crate::postgres_diagnostic::PostgresDiagnosticV1;
 use crate::schema_epoch::{
@@ -176,8 +176,8 @@ pub enum SpatialReferenceInstallOperation {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SpatialReferenceInstallError {
     Bundle(SpatialReferenceProductsError),
-    ConnectionTarget(LegacyAdopterError),
-    Lock(LegacyAdopterError),
+    ConnectionTarget(CatalogError),
+    Lock(CatalogError),
     SchemaEpoch(SchemaEpochError),
     ExactSchemaEpochRequired {
         expected: usize,
@@ -210,7 +210,7 @@ pub enum SpatialReferenceInstallError {
         attempts: usize,
         reconciliation: Box<SpatialReferenceInstallError>,
     },
-    Unlock(LegacyAdopterError),
+    Unlock(CatalogError),
     FailureAndCleanup {
         primary: Box<SpatialReferenceInstallError>,
         cleanup: Box<SpatialReferenceInstallError>,
@@ -310,8 +310,7 @@ where
 {
     let bundle = michigan_spatial_reference_products_v1(cohort)
         .map_err(SpatialReferenceInstallError::Bundle)?;
-    validate_legacy_connection_target(config)
-        .map_err(SpatialReferenceInstallError::ConnectionTarget)?;
+    validate_connection_target(config).map_err(SpatialReferenceInstallError::ConnectionTarget)?;
     let bounded = bounded_config(config);
     let mut session = LockedInstallSession::connect(&bounded)?;
     let primary = install_under_lock(&bounded, &mut session, &bundle, attempt);

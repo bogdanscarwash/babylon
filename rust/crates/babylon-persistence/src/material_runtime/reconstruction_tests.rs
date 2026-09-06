@@ -44,8 +44,8 @@ fn stored_copy(original: &MaterialRuntimeFoundationV2) -> StoredMaterialFoundati
 }
 
 fn alternate_foundation() -> MaterialRuntimeFoundationV2 {
-    let original = crate::michigan_content::MichiganContentPresetV1::StaffedStandardV4
-        .create_foundation()
+    let original = crate::michigan_content::MichiganContentPresetV1::FourWeekStandardV5
+        .create_foundation(&crate::test_support::catalog())
         .unwrap();
     let bundle = original.graph_foundation.content_bundle();
     let source = std::str::from_utf8(bundle.scenario_source_bytes()).unwrap();
@@ -121,8 +121,8 @@ fn stored_content_reconstructs_exact_alternate_session_and_seed_without_factory_
 
 #[test]
 fn reconstruction_refuses_component_changes_and_an_unadmitted_expected_identity() {
-    let original = crate::michigan_content::MichiganContentPresetV1::StaffedStandardV4
-        .create_foundation()
+    let original = crate::michigan_content::MichiganContentPresetV1::FourWeekStandardV5
+        .create_foundation(&crate::test_support::catalog())
         .unwrap();
     let expected = original.digest();
     for mutation in 0..6 {
@@ -157,8 +157,8 @@ fn reconstruction_refuses_component_changes_and_an_unadmitted_expected_identity(
 
 #[test]
 fn reconstruction_rejects_a_different_valid_graph_and_a_nonzero_initial_register() {
-    let original = crate::michigan_content::MichiganContentPresetV1::StaffedStandardV4
-        .create_foundation()
+    let original = crate::michigan_content::MichiganContentPresetV1::FourWeekStandardV5
+        .create_foundation(&crate::test_support::catalog())
         .unwrap();
     let alternate = alternate_foundation();
     let mut mixed = stored_copy(&original);
@@ -245,8 +245,8 @@ fn persisted_layout_is_exact_and_unknown_layouts_are_refused() {
 
 #[test]
 fn large_v2_stored_sources_reconstruct_the_same_circuit_without_factory_substitution() {
-    let original = crate::michigan_content::MichiganContentPresetV1::StaffedStandardV4
-        .create_foundation()
+    let original = crate::michigan_content::MichiganContentPresetV1::FourWeekStandardV5
+        .create_foundation(&crate::test_support::catalog())
         .unwrap();
     assert_eq!(
         original.graph_foundation().content_bundle().layout(),
@@ -292,14 +292,19 @@ fn large_v2_stored_sources_reconstruct_the_same_circuit_without_factory_substitu
 fn admitted_bundle_foundations_reconstruct_exactly_through_dispatch_transit_and_arrival() {
     use crate::michigan_content::MichiganContentPresetV1;
     for preset in [
-        MichiganContentPresetV1::StaffedStandardV4,
-        MichiganContentPresetV1::StaffedDelayedV4,
+        MichiganContentPresetV1::FourWeekStandardV5,
+        MichiganContentPresetV1::FourWeekDelayedV5,
     ] {
-        let original = preset.create_foundation().unwrap();
+        let original = preset
+            .create_foundation(&crate::test_support::catalog())
+            .unwrap();
         let restored = reconstruct_material_foundation_v2(
             stored_copy(&original),
             persisted_graph_copy(original.graph_foundation()),
-            preset.admitted().unwrap().digest(),
+            preset
+                .admitted(&crate::test_support::catalog())
+                .unwrap()
+                .digest(),
         )
         .unwrap();
         assert_eq!(restored.canonical_bytes(), original.canonical_bytes());
@@ -311,10 +316,10 @@ fn admitted_bundle_foundations_reconstruct_exactly_through_dispatch_transit_and_
         let mut reopened = restored.into_session().unwrap();
         let mut left_sink = CollectingSink::default();
         let mut right_sink = CollectingSink::default();
-        for week in 1..=6 {
+        for period in 1..=6 {
             let actions = OrderedPracticeActionBatchV1::empty(
                 continued.graph_session().session_identity().clone(),
-                week,
+                period,
             )
             .unwrap();
             let left = continued.prepare_advance(&actions).unwrap();
@@ -323,13 +328,14 @@ fn admitted_bundle_foundations_reconstruct_exactly_through_dispatch_transit_and_
                 left.graph_report().successful_event_batch().events(),
                 right.graph_report().successful_event_batch().events()
             );
-            if week == 1 {
+            if period == 1 {
                 assert_workforce_seed_evidence(&left);
             }
-            if preset == MichiganContentPresetV1::StaffedDelayedV4 {
-                assert_delayed_panel_retention(&left, week);
+            if preset == MichiganContentPresetV1::FourWeekDelayedV5 {
+                assert_delayed_panel_retention(&left, period);
             }
-            let checkpoint = matches!(week, 2..=4).then(|| reconstructed_checkpoint(preset, &left));
+            let checkpoint =
+                matches!(period, 2..=4).then(|| reconstructed_checkpoint(preset, &left));
             assert_eq!(left.identity(), right.identity());
             assert_eq!(
                 left.material().register().canonical_bytes(),
@@ -359,9 +365,14 @@ fn admitted_bundle_foundations_reconstruct_exactly_through_dispatch_transit_and_
 #[test]
 fn bundle_reconstruction_refuses_alternate_content_and_individually_valid_changed_stock() {
     use crate::michigan_content::MichiganContentPresetV1;
-    let preset = MichiganContentPresetV1::StaffedStandardV4;
-    let original = preset.create_foundation().unwrap();
-    let expected = preset.admitted().unwrap().digest();
+    let preset = MichiganContentPresetV1::FourWeekStandardV5;
+    let original = preset
+        .create_foundation(&crate::test_support::catalog())
+        .unwrap();
+    let expected = preset
+        .admitted(&crate::test_support::catalog())
+        .unwrap()
+        .digest();
     let previous = alternate_foundation();
     // A valid graph with a different seed/session cannot replace the admitted one.
     let mut changed = stored_copy(&original);
@@ -402,7 +413,7 @@ fn bundle_reconstruction_refuses_alternate_content_and_individually_valid_change
 
 fn assert_delayed_panel_retention(
     candidate: &babylon_tick::material_replay::PreparedMaterialTickV3<HypergraphStore>,
-    week: u64,
+    period: u64,
 ) {
     use babylon_bsl::identity_codec::StableBslValueV1;
     use babylon_graph::stable_element::StableElementKeyV1;
@@ -422,16 +433,16 @@ fn assert_delayed_panel_retention(
         _ => panic!("staffing evidence must be exact integer"),
     };
     assert_eq!(field("closing-employed") + field("closing-reserve"), 4);
-    if week == 1 {
-        assert_eq!(field("previous-unretained-hours"), 160);
+    if period == 1 {
+        assert_eq!(field("previous-unretained-hours"), 640);
         assert_eq!(field("current-unretained-hours"), 0);
         assert_eq!(field("closing-employed"), 4);
-    } else if week == 2 {
+    } else if period == 2 {
         assert_eq!(field("previous-unretained-hours"), 0);
         assert_eq!(field("closing-employed"), 0);
         assert_eq!(field("separations"), 4);
-    } else if week == 4 {
-        assert_eq!(field("current-unretained-hours"), 160);
+    } else if period == 4 {
+        assert_eq!(field("current-unretained-hours"), 640);
         assert_eq!(field("closing-employed"), 4);
         assert_eq!(field("hires"), 4);
     }
@@ -439,8 +450,8 @@ fn assert_delayed_panel_retention(
 
 #[test]
 fn unwrapped_definitions_and_changed_opening_workforce_are_not_scheduled_fallbacks() {
-    let current = crate::michigan_content::MichiganContentPresetV1::StaffedStandardV4
-        .create_foundation()
+    let current = crate::michigan_content::MichiganContentPresetV1::FourWeekStandardV5
+        .create_foundation(&crate::test_support::catalog())
         .unwrap();
     let original = current.graph_foundation().content_bundle();
     for change_seed in [false, true] {
@@ -495,11 +506,16 @@ fn reconstructed_checkpoint(
     preset: crate::michigan_content::MichiganContentPresetV1,
     candidate: &babylon_tick::material_replay::PreparedMaterialTickV3<HypergraphStore>,
 ) -> MaterialReplaySessionV3<HypergraphStore> {
-    let stored = preset.create_foundation().unwrap();
+    let stored = preset
+        .create_foundation(&crate::test_support::catalog())
+        .unwrap();
     let mut restored = reconstruct_material_foundation_v2(
         stored_copy(&stored),
         persisted_graph_copy(stored.graph_foundation()),
-        preset.admitted().unwrap().digest(),
+        preset
+            .admitted(&crate::test_support::catalog())
+            .unwrap()
+            .digest(),
     )
     .unwrap()
     .into_session()
@@ -521,7 +537,7 @@ fn assert_workforce_seed_evidence(
 ) {
     use babylon_bsl::identity_codec::StableBslValueV1;
     use babylon_graph::stable_element::StableElementKeyV1;
-    let catalog = crate::michigan_material::michigan_material_catalog_v1().unwrap();
+    let catalog = crate::test_support::catalog();
     let events = candidate.graph_report().successful_event_batch().events();
     assert_eq!(events.len(), 5);
     for seed in &catalog.staffing().pools {

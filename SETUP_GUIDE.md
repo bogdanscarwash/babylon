@@ -102,15 +102,17 @@ By default, the launcher connects to `babylon_test` on `127.0.0.1:5433`.
 
 The runtime initializes a new database, installs the observer read roles,
 and connects to Bevy through anonymous pipes. The window receives read
-credentials. New campaigns start at week zero. The runtime can reopen a
-supported save from the same campaign content version. It reconciles the
-committed checkpoint before a new week.
+credentials. New campaigns start at period zero. One period advances four weeks
+in one simulation tick. The runtime can reopen a supported save from the same
+campaign content version. It reconciles the committed checkpoint before the
+next period.
 
 The campaign menu has controls to continue, start, open, or compare campaigns.
-It includes a scenario with longer `sheet-transfer` durations. The map shows 83
-Michigan county baselines. The production display shows five Designed
-county-industry cohorts, actual freight lots, and committed production for
-16 weeks.
+The supplied delayed-delivery parameters lengthen the `sheet-transfer` route.
+The map shows 83 Michigan county baselines. The production display shows five
+Designed county-industry cohorts, actual freight lots, and committed production.
+The supplied horizon is 16 four-week periods (64 weeks). Comparing saved
+campaigns shows their own committed values; their parameters can differ.
 
 Observed QCEW jobs and wages are source records. Designed physical
 quantities and labor-hours use declared scenario values. Player interventions
@@ -124,7 +126,12 @@ mise run play -- --new --preset delayed
 ```
 
 Use `--campaign UUID` to open a supported saved campaign. The runtime recovers
-its stored scenario. `--preset` applies only to a new campaign.
+its stored scenario and parameters. `--preset` applies only to a new campaign.
+
+Edit `content/scenarios/michigan/defines.toml` before starting a new campaign,
+or pass `--defines /absolute/path/to/defines.toml` to choose another file.
+Each New request validates and saves those values. Editing the file later does
+not change an existing campaign; Open uses its saved values.
 
 Older development saves with unsupported content versions cannot reopen.
 Use `mise run play -- --new` to start a new campaign and keep those saves.
@@ -161,20 +168,8 @@ also use the Rust gate:
 mise run rust:check-no-docs
 ```
 
-Python tests have value during the Rust port. They test the frozen reference,
-data tools, and language-neutral behavior contracts.
-
-## 6. Run the optional frozen-reference smoke test
-
-Run the frozen Python reference for one small tick:
-
-```bash
-mise run reference:python-smoke
-```
-
-The command must show an initial tick, one simulation step, and a completed
-tick. The command does not prove that the Bevy client has player actions.
-
+Python tests cover retained data tools, operator workflows, and
+language-neutral behavior contracts. Rust tests cover mechanics.
 
 ## Make a contribution
 

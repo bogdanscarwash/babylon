@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import shlex
 from pathlib import Path
 from typing import Any
 
@@ -141,13 +140,10 @@ def test_container_image_scan_is_blocking_and_fail_closed() -> None:
     }
 
 
-def test_ai_qualification_excludes_live_ollama_tests() -> None:
-    ai_job = _workflow()["jobs"]["ai-tests"]
-    test_step = next(step for step in ai_job["steps"] if step.get("name") == "Run AI unit tests")
-    argv = shlex.split(test_step["run"])
-    marker_index = argv.index("-m")
-
-    assert argv[marker_index + 1] == "not requires_ollama"
+def test_retired_ai_suite_has_no_qualification_job() -> None:
+    assert not (ROOT / "tests/ai").exists()
+    assert "ai-tests" not in _workflow()["jobs"]
+    assert "not requires_ollama" in MISE_PATH.read_text(encoding="utf-8")
 
 
 def test_workflow_emits_every_qualification_context_once() -> None:
@@ -207,25 +203,14 @@ def test_shared_pr_blocking_pg_tier_is_rust_only_after_cutover() -> None:
     assert shard["strategy"] == {
         "fail-fast": False,
         "max-parallel": 4,
-        "matrix": {
-            "focus": [
-                "clean_bootstrap",
-                "h3_atomicity",
-                "rust_persistence_runtime",
-                "installed_mutation",
-                "archive_worker",
-                "reader_role",
-            ]
-        },
+        "matrix": "${{ fromJSON(needs.scope.outputs.pg-matrix) }}",
     }
     steps = shard["steps"]
-    assert [step.get("run") for step in steps if step.get("run")] == [
-        "tools/run_rust_legacy_adopter_pg.sh"
-    ]
+    assert [step.get("run") for step in steps if step.get("run")] == ["tools/run_rust_postgres.sh"]
     assert not any(step.get("uses") == "./.github/actions/bootstrap-python" for step in steps)
     assert not any(step.get("uses") == "./.github/actions/fetch-reference-db" for step in steps)
-    aggregator = workflow["jobs"]["pg-integration"]
-    assert aggregator["name"] == "Postgres Integration Tier (PG 17, pinned runtime)"
-    assert aggregator["needs"] == "pg-integration-shards"
+    aggregator = workflow["jobs"]["ci-gate"]
+    assert "pg-integration-shards" in aggregator["needs"]
     assert aggregator["if"] == "always()"
-    assert "needs.pg-integration-shards.result" in aggregator["steps"][0]["run"]
+    assert aggregator["steps"][-1]["env"]["CI_NEEDS"] == "${{ toJSON(needs) }}"
+    assert aggregator["steps"][-1]["run"] == "python3 tools/ci_scope.py --verify"

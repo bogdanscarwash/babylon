@@ -17,8 +17,8 @@ use babylon_graph::substrate::GraphSubstrate;
 use postgres::{Config, GenericClient, IsolationLevel, NoTls};
 
 use crate::identity::CampaignId;
-use crate::legacy_adopter::validate_legacy_connection_target;
 use crate::migration_manifest::SCHEMA_ADVISORY_LOCK_KEY;
+use crate::postgres_catalog::validate_connection_target;
 use crate::postgres_diagnostic::PostgresDiagnosticV1;
 
 /// Exact additive schema for the declared territory-county mapping.
@@ -250,7 +250,7 @@ pub fn extract_declared_territory_county_map_v1(
 pub fn install_territory_county_map_schema_v1(
     config: &Config,
 ) -> Result<TerritoryCountyMapSchemaDispositionV1, TerritoryCountyMapErrorV1> {
-    validate_legacy_connection_target(config).map_err(|_| TerritoryCountyMapErrorV1::Database {
+    validate_connection_target(config).map_err(|_| TerritoryCountyMapErrorV1::Database {
         operation: "validate territory county map schema target",
         diagnostic: None,
     })?;

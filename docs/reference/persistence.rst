@@ -1,249 +1,178 @@
 Persistence Reference
 =====================
 
-Babylon has one authoritative game-state persistence path: the Rust
-``babylon-persistence`` crate composed by ``babylon-runtime``. Python
-persistence is non-authoritative periphery.
+``babylon-persistence``, composed by ``babylon-runtime``, owns authoritative
+campaign state. The live observer session uses ``DurableMaterialRuntimeV3``
+with a V5 Michigan foundation. Python prepares reference artifacts and runs
+operator tools; it has no campaign writer or transition reader.
 
-Rust Composition Root
----------------------
-
-The binary accepts these commands:
-
-.. list-table::
-   :header-rows: 1
-   :widths: 25 75
-
-   * - Command
-     - Behavior
-   * - ``preflight``
-     - Validate the target and inspect the current schema epoch without
-       mutation.
-   * - ``activate``
-     - Make sure the required epoch 8/9 predecessor exists. Then run the
-       dedicated epoch 10 preparation and epoch 11 V2 authority cutover.
-   * - ``bootstrap``
-     - Idempotently activate the same Rust persistence boundary.
-   * - ``run --ticks N``
-     - Activate, open or create the Michigan durable campaign, and commit
-       ``N`` Rust ticks.
-   * - ``probe``
-     - Show the authority ledger, selected campaign tail when configured, and
-       separately labeled database-wide totals.
-   * - ``archive``
-     - Install the client-owned semantic Archive schema or check its marker and
-       relations. Then report durable receipts, grants, consumptions, and pages.
-       This command does not change campaign material state.
-   * - ``michigan-smoke``
-     - Commit and restart the Michigan campaign across the 60-tick proof.
-
-The corresponding repository tasks are ``db:bootstrap``,
-``sim:e2e-michigan``, ``sim:probe``, ``sim:archive``, and
-``qa:michigan-rollover-smoke``.
-
-Authority Activation
---------------------
-
-``activate_rust_persistence_v2`` is the sole current authority transition. It
-establishes the exact H3 reader and epoch 8/9 predecessor, then runs a dedicated
-two-step V2 activation. Epoch 10 installs the additive receipt and event schema,
-records ``babylon_meta.committed_tick_v2_incompatible_inventory``, and refuses
-any incompatible campaign or tick rows. Epoch 11 removes the obsolete empty V1
-event relations, constrains the live commit marker to envelope layout 2, and
-commits the V2-active authority row last.
-
-The current ledger relation is
-``babylon_meta.committed_tick_v2_authority_ledger``. Its only legal history is:
-
-#. ``Prepared`` at epoch 10. It binds the epoch 9 predecessor, V2 cutover
-   contract, and epoch 11 reader migration digests.
-#. ``Active`` at activation epoch 11. It binds the same contract and reader
-   digests, plus the exact prepared-row digest.
-
-The active contract pins the epoch 10 and epoch 11 migration digests. The
-ledger's contract digest binds the complete V2 activation law and the exact
-epoch 9 predecessor migration. Its reader contract digest directly binds the
-migration that removes the V1 reader surface.
-
-Epoch 9 is one ``READ COMMITTED`` transaction. It takes ``ACCESS EXCLUSIVE``
-locks on each present legacy relation and on the closed opaque predecessor set
-before counting from a fresh post-wait snapshot. It retains those locks through
-the empty disposition, deletion, active predecessor row, and commit. The census
-sees a concurrent writer that commits while a lock is pending. The resulting
-nonzero count rolls back the complete activation and preserves the relation and
-its rows.
-
-Epoch 11 remains ``SERIALIZABLE``. Its top-level ``ACCESS EXCLUSIVE`` lock runs
-before any query or data modification. The runtime acquires the inventory
-snapshot only after a pending lock succeeds.
-
-The transition cannot skip preparation, update or delete a ledger row, return
-to Python authority, or construct a second migrator command. Re-running
-activation after a durable active row is an idempotent authority reacquisition.
-The predecessor ``babylon_meta.persistence_authority_ledger`` and its epoch 8/9
-rows remain historical cutover evidence. They are not the live V2 writer gate.
-
-Durable Runtime
----------------
-
-``DurableReplayRuntimeV2`` owns adjudication and commit as one closed
-composition. Its primary operations are:
-
-``create``
-   Capture a new ``CampaignFoundationV1`` from an exact replay session and
-   content bundle.
-
-``open``
-   Hydrate a campaign foundation or complete full checkpoint and replay its
-   contiguous committed tail.
-
-``advance_and_commit``
-   Judge the next tick into a private runtime-owned buffer, prepare typed rows,
-   write the marker-last transaction, and publish the receipt only after
-   acknowledgement.
-
-The caller-provided sink is post-acknowledgement only. It remains byte-identical
-after refusal, rollback, or unresolved commit ambiguity. A caller cannot commit
-an externally prepared report.
-
-Transaction Boundary
---------------------
-
-One tick transaction contains:
-
-- the exact action-batch source.
-- the six ordered ``CommittedTickEnvelopeV2`` families: graph, material state,
-  event, choice receipt, checkpoint, and Archive dirty receipt.
-- one ``babylon_state.tick_commit`` marker with envelope layout 2, written last.
-
-``ChoiceReceiptV1`` rows record the ordered carrier, exact Mass values, ticket
-intervals, draw ticket, selected outcome, and allocation and instance digests.
-Committed V2 event metadata retains the emitting rule and, for a finite
-projection, its engine-derived choice-receipt ordinal. Authored event payloads
-never contain probability. The transaction writes choice receipts and projected
-events before checkpoint and Archive rows. The runtime writes no durable row
-after the commit marker.
-
-The receipt family uses ``tick_choice_receipt_v1``,
-``tick_choice_receipt_branch_v1``, and
-``tick_choice_receipt_carrier_element_v1``. The event family uses
-``tick_event_v2`` and ``tick_event_field_v2``. All five relations are in
-``babylon_state``.
-
-All ordered collections use explicit positions or primary-key byte order.
-Floating-point codecs reject non-finite values and normalize negative zero.
-Retry reads typed rows, reconstructs the complete V2 envelope, and requires
-exact byte identity. The runtime never infers durability from ``MAX`` over a
-state table. The V2-only reader refuses any marker whose
-``envelope_layout_version`` is not 2.
-
-Foundation and Restart
+Commands and Bootstrap
 ----------------------
 
-``CampaignFoundationV1`` stores the exact stable graph, world registers,
-resolver manifest, prepared environment, replay identity, seed, content and
-reference digests, and content bundle. Reference artifacts resolve only through
-their exact database key and SHA-256 digest; ambient paths, network fetches,
-latest-version lookup, and digest fallback are refused.
+Use the repository tasks from the checkout root:
 
-A full checkpoint has nine ordered sections. Only a complete full-tag manifest
-is a restart root. Delta checkpoints cannot act as roots.
+.. code-block:: bash
 
-Restart reconstructs the latest full checkpoint's six-family V2 envelope from
-typed rows. It compares the digest with the marker and then restores the nine
-checkpoint sections. Next, it re-executes every later marker-backed tick in
-contiguous order. Each newly prepared envelope must match the stored envelope
-exactly. Restart resumes at the last acknowledged tick plus one.
+   mise run db:bootstrap
+   mise run play
+   mise run sim:report
 
-The Archive dirty receipt participates in the envelope comparison. Restart does
-not use historical semantic Archive pages, grants, consumptions, or citations
-as reconstruction input. Thus restart makes no claim about their historical
-integrity.
+``db:bootstrap`` constructs or verifies the current native schema and activates
+its authority. It validates the embedded H3 cohort and Michigan reference
+foundation before database access, then installs the immutable reference
+bundle. Fresh and current native schemas are the admitted starting states.
+The retired Python database adoption, shadow backfill, and migration-prefix
+modes are not available.
 
-H3 and Schema Boundary
-----------------------
+``play`` launches the durable observer session. Its runtime command is
+``babylon-runtime session --stdio --defines PATH``. New reads and validates the
+selected authored file before installing session schemas or creating campaign
+rows. Open reconstructs the campaign's saved values without reading that file.
+The full foundation binds parameters, graph content, material bundles, staffing,
+interval, and horizon. Unsupported content refuses without deleting the save.
 
-Epoch 7 preserves the exact parity evidence for the retired Python reader
-estate. Epoch 9 removed the Python game-state reader and compatibility view.
-Dedicated epoch 10 prepared the V2-only committed-tick schema, and epoch 11
-activated it. Rust reads the typed ``babylon_ref`` and ``babylon_state``
-relations directly.
+``sim:report`` runs the separate graph-only diagnostic campaign. Its default
+15 four-week periods cross the 13-period annual boundary and exercise restart.
+``qa:michigan-rollover-smoke`` checks the same diagnostic rollover boundary.
+These commands do not advance the material campaign shown in Bevy.
+
+Authority and Schema
+--------------------
+
+The native constructor retains the exact construction SQL and checksum
+history. The epoch 8/9 ``persistence_authority_ledger`` remains predecessor
+evidence. Current authority is
+``babylon_meta.committed_tick_v2_authority_ledger``:
+
+#. ``Prepared`` at epoch 10 binds the epoch 9 predecessor, V2 cutover contract,
+   and epoch 11 reader migration digests.
+#. ``Active`` at epoch 11 binds those inputs and the exact prepared-row digest.
+
+Activation writes its active row last. Reacquisition requires the exact two-row
+ledger and its bound predecessor and contract digests. The epoch 9 row alone
+cannot reopen the writer. Existing incompatible data is refused; there is no
+Python upgrade or alternate writer path.
 
 The authoritative schemas are:
 
 ``babylon_ref``
-   H3 cells, county/place overlaps, immutable cohorts, and exact reference
-   artifacts.
+   Immutable geography, H3 cohorts, overlaps, and exact reference artifacts.
 
 ``babylon_state``
-   Campaign foundation, typed semantic state, V2 events, choice receipts,
+   Campaign foundations, graph and material state, events, choice receipts,
    checkpoints, commit markers, and Archive dirty receipts.
 
 ``babylon_meta``
-   Authority, campaign catalog, watchlist, jumplist, and breadcrumb metadata.
+   Authority and campaign/navigation metadata.
 
-Python Persistence Periphery
-----------------------------
+Material runtime installation builds on the active V2 graph schema. It adds
+the material foundation and transition relations and admits material commit
+layout 3. The graph-only diagnostic runtime retains layout 2.
 
-The ``babylon.persistence`` Python package exports only non-authoritative
-surfaces:
+Durable Material Runtime
+------------------------
 
-``RuntimeDatabase``
-   Mutable SQLite for frozen local reference runs and tests.
+``DurableMaterialRuntimeV3`` owns adjudication and commit. A new campaign
+captures its graph foundation, complete material register, staffing authority,
+and authored content identity in one foundation transaction. Opening a
+campaign verifies those same stored components before reconstruction.
 
-``RuntimePersistence``
-   The frozen local SQLite protocol.
+Each advance judges one 28-day period on detached state. The current Michigan
+campaign has an empty BSL rule set; typed material production, routed freight,
+and staffing determine its physical transition. The runtime stops at the saved
+horizon, which can be 1 through 16 periods.
 
-``PgVectorStore`` and ``VectorStoreProtocol``
-   Semantic document storage in a dedicated periphery estate.
+A caller cannot commit a pre-judged report. The runtime publishes an
+acknowledgement only after a successful commit or exact reconciliation of an
+ambiguous commit. Refused judgment does not advance the published session.
 
-``ReadOnlyPostgres``
-   A read-only periphery boundary. It is not a transition game-state reader.
+Transaction Boundary
+--------------------
 
-``RUNTIME_SCHEMA_DDL``
-   SQLite reference schema only.
+``CommittedMaterialTickEnvelopeV3`` binds eight ordered families: the six typed
+V2 component families followed by the material register and material receipts.
+It includes the exact action-batch source, graph evidence, events, choice
+receipts, full checkpoint, and Archive dirty receipt.
 
-The retired ``babylon.persistence.postgres_runtime`` namespace exports nothing.
-Python has no authoritative game-state PostgreSQL writer, migration runner,
-compatibility adapter, or fallback.
+The transaction writes the typed families and material state before the final
+``babylon_state.tick_commit`` marker. Material markers carry
+``envelope_layout_version = 3``. Material readers require that layout and the
+exact component digests; graph-only diagnostic markers retain layout 2.
+
+Collections use explicit positions or primary-key byte order. Numeric codecs
+reject non-finite values and normalize negative zero. Retry reconstructs the
+complete envelope and requires exact byte identity. Durability comes from the
+commit marker, never a maximum tick over a state table.
+
+Foundation, Restart, and Reads
+-------------------------------
+
+The foundation preserves the exact graph, world registers, resolver manifest,
+prepared environment, replay identity, seed, content, and reference digests.
+V5 material admission decodes the saved canonical defines, rebuilds the complete
+foundation, and compares its bytes. Editing or deleting an external TOML file
+cannot change an existing campaign's parameters.
+
+Restart verifies the foundation and a complete full checkpoint, reconstructs
+its graph and material components, and replays any contiguous committed tail.
+A delta checkpoint cannot be a restart root. Missing, inconsistent, or
+noncanonical components refuse before the runtime resumes.
+
+The full observer reads authenticated committed material evidence. The player
+knowledge preview treats material parameters as opaque: it does not query the
+hidden foundation bytes and returns no production or nominal-world projection.
+Public campaign metadata alone cannot grant access to those values.
+
+The Archive dirty receipt participates in the envelope comparison. The Archive
+worker can publish after the tick becomes durable, so the window reports its
+progress separately. Restart does not consume historical Archive prose as
+simulation input.
 
 Verification
 ------------
 
-Use the narrow contract first, then the serialized repository gates:
+Run the smallest applicable checks first and serialize heavy jobs:
 
 .. code-block:: bash
 
    uv run --frozen python tools/verify_rust_persistence_cutover_v2.py
-   cd rust && cargo test -p babylon-persistence --locked
-   mise run rust:check-no-docs
-   BABYLON_LEGACY_ADOPTER_LIVE_FOCUS=pr tools/run_rust_legacy_adopter_pg.sh
+   mise run rust:test:q -- -p babylon-persistence
+   mise run test:rust-postgres
 
-The live adopter command creates a disposable pinned Postgres 17/PostGIS 3.5
-runtime. It verifies clean activation, restart, rollback, ambiguous-commit
-reconciliation, installed mutations, and residue-free cleanup.
+The PostgreSQL harness defaults to ``runtime_smoke``. It uses an immutable
+pinned image, exact disposable container ownership, loopback admission, and
+checked cleanup. Select one focus explicitly when its behavior changes:
+
+.. code-block:: bash
+
+   BABYLON_POSTGRES_LIVE_FOCUS=reference_integrity mise run test:rust-postgres
+   BABYLON_POSTGRES_LIVE_FOCUS=runtime mise run test:rust-postgres
+   BABYLON_POSTGRES_LIVE_FOCUS=archive mise run test:rust-postgres
+   BABYLON_POSTGRES_LIVE_FOCUS=reader mise run test:rust-postgres
+   BABYLON_POSTGRES_LIVE_FOCUS=client mise run test:rust-postgres
+
+Main qualification and the weekly PostgreSQL workflow run all six focuses.
+They retain reference integrity, rollback and ambiguous-commit reconciliation,
+writer timeouts, runtime restart, Archive, authenticated reader, and live
+client contracts. See :doc:`/reference/ci-workflow` for selection and reporting.
 
 Contracts
 ---------
 
-The active contract and these two tests pin the live V2 boundary:
+The current composition uses these contracts:
 
 - ``contracts/rust_persistence_cutover_v2.yaml``
-- ``rust/crates/babylon-persistence/tests/committed_tick_envelope_v2_contract.rs``
-- ``rust/crates/babylon-persistence/tests/committed_tick_v2_postgres_activation_contract.rs``
+- ``contracts/material_campaign_foundation_v2.yaml``
+- ``contracts/committed_material_tick_v3.yaml``
+- ``contracts/simulation_interval_v1.yaml``
 
-``tools/verify_rust_persistence_cutover_v1.py`` is an offline historical
-verifier only. These older contracts keep their V1 names for predecessor and
-unchanged inner-codec evidence:
-
-- ``contracts/rust_persistence_cutover_v1.yaml``
-- ``contracts/h3_reader_cutover_v1.yaml``
-- ``contracts/committed_tick_envelope_v1.yaml``
-- ``contracts/michigan_dynamic_hex_foundation_v1.yaml``
+Historical contracts and byte vectors retain their original names and layouts.
+They provide codec and predecessor evidence, not permission to open old weekly
+campaigns or run the retired Python migration path.
 
 See Also
 --------
 
 - :doc:`/concepts/architecture`
-- :doc:`/concepts/persistence-architecture`
+- :doc:`/reference/configuration`
 - :doc:`/reference/determinism-contract`

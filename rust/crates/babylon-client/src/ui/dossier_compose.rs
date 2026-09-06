@@ -229,7 +229,7 @@ pub(crate) fn chronicle_header(state: &ArchiveDossierStateV2) -> DossierSegment 
         }
         ArchiveDossierStateV2::Ready { page, .. } => {
             let mut text = format!(
-                "Retained change coverage starts at week {}.",
+                "Retained change coverage starts at period {}.",
                 page.changes.coverage_from_tick
             );
             if page.changes.next_cursor.is_some() {
@@ -249,7 +249,7 @@ pub(crate) fn chronicle_header(state: &ArchiveDossierStateV2) -> DossierSegment 
 pub fn chronicle_row_segments(row: &ArchiveAtomChangeV2) -> Vec<DossierSegment> {
     let mut segments = vec![DossierSegment::new(
         format!(
-            "Published week {} · {} ",
+            "Published period {} · {} ",
             row.publication_tick, row.signal_key
         ),
         DossierTone::Dim,
@@ -295,7 +295,7 @@ pub fn chronicle_row_segments(row: &ArchiveAtomChangeV2) -> Vec<DossierSegment> 
         if let Some(atom) = atom {
             segments.push(DossierSegment::new(
                 format!(
-                    "\n{label}: observed week {}; {}; {}",
+                    "\n{label}: observed period {}; {}; {}",
                     atom.valid_tick(),
                     atom.citation().source_id(),
                     atom.citation().locator()
@@ -487,7 +487,7 @@ mod tests {
                 .iter()
                 .map(|segment| segment.text.as_str())
                 .collect();
-            assert!(text.starts_with("Published week 14"));
+            assert!(text.starts_with("Published period 14"));
             assert!(text.contains(expected));
             assert!(!text.contains("verified"));
             assert!(text.contains("committed-tick-v1; campaign/12/Wayne"));

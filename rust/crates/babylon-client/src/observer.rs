@@ -7,8 +7,6 @@ mod lifecycle;
 use babylon_persistence::CampaignId;
 use bevy::prelude::*;
 
-use crate::observer_calendar::CampaignMonth;
-
 /// The two explicitly distinct read capabilities in the observer product.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Perspective {
@@ -62,10 +60,9 @@ pub struct ObserverSession {
     pub phase: SessionPhase,
     pub playing: bool,
     pub quit_requested: bool,
-    pub weeks_per_second: f64,
+    pub periods_per_second: f64,
     pub error: Option<String>,
     pub generation: u64,
-    month_plan: Option<CampaignMonth>,
     pending_request: Option<u64>,
     next_request: u64,
     pub(crate) lifecycle: lifecycle::LifecycleState,
@@ -86,10 +83,9 @@ impl ObserverSession {
             phase: SessionPhase::Connecting,
             playing: false,
             quit_requested: false,
-            weeks_per_second: 1.0,
+            periods_per_second: 1.0,
             error: None,
             generation: 0,
-            month_plan: None,
             pending_request: None,
             next_request: 1,
             lifecycle: lifecycle::LifecycleState::new(),
@@ -117,26 +113,12 @@ impl ObserverSession {
         self.pending_request.is_some()
     }
 
-    #[must_use]
-    pub const fn month_plan(&self) -> Option<CampaignMonth> {
-        self.month_plan
-    }
-
-    /// A shorter scenario stops mid-month without claiming a complete month.
-    #[must_use]
-    pub fn month_target_tick(&self) -> Option<u64> {
-        self.month_plan.map(|month| {
-            self.horizon_tick.map_or(month.closing_week, |horizon| {
-                horizon.min(month.closing_week)
-            })
-        })
-    }
-
-    /// Queue only the remainder of this planning month, never unbounded play.
-    /// A pending weekly commit still has to acknowledge and load before another.
-    pub fn run_or_resume_month(&mut self) -> bool {
+    /// Play one four-week period at a time, awaiting its commit and observation.
+    pub fn start_playback(&mut self) -> bool {
         if self.quit_requested
             || self.viewed_tick != self.durable_tick
+            || self.lifecycle_pending()
+            || self.durable_tick.checked_add(1).is_none()
             || !matches!(
                 self.phase,
                 SessionPhase::Ready | SessionPhase::Loading | SessionPhase::Advancing
@@ -147,40 +129,27 @@ impl ObserverSession {
         {
             return false;
         }
-        if self
-            .month_target_tick()
-            .is_none_or(|target| target <= self.durable_tick)
-        {
-            let Some(month) = CampaignMonth::after_week(self.durable_tick) else {
-                return false;
-            };
-            self.month_plan = Some(month);
-        }
         self.playing = true;
         true
     }
 
-    /// Finish an outstanding week, preserving the uncompleted month target.
-    pub const fn pause_month(&mut self) {
+    /// Finish an outstanding period; do not schedule another.
+    pub const fn pause_playback(&mut self) {
         self.playing = false;
     }
 
-    /// An explicit weekly step or observation scope change ends the month plan.
-    pub const fn cancel_month(&mut self) {
-        self.pause_month();
-        self.month_plan = None;
-    }
-
     #[must_use]
-    pub fn month_advance_due(&self) -> bool {
+    pub fn playback_due(&self) -> bool {
         self.playing
             && !self.quit_requested
             && self.phase == SessionPhase::Ready
             && !self.advance_pending()
+            && !self.lifecycle_pending()
             && self.viewed_tick == self.durable_tick
+            && self.durable_tick.checked_add(1).is_some()
             && self
-                .month_target_tick()
-                .is_some_and(|target| self.durable_tick < target)
+                .horizon_tick
+                .is_none_or(|limit| self.durable_tick < limit)
     }
 
     /// A runtime handshake reconciles any lost acknowledgement before play.
@@ -190,7 +159,7 @@ impl ObserverSession {
         self.content_hash = hash;
         self.pending_request = None;
         self.error = None;
-        self.cancel_month();
+        self.pause_playback();
         self.invalidate();
     }
 
@@ -208,12 +177,12 @@ impl ObserverSession {
             SessionPhase::Ready
         };
         if self.phase == SessionPhase::Complete {
-            self.pause_month();
+            self.pause_playback();
         }
         true
     }
 
-    /// A bounded scenario remains inspectable after its final committed week.
+    /// A bounded scenario remains inspectable after its final committed period.
     pub fn complete(&mut self) {
         self.playing = false;
         self.pending_request = None;
@@ -227,6 +196,10 @@ impl ObserverSession {
             || self.pending_request.is_some()
             || self.lifecycle_pending()
             || self.viewed_tick != self.durable_tick
+            || self.durable_tick.checked_add(1).is_none()
+            || self
+                .horizon_tick
+                .is_some_and(|limit| self.durable_tick >= limit)
         {
             return None;
         }
@@ -244,12 +217,6 @@ impl ObserverSession {
         self.durable_tick = tick;
         self.viewed_tick = tick;
         self.content_hash = hash;
-        if self
-            .month_target_tick()
-            .is_some_and(|target| tick >= target)
-        {
-            self.pause_month();
-        }
         self.invalidate();
         true
     }
@@ -259,7 +226,7 @@ impl ObserverSession {
             return;
         }
         self.perspective = perspective;
-        self.cancel_month();
+        self.pause_playback();
         self.invalidate();
     }
 
@@ -268,7 +235,7 @@ impl ObserverSession {
             return;
         }
         self.viewed_tick = tick;
-        self.cancel_month();
+        self.pause_playback();
         self.invalidate();
     }
 
@@ -277,7 +244,7 @@ impl ObserverSession {
     }
 
     pub fn fail(&mut self, error: String) {
-        self.pause_month();
+        self.pause_playback();
         self.phase = SessionPhase::Failed;
         self.error = Some(error);
     }
@@ -296,118 +263,127 @@ impl ObserverSession {
 mod tests {
     use super::*;
 
-    fn ready(week: u64) -> ObserverSession {
+    fn ready(period: u64) -> ObserverSession {
         let mut state = ObserverSession::new(CampaignId::from_uuid(uuid::Uuid::from_u128(71)));
-        state.ready(week, None);
+        state.ready(period, None);
         assert!(state.installed(&state.context()));
         state
     }
 
     fn commit(state: &mut ObserverSession) {
-        let week = state.durable_tick + 1;
+        let period = state.durable_tick + 1;
         let request = state.begin_advance().unwrap();
         assert!(state.begin_advance().is_none());
-        assert!(state.acknowledge(request, week, None));
+        assert!(state.acknowledge(request, period, None));
         assert!(
-            !state.month_advance_due(),
+            !state.playback_due(),
             "exact observation must install first"
         );
         assert!(state.installed(&state.context()));
     }
 
     #[test]
-    fn month_transport_stops_at_five_then_nine_without_an_extra_commit() {
+    fn one_advance_has_one_acknowledged_four_week_period() {
         let mut state = ready(0);
-        for endpoint in [5, 9] {
-            assert!(state.run_or_resume_month());
-            assert_eq!(state.month_target_tick(), Some(endpoint));
-            while state.durable_tick < endpoint {
-                assert!(state.month_advance_due());
-                commit(&mut state);
-            }
-            assert_eq!(state.durable_tick, endpoint);
-            assert!(!state.playing);
-            assert!(!state.month_advance_due());
-        }
+        let request = state.begin_advance().unwrap();
+        assert!(state.begin_advance().is_none());
+        assert!(!state.acknowledge(request, 4, None));
+        assert!(!state.acknowledge(request + 1, 1, None));
+        assert_eq!(state.durable_tick, 0);
+        assert!(state.acknowledge(request, 1, None));
+        assert_eq!(state.durable_tick, 1);
+        assert_eq!(babylon_kernel::clock::DAYS_PER_TICK, 28);
+        assert_eq!(babylon_kernel::clock::WEEKS_PER_TICK, 4);
+        assert!(state.installed(&state.context()));
+        assert!(
+            !state.playback_due(),
+            "a single advance cannot queue another"
+        );
     }
 
     #[test]
-    fn paused_pending_week_finishes_but_resume_keeps_the_original_month_endpoint() {
+    fn playback_waits_for_each_commit_and_pause_finishes_only_the_outstanding_period() {
         let mut state = ready(2);
-        assert!(state.run_or_resume_month());
-        let request = state.begin_advance().unwrap();
-        state.pause_month();
-        assert!(!state.acknowledge(request + 1, 3, None));
-        assert!(!state.acknowledge(request, 4, None));
-        assert_eq!(state.durable_tick, 2);
-        assert!(state.acknowledge(request, 3, None));
-        assert!(state.installed(&state.context()));
-        assert!(!state.month_advance_due());
-        assert_eq!(state.month_target_tick(), Some(5));
-        assert!(state.run_or_resume_month());
+        assert!(state.start_playback());
         commit(&mut state);
+        assert!(state.playback_due());
+        let request = state.begin_advance().unwrap();
+        state.pause_playback();
+        assert!(state.advance_pending());
+        assert!(state.acknowledge(request, 4, None));
+        assert!(state.installed(&state.context()));
+        assert!(!state.playback_due());
+        assert!(state.start_playback());
         commit(&mut state);
         assert_eq!(state.durable_tick, 5);
-        assert!(!state.month_advance_due());
     }
 
     #[test]
-    fn scope_changes_discard_month_intent_without_discarding_an_outstanding_commit() {
+    fn scope_changes_pause_playback_without_discarding_an_outstanding_commit() {
         let mut state = ready(6);
-        assert!(state.run_or_resume_month());
+        assert!(state.start_playback());
         let old = state.context();
         let request = state.begin_advance().unwrap();
         state.set_perspective(Perspective::PlayerKnowledge);
-        assert!(state.month_plan().is_none());
+        assert!(!state.playing);
         assert!(!state.accepts(&old));
         assert!(state.advance_pending());
         assert!(state.acknowledge(request, 7, None));
         assert!(state.installed(&state.context()));
-        assert!(!state.month_advance_due());
-        assert!(state.run_or_resume_month());
+        assert!(!state.playback_due());
+        assert!(state.start_playback());
         state.inspect_tick(2);
-        assert!(state.month_plan().is_none());
-        assert!(!state.run_or_resume_month());
+        assert!(!state.playing);
+        assert!(!state.start_playback());
         state.return_live();
         assert!(state.installed(&state.context()));
-        assert!(state.run_or_resume_month());
-        assert_eq!(state.month_target_tick(), Some(9));
+        assert!(state.start_playback());
     }
 
     #[test]
-    fn scenario_horizon_stops_mid_month_and_quit_never_schedules_more_work() {
-        let mut state = ready(13);
-        state.horizon_tick = Some(16);
-        assert!(state.run_or_resume_month());
-        assert_eq!(state.month_plan().unwrap().closing_week, 18);
-        assert_eq!(state.month_target_tick(), Some(16));
-        for _ in 0..3 {
-            commit(&mut state);
-        }
+    fn scenario_horizon_and_quit_stop_playback_without_an_extra_commit() {
+        let mut state = ready(3);
+        state.horizon_tick = Some(4);
+        assert!(state.start_playback());
+        commit(&mut state);
         assert_eq!(state.phase, SessionPhase::Complete);
-        assert!(!state.run_or_resume_month());
+        assert!(!state.playback_due());
+        assert!(!state.start_playback());
         let mut closing = ready(2);
-        assert!(closing.run_or_resume_month());
+        assert!(closing.start_playback());
         let request = closing.begin_advance().unwrap();
         closing.quit_requested = true;
         assert!(closing.acknowledge(request, 3, None));
         assert!(closing.installed(&closing.context()));
-        assert!(!closing.month_advance_due());
-        assert!(!closing.run_or_resume_month());
+        assert!(!closing.playback_due());
+        assert!(!closing.start_playback());
     }
 
     #[test]
-    fn lost_acknowledgement_reopen_uses_durable_progress_without_restarting_a_full_month() {
+    fn lost_acknowledgement_reopen_reconciles_without_replaying_a_period() {
         let mut state = ready(6);
-        assert!(state.run_or_resume_month());
+        assert!(state.start_playback());
         state.begin_advance().unwrap();
         state.fail("acknowledgement lost".into());
         assert!(state.advance_pending());
-        assert!(!state.run_or_resume_month());
+        assert!(!state.start_playback());
         state.ready(7, None);
-        assert!(state.month_plan().is_none());
+        assert!(!state.playing);
+        assert!(!state.advance_pending());
         assert!(state.installed(&state.context()));
-        assert!(state.run_or_resume_month());
-        assert_eq!(state.month_target_tick(), Some(9));
+        assert_eq!(state.durable_tick, 7);
+        assert!(!state.playback_due());
+        assert!(state.start_playback());
+        commit(&mut state);
+        assert_eq!(state.durable_tick, 8);
+    }
+
+    #[test]
+    fn exhausted_period_counter_cannot_schedule_playback() {
+        let mut state = ready(u64::MAX);
+        assert!(!state.start_playback());
+        assert!(state.begin_advance().is_none());
+        state.playing = true;
+        assert!(!state.playback_due());
     }
 }

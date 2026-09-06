@@ -222,10 +222,9 @@ Configuration
    :maxdepth: 1
 
    configuration
-   tuning
 
-Configuration system documentation, environment variables, GameDefines
-parameter tables, and the 20-Year Entropy Standard for parameter tuning.
+Configuration documentation, environment variables, and the authoritative
+four-week simulation interval.
 
 State Apparatus AI (Feature 039)
 ---------------------------------

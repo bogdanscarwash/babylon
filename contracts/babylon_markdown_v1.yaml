@@ -50,7 +50,7 @@ generation:
   provenance: Valid fixtures render from the pinned Archive page renderer or
     assemble from pinned profile forms; refusal fixtures mutate one profile
     rule each; export fixtures derive from the pinned Rust rewrite.
-  independent_verifier: tools/verify_babylon_markdown_v1.py
+  conformance: rust/crates/babylon-persistence/tests/babylon_markdown_v1_vectors.rs
 
 constants:
   profile_id: babylon-markdown.v1

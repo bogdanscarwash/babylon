@@ -3,14 +3,16 @@ meta:
   version: 1
   issue: PER-22
   byte_order: big-endian
-  oracle: babylon.projection.county.project_county (src/babylon/projection/county.py)
+  oracle: "Historical babylon.projection.county.project_county; its captured values remain in the vector corpus \
+          after the Python projection retirement"
   digest: value identity is exact binary64 bits; display parity is the canonical %.6f statblock text
 
 production_decoder: prohibited
 
 authority:
-  owner: Python projection oracle and Rust county dossier producer
-  purpose: Python/Rust golden parity for the PER-22 county dossier, where Python remains the oracle
+  owner: Rust county dossier producer
+  purpose: "Rust conformance to the preserved PER-22 county dossier values captured from the retired Python \
+           projection oracle"
   classifications:
     oracle_field_producer_rulings: Designed
     d2_absence_maximal_ruling: Designed
@@ -27,8 +29,8 @@ authority:
     - Both committed fields are SnapToGrid model types (1e-6 grid, ROUND_HALF_UP),
       so the oracle projects the quantized value. Parity is scoped to committed
       values that are fixed points of that quantization (quantize(value) == value,
-      with -0.0 and 0.0 identified); the independent verifier refuses an
-      off-grid vector.
+      with -0.0 and 0.0 identified); the historical independent verifier
+      refused off-grid vectors when this corpus was captured.
     - The oracle's SnapToGrid boundary and the Rust producer both canonicalize
       -0.0 to +0.0 before display, matching committed-state hashing where
       -0.0 == 0.0; negative-zero parity is exact on both sides.
@@ -42,15 +44,14 @@ authority:
     - Identical committed bits produce identical signal bytes on both sides.
 
 generation:
-  tool: tests/unit/projection/test_county_dossier_parity_v1.py
-  provenance: Expected county_view bits and nulls are regenerated from the
-    Python oracle against a fixture-built graph/world fed only grid-exact
-    committed values; expected signal values apply the contract's canonical
+  historical_source: Retired tests/unit/projection/test_county_dossier_parity_v1.py
+  provenance: Expected county_view bits and nulls were captured from the
+    retired Python oracle against a fixture-built graph/world fed only
+    grid-exact committed values; expected signal values apply the contract's canonical
     %.6f rule to the committed bits; link sets and titles are Derived from
     the pinned Michigan spatial reference products and cross-checked by the
     Rust parity test against the embedded fixture.
   rust_verifier: rust/crates/babylon-persistence/tests/county_dossier_parity_vectors.rs
-  independent_verifier: tools/verify_county_dossier_parity_v1.py
 
 constants:
   oracle_graph_attributes: [tick_median_wage, tick_phi_hour]
@@ -122,7 +123,7 @@ known_divergences:
       is not a fixed point of that quantization the oracle's projected bits
       differ from the committed bits, so bit parity does not hold off-grid.
       This contract scopes the parity claim to grid-exact committed values and
-      the independent verifier refuses an off-grid vector; off-grid parity is
+      the historical verifier refused off-grid vectors at capture; off-grid parity is
       a finding for the Director, not something either side may be weakened to
       force a match.
 

@@ -20,10 +20,8 @@ mod foundation_content_schema;
 mod glossary_concepts;
 pub mod h3_reference_cohort;
 mod h3_reference_installer;
-mod h3_shadow_backfill;
 pub mod hashes;
 pub mod identity;
-pub mod legacy_adopter;
 pub mod material_envelope;
 pub mod material_runtime;
 mod metadata;
@@ -34,6 +32,7 @@ pub(crate) mod observer_material;
 pub mod observer_reader;
 mod observer_tick_components;
 mod place_producer;
+pub mod postgres_catalog;
 mod postgres_diagnostic;
 pub(crate) mod production_projection;
 mod reader;
@@ -115,33 +114,9 @@ pub use h3_reference_installer::{
     H3ReferenceInstallConflict, H3ReferenceInstallDisposition, H3ReferenceInstallError,
     H3ReferenceInstallOperation, H3ReferenceInstallReport, H3ReferenceMembershipReadContext,
 };
-pub use h3_shadow_backfill::{
-    backfill_legacy_h3_shadow_keys, H3ShadowBackfillBoundedResource, H3ShadowBackfillDisposition,
-    H3ShadowBackfillError, H3ShadowBackfillIssue, H3ShadowBackfillIssueKind,
-    H3ShadowBackfillOperation, H3ShadowBackfillReport, H3ShadowFieldReport, H3ShadowRelation,
-    H3ShadowRelationReport, H3_SHADOW_FIELD_COUNT, H3_SHADOW_RELATION_COUNT,
-    MAX_H3_SHADOW_BACKFILL_BATCH_ROWS, MAX_H3_SHADOW_BACKFILL_COMMIT_ATTEMPTS,
-    MAX_H3_SHADOW_BACKFILL_ISSUES, MAX_H3_SHADOW_DISTINCT_GROUPS, MAX_H3_SHADOW_ROWS_PER_RELATION,
-    MAX_H3_SHADOW_TEXT_BYTES,
-};
+
 pub use hashes::{GraphStateHash, MigrationSetDigest, ReplayIdentityHash};
 pub use identity::CampaignId;
-pub use legacy_adopter::{
-    adopt_legacy_schema, compare_legacy_census, expected_legacy_census,
-    legacy_adopter_sql_statements, parse_legacy_census_fixture, validate_legacy_connection_target,
-    validate_legacy_stamps, LegacyAdopterError, LegacyAdopterOperation, LegacyAdopterSqlKind,
-    LegacyAdopterSqlStatement, LegacyAdoptionReport, LegacyBoundedResource, LegacyCensus,
-    LegacyCensusEntry, LegacyCensusParseError, LegacyCleanupFailureV1,
-    LegacyConnectionTargetRejection, LegacyObjectKey, LegacyObjectKind,
-    LegacyOwnerAuthorityDisposition, LegacyStampClass, LegacyStampDefinition, LegacyStampMatch,
-    LegacyStampProvenance, LegacyStampReport, LEGACY_ADOPTER_CONNECT_TIMEOUT,
-    LEGACY_ADOPTER_STARTUP_OPTIONS, LEGACY_ADOPTER_TCP_USER_TIMEOUT, LEGACY_CENSUS_FIXTURE,
-    LEGACY_CENSUS_VERSION, LEGACY_STAMP_CATALOG, MAX_LEGACY_CENSUS_FIXTURE_BYTES,
-    MAX_LEGACY_CENSUS_FIXTURE_LINES, MAX_LEGACY_CENSUS_ROWS,
-    MAX_LEGACY_EXTENSION_DEPENDENCY_ADDRESSES, MAX_LEGACY_EXTENSION_MEMBERS,
-    MAX_LEGACY_EXTENSION_ROLE_IDENTITIES, MAX_LEGACY_PARTITIONS_PER_FAMILY,
-    MAX_LEGACY_SEQUENCE_OWNERSHIP, MAX_LEGACY_STAMP_ROWS, POSTGRES_IDENTIFIER_MAX_BYTES,
-};
 pub use metadata::{
     BreadcrumbRowV1, CampaignCatalogRowV1, CampaignCatalogStatusV1, JumplistRowV1,
     RetainedMetadataStoreV1, WatchlistRowV1,
@@ -164,6 +139,17 @@ pub use place_producer::{
     PINNED_COUNTY_PLACE_OVERLAP_ARTIFACT_SHA256_V1, PINNED_PLACE_IDENTITY_ARTIFACT_SHA256_V1,
     PLACE_DECISION_QUESTION_V1, PLACE_IDENTITY_GRANT_KEY_V1, PLACE_IDENTITY_LOCATOR_PREFIX_V1,
     PLACE_IDENTITY_SIGNAL_LABEL_V1, PLACE_IDENTITY_SOURCE_ID_V1,
+};
+pub use postgres_catalog::{
+    compare_catalog_census, parse_catalog_census, validate_connection_target,
+    CatalogBoundedResource, CatalogCensus, CatalogCensusEntry, CatalogCensusParseError,
+    CatalogCleanupFailure, CatalogError, CatalogObjectKey, CatalogObjectKind, CatalogOperation,
+    ConnectionTargetRejection, CATALOG_CENSUS_VERSION, CATALOG_CONNECT_TIMEOUT,
+    CATALOG_STARTUP_OPTIONS, CATALOG_TCP_USER_TIMEOUT, MAX_CATALOG_CENSUS_FIXTURE_BYTES,
+    MAX_CATALOG_CENSUS_FIXTURE_LINES, MAX_CATALOG_CENSUS_ROWS,
+    MAX_CATALOG_EXTENSION_DEPENDENCY_ADDRESSES, MAX_CATALOG_EXTENSION_MEMBERS,
+    MAX_CATALOG_EXTENSION_ROLE_IDENTITIES, MAX_CATALOG_PARTITIONS_PER_FAMILY,
+    MAX_CATALOG_SEQUENCE_OWNERSHIP, POSTGRES_IDENTIFIER_MAX_BYTES,
 };
 pub use postgres_diagnostic::{
     PostgresDiagnosticV1, PostgresFailureClassV1, MAX_POSTGRES_DIAGNOSTIC_MESSAGE_BYTES,
@@ -215,5 +201,10 @@ pub use production_observation::*;
 
 pub mod michigan_cohorts;
 pub mod michigan_content;
+mod michigan_defines;
 pub mod michigan_material;
+pub use michigan_defines::MichiganDefinesErrorV1;
 pub mod michigan_sectors;
+
+#[cfg(test)]
+mod test_support;

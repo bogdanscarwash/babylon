@@ -46,7 +46,7 @@ pub const fn verified_tick(read: &ArchiveDossierReadV2) -> Option<u64> {
 #[must_use]
 pub const fn availability_label(read: &ArchiveDossierReadV2) -> &'static str {
     match &read.state {
-        ArchiveDossierStateV2::Ready { .. } => "Verified for this viewed week",
+        ArchiveDossierStateV2::Ready { .. } => "Verified for this viewed period",
         ArchiveDossierStateV2::Pending { reason, .. } => pending_label(*reason),
         ArchiveDossierStateV2::Unavailable(reason) => unavailable_label(*reason),
     }
@@ -73,13 +73,13 @@ pub(crate) const fn unavailable_label(reason: ArchiveDossierUnavailableV2) -> &'
             "The campaign foundation has no published Archive page"
         }
         ArchiveDossierUnavailableV2::HistoryNotRetained => {
-            "This week predates retained Archive history"
+            "This period predates retained Archive history"
         }
         ArchiveDossierUnavailableV2::SubjectNotDisclosed => {
             "This subject is not disclosed in this observation"
         }
         ArchiveDossierUnavailableV2::PageNotMaterialized => {
-            "No Archive page has been published for this subject at this week"
+            "No Archive page has been published for this subject at this period"
         }
     }
 }

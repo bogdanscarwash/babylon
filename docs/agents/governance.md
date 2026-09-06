@@ -22,7 +22,7 @@ The four executable gates are:
 <!-- vale ste.UnapprovedWords = YES -->
 <!-- vale ste.NounClusters = YES -->
 
-Read [`CONSTITUTION.md`](../../CONSTITUTION.md) v4.1.0 for the law. Read
+Read [`CONSTITUTION.md`](../../CONSTITUTION.md) v4.2.0 for the law. Read
 [`NORTH_STAR.md`](../../NORTH_STAR.md) for the game direction. Read
 [`CONTRIBUTORS.md`](../../CONTRIBUTORS.md) for the full merge rules.
 

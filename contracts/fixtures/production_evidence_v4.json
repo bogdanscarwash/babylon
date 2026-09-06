@@ -15,14 +15,14 @@
         "counties": [],
         "production": {
           "scenario_label": "s",
-          "horizon_week": 16,
+          "horizon_period": 16,
           "sites": [],
           "routes": [],
           "freight": [],
           "events": [
             {
               "id": "e",
-              "week": 7,
+              "period": 7,
               "subject_site_ids": [
                 "b",
                 "a"
@@ -48,7 +48,7 @@
             "a"
           ],
           "material_balance": {
-            "week": 7,
+            "period": 7,
             "rows": [
               {
                 "site_id": "b",
@@ -79,10 +79,10 @@
               "employed": 2,
               "reserve": 2,
               "previous_unretained_hours": 40,
-              "next_opening_week": 8,
+              "next_opening_period": 8,
               "next_opening_hours": 18446744073709551615,
               "completed": {
-                "week": 7,
+                "period": 7,
                 "opening_employed": 4,
                 "opening_reserve": 0,
                 "previous_unretained_hours": 80,
@@ -106,10 +106,10 @@
               "employed": 2,
               "reserve": 2,
               "previous_unretained_hours": 40,
-              "next_opening_week": 8,
+              "next_opening_period": 8,
               "next_opening_hours": 80,
               "completed": {
-                "week": 7,
+                "period": 7,
                 "opening_employed": 4,
                 "opening_reserve": 0,
                 "previous_unretained_hours": 80,
@@ -133,7 +133,7 @@
               "employed": 2,
               "reserve": 2,
               "previous_unretained_hours": 40,
-              "next_opening_week": 8,
+              "next_opening_period": 8,
               "next_opening_hours": 80,
               "completed": null
             },
@@ -150,10 +150,10 @@
               "employed": 2,
               "reserve": 2,
               "previous_unretained_hours": 40,
-              "next_opening_week": 8,
+              "next_opening_period": 8,
               "next_opening_hours": 80,
               "completed": {
-                "week": 7,
+                "period": 7,
                 "opening_employed": 4,
                 "opening_reserve": 0,
                 "previous_unretained_hours": 80,
@@ -184,7 +184,7 @@
         "counties": [],
         "production": {
           "scenario_label": "s",
-          "horizon_week": 16,
+          "horizon_period": 16,
           "sites": [],
           "routes": [],
           "freight": [],
@@ -211,7 +211,7 @@
               "employed": 4,
               "reserve": 0,
               "previous_unretained_hours": 160,
-              "next_opening_week": 1,
+              "next_opening_period": 1,
               "next_opening_hours": 160,
               "completed": null
             }

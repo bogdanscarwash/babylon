@@ -15,7 +15,7 @@ use babylon_persistence::{
     },
     michigan_material::MichiganDeliveryPresetV1,
     observer_reader::{ObserverEconomyErrorV1, ObserverEconomyReaderV1, ObserverVisibilityV1},
-    validate_legacy_connection_target, ArchiveAtomSubjectKindV1, ArchiveAtomValueV1,
+    validate_connection_target, ArchiveAtomSubjectKindV1, ArchiveAtomValueV1,
     ArchiveEvidenceClassV1, ArchivePageRefV1, ArchiveReceiptDispositionV1, ArchiveSubjectKindV1,
     ArchiveWorkerV1, CampaignId, CompositeArchiveDossierProducerV1, CountyDossierProducerV1,
     PlaceDossierProducerV1, SemanticArchiveReaderV1, SemanticArchiveStoreV1,
@@ -23,11 +23,20 @@ use babylon_persistence::{
 use babylon_practice_contract::ordered_action_v1::OrderedPracticeActionBatchV1;
 use babylon_tick::material_world::MaterialWorldRegisterV2;
 use postgres::{Config, NoTls};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Mutex;
 use uuid::Uuid;
 
-const ACK: &str = "I_UNDERSTAND_PER20_DROPS_SCRATCH_DATABASES_ROLES_AND_CREATED_BABYLON_INTEL";
+const ACK: &str = "I_UNDERSTAND_THIS_DISPOSABLE_RUNTIME_DROPS_ITS_SCRATCH_DATABASES_AND_ROLES";
+
+static NEXT_DISPOSABLE_TARGET: AtomicU64 = AtomicU64::new(0);
+// PostgreSQL parameter ACLs are cluster-wide even when test databases differ.
+// The owned harness runs this test binary alone; only these short shared-row
+// mutations serialize, while each clone's material/Archive proof runs freely.
+static PARAMETER_ACL_WRITE: Mutex<()> = Mutex::new(());
 
 struct DisposableTarget {
+    sequence: u64,
     admin: Config,
     writer: Config,
     database: String,
@@ -41,7 +50,7 @@ fn michigan_archive_producer(config: &Config) -> CompositeArchiveDossierProducer
     ])
 }
 
-fn advance_material_week(runtime: &mut DurableMaterialRuntimeV3) {
+fn advance_material_period(runtime: &mut DurableMaterialRuntimeV3) {
     let tick = runtime.session().completed_tick() + 1;
     let actions = OrderedPracticeActionBatchV1::empty(
         runtime.session().graph_session().session_identity().clone(),
@@ -106,7 +115,7 @@ fn assert_public_qcew_card(
     assert_eq!(
         page.content_source.tick(),
         1,
-        "content remains sourced from week one"
+        "content remains sourced from period one"
     );
     assert_eq!(page.content_source.campaign_id(), campaign);
     assert_eq!(
@@ -276,7 +285,7 @@ fn live_michigan_all_county_cards_keep_public_source_and_quiet_restart_freshness
         &target.writer,
         campaign,
         MichiganContentPresetV1::new_campaign(preset)
-            .create_foundation()
+            .create_foundation(&crate::test_support::catalog())
             .unwrap(),
     )
     .unwrap();
@@ -303,7 +312,7 @@ fn live_michigan_all_county_cards_keep_public_source_and_quiet_restart_freshness
             Some(&postgres::error::SqlState::INSUFFICIENT_PRIVILEGE)
         );
     }
-    advance_material_week(&mut runtime);
+    advance_material_period(&mut runtime);
     assert_archive_progress(&reader, campaign, 1, 0);
     let mut worker = ArchiveWorkerV1::new(&target.writer);
     let producer = michigan_archive_producer(&target.writer);
@@ -320,10 +329,10 @@ fn live_michigan_all_county_cards_keep_public_source_and_quiet_restart_freshness
         ArchiveSearchStateV2::Pending(ArchiveDossierPendingV2::ReceiptProcessing),
     );
     drop((runtime, worker, producer));
-    assert_restart_drains_and_verifies_quiet_weeks(&target, &reader, &scope, &pages);
+    assert_restart_drains_and_verifies_quiet_periods(&target, &reader, &scope, &pages);
 }
 
-fn assert_restart_drains_and_verifies_quiet_weeks(
+fn assert_restart_drains_and_verifies_quiet_periods(
     target: &DisposableTarget,
     reader: &SemanticArchiveReaderV1,
     first_scope: &ArchiveReadScopeV2,
@@ -334,7 +343,7 @@ fn assert_restart_drains_and_verifies_quiet_weeks(
         &target.writer,
         campaign,
         MichiganContentPresetV1::new_campaign(MichiganDeliveryPresetV1::Standard)
-            .create_foundation()
+            .create_foundation(&crate::test_support::catalog())
             .unwrap()
             .digest(),
     )
@@ -372,7 +381,7 @@ fn assert_restart_drains_and_verifies_quiet_weeks(
         .dispositions()
         .is_empty());
     for tick in 2..=3 {
-        advance_material_week(&mut runtime);
+        advance_material_period(&mut runtime);
         let scope = current_archive_scope(reader, campaign);
         assert_eq!(scope.tick(), tick);
         assert_archive_progress(reader, campaign, tick, tick - 1);
@@ -411,7 +420,7 @@ fn assert_restart_drains_and_verifies_quiet_weeks(
             &target.writer,
             campaign,
             MichiganContentPresetV1::new_campaign(MichiganDeliveryPresetV1::Standard)
-                .create_foundation()
+                .create_foundation(&crate::test_support::catalog())
                 .unwrap()
                 .digest(),
         )
@@ -423,22 +432,22 @@ fn assert_restart_drains_and_verifies_quiet_weeks(
 impl DisposableTarget {
     fn create() -> Self {
         assert_eq!(
-            std::env::var("BABYLON_LEGACY_ADOPTER_DISPOSABLE_ACK").as_deref(),
+            std::env::var("BABYLON_POSTGRES_DISPOSABLE_ACK").as_deref(),
             Ok(ACK)
         );
-        let canary = std::env::var("BABYLON_LEGACY_ADOPTER_DISPOSABLE_CANARY").unwrap();
+        let canary = std::env::var("BABYLON_POSTGRES_DISPOSABLE_CANARY").unwrap();
         assert_eq!(canary.len(), 32);
-        let admin: Config = std::env::var("BABYLON_LEGACY_ADOPTER_TEST_DSN")
+        let admin: Config = std::env::var("BABYLON_POSTGRES_TEST_DSN")
             .unwrap()
             .parse()
             .unwrap();
-        validate_legacy_connection_target(&admin).unwrap();
+        validate_connection_target(&admin).unwrap();
         assert_eq!(admin.get_user(), Some("test"));
         assert_eq!(admin.get_dbname(), Some("postgres"));
         let mut connection = admin.connect(NoTls).unwrap();
         let actual: Option<String> = connection
             .query_one(
-                "SELECT pg_catalog.current_setting('babylon.per20_disposable',true)",
+                "SELECT pg_catalog.current_setting('babylon.disposable_runtime',true)",
                 &[],
             )
             .unwrap()
@@ -448,7 +457,15 @@ impl DisposableTarget {
         let suffix = template.strip_prefix("per281_runtime_template_").unwrap();
         assert_eq!(suffix.len(), 12);
         assert!(suffix.bytes().all(|byte| byte.is_ascii_hexdigit()));
-        let database = format!("per281_runtime_materialobserver_{}", std::process::id());
+        let sequence = NEXT_DISPOSABLE_TARGET
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
+                value.checked_add(1)
+            })
+            .expect("disposable target sequence remains bounded");
+        let database = format!(
+            "per281_runtime_materialobserver_{}_{sequence}",
+            std::process::id()
+        );
         connection
             .batch_execute(&format!(
                 "CREATE DATABASE \"{database}\" OWNER test TEMPLATE \"{template}\""
@@ -457,6 +474,7 @@ impl DisposableTarget {
         let mut writer = admin.clone();
         writer.dbname(&database);
         Self {
+            sequence,
             admin,
             writer,
             database,
@@ -467,9 +485,17 @@ impl DisposableTarget {
     fn login(&mut self, group: &str, suffix: &str) -> Config {
         assert!(matches!(group, "babylon_observer" | "babylon_reader"));
         assert!(suffix.bytes().all(|byte| byte.is_ascii_lowercase()));
-        let role = format!("g4_material_{suffix}_{}", std::process::id());
+        let role = format!(
+            "g4_material_{suffix}_{}_{}",
+            std::process::id(),
+            self.sequence
+        );
         let mut connection = self.writer.connect(NoTls).unwrap();
-        connection.batch_execute(&format!("CREATE ROLE \"{role}\" LOGIN PASSWORD 'reader' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS; GRANT {group} TO \"{role}\"; GRANT SET ON PARAMETER event_triggers TO \"{role}\"")).unwrap();
+        let created = {
+            let _guard = PARAMETER_ACL_WRITE.lock().unwrap();
+            connection.batch_execute(&format!("CREATE ROLE \"{role}\" LOGIN PASSWORD 'reader' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS; GRANT {group} TO \"{role}\"; GRANT SET ON PARAMETER event_triggers TO \"{role}\""))
+        };
+        created.unwrap();
         self.roles.push(role.clone());
         let mut config = self.writer.clone();
         config.user(&role).password("reader");
@@ -487,7 +513,10 @@ impl Drop for DisposableTarget {
                 dropped.expect("owned clone cleanup");
             }
             for role in &self.roles {
-                let removed = connection.batch_execute(&format!("REVOKE SET ON PARAMETER event_triggers FROM \"{role}\"; DROP ROLE IF EXISTS \"{role}\""));
+                let removed = {
+                    let _guard = PARAMETER_ACL_WRITE.lock().unwrap();
+                    connection.batch_execute(&format!("REVOKE SET ON PARAMETER event_triggers FROM \"{role}\"; DROP ROLE IF EXISTS \"{role}\""))
+                };
                 if !std::thread::panicking() {
                     removed.expect("owned role cleanup");
                 }
@@ -507,7 +536,7 @@ fn live_material_observer_preserves_history_and_denies_preview_blob_authority() 
         &target.writer,
         campaign,
         MichiganContentPresetV1::new_campaign(preset)
-            .create_foundation()
+            .create_foundation(&crate::test_support::catalog())
             .unwrap(),
     )
     .unwrap();
@@ -539,7 +568,7 @@ fn live_material_observer_preserves_history_and_denies_preview_blob_authority() 
     assert_eq!(observer.campaigns().unwrap()[0].durable_tick, 0);
     let mut history_at_two = None;
     for tick in 1..=6 {
-        advance_material_week(&mut runtime);
+        advance_material_period(&mut runtime);
         let snapshot = observer.snapshot(campaign, tick).unwrap();
         assert_eq!(snapshot.foundation_digest, zero.foundation_digest);
         assert_eq!(snapshot.resolve_tick, tick);
@@ -555,7 +584,7 @@ fn live_material_observer_preserves_history_and_denies_preview_blob_authority() 
                 &target.writer,
                 campaign,
                 MichiganContentPresetV1::new_campaign(preset)
-                    .create_foundation()
+                    .create_foundation(&crate::test_support::catalog())
                     .unwrap()
                     .digest(),
             )
@@ -622,14 +651,14 @@ fn assert_material_accounts(snapshot: &babylon_persistence::ObserverEconomySnaps
     assert!(rows
         .events
         .iter()
-        .all(|event| event.week <= snapshot.resolve_tick));
+        .all(|event| event.period <= snapshot.resolve_tick));
     if snapshot.resolve_tick == 0 {
         assert!(rows.material_balance.is_none());
         assert!(rows.events.is_empty());
         return;
     }
     let balance = rows.material_balance.as_ref().unwrap();
-    assert_eq!(balance.week, snapshot.resolve_tick);
+    assert_eq!(balance.period, snapshot.resolve_tick);
     assert!(!balance.rows.is_empty());
     let mut principals = BTreeSet::new();
     let mut arrivals = BTreeMap::new();
@@ -655,8 +684,7 @@ fn assert_material_accounts(snapshot: &babylon_persistence::ObserverEconomySnaps
         assert_eq!(evidence.good_id, route.good_id);
         assert_eq!(evidence.unit_id, route.unit_id);
         assert!(evidence.quantity > 0);
-        let catalog =
-            babylon_persistence::michigan_material::michigan_material_catalog_v1().unwrap();
+        let catalog = crate::test_support::catalog();
         let source = catalog
             .routes()
             .iter()
@@ -666,7 +694,7 @@ fn assert_material_accounts(snapshot: &babylon_persistence::ObserverEconomySnaps
             evidence.order_id,
             identity_hex(source.order_id().as_bytes())
         );
-        if event.week == balance.week && evidence.stage == ProductionDeliveryStageV1::Arrival {
+        if event.period == balance.period && evidence.stage == ProductionDeliveryStageV1::Arrival {
             let key = (&route.buyer_site_id, &evidence.good_id, &evidence.unit_id);
             *arrivals.entry(key).or_insert(0_u128) += u128::from(evidence.quantity);
         }
@@ -728,11 +756,13 @@ fn live_content_revisions_resume_exactly_and_catalog_filters_before_its_limit() 
         let mut runtime = DurableMaterialRuntimeV3::create(
             &target.writer,
             campaign,
-            preset.create_foundation().unwrap(),
+            preset
+                .create_foundation(&crate::test_support::catalog())
+                .unwrap(),
         )
         .unwrap();
-        advance_material_week(&mut runtime);
-        advance_material_week(&mut runtime);
+        advance_material_period(&mut runtime);
+        advance_material_period(&mut runtime);
         campaigns.push((campaign, preset, runtime));
     }
     install_reader_role_v1(&target.writer).unwrap();
@@ -770,17 +800,34 @@ fn live_content_revisions_resume_exactly_and_catalog_filters_before_its_limit() 
     assert!(before.iter().all(|row| row.durable_tick == 4));
     assert_eq!(before, known.campaigns().unwrap());
     let unknown = insert_unadmitted_catalog_rows(&target.writer, campaigns[0].0);
-    assert_eq!(observer.campaigns().unwrap(), before);
-    assert_eq!(known.campaigns().unwrap(), before);
+    // A safe header is discoverable without disclosing its opaque Designed values.
+    // Only the full capability authenticates stored material content.
+    let discovered = observer.campaigns().unwrap();
+    assert_eq!(discovered, known.campaigns().unwrap());
+    assert_eq!(discovered.len(), before.len() + 1);
+    assert_eq!(&discovered[1..], before.as_slice());
+    assert_eq!(discovered[0].id, unknown[65].as_uuid().to_string());
     assert_eq!(unknown.len(), 66);
-    for campaign in [unknown[0], unknown[65]] {
-        for reader in [&observer, &known] {
-            assert_eq!(
-                reader.snapshot(campaign, 0),
-                Err(ObserverEconomyErrorV1::ScenarioMismatch)
-            );
-        }
+    for reader in [&observer, &known] {
+        assert_eq!(
+            reader.snapshot(unknown[0], 0),
+            Err(ObserverEconomyErrorV1::ScenarioMismatch)
+        );
     }
+    assert_eq!(
+        observer.snapshot(unknown[65], 0),
+        Err(ObserverEconomyErrorV1::ScenarioMismatch)
+    );
+    let opaque = known.snapshot(unknown[65], 0).unwrap();
+    assert!(opaque.production.is_none());
+    assert!(opaque.nominal_world_hash.is_none());
+    assert_eq!(opaque.counties.len(), 83);
+    assert!(opaque.counties.iter().all(|county| {
+        county.annual_avg_estabs_count.is_none()
+            && county.annual_avg_emplvl.is_none()
+            && county.total_annual_wages.is_none()
+            && county.annual_avg_wkly_wage.is_none()
+    }));
     assert!(known_config
         .connect(NoTls)
         .unwrap()
@@ -811,9 +858,15 @@ fn assert_revision_resume(
     )
     .unwrap();
     let uninterrupted = runtime.session().prepare_advance(&actions).unwrap();
-    let mut reopened =
-        DurableMaterialRuntimeV3::open(config, campaign, preset.admitted().unwrap().digest())
-            .unwrap();
+    let mut reopened = DurableMaterialRuntimeV3::open(
+        config,
+        campaign,
+        preset
+            .admitted(&crate::test_support::catalog())
+            .unwrap()
+            .digest(),
+    )
+    .unwrap();
     assert_eq!(reopened.session().completed_tick(), 2);
     let restored = reopened.session().prepare_advance(&actions).unwrap();
     assert_eq!(uninterrupted.identity(), restored.identity());
@@ -826,7 +879,7 @@ fn assert_revision_resume(
         restored.material().receipt_bytes()
     );
     assert_eq!(observer.snapshot(campaign, 2).unwrap(), at_two);
-    advance_material_week(&mut reopened);
+    advance_material_period(&mut reopened);
     assert_material_accounts(&observer.snapshot(campaign, 3).unwrap());
     assert_eq!(observer.snapshot(campaign, 1).unwrap(), history);
     assert_known_material_absence(&known.snapshot(campaign, 3).unwrap());
@@ -883,7 +936,16 @@ fn assert_session_admits_stored_revision(
         lines.push(b'\n');
     }
     let mut output = Vec::new();
-    run_runtime_session_v3(config, std::io::Cursor::new(lines), &mut output).unwrap();
+    run_runtime_session_v3(
+        config,
+        std::path::Path::new(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../../content/scenarios/michigan/defines.toml"
+        )),
+        std::io::Cursor::new(lines),
+        &mut output,
+    )
+    .unwrap();
     let responses = std::str::from_utf8(&output)
         .unwrap()
         .lines()
@@ -916,6 +978,21 @@ fn insert_unadmitted_catalog_rows(config: &Config, source: CampaignId) -> Vec<Ca
         tx.execute("INSERT INTO babylon_state.campaign (campaign_id,replay_layout_version,rng_layout_version,replay_session_id,rng_seed,defines_hash,rules_hash,ref_digest) SELECT $1,replay_layout_version,rng_layout_version,replay_session_id,rng_seed,defines_hash,rules_hash,ref_digest FROM babylon_state.campaign WHERE campaign_id=$2", &[campaign.as_uuid(), source.as_uuid()]).unwrap();
         tx.execute("INSERT INTO babylon_state.campaign_foundation (campaign_id,stable_graph,world_registers,resolver_manifest,prepared_environment,replay_session_id,rng_seed,defines_hash,rules_hash,ref_digest,scenario_source,prelude_source,rule_source,defines_bytes,reference_manifest_bytes,foundation_sha256) SELECT $1,stable_graph,world_registers,resolver_manifest,prepared_environment,replay_session_id,rng_seed,defines_hash,rules_hash,ref_digest,scenario_source,prelude_source,rule_source,defines_bytes,reference_manifest_bytes,foundation_sha256 FROM babylon_state.campaign_foundation WHERE campaign_id=$2", &[campaign.as_uuid(), source.as_uuid()]).unwrap();
         let preset = if number == 66 {
+            // Opaque material content still needs a complete public county family.
+            // Without this mapping, snapshot refusal would concern missing county
+            // rows rather than whether the reader authenticates material bytes.
+            assert_eq!(tx.execute(
+                "INSERT INTO babylon_meta.campaign (campaign_id,slug,engine_version,defines_hash,last_tick,status,rng_seed,content_digest) \
+                 SELECT $1,$1::uuid::text,engine_version,defines_hash,0,'ACTIVE',rng_seed,content_digest \
+                 FROM babylon_meta.campaign WHERE campaign_id=$2",
+                &[campaign.as_uuid(), source.as_uuid()],
+            ).unwrap(), 1);
+            assert_eq!(tx.execute(
+                "INSERT INTO babylon_meta.territory_county_map_v1 (campaign_id,territory_local_name,county_geoid) \
+                 SELECT $1,territory_local_name,county_geoid FROM babylon_meta.territory_county_map_v1 WHERE campaign_id=$2",
+                &[campaign.as_uuid(), source.as_uuid()],
+            ).unwrap(), 83);
+            // No knowledge grants are copied: all observed values must stay hidden.
             MichiganContentPresetV1::new_campaign(MichiganDeliveryPresetV1::Standard).id()
         } else {
             "unadmitted-fixture-v1"
@@ -941,7 +1018,7 @@ mod foundation_content_layout {
     const LAYOUT_TABLE: &str = "babylon_state.campaign_foundation_content_layout_v2";
 
     #[test]
-    #[ignore = "requires the existing disposable PostgreSQL harness; serial clone ownership"]
+    #[ignore = "requires the existing disposable PostgreSQL harness; independent clone ownership"]
     fn live_current_content_layout_refuses_corruption_and_reopens_exactly() {
         let target = DisposableTarget::create();
         let standard = CampaignId::from_uuid(Uuid::from_u128(21_001));
@@ -954,17 +1031,21 @@ mod foundation_content_layout {
         let mut standard_runtime = DurableMaterialRuntimeV3::create(
             &target.writer,
             standard,
-            standard_preset.create_foundation().unwrap(),
+            standard_preset
+                .create_foundation(&crate::test_support::catalog())
+                .unwrap(),
         )
         .unwrap();
         let mut delayed_runtime = DurableMaterialRuntimeV3::create(
             &target.writer,
             delayed,
-            delayed_preset.create_foundation().unwrap(),
+            delayed_preset
+                .create_foundation(&crate::test_support::catalog())
+                .unwrap(),
         )
         .unwrap();
-        advance_material_week(&mut standard_runtime);
-        advance_material_week(&mut delayed_runtime);
+        advance_material_period(&mut standard_runtime);
+        advance_material_period(&mut delayed_runtime);
         assert_missing_layout_is_not_healed(
             &target,
             standard,
@@ -994,7 +1075,7 @@ mod foundation_content_layout {
     }
 
     #[test]
-    #[ignore = "requires the existing disposable PostgreSQL harness; serial clone ownership"]
+    #[ignore = "requires the existing disposable PostgreSQL harness; independent clone ownership"]
     fn live_open_material_runtime_refuses_missing_or_changed_content_layout_before_ack() {
         let target = DisposableTarget::create();
         for (index, missing) in [true, false].into_iter().enumerate() {
@@ -1004,7 +1085,7 @@ mod foundation_content_layout {
                 &target.writer,
                 campaign,
                 MichiganContentPresetV1::new_campaign(MichiganDeliveryPresetV1::Standard)
-                    .create_foundation()
+                    .create_foundation(&crate::test_support::catalog())
                     .unwrap(),
             )
             .unwrap();
@@ -1027,7 +1108,7 @@ mod foundation_content_layout {
     }
 
     #[test]
-    #[ignore = "requires the existing disposable PostgreSQL harness; serial clone ownership"]
+    #[ignore = "requires the existing disposable PostgreSQL harness; independent clone ownership"]
     fn live_open_graph_runtime_refuses_missing_or_changed_content_layout_before_ack() {
         use babylon_persistence::{
             michigan_economy::michigan_observer_foundation_v1, DurableReplayRuntimeV2,
@@ -1130,7 +1211,10 @@ mod foundation_content_layout {
             DurableMaterialRuntimeV3::open(
                 &target.writer,
                 campaign,
-                preset.admitted().unwrap().digest()
+                preset
+                    .admitted(&crate::test_support::catalog())
+                    .unwrap()
+                    .digest()
             ),
             Err(MaterialRuntimeErrorV3::Graph(
                 RustPersistenceRuntimeErrorV2::FoundationAbsent
@@ -1140,7 +1224,9 @@ mod foundation_content_layout {
             DurableMaterialRuntimeV3::create(
                 &target.writer,
                 campaign,
-                preset.create_foundation().unwrap()
+                preset
+                    .create_foundation(&crate::test_support::catalog())
+                    .unwrap()
             ),
             Err(MaterialRuntimeErrorV3::Graph(
                 RustPersistenceRuntimeErrorV2::FoundationAbsent
@@ -1158,7 +1244,10 @@ mod foundation_content_layout {
             DurableMaterialRuntimeV3::open(
                 &target.writer,
                 sibling,
-                sibling_preset.admitted().unwrap().digest()
+                sibling_preset
+                    .admitted(&crate::test_support::catalog())
+                    .unwrap()
+                    .digest()
             )
             .unwrap()
             .session()
@@ -1220,7 +1309,10 @@ mod foundation_content_layout {
             DurableMaterialRuntimeV3::open(
                 &target.writer,
                 campaign,
-                preset.admitted().unwrap().digest()
+                preset
+                    .admitted(&crate::test_support::catalog())
+                    .unwrap()
+                    .digest()
             ),
             Err(MaterialRuntimeErrorV3::Graph(
                 RustPersistenceRuntimeErrorV2::ReplaySource
@@ -1254,7 +1346,10 @@ mod foundation_content_layout {
             DurableMaterialRuntimeV3::open(
                 &target.writer,
                 campaign,
-                preset.admitted().unwrap().digest(),
+                preset
+                    .admitted(&crate::test_support::catalog())
+                    .unwrap()
+                    .digest(),
             ),
             Err(MaterialRuntimeErrorV3::Graph(
                 RustPersistenceRuntimeErrorV2::SemanticCodec
@@ -1276,9 +1371,15 @@ mod foundation_content_layout {
         preset: MichiganContentPresetV1,
         uninterrupted: &DurableMaterialRuntimeV3,
     ) {
-        let mut reopened =
-            DurableMaterialRuntimeV3::open(config, campaign, preset.admitted().unwrap().digest())
-                .unwrap();
+        let mut reopened = DurableMaterialRuntimeV3::open(
+            config,
+            campaign,
+            preset
+                .admitted(&crate::test_support::catalog())
+                .unwrap()
+                .digest(),
+        )
+        .unwrap();
         assert_eq!(reopened.session().completed_tick(), 1);
         let actions = OrderedPracticeActionBatchV1::empty(
             uninterrupted
@@ -1301,13 +1402,20 @@ mod foundation_content_layout {
             expected.material().receipt_bytes()
         );
         drop(actual);
-        advance_material_week(&mut reopened);
+        advance_material_period(&mut reopened);
         assert_eq!(reopened.session().completed_tick(), 2);
         assert_eq!(
-            DurableMaterialRuntimeV3::open(config, campaign, preset.admitted().unwrap().digest())
-                .unwrap()
-                .session()
-                .completed_tick(),
+            DurableMaterialRuntimeV3::open(
+                config,
+                campaign,
+                preset
+                    .admitted(&crate::test_support::catalog())
+                    .unwrap()
+                    .digest()
+            )
+            .unwrap()
+            .session()
+            .completed_tick(),
             2
         );
     }
@@ -1325,7 +1433,7 @@ mod campaign_writer_ownership {
     };
 
     #[test]
-    #[ignore = "requires the existing disposable PostgreSQL harness; serial clone ownership"]
+    #[ignore = "requires the existing disposable PostgreSQL harness; independent clone ownership"]
     fn live_graph_owner_is_refused_for_an_already_registered_material_campaign() {
         let target = DisposableTarget::create();
         let campaign = CampaignId::from_uuid(Uuid::from_u128(31_001));
@@ -1333,7 +1441,7 @@ mod campaign_writer_ownership {
             &target.writer,
             campaign,
             MichiganContentPresetV1::new_campaign(MichiganDeliveryPresetV1::Standard)
-                .create_foundation()
+                .create_foundation(&crate::test_support::catalog())
                 .unwrap(),
         )
         .unwrap();
@@ -1360,7 +1468,7 @@ mod campaign_writer_ownership {
     }
 
     #[test]
-    #[ignore = "requires the existing disposable PostgreSQL harness; serial clone ownership"]
+    #[ignore = "requires the existing disposable PostgreSQL harness; independent clone ownership"]
     fn live_graph_campaign_before_material_schema_still_creates_reopens_and_commits() {
         let target = DisposableTarget::create();
         let absent: bool = target.writer.connect(NoTls).unwrap().query_one(
@@ -1396,7 +1504,7 @@ mod campaign_writer_ownership {
     }
 
     #[test]
-    #[ignore = "requires the existing disposable PostgreSQL harness; serial clone ownership"]
+    #[ignore = "requires the existing disposable PostgreSQL harness; independent clone ownership"]
     fn live_concurrent_creation_cannot_promote_the_winning_graph_campaign_to_material() {
         let target = DisposableTarget::create();
         // Warm every additive schema before the controlled interleaving. No
@@ -1407,7 +1515,7 @@ mod campaign_writer_ownership {
                 &target.writer,
                 warm,
                 MichiganContentPresetV1::new_campaign(MichiganDeliveryPresetV1::Standard)
-                    .create_foundation()
+                    .create_foundation(&crate::test_support::catalog())
                     .unwrap(),
             )
             .unwrap(),
@@ -1415,7 +1523,7 @@ mod campaign_writer_ownership {
         let campaign = CampaignId::from_uuid(Uuid::from_u128(31_003));
         let (graph, bundle) = michigan_observer_foundation_v1().unwrap();
         let material = MichiganContentPresetV1::new_campaign(MichiganDeliveryPresetV1::Standard)
-            .create_foundation()
+            .create_foundation(&crate::test_support::catalog())
             .unwrap();
         let mut graph_config = target.writer.clone();
         graph_config.application_name("g4-owner-race-graph");
@@ -1494,3 +1602,9 @@ mod staffing_admission;
 
 #[path = "observer_material_live/staffing_history.rs"]
 mod staffing_history;
+
+#[path = "observer_material_live/persisted_twins.rs"]
+mod persisted_twins;
+
+#[path = "support/material_config.rs"]
+mod test_support;

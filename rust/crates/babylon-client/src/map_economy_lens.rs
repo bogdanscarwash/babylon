@@ -57,7 +57,7 @@ impl EconomyMetric {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MaterialLensKind {
-    ProducedThisWeek,
+    ProducedThisPeriod,
     OnHand,
     InboundInTransit,
 }
@@ -66,7 +66,7 @@ impl MaterialLensKind {
     #[must_use]
     pub const fn label(self) -> &'static str {
         match self {
-            Self::ProducedThisWeek => "Production this week",
+            Self::ProducedThisPeriod => "Production this period",
             Self::OnHand => "Inventory on hand",
             Self::InboundInTransit => "Inbound in transit",
         }
@@ -127,7 +127,7 @@ impl MapLens {
         }
     }
 
-    /// Preserve the selected identity across weeks. A different campaign or
+    /// Preserve the selected identity across periods. A different campaign or
     /// capability clears it, including while its new observation is pending.
     pub fn reconcile(&mut self, snapshot: Option<&ObserverEconomySnapshotV1>, scope_changed: bool) {
         let Self::Material { kind, good } = self else {
@@ -178,7 +178,7 @@ pub enum LensUnavailable {
     CapabilityUnavailable,
     NoGoodSelected,
     NotModeled,
-    NoProductionWeek,
+    NoProductionPeriod,
     InvalidObservation,
     Arithmetic,
 }
@@ -192,7 +192,7 @@ impl LensUnavailable {
             Self::CapabilityUnavailable => "Material evidence unavailable in this perspective",
             Self::NoGoodSelected => "Choose an available good",
             Self::NotModeled => "Not modeled for this good and lens",
-            Self::NoProductionWeek => "Foundation: no committed production week",
+            Self::NoProductionPeriod => "Foundation: no committed production period",
             Self::InvalidObservation => "Observation refused: inconsistent material identity",
             Self::Arithmetic => "Observation refused: quantity overflow",
         }
@@ -294,7 +294,7 @@ pub fn material_choices(
     };
     let mut choices = BTreeMap::new();
     match kind {
-        MaterialLensKind::ProducedThisWeek => {
+        MaterialLensKind::ProducedThisPeriod => {
             for site in &production.sites {
                 add_choice(
                     &mut choices,
@@ -432,7 +432,7 @@ fn add_quantity(
                 .checked_add(quantity)
                 .ok_or(MapLensError::Arithmetic)?,
         ),
-        _ => CountyLensReading::Unavailable(LensUnavailable::NoProductionWeek),
+        _ => CountyLensReading::Unavailable(LensUnavailable::NoProductionPeriod),
     };
     Ok(())
 }
@@ -444,7 +444,7 @@ fn project_material_counties(
 ) -> Result<BTreeMap<String, CountyLensReading>, MapLensError> {
     let mut counties = BTreeMap::new();
     match kind {
-        MaterialLensKind::ProducedThisWeek => {
+        MaterialLensKind::ProducedThisPeriod => {
             for site in &production.sites {
                 if good.matches(&site.output_good_id, &site.output_unit_id) {
                     let produced = site
@@ -579,7 +579,7 @@ mod tests {
                 labor_accounts: Vec::new(),
                 staffing_accounts: Vec::new(),
                 scenario_label: "Designed lens fixture".into(),
-                horizon_week: 16,
+                horizon_period: 16,
                 sites: vec![
                     site("source", "26163", 'a', 0),
                     site("other", "26163", 'b', 500),
@@ -593,7 +593,7 @@ mod tests {
                     unit_id: key('a').unit_id,
                     good: "Good a".into(),
                     unit: "kg".into(),
-                    travel_weeks: 3,
+                    travel_periods: 3,
                     ordered: 100,
                     shipped: 90,
                     delivered: 60,
@@ -611,8 +611,8 @@ mod tests {
                     good: "Good a".into(),
                     unit: "kg".into(),
                     quantity: 30,
-                    dispatch_week: 1,
-                    arrival_week: 4,
+                    dispatch_period: 1,
+                    arrival_period: 4,
                 }],
                 events: vec![],
                 observed_contexts: Vec::new(),
@@ -632,7 +632,8 @@ mod tests {
     #[test]
     fn same_unit_and_county_never_merge_different_goods() {
         let snapshot = snapshot();
-        let produced = project_map_lens(Some(&snapshot), &lens(MaterialLensKind::ProducedThisWeek));
+        let produced =
+            project_map_lens(Some(&snapshot), &lens(MaterialLensKind::ProducedThisPeriod));
         assert_eq!(produced.county("26163"), CountyLensReading::Available(10));
         assert_eq!(
             produced.county("26099"),
@@ -654,15 +655,15 @@ mod tests {
         site.produced_batches = None;
         snapshot.resolve_tick = 0;
         let projected =
-            project_map_lens(Some(&snapshot), &lens(MaterialLensKind::ProducedThisWeek));
+            project_map_lens(Some(&snapshot), &lens(MaterialLensKind::ProducedThisPeriod));
         assert_eq!(
             projected.county("26163"),
-            CountyLensReading::Unavailable(LensUnavailable::NoProductionWeek)
+            CountyLensReading::Unavailable(LensUnavailable::NoProductionPeriod)
         );
         snapshot.production.as_mut().unwrap().sites[0].produced_batches = Some(0);
         snapshot.resolve_tick = 1;
         assert_eq!(
-            project_map_lens(Some(&snapshot), &lens(MaterialLensKind::ProducedThisWeek))
+            project_map_lens(Some(&snapshot), &lens(MaterialLensKind::ProducedThisPeriod))
                 .county("26163"),
             CountyLensReading::Available(0)
         );
@@ -694,7 +695,7 @@ mod tests {
         let mut snapshot = snapshot();
         snapshot.production.as_mut().unwrap().sites[0].output_per_batch = u64::MAX;
         assert_eq!(
-            project_map_lens(Some(&snapshot), &lens(MaterialLensKind::ProducedThisWeek))
+            project_map_lens(Some(&snapshot), &lens(MaterialLensKind::ProducedThisPeriod))
                 .unavailable,
             LensUnavailable::Arithmetic
         );
@@ -717,7 +718,7 @@ mod tests {
         snapshot.production.as_mut().unwrap().sites[0]
             .output_good_id
             .clear();
-        let result = project_map_lens(Some(&snapshot), &lens(MaterialLensKind::ProducedThisWeek));
+        let result = project_map_lens(Some(&snapshot), &lens(MaterialLensKind::ProducedThisPeriod));
         assert_eq!(result.unavailable, LensUnavailable::InvalidObservation);
         assert!(result.counties.is_empty());
     }
@@ -739,7 +740,7 @@ mod tests {
         let mut live = historical.clone();
         live.resolve_tick = 2;
         live.production.as_mut().unwrap().sites[0].produced_batches = Some(7);
-        let selection = lens(MaterialLensKind::ProducedThisWeek);
+        let selection = lens(MaterialLensKind::ProducedThisPeriod);
         assert_eq!(
             project_map_lens(Some(&historical), &selection).county("26163"),
             CountyLensReading::Available(10)
@@ -753,14 +754,14 @@ mod tests {
     #[test]
     fn capability_change_clears_choices_and_never_logs_stale_identity() {
         let mut snapshot = snapshot();
-        let mut selection = lens(MaterialLensKind::ProducedThisWeek);
+        let mut selection = lens(MaterialLensKind::ProducedThisPeriod);
         assert!(selection.label_for_log(Some(&snapshot)).contains("Good a"));
         assert!(!selection.label_for_log(None).contains("Good a"));
         selection.reconcile(None, true);
         assert_eq!(
             selection,
             MapLens::Material {
-                kind: MaterialLensKind::ProducedThisWeek,
+                kind: MaterialLensKind::ProducedThisPeriod,
                 good: None
             }
         );
@@ -768,7 +769,7 @@ mod tests {
         snapshot.visibility = ObserverVisibilityV1::KnownPreview;
         selection.reconcile(Some(&snapshot), false);
         assert!(
-            material_choices(&snapshot, MaterialLensKind::ProducedThisWeek)
+            material_choices(&snapshot, MaterialLensKind::ProducedThisPeriod)
                 .unwrap()
                 .is_empty()
         );
@@ -778,19 +779,19 @@ mod tests {
         );
         assert_eq!(
             selection.label_for_log(Some(&snapshot)),
-            "Production this week / unavailable"
+            "Production this period / unavailable"
         );
     }
 
     #[test]
     fn selected_good_survives_same_scope_history_loading_and_cycles_by_identity() {
         let snapshot = snapshot();
-        let mut selection = lens(MaterialLensKind::ProducedThisWeek);
+        let mut selection = lens(MaterialLensKind::ProducedThisPeriod);
         selection.cycle_good(Some(&snapshot), false);
         assert_eq!(
             selection,
             MapLens::Material {
-                kind: MaterialLensKind::ProducedThisWeek,
+                kind: MaterialLensKind::ProducedThisPeriod,
                 good: Some(key('b'))
             }
         );
@@ -798,6 +799,6 @@ mod tests {
         selection.reconcile(Some(&snapshot), false);
         assert!(selection.label_for_log(Some(&snapshot)).contains("Good b"));
         selection.cycle_good(Some(&snapshot), true);
-        assert_eq!(selection, lens(MaterialLensKind::ProducedThisWeek));
+        assert_eq!(selection, lens(MaterialLensKind::ProducedThisPeriod));
     }
 }

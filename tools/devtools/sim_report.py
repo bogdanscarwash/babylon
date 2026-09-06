@@ -50,7 +50,8 @@ RUNTIME_TIMEOUT_SECONDS: Final = 15 * 60.0
 CAPTURE_CHUNK_BYTES: Final = 64 * 1024
 PROCESS_POLL_SECONDS: Final = 0.02
 PROCESS_JOIN_SECONDS: Final = 2.0
-RESTART_INTERVAL_TICKS: Final = 52
+TICK_DURATION_DAYS: Final = 28
+RESTART_INTERVAL_TICKS: Final = 13
 POSTGRES_PROBE_TIMEOUT_SECONDS: Final = 10.0
 MAX_POSTGRES_PROBE_OUTPUT_BYTES: Final = 4 * 1024
 SOURCE_PROBE_TIMEOUT_SECONDS: Final = 5.0
@@ -95,6 +96,7 @@ EXPECTED_SCOPE: Final = {
     "slice_id": "michigan-persistence-slice",
     "scenario": "production/michigan-rust-runtime",
     "fixed_replay_seed": 281,
+    "tick_duration_days": TICK_DURATION_DAYS,
     "parameter_overrides": False,
     "stochastic_draws": False,
     "dynamic_h3_updates": False,
@@ -1554,6 +1556,7 @@ def _evidence_summary(
         "runtime_exit_code": runtime_exit_code,
         "ticks_requested": ticks_requested,
         "ticks_reported": len(rows),
+        "tick_duration_days": _nested_mapping(final, "scope")["tick_duration_days"],
         "first_resolve_tick": rows[0]["resolve_tick"],
         "last_resolve_tick": final["resolve_tick"],
         "provenance": dict(provenance),
@@ -1610,6 +1613,7 @@ def render_summary(summary: Mapping[str, object]) -> str:
         f"reporter: {provenance['reporter_sha256']}",
     ]
     if cast("int", summary["ticks_reported"]) > 0:
+        lines.append(f"simulation days per tick: {summary['tick_duration_days']}")
         lines.append(
             f"resolve ticks: {summary['first_resolve_tick']}..{summary['last_resolve_tick']}"
         )
@@ -2566,7 +2570,9 @@ def _parser() -> argparse.ArgumentParser:
         "--ticks",
         required=True,
         type=_positive_ticks,
-        help=(f"count of ticks to execute for the fresh campaign (maximum {MAX_TICKS})"),
+        help=(
+            f"count of four-week periods to execute for the fresh campaign (maximum {MAX_TICKS})"
+        ),
     )
     parser.add_argument(
         "--output-root",

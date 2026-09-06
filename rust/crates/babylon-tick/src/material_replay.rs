@@ -24,7 +24,7 @@ use babylon_graph::{
     substrate::GraphSubstrate, working_copy::DetachedCopy,
 };
 use babylon_kernel::{sha256_of, tick_content_hash::TickContentHashV1};
-use babylon_material_circuit::{close_material_week_v2, MaterialCircuitErrorV2};
+use babylon_material_circuit::{close_material_period_v2, MaterialCircuitErrorV2};
 use babylon_practice_contract::ordered_action_v1::OrderedPracticeActionBatchV1;
 
 const TICK_DOMAIN: &[u8] = b"babylon.material-tick-content.v3\0";
@@ -54,7 +54,7 @@ pub enum MaterialBaseErrorV1 {
         rule_id: String,
         error: babylon_bsl::causal_contract::ContractError,
     },
-    Week,
+    Period,
     MissingCandidate,
     MissingResolver,
 }
@@ -92,12 +92,12 @@ impl MaterialBaseInputs<'_> {
         tick: i64,
     ) -> Result<(PreparedMaterialWorldV3, Option<StaffingEffectsV1>), MaterialBaseErrorV1> {
         if u64::try_from(tick).ok() != self.opening.completed_tick().checked_add(1) {
-            return Err(MaterialBaseErrorV1::Week);
+            return Err(MaterialBaseErrorV1::Period);
         }
         match self.labor {
             MaterialLaborV1::Scheduled => Ok((self.opening.prepare_next()?, None)),
             MaterialLaborV1::Staffed(composition) => {
-                let closed = close_material_week_v2(self.opening.state())?;
+                let closed = close_material_period_v2(self.opening.state())?;
                 let bindings = composition
                     .bindings()
                     .iter()
@@ -108,7 +108,7 @@ impl MaterialBaseInputs<'_> {
                     graph,
                     context,
                     composition,
-                    closed.closing_week(),
+                    closed.closing_period(),
                     &requests,
                 )?;
                 let transition = closed.finish_with_labor(effects.next_labor().to_vec())?;

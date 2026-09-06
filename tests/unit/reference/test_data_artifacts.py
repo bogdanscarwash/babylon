@@ -119,7 +119,7 @@ class TestManifest:
             "ntad_detroit_windsor_rail_v1",
         }
         assert curated <= names
-        from babylon.sentinels.coverage.catalog import load_catalog_tables
+        from babylon.data.catalog import load_catalog_tables
 
         governed_tables = {t.name for t in load_catalog_tables() if t.kind == "table"}
         missing = governed_tables - names

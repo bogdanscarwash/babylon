@@ -3,14 +3,14 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use super::{
-    michigan, SectorBundleErrorV1, SectorBundleV1, UnitIdV1, HORIZON_TICKS, MAX_BUNDLE_GOODS,
-    MAX_BUNDLE_PROCESSES,
+    michigan, SectorBundleErrorV1, SectorBundleV1, UnitIdV1, MAX_BUNDLE_GOODS,
+    MAX_BUNDLE_PROCESSES, MICHIGAN_MAX_HORIZON_PERIODS_V1,
 };
 
 pub(super) fn bundle(value: &SectorBundleV1) -> Result<(), SectorBundleErrorV1> {
     michigan::validate_sources(&value.owner, &value.sources)?;
     let rows = &value.rows;
-    if rows.week != 1
+    if rows.period != 1
         || !rows.orders.is_empty()
         || !rows.backlog.is_empty()
         || !rows.freight.is_empty()
@@ -103,19 +103,19 @@ fn validate_resources(value: &SectorBundleV1) -> Result<(), SectorBundleErrorV1>
             return Err(SectorBundleErrorV1::Resource);
         }
         expected_labor.insert((output.site_id, value.labor_unit, 1));
-        for week in 1..=HORIZON_TICKS {
-            expected_capacities.insert((output.process_id, output.site_id, week));
+        for period in 1..=MICHIGAN_MAX_HORIZON_PERIODS_V1 {
+            expected_capacities.insert((output.process_id, output.site_id, period));
         }
     }
     let capacities: BTreeSet<_> = rows
         .capacities
         .iter()
-        .map(|row| (row.process_id, row.site_id, row.week))
+        .map(|row| (row.process_id, row.site_id, row.period))
         .collect();
     let labor: BTreeSet<_> = rows
         .labor
         .iter()
-        .map(|row| (row.site_id, row.unit_id, row.week))
+        .map(|row| (row.site_id, row.unit_id, row.period))
         .collect();
     if expected_capacities != capacities
         || capacities.len() != rows.capacities.len()
@@ -128,7 +128,7 @@ fn validate_resources(value: &SectorBundleV1) -> Result<(), SectorBundleErrorV1>
         let capacity = rows
             .capacities
             .iter()
-            .find(|row| row.process_id == commitment.process_id && row.week == 1)
+            .find(|row| row.process_id == commitment.process_id && row.period == 1)
             .ok_or(SectorBundleErrorV1::Resource)?;
         if commitment.planned_batches > capacity.available_batches {
             return Err(SectorBundleErrorV1::Resource);
@@ -167,7 +167,7 @@ fn validate_resources(value: &SectorBundleV1) -> Result<(), SectorBundleErrorV1>
         let labor = rows
             .labor
             .iter()
-            .find(|row| row.site_id == commitment.site_id && row.week == 1)
+            .find(|row| row.site_id == commitment.site_id && row.period == 1)
             .ok_or(SectorBundleErrorV1::Resource)?;
         if labor.available < required {
             return Err(SectorBundleErrorV1::Resource);

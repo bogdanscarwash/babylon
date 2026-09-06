@@ -101,7 +101,7 @@ pub(crate) fn opening_site(snapshot: &ProductionSnapshotV1) -> Option<&Productio
 pub(crate) fn committed_plan_status(site: &ProductionSiteV1) -> &'static str {
     match (site.produced_batches, site.planned_batches) {
         (None, None) => "Opening state; no committed production yet",
-        (Some(0), Some(0)) => "No production planned this week",
+        (Some(0), Some(0)) => "No production planned this period",
         (Some(0), Some(_)) => "No work committed against the plan",
         (Some(done), Some(plan)) if done < plan => "Committed plan partly completed",
         (Some(done), Some(plan)) if done == plan => "Committed plan completed",
@@ -373,7 +373,7 @@ mod tests {
             labor_accounts: Vec::new(),
             staffing_accounts: Vec::new(),
             scenario_label: "Designed test chain".into(),
-            horizon_week: 16,
+            horizon_period: 16,
             sites: vec![site("a", &[]), site("b", &["a"]), site("c", &["b"])],
             routes: Vec::new(),
             freight: Vec::new(),
@@ -458,7 +458,7 @@ mod tests {
         assert!(describe_brief(&snapshot.sites[1], &snapshot).contains("reading unavailable"));
         snapshot.sites[1].produced_batches = Some(0);
         assert!(describe_brief(&snapshot.sites[1], &snapshot)
-            .contains("No production planned this week"));
+            .contains("No production planned this period"));
         snapshot.sites[1].planned_batches = Some(8);
         assert_eq!(
             committed_plan_status(&snapshot.sites[1]),
@@ -528,7 +528,7 @@ mod tests {
             unit_id: "kg".into(),
             good: "Input a".into(),
             unit: "kg".into(),
-            travel_weeks: 2,
+            travel_periods: 2,
             ordered: 120,
             shipped: 100,
             delivered: 80,
@@ -549,8 +549,8 @@ mod tests {
             good: "Input a".into(),
             unit: "kg".into(),
             quantity: 20,
-            dispatch_week: 2,
-            arrival_week: 4,
+            dispatch_period: 2,
+            arrival_period: 4,
         }
     }
 
@@ -600,7 +600,7 @@ mod tests {
         );
         assert!(arrived.contains("delivery recorded to date; no backlog"));
         assert!(!arrived.contains("goods in transit"));
-        assert!(!arrived.contains("this week"));
+        assert!(!arrived.contains("this period"));
         snapshot.routes[0].shipped = 0;
         snapshot.routes[0].delivered = 0;
         let no_shipment = dependency_flow_summary(

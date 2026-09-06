@@ -3,7 +3,7 @@ meta:
   name: Babylon Canonical Theory Constraints
   version: "2.1.0"
   updated: "2026-08-25"
-  authority: CONSTITUTION.md v4.1.0
+  authority: CONSTITUTION.md v4.2.0
   architecture: docs/concepts/architecture.rst
   reserved_line: "Marxist-Leninist-Maoist Third Worldist (MLM-TW)"
   human_rendering: docs/concepts/theory.rst

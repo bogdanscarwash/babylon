@@ -32,8 +32,8 @@ fn pool_requests(
     totals.resize(opening.pools().len(), 0_u64);
     let mut seen = BTreeSet::new();
     for request in requests {
-        if request.week() != opening.week() {
-            return Err(StaffingErrorV1::WeekInvariant);
+        if request.period() != opening.period() {
+            return Err(StaffingErrorV1::PeriodInvariant);
         }
         let (index, binding) = owners
             .get(&request.process_id())
@@ -60,8 +60,8 @@ fn pool_requests(
 fn advance_pool(
     opening: &StaffingPoolStateV1,
     current_request: u64,
-    week: u64,
-    next_week: u64,
+    period: u64,
+    next_period: u64,
 ) -> Result<(StaffingPoolStateV1, StaffingReceiptV1, LaborCapacityRowV1), StaffingErrorV1> {
     let binding = opening.binding();
     let schedule = binding.policy().hours_per_person();
@@ -101,7 +101,7 @@ fn advance_pool(
     let closing =
         StaffingPoolStateV1::try_new(binding.clone(), employed, reserve, current_request)?;
     let receipt = StaffingReceiptV1::from_transition(
-        week,
+        period,
         opening,
         &closing,
         current_request,
@@ -112,18 +112,18 @@ fn advance_pool(
     let labor = LaborCapacityRowV1 {
         site_id: binding.site_id(),
         unit_id: binding.unit_id(),
-        week: next_week,
+        period: next_period,
         available: hours,
     };
     Ok((closing, receipt, labor))
 }
 
-/// Resolve one week from exact, labor-unconstrained requests for every process.
+/// Resolve one period from exact, labor-unconstrained requests for every process.
 ///
 /// A zero request must be explicit. One prior unretained request supplies one
-/// week of retention; the retained maximum is never stored as new memory.
+/// period of retention; the retained maximum is never stored as new memory.
 /// The caller remains responsible for deriving material-feasible requests and
-/// installing these next-week budgets before planning production.
+/// installing these next-period budgets before planning production.
 ///
 /// # Errors
 /// Refuses incomplete/foreign/duplicate requests, bounds or checked arithmetic.
@@ -132,8 +132,8 @@ pub fn advance_staffing_v1(
     opening: &StaffingStateV1,
     requests: &[StaffingWorkRequestV1],
 ) -> Result<StaffingTransitionV1, StaffingErrorV1> {
-    let next_week = opening
-        .week()
+    let next_period = opening
+        .period()
         .checked_add(1)
         .ok_or(StaffingErrorV1::Arithmetic)?;
     let requests = pool_requests(opening, requests)?;
@@ -143,14 +143,14 @@ pub fn advance_staffing_v1(
     let mut labor = reserved_vec(count)?;
     for (opening_pool, request) in opening.pools().iter().zip(requests) {
         let (pool, receipt, capacity) =
-            advance_pool(opening_pool, request, opening.week(), next_week)?;
+            advance_pool(opening_pool, request, opening.period(), next_period)?;
         pools.push(pool);
         receipts.push(receipt);
         labor.push(capacity);
     }
     labor.sort_unstable_by_key(|row| (row.site_id, row.unit_id));
     Ok(StaffingTransitionV1::new(
-        StaffingStateV1::try_new(next_week, pools)?,
+        StaffingStateV1::try_new(next_period, pools)?,
         receipts,
         labor,
     ))

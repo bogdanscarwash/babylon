@@ -1,18 +1,8 @@
 name: CI
 
-# Program 15 (The Gauntlet): the DEV FAST LANE.
-#
-# Tier model: push to dev = fast iteration with sanity checks (~8-10 min wall);
-# push to main = the full pipeline (main.yml); deep/slow legs run on a schedule
-# (per-leg nightly workflows). PRs to either branch get this fast lane only —
-# main.yml's pull_request trigger was deleted (R7, ADR181: identical check
-# names with admitted drift made required contexts ambiguous).
-#
-# House rules (Constitution III.11 — Loud Failure):
-#   - every job carries timeout-minutes (a hang must die loudly, not run 56min);
-#   - no continue-on-error except jobs explicitly named "(advisory)";
-#   - steps invoke the same mise tasks devs run locally — one invocation
-#     source of truth (the bootstrap composite pins the identical toolchain).
+# Dev validates changed executable inputs and a real PostgreSQL smoke.
+# Main PRs and manual runs execute the full native and database suites.
+# The final gate fails on missing, failed, or unexpectedly skipped jobs.
 
 on:
   push:
@@ -26,70 +16,51 @@ permissions:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  # ADR181 R2c: post-merge dev runs are NEVER cancelled — 22% were dying
-  # mid-flight (merges land faster than the wall), leaving 1 in 5 merged
-  # states unvalidated; a COMPLETED post-merge run is the layer that caught
-  # #392. PR runs still cancel on force-push (superseded head = dead work).
-  cancel-in-progress: ${{ github.ref != 'refs/heads/dev' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  fast-gate:
-    name: Fast Gate (hygiene, lint, format, imports, types, lock)
+  scope:
+    name: Select CI Scope
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 5
+    outputs:
+      rust: ${{ steps.scope.outputs.rust }}
+      python: ${{ steps.scope.outputs.python }}
+      postgres: ${{ steps.scope.outputs.postgres }}
+      full: ${{ steps.scope.outputs.full }}
+      plan: ${{ steps.scope.outputs.plan }}
+      pg-matrix: ${{ steps.scope.outputs.pg-matrix }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-
-      - uses: ./.github/actions/bootstrap-python
-
-      # Incremental mypy state. Key ends in the commit SHA so every run saves
-      # a fresh snapshot; restore-keys fall back to the newest same-lock cache.
-      # Speed only — mypy's verdict is identical warm or cold.
-      - name: Cache mypy incremental state
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
-          path: .mypy_cache
-          key: mypy-${{ runner.os }}-py3.12-${{ hashFiles('uv.lock') }}-${{ github.sha }}
-          restore-keys: |
-            mypy-${{ runner.os }}-py3.12-${{ hashFiles('uv.lock') }}-
+          fetch-depth: 0
+      - id: scope
+        run: python3 tools/ci_scope.py
 
-      - name: Repo hygiene gate
-        run: mise run check:hygiene
+  fast-gate:
+    name: Repository Checks
+    needs: scope
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/bootstrap-python
+      - name: Static checks
+        run: mise run check:static
 
-      - name: bevy/dynamic_linking fence (R1.4 — local-iteration-only, never in CI)
-        run: mise run check:dynamic-linking-fence
-
-      - name: Sentinel family (static gates — VIII.12; catalog DB-probe runs in nightly refdata)
-        run: mise run check:sentinels-static
-
-      - name: Public-surface baseline gate (__all__ vs pinned baseline)
-        run: mise run check:surface
-
-      - name: Lint (ruff check)
-        run: mise run lint:check
-
-      - name: Format (ruff format --check — blocking)
-        run: mise run format:check
-
-      - name: Import-boundary contracts
-        run: mise run lint:imports
-
-      - name: Type check (mypy strict)
-        run: mise run typecheck
-
-      - name: uv lock consistency
-        run: mise run check:lock
-
-  # M7 packaging flip (BD-5 / ADR150 Task 44): the in-tree rust/ client
-  # workspace gets the same CI-parity gate devs run locally. Single job, all
-  # cargo legs sequential inside `mise run ci:rust` (one target-dir lock —
-  # parallel legs only contend; machine-safety doctrine).
   rust-gate:
-    name: Rust Gate (fmt, clippy, test, doc — rust/ workspace)
+    name: Rust Validation
+    needs: scope
+    if: needs.scope.outputs.rust == 'true'
     runs-on: ubuntu-latest
     # Cold workspace compilation and tests can consume 20 minutes before
     # doctests, documentation, sentinels and the dependency audit finish.
     timeout-minutes: 45
+    # Retain filename/line backtraces in CI; local workspace debugger support
+    # keeps the full debug information configured by Cargo's dev/test defaults.
+    env:
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
+      CARGO_PROFILE_TEST_DEBUG: line-tables-only
     steps:
       # fetch-depth: 0 (full history + tags, matching ci.yml's own pattern at
       # ceremony-gate/gitleaks below): check:bsl-sentinels' citation-drift
@@ -125,7 +96,7 @@ jobs:
       - name: Install Rust test reporter
         uses: taiki-e/install-action@1ed6d7be6168f6c9046541087ff549b6bc581fdf # v2.87.2
         with:
-          tool: cargo-nextest@0.9.143
+          tool: cargo-nextest@0.9.143,cargo-deny@0.20.2
           fallback: none
 
       # Restore is intentionally separate from save. Pull requests can consume
@@ -154,16 +125,27 @@ jobs:
             rust/target/debug/examples/*.so
             rust/target/debug/examples/*.a
             rust/target/doc
-          key: >-
-            cargo-gate-${{ runner.os }}-v4-${{
-            hashFiles('rust/Cargo.lock', 'rust/rust-toolchain.toml') }}-${{
-            hashFiles('rust/**/*.rs', 'rust/**/Cargo.toml', '.mise.toml',
-            '.github/workflows/ci.yml') }}
-          restore-keys: |
-            cargo-gate-${{ runner.os }}-v4-${{ hashFiles('rust/Cargo.lock', 'rust/rust-toolchain.toml') }}-
-
-      - name: Rust full gate (canonical ci:rust task)
-        run: mise run ci:rust
+          key: "cargo-gate-${{ runner.os }}-v4-dev-${{ env.CARGO_PROFILE_DEV_DEBUG }}-test-${{ \
+               env.CARGO_PROFILE_TEST_DEBUG }}-${{ hashFiles('rust/Cargo.lock', 'rust/rust-toolchain.toml', \
+               'rust/Cargo.toml') }}-${{ hashFiles('rust/crates/**', '!rust/crates/**/target/**', \
+               'rust/*.toml', 'rust/.cargo/**', 'rust/.config/**', 'contracts/**', 'content/**', 'assets/**', \
+               'docker/postgres/**', 'docker-compose*.yml', 'src/babylon/data/reference/economy/**', \
+               'tests/fixtures/qcew_economics/**', 'tools/pr_merge.py', 'tools/pr_policy.py', \
+               'tools/qcew_county_economics_v1_source_manifest.json', 'tools/run_rust_postgres.sh', \
+               'tools/rust_test_report.py', '.mise.toml', '.github/**') }}"
+          restore-keys: "cargo-gate-${{ runner.os }}-v4-dev-${{ env.CARGO_PROFILE_DEV_DEBUG }}-test-${{ \
+                        env.CARGO_PROFILE_TEST_DEBUG }}-${{ hashFiles('rust/Cargo.lock', \
+                        'rust/rust-toolchain.toml', 'rust/Cargo.toml') }}-\n\
+                        "
+      - name: Rust validation
+        env:
+          FULL_QUALIFICATION: ${{ needs.scope.outputs.full }}
+        run: |
+          if [ "$FULL_QUALIFICATION" = true ]; then
+            mise run ci:rust
+          else
+            mise run rust:check-no-docs -- --dev
+          fi
 
       - name: Upload Rust test reports
         if: always()
@@ -180,10 +162,11 @@ jobs:
       # construction; the allowlist + manual rev-bump protocol is the
       # ceiling). Config: rust/deny.toml.
       - name: cargo-deny (advisories, bans, licenses, sources)
-        uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2
-        with:
-          manifest-path: rust/Cargo.toml
-          command: check advisories bans licenses sources
+        # Same pinned audit and all-feature scope, without a second Rust
+        # installation inside the action's container.
+        # The dynamic-linking fence admits this exact physical audit command.
+        # yamllint disable-line rule:line-length
+        run: cargo-deny --log-level warn --manifest-path rust/Cargo.toml --all-features check advisories bans licenses sources
 
       # Cache reusable compiler outputs, not multi-gigabyte test executables or
       # incremental state. Oversized caches never weaken the gate: validation
@@ -292,18 +275,21 @@ jobs:
     name: Baseline Ceremony Gate (§6.5 provenance)
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    if: github.event_name == 'pull_request'
+    needs: scope
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
       - name: Ceremony declarations present on baseline-touching commits
+        if: github.event_name == 'pull_request'
         run: >-
           python3 tools/check_baseline_ceremony.py
           --range "${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"
 
   test-unit:
-    name: Unit Tests (xdist, coverage gate)
+    name: Python Tooling Tests
+    needs: scope
+    if: needs.scope.outputs.python == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -327,7 +313,7 @@ jobs:
 
       - uses: ./.github/actions/bootstrap-python
 
-      - name: Unit shard (excludes ai/slow/reference-DB; engine/systems cov >= 80%)
+      - name: Retained Python unit contracts
         run: mise run test:unit-ci
 
       - name: Upload test results + coverage
@@ -338,74 +324,57 @@ jobs:
           path: reports/test-results/unit-ci/
           retention-days: 14
 
-  qa-regression:
-    name: Determinism Gate (byte-identical dense goldens)
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-
-      # The 5 regression scenarios are synthetic in-memory factories
-      # (no reference DB or Postgres) — proven by the Phase-0
-      # probe: byte-identical on hosted runners across CPU/glibc/Python.
-      - uses: ./.github/actions/bootstrap-python
-
-      - name: qa:regression (5 scenarios vs committed baselines)
-        run: mise run qa:regression
-
-      - name: qa:vault-regression (golden-vault byte-gate, in-process scenario — WO-53)
-        run: mise run qa:vault-regression
-
-      - name: Gate-coverage truth probe (declared evidence verified at gate cadence)
-        run: mise run check:gate-coverage-truth
-
   pg-integration-shards:
     name: PostgreSQL Contract (${{ matrix.focus }})
-    # The one-way cutover replaced the Python writer's integration subset with
-    # the task-owned Rust live matrix. The six focus boundaries preserve the
-    # complete PR contract while removing independent phases from the critical
-    # path. fail-fast stays disabled so every exact-head run yields a complete
-    # contract receipt even when one sibling fails.
-    # The seventh live focus, client_dossier, stays in the legacy-adopter
-    # runner script but leaves this matrix: Bevy compiles against system
-    # Wayland/X11/ALSA/udev headers, and the Director ruled (2026-09-04) that
-    # Bevy-dependent live lanes run on the dev box, not in CI. Its local
-    # exit-0 evidence rides in the PR body.
+    needs: scope
+    if: needs.scope.outputs.postgres == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 99
+    timeout-minutes: 55
     strategy:
       fail-fast: false
       max-parallel: 4
-      matrix:
-        focus:
-          - clean_bootstrap
-          - h3_atomicity
-          - rust_persistence_runtime
-          - installed_mutation
-          - archive_worker
-          - reader_role
+      matrix: ${{ fromJSON(needs.scope.outputs.pg-matrix) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - uses: ./.github/actions/bootstrap-persistence
+        id: persistence-cache
+        with:
+          cache-key: ${{ matrix.focus }}
+
+      - uses: ./.github/actions/build-postgres
+        id: postgres-image
 
       - name: Rust PostgreSQL contract
-        timeout-minutes: 69
+        timeout-minutes: 45
         env:
-          BABYLON_LEGACY_ADOPTER_LIVE_FOCUS: ${{ matrix.focus }}
-        run: tools/run_rust_legacy_adopter_pg.sh
+          BABYLON_POSTGRES_LIVE_FOCUS: ${{ matrix.focus }}
+          BABYLON_POSTGRES_IMAGE_ID: ${{ steps.postgres-image.outputs.image-id }}
+        run: tools/run_rust_postgres.sh
 
-  pg-integration:
-    name: Postgres Integration Tier (PG 17, pinned runtime)
-    needs: pg-integration-shards
-    if: always()
-    runs-on: ubuntu-latest
-    timeout-minutes: 1
-    steps:
-      - name: Require every PostgreSQL contract shard
-        run: test '${{ needs.pg-integration-shards.result }}' = success
+      - name: Save successful persistence cache
+        if: >-
+          success() && github.event_name != 'pull_request' &&
+          (github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/main') &&
+          steps.persistence-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          key: ${{ steps.persistence-cache.outputs.cache-key }}
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            rust/target/.rustc_info.json
+            rust/target/debug/.cargo-lock
+            rust/target/debug/.fingerprint
+            rust/target/debug/build
+            rust/target/debug/deps
+            rust/target/debug/babylon-runtime
+            rust/target/debug/babylon-runtime.d
 
   security:
+    needs: scope
+    if: needs.scope.outputs.python == 'true'
     # Blocking since 2026-07-11: item 41 closed the CVE wave (73 -> 5, the
     # residue in security/pip-audit-ignores.toml with reasons + expiries).
     name: Security Audit (pip-audit policy — blocking since item-41)
@@ -422,6 +391,7 @@ jobs:
         run: mise run security:pip-audit
 
   gitleaks:
+    needs: scope
     name: Secret Scan (gitleaks, full history)
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -434,6 +404,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   trivy-config:
+    needs: scope
     name: IaC Config Scan (trivy, HIGH+CRITICAL blocking)
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -448,3 +419,25 @@ jobs:
           skip-dirs: .pre-commit-cache
           trivyignores: .trivyignore
           cache: "true"
+
+  ci-gate:
+    name: CI Gate
+    needs:
+      - scope
+      - fast-gate
+      - ceremony-gate
+      - rust-gate
+      - test-unit
+      - security
+      - gitleaks
+      - trivy-config
+      - pg-integration-shards
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Require every selected job
+        env:
+          CI_NEEDS: ${{ toJSON(needs) }}
+        run: python3 tools/ci_scope.py --verify
