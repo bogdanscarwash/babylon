@@ -122,6 +122,7 @@ struct Coordinator<'a, W: Write, B: SessionBackend, D: ArchiveControl> {
     output: &'a mut W,
     scope: RuntimeSessionScopeV3,
     active: Option<Active<B, D>>,
+    last_request_id: u64,
 }
 impl<'a, W: Write, B: SessionBackend, D: ArchiveControl> Coordinator<'a, W, B, D> {
     fn new(output: &'a mut W) -> Self {
@@ -129,6 +130,7 @@ impl<'a, W: Write, B: SessionBackend, D: ArchiveControl> Coordinator<'a, W, B, D
             output,
             scope: RuntimeSessionScopeV3::default(),
             active: None,
+            last_request_id: 0,
         }
     }
 
@@ -188,6 +190,8 @@ impl<'a, W: Write, B: SessionBackend, D: ArchiveControl> Coordinator<'a, W, B, D
             Some(RuntimeSessionErrorCodeV3::UnsupportedVersion)
         } else if *scope != self.scope {
             Some(RuntimeSessionErrorCodeV3::SessionMismatch)
+        } else if request_id <= self.last_request_id {
+            Some(RuntimeSessionErrorCodeV3::InvalidRequest)
         } else {
             None
         };
@@ -195,6 +199,8 @@ impl<'a, W: Write, B: SessionBackend, D: ArchiveControl> Coordinator<'a, W, B, D
             self.refuse(Some(request_id), code)?;
             return Ok(None);
         }
+        // Scope-valid IDs are consumed even when dispatch fails; switches never reset them.
+        self.last_request_id = request_id;
         match request {
             RuntimeSessionRequestV3::Stop { request_id, .. } => return Ok(Some(request_id)),
             RuntimeSessionRequestV3::Switch { target, .. } => {

@@ -135,10 +135,14 @@ fn progress(
 }
 
 fn advance() -> RuntimeSessionRequestV3 {
+    advance_numbered(2)
+}
+
+fn advance_numbered(request_id: u64) -> RuntimeSessionRequestV3 {
     RuntimeSessionRequestV3::Advance {
         protocol_version: 3,
         scope: scope(1, A),
-        request_id: 1,
+        request_id,
         expected_tail: RuntimeSessionTailV3 {
             resolve_tick: 0,
             tick_content_hash: None,
@@ -158,7 +162,7 @@ fn refresh() -> RuntimeSessionRequestV3 {
     RuntimeSessionRequestV3::RefreshArchive {
         protocol_version: 3,
         scope: scope(1, A),
-        request_id: 31,
+        request_id: 3,
     }
 }
 
@@ -232,6 +236,7 @@ fn active_coordinator<'a, 'b, W: Write>(
         output,
         scope: scope(1, A),
         active: Some(Active::new(backend, archive)),
+        last_request_id: 1,
     }
 }
 fn serve_open<I: BufRead + Send + 'static, W: Write>(
@@ -241,7 +246,7 @@ fn serve_open<I: BufRead + Send + 'static, W: Write>(
     start: impl FnOnce(ArchiveEventSink) -> Result<Driver, RuntimeSessionErrorCodeV3>,
 ) -> Result<(), RuntimeSessionErrorCodeV3> {
     let input =
-        Cursor::new(wire(&[switching(RuntimeSessionScopeV3::default(), A, 100)])).chain(input);
+        Cursor::new(wire(&[switching(RuntimeSessionScopeV3::default(), A, 1)])).chain(input);
     let mut backend = Some(backend);
     let mut start = Some(start);
     serve(
@@ -285,7 +290,7 @@ fn completion_queued_inside_advance_cannot_precede_committed_acknowledgement() {
     assert!(matches!(rows[0], RuntimeSessionResponseV3::Ready { .. }));
     assert!(matches!(
         rows[1],
-        RuntimeSessionResponseV3::Committed { request_id: 1, .. }
+        RuntimeSessionResponseV3::Committed { request_id: 2, .. }
     ));
     assert!(matches!(
         rows[2],
@@ -340,12 +345,12 @@ fn explicit_refresh_uses_the_driver_and_preserves_its_request_identity() {
     let mut backend = backend();
     let mut output = Vec::new();
     run(wire(&[refresh(), stop()]), &mut backend, &mut output).unwrap();
-    assert_eq!(*backend.state.refreshes.lock().unwrap(), [31]);
+    assert_eq!(*backend.state.refreshes.lock().unwrap(), [3]);
     assert_eq!(backend.tick, 0);
     assert!(responses(&output).iter().any(|row| matches!(
         row,
         RuntimeSessionResponseV3::ArchiveProgress {
-            request_id: Some(31),
+            request_id: Some(3),
             durable_tick: 0,
             ..
         }
@@ -358,7 +363,12 @@ fn failed_commit_and_duplicate_tail_never_publish_a_second_week() {
         let mut backend = backend();
         backend.fail_commit = failed;
         let mut output = Vec::new();
-        run(wire(&[advance(), advance()]), &mut backend, &mut output).unwrap();
+        run(
+            wire(&[advance(), advance_numbered(3)]),
+            &mut backend,
+            &mut output,
+        )
+        .unwrap();
         let rows = responses(&output);
         assert_eq!(
             rows.iter()
@@ -617,7 +627,7 @@ fn full_refresh_queue_refuses_the_request_without_fabricating_progress() {
         [
             RuntimeSessionResponseV3::Ready { .. },
             RuntimeSessionResponseV3::Error {
-                request_id: Some(31),
+                request_id: Some(3),
                 code: RuntimeSessionErrorCodeV3::StorageBusy,
                 ..
             }

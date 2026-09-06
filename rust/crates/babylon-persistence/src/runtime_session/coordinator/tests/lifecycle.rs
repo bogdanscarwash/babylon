@@ -175,13 +175,13 @@ fn repeated_campaign_epochs_retire_each_driver_and_refuse_old_commands() {
     let initial_state = Arc::clone(&initial.state);
     let rows = lifecycle(
         &[
-            switching(RuntimeSessionScopeV3::default(), A, 10),
+            switching(RuntimeSessionScopeV3::default(), A, 1),
             advance(),
-            switching(scope(1, A), B, 11),
+            switching(scope(1, A), B, 3),
             advance(),
-            switching(scope(2, B), A, 12),
+            switching(scope(2, B), A, 4),
             advance(),
-            switching(scope(1, A), B, 13),
+            switching(scope(1, A), B, 5),
             stop(),
             stop_at(scope(3, A)),
         ],
@@ -238,7 +238,7 @@ fn repeated_campaign_epochs_retire_each_driver_and_refuse_old_commands() {
         .position(|row| {
             matches!(
                 row,
-                RuntimeSessionResponseV3::Switching { request_id: 11, .. }
+                RuntimeSessionResponseV3::Switching { request_id: 3, .. }
             )
         })
         .unwrap();
@@ -357,4 +357,181 @@ fn wire_targets_are_explicit_and_closed() {
         .unwrap()
         .insert("actions".into(), serde_json::json!([1]));
     assert!(serde_json::from_value::<RuntimeSessionRequestV3>(request).is_err());
+}
+
+#[test]
+fn zero_request_ids_cannot_switch_or_stop_before_initial_admission() {
+    let mut zero_stop = stop_at(RuntimeSessionScopeV3::default());
+    if let RuntimeSessionRequestV3::Stop { request_id, .. } = &mut zero_stop {
+        *request_id = 0;
+    }
+    let rows = lifecycle(
+        &[
+            switching(RuntimeSessionScopeV3::default(), A, 0),
+            zero_stop,
+            switching(RuntimeSessionScopeV3::default(), A, 1),
+            stop_at(scope(1, A)),
+        ],
+        vec![Ok(backend())],
+    );
+    assert!(matches!(rows.as_slice(), [
+        RuntimeSessionResponseV3::Hello { .. },
+        RuntimeSessionResponseV3::Error {
+            request_id: Some(0), code: RuntimeSessionErrorCodeV3::InvalidRequest,
+            scope: refused, tail: None,
+        },
+        RuntimeSessionResponseV3::Error {
+            request_id: Some(0), code: RuntimeSessionErrorCodeV3::InvalidRequest,
+            scope: stop_scope, tail: None,
+        },
+        RuntimeSessionResponseV3::Switching { request_id: 1, .. },
+        RuntimeSessionResponseV3::Ready { request_id: 1, .. },
+        RuntimeSessionResponseV3::Stopped { request_id: 99, .. },
+    ] if *refused == RuntimeSessionScopeV3::default() && *stop_scope == RuntimeSessionScopeV3::default()));
+}
+
+#[test]
+fn request_ids_remain_consumed_after_failed_admission_and_across_campaign_epochs() {
+    let rows = lifecycle(
+        &[
+            switching(RuntimeSessionScopeV3::default(), A, 10),
+            switching(scope(1, A), B, 10),
+            switching(scope(1, A), B, 11),
+            switching(scope(1, A), A, u64::MAX),
+            switching(scope(2, B), A, 11),
+            switching(scope(2, B), A, 12),
+            stop_at(scope(3, A)),
+        ],
+        vec![
+            Err(RuntimeSessionErrorCodeV3::CampaignAbsent),
+            Ok(backend()),
+            Ok(backend()),
+        ],
+    );
+    let errors: Vec<_> = rows
+        .iter()
+        .filter_map(|row| match row {
+            RuntimeSessionResponseV3::Error {
+                request_id,
+                scope,
+                code,
+                tail,
+            } => Some((*request_id, scope.clone(), *code, tail.is_some())),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        errors,
+        [
+            (
+                Some(10),
+                scope(1, A),
+                RuntimeSessionErrorCodeV3::CampaignAbsent,
+                false
+            ),
+            (
+                Some(10),
+                scope(1, A),
+                RuntimeSessionErrorCodeV3::InvalidRequest,
+                false
+            ),
+            (
+                Some(u64::MAX),
+                scope(2, B),
+                RuntimeSessionErrorCodeV3::SessionMismatch,
+                true
+            ),
+            (
+                Some(11),
+                scope(2, B),
+                RuntimeSessionErrorCodeV3::InvalidRequest,
+                true
+            ),
+        ]
+    );
+    let accepted: Vec<_> = rows
+        .iter()
+        .filter_map(|row| match row {
+            RuntimeSessionResponseV3::Switching {
+                request_id, scope, ..
+            } => Some((*request_id, scope.clone())),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        accepted,
+        [(10, scope(1, A)), (11, scope(2, B)), (12, scope(3, A))]
+    );
+    assert!(
+        matches!(rows.last(), Some(RuntimeSessionResponseV3::Stopped { request_id: 99, scope: final_scope }) if *final_scope == scope(3, A))
+    );
+}
+
+#[test]
+fn reused_or_lower_ids_cannot_advance_refresh_or_stop_a_current_scope() {
+    let backend = backend();
+    let state = Arc::clone(&backend.state);
+    let advanced_tail = RuntimeSessionTailV3 {
+        resolve_tick: 1,
+        tick_content_hash: Some(format!("{:064x}", 1)),
+    };
+    let rows = lifecycle(
+        &[
+            switching(RuntimeSessionScopeV3::default(), A, 1),
+            RuntimeSessionRequestV3::Advance {
+                protocol_version: 3,
+                scope: scope(1, A),
+                request_id: 2,
+                expected_tail: RuntimeSessionTailV3 {
+                    resolve_tick: 0,
+                    tick_content_hash: None,
+                },
+            },
+            RuntimeSessionRequestV3::Advance {
+                protocol_version: 3,
+                scope: scope(1, A),
+                request_id: 2,
+                expected_tail: advanced_tail.clone(),
+            },
+            RuntimeSessionRequestV3::RefreshArchive {
+                protocol_version: 3,
+                scope: scope(1, A),
+                request_id: 1,
+            },
+            RuntimeSessionRequestV3::Stop {
+                protocol_version: 3,
+                scope: scope(1, A),
+                request_id: 2,
+            },
+            stop_at(scope(1, A)),
+        ],
+        vec![Ok(backend)],
+    );
+    assert_eq!(state.tick.load(Ordering::SeqCst), 1);
+    assert!(state.refreshes.lock().unwrap().is_empty());
+    let errors: Vec<_> = rows
+        .iter()
+        .filter_map(|row| match row {
+            RuntimeSessionResponseV3::Error {
+                request_id,
+                scope,
+                code,
+                tail,
+            } => Some((*request_id, scope.clone(), *code, tail.clone())),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        errors,
+        [2, 1, 2].map(|id| (
+            Some(id),
+            scope(1, A),
+            RuntimeSessionErrorCodeV3::InvalidRequest,
+            Some(advanced_tail.clone())
+        ))
+    );
+    assert!(matches!(
+        rows.last(),
+        Some(RuntimeSessionResponseV3::Stopped { request_id: 99, .. })
+    ));
 }
