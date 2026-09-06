@@ -66,17 +66,11 @@ def test_rust_client_wheel_is_gone() -> None:
 
 
 def test_python_version_pin_consistency() -> None:
-    """One interpreter, declared everywhere (owner directive 2026-07-22).
-
-    .python-version is the source of truth for the MINOR version: uv reads it
-    when creating/selecting the venv, so a box without mise or the flake still
-    lands on the same interpreter line. The flake owns the PATCH version
-    (python312 from the rev-pinned nixpkgs-data — the sqlite 3.53.1 lockstep,
-    ADR098/ADR102). Every other pin must agree on the minor.
-    """
+    """Native mise and uv share an exact patch; static checkers share its minor."""
     pin = (ROOT / ".python-version").read_text(encoding="utf-8").strip()
-    assert pin == "3.12"
-    assert PYPROJECT["tool"]["mypy"]["python_version"] == pin
-    assert PYPROJECT["tool"]["ruff"]["target-version"] == "py" + pin.replace(".", "")
-    assert PYPROJECT["project"]["requires-python"].startswith(">=" + pin)
+    assert pin == "3.12.14"
+    minor = ".".join(pin.split(".")[:2])
+    assert PYPROJECT["tool"]["mypy"]["python_version"] == minor
+    assert PYPROJECT["tool"]["ruff"]["target-version"] == "py" + minor.replace(".", "")
+    assert PYPROJECT["project"]["requires-python"].startswith(">=" + minor)
     assert f'python = "{pin}"' in MISE

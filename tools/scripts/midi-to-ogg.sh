@@ -5,7 +5,6 @@
 set -e
 
 SOUNDFONT="${SOUNDFONT:-/usr/share/sounds/sf2/FluidR3_GM.sf2}"
-AUDIO_OUTPUT_DIR="${AUDIO_OUTPUT_DIR:-assets/audio}"
 
 INPUT="$1"
 if [ -z "$INPUT" ]; then
@@ -18,14 +17,8 @@ if ! command -v ffmpeg &> /dev/null; then
     exit 1
 fi
 
-BASENAME=$(basename "$INPUT" .mid)
-mkdir -p "$AUDIO_OUTPUT_DIR"
-
-if [ -z "$2" ]; then
-    OUTPUT="$AUDIO_OUTPUT_DIR/$BASENAME.ogg"
-else
-    OUTPUT="$2"
-fi
+OUTPUT="${2:-${INPUT%.mid}.ogg}"
+mkdir -p "$(dirname "$OUTPUT")"
 
 TEMP_WAV=$(mktemp --suffix=.wav)
 trap 'rm -f "$TEMP_WAV"' EXIT

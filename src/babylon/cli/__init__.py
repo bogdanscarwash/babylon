@@ -25,7 +25,7 @@ def _reexec_with_sealed_environment() -> None:
     variable pre-set: an :func:`os.execve` re-exec. It also pins the
     BLAS/OpenMP/rayon thread caps to ``1`` — the same five-variable pin
     ``tests/conftest.py`` (its ``_blas_var`` loop), ``.mise.toml``'s
-    ``[env]``, and ``flake.nix`` already enforce (deterministic FP
+    ``[env]`` already enforce (deterministic FP
     reduction order, Constitution III.7; see the dev-box-freeze history
     in ``CLAUDE.md``). The rayon variable covers rustworkx's centrality
     functions (``topology/graph_algorithms.py``), which parallelize via
@@ -66,8 +66,8 @@ def _reexec_with_sealed_environment() -> None:
         # W1.8: rustworkx centrality parallelizes via rayon above its
         # parallel_threshold (50 nodes) -- same per-core oversubscription
         # and FP-reduction-order determinism hazard as the BLAS vars above.
-        # Mirrors tests/conftest.py's `_blas_var` tuple / .mise.toml [env] /
-        # flake.nix -- kept in parity by
+        # Mirrors tests/conftest.py's `_blas_var` tuple / .mise.toml [env],
+        # kept in parity by
         # tests/unit/cli/test_launcher_reexec.py::
         # test_launcher_thread_vars_match_canonical_pin.
         "RAYON_NUM_THREADS",
@@ -113,14 +113,12 @@ def _register() -> None:
     avoid import cycles between subcommand modules and the seam."""
     from babylon.cli import doctor as doctor_cmd
     from babylon.cli import login as login_cmd
-    from babylon.cli import self_update as self_update_cmd
     from babylon.cli import telemetry as telemetry_cmd
     from babylon.cli import uninstall as uninstall_cmd
 
     app.command(name="doctor")(doctor_cmd.doctor)
     app.command(name="login")(login_cmd.login)
     app.command(name="telemetry")(telemetry_cmd.telemetry)
-    app.command(name="self-update")(self_update_cmd.self_update)
     app.command(name="uninstall")(uninstall_cmd.uninstall)
 
 

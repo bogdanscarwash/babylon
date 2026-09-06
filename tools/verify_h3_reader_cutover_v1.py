@@ -108,6 +108,29 @@ EXPECTED_FOUNDATION_BINDING: Final = {
 }
 RESULT_DOMAIN: Final = b"babylon.h3-reader-parity-result.v1\0"
 CORPUS_DOMAIN: Final = b"babylon.h3-reader-parity-vectors.v1\0"
+# ADR251's economic observations do not expose the retired H3 estate. Keep
+# this exact ownership census separate from the default-deny adapter prefix.
+NON_H3_OBSERVER_SURFACES: Final = {
+    "v_observer_economy_foundation_v1": (
+        "observer_economy_v1.sql",
+        frozenset({"src/observer_reader.rs", "src/reader.rs"}),
+    ),
+    "v_observer_county_economy_v1": (
+        "observer_economy_v1.sql",
+        frozenset({"src/observer_reader.rs", "src/reader.rs"}),
+    ),
+    "v_observer_material_state_v1": (
+        "observer_material_v1.sql",
+        frozenset(
+            {
+                "src/observer_material.rs",
+                "src/observer_reader.rs",
+                "src/reader.rs",
+                "tests/observer_material_live.rs",  # proves raw-view denial for known preview
+            }
+        ),
+    ),
+}
 LEGACY_IDENTITY_FIELDS: Final = {
     "h3_index",
     "home_hex",
@@ -380,7 +403,19 @@ def inspect_sql_literal(contract: dict[str, Any], path: Path, sql: str) -> list[
     ):
         return []
     lowered = sql.lower()
-    if "v_compat_" in lowered or "v_observer_" in lowered:
+    observer_names = re.findall(r"\bv_observer_[a-z0-9_]+\b", lowered)
+    for name in observer_names:
+        entry = NON_H3_OBSERVER_SURFACES.get(name)
+        if entry is None or relative not in {
+            f"rust/crates/babylon-persistence/{owner}" for owner in entry[1]
+        }:
+            raise H3ReaderCutoverRefusal("compatibility_read", str(path))
+        if any(schema != "public" for schema, _ in _relation_matches(lowered, name)):
+            raise H3ReaderCutoverRefusal("compatibility_read", str(path))
+    remaining = lowered
+    for name in observer_names:
+        remaining = re.sub(rf"\b{re.escape(name)}\b", "", remaining)
+    if "v_compat_" in lowered or "v_observer_" in remaining:
         raise H3ReaderCutoverRefusal("compatibility_read", str(path))
 
     reads: list[tuple[str, str]] = []
@@ -1140,6 +1175,25 @@ def _verify_contract_shape(contract: dict[str, Any]) -> None:
         raise H3ReaderCutoverRefusal("contract_shape", "terminal_disposition")
 
 
+def verify_non_h3_observer_surfaces(parent: dict[str, Any], root: Path) -> None:
+    """Prove the exact economic view declarations cannot read the retired H3 estate."""
+    migration_root = root / "rust/crates/babylon-persistence/migrations"
+    retired_relations = _parent_relation_names(parent)
+    for migration in sorted({entry[0] for entry in NON_H3_OBSERVER_SURFACES.values()}):
+        source = _bounded_text(migration_root / migration)
+        expected = {
+            name for name, entry in NON_H3_OBSERVER_SURFACES.items() if entry[0] == migration
+        }
+        declarations = re.findall(
+            r"\bCREATE\s+VIEW\s+public\.(v_observer_[a-z0-9_]+)\b", source, re.IGNORECASE
+        )
+        if len(declarations) != len(expected) or set(declarations) != expected:
+            raise H3ReaderCutoverRefusal("observer_declaration_drift", migration)
+        for relation in sorted(retired_relations):
+            if re.search(rf"\b{re.escape(relation)}\b", source, re.IGNORECASE):
+                raise H3ReaderCutoverRefusal("compatibility_read", f"{migration}: {relation}")
+
+
 def verify_reader_cutover_contract(contract: dict[str, Any], root: Path) -> list[tuple[str, str]]:
     """Verify the parent digest, exact inventory, and every production SQL read."""
     _verify_contract_shape(contract)
@@ -1149,6 +1203,7 @@ def verify_reader_cutover_contract(contract: dict[str, Any], root: Path) -> list
         root,
     )
     parent = _load_parent_contract(contract, root)
+    verify_non_h3_observer_surfaces(parent, root)
 
     expected = {(str(row["path"]), str(row["relation"])) for row in contract["read_edges"]}
     observed = _discover_dynamic_reader_inventory(contract, parent, root)

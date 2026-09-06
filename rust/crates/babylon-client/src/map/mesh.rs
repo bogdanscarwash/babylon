@@ -13,7 +13,10 @@ use bevy::asset::RenderAssetUsages;
 use bevy::mesh::{Indices, PrimitiveTopology};
 use bevy::prelude::*;
 
-const ATLAS_BYTES: &[u8] = include_bytes!("../../assets/map/county_atlas.bin");
+const ATLAS_BYTES: &[u8] = include_bytes!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../../assets/map/county_atlas.bin"
+));
 
 /// The exact fill-mesh vertex count the committed atlas tessellates to —
 /// `atlas.vertices().len()`, since `tessellate::tessellate` appends every
@@ -55,9 +58,14 @@ pub fn spawn_map_surface(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
+    observer: Option<Res<crate::observer::ObserverSession>>,
 ) {
     let atlas = CountyAtlas::parse(ATLAS_BYTES)
         .unwrap_or_else(|e| panic!("county atlas failed to parse at startup: {e}"));
+    if observer.is_some() {
+        commands.insert_resource(atlas);
+        return;
+    }
     let tessellation = tessellate::tessellate(&atlas);
 
     let fill_mesh = meshes.add(build_fill_mesh(&tessellation));

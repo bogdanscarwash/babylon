@@ -87,7 +87,9 @@ jobs:
   rust-gate:
     name: Rust Gate (fmt, clippy, test, doc — rust/ workspace)
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # Cold workspace compilation and tests can consume 20 minutes before
+    # doctests, documentation, sentinels and the dependency audit finish.
+    timeout-minutes: 45
     steps:
       # fetch-depth: 0 (full history + tags, matching ci.yml's own pattern at
       # ceremony-gate/gitleaks below): check:bsl-sentinels' citation-drift
@@ -111,7 +113,7 @@ jobs:
       - name: Set up tools with mise
         uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4
         with:
-          version: 2026.8.12
+          version: 2026.9.1
           cache: true
 
       - name: Install Rust toolchain (with rustfmt + clippy)

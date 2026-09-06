@@ -20,6 +20,8 @@ const LAYOUT_V1: u32 = 1;
 const ROW_KEY_DOMAIN: &[u8] = b"babylon.committed-tick-row-key.v1\0";
 const ROW_PAYLOAD_DOMAIN: &[u8] = b"babylon.committed-tick-row-payload.v1\0";
 const FOUNDATION_CONTENT_DOMAIN: &[u8] = b"babylon.campaign-foundation-content.v1\0";
+const FOUNDATION_CONTENT_DOMAIN_V2: &[u8] = b"babylon.campaign-foundation-content.v2\0";
+const MAX_FOUNDATION_SOURCE_V2: usize = 1_048_576;
 const CHECKPOINT_DOMAIN: &[u8] = b"babylon.full-checkpoint-manifest.v1\0";
 const EMPTY_PROOF_DOMAIN: &[u8] = b"babylon.semantic-empty-proof.v1\0";
 const MAX_UTF8_BYTES: usize = 65_535;
@@ -580,6 +582,129 @@ pub(crate) fn encode_foundation_content(
     output.write_byte(5)?;
     append_bytes(&mut output, reference_manifest)?;
     Ok(output.finish())
+}
+
+/// Explicit content successor. V1's source encoder and bounds remain frozen.
+pub(crate) fn encode_foundation_content_v2(
+    scenario_source: &str,
+    prelude_source: Option<&str>,
+    rule_source: &str,
+    defines: &[u8],
+    reference_manifest: &[u8],
+) -> Result<Vec<u8>, SemanticCodecErrorV1> {
+    foundation_content_v2_length(
+        scenario_source.len(),
+        prelude_source.map(str::len),
+        rule_source.len(),
+        defines.len(),
+        reference_manifest.len(),
+    )?;
+    let mut output = SemanticWriterV1::new("foundation content V2", MAX_BYTES);
+    output.write_all(FOUNDATION_CONTENT_DOMAIN_V2)?;
+    output.write_all(&2_u32.to_be_bytes())?;
+    output.write_byte(1)?;
+    append_foundation_source_v2(&mut output, scenario_source)?;
+    output.write_byte(2)?;
+    match prelude_source {
+        None => output.write_byte(0)?,
+        Some(source) => {
+            output.write_byte(1)?;
+            append_foundation_source_v2(&mut output, source)?;
+        }
+    }
+    output.write_byte(3)?;
+    append_foundation_source_v2(&mut output, rule_source)?;
+    output.write_byte(4)?;
+    append_bytes(&mut output, defines)?;
+    output.write_byte(5)?;
+    append_bytes(&mut output, reference_manifest)?;
+    Ok(output.finish())
+}
+
+fn foundation_content_v2_length(
+    scenario: usize,
+    prelude: Option<usize>,
+    rules: usize,
+    defines: usize,
+    reference: usize,
+) -> Result<usize, SemanticCodecErrorV1> {
+    if [Some(scenario), prelude, Some(rules)]
+        .into_iter()
+        .flatten()
+        .any(|length| length > MAX_FOUNDATION_SOURCE_V2)
+        || defines > MAX_BYTES
+        || reference > MAX_BYTES
+    {
+        return Err(SemanticCodecErrorV1::Refusal(
+            SemanticRefusalCodeV1::FieldByteBound,
+        ));
+    }
+    // Domain, version, five tags, four required length words and one option tag.
+    let mut length = FOUNDATION_CONTENT_DOMAIN_V2.len() + 4 + 5 + 4 * 4 + 1;
+    for field in [
+        scenario,
+        prelude.unwrap_or(0),
+        rules,
+        defines,
+        reference,
+        if prelude.is_some() { 4 } else { 0 },
+    ] {
+        length = length
+            .checked_add(field)
+            .ok_or(SemanticCodecErrorV1::CapacityOverflow {
+                field: "foundation content V2",
+            })?;
+    }
+    if length > MAX_BYTES {
+        return Err(SemanticCodecErrorV1::ByteLimit {
+            field: "foundation content V2",
+            actual: length,
+            maximum: MAX_BYTES,
+        });
+    }
+    Ok(length)
+}
+
+fn append_foundation_source_v2(
+    output: &mut SemanticWriterV1,
+    source: &str,
+) -> Result<(), SemanticCodecErrorV1> {
+    if source.len() > MAX_FOUNDATION_SOURCE_V2 || source.as_bytes().contains(&0) {
+        return Err(SemanticCodecErrorV1::Refusal(
+            SemanticRefusalCodeV1::FieldByteBound,
+        ));
+    }
+    output.write_all(&checked_u32(source.len(), "V2 source byte length")?.to_be_bytes())?;
+    output.write_all(source.as_bytes())
+}
+
+#[cfg(test)]
+mod foundation_content_v2_bounds_tests {
+    use super::*;
+
+    #[test]
+    fn complete_bundle_includes_framing_and_enforces_exact_aggregate_bound() {
+        let overhead = foundation_content_v2_length(0, None, 0, 0, 0).unwrap();
+        assert_eq!(
+            foundation_content_v2_length(0, None, 0, MAX_BYTES - overhead, 0),
+            Ok(MAX_BYTES)
+        );
+        assert!(
+            matches!(foundation_content_v2_length(0, None, 0, MAX_BYTES - overhead, 1),
+            Err(SemanticCodecErrorV1::ByteLimit { actual, maximum: MAX_BYTES, .. }) if actual == MAX_BYTES + 1)
+        );
+        assert_eq!(
+            foundation_content_v2_length(0, Some(0), 0, 0, 0),
+            Ok(overhead + 4)
+        );
+        let encoded =
+            encode_foundation_content_v2("scenario", Some("prelude"), "", b"defines", b"ref")
+                .unwrap();
+        assert_eq!(
+            encoded.len(),
+            foundation_content_v2_length(8, Some(7), 0, 7, 3).unwrap()
+        );
+    }
 }
 
 #[allow(clippy::too_many_arguments)]

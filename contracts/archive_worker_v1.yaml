@@ -25,11 +25,11 @@ authority:
     - The sweep selects only marker-backed unconsumed receipts in ascending
       resolve_tick order.
     - The sweep pages by keyset cursor strictly after the last scanned tick,
-      so a run of deferred receipts never starves a later materializable one.
+      so each bounded pass preserves receipt order.
     - One sweep consumes at most ARCHIVE_SWEEP_MAX_RECEIPTS_V1 receipts and
       scans at most ARCHIVE_SWEEP_MAX_SCAN_V1 pending receipts.
-    - An empty producer batch defers without consuming the receipt; a batch
-      with an undrained tail (empty head, nonzero remaining) stages without
+    - An empty producer batch with no remaining dirty pages consumes the
+      receipt; a batch with an undrained tail (empty head, nonzero remaining) stages without
       consuming, so nothing drops across sweeps.
     - A batch-identity mismatch stops the sweep with an error.
     - The first hard error stops the sweep; later scripted steps are never
@@ -52,8 +52,8 @@ constants:
   watermark_sql_sha256: a93cb9e0d2ff34e2ef58d6d4e5475ad44a313bb052e3d100df71e82521afe204
   sweep_max_receipts: 256
   sweep_max_scan: 4096
-  receipt_plans: [Defer, Materialize]
-  receipt_dispositions: [Deferred, Applied, AlreadyConsumed, Paged]
+  receipt_plans: [Consume, Stage]
+  receipt_dispositions: [Applied, AlreadyConsumed, Paged]
   error_variants_used: [InvalidVerifiedTick, ReceiptMismatch, StoredPageMismatch]
 
 bounds:
@@ -102,14 +102,17 @@ vector_kinds:
 amendments:
   - issue: PER-318
     summary: The dossier drain pages across sweeps. A producer returns the
-      leading page head plus the exact undrained tail count; a receipt defers
-      only when the batch is empty and nothing remains undrained. Plan and
-      sweep vectors carry paged_batch_ref_v1 so an empty batch with a
-      nonzero remaining count still materializes (staged, not consumed).
-      The disposition taxonomy gains Paged for a staged-not-consumed sweep
-      step. CountyDrainOverflow and PlaceDrainOverflow stay in the error
-      taxonomy as defense-only; the merged composite head never exceeds the
-      shared 256-page batch bound.
+      leading page head plus the exact undrained tail count. Plan and sweep
+      vectors carry paged_batch_ref_v1; a nonzero remaining count stages
+      without consuming. The Paged disposition preserves the bounded tail.
+  - issue: PER-320
+    summary: Supersedes the empty-batch deferral policy. A successful producer
+      with zero remaining dirty pages consumes even an empty batch through
+      the same transactional and idempotent claim path. Consume and Stage
+      replace Defer and Materialize; Deferred is removed. Page source ticks,
+      Markdown, atoms, and content hashes do not advance on quiet receipts.
+      Reader processing status derives the contiguous marker-backed consumed
+      prefix independently from page content provenance.
 
 excluded_authority:
   - PostgreSQL execution, transactions, or receipt consumption

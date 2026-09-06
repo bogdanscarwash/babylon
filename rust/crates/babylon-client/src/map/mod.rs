@@ -26,7 +26,10 @@ mod mesh;
 mod pick;
 
 pub use bands::{ActiveLens, LensChanged, LensPaint, LensSpec, LENSES, PANEL};
-pub use camera::{clamp_camera, closest_in_zoom, whole_map_zoom, MapBounds};
+pub use camera::{
+    clamp_camera, closest_in_zoom, closest_in_zoom_from_diagonal, whole_map_zoom,
+    zoom_speed_for_range, MapBounds, MapCamera,
+};
 pub use hud::{lens_cycle_footer, AbsenceBanner, CountyHudText, HudTick};
 pub use mesh::{spawn_map_surface, MapBorders, MapFill, MapSurface, EXPECTED_VERTEX_COUNT};
 pub use pick::{CountyIndex, CursorWorldPosition, HoveredCounty, SelectedCounty};
@@ -116,9 +119,10 @@ impl Plugin for MapPlugin {
             Startup,
             (
                 mesh::spawn_map_surface,
-                camera::spawn_camera,
+                camera::spawn_camera
+                    .run_if(not(resource_exists::<crate::observer::ObserverSession>)),
                 pick::build_county_index,
-                hud::spawn_hud,
+                hud::spawn_hud.run_if(not(resource_exists::<crate::observer::ObserverSession>)),
             ),
         );
         app.add_systems(
@@ -132,7 +136,8 @@ impl Plugin for MapPlugin {
                 pick::update_selection_outline,
                 cycle_lens_on_tab,
             )
-                .chain(),
+                .chain()
+                .run_if(not(resource_exists::<crate::observer::ObserverSession>)),
         );
     }
 }
@@ -182,6 +187,28 @@ mod tests {
         mut count: ResMut<LensChangedCount>,
     ) {
         count.0 += messages.read().count();
+    }
+
+    #[test]
+    fn observer_composition_does_not_run_legacy_tab_lens_shortcut() {
+        let mut app = App::new();
+        app.add_plugins((MinimalPlugins, AssetPlugin::default()))
+            .insert_resource(crate::observer::ObserverSession::new(
+                babylon_persistence::CampaignId::from_uuid(uuid::Uuid::nil()),
+            ))
+            .add_plugins(MapPlugin)
+            .init_resource::<LensChangedCount>()
+            .add_systems(Update, count_lens_changed.after(cycle_lens_on_tab));
+        app.update();
+        let before = *app.world().resource::<ActiveLens>();
+        // Tab belongs to observer focus. F3's historical admin panel is not
+        // part of this map plugin or the current observer composition.
+        for key in [KeyCode::Tab, KeyCode::F3] {
+            press_key_via_real_event(&mut app, key);
+            app.update();
+            assert_eq!(*app.world().resource::<ActiveLens>(), before);
+        }
+        assert_eq!(app.world().resource::<LensChangedCount>().0, 0);
     }
 
     #[test]

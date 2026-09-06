@@ -65,6 +65,10 @@ class TestSyntheticViolations:
         tracked = ["src/a.py", "tests/b.py", "README.md", "pyproject.toml"]
         assert check_top_level_allowlist(tracked) == []
 
+    def test_allowlist_admits_only_the_canonical_mise_lock(self) -> None:
+        tracked = ["mise.lock", "mise.lock.bak", "unapproved.lock"]
+        assert check_top_level_allowlist(tracked) == ["mise.lock.bak", "unapproved.lock"]
+
     def test_allowlist_admits_contracts_root_only(self) -> None:
         tracked = [
             "contracts/relational_territory_dossier_v1.yaml",
@@ -90,6 +94,27 @@ class TestSyntheticViolations:
         ]
         violations = check_large_non_lfs_blobs(lines)
         assert violations == ["tests/fat_fixture.json (2097152 bytes)"]
+
+    @pytest.mark.parametrize("theme", ["phi", "panopticon"])
+    def test_embedded_themes_have_an_exact_two_mib_budget(self, theme: str) -> None:
+        path = f"assets/music/babylon_theme_{theme}.ogg"
+        boundary = 2_097_152
+        assert check_large_non_lfs_blobs([f"100644 blob abc123 {boundary}\t{path}"]) == []
+        assert check_large_non_lfs_blobs([f"100644 blob abc123 {boundary + 1}\t{path}"]) == [
+            f"{path} ({boundary + 1} bytes)"
+        ]
+
+    def test_theme_budget_does_not_admit_other_music_or_near_names(self) -> None:
+        paths = [
+            "assets/music/babylon_theme_phi.ogg.bak",
+            "assets/music/babylon_theme_other.ogg",
+            "assets/music/unrelated.ogg",
+            "other/assets/music/babylon_theme_phi.ogg",
+        ]
+        size = 1_048_577
+        assert check_large_non_lfs_blobs(
+            [f"100644 blob abc123 {size}\t{path}" for path in paths]
+        ) == sorted(f"{path} ({size} bytes)" for path in paths)
 
     def test_lfs_pointer_passes(self) -> None:
         lines = [

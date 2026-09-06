@@ -206,7 +206,10 @@ pub struct LensChanged;
 // fixtures directly from the embedded bytes, so the const stays, scoped to
 // `cfg(test)` since nothing outside tests reads it anymore.
 #[cfg(test)]
-const ATLAS_BYTES: &[u8] = include_bytes!("../../assets/map/county_atlas.bin");
+const ATLAS_BYTES: &[u8] = include_bytes!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../../assets/map/county_atlas.bin"
+));
 
 /// One pass, one buffer, no mesh rebuild — reads whichever `LensReading`
 /// `ActiveLens` indexes out of `CurrentLensData` (Task 8; indexed rather

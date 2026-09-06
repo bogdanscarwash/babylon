@@ -8,7 +8,7 @@ resolver that walks the §A7.6 order of precedence:
     bundled llama-server  →  detected external (Ollama et al.)
                           →  Cloudflare if keyed  →  mute
 
-Design commitments, from the nix-player-channel and local-first docs:
+Provider commitments, preserved by ADR252 native installation:
 
 * **The seam is the wire protocol.** llama-server, Ollama, and the
   ``babylon-api`` Worker all speak OpenAI-compatible ``/v1``. Generation

@@ -10,6 +10,9 @@
 
 use std::str::FromStr;
 
+#[path = "support/legacy_archive.rs"]
+mod legacy_archive;
+
 use babylon_bsl::rule_pipeline::split_content;
 use babylon_bsl::rules_hash_of;
 use babylon_bsl::structural_verbs::CollectingSink;
@@ -21,8 +24,8 @@ use babylon_kernel::ContentDigest;
 use babylon_persistence::{
     michigan_dynamic_hex_foundation_v1, validate_legacy_connection_target,
     ArchiveDossierProducerV1, ArchiveMaterializeDispositionV1, ArchiveMaterializeModeV1,
-    ArchiveReceiptDispositionV1, ArchiveSchemaDispositionV1, ArchiveWorkerV1, CampaignId,
-    CompositeArchiveDossierProducerV1, CountyDossierProducerV1, DurableReplayRuntimeV2,
+    ArchiveReceiptDispositionV1, ArchiveSchemaDispositionV1, ArchiveSubjectKindV1, ArchiveWorkerV1,
+    CampaignId, CompositeArchiveDossierProducerV1, CountyDossierProducerV1, DurableReplayRuntimeV2,
     FoundationContentBundleV1, PendingArchiveReceiptV1, PlaceDossierProducerV1,
     SemanticArchiveErrorV1, SemanticArchiveStoreV1,
 };
@@ -244,15 +247,15 @@ impl LivePlaceTarget {
         let database = TestDatabase::create_from_template(&base, &template, label);
         let config = database.config(&base);
         let campaign_id = CampaignId::from_uuid(Uuid::from_u128(campaign_uuid));
+        let store = SemanticArchiveStoreV1::new(&config);
+        match store.install_schema().expect("Archive schema installs") {
+            ArchiveSchemaDispositionV1::Installed | ArchiveSchemaDispositionV1::AlreadyCurrent => {}
+        }
         let (session, bundle) = runtime_fixture_with_seed(WORKER_SEED);
         let mut runtime = DurableReplayRuntimeV2::create(&config, campaign_id, session, bundle)
             .expect("runtime constructs after activation");
         commit_ticks(&mut runtime, tick_count);
         drop(runtime);
-        let store = SemanticArchiveStoreV1::new(&config);
-        match store.install_schema().expect("Archive schema installs") {
-            ArchiveSchemaDispositionV1::Installed | ArchiveSchemaDispositionV1::AlreadyCurrent => {}
-        }
         Self {
             database,
             config,
@@ -270,7 +273,7 @@ fn archive_page_count(config: &Config, campaign_id: CampaignId, subject_kind: &s
         .connect(NoTls)
         .expect("page count connection")
         .query_one(
-            "SELECT pg_catalog.count(*) FROM babylon_meta.archive_page_v1 \
+            "SELECT pg_catalog.count(DISTINCT subject_id) FROM babylon_meta.archive_page_revision_v2 \
              WHERE campaign_id = $1::uuid AND subject_kind = $2::text",
             &[campaign_id.as_uuid(), &subject_kind],
         )
@@ -302,8 +305,8 @@ fn place_page_rows(config: &Config, campaign_id: CampaignId) -> Vec<(String, i64
         .connect(NoTls)
         .expect("place page rows connection")
         .query(
-            "SELECT subject_id, verified_tick, markdown FROM babylon_meta.archive_page_v1 \
-             WHERE campaign_id = $1::uuid AND subject_kind = 'place' ORDER BY subject_id",
+            "SELECT DISTINCT ON(subject_id) subject_id, source_tick, markdown FROM babylon_meta.archive_page_revision_v2 \
+             WHERE campaign_id = $1::uuid AND subject_kind = 'place' ORDER BY subject_id,effective_tick DESC,origin DESC",
             &[campaign_id.as_uuid()],
         )
         .expect("place page rows query")
@@ -572,9 +575,7 @@ fn live_composite_producer_drains_the_backlog_county_first() {
         .expect("rerun sweep reconciles");
     assert_eq!(rerun.paged_count(), 0);
     assert!(
-        dispositions(&rerun)
-            .iter()
-            .all(|(_, disposition)| *disposition == ArchiveReceiptDispositionV1::Deferred),
+        dispositions(&rerun).is_empty(),
         "settled receipts never republish"
     );
     assert_eq!(
@@ -616,6 +617,7 @@ fn live_staged_batch_restages_without_double_writes() {
         .produce(
             *target.campaign_id.as_uuid(),
             &receipt,
+            &knowledge_at(&target.config, target.campaign_id, receipt.resolve_tick()),
             MAX_PAGES_PER_RECEIPT,
         )
         .expect("allowlisted produce drains whole");
@@ -729,6 +731,7 @@ fn live_staged_batch_refuses_tampered_consumption_claim() {
         .produce(
             *target.campaign_id.as_uuid(),
             &receipt,
+            &knowledge_at(&target.config, target.campaign_id, receipt.resolve_tick()),
             MAX_PAGES_PER_RECEIPT,
         )
         .expect("allowlisted produce drains whole");
@@ -787,6 +790,8 @@ fn live_installer_upgrades_the_legacy_page_provenance_anchor() {
         1,
     );
 
+    legacy_archive::restore_legacy_heads(&target.config);
+
     // Re-anchor the page provenance at the consumption marker, exactly the
     // pre-PER-318 shape, to prove the installer upgrades an installed schema.
     let legacy_fk_targets_consumption: bool = target
@@ -838,7 +843,7 @@ fn live_installer_upgrades_the_legacy_page_provenance_anchor() {
             "SELECT confrelid = 'babylon_state.archive_dirty_receipt_v1'::pg_catalog.regclass \
              FROM pg_catalog.pg_constraint \
              WHERE conname = 'archive_page_v1_campaign_id_source_resolve_tick_fkey' \
-               AND conrelid = 'babylon_meta.archive_page_v1'::pg_catalog.regclass",
+               AND conrelid = 'babylon_meta.archive_page_retired_v1'::pg_catalog.regclass",
             &[],
         )
         .expect("upgrade check lookup")
@@ -901,15 +906,15 @@ fn live_place_producer_drains_allowlisted_pages_and_reruns_clean() {
             .collect::<Vec<_>>(),
         vec![
             (1, ArchiveReceiptDispositionV1::Applied),
-            (2, ArchiveReceiptDispositionV1::Deferred),
+            (2, ArchiveReceiptDispositionV1::Applied),
         ],
-        "one receipt publishes every allowlisted place; the next defers clean"
+        "one receipt publishes every allowlisted place; the next verifies unchanged content"
     );
-    assert_eq!(report.verified_tick(), 1);
+    assert_eq!(report.verified_tick(), 2);
     assert_eq!(place_page_count(&target.config, target.campaign_id), 5);
     assert_eq!(
         receipt_consumption_count(&target.config, target.campaign_id),
-        1
+        2
     );
 
     let rows = place_page_rows(&target.config, target.campaign_id);
@@ -940,20 +945,20 @@ fn live_place_producer_drains_allowlisted_pages_and_reruns_clean() {
     }
 
     // A rerun reconciles without duplicate or republished pages: the
-    // unconsumed deferred receipt re-defers, nothing is rewritten.
+    // settled receipts remain consumed and no content is rewritten.
     let rerun = worker
         .sweep_once(target.campaign_id, &producer)
         .expect("rerun sweep reconciles");
     assert_eq!(
         dispositions(&rerun),
-        vec![(2, ArchiveReceiptDispositionV1::Deferred)],
-        "the still-pending receipt re-defers clean instead of republishing"
+        vec![],
+        "the settled receipts need no further work"
     );
-    assert_eq!(rerun.verified_tick(), 1);
+    assert_eq!(rerun.verified_tick(), 2);
     assert_eq!(place_page_count(&target.config, target.campaign_id), 5);
     assert_eq!(
         receipt_consumption_count(&target.config, target.campaign_id),
-        1
+        2
     );
     for (_, verified_tick, _) in place_page_rows(&target.config, target.campaign_id) {
         assert_eq!(verified_tick, 1, "rerun never republishes a clean page");
@@ -963,7 +968,7 @@ fn live_place_producer_drains_allowlisted_pages_and_reruns_clean() {
 
 #[test]
 #[ignore = "requires the task-owned disposable PostgreSQL runtime and committed ticks"]
-fn live_place_producer_foundation_grants_publish_revealed_page_and_rerun_defers_clean() {
+fn live_place_producer_foundation_grants_publish_revealed_page_and_rerun_is_idle() {
     let target = LivePlaceTarget::create(
         "placeproducerrefresh",
         0x2200_0000_0000_0000_0000_0000_0000_00b4,
@@ -985,8 +990,8 @@ fn live_place_producer_foundation_grants_publish_revealed_page_and_rerun_defers_
         dispositions(&first),
         vec![
             (1, ArchiveReceiptDispositionV1::Applied),
-            (2, ArchiveReceiptDispositionV1::Deferred),
-            (3, ArchiveReceiptDispositionV1::Deferred),
+            (2, ArchiveReceiptDispositionV1::Applied),
+            (3, ArchiveReceiptDispositionV1::Applied),
         ]
     );
     let rows = place_page_rows(&target.config, target.campaign_id);
@@ -994,7 +999,7 @@ fn live_place_producer_foundation_grants_publish_revealed_page_and_rerun_defers_
     assert_eq!(place_page_count(&target.config, target.campaign_id), 1);
     assert_eq!(
         receipt_consumption_count(&target.config, target.campaign_id),
-        1
+        3
     );
 
     // The revealed page settles: reruns reconcile without further writes.
@@ -1003,17 +1008,43 @@ fn live_place_producer_foundation_grants_publish_revealed_page_and_rerun_defers_
         .expect("settled sweep reconciles");
     assert_eq!(
         dispositions(&settled),
-        vec![
-            (2, ArchiveReceiptDispositionV1::Deferred),
-            (3, ArchiveReceiptDispositionV1::Deferred),
-        ],
-        "the revealed page settles; the pending receipts re-defer clean"
+        vec![],
+        "the revealed page and quiet receipt prefix stay settled"
     );
-    assert_eq!(settled.verified_tick(), 1);
+    assert_eq!(settled.verified_tick(), 3);
     assert_eq!(place_page_count(&target.config, target.campaign_id), 1);
     assert_eq!(
         receipt_consumption_count(&target.config, target.campaign_id),
-        1
+        3
     );
     target.finish();
+}
+
+fn knowledge_at(
+    config: &Config,
+    campaign: CampaignId,
+    tick: u64,
+) -> babylon_persistence::ArchiveKnowledgeV1 {
+    let rows=config.connect(NoTls).expect("knowledge fixture connection").query(
+        "SELECT subject_kind,subject_id,grant_key,granted_tick,provenance_source_id,provenance_locator FROM babylon_meta.archive_knowledge_grant_v1 WHERE campaign_id=$1 AND granted_tick<=$2 AND subject_kind IN ('county','place') ORDER BY subject_kind,subject_id,grant_key", &[campaign.as_uuid(), &i64::try_from(tick).expect("fixture tick")]).expect("fixture exact knowledge");
+    let grants = rows
+        .iter()
+        .map(|row| {
+            let kind = match row.get::<_, &str>(0) {
+                "county" => ArchiveSubjectKindV1::County,
+                "place" => ArchiveSubjectKindV1::Place,
+                _ => panic!("closed fixture page kind"),
+            };
+            babylon_persistence::ArchiveKnowledgeGrantV1::try_new(
+                babylon_persistence::ArchivePageRefV1::try_new(kind, row.get(1))
+                    .expect("fixture page"),
+                row.get(2),
+                u64::try_from(row.get::<_, i64>(3)).expect("fixture grant tick"),
+                babylon_persistence::ArchiveCitationV1::try_new(row.get(4), row.get(5))
+                    .expect("fixture citation"),
+            )
+            .expect("fixture grant")
+        })
+        .collect();
+    babylon_persistence::ArchiveKnowledgeV1::try_new(grants).expect("fixture knowledge")
 }

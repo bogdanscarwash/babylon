@@ -544,7 +544,10 @@ impl CountyAtlas {
 mod tests {
     use super::*;
 
-    const ATLAS_BYTES: &[u8] = include_bytes!("../assets/map/county_atlas.bin");
+    const ATLAS_BYTES: &[u8] = include_bytes!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../../assets/map/county_atlas.bin"
+    ));
 
     /// Re-stamps `content_hash` after a structural mutation elsewhere in
     /// the buffer, so a rejection test isolates the ONE check it targets

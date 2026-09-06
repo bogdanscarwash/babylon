@@ -1,0 +1,57 @@
+meta:
+  contract: MichiganMaterialScenarioV1
+  version: 1
+  issue: PER-10
+  scope: Bounded observer demonstration using the exact material circuit V2
+
+artifacts:
+  - path: contracts/fixtures/michigan_industry_baseline_v1.json
+    sha256: eb486d7e11b8b63fc58c53ab918eff84b341b293a66faf422ddb9304fb2b553e
+    evidence_class: Observed
+  - path: contracts/fixtures/michigan_material_scenario_v1.json
+    sha256: 5e09fa210c34cd1033d35bf9cc626bd06b3b536e016b005ed53e27421ff9b5ca
+    evidence_class: Designed
+
+classifications:
+  county_and_industry_labels_and_qcew_2024_baselines: Observed
+  physical_recipe_inventory_labor_demand_capacity_and_delays: Designed
+  transition_receipts_and_committed_inventory: Derived
+
+presets:
+  - id: michigan-material-standard-v1
+    sheet_transfer_travel_weeks: 1
+  - id: michigan-material-delayed-v1
+    sheet_transfer_travel_weeks: 3
+horizon_ticks: 16
+id_domain: babylon.michigan-material.v1
+id_encoding: SHA-256 of UTF-8 domain, NUL, kind, NUL, stable key
+
+invariants:
+  - Both presets have byte-identical initial material states after replacing
+    the sheet-transfer route duration. Inventories, recipes, capacities,
+    labor budgets, demand, identities and other routes are equal.
+  - Capacities and labor budgets are declared for weeks 1 through 16. The
+    authoritative session refuses advances beyond this finite horizon.
+  - Sites represent county-industry aggregates. Logistics nodes are abstract
+    accounts attached to these sites, without factory coordinates or H3 cells.
+  - The five private-industry rows are unsuppressed QCEW annual 2024 records.
+    Their county CSV hashes match the checked 83-county source manifest.
+    Suppressed rows and their zero placeholders are refused as evidence.
+  - Observed employment is an annual average of jobs. It does not determine
+    Designed labor hours, capacity, inventory, production or class movement.
+  - The metal chain consumes billet into sheet, sheet into panels, and panels
+    into subassemblies. The independent food chain consumes grain into meal
+    and meal into packaged meal. All recipe quantities are explicit units.
+  - Subassemblies and packaged meal remain unsold on-hand terminal inventory.
+    No terminal consumption, payment, money or household demand is invented.
+  - Quantity realization follows delivered intermediate orders and is never
+    labeled payment. Supplier relations and route delays are Designed.
+  - Delivered inputs alter the following week's production commitments.
+    Changing the sheet route delay leaves the food trajectory unchanged.
+
+acceptance:
+  - Checked artifacts decode without acquisition files or network access.
+  - Equal preset bytes produce equal canonical states and transition bytes.
+  - The twins diverge in downstream production after differing deliveries.
+  - The unrelated food inventories, production, orders and freight stay equal.
+  - Restart decoding at dispatch, transit and arrival preserves continuation.

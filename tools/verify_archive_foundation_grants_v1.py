@@ -6,9 +6,8 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import struct
 from pathlib import Path
-from typing import Any
+from typing import Any, TypedDict
 
 import yaml
 
@@ -25,6 +24,7 @@ MAX_CITATION_SOURCE_ID_BYTES = 128
 MAX_CITATION_LOCATOR_BYTES = 4_096
 MAX_SPATIAL_FIXTURE_BYTES = 4_194_304
 MAX_GLOSSARY_FIXTURE_BYTES = 65_536
+MAX_QCEW_ARTIFACT_BYTES = 1_048_576
 MAX_TEXT_BYTES = 255
 FIXTURE_MAGIC = b"BABYLONSPATREF1\x00"
 FIXTURE_VERSION = 1
@@ -36,9 +36,54 @@ COMPILED_META = {
     "issue": "PER-23",
     "digest": "SHA-256 diagnostic; exact bytes govern retry equality",
 }
-COMPILED_CONSTANTS = {
+
+
+class FoundationGrantConstants(TypedDict):
+    """Exact types of the compiled contract's heterogeneous constant fields."""
+
+    grant_tick: int
+    county_grant_keys: list[str]
+    county_qcew_grant_keys: list[str]
+    qcew_source_id: str
+    qcew_locator_prefix: str
+    qcew_artifact_path: str
+    qcew_artifact_sha256: str
+    place_grant_keys: list[str]
+    concept_grant_keys: list[str]
+    county_source_id: str
+    county_locator_prefix: str
+    place_identity_source_id: str
+    place_identity_locator_prefix: str
+    place_containment_source_id: str
+    place_containment_locator_prefix: str
+    concept_source_id: str
+    concept_locator_prefix: str
+    michigan_geoid_prefix: str
+    statewide_residual_county_fips: str
+    expected_counties: int
+    expected_places: int
+    expected_concepts: int
+    expected_grant_rows: int
+    spatial_fixture_digest: str
+    glossary_fixture_path: str
+    glossary_fixture_sha256: str
+    semantic_domain_ascii_nul: str
+    semantic_sha256: str
+
+
+COMPILED_CONSTANTS: FoundationGrantConstants = {
     "grant_tick": 0,
     "county_grant_keys": ["subject", "identity", "containment"],
+    "county_qcew_grant_keys": [
+        "qcew-establishments",
+        "qcew-employment",
+        "qcew-total-annual-wages",
+        "qcew-average-weekly-wage",
+    ],
+    "qcew_source_id": "qcew-county-economics-v1",
+    "qcew_locator_prefix": "qcew_county_economics_mi_2024.csv.gz#county_geoid=",
+    "qcew_artifact_path": "src/babylon/data/reference/economy/qcew_county_economics_mi_2024.csv.gz",
+    "qcew_artifact_sha256": "116affb2998c6c0259d5bf14840f99f835d7e0733aa0b4f4c60a257b2723cd16",
     "place_grant_keys": ["subject", "identity", "containment"],
     "concept_grant_keys": ["subject", "identity"],
     "county_source_id": "h3-estate-contract-v1",
@@ -56,12 +101,12 @@ COMPILED_CONSTANTS = {
     "expected_counties": 83,
     "expected_places": 745,
     "expected_concepts": 8,
-    "expected_grant_rows": 2_500,
+    "expected_grant_rows": 2_832,
     "spatial_fixture_digest": ("dea8a368d5b7c5a0f1263af2945ffdd94e3914394ec579ca28508661e4464454"),
     "glossary_fixture_path": GLOSSARY_FIXTURE_PATH,
     "glossary_fixture_sha256": ("f47e289dc4e7a11c595f0e42643e352e255775c77dde3a7ed35a91de8d84d85a"),
     "semantic_domain_ascii_nul": "babylon.archive-foundation-grants.v1",
-    "semantic_sha256": ("d1c51755b30f64064a26b66fd5267e0a151377f023b96734d1ff5b9a7eefc20d"),
+    "semantic_sha256": ("9bb3cdda37dc3dee59242fcfe08f6c3f5bac01ff433988383d459fa0df9dfc65"),
 }
 COMPILED_BOUNDS = {
     "contract_bytes": MAX_CONTRACT_BYTES,
@@ -71,6 +116,7 @@ COMPILED_BOUNDS = {
     "citation_locator_bytes": MAX_CITATION_LOCATOR_BYTES,
     "spatial_fixture_bytes": MAX_SPATIAL_FIXTURE_BYTES,
     "glossary_fixture_bytes": MAX_GLOSSARY_FIXTURE_BYTES,
+    "qcew_artifact_bytes": MAX_QCEW_ARTIFACT_BYTES,
 }
 COMPILED_LAYOUTS = {
     "grant_row_v1": {
@@ -159,10 +205,10 @@ class _FixtureCursor:
         return chunk
 
     def u16(self, field: str) -> int:
-        return struct.unpack(">H", self.take(2, field))[0]
+        return int.from_bytes(self.take(2, field), "big")
 
     def u32(self, field: str) -> int:
-        return struct.unpack(">I", self.take(4, field))[0]
+        return int.from_bytes(self.take(4, field), "big")
 
     def ascii(self, length: int, field: str) -> str:
         raw = self.take(length, field)
@@ -190,6 +236,13 @@ def load_spatial_subjects(root: Path) -> tuple[list[tuple[str, str]], list[str]]
     digest = hashlib.sha256(data).hexdigest()
     if digest != COMPILED_CONSTANTS["spatial_fixture_digest"]:
         raise FoundationGrantsRefusal("spatial_fixture_digest", "composite")
+    qcew = _bounded_file_bytes(
+        root / COMPILED_CONSTANTS["qcew_artifact_path"],
+        MAX_QCEW_ARTIFACT_BYTES,
+        "qcew_artifact_too_large",
+    )
+    if hashlib.sha256(qcew).hexdigest() != COMPILED_CONSTANTS["qcew_artifact_sha256"]:
+        raise FoundationGrantsRefusal("qcew_artifact_digest", "county economics")
     cursor = _FixtureCursor(data)
     if cursor.take(16, "magic") != FIXTURE_MAGIC:
         raise FoundationGrantsRefusal("spatial_fixture_shape", "magic")
@@ -294,6 +347,16 @@ def build_grant_rows(
                     key,
                     constants["county_source_id"],
                     f"{constants['county_locator_prefix']}{geoid}",
+                )
+            )
+        for key in constants["county_qcew_grant_keys"]:
+            rows.append(
+                (
+                    "county",
+                    geoid,
+                    key,
+                    constants["qcew_source_id"],
+                    f"{constants['qcew_locator_prefix']}{geoid}&sha256={constants['qcew_artifact_sha256']}",
                 )
             )
     for geoid in places:
@@ -417,8 +480,8 @@ def main() -> int:
         counties, places = load_spatial_subjects(root)
         concept_ids = load_concept_ids(root / GLOSSARY_FIXTURE_PATH)
         errors = verify_all(contract, counties, places, concept_ids)
-    except FoundationGrantsRefusal as error:
-        print(error)
+    except FoundationGrantsRefusal as refusal:
+        print(refusal)
         return 1
     for error in errors:
         print(error)

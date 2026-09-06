@@ -10,6 +10,16 @@
 
 use std::str::FromStr;
 
+#[path = "support/archive_reader.rs"]
+mod archive_reader;
+#[path = "support/legacy_archive.rs"]
+mod legacy_archive;
+use archive_reader::{scope_at, with_reader};
+use babylon_persistence::archive_revision::{
+    ArchiveDossierBoundsV2, ArchiveDossierPageV2, ArchiveDossierPendingV2, ArchiveDossierStateV2,
+    ArchiveDossierUnavailableV2, ArchiveReadScopeV2,
+};
+
 use babylon_bsl::rule_pipeline::split_content;
 use babylon_bsl::rules_hash_of;
 use babylon_bsl::structural_verbs::CollectingSink;
@@ -278,15 +288,15 @@ impl LiveCountyTarget {
         let database = TestDatabase::create_from_template(&base, &template, label);
         let config = database.config(&base);
         let campaign_id = CampaignId::from_uuid(Uuid::from_u128(campaign_uuid));
+        let store = SemanticArchiveStoreV1::new(&config);
+        match store.install_schema().expect("Archive schema installs") {
+            ArchiveSchemaDispositionV1::Installed | ArchiveSchemaDispositionV1::AlreadyCurrent => {}
+        }
         let (session, bundle) = runtime_fixture_with_seed(WORKER_SEED);
         let mut runtime = DurableReplayRuntimeV2::create(&config, campaign_id, session, bundle)
             .expect("runtime constructs after activation");
         commit_ticks(&mut runtime, tick_count);
         drop(runtime);
-        let store = SemanticArchiveStoreV1::new(&config);
-        match store.install_schema().expect("Archive schema installs") {
-            ArchiveSchemaDispositionV1::Installed | ArchiveSchemaDispositionV1::AlreadyCurrent => {}
-        }
         Self {
             database,
             config,
@@ -359,7 +369,7 @@ fn county_page_count(config: &Config, campaign_id: CampaignId) -> i64 {
         .connect(NoTls)
         .expect("page count connection")
         .query_one(
-            "SELECT pg_catalog.count(*) FROM babylon_meta.archive_page_v1 \
+            "SELECT pg_catalog.count(DISTINCT subject_id) FROM babylon_meta.archive_page_revision_v2 \
              WHERE campaign_id = $1::uuid AND subject_kind = 'county'",
             &[campaign_id.as_uuid()],
         )
@@ -387,8 +397,8 @@ fn county_page_markdown(config: &Config, campaign_id: CampaignId, geoid: &str) -
         .connect(NoTls)
         .expect("county page connection")
         .query_one(
-            "SELECT markdown FROM babylon_meta.archive_page_v1 \
-             WHERE campaign_id = $1::uuid AND subject_kind = 'county' AND subject_id = $2",
+            "SELECT markdown FROM babylon_meta.archive_page_revision_v2 \
+             WHERE campaign_id = $1::uuid AND subject_kind = 'county' AND subject_id = $2 ORDER BY effective_tick DESC,origin DESC LIMIT 1",
             &[campaign_id.as_uuid(), &geoid],
         )
         .expect("county page query")
@@ -398,7 +408,7 @@ fn county_page_markdown(config: &Config, campaign_id: CampaignId, geoid: &str) -
 
 #[test]
 #[ignore = "requires the task-owned disposable PostgreSQL runtime and committed ticks"]
-fn live_county_producer_publishes_committed_signals_then_defers_unchanged_receipts() {
+fn live_county_producer_publishes_committed_signals_then_verifies_quiet_receipts() {
     let target = LiveCountyTarget::create(
         "countyproducerdrain",
         0x2200_0000_0000_0000_0000_0000_0000_00c1,
@@ -422,20 +432,20 @@ fn live_county_producer_publishes_committed_signals_then_defers_unchanged_receip
         dispositions,
         vec![
             (1, ArchiveReceiptDispositionV1::Applied),
-            (2, ArchiveReceiptDispositionV1::Deferred),
-            (3, ArchiveReceiptDispositionV1::Deferred),
+            (2, ArchiveReceiptDispositionV1::Applied),
+            (3, ArchiveReceiptDispositionV1::Applied),
         ],
-        "receipt 1 publishes both county pages; unchanged later receipts defer empty"
+        "receipt 1 publishes both county pages; unchanged later receipts consume empty"
     );
     assert_eq!(
         report.verified_tick(),
-        1,
-        "the deferred tick 2 caps the watermark"
+        3,
+        "quiet ticks advance verification without changing page content"
     );
     assert_eq!(county_page_count(&target.config, target.campaign_id), 2);
     assert_eq!(
         receipt_consumption_count(&target.config, target.campaign_id),
-        1
+        3
     );
 
     let wayne = county_page_markdown(&target.config, target.campaign_id, "26163");
@@ -461,17 +471,29 @@ fn live_county_producer_publishes_committed_signals_then_defers_unchanged_receip
         oakland.contains("- **Imperial rent Φ:** 2.000000 — committed-tick-v1; campaign/1/oakland")
     );
 
-    let hits = store
-        .search_known(target.campaign_id, "21.000000", 10)
-        .expect("known-only search");
-    assert_eq!(hits.len(), 1);
-    assert_eq!(hits[0].page_ref().id(), "26163");
-    assert_eq!(
-        hits[0].citations().len(),
-        2,
-        "the subject-grant citation plus one committed-tick citation: both signals share \
-         the same committed-tick provenance and the store dedupes identical citations"
-    );
+    with_reader(&target.config, |reader| {
+        let scope = scope_at(&target.config, target.campaign_id, 3);
+        let hits = reader
+            .search_as_of(&scope, "21.000000", 10)
+            .expect("known-only search");
+        assert_eq!(hits.hits.len(), 1);
+        assert_eq!(hits.hits[0].subject.id(), "26163");
+        let dossier = reader
+            .dossier_as_of(
+                &scope,
+                &hits.hits[0].subject,
+                &ArchiveDossierBoundsV2::default(),
+            )
+            .expect("exact cited county dossier");
+        let ArchiveDossierStateV2::Ready { page, .. } = dossier.state else {
+            panic!("settled county");
+        };
+        assert_eq!(
+            page.citations.len(),
+            2,
+            "subject grant plus one shared committed-tick citation remain deduplicated"
+        );
+    });
     target.finish();
 }
 
@@ -492,8 +514,8 @@ fn live_county_producer_rerun_reconciles_without_duplicate_pages() {
     let first = worker
         .sweep_once(target.campaign_id, &producer)
         .expect("first sweep applies the bootstrap receipt");
-    assert_eq!(first.applied_count(), 1);
-    assert_eq!(first.deferred_count(), 1);
+    assert_eq!(first.applied_count(), 2);
+    assert_eq!(first.paged_count(), 0);
     assert_eq!(county_page_count(&target.config, target.campaign_id), 2);
 
     let second = worker
@@ -506,14 +528,14 @@ fn live_county_producer_rerun_reconciles_without_duplicate_pages() {
         .collect::<Vec<_>>();
     assert_eq!(
         dispositions,
-        vec![(2, ArchiveReceiptDispositionV1::Deferred)],
-        "the still-pending receipt re-defers clean instead of republishing"
+        vec![],
+        "settled receipts need no further work"
     );
-    assert_eq!(second.verified_tick(), 1);
+    assert_eq!(second.verified_tick(), 2);
     assert_eq!(county_page_count(&target.config, target.campaign_id), 2);
     assert_eq!(
         receipt_consumption_count(&target.config, target.campaign_id),
-        1,
+        2,
         "no duplicate consumption rows appear on the rerun"
     );
 
@@ -522,7 +544,7 @@ fn live_county_producer_rerun_reconciles_without_duplicate_pages() {
         .connect(NoTls)
         .expect("page rows connection")
         .query(
-            "SELECT subject_id, pg_catalog.count(*) FROM babylon_meta.archive_page_v1 \
+            "SELECT subject_id, pg_catalog.count(*) FROM babylon_meta.archive_page_revision_v2 \
              WHERE campaign_id = $1::uuid AND subject_kind = 'county' \
              GROUP BY subject_id ORDER BY subject_id",
             &[target.campaign_id.as_uuid()],
@@ -539,9 +561,32 @@ fn live_county_producer_rerun_reconciles_without_duplicate_pages() {
     assert_eq!(
         rows,
         vec![("26125".to_owned(), 1), ("26163".to_owned(), 1)],
-        "every county keeps exactly one current page"
+        "quiet receipts preserve exactly one immutable publication per county"
     );
     target.finish();
+}
+
+/// Fail after the first durable receipt so the test can add a later field grant.
+struct StopAfterFirst<'a>(&'a CountyDossierProducerV1);
+
+impl babylon_persistence::ArchiveDossierProducerV1 for StopAfterFirst<'_> {
+    fn produce(
+        &self,
+        campaign: Uuid,
+        receipt: &babylon_persistence::PendingArchiveReceiptV1,
+        knowledge: &babylon_persistence::ArchiveKnowledgeV1,
+        budget: usize,
+    ) -> Result<
+        babylon_persistence::ArchiveProducerOutcomeV1,
+        babylon_persistence::SemanticArchiveErrorV1,
+    > {
+        if receipt.resolve_tick() > 1 {
+            return Err(babylon_persistence::SemanticArchiveErrorV1::InvalidText);
+        }
+        babylon_persistence::ArchiveDossierProducerV1::produce(
+            self.0, campaign, receipt, knowledge, budget,
+        )
+    }
 }
 
 #[test]
@@ -561,16 +606,13 @@ fn live_county_producer_grant_refresh_republicates_revealed_page() {
     // tick zero, so the pages render with known place links but no signal
     // section — the earned field keys stay ungranted until the refresh below.
     let mut worker = ArchiveWorkerV1::new(&target.config);
-    let first = worker
-        .sweep_once(target.campaign_id, &producer)
-        .expect("foundation-knowledge sweep publishes the partially revealed pages");
     assert_eq!(
-        sweep_dispositions(&first),
-        vec![
-            (1, ArchiveReceiptDispositionV1::Applied),
-            (2, ArchiveReceiptDispositionV1::Deferred),
-            (3, ArchiveReceiptDispositionV1::Deferred),
-        ]
+        worker.sweep_once(target.campaign_id, &StopAfterFirst(&producer)),
+        Err(babylon_persistence::SemanticArchiveErrorV1::InvalidText)
+    );
+    assert_eq!(
+        receipt_consumption_count(&target.config, target.campaign_id),
+        1
     );
     let wayne_redacted = county_page_markdown(&target.config, target.campaign_id, "26163");
     assert!(wayne_redacted.contains("# Wayne County"));
@@ -601,9 +643,9 @@ fn live_county_producer_grant_refresh_republicates_revealed_page() {
         sweep_dispositions(&second),
         vec![
             (2, ArchiveReceiptDispositionV1::Applied),
-            (3, ArchiveReceiptDispositionV1::Deferred),
+            (3, ArchiveReceiptDispositionV1::Applied),
         ],
-        "receipt two republishes the revealed page; receipt three defers clean"
+        "receipt two republishes; receipt three verifies unchanged content"
     );
     let wayne = county_page_markdown(&target.config, target.campaign_id, "26163");
     assert!(
@@ -626,7 +668,7 @@ fn live_county_producer_grant_refresh_republicates_revealed_page() {
     assert_eq!(county_page_count(&target.config, target.campaign_id), 2);
     assert_eq!(
         receipt_consumption_count(&target.config, target.campaign_id),
-        2
+        3
     );
 
     // The revealed page settles: reruns reconcile without further writes.
@@ -635,13 +677,140 @@ fn live_county_producer_grant_refresh_republicates_revealed_page() {
         .expect("settled sweep reconciles");
     assert_eq!(
         sweep_dispositions(&settled),
-        vec![(3, ArchiveReceiptDispositionV1::Deferred)],
-        "the revealed page settles; the last receipt re-defers clean"
+        vec![],
+        "settled receipts stay consumed"
     );
     assert_eq!(county_page_count(&target.config, target.campaign_id), 2);
     assert_eq!(
         receipt_consumption_count(&target.config, target.campaign_id),
-        2
+        3
     );
     target.finish();
+}
+
+#[test]
+#[ignore = "requires the task-owned disposable PostgreSQL runtime and committed ticks"]
+fn live_adoption_retains_exact_current_head_and_validates_quiet_tail_without_a_tick() {
+    let target = LiveCountyTarget::create(
+        "countyadoption",
+        0x2200_0000_0000_0000_0000_0000_0000_00ca,
+        3,
+    );
+    let producer = CountyDossierProducerV1::try_new(&target.config).expect("county producer");
+    let store = SemanticArchiveStoreV1::new(&target.config);
+    grant_county_fields(&store, target.campaign_id);
+    let report = ArchiveWorkerV1::new(&target.config)
+        .sweep_once(target.campaign_id, &producer)
+        .expect("publish then quiet drain");
+    assert_eq!(report.verified_tick(), 3);
+    let subject = ArchivePageRefV1::try_new(ArchiveSubjectKindV1::County, "26163".to_owned())
+        .expect("subject");
+    let scope = scope_at(&target.config, target.campaign_id, 3);
+    let old = with_reader(&target.config, |reader| {
+        let read = reader
+            .dossier_as_of(&scope, &subject, &ArchiveDossierBoundsV2::default())
+            .expect("original exact page");
+        let ArchiveDossierStateV2::Ready { page, .. } = read.state else {
+            panic!("original ready");
+        };
+        page
+    });
+    assert_eq!(old.content_source.tick(), 1);
+    legacy_archive::restore_legacy_heads(&target.config);
+    assert_eq!(
+        store
+            .install_schema()
+            .expect("adopt original retained bytes"),
+        ArchiveSchemaDispositionV1::Installed
+    );
+    assert_pending_adoption(&target, &scope, &subject, &old);
+    let report = ArchiveWorkerV1::new(&target.config)
+        .sweep_once(target.campaign_id, &producer)
+        .expect("validate adopted complete desired set");
+    assert!(
+        report.dispositions().is_empty(),
+        "maintenance creates no receipt or game tick"
+    );
+    assert!(report.retention_ready());
+    assert_eq!(report.verified_tick(), 3);
+    assert_eq!(
+        receipt_consumption_count(&target.config, target.campaign_id),
+        3
+    );
+    assert_eq!(scope_at(&target.config, target.campaign_id, 3), scope);
+    with_reader(&target.config, |reader| {
+        let read = reader
+            .dossier_as_of(&scope, &subject, &ArchiveDossierBoundsV2::default())
+            .expect("verified adopted head");
+        let ArchiveDossierStateV2::Ready {
+            page,
+            verified_through_tick: 3,
+        } = read.state
+        else {
+            panic!("cutover ready");
+        };
+        assert_eq!(page.markdown, old.markdown);
+        assert_eq!(page.atoms, old.atoms);
+        assert_eq!(page.content_source, old.content_source);
+        assert_eq!(page.content_sha256, old.content_sha256);
+        assert_eq!(page.effective_tick, 3);
+        assert!(
+            page.changes.changes.is_empty(),
+            "adoption is the baseline, not invented older change history"
+        );
+    });
+    assert_eq!(
+        store.install_schema().expect("strict immutable reinstall"),
+        ArchiveSchemaDispositionV1::AlreadyCurrent
+    );
+    target.config.connect(NoTls).expect("corruption connection").execute(
+        "DELETE FROM babylon_meta.archive_revision_atom_v2 WHERE campaign_id=$1 AND subject_kind='county' AND subject_id='26163' AND origin=0 AND position=0",
+        &[target.campaign_id.as_uuid()]
+    ).expect("remove one original adopted membership");
+    assert_eq!(
+        store.install_schema(),
+        Err(babylon_persistence::SemanticArchiveErrorV1::StoredPageMismatch),
+        "reinstall must still validate the entire original adoption"
+    );
+    target.finish();
+}
+
+fn assert_pending_adoption(
+    target: &LiveCountyTarget,
+    scope: &ArchiveReadScopeV2,
+    subject: &ArchivePageRefV1,
+    old: &ArchiveDossierPageV2,
+) {
+    with_reader(&target.config, |reader| {
+        let read = reader
+            .dossier_as_of(scope, subject, &ArchiveDossierBoundsV2::default())
+            .expect("pending adopted head");
+        assert_eq!(read.history_floor_tick, 3);
+        assert_eq!(
+            read.processed_tick, 3,
+            "an old consumed prefix does not prove cutover composition"
+        );
+        let ArchiveDossierStateV2::Pending {
+            page: Some(page),
+            reason: ArchiveDossierPendingV2::CutoverValidation,
+        } = read.state
+        else {
+            panic!("adoption requires validation even P=D");
+        };
+        assert_eq!(page.markdown, old.markdown);
+        assert_eq!(page.atoms, old.atoms);
+        assert_eq!(page.content_source, old.content_source);
+        assert_eq!(page.content_sha256, old.content_sha256);
+        let earlier = reader
+            .dossier_as_of(
+                &scope_at(&target.config, target.campaign_id, 2),
+                subject,
+                &ArchiveDossierBoundsV2::default(),
+            )
+            .expect("honest earlier absence");
+        assert_eq!(
+            earlier.state,
+            ArchiveDossierStateV2::Unavailable(ArchiveDossierUnavailableV2::HistoryNotRetained)
+        );
+    });
 }

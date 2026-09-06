@@ -1,0 +1,73 @@
+meta:
+  contract: NtadBorderRailV1
+  version: 1
+  issues:
+    - PER-28
+    - PER-31
+  delivery: source-observation-only
+classifications:
+  source_attributes_geometry_and_metadata: Observed
+  shared_node_and_semantic_identity: Derived
+  selection_and_canonical_representation: Designed
+limitations:
+  - Two source polylines; not a complete Detroit-Windsor logistics network.
+  - Original FR/TO labels and vertex order; no permission to traverse either direction inferred.
+  - Recorded lengths are source attributes, not recomputed geodesic or travel-time estimates.
+  - Track count and ownership labels do not establish available freight capacity or access rights.
+  - No capacity, border delay, loss rate, H3 assignment, factory, supplier, or Canadian actor inferred.
+  - July 2026 service evidence; not a reconstructed 2024 or September 2025 network snapshot.
+  - No engine activation, campaign mutation, or mechanics authority.
+layer_url: https://services.arcgis.com/xOi1kZaI0eWDREZv/arcgis/rest/services/NTAD_North_American_Rail_Network_Lines/FeatureServer/0
+query:
+  f: json
+  where: FRAARCID IN (489609,737940)
+  outFields: '*'
+  returnGeometry: 'true'
+  outSR: '4326'
+  orderByFields: FRAARCID
+  returnZ: 'false'
+  returnM: 'false'
+  resultRecordCount: '3'
+source_item_id: e143f436d4774402aa8cca1e663b1d24
+acquired_at_utc: '2026-09-05T06:34:39+00:00'
+source_description_date: '2026-07-21'
+source_data_last_edit_unix_ms: 1784743420808
+sources:
+  response:
+    path: src/babylon/data/reference/transport/sources/ntad_border_rail_20260721.esri.json
+    sha256: c05993cd09d53d575b3eaa4a85515b2f1b724c0516da2cd5124a43967dea2d4f
+    http_body_sha256: 490265c9af35ff952f4ed1e263254dadbe704c256faa841d8655a65c6c628e73
+  layer:
+    path: src/babylon/data/reference/transport/sources/ntad_border_rail_20260721.layer.json
+    sha256: 03ea38b5f2b14579363cf2c4d8dbb0e68bef7730cbc8df753f9eac31746dfa63
+    http_body_sha256: b9c2a8396396a7d7ffe9710bdafdbb4a2ee9835150c79c5bfba6fbc4588b0fb6
+artifact:
+  path: src/babylon/data/reference/transport/ntad_detroit_windsor_rail_v1.json
+  sha256: ee00b4971fa70e4a2ca56810d45a4f5b107a68a611d328fb9b2eb32e8d723f24
+  semantic_sha256: f57e41bd2bfc9d9c93c5e03650b0f36f730acd26adf65687d07b95e731134223
+  bytes: 5096
+  arcs: 2
+  vertices: 29
+encoding:
+  artifact: sorted-compact-ASCII-JSON-plus-LF
+  coordinates: finite-binary64-values-preserved-in-source-order-no-rounding-or-resampling
+  semantic_domain: babylon.ntad-border-rail-observation.v1-NUL
+  semantic_payload: canonical-observation-JSON-plus-LF; captured-response-byte-identities-are-separate-provenance
+  ordering: features-by-FRAARCID; vertices-remain-in-source-order
+bounds:
+  file_bytes: 131072
+  features: 2
+  vertices_per_arc: 4096
+held_predecessor:
+  filename: NTAD_North_American_Rail_Network_Lines_-5929403426890888937.geodatabase
+  sha256: a38e0800ae455f91003b0d7f7f98b2ce71683f69d6e801a8ba852c86e7e45c66
+  source_description_date: '2025-09-30'
+  disposition: historical-topology-comparison-only-not-geometry-source
+  comparison: OBJECTID/FRAARCID/FRFRANODE/TOFRANODE/COUNTRY/STATEAB/STCNTYFIPS/TRACKS/MILES/KM unchanged
+    for both selected arcs; RROWNER1 changed CPRS to CPKC; no claim of binary geometry equivalence
+references:
+  - https://catalog.data.gov/dataset/north-american-rail-network-lines
+  - https://doi.org/10.21949/1528950
+  - https://geodata.bts.gov/datasets/usdot::north-american-rail-network-lines/about
+source_capture_framing: One terminal LF appended to each otherwise unchanged HTTP body; both body and
+  file SHA256 pinned.

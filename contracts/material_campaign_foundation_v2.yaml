@@ -1,0 +1,24 @@
+version: 2
+name: material_campaign_foundation_v2
+authority: ADR251
+purpose: Pin an explicit tick-zero circuit campaign without upgrading graph-only campaigns.
+encoding:
+  domain: "babylon.material-campaign-foundation.v2\0"
+  fields:
+    - u32_big_endian_version_2
+    - u64_big_endian_horizon_ticks
+    - exact_32_byte_authored_content_digest
+    - u64_big_endian_preset_utf8_length_then_exact_bytes
+    - u64_big_endian_graph_foundation_v1_length_then_exact_bytes
+    - u64_big_endian_material_register_v2_length_then_exact_bytes
+  digest: sha256_exact_bytes
+  maximum_complete_bytes: 67108864
+  preset: 1_to_128_lowercase_ascii_letters_digits_and_hyphens
+  horizon: Positive_and_representable_as_signed_64
+storage:
+  table: babylon_state.material_campaign_foundation_v2
+  graph_component: babylon_state.campaign_foundation
+  install: Both foundation components and grants in one transaction at completed tick zero.
+  open: Reproduce expected pinned source and compare all stored foundation bytes and digests.
+  historical_campaign: Typed LegacyCampaign refusal; a new campaign identity is required.
+  preset_comparison: Distinct campaign foundations; no in-session intervention.

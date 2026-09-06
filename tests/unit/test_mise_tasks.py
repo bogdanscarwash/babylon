@@ -120,7 +120,7 @@ class TestMiseTaskDiscoverability:
         """This repository's declared Mise floor requires explicit task files."""
         config = tomllib.loads(MISE_TOML.read_text())
 
-        assert config["min_version"] == "2025.11.7"
+        assert config["min_version"] == "2026.9.1"
         assert config["task_config"]["includes"] == [
             ".mise/tasks/analysis.toml",
             ".mise/tasks/devtools.toml",
@@ -334,44 +334,31 @@ def test_docs_rebuild_serializes_clean_before_build(
 
 
 @pytest.mark.skipif(not MISE_TOML.exists(), reason=".mise.toml not present")
-def test_nix_task_forces_git_source_for_linked_worktree(tmp_path: Path) -> None:
-    """The Nix task must not copy a linked worktree as an unfiltered path source."""
-    task_script = tomllib.loads(MISE_TOML.read_text())["tasks"]["nix"]["run"]
-    linked_worktree = tmp_path / "linked worktree"
-    linked_worktree.mkdir()
-    (linked_worktree / ".git").write_text("gitdir: /tmp/babylon-common/worktrees/test\n")
+def test_setup_uses_native_toolchains_without_a_nix_task(
+    mise_tasks: dict[str, dict[str, object]],
+) -> None:
+    """Development tasks must use the native toolchain without a retired entrypoint."""
+    tasks = mise_tasks
+    assert "nix" not in tasks
+    for name in ("setup", "install", "check:env-contract", "play"):
+        run = _task_run(tasks[name])
+        assert "nix develop" not in run
+        assert "mise run nix" not in run
+    assert "uv sync" in _task_run(tasks["install"])
 
-    capture_path = tmp_path / "nix-call.txt"
-    fake_bin = tmp_path / "bin"
-    fake_bin.mkdir()
-    fake_nix = fake_bin / "nix"
-    fake_nix.write_text(
-        "#!/bin/sh\n"
-        'printf \'%s\\n\' "${MISE_TRUSTED_CONFIG_PATHS-}" > "$NIX_TASK_CAPTURE"\n'
-        'printf \'%s\\n\' "$@" >> "$NIX_TASK_CAPTURE"\n'
-    )
-    fake_nix.chmod(0o755)
 
-    environment = os.environ.copy()
-    environment["MISE_PROJECT_ROOT"] = str(linked_worktree)
-    environment["NIX_TASK_CAPTURE"] = str(capture_path)
-    environment["PATH"] = f"{fake_bin}{os.pathsep}{environment['PATH']}"
-    subprocess.run(  # noqa: S603 -- repository-owned task script under contract
-        ["bash", "-c", f'{task_script} "$@"', "nix-task-contract", "probe"],  # noqa: S607
-        cwd=REPOSITORY_ROOT,
-        check=True,
-        capture_output=True,
-        text=True,
-        env=environment,
-    )
-
-    assert capture_path.read_text().splitlines() == [
-        str(linked_worktree),
-        "develop",
-        f"git+file://{linked_worktree}",
-        "--command",
-        "probe",
-    ]
+def test_reference_build_uses_the_same_locked_native_python() -> None:
+    """The governed SQLite build must not create a second interpreter estate."""
+    tasks = _tasks()
+    assert "data:python" not in tasks
+    assert "data:python:setup" not in tasks
+    assert "mise install --locked" in str(tasks["setup"]["run"])
+    for name in ("data:build-db", "data:verify-build", "data:national-incidence"):
+        run = str(tasks[name]["run"])
+        assert "uv run --frozen python tools/" in run
+        assert "run_data_python" not in run
+    assert not (REPOSITORY_ROOT / "tools/run_data_python.py").exists()
+    assert not (REPOSITORY_ROOT / "tools/data_python_sources.json").exists()
 
 
 def test_check_is_non_mutating_and_keeps_dynamic_probes_explicit() -> None:
@@ -656,113 +643,15 @@ def test_rustdoc_remains_hosted_and_blocking_after_single_pass_refactor() -> Non
     assert "continue-on-error" not in rust_job
 
 
-# The play task's Archive sweep loop is executed by mise under a POSIX `sh`
-# (dash on the dev host), where the glob negation class is `[!0-9]`; the
-# bashism `[^0-9]` parses empty there and the loop broke after one sweep with
-# pages still pending (PER-318 live-fire finding, 2026-09-04).
-_PLAY_SWEEP_LOOP_BEGIN = "for sweep in 1 2 3 4 5 6 7 8; do"
-_PLAY_SWEEP_LINE = (
-    "Archive worker sweep complete; verified_tick=1; deferred=0; applied=0; "
-    "already_consumed=0; paged={paged}."
-)
-
-
-def _play_run_script() -> str:
-    """Return the play task's run script as one string."""
-    run = _tasks()["play"]["run"]
-    if isinstance(run, list):
-        return "\n".join(str(command) for command in run)
-    return str(run)
-
-
-def _play_sweep_loop_block() -> str:
-    """Extract the verbatim `for sweep ... done` block from the play task."""
-    script = _play_run_script()
-    begin = script.index(_PLAY_SWEEP_LOOP_BEGIN)
-    block = []
-    for line in script[begin:].splitlines():
-        block.append(line)
-        if line.strip() == "done":
-            return "\n".join(block)
-    raise AssertionError("play sweep loop has no closing `done`")
-
-
-_STUB_RUNTIME = """\
-#!/bin/sh
-# Stub `babylon-runtime`: shift one scripted `--once` report per archive-worker
-# call. A PATH stub is used because POSIX function names cannot contain "-".
-[ "$1" = "archive-worker" ] || exit 0
-sed -n '1p' "$PLAY_SWEEP_FIXTURE"
-sed -n '2,$p' "$PLAY_SWEEP_FIXTURE" > "$PLAY_SWEEP_FIXTURE.shifted"
-mv "$PLAY_SWEEP_FIXTURE.shifted" "$PLAY_SWEEP_FIXTURE"
-"""
-
-
-def _run_sweep_loop_under_posix_sh(outputs: list[str]) -> subprocess.CompletedProcess[str]:
-    """Execute the real loop block under `/bin/sh` with a stubbed runtime.
-
-    The stub shifts one scripted `--once` report line per archive-worker call,
-    so the test exercises the task's actual parse and break logic instead of
-    a hand-copied replica.
-    """
-    import tempfile
-
-    with tempfile.TemporaryDirectory() as tmp:
-        fixture = Path(tmp) / "sweep_outputs.txt"
-        fixture.write_text("".join(f"{line}\n" for line in outputs))
-        stub_bin = Path(tmp) / "bin"
-        stub_bin.mkdir()
-        (stub_bin / "babylon-runtime").write_text(_STUB_RUNTIME)
-        (stub_bin / "babylon-runtime").chmod(0o755)
-        script = Path(tmp) / "sweep_loop.sh"
-        script.write_text(_play_sweep_loop_block())
-        env = {
-            **os.environ,
-            "PATH": f"{stub_bin}{os.pathsep}{os.environ.get('PATH', '')}",
-            "PLAY_SWEEP_FIXTURE": str(fixture),
-        }
-        return subprocess.run(  # noqa: S603 -- generated script, pinned interpreter
-            ["/bin/sh", str(script)],
-            check=False,
-            capture_output=True,
-            text=True,
-            env=env,
-        )
-
-
-def _sweep_lines(result: subprocess.CompletedProcess[str]) -> list[str]:
-    return [line for line in result.stdout.splitlines() if "paged=" in line]
-
-
+# The window now observes a held-open Rust runtime. Protocol, anonymous pipe,
+# credential isolation and Archive progress behavior have executable coverage
+# in test_run_observer_session.py and the Rust runtime/reader tests.
 @pytest.mark.skipif(not MISE_TOML.exists(), reason=".mise.toml not present")
-class TestPlaySweepLoopUnderPosixSh:
-    """The play drain loop parses `paged=N.` under dash semantics, not bash."""
+class TestNativeObserverPlayTask:
+    """Mise exposes the one durable observer launcher and forwards its CLI."""
 
-    def test_loop_uses_the_posix_negated_glob_class(self) -> None:
-        """`[^0-9]` is a bashism; dash reads it as a literal class member."""
-        assert "[!0-9]" in _play_sweep_loop_block()
-        assert "[^0-9]" not in _play_run_script()
-
-    def test_paged_parse_survives_the_trailing_period_under_posix_sh(self) -> None:
-        """A mid-drain report (`paged=2.`) must not settle the loop early.
-
-        Regression: under dash the bashism parsed empty, `${paged:-0}` became
-        0, and the loop broke after the first sweep with pages still pending.
-        """
-        result = _run_sweep_loop_under_posix_sh(
-            [_PLAY_SWEEP_LINE.format(paged=2), _PLAY_SWEEP_LINE.format(paged=0)]
-        )
-        assert result.returncode == 0, result.stderr
-        lines = _sweep_lines(result)
-        assert len(lines) == 2, f"loop must run both sweeps, got: {lines}"
-        assert lines[0].endswith("paged=2.")
-
-    def test_loop_breaks_immediately_on_a_settled_first_sweep(self) -> None:
-        result = _run_sweep_loop_under_posix_sh([_PLAY_SWEEP_LINE.format(paged=0)])
-        assert result.returncode == 0, result.stderr
-        assert len(_sweep_lines(result)) == 1
-
-    def test_loop_refuses_to_launch_when_the_drain_never_settles(self) -> None:
-        result = _run_sweep_loop_under_posix_sh([_PLAY_SWEEP_LINE.format(paged=2)] * 8)
-        assert result.returncode == 1
-        assert "still paged" in result.stderr
+    def test_play_uses_the_versioned_runtime_launcher_without_preadvance(self) -> None:
+        task = _tasks()["play"]
+        assert task["run"] == "uv run --frozen python tools/run_observer_session.py"
+        assert "durable Michigan observer" in str(task["description"])
+        assert "usage" not in task

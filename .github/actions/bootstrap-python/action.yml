@@ -1,7 +1,7 @@
 # Shared Python bootstrap (Program 15). ONE provisioner: mise installs the
 # exact [tools] pins from .mise.toml (python 3.12 + uv), so CI and local dev
 # run the identical toolchain against the single uv.lock. The venv cache key
-# hashes uv.lock AND .mise.toml (the uv pin lives there); bump -vN to evict.
+# hashes uv.lock, .mise.toml, and mise.lock (the exact interpreter build).
 name: Bootstrap Python
 description: mise toolchain + uv-managed venv cache + uv sync
 
@@ -21,8 +21,9 @@ runs:
     - name: Set up tools with mise
       uses: jdx/mise-action@3c2e0cf82a5b2e5249f0d3635a4d83d0ae861518 # v4
       with:
-        version: 2026.8.12
+        version: 2026.9.1
         cache: true
+        install_args: --locked
 
     # Amendment AF (ADR186) deletion ceremony: the babylon-tui maturin wheel
     # (ADR181 R8's "once per head" build-wheel job + this action's former
@@ -35,7 +36,7 @@ runs:
         path: .venv
         key: >-
           venv-${{ runner.os }}-py3.12-uv-v4-${{ inputs.docs }}-${{ inputs.ops }}-${{
-          hashFiles('uv.lock', '.mise.toml') }}
+          hashFiles('uv.lock', '.mise.toml', 'mise.lock') }}
 
     - name: Sync dependencies (uv)
       shell: bash

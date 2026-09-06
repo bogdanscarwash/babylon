@@ -31,7 +31,7 @@ This section covers source, configuration, and docs-as-code:
   not a creative asset, so it is code for licensing purposes.
 - `design/bevy-assets/**` — original SVG interface masters, OpenAI image-generation prompt records,
   the asset manifest, and the authoritative provenance record.
-- `rust/crates/babylon-client/src/visual_assets/embedded/**` — the Bevy interface PNG files and
+- `assets/visual/**` — the Bevy interface PNG files and
   generated illustration WebP files listed in `design/bevy-assets/manifest.toml`.
 - `tests/`, `tools/`, `scripts/`, `docs/` (the reStructuredText/Markdown
   sources, not any rendered build output), `data-artifacts.yaml`,
@@ -46,11 +46,12 @@ This section covers source, configuration, and docs-as-code:
 
 <!-- vale off -->
 <!-- Exact repository paths, license fields, and ADR identifiers. -->
-- `src/assets/sfx/` — the 39-sound interface SFX suite (ADR152). Also
-  carries its own `src/assets/LICENSE` (identical CC0-1.0 text) and states
-  "License: CC0-1.0" in `src/assets/README.md`.
-- `src/assets/music/` — the 13-track soundtrack (ADR153). Same
-  `src/assets/LICENSE` and README statement as above.
+- `assets/sfx/` — the 39-sound interface SFX suite (ADR152). Also
+  carries its own `assets/audio-LICENSE` (identical CC0-1.0 text) and states
+  "License: CC0-1.0" in `assets/README.md`.
+- `assets/music/{ambient,superstructure,periphery,rift,endgame,entity}/` and their
+  generators in `tools/audio/` — the soundtrack covered by ADR153. Same
+  `assets/audio-LICENSE` and README statement as above.
 <!-- vale on -->
 
 The new Bevy image estate described above does not change the CC0-1.0 classification of these
@@ -73,8 +74,8 @@ disposition does not have a ruling. This explicit list prevents an "AGPL by defa
 <!-- vale off -->
 <!-- Exact unresolved paths and historical provenance notes. -->
 - **`assets/music/`** (legacy: `crisis/`, `fascist/`, `revolutionary/`
-  suites + `babylon_theme_panopticon.mid` / `babylon_theme_phi.mid`, 32
-  tracked files). Predates the `src/assets/` CC0 estates by about seven
+  suites + `babylon_theme_panopticon.mid` / `babylon_theme_phi.mid`, with legacy
+  generators now in `tools/audio/music/legacy/`). Predates the CC0 estates by about seven
   months and was never folded into ADR152/ADR153's CC0 dedication.
   Believed to be original project composition (same generator-script
   authorship pattern as the later CC0 estates) but unconfirmed — pending

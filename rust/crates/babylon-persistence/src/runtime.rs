@@ -28,7 +28,10 @@ use crate::committed_tick_envelope::{
     CommittedTickEnvelopeErrorV2, CommittedTickEnvelopeV2, CommittedTickRowFamiliesV2,
     CommittedTickRowV2,
 };
-use crate::foundation::{CampaignFoundationV1, FoundationContentBundleV1};
+use crate::foundation::{
+    CampaignFoundationV1, FoundationContentBundle, FoundationContentBundleV1,
+    FoundationContentLayout,
+};
 use crate::identity::CampaignId;
 use crate::legacy_adopter::{
     acquire_lock, release_lock, validate_legacy_connection_target, LegacyAdopterError,
@@ -1518,6 +1521,13 @@ impl DurableReplayRuntimeV2<HypergraphStore> {
     ) -> Result<Self, RustPersistenceRuntimeErrorV2> {
         let activation_row = require_active_authority(config)?;
         let foundation = hydrate_campaign_foundation_v1(config, campaign_id)?;
+        {
+            let mut client = config.connect(NoTls).map_err(|error| {
+                RustPersistenceRuntimeErrorV2::postgres("connect campaign owner reader", &error)
+            })?;
+            require_graph_campaign_owner_v2(&mut client, campaign_id)?;
+        }
+        let session = reconstruct_graph_foundation_session_v1(&foundation)?;
         let bundle = foundation.content_bundle();
         let scenario = std::str::from_utf8(bundle.scenario_source_bytes())
             .map_err(|_| RustPersistenceRuntimeErrorV2::ReplaySource)?;
@@ -1526,36 +1536,6 @@ impl DurableReplayRuntimeV2<HypergraphStore> {
             .map(std::str::from_utf8)
             .transpose()
             .map_err(|_| RustPersistenceRuntimeErrorV2::ReplaySource)?;
-        let rules = std::str::from_utf8(bundle.rule_source_bytes())
-            .map_err(|_| RustPersistenceRuntimeErrorV2::ReplaySource)?;
-        let material = MaterialStateV1::try_new(
-            michigan_dynamic_hex_foundation_v1()
-                .map_err(|_| RustPersistenceRuntimeErrorV2::ReplaySource)?,
-        )
-        .map_err(|_| RustPersistenceRuntimeErrorV2::ReplaySource)?;
-        let session = ReplayTickSession::new(
-            scenario,
-            prelude,
-            rules,
-            HypergraphStore::new(),
-            foundation.replay_session_identity().clone(),
-            foundation.rng_seed(),
-            foundation.content_digest().clone(),
-            foundation.reference_digest(),
-            material,
-        )
-        .map_err(|_| RustPersistenceRuntimeErrorV2::ReplayTick)?;
-        let verification_bundle = FoundationContentBundleV1::try_new(
-            scenario,
-            prelude,
-            rules,
-            bundle.defines_bytes(),
-            bundle.reference_bundle_manifest_bytes(),
-        )?;
-        let verification = CampaignFoundationV1::capture(&session, verification_bundle)?;
-        if verification.canonical_bytes() != foundation.canonical_bytes() {
-            return Err(RustPersistenceRuntimeErrorV2::CampaignConflict);
-        }
         // Upgrade path for campaigns founded before the declared mapping
         // existed: install the additive schema and reconcile the rows
         // idempotently. Divergence between stored and declared rows refuses
@@ -1604,10 +1584,18 @@ impl DurableReplayRuntimeV2<HypergraphStore> {
         let envelope = prepared.into_envelope(self.campaign_id)?;
         let config = &self.config;
         let campaign_id = self.campaign_id;
+        let content_layout = self.foundation.content_bundle().layout();
         let (acknowledged, disposition) = self
             .session
             .commit_prepared_and_publish(sink, candidate, |report| {
-                commit_typed_tick_v2(config, campaign_id, report, &checkpoint, &envelope)
+                commit_typed_tick_v2(
+                    config,
+                    campaign_id,
+                    report,
+                    &checkpoint,
+                    &envelope,
+                    content_layout,
+                )
             })
             .map_err(|error| match error {
                 PreparedReplayCommitErrorV1::Preflight(_) => {
@@ -1730,13 +1718,72 @@ pub fn hydrate_campaign_foundation_v1(
     let mut client = config.connect(NoTls).map_err(|error| {
         RustPersistenceRuntimeErrorV2::postgres("connect foundation reader", &error)
     })?;
+    require_active_authority_client(&mut client)?;
+    crate::foundation_content_schema::install_foundation_content_schema_v2(&mut client)?;
+    hydrate_campaign_foundation_client_v1(&mut client, campaign_id)
+}
+
+/// Rebuild the exact stored tick-zero graph and verify all captured components.
+/// The immutable H3 reference remains the existing admitted reference; scenario,
+/// rules, defines, session identity and seed come from the durable foundation.
+pub(crate) fn reconstruct_graph_foundation_session_v1(
+    foundation: &CampaignFoundationV1,
+) -> Result<ReplayTickSession<HypergraphStore>, RustPersistenceRuntimeErrorV2> {
+    let bundle = foundation.content_bundle();
+    let scenario = std::str::from_utf8(bundle.scenario_source_bytes())
+        .map_err(|_| RustPersistenceRuntimeErrorV2::ReplaySource)?;
+    let prelude = bundle
+        .prelude_source_bytes()
+        .map(std::str::from_utf8)
+        .transpose()
+        .map_err(|_| RustPersistenceRuntimeErrorV2::ReplaySource)?;
+    let rules = std::str::from_utf8(bundle.rule_source_bytes())
+        .map_err(|_| RustPersistenceRuntimeErrorV2::ReplaySource)?;
+    let material = MaterialStateV1::try_new(
+        michigan_dynamic_hex_foundation_v1()
+            .map_err(|_| RustPersistenceRuntimeErrorV2::ReplaySource)?,
+    )
+    .map_err(|_| RustPersistenceRuntimeErrorV2::ReplaySource)?;
+    let session = ReplayTickSession::new(
+        scenario,
+        prelude,
+        rules,
+        HypergraphStore::new(),
+        foundation.replay_session_identity().clone(),
+        foundation.rng_seed(),
+        foundation.content_digest().clone(),
+        foundation.reference_digest(),
+        material,
+    )
+    .map_err(|_| RustPersistenceRuntimeErrorV2::ReplayTick)?;
+    let verification_bundle = FoundationContentBundle::try_new(
+        bundle.layout(),
+        scenario,
+        prelude,
+        rules,
+        bundle.defines_bytes(),
+        bundle.reference_bundle_manifest_bytes(),
+    )?;
+    let verification = CampaignFoundationV1::capture_content(&session, verification_bundle)?;
+    if verification.canonical_bytes() != foundation.canonical_bytes() {
+        return Err(RustPersistenceRuntimeErrorV2::CampaignConflict);
+    }
+    Ok(session)
+}
+
+pub(crate) fn hydrate_campaign_foundation_client_v1(
+    client: &mut impl GenericClient,
+    campaign_id: CampaignId,
+) -> Result<CampaignFoundationV1, RustPersistenceRuntimeErrorV2> {
     let row = client
         .query_opt(
             "SELECT stable_graph, world_registers, resolver_manifest, prepared_environment, \
                     replay_session_id, rng_seed, defines_hash, rules_hash, ref_digest, \
                     scenario_source, prelude_source, rule_source, defines_bytes, \
-                    reference_manifest_bytes, foundation_sha256 \
-             FROM babylon_state.campaign_foundation WHERE campaign_id = $1::uuid",
+                    reference_manifest_bytes, foundation_sha256, content_layout_version \
+             FROM babylon_state.campaign_foundation \
+             JOIN babylon_state.campaign_foundation_content_layout_v2 USING (campaign_id) \
+             WHERE campaign_id = $1::uuid",
             &[campaign_id.as_uuid()],
         )
         .map_err(|error| {
@@ -1774,10 +1821,11 @@ pub fn hydrate_campaign_foundation_v1(
         &defines_bytes,
         &reference_manifest,
         foundation_sha256,
+        FoundationContentLayout::from_persisted(decode_runtime_column(&row, 15)?)?,
     )
 }
 
-fn require_active_authority(
+pub(crate) fn require_active_authority(
     config: &Config,
 ) -> Result<CommittedTickAuthorityLedgerRowV2, RustPersistenceRuntimeErrorV2> {
     validate_legacy_connection_target(config)
@@ -1788,7 +1836,7 @@ fn require_active_authority(
     require_active_authority_client(&mut client)
 }
 
-fn require_active_authority_client(
+pub(crate) fn require_active_authority_client(
     client: &mut impl GenericClient,
 ) -> Result<CommittedTickAuthorityLedgerRowV2, RustPersistenceRuntimeErrorV2> {
     let predecessor = read_predecessor_active_hash(client).map_err(runtime_authority_error_v2)?;
@@ -1851,6 +1899,8 @@ fn persist_campaign_foundation_v1(
     let mut client = config.connect(NoTls).map_err(|error| {
         RustPersistenceRuntimeErrorV2::postgres("connect foundation writer", &error)
     })?;
+    require_active_authority_client(&mut client)?;
+    crate::foundation_content_schema::install_foundation_content_schema_v2(&mut client)?;
     let mut transaction = client.transaction().map_err(|error| {
         RustPersistenceRuntimeErrorV2::postgres("begin foundation writer", &error)
     })?;
@@ -1859,6 +1909,17 @@ fn persist_campaign_foundation_v1(
         .map_err(|error| {
             RustPersistenceRuntimeErrorV2::postgres("foundation writer settings", &error)
         })?;
+    // Material creation uses the same founding lock. Hold it through graph
+    // insertion so its absence check cannot adopt a concurrent graph campaign.
+    transaction
+        .query_one(
+            "SELECT pg_catalog.pg_advisory_xact_lock($1)",
+            &[&crate::SCHEMA_ADVISORY_LOCK_KEY],
+        )
+        .map_err(|error| {
+            RustPersistenceRuntimeErrorV2::postgres("lock campaign founding", &error)
+        })?;
+    require_graph_campaign_owner_v2(&mut transaction, campaign_id)?;
     insert_campaign_foundation_rows_v1(&mut transaction, campaign_id, foundation)?;
     transaction.commit().map_err(|error| {
         RustPersistenceRuntimeErrorV2::postgres("commit campaign foundation", &error)
@@ -1870,7 +1931,7 @@ fn persist_campaign_foundation_v1(
     Ok(())
 }
 
-fn insert_campaign_foundation_rows_v1(
+pub(crate) fn insert_campaign_foundation_rows_v1(
     client: &mut impl GenericClient,
     campaign_id: CampaignId,
     foundation: &CampaignFoundationV1,
@@ -1914,7 +1975,7 @@ fn insert_campaign_foundation_rows_v1(
         crate::territory_county_map::extract_declared_territory_county_map_v1(scenario, prelude)
             .map_err(RustPersistenceRuntimeErrorV2::TerritoryCountyMap)?;
     let foundation_sha256 = sha256_of(foundation.canonical_bytes());
-    client
+    let inserted = client
         .execute(
             "INSERT INTO babylon_state.campaign_foundation \
              (campaign_id, stable_graph, world_registers, resolver_manifest, prepared_environment, \
@@ -1944,6 +2005,7 @@ fn insert_campaign_foundation_rows_v1(
         .map_err(|error| {
             RustPersistenceRuntimeErrorV2::postgres("insert campaign foundation", &error)
         })?;
+    persist_foundation_content_layout_v2(client, campaign_id, bundle.layout(), inserted == 1)?;
     let stored_sha: Vec<u8> = client
         .query_one(
             "SELECT foundation_sha256 FROM babylon_state.campaign_foundation \
@@ -1966,6 +2028,36 @@ fn insert_campaign_foundation_rows_v1(
     .map_err(RustPersistenceRuntimeErrorV2::TerritoryCountyMap)?;
     crate::archive_foundation_grants::seed_foundation_grants_v1(client, campaign_id)
         .map_err(RustPersistenceRuntimeErrorV2::FoundationGrants)?;
+    crate::archive_revision::schema::enroll_foundation(client, campaign_id, inserted == 1)
+        .map_err(RustPersistenceRuntimeErrorV2::SemanticArchive)?;
+    Ok(())
+}
+
+fn persist_foundation_content_layout_v2(
+    client: &mut impl GenericClient,
+    campaign_id: CampaignId,
+    layout: FoundationContentLayout,
+    foundation_inserted: bool,
+) -> Result<(), RustPersistenceRuntimeErrorV2> {
+    if foundation_inserted {
+        client
+            .execute(
+                "INSERT INTO babylon_state.campaign_foundation_content_layout_v2 \
+             (campaign_id, content_layout_version) VALUES ($1::uuid, $2)",
+                &[campaign_id.as_uuid(), &layout.version()],
+            )
+            .map_err(|error| {
+                RustPersistenceRuntimeErrorV2::postgres("insert foundation content layout", &error)
+            })?;
+    }
+    let stored_layout: i16 = client.query_one(
+        "SELECT content_layout_version FROM babylon_state.campaign_foundation_content_layout_v2 \
+         WHERE campaign_id = $1::uuid", &[campaign_id.as_uuid()],
+    ).and_then(|row| row.try_get(0))
+        .map_err(|error| RustPersistenceRuntimeErrorV2::postgres("verify foundation content layout", &error))?;
+    if FoundationContentLayout::from_persisted(stored_layout)? != layout {
+        return Err(RustPersistenceRuntimeErrorV2::CampaignConflict);
+    }
     Ok(())
 }
 
@@ -2030,12 +2122,37 @@ fn validate_campaign_catalog_tail_v1(
     }
 }
 
+/// Inspect the existing owner relation; never attach or replace an owner.
+/// Writers call this while holding the campaign/founding lock. A pre-material
+/// schema has no registered material campaigns and remains a valid graph estate.
+fn require_graph_campaign_owner_v2(
+    client: &mut impl GenericClient,
+    campaign_id: CampaignId,
+) -> Result<(), RustPersistenceRuntimeErrorV2> {
+    let installed: bool = client.query_one(
+        "SELECT pg_catalog.to_regclass('babylon_state.material_campaign_foundation_v2') IS NOT NULL", &[],
+    ).and_then(|row| row.try_get(0))
+        .map_err(|error| RustPersistenceRuntimeErrorV2::postgres("inspect material owner relation", &error))?;
+    if installed {
+        let material: bool = client.query_one(
+            "SELECT EXISTS (SELECT 1 FROM babylon_state.material_campaign_foundation_v2 WHERE campaign_id=$1::uuid)",
+            &[campaign_id.as_uuid()],
+        ).and_then(|row| row.try_get(0))
+            .map_err(|error| RustPersistenceRuntimeErrorV2::postgres("read campaign writer owner", &error))?;
+        if material {
+            return Err(RustPersistenceRuntimeErrorV2::CampaignConflict);
+        }
+    }
+    Ok(())
+}
+
 fn commit_typed_tick_v2(
     config: &Config,
     campaign_id: CampaignId,
     report: &IdentifiedTickReportV2,
     checkpoint: &CommittedFullCheckpointV1,
     envelope: &CommittedTickEnvelopeV2,
+    content_layout: FoundationContentLayout,
 ) -> Result<ReplayCommitDispositionV1, RustPersistenceRuntimeErrorV2> {
     let claim = envelope.claim();
     if claim.campaign_id() != campaign_id
@@ -2054,16 +2171,13 @@ fn commit_typed_tick_v2(
     let mut client = config.connect(NoTls).map_err(|error| {
         RustPersistenceRuntimeErrorV2::postgres("connect typed tick writer", &error)
     })?;
-    if marker_matches_envelope_v2(&mut client, report, envelope)? {
-        return Ok(ReplayCommitDispositionV1::ReconciledAfterAmbiguousCommit);
-    }
     #[cfg(test)]
-    let retry_probe_barrier = LIVE_AFTER_INITIAL_RETRY_PROBE_BARRIER
+    let before_lock_barrier = LIVE_BEFORE_CAMPAIGN_LOCK_BARRIER
         .lock()
-        .expect("live retry probe barrier lock")
+        .expect("live pre-lock barrier lock")
         .clone();
     #[cfg(test)]
-    if let Some(barrier) = retry_probe_barrier {
+    if let Some(barrier) = before_lock_barrier {
         barrier.wait();
     }
     let mut transaction = client
@@ -2082,6 +2196,12 @@ fn commit_typed_tick_v2(
     if locked.is_none() {
         return Err(RustPersistenceRuntimeErrorV2::FoundationAbsent);
     }
+    require_graph_campaign_owner_v2(&mut transaction, campaign_id)?;
+    crate::foundation_content_schema::lock_foundation_content_layout_v2(
+        &mut transaction,
+        campaign_id,
+        content_layout,
+    )?;
     // Another identical writer may have committed while this transaction waited for the campaign
     // row. Reconcile the exact marker and envelope under the acquired lock before interpreting the
     // advanced tail as a conflict.
@@ -2110,7 +2230,7 @@ fn commit_typed_tick_v2(
         resolve_tick,
         report,
         checkpoint,
-        envelope,
+        envelope.claim().tick_content_hash(),
     )?;
     commit_marker_last_v2(
         config,
@@ -2119,6 +2239,7 @@ fn commit_typed_tick_v2(
         resolve_tick,
         report,
         envelope,
+        content_layout,
     )
 }
 
@@ -2129,6 +2250,7 @@ fn commit_marker_last_v2(
     resolve_tick: i64,
     report: &IdentifiedTickReportV2,
     envelope: &CommittedTickEnvelopeV2,
+    content_layout: FoundationContentLayout,
 ) -> Result<ReplayCommitDispositionV1, RustPersistenceRuntimeErrorV2> {
     #[cfg(test)]
     if LIVE_FAIL_BEFORE_MARKER.swap(false, std::sync::atomic::Ordering::SeqCst) {
@@ -2160,9 +2282,25 @@ fn commit_marker_last_v2(
     match commit_transaction_v1(transaction) {
         TickCommitAttemptV1::Acknowledged => Ok(ReplayCommitDispositionV1::Committed),
         TickCommitAttemptV1::Ambiguous { diagnostic } => {
-            let mut reconciliation = config.connect(NoTls).map_err(|error| {
+            let mut client = config.connect(NoTls).map_err(|error| {
                 RustPersistenceRuntimeErrorV2::postgres("reconnect ambiguous commit", &error)
             })?;
+            let mut reconciliation = client.transaction().map_err(|error| {
+                RustPersistenceRuntimeErrorV2::postgres("begin ambiguous reconciliation", &error)
+            })?;
+            let locked = reconciliation.query_opt(
+                "SELECT campaign_id FROM babylon_state.campaign WHERE campaign_id=$1::uuid FOR UPDATE",
+                &[campaign_id.as_uuid()],
+            ).map_err(|error| RustPersistenceRuntimeErrorV2::postgres("lock reconciliation campaign", &error))?;
+            if locked.is_none() {
+                return Err(RustPersistenceRuntimeErrorV2::FoundationAbsent);
+            }
+            require_graph_campaign_owner_v2(&mut reconciliation, campaign_id)?;
+            crate::foundation_content_schema::lock_foundation_content_layout_v2(
+                &mut reconciliation,
+                campaign_id,
+                content_layout,
+            )?;
             if marker_matches_envelope_v2(&mut reconciliation, report, envelope)? {
                 #[cfg(test)]
                 LIVE_RECONCILIATIONS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
@@ -2177,13 +2315,13 @@ fn commit_marker_last_v2(
     }
 }
 
-fn insert_typed_tick_pre_marker_rows_v2(
+pub(crate) fn insert_typed_tick_pre_marker_rows_v2(
     client: &mut impl GenericClient,
     campaign_id: CampaignId,
     resolve_tick: i64,
     report: &IdentifiedTickReportV2,
     checkpoint: &CommittedFullCheckpointV1,
-    envelope: &CommittedTickEnvelopeV2,
+    tick_content_hash: TickContentHashV1,
 ) -> Result<(), RustPersistenceRuntimeErrorV2> {
     let action_layout = i16::try_from(report.action_batch_layout_version())
         .map_err(|_| RustPersistenceRuntimeErrorV2::CampaignConflict)?;
@@ -2214,7 +2352,7 @@ fn insert_typed_tick_pre_marker_rows_v2(
             &[
                 campaign_id.as_uuid(),
                 &resolve_tick,
-                &&envelope.claim().tick_content_hash().as_bytes()[..],
+                &&tick_content_hash.as_bytes()[..],
             ],
         ),
         "insert archive dirty receipt",
@@ -2252,7 +2390,7 @@ static LIVE_COMMIT_AS_AMBIGUOUS: std::sync::atomic::AtomicBool =
 static LIVE_RECONCILIATIONS: std::sync::atomic::AtomicUsize =
     std::sync::atomic::AtomicUsize::new(0);
 #[cfg(test)]
-static LIVE_AFTER_INITIAL_RETRY_PROBE_BARRIER: std::sync::Mutex<
+static LIVE_BEFORE_CAMPAIGN_LOCK_BARRIER: std::sync::Mutex<
     Option<std::sync::Arc<std::sync::Barrier>>,
 > = std::sync::Mutex::new(None);
 
@@ -3314,6 +3452,23 @@ impl PreparedCommittedTickV2 {
             },
         )
         .map_err(RustPersistenceRuntimeErrorV2::SemanticEnvelope)
+    }
+
+    pub(crate) fn into_material_families(
+        self,
+        hash: TickContentHashV1,
+    ) -> Result<CommittedTickRowFamiliesV2, RustPersistenceRuntimeErrorV2> {
+        let (graph, event, choice_receipt) = self.graph_event_batches.into_rows();
+        Ok(CommittedTickRowFamiliesV2 {
+            graph,
+            state: self.material_state_rows,
+            event,
+            choice_receipt,
+            checkpoint: self.checkpoint_rows.into_rows(),
+            archive_dirty_receipt: crate::semantic_codec::encode_archive_dirty_receipt(
+                hash.as_bytes(),
+            )?,
+        })
     }
 
     #[cfg(test)]
@@ -4585,10 +4740,10 @@ mod live_tests {
             .expect("campaign foundation installs before concurrent writers");
         drop(runtime);
 
-        let initial_probe_barrier = Arc::new(Barrier::new(3));
-        *LIVE_AFTER_INITIAL_RETRY_PROBE_BARRIER
+        let before_lock_barrier = Arc::new(Barrier::new(3));
+        *LIVE_BEFORE_CAMPAIGN_LOCK_BARRIER
             .lock()
-            .expect("install retry probe barrier") = Some(Arc::clone(&initial_probe_barrier));
+            .expect("install pre-lock barrier") = Some(Arc::clone(&before_lock_barrier));
         let mut workers = Vec::new();
         for _ in 0..2 {
             let worker_config = config.clone();
@@ -4620,14 +4775,15 @@ mod live_tests {
                     candidate.report(),
                     &checkpoint,
                     &envelope,
+                    FoundationContentLayout::V1,
                 )
             }));
         }
 
-        initial_probe_barrier.wait();
-        *LIVE_AFTER_INITIAL_RETRY_PROBE_BARRIER
+        before_lock_barrier.wait();
+        *LIVE_BEFORE_CAMPAIGN_LOCK_BARRIER
             .lock()
-            .expect("remove retry probe barrier") = None;
+            .expect("remove pre-lock barrier") = None;
         let dispositions = workers
             .into_iter()
             .map(|worker| {

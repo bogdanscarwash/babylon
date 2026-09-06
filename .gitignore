@@ -73,11 +73,19 @@ chromadb/
 .hypothesis/
 
 # Compiled Audio (generated from MIDI via FluidSynth)
-# Commit MIDI source files, not compiled audio
+# Keep local audio exports out of git; the eight pinned observer renders ship.
 assets/audio/
 *.wav
 *.mp3
 *.ogg
+!assets/music/babylon_theme_phi.ogg
+!assets/music/babylon_theme_panopticon.ogg
+!assets/sfx/ui/ui_select.ogg
+!assets/sfx/ui/ui_tab.ogg
+!assets/sfx/ui/ui_open.ogg
+!assets/sfx/ui/ui_back.ogg
+!assets/sfx/state/tick_advance.ogg
+!assets/sfx/state/state_fault.ogg
 
 # Large image assets (use Git LFS for these)
 assets/images/*.png
@@ -202,3 +210,8 @@ snapshot_report.html
 /tools/tree-sitter-bsl/bindings/
 /tools/tree-sitter-bsl/build/
 /tools/tree-sitter-bsl/*.wasm
+
+# Preserved pre-native build output; canonical Cargo output remains rust/target.
+/rust/target.nix-retired-20260904/
+# Dedicated reference-data interpreter and venv (ADR252).
+/.cache/babylon/

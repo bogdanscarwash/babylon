@@ -27,4 +27,5 @@ src/babylon/data/reference/**/*.csv -filter diff merge text
 # so an LFS-pointered CSV read by a unit test yields KeyError on the pointer
 # line — first hit by #334's fixture-reading tests, PR #665).
 tests/fixtures/national_incidence/*.csv -filter -diff -merge text
+tests/fixtures/qcew_economics/*.csv -filter diff merge text
 src/babylon/data/reference/national/*.csv -filter -diff -merge text

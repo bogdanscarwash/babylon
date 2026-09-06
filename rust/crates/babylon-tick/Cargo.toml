@@ -10,6 +10,7 @@ publish = false
 [dependencies]
 babylon-bsl = { path = "../babylon-bsl" }
 babylon-graph = { path = "../babylon-graph" }
+babylon-material-circuit = { path = "../babylon-material-circuit" }
 # TickSession's deterministic V1 execution namespace and ReplayTickSession's
 # governed V2 replay identity are direct production dependencies. Finite
 # choices are legal only through the latter; BSL has no author-visible draw.

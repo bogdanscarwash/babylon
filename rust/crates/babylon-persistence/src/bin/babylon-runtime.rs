@@ -7,25 +7,32 @@ use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
+#[cfg(test)]
 use babylon_bsl::rule_pipeline::split_content;
+#[cfg(test)]
 use babylon_bsl::rules_hash_of;
 use babylon_bsl::structural_verbs::CollectingSink;
 use babylon_graph::hypergraph_store::HypergraphStore;
 use babylon_graph::stable_state::StableGraphStateV1;
+#[cfg(test)]
 use babylon_kernel::replay::{ReplaySeed, ReplaySessionIdV1};
 use babylon_kernel::sha256_of;
+#[cfg(test)]
 use babylon_kernel::tick_content_hash::RefDigestV1;
+#[cfg(test)]
 use babylon_kernel::ContentDigest;
+#[cfg(test)]
+use babylon_persistence::michigan_dynamic_hex_foundation_v1;
 use babylon_persistence::{
-    activate_rust_persistence_v2, michigan_dynamic_hex_foundation_v1, preflight_schema_epoch,
-    representative_h3_reference_cohort_v1, ArchiveSchemaDispositionV1, CampaignFoundationV1,
-    CampaignId, CommittedResolveTickV1, CommittedTickReceiptV2, CompositeArchiveDossierProducerV1,
-    CountyDossierProducerV1, DurableReplayRuntimeV2, FoundationContentBundleV1,
-    PlaceDossierProducerV1, PostgresDiagnosticV1, RustPersistenceRuntimeErrorV2,
-    SemanticArchiveStoreV1,
+    activate_rust_persistence_v2, preflight_schema_epoch, representative_h3_reference_cohort_v1,
+    ArchiveSchemaDispositionV1, CampaignFoundationV1, CampaignId, CommittedResolveTickV1,
+    CommittedTickReceiptV2, CompositeArchiveDossierProducerV1, CountyDossierProducerV1,
+    DurableReplayRuntimeV2, FoundationContentBundleV1, PlaceDossierProducerV1,
+    PostgresDiagnosticV1, RustPersistenceRuntimeErrorV2, SemanticArchiveStoreV1,
 };
 use babylon_practice_contract::ordered_action_v1::OrderedPracticeActionBatchV1;
 use babylon_tick::choice_receipt::ChoiceReceiptV1;
+#[cfg(test)]
 use babylon_tick::material_state::MaterialStateV1;
 use babylon_tick::replay_session::{ReplayCommitDispositionV1, ReplayTickSession};
 use postgres::{Config, NoTls};
@@ -39,8 +46,11 @@ const MICHIGAN_SMOKE_RESTART_TICKS: &[u64] = &[1, 51, 52, 60];
 const TICK_REPORT_SCHEMA_V2: &str = "babylon.simulation.tick-report.v2";
 const CHOICE_RECEIPT_REPORT_SCHEMA_V1: &str = "babylon.simulation.choice-receipts.v1";
 const TICK_REPORT_SLICE_ID: &str = "michigan-persistence-slice";
+#[cfg(test)]
 const FIXED_REPLAY_SEED: i64 = 281;
+#[cfg(test)]
 const OBSERVED_ENTITY: &str = "wayne";
+#[cfg(test)]
 const OBSERVABLE_ALLOWLIST_V2: &[(&str, &str)] = &[
     ("territory/median-wage", "configured_input"),
     ("territory/phi-hour", "configured_input"),
@@ -48,8 +58,11 @@ const OBSERVABLE_ALLOWLIST_V2: &[(&str, &str)] = &[
     ("territory/rate-accumulation", "dynamic"),
     ("territory/dist-year", "dynamic"),
 ];
+#[cfg(test)]
 const DEFINES: &[u8] = br#"{"alpha":1}"#;
+#[cfg(test)]
 const REFERENCE_BUNDLE_DOMAIN: &[u8] = b"babylon.h3.reference-bundle-composite.v1\0";
+#[cfg(test)]
 const SCENARIO: &str = r"
 (scenario production/michigan-rust-runtime
   (defvocabulary NodeType (TERRITORY))
@@ -77,6 +90,7 @@ const SCENARIO: &str = r"
     (territory/dist-year 2010)
     (territory/county-fips 26163)))
 ";
+#[cfg(test)]
 const RULE: &str = r#"
 (rule class-dynamics/a01-rollover-accumulation-smoke
   :role mechanic
@@ -156,6 +170,10 @@ enum Command {
         restart_every: Option<u64>,
     },
     Probe,
+    Session {
+        preset: Option<babylon_persistence::michigan_material::MichiganDeliveryPresetV1>,
+    },
+    ObserverSchema,
     Archive,
     ArchiveWorker,
     MichiganSmoke {
@@ -167,7 +185,7 @@ enum Command {
 fn main() -> ExitCode {
     let Ok(command) = parse_command(std::env::args_os().skip(1)) else {
         eprintln!(
-            "babylon-runtime: expected activate, bootstrap, preflight, run --ticks N [--report-jsonl PATH] [--choice-receipts-jsonl PATH] [--restart-every N], probe, archive, archive-worker --once, or michigan-smoke [--report-jsonl PATH] [--choice-receipts-jsonl PATH]"
+            "babylon-runtime: expected activate, bootstrap, preflight, diagnostic run --ticks N [--report-jsonl PATH] [--choice-receipts-jsonl PATH] [--restart-every N], probe, archive, archive-worker --once, diagnostic michigan-smoke [--report-jsonl PATH] [--choice-receipts-jsonl PATH], observer-schema, or session --stdio [--preset standard|delayed]"
         );
         return ExitCode::from(2);
     };
@@ -258,6 +276,19 @@ fn execute(command: Command, config: &Config) -> Result<(), String> {
                 report_writer.as_mut(),
                 choice_receipt_writer.as_mut(),
             )?;
+        }
+        Command::Session { preset } => {
+            babylon_persistence::run_runtime_session_stdio_v2(config, campaign_id()?, preset)
+                .map_err(|error| error.to_string())?;
+        }
+        Command::ObserverSchema => {
+            SemanticArchiveStoreV1::new(config)
+                .install_schema()
+                .map_err(|error| error.to_string())?;
+            babylon_persistence::install_reader_role_v1(config)
+                .map_err(|error| error.to_string())?;
+            babylon_persistence::install_observer_economy_schema_v1(config)
+                .map_err(|error| error.to_string())?;
         }
         Command::Probe => probe(config, configured_campaign_id()?)?,
         Command::Archive => inspect_archive(config)?,
@@ -542,7 +573,7 @@ impl SimulationTickReportV2 {
             "scope": {
                 "slice_id": TICK_REPORT_SLICE_ID,
                 "scenario": self.scenario.as_str(),
-                "fixed_replay_seed": FIXED_REPLAY_SEED,
+                "fixed_replay_seed": if self.scenario == babylon_persistence::MICHIGAN_OBSERVER_SCENARIO_V1 { 319 } else { 281 },
                 "parameter_overrides": false,
                 "stochastic_draws": false,
                 "dynamic_h3_updates": false,
@@ -666,27 +697,67 @@ fn collect_observable_transitions_v2(
     if before.scenario_scope() != after.scenario_scope() {
         return Err("tick report observable scenarios are misaligned".to_owned());
     }
-    let mut observables = Vec::with_capacity(OBSERVABLE_ALLOWLIST_V2.len());
-    for &(field, role) in OBSERVABLE_ALLOWLIST_V2 {
-        let (before_entity, before_value_bits) = observable_bits_v2(before, field, "pre")?;
-        let (after_entity, after_value_bits) = observable_bits_v2(after, field, "post")?;
-        if before_entity != after_entity {
-            return Err(format!(
-                "tick report observable {OBSERVED_ENTITY}::{field} identities are misaligned"
-            ));
+    if after.scenario_scope() == babylon_persistence::MICHIGAN_OBSERVER_SCENARIO_V1 {
+        let mut observables = Vec::with_capacity(83 * 4);
+        for county in babylon_persistence::michigan_economy_v1()
+            .map_err(|error| error.to_string())?
+            .counties()
+        {
+            let entity = format!("county-{}", county.county_geoid);
+            for key in babylon_persistence::QCEW_ECONOMICS_FIELD_KEYS_V1 {
+                let field = format!("territory/{key}");
+                let find = |state: &StableGraphStateV1| -> Result<u64, String> {
+                    state
+                        .rows()
+                        .node_f64()
+                        .iter()
+                        .find(|(candidate, candidate_field, _)| {
+                            candidate == &entity && candidate_field == &field
+                        })
+                        .map(|(_, _, bits)| *bits)
+                        .ok_or_else(|| {
+                            format!("committed QCEW observable {entity}::{field} missing")
+                        })
+                };
+                observables.push(ObservableTickReportV2 {
+                    name: format!("{}::{entity}::{field}", after.scenario_scope()),
+                    entity: entity.clone(),
+                    field: field.clone(),
+                    role: "observed_baseline",
+                    before_value_bits: find(before)?,
+                    after_value_bits: find(after)?,
+                });
+            }
         }
-        observables.push(ObservableTickReportV2 {
-            name: format!("{}::{OBSERVED_ENTITY}::{field}", after.scenario_scope()),
-            entity: after_entity.to_owned(),
-            field: field.to_owned(),
-            role,
-            before_value_bits,
-            after_value_bits,
-        });
+        return Ok(observables);
     }
-    Ok(observables)
+    #[cfg(not(test))]
+    return Err("tick report scenario is not the Michigan observer foundation".to_owned());
+    #[cfg(test)]
+    {
+        let mut observables = Vec::with_capacity(OBSERVABLE_ALLOWLIST_V2.len());
+        for &(field, role) in OBSERVABLE_ALLOWLIST_V2 {
+            let (before_entity, before_value_bits) = observable_bits_v2(before, field, "pre")?;
+            let (after_entity, after_value_bits) = observable_bits_v2(after, field, "post")?;
+            if before_entity != after_entity {
+                return Err(format!(
+                    "tick report observable {OBSERVED_ENTITY}::{field} identities are misaligned"
+                ));
+            }
+            observables.push(ObservableTickReportV2 {
+                name: format!("{}::{OBSERVED_ENTITY}::{field}", after.scenario_scope()),
+                entity: after_entity.to_owned(),
+                field: field.to_owned(),
+                role,
+                before_value_bits,
+                after_value_bits,
+            });
+        }
+        Ok(observables)
+    }
 }
 
+#[cfg(test)]
 fn observable_bits_v2<'a>(
     state: &'a StableGraphStateV1,
     field: &str,
@@ -904,7 +975,19 @@ fn open_or_create_runtime(
     campaign: CampaignId,
 ) -> Result<DurableReplayRuntimeV2<HypergraphStore>, String> {
     match DurableReplayRuntimeV2::open(config, campaign) {
-        Ok(runtime) => Ok(runtime),
+        Ok(runtime) => {
+            let economy =
+                babylon_persistence::michigan_economy_v1().map_err(|error| error.to_string())?;
+            if runtime
+                .foundation()
+                .content_bundle()
+                .scenario_source_bytes()
+                != economy.scenario_source().as_bytes()
+            {
+                return Err("campaign scenario differs from the Michigan observer foundation; choose another campaign identity".to_owned());
+            }
+            Ok(runtime)
+        }
         Err(RustPersistenceRuntimeErrorV2::FoundationAbsent) => {
             let (session, bundle) = runtime_foundation()?;
             DurableReplayRuntimeV2::create(config, campaign, session, bundle)
@@ -915,6 +998,17 @@ fn open_or_create_runtime(
 }
 
 fn runtime_foundation() -> Result<
+    (
+        ReplayTickSession<HypergraphStore>,
+        FoundationContentBundleV1,
+    ),
+    String,
+> {
+    babylon_persistence::michigan_observer_foundation_v1().map_err(|error| error.to_string())
+}
+
+#[cfg(test)]
+fn smoke_foundation() -> Result<
     (
         ReplayTickSession<HypergraphStore>,
         FoundationContentBundleV1,
@@ -1036,10 +1130,9 @@ fn run_archive_worker_once(config: &Config) -> Result<(), String> {
         .sweep_once(campaign_id()?, &producer)
         .map_err(|error| format!("Archive worker sweep refused: {error}"))?;
     println!(
-        "Archive worker sweep complete; verified_tick={}; deferred={}; applied={}; \
+        "Archive worker sweep complete; verified_tick={}; applied={}; \
          already_consumed={}; paged={}.",
         report.verified_tick(),
-        report.deferred_count(),
         report.applied_count(),
         report.already_consumed_count(),
         report.paged_count(),
@@ -1132,6 +1225,27 @@ fn parse_command(mut args: impl Iterator<Item = OsString>) -> Result<Command, ()
         }
         value if value == OsStr::new("preflight") && args.next().is_none() => {
             Ok(Command::Preflight)
+        }
+        value if value == OsStr::new("session") => {
+            if args.next() != Some(OsString::from("--stdio")) {
+                return Err(());
+            }
+            let preset=match args.next() {
+                None=>None,
+                Some(flag) if flag==OsStr::new("--preset")=>Some(match args.next().as_deref() {
+                    Some(value) if value==OsStr::new("standard")=>babylon_persistence::michigan_material::MichiganDeliveryPresetV1::Standard,
+                    Some(value) if value==OsStr::new("delayed")=>babylon_persistence::michigan_material::MichiganDeliveryPresetV1::Delayed,
+                    _=>return Err(()),
+                }),
+                _=>return Err(()),
+            };
+            if args.next().is_some() {
+                return Err(());
+            }
+            Ok(Command::Session { preset })
+        }
+        value if value == OsStr::new("observer-schema") && args.next().is_none() => {
+            Ok(Command::ObserverSchema)
         }
         value if value == OsStr::new("probe") && args.next().is_none() => Ok(Command::Probe),
         value if value == OsStr::new("archive") && args.next().is_none() => Ok(Command::Archive),
@@ -1251,9 +1365,9 @@ mod tests {
 
     use super::{
         collect_event_type_counts_v2, collect_observable_transitions_v2, foundation_identity_v2,
-        parse_command, runtime_foundation, should_reopen_after_commit_v2, ChoiceReceiptJsonlWriter,
-        Command, EventTypeTickReportV2, FoundationIdentityTickReportV2, ObservableTickReportV2,
-        RuleTickReportV2, SimulationTickReportV2, TickReportJsonlWriter,
+        parse_command, should_reopen_after_commit_v2, smoke_foundation as runtime_foundation,
+        ChoiceReceiptJsonlWriter, Command, EventTypeTickReportV2, FoundationIdentityTickReportV2,
+        ObservableTickReportV2, RuleTickReportV2, SimulationTickReportV2, TickReportJsonlWriter,
         MICHIGAN_SMOKE_RESTART_TICKS, MICHIGAN_SMOKE_TICKS, RULE, SCENARIO, TICK_REPORT_SCHEMA_V2,
     };
 

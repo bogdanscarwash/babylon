@@ -1,45 +1,34 @@
-//! PER-23 Slice 4 (ADR249 R5/R6/R9): the county dossier card — the client's
-//! first styled card and its first Gameplay-role
-//! [`DecisionSurfaceContract`](crate::decision_surface::DecisionSurfaceContract)
-//! row, composed from typed Archive atoms (never stored Markdown, no Markdown
-//! parser).
+//! One canonical, scoped Archive observation composed into a native card.
 //!
-//! **Why a dedicated plugin** (decided once, here): every other `ui` module
-//! owns no plugin and wires into `TickLoopPlugin`, but the dossier card owns
-//! a whole resource family — campaign identity, fetch state, the typed
-//! projection, the page view — and that family must exist identically in the
-//! windowed viewer and in headless test compositions riding `MinimalPlugins`.
-//! A dedicated `DossierCardPlugin` adds the family in one place; both the
-//! production `AppMode::Windowed` build and the headless CI tests add this
-//! one plugin. The `AppMode::Headless` dossier CLI keeps its pure-JSONL path
-//! (`crate::dossier`) — it answers agent queries, it renders no UI.
-//!
-//! **Fetch discipline**: a selection change resolves the atlas index to a
-//! county FIPS and starts exactly one `AsyncComputeTaskPool` task against
-//! the fog-safe reader; completion installs the [`ActiveCountyDossier`]
-//! projection and the repaint derives ONLY from that resource — never from
-//! the reader, never per frame. Starting a new fetch clears the projection
-//! first, so an in-flight card never shows stale data (ADR249 R9's honest
-//! pending state). A missing `BABYLON_READER_DSN` is an honest card line
-//! ("Archive reader not configured"), never a panic — CI headless tests have
-//! no Postgres.
+//! Async reads bind the exact installed week, commit identity, capability and
+//! geographic selection. The same typed read feeds headless JSONL. Retained
+//! publications stay explicitly pending until the reader verifies them; no
+//! current-page search or global progress counter fills missing historical data.
+//! Keyboard and pointer controls share admission and are checked again on apply.
 
 use babylon_persistence::{
-    ArchiveAtomSubjectKindV1, ArchiveAtomSubjectV1, ArchiveAtomV1, ArchiveSubjectKindV1,
-    CampaignId, SemanticArchiveReaderV1,
+    ArchivePageRefV1, ArchiveSubjectKindV1, CampaignId, SemanticArchiveReaderV1,
 };
+use bevy::ecs::system::SystemParam;
+use bevy::input_focus::tab_navigation::TabGroup;
 use bevy::prelude::*;
 use bevy::tasks::{block_on, AsyncComputeTaskPool, Task};
 
 use crate::atlas::CountyAtlas;
 use crate::decision_surface::{DeclaredSurface, SurfaceId};
-use crate::dossier::{changelog_rows, ChangelogRow};
+use crate::dossier::{availability_label, observation_scope, retained_page, verified_tick};
 use crate::map::SelectedCounty;
+use crate::observer::{ObservationContext, ObserverSession};
+use crate::observer_focus::{ObserverFocusSystems, ObserverFocusTarget, ObserverKeyboardActivate};
+use crate::observer_ui::{ObserverFeedback, ObserverFontRole, ObserverFrame, ObserverUiState};
 use crate::palette;
 use crate::ui::dossier_compose::{
-    chip_text, chronicle_row_segments, compose_stub, compose_vague, dual_tick_segments,
-    signal_atoms, signal_row_segments, DossierSegment, DossierTone, PlaceChip,
-    DOSSIER_DECISION_QUESTION, INVESTIGATE_SEALED_CHIP,
+    chronicle_header, chronicle_row_segments, retained_signal_segments, DossierSegment,
+    DossierTone, DOSSIER_DECISION_QUESTION, INVESTIGATE_SEALED_CHIP,
+};
+use babylon_persistence::archive_revision::{
+    ArchiveChangeCursorV2, ArchiveDossierBoundsV2, ArchiveDossierLinkV2, ArchiveDossierReadV2,
+    ArchiveLinkedPageStateV2, ArchiveReadScopeV2,
 };
 
 /// `babylon-runtime`'s default campaign identity (`babylon-runtime.rs`), the
@@ -70,68 +59,114 @@ impl Default for DossierCampaignId {
     }
 }
 
-/// One requested subject page: a place-link chip click. Carries the public
-/// kind word, the public subject id, and the resolved label when the Archive
-/// acknowledges one (`None` for a fog chip) — everything an R6 placeholder
-/// needs, with zero label bytes for the ungranted case.
+/// Exact request identity retained beside the single canonical Archive read.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DossierRequestScope {
+    pub campaign: CampaignId,
+    pub county_geoid: String,
+    pub refresh_generation: u64,
+    pub observer: Option<ObservationContext>,
+    pub read_scope: ArchiveReadScopeV2,
+    pub subject: ArchivePageRefV1,
+}
+
+/// A retained, disclosed link, captured at the page that offered it.
 #[derive(Message, Clone, Debug, PartialEq, Eq)]
 pub struct SubjectPageRequest {
-    /// Public subject kind word ("place").
+    pub scope: DossierRequestScope,
     pub kind: String,
-    /// Public subject id (the place GEOID).
     pub id: String,
-    /// The acknowledged label, or `None` below the fog.
     pub label: Option<String>,
 }
 
-/// Which page the card currently renders.
+/// Geographic selection remains independent of the inspected Archive subject.
 #[derive(Resource, Clone, Debug, PartialEq, Eq, Default)]
 pub enum DossierPageView {
-    /// The county dossier card itself.
     #[default]
     Card,
-    /// An R6 placeholder for one requested subject page.
-    Placeholder(SubjectPageRequest),
+    Subject(Box<SubjectPageRequest>),
 }
 
-/// The typed county dossier projection the card composes from — Slice 3's
-/// `county_dossier_card` JSONL semantics as a typed value: durable tick,
-/// verified tick, visible atoms, resolved place chips, and the supersession
-/// feed. The SAME resource feeds the windowed viewer and headless tests, so
-/// both render identical card text from identical bytes.
+/// Request identity and its one canonical response; no duplicate page projection.
 #[derive(Clone, Debug, PartialEq)]
-pub struct CountyDossierCardProjection {
-    /// Five-digit county GEOID.
-    pub geoid: String,
-    /// The governed county title (the subject atom's text).
-    pub title: String,
-    /// The durable committed tick, or `None` before any commit.
-    pub durable_tick: Option<u64>,
-    /// The county page's verified tick, or `None` while unmaterialized.
-    pub verified_tick: Option<u64>,
-    /// The position-ordered visible atoms (subject, signals, links).
-    pub atoms: Vec<ArchiveAtomV1>,
-    /// One chip per link atom, granted or fog.
-    pub places: Vec<PlaceChip>,
-    /// The supersession feed (ADR249 R9 consequence presentation).
-    pub changelog: Vec<ChangelogRow>,
+pub struct InstalledDossier {
+    pub scope: DossierRequestScope,
+    pub read: ArchiveDossierReadV2,
 }
 
-/// The projection the card currently renders. `None` while no fetch has
-/// completed (or after a restart/selection clear).
+/// The installed observation. Consumers must admit its captured scope before reading.
 #[derive(Resource, Clone, Debug, Default, PartialEq)]
-pub struct ActiveCountyDossier(pub Option<CountyDossierCardProjection>);
+pub struct ActiveCountyDossier(pub Option<InstalledDossier>);
 
-/// Why one dossier fetch failed — the card renders each case honestly.
+impl ActiveCountyDossier {
+    /// Admit one exact observed week, capability, selection and refresh generation.
+    #[must_use]
+    pub fn for_observer(
+        &self,
+        session: &ObserverSession,
+        frame: &ObserverFrame,
+        refresh_generation: u64,
+        selected_county_geoid: &str,
+    ) -> Option<&ArchiveDossierReadV2> {
+        self.0
+            .as_ref()?
+            .for_observer(session, frame, refresh_generation, selected_county_geoid)
+    }
+}
+
+impl InstalledDossier {
+    fn for_observer(
+        &self,
+        session: &ObserverSession,
+        frame: &ObserverFrame,
+        refresh_generation: u64,
+        selected_county_geoid: &str,
+    ) -> Option<&ArchiveDossierReadV2> {
+        let installed = self;
+        let snapshot = frame.for_session(session)?;
+        let read_scope = observation_scope(
+            session.campaign,
+            snapshot.resolve_tick,
+            snapshot.tick_content_hash.as_deref(),
+        )
+        .ok()?;
+        (installed.scope.campaign == session.campaign
+            && installed.scope.county_geoid == selected_county_geoid
+            && installed.scope.refresh_generation == refresh_generation
+            && installed
+                .scope
+                .observer
+                .as_ref()
+                .is_some_and(|scope| session.accepts(scope))
+            && installed.scope.read_scope == read_scope
+            && installed.read.scope == read_scope
+            && installed.read.subject == installed.scope.subject)
+            .then_some(&installed.read)
+    }
+}
+
+/// Acknowledged runtime/Archive progress refreshes a held selection.
+#[derive(Resource, Debug, Default)]
+pub struct DossierRefresh(pub u64);
+impl DossierRefresh {
+    /// Advances the held-selection refresh generation.
+    ///
+    /// # Panics
+    /// Panics if the refresh generation exhausts `u64`.
+    pub fn bump(&mut self) {
+        self.0 = self
+            .0
+            .checked_add(1)
+            .expect("dossier refresh generation exhausted");
+    }
+}
+
+/// Why one dossier read failed; database errors never become content absence.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum DossierFetchError {
-    /// `BABYLON_READER_DSN` is missing or refused: the card renders "Archive
-    /// reader not configured" (the CI headless reality, never a panic).
     ReaderAbsent(String),
-    /// The reader admitted the DSN but a read failed mid-fetch.
     ReadFailed(String),
 }
-
 impl std::fmt::Display for DossierFetchError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -143,96 +178,50 @@ impl std::fmt::Display for DossierFetchError {
     }
 }
 
-/// The fetch lifecycle: idle, one in-flight task per selection change, or the
-/// last honest failure.
+/// One read task, explicit waiting, or a read failure.
 #[derive(Resource, Debug, Default)]
 pub enum DossierFetchState {
-    /// No fetch running and none failed.
     #[default]
     Idle,
-    /// One task running for `fips`; the projection is already cleared.
+    WaitingForObservation,
     InFlight {
-        /// The county FIPS being fetched.
-        fips: String,
-        /// The reader task (dropping it cancels the fetch).
-        task: Task<Result<CountyDossierCardProjection, DossierFetchError>>,
+        scope: DossierRequestScope,
+        task: Task<Result<InstalledDossier, DossierFetchError>>,
     },
-    /// The last fetch failed; the card renders the reason.
     Failed(DossierFetchError),
 }
 
-/// Runs the Slice 3 reader assembly against one county: durable tick, card
-/// atoms, one title-scoped known-only search pass (county verified tick plus
-/// place labels), place chips, and the supersession feed. Never called on
-/// the main thread — only from the fetch task.
-fn fetch_county_dossier(
-    campaign: CampaignId,
-    fips: &str,
-) -> Result<CountyDossierCardProjection, DossierFetchError> {
-    let read = |error: babylon_persistence::SemanticArchiveReaderErrorV1| {
+#[derive(Resource, Default, Debug, PartialEq, Eq)]
+struct DossierPresentation {
+    cursor: Option<ArchiveChangeCursorV2>,
+    details_open: bool,
+}
+
+fn fetch_dossier(
+    mut scope: DossierRequestScope,
+    cursor: Option<ArchiveChangeCursorV2>,
+) -> Result<InstalledDossier, DossierFetchError> {
+    let read_error = |error: babylon_persistence::SemanticArchiveReaderErrorV1| {
         DossierFetchError::ReadFailed(error.to_string())
     };
     let reader = SemanticArchiveReaderV1::from_env()
         .map_err(|error| DossierFetchError::ReaderAbsent(error.to_string()))?;
-    let durable_tick = reader
-        .committed_tick_status(campaign)
-        .map_err(read)?
-        .map(|status| status.resolve_tick());
-    let atoms = reader.county_card_atoms(campaign, fips).map_err(read)?;
-    let title = atoms
-        .iter()
-        .find(|atom| atom.signal_key() == "subject")
-        .and_then(|atom| match atom.value() {
-            babylon_persistence::ArchiveAtomValueV1::Text(text) => Some(text.clone()),
-            _ => None,
-        })
-        .unwrap_or_default();
-
-    // One title-scoped known-only search pass resolves the county hit
-    // (verified tick) and the place titles behind the link atoms — the same
-    // single-pass discipline as the Slice 3 JSONL path.
-    let hits = reader.search_known(campaign, &title, 50).map_err(read)?;
-    let verified_tick = hits
-        .iter()
-        .find(|hit| {
-            hit.page_ref().kind() == ArchiveSubjectKindV1::County && hit.page_ref().id() == fips
-        })
-        .map(babylon_persistence::ArchiveSearchHitV1::verified_tick);
-    let places = atoms
-        .iter()
-        .filter_map(crate::dossier::place_link_geoid)
-        .map(|geoid| {
-            let hit = hits.iter().find(|hit| {
-                hit.page_ref().kind() == ArchiveSubjectKindV1::Place && hit.page_ref().id() == geoid
-            });
-            match hit {
-                Some(hit) => PlaceChip::known(
-                    geoid,
-                    hit.title().to_owned(),
-                    // Pending = the place page's verified tick sits behind
-                    // the durable tail: the Archive is still materializing
-                    // that page (decision 2's honest lag state).
-                    durable_tick.is_some_and(|durable| hit.verified_tick() < durable),
-                ),
-                None => PlaceChip::unknown(geoid),
-            }
-        })
-        .collect::<Vec<_>>();
-
-    let subject = ArchiveAtomSubjectV1::try_new(ArchiveAtomSubjectKindV1::County, fips.to_owned())
+    if scope.observer.is_none() {
+        // The standalone conformance card pins one marker before its canonical read.
+        scope.read_scope = crate::dossier::pinned_scope(&reader, scope.campaign)
+            .map_err(DossierFetchError::ReadFailed)?;
+    }
+    let bounds = ArchiveDossierBoundsV2::try_new(32, cursor)
         .map_err(|error| DossierFetchError::ReadFailed(error.to_string()))?;
-    let history = reader
-        .subject_atom_history(campaign, &subject)
-        .map_err(read)?;
-    Ok(CountyDossierCardProjection {
-        geoid: fips.to_owned(),
-        title,
-        durable_tick,
-        verified_tick,
-        atoms,
-        places,
-        changelog: changelog_rows(&history),
-    })
+    let read = reader
+        .dossier_as_of(&scope.read_scope, &scope.subject, &bounds)
+        .map_err(read_error)?;
+    if read.scope != scope.read_scope || read.subject != scope.subject {
+        return Err(DossierFetchError::ReadFailed(
+            "Archive returned a different observation".into(),
+        ));
+    }
+    Ok(InstalledDossier { scope, read })
 }
 
 // ---- Card chrome ----
@@ -267,7 +256,7 @@ pub struct DossierCardRoot;
 /// hover-out observer can restore it without re-deriving chip state.
 #[derive(Component, Clone, Debug)]
 struct PlaceChipNode {
-    request: SubjectPageRequest,
+    control: DossierControl,
     base_border: Color,
 }
 
@@ -291,6 +280,7 @@ fn section_header(text: &str) -> impl Bundle {
             font_size: 11.0,
             ..default()
         },
+        ObserverFontRole::Body,
         DeclaredSurface::new(CARD_SURFACE),
     )
 }
@@ -334,6 +324,7 @@ fn spawn_dossier_card(mut commands: Commands) {
             Visibility::Hidden,
             DeclaredSurface::new(CARD_SURFACE),
             DossierCardRoot,
+            TabGroup::new(20),
         ))
         .with_children(|card| {
             card.spawn((
@@ -343,7 +334,9 @@ fn spawn_dossier_card(mut commands: Commands) {
                     font_size: 24.0,
                     ..default()
                 },
+                ObserverFontRole::Display,
                 zone(DossierZone::Title),
+                ObserverFocusTarget::reading(None),
             ));
             card.spawn((
                 Text::new(""),
@@ -352,11 +345,13 @@ fn spawn_dossier_card(mut commands: Commands) {
                     font_size: 13.0,
                     ..default()
                 },
+                ObserverFontRole::Body,
                 zone(DossierZone::Question),
             ));
             card.spawn((
                 Text::new(""),
                 TextFont::default(),
+                ObserverFontRole::Body,
                 zone(DossierZone::DualTick),
             ));
             card.spawn(gold_rule());
@@ -364,6 +359,7 @@ fn spawn_dossier_card(mut commands: Commands) {
             card.spawn((
                 Text::new(""),
                 TextFont::default(),
+                ObserverFontRole::Exact,
                 zone(DossierZone::Signals),
             ));
             card.spawn(gold_rule());
@@ -383,83 +379,246 @@ fn spawn_dossier_card(mut commands: Commands) {
             card.spawn((
                 Text::new(""),
                 TextFont::default(),
+                ObserverFontRole::Exact,
                 zone(DossierZone::Chronicle),
             ));
             card.spawn(gold_rule());
-            // Actions footer: the visibly-unavailable Investigate chip.
-            card.spawn((
-                Node {
-                    align_self: AlignSelf::FlexEnd,
-                    padding: UiRect::axes(px(8), px(4)),
-                    border: UiRect::all(px(1)),
-                    border_radius: BorderRadius::all(px(4)),
-                    ..default()
-                },
-                BorderColor::all(palette::DIM),
-                zone(DossierZone::Actions),
-            ))
-            .with_child((
-                Text::new(INVESTIGATE_SEALED_CHIP),
-                TextColor(palette::DIM),
-                TextFont {
-                    font_size: 11.0,
-                    ..default()
-                },
-                DeclaredSurface::new(CARD_SURFACE),
-            ));
+            spawn_sealed_actions(card);
         });
 }
 
-/// `Update` system: a selection change resolves the atlas index to a county
-/// FIPS and starts exactly one fetch task; the projection and page view are
-/// cleared first so in-flight never renders stale data. `None` (deselect,
-/// restart) returns the fetch state to `Idle`.
+fn spawn_sealed_actions(card: &mut ChildSpawnerCommands) {
+    // Actions footer: the visibly-unavailable Investigate chip.
+    card.spawn((
+        Node {
+            width: percent(100),
+            flex_direction: FlexDirection::Column,
+            row_gap: px(8),
+            padding: UiRect::axes(px(8), px(4)),
+            border: UiRect::all(px(1)),
+            border_radius: BorderRadius::all(px(4)),
+            ..default()
+        },
+        BorderColor::all(palette::DIM),
+        DossierZone::Actions,
+        DeclaredSurface::new(CARD_SURFACE),
+    ))
+    .with_child((
+        Text::new(INVESTIGATE_SEALED_CHIP),
+        TextColor(palette::DIM),
+        TextFont {
+            font_size: 11.0,
+            ..default()
+        },
+        ObserverFontRole::Body,
+        DeclaredSurface::new(CARD_SURFACE),
+    ));
+}
+
+#[derive(SystemParam)]
+struct DossierReadIdentity<'w> {
+    campaign: Res<'w, DossierCampaignId>,
+    refresh: Res<'w, DossierRefresh>,
+    selected: Res<'w, SelectedCounty>,
+    atlas: Option<Res<'w, CountyAtlas>>,
+    observer: Option<Res<'w, ObserverSession>>,
+    frame: Option<Res<'w, ObserverFrame>>,
+}
+
+impl DossierReadIdentity<'_> {
+    fn county(&self) -> Option<&str> {
+        self.atlas
+            .as_ref()?
+            .county(self.selected.0?)
+            .map(|county| county.fips)
+    }
+
+    fn scope(&self, view: &DossierPageView) -> Option<DossierRequestScope> {
+        let county = self.county()?;
+        let observer = self.observer.as_ref().map(|session| session.context());
+        let read_scope = if let Some(session) = &self.observer {
+            let snapshot = self.frame.as_ref()?.for_session(session)?;
+            if session.campaign != self.campaign.0 {
+                return None;
+            }
+            observation_scope(
+                session.campaign,
+                snapshot.resolve_tick,
+                snapshot.tick_content_hash.as_deref(),
+            )
+            .ok()?
+        } else {
+            ArchiveReadScopeV2::foundation(self.campaign.0)
+        };
+        let subject = match view {
+            DossierPageView::Card => {
+                ArchivePageRefV1::try_new(ArchiveSubjectKindV1::County, county.into()).ok()?
+            }
+            DossierPageView::Subject(request) => request.target()?,
+        };
+        Some(DossierRequestScope {
+            campaign: self.campaign.0,
+            county_geoid: county.into(),
+            refresh_generation: self.refresh.0,
+            observer,
+            read_scope,
+            subject,
+        })
+    }
+
+    fn admits(&self, installed: &InstalledDossier, view: &DossierPageView) -> bool {
+        let Some(expected) = self.scope(view) else {
+            return false;
+        };
+        if expected.campaign != installed.scope.campaign
+            || expected.county_geoid != installed.scope.county_geoid
+            || expected.refresh_generation != installed.scope.refresh_generation
+            || expected.observer != installed.scope.observer
+            || expected.subject != installed.scope.subject
+            || installed.read.scope != installed.scope.read_scope
+            || installed.read.subject != installed.scope.subject
+        {
+            return false;
+        }
+        match (&self.observer, &self.frame) {
+            (Some(session), Some(frame)) => installed
+                .for_observer(session, frame, self.refresh.0, &expected.county_geoid)
+                .is_some(),
+            (None, _) => true,
+            _ => false,
+        }
+    }
+}
+
+impl SubjectPageRequest {
+    fn target(&self) -> Option<ArchivePageRefV1> {
+        let kind = match self.kind.as_str() {
+            "county" => ArchiveSubjectKindV1::County,
+            "place" => ArchiveSubjectKindV1::Place,
+            _ => return None,
+        };
+        ArchivePageRefV1::try_new(kind, self.id.clone()).ok()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct FetchKey {
+    scope: DossierRequestScope,
+    cursor: Option<ArchiveChangeCursorV2>,
+}
+
+fn same_navigation_scope(left: &DossierRequestScope, right: &DossierRequestScope) -> bool {
+    left.campaign == right.campaign
+        && left.county_geoid == right.county_geoid
+        && left.observer == right.observer
+        && left.read_scope == right.read_scope
+}
+
 fn drive_dossier_fetch(
-    selected: Res<SelectedCounty>,
-    atlas: Res<CountyAtlas>,
-    campaign: Res<DossierCampaignId>,
+    identity: DossierReadIdentity,
+    mut last: Local<Option<FetchKey>>,
     mut state: ResMut<DossierFetchState>,
     mut projection: ResMut<ActiveCountyDossier>,
     mut view: ResMut<DossierPageView>,
+    mut presentation: ResMut<DossierPresentation>,
 ) {
-    if !selected.is_changed() {
+    if last.is_some()
+        && !identity.campaign.is_changed()
+        && !identity.refresh.is_changed()
+        && !identity.selected.is_changed()
+        && !view.is_changed()
+        && !presentation.is_changed()
+        && !identity
+            .observer
+            .as_ref()
+            .is_some_and(DetectChanges::is_changed)
+        && !identity
+            .frame
+            .as_ref()
+            .is_some_and(DetectChanges::is_changed)
+    {
         return;
     }
-    *view = DossierPageView::Card;
+    let Some(mut scope) = identity.scope(&view) else {
+        if last.take().is_some() || projection.0.is_some() {
+            projection.0 = None;
+            *view = DossierPageView::Card;
+            *presentation = DossierPresentation::default();
+        }
+        let next = if identity.selected.0.is_some() {
+            DossierFetchState::WaitingForObservation
+        } else {
+            DossierFetchState::Idle
+        };
+        if !matches!(
+            (&*state, &next),
+            (DossierFetchState::Idle, DossierFetchState::Idle)
+                | (
+                    DossierFetchState::WaitingForObservation,
+                    DossierFetchState::WaitingForObservation
+                )
+        ) {
+            *state = next;
+        }
+        return;
+    };
+    if last
+        .as_ref()
+        .is_some_and(|old| !same_navigation_scope(&old.scope, &scope))
+    {
+        *view = DossierPageView::Card;
+        *presentation = DossierPresentation::default();
+        scope = identity
+            .scope(&view)
+            .expect("the selected county scope was admitted");
+    }
+    let key = FetchKey {
+        scope: scope.clone(),
+        cursor: presentation.cursor.clone(),
+    };
+    if last.as_ref() == Some(&key) {
+        return;
+    }
+    *last = Some(key);
     projection.0 = None;
-    let Some(index) = selected.0 else {
-        *state = DossierFetchState::Idle;
-        return;
-    };
-    let Some(county) = atlas.county(index) else {
-        *state = DossierFetchState::Idle;
-        return;
-    };
-    let fips = county.fips.to_owned();
-    let fips_for_task = fips.clone();
-    let campaign_id = campaign.0;
-    let task = AsyncComputeTaskPool::get()
-        .spawn(async move { fetch_county_dossier(campaign_id, &fips_for_task) });
-    *state = DossierFetchState::InFlight { fips, task };
+    let cursor = presentation.cursor.clone();
+    let request = scope.clone();
+    let task = AsyncComputeTaskPool::get().spawn(async move { fetch_dossier(request, cursor) });
+    *state = DossierFetchState::InFlight { scope, task };
 }
 
-/// `Update` system: polls the in-flight task once per frame; on completion
-/// installs the projection (success) or the honest failure (error).
 fn collect_dossier_fetch(
     mut state: ResMut<DossierFetchState>,
     mut projection: ResMut<ActiveCountyDossier>,
+    identity: DossierReadIdentity,
+    view: Res<DossierPageView>,
 ) {
-    let DossierFetchState::InFlight { task, .. } = &mut *state else {
+    let DossierFetchState::InFlight { scope, .. } = &*state else {
         return;
     };
+    if identity.scope(&view).as_ref() != Some(scope) {
+        *state = DossierFetchState::Idle;
+        projection.0 = None;
+        return;
+    }
+    let expected = scope.clone();
+    let DossierFetchState::InFlight { task, .. } = state.bypass_change_detection() else {
+        unreachable!()
+    };
     let Some(result) = block_on(bevy::tasks::futures_lite::future::poll_once(task)) else {
-        return; // still running
+        return;
     };
     *state = match result {
-        Ok(card) => {
-            projection.0 = Some(card);
+        Ok(installed)
+            if identity.admits(&installed, &view)
+                && (expected.observer.is_none() || installed.scope == expected) =>
+        {
+            projection.0 = Some(installed);
             DossierFetchState::Idle
         }
+        Ok(_) => DossierFetchState::Failed(DossierFetchError::ReadFailed(
+            "Archive returned a different observation than requested".into(),
+        )),
         Err(error) => DossierFetchState::Failed(error),
     };
 }
@@ -477,13 +636,21 @@ fn set_segments(commands: &mut Commands, zone: Entity, segments: &[DossierSegmen
                 font_size: 14.0,
                 ..default()
             },
+            ObserverFontRole::Body,
             DeclaredSurface::new(CARD_SURFACE),
         ));
     }
 }
 
 /// Rebuilds one zone entity as a single styled line.
-fn set_line(commands: &mut Commands, zone: Entity, text: String, color: Color, font_size: f32) {
+fn set_line(
+    commands: &mut Commands,
+    zone: Entity,
+    text: String,
+    color: Color,
+    font_size: f32,
+    font_role: ObserverFontRole,
+) {
     commands.entity(zone).despawn_related::<Children>();
     commands.entity(zone).with_child((
         TextSpan::new(text),
@@ -492,6 +659,7 @@ fn set_line(commands: &mut Commands, zone: Entity, text: String, color: Color, f
             font_size,
             ..default()
         },
+        font_role,
         DeclaredSurface::new(CARD_SURFACE),
     ));
 }
@@ -500,7 +668,18 @@ fn set_line(commands: &mut Commands, zone: Entity, text: String, color: Color, f
 /// (signal rows, chronicle rows) — each row a `Text` with `TextSpan`
 /// children.
 fn set_segment_rows(commands: &mut Commands, zone: Entity, rows: &[Vec<DossierSegment>]) {
-    commands.entity(zone).despawn_related::<Children>();
+    commands.entity(zone).despawn_related::<Children>().insert((
+        Node {
+            width: percent(100),
+            min_width: px(0),
+            max_width: percent(100),
+            flex_direction: FlexDirection::Column,
+            flex_shrink: 0.0,
+            row_gap: px(12),
+            ..default()
+        },
+        TextLayout::new_with_linebreak(bevy::text::LineBreak::WordOrCharacter),
+    ));
     for row in rows {
         commands.entity(zone).with_children(|parent| {
             parent
@@ -510,6 +689,15 @@ fn set_segment_rows(commands: &mut Commands, zone: Entity, rows: &[Vec<DossierSe
                         font_size: 14.0,
                         ..default()
                     },
+                    TextLayout::new_with_linebreak(bevy::text::LineBreak::WordOrCharacter),
+                    Node {
+                        width: percent(100),
+                        min_width: px(0),
+                        max_width: percent(100),
+                        flex_shrink: 0.0,
+                        ..default()
+                    },
+                    ObserverFontRole::Exact,
                     DeclaredSurface::new(CARD_SURFACE),
                 ))
                 .with_children(|text| {
@@ -518,9 +706,14 @@ fn set_segment_rows(commands: &mut Commands, zone: Entity, rows: &[Vec<DossierSe
                             TextSpan::new(segment.text.clone()),
                             TextColor(tone_color(segment.tone)),
                             TextFont {
-                                font_size: 14.0,
+                                font_size: if segment.tone == DossierTone::Dim {
+                                    11.0
+                                } else {
+                                    14.0
+                                },
                                 ..default()
                             },
+                            ObserverFontRole::Exact,
                             DeclaredSurface::new(CARD_SURFACE),
                         ));
                     }
@@ -529,72 +722,301 @@ fn set_segment_rows(commands: &mut Commands, zone: Entity, rows: &[Vec<DossierSe
     }
 }
 
-/// Rebuilds the places zone's chip children from the projection's chips.
-fn set_chips(commands: &mut Commands, zone: Entity, chips: &[PlaceChip]) {
+#[derive(Message, Clone, Debug, PartialEq, Eq)]
+enum DossierControl {
+    Link(SubjectPageRequest),
+    Back(DossierRequestScope),
+    More(DossierRequestScope, ArchiveChangeCursorV2),
+    First(DossierRequestScope),
+    Details(DossierRequestScope),
+}
+impl DossierControl {
+    fn scope(&self) -> &DossierRequestScope {
+        match self {
+            Self::Link(request) => &request.scope,
+            Self::Back(scope)
+            | Self::More(scope, _)
+            | Self::First(scope)
+            | Self::Details(scope) => scope,
+        }
+    }
+}
+
+fn chip_request(link: &ArchiveDossierLinkV2, scope: &DossierRequestScope) -> SubjectPageRequest {
+    SubjectPageRequest {
+        scope: scope.clone(),
+        kind: link.target.kind().as_str().into(),
+        id: link.target.id().into(),
+        label: link.retained_label.clone(),
+    }
+}
+
+fn navigable_link(link: &ArchiveDossierLinkV2) -> bool {
+    matches!(
+        link.target_state,
+        ArchiveLinkedPageStateV2::KnownReady | ArchiveLinkedPageStateV2::KnownPending
+    )
+}
+
+fn set_chips(
+    commands: &mut Commands,
+    zone: Entity,
+    links: &[ArchiveDossierLinkV2],
+    scope: &DossierRequestScope,
+) {
     commands.entity(zone).despawn_related::<Children>();
-    for chip in chips {
-        let (text_color, base_border) = match (chip.is_known(), chip.is_pending()) {
-            (true, false) => (palette::BONE, Color::NONE),
-            // Pending (Archive lag) and fog chips both render DIM with a DIM
-            // border; hover still lifts either to GOLD.
-            (true, true) | (false, _) => (palette::DIM, palette::DIM.with_alpha(0.6)),
+    for link in links {
+        let label = if link.target_state == ArchiveLinkedPageStateV2::Unknown {
+            babylon_persistence::fog_chip_v1(link.target.kind().as_str(), link.target.id())
+        } else {
+            link.retained_label.clone().unwrap_or_else(|| {
+                format!("{} · {}", link.target.kind().as_str(), link.target.id())
+            })
         };
-        let label = match chip {
-            known if known.is_known() => Some(chip_text(known).replace(" · pending", "")),
-            _ => None,
+        let text = match link.target_state {
+            ArchiveLinkedPageStateV2::KnownReady | ArchiveLinkedPageStateV2::Unknown => label,
+            state => format!("{label} · {}", crate::dossier::link_state_label(state)),
         };
-        let request = SubjectPageRequest {
-            kind: "place".to_owned(),
-            id: chip.geoid().to_owned(),
-            label,
-        };
-        // `with_child` returns the PARENT, so the chip node is spawned inside
-        // a `with_children` closure: the observers and the label text must
-        // land on the CHIP, not the zone (the tree shape the hover/click
-        // observers and the headless harness both depend on).
-        commands.entity(zone).with_children(|parent| {
-            parent
-                .spawn((
-                    Node {
-                        padding: UiRect::axes(px(8), px(4)),
-                        border: UiRect::all(px(1)),
-                        border_radius: BorderRadius::all(px(4)),
-                        ..default()
-                    },
-                    BackgroundColor(palette::MUTED_DARK.with_alpha(0.85)),
-                    BorderColor::all(base_border),
-                    PlaceChipNode {
-                        request,
-                        base_border,
-                    },
-                    DeclaredSurface::new(CARD_SURFACE),
-                ))
-                .observe(on_place_chip_click)
-                .observe(on_place_chip_over)
-                .observe(on_place_chip_out)
-                .with_child((
-                    Text::new(chip_text(chip)),
-                    TextColor(text_color),
-                    TextFont {
-                        font_size: 13.0,
-                        ..default()
-                    },
-                    DeclaredSurface::new(CARD_SURFACE),
-                ));
-        });
+        spawn_control(
+            commands,
+            zone,
+            text,
+            DossierControl::Link(chip_request(link, scope)),
+        );
+    }
+}
+
+fn spawn_control(commands: &mut Commands, zone: Entity, label: String, control: DossierControl) {
+    commands.entity(zone).with_children(|parent| {
+        parent
+            .spawn((
+                Node {
+                    padding: UiRect::axes(px(8), px(4)),
+                    border: UiRect::bottom(px(1)),
+                    ..default()
+                },
+                BackgroundColor(palette::MUTED_DARK.with_alpha(0.85)),
+                BorderColor::all(palette::DIM),
+                ObserverFocusTarget::action(control.scope().observer.clone()),
+                PlaceChipNode {
+                    control,
+                    base_border: palette::DIM,
+                },
+                DeclaredSurface::new(CARD_SURFACE),
+            ))
+            .observe(on_place_chip_click)
+            .observe(on_place_chip_over)
+            .observe(on_place_chip_out)
+            .with_child((
+                Text::new(label),
+                TextColor(palette::BONE),
+                TextFont {
+                    font_size: 13.0,
+                    ..default()
+                },
+                ObserverFontRole::Body,
+                DeclaredSurface::new(CARD_SURFACE),
+            ));
+    });
+}
+
+#[derive(SystemParam)]
+struct DossierReadContext<'w> {
+    identity: DossierReadIdentity<'w>,
+    projection: Res<'w, ActiveCountyDossier>,
+    fetch: Res<'w, DossierFetchState>,
+    ui: Option<Res<'w, ObserverUiState>>,
+}
+impl DossierReadContext<'_> {
+    fn visible(&self) -> bool {
+        self.identity.selected.0.is_some()
+            && self.ui.as_ref().is_none_or(|ui| {
+                ui.archive_open && !ui.menu_open && !ui.splash_visible && !ui.comparison_open
+            })
+    }
+    fn admits(&self, control: &DossierControl, view: &DossierPageView) -> bool {
+        admitted_control(
+            control,
+            &self.identity,
+            &self.projection,
+            &self.fetch,
+            self.ui.as_deref(),
+            view,
+        )
+    }
+}
+
+fn admitted_control(
+    control: &DossierControl,
+    identity: &DossierReadIdentity,
+    projection: &ActiveCountyDossier,
+    fetch: &DossierFetchState,
+    ui: Option<&ObserverUiState>,
+    view: &DossierPageView,
+) -> bool {
+    if identity.selected.0.is_none()
+        || ui.is_some_and(|ui| {
+            !ui.archive_open || ui.menu_open || ui.splash_visible || ui.comparison_open
+        })
+    {
+        return false;
+    }
+    if let DossierControl::Back(scope) = control {
+        return matches!(view, DossierPageView::Subject(_))
+            && identity.scope(view).as_ref() == Some(scope);
+    }
+    if !matches!(fetch, DossierFetchState::Idle) {
+        return false;
+    }
+    let Some(installed) = projection
+        .0
+        .as_ref()
+        .filter(|installed| identity.admits(installed, view))
+    else {
+        return false;
+    };
+    if control.scope() != &installed.scope {
+        return false;
+    }
+    let page = retained_page(&installed.read);
+    match control {
+        DossierControl::Link(request) => page.is_some_and(|page| {
+            page.links.iter().any(|link| {
+                navigable_link(link) && chip_request(link, &installed.scope) == *request
+            })
+        }),
+        DossierControl::Back(_) => matches!(view, DossierPageView::Subject(_)),
+        DossierControl::More(_, cursor) => {
+            page.is_some_and(|page| page.changes.next_cursor.as_ref() == Some(cursor))
+        }
+        DossierControl::First(_) | DossierControl::Details(_) => page.is_some(),
+    }
+}
+
+#[derive(SystemParam)]
+struct DossierRefusal<'w> {
+    feedback: Option<ResMut<'w, ObserverFeedback>>,
+    time: Option<Res<'w, Time>>,
+}
+impl DossierRefusal<'_> {
+    fn reject(&mut self) {
+        if let Some(feedback) = &mut self.feedback {
+            feedback.reject(
+                "This Archive control belongs to an unavailable observation.",
+                self.time
+                    .as_ref()
+                    .map_or(0.0, |time| time.elapsed_secs_f64()),
+            );
+        }
+    }
+}
+
+fn dispatch_control(
+    control: &DossierControl,
+    context: &DossierReadContext,
+    view: &DossierPageView,
+    refusal: &mut DossierRefusal,
+    requests: &mut MessageWriter<DossierControl>,
+    subjects: &mut MessageWriter<SubjectPageRequest>,
+) {
+    if context.admits(control, view) {
+        requests.write(control.clone());
+        if let DossierControl::Link(request) = control {
+            subjects.write(request.clone());
+        }
+    } else {
+        refusal.reject();
     }
 }
 
 fn on_place_chip_click(
     click: On<Pointer<Click>>,
     chips: Query<&PlaceChipNode>,
-    mut requests: MessageWriter<SubjectPageRequest>,
+    context: DossierReadContext,
+    view: Res<DossierPageView>,
+    mut refusal: DossierRefusal,
+    mut requests: MessageWriter<DossierControl>,
+    mut subjects: MessageWriter<SubjectPageRequest>,
 ) {
     if let Ok(chip) = chips.get(click.entity) {
-        requests.write(chip.request.clone());
+        dispatch_control(
+            &chip.control,
+            &context,
+            &view,
+            &mut refusal,
+            &mut requests,
+            &mut subjects,
+        );
     }
 }
+fn keyboard_activate(
+    event: On<ObserverKeyboardActivate>,
+    chips: Query<&PlaceChipNode>,
+    context: DossierReadContext,
+    view: Res<DossierPageView>,
+    mut refusal: DossierRefusal,
+    mut requests: MessageWriter<DossierControl>,
+    mut subjects: MessageWriter<SubjectPageRequest>,
+) {
+    let Ok(chip) = chips.get(event.entity) else {
+        return;
+    };
+    if event.context != chip.control.scope().observer {
+        refusal.reject();
+        return;
+    }
+    dispatch_control(
+        &chip.control,
+        &context,
+        &view,
+        &mut refusal,
+        &mut requests,
+        &mut subjects,
+    );
+}
 
+type DossierFocusOwners = Or<(With<PlaceChipNode>, With<DossierZone>)>;
+fn focus_eligibility(
+    context: DossierReadContext,
+    view: Res<DossierPageView>,
+    mut targets: Query<(&mut ObserverFocusTarget, Option<&PlaceChipNode>), DossierFocusOwners>,
+) {
+    let identity = &context.identity;
+    if !(identity.campaign.is_changed()
+        || identity.refresh.is_changed()
+        || identity.selected.is_changed()
+        || context.projection.is_changed()
+        || context.fetch.is_changed()
+        || view.is_changed()
+        || targets.iter_mut().any(|(target, _)| target.is_changed())
+        || identity
+            .observer
+            .as_ref()
+            .is_some_and(DetectChanges::is_changed)
+        || identity
+            .frame
+            .as_ref()
+            .is_some_and(DetectChanges::is_changed)
+        || context.ui.as_ref().is_some_and(DetectChanges::is_changed))
+    {
+        return;
+    }
+    for (mut target, chip) in &mut targets {
+        let mut next = target.clone();
+        if let Some(chip) = chip {
+            next.context.clone_from(&chip.control.scope().observer);
+            next.available = context.admits(&chip.control, &view);
+        } else {
+            next.available = context.visible()
+                && match (&identity.observer, &next.context) {
+                    (Some(session), Some(scope)) => session.accepts(scope),
+                    (None, None) => true,
+                    _ => false,
+                };
+        }
+        target.set_if_neq(next);
+    }
+}
 fn on_place_chip_over(
     over: On<Pointer<Over>>,
     mut chips: Query<&mut BorderColor, With<PlaceChipNode>>,
@@ -603,227 +1025,449 @@ fn on_place_chip_over(
         *border = BorderColor::all(palette::GOLD);
     }
 }
-
 fn on_place_chip_out(out: On<Pointer<Out>>, mut chips: Query<(&mut BorderColor, &PlaceChipNode)>) {
     if let Ok((mut border, chip)) = chips.get_mut(out.entity) {
         *border = BorderColor::all(chip.base_border);
     }
 }
 
-/// `Update` system: applies pending [`SubjectPageRequest`]s to the page view.
-/// Kept separate from [`repaint_dossier_card`] so the painter holds the Bevy
-/// 7-parameter system shape and stays a pure projection of resources.
+#[derive(SystemParam)]
+struct DossierWriteState<'w> {
+    view: ResMut<'w, DossierPageView>,
+    projection: ResMut<'w, ActiveCountyDossier>,
+    fetch: ResMut<'w, DossierFetchState>,
+    presentation: ResMut<'w, DossierPresentation>,
+}
+
 fn apply_page_requests(
-    mut view: ResMut<DossierPageView>,
-    mut requests: MessageReader<SubjectPageRequest>,
+    mut requests: MessageReader<DossierControl>,
+    identity: DossierReadIdentity,
+    outputs: DossierWriteState,
+    ui: Option<Res<ObserverUiState>>,
+    mut refusal: DossierRefusal,
 ) {
-    for request in requests.read() {
-        *view = DossierPageView::Placeholder(request.clone());
+    let DossierWriteState {
+        mut view,
+        mut projection,
+        fetch: mut state,
+        mut presentation,
+    } = outputs;
+    for control in requests.read() {
+        // Reuse the same admission function without overlapping mutable resource borrows.
+        let admitted = admitted_control(
+            control,
+            &identity,
+            &projection,
+            &state,
+            ui.as_deref(),
+            &view,
+        );
+        if !admitted {
+            refusal.reject();
+            continue;
+        }
+        match control {
+            DossierControl::Link(request) => {
+                *view = DossierPageView::Subject(Box::new(request.clone()));
+                *presentation = DossierPresentation::default();
+            }
+            DossierControl::Back(_) => {
+                *view = DossierPageView::Card;
+                *presentation = DossierPresentation::default();
+            }
+            DossierControl::More(_, cursor) => presentation.cursor = Some(cursor.clone()),
+            DossierControl::First(_) => presentation.cursor = None,
+            DossierControl::Details(_) => {
+                presentation.details_open = !presentation.details_open;
+                continue;
+            }
+        }
+        projection.0 = None;
+        *state = DossierFetchState::Idle;
     }
 }
 
-/// `Update` system: the pure repaint. Derives every zone's content from
-/// [`ActiveCountyDossier`], [`DossierFetchState`], and [`DossierPageView`]
-/// only — the same resources in windowed and headless compositions, which is
-/// the parity proof. Nothing here touches the reader.
+type DossierRoots<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static mut Visibility,
+        &'static mut Node,
+        &'static mut BackgroundColor,
+        &'static mut BorderColor,
+        &'static mut BoxShadow,
+    ),
+    With<DossierCardRoot>,
+>;
+
 fn repaint_dossier_card(
     mut commands: Commands,
-    selected: Res<SelectedCounty>,
-    projection: Res<ActiveCountyDossier>,
-    state: Res<DossierFetchState>,
+    context: DossierReadContext,
     view: Res<DossierPageView>,
+    presentation: Res<DossierPresentation>,
     zones: Query<(Entity, &DossierZone)>,
-    mut roots: Query<&mut Visibility, With<DossierCardRoot>>,
+    mut roots: DossierRoots,
 ) {
-    let Ok(mut root_visibility) = roots.single_mut() else {
+    let Ok((root, mut visibility, mut node, mut background, mut border, mut shadow)) =
+        roots.single_mut()
+    else {
         return;
     };
-    if selected.0.is_none() {
-        *root_visibility = Visibility::Hidden;
+    if context.ui.as_ref().is_some_and(DetectChanges::is_added) {
+        commands
+            .entity(root)
+            .insert(crate::observer_layout::ObserverRegion::Log);
+        node.right = Val::Auto;
+        node.bottom = Val::Auto;
+        node.min_width = Val::Auto;
+        node.max_width = Val::Auto;
+        node.overflow = Overflow::scroll_y();
+        node.border = UiRect::left(px(2));
+        node.border_radius = BorderRadius::ZERO;
+        *background = BackgroundColor(crate::observer_theme::PANEL);
+        *border = BorderColor::all(crate::observer_theme::PAPER);
+        *shadow = BoxShadow::default();
+    }
+    if !context.visible() {
+        visibility.set_if_neq(Visibility::Hidden);
         return;
     }
-    *root_visibility = Visibility::Visible;
+    let became_visible = *visibility != Visibility::Visible;
+    visibility.set_if_neq(Visibility::Visible);
+    let identity = &context.identity;
+    if !(became_visible
+        || context.projection.is_changed()
+        || context.fetch.is_changed()
+        || view.is_changed()
+        || presentation.is_changed()
+        || identity.selected.is_changed()
+        || identity.refresh.is_changed()
+        || identity.campaign.is_changed()
+        || identity
+            .observer
+            .as_ref()
+            .is_some_and(DetectChanges::is_changed)
+        || identity
+            .frame
+            .as_ref()
+            .is_some_and(DetectChanges::is_changed))
+    {
+        return;
+    }
+    paint_zones(&mut commands, &context, &view, &presentation, &zones);
+}
 
-    for (entity, zone) in &zones {
+fn paint_zones(
+    commands: &mut Commands,
+    context: &DossierReadContext,
+    view: &DossierPageView,
+    presentation: &DossierPresentation,
+    zones: &Query<(Entity, &DossierZone)>,
+) {
+    let identity = &context.identity;
+    let installed = context
+        .projection
+        .0
+        .as_ref()
+        .filter(|installed| identity.admits(installed, view));
+    let read = installed.map(|installed| &installed.read);
+    let page = read.and_then(retained_page);
+    for (entity, zone) in zones {
         match zone {
-            DossierZone::Title => paint_title(&mut commands, entity, &view, &projection),
-            DossierZone::Question => paint_question(&mut commands, entity, &view),
-            DossierZone::DualTick => {
-                paint_dual_tick(&mut commands, entity, &view, &state, &projection);
+            DossierZone::Title => {
+                commands.entity(entity).insert(ObserverFocusTarget::reading(
+                    identity.observer.as_ref().map(|session| session.context()),
+                ));
+                let fallback = match *view {
+                    DossierPageView::Card => identity
+                        .selected
+                        .0
+                        .and_then(|index| identity.atlas.as_ref()?.county(index))
+                        .map_or("County Archive", |county| county.name),
+                    DossierPageView::Subject(_) => "Archive subject",
+                };
+                set_line(
+                    commands,
+                    entity,
+                    page.map_or(fallback, |page| &page.title).into(),
+                    palette::BONE,
+                    24.0,
+                    ObserverFontRole::Display,
+                );
             }
-            DossierZone::Signals => paint_signals(&mut commands, entity, &view, &projection),
-            DossierZone::Places => paint_places(&mut commands, entity, &view, &projection),
-            DossierZone::Chronicle => paint_chronicle(&mut commands, entity, &view, &projection),
-            DossierZone::Actions => {
-                // The sealed Investigate chip is static chrome; nothing to
-                // repaint. Gate 5 (PER-26) swaps this zone's content when the
-                // verb opens.
-            }
-        }
-    }
-}
-
-fn paint_title(
-    commands: &mut Commands,
-    entity: Entity,
-    view: &DossierPageView,
-    projection: &ActiveCountyDossier,
-) {
-    match view {
-        DossierPageView::Card => {
-            let title = projection
-                .0
-                .as_ref()
-                .map_or_else(|| "…".to_owned(), |card| card.title.clone());
-            set_line(commands, entity, title, palette::BONE, 24.0);
-        }
-        DossierPageView::Placeholder(request) => {
-            let title = request
-                .label
-                .clone()
-                .unwrap_or_else(|| format!("unknown {} · {}", request.kind, request.id));
-            set_line(commands, entity, title, palette::BONE, 24.0);
-        }
-    }
-}
-
-fn paint_question(commands: &mut Commands, entity: Entity, view: &DossierPageView) {
-    let text = match view {
-        DossierPageView::Card => DOSSIER_DECISION_QUESTION.to_owned(),
-        DossierPageView::Placeholder(request) => {
-            format!("What is known about {} {}?", request.kind, request.id)
-        }
-    };
-    set_line(commands, entity, text, palette::GOLD, 13.0);
-}
-
-fn paint_dual_tick(
-    commands: &mut Commands,
-    entity: Entity,
-    view: &DossierPageView,
-    state: &DossierFetchState,
-    projection: &ActiveCountyDossier,
-) {
-    match view {
-        DossierPageView::Placeholder(_) => set_segments(commands, entity, &[]),
-        DossierPageView::Card => match state {
-            DossierFetchState::InFlight { .. } => set_segments(
+            DossierZone::Question => set_line(
                 commands,
                 entity,
-                &[DossierSegment {
-                    text: "Fetching dossier…".to_owned(),
-                    tone: DossierTone::Dim,
-                }],
-            ),
-            DossierFetchState::Failed(DossierFetchError::ReaderAbsent(_)) => set_segments(
-                commands,
-                entity,
-                &[DossierSegment {
-                    text: "Archive reader not configured".to_owned(),
-                    tone: DossierTone::Dim,
-                }],
-            ),
-            DossierFetchState::Failed(error @ DossierFetchError::ReadFailed(_)) => set_segments(
-                commands,
-                entity,
-                &[DossierSegment {
-                    text: error.to_string(),
-                    tone: DossierTone::Crimson,
-                }],
-            ),
-            DossierFetchState::Idle => {
-                let segments = projection.0.as_ref().map_or_else(Vec::new, |card| {
-                    dual_tick_segments(card.durable_tick, card.verified_tick)
-                });
-                set_segments(commands, entity, &segments);
-            }
-        },
-    }
-}
-
-fn paint_signals(
-    commands: &mut Commands,
-    entity: Entity,
-    view: &DossierPageView,
-    projection: &ActiveCountyDossier,
-) {
-    match view {
-        DossierPageView::Card => {
-            let rows = projection.0.as_ref().map_or_else(Vec::new, |card| {
-                signal_atoms(&card.atoms)
-                    .map(signal_row_segments)
-                    .collect::<Vec<_>>()
-            });
-            set_segment_rows(commands, entity, &rows);
-        }
-        DossierPageView::Placeholder(request) => {
-            // R6(a): containment is the county the place links from —
-            // public-record structure the dossier already carries.
-            let containment = projection.0.as_ref().map(|card| card.title.clone());
-            let lines = match (&request.label, &containment) {
-                (Some(label), Some(county)) => compose_stub(label, Some(county)),
-                (Some(label), None) => compose_stub(label, None),
-                (None, _) => compose_vague(&request.kind, &request.id),
-            };
-            let segments = lines
-                .iter()
-                .enumerate()
-                .map(|(index, line)| DossierSegment {
-                    text: if index == 0 {
-                        line.clone()
-                    } else {
-                        format!("\n{line}")
-                    },
-                    tone: if index == 0 {
-                        match &request.label {
-                            Some(_) => DossierTone::Bone,
-                            None => DossierTone::Dim,
+                page.map_or_else(
+                    || {
+                        if context.ui.is_some() {
+                            "Which cited observations are available at this week?".into()
+                        } else {
+                            DOSSIER_DECISION_QUESTION.into()
                         }
-                    } else {
-                        DossierTone::Crimson
                     },
-                })
-                .collect::<Vec<_>>();
-            set_segments(commands, entity, &segments);
+                    |page| page.question.clone(),
+                ),
+                palette::GOLD,
+                13.0,
+                ObserverFontRole::Body,
+            ),
+            DossierZone::DualTick => {
+                set_segments(commands, entity, &status_segments(&context.fetch, read));
+            }
+            DossierZone::Signals => {
+                let rows = page.map_or_else(Vec::new, |page| {
+                    page.signals
+                        .iter()
+                        .map(|signal| retained_signal_segments(signal, presentation.details_open))
+                        .collect()
+                });
+                set_segment_rows(commands, entity, &rows);
+            }
+            DossierZone::Places => {
+                if let (Some(installed), Some(page)) = (installed, page) {
+                    set_chips(commands, entity, &page.links, &installed.scope);
+                } else {
+                    commands.entity(entity).despawn_related::<Children>();
+                }
+            }
+            DossierZone::Chronicle => {
+                let rows = read
+                    .filter(|_| presentation.details_open)
+                    .map_or_else(Vec::new, evidence_rows);
+                set_segment_rows(commands, entity, &rows);
+            }
+            DossierZone::Actions => paint_actions(
+                commands,
+                entity,
+                installed,
+                matches!(view, DossierPageView::Subject(_))
+                    .then(|| identity.scope(view))
+                    .flatten()
+                    .as_ref(),
+                presentation,
+                context.ui.is_some(),
+            ),
         }
     }
 }
 
-fn paint_places(
-    commands: &mut Commands,
-    entity: Entity,
-    view: &DossierPageView,
-    projection: &ActiveCountyDossier,
-) {
-    match view {
-        DossierPageView::Card => {
-            let chips = projection
-                .0
-                .as_ref()
-                .map_or_else(Vec::new, |card| card.places.clone());
-            set_chips(commands, entity, &chips);
-        }
-        DossierPageView::Placeholder(_) => set_chips(commands, entity, &[]),
+fn evidence_rows(read: &ArchiveDossierReadV2) -> Vec<Vec<DossierSegment>> {
+    let mut rows = vec![vec![chronicle_header(&read.state)]];
+    let Some(page) = retained_page(read) else {
+        return rows;
+    };
+    rows.extend(page.changes.changes.iter().map(chronicle_row_segments));
+    rows.push(vec![DossierSegment {
+        text: format!(
+            "Content observed at week {}; published at week {}.\nRevision {}\nContent SHA256 {}",
+            page.content_source.tick(),
+            page.effective_tick,
+            crate::dossier::hex_bytes(page.revision_id),
+            crate::dossier::hex_bytes(page.content_sha256)
+        ),
+        tone: DossierTone::Dim,
+    }]);
+    rows.push(vec![DossierSegment {
+        text: format!("Original publication\n{}", page.markdown),
+        tone: DossierTone::BoneDim,
+    }]);
+    for citation in &page.citations {
+        rows.push(vec![DossierSegment {
+            text: format!("{}; {}", citation.source_id(), citation.locator()),
+            tone: DossierTone::Dim,
+        }]);
     }
+    rows
 }
 
-fn paint_chronicle(
+fn status_segments(
+    state: &DossierFetchState,
+    read: Option<&ArchiveDossierReadV2>,
+) -> Vec<DossierSegment> {
+    let Some(read) = read else {
+        let (text, tone) = match state {
+            DossierFetchState::Idle => (
+                "No cited observation is installed.".into(),
+                DossierTone::Dim,
+            ),
+            DossierFetchState::WaitingForObservation => (
+                "Waiting for the selected week's committed observation.".into(),
+                DossierTone::Dim,
+            ),
+            DossierFetchState::InFlight { .. } => {
+                ("Reading cited observations...".into(), DossierTone::Dim)
+            }
+            DossierFetchState::Failed(DossierFetchError::ReaderAbsent(_)) => {
+                ("Archive reader not configured".into(), DossierTone::Dim)
+            }
+            DossierFetchState::Failed(error) => (error.to_string(), DossierTone::Crimson),
+        };
+        return vec![DossierSegment { text, tone }];
+    };
+    let verified = verified_tick(read);
+    let mut segments = vec![DossierSegment {
+        text: format!(
+            "Viewing week {} · durable week {}\n{}",
+            read.scope.tick(),
+            read.durable_tick,
+            availability_label(read)
+        ),
+        tone: if verified.is_some() {
+            DossierTone::Gold
+        } else {
+            DossierTone::Crimson
+        },
+    }];
+    if let Some(tick) = verified {
+        segments.push(DossierSegment {
+            text: format!(" · verified through {tick}"),
+            tone: DossierTone::Gold,
+        });
+    }
+    if let Some(page) = retained_page(read) {
+        segments.push(DossierSegment {
+            text: format!("\nContent last published at week {}", page.effective_tick),
+            tone: DossierTone::Dim,
+        });
+    }
+    segments
+}
+
+fn paint_actions(
     commands: &mut Commands,
     entity: Entity,
-    view: &DossierPageView,
-    projection: &ActiveCountyDossier,
+    installed: Option<&InstalledDossier>,
+    back_scope: Option<&DossierRequestScope>,
+    presentation: &DossierPresentation,
+    observer: bool,
 ) {
-    match view {
-        DossierPageView::Card => {
-            let rows = projection.0.as_ref().map_or_else(Vec::new, |card| {
-                card.changelog
-                    .iter()
-                    .map(chronicle_row_segments)
-                    .collect::<Vec<_>>()
-            });
-            set_segment_rows(commands, entity, &rows);
+    commands.entity(entity).despawn_related::<Children>();
+    if let Some(scope) = back_scope {
+        spawn_control(
+            commands,
+            entity,
+            "Back to county".into(),
+            DossierControl::Back(scope.clone()),
+        );
+    }
+    if let Some(installed) = installed {
+        let scope = &installed.scope;
+        if let Some(page) = retained_page(&installed.read) {
+            spawn_control(
+                commands,
+                entity,
+                if presentation.details_open {
+                    "Hide evidence"
+                } else {
+                    "Evidence and changes"
+                }
+                .into(),
+                DossierControl::Details(scope.clone()),
+            );
+            if presentation.details_open {
+                if let Some(cursor) = &page.changes.next_cursor {
+                    spawn_control(
+                        commands,
+                        entity,
+                        "More changes".into(),
+                        DossierControl::More(scope.clone(), cursor.clone()),
+                    );
+                }
+                if presentation.cursor.is_some() {
+                    spawn_control(
+                        commands,
+                        entity,
+                        "First changes".into(),
+                        DossierControl::First(scope.clone()),
+                    );
+                }
+            }
         }
-        DossierPageView::Placeholder(_) => set_segments(commands, entity, &[]),
+    }
+    commands.entity(entity).with_child((
+        Text::new(if observer {
+            "READ-ONLY ARCHIVE"
+        } else {
+            INVESTIGATE_SEALED_CHIP
+        }),
+        TextColor(palette::DIM),
+        TextFont {
+            font_size: 11.0,
+            ..default()
+        },
+        ObserverFontRole::Body,
+        DeclaredSurface::new(CARD_SURFACE),
+    ));
+}
+
+type AddedCardNodes<'w, 's> = Query<
+    'w,
+    's,
+    (&'static DeclaredSurface, &'static mut Node),
+    (Added<Node>, Without<DossierCardRoot>),
+>;
+
+/// Apply observer typography to rendered card entities without changing the
+/// shared Archive composition or the player-action conformance contract.
+fn polish_observer_card(
+    mut texts: Query<(&DeclaredSurface, &mut TextColor), Changed<TextColor>>,
+    mut nodes: AddedCardNodes,
+    mut lines: Query<(&DeclaredSurface, &mut Text), Changed<Text>>,
+    mut spans: Query<(&DeclaredSurface, &mut TextSpan), Changed<TextSpan>>,
+) {
+    use crate::observer_theme as theme;
+    fn supported_glyphs(value: &str) -> String {
+        value
+            .replace('·', "|")
+            .replace('…', "...")
+            .replace(['—', '–'], "-")
+            .replace('→', ">")
+            .replace('←', "<")
+            .replace('φ', "phi")
+    }
+    for (surface, mut text) in &mut lines {
+        if surface.id == CARD_SURFACE && !text.0.is_ascii() {
+            let next = supported_glyphs(&text.0);
+            if text.0 != next {
+                text.0 = next;
+            }
+        }
+    }
+    for (surface, mut span) in &mut spans {
+        if surface.id == CARD_SURFACE && !span.0.is_ascii() {
+            let next = supported_glyphs(&span.0);
+            if span.0 != next {
+                span.0 = next;
+            }
+        }
+    }
+    for (surface, mut color) in &mut texts {
+        if surface.id != CARD_SURFACE {
+            continue;
+        }
+        let next = if color.0 == palette::DIM || color.0 == palette::BONE.with_alpha(0.7) {
+            theme::GRAY
+        } else if color.0 == palette::BONE {
+            theme::PAPER
+        } else if color.0 == palette::GOLD {
+            theme::YELLOW
+        } else if color.0 == palette::CRIMSON {
+            theme::RED
+        } else {
+            color.0
+        };
+        if color.0 != next {
+            color.0 = next;
+        }
+    }
+    for (surface, mut node) in &mut nodes {
+        if surface.id == CARD_SURFACE {
+            node.flex_shrink = 0.0;
+            node.min_width = px(0);
+            node.max_width = percent(100);
+        }
     }
 }
 
@@ -833,10 +1477,18 @@ pub struct DossierCardPlugin;
 impl Plugin for DossierCardPlugin {
     fn build(&self, app: &mut App) {
         app.add_message::<SubjectPageRequest>()
+            .add_message::<DossierControl>()
+            .init_resource::<DossierPresentation>()
             .init_resource::<DossierCampaignId>()
             .init_resource::<ActiveCountyDossier>()
             .init_resource::<DossierPageView>()
             .init_resource::<DossierFetchState>()
+            .init_resource::<DossierRefresh>()
+            .add_observer(keyboard_activate)
+            .add_systems(
+                PreUpdate,
+                focus_eligibility.in_set(ObserverFocusSystems::Eligibility),
+            )
             .add_systems(Startup, spawn_dossier_card)
             .add_systems(
                 Update,
@@ -851,8 +1503,12 @@ impl Plugin for DossierCardPlugin {
                     collect_dossier_fetch,
                     apply_page_requests,
                     repaint_dossier_card,
+                    polish_observer_card
+                        .run_if(resource_exists::<crate::observer_ui::ObserverUiState>),
                 )
-                    .chain(),
+                    .chain()
+                    .after(crate::observer_io::ObserverSet::Install)
+                    .before(crate::observer_io::ObserverSet::Paint),
             );
     }
 }
@@ -860,6 +1516,505 @@ impl Plugin for DossierCardPlugin {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use babylon_persistence::archive_revision::{
+        ArchiveChangePageV2, ArchiveDossierPageV2, ArchiveDossierPendingV2, ArchiveDossierStateV2,
+        ArchivePublicationOriginV2,
+    };
+    use babylon_persistence::{
+        ArchiveCitationV1, ArchiveSignalV1, ObserverEconomySnapshotV1, ObserverVisibilityV1,
+    };
+
+    fn subject(kind: ArchiveSubjectKindV1, id: &str) -> ArchivePageRefV1 {
+        ArchivePageRefV1::try_new(kind, id.into()).unwrap()
+    }
+    fn frame(session: &ObserverSession, hash: &str) -> ObserverFrame {
+        ObserverFrame(Some(ObserverEconomySnapshotV1 {
+            campaign_id: session.campaign.as_uuid().to_string(),
+            resolve_tick: session.viewed_tick,
+            foundation_digest: "foundation".into(),
+            nominal_world_hash: None,
+            tick_content_hash: Some(hash.into()),
+            envelope_digest: None,
+            visibility: ObserverVisibilityV1::FullObserver,
+            counties: vec![],
+            production: None,
+        }))
+    }
+    fn installed(session: &ObserverSession, hash: &str) -> InstalledDossier {
+        let read_scope =
+            observation_scope(session.campaign, session.viewed_tick, Some(hash)).unwrap();
+        let subject = subject(ArchiveSubjectKindV1::County, "26163");
+        let page = ArchiveDossierPageV2 {
+            revision_id: [1; 32],
+            effective_tick: 1,
+            origin: ArchivePublicationOriginV2::Materialized,
+            content_source: read_scope.clone(),
+            title: "Wayne County".into(),
+            question: "Retained question?".into(),
+            signals: vec![signal()],
+            markdown: "Exact retained narrative".into(),
+            content_sha256: [2; 32],
+            citations: vec![],
+            atoms: vec![],
+            links: vec![ArchiveDossierLinkV2 {
+                target: self::subject(ArchiveSubjectKindV1::Place, "2622000"),
+                retained_label: Some("Retained Detroit".into()),
+                target_state: ArchiveLinkedPageStateV2::KnownReady,
+            }],
+            changes: ArchiveChangePageV2 {
+                coverage_from_tick: 1,
+                changes: vec![],
+                next_cursor: None,
+            },
+        };
+        InstalledDossier {
+            scope: DossierRequestScope {
+                campaign: session.campaign,
+                county_geoid: "26163".into(),
+                refresh_generation: 0,
+                observer: Some(session.context()),
+                read_scope: read_scope.clone(),
+                subject: subject.clone(),
+            },
+            read: ArchiveDossierReadV2 {
+                scope: read_scope,
+                subject,
+                durable_tick: session.durable_tick,
+                processed_tick: session.durable_tick,
+                history_floor_tick: 1,
+                state: ArchiveDossierStateV2::Ready {
+                    page,
+                    verified_through_tick: session.viewed_tick,
+                },
+            },
+        }
+    }
+    fn signal() -> ArchiveSignalV1 {
+        ArchiveSignalV1::try_new(
+            "jobs".into(),
+            "Original jobs label".into(),
+            "1469 annual average jobs".into(),
+            ArchiveCitationV1::try_new("observed-source".into(), "exact/locator".into()).unwrap(),
+        )
+        .unwrap()
+    }
+    fn page_mut(installed: &mut InstalledDossier) -> &mut ArchiveDossierPageV2 {
+        match &mut installed.read.state {
+            ArchiveDossierStateV2::Ready { page, .. } => page,
+            _ => panic!("ready fixture"),
+        }
+    }
+    fn chip_app() -> (App, Entity, SubjectPageRequest) {
+        let campaign = CampaignId::from_uuid(uuid::Uuid::nil());
+        let mut session = ObserverSession::new(campaign);
+        session.ready(1, Some("a".repeat(64)));
+        assert!(session.installed(&session.context()));
+        let frame = frame(&session, &"a".repeat(64));
+        let installed = installed(&session, &"a".repeat(64));
+        let scope = installed.scope.clone();
+        let links = retained_page(&installed.read).unwrap().links.clone();
+        let request = chip_request(&links[0], &scope);
+        let atlas = CountyAtlas::parse(include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../../assets/map/county_atlas.bin"
+        )))
+        .unwrap();
+        let selected = SelectedCounty(atlas.index_of_fips("26163"));
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .insert_resource(atlas)
+            .insert_resource(selected)
+            .insert_resource(session)
+            .insert_resource(frame)
+            .insert_resource(DossierCampaignId(campaign))
+            .insert_resource(ObserverUiState {
+                archive_open: true,
+                menu_open: false,
+                splash_visible: false,
+                ..default()
+            })
+            .insert_resource(ActiveCountyDossier(Some(installed)))
+            .init_resource::<DossierRefresh>()
+            .init_resource::<DossierFetchState>()
+            .init_resource::<DossierPageView>()
+            .init_resource::<DossierPresentation>()
+            .init_resource::<ObserverFeedback>()
+            .add_message::<SubjectPageRequest>()
+            .add_message::<DossierControl>()
+            .add_observer(keyboard_activate)
+            .add_systems(Startup, move |mut commands: Commands| {
+                let zone = commands.spawn((Node::default(), TabGroup::new(20))).id();
+                set_chips(&mut commands, zone, &links, &scope);
+            })
+            .add_systems(PreUpdate, focus_eligibility)
+            .add_systems(Update, apply_page_requests);
+        app.update();
+        app.update();
+        let entity = app
+            .world_mut()
+            .query_filtered::<Entity, With<PlaceChipNode>>()
+            .single(app.world())
+            .unwrap();
+        (app, entity, request)
+    }
+
+    #[test]
+    fn keyboard_archive_chip_opens_the_exact_current_link() {
+        let (mut app, entity, request) = chip_app();
+        assert!(
+            app.world()
+                .get::<ObserverFocusTarget>(entity)
+                .unwrap()
+                .available
+        );
+        app.world_mut().trigger(ObserverKeyboardActivate {
+            entity,
+            context: request.scope.observer.clone(),
+        });
+        assert_eq!(
+            *app.world().resource::<DossierPageView>(),
+            DossierPageView::Card
+        );
+        app.update();
+        assert_eq!(
+            *app.world().resource::<DossierPageView>(),
+            DossierPageView::Subject(Box::new(request))
+        );
+        assert!(app.world().resource::<ActiveCountyDossier>().0.is_none());
+        assert_eq!(app.world().resource::<ObserverSession>().viewed_tick, 1);
+    }
+
+    #[test]
+    fn queued_archive_links_refuse_changed_campaign_county_generation_perspective_and_hash() {
+        for mutation in 0..6 {
+            let (mut app, entity, request) = chip_app();
+            app.world_mut().trigger(ObserverKeyboardActivate {
+                entity,
+                context: request.scope.observer.clone(),
+            });
+            match mutation {
+                0 => {
+                    app.world_mut().resource_mut::<DossierCampaignId>().0 =
+                        CampaignId::from_uuid(uuid::Uuid::from_u128(9));
+                }
+                1 => app.world_mut().resource_mut::<SelectedCounty>().0 = None,
+                2 => app.world_mut().resource_mut::<DossierRefresh>().bump(),
+                3 => app
+                    .world_mut()
+                    .resource_mut::<ObserverSession>()
+                    .set_perspective(crate::observer::Perspective::PlayerKnowledge),
+                4 => {
+                    page_mut(
+                        app.world_mut()
+                            .resource_mut::<ActiveCountyDossier>()
+                            .0
+                            .as_mut()
+                            .unwrap(),
+                    )
+                    .links[0]
+                        .target_state = ArchiveLinkedPageStateV2::Unknown;
+                }
+                5 => {
+                    app.world_mut()
+                        .resource_mut::<ObserverFrame>()
+                        .0
+                        .as_mut()
+                        .unwrap()
+                        .tick_content_hash = Some("b".repeat(64));
+                }
+                _ => unreachable!(),
+            }
+            app.update();
+            assert_eq!(
+                *app.world().resource::<DossierPageView>(),
+                DossierPageView::Card,
+                "scope mutation {mutation}"
+            );
+            assert!(app.world().resource::<ObserverFeedback>().message.is_some());
+            assert!(
+                !app.world()
+                    .get::<ObserverFocusTarget>(entity)
+                    .unwrap()
+                    .available
+            );
+        }
+    }
+
+    #[test]
+    fn archive_chip_rejects_forged_activation_context_and_idle_focus_does_not_change() {
+        #[derive(Resource, Default)]
+        struct ChangedTargets(usize);
+        let (mut app, entity, request) = chip_app();
+        app.init_resource::<ChangedTargets>().add_systems(
+            PostUpdate,
+            |changed: Query<(), Changed<ObserverFocusTarget>>,
+             mut count: ResMut<ChangedTargets>| {
+                count.0 = changed.iter().count();
+            },
+        );
+        app.update();
+        app.update();
+        assert_eq!(app.world().resource::<ChangedTargets>().0, 0);
+        let mut wrong = request.scope.observer.unwrap();
+        wrong.tick += 1;
+        app.world_mut().trigger(ObserverKeyboardActivate {
+            entity,
+            context: Some(wrong),
+        });
+        app.update();
+        assert_eq!(
+            *app.world().resource::<DossierPageView>(),
+            DossierPageView::Card
+        );
+        assert!(app.world().resource::<ObserverFeedback>().message.is_some());
+    }
+
+    #[test]
+    fn back_recovers_from_a_failed_link_read_without_changing_the_week() {
+        let (mut app, entity, request) = chip_app();
+        app.world_mut().trigger(ObserverKeyboardActivate {
+            entity,
+            context: request.scope.observer.clone(),
+        });
+        app.update();
+        assert!(app.world().resource::<ActiveCountyDossier>().0.is_none());
+        let mut scope = request.scope.clone();
+        scope.subject = request.target().unwrap();
+        *app.world_mut().resource_mut::<DossierFetchState>() =
+            DossierFetchState::Failed(DossierFetchError::ReadFailed("offline".into()));
+        app.world_mut().write_message(DossierControl::Back(scope));
+        app.update();
+        assert_eq!(
+            *app.world().resource::<DossierPageView>(),
+            DossierPageView::Card
+        );
+        assert_eq!(app.world().resource::<ObserverSession>().viewed_tick, 1);
+        assert!(app.world().resource::<ActiveCountyDossier>().0.is_none());
+    }
+
+    #[test]
+    fn disclosed_unlabeled_link_uses_only_its_public_identity() {
+        let (mut app, entity, request) = chip_app();
+        let mut unlabeled = request;
+        unlabeled.label = None;
+        page_mut(
+            app.world_mut()
+                .resource_mut::<ActiveCountyDossier>()
+                .0
+                .as_mut()
+                .unwrap(),
+        )
+        .links[0]
+            .retained_label = None;
+        app.world_mut()
+            .get_mut::<PlaceChipNode>(entity)
+            .unwrap()
+            .control = DossierControl::Link(unlabeled.clone());
+        app.world_mut().trigger(ObserverKeyboardActivate {
+            entity,
+            context: unlabeled.scope.observer.clone(),
+        });
+        app.update();
+        assert_eq!(
+            *app.world().resource::<DossierPageView>(),
+            DossierPageView::Subject(Box::new(unlabeled))
+        );
+    }
+
+    #[test]
+    fn historical_admission_uses_the_installed_week_hash_and_preserves_pending() {
+        let mut session = ObserverSession::new(CampaignId::from_uuid(uuid::Uuid::nil()));
+        session.ready(2, Some("b".repeat(64)));
+        session.inspect_tick(1);
+        assert!(session.installed(&session.context()));
+        let frame = frame(&session, &"a".repeat(64));
+        let mut active = ActiveCountyDossier(Some(installed(&session, &"a".repeat(64))));
+        let page = retained_page(&active.0.as_ref().unwrap().read)
+            .unwrap()
+            .clone();
+        active.0.as_mut().unwrap().read.state = ArchiveDossierStateV2::Pending {
+            page: Some(page),
+            reason: ArchiveDossierPendingV2::KnowledgeRefresh,
+        };
+        let read = active.for_observer(&session, &frame, 0, "26163").unwrap();
+        assert_eq!(read.scope.tick_content_hash(), Some([0xaa; 32]));
+        assert_eq!(
+            verified_tick(read),
+            None,
+            "global progress cannot verify a pending historical page"
+        );
+        for (refresh, county) in [(1, "26163"), (0, "26099")] {
+            assert!(active
+                .for_observer(&session, &frame, refresh, county)
+                .is_none());
+        }
+        active.0.as_mut().unwrap().read.scope =
+            ArchiveReadScopeV2::committed(session.campaign, 1, [0xbb; 32]).unwrap();
+        assert!(active.for_observer(&session, &frame, 0, "26163").is_none());
+    }
+
+    #[test]
+    fn unknown_and_unavailable_links_never_dispatch_a_guessed_subject() {
+        for state in [
+            ArchiveLinkedPageStateV2::Unknown,
+            ArchiveLinkedPageStateV2::KnownUnavailable,
+        ] {
+            let (mut app, entity, request) = chip_app();
+            page_mut(
+                app.world_mut()
+                    .resource_mut::<ActiveCountyDossier>()
+                    .0
+                    .as_mut()
+                    .unwrap(),
+            )
+            .links[0]
+                .target_state = state;
+            app.world_mut().trigger(ObserverKeyboardActivate {
+                entity,
+                context: request.scope.observer,
+            });
+            app.update();
+            assert_eq!(
+                *app.world().resource::<DossierPageView>(),
+                DossierPageView::Card
+            );
+        }
+    }
+
+    #[test]
+    fn repainted_archive_title_reenters_tab_order_without_recreated_link_chips() {
+        use crate::observer_focus::{ObserverFocusPlugin, ObserverFocusPolicy};
+        use bevy::ecs::system::RunSystemOnce;
+        use bevy::input::InputPlugin;
+        use bevy::input_focus::tab_navigation::TabIndex;
+        let (mut app, chip, _) = chip_app();
+        app.world_mut().despawn(chip);
+        page_mut(
+            app.world_mut()
+                .resource_mut::<ActiveCountyDossier>()
+                .0
+                .as_mut()
+                .unwrap(),
+        )
+        .links
+        .clear();
+        app.add_plugins((InputPlugin, ObserverFocusPlugin))
+            .configure_sets(
+                PreUpdate,
+                ObserverFocusSystems::Registration.after(focus_eligibility),
+            )
+            .add_systems(Update, repaint_dossier_card.after(apply_page_requests));
+        app.world_mut()
+            .spawn((Window::default(), bevy::window::PrimaryWindow));
+        let context = app.world().resource::<ObserverSession>().context();
+        app.world_mut()
+            .resource_mut::<ObserverFocusPolicy>()
+            .context = Some(context.clone());
+        app.world_mut().run_system_once(spawn_dossier_card).unwrap();
+        app.update();
+        app.update();
+        let title = {
+            let world = app.world_mut();
+            world
+                .query::<(Entity, &DossierZone)>()
+                .iter(world)
+                .find_map(|(entity, zone)| (*zone == DossierZone::Title).then_some(entity))
+                .unwrap()
+        };
+        assert!(app.world().get::<TabIndex>(title).is_some());
+        let (frame, mut next) = {
+            let mut session = app.world_mut().resource_mut::<ObserverSession>();
+            session.ready(2, Some("b".repeat(64)));
+            let context = session.context();
+            assert!(session.installed(&context));
+            (
+                frame(&session, &"b".repeat(64)),
+                installed(&session, &"b".repeat(64)),
+            )
+        };
+        page_mut(&mut next).links.clear();
+        app.world_mut().insert_resource(frame);
+        app.world_mut()
+            .insert_resource(ActiveCountyDossier(Some(next)));
+        let context = app.world().resource::<ObserverSession>().context();
+        app.world_mut()
+            .resource_mut::<ObserverFocusPolicy>()
+            .context = Some(context.clone());
+        app.update();
+        assert!(app.world().get::<TabIndex>(title).is_none());
+        app.update();
+        let target = app.world().get::<ObserverFocusTarget>(title).unwrap();
+        assert_eq!(target.context.as_ref(), Some(&context));
+        assert!(target.available);
+        assert!(app.world().get::<TabIndex>(title).is_some());
+    }
+
+    #[test]
+    fn pending_evidence_expansion_explicitly_waits_instead_of_claiming_empty_history() {
+        let mut session = ObserverSession::new(CampaignId::from_uuid(uuid::Uuid::nil()));
+        session.ready(1, Some("a".repeat(64)));
+        let mut installed = installed(&session, &"a".repeat(64));
+        let page = retained_page(&installed.read).unwrap().clone();
+        installed.read.processed_tick = 99;
+        installed.read.state = ArchiveDossierStateV2::Pending {
+            page: Some(page),
+            reason: ArchiveDossierPendingV2::ReceiptProcessing,
+        };
+        let rows = evidence_rows(&installed.read);
+        assert_eq!(rows[0][0].text, "Changes await Archive completion.");
+        let text: String = rows
+            .iter()
+            .flatten()
+            .map(|segment| segment.text.as_str())
+            .collect();
+        assert!(!text.to_lowercase().contains("no changes"));
+        assert!(text.contains("Exact retained narrative"));
+    }
+
+    #[test]
+    fn retained_signal_labels_and_citations_are_not_reconstructed_from_atom_keys() {
+        let signal = signal();
+        let collapsed = retained_signal_segments(&signal, false);
+        assert_eq!(collapsed[0].text, "Original jobs label: ");
+        assert_eq!(collapsed[1].text, "1469 annual average jobs");
+        let expanded = retained_signal_segments(&signal, true);
+        assert!(expanded[2].text.contains("observed-source"));
+        assert!(expanded[2].text.contains("exact/locator"));
+    }
+
+    #[test]
+    fn rendered_signal_rows_stack_and_wrap_without_losing_citation_bytes() {
+        let rows = vec![retained_signal_segments(&signal(), true)];
+        let expected: String = rows[0].iter().map(|part| part.text.as_str()).collect();
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .add_systems(Startup, move |mut commands: Commands| {
+                let zone = commands.spawn((Text::new(""), DossierZone::Signals)).id();
+                set_segment_rows(&mut commands, zone, &rows);
+            });
+        app.update();
+        let world = app.world_mut();
+        let (_, container, children) = world
+            .query::<(&DossierZone, &Node, &Children)>()
+            .single(world)
+            .unwrap();
+        assert_eq!(container.flex_direction, FlexDirection::Column);
+        assert_eq!(container.width, percent(100));
+        let row = children[0];
+        let node = world.get::<Node>(row).unwrap();
+        assert_eq!(node.min_width, px(0));
+        assert_eq!(
+            world.get::<TextLayout>(row).unwrap().linebreak,
+            bevy::text::LineBreak::WordOrCharacter
+        );
+        let actual: String = world
+            .get::<Children>(row)
+            .unwrap()
+            .iter()
+            .map(|span| world.get::<TextSpan>(span).unwrap().0.as_str())
+            .collect();
+        assert_eq!(actual, expected);
+    }
 
     #[test]
     fn campaign_default_uses_the_runtime_default_uuid_without_env() {
@@ -870,7 +2025,6 @@ mod tests {
             CampaignId::from_uuid(uuid::Uuid::from_u128(DEFAULT_CAMPAIGN_UUID))
         );
     }
-
     #[test]
     fn campaign_default_reads_a_canonical_env_uuid() {
         let env = crate::test_support::EnvVarGuard::lock(CAMPAIGN_ENV);
@@ -882,17 +2036,14 @@ mod tests {
             ))
         );
     }
-
     #[test]
     fn fetch_error_display_is_honest() {
         assert_eq!(
-            DossierFetchError::ReaderAbsent("missing env".to_owned()).to_string(),
+            DossierFetchError::ReaderAbsent("missing env".into()).to_string(),
             "Archive reader not configured (missing env)"
         );
-        assert!(
-            DossierFetchError::ReadFailed("connection refused".to_owned())
-                .to_string()
-                .starts_with("Archive fetch failed — ")
-        );
+        assert!(DossierFetchError::ReadFailed("connection refused".into())
+            .to_string()
+            .starts_with("Archive fetch failed — "));
     }
 }

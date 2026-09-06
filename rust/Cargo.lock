@@ -454,10 +454,12 @@ version = "0.1.0"
 dependencies = [
  "babylon-bsl",
  "babylon-graph",
+ "babylon-material-circuit",
  "babylon-kernel",
  "babylon-practice-contract",
  "babylon-tick",
  "fallible-iterator",
+ "flate2",
  "minijinja",
  "postgres",
  "serde",
@@ -490,6 +492,7 @@ version = "0.1.0"
 dependencies = [
  "babylon-bsl",
  "babylon-graph",
+ "babylon-material-circuit",
  "babylon-kernel",
  "babylon-practice-contract",
  "serde",

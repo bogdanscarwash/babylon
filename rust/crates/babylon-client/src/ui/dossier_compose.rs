@@ -15,10 +15,9 @@
 //! (`~~[Detroit](subject:…)~~`) render as DIM text plus a "· pending" suffix
 //! (decision 2) — no combining-glyph tricks, testable headless.
 
+use babylon_persistence::archive_revision::{ArchiveAtomChangeV2, ArchiveDossierStateV2};
+use babylon_persistence::ArchiveSignalV1;
 use babylon_persistence::{fog_chip_v1, ArchiveAtomV1, ArchiveAtomValueV1};
-use serde_json::Value;
-
-use crate::dossier::ChangelogRow;
 
 /// The one decision question the dossier card answers (ADR249 R9), pinned in
 /// exactly one place so the manifest row and the rendered card cannot drift.
@@ -201,57 +200,109 @@ pub fn signal_row_segments(atom: &ArchiveAtomV1) -> Vec<DossierSegment> {
     ]
 }
 
-/// Render one changelog value (JSON form) with the same `%.6f` discipline.
+/// Exact retained display labels and values, with evidence expanded inline.
 #[must_use]
-fn changelog_value_text(value: &Value) -> String {
-    match value {
-        Value::String(text) => text.clone(),
-        Value::Number(number) => match number.as_f64() {
-            Some(float) => format!("{float:.6}"),
-            None => number.to_string(),
-        },
-        other => other.to_string(),
-    }
-}
-
-/// One chronicle-strip row as toned segments (ADR249 R9 consequence
-/// presentation): `t12` DIM, signal key BONE, `31.400000 → 31.870000` with
-/// the GOLD arrow, `verified 11→12` DIM.
-#[must_use]
-pub fn chronicle_row_segments(row: &ChangelogRow) -> Vec<DossierSegment> {
-    let mut segments = vec![
-        DossierSegment::new(format!("t{} ", row.to_tick), DossierTone::Dim),
-        DossierSegment::new(format!("{} ", row.signal_key), DossierTone::Bone),
+pub fn retained_signal_segments(signal: &ArchiveSignalV1, details: bool) -> Vec<DossierSegment> {
+    let mut parts = vec![
+        DossierSegment::new(format!("{}: ", signal.label()), DossierTone::BoneDim),
+        DossierSegment::new(signal.value(), DossierTone::Bone),
     ];
-    if let (Some(from), Some(_)) = (&row.from_value, &row.from_tick) {
-        segments.push(DossierSegment::new(
-            changelog_value_text(from),
-            DossierTone::Bone,
-        ));
-        segments.push(DossierSegment::new(" → ", DossierTone::Gold));
-        segments.push(DossierSegment::new(
-            changelog_value_text(&row.to_value),
-            DossierTone::Bone,
-        ));
-        segments.push(DossierSegment::new(
+    if details {
+        parts.push(DossierSegment::new(
             format!(
-                " · verified {}→{}",
-                row.from_tick
-                    .map_or_else(|| "—".to_owned(), |t| t.to_string()),
-                row.to_tick
+                "\nSource: {}\nLocator: {}\nField: {}",
+                signal.citation().source_id(),
+                signal.citation().locator(),
+                signal.grant_key()
             ),
             DossierTone::Dim,
         ));
-    } else {
-        segments.push(DossierSegment::new("(new) ", DossierTone::Gold));
-        segments.push(DossierSegment::new(
-            changelog_value_text(&row.to_value),
-            DossierTone::Bone,
-        ));
-        segments.push(DossierSegment::new(
-            format!(" · new at t{}", row.to_tick),
+    }
+    parts
+}
+
+/// A bounded or unfinished change page never implies that no changes occurred.
+pub(crate) fn chronicle_header(state: &ArchiveDossierStateV2) -> DossierSegment {
+    match state {
+        ArchiveDossierStateV2::Pending { .. } => {
+            DossierSegment::new("Changes await Archive completion.", DossierTone::Crimson)
+        }
+        ArchiveDossierStateV2::Ready { page, .. } => {
+            let mut text = format!(
+                "Retained change coverage starts at week {}.",
+                page.changes.coverage_from_tick
+            );
+            if page.changes.next_cursor.is_some() {
+                text.push_str(" More retained changes are available.");
+            }
+            DossierSegment::new(text, DossierTone::Dim)
+        }
+        ArchiveDossierStateV2::Unavailable(_) => DossierSegment::new(
+            "Change history is unavailable for this observation.",
             DossierTone::Dim,
-        ));
+        ),
+    }
+}
+
+/// Report publication differences without calling absence zero or a verification.
+#[must_use]
+pub fn chronicle_row_segments(row: &ArchiveAtomChangeV2) -> Vec<DossierSegment> {
+    let mut segments = vec![DossierSegment::new(
+        format!(
+            "Published week {} · {} ",
+            row.publication_tick, row.signal_key
+        ),
+        DossierTone::Dim,
+    )];
+    match (&row.before, &row.after) {
+        (Some(before), Some(after)) => {
+            segments.push(DossierSegment::new(
+                atom_value_text(before.value()),
+                DossierTone::Bone,
+            ));
+            segments.push(DossierSegment::new(" → ", DossierTone::Gold));
+            segments.push(DossierSegment::new(
+                atom_value_text(after.value()),
+                DossierTone::Bone,
+            ));
+        }
+        (None, Some(after)) => {
+            segments.push(DossierSegment::new(
+                "(added within retained coverage) ",
+                DossierTone::Gold,
+            ));
+            segments.push(DossierSegment::new(
+                atom_value_text(after.value()),
+                DossierTone::Bone,
+            ));
+        }
+        (Some(before), None) => {
+            segments.push(DossierSegment::new(
+                atom_value_text(before.value()),
+                DossierTone::Bone,
+            ));
+            segments.push(DossierSegment::new(
+                " → removed from this publication",
+                DossierTone::Gold,
+            ));
+        }
+        (None, None) => segments.push(DossierSegment::new(
+            "No retained value on either side",
+            DossierTone::Dim,
+        )),
+    }
+    for (label, atom) in [("Before", &row.before), ("After", &row.after)] {
+        if let Some(atom) = atom {
+            segments.push(DossierSegment::new(
+                format!(
+                    "\n{label}: observed week {}; {}; {}",
+                    atom.valid_tick(),
+                    atom.citation().source_id(),
+                    atom.citation().locator()
+                ),
+                DossierTone::Dim,
+            ));
+        }
     }
     segments
 }
@@ -417,42 +468,30 @@ mod tests {
         assert_eq!(atom_value_text(&ArchiveAtomValueV1::Bool(true)), "true");
     }
 
-    fn changelog_row(from: Option<(u64, Value)>, to_tick: u64, to: Value) -> ChangelogRow {
-        let (from_tick, from_value, from_atom_id) = match from {
-            Some((tick, value)) => (Some(tick), Some(value), Some([0xab; 32])),
-            None => (None, None, None),
-        };
-        ChangelogRow {
-            signal_key: "median-wage".to_owned(),
-            from_tick,
-            to_tick,
-            from_atom_id,
-            to_atom_id: [0xcd; 32],
-            from_value,
-            to_value: to,
+    #[test]
+    fn publication_changes_distinguish_replacement_addition_and_removal() {
+        let before = atom("jobs", "2", 11);
+        let after = atom("jobs", "0", 12);
+        for (old, new, expected) in [
+            (Some(before.clone()), Some(after.clone()), "2 → 0"),
+            (None, Some(after), "(added within retained coverage) 0"),
+            (Some(before), None, "2 → removed from this publication"),
+        ] {
+            let row = ArchiveAtomChangeV2 {
+                publication_tick: 14,
+                signal_key: "jobs".into(),
+                before: old,
+                after: new,
+            };
+            let text: String = chronicle_row_segments(&row)
+                .iter()
+                .map(|segment| segment.text.as_str())
+                .collect();
+            assert!(text.starts_with("Published week 14"));
+            assert!(text.contains(expected));
+            assert!(!text.contains("verified"));
+            assert!(text.contains("committed-tick-v1; campaign/12/Wayne"));
         }
-    }
-
-    #[test]
-    fn chronicle_change_row_uses_the_gold_arrow_and_verified_span() {
-        let row = changelog_row(Some((11, Value::from(31.4))), 12, Value::from(31.87));
-        let segments = chronicle_row_segments(&row);
-        let text: String = segments.iter().map(|s| s.text.as_str()).collect();
-        assert_eq!(
-            text,
-            "t12 median-wage 31.400000 → 31.870000 · verified 11→12"
-        );
-        assert_eq!(segments[0].tone, DossierTone::Dim);
-        assert_eq!(segments[3].tone, DossierTone::Gold);
-        assert_eq!(segments[3].text, " → ");
-    }
-
-    #[test]
-    fn chronicle_appearance_row_marks_the_value_new() {
-        let row = changelog_row(None, 12, Value::from(31.4));
-        let segments = chronicle_row_segments(&row);
-        let text: String = segments.iter().map(|s| s.text.as_str()).collect();
-        assert_eq!(text, "t12 median-wage (new) 31.400000 · new at t12");
     }
 
     #[test]

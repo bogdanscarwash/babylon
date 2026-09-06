@@ -19,6 +19,7 @@ from tools.verify_h3_reader_cutover_v1 import (
     load_reader_cutover_contract,
     load_reader_parity_vectors,
     require_exact_reader_inventory,
+    verify_non_h3_observer_surfaces,
     verify_reader_cutover_contract,
     verify_reader_parity_vectors,
 )
@@ -177,6 +178,7 @@ def test_checked_in_sources_satisfy_the_exact_reader_inventory() -> None:
             "legacy_identity_read",
         ),
         ("SELECT cell_id FROM public.v_compat_dynamic_hex_state_v1", "compatibility_read"),
+        ("SELECT cell_id FROM public.v_observer_dynamic_hex_state_v1", "compatibility_read"),
     ],
 )
 def test_sql_sentinel_refuses_noncanonical_h3_reads(sql: str, code: str) -> None:
@@ -203,6 +205,55 @@ def test_sql_sentinel_accepts_schema_qualified_bigint_reads() -> None:
         ("dynamic_hex_state", "public.dynamic_hex_state"),
         ("hex_spatial_map", "public.hex_spatial_map"),
     ]
+
+
+def test_non_h3_economic_observation_is_admitted_only_for_its_exact_owner() -> None:
+    contract = load_reader_cutover_contract(CONTRACT)
+    sql = "SELECT register_bytes FROM public.v_observer_material_state_v1 WHERE resolve_tick=$1"
+    owner = Path("rust/crates/babylon-persistence/src/observer_material.rs")
+    assert inspect_sql_literal(contract, owner, sql) == []
+    for foreign_path, foreign_sql in (
+        (Path("src/babylon/probe.py"), sql),
+        (owner, sql.replace("public.", "")),
+        (owner, sql.replace("public.", "foreign_schema.")),
+        (owner, sql.replace("v_observer_material_state_v1", "v_observer_unreviewed_v1")),
+    ):
+        with pytest.raises(H3ReaderCutoverRefusal, match="compatibility_read"):
+            inspect_sql_literal(contract, foreign_path, foreign_sql)
+
+
+def test_economic_observer_admission_cannot_hide_a_legacy_h3_join() -> None:
+    contract = load_reader_cutover_contract(CONTRACT)
+    with pytest.raises(H3ReaderCutoverRefusal, match="legacy_identity_read"):
+        inspect_sql_literal(
+            contract,
+            Path("rust/crates/babylon-persistence/src/observer_material.rs"),
+            "SELECT hex.h3_index FROM public.v_observer_material_state_v1 AS material "
+            "JOIN public.dynamic_hex_state AS hex ON hex.resolve_tick = material.resolve_tick",
+        )
+
+
+@pytest.mark.parametrize("drift", ["legacy_dependency", "unknown_view"])
+def test_non_h3_observer_definition_cannot_become_an_h3_adapter(tmp_path: Path, drift: str) -> None:
+    migration_root = Path("rust/crates/babylon-persistence/migrations")
+    (tmp_path / migration_root).mkdir(parents=True)
+    for name in ("observer_economy_v1.sql", "observer_material_v1.sql"):
+        source = (ROOT / migration_root / name).read_text()
+        if name == "observer_material_v1.sql":
+            if drift == "legacy_dependency":
+                source = source.replace(
+                    "FROM babylon_state.material_campaign_foundation_v2",
+                    "FROM public.dynamic_hex_state",
+                )
+            else:
+                source += "\nCREATE VIEW public.v_observer_extra_v1 AS SELECT 1;\n"
+        (tmp_path / migration_root / name).write_text(source)
+    parent = load_reader_cutover_contract(ROOT / "contracts/h3_estate_contract_v1.yaml")
+    with pytest.raises(H3ReaderCutoverRefusal) as error:
+        verify_non_h3_observer_surfaces(parent, tmp_path)
+    assert error.value.code == (
+        "compatibility_read" if drift == "legacy_dependency" else "observer_declaration_drift"
+    )
 
 
 def test_tagged_lodes_read_requires_closed_kind_and_canonical_cell_columns() -> None:

@@ -47,7 +47,7 @@ tree-sitter parse <file.bsl>     # print a parse tree; exits non-zero on error
 
 The CLI ships with the repo's Rust toolchain (`cargo install tree-sitter-cli`,
 already present at `~/.cargo/bin/tree-sitter` on the dev box); node is
-available via the repo flake (`mise run nix -- node --version`). The generated
+installed at the pinned version by `mise install`. The generated
 parser is **not committed** — it is a build product of `grammar.js`, and
 committing it would make the grammar's real source ambiguous.
 

@@ -164,7 +164,7 @@ pub(crate) fn read_stored_typed_tick_v2(
     }))
 }
 
-fn read_graph_state(
+pub(crate) fn read_graph_state(
     client: &mut impl GenericClient,
     campaign_id: CampaignId,
     resolve_tick: i64,
@@ -383,7 +383,7 @@ fn read_graph_hyperedge_f64(
         .collect()
 }
 
-fn read_material_rows(
+pub(crate) fn read_material_rows(
     client: &mut impl GenericClient,
     campaign_id: CampaignId,
     resolve_tick: i64,
@@ -568,7 +568,7 @@ fn read_organizations(
     Ok(output)
 }
 
-fn read_event_rows(
+pub(crate) fn read_event_rows(
     client: &mut impl GenericClient,
     campaign_id: CampaignId,
     resolve_tick: i64,
@@ -631,7 +631,7 @@ fn read_event_rows(
     Ok(output)
 }
 
-fn read_choice_receipt_rows(
+pub(crate) fn read_choice_receipt_rows(
     client: &mut impl GenericClient,
     campaign_id: CampaignId,
     resolve_tick: i64,
@@ -722,7 +722,7 @@ fn read_choice_receipt_rows(
     Ok(output)
 }
 
-fn read_checkpoint_rows(
+pub(crate) fn read_checkpoint_rows(
     client: &mut impl GenericClient,
     campaign_id: CampaignId,
     resolve_tick: u64,
@@ -792,7 +792,7 @@ fn read_checkpoint_rows(
     Ok((rows, sections))
 }
 
-fn read_archive_receipt(
+pub(crate) fn read_archive_receipt(
     client: &mut impl GenericClient,
     campaign_id: CampaignId,
     resolve_tick: i64,

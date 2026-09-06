@@ -15,7 +15,7 @@ const EXPECTED_COUNTIES: usize = 83;
 const EXPECTED_PLACES: usize = 745;
 const EXPECTED_CONCEPTS: usize = 8;
 const EXPECTED_GRANT_ROWS: usize =
-    3 * EXPECTED_COUNTIES + 3 * EXPECTED_PLACES + 2 * EXPECTED_CONCEPTS;
+    7 * EXPECTED_COUNTIES + 3 * EXPECTED_PLACES + 2 * EXPECTED_CONCEPTS;
 
 #[test]
 fn glossary_concepts_parse_to_the_pinned_corpus() {
@@ -156,12 +156,30 @@ fn canonical_grant_rows_cover_exactly_the_public_reference_subjects() {
         .iter()
         .filter(|row| row.subject().kind() == ArchiveAtomSubjectKindV1::Concept)
         .count();
-    assert_eq!(counties, 3 * EXPECTED_COUNTIES);
+    assert_eq!(counties, 7 * EXPECTED_COUNTIES);
     assert_eq!(places, 3 * EXPECTED_PLACES);
     assert_eq!(concepts, 2 * EXPECTED_CONCEPTS);
     for row in &rows {
         match row.subject().kind() {
             ArchiveAtomSubjectKindV1::County => {
+                if row.grant_key().starts_with("qcew-") {
+                    assert!([
+                        "qcew-establishments",
+                        "qcew-employment",
+                        "qcew-total-annual-wages",
+                        "qcew-average-weekly-wage"
+                    ]
+                    .contains(&row.grant_key()));
+                    assert_eq!(row.citation().source_id(), "qcew-county-economics-v1");
+                    assert_eq!(
+                        row.citation().locator(),
+                        format!(
+                            "qcew_county_economics_mi_2024.csv.gz#county_geoid={}&sha256=116affb2998c6c0259d5bf14840f99f835d7e0733aa0b4f4c60a257b2723cd16",
+                            row.subject().id()
+                        )
+                    );
+                    continue;
+                }
                 assert_eq!(row.citation().source_id(), FOUNDATION_COUNTY_SOURCE_ID_V1);
                 assert_eq!(
                     row.citation().locator(),

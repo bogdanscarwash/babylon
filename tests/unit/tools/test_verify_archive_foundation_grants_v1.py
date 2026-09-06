@@ -44,9 +44,9 @@ def test_grant_row_census_covers_exactly_the_public_reference_subjects() -> None
     assert len(counties) == 3285
     assert len(places) == 745
     assert len(concept_ids) == 8
-    assert len(rows) == COMPILED_CONSTANTS["expected_grant_rows"] == 2500
+    assert len(rows) == COMPILED_CONSTANTS["expected_grant_rows"] == 2832
     kinds = [row[0] for row in rows]
-    assert kinds.count("county") == 3 * 83
+    assert kinds.count("county") == 7 * 83
     assert kinds.count("place") == 3 * 745
     assert kinds.count("concept") == 2 * 8
 
@@ -68,7 +68,7 @@ def test_semantic_digest_matches_the_contract_and_rust_pin() -> None:
     assert compute_semantic_sha256(rows) == contract["constants"]["semantic_sha256"]
     assert (
         compute_semantic_sha256(rows)
-        == "d1c51755b30f64064a26b66fd5267e0a151377f023b96734d1ff5b9a7eefc20d"
+        == "9bb3cdda37dc3dee59242fcfe08f6c3f5bac01ff433988383d459fa0df9dfc65"
     )
 
 
@@ -88,6 +88,27 @@ def test_earned_magnitude_keys_never_seed() -> None:
 
     for forbidden in ["median-wage", "phi-hour", "class-composition", "employment"]:
         assert all(row[2] != forbidden for row in rows)
+
+
+def test_all_counties_receive_exact_public_qcew_baseline_grants() -> None:
+    counties, places, concept_ids = _subjects()
+    rows = build_grant_rows(counties, places, concept_ids)
+    baseline = [row for row in rows if row[2].startswith("qcew-")]
+
+    assert len(baseline) == 4 * 83
+    for kind, geoid, key, source_id, locator in baseline:
+        assert kind == "county"
+        assert key in {
+            "qcew-establishments",
+            "qcew-employment",
+            "qcew-total-annual-wages",
+            "qcew-average-weekly-wage",
+        }
+        assert source_id == "qcew-county-economics-v1"
+        assert locator == (
+            f"qcew_county_economics_mi_2024.csv.gz#county_geoid={geoid}"
+            "&sha256=116affb2998c6c0259d5bf14840f99f835d7e0733aa0b4f4c60a257b2723cd16"
+        )
 
 
 def test_place_containment_rows_carry_the_overlap_citation() -> None:

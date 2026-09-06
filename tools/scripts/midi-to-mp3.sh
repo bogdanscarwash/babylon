@@ -5,7 +5,6 @@
 set -e
 
 SOUNDFONT="${SOUNDFONT:-/usr/share/sounds/sf2/FluidR3_GM.sf2}"
-AUDIO_OUTPUT_DIR="${AUDIO_OUTPUT_DIR:-assets/audio}"
 
 INPUT="$1"
 if [ -z "$INPUT" ]; then
@@ -20,17 +19,9 @@ if ! command -v ffmpeg &> /dev/null; then
     exit 1
 fi
 
-BASENAME=$(basename "$INPUT" .mid)
-mkdir -p "$AUDIO_OUTPUT_DIR"
+OUTPUT="${2:-${INPUT%.mid}.mp3}"
+mkdir -p "$(dirname "$OUTPUT")"
 
-# Default output: same name with .mp3 extension
-if [ -z "$2" ]; then
-    OUTPUT="$AUDIO_OUTPUT_DIR/$BASENAME.mp3"
-else
-    OUTPUT="$2"
-fi
-
-# First convert to WAV, then to MP3
 TEMP_WAV=$(mktemp --suffix=.wav)
 trap 'rm -f "$TEMP_WAV"' EXIT
 

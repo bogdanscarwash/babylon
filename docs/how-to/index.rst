@@ -41,18 +41,12 @@ Reference Data
    :maxdepth: 1
 
    reference-data-pipeline
-   reference-data-fod
 
 **Add or Change Reference Data (parquet-canonical pipeline)**
    Add tables or ingest rows through the source-only pipeline: parquet +
    ``schema.sql`` are canonical, the SQLite reference DB is a deterministic
    build product, and loaders run against scratch copies via
    ``tools/loader_to_sources.py`` (ADR098).
-
-**Wire the Reference-Data Fixed-Output Derivation**
-   Planned, not yet wired: how to add the Nix FOD that ships the built
-   reference DB to players through the signed R2 cache, once the BD-run R2
-   custom-domain ceremony lands a real URL (ADR104).
 
 State Apparatus AI (Feature 039)
 ---------------------------------

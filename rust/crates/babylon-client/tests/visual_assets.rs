@@ -28,6 +28,7 @@ fn add_visual_asset_plugins(app: &mut App) {
         MinimalPlugins,
         AssetPlugin::default(),
         ImagePlugin::default(),
+        bevy::text::TextPlugin,
         // Bevy 0.18 registers the concrete image loader in this plugin's finish phase.
         TexturePlugin,
     ));

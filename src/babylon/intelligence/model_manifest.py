@@ -1,9 +1,9 @@
-"""The signed model manifest (D3, ADR096).
+"""The bundled model manifest (D3, ADR096; native distribution in ADR252).
 
-The manifest ships in the package (``data/model_manifest.toml``) → inside the
-signed Nix closure, so the closure narinfo signature IS the manifest
-signature. Weights never enter the store; ``babylon doctor --provision``
-(see ``provision.py``) fetches them per this manifest into
+The manifest is versioned source packaged as ``data/model_manifest.toml``.
+Downloaded weights are checked against its byte length and SHA-256. The
+native source installation does not provide a separate manifest signature.
+``babylon doctor --provision`` stores weights in
 ``~/.local/share/babylon/models/``.
 
 Entries are owner-provisioned: an entry is fetched only when ``available`` is
@@ -74,7 +74,7 @@ def parse_manifest(raw: dict[str, Any]) -> ModelManifest:
 
 
 def load_bundled_manifest() -> ModelManifest:
-    """Load the manifest shipped inside the package (the signed closure)."""
+    """Load the versioned manifest shipped inside the package."""
     data = resources.files("babylon.intelligence.data").joinpath("model_manifest.toml")
     with resources.as_file(data) as path, path.open("rb") as handle:
         raw = tomllib.load(handle)

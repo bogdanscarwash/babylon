@@ -1,4 +1,6 @@
 use std::str::FromStr;
+#[path = "support/archive_reader.rs"]
+mod archive_reader;
 
 use babylon_kernel::sha256_of;
 use babylon_persistence::{
@@ -6,8 +8,7 @@ use babylon_persistence::{
     ArchiveLinkV1, ArchiveMaterializeDispositionV1, ArchiveMaterializeModeV1, ArchivePageInputV1,
     ArchivePageRefV1, ArchiveSignalV1, ArchiveSubjectKindV1, ArchiveSubjectV1, CampaignId,
     FogSafeArchiveRendererV1, SemanticArchiveErrorV1, SemanticArchiveStoreV1,
-    ARCHIVE_KNOWLEDGE_SQL_V1, ARCHIVE_PAGE_TEMPLATE_SHA256_V1, ARCHIVE_SEARCH_SQL_V1,
-    SEMANTIC_ARCHIVE_SCHEMA_V1_SQL,
+    ARCHIVE_KNOWLEDGE_SQL_V1, ARCHIVE_PAGE_TEMPLATE_SHA256_V1, SEMANTIC_ARCHIVE_SCHEMA_V1_SQL,
 };
 use postgres::{Config, NoTls};
 use uuid::Uuid;
@@ -281,11 +282,12 @@ fn persistence_queries_enforce_grants_in_sql_and_hide_raw_ledgers() {
     assert!(ARCHIVE_KNOWLEDGE_SQL_V1.contains("granted_tick <= $2"));
     assert!(ARCHIVE_KNOWLEDGE_SQL_V1.contains("provenance_source_id"));
     assert!(ARCHIVE_KNOWLEDGE_SQL_V1.contains("provenance_locator"));
-    assert!(ARCHIVE_SEARCH_SQL_V1.contains("JOIN babylon_meta.archive_knowledge_grant_v1"));
-    assert!(ARCHIVE_SEARCH_SQL_V1.contains("knowledge.grant_key = 'subject'"));
-    assert!(ARCHIVE_SEARCH_SQL_V1.contains("knowledge.granted_tick <= page.verified_tick"));
-    assert!(!ARCHIVE_SEARCH_SQL_V1.contains("archive_dirty_receipt_v1"));
-    assert!(!ARCHIVE_SEARCH_SQL_V1.contains("tick_event"));
+    let revision = include_str!("../migrations/archive_revision_v2.sql");
+    assert!(revision.contains("grant_row.granted_tick = dependency.granted_tick"));
+    assert!(revision.contains("emission_json IS NOT NULL"));
+    let read = include_str!("../src/archive_revision/read.rs");
+    assert!(!read.contains("babylon_meta."));
+    assert!(!read.contains("babylon_state."));
 }
 
 #[test]
@@ -314,14 +316,32 @@ fn live_store_consumes_searches_and_reconciles_exact_receipt_retries() {
     assert_eq!(applied.pages().len(), 1);
     assert!(applied.pages()[0].persisted());
 
-    let hits = store
-        .search_known(campaign_id, "728576", 10)
-        .expect("known-only search");
-    assert_eq!(hits.len(), 1);
-    assert_eq!(hits[0].verified_tick(), 1);
-    assert!(hits[0].markdown().contains("728576 jobs"));
-    assert!(!hits[0].markdown().contains("Riverview"));
-    assert_eq!(hits[0].citations().len(), 2);
+    archive_reader::with_reader(&config, |reader| {
+        let scope = archive_reader::scope_at(&config, campaign_id, 1);
+        let hits = reader
+            .search_as_of(&scope, "728576", 10)
+            .expect("scoped known search");
+        assert_eq!(hits.hits.len(), 1);
+        assert_eq!(hits.hits[0].content_source.tick(), 1);
+        let read = reader
+            .dossier_as_of(
+                &scope,
+                &hits.hits[0].subject,
+                &babylon_persistence::archive_revision::ArchiveDossierBoundsV2::default(),
+            )
+            .expect("exact typed dossier");
+        let (babylon_persistence::archive_revision::ArchiveDossierStateV2::Ready { page, .. }
+        | babylon_persistence::archive_revision::ArchiveDossierStateV2::Pending {
+            page: Some(page),
+            ..
+        }) = read.state
+        else {
+            panic!("retained witnessed page");
+        };
+        assert!(page.markdown.contains("728576 jobs"));
+        assert!(!page.markdown.contains("Riverview"));
+        assert_eq!(page.citations.len(), 2);
+    });
 
     let retry = store
         .materialize_receipt(campaign_id, &batch, ArchiveMaterializeModeV1::Consume)
@@ -332,8 +352,11 @@ fn live_store_consumes_searches_and_reconciles_exact_receipt_retries() {
     );
     grant_late_link_knowledge(&store, campaign_id);
     assert_eq!(
-        store.materialize_receipt(campaign_id, &batch, ArchiveMaterializeModeV1::Consume),
-        Err(SemanticArchiveErrorV1::ReceiptConflict)
+        store
+            .materialize_receipt(campaign_id, &batch, ArchiveMaterializeModeV1::Consume)
+            .expect("same receipt retains its first knowledge pin")
+            .disposition(),
+        ArchiveMaterializeDispositionV1::AlreadyConsumed
     );
     let changed = ArchiveDirtyBatchV1::try_new(
         1,

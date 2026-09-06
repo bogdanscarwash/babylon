@@ -2,11 +2,8 @@
 //! the v1.0 client: a standalone Bevy executable, engine crates linked
 //! in-process, no `PyO3` in the play path.
 //!
-//! No true "Iosevka Term" family is installed on this build machine (only
-//! Nerd Font variants, without a bundled OFL license file alongside them);
-//! per the B0 scope this title uses Bevy's built-in default font rather
-//! than shipping an unlicensed asset. Iosevka lands when the Director's
-//! font files are available (see the PR body).
+//! The observer embeds licensed Source Sans 3 for reading and Barlow
+//! Condensed for headings. Exact values retain Bevy's bundled Fira Mono.
 //!
 //! B1 Task 6 wires in `map::MapPlugin`, which spawns the county fill and
 //! border meshes at Startup. B1 Task 7 folds the camera into `MapPlugin`
@@ -49,7 +46,7 @@ fn main() {
             print!("{}", cli::render_help(topic));
             return;
         }
-        CliRequest::Windowed { story } => AppMode::Windowed { story },
+        CliRequest::Windowed { campaign_id } => AppMode::Windowed { campaign_id },
         CliRequest::Headless {
             command,
             campaign_id,

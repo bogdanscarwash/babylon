@@ -41,8 +41,11 @@ overflow-checks = true
 # steps into. `split-debuginfo = "unpacked"` keeps whatever symbols remain
 # out of the object files themselves (faster incremental links; the .debug
 # files are regenerable, never a correctness artifact — Constitution III.7
-# unaffected, this touches debug symbols only, never codegen/optimization).
+# unaffected by those symbol settings).
 [profile.dev.package."*"]
+# Keep Bevy's frame loop usable in the canonical development build. Workspace
+# code retains debug symbols and the normal dev assertions/overflow checks.
+opt-level = 3
 debug = false
 split-debuginfo = "unpacked"
 

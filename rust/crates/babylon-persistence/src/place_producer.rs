@@ -52,17 +52,15 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use babylon_kernel::tick_content_hash::RefDigestV1;
-use postgres::{Config, NoTls};
+use postgres::Config;
 use sha2::{Digest as _, Sha256};
 use uuid::Uuid;
 
-use crate::archive::{
-    database, decode, decode_subject_kind, validate_text, ARCHIVE_PAGE_TEMPLATE_SHA256_V1,
-};
+use crate::archive::{validate_text, ARCHIVE_PAGE_TEMPLATE_SHA256_V1};
 use crate::{
     michigan_spatial_reference_products_v1, representative_h3_reference_cohort_v1,
-    ArchiveCitationV1, ArchiveDirtyBatchV1, ArchiveDirtySelectionV1, ArchiveDossierProducerV1,
-    ArchiveLinkV1, ArchivePageInputV1, ArchivePageRefV1, ArchiveProducerOutcomeV1, ArchiveSignalV1,
+    ArchiveCitationV1, ArchiveDirtySelectionV1, ArchiveDossierProducerV1, ArchiveLinkV1,
+    ArchivePageInputV1, ArchivePageRefV1, ArchiveProducerOutcomeV1, ArchiveSignalV1,
     ArchiveSubjectKindV1, ArchiveSubjectV1, CampaignId, PendingArchiveReceiptV1, PlaceIdentityRow,
     SemanticArchiveErrorV1, SpatialReferenceProducts,
 };
@@ -796,66 +794,6 @@ impl PlaceDossierProducerV1 {
             })
             .collect()
     }
-
-    /// Read the stored place-page projections for one campaign.
-    ///
-    /// # Errors
-    /// Returns any database or decode failure from the read-only query.
-    fn read_stored_pages(
-        &self,
-        campaign_id: CampaignId,
-    ) -> Result<BTreeMap<String, PlacePageProjectionV1>, SemanticArchiveErrorV1> {
-        let mut client = self
-            .config
-            .connect(NoTls)
-            .map_err(|error| database("connect place page reader", &error))?;
-        let rows = client
-            .query(ARCHIVE_PLACE_PAGE_READ_SQL_V1, &[campaign_id.as_uuid()])
-            .map_err(|error| database("read stored place pages", &error))?;
-        let mut stored = BTreeMap::new();
-        for row in &rows {
-            let subject_id: String = decode(row, 0)?;
-            let title: String = decode(row, 1)?;
-            let markdown: String = decode(row, 2)?;
-            if let Some(page) = parse_stored_place_page_v1(&subject_id, &title, &markdown) {
-                stored.insert(subject_id, page);
-            }
-        }
-        Ok(stored)
-    }
-
-    /// Read the campaign grant snapshot visible at one receipt tick.
-    ///
-    /// # Errors
-    /// Returns any database or decode failure from the read-only query.
-    fn read_grants(
-        &self,
-        campaign_id: CampaignId,
-        receipt_tick: u64,
-    ) -> Result<PlaceGrantIndexV1, SemanticArchiveErrorV1> {
-        let mut client = self
-            .config
-            .connect(NoTls)
-            .map_err(|error| database("connect place grant reader", &error))?;
-        let receipt_tick =
-            i64::try_from(receipt_tick).map_err(|_| SemanticArchiveErrorV1::InvalidVerifiedTick)?;
-        let rows = client
-            .query(
-                ARCHIVE_PLACE_GRANTS_SQL_V1,
-                &[campaign_id.as_uuid(), &receipt_tick],
-            )
-            .map_err(|error| database("read place grant snapshot", &error))?;
-        let grants = rows
-            .iter()
-            .map(|row| {
-                let kind = decode_subject_kind(&decode::<String>(row, 0)?)?;
-                let id: String = decode(row, 1)?;
-                let grant_key: String = decode(row, 2)?;
-                Ok((kind, id, grant_key))
-            })
-            .collect::<Result<Vec<_>, SemanticArchiveErrorV1>>()?;
-        PlaceGrantIndexV1::try_from_rows(grants)
-    }
 }
 
 impl ArchiveDossierProducerV1 for PlaceDossierProducerV1 {
@@ -863,26 +801,37 @@ impl ArchiveDossierProducerV1 for PlaceDossierProducerV1 {
         &self,
         campaign_id: Uuid,
         receipt: &PendingArchiveReceiptV1,
+        knowledge: &crate::ArchiveKnowledgeV1,
         page_budget: usize,
     ) -> Result<ArchiveProducerOutcomeV1, SemanticArchiveErrorV1> {
         let campaign = CampaignId::from_uuid(campaign_id);
         let desired = self.desired_pages()?;
-        let stored = self.read_stored_pages(campaign)?;
-        let grants = self.read_grants(campaign, receipt.resolve_tick())?;
-        let selection = select_dirty_place_pages_v1(&desired, &stored, &grants, page_budget)?;
-        let pages = selection
-            .head()
-            .iter()
-            .map(|plan| {
-                place_page_input_v1(plan, receipt.resolve_tick(), *receipt.tick_content_hash())
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-        let batch = ArchiveDirtyBatchV1::try_new(
-            receipt.resolve_tick(),
-            *receipt.tick_content_hash(),
-            pages,
-        )?;
-        Ok(ArchiveProducerOutcomeV1::new(batch, selection.remaining()))
+        crate::archive_revision::publication::select_dirty_pages(
+            &self.config,
+            campaign,
+            receipt,
+            knowledge,
+            &desired,
+            page_budget,
+            place_page_input_v1,
+        )
+    }
+    fn cutover_subjects(
+        &self,
+        _campaign_id: Uuid,
+        receipt: &PendingArchiveReceiptV1,
+        knowledge: &crate::ArchiveKnowledgeV1,
+    ) -> Result<Vec<ArchivePageRefV1>, SemanticArchiveErrorV1> {
+        let desired = self.desired_pages()?;
+        let mut subjects = std::collections::BTreeSet::new();
+        for plan in &desired {
+            let page =
+                place_page_input_v1(plan, receipt.resolve_tick(), *receipt.tick_content_hash())?;
+            if knowledge.knows_subject(page.subject().page_ref()) {
+                subjects.insert(page.subject().page_ref().clone());
+            }
+        }
+        Ok(subjects.into_iter().collect())
     }
 }
 

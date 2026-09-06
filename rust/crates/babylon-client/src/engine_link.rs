@@ -175,7 +175,10 @@ mod tests {
     use crate::atlas::CountyAtlas;
     use crate::story;
 
-    const ATLAS_BYTES: &[u8] = include_bytes!("../assets/map/county_atlas.bin");
+    const ATLAS_BYTES: &[u8] = include_bytes!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../../assets/map/county_atlas.bin"
+    ));
 
     #[test]
     fn engine_session_starts_and_the_twelve_fips_resolve_on_the_real_atlas() {

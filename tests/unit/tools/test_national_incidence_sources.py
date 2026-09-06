@@ -55,7 +55,7 @@ def _skip_unless_pinned_sqlite() -> None:
     if sqlite3.sqlite_version != nia.PINNED_SQLITE_VERSION:
         pytest.skip(
             f"runtime sqlite3 {sqlite3.sqlite_version} != pinned "
-            f"{nia.PINNED_SQLITE_VERSION} -- run via `mise run nix -- ...`"
+            f"{nia.PINNED_SQLITE_VERSION} -- run via `mise exec -- uv run --frozen python -m pytest ...`"
         )
 
 

@@ -1,25 +1,17 @@
-//! Pure PER-23 retrieval-boundary contract for the semantic Archive.
-//!
-//! These pins prove that `SemanticArchiveStoreV1::search_known` is the only
-//! retrieval path PER-23 needs: every hit is self-contained with page, tick,
-//! subject, signal content, and provenance citations, the search SQL never
-//! names raw-ledger tables and bounds its result set, and the hit limit is
-//! refused before any connection. Digest revalidation of stored page bytes is
-//! pinned through the live read path in `archive_worker_live.rs`.
-
+//! Exact-scope retrieval boundary. V1 rendering/atom identities remain unchanged;
+//! immutable revision composition is the sole live dossier and search path.
 use babylon_kernel::sha256_of;
+use babylon_persistence::archive_revision::{ArchiveDossierBoundsV2, ArchiveReadScopeV2};
 use babylon_persistence::{
-    ArchiveAtomV1, ArchiveCitationV1, ArchiveKnowledgeGrantV1, ArchiveKnowledgeV1,
-    ArchivePageInputV1, ArchivePageRefV1, ArchiveSignalV1, ArchiveSubjectKindV1, ArchiveSubjectV1,
-    CampaignId, FogSafeArchiveRendererV1, SemanticArchiveErrorV1, SemanticArchiveStoreV1,
-    ARCHIVE_PAGE_ATOMS_SQL_V1, ARCHIVE_SEARCH_SQL_V1, COUNTY_CARD_ATOMS_SQL_V1,
-    READER_PAGE_ATOMS_SQL_V1,
+    ArchiveCitationV1, ArchiveKnowledgeGrantV1, ArchiveKnowledgeV1, ArchivePageInputV1,
+    ArchivePageRefV1, ArchiveSignalV1, ArchiveSubjectKindV1, ArchiveSubjectV1, CampaignId,
+    FogSafeArchiveRendererV1, SemanticArchiveErrorV1, SemanticArchiveReaderErrorV1,
+    SemanticArchiveReaderV1,
 };
 use uuid::Uuid;
-
-/// The exact search limit ceiling has no public symbol; this source pin is
-/// the minimal stand-in so the contract holds the value itself.
-const ARCHIVE_SOURCE: &str = include_str!("../src/archive.rs");
+const READ: &str = include_str!("../src/archive_revision/read.rs");
+const HISTORY: &str = include_str!("../src/archive_revision/read_history.rs");
+const SCHEMA: &str = include_str!("../migrations/archive_revision_v2.sql");
 
 fn county() -> ArchiveSubjectV1 {
     ArchiveSubjectV1::try_new(
@@ -84,196 +76,165 @@ fn knowledge() -> ArchiveKnowledgeV1 {
 }
 
 #[test]
-fn search_hit_carries_page_tick_subject_signal_and_provenance() {
-    fn hit_surface_is_complete(
-        hit: &babylon_persistence::ArchiveSearchHitV1,
-    ) -> (
-        &babylon_persistence::ArchivePageRefV1,
-        &str,
-        u64,
-        &str,
-        [u8; 32],
-        &[babylon_persistence::ArchiveCitationV1],
-        &[ArchiveAtomV1],
-    ) {
-        (
-            hit.page_ref(),
-            hit.title(),
-            hit.verified_tick(),
-            hit.markdown(),
-            hit.content_sha256(),
-            hit.citations(),
-            hit.atoms(),
-        )
-    }
-    let _ = hit_surface_is_complete;
-
-    for column in [
-        "page.subject_kind",
-        "page.subject_id",
-        "page.title",
-        "page.verified_tick",
-        "page.markdown",
-        "page.content_sha256",
-        "page.provenance_json",
-    ] {
-        assert!(
-            ARCHIVE_SEARCH_SQL_V1.contains(column),
-            "known-only search must select {column} so one hit is self-contained"
-        );
-    }
-    assert!(ARCHIVE_SEARCH_SQL_V1.contains("FROM babylon_meta.archive_page_v1 AS page"),);
-    assert!(
-        ARCHIVE_SEARCH_SQL_V1.contains("JOIN babylon_meta.archive_knowledge_grant_v1 AS knowledge")
-    );
-    assert!(
-        ARCHIVE_PAGE_ATOMS_SQL_V1.contains("FROM babylon_meta.archive_page_atom_v1 AS composition"),
-        "the writer composition query reads the join table as `composition`"
-    );
-    assert!(
-        ARCHIVE_PAGE_ATOMS_SQL_V1.contains("JOIN babylon_meta.archive_atom_v1 AS atom"),
-        "the writer composition query joins the immutable atom table as `atom`"
-    );
-
-    let renderer = FogSafeArchiveRendererV1::new().expect("pinned template compiles");
-    let page = renderer
+fn retained_rendering_preserves_exact_signal_and_provenance_identity() {
+    let page = FogSafeArchiveRendererV1::new()
+        .expect("pinned template")
         .render(&page_input(), &knowledge())
-        .expect("known page renders");
+        .expect("known page");
     let signal = signal_citation();
-
     assert!(page.markdown().contains("**Employment:** 728576 jobs"));
     assert!(page.markdown().contains(signal.source_id()));
     assert!(page.markdown().contains(signal.locator()));
     assert_eq!(page.citations()[1], signal);
     assert_eq!(page.sha256(), sha256_of(page.markdown().as_bytes()));
 }
-
 #[test]
-fn atom_composition_sql_selects_the_full_atom_surface() {
-    for column in [
-        "atom.campaign_id",
-        "atom.subject_kind",
-        "atom.subject_id",
-        "atom.signal_key",
-        "atom.grant_key",
-        "atom.evidence_class",
-        "atom.value_kind",
-        "atom.value_text",
-        "atom.value_f64",
-        "atom.value_u64",
-        "atom.value_bool",
-        "atom.provenance_source_id",
-        "atom.provenance_locator",
-        "atom.valid_tick",
-        "atom.atom_id",
-    ] {
-        assert!(
-            ARCHIVE_PAGE_ATOMS_SQL_V1.contains(column),
-            "the writer composition query must select {column} so one hit is self-contained"
+fn exact_scope_refuses_invalid_tick_and_bounds_before_database_access() {
+    let campaign = CampaignId::from_uuid(Uuid::from_bytes([1; 16]));
+    assert!(ArchiveReadScopeV2::committed(campaign, 0, [2; 32]).is_err());
+    assert!(ArchiveReadScopeV2::committed(campaign, (i64::MAX as u64) + 1, [2; 32]).is_err());
+    assert!(ArchiveDossierBoundsV2::try_new(0, None).is_err());
+    assert!(ArchiveDossierBoundsV2::try_new(101, None).is_err());
+    let mut config = postgres::Config::new();
+    config
+        .host("127.0.0.1")
+        .port(9)
+        .user("unconnected_reader")
+        .dbname("unconnected_archive");
+    let reader = SemanticArchiveReaderV1::new(&config).expect("local target; no connection yet");
+    let scope = ArchiveReadScopeV2::committed(campaign, 1, [2; 32]).expect("scope");
+    for limit in [0, 101] {
+        assert_eq!(
+            reader.search_as_of(&scope, "employment", limit),
+            Err(SemanticArchiveReaderErrorV1::Archive(
+                SemanticArchiveErrorV1::CollectionBound
+            ))
         );
     }
-    for (sql, view) in [
-        (READER_PAGE_ATOMS_SQL_V1, "public.v_archive_atom_visible"),
-        (COUNTY_CARD_ATOMS_SQL_V1, "public.v_county_card_atoms"),
-    ] {
-        for column in [
-            "campaign_id",
-            "subject_kind",
-            "subject_id",
-            "signal_key",
-            "grant_key",
-            "evidence_class",
-            "value_kind",
-            "value_text",
-            "value_f64",
-            "value_u64",
-            "value_bool",
-            "provenance_source_id",
-            "provenance_locator",
-            "valid_tick",
-            "atom_id",
-        ] {
-            assert!(
-                sql.contains(column),
-                "reader atom SQL must select {column} so the shared decoder revalidates"
-            );
-        }
-        assert!(
-            sql.contains(&format!("FROM {view}")),
-            "reader atom SQL must read the fog-safe view {view}, never a base table"
+    for query in ["  ".to_owned(), "x".repeat(4097)] {
+        assert_eq!(
+            reader.search_as_of(&scope, &query, 100),
+            Err(SemanticArchiveReaderErrorV1::Archive(
+                SemanticArchiveErrorV1::InvalidText
+            ))
         );
     }
 }
-
 #[test]
-fn search_hit_atoms_are_filled_by_the_store_path() {
-    assert!(
-        ARCHIVE_SOURCE.contains("pub fn atoms(&self) -> &[ArchiveAtomV1]"),
-        "the hit surface must expose the position-ordered structured atom composition"
-    );
-    assert!(
-        ARCHIVE_SOURCE.contains("hit.atoms = "),
-        "known search must fill atoms in the store path so one hit stays self-contained"
-    );
-    assert!(
-        ARCHIVE_SOURCE.contains("pub(crate) fn attach_atoms"),
-        "atom attachment is crate-internal; callers receive a complete hit"
-    );
-}
-
-#[test]
-fn search_sql_never_names_raw_ledger_tables() {
-    for sql in [
-        ARCHIVE_SEARCH_SQL_V1,
-        ARCHIVE_PAGE_ATOMS_SQL_V1,
-        READER_PAGE_ATOMS_SQL_V1,
-        COUNTY_CARD_ATOMS_SQL_V1,
-    ] {
-        for raw_relation in [
-            "archive_dirty_receipt_v1",
-            "tick_commit",
-            "tick_event",
-            "hypergraph",
-            "material",
-            "babylon_state",
+fn dossier_search_and_history_use_one_confined_repeatable_read_scope() {
+    for source in [READ, HISTORY] {
+        for forbidden in [
+            "babylon_meta.",
+            "babylon_state.",
+            "archive_page_v1",
+            "decode_search_hit",
         ] {
             assert!(
-                !sql.contains(raw_relation),
-                "known-only retrieval must not name {raw_relation}"
+                !source.contains(forbidden),
+                "confined read cannot name {forbidden}"
             );
         }
     }
+    assert_eq!(
+        READ.matches(".isolation_level(IsolationLevel::RepeatableRead)")
+            .count(),
+        2
+    );
+    assert_eq!(READ.matches(".read_only(true)").count(), 2);
+    for view in [
+        "v_committed_tick_status_v1",
+        "v_archive_retention_v2",
+        "v_archive_tick_knowledge_v2",
+        "v_archive_revision_scope_v2",
+        "v_archive_revision_known_v2",
+    ] {
+        assert!(READ.contains(view), "exact reader requires {view}");
+    }
+    assert!(READ.contains("super::publication::worker_contract()"));
+    assert!(
+        READ.contains("scope.tick() == durable"),
+        "late grants affect only the current tail"
+    );
+    assert!(HISTORY.contains("ArchiveCursorMismatch"));
+    assert!(HISTORY.contains("LIMIT 17"));
+}
+#[test]
+fn retained_bytes_require_complete_emission_and_captured_grants() {
+    for field in [
+        "emission_json IS NOT NULL",
+        "grant_count",
+        "atom_count",
+        "provenance_source_id",
+        "provenance_locator",
+        "granted_tick",
+        "archive_tick_knowledge_member_v2",
+    ] {
+        assert!(SCHEMA.contains(field), "retained publication binds {field}");
+    }
+    assert!(SCHEMA.contains("grant_row.granted_tick = dependency.granted_tick"));
+    assert!(SCHEMA.contains("grant_row.provenance_locator = dependency.provenance_locator"));
+    assert!(SCHEMA.contains("marker.resolve_tick>=revision.effective_tick"));
+    assert!(SCHEMA.contains("member.grant_key=dependency.grant_key"));
+    assert!(SCHEMA.contains("security_barrier=true"));
+    assert!(
+        SCHEMA.contains("revision_generation = 2) NOT VALID"),
+        "new obsolete quiet claims refuse; old claims are not rewritten"
+    );
+}
+#[test]
+fn no_current_head_entry_point_remains_and_search_is_bounded() {
+    for source in [
+        include_str!("../src/reader.rs"),
+        include_str!("../src/archive.rs"),
+    ] {
+        for retired in [
+            "pub fn search_known(",
+            "pub fn county_card_atoms(",
+            "pub fn subject_atom_history(",
+            "struct ArchiveSearchHitV1",
+        ] {
+            assert!(!source.contains(retired), "retire {retired}");
+        }
+    }
+    assert!(READ.contains("1..=100"));
+    assert!(READ.contains("LIMIT $4"));
+    assert!(READ.contains("result.truncated"));
+    assert!(READ.contains("effective_tick DESC,origin DESC"));
 }
 
 #[test]
-fn search_sql_pins_the_bounded_result_set_clause() {
-    assert!(
-        ARCHIVE_SEARCH_SQL_V1.contains("LIMIT $3"),
-        "known-only search must pass the caller's bound into the SQL limit"
-    );
-    assert!(
-        ARCHIVE_SOURCE.contains("const MAX_SEARCH_HITS: u32 = 100;"),
-        "the exact search limit ceiling stays pinned at 100"
-    );
-}
-
-#[test]
-fn known_search_limit_is_bounded_before_any_connection() {
-    let store = SemanticArchiveStoreV1::new(&postgres::Config::new());
-    let campaign_id =
-        CampaignId::from_uuid(Uuid::from_u128(0x2200_0000_0000_0000_0000_0000_0000_00b1));
-
-    assert_eq!(
-        store.search_known(campaign_id, "employment", 0),
-        Err(SemanticArchiveErrorV1::CollectionBound)
-    );
-    assert_eq!(
-        store.search_known(campaign_id, "employment", 101),
-        Err(SemanticArchiveErrorV1::CollectionBound)
-    );
-    assert_eq!(store.search_known(campaign_id, "  ", 100), Ok(Vec::new()));
-    assert_eq!(
-        store.search_known(campaign_id, &"x".repeat(4_097), 100),
-        Err(SemanticArchiveErrorV1::InvalidText)
-    );
+fn language_neutral_successor_names_exact_scope_and_preserved_identity() {
+    let contract = include_str!("../../../../contracts/archive_revision_v2.yaml");
+    for rule in [
+        "version: 2",
+        "dossier_as_of",
+        "search_as_of",
+        "HistoryNotRetained",
+        "KnowledgeRefresh",
+        "Stage stops later evaluation",
+        "present corrupt seals refuse",
+        "maximum: 100",
+        "Original campaign, committed tick, semantic atom and rendered Markdown identities.",
+    ] {
+        assert!(
+            contract.contains(rule),
+            "successor explicitly records {rule}"
+        );
+    }
+    for domain in [
+        "babylon.archive-page-revision.v2",
+        "babylon.archive-retention-adoption.v2",
+    ] {
+        assert!(contract.contains(domain));
+    }
+    for component in [
+        "seal.knowledge_sha256=pin.knowledge_sha256",
+        "seal.composition_sha256=composition.digest",
+        "seal.worker_contract_sha256=pin.worker_contract_sha256",
+    ] {
+        assert!(
+            SCHEMA.contains(component),
+            "cutover proof binds {component}"
+        );
+    }
 }

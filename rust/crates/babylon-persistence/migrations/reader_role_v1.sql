@@ -39,6 +39,22 @@ BEGIN
     IF pg_catalog.to_regclass('public.v_archive_subject_atoms') IS NOT NULL THEN
         GRANT SELECT ON public.v_archive_subject_atoms TO babylon_reader;
     END IF;
+    IF pg_catalog.to_regclass('public.v_archive_verification_v1') IS NOT NULL THEN
+        GRANT SELECT ON public.v_archive_verification_v1 TO babylon_reader;
+    END IF;
+    IF pg_catalog.to_regclass('public.v_known_county_economy_v1') IS NOT NULL THEN
+        GRANT SELECT ON public.v_known_county_economy_v1 TO babylon_reader;
+        GRANT SELECT ON public.v_observer_economy_foundation_v1 TO babylon_reader;
+    END IF;
+END
+$$;
+
+-- The material identity header contains no unfiltered numeric state.
+DO $$
+BEGIN
+    IF pg_catalog.to_regclass('public.v_material_campaign_identity_v1') IS NOT NULL THEN
+        GRANT SELECT ON public.v_material_campaign_identity_v1 TO babylon_reader;
+    END IF;
 END
 $$;
 
@@ -64,3 +80,18 @@ BEGIN
     END IF;
 END
 $$;
+
+-- A fresh confined login receives only the sole live revision views after cutover.
+DO $$ BEGIN
+    IF pg_catalog.to_regclass('public.v_archive_revision_known_v2') IS NOT NULL THEN
+        GRANT SELECT ON public.v_archive_revision_known_v2, public.v_archive_revision_index_v2,
+            public.v_archive_revision_atom_v2, public.v_archive_revision_grant_v2,
+            public.v_archive_retention_v2, public.v_archive_subject_grant_v2,
+            public.v_archive_tick_knowledge_v2, public.v_archive_revision_scope_v2 TO babylon_reader;
+        REVOKE ALL ON babylon_meta.archive_page_retired_v1, babylon_meta.archive_page_atom_retired_v1,
+            babylon_meta.archive_revision_schema_v2, babylon_meta.archive_retention_v2,
+            babylon_meta.archive_page_revision_v2, babylon_meta.archive_revision_atom_v2,
+            babylon_meta.archive_revision_grant_v2, babylon_meta.archive_retention_seal_v2,
+            babylon_meta.archive_tick_knowledge_v2, babylon_meta.archive_tick_knowledge_member_v2 FROM babylon_reader;
+    END IF;
+END $$;

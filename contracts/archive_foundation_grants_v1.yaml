@@ -13,8 +13,8 @@ authority:
     pinned spatial reference products and the pinned glossary concept fixture,
     before any committed tick. The grant set is the fog floor: every
     public-reference subject is known at the cursory public-record keys, while
-    compositional and magnitude keys stay ungranted until earned in play
-    (ADR182).
+    the four public QCEW 2024 county baseline keys are granted with pinned
+    artifact citations. Other composition and magnitude keys remain earned.
   classifications:
     grant_key_set: Designed
     grant_tick: Designed
@@ -25,6 +25,9 @@ authority:
       spatial products fixture (GEOID prefix 26, excluding the 999 statewide
       residual pseudo-county), granted subject + identity + containment at
       tick 0.
+    - County public QCEW baseline grants cover establishments, annual-average
+      employment, total annual wages, and average weekly wages. They are
+      observed 2024 records, never current production or median wages.
     - Places are all 745 Michigan places of the pinned spatial products
       fixture, granted subject + identity + containment at tick 0; identity
       and containment rows carry their own pinned artifact citations.
@@ -45,6 +48,15 @@ constants:
     - subject
     - identity
     - containment
+  county_qcew_grant_keys:
+    - qcew-establishments
+    - qcew-employment
+    - qcew-total-annual-wages
+    - qcew-average-weekly-wage
+  qcew_source_id: qcew-county-economics-v1
+  qcew_locator_prefix: qcew_county_economics_mi_2024.csv.gz#county_geoid=
+  qcew_artifact_path: src/babylon/data/reference/economy/qcew_county_economics_mi_2024.csv.gz
+  qcew_artifact_sha256: 116affb2998c6c0259d5bf14840f99f835d7e0733aa0b4f4c60a257b2723cd16
   place_grant_keys:
     - subject
     - identity
@@ -65,12 +77,12 @@ constants:
   expected_counties: 83
   expected_places: 745
   expected_concepts: 8
-  expected_grant_rows: 2500
+  expected_grant_rows: 2832
   spatial_fixture_digest: dea8a368d5b7c5a0f1263af2945ffdd94e3914394ec579ca28508661e4464454
   glossary_fixture_path: contracts/fixtures/glossary_concepts_v1.jsonl
   glossary_fixture_sha256: f47e289dc4e7a11c595f0e42643e352e255775c77dde3a7ed35a91de8d84d85a
   semantic_domain_ascii_nul: babylon.archive-foundation-grants.v1
-  semantic_sha256: d1c51755b30f64064a26b66fd5267e0a151377f023b96734d1ff5b9a7eefc20d
+  semantic_sha256: 9bb3cdda37dc3dee59242fcfe08f6c3f5bac01ff433988383d459fa0df9dfc65
 
 bounds:
   contract_bytes: 32768
@@ -80,6 +92,7 @@ bounds:
   citation_locator_bytes: 4096
   spatial_fixture_bytes: 4194304
   glossary_fixture_bytes: 65536
+  qcew_artifact_bytes: 1048576
 
 layouts:
   grant_row_v1:

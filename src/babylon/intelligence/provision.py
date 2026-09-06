@@ -7,7 +7,7 @@ uses stdlib ``urllib`` with a Range header; tests inject a fake, so the core
 carries zero network dependency.
 
 Weights land in ``$XDG_DATA_HOME/babylon/models/`` (default
-``~/.local/share/babylon/models/``); they never enter the Nix store.
+``~/.local/share/babylon/models/``); they are separate from the installed package.
 """
 
 from __future__ import annotations

@@ -12,7 +12,7 @@ runs:
     - name: Set up tools with mise
       uses: jdx/mise-action@3c2e0cf82a5b2e5249f0d3635a4d83d0ae861518 # v4
       with:
-        version: 2026.8.12
+        version: 2026.9.1
         cache: true
 
     - name: Install pinned Rust toolchain

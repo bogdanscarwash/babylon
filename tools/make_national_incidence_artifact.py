@@ -36,8 +36,8 @@ neither of which is "derive the poverty measures from it":
    risks producing bytes that don't match the registered
    ``data-artifacts.yaml`` sha256 pins, which is exactly the kind of silent
    drift step 2 below exists to catch, so it's caught earlier and louder
-   here instead. Run inside ``mise run nix -- ...``
-   (``docs/how-to/reference-data-pipeline.rst:10-17``).
+   here instead. Run inside ``mise exec -- uv run --frozen python ...``
+   (``docs/how-to/reference-data-pipeline.rst``).
 2. The ``scopes`` universe (:func:`_scopes_universe`) reuses
    ``babylon.data.reference_scope._load_national_fips`` directly —
    the same call ``tools/make_fips_vintage_crosswalk.py`` (T1) already
@@ -105,7 +105,7 @@ Usage::
 
     # one-time, pinned-toolchain only — materializes the registered parquet
     # sources this derivation reads (dist/ is gitignored; absent on a fresh box)
-    mise run nix -- uv run python tools/make_national_incidence_artifact.py --export-source
+    mise exec -- uv run --frozen python tools/make_national_incidence_artifact.py --export-source
 
     # the skeleton itself (steps 1-2; prints sizes, computes no measures)
     uv run python tools/make_national_incidence_artifact.py
@@ -238,7 +238,7 @@ def export_source_tables(
         msg = (
             f"--export-source requires the pinned SQLite runtime "
             f"({PINNED_SQLITE_VERSION}); got {sqlite3.sqlite_version}. Run inside "
-            "`mise run nix -- ...` (docs/how-to/reference-data-pipeline.rst:10-17) — "
+            "`mise exec -- uv run --frozen python ...` (docs/how-to/reference-data-pipeline.rst) — "
             "an off-pin export risks producing bytes that don't match the registered "
             "data-artifacts.yaml sha256 pins."
         )
@@ -1665,7 +1665,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
             f"({', '.join(SOURCE_TABLES)}) from the read-only reference DB via "
             "make_data_artifacts.export_table_parquet — the ONLY sanctioned "
             "parquet-writing path. PRODUCES the registered sources; run inside "
-            "`mise run nix -- ...` (pinned SQLite required). There is no "
+            "`mise exec -- uv run --frozen python ...` (pinned SQLite required). There is no "
             "--from-sqlite derivation flag — every other mode reads only the "
             "sha-pinned parquet sources."
         ),

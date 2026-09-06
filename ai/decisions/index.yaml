@@ -25,6 +25,21 @@ meta:
   # ADR160-169 = P26 international-trade lane block (101-trade-activation),
   # allocated by Director ruling 2026-07-27; ADR160 minted at its charter.
 decisions:
+  ADR254_archive_notification_wakeups:
+    title: PostgreSQL wakeups for the owned Archive worker
+    status: accepted
+    date: '2026-09-05'
+    file: ADR254_archive_notification_wakeups.yaml
+  ADR253_immutable_archive_revisions_and_adoption:
+    title: Immutable Archive revisions and exact historical observations
+    status: proposed
+    date: '2026-09-05'
+    file: ADR253_immutable_archive_revisions_and_adoption.yaml
+  ADR252_native_development_toolchain:
+    title: Native development and release tooling without Nix
+    status: accepted
+    date: '2026-09-04'
+    file: ADR252_native_development_toolchain.yaml
   ADR169_p26_train_closure:
     title: 'P26 U5g + U6 phase 2 + train closure: Vol2 composer closes ADR162''s inert half (interactive hex hydration + honest TIGER-absent degradation); trade surfaces render in BOTH Archive clients through the generic subject seam (no new Host method — 59 Python + 5 Rust proofs); all gates green with ONE declared ceremony blessed(p26-defines-categories) (defines_hash-only, zero cell drift); sentinel pins updated in lockstep; follow-ups enumerated (sigma_index generator, 10th-verb registration, routing solver, per-node tariff targeting, ci-data re-cut, _write_manifest ticket, LatAm proxy review)'
     status: accepted
@@ -1165,3 +1180,8 @@ decisions:
     status: accepted
     date: '2026-09-04'
     file: ADR250_economy_first_gate_order.yaml
+  ADR251_durable_g4_observer_and_material_activation:
+    title: 'One durable Michigan observer game, explicit material-circuit activation, and a native three-dimensional presentation'
+    status: accepted
+    date: '2026-09-04'
+    file: ADR251_durable_g4_observer_and_material_activation.yaml

@@ -3,7 +3,10 @@
 #![warn(clippy::pedantic)]
 
 mod archive;
+pub mod archive_driver;
 mod archive_foundation_grants;
+pub mod archive_revision;
+mod archive_wakeup;
 mod archive_worker;
 mod babylon_markdown;
 mod bootstrap;
@@ -13,6 +16,7 @@ mod county_producer;
 mod cutover_vectors;
 pub mod error;
 mod foundation;
+mod foundation_content_schema;
 mod glossary_concepts;
 pub mod h3_reference_cohort;
 mod h3_reference_installer;
@@ -20,15 +24,23 @@ mod h3_shadow_backfill;
 pub mod hashes;
 pub mod identity;
 pub mod legacy_adopter;
+pub mod material_envelope;
+pub mod material_runtime;
 mod metadata;
 mod michigan_dynamic_hex_foundation;
+pub mod michigan_economy;
 pub mod migration_manifest;
+pub(crate) mod observer_material;
+pub mod observer_reader;
 mod place_producer;
 mod postgres_diagnostic;
+pub(crate) mod production_projection;
 mod reader;
 mod runtime;
+pub mod runtime_session;
 pub mod schema_epoch;
 pub mod schema_migration;
+pub mod sector_bundle;
 #[allow(
     dead_code,
     reason = "the stopped cutover composer remains private until Rust persistence activation"
@@ -53,6 +65,7 @@ pub use archive_foundation_grants::{
     FOUNDATION_PLACE_IDENTITY_SOURCE_ID_V1, MICHIGAN_GEOID_PREFIX_V1,
     PINNED_FOUNDATION_GRANTS_SEMANTIC_SHA256_V1, STATEWIDE_RESIDUAL_COUNTY_FIPS_V1,
 };
+pub use archive_wakeup::{archive_wakeup_migration_sha256_v1, ARCHIVE_WAKEUP_CHANNEL_V1};
 pub use archive_worker::*;
 pub use babylon_markdown::{
     fog_chip_v1, git_export_markdown_v1, is_citation_line_v1, validate_babylon_markdown_v1,
@@ -83,7 +96,10 @@ pub use cutover_vectors::{
     RustPersistenceVectorErrorV1, RustPersistenceVectorOutcomeV1, RustPersistenceVectorReportV1,
 };
 pub use error::{PersistenceError, PersistenceFailureKind};
-pub use foundation::{CampaignFoundationV1, FoundationContentBundleV1};
+pub use foundation::{
+    CampaignFoundationV1, FoundationContentBundle, FoundationContentBundleV1,
+    FoundationContentBundleV2, FoundationContentLayout,
+};
 pub use glossary_concepts::{
     glossary_concepts_v1, GlossaryConceptV1, GlossaryConceptsErrorV1, GlossaryConceptsV1,
     GLOSSARY_CONCEPTS_FIXTURE_PATH_V1, PINNED_GLOSSARY_CONCEPTS_SHA256_V1,
@@ -133,10 +149,12 @@ pub use michigan_dynamic_hex_foundation::{
     decode_michigan_dynamic_hex_foundation_v1, michigan_dynamic_hex_foundation_fixture_parts_v1,
     michigan_dynamic_hex_foundation_v1, MichiganDynamicHexFoundationDecodeErrorV1,
 };
+pub use michigan_economy::*;
 pub use migration_manifest::{
     ManifestError, MigrationManifest, MAX_MANIFEST_BYTES, MAX_MANIFEST_CHUNKS,
     SCHEMA_ADVISORY_LOCK_KEY,
 };
+pub use observer_reader::*;
 pub use place_producer::{
     desired_place_projection_v1, parse_stored_place_page_v1, place_page_input_v1,
     place_page_semantic_sha256_v1, select_dirty_place_pages_v1, PlaceCountySliceV1,
@@ -156,6 +174,7 @@ pub use runtime::{
     CommittedTickReceiptV2, DurableReplayRuntimeV2, PreActivationIncompatibleRelationV2,
     PreparedCommittedTickV2, RustPersistenceActivationErrorV2, RustPersistenceRuntimeErrorV2,
 };
+pub use runtime_session::*;
 pub use schema_epoch::{
     compiled_committed_tick_v2_activation_migrations, compiled_schema_migrations,
     migrate_schema_epoch, preflight_schema_epoch, validate_migration_prefix, PersistedMigration,
@@ -184,3 +203,16 @@ pub use territory_county_map::{
     TERRITORY_COUNTY_MAP_FIELD_V1, TERRITORY_COUNTY_MAP_SCHEMA_CONTRACT_ID,
     TERRITORY_COUNTY_MAP_SCHEMA_V1_SQL,
 };
+
+mod production_evidence;
+pub use production_evidence::ProductionEvidenceDigestV3;
+pub use production_projection::material_balance::{
+    CompletedMaterialBalanceV1, ProductionMaterialBalanceRowV1,
+};
+pub mod production_observation;
+pub use production_observation::*;
+
+pub mod michigan_cohorts;
+pub mod michigan_content;
+pub mod michigan_material;
+pub mod michigan_sectors;

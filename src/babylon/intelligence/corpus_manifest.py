@@ -317,7 +317,7 @@ def load_bundled_manifest() -> CorpusManifest:
     :mod:`babylon.intelligence.model_manifest` reads from) — resolving them as
     ``importlib.resources`` packages would lean on implicit namespace-package
     behavior that the rest of ``babylon/data/`` deliberately does not depend
-    on for a real wheel / signed Nix-closure build.
+    on for a packaged wheel.
     """
     manifest_path = Path(__file__).parent.parent / "data" / "corpus" / "manifest.yaml"
     return load_manifest(manifest_path)

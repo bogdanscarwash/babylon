@@ -58,7 +58,10 @@ use bevy::math::{Rect, Vec2};
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 
-const ATLAS_BYTES: &[u8] = include_bytes!("../../assets/map/county_atlas.bin");
+const ATLAS_BYTES: &[u8] = include_bytes!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../../assets/map/county_atlas.bin"
+));
 
 /// Fallback viewport used only when no primary window exists — the
 /// headless test path (`MinimalPlugins` carries no `WindowPlugin`).
@@ -195,6 +198,9 @@ fn grow(rect: Rect, fraction: f32) -> Rect {
     }
 }
 
+#[derive(Component)]
+pub struct MapCamera;
+
 fn primary_viewport(windows: &Query<&Window, With<PrimaryWindow>>) -> Vec2 {
     windows
         .single()
@@ -222,6 +228,7 @@ pub(super) fn spawn_camera(mut commands: Commands, windows: Query<&Window, With<
 
     commands.spawn((
         Camera2d,
+        MapCamera,
         Transform::from_xyz(center.x, center.y, 0.0),
         Projection::Orthographic(OrthographicProjection {
             scaling_mode: ScalingMode::WindowSize,
@@ -270,12 +277,15 @@ pub(super) fn spawn_camera(mut commands: Commands, windows: Query<&Window, With<
 pub(super) fn clamp_camera_system(
     windows: Query<&Window, With<PrimaryWindow>>,
     bounds: Option<Res<MapBounds>>,
-    mut cameras: Query<(&mut Transform, &mut PanCamera)>,
+    observer_viewport: Option<Res<crate::observer_ui::ObserverViewport>>,
+    mut cameras: Query<(&mut Transform, &mut PanCamera), With<MapCamera>>,
 ) {
     let Some(bounds) = bounds else {
         return;
     };
-    let viewport = primary_viewport(&windows);
+    let viewport = observer_viewport
+        .and_then(|viewport| viewport.0)
+        .map_or_else(|| primary_viewport(&windows), |rect| rect.size());
     for (mut transform, mut pan_camera) in &mut cameras {
         let clamped = clamp_camera(
             transform.translation.truncate(),
@@ -305,7 +315,7 @@ pub(super) fn clamp_camera_system(
 pub(super) fn resize_camera_bounds_system(
     windows: Query<&Window, (With<PrimaryWindow>, Changed<Window>)>,
     bounds: Option<Res<MapBounds>>,
-    mut cameras: Query<&mut PanCamera>,
+    mut cameras: Query<&mut PanCamera, With<MapCamera>>,
 ) {
     let Some(bounds) = bounds else {
         return;

@@ -10,17 +10,72 @@
 use std::collections::BTreeMap;
 
 use babylon_persistence::{
-    county_page_input_v1, county_page_semantic_sha256_v1, desired_county_projection_v1,
-    filter_granted_county_plans_v1, format_county_statblock_value_v1, parse_stored_county_page_v1,
-    select_dirty_county_pages_v1, ArchiveCitationV1, ArchiveDirtyBatchV1, ArchiveKnowledgeGrantV1,
-    ArchiveKnowledgeV1, ArchivePageInputV1, ArchivePageRefV1, ArchiveSubjectKindV1,
-    CountyGrantIndexV1, CountyPagePlanV1, CountyPageProjectionV1, CountyPlaceLinkV1,
-    CountySignalProjectionV1, CountySignalV1, FogSafeArchiveRendererV1, SemanticArchiveErrorV1,
+    county_committed_signals_v1, county_page_input_v1, county_page_semantic_sha256_v1,
+    desired_county_projection_v1, filter_granted_county_plans_v1, format_county_statblock_value_v1,
+    parse_stored_county_page_v1, select_dirty_county_pages_v1, ArchiveCitationV1,
+    ArchiveDirtyBatchV1, ArchiveKnowledgeGrantV1, ArchiveKnowledgeV1, ArchivePageInputV1,
+    ArchivePageRefV1, ArchiveSubjectKindV1, CommittedTerritoryFieldsV1, CountyGrantIndexV1,
+    CountyPagePlanV1, CountyPageProjectionV1, CountyPlaceLinkV1, CountySignalProjectionV1,
+    CountySignalV1, FogSafeArchiveRendererV1, SemanticArchiveErrorV1,
     ARCHIVE_COUNTY_FIELD_READ_SQL_V1, ARCHIVE_COUNTY_GRANTS_SQL_V1, ARCHIVE_COUNTY_MAP_READ_SQL_V1,
     ARCHIVE_COUNTY_PAGE_READ_SQL_V1, COMMITTED_TICK_SOURCE_ID_V1, COUNTY_DECISION_QUESTION_V1,
     COUNTY_MEDIAN_WAGE_GRANT_KEY_V1, COUNTY_MEDIAN_WAGE_LABEL_V1, COUNTY_PHI_HOUR_GRANT_KEY_V1,
     COUNTY_PHI_HOUR_LABEL_V1,
 };
+
+#[test]
+fn qcew_baseline_retains_exact_integers_units_and_public_provenance() {
+    let fields = CommittedTerritoryFieldsV1::try_from_qcew([
+        Some(36_727),
+        Some(725_504),
+        Some(55_436_615_328),
+        Some(1_469),
+    ])
+    .expect("observed baseline");
+    let signals = county_committed_signals_v1(&fields).expect("signals");
+    assert_eq!(signals.len(), 4);
+    assert_eq!(signals[2].value(), "55436615328");
+    assert_eq!(signals[2].label(), "QCEW 2024 total annual wages (USD)");
+    assert_eq!(signals[3].value(), "1469");
+    assert_eq!(
+        signals[3].label(),
+        "QCEW 2024 average weekly wage (USD/week)"
+    );
+    assert!(signals
+        .iter()
+        .all(|signal| signal.grant_key().starts_with("qcew-")));
+    let plan = wayne_plan(signals, vec![]);
+    let knowledge = knowledge_for(&plan, true, false);
+    let markdown = render_markdown(&plan, 1, &knowledge);
+    assert!(markdown.contains("qcew-county-economics-v1; qcew_county_economics_mi_2024.csv.gz#county_geoid=26163&sha256=116affb2998c6c0259d5bf14840f99f835d7e0733aa0b4f4c60a257b2723cd16"));
+    assert!(!markdown.contains("Median wage"));
+    let parsed = parse_stored_county_page_v1("26163", "Wayne County", &markdown)
+        .expect("QCEW source roundtrip");
+    let desired =
+        desired_county_projection_v1(&plan, &grant_index_for(&plan, true, false)).expect("desired");
+    assert_eq!(parsed, desired);
+    let later = render_markdown(&plan, 2, &knowledge);
+    assert_eq!(
+        parse_stored_county_page_v1("26163", "Wayne County", &later).expect("later source"),
+        desired
+    );
+    assert!(
+        desired_county_projection_v1(&plan, &grant_index_for(&plan, false, false))
+            .expect("redacted")
+            .signals()
+            .is_empty()
+    );
+}
+
+#[test]
+fn qcew_fields_refuse_negative_values_and_preserve_large_exact_counts() {
+    assert!(CommittedTerritoryFieldsV1::try_from_qcew([Some(-1), None, None, None]).is_err());
+    let fields = CommittedTerritoryFieldsV1::try_from_qcew([None, None, Some(i64::MAX), None])
+        .expect("exact integer");
+    let signals = county_committed_signals_v1(&fields).expect("signals");
+    assert_eq!(signals.len(), 1);
+    assert_eq!(signals[0].value(), "9223372036854775807");
+}
 
 fn signal(grant_key: &str, label: &str, value: &str) -> CountySignalV1 {
     CountySignalV1::try_new(grant_key.to_owned(), label.to_owned(), value.to_owned())

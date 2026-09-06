@@ -9,7 +9,7 @@ Prerequisites
 
 - mise installed with pinned Python and uv tools: ``mise install``
 - Locked dependencies installed: ``mise run install``
-- Nix installed for pinned Rust checks: https://nixos.org/download/
+- rustup installed; Cargo commands run from ``rust/`` to use its toolchain pin
 - All configured Git hooks installed: ``mise run hooks``
 - For ``gh act``: GitHub CLI with act extension (``gh extension install nektos/gh-act``)
 - For ``gh act``: Docker running

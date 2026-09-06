@@ -1426,3 +1426,57 @@ artifacts:
       denominator, and a floor-derived parts-per-billion share. Cross-county places
       remain many-to-many; shares are not normalized to 100%, and the artifact grants
       no PostgreSQL schema, runtime reader/writer, or cutover authority.
+  - name: qcew_county_economics_mi_2024
+    format: csv.gz
+    source_table: null
+    generator: tools/make_qcew_county_economics_artifacts.py
+    mode: register
+    rows: 83
+    sha256: 116affb2998c6c0259d5bf14840f99f835d7e0733aa0b4f4c60a257b2723cd16
+    home: src/babylon/data/reference/economy/qcew_county_economics_mi_2024.csv.gz
+    material_relation: >-
+      PER-319 (ADR250 R3/R5/R6/R7) QCEW county-economics reference for the bounded
+      Michigan proving cohort: one sorted 2024 BLS QCEW annual county-total row
+      (agglvl 70, total ownership) per Michigan county GEOID with establishments,
+      employment, total annual wages, and average weekly wage exactly as the
+      public record prints them. Every staged source CSV is SHA-256-pinned in
+      tools/qcew_county_economics_v1_source_manifest.json before parsing, and no
+      county-total row carries a disclosure code. This artifact grants no
+      industry or ownership detail, no derived or rounded values, no PostgreSQL
+      schema, no runtime importer, and no cutover authority.
+  - name: qcew_county_sectors_mi_2024
+    format: csv.gz
+    source_table: null
+    generator: tools/make_qcew_county_sector_artifacts.py
+    mode: register
+    rows: 1603
+    sha256: 1cac80bee20c086be2e1f268643b0caab5d8d63030251817a9f149123755d71a
+    home: src/babylon/data/reference/economy/qcew_county_sectors_mi_2024.csv.gz
+    material_relation: >-
+      Part of PER-29: observed 2024 BLS QCEW private county-sector cells across
+      all 83 Michigan counties, selected at aggregation 74 and ownership 5.
+      All 1603 rows have positive public establishment counts. The 416 N rows
+      retain those counts and withhold employment, payroll, and mean weekly wage
+      as empty optional fields. Code 99 remains explicitly unclassified in 81
+      rows; 57 absent county-sector combinations receive no invented zero row.
+      Composite NAICS sector codes and exact 64-bit values remain intact, with
+      each row bound to the existing county-source filename and SHA-256 manifest.
+      This foundation reference grants no runtime hydration, production recipes,
+      worker allocation, ReserveArmy transitions, or completion of PER-29.
+  - name: ntad_detroit_windsor_rail_v1
+    format: json
+    source_table: null
+    generator: tools/make_ntad_border_rail_artifact.py
+    mode: register
+    rows: 2
+    sha256: ee00b4971fa70e4a2ca56810d45a4f5b107a68a611d328fb9b2eb32e8d723f24
+    home: src/babylon/data/reference/transport/ntad_detroit_windsor_rail_v1.json
+    material_relation: 'Part of PER-28/PER-31: two Observed NTAD North American Rail Network polylines
+      from the official July 21, 2026 service revision, preserving FRAARCID 489609/737940, original
+      FR/TO identities and vertex order, 29 EPSG:4326 vertices, shared node 441352, recorded lengths,
+      tracks, and ownership labels. Captured response and layer metadata have exact HTTP-body and
+      stored-file SHA-256 pins in contracts/ntad_border_rail_v1.yaml; the generator rebuilds offline.
+      Shared topology and semantic identity are Derived; selection and canonical representation are
+      Designed. This is source evidence only, with no HPMS replacement, freight capacity, border delay,
+      loss rate, H3 allocation, factory placement, Canadian actor, runtime hydration, campaign mutation,
+      or gate completion authority.'

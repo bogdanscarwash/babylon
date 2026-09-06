@@ -18,7 +18,7 @@ _ADR221_PATH: Final[Path] = _ROOT / "ai" / "decisions" / "ADR221_game_first_refo
 _ADR177_PATH: Final[Path] = (
     _ROOT / "ai" / "decisions" / "ADR177_verb_matrix_ratified_main_ruleset.yaml"
 )
-_SFX_MANIFEST_PATH: Final[Path] = _ROOT / "src" / "assets" / "sfx" / "manifest.toml"
+_SFX_MANIFEST_PATH: Final[Path] = _ROOT / "assets" / "sfx" / "manifest.toml"
 _BSL_REFERENCE_PATH: Final[Path] = _ROOT / "docs" / "reference" / "bsl-language.rst"
 
 _GOVERNED_DESTINATIONS: Final[tuple[str, str, str]] = (

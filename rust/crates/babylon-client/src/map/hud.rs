@@ -22,7 +22,10 @@ use bevy::prelude::*;
 // now — this file's own tests still build fixtures directly from the
 // embedded bytes, so the const stays, scoped to `cfg(test)`.
 #[cfg(test)]
-const ATLAS_BYTES: &[u8] = include_bytes!("../../assets/map/county_atlas.bin");
+const ATLAS_BYTES: &[u8] = include_bytes!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../../assets/map/county_atlas.bin"
+));
 
 /// The tick number the lens readouts should quote as "live, tick N" —
 /// owned here rather than borrowed from `loop_ui::TickCounter` (see the

@@ -174,15 +174,28 @@ Client and Archive Boundary
 The Bevy client still reads an administrative world view and displays the
 nominal world hash. It does not submit a player intent.
 
-Each committed tick emits an Archive dirty receipt. ``sim:archive`` installs the
-client-owned semantic schema or checks its marker and relations. The Rust
-Archive store binds each receipt to an exact dirty batch, worker contract, and
-ordered knowledge-grant snapshot with provenance. It applies knowledge grants
-in SQL, renders pages with the pinned strict template, persists known
-citations, and searches only material visible to the player. Later work adds
-broader dossier producers, the player-facing retrieval surface, and a player
-decision loop that supports replay. The persistence cutover and this first
-Archive slice do not include those pieces.
+Each committed tick emits an Archive dirty receipt. The Rust Archive worker
+binds each receipt to an exact dirty batch, worker contract, and pinned
+knowledge-grant snapshot. It publishes immutable county and place dossiers
+with validated content and known citations. The scoped reader admits the
+requested committed week, retained publication, and disclosed links together.
+Global Archive progress cannot certify a selected page.
+
+The runtime owns one Archive listener and worker. Empty Postgres notifications
+signal committed tick markers and campaign enrollment. The listener registers
+before reading durable work at startup and after reconnect. It drains retained
+work through the existing worker. An idle notification timeout performs no
+maintenance query. Notifications carry no world state or player intent.
+
+One coordinator owns the V2 control pipe and tick acknowledgements. It flushes
+``Committed`` before handling the resulting Archive progress. Bevy accepts
+progress only for its acknowledged campaign and durable week, then refreshes
+its scoped read. It does not poll for Archive maintenance.
+
+Shutdown requests cooperative cancellation and observes actual worker
+completion. A database connection that stays open beyond the existing process
+deadline cannot claim successful shutdown.
+ADR254 records this scheduling boundary. G5 adds player actions separately.
 
 Event payloads contain observed or derived material facts, never probability.
 Committed event metadata records the emitting rule and can carry an

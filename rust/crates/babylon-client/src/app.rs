@@ -9,16 +9,19 @@ use bevy::prelude::*;
 
 use crate::cli::CliCommand;
 use crate::dossier::{run_headless_command, HeadlessInvocation};
-use crate::story::{SelectedStory, Story};
-use crate::{logging, loop_ui, map, palette, session_log, ui, visual_assets};
+use crate::observer::ObserverSession;
+use crate::observer_focus::ObserverFocusPlugin;
+use crate::observer_io::ObserverIoPlugin;
+use crate::observer_ui::ObserverShellPlugin;
+use crate::{logging, map, session_log, ui, visual_assets};
 
 /// Which executable shape [`build_app`] assembles.
 #[derive(Clone, Debug)]
 pub enum AppMode {
-    /// The windowed administrative viewer with the visual plugin quartet.
+    /// The windowed observer of one durable campaign.
     Windowed {
-        /// The selected story.
-        story: &'static Story,
+        /// The canonical campaign identity.
+        campaign_id: babylon_persistence::CampaignId,
     },
     /// One headless dossier command: JSONL on stdout, logs on stderr,
     /// process exit after the first update.
@@ -37,11 +40,14 @@ pub enum AppMode {
 pub fn build_app(mode: AppMode) -> App {
     let mut app = App::new();
     match mode {
-        AppMode::Windowed { story } => {
+        AppMode::Windowed { campaign_id } => {
             app.add_plugins(
                 DefaultPlugins
                     .set(LogPlugin {
-                        filter: format!("{},babylon_client=debug", bevy::log::DEFAULT_FILTER),
+                        filter: format!(
+                            "{},babylon_client=debug,session=debug",
+                            bevy::log::DEFAULT_FILTER
+                        ),
                         custom_layer: logging::file_layer,
                         fmt_layer: logging::stderr_fmt_layer,
                         ..default()
@@ -49,6 +55,7 @@ pub fn build_app(mode: AppMode) -> App {
                     .set(WindowPlugin {
                         primary_window: Some(Window {
                             title: "Babylon — The Fall of America".into(),
+                            resolution: (1366, 768).into(),
                             ..default()
                         }),
                         ..default()
@@ -57,11 +64,18 @@ pub fn build_app(mode: AppMode) -> App {
             // Nothing listens before LogPlugin::build installs the
             // subscriber, so the startup line stays after add_plugins. The
             // line stays static: no parse-channel value is logged.
-            log::info!("babylon-client starting (B3 tick loop)");
+            log::info!("babylon-client starting (durable observer)");
             app.add_plugins(visual_assets::VisualAssetsPlugin)
-                .add_plugins(visual_assets::VisualPresentationPlugin)
                 .add_plugins(map::MapPlugin)
-                .add_plugins(loop_ui::TickLoopPlugin)
+                .add_plugins(ObserverFocusPlugin)
+                .add_plugins(ObserverShellPlugin)
+                .add_plugins(crate::observer_map3d::ObserverMap3dPlugin)
+                .add_plugins(ObserverIoPlugin)
+                .add_plugins(crate::production::ProductionPlugin)
+                .add_plugins(crate::observer_audio::ObserverAudioPlugin)
+                .add_plugins(crate::campaign_browser::CampaignBrowserPlugin)
+                .add_plugins(crate::observer_history::ObserverHistoryPlugin)
+                .add_plugins(crate::observer_performance::ObserverPerformancePlugin)
                 // PER-23 Slice 4 (ADR249 R9): the county dossier card — the
                 // first Gameplay-role surface. Its resource family must exist
                 // identically in windowed and headless compositions, so it
@@ -71,8 +85,10 @@ pub fn build_app(mode: AppMode) -> App {
                 // observer tolerates its absence), so the session log sees
                 // exactly what the card renderer saw.
                 .add_plugins(session_log::SessionLogPlugin)
-                .insert_resource(SelectedStory(story))
-                .insert_resource(ClearColor(palette::FIELD));
+                .insert_resource(crate::production::PrimaryView::Map)
+                .insert_resource(ObserverSession::new(campaign_id))
+                .insert_resource(ui::dossier_card::DossierCampaignId(campaign_id))
+                .insert_resource(ClearColor(crate::observer_theme::INK));
         }
         AppMode::Headless {
             command,
@@ -80,7 +96,10 @@ pub fn build_app(mode: AppMode) -> App {
         } => {
             app.add_plugins(MinimalPlugins)
                 .add_plugins(LogPlugin {
-                    filter: format!("{},babylon_client=debug", bevy::log::DEFAULT_FILTER),
+                    filter: format!(
+                        "{},babylon_client=debug,session=debug",
+                        bevy::log::DEFAULT_FILTER
+                    ),
                     custom_layer: logging::file_layer,
                     fmt_layer: logging::stderr_fmt_layer,
                     ..default()
@@ -110,6 +129,11 @@ mod tests {
             command: CliCommand::TickStatus,
             campaign_id: babylon_persistence::CampaignId::from_uuid(Uuid::nil()),
         });
+        assert!(!app.is_plugin_added::<ObserverFocusPlugin>());
+        assert!(app
+            .world()
+            .get_resource::<crate::observer_focus::ObserverFocusPolicy>()
+            .is_none());
         assert!(
             app.world().get_resource::<HeadlessInvocation>().is_some(),
             "the invocation resource is installed before Startup"

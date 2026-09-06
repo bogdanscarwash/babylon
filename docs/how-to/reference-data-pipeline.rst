@@ -10,11 +10,25 @@ How to add or change reference data (parquet-canonical pipeline)
 Prerequisites
 -------------
 
-- The pinned toolchain (the builder hard-gates on SQLite 3.53.1): the repo's
-  own vendored flake (ADR102) — run builder commands through
-  ``mise run nix -- <cmd>`` or a venv built on the devshell interpreter.
+- Python 3.12.14 linked to SQLite 3.53.1 for reference-data reproduction.
 - The data drive mounted (``mise run data:doctor`` green) for drive-sourced
   ingests.
+
+The development environment on Linux x64 includes the governed SQLite version.
+``mise.lock`` pins Python 3.12.14 from 20260901 by its
+download URL and SHA-256. Install the same tools and dependencies used for
+ordinary development::
+
+    mise install --locked
+    mise run install
+    mise exec -- uv run --frozen python -c "import sqlite3; print(sqlite3.sqlite_version)"
+
+The builder refuses other SQLite versions. Reference-data commands use
+the ordinary project ``.venv`` and frozen ``uv.lock`` dependencies.
+
+``data:build-db`` rebuilds from the registered sources. ``data:verify-build``
+checks two builds for byte identity. Existing source and product checks remain
+mandatory; a dependency update does not authorize an artifact-pin change.
 
 Add a new table
 ---------------
@@ -42,7 +56,7 @@ Change rows in an existing table (ingest)
 Loaders produce **sources**; only the builder produces the DB. Run any legacy
 DB-writing loader through the wrapper::
 
-    uv run python tools/loader_to_sources.py \
+    mise exec -- uv run --frozen python tools/loader_to_sources.py \
         --loader <module_name_in_tools> \
         --tables <comma-separated affected tables>
 
@@ -84,8 +98,8 @@ Two properties distinguish this class:
   generator twice from clean and comparing sha256 is the only reproducibility
   proof that applies. Regenerate::
 
-      mise run nix -- mise run data:national-incidence   # A2 + A3 (pinned devshell only)
-      mise run nix -- uv run python tools/make_fips_vintage_crosswalk.py  # A1
+      mise run data:national-incidence  # A2 + A3
+      mise exec -- uv run --frozen python tools/make_fips_vintage_crosswalk.py  # A1
 
 Each artifact's ``data-artifacts.yaml`` entry is hand-registered — a real
 ``tools/make_data_artifacts.py`` regeneration (no ``--check``) never touches
@@ -108,6 +122,5 @@ Gotchas (hard-won at the cutover)
 - On a tmpfs-``/tmp`` box, VACUUM spills a full DB copy — the builder pins
   its temp dir next to the output; if a "database or disk is full" appears
   anyway, ``df`` the **output path's** filesystem, not ``/``.
-- CI note: the nightly rebuild-verify leg runs inside the vendored flake's
-  ``dataBuild`` devshell (``nix develop .#dataBuild``) so the runner's sqlite
-  is always on-pin (ADR098; devshells vendored in-repo by ADR102).
+- The weekly workflow compares the database SHA-256 with
+  ``data-artifacts.yaml`` and refuses mismatches.

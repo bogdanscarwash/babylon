@@ -6,9 +6,20 @@ This guide covers how to install Babylon and set up your development environment
 Requirements
 ------------
 
-- mise for the pinned Python and uv toolchain
-- Nix for the pinned Rust toolchain and system dependencies
+- mise 2026.9.1 for the locked Python and uv toolchain
+- ``rustup`` for the pinned Rust toolchain
+- Debian window, audio, input and compiler libraries
+- Docker Engine and ``docker compose`` for the default local Postgres database
 - Git
+
+Install the native Debian prerequisites first:
+
+.. code-block:: bash
+
+   sudo apt-get update
+   sudo apt-get install -y build-essential pkg-config git-lfs libssl-dev libpq-dev \
+     libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev libx11-dev \
+     libxcursor-dev libxi-dev libxrandr-dev libvulkan-dev mesa-vulkan-drivers
 
 Installation Steps
 ------------------
@@ -24,7 +35,7 @@ Installation Steps
 
    .. code-block:: bash
 
-      mise install
+      mise install --locked
       mise run install
 
 3. Install pre-commit hooks:
@@ -39,11 +50,43 @@ Installation Steps
 
       mise run check
 
-   Run Rust commands inside the repository's pinned Nix shell, for example:
+   Run the Rust check through the repository task:
 
    .. code-block:: bash
 
-      mise run nix -- mise run rust:check-no-docs
+      mise run rust:check-no-docs
+
+Open the Observer Game
+----------------------
+
+From the repository root:
+
+.. code-block:: bash
+
+   mise run play
+
+The launcher builds the runtime and Bevy client with native Cargo, reuses a
+reachable local database, and opens the saved campaign at its durable week.
+On first use it creates a new campaign at week zero. The in-game menu provides
+new and saved campaigns. It can compare committed weeks and start a scenario
+with longer ``sheet-transfer`` durations. The window observes the durable runtime.
+
+The Michigan map has 83 county QCEW baselines. The production scenario
+has five Designed county-industry cohorts and a 16-week horizon, with 3D and
+compact 2D views. Player interventions belong to Gate 5.
+
+To keep saved worlds and open a new campaign:
+
+.. code-block:: bash
+
+   mise run play -- --new
+   mise run play -- --new --preset delayed
+
+Use ``--campaign UUID`` to reopen an exact campaign, or ``--no-build`` after
+building the current source. The default database is ``babylon_test`` on
+``127.0.0.1:5433``. A custom ``BABYLON_RUNTIME_DSN`` must point to a
+reachable local database. The launcher passes writer credentials only to the
+runtime and read credentials to the window.
 
 Development Tools
 -----------------

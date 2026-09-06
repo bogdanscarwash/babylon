@@ -32,11 +32,13 @@ pub enum SurfaceId {
     AdminDisclosure,
     AdminInspector,
     CountyDossier,
+    ObserverShell,
+    ObserverProduction,
 }
 
 impl SurfaceId {
     /// Complete closed set used by the manifest-exhaustiveness sentinel.
-    pub const ALL: [Self; 14] = [
+    pub const ALL: [Self; 16] = [
         Self::TitleLockup,
         Self::StoryBanner,
         Self::CountyMap,
@@ -51,6 +53,8 @@ impl SurfaceId {
         Self::AdminDisclosure,
         Self::AdminInspector,
         Self::CountyDossier,
+        Self::ObserverShell,
+        Self::ObserverProduction,
     ];
 }
 
@@ -71,6 +75,8 @@ impl fmt::Display for SurfaceId {
             Self::AdminDisclosure => "admin-disclosure",
             Self::AdminInspector => "admin-inspector",
             Self::CountyDossier => "county-dossier",
+            Self::ObserverShell => "observer-shell",
+            Self::ObserverProduction => "observer-production",
         })
     }
 }
@@ -80,6 +86,8 @@ impl fmt::Display for SurfaceId {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DecisionSurfaceRole {
     Gameplay,
+    /// G4 observation and diagnosis; never certifies G5 player agency.
+    Observer,
     ArchiveReference,
     AdminDebug,
 }
@@ -220,7 +228,10 @@ impl DecisionSurfaceContract {
         if self.admin_debug_exempt != (self.role == DecisionSurfaceRole::AdminDebug) {
             return Err(DecisionSurfaceContractError::AdminExemptionMismatch);
         }
-        if self.role != DecisionSurfaceRole::Gameplay {
+        if !matches!(
+            self.role,
+            DecisionSurfaceRole::Gameplay | DecisionSurfaceRole::Observer
+        ) {
             return Ok(());
         }
         if self
@@ -347,6 +358,30 @@ const fn gameplay_surface(
 /// evidence merely by existing, and a gameplay-role row cannot claim player
 /// agency before Gate 5 enables the verb.
 pub const SHIPPED_SURFACE_MANIFEST: &[DecisionSurfaceContract] = &[
+    DecisionSurfaceContract {
+        id: SurfaceId::ObserverProduction,
+        role: DecisionSurfaceRole::Observer,
+        decision_question: Some("Whose work does this industry depend on, and who relies on its output?"),
+        visible_signals: &["exact inventories and input requirements", "planned and produced batch receipts", "labor and capacity budgets", "actual freight lots and quantity realization"],
+        visible_uncertainty: &["county aggregate cohorts have no factory coordinates", "designed physical budgets are separate from observed employment", "physical dependence does not prove organization or readiness for collective action", "absent or ungranted circuit data is explicit"],
+        fog_requirements: &["separate full-observer and grant-filtered reader capabilities", "same campaign, committed week, perspective and generation as the map"],
+        actions: INVESTIGATE_SEALED,
+        expected_receipts: &["production, dispatch, arrival and delivery receipts bound to the committed identity"],
+        archive_subjects: &["county/<geoid>", "material cohort identity"],
+        admin_debug_exempt: false,
+    },
+    DecisionSurfaceContract {
+        id: SurfaceId::ObserverShell,
+        role: DecisionSurfaceRole::Observer,
+        decision_question: Some("What constrains this economy, where does it propagate, and what evidence explains the change?"),
+        visible_signals: &["acknowledged economic observations", "campaign and selected week", "source units and vintage"],
+        visible_uncertainty: &["missing is not zero", "Archive verification lag", "historical inspection"],
+        fog_requirements: &["explicit full-observer capability or separately grant-filtered player preview", "no cached facts across perspective changes"],
+        actions: INVESTIGATE_SEALED,
+        expected_receipts: &["committed tick identity", "cited Archive verification"],
+        archive_subjects: &["county/<geoid>", "place/<geoid>"],
+        admin_debug_exempt: false,
+    },
     gameplay_surface(
         SurfaceId::CountyDossier,
         "What is true here, and what would Investigation reveal?",

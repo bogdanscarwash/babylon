@@ -12,12 +12,66 @@ Babylon is an entertainment-first emergent political-economy game. Babylon is
 not a forecast and not a scientific reproduction. Theory constrains the causal
 model but does not predetermine results.
 
+<!-- Vale: the Director's political game vocabulary and intended player freedom. -->
+<!-- vale ste.UnapprovedWords = NO -->
+The intended player leads a small political organization,
+responsible for its members and collective power.
+The MIM line supplies the analytical framework. The player can pursue an
+electoral, reformist, or revolutionary project. Political direction emerges
+from practice: campaigns, alliances, membership, and institutional commitments.
+These commitments also shape later choices and pressures.
+
+Reformism versus revolution is a central strategic tension. Adventurism and
+sectarianism are distinct tendencies that can also develop through practice.
+Decisions and material conditions explain these trajectories. Political labels
+do not predetermine success or failure.
+<!-- vale ste.UnapprovedWords = YES -->
+The intended first screen centers political forces: organizations,
+institutions, allies, and opponents. Economic panels explain their material
+relationships.
+The world must explain labor dependence, material needs, institutions, and
+collective relationships. Each visualization must answer a player question:
+where can I organize, and what sustains collective action?
+Who bears its costs, and what changes as a result?
+Statistical totals and citations belong in context views and the Archive.
+
+The player plans in months while the engine resolves individual weeks. The
+main control runs to a monthly boundary. The player can pause and resume the
+remaining period. Important developments also pause play for a closer look.
+A briefing explains what changed, why it matters to the organization,
+and links to records that the player can examine. The player makes the
+strategic judgment.
+
+Hearts of Iron IV and Victoria 3 are references for strategic scale and pace.
+Dwarf Fortress is a reference for systems that interact and produce histories.
+The game must make consequences clear at the level of organizations.
+
+The geographic world is the persistent home. A compact resource bar describes
+the organization as a whole. Selection reveals local availability, activities,
+and relationships. The log records developments, group communications, and
+completed activity, with links back to affected subjects.
+
+Portraits represent groups and organizations. Detailed individual simulation
+is not the focus.
+Support and opposition belong to distinct groups. Pressure directed at the
+organization stays separate from regional unrest and the repressive climate.
+
+The future language interface proposes a few concrete first steps for a broad
+intention. The player chooses an approach and confirms a reviewed action.
+Pinned plans preserve intentions. They do not silently execute them. G5 owns
+those actions. The engine determines their legality, costs, and consequences.
+
+G4's observer surface must make those relationships legible before G5 adds
+actions for the organizer. Physical dependence does not prove organization,
+solidarity, or readiness for collective action. The game must model those
+relations before it can display them as facts.
+
 Determinism proves computational identity, not scientific truth. Historical
 cases test causal signatures and counterfactual behavior. They do not dictate a
 historical path.
 
-The Bevy client is an administrative viewer with no player action. It can run
-and show the null world, but the player cannot change that world.
+The Bevy client observes the durable Michigan campaign. It has no player action.
+G4 observer acceptance remains incomplete.
 
 <!-- vale ste.UnapprovedWords = NO -->
 Gate 2 now gives the Rust engine executable phase order, whole-tick atomicity,
@@ -46,12 +100,13 @@ Today one weekly tick takes a typed world and governed rules. It produces a new
 world, events, identity-free causal audit receipts, a Rust `TickReport`, and a
 canonical hash. The receipts state which role and evidence class produced each
 actual event and write. They are not durable action receipts. Persisted replay
-remains in the frozen Python path.
+and campaign restart belong to Rust. The frozen Python engine remains a
+behavioral reference.
 <!-- vale ste.UnapprovedWords = YES -->
 
-The planned action cycle adds prior intent and durable action receipts. A
-knowledge layer will show only what the player has learned. The player will then
-make a choice that becomes intent for a future tick.
+The planned action cycle adds prior intent and durable action receipts. The
+current knowledge boundary restricts Archive reads to granted facts. G5 adds
+player choices that become intent for a future tick.
 
 Political economy supplies the entities, relations, and causal rules. The
 general system has seven parts:
@@ -70,7 +125,7 @@ does not judge mechanics.
 ## Live path and planned cycle
 
 The solid arrows show the live Rust persistence and Bevy path. Dashed arrows
-show the planned Archive worker and player-action slice.
+show the planned player-action slice.
 
 <!-- Vale: the Mermaid block contains literal crate and schema identifiers. -->
 <!-- vale off -->
@@ -81,19 +136,24 @@ flowchart LR
     INTENT["Prior intent"] -. "planned action cycle" .-> TICK
     TICK --> HASH["Canonical world hash"]
     TICK --> AUDIT["Identity-free audit receipts"]
-    HASH --> VIEW["Bevy administrative viewer"]
     TICK --> ENV["CommittedTickEnvelope"]
+    HASH --> ENV
     ENV --> STATE["babylon_state"]
+    STATE --> READ["Role-scoped observations"]
+    READ --> VIEW["Bevy administrative viewer"]
     STATE --> OUTBOX["Archive dirty receipt"]
-    OUTBOX -.-> ARCHIVE["Knowledge-safe Archive"]
+    OUTBOX --> WORKER["Rust Archive worker"]
+    WORKER --> ARCHIVE["Knowledge-safe Archive"]
+    ARCHIVE --> DOSSIER["Bevy dossiers"]
     ARCHIVE -.-> CHOICE["Player choice"]
     CHOICE -.-> INTENT
 ```
 <!-- vale on -->
 
 The live Rust path uses `babylon-kernel`, `babylon-graph`, `babylon-bsl`,
-`babylon-tick`, and `babylon-client`. The Bevy client draws the county atlas,
-moves ticks forward, and shows lenses, events, causal beats, and hash data.
+`babylon-tick`, `babylon-persistence`, and `babylon-client`.
+`babylon-runtime` owns campaign writes. Bevy requests week advances and reads
+the committed map, material views, history, and dossiers.
 
 The Python engine is a frozen behavioral reference. Its tests, traces, and
 goldens specify behavior for port and replacement decisions. Python also
@@ -102,10 +162,12 @@ prepares data and runs selected periphery.
 <!-- Vale: this paragraph preserves literal persistence and schema identifiers. -->
 <!-- vale ste.UnapprovedWords = NO -->
 <!-- vale ste.NounClusters = NO -->
-The Python periphery has mutable SQLite replay, data and optimization tools,
-and dedicated document stores. The Rust three-schema boundary, committed tick
-envelope, checkpoint restart, and Archive dirty receipts are live. The fog-safe
-Archive worker and BSL-Bevy player actions have not landed.
+Python keeps its separate mutable SQLite reference store, data and optimization
+tools, and dedicated document stores. Rust owns authoritative replay, checkpoint
+restart, and Archive dirty receipts. The Rust Archive worker and restricted
+reader supply cited county and place dossiers to Bevy. The card shows Archive
+verification lag and refuses historical pages. BSL-Bevy player actions remain
+unavailable.
 <!-- vale ste.NounClusters = YES -->
 <!-- vale ste.UnapprovedWords = YES -->
 

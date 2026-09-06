@@ -3,7 +3,7 @@
 Turns the sha-pinned ``dim_county_geometry`` parquet (TIGER/Line 2024 county
 boundaries, EPSG:4269) plus the committed ``county_adjacency.json`` into ONE
 content-hashed binary at
-``rust/crates/babylon-client/assets/map/county_atlas.bin``.
+``assets/map/county_atlas.bin``.
 
 Why a build-time artifact at all: Amendment AF (i)/(iv) ships the game as a
 pure Rust binary, so the deleted Ratatui client's "ask Python for WKT over
@@ -103,9 +103,7 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 
 DEFAULT_SOURCES = _REPO_ROOT / "dist" / "data-artifacts"
 FALLBACK_SOURCES = Path("/media/user/data/babylon-data/backups/data-artifacts-v7")
-DEFAULT_OUT = (
-    _REPO_ROOT / "rust" / "crates" / "babylon-client" / "assets" / "map" / "county_atlas.bin"
-)
+DEFAULT_OUT = _REPO_ROOT / "assets" / "map" / "county_atlas.bin"
 
 MAGIC = b"BABCTY\0\x01"
 FORMAT_VERSION = 1

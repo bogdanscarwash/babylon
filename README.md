@@ -5,8 +5,8 @@ not a forecast and not a scientific reproduction. Theory constrains the causal
 model but does not predetermine results.
 
 Determinism proves computational identity, not scientific truth. Historical
-cases test causal signatures and counterfactual behavior. The Bevy client is an
-administrative viewer with no player action.
+cases test causal signatures and counterfactual behavior. The Bevy client
+observes the campaign. Player interventions belong to Gate 5.
 
 The four executable gates are:
 
@@ -40,8 +40,8 @@ level, the live engine has:
 
 - typed world data
 - ordered causal rules
-- an in-memory Rust `TickReport`
-- persisted replay in the frozen Python reference
+- committed Rust tick reports and checkpoints
+- a frozen Python reference for retained reference tests
 
 The planned decision cycle adds player and AI intent plus views limited by
 player knowledge.
@@ -51,9 +51,16 @@ Read [`NORTH_STAR.md`](NORTH_STAR.md) for the full system model. Read
 
 ## Live system
 
-The Bevy client in Rust draws an atlas of 3,222 counties. It advances the Rust
-tick with a deterministic automatic clock. It has three lenses, events, causal
-beats, and hash diagnostics. The client is an administrative viewer.
+The Bevy window observes one durable Michigan campaign with 83 county QCEW
+baselines. It has a county map, an inspector, and a production display with
+3D cohort columns and a compact 2D option. The physical scenario contains
+five Designed county-industry cohorts for 16 weeks. Two committed presets
+compare the same productive configuration with different `sheet-transfer` durations.
+
+The runtime commits weekly changes to Postgres. The window receives read
+capabilities and controls pause, step, and speed through anonymous pipes.
+Full observer and player-knowledge preview use different database roles.
+The preview displays only granted facts. It has no material grants.
 
 The live Rust path uses these crates:
 
@@ -61,6 +68,8 @@ The live Rust path uses these crates:
 - `babylon-graph` for relations and world data
 - `babylon-bsl` for the BSL language
 - `babylon-tick` for weekly judgment
+- `babylon-material-circuit` for physical production and routed freight
+- `babylon-persistence` for the durable runtime and restricted readers
 - `babylon-client` for the Bevy viewer
 
 The Python engine is a frozen behavioral reference. Its tests, traces, and
@@ -70,11 +79,13 @@ decision. Python also prepares data and runs other periphery.
 <!-- Vale: this paragraph preserves literal persistence and schema identifiers. -->
 <!-- vale ste.UnapprovedWords = NO -->
 <!-- vale ste.NounClusters = NO -->
-The deterministic reference SQLite is a build artifact. Mutable Python
-``RuntimeDatabase`` SQLite separately stores per-run snapshots and replay. The
-Python path also has atomic Postgres tick persistence, `tick_commit`, partial
-`babylon_meta`, and an action pipeline. The full v4 Rust three-schema boundary,
-commit envelope, outbox, and Archive decision cycle have not landed.
+Deterministic reference SQLite is a build artifact. The frozen Python reference
+retains a separate mutable `RuntimeDatabase` SQLite store. Rust owns authoritative game-managed
+Postgres and marker-last committed envelopes. Archive verification can lag
+the durable week. The window shows that lag.
+
+Python retains data tooling and
+the frozen reference. It does not write the campaign shown in Bevy.
 <!-- vale ste.NounClusters = YES -->
 <!-- vale ste.UnapprovedWords = YES -->
 
@@ -82,10 +93,11 @@ The Django browser client in `web/` is legacy. Its failures do not gate v1.
 
 ## Install and check
 
-The repository uses `mise` to load the pinned tools. Start in a new clone:
+The repository uses `mise.lock` to pin tool downloads and checksums. Start in a new clone:
 
-`mise run setup` requires [Nix](https://nixos.org/download/) because canonical
-schema bootstrap uses the repository Nix shell to run the pinned Rust migrator.
+Install the native Debian prerequisites and rustup described in
+[`SETUP_GUIDE.md`](SETUP_GUIDE.md). Rust commands use the workspace toolchain.
+uv installs Python dependencies from the committed lock.
 
 ```bash
 mise trust
@@ -104,13 +116,17 @@ Run the repository check:
 mise run check
 ```
 
-Run the Bevy administrative viewer in its fast developer lane:
+Open or continue the native observer game:
 
 ```bash
-mise run nix -- mise run rust:client-dev-dylib
+mise run play
 ```
 
-See [`SETUP_GUIDE.md`](SETUP_GUIDE.md) for host requirements and fault help.
+The launcher builds the runtime and client, reuses a reachable local database,
+and starts at the campaign's durable week. New campaigns start at week zero.
+Use the in-game menu to start a new campaign, reopen a saved campaign, or
+compare two committed scenarios. Saved campaigns stay in the database.
+See [`SETUP_GUIDE.md`](SETUP_GUIDE.md) for launch options and host requirements.
 
 ## Why Python tests continue
 
@@ -123,7 +139,7 @@ area:
 
 ```bash
 mise run test:q -- tests/unit/path/to/test_file.py
-mise run rust:check
+mise run rust:check-no-docs
 mise run check
 ```
 

@@ -1,4 +1,4 @@
-"""Behavioral contracts for the interface SFX suite (``src/assets/sfx``).
+"""Behavioral contracts for the interface SFX suite (``assets/sfx``).
 
 The suite's rewrite test: the manifest is the spec, the renderer is a pure
 function, and the committed ``.mid`` files must be byte-identical to a fresh
@@ -17,7 +17,7 @@ from types import ModuleType
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-SFX_DIR = REPO_ROOT / "src" / "assets" / "sfx"
+SFX_DIR = REPO_ROOT / "assets" / "sfx"
 
 EXPECTED_FAMILIES = {
     "ui": 10,
@@ -31,7 +31,9 @@ EXPECTED_FAMILIES = {
 
 
 def _load_generator() -> ModuleType:
-    spec = importlib.util.spec_from_file_location("generate_sfx", SFX_DIR / "generate_sfx.py")
+    spec = importlib.util.spec_from_file_location(
+        "generate_sfx", REPO_ROOT / "tools" / "audio" / "sfx" / "generate_sfx.py"
+    )
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module

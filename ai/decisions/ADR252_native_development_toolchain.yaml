@@ -1,0 +1,43 @@
+ADR252_native_development_toolchain:
+  status: accepted
+  date: '2026-09-04'
+  issue: PER-10
+  title: Native development and release tooling without Nix
+  authority:
+    - Director instruction on 4 September 2026 to remove Nix
+  supersedes_scope:
+    - Nix development shells and the Nix-only installer and release channel
+    - Nix invocation requirements in contributor setup and verification
+  context: |
+    The G4 Bevy client built successfully inside Nix but could not use the
+    development machine's installed graphics driver through that environment.
+    The Director chose native development instead of further Nix integration.
+    Exact dependency and reference-data contracts must survive this change.
+  decision: |
+    R1. NATIVE DEVELOPMENT. System packages provide the C toolchain, display,
+    audio and graphics libraries. mise.lock pins the exact Linux x64 Python, uv and Node.js download URLs
+    and checksums; mise install --locked uses those artifacts. rustup
+    selects the compiler and components in rust/rust-toolchain.toml. Cargo
+    commands run from rust/. uv.lock and Cargo.lock remain authoritative.
+    The existing shared-host Cargo dispatcher and resource policy remain.
+
+    R2. ONE LIVE PATH. Remove the flakes, Nix task, Nix-only installer,
+    self-update command and their workflows. Source setup and mise run play
+    are the current installation and launch path. Native CI retains release
+    ancestry, regression, dependency-lock and artifact-integrity checks.
+    No compatibility wrapper or replacement binary distribution service is
+    introduced. Historical ADRs and release records remain historical evidence.
+
+    R3. REFERENCE REPRODUCTION. Daily development and reference-data tools use
+    the same native Python environment with frozen uv dependencies. The exact
+    Python 3.12.14 standalone build dated 20260901 contains SQLite 3.53.1. Its
+    archive checksum and installed executable bytes were verified together
+    with the SQLite source identity. The existing SQLite version refusal,
+    byte-identity checks and registered product checksums remain mandatory.
+    No separate interpreter builder, environment or wrapper is introduced.
+    This decision does not authorize changes to data algorithms or artifact pins.
+
+    R4. HOST BOUNDARY. Retiring repository tooling does not uninstall a user's
+    system Nix installation or delete its store. Existing build outputs may be
+    preserved separately while native binaries are rebuilt in the canonical
+    Cargo target directory. Game mechanics and gate acceptance do not change.

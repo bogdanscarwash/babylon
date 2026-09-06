@@ -10,19 +10,16 @@ use std::fmt;
 use babylon_persistence::CampaignId;
 use uuid::Uuid;
 
-use crate::story::{select_story, Story};
-
 /// The `--headless` flag: run exactly one dossier command against the
 /// fog-safe reader and exit instead of opening the windowed viewer.
 pub const HEADLESS_FLAG: &str = "--headless";
-/// The `--campaign <uuid>` flag: the canonical campaign identity a headless
-/// command reads. Falls back to [`CAMPAIGN_ENV`].
+/// The canonical campaign identity for the connected window or headless read.
+/// Falls back to [`CAMPAIGN_ENV`].
 pub const CAMPAIGN_FLAG: &str = "--campaign";
 /// Environment fallback for the campaign identity when `--campaign` is
 /// absent.
 pub const CAMPAIGN_ENV: &str = "BABYLON_CAMPAIGN_ID";
-/// The `--story <id>` flag: windowed-only — the headless surface takes no
-/// story selection.
+/// Retired demo option, recognized only to return an explicit refusal.
 pub const STORY_FLAG: &str = "--story";
 
 /// The closed set of command words the parser recognizes. Anything else
@@ -42,7 +39,7 @@ const TOP_LEVEL_HELP: &str = "\
 babylon-client — the Babylon viewer and headless dossier CLI
 
 usage:
-  babylon-client [--story <id>]
+  babylon-client --campaign <uuid>
   babylon-client --headless [--campaign <uuid>] <command>
 
 commands:
@@ -66,7 +63,7 @@ commands:
 options:
   --headless    run one command against the fog-safe reader and exit.
   --campaign    canonical campaign UUID; falls back to BABYLON_CAMPAIGN_ID.
-  --story       windowed story id (windowed mode only).
+  Open the connected window with `mise run play`.
 ";
 
 const DOSSIER_HELP: &str = "\
@@ -197,10 +194,10 @@ pub enum HelpTopic {
 /// command, or a help topic that `main` renders and exits 0.
 #[derive(Clone, Debug)]
 pub enum CliRequest {
-    /// Open the windowed viewer with the selected story.
+    /// Open the observer window for one durable campaign.
     Windowed {
-        /// The selected story.
-        story: &'static Story,
+        /// The canonical campaign identity.
+        campaign_id: CampaignId,
     },
     /// Run exactly one headless dossier command.
     Headless {
@@ -274,20 +271,18 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<CliRequest, Cli
         }
     }
     if !headless {
-        if campaign.is_some() {
-            return Err(CliError::at(
-                concat!(file!(), ":", line!()),
-                format!("{CAMPAIGN_FLAG} only applies with {HEADLESS_FLAG}"),
-            ));
+        if !rest.is_empty() {
+            return Err(CliError::at(concat!(file!(), ":", line!()),
+                format!("windowed mode observes one durable campaign; use {HEADLESS_FLAG} for commands; demo stories are conformance-only")));
         }
-        let story = select_story(&rest)
-            .map_err(|message| CliError::at(concat!(file!(), ":", line!()), message))?;
-        return Ok(CliRequest::Windowed { story });
+        return Ok(CliRequest::Windowed {
+            campaign_id: resolve_campaign(campaign)?,
+        });
     }
     if rest.iter().any(|word| word == STORY_FLAG) {
         return Err(CliError::at(
             concat!(file!(), ":", line!()),
-            format!("{STORY_FLAG} is windowed-only; headless commands take no story"),
+            format!("{STORY_FLAG} is conformance-only; the client observes a durable campaign"),
         ));
     }
     if rest.first().is_some_and(|word| word == "help") {
@@ -330,6 +325,12 @@ fn resolve_campaign(flag: Option<String>) -> Result<CampaignId, CliError> {
             format!("campaign identity must be a canonical UUID, got '{raw}'"),
         )
     })?;
+    if uuid.is_nil() || uuid.to_string() != raw {
+        return Err(CliError::at(
+            concat!(file!(), ":", line!()),
+            "campaign identity must be a nonzero canonical UUID".into(),
+        ));
+    }
     Ok(CampaignId::from_uuid(uuid))
 }
 
@@ -500,21 +501,17 @@ mod tests {
     }
 
     #[test]
-    fn no_arguments_opens_the_default_windowed_story() {
-        let request = parse(os(&[])).expect("empty arguments admit");
+    fn campaign_flag_opens_the_durable_window() {
+        let request = parse(os(&[CAMPAIGN_FLAG, CAMPAIGN])).expect("campaign admits");
         assert!(
-            matches!(request, CliRequest::Windowed { story } if story.id == "counties"),
-            "the default story is the counties ambient world"
+            matches!(request, CliRequest::Windowed { campaign_id } if campaign_id == campaign()),
+            "the window binds the declared campaign"
         );
     }
 
     #[test]
-    fn story_flag_selects_the_windowed_story() {
-        let request = parse(os(&["--story", "carceral"])).expect("story flag admits");
-        assert!(
-            matches!(request, CliRequest::Windowed { story } if story.id == "carceral"),
-            "--story selects the carceral arc"
-        );
+    fn story_flag_cannot_open_a_parallel_windowed_simulation() {
+        assert!(parse(os(&["--story", "carceral"])).is_err());
     }
 
     #[test]
@@ -587,7 +584,7 @@ mod tests {
     }
 
     #[test]
-    fn story_flag_in_headless_mode_refuses_as_windowed_only() {
+    fn story_flag_in_headless_mode_refuses_as_conformance_only() {
         let error = parse(os(&[
             HEADLESS_FLAG,
             STORY_FLAG,
@@ -598,8 +595,8 @@ mod tests {
         .expect_err("a story flag in headless mode refuses");
         let message = error.to_string();
         assert!(
-            message.contains(STORY_FLAG) && message.contains("windowed-only"),
-            "the refusal names the flag and its windowed-only estate, got {error}"
+            message.contains(STORY_FLAG) && message.contains("conformance-only"),
+            "the refusal names the flag and its conformance-only scope, got {error}"
         );
     }
 
@@ -620,9 +617,9 @@ mod tests {
     }
 
     #[test]
-    fn campaign_flag_without_headless_refuses() {
-        let error =
-            parse(os(&[CAMPAIGN_FLAG, CAMPAIGN])).expect_err("campaign without headless refuses");
+    fn positional_commands_require_headless() {
+        let error = parse(os(&[CAMPAIGN_FLAG, CAMPAIGN, "tick", "status"]))
+            .expect_err("commands without headless refuse");
         assert!(
             error.to_string().contains(HEADLESS_FLAG),
             "the refusal points at the headless flag"

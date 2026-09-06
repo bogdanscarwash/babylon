@@ -24,6 +24,13 @@ SCHEMA = ROOT / "contracts" / "archive_worker_v1.yaml"
 VECTORS = ROOT / "contracts" / "archive_worker_v1_vectors.jsonl"
 
 
+def test_quiet_receipt_settles_but_an_undrained_receipt_stages() -> None:
+    assert classify_receipt(0, 0) == "Consume"
+    assert classify_receipt(0, 4) == "Stage"
+    assert classify_receipt(256, 1) == "Stage"
+    assert classify_receipt(60, 0) == "Consume"
+
+
 def test_shared_contract_verifies_independently() -> None:
     contract = load_contract(SCHEMA)
     vectors = load_vectors(VECTORS)
@@ -45,7 +52,7 @@ def test_every_vector_kind_is_present() -> None:
     ]
     multi_page = next(row for row in vectors if row["id"] == "plan-multi-page-materializes")
     assert multi_page["data"]["batch"]["page_count"] == 2
-    assert multi_page["data"]["expected"] == "Materialize"
+    assert multi_page["data"]["expected"] == "Consume"
 
 
 def test_pure_derivations_match_the_pinned_semantics() -> None:
@@ -53,19 +60,19 @@ def test_pure_derivations_match_the_pinned_semantics() -> None:
     assert derive_watermark(None, 5) == 5
     assert derive_watermark(2, 3) == 1
     assert derive_watermark(1, 3) == 0
-    assert classify_receipt(0, 0) == "Defer"
-    assert classify_receipt(1, 0) == "Materialize"
-    assert classify_receipt(256, 316) == "Materialize"
-    assert classify_receipt(0, 4) == "Materialize"
+    assert classify_receipt(0, 0) == "Consume"
+    assert classify_receipt(1, 0) == "Consume"
+    assert classify_receipt(256, 316) == "Stage"
+    assert classify_receipt(0, 4) == "Stage"
     plans, error = classify_sweep(
         [{"batch": {"page_count": 0, "remaining": 0}}, {"batch": {"page_count": 1, "remaining": 0}}]
     )
-    assert plans == ["Defer", "Materialize"]
+    assert plans == ["Consume", "Consume"]
     assert error is None
     plans, error = classify_sweep(
         [{"batch": {"page_count": 1, "remaining": 0}}, {"error": "ReceiptMismatch"}]
     )
-    assert plans == ["Materialize"]
+    assert plans == ["Consume"]
     assert error == "ReceiptMismatch"
 
 
@@ -119,7 +126,7 @@ def test_sweep_plans_mutation_refuses_stale_ordering() -> None:
     contract = load_contract(SCHEMA)
     vectors = copy.deepcopy(load_vectors(VECTORS))
     row = next(item for item in vectors if item["id"] == "sweep-mixed-order")
-    row["data"]["expected"] = ["Materialize", "Defer", "Materialize"]
+    row["data"]["expected"] = ["Stage", "Consume", "Consume"]
 
     errors = verify_all(contract, vectors, ROOT)
 
@@ -356,7 +363,7 @@ def test_digest32_rejects_whitespace_padding() -> None:
 
 def test_sweep_step_with_unknown_error_variant_refuses() -> None:
     vectors = copy.deepcopy(load_vectors(VECTORS))
-    row = next(item for item in vectors if item["id"] == "sweep-all-defer")
+    row = next(item for item in vectors if item["id"] == "sweep-all-quiet")
     row["data"]["steps"].append({"error": "UnknownSubject"})
 
     with pytest.raises(ArchiveWorkerContractRefusal) as exc_info:

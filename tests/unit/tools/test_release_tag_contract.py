@@ -18,10 +18,7 @@ from tools.check_release_tag import (
 ROOT = Path(__file__).resolve().parents[3]
 MISE_PATH = ROOT / ".mise.toml"
 VERSIONING_PATH = ROOT / "docs" / "versioning.md"
-RELEASE_WORKFLOWS = (
-    ROOT / ".github" / "workflows" / "release.yml",
-    ROOT / ".github" / "workflows" / "nix-release.yml",
-)
+RELEASE_WORKFLOWS = (ROOT / ".github" / "workflows" / "release.yml",)
 
 
 def _workflow(path: Path) -> dict[str, Any]:

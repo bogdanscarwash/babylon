@@ -33,12 +33,12 @@ are opaque, use linear sampling, and remain below the repository's 1 MiB file li
 Run these commands from the repository root:
 
 ```bash
-inkscape design/bevy-assets/sources/title-mark.svg --export-type=png --export-filename=rust/crates/babylon-client/src/visual_assets/embedded/title-mark.png
-inkscape design/bevy-assets/sources/interface-atlas.svg --export-type=png --export-filename=rust/crates/babylon-client/src/visual_assets/embedded/interface-atlas.png
-inkscape design/bevy-assets/sources/marker-atlas.svg --export-type=png --export-filename=rust/crates/babylon-client/src/visual_assets/embedded/marker-atlas.png
-inkscape design/bevy-assets/sources/provenance-atlas.svg --export-type=png --export-filename=rust/crates/babylon-client/src/visual_assets/embedded/provenance-atlas.png
-inkscape design/bevy-assets/sources/frame-atlas.svg --export-type=png --export-filename=rust/crates/babylon-client/src/visual_assets/embedded/frame-atlas.png
-inkscape design/bevy-assets/sources/surface-atlas.svg --export-type=png --export-filename=rust/crates/babylon-client/src/visual_assets/embedded/surface-atlas.png
+inkscape design/bevy-assets/sources/title-mark.svg --export-type=png --export-filename=assets/visual/title-mark.png
+inkscape design/bevy-assets/sources/interface-atlas.svg --export-type=png --export-filename=assets/visual/interface-atlas.png
+inkscape design/bevy-assets/sources/marker-atlas.svg --export-type=png --export-filename=assets/visual/marker-atlas.png
+inkscape design/bevy-assets/sources/provenance-atlas.svg --export-type=png --export-filename=assets/visual/provenance-atlas.png
+inkscape design/bevy-assets/sources/frame-atlas.svg --export-type=png --export-filename=assets/visual/frame-atlas.png
+inkscape design/bevy-assets/sources/surface-atlas.svg --export-type=png --export-filename=assets/visual/surface-atlas.png
 ```
 
 ## Illustration exports
@@ -50,7 +50,7 @@ Heroes:
 
 ```bash
 magick selected-source.png -resize '1536x864^' -gravity center -extent 1536x864 /tmp/babylon-asset.png
-cwebp -quiet -q 82 -m 6 /tmp/babylon-asset.png -o rust/crates/babylon-client/src/visual_assets/embedded/hero-red-apparatus.webp
+cwebp -quiet -q 82 -m 6 /tmp/babylon-asset.png -o assets/visual/hero-red-apparatus.webp
 ```
 
 After you process the next selected source, change the output name to
@@ -60,7 +60,7 @@ Concept plates:
 
 ```bash
 magick selected-source.png -resize '1024x1024^' -gravity center -extent 1024x1024 /tmp/babylon-asset.png
-cwebp -quiet -q 82 -m 6 /tmp/babylon-asset.png -o rust/crates/babylon-client/src/visual_assets/embedded/concept-bunker-oracle.webp
+cwebp -quiet -q 82 -m 6 /tmp/babylon-asset.png -o assets/visual/concept-bunker-oracle.webp
 ```
 
 After you process each selected source, change the output name to `concept-living-map.webp`,
@@ -70,7 +70,7 @@ Banners:
 
 ```bash
 magick selected-source.png -resize '1536x384^' -gravity center -extent 1536x384 /tmp/babylon-asset.png
-cwebp -quiet -q 82 -m 6 /tmp/babylon-asset.png -o rust/crates/babylon-client/src/visual_assets/embedded/banner-counties.webp
+cwebp -quiet -q 82 -m 6 /tmp/babylon-asset.png -o assets/visual/banner-counties.webp
 ```
 
 After you process each selected source, change the output name to `banner-carceral.webp`,

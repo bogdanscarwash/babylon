@@ -16,9 +16,11 @@
 #   mutate:*      - Mutation testing
 #   midi:*        - Music generation
 
-# The vendored Nix shell currently provides this floor. Hosted CI installs the
-# exact current release separately through mise-action.
-min_version = "2025.11.7"
+# Hosted CI installs the current mise release through mise-action.
+min_version = "2026.9.1"
+
+[tool_config]
+locked = true
 
 [task_config]
 includes = [
@@ -28,11 +30,11 @@ includes = [
 ]
 
 [tools]
-python = "3.12"
-uv = "0.9.8"  # single-lock fork (ADR095 D3, ruling U); uv2nix consumes this same lock
+python = "3.12.14"
+uv = "0.9.8"
+node = "22.22.2"
 
 [env]
-PYTHONPATH = "src"
 BABYLON_ENV = "development"
 # Pin BLAS/OpenMP to 1 thread for every mise-run command. The engine's numpy/scipy
 # economics spawns one OpenBLAS thread PER CORE (24 here) per process by default;
@@ -59,18 +61,10 @@ CARGO_BUILD_JOBS = "4"
 # Soundfont for MIDI conversion
 SOUNDFONT = "/usr/share/sounds/sf2/FluidR3_GM.sf2"
 MUSIC_DIR = "assets/music"
-AUDIO_OUTPUT_DIR = "assets/audio"
 
 # =============================================================================
 # INSTALLATION
 # =============================================================================
-
-[tasks."nix"]
-description = "Run any command inside the vendored devshell and pass through trust for this already-trusted project root, including nested mise tasks."
-# Force Git's tracked-files accessor. Older Nix installations can classify a
-# linked worktree's .git file as path:, copying untracked rust/target into the
-# store before the flake fileset can filter it.
-run = 'MISE_TRUSTED_CONFIG_PATHS="${MISE_PROJECT_ROOT:-$PWD}" nix develop "git+file://${MISE_PROJECT_ROOT:-$PWD}" --command'
 
 [tasks."pr:merge"]
 description = "the ONE sanctioned merge path: all-green + head-pin + Copilot advisory + unresolved review thread block + zero alert floor + stacked-PR guard"
@@ -85,29 +79,8 @@ description = "worktree contract (ADR181 R9c): venv interpreter pin, ops extra, 
 run = "python3 tools/check_worktree_contract.py"
 
 [tasks."check:env-contract"]
-description = "devshell environment contract: no PYTHONPATH leaks from python-built packages (default/dataBuild)"
-run = """
-#!/usr/bin/env bash
-set -euo pipefail
-# The devshells provide TOOLS, not python imports: nixpkgs' python setup
-# hooks export tool site-packages onto PYTHONPATH, shadowing the repo venv
-# (git-hook mypy crash, 2026-07-20 — the `env -u PYTHONPATH git` era). Each
-# shellHook unsets it; this proves the contract for every shell the flake
-# exports. Workstation-run (shells are realized here); run after any flake
-# edit.
-for shell in default dataBuild; do
-  # shellHooks echo greetings to stdout — extract the marker-delimited
-  # value instead of trusting raw captured output.
-  raw="$(nix develop "${MISE_PROJECT_ROOT:-$PWD}#${shell}" --command bash -c 'printf "PYPC<[%s]>PYPC" "${PYTHONPATH:-}"')"
-  leaked="$(printf '%s' "$raw" | sed -n 's/.*PYPC<\\[\\(.*\\)\\]>PYPC.*/\\1/p')"
-  if [ -n "$leaked" ]; then
-    echo "env-contract: ${shell} devshell leaks PYTHONPATH:" >&2
-    printf '%s\\n' "$leaked" | tr ':' '\\n' | sed 's/^/  /' >&2
-    exit 1
-  fi
-  echo "env-contract: ${shell} clean"
-done
-"""
+description = "Verify the native project interpreter and isolated editable imports"
+run = "uv run --frozen python tools/check_native_environment.py"
 
 [tasks.install]
 description = "Install all dependencies (from the committed lock — see deps:lock to re-resolve)"
@@ -121,7 +94,8 @@ run = "uv sync --extra ops --frozen"
 description = "One-shot bootstrap for a fresh clone: toolchain + deps + hooks + tuned PostgreSQL 17 + canonical schema (spec-087 FR-008)"
 run = """
 set -e
-mise install
+mise install --locked
+rustup toolchain install 1.91.1 --profile minimal --component rustfmt --component clippy
 uv sync --extra ops --frozen
 uv run --frozen pre-commit install
 mise run db:up
@@ -364,14 +338,6 @@ description = "Run a GitHub Actions job locally via gh-act (program 15) — e.g.
 # --reuse/--pull=false/--action-offline-mode: SPEED — keep the container and
 #   cached actions between runs; do an occasional clean run without them.
 run = "gh act --apply-event-filters --reuse --pull=false --action-offline-mode"
-
-[tasks."ci:local:install"]
-description = "Simulate the installer-smoke CI job locally on the act ubuntu image (no GitHub minutes)"
-run = "gh act workflow_dispatch -W .github/workflows/installer.yml -j installer-smoke --reuse --pull=false --action-offline-mode"
-
-[tasks."install:test"]
-description = "Static + dry-run smoke of install.sh / Patches wizard (same harness the CI installer-smoke job runs)"
-run = "bash tools/installer_smoke.sh"  # bash: the harness sets pipefail, dash rejects it
 
 [tasks."lint:check"]
 description = "Ruff lint, no fixes (CI parity; the auto-fixing variant is tasks.lint)"
@@ -929,8 +895,8 @@ description = "Regenerate ALL reference sources (full-coverage parquet + manifes
 run = "uv run python tools/make_data_artifacts.py --full-coverage"
 
 [tasks."data:national-incidence"]
-description = "Regenerate the second-order national-incidence artifacts (A2/A3 county-pole + reproduction-floor; #334 Phase 0, ADR098/ADR171) from sha-pinned parquet sources — PINNED-DEVSHELL ONLY (run as mise run nix -- mise run data:national-incidence); no schema.sql table, hand-registered in data-artifacts.yaml, tripwire-guarded. A1 (county_fips_vintage_crosswalk) is a separate generator, tools/make_fips_vintage_crosswalk.py."
-run = "uv run python tools/make_national_incidence_artifact.py"
+description = "Regenerate the second-order national-incidence artifacts (A2/A3 county-pole + reproduction-floor; #334 Phase 0, ADR098/ADR171) from sha-pinned parquet sources — uses the locked native Python and governed SQLite pin; no schema.sql table, hand-registered in data-artifacts.yaml, tripwire-guarded. A1 (county_fips_vintage_crosswalk) is a separate generator, tools/make_fips_vintage_crosswalk.py."
+run = "uv run --frozen python tools/make_national_incidence_artifact.py"
 
 [tasks."data:county-atlas"]
 description = "Rebuild the committed county atlas the Bevy client renders (needs dist/data-artifacts or the babylon-data drive; CI never builds it)"
@@ -942,13 +908,14 @@ run = "uv run python tools/extract_reference_schema.py"
 
 [tasks."data:build-db"]
 description = "Rebuild the reference DB from parquet sources + schema.sql (product block updated)"
-run = "uv run python tools/build_reference_db.py --out dist/build/marxist-data-3NF.sqlite --update-manifest"
+run = "uv run --frozen python tools/build_reference_db.py --out dist/build/marxist-data-3NF.sqlite --update-manifest"
 
 [tasks."data:verify-build"]
 description = "Build the reference DB twice from sources and prove byte-identity (dev box only)"
 run = """
-uv run python tools/build_reference_db.py --out dist/build/ref-a.sqlite
-uv run python tools/build_reference_db.py --out dist/build/ref-b.sqlite
+set -e
+uv run --frozen python tools/build_reference_db.py --out dist/build/ref-a.sqlite
+uv run --frozen python tools/build_reference_db.py --out dist/build/ref-b.sqlite
 python3 - <<'EOF'
 import hashlib, pathlib, sys
 h = [hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest()
@@ -1002,96 +969,8 @@ PGPASSWORD=test psql -h localhost -p 5433 -U test -d babylon_test -c
 '''
 
 [tasks."play"]
-description = "One-command local loop (Director directive 2026-09-04): start Postgres, bootstrap, advance ticks, sweep the Archive, launch the windowed client"
-usage = '''
-arg "[ticks]" help="Ticks to commit and materialize before launch (0 = just reopen the world)" default="2"
-'''
-run = '''
-set -e
-export BABYLON_RUNTIME_DSN="${BABYLON_RUNTIME_DSN:-host=127.0.0.1 port=5433 dbname=babylon_test user=test password=test}"
-# The runtime's DEFAULT_CAMPAIGN_UUID (babylon-runtime.rs): overriding
-# BABYLON_CAMPAIGN_ID switches worlds; the default keeps one continuous one.
-export BABYLON_CAMPAIGN_ID="${BABYLON_CAMPAIGN_ID:-28100000-0000-0000-0000-000000000001}"
-mise run db:up
-mise run db:bootstrap
-(cd rust && cargo build -p babylon-persistence --bin babylon-runtime --locked && cargo build -p babylon-client --bin babylon-client --locked)
-export PATH="$PWD/rust/target/debug:$PATH"
-if [ "${usage_ticks}" != "0" ]; then
-    babylon-runtime run --ticks "${usage_ticks}"
-    # PER-318: one receipt's dirty set can exceed one sweep's page budget, so
-    # the drain pages across sweeps until nothing remains undrained (paged=0).
-    for sweep in 1 2 3 4 5 6 7 8; do
-        sweep_output="$(babylon-runtime archive-worker --once)"
-        printf '%s\n' "$sweep_output"
-        paged="${sweep_output##*paged=}"
-        paged="${paged%%[!0-9]*}"
-        if [ "${paged:-0}" = "0" ]; then
-            break
-        fi
-        if [ "$sweep" = "8" ]; then
-            printf 'archive drain still paged after 8 sweeps; refusing to launch against an unsettled world\n' >&2
-            exit 1
-        fi
-    done
-fi
-# Reader provisioning, idempotent — the same block sim:dossier-demo runs.
-# It must follow the runtime: the fog-safe atom views are installed by the
-# campaign-foundation path, so on a fresh database they do not exist until
-# the first `run` commits them.
-play_reader_password="${BABYLON_DOSSIER_DEMO_PASSWORD:-babylon_dossier_demo}"
-# The password is interpolated into SQL literals and a connection URI, so
-# anything outside a strict charset would break the heredoc or inject.
-case "$play_reader_password" in
-    *[!A-Za-z0-9_-]*)
-        printf 'refusing BABYLON_DOSSIER_DEMO_PASSWORD %s: only ASCII letters, digits, "_" and "-" are admissible\n' "$play_reader_password" >&2
-        exit 1
-        ;;
-esac
-psql "$BABYLON_RUNTIME_DSN" <<SQL
-DO \$\$
-BEGIN
-    IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'babylon_reader') THEN
-        CREATE ROLE babylon_reader NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE;
-    END IF;
-END
-\$\$;
-CREATE OR REPLACE VIEW public.v_committed_tick_status_v1 AS
-SELECT campaign_id, resolve_tick, envelope_layout_version, tick_content_hash, envelope_digest
-FROM babylon_state.tick_commit;
-DO \$\$
-BEGIN
-    IF pg_catalog.to_regclass('public.v_committed_tick_status_v1') IS NOT NULL THEN
-        GRANT SELECT ON public.v_committed_tick_status_v1 TO babylon_reader;
-    END IF;
-    IF pg_catalog.to_regclass('public.v_archive_page_known_v1') IS NOT NULL THEN
-        GRANT SELECT ON public.v_archive_page_known_v1 TO babylon_reader;
-    END IF;
-    IF pg_catalog.to_regclass('public.v_archive_atom_visible') IS NOT NULL THEN
-        GRANT SELECT ON public.v_archive_atom_visible TO babylon_reader;
-    END IF;
-    IF pg_catalog.to_regclass('public.v_county_card_atoms') IS NOT NULL THEN
-        GRANT SELECT ON public.v_county_card_atoms TO babylon_reader;
-    END IF;
-    IF pg_catalog.to_regclass('public.v_archive_subject_atoms') IS NOT NULL THEN
-        GRANT SELECT ON public.v_archive_subject_atoms TO babylon_reader;
-    END IF;
-END
-\$\$;
-DO \$\$
-BEGIN
-    IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'babylon_dossier_demo') THEN
-        CREATE ROLE babylon_dossier_demo LOGIN PASSWORD '${play_reader_password}'
-          NOSUPERUSER NOCREATEDB NOCREATEROLE;
-    END IF;
-END
-\$\$;
-ALTER ROLE babylon_dossier_demo PASSWORD '${play_reader_password}';
-GRANT babylon_reader TO babylon_dossier_demo;
-GRANT SET ON PARAMETER event_triggers TO babylon_dossier_demo;
-SQL
-export BABYLON_READER_DSN="postgresql://babylon_dossier_demo:${play_reader_password}@127.0.0.1:5433/babylon_test"
-(cd rust && cargo run -p babylon-client --locked)
-'''
+description = "Open or continue the durable Michigan observer game with isolated read capabilities"
+run = "uv run --frozen python tools/run_observer_session.py"
 
 [tasks."data:lodes-od"]
 description = "Download LODES OD commuter flow data (Michigan, current year). Tri-county minimum: --states mi"
@@ -1421,12 +1300,16 @@ description = "Generate all fascist faction MIDI tracks"
 run = "cd tools/fascist_soundtrack && for f in generate_*.py; do echo \"Generating: $f\"; uv run python \"$f\"; done"
 
 [tasks."midi:generate-sfx"]
-description = "Regenerate the interface SFX suite from src/assets/sfx/manifest.toml (deterministic)"
-run = "uv run python src/assets/sfx/generate_sfx.py"
+description = "Regenerate the interface SFX suite from assets/sfx/manifest.toml (deterministic)"
+run = "uv run python tools/audio/sfx/generate_sfx.py"
 
 [tasks."midi:generate-soundtrack"]
-description = "Regenerate the 13-track soundtrack estate from src/assets/music/tracks/ (deterministic)"
-run = "uv run python src/assets/music/generate_music.py"
+description = "Regenerate the 17-track soundtrack estate from tools/audio/music/tracks/ (deterministic)"
+run = "uv run python tools/audio/music/generate_music.py"
+
+[tasks."midi:render-observer"]
+description = "Render the two observer themes and six cues with pinned audio provenance"
+run = "uv run python tools/audio/render_observer_audio.py"
 
 [tasks."midi:soundfont-list"]
 description = "List available soundfonts on the system"
@@ -1560,7 +1443,7 @@ set -e
 command -v tree-sitter >/dev/null 2>&1 || {
   echo "tree-sitter CLI not found on PATH."
   echo "Install it with: cargo install tree-sitter-cli"
-  echo "(node comes from the repo flake: mise run nix -- node --version)"
+  echo "(install the pinned Node.js toolchain with mise install)"
   exit 1
 }
 tree-sitter generate

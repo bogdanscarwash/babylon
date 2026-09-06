@@ -252,10 +252,9 @@ def test_codex_environment_is_tracked_policy_not_ignored_local_state() -> None:
 
 @pytest.mark.unit
 def test_repository_entrypoints_do_not_override_dispatcher_owned_resources() -> None:
-    """Mise and Nix must not recreate the retired cross-repository cache."""
+    """Native Mise must not recreate the retired cross-repository cache."""
     entrypoints = {
         ".mise.toml": (REPO_ROOT / ".mise.toml").read_text(encoding="utf-8"),
-        "flake.nix": (REPO_ROOT / "flake.nix").read_text(encoding="utf-8"),
     }
     prohibited_assignments = (
         r"^\s*RUSTC_WRAPPER\s*=",
@@ -274,24 +273,17 @@ def test_repository_entrypoints_do_not_override_dispatcher_owned_resources() -> 
     assert re.findall(
         r'^CARGO_BUILD_JOBS = "([0-9]+)"$', entrypoints[".mise.toml"], re.MULTILINE
     ) == ["4"]
-    assert re.findall(
-        r"^\s*export CARGO_BUILD_JOBS=([0-9]+)$",
-        entrypoints["flake.nix"],
-        re.MULTILINE,
-    ) == ["4"]
-    assert "codex-rust-host/v11/cargo" in entrypoints["flake.nix"]
-    assert "codex-rust-host/v*/cargo" not in entrypoints["flake.nix"]
-    assert 'export PATH="$HOME/.local/bin:' not in entrypoints["flake.nix"]
+    environment = (REPO_ROOT / ".codex/environments/environment.toml").read_text(encoding="utf-8")
     assert (
-        'export PATH="$codex_rust_dispatcher_bin:$codex_rust_cargo_home/bin:$PATH"'
-        in entrypoints["flake.nix"]
+        'export PATH="$codex_rust_dispatcher_bin:$codex_rust_cargo_home/bin:$PATH"' in environment
     )
-    assert "! -name cargo -print -quit" in entrypoints["flake.nix"]
+    assert 'export PATH="$HOME/.local/bin:' not in entrypoints[".mise.toml"]
+    assert "nix develop" not in entrypoints[".mise.toml"]
 
 
 @pytest.mark.integration
-def test_nix_shell_prefers_installed_managed_cargo() -> None:
-    """A Codex host must not let Nix shadow the Babylon dispatcher."""
+def test_native_mise_prefers_installed_managed_cargo() -> None:
+    """Native Mise preserves the managed Cargo dispatcher and rustup tools."""
     cargo = shutil.which("cargo")
     if cargo is None:
         pytest.skip("Cargo is unavailable")
@@ -306,8 +298,7 @@ def test_nix_shell_prefers_installed_managed_cargo() -> None:
     proof = subprocess.run(
         [
             "mise",
-            "run",
-            "nix",
+            "exec",
             "--",
             "sh",
             "-c",

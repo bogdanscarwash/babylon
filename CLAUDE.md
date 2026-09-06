@@ -163,9 +163,10 @@ Keep unrelated user changes unchanged. Report an unrelated fault unless the owne
 
 ## Toolchain and host safety
 
-`flake.nix` pins tools and `.python-version` pins Python 3.12. Use
-`mise run nix -- <command>` for the pinned shell. Do not set `PYTHONPATH` for
-standard tasks. Run heavy gates uncapped. Do not overlap them. Keep `BLAS=1`.
+Use native libraries and `.mise.toml`, `mise.lock`, and `.python-version` pins (ADR252). Install with `mise install --locked` and `mise run install`.
+Run Cargo from `rust/` to use `rust-toolchain.toml`. Reference tools use `mise exec -- uv run --frozen python` in the project `.venv`. The builder checks SQLite 3.53.1.
+
+Do not set `PYTHONPATH`. Run heavy gates uncapped and serially. Keep `BLAS=1`.
 
 `earlyoom` is the host backstop. Use `mise run mcp:reap`. Do not use broad
 `pkill`.
@@ -195,5 +196,4 @@ injection.
 ## Records
 
 Keep old ADRs and reports unchanged. Add an ADR for a new architecture decision.
-Linear alone records status and tasks. Check the source and an executable test
-before you claim live behavior.
+Linear owns status and tasks. Verify source and executable evidence before claiming behavior.

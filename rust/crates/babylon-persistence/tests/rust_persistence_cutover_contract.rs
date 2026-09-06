@@ -12,10 +12,10 @@ use babylon_persistence::{
     CampaignFoundationV1, CampaignId, CheckpointCompletenessV1, CheckpointRowsV1,
     CommittedCheckpointSectionV1, CommittedFullCheckpointV1, CommittedResolveTickErrorV1,
     CommittedResolveTickV1, CommittedTickAuthorityLedgerRowV2, CommittedTickAuthorityStateV2,
-    CommittedTickReceiptV2, DurableReplayRuntimeV2, FoundationContentBundleV1,
-    FullCheckpointSectionTagV1, JumplistRowV1, PreparedCommittedTickV2, RetainedMetadataStoreV1,
-    RustPersistenceActivationErrorV2, RustPersistenceRuntimeErrorV2, StableGraphRowsEmptyProofV1,
-    SuccessfulEventBatchEmptyProofV2, WatchlistRowV1,
+    CommittedTickReceiptV2, DurableReplayRuntimeV2, FoundationContentBundle,
+    FoundationContentBundleV1, FullCheckpointSectionTagV1, JumplistRowV1, PreparedCommittedTickV2,
+    RetainedMetadataStoreV1, RustPersistenceActivationErrorV2, RustPersistenceRuntimeErrorV2,
+    StableGraphRowsEmptyProofV1, SuccessfulEventBatchEmptyProofV2, WatchlistRowV1,
 };
 use babylon_practice_contract::ordered_action_v1::OrderedPracticeActionBatchV1;
 use babylon_tick::material_state::MaterialStateRowsV1;
@@ -193,7 +193,12 @@ fn only_an_identified_replay_report_can_prepare_semantic_rows() {
 #[test]
 fn campaign_foundation_retains_every_exact_replay_source() {
     fn assert_foundation_accessors(foundation: &CampaignFoundationV1) {
-        let content: &FoundationContentBundleV1 = foundation.content_bundle();
+        let FoundationContentBundle::V1(content): &FoundationContentBundle =
+            foundation.content_bundle()
+        else {
+            panic!("this retained accessor fixture uses explicit V1 content")
+        };
+        let content: &FoundationContentBundleV1 = content;
         let _: &[u8] = content.scenario_source_bytes();
         let _: Option<&[u8]> = content.prelude_source_bytes();
         let _: &[u8] = content.rule_source_bytes();

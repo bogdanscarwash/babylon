@@ -2,10 +2,9 @@ name: Weekly — Rebuild-Verify Reference DB
 
 # ADR181 R3(ii): per-leg split of the monolithic nightly. Weekly tempo.
 # The byte-identity contract is defined ONLY under the pinned sqlite (the
-# builder hard-gates on PINNED_SQLITE_VERSION), so this leg runs inside the
-# vendored flake's dataBuild devshell (environment-sovereignty ruling
-# 2026-07-21; the nixpkgs-data input is the sole sqlite pinning authority,
-# lockstep with tools/build_reference_db.py::PINNED_SQLITE_VERSION).
+# builder hard-gates on PINNED_SQLITE_VERSION). The ordinary native project
+# interpreter comes from the exact standalone URL and SHA in mise.lock.
+# Its SQLite version must match the builder and the product manifest.
 
 on:
   schedule:
@@ -21,7 +20,7 @@ concurrency:
 
 jobs:
   rebuild-verify:
-    name: Rebuild-Verify Reference DB (byte-identity, dataBuild devshell)
+    name: Rebuild-Verify Reference DB (byte-identity, native pinned interpreter)
     if: vars.CI_REFDB_READY == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -29,16 +28,12 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: dev
-      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31
-        with:
-          github_access_token: ${{ secrets.GITHUB_TOKEN }}
-          extra_nix_config: |
-            experimental-features = nix-command flakes
+      - uses: ./.github/actions/bootstrap-python
       # The manifest-driven step of this action fetches every `artifacts:`
       # entry + schema.sql into their dist/ homes — exactly what
       # build_reference_db.py reads.
       - uses: ./.github/actions/fetch-reference-db
-      - name: Rebuild under the pinned devshell + compare product sha
+      - name: Rebuild under the pinned interpreter and compare product SHA
         run: |
           # Post-cutover the product block is load-bearing — its absence is a
           # manifest regression, not a pre-cutover state (III.11: fail loud).
@@ -46,9 +41,8 @@ jobs:
             echo "::error::data-artifacts.yaml has no product block — manifest regression"
             exit 1
           fi
-          nix develop .#dataBuild --command \
-            python3 tools/build_reference_db.py --out /tmp/rebuilt.sqlite
-          nix develop .#dataBuild --command python3 - <<'EOF'
+          uv run --frozen python tools/build_reference_db.py --out /tmp/rebuilt.sqlite
+          uv run --frozen python - <<'EOF'
           import hashlib
           import pathlib
           import sys

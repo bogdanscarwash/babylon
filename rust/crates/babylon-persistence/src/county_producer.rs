@@ -12,13 +12,14 @@
 //! Each page carries the governed census county name as its title, the
 //! established county decision question, one grant-keyed signal per committed
 //! per-tick territory field that exists at the receipt's resolve tick —
-//! `territory/median-wage` and `territory/phi-hour` (Director ruling D2:
-//! absence-maximal; every other county field projects absent) — and one link
+//! the four public QCEW baseline integer fields, or the established
+//! `territory/median-wage` and `territory/phi-hour` real fields — and one link
 //! per place overlapping the county. A committed field that is missing at the
 //! resolve tick emits no signal, never a fabricated value. Signal values are
-//! pre-formatted with the Python statblock's `%.6f` discipline and each
-//! citation pins the committed provenance (`committed-tick-v1` at
-//! `campaign/{resolve_tick}/{territory local name}`). Unknown place subjects
+//! exact decimal integers for QCEW and `%.6f` for the established real fields.
+//! Public baseline citations pin the QCEW artifact and county row; established
+//! real-field citations pin `campaign/{resolve_tick}/{territory local name}`.
+//! Unknown place subjects
 //! stay redlinks because the renderer hides labels for subjects no knowledge
 //! grant covers.
 //!
@@ -59,16 +60,18 @@ use postgres::{Config, NoTls};
 use sha2::{Digest as _, Sha256};
 use uuid::Uuid;
 
-use crate::archive::{
-    database, decode, decode_subject_kind, validate_text, ARCHIVE_PAGE_TEMPLATE_SHA256_V1,
+use crate::archive::{database, decode, validate_text, ARCHIVE_PAGE_TEMPLATE_SHA256_V1};
+use crate::archive_foundation_grants::county_qcew_citation;
+use crate::michigan_economy::{
+    QCEW_ECONOMICS_ARTIFACT_SHA256_V1, QCEW_ECONOMICS_FIELD_KEYS_V1, QCEW_ECONOMICS_SOURCE_ID_V1,
 };
 use crate::place_producer::{
     PINNED_COUNTY_PLACE_OVERLAP_ARTIFACT_SHA256_V1, PINNED_PLACE_IDENTITY_ARTIFACT_SHA256_V1,
 };
 use crate::{
     michigan_spatial_reference_products_v1, representative_h3_reference_cohort_v1,
-    ArchiveCitationV1, ArchiveDirtyBatchV1, ArchiveDirtySelectionV1, ArchiveDossierProducerV1,
-    ArchiveLinkV1, ArchivePageInputV1, ArchivePageRefV1, ArchiveProducerOutcomeV1, ArchiveSignalV1,
+    ArchiveCitationV1, ArchiveDirtySelectionV1, ArchiveDossierProducerV1, ArchiveLinkV1,
+    ArchivePageInputV1, ArchivePageRefV1, ArchiveProducerOutcomeV1, ArchiveSignalV1,
     ArchiveSubjectKindV1, ArchiveSubjectV1, CampaignId, PendingArchiveReceiptV1,
     SemanticArchiveErrorV1, SpatialReferenceProducts,
 };
@@ -99,20 +102,21 @@ WHERE campaign_id = $1::uuid ORDER BY county_geoid, territory_local_name";
 
 /// Read-only committed per-tick territory fields used by the county dossier.
 ///
-/// Only the two D2-committed territory fields are selected by their stored
+/// The exact observed baseline and established real fields use their stored
 /// scenario-local field names (`territory_state_field_v1` persists the local
 /// name, not the declared `territory/` path); every row comes from the
 /// committed tick the receipt names, never from material ledgers or
 /// `MAX(tick)` shortcuts.
 pub const ARCHIVE_COUNTY_FIELD_READ_SQL_V1: &str = "SELECT \
-    t.territory_id, f.field_name, f.value_tag, f.real_bits \
+    t.territory_id, f.field_name, f.value_tag, f.real_bits, f.int_value \
     FROM babylon_state.territory_state_v1 t \
     JOIN babylon_state.territory_state_field_v1 f \
       ON f.campaign_id = t.campaign_id \
      AND f.resolve_tick = t.resolve_tick \
      AND f.territory_id = t.territory_id \
     WHERE t.campaign_id = $1::uuid AND t.resolve_tick = $2 \
-      AND f.field_name IN ('median-wage', 'phi-hour') \
+      AND f.field_name IN ('median-wage', 'phi-hour', 'qcew-establishments', \
+          'qcew-employment', 'qcew-total-annual-wages', 'qcew-average-weekly-wage') \
     ORDER BY t.territory_id, f.position";
 
 /// Read-only stored county-page projection used by the dirty diff.
@@ -153,6 +157,13 @@ const COUNTY_SUBJECT_GRANT_KEY_V1: &str = "subject";
 const MEDIAN_WAGE_FIELD_V1: &str = "median-wage";
 const PHI_HOUR_FIELD_V1: &str = "phi-hour";
 const REAL_VALUE_TAG_V1: i16 = 3;
+const INT_VALUE_TAG_V1: i16 = 1;
+const QCEW_LABELS_V1: [&str; 4] = [
+    "QCEW 2024 annual-average establishments",
+    "QCEW 2024 annual-average employment (jobs)",
+    "QCEW 2024 total annual wages (USD)",
+    "QCEW 2024 average weekly wage (USD/week)",
+];
 
 /// Format one committed real with the Python statblock's `%.6f` discipline.
 ///
@@ -558,11 +569,24 @@ pub fn desired_county_projection_v1(
         .iter()
         .filter(|signal| grants.knows_field(&county_ref, signal.grant_key()))
         .map(|signal| {
+            let (source_id, provenance_name) =
+                if QCEW_ECONOMICS_FIELD_KEYS_V1.contains(&signal.grant_key()) {
+                    let citation = county_qcew_citation(plan.county_geoid());
+                    (
+                        citation.source_id().to_owned(),
+                        citation.locator().to_owned(),
+                    )
+                } else {
+                    (
+                        COMMITTED_TICK_SOURCE_ID_V1.to_owned(),
+                        plan.territory_local_name().to_owned(),
+                    )
+                };
             CountySignalProjectionV1::try_new(
                 signal.label().to_owned(),
                 signal.value().to_owned(),
-                COMMITTED_TICK_SOURCE_ID_V1.to_owned(),
-                plan.territory_local_name().to_owned(),
+                source_id,
+                provenance_name,
             )
         })
         .collect::<Result<Vec<_>, SemanticArchiveErrorV1>>()?;
@@ -736,7 +760,20 @@ fn parse_signal_bullet(line: &str, verified_tick: u64) -> Option<CountySignalPro
     let (label, rest) = rest.split_once(":** ")?;
     let (value, citation) = rest.split_once(" — ")?;
     let (source_id, locator) = citation.split_once("; ")?;
-    let provenance_name = parse_committed_locator(locator, verified_tick)?;
+    let provenance_name = if source_id == QCEW_ECONOMICS_SOURCE_ID_V1 {
+        let county = locator.strip_prefix("qcew_county_economics_mi_2024.csv.gz#county_geoid=")?;
+        let (geoid, digest) = county.split_once("&sha256=")?;
+        if geoid.len() != 5
+            || !geoid.starts_with("26")
+            || !geoid.bytes().all(|byte| byte.is_ascii_digit())
+            || digest != QCEW_ECONOMICS_ARTIFACT_SHA256_V1
+        {
+            return None;
+        }
+        locator.to_owned()
+    } else {
+        parse_committed_locator(locator, verified_tick)?
+    };
     CountySignalProjectionV1::try_new(
         label.to_owned(),
         value.to_owned(),
@@ -814,8 +851,8 @@ pub fn select_dirty_county_pages_v1<'a>(
 
 /// Build the exact receipt-bound page input for one desired county page.
 ///
-/// Each signal citation pins the committed tick provenance; the territory
-/// local name is never rendered, only the campaign, tick, and source field.
+/// Public baseline signals cite their pinned QCEW county row. Other signals
+/// cite their committed tick provenance.
 ///
 /// # Errors
 /// Refuses any unsafe page component.
@@ -833,14 +870,19 @@ pub fn county_page_input_v1(
         .signals
         .iter()
         .map(|signal| {
+            let citation = if QCEW_ECONOMICS_FIELD_KEYS_V1.contains(&signal.grant_key()) {
+                county_qcew_citation(plan.county_geoid())
+            } else {
+                ArchiveCitationV1::try_new(
+                    COMMITTED_TICK_SOURCE_ID_V1.to_owned(),
+                    format!("campaign/{resolve_tick}/{}", plan.territory_local_name),
+                )?
+            };
             ArchiveSignalV1::try_new(
                 signal.grant_key.clone(),
                 signal.label.clone(),
                 signal.value.clone(),
-                ArchiveCitationV1::try_new(
-                    COMMITTED_TICK_SOURCE_ID_V1.to_owned(),
-                    format!("campaign/{resolve_tick}/{}", plan.territory_local_name),
-                )?,
+                citation,
             )
         })
         .collect::<Result<Vec<_>, _>>()?;
@@ -866,12 +908,13 @@ pub fn county_page_input_v1(
 
 /// Committed per-tick signal sources for one territory, absence-maximal.
 ///
-/// Only the two D2-committed territory fields exist; a field missing at the
-/// resolve tick stays `None` and emits no signal.
+/// Public baseline integers retain exact units and magnitude. Every field
+/// missing at the resolve tick stays `None` and emits no signal.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct CommittedTerritoryFieldsV1 {
     median_wage: Option<f64>,
     phi_hour: Option<f64>,
+    qcew: [Option<i64>; 4],
 }
 
 impl CommittedTerritoryFieldsV1 {
@@ -892,7 +935,61 @@ impl CommittedTerritoryFieldsV1 {
         Ok(Self {
             median_wage,
             phi_hour,
+            qcew: [None; 4],
         })
+    }
+
+    /// Construct exact public QCEW fields in `QCEW_ECONOMICS_FIELD_KEYS_V1` order.
+    /// # Errors
+    /// Refuses negative public-record counts or whole-USD wages.
+    pub fn try_from_qcew(values: [Option<i64>; 4]) -> Result<Self, SemanticArchiveErrorV1> {
+        if values.iter().flatten().any(|value| *value < 0) {
+            return Err(SemanticArchiveErrorV1::StoredPageMismatch);
+        }
+        Ok(Self {
+            qcew: values,
+            ..Self::default()
+        })
+    }
+
+    fn insert_stored(
+        &mut self,
+        field: &str,
+        tag: i16,
+        real_bits: Option<i64>,
+        integer: Option<i64>,
+    ) -> Result<(), SemanticArchiveErrorV1> {
+        if let Some(index) = QCEW_ECONOMICS_FIELD_KEYS_V1
+            .iter()
+            .position(|key| *key == field)
+        {
+            let value = integer
+                .filter(|value| *value >= 0)
+                .ok_or(SemanticArchiveErrorV1::StoredPageMismatch)?;
+            if tag != INT_VALUE_TAG_V1 || real_bits.is_some() || self.qcew[index].is_some() {
+                return Err(SemanticArchiveErrorV1::StoredPageMismatch);
+            }
+            self.qcew[index] = Some(value);
+        } else {
+            let value = f64::from_bits(
+                real_bits
+                    .ok_or(SemanticArchiveErrorV1::StoredPageMismatch)?
+                    .cast_unsigned(),
+            );
+            if tag != REAL_VALUE_TAG_V1 || integer.is_some() || !value.is_finite() {
+                return Err(SemanticArchiveErrorV1::StoredPageMismatch);
+            }
+            let target = match field {
+                MEDIAN_WAGE_FIELD_V1 => &mut self.median_wage,
+                PHI_HOUR_FIELD_V1 => &mut self.phi_hour,
+                _ => return Err(SemanticArchiveErrorV1::StoredPageMismatch),
+            };
+            if target.is_some() {
+                return Err(SemanticArchiveErrorV1::StoredPageMismatch);
+            }
+            *target = Some(value);
+        }
+        Ok(())
     }
 
     /// Borrow the committed median-wage value, absent when not committed.
@@ -908,11 +1005,11 @@ impl CommittedTerritoryFieldsV1 {
     }
 }
 
-/// Build the two grant-keyed committed signals for one territory, absence-maximal.
+/// Build exact grant-keyed committed signals, absence-maximal.
 ///
 /// A committed field that is missing emits no signal, never a fabricated
-/// value; each present value formats with the canonical `%.6f` statblock
-/// discipline. This is the exact signal construction [`CountyDossierProducerV1`]
+/// value. Public baseline integers remain exact; established real fields use
+/// `%.6f`. This is the exact signal construction [`CountyDossierProducerV1`]
 /// runs inside `desired_pages`, factored pure so the language-neutral parity
 /// vectors exercise it without a database.
 ///
@@ -922,6 +1019,19 @@ pub fn county_committed_signals_v1(
     fields: &CommittedTerritoryFieldsV1,
 ) -> Result<Vec<CountySignalV1>, SemanticArchiveErrorV1> {
     let mut signals = Vec::new();
+    for ((key, label), value) in QCEW_ECONOMICS_FIELD_KEYS_V1
+        .into_iter()
+        .zip(QCEW_LABELS_V1)
+        .zip(fields.qcew)
+    {
+        if let Some(value) = value {
+            signals.push(CountySignalV1::try_new(
+                key.to_owned(),
+                label.to_owned(),
+                value.to_string(),
+            )?);
+        }
+    }
     if let Some(value) = fields.median_wage {
         signals.push(CountySignalV1::from_committed_real(
             COUNTY_MEDIAN_WAGE_GRANT_KEY_V1.to_owned(),
@@ -1100,82 +1210,11 @@ impl CountyDossierProducerV1 {
             let field_name: String = decode(row, 1)?;
             let value_tag: i16 = decode(row, 2)?;
             let real_bits: Option<i64> = decode(row, 3)?;
-            if value_tag != REAL_VALUE_TAG_V1 {
-                return Err(SemanticArchiveErrorV1::StoredPageMismatch);
-            }
-            let bits = real_bits.ok_or(SemanticArchiveErrorV1::StoredPageMismatch)?;
-            let value = f64::from_bits(bits.cast_unsigned());
-            if !value.is_finite() {
-                return Err(SemanticArchiveErrorV1::StoredPageMismatch);
-            }
+            let integer: Option<i64> = decode(row, 4)?;
             let fields = committed.entry(local_name).or_default();
-            match field_name.as_str() {
-                MEDIAN_WAGE_FIELD_V1 => fields.median_wage = Some(value),
-                PHI_HOUR_FIELD_V1 => fields.phi_hour = Some(value),
-                _ => {}
-            }
+            fields.insert_stored(&field_name, value_tag, real_bits, integer)?;
         }
         Ok(committed)
-    }
-
-    /// Read the stored county-page projections for one campaign.
-    ///
-    /// # Errors
-    /// Returns any database or decode failure from the read-only query.
-    fn read_stored_pages(
-        &self,
-        campaign_id: CampaignId,
-    ) -> Result<BTreeMap<String, CountyPageProjectionV1>, SemanticArchiveErrorV1> {
-        let mut client = self
-            .config
-            .connect(NoTls)
-            .map_err(|error| database("connect county page reader", &error))?;
-        let rows = client
-            .query(ARCHIVE_COUNTY_PAGE_READ_SQL_V1, &[campaign_id.as_uuid()])
-            .map_err(|error| database("read stored county pages", &error))?;
-        let mut stored = BTreeMap::new();
-        for row in &rows {
-            let subject_id: String = decode(row, 0)?;
-            let title: String = decode(row, 1)?;
-            let markdown: String = decode(row, 2)?;
-            if let Some(page) = parse_stored_county_page_v1(&subject_id, &title, &markdown) {
-                stored.insert(subject_id, page);
-            }
-        }
-        Ok(stored)
-    }
-
-    /// Read the campaign grant snapshot visible at one receipt tick.
-    ///
-    /// # Errors
-    /// Returns any database or decode failure from the read-only query.
-    fn read_grants(
-        &self,
-        campaign_id: CampaignId,
-        receipt_tick: u64,
-    ) -> Result<CountyGrantIndexV1, SemanticArchiveErrorV1> {
-        let mut client = self
-            .config
-            .connect(NoTls)
-            .map_err(|error| database("connect county grant reader", &error))?;
-        let receipt_tick =
-            i64::try_from(receipt_tick).map_err(|_| SemanticArchiveErrorV1::InvalidVerifiedTick)?;
-        let rows = client
-            .query(
-                ARCHIVE_COUNTY_GRANTS_SQL_V1,
-                &[campaign_id.as_uuid(), &receipt_tick],
-            )
-            .map_err(|error| database("read county grant snapshot", &error))?;
-        let grants = rows
-            .iter()
-            .map(|row| {
-                let kind = decode_subject_kind(&decode::<String>(row, 0)?)?;
-                let id: String = decode(row, 1)?;
-                let grant_key: String = decode(row, 2)?;
-                Ok((kind, id, grant_key))
-            })
-            .collect::<Result<Vec<_>, SemanticArchiveErrorV1>>()?;
-        CountyGrantIndexV1::try_from_rows(grants)
     }
 }
 
@@ -1184,30 +1223,38 @@ impl ArchiveDossierProducerV1 for CountyDossierProducerV1 {
         &self,
         campaign_id: Uuid,
         receipt: &PendingArchiveReceiptV1,
+        knowledge: &crate::ArchiveKnowledgeV1,
         page_budget: usize,
     ) -> Result<ArchiveProducerOutcomeV1, SemanticArchiveErrorV1> {
-        let campaign_id = CampaignId::from_uuid(campaign_id);
-        let desired = self.desired_pages(campaign_id, receipt.resolve_tick())?;
-        let stored = self.read_stored_pages(campaign_id)?;
-        let grants = self.read_grants(campaign_id, receipt.resolve_tick())?;
-        let granted: Vec<CountyPagePlanV1> = filter_granted_county_plans_v1(&desired, &grants)
-            .into_iter()
-            .cloned()
-            .collect();
-        let selection = select_dirty_county_pages_v1(&granted, &stored, &grants, page_budget)?;
-        let pages = selection
-            .head()
-            .iter()
-            .map(|plan| {
-                county_page_input_v1(plan, receipt.resolve_tick(), *receipt.tick_content_hash())
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-        let batch = ArchiveDirtyBatchV1::try_new(
-            receipt.resolve_tick(),
-            *receipt.tick_content_hash(),
-            pages,
-        )?;
-        Ok(ArchiveProducerOutcomeV1::new(batch, selection.remaining()))
+        let campaign = CampaignId::from_uuid(campaign_id);
+        let desired = self.desired_pages(campaign, receipt.resolve_tick())?;
+        crate::archive_revision::publication::select_dirty_pages(
+            &self.config,
+            campaign,
+            receipt,
+            knowledge,
+            &desired,
+            page_budget,
+            county_page_input_v1,
+        )
+    }
+    fn cutover_subjects(
+        &self,
+        campaign_id: Uuid,
+        receipt: &PendingArchiveReceiptV1,
+        knowledge: &crate::ArchiveKnowledgeV1,
+    ) -> Result<Vec<ArchivePageRefV1>, SemanticArchiveErrorV1> {
+        let campaign = CampaignId::from_uuid(campaign_id);
+        let desired = self.desired_pages(campaign, receipt.resolve_tick())?;
+        let mut subjects = std::collections::BTreeSet::new();
+        for plan in &desired {
+            let page =
+                county_page_input_v1(plan, receipt.resolve_tick(), *receipt.tick_content_hash())?;
+            if knowledge.knows_subject(page.subject().page_ref()) {
+                subjects.insert(page.subject().page_ref().clone());
+            }
+        }
+        Ok(subjects.into_iter().collect())
     }
 }
 
@@ -1247,4 +1294,44 @@ fn hash_text(hasher: &mut Sha256, text: &str) {
 
 fn hash_len(hasher: &mut Sha256, len: usize) {
     hasher.update(u64::try_from(len).unwrap_or(u64::MAX).to_be_bytes());
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn stored_qcew_ints_never_round_through_binary64() {
+        let mut fields = CommittedTerritoryFieldsV1::default();
+        fields
+            .insert_stored("qcew-total-annual-wages", 1, None, Some(i64::MAX))
+            .expect("exact integer");
+        let signals = county_committed_signals_v1(&fields).expect("signals");
+        assert_eq!(signals[0].value(), "9223372036854775807");
+    }
+
+    #[test]
+    fn stored_qcew_wrong_type_missing_negative_or_duplicate_refuses() {
+        for (tag, real, integer) in [
+            (3, Some(1_f64.to_bits().cast_signed()), None),
+            (1, None, None),
+            (1, None, Some(-1)),
+            (1, Some(0), Some(1)),
+        ] {
+            assert!(CommittedTerritoryFieldsV1::default()
+                .insert_stored("qcew-employment", tag, real, integer)
+                .is_err());
+        }
+        let mut fields = CommittedTerritoryFieldsV1::default();
+        fields
+            .insert_stored("qcew-employment", 1, None, Some(0))
+            .expect("zero is observed");
+        assert!(fields
+            .insert_stored("qcew-employment", 1, None, Some(0))
+            .is_err());
+        assert_eq!(
+            county_committed_signals_v1(&fields).expect("signals")[0].value(),
+            "0"
+        );
+    }
 }

@@ -1,34 +1,11 @@
-//! Session observability (Director ask 2026-09-04): structured `session`-target
-//! events at every player-visible interaction seam, so one play session can be
-//! reconstructed from the rotating file log ([`crate::logging`]) alone — what
-//! county was selected, what page was requested, what the card installed, how
-//! the clock was driven, and why a fetch failed.
+//! Conformance session and Archive interaction telemetry through the shared
+//! Bevy tracing sink. These legacy observers cover the in-process viewer's
+//! resources; they do not describe the durable observer clock or camera.
 //!
-//! **Why a plugin of observers, not log lines inside each system**: the
-//! interaction systems own Bevy's 7-parameter shape and stay pure projections
-//! (see `ui::dossier_card`); bolting `info!` into them would spend their
-//! parameter budget and mix presentation with telemetry. Observers read the
-//! same resources and messages the renderers consume, so the log can never lie
-//! about what the renderer saw.
-//!
-//! **Why value snapshots instead of `is_changed`**: producers like
-//! `collect_dossier_fetch` hold `ResMut` across a poll loop, so Bevy marks the
-//! resource changed every frame even when the value is identical — change
-//! detection alone would flood the log with per-frame repeats (Codex review
-//! 2026-09-04). Each observer diffs the current value against the last value
-//! it logged, so a spurious change mark costs one comparison, never a line.
-//!
-//! **Ordering**: the observers chain in causal order (selection → request →
-//! view → projection → fetch → controls → story → tick). A line can land one
-//! frame after its cause when the producer runs later in the same schedule —
-//! telemetry trades that frame for zero coupling to the renderers' internals;
-//! the per-line timestamps bound the lag.
-//!
-//! **Levels**: the session narrative (selections, pages, installs, control
-//! transitions, beats) is `INFO` — the file lane captures it and the stderr
-//! lane mirrors it. The per-tick heartbeat is `DEBUG` (file-only). **No
-//! wall-clock in events**: the fmt layer timestamps each line, exactly as
-//! [`crate::logging`] mandates.
+//! Observer composition uses the internal `observer_session_log` module: scoped
+//! requests, applied state, acknowledgements and bounded camera checkpoints.
+//! Neither stream records every input or proves that a person understood it.
+//! Value snapshots suppress repeated events from spurious change marks.
 
 use bevy::prelude::*;
 
@@ -38,8 +15,8 @@ use crate::map::SelectedCounty;
 use crate::story::SelectedStory;
 use crate::ui::beats::BeatLog;
 use crate::ui::dossier_card::{
-    ActiveCountyDossier, CountyDossierCardProjection, DossierCampaignId, DossierFetchState,
-    DossierPageView, SubjectPageRequest,
+    ActiveCountyDossier, DossierCampaignId, DossierFetchState, DossierPageView, InstalledDossier,
+    SubjectPageRequest,
 };
 use crate::ui::time::{AutopauseMode, RunState, SPEEDS_PER_SECOND};
 
@@ -66,7 +43,10 @@ impl Plugin for SessionLogPlugin {
             .init_resource::<ActiveCountyDossier>()
             .init_resource::<DossierPageView>()
             .init_resource::<DossierFetchState>()
-            .add_systems(Startup, log_session_start)
+            .add_systems(
+                Startup,
+                log_session_start.run_if(not(resource_exists::<crate::observer::ObserverSession>)),
+            )
             .add_systems(
                 Update,
                 (
@@ -79,8 +59,10 @@ impl Plugin for SessionLogPlugin {
                     log_story_changes,
                     log_tick_and_beats,
                 )
-                    .chain(),
+                    .chain()
+                    .run_if(not(resource_exists::<crate::observer::ObserverSession>)),
             );
+        crate::observer_session_log::register(app);
     }
 }
 
@@ -140,32 +122,20 @@ fn log_selection_changes(
     }
 }
 
-/// `Update`: place-chip clicks — one line per requested subject page, with the
-/// label only when the Archive acknowledged one (`None` carries zero label
-/// bytes below the fog, and the log honors that).
+/// A pending request is not an admitted observation. Record only its static
+/// action kind; the scope-checked page installation has its separate record.
 fn log_subject_page_requests(mut requests: MessageReader<SubjectPageRequest>) {
     for request in requests.read() {
-        if let Some(label) = &request.label {
-            bevy::log::info!(
-                target: "session",
-                "subject page requested kind={} id={} label={:?}",
-                request.kind,
-                request.id,
-                label
-            );
+        let kind = if request.kind == "place" {
+            "place"
         } else {
-            bevy::log::info!(
-                target: "session",
-                "subject page requested kind={} id={} label=<fog>",
-                request.kind,
-                request.id
-            );
-        }
+            "unrecognized"
+        };
+        bevy::log::info!(target: "session", "subject page requested kind={kind}");
     }
 }
 
-/// `Update`: which page the card renders — the county card itself or one R6
-/// placeholder. The initial card view is the baseline.
+/// `Update`: county or linked-subject navigation within the same Archive panel.
 fn log_page_view_changes(view: Res<DossierPageView>, mut last: Local<Snapshot<DossierPageView>>) {
     let current = &*view;
     if matches!(&*last, Snapshot::Seen(previous) if previous == current) {
@@ -176,10 +146,10 @@ fn log_page_view_changes(view: Res<DossierPageView>, mut last: Local<Snapshot<Do
     if first {
         return;
     }
-    if let DossierPageView::Placeholder(request) = current {
+    if let DossierPageView::Subject(request) = current {
         bevy::log::info!(
             target: "session",
-            "page view: placeholder kind={} id={}",
+            "page view: subject kind={} id={}",
             request.kind,
             request.id
         );
@@ -193,7 +163,7 @@ fn log_page_view_changes(view: Res<DossierPageView>, mut last: Local<Snapshot<Do
 /// Archive; the log records that they arrived).
 fn log_dossier_projection_changes(
     projection: Res<ActiveCountyDossier>,
-    mut last: Local<Snapshot<Option<CountyDossierCardProjection>>>,
+    mut last: Local<Snapshot<Option<InstalledDossier>>>,
 ) {
     let current = &projection.0;
     if matches!(&*last, Snapshot::Seen(previous) if previous == current) {
@@ -204,17 +174,22 @@ fn log_dossier_projection_changes(
     if first {
         return;
     }
-    if let Some(card) = current {
+    if let Some(installed) = current {
+        let read = &installed.read;
+        let page = crate::dossier::retained_page(read);
         bevy::log::info!(
             target: "session",
-            "dossier installed geoid={} title={:?} atoms={} places={} changelog={} durable={:?} verified={:?}",
-            card.geoid,
-            card.title,
-            card.atoms.len(),
-            card.places.len(),
-            card.changelog.len(),
-            card.durable_tick,
-            card.verified_tick
+            "dossier installed geoid={} title={:?} atoms={} links={} changes={} requested={} durable={} processed={} verified={:?} availability={}",
+            installed.scope.county_geoid,
+            page.map(|page| page.title.as_str()),
+            page.map_or(0, |page| page.atoms.len()),
+            page.map_or(0, |page| page.links.len()),
+            page.map_or(0, |page| page.changes.changes.len()),
+            read.scope.tick(),
+            read.durable_tick,
+            read.processed_tick,
+            crate::dossier::verified_tick(read),
+            crate::dossier::availability_label(read)
         );
     } else {
         bevy::log::info!(target: "session", "dossier cleared");
@@ -224,14 +199,19 @@ fn log_dossier_projection_changes(
 /// `Update`: the fetch lifecycle, so a card that shows "Archive reader not
 /// configured" or a hard failure is explained by the log line that precedes
 /// it. Snapshots a descriptor string: `DossierFetchState` holds the in-flight
-/// `Task` (no `PartialEq`), and its producer marks it changed on every poll —
-/// the descriptor diff is what keeps an unchanged `Idle` from logging per
-/// frame.
+/// `Task` (no `PartialEq`); the descriptor diff suppresses unchanged lifecycle
+/// descriptions.
 fn log_fetch_state_changes(state: Res<DossierFetchState>, mut last: Local<Snapshot<String>>) {
     let current = match &*state {
         DossierFetchState::Idle => "idle".to_owned(),
-        DossierFetchState::InFlight { fips, .. } => format!("in-flight:{fips}"),
-        DossierFetchState::Failed(error) => format!("failed:{error:?}"),
+        DossierFetchState::WaitingForObservation => "waiting-for-observation".to_owned(),
+        DossierFetchState::InFlight { scope, .. } => format!("in-flight:{}", scope.county_geoid),
+        DossierFetchState::Failed(crate::ui::dossier_card::DossierFetchError::ReaderAbsent(_)) => {
+            "failed:ReaderAbsent".to_owned()
+        }
+        DossierFetchState::Failed(crate::ui::dossier_card::DossierFetchError::ReadFailed(_)) => {
+            "failed:ReadFailed".to_owned()
+        }
     };
     if matches!(&*last, Snapshot::Seen(previous) if previous == &current) {
         return;
@@ -246,7 +226,7 @@ fn log_fetch_state_changes(state: Res<DossierFetchState>, mut last: Local<Snapsh
     } else if let Some(fips) = current.strip_prefix("in-flight:") {
         bevy::log::info!(target: "session", "dossier fetch started fips={fips}");
     } else {
-        bevy::log::info!(target: "session", "dossier fetch: idle");
+        bevy::log::info!(target: "session", "dossier fetch: {current}");
     }
 }
 
@@ -352,11 +332,19 @@ mod tests {
     use crate::severity::SeverityTier;
     use crate::ui::beats::Beat;
     use crate::ui::dossier_card::DossierFetchError;
+    use babylon_persistence::archive_revision::{
+        ArchiveChangePageV2, ArchiveDossierPageV2, ArchiveDossierReadV2, ArchiveDossierStateV2,
+        ArchivePublicationOriginV2, ArchiveReadScopeV2,
+    };
+    use babylon_persistence::{ArchivePageRefV1, ArchiveSubjectKindV1};
     use bevy::log::tracing_subscriber::layer::SubscriberExt as _;
     use std::collections::VecDeque;
     use std::path::PathBuf;
 
-    const ATLAS_BYTES: &[u8] = include_bytes!("../assets/map/county_atlas.bin");
+    const ATLAS_BYTES: &[u8] = include_bytes!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../../assets/map/county_atlas.bin"
+    ));
 
     fn temp_dir(tag: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!(
@@ -409,29 +397,72 @@ mod tests {
                 .index_of_fips("26163")
                 .expect("the committed atlas carries Wayne County");
             app.world_mut().resource_mut::<SelectedCounty>().0 = Some(wayne);
+            let scope = crate::ui::dossier_card::DossierRequestScope {
+                campaign: DossierCampaignId::default().0,
+                county_geoid: "26163".into(),
+                refresh_generation: 0,
+                observer: None,
+                read_scope: ArchiveReadScopeV2::committed(
+                    DossierCampaignId::default().0,
+                    2,
+                    [2; 32],
+                )
+                .unwrap(),
+                subject: ArchivePageRefV1::try_new(ArchiveSubjectKindV1::County, "26163".into())
+                    .unwrap(),
+            };
             app.world_mut()
                 .resource_mut::<Messages<SubjectPageRequest>>()
                 .write(SubjectPageRequest {
+                    scope: scope.clone(),
                     kind: "place".to_owned(),
                     id: "2674900".to_owned(),
                     label: None,
                 });
             *app.world_mut().resource_mut::<DossierPageView>() =
-                DossierPageView::Placeholder(SubjectPageRequest {
+                DossierPageView::Subject(Box::new(SubjectPageRequest {
+                    scope: scope.clone(),
                     kind: "place".to_owned(),
                     id: "2674900".to_owned(),
                     label: None,
-                });
-            app.world_mut().resource_mut::<ActiveCountyDossier>().0 =
-                Some(CountyDossierCardProjection {
-                    geoid: "26163".to_owned(),
-                    title: "Wayne County".to_owned(),
-                    durable_tick: Some(2),
-                    verified_tick: Some(1),
-                    atoms: Vec::new(),
-                    places: Vec::new(),
-                    changelog: Vec::new(),
-                });
+                }));
+            app.world_mut().resource_mut::<ActiveCountyDossier>().0 = Some(InstalledDossier {
+                read: ArchiveDossierReadV2 {
+                    scope: scope.read_scope.clone(),
+                    subject: scope.subject.clone(),
+                    durable_tick: 2,
+                    processed_tick: 2,
+                    history_floor_tick: 0,
+                    state: ArchiveDossierStateV2::Ready {
+                        verified_through_tick: 2,
+                        page: ArchiveDossierPageV2 {
+                            revision_id: [1; 32],
+                            effective_tick: 1,
+                            origin: ArchivePublicationOriginV2::Materialized,
+                            content_source: ArchiveReadScopeV2::committed(
+                                scope.campaign,
+                                1,
+                                [1; 32],
+                            )
+                            .unwrap(),
+                            title: "Wayne County".into(),
+                            question: "What changed?".into(),
+                            signals: Vec::new(),
+                            markdown: String::new(),
+                            content_sha256: [0; 32],
+                            citations: Vec::new(),
+                            atoms: Vec::new(),
+                            links: Vec::new(),
+                            changes: ArchiveChangePageV2 {
+                                coverage_from_tick: 0,
+                                changes: Vec::new(),
+                                next_cursor: None,
+                            },
+                        },
+                    },
+                },
+                scope,
+            });
         });
         assert!(log.contains("session start campaign="), "startup: {log}");
         assert!(
@@ -439,18 +470,74 @@ mod tests {
             "selection: {log}"
         );
         assert!(
-            log.contains("subject page requested kind=place id=2674900 label=<fog>"),
+            log.contains("subject page requested kind=place"),
             "chip: {log}"
         );
         assert!(
-            log.contains("page view: placeholder kind=place id=2674900"),
+            log.contains("page view: subject kind=place id=2674900"),
             "view: {log}"
         );
         assert!(
-            log.contains("dossier installed geoid=26163 title=\"Wayne County\" atoms=0 places=0 changelog=0 durable=Some(2) verified=Some(1)"),
+            log.contains("dossier installed geoid=26163 title=Some(\"Wayne County\") atoms=0 links=0 changes=0 requested=2 durable=2 processed=2 verified=Some(2)"),
             "install: {log}"
         );
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn pending_subject_log_never_emits_a_label_after_scope_changes() {
+        use crate::observer::{ObserverSession, Perspective};
+        use crate::ui::dossier_card::{DossierRefresh, DossierRequestScope};
+        let dir = temp_dir("pending-scope");
+        let sink = RotatingSink::open(&dir, 1024 * 1024, 2).unwrap();
+        let layer = bevy::log::tracing_subscriber::fmt::Layer::default()
+            .with_ansi(false)
+            .with_writer(sink);
+        let subscriber = bevy::log::tracing_subscriber::registry().with(layer);
+        let mut app = App::new();
+        app.add_message::<SubjectPageRequest>()
+            .init_resource::<DossierRefresh>()
+            .add_systems(Update, log_subject_page_requests);
+        let campaign = DossierCampaignId::default().0;
+        app.insert_resource(ObserverSession::new(campaign));
+        app.edit_schedule(Update, |schedule| {
+            schedule.set_executor_kind(bevy::ecs::schedule::ExecutorKind::SingleThreaded);
+        });
+        bevy::log::tracing::subscriber::with_default(subscriber, || {
+            for perspective_change in [false, true] {
+                let scope = DossierRequestScope {
+                    campaign,
+                    county_geoid: "26163".into(),
+                    refresh_generation: app.world().resource::<DossierRefresh>().0,
+                    observer: Some(app.world().resource::<ObserverSession>().context()),
+                    read_scope: ArchiveReadScopeV2::foundation(campaign),
+                    subject: ArchivePageRefV1::try_new(
+                        ArchiveSubjectKindV1::County,
+                        "26163".into(),
+                    )
+                    .unwrap(),
+                };
+                app.world_mut().write_message(SubjectPageRequest {
+                    scope,
+                    kind: "place".into(),
+                    id: "private-place-id".into(),
+                    label: Some("withheld-place-label".into()),
+                });
+                if perspective_change {
+                    app.world_mut()
+                        .resource_mut::<ObserverSession>()
+                        .set_perspective(Perspective::PlayerKnowledge);
+                } else {
+                    app.world_mut().resource_mut::<DossierRefresh>().bump();
+                }
+                app.update();
+            }
+        });
+        let log = std::fs::read_to_string(dir.join("babylon-client.log")).unwrap();
+        assert_eq!(log.matches("subject page requested kind=place").count(), 2);
+        assert!(!log.contains("private-place-id"));
+        assert!(!log.contains("withheld-place-label"));
+        std::fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]

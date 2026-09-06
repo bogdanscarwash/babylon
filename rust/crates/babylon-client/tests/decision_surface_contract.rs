@@ -13,12 +13,13 @@ use bevy::time::TimeUpdateStrategy;
 use std::collections::HashSet;
 use std::time::Duration;
 
-fn shipped_app() -> App {
+fn conformance_app() -> App {
     let mut app = App::new();
     app.add_plugins((
         MinimalPlugins,
         AssetPlugin::default(),
         ImagePlugin::default(),
+        bevy::text::TextPlugin,
         TexturePlugin,
     ));
     app.add_plugins((
@@ -27,9 +28,7 @@ fn shipped_app() -> App {
     ));
     app.add_plugins(babylon_client::map::MapPlugin);
     app.add_plugins(babylon_client::loop_ui::TickLoopPlugin);
-    // PER-23 Slice 4: the dossier card is the 14th shipped surface; the
-    // production composition adds DossierCardPlugin beside TickLoopPlugin
-    // (app.rs), and this harness mirrors that composition.
+    // Retained graph-viewer conformance composition, including its dossier.
     app.add_plugins(babylon_client::ui::dossier_card::DossierCardPlugin);
     app.insert_resource(babylon_client::story::SelectedStory(
         babylon_client::story::counties(),
@@ -42,6 +41,158 @@ fn shipped_app() -> App {
         .0 = Some(0);
     app.update(); // Exercise the selection-outline spawn path too.
     app
+}
+
+fn observer_app() -> App {
+    use babylon_client::observer::{ObserverSession, SessionPhase};
+    use babylon_client::observer_io::ObserverSet;
+    use babylon_client::observer_ui::{ObserverFrame, ObserverUiState};
+    use babylon_persistence::{CampaignId, ObserverEconomySnapshotV1, ObserverVisibilityV1};
+
+    let campaign = CampaignId::from_uuid(uuid::Uuid::nil());
+    let mut session = ObserverSession::new(campaign);
+    session.foundation_digest = Some("f".repeat(64));
+    session.ready(2, Some("b".repeat(64)));
+    session.inspect_tick(1);
+    assert!(session.installed(&session.context()));
+    assert_eq!(session.phase, SessionPhase::Ready);
+    let mut app = App::new();
+    app.add_plugins((
+        MinimalPlugins,
+        AssetPlugin::default(),
+        ImagePlugin::default(),
+        bevy::text::TextPlugin,
+        TexturePlugin,
+        WindowPlugin {
+            primary_window: None,
+            exit_condition: bevy::window::ExitCondition::DontExit,
+            ..default()
+        },
+        bevy::picking::DefaultPickingPlugins,
+    ));
+    // Mirror app.rs's visual composition. IO is supplied by an immutable,
+    // historical read fixture; audio settings need no device. There is no
+    // runtime pipe, credential lookup, gameplay session, or database writer.
+    app.add_plugins(babylon_client::visual_assets::VisualAssetsPlugin)
+        .add_plugins(babylon_client::map::MapPlugin)
+        .add_plugins(babylon_client::observer_ui::ObserverShellPlugin)
+        .add_plugins(babylon_client::observer_map3d::ObserverMap3dPlugin)
+        .add_plugins(babylon_client::production::ProductionPlugin)
+        .add_plugins(babylon_client::campaign_browser::CampaignBrowserPlugin)
+        .add_plugins(babylon_client::observer_history::ObserverHistoryPlugin)
+        .add_plugins(babylon_client::ui::dossier_card::DossierCardPlugin)
+        .add_plugins(babylon_client::session_log::SessionLogPlugin)
+        .init_resource::<babylon_client::observer_audio::ObserverAudioSettings>()
+        .init_resource::<UiScale>()
+        .insert_resource(session)
+        .insert_resource(babylon_client::ui::dossier_card::DossierCampaignId(
+            campaign,
+        ))
+        .insert_resource(ObserverFrame(Some(ObserverEconomySnapshotV1 {
+            campaign_id: campaign.as_uuid().to_string(),
+            resolve_tick: 1,
+            foundation_digest: "f".repeat(64),
+            nominal_world_hash: Some("c".repeat(64)),
+            tick_content_hash: Some("a".repeat(64)),
+            envelope_digest: Some("d".repeat(64)),
+            visibility: ObserverVisibilityV1::FullObserver,
+            counties: Vec::new(),
+            production: Some(production_observation()),
+        })))
+        .insert_resource(TimeUpdateStrategy::ManualDuration(Duration::ZERO))
+        .configure_sets(
+            Update,
+            (
+                ObserverSet::Input,
+                ObserverSet::Receive,
+                ObserverSet::Install,
+                ObserverSet::Paint,
+            )
+                .chain(),
+        );
+    app.finish();
+    app.update();
+    {
+        let mut ui = app.world_mut().resource_mut::<ObserverUiState>();
+        ui.splash_visible = false;
+        ui.menu_open = false;
+        ui.history_open = true;
+    }
+    app.update(); // Exercise committed event buttons without requesting history.
+    app
+}
+
+fn production_observation() -> babylon_persistence::ProductionSnapshotV1 {
+    use babylon_persistence::{
+        ProductionEventV1, ProductionFreightV1, ProductionRouteV1, ProductionSiteV1,
+        ProductionSnapshotV1,
+    };
+    let site = |id: &str| ProductionSiteV1 {
+        id: id.into(),
+        county_geoid: "26163".into(),
+        name: format!("Surface fixture {id}"),
+        industry_code: "331".into(),
+        observed_employment: None,
+        output_good_id: "a".repeat(64),
+        output_unit_id: "b".repeat(64),
+        output_good: "sheet".into(),
+        output_unit: "kg".into(),
+        output_per_batch: 1,
+        available_batches: 10,
+        planned_batches: Some(10),
+        produced_batches: Some(10),
+        inventory: Vec::new(),
+        inputs: Vec::new(),
+        labor: Vec::new(),
+    };
+    ProductionSnapshotV1 {
+        material_balance: None,
+        labor_accounts: Vec::new(),
+        scenario_label: "Read-only surface fixture".into(),
+        horizon_week: 16,
+        sites: vec![site("source"), site("destination")],
+        routes: vec![ProductionRouteV1 {
+            id: "route".into(),
+            supplier_site_id: "source".into(),
+            buyer_site_id: "destination".into(),
+            good_id: "a".repeat(64),
+            unit_id: "b".repeat(64),
+            good: "sheet".into(),
+            unit: "kg".into(),
+            travel_weeks: 1,
+            ordered: 10,
+            shipped: 10,
+            delivered: 0,
+            lost: 0,
+            realized: 0,
+            backlog: 0,
+        }],
+        freight: vec![ProductionFreightV1 {
+            id: "lot".into(),
+            route_id: "route".into(),
+            source_site_id: "source".into(),
+            destination_site_id: "destination".into(),
+            good_id: "a".repeat(64),
+            unit_id: "b".repeat(64),
+            good: "sheet".into(),
+            unit: "kg".into(),
+            quantity: 10,
+            dispatch_week: 1,
+            arrival_week: 2,
+        }],
+        events: vec![ProductionEventV1 {
+            id: "dispatch".into(),
+            week: 1,
+            subject_site_ids: vec!["source".into(), "destination".into()],
+            kind: "dispatch".into(),
+            description: "Surface fixture dispatch".into(),
+            receipt_digest: "e".repeat(64),
+            delivery_evidence: None,
+        }],
+        observed_contexts: Vec::new(),
+        process_attributions: Vec::new(),
+        provenance: vec!["Designed read-only test fixture".into()],
+    }
 }
 
 #[test]
@@ -194,7 +345,7 @@ fn admin_inspector_manifest_matches_its_pre_tick_rendering() {
     assert!(contract.visible_signals.contains(&PRE_TICK_REPORT));
     assert!(contract.visible_signals.contains(&ROSTER_STATUS));
 
-    let mut app = shipped_app();
+    let mut app = conformance_app();
     app.world_mut()
         .resource_mut::<babylon_client::map::SelectedCounty>()
         .0 = None;
@@ -257,20 +408,60 @@ fn admin_exemptions_never_satisfy_gameplay_gates() {
 
 #[test]
 fn every_shipped_visual_entity_declares_a_manifest_surface() {
-    let mut app = shipped_app();
-    let world = app.world_mut();
+    let mut conformance = conformance_app();
+    let mut observer = observer_app();
+    let conformance_ids = visual_surface_ids(conformance.world_mut());
+    let observer_ids = visual_surface_ids(observer.world_mut());
+    let observer_surfaces = HashSet::from([
+        SurfaceId::TitleLockup,
+        SurfaceId::CountyDossier,
+        SurfaceId::ObserverShell,
+        SurfaceId::ObserverProduction,
+    ]);
+    assert_eq!(observer_ids, observer_surfaces);
+    assert_eq!(
+        conformance_ids,
+        SurfaceId::ALL
+            .into_iter()
+            .filter(|id| !matches!(id, SurfaceId::ObserverShell | SurfaceId::ObserverProduction))
+            .collect(),
+        "the retained conformance composition must still instantiate all of its surfaces"
+    );
+    assert_eq!(
+        conformance_ids
+            .union(&observer_ids)
+            .copied()
+            .collect::<HashSet<_>>(),
+        SurfaceId::ALL.into_iter().collect(),
+        "the actual observer and retained conformance compositions cover the full manifest"
+    );
 
+    let world = observer.world_mut();
+    let mesh_surfaces: HashSet<_> = world
+        .query_filtered::<&DeclaredSurface, With<Mesh3d>>()
+        .iter(world)
+        .map(|surface| surface.id)
+        .collect();
+    assert_eq!(
+        mesh_surfaces,
+        HashSet::from([SurfaceId::ObserverShell, SurfaceId::ObserverProduction]),
+        "the observer fixture must instantiate geographic and production meshes"
+    );
+    assert!(
+        world
+            .query::<&Text>()
+            .iter(world)
+            .any(|text| { text.0.contains("Surface fixture dispatch") }),
+        "the history fixture must instantiate a committed-event button"
+    );
+}
+
+fn visual_surface_ids(world: &mut World) -> HashSet<SurfaceId> {
     let declared_ids: HashSet<_> = world
         .query::<&DeclaredSurface>()
         .iter(world)
         .map(|declared| declared.id)
         .collect();
-    assert_eq!(
-        declared_ids,
-        SurfaceId::ALL.into_iter().collect(),
-        "the production plugin composition must instantiate every manifest surface"
-    );
-
     let mut text_query = world.query::<(Entity, &Text, Option<&DeclaredSurface>)>();
     for (entity, _, declared) in text_query.iter(world) {
         let declared = declared.unwrap_or_else(|| {
@@ -296,6 +487,15 @@ fn every_shipped_visual_entity_declares_a_manifest_surface() {
         });
         assert_eq!(declared.id, SurfaceId::CountyMap);
     }
+
+    let mut mesh_query = world.query::<(Entity, &Mesh3d, Option<&DeclaredSurface>)>();
+    for (entity, _, declared) in mesh_query.iter(world) {
+        let declared = declared.unwrap_or_else(|| {
+            panic!("shipped Mesh3d entity {entity:?} has no DecisionSurfaceContract declaration")
+        });
+        assert!(contract_for(declared.id).validate().is_ok());
+    }
+    declared_ids
 }
 
 #[test]

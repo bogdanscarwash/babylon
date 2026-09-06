@@ -42,6 +42,7 @@ jobs:
       - name: Install uv
         uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4
         with:
+          version: 2026.9.1
           install_args: uv
       - name: Install dependencies on 3.13
         run: uv sync --frozen --extra ops --python 3.13

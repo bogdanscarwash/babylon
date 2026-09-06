@@ -480,7 +480,7 @@ if [ "$status" -eq 0 ] && [ "$LIVE_FOCUS" = "reader_role" ]; then
       BABYLON_LEGACY_ADOPTER_DISPOSABLE_CANARY="$CANARY" \
       BABYLON_RUNTIME_TEMPLATE_DB="$RUNTIME_TEMPLATE" \
       CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$REPO_ROOT/rust/target}" \
-    cargo test -p babylon-persistence --test reader_role_live \
+    cargo test -p babylon-persistence --test reader_role_live --test observer_material_live \
       --locked -- --nocapture --ignored --test-threads=1 || status=$?
 fi
 

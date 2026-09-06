@@ -1,0 +1,117 @@
+{
+  "assets": [
+    {
+      "duration_seconds": 101.6,
+      "kind": "music",
+      "normalization": "loudnorm=I=-20:TP=-2:LRA=11:linear=true:measured_I=-27.58:measured_TP=-10.09:measured_LRA=12.00:measured_thresh=-37.81:offset=-0.67",
+      "output": "assets/music/babylon_theme_phi.ogg",
+      "output_sha256": "54f91118c3019ad3d8a634e44fd16b5b84e5791bfd1c4fe287a5ddc2413101bc",
+      "source": "assets/music/babylon_theme_phi.mid",
+      "source_sha256": "dba491b504fe1520d992506c7925623093fd3f7de919b0824ac6356c2fe98fed"
+    },
+    {
+      "duration_seconds": 87.2,
+      "kind": "music",
+      "normalization": "loudnorm=I=-20:TP=-2:LRA=11:linear=true:measured_I=-25.89:measured_TP=-8.97:measured_LRA=12.40:measured_thresh=-36.34:offset=-0.55",
+      "output": "assets/music/babylon_theme_panopticon.ogg",
+      "output_sha256": "0ddbaf7300be9d1238a6089a4f738649d7ab03111ac401ee586fad4dbc21be00",
+      "source": "assets/music/babylon_theme_panopticon.mid",
+      "source_sha256": "5d21ba4c794ac622ac98a9e1eb712be123798dcf85ecd5dd127ea01592b6ebcd"
+    },
+    {
+      "duration_seconds": 1.175011,
+      "kind": "sfx",
+      "normalization": "volume=2.300000dB",
+      "output": "assets/sfx/ui/ui_select.ogg",
+      "output_sha256": "5f00fc0ceeb1ed5425decf252ff41d9a1354b28e54aa7c5108d73248a777af7d",
+      "source": "assets/sfx/ui/ui_select.mid",
+      "source_sha256": "8af6aff4cfeaac05075900a5cf492bd34c228601e5ec9c5479ce4b927fb9ba47"
+    },
+    {
+      "duration_seconds": 1.03229,
+      "kind": "sfx",
+      "normalization": "volume=3.600000dB",
+      "output": "assets/sfx/ui/ui_tab.ogg",
+      "output_sha256": "db589685df818b2fdac59e32d3dae594380ad2610e202101e46150d6528b30d8",
+      "source": "assets/sfx/ui/ui_tab.mid",
+      "source_sha256": "c75f66f8716fefd2fdec0cc2adbd113b7f9169b89961defddf8c85c3477f98e9"
+    },
+    {
+      "duration_seconds": 1.210408,
+      "kind": "sfx",
+      "normalization": "volume=-1.900000dB",
+      "output": "assets/sfx/ui/ui_open.ogg",
+      "output_sha256": "881ca360985230e111c48a6443588d959854eec228086e1e6aaafdd771746372",
+      "source": "assets/sfx/ui/ui_open.mid",
+      "source_sha256": "30da0e3735eac246011978bd7788f1806b40f3851cbe00b224bc135e780f4a29"
+    },
+    {
+      "duration_seconds": 1.075011,
+      "kind": "sfx",
+      "normalization": "volume=5.000000dB",
+      "output": "assets/sfx/ui/ui_back.ogg",
+      "output_sha256": "677e30017bd79a301383e0367795d22d766ec686910dae47d7f7776f93028f96",
+      "source": "assets/sfx/ui/ui_back.mid",
+      "source_sha256": "b4b980b4a768198b29f81523203f378393906065503d892d936d4051b5aeeb41"
+    },
+    {
+      "duration_seconds": 1.53,
+      "kind": "sfx",
+      "normalization": "volume=0.700000dB",
+      "output": "assets/sfx/state/tick_advance.ogg",
+      "output_sha256": "f655f8b6a23fe4bbf75b317c7820158dde3cd4df6543a9c52b0dec3262bdcc2d",
+      "source": "assets/sfx/state/tick_advance.mid",
+      "source_sha256": "e09162466ce54957c16e61c649d24e86522db43c74fe5c25402940562cdae26f"
+    },
+    {
+      "duration_seconds": 2.416667,
+      "kind": "sfx",
+      "normalization": "volume=0.700000dB",
+      "output": "assets/sfx/state/state_fault.ogg",
+      "output_sha256": "f008911abb97a28fef465b6e1f23e923c2158b7e076905618bf0bd709073e95c",
+      "source": "assets/sfx/state/state_fault.mid",
+      "source_sha256": "de6f13ca8a0eddfe74172c84b13b5c24b91771c4df26ac0c0e6601bc5eaa772e"
+    }
+  ],
+  "license_scope": "SFX MIDI is CC0; the two legacy theme MIDI compositions retain their unresolved status in LICENSING.md. Rendering does not relicense them.",
+  "recipe": {
+    "channels": 2,
+    "codec": "vorbis",
+    "ffmpeg_bitexact": true,
+    "metadata": "removed",
+    "music_integrated_lufs": -20,
+    "music_true_peak_db": -2,
+    "quality": 5,
+    "sample_rate_hz": 44100,
+    "sfx_peak_db": -6,
+    "synth_chorus": false,
+    "synth_gain": 0.5,
+    "synth_reverb": false,
+    "tail_seconds": {
+      "music": 0.5,
+      "sfx": 0.15
+    }
+  },
+  "renderer": "tools/audio/render_observer_audio.py",
+  "soundfont": {
+    "license": "MIT",
+    "name": "FluidR3_GM.sf2",
+    "notice": "assets/licenses/FluidR3-GM.txt",
+    "sha256": "74594e8f4250680adf590507a306655a299935343583256f3b722c48a1bc1cb0"
+  },
+  "tools": {
+    "ffmpeg": {
+      "binary_sha256": "e8a8d46f5225f3062cec7c07fb145d58ae73c603cb740dcd5bad34bfb54e455a",
+      "version": "ffmpeg version 7.1.5-0+deb13u1 Copyright (c) 2000-2026 the FFmpeg developers"
+    },
+    "ffprobe": {
+      "binary_sha256": "cefc5f81c0b18429cdbf8fa5a89e1e9c759235e10f93f9b329ff1b2fdff26f46",
+      "version": "ffprobe version 7.1.5-0+deb13u1 Copyright (c) 2007-2026 the FFmpeg developers"
+    },
+    "fluidsynth": {
+      "binary_sha256": "aa402f82ed97435e293114be4f09da56ba94b499d06c63b3870b81e313811ad0",
+      "version": "FluidSynth runtime version 2.4.4"
+    }
+  },
+  "version": 1
+}

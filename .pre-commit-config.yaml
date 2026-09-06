@@ -290,7 +290,14 @@ repos:
         # `mise run data:county-atlas`; the Bevy client include_bytes!s it, so an
         # LFS pointer would hand the reader 130 bytes of text where it expects
         # geometry.
-        exclude: ^tests/baselines/.*\.json$|^src/babylon/data/game/balkanization/seed_influences\.json$|^uv\.lock$|^rust/crates/babylon-client/assets/map/county_atlas\.bin$
+        # The two embedded theme renders have a separate 2 MiB check below.
+        # Their exact source, render recipe and bytes are pinned in
+        # assets/audio-renders.json; this changes no licensing decision.
+        exclude: ^tests/baselines/.*\.json$|^src/babylon/data/game/balkanization/seed_influences\.json$|^uv\.lock$|^assets/map/county_atlas\.bin$|^assets/music/babylon_theme_(phi|panopticon)\.ogg$
+      - id: check-added-large-files
+        name: check embedded theme size (2 MiB per named render)
+        args: ['--maxkb=2048', '--enforce-all']
+        files: ^assets/music/babylon_theme_(phi|panopticon)\.ogg$
       - id: check-merge-conflict
       - id: check-case-conflict
       - id: forbid-new-submodules

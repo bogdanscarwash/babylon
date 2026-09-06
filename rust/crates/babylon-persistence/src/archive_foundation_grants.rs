@@ -5,8 +5,8 @@
 //! reference products, plus every glossary concept from the pinned fixture —
 //! receives the cursory public-record grant keys at tick 0: `subject`,
 //! `identity`, and `containment` for geography, `subject` and `identity`
-//! for concepts. Compositional and magnitude keys stay ungranted; they are
-//! earned, never seeded (ADR182).
+//! for concepts. The four explicitly public QCEW 2024 baseline keys are also
+//! granted for counties. Other composition and magnitude keys remain earned.
 
 use postgres::GenericClient;
 
@@ -17,6 +17,10 @@ use crate::archive::{
 use crate::glossary_concepts::{glossary_concepts_v1, GlossaryConceptsErrorV1};
 use crate::h3_reference_cohort::{representative_h3_reference_cohort_v1, H3ReferenceCohortError};
 use crate::identity::CampaignId;
+use crate::michigan_economy::{
+    michigan_economy_v1, MichiganEconomyErrorV1, QCEW_ECONOMICS_ARTIFACT_SHA256_V1,
+    QCEW_ECONOMICS_FIELD_KEYS_V1, QCEW_ECONOMICS_SOURCE_ID_V1,
+};
 use crate::spatial_reference_products::{
     michigan_spatial_reference_products_v1, SpatialReferenceProductsError,
 };
@@ -106,7 +110,7 @@ pub fn foundation_grant_rows_v1() -> Result<Vec<FoundationGrantRowV1>, Foundatio
     let cohort = representative_h3_reference_cohort_v1()?;
     let products = michigan_spatial_reference_products_v1(cohort)?;
     let concepts = glossary_concepts_v1()?;
-    let mut rows = Vec::with_capacity(2_600);
+    let mut rows = Vec::with_capacity(2_832);
     for county in products
         .counties()
         .iter()
@@ -122,6 +126,19 @@ pub fn foundation_grant_rows_v1() -> Result<Vec<FoundationGrantRowV1>, Foundatio
                 subject.clone(),
                 key.to_owned(),
                 citation.clone(),
+            )?);
+        }
+    }
+    for county in michigan_economy_v1()?.counties() {
+        let subject = ArchiveAtomSubjectV1::try_new(
+            ArchiveAtomSubjectKindV1::County,
+            county.county_geoid.clone(),
+        )?;
+        for key in QCEW_ECONOMICS_FIELD_KEYS_V1 {
+            rows.push(FoundationGrantRowV1::try_new(
+                subject.clone(),
+                key.to_owned(),
+                county_qcew_citation(&county.county_geoid),
             )?);
         }
     }
@@ -234,8 +251,8 @@ pub const FOUNDATION_GRANTS_SEMANTIC_DOMAIN_V1: &[u8] = b"babylon.archive-founda
 /// pinned here from failing-test output (never hand-edited) and mirrored by
 /// `contracts/archive_foundation_grants_v1.yaml`.
 pub const PINNED_FOUNDATION_GRANTS_SEMANTIC_SHA256_V1: [u8; 32] = [
-    0xd1, 0xc5, 0x17, 0x55, 0xb3, 0x0f, 0x64, 0x06, 0x4a, 0x26, 0xb6, 0x6f, 0xd5, 0x26, 0x7e, 0x0a,
-    0x15, 0x13, 0x77, 0xf0, 0x23, 0xb9, 0x67, 0x34, 0xd1, 0xff, 0x5b, 0x9a, 0x7e, 0xef, 0xc2, 0x0d,
+    0x9b, 0xb3, 0xcd, 0xda, 0x37, 0xdc, 0x3d, 0xee, 0x59, 0x24, 0x2f, 0xcf, 0xe0, 0x8f, 0x6c, 0x3f,
+    0x5b, 0xac, 0x01, 0xff, 0x43, 0x39, 0x88, 0x38, 0x3d, 0x45, 0x9f, 0xa0, 0xdf, 0x9d, 0xfc, 0x65,
 ];
 
 /// Closed refusal taxonomy for foundation grant seeding.
@@ -247,8 +264,16 @@ pub enum FoundationGrantsErrorV1 {
     Spatial(SpatialReferenceProductsError),
     /// The pinned glossary concept fixture drifted.
     Concepts(GlossaryConceptsErrorV1),
+    /// The pinned public QCEW county economics artifact drifted.
+    Economics(MichiganEconomyErrorV1),
     /// One grant row refused validation, conflicted, or hit a database error.
     Archive(SemanticArchiveErrorV1),
+}
+
+impl From<MichiganEconomyErrorV1> for FoundationGrantsErrorV1 {
+    fn from(error: MichiganEconomyErrorV1) -> Self {
+        Self::Economics(error)
+    }
 }
 
 impl From<H3ReferenceCohortError> for FoundationGrantsErrorV1 {
@@ -326,6 +351,13 @@ fn county_citation(county_geoid: &str) -> ArchiveCitationV1 {
     .expect("bounded county locator")
 }
 
+pub(crate) fn county_qcew_citation(county_geoid: &str) -> ArchiveCitationV1 {
+    ArchiveCitationV1::try_new(
+        QCEW_ECONOMICS_SOURCE_ID_V1.to_owned(),
+        format!("qcew_county_economics_mi_2024.csv.gz#county_geoid={county_geoid}&sha256={QCEW_ECONOMICS_ARTIFACT_SHA256_V1}"),
+    ).expect("bounded county economics locator")
+}
+
 fn place_identity_citation(place_geoid: &str) -> ArchiveCitationV1 {
     ArchiveCitationV1::try_new(
         FOUNDATION_PLACE_IDENTITY_SOURCE_ID_V1.to_owned(),
@@ -376,7 +408,7 @@ pub fn seed_foundation_grants_v1(
         .iter()
         .filter(|row| row.subject().kind() == ArchiveAtomSubjectKindV1::County)
         .count()
-        / FOUNDATION_COUNTY_GRANT_KEYS_V1.len();
+        / (FOUNDATION_COUNTY_GRANT_KEYS_V1.len() + QCEW_ECONOMICS_FIELD_KEYS_V1.len());
     let places = rows
         .iter()
         .filter(|row| row.subject().kind() == ArchiveAtomSubjectKindV1::Place)

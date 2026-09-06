@@ -1,19 +1,15 @@
-//! PER-23 Slice 3 headless dossier execution (ADR249 R9-R11): the
-//! [`HeadlessInvocation`] resource, one Startup system that runs exactly
-//! one fog-safe reader command, and the JSONL serializers that keep
-//! stdout machine-readable while every log line stays on stderr.
-//!
-//! The client serializes persistence types into [`serde_json::Value`]
-//! manually — persistence types intentionally carry no `Serialize`
-//! derives (Slice 2 decision 4), so the JSONL shape is a client-owned
-//! contract, one field per line, decided here and nowhere else.
+//! One scoped Archive observation shared by native composition and headless JSONL.
 
 use std::io::Write;
 use std::num::NonZero;
 
+use babylon_persistence::archive_revision::{
+    ArchiveAtomChangeV2, ArchiveDossierBoundsV2, ArchiveDossierPageV2, ArchiveDossierPendingV2,
+    ArchiveDossierReadV2, ArchiveDossierStateV2, ArchiveDossierUnavailableV2,
+    ArchiveLinkedPageStateV2, ArchiveReadScopeV2, ArchiveSearchStateV2,
+};
 use babylon_persistence::{
-    ArchiveAtomSubjectKindV1, ArchiveAtomSubjectV1, ArchiveAtomV1, ArchiveSubjectKindV1,
-    CampaignId, SemanticArchiveReaderV1,
+    ArchiveAtomV1, ArchivePageRefV1, ArchiveSubjectKindV1, CampaignId, SemanticArchiveReaderV1,
 };
 use bevy::app::AppExit;
 use bevy::prelude::{MessageWriter, Res, Resource};
@@ -21,73 +17,122 @@ use serde_json::{json, Value};
 
 use crate::cli::CliCommand;
 
-/// How honestly current the dossier card's Archive knowledge is, against
-/// the durable committed tick.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ArchiveFreshness {
-    /// No tick committed yet: nothing is durable, the card is all fog.
-    NoCommittedTick,
-    /// Ticks committed but the page is absent or verified behind the
-    /// durable tail: the card answers an older week.
-    ArchivePending,
-    /// The page's verified tick reaches the durable tail.
-    ArchiveCurrent,
+/// The retained page is readable while pending, but that is not verification.
+#[must_use]
+pub fn retained_page(read: &ArchiveDossierReadV2) -> Option<&ArchiveDossierPageV2> {
+    match &read.state {
+        ArchiveDossierStateV2::Ready { page, .. }
+        | ArchiveDossierStateV2::Pending {
+            page: Some(page), ..
+        } => Some(page),
+        ArchiveDossierStateV2::Pending { page: None, .. }
+        | ArchiveDossierStateV2::Unavailable(_) => None,
+    }
 }
 
-impl ArchiveFreshness {
-    /// Stable JSONL spelling.
-    #[must_use]
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::NoCommittedTick => "no-committed-tick",
-            Self::ArchivePending => "archive-pending",
-            Self::ArchiveCurrent => "archive-current",
+/// Only the reader's exact selected-page result certifies this observation.
+#[must_use]
+pub const fn verified_tick(read: &ArchiveDossierReadV2) -> Option<u64> {
+    match &read.state {
+        ArchiveDossierStateV2::Ready {
+            verified_through_tick,
+            ..
+        } => Some(*verified_through_tick),
+        _ => None,
+    }
+}
+
+/// Static availability wording shared by the card and CLI.
+#[must_use]
+pub const fn availability_label(read: &ArchiveDossierReadV2) -> &'static str {
+    match &read.state {
+        ArchiveDossierStateV2::Ready { .. } => "Verified for this viewed week",
+        ArchiveDossierStateV2::Pending { reason, .. } => pending_label(*reason),
+        ArchiveDossierStateV2::Unavailable(reason) => unavailable_label(*reason),
+    }
+}
+
+pub(crate) const fn pending_label(reason: ArchiveDossierPendingV2) -> &'static str {
+    match reason {
+        ArchiveDossierPendingV2::EmissionWitnessRequired => {
+            "Retained content awaits a complete publication record"
+        }
+        ArchiveDossierPendingV2::CutoverValidation => "Retained content awaits Archive validation",
+        ArchiveDossierPendingV2::ReceiptProcessing => {
+            "Archive is still processing this observation"
+        }
+        ArchiveDossierPendingV2::KnowledgeRefresh => {
+            "Newly learned information awaits Archive publication"
         }
     }
 }
 
-/// One row of a county's supersession feed: two consecutive visible atoms
-/// of one signal key whose atom identity changed (ADR249 R9). The initial
-/// appearance of a signal carries `from_* = None`.
-#[derive(Clone, Debug, PartialEq)]
-pub struct ChangelogRow {
-    /// The stable signal key both atoms answer to.
-    pub signal_key: String,
-    /// The earlier atom's valid tick, or `None` on first appearance.
-    pub from_tick: Option<u64>,
-    /// The later atom's valid tick.
-    pub to_tick: u64,
-    /// The earlier atom's identity, or `None` on first appearance.
-    pub from_atom_id: Option<[u8; 32]>,
-    /// The later atom's identity.
-    pub to_atom_id: [u8; 32],
-    /// The earlier atom's JSON value, or `None` on first appearance.
-    pub from_value: Option<Value>,
-    /// The later atom's JSON value.
-    pub to_value: Value,
+pub(crate) const fn unavailable_label(reason: ArchiveDossierUnavailableV2) -> &'static str {
+    match reason {
+        ArchiveDossierUnavailableV2::FoundationHasNoPage => {
+            "The campaign foundation has no published Archive page"
+        }
+        ArchiveDossierUnavailableV2::HistoryNotRetained => {
+            "This week predates retained Archive history"
+        }
+        ArchiveDossierUnavailableV2::SubjectNotDisclosed => {
+            "This subject is not disclosed in this observation"
+        }
+        ArchiveDossierUnavailableV2::PageNotMaterialized => {
+            "No Archive page has been published for this subject at this week"
+        }
+    }
 }
 
-/// One resolved place name on the dossier card: a link atom's target geoid
-/// and the title the acknowledged Archive resolves it to, or `None` when
-/// the place page stays below the fog.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct PlaceName {
-    /// Seven-digit place GEOID.
-    pub geoid: String,
-    /// The acknowledged place title, or `None` when no known page matches.
-    pub name: Option<String>,
+pub(crate) const fn link_state_label(state: ArchiveLinkedPageStateV2) -> &'static str {
+    match state {
+        ArchiveLinkedPageStateV2::Unknown => "unknown",
+        ArchiveLinkedPageStateV2::KnownUnavailable => "unavailable",
+        ArchiveLinkedPageStateV2::KnownPending => "pending",
+        ArchiveLinkedPageStateV2::KnownReady => "ready",
+    }
 }
 
-/// The parsed headless invocation: exactly one command against one
-/// campaign, inserted as a resource before `Startup`.
+/// Bind the exact installed observation, never the session's newer durable hash.
+///
+/// # Errors
+/// Refuses a missing or noncanonical positive-tick identity, or a fabricated foundation hash.
+pub fn observation_scope(
+    campaign: CampaignId,
+    tick: u64,
+    hash: Option<&str>,
+) -> Result<ArchiveReadScopeV2, String> {
+    if tick == 0 {
+        return if hash.is_none() {
+            Ok(ArchiveReadScopeV2::foundation(campaign))
+        } else {
+            Err("Foundation cannot carry a committed tick hash".into())
+        };
+    }
+    let hash = hash.ok_or("The installed observation has no committed identity")?;
+    if hash.len() != 64
+        || !hash
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    {
+        return Err("The installed observation has a noncanonical committed identity".into());
+    }
+    let mut bytes = [0; 32];
+    for (index, byte) in bytes.iter_mut().enumerate() {
+        *byte = u8::from_str_radix(&hash[index * 2..index * 2 + 2], 16)
+            .map_err(|_| "The installed observation has an invalid committed identity")?;
+    }
+    ArchiveReadScopeV2::committed(campaign, tick, bytes).map_err(|error| error.to_string())
+}
+
+/// One CLI invocation; live commands pin a marker once before their scoped reads.
 #[derive(Resource, Clone, Debug)]
 pub struct HeadlessInvocation {
     command: CliCommand,
     campaign_id: CampaignId,
 }
-
 impl HeadlessInvocation {
-    /// Construct one invocation from the parsed CLI request.
+    /// Capture one parsed command and campaign.
     #[must_use]
     pub const fn new(command: CliCommand, campaign_id: CampaignId) -> Self {
         Self {
@@ -97,14 +142,7 @@ impl HeadlessInvocation {
     }
 }
 
-/// Build the reader pair and run exactly one command, writing JSONL rows
-/// to stdout. Returns the process exit code: 0 on success, 2 on a loud
-/// refusal (already rendered to stderr).
-///
-/// # Errors
-/// Refuses a missing or malformed `BABYLON_READER_DSN`, a reader census
-/// failure, or any database read failure, each with the reader's own
-/// display text.
+/// Execute a scoped command, returning a process exit code.
 #[must_use]
 pub fn run_headless(invocation: &HeadlessInvocation) -> u8 {
     match execute(invocation) {
@@ -116,63 +154,129 @@ pub fn run_headless(invocation: &HeadlessInvocation) -> u8 {
     }
 }
 
+pub(crate) fn pinned_scope(
+    reader: &SemanticArchiveReaderV1,
+    campaign: CampaignId,
+) -> Result<ArchiveReadScopeV2, String> {
+    reader
+        .committed_tick_status(campaign)
+        .map_err(|error| error.to_string())?
+        .map_or_else(
+            || Ok(ArchiveReadScopeV2::foundation(campaign)),
+            |status| {
+                ArchiveReadScopeV2::committed(
+                    campaign,
+                    status.resolve_tick(),
+                    *status.tick_content_hash(),
+                )
+                .map_err(|error| error.to_string())
+            },
+        )
+}
+
+fn county_subject(geoid: &str) -> Result<ArchivePageRefV1, String> {
+    ArchivePageRefV1::try_new(ArchiveSubjectKindV1::County, geoid.into())
+        .map_err(|error| error.to_string())
+}
+
 fn execute(invocation: &HeadlessInvocation) -> Result<(), String> {
     let reader = SemanticArchiveReaderV1::from_env().map_err(|error| error.to_string())?;
     let mut out = std::io::stdout().lock();
-    match &invocation.command {
-        CliCommand::TickStatus => {
-            let row = tick_status_row(&reader, invocation.campaign_id)?;
-            write_jsonl(&mut out, &row)?;
-        }
-        CliCommand::DossierShow { geoid } => {
-            let row = county_dossier_card(&reader, invocation.campaign_id, geoid)?;
-            write_jsonl(&mut out, &row)?;
-        }
-        CliCommand::DossierSearch { query } => {
-            for hit in reader
-                .search_known(invocation.campaign_id, query, 50)
-                .map_err(|error| error.to_string())?
-            {
-                write_jsonl(
-                    &mut out,
-                    &json!({
-                        "record": "search-hit",
-                        "subject_kind": hit.page_ref().kind().as_str(),
-                        "geoid": hit.page_ref().id(),
-                        "title": hit.title(),
-                        "verified_tick": hit.verified_tick(),
-                        "atom_count": hit.atoms().len(),
-                    }),
-                )?;
+    if invocation.command == CliCommand::TickStatus {
+        write_jsonl(&mut out, &tick_status_row(&reader, invocation.campaign_id)?)?;
+    } else {
+        let scope = pinned_scope(&reader, invocation.campaign_id)?;
+        match &invocation.command {
+            CliCommand::DossierShow { geoid } => {
+                let read = reader
+                    .dossier_as_of(
+                        &scope,
+                        &county_subject(geoid)?,
+                        &ArchiveDossierBoundsV2::default(),
+                    )
+                    .map_err(|error| error.to_string())?;
+                write_jsonl(&mut out, &dossier_json(&read))?;
             }
-        }
-        CliCommand::Changelog { geoid } => {
-            let history = subject_history(&reader, invocation.campaign_id, geoid)?;
-            for row in changelog_rows(&history) {
-                write_jsonl(
-                    &mut out,
-                    &json!({
-                        "record": "changelog-row",
-                        "geoid": geoid,
-                        "signal_key": row.signal_key,
-                        "from_tick": row.from_tick,
-                        "to_tick": row.to_tick,
-                        "from_value": row.from_value,
-                        "to_value": row.to_value,
-                        "from_atom_id": row.from_atom_id.map(hex_bytes),
-                        "to_atom_id": hex_bytes(row.to_atom_id),
-                    }),
-                )?;
+            CliCommand::DossierSearch { query } => write_search(&mut out, &reader, &scope, query)?,
+            CliCommand::Changelog { geoid } => {
+                write_changes(&mut out, &reader, &scope, &county_subject(geoid)?)?;
             }
+            CliCommand::TickStatus => unreachable!("handled above"),
         }
     }
-    out.flush().map_err(|error| error.to_string())?;
+    out.flush().map_err(|error| error.to_string())
+}
+
+fn write_search(
+    out: &mut impl Write,
+    reader: &SemanticArchiveReaderV1,
+    scope: &ArchiveReadScopeV2,
+    query: &str,
+) -> Result<(), String> {
+    let read = reader
+        .search_as_of(scope, query, 50)
+        .map_err(|error| error.to_string())?;
+    let (state, reason) = match read.state {
+        ArchiveSearchStateV2::Ready => ("ready", None),
+        ArchiveSearchStateV2::Pending(reason) => ("pending", Some(pending_label(reason))),
+        ArchiveSearchStateV2::Unavailable(reason) => {
+            ("unavailable", Some(unavailable_label(reason)))
+        }
+    };
+    write_jsonl(
+        out,
+        &json!({"record":"archive-search-status", "scope":scope_json(&read.scope),
+        "state":state,"reason":reason,"durable_tick":read.durable_tick,"processed_tick":read.processed_tick,
+        "history_floor_tick":read.history_floor_tick,"truncated":read.truncated}),
+    )?;
+    for hit in read.hits {
+        write_jsonl(
+            out,
+            &json!({"record":"search-hit","subject_kind":hit.subject.kind().as_str(),
+            "geoid":hit.subject.id(),"title":hit.title,"revision_id":hex_bytes(hit.revision_id),
+            "content_source":scope_json(&hit.content_source)}),
+        )?;
+    }
     Ok(())
 }
 
-/// Bevy Startup system: run the one parsed command, then leave the app
-/// through [`AppExit`] so the headless process terminates after the first
-/// update.
+fn write_changes(
+    out: &mut impl Write,
+    reader: &SemanticArchiveReaderV1,
+    scope: &ArchiveReadScopeV2,
+    subject: &ArchivePageRefV1,
+) -> Result<(), String> {
+    let mut cursor = None;
+    loop {
+        let bounds = ArchiveDossierBoundsV2::try_new(32, cursor.clone())
+            .map_err(|error| error.to_string())?;
+        let read = reader
+            .dossier_as_of(scope, subject, &bounds)
+            .map_err(|error| error.to_string())?;
+        write_jsonl(
+            out,
+            &json!({"record":"archive-changes-page","scope":scope_json(&read.scope),
+            "subject":read.subject,"availability":availability_label(&read),"history_floor_tick":read.history_floor_tick,
+            "coverage_from_tick":retained_page(&read).map(|page|page.changes.coverage_from_tick),
+            "has_more":retained_page(&read).is_some_and(|page|page.changes.next_cursor.is_some())}),
+        )?;
+        let Some(page) = retained_page(&read) else {
+            return Ok(());
+        };
+        for change in &page.changes.changes {
+            write_jsonl(out, &change_json(change))?;
+        }
+        let Some(next) = &page.changes.next_cursor else {
+            return Ok(());
+        };
+        if cursor.as_ref() == Some(next) {
+            return Err("Archive continuation did not advance".into());
+        }
+        cursor = Some(next.clone());
+    }
+}
+
+/// Execute the one headless invocation and request application exit.
 pub fn run_headless_command(invocation: Res<HeadlessInvocation>, mut exit: MessageWriter<AppExit>) {
     let code = run_headless(&invocation);
     exit.write(match NonZero::<u8>::new(code) {
@@ -181,188 +285,49 @@ pub fn run_headless_command(invocation: Res<HeadlessInvocation>, mut exit: Messa
     });
 }
 
-fn tick_status_row(
-    reader: &SemanticArchiveReaderV1,
-    campaign_id: CampaignId,
-) -> Result<Value, String> {
-    let status = reader
-        .committed_tick_status(campaign_id)
-        .map_err(|error| error.to_string())?;
-    Ok(match status {
-        Some(status) => json!({
-            "record": "tick-status",
-            "campaign_id": status.campaign_id().as_uuid().to_string(),
-            "durable_tick": status.resolve_tick(),
-            "envelope_layout_version": status.envelope_layout_version(),
-            "tick_content_hash": hex_bytes(*status.tick_content_hash()),
-            "envelope_digest": hex_bytes(*status.envelope_digest()),
-        }),
-        None => json!({
-            "record": "tick-status",
-            "campaign_id": campaign_id.as_uuid().to_string(),
-            "durable_tick": Value::Null,
-            "envelope_layout_version": Value::Null,
-            "tick_content_hash": Value::Null,
-            "envelope_digest": Value::Null,
-        }),
-    })
+pub(crate) fn scope_json(scope: &ArchiveReadScopeV2) -> Value {
+    json!({"campaign_id":scope.campaign_id().as_uuid().to_string(),"tick":scope.tick(),
+        "tick_content_hash":scope.tick_content_hash().map(hex_bytes)})
 }
 
-/// Assemble one county dossier card: the durable committed tick, the
-/// acknowledged page's verified tick and content hash (via one
-/// title-scoped search pass that also resolves the place names behind the
-/// card's link atoms), the freshness state, and the structured atoms.
-fn county_dossier_card(
-    reader: &SemanticArchiveReaderV1,
-    campaign_id: CampaignId,
-    geoid: &str,
-) -> Result<Value, String> {
-    let durable_tick = reader
-        .committed_tick_status(campaign_id)
-        .map_err(|error| error.to_string())?
-        .map(|status| status.resolve_tick());
-    let atoms = reader
-        .county_card_atoms(campaign_id, geoid)
-        .map_err(|error| error.to_string())?;
-    let title = atoms
-        .iter()
-        .find(|atom| atom.signal_key() == "subject")
-        .and_then(|atom| match atom.value() {
-            babylon_persistence::ArchiveAtomValueV1::Text(text) => Some(text.clone()),
-            _ => None,
-        })
-        .unwrap_or_default();
-
-    // One title-scoped search pass resolves both the county hit (verified
-    // tick and exact content hash) and the place titles behind the link
-    // atoms. A place the Archive does not acknowledge stays `name: null`.
-    let hits = reader
-        .search_known(campaign_id, &title, 50)
-        .map_err(|error| error.to_string())?;
-    let county_hit = hits.iter().find(|hit| {
-        hit.page_ref().kind() == ArchiveSubjectKindV1::County && hit.page_ref().id() == geoid
-    });
-    let verified_tick = county_hit.map(babylon_persistence::ArchiveSearchHitV1::verified_tick);
-    let content_sha256 = county_hit.map(|hit| hex_bytes(hit.content_sha256()));
-    let place_title = |place_geoid: &str| {
-        hits.iter()
-            .find(|hit| {
-                hit.page_ref().kind() == ArchiveSubjectKindV1::Place
-                    && hit.page_ref().id() == place_geoid
-            })
-            .map(|hit| hit.title().to_owned())
+pub(crate) fn dossier_json(read: &ArchiveDossierReadV2) -> Value {
+    let page = retained_page(read);
+    let state = match read.state {
+        ArchiveDossierStateV2::Ready { .. } => "ready",
+        ArchiveDossierStateV2::Pending { .. } => "pending",
+        ArchiveDossierStateV2::Unavailable(_) => "unavailable",
     };
-    let places = atoms
-        .iter()
-        .filter_map(place_link_geoid)
-        .map(|place_geoid| PlaceName {
-            name: place_title(&place_geoid),
-            geoid: place_geoid,
-        })
-        .collect::<Vec<_>>();
-
-    let freshness = match (durable_tick, verified_tick) {
-        (None, _) => ArchiveFreshness::NoCommittedTick,
-        (Some(_), None) => ArchiveFreshness::ArchivePending,
-        (Some(durable), Some(verified)) if verified < durable => ArchiveFreshness::ArchivePending,
-        (Some(_), Some(_)) => ArchiveFreshness::ArchiveCurrent,
-    };
-
-    Ok(json!({
-        "record": "county-dossier",
-        "geoid": geoid,
-        "title": title,
-        "durable_tick": durable_tick,
-        "verified_tick": verified_tick,
-        "freshness": freshness.as_str(),
-        "content_sha256": content_sha256,
-        "atoms": atoms.iter().map(atom_json).collect::<Vec<_>>(),
-        "places": places
-            .iter()
-            .map(|place| json!({ "geoid": place.geoid, "name": place.name }))
-            .collect::<Vec<_>>(),
-    }))
+    json!({"record":"county-dossier","schema_version":2,"scope":scope_json(&read.scope),"subject":read.subject,
+        "geoid":read.subject.id(),"state":state,"availability":availability_label(read),
+        "durable_tick":read.durable_tick,"processed_tick":read.processed_tick,"verified_tick":verified_tick(read),
+        "history_floor_tick":read.history_floor_tick,
+        "page":page.map(|page| json!({"title":page.title,"question":page.question,
+            "revision_id":hex_bytes(page.revision_id),"content_source":scope_json(&page.content_source),
+            "content_sha256":hex_bytes(page.content_sha256),"effective_tick":page.effective_tick,"markdown":page.markdown,
+            "origin":match page.origin { babylon_persistence::archive_revision::ArchivePublicationOriginV2::AdoptedHead => "adopted_head", babylon_persistence::archive_revision::ArchivePublicationOriginV2::Materialized => "materialized" },
+            "citations":page.citations.iter().map(|citation|json!({"source_id":citation.source_id(),"locator":citation.locator()})).collect::<Vec<_>>(),
+            "signals":page.signals.iter().map(|signal|json!({"grant_key":signal.grant_key(),"label":signal.label(),
+                "value":signal.value(),"citation":{"source_id":signal.citation().source_id(),"locator":signal.citation().locator()}})).collect::<Vec<_>>(),
+            "atoms":page.atoms.iter().map(atom_json).collect::<Vec<_>>(),
+            "links":page.links.iter().map(|link|json!({"target":link.target,"label":link.retained_label,
+                "state":link_state_label(link.target_state)})).collect::<Vec<_>>(),
+            "coverage_from_tick":page.changes.coverage_from_tick,
+            "changes":page.changes.changes.iter().map(change_json).collect::<Vec<_>>(),
+            "has_more_changes":page.changes.next_cursor.is_some()}))})
 }
 
-fn subject_history(
-    reader: &SemanticArchiveReaderV1,
-    campaign_id: CampaignId,
-    geoid: &str,
-) -> Result<Vec<ArchiveAtomV1>, String> {
-    let subject = ArchiveAtomSubjectV1::try_new(ArchiveAtomSubjectKindV1::County, geoid.to_owned())
-        .map_err(|error| error.to_string())?;
-    reader
-        .subject_atom_history(campaign_id, &subject)
-        .map_err(|error| error.to_string())
-}
-
-/// Extract the place GEOID from one link atom's `place/<geoid>` text value.
-pub(crate) fn place_link_geoid(atom: &ArchiveAtomV1) -> Option<String> {
-    match atom.value() {
-        babylon_persistence::ArchiveAtomValueV1::Text(text)
-            if text.starts_with("place/") && text.len() == 13 =>
-        {
-            let geoid = &text["place/".len()..];
-            if geoid.bytes().all(|byte| byte.is_ascii_digit()) {
-                return Some(geoid.to_owned());
-            }
-            None
-        }
-        _ => None,
-    }
-}
-
-/// Fold a subject's signal-keyed, tick-ordered atom history into the
-/// supersession feed: the initial appearance of each signal key, then one
-/// row for every consecutive pair whose atom identity changed (ADR249 R9).
-/// Equal-value supersessions still emit a row — an identity change is a
-/// change, even when the carried value repeats.
-#[must_use]
-pub fn changelog_rows(history: &[ArchiveAtomV1]) -> Vec<ChangelogRow> {
-    let mut rows = Vec::new();
-    let mut previous: Option<&ArchiveAtomV1> = None;
-    for atom in history {
-        match previous {
-            Some(prior) if prior.signal_key() == atom.signal_key() => {
-                if prior.atom_id() != atom.atom_id() {
-                    rows.push(ChangelogRow {
-                        signal_key: atom.signal_key().to_owned(),
-                        from_tick: Some(prior.valid_tick()),
-                        to_tick: atom.valid_tick(),
-                        from_atom_id: Some(prior.atom_id()),
-                        to_atom_id: atom.atom_id(),
-                        from_value: Some(atom_value_json(prior.value())),
-                        to_value: atom_value_json(atom.value()),
-                    });
-                }
-            }
-            _ => rows.push(ChangelogRow {
-                signal_key: atom.signal_key().to_owned(),
-                from_tick: None,
-                to_tick: atom.valid_tick(),
-                from_atom_id: None,
-                to_atom_id: atom.atom_id(),
-                from_value: None,
-                to_value: atom_value_json(atom.value()),
-            }),
-        }
-        previous = Some(atom);
-    }
-    rows
+pub(crate) fn change_json(change: &ArchiveAtomChangeV2) -> Value {
+    json!({"record":"changelog-row","publication_tick":change.publication_tick,"signal_key":change.signal_key,
+        "before":change.before.as_ref().map(atom_json),"after":change.after.as_ref().map(atom_json)})
 }
 
 fn atom_json(atom: &ArchiveAtomV1) -> Value {
-    json!({
-        "signal_key": atom.signal_key(),
-        "grant_key": atom.grant_key(),
-        "evidence_class": atom.evidence_class().as_str(),
-        "value": atom_value_json(atom.value()),
-        "valid_tick": atom.valid_tick(),
-        "atom_id": hex_bytes(atom.atom_id()),
-    })
+    json!({"signal_key":atom.signal_key(),"grant_key":atom.grant_key(),"evidence_class":atom.evidence_class().as_str(),
+        "value":atom_value_json(atom.value()),"valid_tick":atom.valid_tick(),"atom_id":hex_bytes(atom.atom_id()),
+        "citation":{"source_id":atom.citation().source_id(),"locator":atom.citation().locator()}})
 }
 
-fn atom_value_json(value: &babylon_persistence::ArchiveAtomValueV1) -> Value {
+pub(crate) fn atom_value_json(value: &babylon_persistence::ArchiveAtomValueV1) -> Value {
     match value {
         babylon_persistence::ArchiveAtomValueV1::Text(text) => Value::String(text.clone()),
         babylon_persistence::ArchiveAtomValueV1::F64(number) => {
@@ -373,7 +338,7 @@ fn atom_value_json(value: &babylon_persistence::ArchiveAtomValueV1) -> Value {
     }
 }
 
-fn hex_bytes(bytes: [u8; 32]) -> String {
+pub(crate) fn hex_bytes(bytes: [u8; 32]) -> String {
     let mut rendered = String::with_capacity(64);
     for byte in bytes {
         use std::fmt::Write as _;
@@ -386,140 +351,178 @@ fn write_jsonl(out: &mut impl Write, value: &Value) -> Result<(), String> {
     writeln!(out, "{value}").map_err(|error| error.to_string())
 }
 
+fn tick_status_row(
+    reader: &SemanticArchiveReaderV1,
+    campaign_id: CampaignId,
+) -> Result<Value, String> {
+    let status = reader
+        .committed_tick_status(campaign_id)
+        .map_err(|error| error.to_string())?;
+    let processed_tick = reader
+        .archive_verification_status(campaign_id)
+        .map_err(|error| error.to_string())?
+        .map(|status| status.processed_tick());
+    Ok(match status {
+        Some(status) => json!({
+            "record": "tick-status",
+            "campaign_id": status.campaign_id().as_uuid().to_string(),
+            "durable_tick": status.resolve_tick(),
+            "processed_tick": processed_tick,
+            "envelope_layout_version": status.envelope_layout_version(),
+            "tick_content_hash": hex_bytes(*status.tick_content_hash()),
+            "envelope_digest": hex_bytes(*status.envelope_digest()),
+        }),
+        None => json!({
+            "record": "tick-status",
+            "campaign_id": campaign_id.as_uuid().to_string(),
+            "durable_tick": Value::Null,
+            "processed_tick": Value::Null,
+            "envelope_layout_version": Value::Null,
+            "tick_content_hash": Value::Null,
+            "envelope_digest": Value::Null,
+        }),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use babylon_persistence::archive_revision::{ArchiveChangePageV2, ArchivePublicationOriginV2};
     use babylon_persistence::{
-        ArchiveAtomSubjectV1, ArchiveAtomValueV1, ArchiveCitationV1, ArchiveEvidenceClassV1,
+        ArchiveAtomSubjectKindV1, ArchiveAtomSubjectV1, ArchiveAtomValueV1, ArchiveCitationV1,
+        ArchiveEvidenceClassV1, ArchiveSignalV1,
     };
-    use uuid::Uuid;
 
-    fn atom(signal_key: &str, value: &str, valid_tick: u64) -> ArchiveAtomV1 {
-        ArchiveAtomV1::try_new(
-            CampaignId::from_uuid(Uuid::nil()),
-            ArchiveAtomSubjectV1::try_new(ArchiveAtomSubjectKindV1::County, "26163".to_owned())
-                .expect("subject admits"),
-            signal_key.to_owned(),
-            "employment".to_owned(),
-            ArchiveEvidenceClassV1::Observed,
-            &ArchiveAtomValueV1::Text(value.to_owned()),
-            ArchiveCitationV1::try_new("src".to_owned(), "loc".to_owned())
-                .expect("citation admits"),
-            valid_tick,
-        )
-        .expect("atom admits")
+    fn read(state: ArchiveDossierStateV2) -> ArchiveDossierReadV2 {
+        let campaign = CampaignId::from_uuid(uuid::Uuid::nil());
+        ArchiveDossierReadV2 {
+            scope: ArchiveReadScopeV2::committed(campaign, 3, [0xab; 32]).unwrap(),
+            subject: county_subject("26163").unwrap(),
+            durable_tick: 8,
+            processed_tick: 8,
+            history_floor_tick: 2,
+            state,
+        }
     }
-
-    #[test]
-    fn changelog_rows_emit_appearances_and_identity_changes_only() {
-        let first = atom("employment", "728576 jobs", 1);
-        let same = atom("employment", "728576 jobs", 1);
-        let changed = atom("employment", "731000 jobs", 2);
-        let untouched_a = atom("median-wage", "24.50", 1);
-        let untouched_b = atom("median-wage", "24.50", 2);
-        // Identical identity at the same tick emits nothing; the changed
-        // pair emits exactly one row; a brand-new signal emits its
-        // appearance with from_* null.
-        let rows = changelog_rows(&[
-            first.clone(),
-            same,
-            changed.clone(),
-            untouched_a,
-            untouched_b,
-        ]);
-        assert_eq!(
-            rows.len(),
-            4,
-            "appearance + one identity change + one appearance + the equal-value \
-             tick-2 supersession, got {rows:?}"
-        );
-        assert_eq!(rows[0].signal_key, "employment");
-        assert_eq!(rows[0].from_tick, None);
-        assert_eq!(rows[0].to_tick, 1);
-        assert_eq!(rows[1].signal_key, "employment");
-        assert_eq!(rows[1].from_tick, Some(1));
-        assert_eq!(rows[1].to_tick, 2);
-        assert_eq!(
-            rows[1].from_value,
-            Some(Value::String("728576 jobs".to_owned()))
-        );
-        assert_eq!(rows[1].to_value, Value::String("731000 jobs".to_owned()));
-        assert_ne!(rows[1].from_atom_id, None);
-        assert_eq!(rows[2].signal_key, "median-wage");
-        assert_eq!(rows[2].from_tick, None);
-        // The tick-2 median-wage atom mints a fresh identity even though
-        // the carried value repeats: an identity change is a change.
-        assert_eq!(rows[3].signal_key, "median-wage");
-        assert_eq!(rows[3].from_tick, Some(1));
-        assert_eq!(rows[3].to_tick, 2);
-        assert_eq!(rows[3].from_value, Some(rows[3].to_value.clone()));
-        let _ = first;
-        let _ = changed;
-    }
-
-    #[test]
-    fn equal_value_supersession_still_emits_a_row() {
-        let first = atom("employment", "731000 jobs", 1);
-        // Force a different identity at the same value by changing the
-        // citation, which enters the canonical atom id.
-        let second = ArchiveAtomV1::try_new(
-            CampaignId::from_uuid(Uuid::nil()),
-            ArchiveAtomSubjectV1::try_new(ArchiveAtomSubjectKindV1::County, "26163".to_owned())
-                .expect("subject admits"),
-            "employment".to_owned(),
-            "employment".to_owned(),
-            ArchiveEvidenceClassV1::Observed,
-            &ArchiveAtomValueV1::Text("731000 jobs".to_owned()),
-            ArchiveCitationV1::try_new("src".to_owned(), "other-loc".to_owned())
-                .expect("citation admits"),
-            2,
-        )
-        .expect("atom admits");
-        assert_ne!(first.atom_id(), second.atom_id());
-        let rows = changelog_rows(&[first, second]);
-        assert_eq!(
-            rows.len(),
-            2,
-            "appearance + the equal-value identity change"
-        );
-        assert_eq!(rows[1].from_value, Some(rows[1].to_value.clone()));
-        assert_ne!(rows[1].from_atom_id, None);
-    }
-
-    #[test]
-    fn freshness_spellings_are_stable() {
-        assert_eq!(
-            ArchiveFreshness::NoCommittedTick.as_str(),
-            "no-committed-tick"
-        );
-        assert_eq!(ArchiveFreshness::ArchivePending.as_str(), "archive-pending");
-        assert_eq!(ArchiveFreshness::ArchiveCurrent.as_str(), "archive-current");
-    }
-
-    #[test]
-    fn place_link_geoid_accepts_only_place_text_values() {
-        let place = atom("link", "place/2622000", 1);
-        assert_eq!(place_link_geoid(&place), Some("2622000".to_owned()));
-        let jobs = atom("employment", "728576 jobs", 1);
-        assert_eq!(place_link_geoid(&jobs), None);
-        let short = atom("link", "place/26220", 1);
-        assert_eq!(place_link_geoid(&short), None);
-    }
-
-    #[test]
-    fn hex_bytes_renders_lowercase_digest() {
-        assert_eq!(hex_bytes([0xab; 32]), "ab".repeat(32));
-        let bytes = [
-            0x00, 0x0f, 0xff, 0x10, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-            0x00, 0x00, 0x00, 0x00,
-        ];
-        assert_eq!(
-            hex_bytes(bytes),
-            format!(
-                "{}000000000000000000000000000000000000000000000000000000",
-                "000fff1001"
+    fn page() -> ArchiveDossierPageV2 {
+        let campaign = CampaignId::from_uuid(uuid::Uuid::nil());
+        let citation =
+            ArchiveCitationV1::try_new("original-source".into(), "original/locator".into())
+                .unwrap();
+        ArchiveDossierPageV2 {
+            revision_id: [1; 32],
+            effective_tick: 2,
+            origin: ArchivePublicationOriginV2::AdoptedHead,
+            content_source: ArchiveReadScopeV2::committed(campaign, 1, [0xaa; 32]).unwrap(),
+            title: "Retained title".into(),
+            question: "Original question?".into(),
+            signals: vec![ArchiveSignalV1::try_new(
+                "observed-key".into(),
+                "Original label".into(),
+                "Original display value".into(),
+                citation.clone(),
             )
+            .unwrap()],
+            markdown: "Original narrative bytes".into(),
+            content_sha256: [2; 32],
+            citations: vec![citation],
+            atoms: vec![],
+            links: vec![],
+            changes: ArchiveChangePageV2 {
+                coverage_from_tick: 2,
+                changes: vec![],
+                next_cursor: None,
+            },
+        }
+    }
+    #[test]
+    fn pending_retained_content_never_inherits_global_progress_verification() {
+        let read = read(ArchiveDossierStateV2::Pending {
+            page: Some(page()),
+            reason: ArchiveDossierPendingV2::KnowledgeRefresh,
+        });
+        assert!(retained_page(&read).is_some());
+        assert_eq!(verified_tick(&read), None);
+        let json = dossier_json(&read);
+        assert_eq!(json["state"], "pending");
+        assert!(json["verified_tick"].is_null());
+        assert_eq!(json["processed_tick"], 8);
+        assert_eq!(json["scope"]["tick"], 3);
+        assert_eq!(json["page"]["content_source"]["tick"], 1);
+        assert_eq!(json["page"]["question"], "Original question?");
+        assert_eq!(json["page"]["signals"][0]["label"], "Original label");
+        assert_eq!(json["page"]["markdown"], "Original narrative bytes");
+    }
+    #[test]
+    fn ready_uses_exact_selected_page_verification_and_absence_stays_typed() {
+        let ready = read(ArchiveDossierStateV2::Ready {
+            page: page(),
+            verified_through_tick: 3,
+        });
+        assert_eq!(verified_tick(&ready), Some(3));
+        for reason in [
+            ArchiveDossierUnavailableV2::FoundationHasNoPage,
+            ArchiveDossierUnavailableV2::HistoryNotRetained,
+            ArchiveDossierUnavailableV2::SubjectNotDisclosed,
+            ArchiveDossierUnavailableV2::PageNotMaterialized,
+        ] {
+            let read = read(ArchiveDossierStateV2::Unavailable(reason));
+            assert!(retained_page(&read).is_none());
+            assert_eq!(verified_tick(&read), None);
+            let json = dossier_json(&read);
+            assert_eq!(json["state"], "unavailable");
+            assert!(json["page"].is_null());
+            assert_eq!(json["availability"], unavailable_label(reason));
+        }
+    }
+    #[test]
+    fn exact_scope_requires_the_selected_hash_and_cannot_fabricate_foundation() {
+        let campaign = CampaignId::from_uuid(uuid::Uuid::nil());
+        assert!(observation_scope(campaign, 0, None)
+            .unwrap()
+            .tick_content_hash()
+            .is_none());
+        assert!(observation_scope(campaign, 0, Some(&"a".repeat(64))).is_err());
+        for hash in [
+            None,
+            Some("bad"),
+            Some("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"),
+        ] {
+            assert!(observation_scope(campaign, 1, hash).is_err());
+        }
+        assert_eq!(
+            observation_scope(campaign, 3, Some(&"ab".repeat(32)))
+                .unwrap()
+                .tick_content_hash(),
+            Some([0xab; 32])
         );
+    }
+    #[test]
+    fn removal_and_numeric_zero_have_different_json_evidence() {
+        let atom = ArchiveAtomV1::try_new(
+            CampaignId::from_uuid(uuid::Uuid::nil()),
+            ArchiveAtomSubjectV1::try_new(ArchiveAtomSubjectKindV1::County, "26163".into())
+                .unwrap(),
+            "jobs".into(),
+            "jobs".into(),
+            ArchiveEvidenceClassV1::Observed,
+            &ArchiveAtomValueV1::U64(0),
+            ArchiveCitationV1::try_new("source".into(), "locator".into()).unwrap(),
+            2,
+        )
+        .unwrap();
+        let mut change = ArchiveAtomChangeV2 {
+            publication_tick: 3,
+            signal_key: "jobs".into(),
+            before: None,
+            after: Some(atom.clone()),
+        };
+        assert_eq!(change_json(&change)["after"]["value"], 0);
+        change.before = Some(atom);
+        change.after = None;
+        let json = change_json(&change);
+        assert!(json["after"].is_null());
+        assert_eq!(json["before"]["valid_tick"], 2);
+        assert_eq!(json["publication_tick"], 3);
     }
 }

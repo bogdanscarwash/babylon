@@ -13,11 +13,12 @@ from babylon.cli import app
 runner = CliRunner()
 
 
-def test_help_lists_all_five_subcommands() -> None:
+def test_help_lists_supported_operator_subcommands() -> None:
     result = runner.invoke(app, ["--help"])
     assert result.exit_code == 0
-    for name in ("doctor", "login", "telemetry", "self-update", "uninstall"):
+    for name in ("doctor", "login", "telemetry", "uninstall"):
         assert name in result.stdout
+    assert "self-update" not in result.stdout
 
 
 def test_help_no_longer_lists_play() -> None:

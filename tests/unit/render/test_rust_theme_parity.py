@@ -104,6 +104,12 @@ _COLOR_LITERAL_RE = re.compile(
 #: above; this registry covers everything else, so a stray color literal
 #: added to ANY other file cannot drift from §9b with nothing watching it.
 _SWEEP_EXEMPTIONS: dict[str, str] = {
+    "observer_theme.rs": (
+        "ADR251: the Director explicitly authorized a redesigned neobrutalist "
+        "observer palette on 2026-09-04. These native observer tokens are not "
+        "mirrors of the frozen Python reference palette. All observer color "
+        "literals remain centralized in this one theme module."
+    ),
     "map/bands.rs": (
         "PANEL (#200404): the county map's absence/no-data fill. "
         "Explicitly NOT a §9b token (deliberately misses MUTED_DARK) — "

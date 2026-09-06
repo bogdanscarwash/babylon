@@ -28,7 +28,7 @@ policy and ceremony below apply to the Rust engine release.
 ## Commit scopes (controlled vocabulary)
 
 `cli`, `intelligence`, `engine`, `persistence`, `render`, `web`, `data`, `deps`, `ci`,
-`nix`, `flake`, `docs`, `plans`, `ai`, `specs`, `tooling`, `hygiene`, `packaging`.
+`docs`, `plans`, `ai`, `specs`, `tooling`, `hygiene`, `packaging`.
 babylon-infra additionally: `tf`, `ansible`, `cloudflare`, `secrets`, `tasks`.
 Add new scopes here before use.
 
@@ -52,7 +52,7 @@ Add new scopes here before use.
 
 The tag task refuses until the lineage PR is in `origin/dev`. The task creates
 and pushes `vX.Y.Z` on the qualified main merge commit. The tag starts
-`release.yml` and `nix-release.yml`.
+`release.yml`.
 
 The tag task proves that its target is exact protected `main`. It also proves
 that the main commit returned to protected `dev`. Each publishing workflow
@@ -60,14 +60,24 @@ independently rejects a tag outside protected `main` history.
 
 ## Releases pin their environment
 
-ADR102 makes the vendored flake the release toolchain. `flake.nix` and
-`flake.lock` pin each tag's environment. No infrastructure gitlink
-remains. `tools/check_release_pins.sh` checks the remaining lockstep offline.
+ADR252 makes native Debian, mise, rustup, and uv the development toolchain.
+`.mise.toml`, `mise.lock`, `.python-version`, `rust/rust-toolchain.toml`, `uv.lock`, and
+`rust/Cargo.lock` pin the language tools and dependencies at each tag.
+`tools/check_release_pins.sh` checks their consistency offline.
 
-It compares the `nixpkgs-data` revisions in `flake.lock` and `flake.nix`. It
-also compares `PINNED_SQLITE_VERSION` with the `data-artifacts.yaml` product
-block. The ceremony and `release.yml` run this check. The babylon-infra
-repository versions its operations surface independently.
+Exact reference-data builds use the ordinary project interpreter. `mise.lock`
+records its official standalone build URL and checksum for Linux x64. The
+release check validates the locked tool versions, download sources, and hashes.
+It also compares `PINNED_SQLITE_VERSION` with the `data-artifacts.yaml` product
+block. The builder refuses a runtime SQLite version that differs from the pin.
+The weekly rebuild verifies the resulting database's exact product SHA.
+
+The ceremony and `release.yml` run the pin check. Before publication, the
+workflow installs the locked Python environment and runs source smoke and
+regression checks. Native source installation uses `mise run setup` and
+`mise run play`. ADR252 retires the obsolete binary-cache installer and publisher.
+Historical releases and their architecture records remain unchanged. The
+babylon-infra repository versions its operations surface independently.
 
 ## Tag namespace
 

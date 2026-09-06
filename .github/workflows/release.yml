@@ -25,7 +25,7 @@ jobs:
   release:
     name: Publish GitHub Release
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 45
     steps:
       - name: Resolve tag
         id: tag
@@ -74,18 +74,21 @@ jobs:
             --tag "$RELEASE_TAG" \
             --main-sha "$MAIN_SHA"
 
-      - name: Releases pin released infra (docs/versioning.md D5)
+      - name: Verify native toolchain and reference byte-contract pins
         run: ./tools/check_release_pins.sh
 
-      - name: Set up Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
-        with:
-          python-version: "3.12"
+      - uses: ./.github/actions/bootstrap-python
 
-      # Pinned to the version uv.lock resolves (bare pip install would
-      # silently pull whatever is latest on PyPI at run time).
-      - name: Install Commitizen
-        run: pip install commitizen==4.15.1
+      - name: Verify dependency lock matches source declarations
+        run: uv lock --check
+
+      - name: Source smoke
+        run: |
+          uv run --frozen python -c "import babylon"
+          uv run --frozen babylon --help
+
+      - name: Regression gate against committed baselines
+        run: mise run qa:regression
 
       - name: Extract release notes for this tag
         id: notes
@@ -95,7 +98,7 @@ jobs:
           TAG="$RELEASE_TAG"
           # The bump commit (made by `mise run release:bump` on dev) updated
           # CHANGELOG.md; extract this version's section for the release body.
-          cz changelog "${TAG#v}" --dry-run > release-notes.md || {
+          uv run --frozen cz changelog "${TAG#v}" --dry-run > release-notes.md || {
             echo "::warning::cz changelog extraction failed — falling back to full CHANGELOG.md"
             cp CHANGELOG.md release-notes.md
           }

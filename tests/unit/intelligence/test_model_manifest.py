@@ -1,7 +1,7 @@
-"""Behavioral contract for the signed model manifest (D3, ADR096).
+"""Behavioral contract for the bundled model manifest (D3, ADR096).
 
-The manifest ships in the package (data/model_manifest.toml) → inside the
-signed Nix closure. Entries are owner-provisioned: until the owner uploads
+The manifest ships in the package (data/model_manifest.toml). Entries are
+owner-provisioned: until the owner uploads
 weights to R2 and flips ``available = true`` with real url/sha256/bytes, no
 entry is available and provision is a loud no-op.
 """

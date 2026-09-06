@@ -37,7 +37,6 @@ OPTIONAL_DEPENDABOT_CHECKS = (
     "Classify Dependabot update",
     "Dependabot Eligibility",
 )
-INSTALLER_E2E_CHECK = "Installer e2e (real nix profile install from the signed cache)"
 
 
 def _entry(
@@ -203,13 +202,6 @@ class TestRollupFailuresLatestPerCheck:
                 _entry(name, "SKIPPED", "2026-08-26T02:48:05Z")
                 for name in OPTIONAL_DEPENDABOT_CHECKS
             ],
-        ]
-        assert pr_merge._rollup_failures(rollup) == []
-
-    def test_workflow_dispatch_only_installer_e2e_may_skip_on_a_pr(self) -> None:
-        rollup = [
-            *_dev_manifest_green(),
-            _entry(INSTALLER_E2E_CHECK, "SKIPPED", "2026-08-26T08:43:00Z"),
         ]
         assert pr_merge._rollup_failures(rollup) == []
 

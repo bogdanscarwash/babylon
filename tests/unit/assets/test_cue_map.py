@@ -1,4 +1,4 @@
-"""Behavioral contract for the cue map (``src/assets/CUE_MAP.md``).
+"""Behavioral contract for the cue map (``assets/CUE_MAP.md``).
 
 The cue map binds every rendered SFX/music asset to the exact engine
 vocabulary it fires on. This test is the map's rewrite test: every row's
@@ -24,9 +24,12 @@ from typing import Final
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-SFX_DIR = REPO_ROOT / "src" / "assets" / "sfx"
-MUSIC_DIR = REPO_ROOT / "src" / "assets" / "music"
-CUE_MAP_PATH = REPO_ROOT / "src" / "assets" / "CUE_MAP.md"
+SFX_DIR = REPO_ROOT / "assets" / "sfx"
+MUSIC_DIR = REPO_ROOT / "assets" / "music"
+CUE_MAP_PATH = REPO_ROOT / "assets" / "CUE_MAP.md"
+
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 _SRC_ROOT = REPO_ROOT / "src"
 if str(_SRC_ROOT) not in sys.path:
@@ -85,7 +88,7 @@ def _parse_rows(text: str) -> list[dict[str, str]]:
 
 def _load_sfx_manifest() -> object:
     spec = importlib.util.spec_from_file_location(
-        "generate_sfx_for_cue_map", SFX_DIR / "generate_sfx.py"
+        "generate_sfx_for_cue_map", REPO_ROOT / "tools" / "audio" / "sfx" / "generate_sfx.py"
     )
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -103,7 +106,7 @@ def _expected_sfx_assets() -> dict[str, Path]:
 
 
 def _expected_music_assets() -> dict[str, Path]:
-    generator = importlib.import_module("assets.music.generate_music")
+    generator = importlib.import_module("tools.audio.music.generate_music")
     expected: dict[str, Path] = {}
     for module, suite, index in generator.TRACKS:
         score = module.compose()

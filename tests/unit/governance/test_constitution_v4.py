@@ -591,16 +591,19 @@ def test_claude_preserves_exact_operational_gotchas() -> None:
     assert len(text.splitlines()) < 200
 
 
-def test_setup_names_host_and_optional_bevy_prerequisites() -> None:
-    """Fresh-clone setup distinguishes required services from optional client builds."""
+def test_setup_names_native_host_and_bevy_prerequisites() -> None:
+    """Fresh-clone setup declares native dependencies before the game entrypoint."""
     text = " ".join(_repository_text("SETUP_GUIDE.md").lower().split())
     required = (
         "docker compose",
         "host prerequisite",
         "bevy",
-        "optional",
-        "nix",
-        "mise run nix -- mise run rust:client-dev-dylib",
+        "libx11-dev",
+        "libasound2-dev",
+        "libvulkan-dev",
+        "rustup",
+        "rust/rust-toolchain.toml",
+        "mise run play",
     )
     missing = tuple(phrase for phrase in required if phrase not in text)
     assert missing == (), f"SETUP_GUIDE.md is missing {missing}"
@@ -622,16 +625,17 @@ def test_readme_distinguishes_both_live_sqlite_roles() -> None:
     text = " ".join(_repository_text("README.md").lower().split())
     required = (
         "deterministic reference sqlite",
-        "mutable python ``runtimedatabase`` sqlite",
+        "mutable `runtimedatabase` sqlite",
     )
     missing = tuple(phrase for phrase in required if phrase not in text)
     assert missing == (), f"README.md is missing {missing}"
 
 
-def test_readme_runs_bevy_through_the_pinned_nix_shell() -> None:
-    """The fresh-clone viewer command cannot rely on undeclared host Cargo."""
+def test_readme_runs_bevy_through_the_native_campaign_launcher() -> None:
+    """The documented game entrypoint composes durable runtime and native client."""
     text = _repository_text("README.md")
-    assert "mise run nix -- mise run rust:client-dev-dylib" in text
+    assert "\nmise run play\n" in text
+    assert "mise run nix" not in text
     assert "\nmise run rust:client-dev-dylib\n" not in text
 
 

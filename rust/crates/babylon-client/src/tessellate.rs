@@ -432,7 +432,10 @@ mod tests {
 
     #[test]
     fn real_atlas_tessellates_every_county_and_lands_near_the_ring_estimate() {
-        let atlas_bytes: &[u8] = include_bytes!("../assets/map/county_atlas.bin");
+        let atlas_bytes: &[u8] = include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../../assets/map/county_atlas.bin"
+        ));
         let atlas = CountyAtlas::parse(atlas_bytes).expect("committed atlas parses");
         let started = std::time::Instant::now();
         let tess = tessellate(&atlas);
@@ -497,7 +500,10 @@ mod tests {
     /// 1% band, giving headroom above the measured worst case.
     #[test]
     fn every_real_county_tessellates_to_its_own_shoelace_area() {
-        let atlas_bytes: &[u8] = include_bytes!("../assets/map/county_atlas.bin");
+        let atlas_bytes: &[u8] = include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../../assets/map/county_atlas.bin"
+        ));
         let atlas = CountyAtlas::parse(atlas_bytes).expect("committed atlas parses");
         let tess = tessellate(&atlas);
 

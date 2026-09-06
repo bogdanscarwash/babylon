@@ -1,0 +1,73 @@
+version: 2
+name: campaign_foundation_content_v2
+purpose: Retain complete authored scenario sources in an explicitly versioned campaign foundation.
+predecessor:
+  contract: contracts/rust_persistence_cutover_v1.yaml
+  content_layout: 1
+  source_maximum_bytes: 65535
+  disposition: Existing V1 source limits, canonical bytes and vectors remain unchanged.
+encoding:
+  type: FoundationContentBundleV2
+  domain: "babylon.campaign-foundation-content.v2\0"
+  layout: u32_big_endian_2
+  fields:
+    - {tag: 1, name: scenario_source_bytes, codec: source_utf8_v2}
+    - {tag: 2, name: prelude_source_bytes, codec: optional_source_utf8_v2}
+    - {tag: 3, name: rule_source_bytes, codec: source_utf8_v2}
+    - {tag: 4, name: defines_bytes, codec: existing_bounded_bytes_v1}
+    - {tag: 5, name: reference_bundle_manifest_bytes, codec: existing_bounded_bytes_v1}
+  source_utf8_v2:
+    frame: u32_big_endian_length_then_exact_utf8_bytes
+    maximum_bytes: 1048576
+    refused: [invalid_utf8, embedded_nul, over_bound]
+  optional_source_utf8_v2:
+    none: u8_0
+    some: u8_1_then_source_utf8_v2
+    absent_and_present_empty: distinct
+  existing_bounded_bytes_v1:
+    frame: u32_big_endian_length_then_exact_bytes
+    maximum_bytes: 67108864
+  maximum_complete_bytes: 67108864
+  digest: sha256_exact_complete_bytes
+  canonicalization: No trimming, source rewriting, compression or implicit version selection.
+construction:
+  content_version: Closed FoundationContentBundle variants V1 and V2.
+  v1: FoundationContentBundleV1::try_new remains strictly content layout 1.
+  v2: FoundationContentBundleV2::try_new explicitly constructs content layout 2.
+  capture: CampaignFoundationV1::capture_v2 explicitly captures content layout 2.
+  outer_foundation: Existing exact outer foundation field order and codecs remain unchanged.
+  identity: The nested content domain and layout are bound by the complete foundation digest.
+storage:
+  companion_relation: babylon_state.campaign_foundation_content_layout_v2
+  companion_key: campaign_id_uuid_primary_and_foreign_key_to_campaign_foundation
+  companion_version: content_layout_version_smallint_in_1_2
+  schema_marker: babylon_meta.foundation_content_schema_v2
+  schema_identity: Exact migration_sha256 in the singleton marker.
+  version_selection: Exact durable campaign content-layout row; no source-length or digest fallback.
+  existing_rows: Initial migration records layout 1 under a table lock without rewriting source or identity bytes.
+  creation: Insert foundation and its explicit content-layout row in the same transaction.
+  hydration: Select the stored layout, rebuild exact source bytes, and verify the stored foundation digest.
+  commit: Lock the requested layout FOR SHARE and match the loaded foundation before any write or acknowledgement.
+  reconciliation: Retry and ambiguous-commit acknowledgement require the same locked layout validation.
+  refusal: Unknown layout, missing required layout, changed bytes or layout mismatch.
+  missing_after_install: Refuse; never backfill or repair an absent layout row after the schema marker exists.
+  transitions: No existing campaign acquires a new content layout during advance or reopen.
+scope:
+  changed: Authored source field capacity in explicit content layout 2.
+  unchanged:
+    - BSL grammar and validation
+    - Graph and material mechanics
+    - Tick timestep and deterministic identities
+    - Existing V1 content bounds and conformance vectors
+    - Authority and capability checks
+qualification:
+  rust: rust/crates/babylon-persistence/tests/foundation_content_v2.rs
+  cohort: rust/crates/babylon-persistence/src/michigan_cohorts/tests.rs
+  required:
+    - Exact independent V2 domain, layout and ordered field encoding.
+    - Every source field accepts its bound and refuses the next byte and embedded NUL.
+    - Absent and present-empty preludes have different identities.
+    - The complete 1603-cohort source fits V2 and retains the V1 over-bound refusal.
+    - Existing V1 foundation bytes remain identical.
+    - Durable V1 and V2 restart select their stored content versions and reject mixed versions.
+    - Missing or changed layout after open refuses advance without changing live or durable ticks.

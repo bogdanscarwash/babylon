@@ -37,6 +37,7 @@ from __future__ import annotations
 import os
 import re
 import subprocess
+import tomllib
 from pathlib import Path
 from typing import Any
 
@@ -261,6 +262,25 @@ def _external_action_reference_errors(workflow_text: str, filename: str) -> list
 class TestWorkflowStepShape:
     """Every workflow step is GitHub-valid, not merely YAML-valid."""
 
+    def test_mise_installers_match_repository_minimum(self) -> None:
+        """Hosted task runners must satisfy the same exact pin as local tasks."""
+        required = tomllib.loads(Path(".mise.toml").read_text())["min_version"]
+        violations: list[str] = []
+        installers = 0
+        for path in _automation_paths():
+            automation = yaml.safe_load(path.read_text())
+            for location, step in _automation_step_locations(automation):
+                if not str(step.get("uses", "")).startswith("jdx/mise-action@"):
+                    continue
+                installers += 1
+                version = (step.get("with") or {}).get("version")
+                if version != required:
+                    violations.append(
+                        f"{path} {location}: mise version={version!r}; required={required!r}"
+                    )
+        assert installers > 0, "no hosted mise installers were checked"
+        assert not violations, "\n".join(violations)
+
     def test_no_workflow_materializes_a_hypergraph_sibling(self) -> None:
         """Python CI must not depend on a fabricated local checkout."""
         violations: list[str] = []
@@ -452,7 +472,8 @@ class TestScheduledWorkflows:
         assert weekly_fetch == ci_fetch
 
         mise = next(step for step in steps if step.get("uses") == _MISE_ACTION)
-        assert mise.get("with") == {"install_args": "uv"}
+        required = tomllib.loads(Path(".mise.toml").read_text())["min_version"]
+        assert mise.get("with") == {"version": required, "install_args": "uv"}
         assert not any("astral-sh/setup-uv" in str(step.get("uses", "")) for step in steps)
 
         fetch_index = steps.index(weekly_fetch)

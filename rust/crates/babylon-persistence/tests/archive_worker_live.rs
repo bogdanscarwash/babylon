@@ -6,6 +6,15 @@
 
 use std::str::FromStr;
 
+#[path = "support/archive_reader.rs"]
+mod archive_reader;
+#[path = "archive_worker_live/revisions.rs"]
+mod revisions;
+#[path = "archive_worker_live/wakeup.rs"]
+mod wakeup;
+use archive_reader::{scope_at, with_reader};
+use babylon_persistence::archive_revision::{ArchiveDossierBoundsV2, ArchiveDossierStateV2};
+
 use babylon_bsl::rule_pipeline::split_content;
 use babylon_bsl::rules_hash_of;
 use babylon_bsl::structural_verbs::CollectingSink;
@@ -43,7 +52,7 @@ const RULE: &str = include_str!("../../babylon-tick/content/rules/struggle-spark
 const WORKER_SEED: i64 = 2;
 
 /// One distinct stub subject per receipt tick, because the Archive keeps one
-/// current page per subject and converges repeated receipts onto it. The ids
+/// latest page per subject while preserving each immutable revision. The ids
 /// are synthetic: foundation grant seeding already covers every real Michigan
 /// county and place, and an explicit grant for a seeded subject refuses
 /// `GrantConflict` instead of shadowing the seeded row.
@@ -109,6 +118,7 @@ impl ArchiveDossierProducerV1 for StubPageProducer {
         &self,
         _campaign_id: Uuid,
         receipt: &PendingArchiveReceiptV1,
+        _knowledge: &babylon_persistence::ArchiveKnowledgeV1,
         _page_budget: usize,
     ) -> Result<ArchiveProducerOutcomeV1, SemanticArchiveErrorV1> {
         let batch = ArchiveDirtyBatchV1::try_new(
@@ -130,12 +140,13 @@ impl ArchiveDossierProducerV1 for FailAtTickProducer {
         &self,
         campaign_id: Uuid,
         receipt: &PendingArchiveReceiptV1,
+        knowledge: &babylon_persistence::ArchiveKnowledgeV1,
         page_budget: usize,
     ) -> Result<ArchiveProducerOutcomeV1, SemanticArchiveErrorV1> {
         if receipt.resolve_tick() == self.fail_at_tick {
             return Err(SemanticArchiveErrorV1::InvalidText);
         }
-        StubPageProducer.produce(campaign_id, receipt, page_budget)
+        StubPageProducer.produce(campaign_id, receipt, knowledge, page_budget)
     }
 }
 
@@ -143,21 +154,21 @@ impl ArchiveDossierProducerV1 for FailAtTickProducer {
 /// identity, proving the worker refuses identity drift before the store.
 struct WrongTickProducer;
 
-/// Stub producer that defers every receipt except one materializable tick,
-/// proving one sweep pages past accumulated deferrals under the scan bound.
-struct DeferAllButProducer {
+/// Successful quiet receipts surrounding one changed-content receipt.
+struct QuietExceptProducer {
     materialize_tick: u64,
 }
 
-impl ArchiveDossierProducerV1 for DeferAllButProducer {
+impl ArchiveDossierProducerV1 for QuietExceptProducer {
     fn produce(
         &self,
         campaign_id: Uuid,
         receipt: &PendingArchiveReceiptV1,
+        knowledge: &babylon_persistence::ArchiveKnowledgeV1,
         page_budget: usize,
     ) -> Result<ArchiveProducerOutcomeV1, SemanticArchiveErrorV1> {
         if receipt.resolve_tick() == self.materialize_tick {
-            StubPageProducer.produce(campaign_id, receipt, page_budget)
+            StubPageProducer.produce(campaign_id, receipt, knowledge, page_budget)
         } else {
             let batch = ArchiveDirtyBatchV1::try_new(
                 receipt.resolve_tick(),
@@ -169,21 +180,20 @@ impl ArchiveDossierProducerV1 for DeferAllButProducer {
     }
 }
 
-/// Stub producer that materializes every receipt except one scripted
-/// deferral, proving the consume cap binds across keyset pages no matter how
-/// materializable the remaining backlog is.
-struct MaterializeAllButProducer {
-    defer_tick: u64,
+/// Changed-content receipts surrounding one successful quiet receipt.
+struct ChangedExceptProducer {
+    quiet_tick: u64,
 }
 
-impl ArchiveDossierProducerV1 for MaterializeAllButProducer {
+impl ArchiveDossierProducerV1 for ChangedExceptProducer {
     fn produce(
         &self,
         campaign_id: Uuid,
         receipt: &PendingArchiveReceiptV1,
+        knowledge: &babylon_persistence::ArchiveKnowledgeV1,
         page_budget: usize,
     ) -> Result<ArchiveProducerOutcomeV1, SemanticArchiveErrorV1> {
-        if receipt.resolve_tick() == self.defer_tick {
+        if receipt.resolve_tick() == self.quiet_tick {
             let batch = ArchiveDirtyBatchV1::try_new(
                 receipt.resolve_tick(),
                 *receipt.tick_content_hash(),
@@ -191,7 +201,7 @@ impl ArchiveDossierProducerV1 for MaterializeAllButProducer {
             )?;
             Ok(ArchiveProducerOutcomeV1::new(batch, 0))
         } else {
-            StubPageProducer.produce(campaign_id, receipt, page_budget)
+            StubPageProducer.produce(campaign_id, receipt, knowledge, page_budget)
         }
     }
 }
@@ -201,6 +211,7 @@ impl ArchiveDossierProducerV1 for WrongTickProducer {
         &self,
         _campaign_id: Uuid,
         receipt: &PendingArchiveReceiptV1,
+        _knowledge: &babylon_persistence::ArchiveKnowledgeV1,
         _page_budget: usize,
     ) -> Result<ArchiveProducerOutcomeV1, SemanticArchiveErrorV1> {
         let wrong = PendingArchiveReceiptV1::try_new(
@@ -214,6 +225,27 @@ impl ArchiveDossierProducerV1 for WrongTickProducer {
             vec![stub_page_input(&wrong)],
         )?;
         Ok(ArchiveProducerOutcomeV1::new(batch, 0))
+    }
+}
+
+struct UndrainedProducer;
+
+impl ArchiveDossierProducerV1 for UndrainedProducer {
+    fn produce(
+        &self,
+        _campaign_id: Uuid,
+        receipt: &PendingArchiveReceiptV1,
+        _knowledge: &babylon_persistence::ArchiveKnowledgeV1,
+        _page_budget: usize,
+    ) -> Result<ArchiveProducerOutcomeV1, SemanticArchiveErrorV1> {
+        Ok(ArchiveProducerOutcomeV1::new(
+            ArchiveDirtyBatchV1::try_new(
+                receipt.resolve_tick(),
+                *receipt.tick_content_hash(),
+                Vec::new(),
+            )?,
+            1,
+        ))
     }
 }
 
@@ -511,7 +543,7 @@ fn archive_page_count(config: &Config, campaign_id: CampaignId) -> i64 {
         .connect(NoTls)
         .expect("page count connection")
         .query_one(
-            "SELECT pg_catalog.count(*) FROM babylon_meta.archive_page_v1 \
+            "SELECT pg_catalog.count(*) FROM babylon_meta.archive_page_revision_v2 \
              WHERE campaign_id = $1::uuid",
             &[campaign_id.as_uuid()],
         )
@@ -548,15 +580,15 @@ impl LiveWorkerTarget {
         let database = TestDatabase::create_from_template(&base, &template, label);
         let config = database.config(&base);
         let campaign_id = CampaignId::from_uuid(Uuid::from_u128(campaign_uuid));
+        let store = SemanticArchiveStoreV1::new(&config);
+        match store.install_schema().expect("Archive schema installs") {
+            ArchiveSchemaDispositionV1::Installed | ArchiveSchemaDispositionV1::AlreadyCurrent => {}
+        }
         let (session, bundle) = runtime_fixture_with_seed(WORKER_SEED);
         let mut runtime = DurableReplayRuntimeV2::create(&config, campaign_id, session, bundle)
             .expect("runtime constructs after activation");
         commit_ticks(&mut runtime, tick_count);
         drop(runtime);
-        let store = SemanticArchiveStoreV1::new(&config);
-        match store.install_schema().expect("Archive schema installs") {
-            ArchiveSchemaDispositionV1::Installed | ArchiveSchemaDispositionV1::AlreadyCurrent => {}
-        }
         grant_stub_knowledge(&store, campaign_id, &[1, 2, 3]);
         Self {
             database,
@@ -566,7 +598,7 @@ impl LiveWorkerTarget {
     }
 
     /// Create one campaign with `tick_count` committed receipts but grant
-    /// knowledge only for `granted_ticks`, for deferral-heavy sweep proofs.
+    /// knowledge only for `granted_ticks`, for quiet-backlog sweep proofs.
     fn create_with_grants(
         label: &str,
         campaign_uuid: u128,
@@ -579,15 +611,15 @@ impl LiveWorkerTarget {
         let database = TestDatabase::create_from_template(&base, &template, label);
         let config = database.config(&base);
         let campaign_id = CampaignId::from_uuid(Uuid::from_u128(campaign_uuid));
+        let store = SemanticArchiveStoreV1::new(&config);
+        match store.install_schema().expect("Archive schema installs") {
+            ArchiveSchemaDispositionV1::Installed | ArchiveSchemaDispositionV1::AlreadyCurrent => {}
+        }
         let (session, bundle) = runtime_fixture_with_seed(WORKER_SEED);
         let mut runtime = DurableReplayRuntimeV2::create(&config, campaign_id, session, bundle)
             .expect("runtime constructs after activation");
         commit_ticks(&mut runtime, tick_count);
         drop(runtime);
-        let store = SemanticArchiveStoreV1::new(&config);
-        match store.install_schema().expect("Archive schema installs") {
-            ArchiveSchemaDispositionV1::Installed | ArchiveSchemaDispositionV1::AlreadyCurrent => {}
-        }
         grant_stub_knowledge(&store, campaign_id, granted_ticks);
         Self {
             database,
@@ -631,7 +663,7 @@ fn live_worker_consumes_pending_receipts_in_tick_order() {
     assert!(dispositions.windows(2).all(|pair| pair[0].0 < pair[1].0));
     assert_eq!(report.applied_count(), 3);
     assert_eq!(report.already_consumed_count(), 0);
-    assert_eq!(report.deferred_count(), 0);
+    assert_eq!(report.paged_count(), 0);
     assert_eq!(report.verified_tick(), 3);
     assert_eq!(
         receipt_consumption_count(&target.config, target.campaign_id),
@@ -639,22 +671,38 @@ fn live_worker_consumes_pending_receipts_in_tick_order() {
     );
     assert_eq!(archive_page_count(&target.config, target.campaign_id), 3);
 
-    let store = SemanticArchiveStoreV1::new(&target.config);
-    let hits = store
-        .search_known(target.campaign_id, "investigate at tick 2", 10)
-        .expect("known-only search");
-    assert_eq!(hits.len(), 1);
-    assert_eq!(hits[0].page_ref(), &stub_place_page_ref());
-    assert_eq!(hits[0].verified_tick(), 2);
-    assert!(hits[0].markdown().contains("728576 jobs"));
-    assert_eq!(hits[0].citations().len(), 2);
-    assert_eq!(hits[0].citations()[0].source_id(), "live-worker-subject");
-    assert_eq!(hits[0].citations()[1].source_id(), "qcew-2024");
-    assert_eq!(hits[0].citations()[0].locator(), "subject@tick-1");
-    assert_eq!(
-        hits[0].citations()[1].locator(),
-        "fact_qcew_county_rollup county_fips=26163"
-    );
+    with_reader(&target.config, |reader| {
+        let scope = scope_at(&target.config, target.campaign_id, 3);
+        let hits = reader
+            .search_as_of(&scope, "investigate at tick 2", 10)
+            .expect("known-only scoped search");
+        assert_eq!(hits.hits.len(), 1);
+        assert_eq!(hits.hits[0].subject, stub_place_page_ref());
+        assert_eq!(hits.hits[0].content_source.tick(), 2);
+        let dossier = reader
+            .dossier_as_of(
+                &scope,
+                &stub_place_page_ref(),
+                &ArchiveDossierBoundsV2::default(),
+            )
+            .expect("exact retained dossier");
+        let ArchiveDossierStateV2::Ready {
+            page,
+            verified_through_tick: 3,
+        } = dossier.state
+        else {
+            panic!("settled scope must be ready");
+        };
+        assert!(page.markdown.contains("728576 jobs"));
+        assert_eq!(page.citations.len(), 2);
+        assert_eq!(page.citations[0].source_id(), "live-worker-subject");
+        assert_eq!(page.citations[1].source_id(), "qcew-2024");
+        assert_eq!(page.citations[0].locator(), "subject@tick-1");
+        assert_eq!(
+            page.citations[1].locator(),
+            "fact_qcew_county_rollup county_fips=26163"
+        );
+    });
     target.finish();
 }
 
@@ -680,7 +728,7 @@ fn live_worker_rerun_reconciles_without_duplicate_publication() {
     assert!(second.dispositions().is_empty());
     assert_eq!(second.applied_count(), 0);
     assert_eq!(second.already_consumed_count(), 0);
-    assert_eq!(second.deferred_count(), 0);
+    assert_eq!(second.paged_count(), 0);
     assert_eq!(
         second.verified_tick(),
         2,
@@ -714,8 +762,8 @@ fn live_worker_crash_between_receipts_resumes_exactly() {
 
     let mut probe = ArchiveWorkerV1::new(&target.config);
     let pending = probe
-        .sweep_once(target.campaign_id, &NullArchiveDossierProducerV1::new())
-        .expect("probe sweep defers the surviving receipts");
+        .sweep_once(target.campaign_id, &UndrainedProducer)
+        .expect("probe sweep stages the surviving receipts");
     let pending_dispositions = pending
         .dispositions()
         .iter()
@@ -723,15 +771,13 @@ fn live_worker_crash_between_receipts_resumes_exactly() {
         .collect::<Vec<_>>();
     assert_eq!(
         pending_dispositions,
-        vec![
-            (2, ArchiveReceiptDispositionV1::Deferred),
-            (3, ArchiveReceiptDispositionV1::Deferred),
-        ]
+        vec![(2, ArchiveReceiptDispositionV1::Paged)],
+        "an undrained receipt prevents every later producer evaluation"
     );
     assert_eq!(
         pending.verified_tick(),
         1,
-        "the deferred tick 2 caps the watermark at the contiguous prefix even though tick 1 applied"
+        "the undrained tick 2 caps the watermark at the contiguous prefix even though tick 1 applied"
     );
     assert_eq!(
         receipt_consumption_count(&target.config, target.campaign_id),
@@ -765,12 +811,7 @@ fn live_worker_crash_between_receipts_resumes_exactly() {
 
 #[test]
 #[ignore = "requires the task-owned disposable PostgreSQL runtime and committed ticks"]
-fn live_worker_sweep_pages_past_deferred_receipts_to_reach_a_materializable_one() {
-    // One real committed tick establishes the campaign; the remaining
-    // marker-backed dirty receipts insert directly, as the orphan-receipt
-    // proof already does, because committing hundreds of real ticks would
-    // exceed the disposable-runtime envelope without changing what the sweep
-    // semantics under test observe.
+fn live_worker_quiet_backlog_respects_the_bound_and_reaches_later_changed_content() {
     const TICKS: u64 = 300;
     let target = LiveWorkerTarget::create_with_grants(
         "archiveworkersweeppage",
@@ -779,43 +820,25 @@ fn live_worker_sweep_pages_past_deferred_receipts_to_reach_a_materializable_one(
         &[1, TICKS],
     );
     insert_marker_backed_dirty_receipts(&target.config, target.campaign_id, 2..=TICKS);
-
+    let producer = QuietExceptProducer {
+        materialize_tick: TICKS,
+    };
     let mut worker = ArchiveWorkerV1::new(&target.config);
-    let report = worker
-        .sweep_once(
-            target.campaign_id,
-            &DeferAllButProducer {
-                materialize_tick: TICKS,
-            },
-        )
-        .expect("one sweep pages past the deferral backlog");
-
-    assert_eq!(
-        report.deferred_count(),
-        usize::try_from(TICKS - 1).expect("bounded deferral count"),
-        "every unchanged receipt defers and stays pending"
-    );
-    assert_eq!(report.applied_count(), 1);
-    assert_eq!(report.already_consumed_count(), 0);
-    let last = report
-        .dispositions()
-        .last()
-        .expect("the materializable receipt is reached in the same sweep");
-    assert_eq!(
-        *last,
-        (TICKS, ArchiveReceiptDispositionV1::Applied),
-        "a receipt beyond the first 256-pending window still materializes in one sweep"
-    );
-    assert_eq!(
-        report.verified_tick(),
-        0,
-        "every receipt including tick 1 defers, so the deferred backlog caps the contiguous \
-         watermark at zero even though the sweep reached tick 300"
-    );
+    let first = worker
+        .sweep_once(target.campaign_id, &producer)
+        .expect("bounded quiet prefix");
+    assert_eq!(first.applied_count(), 256);
+    assert_eq!(first.verified_tick(), 256);
+    assert_eq!(archive_page_count(&target.config, target.campaign_id), 0);
+    let second = worker
+        .sweep_once(target.campaign_id, &producer)
+        .expect("remaining prefix");
+    assert_eq!(second.applied_count(), 44);
+    assert_eq!(second.verified_tick(), TICKS);
     assert_eq!(archive_page_count(&target.config, target.campaign_id), 1);
     assert_eq!(
         receipt_consumption_count(&target.config, target.campaign_id),
-        1
+        300
     );
     target.finish();
 }
@@ -824,10 +847,8 @@ fn live_worker_sweep_pages_past_deferred_receipts_to_reach_a_materializable_one(
 #[ignore = "requires the task-owned disposable PostgreSQL runtime and committed ticks"]
 fn live_worker_stops_at_the_consume_cap_and_leaves_the_remainder_pending() {
     // One real committed tick establishes the campaign; the remaining
-    // marker-backed dirty receipts insert directly, as the deferral-paging
-    // proof already does. Tick 256 defers inside the first 256-row page, so
-    // the page ends with 255 consumed; a sweep that enforces only the scan
-    // bound would then consume the whole second page and reach 299.
+    // marker-backed dirty receipts insert directly, as the quiet-backlog
+    // proof already does. Tick 256 consumes empty and fills the sweep cap.
     const TICKS: u64 = 300;
     let target = LiveWorkerTarget::create_with_grants(
         "archiveworkercap",
@@ -841,23 +862,23 @@ fn live_worker_stops_at_the_consume_cap_and_leaves_the_remainder_pending() {
     let report = worker
         .sweep_once(
             target.campaign_id,
-            &MaterializeAllButProducer { defer_tick: 256 },
+            &ChangedExceptProducer { quiet_tick: 256 },
         )
         .expect("one sweep stops at the consume cap");
 
     assert_eq!(
         report.applied_count(),
         256,
-        "255 receipts of the first page plus exactly one of the second page"
+        "255 changed receipts plus the quiet receipt at tick 256"
     );
-    assert_eq!(report.deferred_count(), 1);
+    assert_eq!(report.paged_count(), 0);
     assert_eq!(report.already_consumed_count(), 0);
-    assert_eq!(report.dispositions().len(), 257);
+    assert_eq!(report.dispositions().len(), 256);
     let last = report
         .dispositions()
         .last()
-        .expect("exactly one receipt past the deferred tail is consumed");
-    assert_eq!(*last, (257, ArchiveReceiptDispositionV1::Applied));
+        .expect("the final receipt in the bounded prefix settles");
+    assert_eq!(*last, (256, ArchiveReceiptDispositionV1::Applied));
     assert_eq!(
         receipt_consumption_count(&target.config, target.campaign_id),
         256,
@@ -865,16 +886,16 @@ fn live_worker_stops_at_the_consume_cap_and_leaves_the_remainder_pending() {
     );
     assert_eq!(
         report.verified_tick(),
-        255,
-        "the deferred tick 256 caps the contiguous watermark even though 257 applied"
+        256,
+        "the quiet tick 256 settles within the same bounded prefix"
     );
 
     let mut resumed = ArchiveWorkerV1::new(&target.config);
     let second = resumed
         .sweep_once(target.campaign_id, &StubPageProducer)
         .expect("the remainder stays pending for the next invocation");
-    assert_eq!(second.applied_count(), 44, "tick 256 plus ticks 258..=300");
-    assert_eq!(second.deferred_count(), 0);
+    assert_eq!(second.applied_count(), 44, "ticks 257..=300");
+    assert_eq!(second.paged_count(), 0);
     assert_eq!(
         receipt_consumption_count(&target.config, target.campaign_id),
         i64::try_from(TICKS).expect("bounded tick count")
@@ -884,58 +905,34 @@ fn live_worker_stops_at_the_consume_cap_and_leaves_the_remainder_pending() {
 
 #[test]
 #[ignore = "requires the task-owned disposable PostgreSQL runtime and committed ticks"]
-fn live_worker_defers_empty_batches_without_consuming() {
+fn live_worker_consumes_empty_batches_once_without_publishing_content() {
     let target = LiveWorkerTarget::create(
-        "archiveworkerdefer",
+        "archiveworkerquiet",
         0x2200_0000_0000_0000_0000_0000_0000_00a4,
         2,
     );
-
     let mut worker = ArchiveWorkerV1::new(&target.config);
-    let deferred = worker
+    let settled = worker
         .sweep_once(target.campaign_id, &NullArchiveDossierProducerV1::new())
-        .expect("null sweep defers without consuming");
-    let deferred_dispositions = deferred
-        .dispositions()
-        .iter()
-        .map(|(tick, disposition)| (*tick, *disposition))
-        .collect::<Vec<_>>();
-    assert_eq!(
-        deferred_dispositions,
-        vec![
-            (1, ArchiveReceiptDispositionV1::Deferred),
-            (2, ArchiveReceiptDispositionV1::Deferred),
-        ]
-    );
-    assert_eq!(deferred.applied_count(), 0);
-    assert_eq!(deferred.verified_tick(), 0);
-    assert_eq!(
-        receipt_consumption_count(&target.config, target.campaign_id),
-        0
-    );
-    assert_eq!(archive_page_count(&target.config, target.campaign_id), 0);
-
-    let filled = worker
-        .sweep_once(target.campaign_id, &StubPageProducer)
-        .expect("real producer fills the deferred receipts");
-    let filled_dispositions = filled
-        .dispositions()
-        .iter()
-        .map(|(tick, disposition)| (*tick, *disposition))
-        .collect::<Vec<_>>();
-    assert_eq!(
-        filled_dispositions,
-        vec![
-            (1, ArchiveReceiptDispositionV1::Applied),
-            (2, ArchiveReceiptDispositionV1::Applied),
-        ]
-    );
-    assert_eq!(filled.verified_tick(), 2);
-    assert_eq!(archive_page_count(&target.config, target.campaign_id), 2);
+        .expect("evaluated quiet receipts settle");
+    assert_eq!(settled.applied_count(), 2);
+    assert_eq!(settled.verified_tick(), 2);
     assert_eq!(
         receipt_consumption_count(&target.config, target.campaign_id),
         2
     );
+    assert_eq!(archive_page_count(&target.config, target.campaign_id), 0);
+    let mut restarted = ArchiveWorkerV1::new(&target.config);
+    let rerun = restarted
+        .sweep_once(target.campaign_id, &NullArchiveDossierProducerV1::new())
+        .expect("restarted worker reads settled prefix");
+    assert!(rerun.dispositions().is_empty());
+    assert_eq!(rerun.verified_tick(), 2);
+    assert_eq!(
+        receipt_consumption_count(&target.config, target.campaign_id),
+        2
+    );
+    assert_eq!(archive_page_count(&target.config, target.campaign_id), 0);
     target.finish();
 }
 
@@ -1017,28 +1014,30 @@ fn live_search_refuses_tampered_page_content() {
         .sweep_once(target.campaign_id, &StubPageProducer)
         .expect("sweep materializes the page");
 
-    let store = SemanticArchiveStoreV1::new(&target.config);
-    let hits = store
-        .search_known(target.campaign_id, "728576", 10)
-        .expect("untampered search returns the known page");
-    assert_eq!(hits.len(), 1);
-
-    target
-        .config
-        .connect(NoTls)
-        .expect("tamper connection")
-        .execute(
-            "UPDATE babylon_meta.archive_page_v1 SET markdown = \
+    with_reader(&target.config, |reader| {
+        let scope = scope_at(&target.config, target.campaign_id, 1);
+        let hits = reader
+            .search_as_of(&scope, "728576", 10)
+            .expect("untampered search returns the known page");
+        assert_eq!(hits.hits.len(), 1);
+        target
+            .config
+            .connect(NoTls)
+            .expect("tamper connection")
+            .execute(
+                "UPDATE babylon_meta.archive_page_revision_v2 SET markdown = \
              pg_catalog.concat(markdown, ' tampered') WHERE campaign_id = $1::uuid",
-            &[target.campaign_id.as_uuid()],
-        )
-        .expect("stored markdown tampers");
-
-    assert_eq!(
-        store.search_known(target.campaign_id, "728576", 10),
-        Err(SemanticArchiveErrorV1::StoredPageMismatch),
-        "a stored page whose bytes no longer match its content digest refuses the read"
-    );
+                &[target.campaign_id.as_uuid()],
+            )
+            .expect("stored markdown tampers");
+        assert_eq!(
+            reader.search_as_of(&scope, "728576", 10),
+            Err(babylon_persistence::SemanticArchiveReaderErrorV1::Archive(
+                SemanticArchiveErrorV1::StoredPageMismatch
+            )),
+            "bytes that disagree with their digest refuse the canonical read"
+        );
+    });
     target.finish();
 }
 
@@ -1054,19 +1053,23 @@ fn live_search_bounds_results_to_the_requested_limit() {
         .expect("sweep materializes both pages");
     assert_eq!(archive_page_count(&target.config, target.campaign_id), 2);
 
-    let store = SemanticArchiveStoreV1::new(&target.config);
-    let bounded = store
-        .search_known(target.campaign_id, "728576", 1)
-        .expect("bounded known-only search");
-    assert_eq!(
-        bounded.len(),
-        1,
-        "two pages match, so the requested limit of one must bound the result set"
-    );
-    let unbounded = store
-        .search_known(target.campaign_id, "728576", 10)
-        .expect("unbounded known-only search");
-    assert_eq!(unbounded.len(), 2);
+    with_reader(&target.config, |reader| {
+        let scope = scope_at(&target.config, target.campaign_id, 2);
+        let bounded = reader
+            .search_as_of(&scope, "728576", 1)
+            .expect("bounded search");
+        assert_eq!(
+            bounded.hits.len(),
+            1,
+            "the requested limit bounds matching subjects"
+        );
+        assert!(bounded.truncated, "the second match is reported honestly");
+        let complete = reader
+            .search_as_of(&scope, "728576", 10)
+            .expect("complete bounded search");
+        assert_eq!(complete.hits.len(), 2);
+        assert!(!complete.truncated);
+    });
     target.finish();
 }
 
@@ -1099,6 +1102,18 @@ fn assert_foundation_grant_census(client: &mut postgres::Client, campaign_id: Ca
             ("concept".to_owned(), "subject".to_owned(), 8),
             ("county".to_owned(), "containment".to_owned(), 83),
             ("county".to_owned(), "identity".to_owned(), 83),
+            (
+                "county".to_owned(),
+                "qcew-average-weekly-wage".to_owned(),
+                83
+            ),
+            ("county".to_owned(), "qcew-employment".to_owned(), 83),
+            ("county".to_owned(), "qcew-establishments".to_owned(), 83),
+            (
+                "county".to_owned(),
+                "qcew-total-annual-wages".to_owned(),
+                83
+            ),
             ("county".to_owned(), "subject".to_owned(), 83),
             ("place".to_owned(), "containment".to_owned(), 745),
             ("place".to_owned(), "identity".to_owned(), 745),
@@ -1115,7 +1130,7 @@ fn assert_foundation_grant_census(client: &mut postgres::Client, campaign_id: Ca
         .expect("total grant row query")
         .try_get(0)
         .expect("total grant row count decodes");
-    assert_eq!(total, 2_500);
+    assert_eq!(total, 2_832);
     let grant_ticks = client
         .query(
             "SELECT DISTINCT granted_tick FROM babylon_meta.archive_knowledge_grant_v1 \
@@ -1164,7 +1179,7 @@ fn live_foundation_grants_seed_at_campaign_foundation_and_reconcile_exactly() {
     assert_eq!(report.counties(), 83);
     assert_eq!(report.places(), 745);
     assert_eq!(report.concepts(), 8);
-    assert_eq!(report.grant_rows(), 2_500);
+    assert_eq!(report.grant_rows(), 2_832);
     let retried_total: i64 = client
         .query_one(
             "SELECT pg_catalog.count(*) FROM babylon_meta.archive_knowledge_grant_v1 \
@@ -1174,7 +1189,7 @@ fn live_foundation_grants_seed_at_campaign_foundation_and_reconcile_exactly() {
         .expect("retried total query")
         .try_get(0)
         .expect("retried total decodes");
-    assert_eq!(retried_total, 2_500, "the retry mints no duplicate rows");
+    assert_eq!(retried_total, 2_832, "the retry mints no duplicate rows");
 
     // Divergence: one drifted durable row refuses loudly, never rewrites.
     client

@@ -22,8 +22,8 @@ MAX_CONTRACT_BYTES = 131_072
 MAX_VECTOR_ROWS = 32
 MAX_VECTOR_LINE_BYTES = 16_384
 MAX_VECTOR_OBJECT_FIELDS = 64
-PLANS = ["Defer", "Materialize"]
-DISPOSITIONS = ["Deferred", "Applied", "AlreadyConsumed", "Paged"]
+PLANS = ["Consume", "Stage"]
+DISPOSITIONS = ["Applied", "AlreadyConsumed", "Paged"]
 ERROR_VARIANTS_USED = ["InvalidVerifiedTick", "ReceiptMismatch", "StoredPageMismatch"]
 REQUIRED_VECTOR_KINDS = {"watermark", "match", "plan", "sweep", "identity"}
 REQUIRED_ROW_IDS = {
@@ -35,14 +35,14 @@ REQUIRED_ROW_IDS = {
     },
     "match": {"match-exact-ok", "match-tick-mismatch", "match-hash-mismatch"},
     "plan": {
-        "plan-empty-defers",
+        "plan-empty-consumes",
         "plan-nonempty-materializes",
         "plan-multi-page-materializes",
         "plan-paged-materializes-without-consuming",
         "plan-empty-budget-exhausted-still-materializes",
     },
     "sweep": {
-        "sweep-all-defer",
+        "sweep-all-quiet",
         "sweep-mixed-order",
         "sweep-stop-on-first-error",
         "sweep-error-first",
@@ -346,16 +346,9 @@ def derive_watermark(first_pending_tick: int | None, max_receipt_tick: int) -> i
     return max_receipt_tick
 
 
-def classify_receipt(page_count: int, remaining: int) -> str:
-    """Recompute the pure per-receipt plan from the paged producer outcome.
-
-    A receipt defers only when the head batch is empty and nothing remains
-    undrained; an empty head with a nonzero undrained tail still materializes
-    (staged, not consumed) so nothing drops across sweeps.
-    """
-    if page_count == 0 and remaining == 0:
-        return "Defer"
-    return "Materialize"
+def classify_receipt(_page_count: int, remaining: int) -> str:
+    """Settle a fully evaluated receipt; preserve every undrained page."""
+    return "Consume" if remaining == 0 else "Stage"
 
 
 def match_batch_receipt(batch: dict[str, Any], receipt: dict[str, Any]) -> str | None:
@@ -600,8 +593,8 @@ def main() -> int:
     root = Path(__file__).resolve().parents[1]
     try:
         errors = verify_all(load_contract(arguments.schema), load_vectors(arguments.vectors), root)
-    except ArchiveWorkerContractRefusal as error:
-        print(error)
+    except ArchiveWorkerContractRefusal as refusal:
+        print(refusal)
         return 1
     for error in errors:
         print(error)

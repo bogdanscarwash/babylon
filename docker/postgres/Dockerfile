@@ -4,8 +4,8 @@
 #
 # Base: supported postgis/postgis 17-3.5 Alpine lineage for both stages. Using
 # one digest keeps the compiled extensions on the final image's PostgreSQL,
-# musl, and PostGIS ABI. The player still ships PostgreSQL 17 through the
-# flake closure (flake.nix postgresql_17.withPackages [postgis pgvector]).
+# musl, and PostGIS ABI. Native source installations and CI use this same
+# PostgreSQL 17 runtime through Docker Compose.
 #
 # PIN AND VERIFICATION CONTRACT: the digest-pinned base, checksum-pinned source
 # archives, and exact final-stage runtime package revisions are the declared

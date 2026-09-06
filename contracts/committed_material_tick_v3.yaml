@@ -1,0 +1,48 @@
+version: 3
+name: committed_material_tick_v3
+authority: ADR251
+purpose: One marker-last transaction binds graph, H3, circuit, receipts and full restart state.
+envelope:
+  domain: "babylon.committed-material-tick.v3\0"
+  header:
+    - u32_big_endian_version_3
+    - exact_16_byte_database_campaign_uuid
+    - u64_big_endian_positive_resolve_tick
+    - exact_32_byte_material_tick_content_v3_hash
+  families:
+    - {tag: 1, name: graph, codec: existing_graph_semantic_rows_v1}
+    - {tag: 2, name: graph_and_h3_state, codec: existing_material_state_rows_v1}
+    - {tag: 3, name: bsl_event, codec: existing_event_rows_v2}
+    - {tag: 4, name: choice_receipt, codec: existing_choice_receipt_rows_v1}
+    - {tag: 5, name: graph_full_checkpoint, codec: existing_nine_checkpoint_sections_v1}
+    - {tag: 6, name: archive_dirty_receipt, count: 1, hash: combined_material_tick_content_v3}
+    - {tag: 7, name: complete_material_register, count: 1, key: empty, payload: exact_material_world_register_v2_bytes}
+    - {tag: 8, name: material_receipts, count: 1, key: empty, payload: exact_material_tick_receipts_v3_bytes}
+  family_frame: u8_tag_then_u64_big_endian_count
+  row_frame: u32_big_endian_key_length_then_key_then_u32_big_endian_payload_length_then_payload
+  ordering: Existing six families preserve strict canonical key order; singular added families cannot reorder.
+  digest: sha256_exact_complete_envelope_bytes
+  maximum_complete_bytes: 67108864
+receipts:
+  domain: "babylon.material-tick-receipts.v3\0"
+  header: u32_big_endian_version_3_then_u64_big_endian_positive_resolve_tick
+  family_frame: u8_tag_then_u64_big_endian_count
+  identities: Exact_32_bytes
+  quantities_and_weeks: u64_big_endian
+  rows:
+    - {tag: 1, fields: [process_id, site_id, planned_batches, produced_batches], width: 80}
+    - {tag: 2, fields: [lot_id, order_id, route_id, quantity, final_arrival_week], width: 112}
+    - {tag: 3, fields: [lot_id, order_id, corridor_id, quantity], width: 104}
+    - {tag: 4, fields: [order_id, quantity], width: 40, meaning: arrival}
+    - {tag: 5, fields: [order_id, quantity], width: 40, meaning: accepted_delivery}
+    - {tag: 6, fields: [order_id, quantity], width: 40, meaning: quantity_realization}
+  order: Exact deterministic encounter order from advance_material_circuit_v2.
+  maximum_rows_per_family: 65536
+persistence:
+  material_rows: babylon_state.material_tick_v3
+  marker: babylon_state.tick_commit_with_envelope_layout_version_3
+  marker_order: Final durable statement, after full checkpoint, material rows and Archive outbox.
+  success: Acknowledgement only after COMMIT or exact reconciliation of the same committed candidate.
+  restart: Verify contiguous V3 markers, full eight-family envelope, exact foundation and combined world hash.
+  old_campaign: Cannot gain material state implicitly and cannot receive a V3 marker.
+  material_campaign: Cannot receive a graph-only V2 marker.

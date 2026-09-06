@@ -138,26 +138,14 @@ def test_pip_audit_jobs_install_the_operator_dependency_set() -> None:
     assert violations == []
 
 
-def test_nix_release_passes_secrets_via_env_and_pins_the_remote_bundler() -> None:
-    release = _workflow("nix-release.yml")["jobs"]["nix-release"]
-    sign_step = next(
-        step
-        for step in release["steps"]
-        if step.get("name") == "Sign and push to the babylon-cache R2 bucket"
-    )
-    appimage_step = next(
-        step
-        for step in release["steps"]
-        if step.get("name") == "AppImage demo artifact (zero-install path)"
-    )
-
-    assert set(sign_step["env"]) == {
-        "AWS_ACCESS_KEY_ID",
-        "AWS_SECRET_ACCESS_KEY",
-        "CF_ACCOUNT_ID",
-        "NIX_CACHE_SIGNING_KEY",
-    }
-    assert "${{ secrets." not in sign_step["run"]
-    assert "$NIX_CACHE_SIGNING_KEY" in sign_step["run"]
-    assert "${CF_ACCOUNT_ID}" in sign_step["run"]
-    assert re.search(r"github:ralismark/nix-appimage/[0-9a-f]{40}", appimage_step["run"])
+def test_source_release_has_no_distribution_secrets_or_inline_secret_shell_expansion() -> None:
+    workflow = _workflow("release.yml")
+    steps = workflow["jobs"]["release"]["steps"]
+    for step in steps:
+        assert "${{ secrets." not in step.get("run", "")
+    secret_environments = [
+        step["env"]
+        for step in steps
+        if any("${{ secrets." in str(value) for value in step.get("env", {}).values())
+    ]
+    assert secret_environments == [{"GITHUB_TOKEN": "${{ secrets.GITHUB_TOKEN }}"}]

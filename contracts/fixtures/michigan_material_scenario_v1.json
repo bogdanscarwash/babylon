@@ -1,0 +1,175 @@
+{
+  "delayed_route_key": "sheet-transfer",
+  "delayed_travel_weeks": 3,
+  "evidence_class": "Designed",
+  "geographic_scale": "county_industry_aggregate",
+  "goods": [
+    {
+      "key": "billet",
+      "label": "Metal billet",
+      "unit_key": "kg"
+    },
+    {
+      "key": "sheet",
+      "label": "Sheet metal",
+      "unit_key": "kg"
+    },
+    {
+      "key": "panel",
+      "label": "Metal panel",
+      "unit_key": "panel"
+    },
+    {
+      "key": "subassembly",
+      "label": "Metal subassembly",
+      "unit_key": "subassembly"
+    },
+    {
+      "key": "grain",
+      "label": "Food grain",
+      "unit_key": "kg"
+    },
+    {
+      "key": "meal",
+      "label": "Milled meal",
+      "unit_key": "kg"
+    },
+    {
+      "key": "packaged-meal",
+      "label": "Packaged meal",
+      "unit_key": "kg"
+    }
+  ],
+  "horizon_ticks": 16,
+  "processes": [
+    {
+      "capacity_batches_per_week": 8,
+      "input_good_key": "billet",
+      "input_quantity_per_batch": 10,
+      "key": "sheet-rolling",
+      "labor_capacity_hours_per_week": 80,
+      "labor_hours_per_batch": 10,
+      "opening_input_quantity": 600,
+      "opening_planned_batches": 8,
+      "output_good_key": "sheet",
+      "output_quantity_per_batch": 10,
+      "site_key": "wayne-primary-metal"
+    },
+    {
+      "capacity_batches_per_week": 8,
+      "input_good_key": "sheet",
+      "input_quantity_per_batch": 10,
+      "key": "panel-forming",
+      "labor_capacity_hours_per_week": 16,
+      "labor_hours_per_batch": 2,
+      "opening_input_quantity": 0,
+      "opening_planned_batches": 0,
+      "output_good_key": "panel",
+      "output_quantity_per_batch": 1,
+      "site_key": "macomb-fabricated-metal"
+    },
+    {
+      "capacity_batches_per_week": 4,
+      "input_good_key": "panel",
+      "input_quantity_per_batch": 2,
+      "key": "subassembly-making",
+      "labor_capacity_hours_per_week": 16,
+      "labor_hours_per_batch": 4,
+      "opening_input_quantity": 0,
+      "opening_planned_batches": 0,
+      "output_good_key": "subassembly",
+      "output_quantity_per_batch": 1,
+      "site_key": "wayne-vehicle-parts"
+    },
+    {
+      "capacity_batches_per_week": 4,
+      "input_good_key": "grain",
+      "input_quantity_per_batch": 5,
+      "key": "meal-milling",
+      "labor_capacity_hours_per_week": 4,
+      "labor_hours_per_batch": 1,
+      "opening_input_quantity": 200,
+      "opening_planned_batches": 4,
+      "output_good_key": "meal",
+      "output_quantity_per_batch": 5,
+      "site_key": "washtenaw-food"
+    },
+    {
+      "capacity_batches_per_week": 4,
+      "input_good_key": "meal",
+      "input_quantity_per_batch": 5,
+      "key": "meal-packaging",
+      "labor_capacity_hours_per_week": 8,
+      "labor_hours_per_batch": 2,
+      "opening_input_quantity": 0,
+      "opening_planned_batches": 0,
+      "output_good_key": "packaged-meal",
+      "output_quantity_per_batch": 5,
+      "site_key": "oakland-food"
+    }
+  ],
+  "routes": [
+    {
+      "buyer_site_key": "macomb-fabricated-metal",
+      "capacity_quantity_per_week": 80,
+      "good_key": "sheet",
+      "key": "sheet-transfer",
+      "ordered_quantity": 600,
+      "supplier_site_key": "wayne-primary-metal",
+      "travel_weeks": 1
+    },
+    {
+      "buyer_site_key": "wayne-vehicle-parts",
+      "capacity_quantity_per_week": 8,
+      "good_key": "panel",
+      "key": "panel-transfer",
+      "ordered_quantity": 60,
+      "supplier_site_key": "macomb-fabricated-metal",
+      "travel_weeks": 1
+    },
+    {
+      "buyer_site_key": "oakland-food",
+      "capacity_quantity_per_week": 20,
+      "good_key": "meal",
+      "key": "food-transfer",
+      "ordered_quantity": 200,
+      "supplier_site_key": "washtenaw-food",
+      "travel_weeks": 1
+    }
+  ],
+  "schema": "MichiganMaterialScenarioV1",
+  "sites": [
+    {
+      "county_geoid": "26163",
+      "key": "wayne-primary-metal",
+      "label": "Wayne primary-metal cohort",
+      "naics": "331"
+    },
+    {
+      "county_geoid": "26099",
+      "key": "macomb-fabricated-metal",
+      "label": "Macomb fabricated-metal cohort",
+      "naics": "332"
+    },
+    {
+      "county_geoid": "26163",
+      "key": "wayne-vehicle-parts",
+      "label": "Wayne vehicle-parts cohort",
+      "naics": "3363"
+    },
+    {
+      "county_geoid": "26161",
+      "key": "washtenaw-food",
+      "label": "Washtenaw food-processing cohort",
+      "naics": "311"
+    },
+    {
+      "county_geoid": "26125",
+      "key": "oakland-food",
+      "label": "Oakland food-packaging cohort",
+      "naics": "311"
+    }
+  ],
+  "standard_travel_weeks": 1,
+  "terminal_output_disposition": "on_hand_unsold"
+}

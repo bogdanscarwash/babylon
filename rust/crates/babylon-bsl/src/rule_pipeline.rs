@@ -521,7 +521,7 @@ pub struct SplitRuleFormV1 {
 /// # Errors
 ///
 /// [`LoadError::Read`] for a parse failure; [`LoadError::Content`] (uncoded)
-/// when the source contains zero `(rule …)` top-forms; or
+/// when a nonempty source contains zero `(rule …)` top-forms; or
 /// [`LoadError::DuplicateRuleId`] (`E-LOAD-001`) when two rule forms share
 /// the same id.
 pub fn split_content(source: &str) -> Result<(Vec<SExpr>, Vec<SplitRuleFormV1>), LoadError> {
@@ -543,6 +543,11 @@ pub(crate) fn split_content_unchecked(
     source: &str,
 ) -> Result<(Vec<SExpr>, Vec<SplitRuleFormV1>), LoadError> {
     let forms = read_all(source.as_bytes()).map_err(LoadError::Read)?;
+    // An empty parsed program is an explicit zero-rule transition. Comments
+    // and whitespace carry no content; intrinsic-only programs still refuse.
+    if forms.is_empty() {
+        return Ok((Vec::new(), Vec::new()));
+    }
     let mut intrinsic_forms = Vec::new();
     let mut rule_forms = Vec::new();
     for (top_index, form) in forms.into_iter().enumerate() {
@@ -1032,9 +1037,10 @@ mod split_content_tests {
     }
 
     #[test]
-    fn a_source_with_no_forms_at_all_is_a_loud_content_error() {
-        let err = split_content("").unwrap_err();
-        assert!(matches!(err, LoadError::Content(_)));
+    fn a_source_with_no_forms_is_an_explicit_empty_program() {
+        let (intrinsics, rules) = split_content("").expect("empty program");
+        assert!(intrinsics.is_empty());
+        assert!(rules.is_empty());
     }
 
     #[test]
@@ -1074,8 +1080,8 @@ mod split_content_tests {
     }
 
     #[test]
-    fn split_content_refuses_zero_rules() {
-        let err = split_content("").unwrap_err();
+    fn split_content_refuses_nonempty_intrinsic_only_sources() {
+        let err = split_content(INTRINSIC).unwrap_err();
         assert!(err.to_string().contains("found 0"));
     }
 
@@ -1851,5 +1857,30 @@ mod kind_mixing_wiring_tests {
         .unwrap_err();
         assert!(matches!(err, LoadError::Type(_)), "{err:?}");
         assert_eq!(err.spec_code(), Some("E-TYPE-040"));
+    }
+}
+
+#[cfg(test)]
+mod empty_program_tests {
+    use super::split_content;
+    use crate::rules_hash_of;
+
+    #[test]
+    fn empty_program_spelling_has_one_empty_rule_hash() {
+        let expected = rules_hash_of(&[]).expect("empty canonical rule set");
+        for source in ["", " \n\t", "; immutable observer baseline\n"] {
+            let (intrinsics, rules) = split_content(source).expect("explicit empty program");
+            assert!(intrinsics.is_empty());
+            assert!(rules.is_empty());
+            let forms: Vec<_> = rules.into_iter().map(|rule| rule.form).collect();
+            assert_eq!(rules_hash_of(&forms).unwrap(), expected);
+        }
+    }
+
+    #[test]
+    fn empty_program_does_not_swallow_malformed_or_intrinsic_only_content() {
+        assert!(split_content("(").is_err());
+        assert!(split_content("(intrinsic economy/foo :cost 1)").is_err());
+        assert!(split_content("(nonsense)").is_err());
     }
 }

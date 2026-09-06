@@ -1,0 +1,111 @@
+ADR253_immutable_archive_revisions_and_adoption:
+  status: proposed
+  date: '2026-09-05'
+  issue: PER-10
+  title: Immutable Archive revisions and exact historical observations
+  authority:
+    - ADR249 semantic atoms, disclosure grants and shared dossier composition
+    - ADR251 R2 observation identity and R6 honest Archive verification
+    - Director requirement to preserve campaign resume and Archive continuity
+  supersedes_scope:
+    - ADR249 mutable current-page composition and ordered atom membership
+    - ADR251 R2 current-only refusal when an exact retained page is available
+  context: |
+    Immutable atoms cannot recover an overwritten page's question, title,
+    narrative, unknown links or ordered composition. The observer therefore
+    needs retained publications to show an earlier committed week honestly.
+    Existing saves also need a conservative upgrade that preserves retained
+    content without inventing lost history or requiring another game tick.
+  decision: |
+    R1. RETAINED PUBLICATIONS. A publication binds campaign, subject, effective
+    tick, origin, original content-source tick and commit hash, template, exact
+    title, Markdown, search bytes, provenance, and ordered atom membership.
+    Its key is (campaign, subject, effective tick, origin), where origin is
+    AdoptedHead or Materialized. Exact retries preserve every byte and member
+    position; unequal retries refuse. The revision digest binds the complete
+    record. Existing atom identities and Markdown-only V1 digests remain exact.
+
+    R2. CONSERVATIVE ADOPTION. One installer locks out old writers before its
+    capture snapshot. It records the marker-backed durable tail D, processed
+    prefix P, and all retained heads with their original sources and members.
+    AdoptedHead publications enter coverage at D. Older overwritten history
+    stays unavailable, even if isolated atoms or an earlier content source
+    survive. Reinstallation validates the original adoption identity and never
+    advances its floor. New campaigns enroll at foundation in the same atomic
+    transaction as their first foundation insert; retries cannot repair a
+    missing enrollment silently.
+
+    R3. WITNESSED CONTENT. A retained page is readable only with a complete
+    typed emission record that reproduces its exact bytes, atoms and grants
+    through the existing renderer. New materialization persists that record.
+    Legacy Markdown is not an unambiguous typed serialization: legal labels
+    can contain newlines and delimiters. Adoption preserves opaque bytes
+    privately when complete forward validation is unavailable. Such a page
+    stays explicitly pending and exposes no narrative or search payload.
+    Unknown links retain their original lack of labels.
+
+    R4. ORDERED VERIFICATION. A worker completes the earliest receipt before
+    evaluating a later one. Stage ends forward progress for that sweep. Quiet
+    complete receipts consume without inventing page writes. Each started
+    receipt pins its exact knowledge membership atomically with publication;
+    all later Stage and Consume operations use that membership. A late grant
+    cannot rewrite an existing publication. The next eligible receipt may
+    observe it. Older requested weeks retain their original knowledge; current
+    content awaiting a later publication reports that limitation explicitly.
+
+    Every adopted campaign validates the complete desired dossier set at the
+    already committed D, including P=D and saves at the material horizon.
+    Cutover and ordinary materialization at D share the same pinned knowledge.
+    Changed content publishes as Materialized at D, which takes precedence
+    over AdoptedHead at that tick without overwriting it. Partial work cannot
+    seal coverage. The final seal binds adoption, commit, worker, knowledge and
+    complete composition. Validation creates no game tick or synthetic receipt.
+
+    R5. ONE CONFINED READER. Native and headless consumers use the same bounded
+    dossier and search operations over campaign, subject and exact requested
+    commit identity. Foundation has its own explicit scope. One read-only
+    repeatable-read transaction checks the marker, retention floor, publication
+    identity, membership, grants and scoped links. It selects the latest
+    eligible revision before filtering payload, so an opaque or corrupt newest
+    revision cannot fall back to an older answer. Known linked subjects use
+    exact IDs; retained labels never come from later pages or search results.
+
+    Ready certifies only the requested week. Pending may contain witnessed
+    retained content; Unavailable distinguishes foundation, missing retained
+    history, undisclosed subjects and unpublished pages. Corruption is an
+    error, not absence. Content-source week, history floor and global processed
+    prefix remain distinct. Bounded changelog continuation preserves real atom
+    additions, changes and removals; a removal is not a zero. Search states
+    completeness explicitly and cannot expose opaque content.
+
+    R6. CUTOVER AND DELIVERY. Retire the mutable-head relation names and old
+    reader grants without aliases or a second live reader. A required revision
+    generation on new consumption rows fences already-open old workers,
+    including quiet claims. Historical rows and codec vectors remain intact.
+    Async UI reads and actions capture campaign, committed week and hash,
+    perspective, subject and generation. The same admission check guards the
+    card, HUD and logs. Archive maintenance refreshes a held page even when
+    the processed counter does not change. Global progress cannot certify it.
+    The sole live stdio protocol advances to version 2 and reports retention
+    readiness explicitly. Mixed old and new binaries refuse at handshake;
+    transport versioning changes no foundation or committed world identity.
+
+    This is Archive storage and presentation work. It adds no economic law,
+    mathematical primitive, entitlement, mechanics timestep, player action,
+    AI narration or per-reader fog. Those boundaries retain their prior owners.
+  alternatives_rejected:
+    - Reconstructing overwritten prose or unknown links from atom history.
+    - Parsing arbitrary legacy Markdown as proof of its original typed input.
+    - Dropping old heads or advancing a horizon save to validate its Archive.
+    - Certifying a selected page from a global processed counter.
+    - Letting a later quiet receipt overtake an incomplete earlier receipt.
+    - Rewriting a publication after a late grant or adding a legacy fallback.
+  consequences:
+    - Existing bytes survive, but inaccessible history is never fabricated.
+    - Witnessed retained content can remain readable while verification runs.
+    - Opaque old content stays private until complete validation is possible.
+    - Storage grows with retained publications and their ordered memberships.
+    - Late knowledge at a terminal horizon may remain explicitly pending.
+    - Implementation and live upgrade tests must land with the scoped consumers.
+    - This proposed record does not claim G4 or human acceptance completion.
+  evidence_class: Designed

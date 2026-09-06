@@ -26,7 +26,10 @@ use bevy::mesh::PrimitiveTopology;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 
-const ATLAS_BYTES: &[u8] = include_bytes!("../../assets/map/county_atlas.bin");
+const ATLAS_BYTES: &[u8] = include_bytes!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../../assets/map/county_atlas.bin"
+));
 
 /// Cells per axis. 128×128 over the committed atlas's `world_bounds()`
 /// (roughly 4.6M × 4.3M m) puts each cell at ~36km × ~34km — small enough
@@ -198,9 +201,21 @@ pub struct SelectedCounty(pub Option<usize>);
 /// the pure, testable half this system feeds.
 pub(super) fn track_cursor_world_position(
     windows: Query<&Window, With<PrimaryWindow>>,
-    cameras: Query<(&Camera, &GlobalTransform)>,
+    cameras: Query<(&Camera, &GlobalTransform), With<super::MapCamera>>,
     mut cursor: ResMut<CursorWorldPosition>,
+    viewport: Option<Res<crate::observer_ui::ObserverViewport>>,
+    ui: Option<Res<crate::observer_ui::ObserverUiState>>,
+    buttons: Query<&Interaction, With<Button>>,
 ) {
+    if ui.as_ref().is_some_and(|ui| ui.menu_open)
+        || (viewport.is_some()
+            && buttons
+                .iter()
+                .any(|interaction| *interaction != Interaction::None))
+    {
+        cursor.0 = None;
+        return;
+    }
     let Ok(window) = windows.single() else {
         cursor.0 = None;
         return;
@@ -209,10 +224,22 @@ pub(super) fn track_cursor_world_position(
         cursor.0 = None;
         return;
     };
+    if viewport
+        .as_ref()
+        .and_then(|v| v.0)
+        .is_some_and(|rect| !rect.contains(screen_pos))
+    {
+        cursor.0 = None;
+        return;
+    }
     let Ok((camera, camera_transform)) = cameras.single() else {
         cursor.0 = None;
         return;
     };
+    if !camera.is_active {
+        cursor.0 = None;
+        return;
+    }
     cursor.0 = camera
         .viewport_to_world_2d(camera_transform, screen_pos)
         .ok();
@@ -235,7 +262,12 @@ pub(super) fn promote_selection_on_click(
     buttons: Res<ButtonInput<MouseButton>>,
     hovered: Res<HoveredCounty>,
     mut selected: ResMut<SelectedCounty>,
+    cursor: Res<CursorWorldPosition>,
+    observer: Option<Res<crate::observer::ObserverSession>>,
 ) {
+    if observer.is_some() && cursor.0.is_none() {
+        return;
+    }
     if buttons.just_pressed(MouseButton::Left) {
         selected.0 = hovered.0;
     }

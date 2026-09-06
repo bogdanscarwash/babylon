@@ -48,7 +48,7 @@ ALLOWED_TOP_LEVEL_DIRS: frozenset[str] = frozenset(
         "design",
         "docker",
         "docs",
-        "infra",  # babylon-infra git submodule (gitlink) — canonical devshell/toolchain, ADR093 Amendment X
+        "infra",  # babylon-infra git submodule (gitlink), separate infrastructure scope
         "openwiki",  # generated wiki estate + engine instructions (ADR181 Train F); daily workflow regenerates
         "output",  # tracked delivery evidence: demo screenshots (spec-113 Living Map, ADR066)
         "project",  # long-horizon governance: programs/owner/execution/notes
@@ -101,10 +101,8 @@ ALLOWED_TOP_LEVEL_FILES: frozenset[str] = frozenset(
         "SETUP_GUIDE.md",
         "data-artifacts.yaml",  # ADR076 successor registry for demoted reference tables
         "data-catalog.yaml",
-        "flake.lock",  # ADR094: game flake pin (uv2nix packaging train)
-        "flake.nix",  # ADR094: game flake — packages.babylon via uv2nix
-        "install.sh",  # ADR094 D1/D2: player installer with refuse-until-keyed cache guard
         "logging.yaml",  # runtime logging config (src/babylon/config/logging_config.py)
+        "mise.lock",  # ADR252: exact native tool download URLs and checksums
         "uv.lock",  # ADR095 D3a: uv replaces Poetry as the dependency toolchain
         "pyproject.toml",
         "setup.cfg",  # doc8 config; doc8 cannot read pyproject (documented upstream issue)
@@ -133,12 +131,20 @@ LARGE_BLOB_EXEMPTIONS: frozenset[str] = frozenset(
         # (1.6 MB target, 3 MB hard stop) and regeneration live in
         # tools/build_county_atlas.py; `mise run data:county-atlas` rebuilds
         # it. Same tolerated-in-pack reasoning as the entries above.
-        "rust/crates/babylon-client/assets/map/county_atlas.bin",
+        "assets/map/county_atlas.bin",
     }
 )
 
 #: 1 MiB — anything larger in plain git belongs in LFS (or out of the repo).
 MAX_BLOB_BYTES: int = 1_048_576
+
+# These two embedded, quality-5 Vorbis themes need 1.5 and 1.8 MiB. Keep a
+# finite per-file budget: assets/audio-renders.json pins their MIDI sources,
+# soundfont, render recipe, and exact output hashes. Licensing is unchanged.
+RUNTIME_THEME_BLOB_LIMITS: dict[str, int] = {
+    "assets/music/babylon_theme_phi.ogg": 2_097_152,
+    "assets/music/babylon_theme_panopticon.ogg": 2_097_152,
+}
 
 #: Fixed upper bound on git output lines (Power-of-10 rule 2). The repo
 #: tracks ~7k files; hitting this bound means something is deeply wrong.
@@ -208,7 +214,7 @@ def check_tracked_but_ignored(ignored_tracked_paths: list[str]) -> list[str]:
 
 
 def check_large_non_lfs_blobs(ls_tree_lines: list[str]) -> list[str]:
-    """Return HEAD blobs larger than MAX_BLOB_BYTES (LFS pointers are tiny).
+    """Return HEAD blobs exceeding the default or named budget (LFS pointers are tiny).
 
     :param ls_tree_lines: Output of ``git ls-tree -r -l HEAD`` — each line is
         ``<mode> <type> <oid> <size>\\t<path>`` (size is ``-`` for non-blobs).
@@ -225,7 +231,7 @@ def check_large_non_lfs_blobs(ls_tree_lines: list[str]) -> list[str]:
         size_field = fields[3]
         if not size_field.isdigit():
             continue
-        if int(size_field) > MAX_BLOB_BYTES:
+        if int(size_field) > RUNTIME_THEME_BLOB_LIMITS.get(path, MAX_BLOB_BYTES):
             violations.append(f"{path} ({size_field} bytes)")
     return sorted(violations)
 

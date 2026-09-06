@@ -23,15 +23,7 @@ import pytest
 from babylon.domain.geography.adjacency import ARTIFACT_PATH as ADJACENCY_PATH
 from babylon.domain.geography.adjacency import load_adjacency_pairs
 
-ATLAS_PATH = (
-    Path(__file__).resolve().parents[3]
-    / "rust"
-    / "crates"
-    / "babylon-client"
-    / "assets"
-    / "map"
-    / "county_atlas.bin"
-)
+ATLAS_PATH = Path(__file__).resolve().parents[3] / "assets" / "map" / "county_atlas.bin"
 
 MAGIC = b"BABCTY\0\x01"
 HEADER_BYTES = 128

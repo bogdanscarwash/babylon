@@ -1,0 +1,338 @@
+{
+  "contract": "QcewCountyEconomicsV1",
+  "version": 1,
+  "entries": [
+    {
+      "file": "2024.annual 26001 Alcona County, Michigan.csv",
+      "sha256": "3ca1ae4fc8385410d5c59a7a73fc9dbae77ac864b340dbcf8bc3e812dd0db153"
+    },
+    {
+      "file": "2024.annual 26003 Alger County, Michigan.csv",
+      "sha256": "373cf0371246e6713fa7bd4afb8f45541c5f3bba8d15476bb2235b1a3a6caf05"
+    },
+    {
+      "file": "2024.annual 26005 Allegan County, Michigan.csv",
+      "sha256": "38eff95934743fa8cf82abe72c5818bda9e361e7e28df98919436877fba9fca0"
+    },
+    {
+      "file": "2024.annual 26007 Alpena County, Michigan.csv",
+      "sha256": "98ff6f8afcfcff649be1174c857ba9f160324fde05feb20e78436608a3c4a268"
+    },
+    {
+      "file": "2024.annual 26009 Antrim County, Michigan.csv",
+      "sha256": "ef8c4ad810b2b0be924ca4e5dae78f09823b68bb3ee76b78577bf4ee2743101e"
+    },
+    {
+      "file": "2024.annual 26011 Arenac County, Michigan.csv",
+      "sha256": "09035eea2c6e704ecae448a03a79be8a378649395b4be7932dbba3057ccea506"
+    },
+    {
+      "file": "2024.annual 26013 Baraga County, Michigan.csv",
+      "sha256": "1d7ab7f9d5c30da5cc3b35a8660350680c7867f84c6a90a40d5743da8ff0c51a"
+    },
+    {
+      "file": "2024.annual 26015 Barry County, Michigan.csv",
+      "sha256": "8a5b9c3de66900c210d1b0e8ac0b7df973fa0371f209141b08b9a80bad9825ae"
+    },
+    {
+      "file": "2024.annual 26017 Bay County, Michigan.csv",
+      "sha256": "9a69136a59d794a73c18d03785cd50b1b3669cdf499aaaacfd4e7228802b5497"
+    },
+    {
+      "file": "2024.annual 26019 Benzie County, Michigan.csv",
+      "sha256": "198a8b820e5362322de0949903e21f240a00225dc138b8e78313266c55da3a98"
+    },
+    {
+      "file": "2024.annual 26021 Berrien County, Michigan.csv",
+      "sha256": "f6b35b4f024c2bedbde2d68d16dc9b3abab7e0ecb684db7d41d74718ebb5184e"
+    },
+    {
+      "file": "2024.annual 26023 Branch County, Michigan.csv",
+      "sha256": "b0484f5dff0277092fb01e1e87cee0bb63555cfa6e182dd7d9cebe4664eb45e1"
+    },
+    {
+      "file": "2024.annual 26025 Calhoun County, Michigan.csv",
+      "sha256": "2532869ab7fb9c6a9c0323ef1b3e77e7d418119a700771de6e26cfae4df15f22"
+    },
+    {
+      "file": "2024.annual 26027 Cass County, Michigan.csv",
+      "sha256": "90655ff2047f9454f967d768ce5926f647bcff7d6675332260af51fd89fbe367"
+    },
+    {
+      "file": "2024.annual 26029 Charlevoix County, Michigan.csv",
+      "sha256": "2385ae43c33f43052de1ea5b8fca789f6c20ab5107dae1de564bffdde79247df"
+    },
+    {
+      "file": "2024.annual 26031 Cheboygan County, Michigan.csv",
+      "sha256": "9f2ecf9b6bdd6dabc50b7c33d3cde81123786ad4b6a81963134745f08ffcc968"
+    },
+    {
+      "file": "2024.annual 26033 Chippewa County, Michigan.csv",
+      "sha256": "2ca2422f27989cdb314e88eca020bc63db2f7a914e5b9e4604c27a053ea72e09"
+    },
+    {
+      "file": "2024.annual 26035 Clare County, Michigan.csv",
+      "sha256": "e71e11f25611f7ca3e46400ce13c2f760dac191ba2783d8d3016dfd11fac9b31"
+    },
+    {
+      "file": "2024.annual 26037 Clinton County, Michigan.csv",
+      "sha256": "91a8b78ad492f7977f747ddfdfc5d7f0907c89858b55deeb4ff0b6e4cc612ebb"
+    },
+    {
+      "file": "2024.annual 26039 Crawford County, Michigan.csv",
+      "sha256": "7600248009c30b5fb6f12a68631449b09d7042fd2ae439a6e0964d55b56a6742"
+    },
+    {
+      "file": "2024.annual 26041 Delta County, Michigan.csv",
+      "sha256": "2b7ac08185951f16ab17f35ee8ea00fba6bce26eb1ad584f2c19e199d81b791a"
+    },
+    {
+      "file": "2024.annual 26043 Dickinson County, Michigan.csv",
+      "sha256": "be8727d3b7c7289c0bf690eee126ec6d11e5210564a4f2ba112dd54cec00c92c"
+    },
+    {
+      "file": "2024.annual 26045 Eaton County, Michigan.csv",
+      "sha256": "b563c0cd23e8055f8325724e0eb19286f384a1692ef35d79cfe3b09cb9f477f0"
+    },
+    {
+      "file": "2024.annual 26047 Emmet County, Michigan.csv",
+      "sha256": "b869104c542e1be91239ff3733375d37e06029a72a51afb19f098737ae40aecd"
+    },
+    {
+      "file": "2024.annual 26049 Genesee County, Michigan.csv",
+      "sha256": "675f8224e2070003ee76cc938abaf700958477e1c963fc8b627c1135b3a6b0f4"
+    },
+    {
+      "file": "2024.annual 26051 Gladwin County, Michigan.csv",
+      "sha256": "799b0cc5b3a7ded1bd281ae32d775a4e20990277cef1d7ded33e9e7ba8a1a6a7"
+    },
+    {
+      "file": "2024.annual 26053 Gogebic County, Michigan.csv",
+      "sha256": "accbfa041f6438feeb2d5f8cb50a9e983e7f0328688f9cd5ed30abaffc016225"
+    },
+    {
+      "file": "2024.annual 26055 Grand Traverse County, Michigan.csv",
+      "sha256": "dbdc0630361511d4ccc752f70cf6b4bd46aa9058b4e0a6e7b43d0acf7d69151c"
+    },
+    {
+      "file": "2024.annual 26057 Gratiot County, Michigan.csv",
+      "sha256": "91c46e1726e2c0c2953a11317565a98c44667b5f21cdb7f0d4d181f3ab50ed0f"
+    },
+    {
+      "file": "2024.annual 26059 Hillsdale County, Michigan.csv",
+      "sha256": "ada827d1ecc1eae53ab78d70fb67472fd83a9093ce28b155e2caad648cca5ca4"
+    },
+    {
+      "file": "2024.annual 26061 Houghton County, Michigan.csv",
+      "sha256": "bc66b9483fdfc4bf89c3146ebf3160b846777f303742faaf1241f29626d7fa9e"
+    },
+    {
+      "file": "2024.annual 26063 Huron County, Michigan.csv",
+      "sha256": "a08398491f553781b677ad9e92516765a026d409123e3f71d6a22ef7f8d598a0"
+    },
+    {
+      "file": "2024.annual 26065 Ingham County, Michigan.csv",
+      "sha256": "610b4d502a67d357dbc3006c92bf198ac6bf24b100302edcb1c5bd29d95205b0"
+    },
+    {
+      "file": "2024.annual 26067 Ionia County, Michigan.csv",
+      "sha256": "216102c10c69200e591e0d1ad8eae6786b27d59c9968591f421aa758eb5f7f67"
+    },
+    {
+      "file": "2024.annual 26069 Iosco County, Michigan.csv",
+      "sha256": "8610c43330389cc40c49a3a381e398728e723fac1c0ab12698b0569a10c2f363"
+    },
+    {
+      "file": "2024.annual 26071 Iron County, Michigan.csv",
+      "sha256": "732893729b3dd625b58ff99c9e0a044634a349354b3160ce5944656c723e0b15"
+    },
+    {
+      "file": "2024.annual 26073 Isabella County, Michigan.csv",
+      "sha256": "5b6f19dbde3c64ae010d752a1b22dd31c88dba6a531fd6388ba1f07c11bb2733"
+    },
+    {
+      "file": "2024.annual 26075 Jackson County, Michigan.csv",
+      "sha256": "ae0e0dc8ebcc25f0e6ae2eb8848966aa302ccf925e69c8404e2a2f9f8cce19cb"
+    },
+    {
+      "file": "2024.annual 26077 Kalamazoo County, Michigan.csv",
+      "sha256": "2c2fd22b5f0208407ea83181b1fd9accda4f3703d7f2e80d65ffc3fa20d15b83"
+    },
+    {
+      "file": "2024.annual 26079 Kalkaska County, Michigan.csv",
+      "sha256": "6305aa504b1904556ff3e97446234e99fe8ee40b98a9d391fdde0615554399de"
+    },
+    {
+      "file": "2024.annual 26081 Kent County, Michigan.csv",
+      "sha256": "eb67ab6d8fb5bd79edef28ba6b0b7ab8acb4dec1197ffc21b7c5386bfde1c248"
+    },
+    {
+      "file": "2024.annual 26083 Keweenaw County, Michigan.csv",
+      "sha256": "bd376833ef315f8a55194da96da2891cd36968e99f5ce8f403a8f6b48eb09777"
+    },
+    {
+      "file": "2024.annual 26085 Lake County, Michigan.csv",
+      "sha256": "24375b2aad37fb23aa67f57b4c14fce7fa066775d0a00fdbe52bf1cd2d4ce2a9"
+    },
+    {
+      "file": "2024.annual 26087 Lapeer County, Michigan.csv",
+      "sha256": "fc2c9d1c9e88980e42bdf5e77d6fa04c41cda51f30889bd9b7bbd6b55bea5260"
+    },
+    {
+      "file": "2024.annual 26089 Leelanau County, Michigan.csv",
+      "sha256": "cdece72ef65006a230104ba181432819d8954c4d5dfb3ad5387a147387010ead"
+    },
+    {
+      "file": "2024.annual 26091 Lenawee County, Michigan.csv",
+      "sha256": "e33503514d983aaf0b259a7b0af5349d620c32c083da817aa51512c69159f4aa"
+    },
+    {
+      "file": "2024.annual 26093 Livingston County, Michigan.csv",
+      "sha256": "2e18bae196a532d5004b3d8a0f748455de98683804827f8263e79f65784ec582"
+    },
+    {
+      "file": "2024.annual 26095 Luce County, Michigan.csv",
+      "sha256": "cc92a4771ff1a1dc3cadd32e160a037de8342e8ff0086a2e8d954c1ca96770c7"
+    },
+    {
+      "file": "2024.annual 26097 Mackinac County, Michigan.csv",
+      "sha256": "813c3a0e456c1e7d93a9c328bef800bb8a19b5b73c9fc8505605f7aaf22a91ad"
+    },
+    {
+      "file": "2024.annual 26099 Macomb County, Michigan.csv",
+      "sha256": "1ad14e796385b82ff43a264af463f9febd7584d380a09a076eb7289be7d78b99"
+    },
+    {
+      "file": "2024.annual 26101 Manistee County, Michigan.csv",
+      "sha256": "ae7c50005647e7805e0e122c3af96a2dd521c16107cd95b0e6e1876a8c5262dc"
+    },
+    {
+      "file": "2024.annual 26103 Marquette County, Michigan.csv",
+      "sha256": "3580b53a4f371491401bcbacf37c1c14f967ae5d32cdc061e09d7957f255dba5"
+    },
+    {
+      "file": "2024.annual 26105 Mason County, Michigan.csv",
+      "sha256": "223567061b8884df075761ff72384afc4cfc23baffafc45f3deeec1d8b721261"
+    },
+    {
+      "file": "2024.annual 26107 Mecosta County, Michigan.csv",
+      "sha256": "bc65b17a6bccfe2be6255dcf76fce86490b66d069aab53a91f78c3bb0aa6ad18"
+    },
+    {
+      "file": "2024.annual 26109 Menominee County, Michigan.csv",
+      "sha256": "285b3860e0ce2f4b496a87061972c629f48f4ea97bf86c982647823666beb0cc"
+    },
+    {
+      "file": "2024.annual 26111 Midland County, Michigan.csv",
+      "sha256": "4bb0ee657364cb55e66fdfe930a7be2ff43fd5fb2243ce5a12ba6ee7b71b9089"
+    },
+    {
+      "file": "2024.annual 26113 Missaukee County, Michigan.csv",
+      "sha256": "8d35813687f49242d915f397571fbe6c0dcd92ab2ea8be96da622150d02d489d"
+    },
+    {
+      "file": "2024.annual 26115 Monroe County, Michigan.csv",
+      "sha256": "130f192f6787c6a4e45b958d74fa883d36d80bd454b93c5a7de108cf4b37ca28"
+    },
+    {
+      "file": "2024.annual 26117 Montcalm County, Michigan.csv",
+      "sha256": "c0eebcc4a36819c6dc15539a796a0bded7e9991d10698d947104a848a392df91"
+    },
+    {
+      "file": "2024.annual 26119 Montmorency County, Michigan.csv",
+      "sha256": "b42cdea2e10331a54357aaea74bffb500f9320556c1de3f9e4e2a9d0ae70a35e"
+    },
+    {
+      "file": "2024.annual 26121 Muskegon County, Michigan.csv",
+      "sha256": "fea65ac0dd7eb8fc3b1fd1e3231c98a3119d776630d53046d4cb43ec182dc380"
+    },
+    {
+      "file": "2024.annual 26123 Newaygo County, Michigan.csv",
+      "sha256": "60dad9cbe20a9f2b0649af1e763ced8a7c3f2247e8d3623bf638c18f2a8c08d7"
+    },
+    {
+      "file": "2024.annual 26125 Oakland County, Michigan.csv",
+      "sha256": "db20313e5300152fc97489f2975bf17de053441d3eae246abe5d5a67c0ac20f8"
+    },
+    {
+      "file": "2024.annual 26127 Oceana County, Michigan.csv",
+      "sha256": "1c22dd7ca1631e0305efafb2f1888fa23d1c80e55682cb4a24587ecfb226172c"
+    },
+    {
+      "file": "2024.annual 26129 Ogemaw County, Michigan.csv",
+      "sha256": "8987576d4e5cd14f3fb1d12622e3498f5e68ecca43db9a09db497da824526709"
+    },
+    {
+      "file": "2024.annual 26131 Ontonagon County, Michigan.csv",
+      "sha256": "63beb53a5e6cb7bb16e4cf17065f63da0b72ebb5906247aa6e468f9c78b97422"
+    },
+    {
+      "file": "2024.annual 26133 Osceola County, Michigan.csv",
+      "sha256": "143f326933888a589cd75863788c3c73a986654829beb5bea53831bfd41e76aa"
+    },
+    {
+      "file": "2024.annual 26135 Oscoda County, Michigan.csv",
+      "sha256": "cd9bbcc0ee40984a458a3f1ccbfd58681fa6d7149117aeb00756257eac6d040c"
+    },
+    {
+      "file": "2024.annual 26137 Otsego County, Michigan.csv",
+      "sha256": "538f572bac0832daec6edd4ad1156c35b7b0cf01cb0e9ccd8494c75ddadf9898"
+    },
+    {
+      "file": "2024.annual 26139 Ottawa County, Michigan.csv",
+      "sha256": "509cf3043a525aa3d3c65ad59c3a46f731020132cd473d3033de2908ff4d82b0"
+    },
+    {
+      "file": "2024.annual 26141 Presque Isle County, Michigan.csv",
+      "sha256": "1dce224b8e788e7fad07bf0121b3afb0f61706bd9de1ac5f585cb7a9270f68da"
+    },
+    {
+      "file": "2024.annual 26143 Roscommon County, Michigan.csv",
+      "sha256": "3007f9c4828a4ac742c4ce75390e493f2d26a90f1e18d0ba6370c2780a531efb"
+    },
+    {
+      "file": "2024.annual 26145 Saginaw County, Michigan.csv",
+      "sha256": "3f0d85722abaa99eceb4e48676e2e7ee844fb31e6b5a286b77d6b9b6e81832b8"
+    },
+    {
+      "file": "2024.annual 26147 St. Clair County, Michigan.csv",
+      "sha256": "4dba4a6be759a3492c30f578b4dc4d844a6d815cfad2c17ebbe86f68ee23a927"
+    },
+    {
+      "file": "2024.annual 26149 St. Joseph County, Michigan.csv",
+      "sha256": "25c9b020ec0ea272d5c9b4236ee32f4739a34436a936566c259d6f960788250b"
+    },
+    {
+      "file": "2024.annual 26151 Sanilac County, Michigan.csv",
+      "sha256": "c39e02a282707ec5b9f30cafcd340184f5a7bef83b439e5d1aaa227ba7acc3d8"
+    },
+    {
+      "file": "2024.annual 26153 Schoolcraft County, Michigan.csv",
+      "sha256": "fbdfe1e941aa7905cee6cc37fce1a78b8905d50a94769fa34f684221e2758985"
+    },
+    {
+      "file": "2024.annual 26155 Shiawassee County, Michigan.csv",
+      "sha256": "86c33ccc1c4f1f77fcb97be3e5fdee877408f6ffa0ca64cf72d1774256b8071d"
+    },
+    {
+      "file": "2024.annual 26157 Tuscola County, Michigan.csv",
+      "sha256": "d6abb86375ee791221b75b9bacc279fd3685e1b271493f33c64ce7dd3fdbf20f"
+    },
+    {
+      "file": "2024.annual 26159 Van Buren County, Michigan.csv",
+      "sha256": "abe99da5187361b835c9eef92925225e1ae4bdccc677a3b1b83c08e7478fb8d9"
+    },
+    {
+      "file": "2024.annual 26161 Washtenaw County, Michigan.csv",
+      "sha256": "1edb6a301dfdb6cd8418e4929e17a86466c46fd01dab7e138289bdfd629cd6c4"
+    },
+    {
+      "file": "2024.annual 26163 Wayne County, Michigan.csv",
+      "sha256": "1382b5821ac95ca6f344e50f76b6846f76f841b0bc32ebf69ee8fbadc545481a"
+    },
+    {
+      "file": "2024.annual 26165 Wexford County, Michigan.csv",
+      "sha256": "c40200b8f726f6daadc39d5704685082448b7f000ff613b56a8dbf5dec88b43c"
+    }
+  ]
+}

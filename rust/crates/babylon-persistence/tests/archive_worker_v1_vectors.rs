@@ -129,8 +129,8 @@ fn error_name(error: &SemanticArchiveErrorV1) -> &'static str {
 
 fn plan_name(plan: ArchiveReceiptPlanV1) -> &'static str {
     match plan {
-        ArchiveReceiptPlanV1::Defer => "Defer",
-        ArchiveReceiptPlanV1::Materialize => "Materialize",
+        ArchiveReceiptPlanV1::Stage => "Stage",
+        ArchiveReceiptPlanV1::Consume => "Consume",
     }
 }
 
@@ -226,7 +226,7 @@ fn match_rows() -> Vec<Value> {
 
 fn plan_rows() -> Vec<Value> {
     [
-        ("plan-empty-defers", 0, 0),
+        ("plan-empty-consumes", 0, 0),
         ("plan-nonempty-materializes", 1, 0),
         ("plan-multi-page-materializes", 2, 0),
         ("plan-paged-materializes-without-consuming", 256, 316),
@@ -254,12 +254,12 @@ fn plan_rows() -> Vec<Value> {
 fn sweep_rows() -> Vec<Value> {
     [
         (
-            "sweep-all-defer",
+            "sweep-all-quiet",
             json!([
                 {"batch": paged_batch_ref_json(42, TICK_CONTENT_HASH_HEX, 0, 0)},
                 {"batch": paged_batch_ref_json(44, TICK_CONTENT_HASH_HEX, 0, 0)},
             ]),
-            json!({"expected": ["Defer", "Defer"]}),
+            json!({"expected": ["Consume", "Consume"]}),
         ),
         (
             "sweep-mixed-order",
@@ -268,7 +268,7 @@ fn sweep_rows() -> Vec<Value> {
                 {"batch": paged_batch_ref_json(43, TICK_CONTENT_HASH_HEX, 1, 0)},
                 {"batch": paged_batch_ref_json(44, TICK_CONTENT_HASH_HEX, 1, 0)},
             ]),
-            json!({"expected": ["Defer", "Materialize", "Materialize"]}),
+            json!({"expected": ["Consume", "Consume", "Consume"]}),
         ),
         (
             "sweep-stop-on-first-error",
@@ -296,28 +296,28 @@ fn sweep_rows() -> Vec<Value> {
             json!([
                 {"batch": paged_batch_ref_json(42, TICK_CONTENT_HASH_HEX, 256, 572)},
             ]),
-            json!({"expected": ["Materialize"]}),
+            json!({"expected": ["Stage"]}),
         ),
         (
             "sweep-foundation-drain-two",
             json!([
                 {"batch": paged_batch_ref_json(42, TICK_CONTENT_HASH_HEX, 256, 316)},
             ]),
-            json!({"expected": ["Materialize"]}),
+            json!({"expected": ["Stage"]}),
         ),
         (
             "sweep-foundation-drain-three",
             json!([
                 {"batch": paged_batch_ref_json(42, TICK_CONTENT_HASH_HEX, 256, 60)},
             ]),
-            json!({"expected": ["Materialize"]}),
+            json!({"expected": ["Stage"]}),
         ),
         (
             "sweep-foundation-drain-four",
             json!([
                 {"batch": paged_batch_ref_json(42, TICK_CONTENT_HASH_HEX, 60, 0)},
             ]),
-            json!({"expected": ["Materialize"]}),
+            json!({"expected": ["Consume"]}),
         ),
     ]
     .into_iter()
@@ -337,7 +337,6 @@ fn sweep_rows() -> Vec<Value> {
 
 fn disposition_name(disposition: ArchiveReceiptDispositionV1) -> &'static str {
     match disposition {
-        ArchiveReceiptDispositionV1::Deferred => "Deferred",
         ArchiveReceiptDispositionV1::Applied => "Applied",
         ArchiveReceiptDispositionV1::AlreadyConsumed => "AlreadyConsumed",
         ArchiveReceiptDispositionV1::Paged => "Paged",
@@ -345,15 +344,11 @@ fn disposition_name(disposition: ArchiveReceiptDispositionV1) -> &'static str {
 }
 
 fn identity_row() -> Value {
-    let plan_names: Vec<&str> = [
-        ArchiveReceiptPlanV1::Defer,
-        ArchiveReceiptPlanV1::Materialize,
-    ]
-    .into_iter()
-    .map(plan_name)
-    .collect();
+    let plan_names: Vec<&str> = [ArchiveReceiptPlanV1::Consume, ArchiveReceiptPlanV1::Stage]
+        .into_iter()
+        .map(plan_name)
+        .collect();
     let disposition_names: Vec<&str> = [
-        ArchiveReceiptDispositionV1::Deferred,
         ArchiveReceiptDispositionV1::Applied,
         ArchiveReceiptDispositionV1::AlreadyConsumed,
         ArchiveReceiptDispositionV1::Paged,
@@ -535,7 +530,7 @@ fn shared_identity_vectors_match_the_pinned_sql_and_taxonomy() {
     );
     assert_eq!(
         data["dispositions"].as_array().expect("dispositions").len(),
-        4,
+        3,
         "disposition taxonomy stays pinned"
     );
     assert_eq!(

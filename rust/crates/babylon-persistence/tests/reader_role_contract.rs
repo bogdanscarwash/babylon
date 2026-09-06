@@ -23,6 +23,22 @@ fn reader_role_create_sql_pins_exact_locked_attributes() {
 }
 
 #[test]
+fn verification_read_separates_processing_from_page_content() {
+    let schema = babylon_persistence::ARCHIVE_VERIFICATION_SCHEMA_V1_SQL;
+    assert!(schema.contains("FROM babylon_state.tick_commit AS marker"));
+    assert!(schema.contains("consumed.tick_content_hash = marker.tick_content_hash"));
+    assert!(
+        schema.contains("MIN(marker.resolve_tick) FILTER (WHERE consumed.campaign_id IS NULL) - 1")
+    );
+    assert!(!schema.contains("UPDATE"));
+    assert!(!schema.contains("archive_page_v1"));
+    let query = babylon_persistence::ARCHIVE_VERIFICATION_STATUS_SQL_V1;
+    assert!(query.contains("public.v_archive_verification_v1"));
+    assert!(!query.contains("babylon_state"));
+    assert!(!query.contains("babylon_meta"));
+}
+
+#[test]
 fn reader_role_schema_grants_select_only_on_the_fog_safe_views() {
     assert!(READER_ROLE_SCHEMA_V1_SQL.contains("CREATE VIEW public.v_committed_tick_status_v1"));
     assert!(READER_ROLE_SCHEMA_V1_SQL.contains("FROM babylon_state.tick_commit"));
@@ -40,8 +56,8 @@ fn reader_role_schema_grants_select_only_on_the_fog_safe_views() {
     }
     assert_eq!(
         READER_ROLE_SCHEMA_V1_SQL.matches("GRANT SELECT").count(),
-        5,
-        "one tick-view grant plus four guarded atom-view grants, nothing else"
+        10,
+        "historical optional views plus the single guarded immutable revision-view grant"
     );
     assert!(READER_ROLE_SCHEMA_V1_SQL
         .contains("GRANT SELECT ON public.v_committed_tick_status_v1 TO babylon_reader"));
@@ -50,6 +66,9 @@ fn reader_role_schema_grants_select_only_on_the_fog_safe_views() {
         "public.v_archive_atom_visible",
         "public.v_county_card_atoms",
         "public.v_archive_subject_atoms",
+        "public.v_archive_verification_v1",
+        "public.v_known_county_economy_v1",
+        "public.v_observer_economy_foundation_v1",
     ] {
         assert!(
             READER_ROLE_SCHEMA_V1_SQL
@@ -189,18 +208,6 @@ fn reader_privilege_census_pins_the_exact_restricted_relation_set() {
     assert!(authority.contains("rolsuper"));
 }
 
-/// Extract one `&str` constant body from the reader source, terminated by the
-/// first `;` outside the literal (the pinned SQL carries no semicolon).
-fn reader_constant_body<'a>(source: &'a str, name: &str) -> &'a str {
-    source
-        .split(&format!("{name}: &str = "))
-        .nth(1)
-        .unwrap_or_else(|| panic!("{name} constant exists"))
-        .split(';')
-        .next()
-        .unwrap_or_else(|| panic!("{name} constant terminates"))
-}
-
 /// Extract the quoted entries of one `[&str; N]` constant from the reader
 /// source, terminated by the first `]`.
 fn reader_string_array_body<'a>(source: &'a str, name: &str) -> Vec<&'a str> {
@@ -243,70 +250,28 @@ fn reader_footprint_is_existence_dependent_on_the_atom_schema() {
 }
 
 #[test]
-fn reader_search_and_projection_reads_touch_only_fog_safe_views() {
-    let source = include_str!("../src/reader.rs");
-    for (name, view) in [
-        (
-            "READER_KNOWN_SEARCH_SQL_V1",
-            "public.v_archive_page_known_v1",
-        ),
-        ("READER_PAGE_ATOMS_SQL_V1", "public.v_archive_atom_visible"),
-        ("COUNTY_CARD_ATOMS_SQL_V1", "public.v_county_card_atoms"),
-        ("SUBJECT_ATOMS_SQL_V1", "public.v_archive_subject_atoms"),
+fn revision_reader_has_no_current_head_sql_path() {
+    let source = include_str!("../src/archive_revision/read.rs");
+    for forbidden in [
+        "babylon_meta.",
+        "babylon_state.",
+        "archive_page_atom_v1",
+        "v_archive_subject_atoms",
     ] {
-        let body = reader_constant_body(source, name);
         assert!(
-            body.contains(&format!("FROM {view}")),
-            "{name} must read through {view}"
+            !source.contains(forbidden),
+            "read boundary must not name {forbidden}"
         );
-        for forbidden in [
-            "babylon_meta",
-            "babylon_state",
-            "MAX(",
-            "archive_page_atom_v1",
-        ] {
-            assert!(
-                !body.contains(forbidden),
-                "{name} must never name {forbidden}"
-            );
-        }
     }
-    let atoms = reader_constant_body(source, "READER_PAGE_ATOMS_SQL_V1");
-    assert!(
-        atoms.contains("page_subject_kind = $2"),
-        "the page atom read addresses the composing page"
-    );
-    assert!(atoms.contains("ORDER BY position"));
-    let county = reader_constant_body(source, "COUNTY_CARD_ATOMS_SQL_V1");
-    assert!(county.contains("page_subject_id = $2"));
-    assert!(county.contains("ORDER BY position"));
-    // The changelog history read is subject-scoped through the fifth
-    // fog-safe view: no composition join, ordered for the changelog strip.
-    let history = reader_constant_body(source, "SUBJECT_ATOMS_SQL_V1");
-    assert!(history.contains("subject_kind = $2"));
-    assert!(history.contains("subject_id = $3"));
-    assert!(history.contains("ORDER BY signal_key, valid_tick"));
-    assert!(
-        !history.contains("archive_page_atom_v1"),
-        "the history read must never join the delete-replaced composition table"
-    );
-    // The atom reads carry the exact 15-column decode layout the shared
-    // `decode_stored_atom` revalidator expects, `valid_tick` then `atom_id`
-    // last. Continuation backslashes are whitespace-normalized first.
-    for name in [
-        "READER_PAGE_ATOMS_SQL_V1",
-        "COUNTY_CARD_ATOMS_SQL_V1",
-        "SUBJECT_ATOMS_SQL_V1",
+    for required in [
+        "v_archive_revision_known_v2",
+        "v_archive_revision_scope_v2",
+        "v_archive_revision_index_v2",
+        "v_archive_tick_knowledge_v2",
     ] {
-        let body = reader_constant_body(source, name).replace("\\\n", " ");
-        let body = body.split_whitespace().collect::<Vec<_>>().join(" ");
         assert!(
-            body.contains(
-                "SELECT campaign_id, subject_kind, subject_id, signal_key, grant_key, \
-                 evidence_class, value_kind, value_text, value_f64, value_u64, value_bool, \
-                 provenance_source_id, provenance_locator, valid_tick, atom_id FROM"
-            ),
-            "{name} must pin the exact decode column layout, got {body}"
+            source.contains(required),
+            "one scoped read requires {required}"
         );
     }
 }

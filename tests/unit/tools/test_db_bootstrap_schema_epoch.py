@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import tomllib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -77,29 +78,26 @@ def test_repository_cargo_concurrency_matches_the_host_contract() -> None:
 
 def test_sccache_uses_the_repository_local_policy_cache() -> None:
     mise = (ROOT / ".mise.toml").read_text(encoding="utf-8")
-    flake = (ROOT / "flake.nix").read_text(encoding="utf-8")
+    environment = (ROOT / ".codex/environments/environment.toml").read_text(encoding="utf-8")
     policy = (ROOT / ".codex/host/policy.sh").read_text(encoding="utf-8")
 
     assert "SCCACHE_DIR" not in mise
-    assert "SCCACHE_DIR" not in flake
-    assert "codex_rust_dispatcher_bin" in flake
-    assert "codex-rust-host/v11/cargo" in flake
+    assert "codex_rust_dispatcher_bin" in environment
+    assert (
+        'export PATH="$codex_rust_dispatcher_bin:$codex_rust_cargo_home/bin:$PATH"' in environment
+    )
     assert "CODEX_RUST_SCCACHE_POLICY_KEY=0.17.0-p2" in policy
     assert "printf '%s/sccache/%s/%s\\n'" in policy
     assert "/media/user/data/sccache" not in mise
-    assert "/media/user/data/sccache" not in flake
 
 
-def test_default_nix_shell_conditions_the_linux_only_bevy_closure() -> None:
-    flake = (ROOT / "flake.nix").read_text(encoding="utf-8")
-
-    assert flake.count("devShells.default = pkgs.mkShell") == 1
-    assert "linuxBevyPackages = lib.optionals pkgs.stdenv.isLinux" in flake
-    assert "linuxBevyLibraryPackages" not in flake
-    assert "]) ++ linuxBevyPackages ++ rustToolchainPackages ++ [" in flake
-    assert "] ++ linuxBevyPackages)}" in flake
-    for package in ("alsa-lib", "udev", "wayland", "libxkbcommon"):
-        assert flake.count(package) == 1
+def test_native_ci_and_setup_document_the_bevy_development_dependencies() -> None:
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    guide = (ROOT / "SETUP_GUIDE.md").read_text(encoding="utf-8")
+    assert "tools/install_ci_apt_packages.sh" in workflow
+    for package in ("libasound2-dev", "libudev-dev", "libwayland-dev", "libxkbcommon-dev"):
+        assert package in workflow
+        assert package in guide
 
 
 def test_local_bootstrap_callers_expose_the_single_rust_authority_root() -> None:
@@ -136,7 +134,9 @@ def test_local_bootstrap_callers_expose_the_single_rust_authority_root() -> None
 
     for relative in ("README.md", "SETUP_GUIDE.md"):
         guide = (ROOT / relative).read_text(encoding="utf-8")
-        assert "`mise run setup` requires [Nix]" in guide
+        assert "rustup" in guide
+        assert "mise run setup" in guide
+        assert "requires [Nix]" not in guide
 
 
 def test_runtime_cli_has_one_exact_connecting_schema_preflight_mode() -> None:
@@ -258,7 +258,8 @@ def test_persistence_bootstrap_provisions_mise_for_runtime_tasks() -> None:
     mise_setup = action.index("uses: jdx/mise-action@3c2e0cf82a5b2e5249f0d3635a4d83d0ae861518 # v4")
     rust_setup = action.index("- name: Install pinned Rust toolchain")
     assert mise_setup < rust_setup
-    assert "version: 2026.8.12" in action[mise_setup:rust_setup]
+    required = tomllib.loads((ROOT / ".mise.toml").read_text(encoding="utf-8"))["min_version"]
+    assert f"version: {required}" in action[mise_setup:rust_setup]
 
 
 def test_pr_pg_lane_runs_the_rust_live_matrix_without_python_reference_data() -> None:

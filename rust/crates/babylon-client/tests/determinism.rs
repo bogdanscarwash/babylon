@@ -71,6 +71,7 @@ fn visual_presentation_leaves_the_app_owned_engine_tick_report_unchanged() {
         MinimalPlugins,
         AssetPlugin::default(),
         ImagePlugin::default(),
+        bevy::text::TextPlugin,
         TexturePlugin,
     ));
     visual_app.add_plugins((

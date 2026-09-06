@@ -163,7 +163,7 @@ mutation = [
 # babylon_data (thin wrapper around the data trove at
 # /media/user/data/babylon-data/; src/babylon_data is a committed symlink,
 # ADR-037) is deliberately NOT packaged: the symlink is dead in every build
-# sandbox (nix build, CI, `uv build`) and ships in no wheel either way
+# sandbox (CI or `uv build`) and ships in no wheel either way
 # (ADR095's "default install slims toward the player closure"). Unlike
 # poetry-core — which hard-failed on a declared-but-absent include and
 # forced the ADR094/ADR095 workaround note that used to live here —
@@ -171,9 +171,8 @@ mutation = [
 packages = ["src/babylon"]
 
 [tool.hatch.build.targets.sdist]
-# sdist is consumed by neither uv2nix (wheel preference) nor the player
-# closure (nix builds from the fileset-filtered tree). Kept correct for a
-# potential PyPI future: never ship the dead data symlink.
+# Keep source distributions independent of the external data drive:
+# never ship the dead data symlink.
 exclude = ["/src/babylon_data"]
 
 [project.urls]
@@ -284,7 +283,7 @@ src = [
 ]
 exclude = [
     ".codex/host/",  # immutable shared Rust host-policy bytes have their own executable law
-    "assets/music/",
+    "tools/audio/music/legacy/",
     "specs/",
     "**/*.md",  # ruff 0.16 formats Python blocks in Markdown by default; docs keep their own style
 ]
@@ -373,7 +372,7 @@ exclude = [
     "tests/",
     "build/",
     "dist/",
-    "assets/music/",
+    "tools/audio/music/legacy/",
     "specs/",
     "src/babylon_data/",
 ]
@@ -541,8 +540,7 @@ asyncio = "WARNING"
 [build-system]
 # hatchling replaced poetry-core 2026-07-22 — the last Poetry artifact in
 # the toolchain (tasks/lock/CI went uv in ADR095's train). Chosen over
-# uv_build for explicit src-layout packages= control and longer-proven
-# pyproject-build-systems support in the uv2nix lane.
+# uv_build for explicit src-layout packages= control.
 requires = [
     "hatchling>=1.32.0",
 ]

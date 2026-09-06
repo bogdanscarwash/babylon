@@ -165,11 +165,11 @@ def test_launcher_thread_vars_match_canonical_pin() -> None:
     """The launcher's sealed thread-var set must equal the canonical pin.
 
     ``tests/conftest.py``'s ``_blas_var`` loop (mirrored in ``.mise.toml``
-    ``[env]`` and ``flake.nix``) is the canonical BLAS/rayon thread-cap pin --
+    ``[env]``) is the canonical BLAS/rayon thread-cap pin --
     see ``tests/unit/test_blas_thread_cap.py``. Comparing hardcoded literals on
     both sides would pass tautologically even if the two drifted (exactly how
-    the launcher silently dropped ``RAYON_NUM_THREADS`` while conftest/mise/
-    flake all carried it). Parsing both files' actual loop tuples via AST ties
+    the launcher silently dropped ``RAYON_NUM_THREADS`` while conftest/mise
+    both carried it). Parsing both files' actual loop tuples via AST ties
     this assertion to the real production tuple in ``babylon.cli``, not a
     hand-copied stand-in, so any future addition to one side without the other
     fails loudly here instead of only showing up as a runtime determinism bug.
