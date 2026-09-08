@@ -468,7 +468,11 @@ def _validate_policy(policy: dict[str, object]) -> None:
     dev_ruleset = normalize_ruleset(_object(policy.get("dev_ruleset"), "dev ruleset policy"))
     if not _exact_dev_scope(dev_ruleset):
         raise PolicyError("desired ruleset must have exact dev-only branch scope")
-    _require_codeql_zero_alert_floor(dev_ruleset, "dev")
+    if any(
+        rule.get("type") == "code_scanning"
+        for rule in _objects(dev_ruleset["rules"], "dev rules", MAX_RULESETS)
+    ):
+        raise PolicyError("dev CodeQL scans must be asynchronous, not a code-scanning merge rule")
     dev_contexts = _required_contexts(policy, "dev")
     if len(dev_contexts) != len(DEV_BLOCKING_CONTEXTS) or set(dev_contexts) != set(
         DEV_BLOCKING_CONTEXTS
@@ -834,29 +838,43 @@ def _verify_migration_contents(
         raise PolicyError("desired policy differs from the exact reviewed migration PR head")
 
 
-def _verify_checks_only_migration(before: dict[str, object], policy: dict[str, object]) -> None:
-    """A workflow rename cannot change any other repository protection."""
+def _verify_authorized_migration(before: dict[str, object], policy: dict[str, object]) -> None:
+    """Allow check renames and the authorized exact dev-CodeQL gate removal only."""
     for component in ("repository", "actions_permissions"):
         if before[component] != policy[component]:
-            raise PolicyError("policy migration may change only required status checks")
+            raise PolicyError(
+                "policy migration may change only required status checks "
+                "or remove the exact dev CodeQL rule"
+            )
     label = before["automerge_label"]
     if (
         label is None
         or normalize_label(_object(label, "current label")) != policy["automerge_label"]
     ):
-        raise PolicyError("policy migration may change only required status checks")
+        raise PolicyError(
+            "policy migration may change only required status checks "
+            "or remove the exact dev CodeQL rule"
+        )
     for branch in ("dev", "main"):
         current = deepcopy(_object(before[f"{branch}_ruleset"], f"current {branch} ruleset"))
         desired = normalize_ruleset(
             _object(policy[f"{branch}_ruleset"], f"desired {branch} ruleset")
         )
+        if branch == "dev":
+            rules = _objects(current["rules"], "current dev rules", MAX_RULESETS)
+            if any(rule.get("type") == "code_scanning" for rule in rules):
+                _require_codeql_zero_alert_floor(current, "dev")
+                current["rules"] = [rule for rule in rules if rule.get("type") != "code_scanning"]
         for ruleset in (current, desired):
             for rule in _objects(ruleset["rules"], f"{branch} rules", MAX_RULESETS):
                 if rule.get("type") == "required_status_checks":
                     parameters = _object(rule.get("parameters"), f"{branch} check parameters")
                     parameters["required_status_checks"] = []
         if current != desired:
-            raise PolicyError("policy migration may change only required status checks")
+            raise PolicyError(
+                "policy migration may change only required status checks "
+                "or remove the exact dev CodeQL rule"
+            )
 
 
 def apply_policy(
@@ -886,7 +904,7 @@ def apply_policy(
         _verify_migration_pr_checks(migration_pr, expected_pr_head)
     before = _current_state(api)
     if migration_pr is not None:
-        _verify_checks_only_migration(before, policy)
+        _verify_authorized_migration(before, policy)
     _write_snapshot(snapshot_path, before, expected_dev_sha)
     if migration_pr is not None and expected_pr_head is not None:
         _verify_migration_pr_checks(migration_pr, expected_pr_head)
@@ -1034,7 +1052,9 @@ def main() -> int:
     parser.add_argument("--expected-dev-sha")
     parser.add_argument("--snapshot", type=Path)
     parser.add_argument(
-        "--migration-pr", type=int, help="Reviewed dev PR replacing required checks"
+        "--migration-pr",
+        type=int,
+        help="Reviewed dev PR replacing checks or removing the exact dev CodeQL merge rule",
     )
     parser.add_argument("--expected-pr-head", help="Exact reviewed migration PR head SHA")
     args = parser.parse_args()

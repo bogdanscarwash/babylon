@@ -68,7 +68,7 @@ def test_merge_evidence_is_pinned_to_reviewed_head_and_base(path: Path) -> None:
     text = _normalized(path)
     assert "exact reviewed head sha" in text
     assert "base branch" in text
-    assert "all reported checks" in text
+    assert "blocking checks" in text
 
 
 @pytest.mark.parametrize("path", COPILOT_ADVISORY_SURFACES)

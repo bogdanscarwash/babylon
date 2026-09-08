@@ -6,11 +6,11 @@ each of which has already bitten:
 
 1. Never ``--auto`` (#392: it ignores failing non-required checks) — this
    wrapper simply has no such flag.
-2. All checks green AND both PR refs unchanged across the verdict snapshot.
+2. Blocking checks green AND both PR refs unchanged across the verdict snapshot.
 3. Copilot review state and unreplied top-level comments are advisory; every
    review thread, regardless of author, must resolve.
-4. Any open code-scanning alert is a STOP. CodeQL also runs on pull requests;
-   the alert DB is the durable source of truth across all matrix languages.
+4. Known default-dev code-scanning findings are a STOP. Main also requires
+   exact-head CodeQL success and no PR-specific findings. Dev scans run asynchronously.
 5. ``--delete-branch`` is refused for ``dev`` and while another open PR bases
    on the head (#193: deleting it closes-not-merges the child).
 
@@ -31,8 +31,10 @@ from typing import Final
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from tools.pr_policy import (  # noqa: E402
+    CODEQL_PRODUCER,
     DEV_CHECK_MANIFEST,
     GITHUB_ACTIONS_PRODUCER,
+    MAIN_CODEQL_CHECK_MANIFEST,
     SCOPED_CI_CHECKS,
     CheckRequirement,
     manifest_for_base,
@@ -247,6 +249,7 @@ def _rollup_findings(
     *,
     allow_pending: bool = False,
     verified_scoped_skips: frozenset[tuple[str, str]] = frozenset(),
+    verified_async_codeql: frozenset[tuple[str, str]] = frozenset(),
 ) -> VerificationFindings:
     """Classify disallowed unknown rollup conclusions.
 
@@ -262,7 +265,7 @@ def _rollup_findings(
     expected = {requirement.context for requirement in manifest}
     for entry in rollup:
         name = str(entry.get("name") or entry.get("context") or "?")
-        if name in expected:
+        if name in expected or (name, str(entry.get("detailsUrl") or "")) in verified_async_codeql:
             continue
         if name not in latest or _entry_sort_key(entry) >= _entry_sort_key(latest[name]):
             latest[name] = entry
@@ -295,6 +298,79 @@ def _rollup_findings(
         ):
             findings.hard.append(f"{name}: {conclusion}")
     return findings
+
+
+CODEQL_WORKFLOW_ID: Final[int] = 218754705
+CODEQL_WORKFLOW_PATH: Final[str] = ".github/workflows/codeql.yml"
+CODEQL_JOB_NAMES: Final[frozenset[str]] = frozenset(
+    {"Analyze python", "Analyze rust", "Analyze actions", "Analyze javascript-typescript"}
+)
+
+
+def _verified_async_codeql_checks(head_oid: str) -> frozenset[tuple[str, str]]:
+    """Identify canonical same-SHA asynchronous scans without trusting rollup names."""
+    payload = _json_dict(
+        _gh_json("api", CHECK_RUNS_ENDPOINT.format(head_oid=head_oid)), "CodeQL checks"
+    )
+    checks = _bounded_counted_items(payload, "CodeQL checks", "check_runs")
+    latest: dict[tuple[str, str], dict[str, object]] = {}
+    for check in checks:
+        name, url = check.get("name"), check.get("details_url")
+        if (
+            not isinstance(name, str)
+            or name not in CODEQL_JOB_NAMES | {"CodeQL"}
+            or not isinstance(url, str)
+        ):
+            continue
+        check_id = _positive_int(check.get("id"), "CodeQL check id")
+        key = (str(name), url)
+        if key not in latest or check_id > _positive_int(latest[key].get("id"), "CodeQL prior id"):
+            latest[key] = check
+    verified: set[tuple[str, str]] = set()
+    workflows: dict[int, dict[str, object]] = {}
+    for (name, url), check in latest.items():
+        if check.get("head_sha") != head_oid:
+            continue
+        app = _json_dict(check.get("app"), "CodeQL check app")
+        if name == "CodeQL":
+            if (
+                type(app.get("id")) is int
+                and app["id"] == CODEQL_PRODUCER.integration_id
+                and app.get("slug") == CODEQL_PRODUCER.slug
+                and url == f"https://github.com/percy-raskova/babylon/runs/{check['id']}"
+            ):
+                verified.add((name, url))
+            continue
+        match = re.fullmatch(
+            r"https://github\.com/percy-raskova/babylon/actions/runs/([1-9][0-9]*)/job/([1-9][0-9]*)",
+            url,
+        )
+        if not _is_actions_app(app) or match is None or int(match[2]) != check["id"]:
+            continue
+        run_id = int(match[1])
+        if run_id not in workflows:
+            workflows[run_id] = _json_dict(
+                _gh_json("api", f"repos/{{owner}}/{{repo}}/actions/runs/{run_id}"),
+                "CodeQL workflow",
+            )
+        run = workflows[run_id]
+        if (
+            run.get("id") == run_id
+            and run.get("workflow_id") == CODEQL_WORKFLOW_ID
+            and run.get("path") == CODEQL_WORKFLOW_PATH
+            and run.get("head_sha") == head_oid
+            and run.get("event") in {"push", "schedule", "workflow_dispatch"}
+            and run.get("head_branch") in {"dev", "main"}
+            and _json_dict(check.get("check_suite"), "CodeQL check suite").get("id")
+            == _positive_int(run.get("check_suite_id"), "CodeQL workflow suite")
+            and all(
+                _json_dict(run.get(field), f"CodeQL {field}").get("full_name")
+                == "percy-raskova/babylon"
+                for field in ("repository", "head_repository")
+            )
+        ):
+            verified.add((name, url))
+    return frozenset(verified)
 
 
 def _verified_ci_scope(pr: int, head_oid: str, base_ref: str) -> frozenset[tuple[str, str]]:
@@ -664,13 +740,14 @@ def _first_thread_url(thread: dict[str, object]) -> str:
     return str(nodes[0].get("url") or "(URL unavailable)")
 
 
-def _open_alert_count() -> int:
+def _open_alert_count(pr: int | None = None) -> int:
+    ref_query = "" if pr is None else f"&ref=refs/pull/{pr}/merge"
     return len(
         _json_dicts(
             _gh_json(
                 "api",
                 "repos/{owner}/{repo}/code-scanning/alerts"
-                f"?state=open&per_page={MAX_GITHUB_ITEMS}",
+                f"?state=open&per_page={MAX_GITHUB_ITEMS}{ref_query}",
             ),
             "code-scanning alerts",
             refuse_full_page=True,
@@ -1193,6 +1270,8 @@ def _main() -> int:
         findings.hard.append(f"expected head {args.expected_head}, found {head_oid}")
     rollup = view.get("statusCheckRollup") or []
     manifest = manifest_for_base(base_ref) if base_ref in {"dev", "main"} else ()
+    if base_ref == "main":
+        manifest = (*manifest, *MAIN_CODEQL_CHECK_MANIFEST)
     if manifest:
         findings.extend(
             _manifest_check_run_findings(
@@ -1203,6 +1282,12 @@ def _main() -> int:
         )
     rollup_entries = _json_dicts(rollup, "status-check rollup")
     verified_scoped_skips: frozenset[tuple[str, str]] = frozenset()
+    async_codeql = (
+        _verified_async_codeql_checks(head_oid)
+        if base_ref == "dev"
+        and any(entry.get("name") in CODEQL_JOB_NAMES | {"CodeQL"} for entry in rollup_entries)
+        else frozenset()
+    )
     needs_scope_proof = args.require_ci_workflow or any(
         entry.get("name") in SCOPED_CI_CHECKS and entry.get("conclusion") == "SKIPPED"
         for entry in rollup_entries
@@ -1215,12 +1300,17 @@ def _main() -> int:
             manifest,
             allow_pending=args.dependabot,
             verified_scoped_skips=verified_scoped_skips,
+            verified_async_codeql=async_codeql,
         )
     )
     advisories = _copilot_advisories(args.pr, view.get("reviews"), head_oid)
     findings.hard.extend(_review_thread_problems(args.pr))
     if (alerts := _open_alert_count()) > 0:
         findings.hard.append(f"{alerts} open code-scanning alert(s) — the zero floor is a STOP")
+    if base_ref == "main" and (pr_alerts := _open_alert_count(args.pr)) > 0:
+        findings.hard.append(
+            f"{pr_alerts} PR-specific CodeQL finding(s) — the zero floor is a STOP"
+        )
     if args.delete_branch and (children := _child_prs(head_ref)):
         findings.hard.append(
             f"--delete-branch refused: open PR(s) {children} base on this branch (#193 class)"
