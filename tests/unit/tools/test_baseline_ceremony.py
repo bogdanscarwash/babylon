@@ -185,12 +185,16 @@ class TestRangeMode:
         # commit needs no trailer of its own (the side commit is blessed).
         assert check_range(f"{base}..HEAD", repo) == []
 
-    def test_evil_merge_baseline_change_flagged(self, tmp_path: Path) -> None:
+    @pytest.mark.parametrize("respect_introduction", [False, True])
+    def test_evil_merge_baseline_change_flagged(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, respect_introduction: bool
+    ) -> None:
         """A merge whose conflict resolution differs from BOTH parents is a
         ceremony in its own right — the Opus-review evil-merge hole."""
         repo = _init_repo(tmp_path)
         _commit_file(repo, "tests/baselines/glut.json", "{}\n", BLESSED)
         base = _git(repo, "rev-parse", "HEAD")
+        monkeypatch.setattr("check_baseline_ceremony.CEREMONY_INTRODUCTION", base)
         _git(repo, "switch", "-c", "side")
         _commit_file(repo, "tests/baselines/glut.json", '{"v": 1}\n', BLESSED)
         _git(repo, "switch", "main")
@@ -202,14 +206,22 @@ class TestRangeMode:
         _git(repo, "add", "tests/baselines/glut.json")
         _git(repo, "commit", "--no-verify", "-m", "merge side into main")
         merge_sha = _git(repo, "rev-parse", "HEAD")
-        violations = check_range(f"{base}..HEAD", repo)
+        violations = check_range(
+            f"{base}..{_git(repo, 'rev-parse', 'HEAD')}",
+            repo,
+            respect_introduction=respect_introduction,
+        )
         assert len(violations) == 1
         assert merge_sha[:12] in violations[0]
 
-    def test_evil_merge_with_trailer_is_clean(self, tmp_path: Path) -> None:
+    @pytest.mark.parametrize("respect_introduction", [False, True])
+    def test_evil_merge_with_trailer_is_clean(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, respect_introduction: bool
+    ) -> None:
         repo = _init_repo(tmp_path)
         _commit_file(repo, "tests/baselines/glut.json", "{}\n", BLESSED)
         base = _git(repo, "rev-parse", "HEAD")
+        monkeypatch.setattr("check_baseline_ceremony.CEREMONY_INTRODUCTION", base)
         _git(repo, "switch", "-c", "side")
         _commit_file(repo, "tests/baselines/glut.json", '{"v": 1}\n', BLESSED)
         _git(repo, "switch", "main")
@@ -225,7 +237,14 @@ class TestRangeMode:
             "-m",
             "merge side into main\n\nBaselines: blessed(evil-merge-resolution)",
         )
-        assert check_range(f"{base}..HEAD", repo) == []
+        assert (
+            check_range(
+                f"{base}..{_git(repo, 'rev-parse', 'HEAD')}",
+                repo,
+                respect_introduction=respect_introduction,
+            )
+            == []
+        )
 
     def test_multiple_undeclared_commits_all_reported(self, tmp_path: Path) -> None:
         repo = _init_repo(tmp_path)
@@ -261,3 +280,66 @@ class TestMainCli:
     def test_bad_range_is_git_error(self, tmp_path: Path) -> None:
         repo = _init_repo(tmp_path)
         assert main(["--range", "nonexistent..HEAD", "--repo", str(repo)]) == 2
+
+
+class TestIntroductionBoundary:
+    """Release ranges preserve old history without grandfathering new drift."""
+
+    def test_old_history_excluded_but_introduction_and_later_drift_block(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import check_baseline_ceremony as gate
+
+        repo = _init_repo(tmp_path)
+        base = _git(repo, "rev-parse", "HEAD")
+        old = _commit_file(repo, "tests/baselines/old.json", "old\n", "historic ceremony")
+        introduction = _commit_file(
+            repo, "tests/baselines/start.json", "start\n", "introduce the gate with drift"
+        )
+        monkeypatch.setattr(gate, "CEREMONY_INTRODUCTION", introduction)
+        later = _commit_file(repo, "tests/baselines/new.json", "new\n", "silent new drift")
+        violations = gate.check_range(f"{base}..{later}", repo, respect_introduction=True)
+        assert len(violations) == 2
+        assert any(introduction[:12] in item for item in violations)
+        assert any(later[:12] in item for item in violations)
+        assert all(old[:12] not in item for item in violations)
+        assert len(gate.check_range(f"{base}..{later}", repo)) == 3
+
+    def test_late_side_branch_from_old_history_is_still_checked(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import check_baseline_ceremony as gate
+
+        repo = _init_repo(tmp_path)
+        base = _git(repo, "rev-parse", "HEAD")
+        old = _commit_file(repo, "tests/baselines/old.json", "old\n", "historic ceremony")
+        introduction = _commit_file(repo, "gate.txt", "enforced\n", "introduce gate")
+        monkeypatch.setattr(gate, "CEREMONY_INTRODUCTION", introduction)
+        _git(repo, "switch", "-c", "late-side", old)
+        late = _commit_file(repo, "tests/baselines/late.json", "late\n", "undeclared side drift")
+        _git(repo, "switch", "main")
+        _git(repo, "merge", "--no-ff", "-m", "integrate side", "late-side")
+        head = _git(repo, "rev-parse", "HEAD")
+        violations = gate.check_range(f"{base}..{head}", repo, respect_introduction=True)
+        assert len(violations) == 1 and late[:12] in violations[0]
+
+    def test_missing_or_unreachable_introduction_refuses(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import check_baseline_ceremony as gate
+
+        repo = _init_repo(tmp_path)
+        base = _git(repo, "rev-parse", "HEAD")
+        introduction = _commit_file(repo, "gate.txt", "enforced\n", "introduce gate")
+        monkeypatch.setattr(gate, "CEREMONY_INTRODUCTION", introduction)
+        _git(repo, "switch", "-c", "unrelated-side", base)
+        head = _commit_file(repo, "notes.txt", "notes\n", "side commit")
+        assert (
+            gate.main(["--repo", str(repo), "--range", f"{base}..{head}", "--respect-introduction"])
+            == 2
+        )
+        monkeypatch.setattr(gate, "CEREMONY_INTRODUCTION", "0" * 40)
+        assert (
+            gate.main(["--repo", str(repo), "--range", f"{base}..{head}", "--respect-introduction"])
+            == 2
+        )
