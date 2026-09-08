@@ -5,6 +5,7 @@ Tests the centralized logging configuration system that reads from pyproject.tom
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import tempfile
@@ -422,6 +423,33 @@ class TestGetCurrentConfig:
 @pytest.mark.unit
 class TestLoggingIntegration:
     """Integration tests for the logging system."""
+
+    def test_shipped_yaml_routes_json_records(
+        self, tmp_path: Path, temp_pyproject_minimal: Path
+    ) -> None:
+        """The shipped YAML loads its formatter and separates error records."""
+        log_dir = tmp_path / "logs"
+        config_path = Path(__file__).resolve().parents[3] / "logging.yaml"
+
+        with patch("babylon.config.logging_config.BaseConfig.LOG_DIR", log_dir):
+            setup_logging(config_path=config_path, pyproject_path=temp_pyproject_minimal)
+            logger = logging.getLogger("test.shipped_yaml")
+            logger.info("Native info message")
+            logger.error("Native error message")
+
+        main_records = [
+            json.loads(line) for line in (log_dir / "babylon.log").read_text().splitlines()
+        ]
+        error_records = [
+            json.loads(line) for line in (log_dir / "errors.log").read_text().splitlines()
+        ]
+        assert [(record["level"], record["logger"], record["msg"]) for record in main_records] == [
+            ("INFO", "test.shipped_yaml", "Native info message"),
+            ("ERROR", "test.shipped_yaml", "Native error message"),
+        ]
+        assert [(record["level"], record["logger"], record["msg"]) for record in error_records] == [
+            ("ERROR", "test.shipped_yaml", "Native error message"),
+        ]
 
     def test_full_setup_and_log(self, tmp_path: Path) -> None:
         """Complete test of setup and logging a message."""
