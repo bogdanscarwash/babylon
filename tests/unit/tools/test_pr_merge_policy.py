@@ -495,33 +495,41 @@ def _run_pr_merge(
     return result, calls
 
 
-def _scoped_ci_scenario() -> dict[str, object]:
+SCOPED_NATIVE_JOB_NAMES = ("Rust Validation", "PostgreSQL Contract (${{ matrix.focus }})")
+
+
+def _scoped_ci_scenario(job_name: str = "Rust Validation") -> dict[str, object]:
     scenario = _default_scenario()
     base_url = f"https://github.com/percy-raskova/babylon/actions/runs/{SOURCE_RUN_ID}/job"
     gate = scenario["manifest_check_runs"]["check_runs"][0]
     gate.update({"details_url": f"{base_url}/1", "check_suite": {"id": SOURCE_SUITE_ID}})
-    skipped = _manifest_check_run("Rust Validation", run_id=2, conclusion="skipped")
+    skipped = _manifest_check_run(job_name, run_id=2, conclusion="skipped")
     skipped.update({"details_url": f"{base_url}/2", "check_suite": {"id": SOURCE_SUITE_ID}})
     scenario["manifest_check_runs"]["check_runs"].append(skipped)
     scenario["manifest_check_runs"]["total_count"] = 2
-    entry = _check("Rust Validation", conclusion="SKIPPED")
+    entry = _check(job_name, conclusion="SKIPPED")
     entry["detailsUrl"] = f"{base_url}/2"
     scenario["view"]["statusCheckRollup"].append(entry)
     return scenario
 
 
+@pytest.mark.parametrize("job_name", SCOPED_NATIVE_JOB_NAMES)
 def test_verified_ci_scope_can_skip_a_native_job_without_fabricating_success(
     tmp_path: Path,
+    job_name: str,
 ) -> None:
-    result, calls = _run_pr_merge(tmp_path, "--verify-only", scenario=_scoped_ci_scenario())
+    result, calls = _run_pr_merge(tmp_path, "--verify-only", scenario=_scoped_ci_scenario(job_name))
 
     assert result.returncode == 0, result.stderr
     assert not any(call[:2] == ["pr", "merge"] for call in calls)
 
 
+@pytest.mark.parametrize("job_name", SCOPED_NATIVE_JOB_NAMES)
 @pytest.mark.parametrize("fault", ["workflow", "head", "suite", "app", "run", "unknown", "gate"])
-def test_scoped_skips_require_the_exact_successful_ci_workflow(tmp_path: Path, fault: str) -> None:
-    scenario = _scoped_ci_scenario()
+def test_scoped_skips_require_the_exact_successful_ci_workflow(
+    tmp_path: Path, fault: str, job_name: str
+) -> None:
+    scenario = _scoped_ci_scenario(job_name)
     skipped = scenario["manifest_check_runs"]["check_runs"][1]
     if fault == "workflow":
         scenario["source_run"]["workflow_id"] = 9
@@ -560,8 +568,11 @@ def test_policy_migration_can_require_workflow_identity_without_skipped_jobs(
     assert not any(call[:2] == ["pr", "merge"] for call in calls)
 
 
-def test_newer_scoped_failure_invalidates_an_older_skip_receipt(tmp_path: Path) -> None:
-    scenario = _scoped_ci_scenario()
+@pytest.mark.parametrize("job_name", SCOPED_NATIVE_JOB_NAMES)
+def test_newer_scoped_failure_invalidates_an_older_skip_receipt(
+    tmp_path: Path, job_name: str
+) -> None:
+    scenario = _scoped_ci_scenario(job_name)
     newer = copy.deepcopy(scenario["manifest_check_runs"]["check_runs"][1])
     newer.update({"id": 3, "conclusion": "failure"})
     scenario["manifest_check_runs"]["check_runs"].append(newer)
@@ -1921,3 +1932,22 @@ def test_delete_branch_refuses_an_exactly_full_child_page(tmp_path: Path) -> Non
     assert result.returncode == 1
     assert "child pull requests reached the 100-item safety bound" in result.stderr
     assert _merge_calls(calls) == []
+
+
+@pytest.mark.parametrize("job_name", SCOPED_NATIVE_JOB_NAMES)
+def test_verified_scoped_native_skip_is_not_allowed_for_main(tmp_path: Path, job_name: str) -> None:
+    scenario = _scoped_ci_scenario(job_name)
+    verified_gate = copy.deepcopy(scenario["manifest_check_runs"]["check_runs"][0])
+    skipped_rollup = copy.deepcopy(scenario["view"]["statusCheckRollup"][-1])
+    skipped_run = copy.deepcopy(scenario["manifest_check_runs"]["check_runs"][-1])
+    _view(scenario).update({"baseRefName": "main", "headRefName": "dev"})
+    _use_main_manifest(scenario)
+    scenario["manifest_check_runs"]["check_runs"][0] = verified_gate
+    scenario["source_run"]["pull_requests"][0]["base"]["ref"] = "main"
+    scenario["view"]["statusCheckRollup"].append(skipped_rollup)
+    scenario["manifest_check_runs"]["check_runs"].append(skipped_run)
+    scenario["manifest_check_runs"]["total_count"] += 1
+    result, calls = _run_pr_merge(tmp_path, "--director-main", "--verify-only", scenario=scenario)
+    assert result.returncode == 1, result.stderr
+    assert f"{job_name}: SKIPPED" in result.stderr
+    assert not _merge_calls(calls)

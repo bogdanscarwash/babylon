@@ -41,6 +41,7 @@ SCOPED_CI_CHECKS: Final[frozenset[str]] = frozenset(
         "Security Audit (pip-audit policy — blocking since item-41)",
         "PostgreSQL Contract",
         "PostgreSQL Contract ()",
+        "PostgreSQL Contract (${{ matrix.focus }})",
         "PostgreSQL Contract (runtime_smoke)",
     }
 )
