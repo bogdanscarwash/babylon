@@ -275,7 +275,8 @@ description = "Hook-safe commit: pre-run hooks, re-stage fixes, retry on hook-re
 usage = 'arg "<message>" help="Conventional commit message, or - to read from stdin"'
 run = '''
 set -euo pipefail
-if git diff --cached --quiet; then
+# A pending merge can add ancestry even when its tree equals HEAD.
+if git diff --cached --quiet && ! git rev-parse --verify --quiet MERGE_HEAD >/dev/null; then
   echo "[commit] nothing staged — git add first"; exit 1
 fi
 
