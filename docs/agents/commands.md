@@ -11,7 +11,7 @@ mise run dev:doctor
 ```
 
 Use the checkout's own pinned environment. Create a sibling worktree from
-`origin/dev` after a fetch with Git or Codex. For explicit Git creation:
+`origin/dev` with Git or Codex. First update the remote reference:
 
 ```bash
 git fetch origin
