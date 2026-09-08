@@ -7,9 +7,9 @@ Idempotent — drops + recreates table on each run.
 
 Usage::
 
-    poetry run python -m tools.ingest.hickel_erdi
+    mise exec -- uv run --frozen python -m tools.ingest.hickel_erdi
     # or with custom paths:
-    poetry run python -m tools.ingest.hickel_erdi \\
+    mise exec -- uv run --frozen python -m tools.ingest.hickel_erdi \\
         --csv /path/to/babylon_hickel_final.csv \\
         --db sqlite:////absolute/path/to/marxist-data-3NF.sqlite
 """

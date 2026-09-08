@@ -441,8 +441,7 @@ def build_reference_db(
         # spill dies "database or disk is full" (cutover Step 4, 2026-07-20).
         # Pin temp next to the output file instead: its filesystem must hold
         # the product anyway. (Deprecated pragma, but it is the only
-        # per-connection control; SQLITE_TMPDIR proved unreliable through
-        # the mise->poetry->python chain.)
+        # per-connection control for this build.)
         conn.execute(f"PRAGMA temp_store_directory = '{out_path.parent.resolve()}'")
 
         for stmt in table_statements:

@@ -15,14 +15,14 @@ channel, sha256-pinned here).
 Determinism discipline (decision 3): rows sorted by the table's primary key,
 an EXPLICIT arrow schema mapped from the sqlite declared types (never
 inferred from values), a single row group per parquet file, pinned
-codec+level, pyarrow pinned by poetry.lock. Byte-stability is proven by the
+codec+level, pyarrow pinned by uv.lock. Byte-stability is proven by the
 double-generation test in ``tests/unit/reference/test_data_artifacts.py``,
 never asserted.
 
 Usage::
 
-    uv run python tools/make_data_artifacts.py            # generate + rewrite manifest
-    uv run python tools/make_data_artifacts.py --check    # verify hashes vs manifest
+    mise exec -- uv run --frozen python tools/make_data_artifacts.py            # generate + rewrite manifest
+    mise exec -- uv run --frozen python tools/make_data_artifacts.py --check    # verify hashes vs manifest
 """
 
 from __future__ import annotations
