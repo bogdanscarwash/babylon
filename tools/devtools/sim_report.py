@@ -94,19 +94,28 @@ LIBPQ_ENV_BY_DSN_KEY: Final = {
 
 EXPECTED_SCOPE: Final = {
     "slice_id": "michigan-persistence-slice",
-    "scenario": "production/michigan-rust-runtime",
-    "fixed_replay_seed": 281,
+    "scenario": "production/michigan-observer-v1",
+    "fixed_replay_seed": 319,
     "tick_duration_days": TICK_DURATION_DAYS,
     "parameter_overrides": False,
     "stochastic_draws": False,
     "dynamic_h3_updates": False,
 }
-OBSERVABLE_SPECS: Final = (
-    ("territory/median-wage", "configured_input"),
-    ("territory/phi-hour", "configured_input"),
-    ("territory/phi-savings-adjustment", "dynamic"),
-    ("territory/rate-accumulation", "dynamic"),
-    ("territory/dist-year", "dynamic"),
+# The native Michigan observer emits four QCEW facts for each of its 83
+# counties, ordered by GEOID then by the governed economics field inventory.
+OBSERVABLE_SPECS: Final = tuple(
+    (f"county-26{county:03}", f"territory/{field}")
+    for county in range(1, 166, 2)
+    for field in (
+        "qcew-establishments",
+        "qcew-employment",
+        "qcew-total-annual-wages",
+        "qcew-average-weekly-wage",
+    )
+)
+OBSERVABLE_CSV_PREFIXES: Final = tuple(
+    f"{entity}_{field.removeprefix('territory/')}".replace("-", "_")
+    for entity, field in OBSERVABLE_SPECS
 )
 
 COMMIT_DISPOSITIONS: Final = frozenset({"committed", "reconciled_after_ambiguous_commit"})
@@ -188,40 +197,17 @@ CSV_COLUMNS: Final = (
     "rules_fired",
     "event_count",
     "event_digest_sha256",
-    "median_wage_before_value",
-    "median_wage_before_bits_hex",
-    "median_wage_after_value",
-    "median_wage_after_bits_hex",
-    "phi_hour_before_value",
-    "phi_hour_before_bits_hex",
-    "phi_hour_after_value",
-    "phi_hour_after_bits_hex",
-    "phi_savings_adjustment_before_value",
-    "phi_savings_adjustment_before_bits_hex",
-    "phi_savings_adjustment_after_value",
-    "phi_savings_adjustment_after_bits_hex",
-    "rate_accumulation_before_value",
-    "rate_accumulation_before_bits_hex",
-    "rate_accumulation_after_value",
-    "rate_accumulation_after_bits_hex",
-    "dist_year_before_value",
-    "dist_year_before_bits_hex",
-    "dist_year_after_value",
-    "dist_year_after_bits_hex",
+    *(
+        f"{prefix}_{suffix}"
+        for prefix in OBSERVABLE_CSV_PREFIXES
+        for suffix in ("before_value", "before_bits_hex", "after_value", "after_bits_hex")
+    ),
     "audit_receipt_count",
     "choice_receipt_count",
     "choice_receipt_digest_sha256",
     "material_row_count",
     "material_row_digest_sha256",
     "tick_content_hash",
-)
-
-OBSERVABLE_CSV_PREFIXES: Final = (
-    "median_wage",
-    "phi_hour",
-    "phi_savings_adjustment",
-    "rate_accumulation",
-    "dist_year",
 )
 
 
@@ -704,13 +690,13 @@ def _validate_observables(value: object, *, line_number: int) -> None:
             line_number=line_number,
             location=location,
         )
-        expected_field, expected_role = specification
+        expected_entity, expected_field = specification
         exact_values = {
             "field": expected_field,
-            "role": expected_role,
-            "entity": "wayne",
+            "role": "observed_baseline",
+            "entity": expected_entity,
             "kind": "f64",
-            "name": f"{scenario}::wayne::{expected_field}",
+            "name": f"{scenario}::{expected_entity}::{expected_field}",
         }
         for field_name, expected in exact_values.items():
             if observable[field_name] != expected:
@@ -1441,20 +1427,8 @@ def _diagnostics(rows: Sequence[Mapping[str, object]]) -> dict[str, object]:
             }
         )
         name = cast("str", first_observable["name"])
-        if role == "configured_input" and observable_change_ticks:
-            notices.append({"code": "observable.configured_input_changed", "subject": name})
-        if role != "dynamic":
-            continue
-        value_span = max(values) - min(values)
-        if len(set(bits)) == 1:
-            notices.append({"code": "observable.dynamic_flat", "subject": name})
-        elif value_span <= 1e-9 * max(1.0, abs(min(values)), abs(max(values))):
-            notices.append({"code": "observable.dynamic_near_flat", "subject": name})
-        elif (
-            observable_change_ticks
-            and reported_ticks[-1] - observable_change_ticks[-1] >= RESTART_INTERVAL_TICKS
-        ):
-            notices.append({"code": "observable.dynamic_plateau", "subject": name})
+        if observable_change_ticks:
+            notices.append({"code": "observable.observed_baseline_changed", "subject": name})
 
     return {
         "schema": DIAGNOSTICS_SCHEMA,
