@@ -85,6 +85,7 @@ RUN --mount=type=bind,source=patch-entrypoint.awk,target=/tmp/patch-entrypoint.a
     set -eux; \
     apk add --no-cache su-exec=0.3-r0 \
         giflib=5.2.2-r2 \
+        libuuid=2.42.3-r1 \
         libcrypto3=3.5.8-r0 \
         libssl3=3.5.8-r0; \
     entrypoint=/usr/local/bin/docker-entrypoint.sh; \
