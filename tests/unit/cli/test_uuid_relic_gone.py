@@ -6,11 +6,19 @@ import tomllib
 import uuid
 from pathlib import Path
 
+from packaging.requirements import Requirement
+from packaging.utils import canonicalize_name
+
 
 def test_pyproject_does_not_declare_uuid_dependency() -> None:
     data = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
-    project_deps = data["project"]["dependencies"]
-    names = {d.split(">")[0].split("<")[0].split("=")[0].strip() for d in project_deps}
+    requirements = list(data["project"]["dependencies"])
+    for extra in data["project"].get("optional-dependencies", {}).values():
+        requirements.extend(extra)
+    for group in data.get("dependency-groups", {}).values():
+        # include-group entries are not requirements; every group is inspected here.
+        requirements.extend(requirement for requirement in group if isinstance(requirement, str))
+    names = {canonicalize_name(Requirement(requirement).name) for requirement in requirements}
     assert "uuid" not in names, "PyPI uuid relic still declared — it shadows the stdlib module"
 
 
