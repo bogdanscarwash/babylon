@@ -150,6 +150,43 @@ class TestDoubleBuildByteIdentity:
         assert isinstance(r1, BuildResult)
         assert r1.sqlite_version == PINNED_SQLITE_VERSION
 
+    def test_host_secure_delete_default_does_not_change_product_bytes(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        conn = _make_source_db(tmp_path)
+        try:
+            conn.executemany(
+                "INSERT INTO dim_k VALUES (?, ?)",
+                [(i + 3, "x" * ((i * 31) % 713)) for i in range(5000)],
+            )
+            conn.commit()
+            manifest, schema = _export_all(conn, tmp_path)
+        finally:
+            conn.close()
+
+        original_connect = sqlite3.connect
+        final_settings: list[int] = []
+
+        class ObservedConnection(sqlite3.Connection):
+            def close(self) -> None:
+                final_settings.append(self.execute("PRAGMA secure_delete").fetchone()[0])
+                super().close()
+
+        hashes: list[str] = []
+        for default in (0, 1):
+
+            def connect(path: Path, ambient_default: int = default) -> sqlite3.Connection:
+                connection = original_connect(path, factory=ObservedConnection)
+                connection.execute(f"PRAGMA secure_delete={ambient_default}")
+                return connection
+
+            monkeypatch.setattr(build_reference_db.sqlite3, "connect", connect)
+            result = build_db(manifest, schema, tmp_path, tmp_path / f"out-{default}.sqlite")
+            hashes.append(result.sha256)
+
+        assert hashes[0] == hashes[1]
+        assert final_settings == [1, 1]
+
 
 class TestSchemaOrderFidelity:
     def test_index_rowid_order_survives_manifest_order_divergence(self, tmp_path: Path) -> None:
