@@ -14,7 +14,12 @@ def checkout(tmp_path: Path) -> Path:
 
 def test_native_editable_environment_is_valid(checkout: Path) -> None:
     assert not environment_faults(
-        checkout, {}, "3.12.14", "/opt/python", str(checkout / "src/babylon/__init__.py")
+        checkout,
+        {},
+        "3.12.14",
+        "/opt/python",
+        str(checkout / ".venv"),
+        str(checkout / "src/babylon/__init__.py"),
     )
 
 
@@ -36,5 +41,37 @@ def test_environment_drift_is_reported(
     origin: str | None,
     message: str,
 ) -> None:
-    faults = environment_faults(checkout, environment, version, base_prefix, origin)
+    faults = environment_faults(
+        checkout, environment, version, base_prefix, str(checkout / ".venv"), origin
+    )
     assert any(message in fault for fault in faults)
+
+
+@pytest.mark.parametrize("prefix", ["/other/.venv", "/opt/python"])
+def test_foreign_environment_is_rejected_even_with_checkout_imports(
+    checkout: Path, prefix: str
+) -> None:
+    faults = environment_faults(
+        checkout,
+        {},
+        "3.12.14",
+        "/opt/python",
+        prefix,
+        str(checkout / "src/babylon/__init__.py"),
+    )
+    assert any("checkout-local .venv" in fault for fault in faults)
+
+
+def test_symlinked_environment_is_rejected(checkout: Path, tmp_path: Path) -> None:
+    foreign = tmp_path / "other-venv"
+    foreign.mkdir()
+    (checkout / ".venv").symlink_to(foreign, target_is_directory=True)
+    faults = environment_faults(
+        checkout,
+        {},
+        "3.12.14",
+        "/opt/python",
+        str(checkout / ".venv"),
+        str(checkout / "src/babylon/__init__.py"),
+    )
+    assert any("checkout-local .venv" in fault for fault in faults)

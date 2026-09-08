@@ -9,10 +9,6 @@ script = ""
 script = '''
 set -euo pipefail
 
-if [ -z "${CODEX_SOURCE_TREE_PATH:-}" ]; then
-  echo "CODEX_SOURCE_TREE_PATH is not set" >&2
-  exit 1
-fi
 if [ -z "${CODEX_WORKTREE_PATH:-}" ]; then
   echo "CODEX_WORKTREE_PATH is not set" >&2
   exit 1
@@ -21,6 +17,18 @@ if [ "$PWD" != "$CODEX_WORKTREE_PATH" ]; then
   echo "setup must run from CODEX_WORKTREE_PATH ($CODEX_WORKTREE_PATH), got $PWD" >&2
   exit 1
 fi
+if [ -n "${PYTHONPATH:-}" ]; then
+  echo "PYTHONPATH must be unset; each worktree owns its editable environment" >&2
+  exit 1
+fi
+if [ -L "$CODEX_WORKTREE_PATH/.venv" ]; then
+  echo ".venv must be a checkout-local directory, not a symlink" >&2
+  exit 1
+fi
+unset VIRTUAL_ENV
+export UV_PROJECT_ENVIRONMENT="$CODEX_WORKTREE_PATH/.venv"
+export UV_PYTHON="$(cat "$CODEX_WORKTREE_PATH/.python-version")"
+
 for cargo_environment in CARGO_TARGET_DIR CARGO_BUILD_TARGET_DIR CARGO_BUILD_BUILD_DIR; do
   eval "cargo_environment_is_set=\${$cargo_environment+x}"
   if [ "$cargo_environment_is_set" = x ]; then
@@ -185,13 +193,6 @@ install -d -m 700 "$lfs_cache"
 git config extensions.worktreeConfig true
 git config --worktree lfs.storage "$lfs_cache"
 
-if [ ! -e data ] && [ ! -L data ]; then
-  if [ ! -f "$CODEX_SOURCE_TREE_PATH/data/sqlite/marxist-data-3NF.sqlite" ]; then
-    echo "Babylon reference data is missing from $CODEX_SOURCE_TREE_PATH/data" >&2
-    exit 1
-  fi
-  cp -a "$CODEX_SOURCE_TREE_PATH/data" .
-fi
 if [ ! -e .env ] && [ ! -L .env ]; then
   install -m 600 .env.example .env
 fi
@@ -257,9 +258,10 @@ fi
 CODEX_RUST_CACHE_ROOT="$codex_cache_root" "$CODEX_WORKTREE_PATH/.codex/host/install.sh" --check
 
 mise trust --yes
-mise install
+mise install --locked
 mise run install
-git lfs pull --include='reports/sim-trace-baseline-200.csv,src/babylon/reference/data/michigan_bea_ea.csv,tests/baselines/michigan-e2e.json'
+mise run hooks
+mise run check:env-contract
 mise run check:worktree-contract
 
 target_directory="$(
@@ -287,7 +289,7 @@ platform = "linux"
 [[actions]]
 name = "Rust host policy contract"
 icon = "test"
-command = "uv run pytest -q -n 0 tests/unit/tools/test_rust_host_policy_contract.py"
+command = "mise exec -- uv run --frozen pytest -q -n 0 tests/unit/tools/test_rust_host_policy_contract.py"
 platform = "linux"
 
 [[actions]]

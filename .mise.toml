@@ -270,19 +270,6 @@ fi
 description = "pip-audit through the expiring-ignores policy wrapper (program 15): security/pip-audit-ignores.toml entries need reason + expiry; expired entries hard-fail"
 run = "uv run python tools/run_pip_audit.py"
 
-[tasks."wt:new"]
-description = "Git-doctrine item 2: create .claude/worktrees/NAME on a fresh wt/NAME branch off the current branch; prints the shadow-venv + lint-imports usage recipe (worktrees never get their own venv)"
-usage = 'arg "<name>" help="Worktree slug: lowercase alnum segments joined by single hyphens"'
-run = 'uv run python tools/worktree_tool.py new "$usage_name"'
-
-[tasks."wt:done"]
-description = "Git-doctrine item 2: retire .claude/worktrees/NAME — refuses unless the worktree is clean AND wt/NAME is fully merged into the current branch (pass --force to bypass); removes the worktree and deletes the branch"
-usage = '''
-arg "<name>" help="Worktree slug to retire"
-flag "--force" help="Bypass the clean/merged checks (force-remove worktree, -D delete branch)"
-'''
-run = 'uv run python tools/worktree_tool.py done "$usage_name" ${usage_force:+--force}'
-
 [tasks.commit]
 description = "Hook-safe commit: pre-run hooks, re-stage fixes, retry on hook-rewrite, VERIFY HEAD moved. Pass - to read the message from stdin (multi-line bodies)."
 usage = 'arg "<message>" help="Conventional commit message, or - to read from stdin"'
