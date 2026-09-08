@@ -213,7 +213,7 @@ fn atom(signal_key: &str, value: &str, valid_tick: u64) -> ArchiveAtomV1 {
     .expect("atom admits")
 }
 
-/// Requested/durable week 12 with retained week-11 content still awaiting
+/// Requested/durable period 12 with retained period-11 content still awaiting
 /// processing. Links preserve three disclosure states and one exact change.
 fn fixture_projection() -> ArchiveDossierReadV2 {
     let campaign = CampaignId::from_uuid(Uuid::nil());
@@ -627,7 +627,7 @@ fn seeded_projection_renders_the_whole_card_after_one_update() {
     );
     let status = zone_text(&mut app, DossierZone::DualTick);
     assert!(
-        status.contains("Viewing week 12 · durable week 12"),
+        status.contains("Viewing period 12 · durable period 12"),
         "{status}"
     );
     assert!(
@@ -635,7 +635,7 @@ fn seeded_projection_renders_the_whole_card_after_one_update() {
         "{status}"
     );
     assert!(
-        status.contains("Content last published at week 11"),
+        status.contains("Content last published at period 11"),
         "{status}"
     );
     assert!(
@@ -662,7 +662,7 @@ fn seeded_projection_renders_the_whole_card_after_one_update() {
     let pending_changes = zone_text(&mut app, DossierZone::Chronicle);
     assert!(pending_changes.contains("Changes await Archive completion."));
     assert!(!pending_changes.contains("coverage starts"));
-    assert!(!pending_changes.contains("Published week 11"));
+    assert!(!pending_changes.contains("Published period 11"));
     assert!(!pending_changes.to_lowercase().contains("no changes"));
 
     let installed = installed_fixture(&app, ready);
@@ -671,18 +671,18 @@ fn seeded_projection_renders_the_whole_card_after_one_update() {
     let status = zone_text(&mut app, DossierZone::DualTick);
     assert!(status.contains("verified through 12"), "{status}");
     assert!(
-        status.contains("Content last published at week 11"),
+        status.contains("Content last published at period 11"),
         "{status}"
     );
     let changes = zone_text(&mut app, DossierZone::Chronicle);
     for exact in [
-        "Published week 11",
+        "Published period 11",
         "employment",
         "710000 jobs",
         "728576 jobs",
         " → ",
-        "coverage starts at week 1",
-        "Content observed at week 11; published at week 11.",
+        "coverage starts at period 1",
+        "Content observed at period 11; published at period 11.",
     ] {
         assert!(changes.contains(exact), "{exact}: {changes}");
     }
@@ -1077,7 +1077,7 @@ fn assert_historical_observer_archive(app: &mut App, root: Entity) {
         DossierFetchState::WaitingForObservation
     ));
     assert!(zone_text(app, DossierZone::DualTick)
-        .contains("Waiting for the selected week's committed observation"));
+        .contains("Waiting for the selected period's committed observation"));
     assert!(!zone_text(app, DossierZone::Signals).contains("728576 jobs"));
     install_observer_frame(app);
     app.update();
@@ -1096,7 +1096,7 @@ fn assert_historical_observer_archive(app: &mut App, root: Entity) {
     app.update();
     let text = zone_text(app, DossierZone::DualTick);
     assert!(
-        text.contains("Viewing week 10") && text.contains("predates retained Archive history"),
+        text.contains("Viewing period 10") && text.contains("predates retained Archive history"),
         "{text}"
     );
     assert!(!zone_text(app, DossierZone::Signals).contains("728576 jobs"));
@@ -1104,7 +1104,7 @@ fn assert_historical_observer_archive(app: &mut App, root: Entity) {
     assert_eq!(zone_text(app, DossierZone::Actions), "READ-ONLY ARCHIVE");
     assert_eq!(
         zone_text(app, DossierZone::Question),
-        "Which cited observations are available at this week?"
+        "Which cited observations are available at this period?"
     );
     let mut read = fixture_projection();
     read.scope = ArchiveReadScopeV2::committed(read.scope.campaign_id(), 10, [10; 32]).unwrap();
@@ -1135,8 +1135,8 @@ fn assert_historical_observer_archive(app: &mut App, root: Entity) {
     app.update();
     let status = zone_text(app, DossierZone::DualTick);
     assert!(
-        status.contains("Viewing week 10")
-            && status.contains("durable week 12")
+        status.contains("Viewing period 10")
+            && status.contains("durable period 12")
             && status.contains("verified through 10"),
         "{status}"
     );
@@ -1212,7 +1212,7 @@ fn observer_archive_layout_and_exact_historical_unavailability_are_explicit() {
         );
         assert_observer_archive_geometry(&mut app, root);
         assert!(zone_text(&mut app, DossierZone::DualTick)
-            .contains("Content last published at week 11"));
+            .contains("Content last published at period 11"));
         assert_historical_observer_archive(&mut app, root);
     }
 }

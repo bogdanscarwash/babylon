@@ -5,9 +5,13 @@ from __future__ import annotations
 
 import argparse
 import ipaddress
+import json
 import os
+import re
+import select
 import subprocess
 import sys
+import time
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -19,6 +23,7 @@ from psycopg import sql
 from psycopg.conninfo import conninfo_to_dict, make_conninfo
 
 ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_DEFINES = ROOT / "content" / "scenarios" / "michigan" / "defines.toml"
 DEFAULT_RUNTIME_DSN = "host=127.0.0.1 port=5433 dbname=babylon_test user=test password=test"
 OBSERVER_CAPTURE_FILTER = "session=debug,babylon_client=debug"
 # The runtime's database statement timeout is 120 seconds. EOF/Stop gets time
@@ -29,6 +34,121 @@ READ_LOGINS = (
     ("babylon_observer_game", "babylon_observer", "babylon_observer_game"),
     ("babylon_preview_game", "babylon_reader", "babylon_preview_game"),
 )
+
+
+def distribution_identity(root: Path) -> tuple[str, str]:
+    """Read the release identity used to isolate this installation's saved worlds."""
+    try:
+        manifest_path = root / "release.json"
+        if manifest_path.stat().st_size > 65_536:
+            raise ValueError("oversized release manifest")
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        version = manifest["version"]
+        if (
+            not isinstance(version, str)
+            or re.fullmatch(r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)", version)
+            is None
+        ):
+            raise ValueError("invalid release version")
+        if manifest["schema"] != 1 or manifest["platform"] != "linux-x86_64":
+            raise ValueError("unsupported release manifest")
+    except (OSError, ValueError, TypeError, KeyError) as error:
+        raise ObserverLaunchError("cannot read this distribution's release identity") from error
+    return version, f"babylon-preview-{os.getuid()}-{version.replace('.', '-')}"
+
+
+def distribution_compose(root: Path) -> list[str]:
+    """Use only this release's compose file, project, and persisted volume."""
+    _, project = distribution_identity(root)
+    return [
+        "docker",
+        "compose",
+        "--project-name",
+        project,
+        "--file",
+        str(root / "distribution" / "compose.yaml"),
+        "--env-file",
+        "/dev/null",
+    ]
+
+
+def distribution_docker_environment(root: Path, environment: Mapping[str, str]) -> dict[str, str]:
+    """Ignore other compose projects and require a local Docker daemon."""
+    common = {
+        key: value
+        for key, value in _clean_environment(environment).items()
+        if not key.startswith("COMPOSE_") and key != "BABYLON_PG_DATA"
+    }
+    # A remote Docker daemon would create the database on another machine even
+    # though every native connection is confined to this machine's loopback.
+    try:
+        endpoint = common.get("DOCKER_HOST") if not common.get("DOCKER_CONTEXT") else None
+        if not endpoint:
+            endpoint = subprocess.run(
+                ["docker", "context", "inspect", "--format", "{{.Endpoints.docker.Host}}"],
+                cwd=root,
+                env=common,
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=10,
+            ).stdout.strip()
+        if not endpoint.startswith("unix://"):
+            raise ValueError("Docker must use a local Unix socket")
+    except (OSError, subprocess.SubprocessError, ValueError) as error:
+        raise ObserverLaunchError(
+            "the preview requires a local Docker Unix-socket context"
+        ) from error
+    return common
+
+
+def distribution_environment(root: Path, environment: Mapping[str, str]) -> dict[str, str]:
+    """Start the packaged local database and resolve its assigned loopback port."""
+    version, _ = distribution_identity(root)
+    common = distribution_docker_environment(root, environment)
+    for variable, default in (
+        ("XDG_STATE_HOME", ".local/state"),
+        ("XDG_DATA_HOME", ".local/share"),
+    ):
+        base = Path(environment.get(variable, str(Path.home() / default)))
+        if not base.is_absolute():
+            raise ObserverLaunchError(f"{variable} must be absolute")
+        common[variable] = str(base / "babylon-preview" / version)
+    try:
+        compose = distribution_compose(root)
+        _run(
+            [
+                *compose,
+                "up",
+                "--build",
+                "--detach",
+                "--wait",
+                "--wait-timeout",
+                "120",
+                "babylon-pg",
+            ],
+            root,
+            common,
+            "preview database startup",
+        )
+        address = subprocess.run(
+            [*compose, "port", "babylon-pg", "5432"],
+            cwd=root,
+            env=common,
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        ).stdout.strip()
+        match = re.fullmatch(r"127\.0\.0\.1:([1-9][0-9]{0,4})", address)
+        if match is None or int(match[1]) > 65_535:
+            raise ValueError("Docker did not return one loopback port")
+    except (OSError, subprocess.SubprocessError, ValueError) as error:
+        raise ObserverLaunchError("cannot prepare this preview's local Docker database") from error
+    parameters = _target_parameters(DEFAULT_RUNTIME_DSN)
+    parameters["port"] = match[1]
+    common["BABYLON_RUNTIME_DSN"] = make_conninfo(**parameters)
+    return common
 
 
 class ObserverLaunchError(ValueError):
@@ -258,7 +378,7 @@ def database_reachable(runtime_dsn: str) -> bool:
 
 
 def prepare(
-    root: Path, environment: Mapping[str, str], *, no_build: bool
+    root: Path, environment: Mapping[str, str], *, no_build: bool, distribution: bool = False
 ) -> tuple[Path, Path, ReaderCredentials]:
     """Start the local DB and install Rust authority before any client connects."""
     runtime_dsn = environment.get("BABYLON_RUNTIME_DSN", DEFAULT_RUNTIME_DSN)
@@ -268,16 +388,19 @@ def prepare(
     if not target.is_absolute():
         target = root / "rust" / target
     common["CARGO_TARGET_DIR"] = str(target)
-    runtime, client = target / "debug" / "babylon-runtime", target / "debug" / "babylon-client"
+    binary_dir = root / "bin" if distribution else target / "debug"
+    runtime, client = binary_dir / "babylon-runtime", binary_dir / "babylon-client"
     if not database_reachable(runtime_dsn):
-        if _target_parameters(runtime_dsn) != _target_parameters(DEFAULT_RUNTIME_DSN):
+        if distribution or _target_parameters(runtime_dsn) != _target_parameters(
+            DEFAULT_RUNTIME_DSN
+        ):
             raise ObserverLaunchError(
                 "requested local database is unavailable; start or create that database and retry"
             )
         _run(["mise", "run", "db:up"], root, common, "local database startup")
         if not database_reachable(runtime_dsn):
             raise ObserverLaunchError("default local database is still unavailable after db:up")
-    if not no_build:
+    if not no_build and not distribution:
         _run(
             [
                 "cargo",
@@ -337,6 +460,176 @@ def _finish_runtime(child: subprocess.Popen[bytes]) -> int:
         ) from error
 
 
+def _check_session(
+    runtime: Path,
+    root: Path,
+    environment: Mapping[str, str],
+    defines: Path,
+    campaign: UUID,
+    *,
+    new: bool,
+) -> tuple[str, dict[str, object]]:
+    """Exercise the installed lifecycle protocol with one bounded native process."""
+    child = subprocess.Popen(
+        [str(runtime), "session", "--stdio", "--defines", str(defines)],
+        cwd=root,
+        env=dict(environment),
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+    )
+    assert child.stdin is not None and child.stdout is not None
+    output = child.stdout
+    buffer = b""
+
+    def receive(kind: str, request_id: int | None = None) -> dict[str, object]:
+        nonlocal buffer
+        deadline = time.monotonic() + RUNTIME_SHUTDOWN_GRACE_SECONDS
+        while True:
+            while b"\n" not in buffer:
+                if len(buffer) >= 4096:
+                    raise ObserverLaunchError(
+                        "installation check received an oversized protocol row"
+                    )
+                remaining = deadline - time.monotonic()
+                if remaining <= 0 or not select.select([output], [], [], remaining)[0]:
+                    raise ObserverLaunchError(
+                        "installation check timed out waiting for the runtime"
+                    )
+                chunk = os.read(output.fileno(), 4096)
+                if not chunk:
+                    raise ObserverLaunchError(
+                        "installation check runtime exited before acknowledgement"
+                    )
+                buffer += chunk
+            line, buffer = buffer.split(b"\n", 1)
+            if len(line) >= 4096:
+                raise ObserverLaunchError("installation check received an oversized protocol row")
+            message = json.loads(line)
+            if not isinstance(message, dict):
+                raise ObserverLaunchError("installation check received an invalid protocol row")
+            if message.get("type") == "error":
+                raise ObserverLaunchError(
+                    f"installation check runtime refused: {message.get('code')}"
+                )
+            if message.get("type") == kind and message.get("request_id") == request_id:
+                return message
+            if message.get("type") not in {"switching", "archive_progress"}:
+                raise ObserverLaunchError(
+                    "installation check received an unexpected protocol response"
+                )
+
+    def send(kind: str, request_id: int, scope: object, **fields: object) -> None:
+        assert child.stdin is not None
+        row = {
+            "type": kind,
+            "protocol_version": 3,
+            "request_id": request_id,
+            "scope": scope,
+            **fields,
+        }
+        child.stdin.write(json.dumps(row).encode("ascii") + b"\n")
+        child.stdin.flush()
+
+    try:
+        hello = receive("hello")
+        if hello.get("protocol_version") != 3:
+            raise ObserverLaunchError("installation check requires runtime session protocol 3")
+        target = {"type": "new" if new else "open", "campaign_id": str(campaign)}
+        if new:
+            target["preset"] = "standard"
+        send("switch", 1, hello["scope"], target=target)
+        ready = receive("ready", 1)
+        tail = ready["tail"]
+        scope = ready["scope"]
+        if new:
+            if tail != {"resolve_tick": 0, "tick_content_hash": None}:
+                raise ObserverLaunchError(
+                    "installation check New did not return an empty durable tail"
+                )
+            send("advance", 2, scope, expected_tail=tail)
+            committed = receive("committed", 2)
+            if committed["scope"] != scope:
+                raise ObserverLaunchError("installation check commit changed campaign scope")
+            tail = committed["tail"]
+        if (
+            not isinstance(tail, dict)
+            or tail.get("resolve_tick") != 1
+            or re.fullmatch(r"[0-9a-f]{64}", str(tail.get("tick_content_hash"))) is None
+        ):
+            raise ObserverLaunchError(
+                "installation check did not observe one hashed committed period"
+            )
+        stop_id = 3 if new else 2
+        send("stop", stop_id, scope)
+        receive("stopped", stop_id)
+        child.stdin.close()
+        if _finish_runtime(child) != 0:
+            raise ObserverLaunchError("installation check runtime shutdown failed")
+        foundation = ready["foundation_digest"]
+        if not isinstance(foundation, str):
+            raise ObserverLaunchError("installation check foundation identity was absent")
+        return foundation, tail
+    finally:
+        if not child.stdin.closed:
+            child.stdin.close()
+        if child.poll() is None:
+            _finish_runtime(child)
+        child.stdout.close()
+
+
+def check_installation(
+    runtime: Path,
+    client: Path,
+    root: Path,
+    writer: Mapping[str, str],
+    reader: Mapping[str, str],
+    defines: Path,
+) -> int:
+    """Prove New, one period, process restart, Open, and the real native reader."""
+    campaign = uuid4()
+    first = _check_session(runtime, root, writer, defines, campaign, new=True)
+    reopened = _check_session(runtime, root, writer, Path("/dev/null"), campaign, new=False)
+    if reopened != first:
+        raise ObserverLaunchError(
+            "installation check reopened a different foundation or durable tail"
+        )
+    result = subprocess.run(
+        [str(client), "--headless", "--campaign", str(campaign), "tick", "status"],
+        cwd=root,
+        env=dict(reader),
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=RUNTIME_SHUTDOWN_GRACE_SECONDS,
+    )
+    status = json.loads(result.stdout)
+    if (
+        not isinstance(status, dict)
+        or status.get("campaign_id") != str(campaign)
+        or (
+            status.get("durable_tick") != 1
+            or status.get("tick_content_hash") != first[1]["tick_content_hash"]
+        )
+    ):
+        raise ObserverLaunchError(
+            "installation check native reader disagrees with the committed period"
+        )
+    print(
+        json.dumps(
+            {
+                "check": "passed",
+                "campaign_id": str(campaign),
+                "periods": 1,
+                "foundation_digest": first[0],
+                "tail": first[1],
+                "reopened_without_defines": True,
+            }
+        )
+    )
+    return 0
+
+
 def run_pair(
     runtime_binary: Path,
     client_binary: Path,
@@ -344,6 +637,7 @@ def run_pair(
     runtime_environment: Mapping[str, str],
     client_environment: Mapping[str, str],
     *,
+    defines_path: Path,
     initial_target: NewCampaignTarget | OpenCampaignTarget,
 ) -> int:
     """Cross-connect two anonymous pipes; the parent never reads or forwards protocol bytes."""
@@ -357,8 +651,8 @@ def run_pair(
         responses = os.pipe()
         descriptors.extend(responses)
         runtime = subprocess.Popen(
-            [str(runtime_binary), "session", "--stdio"],
-            cwd=root / "rust",
+            [str(runtime_binary), "session", "--stdio", "--defines", str(defines_path)],
+            cwd=root,
             env=dict(runtime_environment),
             stdin=requests[0],
             stdout=responses[1],
@@ -377,7 +671,7 @@ def run_pair(
             client_args = [str(client_binary), "--campaign", str(initial_target.campaign)]
         client = subprocess.Popen(
             client_args,
-            cwd=root / "rust",
+            cwd=root,
             env=dict(client_environment),
             stdin=responses[0],
             stdout=requests[1],
@@ -414,6 +708,21 @@ def main(argv: list[str] | None = None) -> int:
         "--new", action="store_true", help="start another campaign and preserve prior worlds"
     )
     parser.add_argument("--no-build", action="store_true", help="use existing native binaries")
+    parser.add_argument("--distribution", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument(
+        "--stop-database", action="store_true", help="stop this preview's database and retain saves"
+    )
+    parser.add_argument(
+        "--smoke",
+        action="store_true",
+        help="verify New, one period, restart, and native reads without a window",
+    )
+    parser.add_argument(
+        "--defines",
+        type=Path,
+        default=DEFAULT_DEFINES,
+        help="TOML values for new campaigns; existing campaigns use their saved parameters",
+    )
     parser.add_argument(
         "--preset",
         choices=("standard", "delayed"),
@@ -422,16 +731,43 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         environment = dict(os.environ)
-        state_file = preference_path(environment)
-        initial_target = select_initial_target(
-            environment,
-            state_file=state_file,
-            explicit=args.campaign,
-            new=args.new,
-            preset=args.preset,
+        if args.stop_database:
+            if not args.distribution:
+                raise ObserverLaunchError(
+                    "--stop-database is available in the downloadable preview"
+                )
+            _run(
+                [*distribution_compose(ROOT), "stop", "babylon-pg"],
+                ROOT,
+                distribution_docker_environment(ROOT, environment),
+                "preview database stop",
+            )
+            return 0
+        if args.distribution:
+            environment = distribution_environment(ROOT, environment)
+        initial_target = None
+        if not args.smoke:
+            initial_target = select_initial_target(
+                environment,
+                state_file=preference_path(environment),
+                explicit=args.campaign,
+                new=args.new,
+                preset=args.preset,
+            )
+        runtime, client, credentials = prepare(
+            ROOT, environment, no_build=args.no_build, distribution=args.distribution
         )
-        runtime, client, credentials = prepare(ROOT, environment, no_build=args.no_build)
         writer_environment, reader_environment = child_environments(environment, credentials)
+        if args.smoke:
+            return check_installation(
+                runtime,
+                client,
+                ROOT,
+                writer_environment,
+                reader_environment,
+                args.defines.expanduser().resolve(),
+            )
+        assert initial_target is not None
         # Never echo the ambient filter: field selectors may contain private values.
         print(f"Observer log targets enabled: {OBSERVER_CAPTURE_FILTER}", file=sys.stderr)
         return run_pair(
@@ -440,9 +776,10 @@ def main(argv: list[str] | None = None) -> int:
             ROOT,
             writer_environment,
             reader_environment,
+            defines_path=args.defines.expanduser().resolve(),
             initial_target=initial_target,
         )
-    except ObserverLaunchError as error:
+    except (ObserverLaunchError, OSError, ValueError, subprocess.SubprocessError) as error:
         print(f"Observer launch refused: {error}", file=sys.stderr)
         return 1
     except KeyboardInterrupt:

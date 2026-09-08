@@ -1,135 +1,50 @@
 # Commands Reference
 
-## Setup
+`.mise.toml` and its included task files own executable commands. Use
+`mise tasks` for the complete current list.
 
 ```bash
-mise install
+mise install --locked
 mise run install
 mise run hooks
+mise run dev:doctor
 ```
 
-## CI & Quality (Fast Gate)
+Use the checkout's own pinned environment. Nested worktrees must exclude the
+parent checkout's Mise configuration; `mise config ls` shows the files loaded.
 
 ```bash
-mise run check            # Non-mutating static/local contracts + unit tests
-mise run check:quick      # Non-mutating lint + format + typecheck
-mise run check:full-local # Check plus workstation data/reference probes
-mise run fix              # Apply Ruff fixes, then format sequentially
-mise run ci               # Same as check
-mise run lint:check       # Ruff linter, no fixes
-mise run format:check     # Ruff formatter check, no rewrites
-mise run lint             # Apply Ruff lint fixes
-mise run format           # Apply Ruff formatting
-mise run typecheck        # MyPy strict mode
-mise run clean            # Clean build artifacts
+mise run check:static                 # Retained static contracts, lint, types, lock
+mise run check                        # Static checks, governance, and Python unit tests
+mise run test:q -- tests/unit/PATH.py # One Python test file
+mise run rust:test:q -- -p CRATE       # Scoped native tests with reports
+mise run rust:check-no-docs            # Complete local native gate
+mise run rust:test:summary             # Compact latest native report
+mise run rust:test:failed              # Repeat the exact failing native tests
 ```
 
-## Testing
+Run heavy gates serially. Documentation generation requires an explicit user
+request; hosted release qualification owns the full documentation build.
 
 ```bash
-mise run test:unit      # Unit tests only (fast)
-mise run test:int       # Integration tests (mechanics & systems)
-mise run test:scenario  # Scenario tests (slow, full arcs)
-mise run test:all       # All non-AI tests
-mise run test:cov       # Tests with coverage report
-mise run test:doctest   # Doctest examples in formulas
+mise run play                         # Durable Bevy observer session
+mise run sim:report                    # 15 periods / 60 weeks; includes annual rollover
+mise run sim:report 130                # 10 modeled years; each period is four weeks
+mise run data:doctor                   # Local reference input checks
+mise run data:artifacts                # Rebuild declared data artifacts
+mise run data:verify-build             # Verify deterministic reference build
+mise run test:rust-postgres   # Isolated pinned PostgreSQL contracts
 ```
 
-<!-- vale off -->
-Rust has a failure-first agent interface separate from the verbose Python
-artifacts:
+For a release, the fast gate runs ordinary unit tests once. The release
+remainder runs non-unit tests and any slow units; the reference-data job owns
+``requires_reference_db`` tests, including unit tests. An empty slow-unit shard
+is allowed, but a failed collection or test remains a failure.
 
-```bash
-mise run rust:test:install-tools       # One-time exact nextest/llvm-cov install
-mise run rust:test                     # Complete non-doctest workspace + reports
-mise run rust:test:q -- -p CRATE       # Scoped inner-loop run + the same schema
-mise run rust:test:summary             # One-screen latest result
-mise run rust:test:failed              # Exact latest failure set; green is a no-op
-mise run rust:test:inventory           # Machine test census for parity audits
-mise run rust:coverage                 # Separate instrumented advisory coverage run
-```
+The frozen Python simulation, formula gates, vault regressions, scenario
+runners, and optimization campaigns are retired. Their source and evidence
+remain recoverable from Git history.
 
-The explicit latest pointer is ``reports/test-results/rust/latest.json``.
-Read its compact JSON/Markdown first; follow its JUnit and log pointers only
-for full captured output. The canonical ``rust:check-no-docs`` task also runs
-the separately required Rust doctests because nextest does not execute them.
-<!-- vale on -->
-
-## Simulation
-
-```bash
-mise run sim:e2e-michigan     # Fresh 520-tick Rust run unless campaign ID is explicit
-mise run sim:e2e-bg           # Resume explicit campaign, or worktree default, in background
-mise run sim:status           # Process, its recorded campaign tail, and global totals
-mise run sim:probe            # Explicit campaign, or worktree default, plus global totals
-mise run sim:archive          # Verify semantic Archive schema and report its estate
-mise run sim:report                    # Local 60-tick report; shared database attribution
-mise run sim:report 520 3000 exclusive # Canonical Rust Michigan diagnostic bundle
-mise run reference:python-smoke  # Frozen Python one-tick reference smoke
-```
-
-``sim:report`` is authoritative Rust persistence observability. The canonical
-520-tick run writes a collision-safe bundle below ``reports/sim-runs/`` and
-labels its Postgres database and WAL observations ``exclusive``.
-
-## Development Tooling
-
-```bash
-mise run dev:doctor  # Report worktree, Mise, and repository Rust host-policy facts
-```
-
-## Frozen-reference analysis
-
-```bash
-mise run analysis:optuna      # Bayesian optimization (Optuna TPE)
-mise run analysis:landscape   # 2D parameter grid search
-mise run analysis:sweep       # 1D sensitivity sweep
-mise run analysis:monte-carlo # Monte Carlo uncertainty analysis
-mise run analysis:campaign    # Weekly frozen-Python reference profile
-mise run analysis:campaign -- full # Full MC + Optuna + Morris/Sobol profile
-mise run analysis:dashboard   # Root optuna.db by default
-mise run analysis:dashboard -- /absolute/campaign/study.sqlite3
-```
-
-``analysis:campaign`` is non-authoritative frozen-Python analysis. Each run
-writes ``campaign.json`` and leg artifacts below
-``reports/frozen-reference-analysis/<run>/``. Pass a campaign's absolute
-``optuna/study.sqlite3`` path to ``analysis:dashboard`` to open that study.
-
-## QA
-
-```bash
-mise run qa:verify              # Formula correctness verification
-mise run qa:schemas             # JSON schema validation
-mise run qa:security            # Dependency security audit
-mise run qa:regression          # Baseline comparison (CI)
-mise run qa:vault-regression    # Retained projection-vault byte gate
-mise run qa:regression-generate # Create regression baselines
-```
-
-## Data
-
-```bash
-mise run data:ingest     # Ingest Marxist corpus into ChromaDB
-mise run data:db-init    # Initialize SQLite database
-```
-
-## Documentation
-
-```bash
-mise run docs:build   # Build Sphinx documentation
-mise run docs:live    # Live-reload documentation server
-mise run docs:strict  # Build with warnings as errors
-```
-
-## UI
-
-```bash
-mise run ui           # Launch DearPyGui Synopticon dashboard
-```
-
-## Full Task Listing
-
-```bash
-mise tasks            # List all available tasks
-```
+Stage the exact intended files, commit with `mise run commit -- "type(scope):
+description"`, and use `mise run pr:merge -- N` only after merge authorization
+and exact-head qualification. See [governance](governance.md) for releases.

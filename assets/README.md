@@ -19,9 +19,11 @@ its hash and MIT attribution are recorded in that manifest and
 
 The SFX estate and the 17-track soundtrack in `music/{ambient,superstructure,
 periphery,rift,endgame,entity}` retain their CC0 dedication in `audio-LICENSE`.
-The older themes and suites retain their separate, unresolved licensing
-status in [LICENSING.md](../LICENSING.md). Moving or rendering them grants no
-new license. Visuals retain their recorded AGPL-3.0-or-later attribution.
+The Director confirmed original authorship of Phi and Panopticon on 2026-09-06
+and authorized distribution of both MIDI compositions and their rendered forms
+with Babylon. Their permission is recorded in [LICENSING.md](../LICENSING.md);
+it does not assign them CC0. The older crisis, fascist and revolutionary suites
+retain their unresolved status. Visuals retain their recorded AGPL-3.0-or-later attribution.
 
 Audio composition generators live in `tools/audio/`; MIDI masters stay here.
 The remaining sections describe the CC0 soundtrack and cue estate.

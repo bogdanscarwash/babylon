@@ -5,7 +5,7 @@ use postgres::{Config, GenericClient, NoTls};
 
 use crate::{
     michigan_economy::digest_hex, observer_reader::ObserverEconomyErrorV1,
-    validate_legacy_connection_target,
+    validate_connection_target,
 };
 
 const SCHEMA: &str = include_str!("../migrations/observer_tick_components_v1.sql");
@@ -42,8 +42,7 @@ pub(crate) const OBSERVER_TICK_COMPONENT_VIEWS_V1: [&str; 24] = [
 pub(crate) fn install_observer_tick_components_schema_v1(
     config: &Config,
 ) -> Result<(), ObserverEconomyErrorV1> {
-    validate_legacy_connection_target(config)
-        .map_err(|_| ObserverEconomyErrorV1::ConnectionTarget)?;
+    validate_connection_target(config).map_err(|_| ObserverEconomyErrorV1::ConnectionTarget)?;
     let mut client = config
         .connect(NoTls)
         .map_err(|_| ObserverEconomyErrorV1::Database)?;

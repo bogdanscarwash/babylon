@@ -1,4 +1,8 @@
 //! Exact conserved production, inventory, order, and realization transitions.
+//!
+//! One transition closes one four-week period. Period ordinals advance by one;
+//! content supplies capacities and labor schedules for the entire interval.
+//! Inventories, people, order principals and per-batch recipes retain their units.
 #![forbid(unsafe_code)]
 #![warn(clippy::pedantic)]
 
@@ -20,7 +24,7 @@ pub use staffing::{
 };
 pub use transition::advance_material_circuit_v1;
 pub use transition_v2::{
-    advance_material_circuit_v2, close_material_week_v2, ClosedMaterialWeekV2,
+    advance_material_circuit_v2, close_material_period_v2, ClosedMaterialPeriodV2,
 };
 pub use wire::{
     decode_material_circuit_state_v1, encode_material_circuit_state_v1,

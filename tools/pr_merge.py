@@ -33,6 +33,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from tools.pr_policy import (  # noqa: E402
     DEV_CHECK_MANIFEST,
     GITHUB_ACTIONS_PRODUCER,
+    SCOPED_CI_CHECKS,
     CheckRequirement,
     manifest_for_base,
 )
@@ -245,6 +246,7 @@ def _rollup_findings(
     manifest: tuple[CheckRequirement, ...] = DEV_CHECK_MANIFEST,
     *,
     allow_pending: bool = False,
+    verified_scoped_skips: frozenset[tuple[str, str]] = frozenset(),
 ) -> VerificationFindings:
     """Classify disallowed unknown rollup conclusions.
 
@@ -277,11 +279,115 @@ def _rollup_findings(
             target.append(f"{name}: still {conclusion}")
         elif allow_pending and conclusion == "NEUTRAL":
             findings.pending.append(f"{name}: {conclusion}")
+        elif (
+            allow_pending
+            and conclusion == "SKIPPED"
+            and name in SCOPED_CI_CHECKS
+            and (name, str(entry.get("detailsUrl") or "")) not in verified_scoped_skips
+        ):
+            findings.pending.append(f"{name}: awaiting exact CI scope evidence")
         elif conclusion != "SUCCESS" and not (
-            conclusion == "SKIPPED" and name in OPTIONAL_SKIPPED_CHECKS
+            conclusion == "SKIPPED"
+            and (
+                name in OPTIONAL_SKIPPED_CHECKS
+                or (name, str(entry.get("detailsUrl") or "")) in verified_scoped_skips
+            )
         ):
             findings.hard.append(f"{name}: {conclusion}")
     return findings
+
+
+def _verified_ci_scope(pr: int, head_oid: str, base_ref: str) -> frozenset[tuple[str, str]]:
+    """Bind scope skips to the exact successful native CI workflow and suite."""
+    payload = _json_dict(
+        _gh_json("api", CHECK_RUNS_ENDPOINT.format(head_oid=head_oid)), "CI scope checks"
+    )
+    checks = _bounded_counted_items(payload, "CI scope checks", "check_runs")
+    gates = [
+        check
+        for check in checks
+        if check.get("name") == "CI Gate" and _is_actions_app(check.get("app"))
+    ]
+    if not gates:
+        raise RuntimeError("CI scope requires the canonical CI Gate")
+    gate = max(gates, key=lambda check: _positive_int(check.get("id"), "CI Gate id"))
+    if (
+        gate.get("head_sha") != head_oid
+        or gate.get("status") != "completed"
+        or gate.get("conclusion") != "success"
+    ):
+        raise RuntimeError("CI scope requires a successful exact-head CI Gate")
+    details = gate.get("details_url")
+    identity = (
+        re.fullmatch(
+            r"https://github\.com/percy-raskova/babylon/actions/runs/([1-9][0-9]*)/job/[1-9][0-9]*",
+            details,
+        )
+        if isinstance(details, str)
+        else None
+    )
+    if identity is None:
+        raise RuntimeError("CI Gate has no canonical native workflow URL")
+    run_id = int(identity.group(1))
+    run = _json_dict(
+        _gh_json("api", f"repos/{{owner}}/{{repo}}/actions/runs/{run_id}"), "CI scope workflow"
+    )
+    if (
+        run.get("id") != run_id
+        or run.get("workflow_id") != CI_WORKFLOW_ID
+        or run.get("path") != CI_WORKFLOW_PATH
+        or run.get("event") != "pull_request"
+        or run.get("head_sha") != head_oid
+        or run.get("status") != "completed"
+        or run.get("conclusion") != "success"
+    ):
+        raise RuntimeError("CI scope has the wrong workflow identity, head, event, or result")
+    for field in ("repository", "head_repository"):
+        repository = _json_dict(run.get(field), f"CI scope {field}")
+        if repository.get("full_name") != "percy-raskova/babylon":
+            raise RuntimeError("CI scope requires the canonical repository")
+    pulls = _json_dicts(run.get("pull_requests"), "CI scope PRs", refuse_full_page=True)
+    if len(pulls) != 1:
+        raise RuntimeError("CI scope requires one exact PR association")
+    pull = pulls[0]
+    if (
+        pull.get("number") != pr
+        or _json_dict(pull.get("head"), "CI scope PR head").get("sha") != head_oid
+        or _json_dict(pull.get("base"), "CI scope PR base").get("ref") != base_ref
+    ):
+        raise RuntimeError("CI scope has the wrong PR association")
+    suite_id = _positive_int(run.get("check_suite_id"), "CI scope suite id")
+    if _json_dict(gate.get("check_suite"), "CI Gate suite").get("id") != suite_id:
+        raise RuntimeError("CI Gate is not owned by its native workflow suite")
+    # Main always selects every job. Only dev's observed scope skips are eligible.
+    if base_ref != "dev":
+        return frozenset()
+    prefix = f"https://github.com/percy-raskova/babylon/actions/runs/{run_id}/job/"
+    latest: dict[str, dict[str, object]] = {}
+    for check in checks:
+        name = check.get("name")
+        if (
+            not isinstance(name, str)
+            or name not in SCOPED_CI_CHECKS
+            or not _is_actions_app(check.get("app"))
+        ):
+            continue
+        check_id = _positive_int(check.get("id"), "scoped check id")
+        if name not in latest or check_id > _positive_int(
+            latest[name].get("id"), "prior scoped check id"
+        ):
+            latest[name] = check
+    return frozenset(
+        (str(check["name"]), str(check["details_url"]))
+        for check in latest.values()
+        if check.get("head_sha") == head_oid
+        and check.get("status") == "completed"
+        and check.get("conclusion") == "skipped"
+        and _is_actions_app(check.get("app"))
+        and _json_dict(check.get("check_suite"), "scoped job suite").get("id") == suite_id
+        and isinstance(check.get("details_url"), str)
+        and str(check["details_url"]).startswith(prefix)
+    )
 
 
 def _rollup_failures(
@@ -1051,6 +1157,7 @@ def _main() -> int:
     parser.add_argument("--verify-only", action="store_true")
     parser.add_argument("--expected-head")
     parser.add_argument("--director-main", action="store_true")
+    parser.add_argument("--require-ci-workflow", action="store_true")
     parser.add_argument("--dependabot", action="store_true")
     parser.add_argument("--dependabot-source-run", type=int)
     parser.add_argument("--dependabot-classifier-run", type=int)
@@ -1094,11 +1201,20 @@ def _main() -> int:
                 allow_pending=args.dependabot,
             )
         )
+    rollup_entries = _json_dicts(rollup, "status-check rollup")
+    verified_scoped_skips: frozenset[tuple[str, str]] = frozenset()
+    needs_scope_proof = args.require_ci_workflow or any(
+        entry.get("name") in SCOPED_CI_CHECKS and entry.get("conclusion") == "SKIPPED"
+        for entry in rollup_entries
+    )
+    if needs_scope_proof and not findings.hard and not findings.pending:
+        verified_scoped_skips = _verified_ci_scope(args.pr, head_oid, base_ref)
     findings.extend(
         _rollup_findings(
-            _json_dicts(rollup, "status-check rollup"),
+            rollup_entries,
             manifest,
             allow_pending=args.dependabot,
+            verified_scoped_skips=verified_scoped_skips,
         )
     )
     advisories = _copilot_advisories(args.pr, view.get("reviews"), head_oid)

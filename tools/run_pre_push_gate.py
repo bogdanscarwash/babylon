@@ -17,7 +17,7 @@ REPOSITORY_ROOT: Final = Path(__file__).resolve().parents[1]
 class Gate(StrEnum):
     """Pre-push gates with repository-level input ownership."""
 
-    RUST_FULL = "rust-full-gate"
+    RUST_DEV = "rust-dev-gate"
     BSL_REPO_SENTINELS = "bsl-repo-sentinels"
 
 
@@ -45,7 +45,7 @@ BSL_RETIRED_AUTHORITY_PATHS: Final = frozenset(
 )
 BSL_SENTINEL_PATHS: Final = BSL_RETIRED_AUTHORITY_PATHS | {CLASSIFIER_PATH}
 GATE_COMMANDS: Final = {
-    Gate.RUST_FULL: ("mise", "run", "rust:check-no-docs"),
+    Gate.RUST_DEV: ("mise", "run", "rust:check-no-docs", "--", "--dev"),
     Gate.BSL_REPO_SENTINELS: ("mise", "run", "check:bsl-sentinels"),
 }
 
@@ -73,8 +73,11 @@ def changed_paths(
 
 def gate_applies(gate: Gate, paths: set[str] | frozenset[str]) -> bool:
     """Return whether ``paths`` can alter ``gate`` or its selection contract."""
-    if gate is Gate.RUST_FULL:
-        return any(path.startswith("rust/") or path in RUST_GATE_PATHS for path in paths)
+    if gate is Gate.RUST_DEV:
+        return any(
+            path.startswith(("rust/", "contracts/", "content/")) or path in RUST_GATE_PATHS
+            for path in paths
+        )
     return any(path.startswith("ai/decisions/") or path in BSL_SENTINEL_PATHS for path in paths)
 
 

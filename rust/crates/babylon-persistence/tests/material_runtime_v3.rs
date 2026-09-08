@@ -13,7 +13,7 @@ use babylon_tick::{
 
 fn session(preset: MichiganDeliveryPresetV1) -> MaterialReplaySessionV3<HypergraphStore> {
     MichiganContentPresetV1::new_campaign(preset)
-        .create_foundation()
+        .create_foundation(&crate::test_support::catalog())
         .unwrap()
         .into_session()
         .unwrap()
@@ -65,8 +65,8 @@ fn material_commit_failure_leaves_graph_circuit_world_time_and_sink_unchanged() 
 #[test]
 fn material_transition_failure_abandons_prepared_graph_and_identity() {
     let (graph, _) = michigan_observer_foundation_v1().unwrap();
-    let mut initial = MichiganContentPresetV1::StaffedStandardV4
-        .create_foundation()
+    let mut initial = MichiganContentPresetV1::FourWeekStandardV5
+        .create_foundation(&crate::test_support::catalog())
         .unwrap()
         .initial_register()
         .state()
@@ -74,7 +74,7 @@ fn material_transition_failure_abandons_prepared_graph_and_identity() {
     let source = initial
         .production_commitments
         .iter()
-        .find(|row| row.week == 1 && row.planned_batches > 0)
+        .find(|row| row.period == 1 && row.planned_batches > 0)
         .unwrap();
     let output = initial
         .process_outputs
@@ -145,7 +145,7 @@ fn staffed_arrival_feeds_following_commitments_through_the_full_horizon() {
                     .production_commitments
                     .iter()
                     .find(|row| {
-                        row.week == tick
+                        row.period == tick
                             && row.process_id == produced.process_id
                             && row.site_id == produced.site_id
                     });
@@ -184,3 +184,6 @@ fn committed_identity_can_publish_without_heap_allocation() {
         identity
     );
 }
+
+#[path = "support/material_config.rs"]
+mod test_support;

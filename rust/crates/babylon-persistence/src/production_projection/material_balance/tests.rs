@@ -22,7 +22,7 @@ type Pair = (
 
 fn empty_state() -> MaterialCircuitStateV2 {
     MaterialCircuitStateV2 {
-        week: 1,
+        period: 1,
         site_logistics_nodes: vec![],
         process_outputs: vec![],
         input_coefficients: vec![],
@@ -41,7 +41,7 @@ fn empty_state() -> MaterialCircuitStateV2 {
 }
 
 fn pair(state: MaterialCircuitStateV2) -> Pair {
-    let opening = MaterialWorldRegisterV2::try_new(state.week - 1, state).unwrap();
+    let opening = MaterialWorldRegisterV2::try_new(state.period - 1, state).unwrap();
     let next = opening.prepare_next().unwrap();
     (
         opening.state().clone(),
@@ -106,13 +106,13 @@ fn production_state(specs: &[(u8, u64, u64, u64)], opening: u64) -> MaterialCirc
         state.capacities.push(CapacityRowV1 {
             process_id,
             site_id: inventory.site_id,
-            week: 1,
+            period: 1,
             available_batches: batches,
         });
         state.production_commitments.push(ProductionCommitmentV1 {
             process_id,
             site_id: inventory.site_id,
-            week: 1,
+            period: 1,
             planned_batches: batches,
         });
         labor = labor.checked_add(batches).unwrap();
@@ -120,7 +120,7 @@ fn production_state(specs: &[(u8, u64, u64, u64)], opening: u64) -> MaterialCirc
     state.labor.push(LaborCapacityRowV1 {
         site_id: inventory.site_id,
         unit_id: UnitIdV1::from_bytes([4; 32]),
-        week: 1,
+        period: 1,
         available: labor,
     });
     state.inventory.push(inventory);
@@ -131,7 +131,7 @@ fn production_state(specs: &[(u8, u64, u64, u64)], opening: u64) -> MaterialCirc
 fn shared_process_principal_records_production_and_consumption_separately_once() {
     let pair = pair(production_state(&[(10, 2, 3, 2), (11, 1, 2, 3)], 10));
     let balance = complete(&pair);
-    assert_eq!(balance.week, 1);
+    assert_eq!(balance.period, 1);
     assert_eq!(balance.rows.len(), 1);
     let row = &balance.rows[0];
     assert_eq!(
@@ -222,13 +222,13 @@ fn freight_state(loss_ppm: u32) -> MaterialCircuitStateV2 {
         corridor_id: corridor,
         from_node_id: source,
         to_node_id: destination,
-        travel_weeks: 1,
+        travel_periods: 1,
         loss_ppm,
     });
     state.corridor_capacities.push(CorridorCapacityV2 {
         corridor_id: corridor,
         unit_id: inventory.unit_id,
-        week: 1,
+        period: 1,
         available: 100,
     });
     state.orders.push(OrderRowV2 {
@@ -301,7 +301,7 @@ fn two_leg_work_state() -> MaterialCircuitStateV2 {
         corridor_id: CorridorIdV2::from_bytes([11; 32]),
         from_node_id: intermediate,
         to_node_id: destination,
-        travel_weeks: 1,
+        travel_periods: 1,
         loss_ppm: 0,
     });
     // The actual V2 dispatcher reserves the full dispatched quantity on every
@@ -309,7 +309,7 @@ fn two_leg_work_state() -> MaterialCircuitStateV2 {
     state.corridor_capacities.push(CorridorCapacityV2 {
         corridor_id: state.route_legs[1].corridor_id,
         unit_id: state.inventory[0].unit_id,
-        week: 2,
+        period: 2,
         available: 100,
     });
     add_receiving_work(&mut state);
@@ -325,13 +325,13 @@ fn add_receiving_work(state: &mut MaterialCircuitStateV2) {
     work.capacities[0].site_id = buyer;
     work.labor[0].site_id = buyer;
     work.production_commitments[0].site_id = buyer;
-    for week in [2, 3] {
+    for period in [2, 3] {
         work.capacities.push(CapacityRowV1 {
-            week,
+            period,
             ..work.capacities[0].clone()
         });
         work.labor.push(LaborCapacityRowV1 {
-            week,
+            period,
             ..work.labor[0].clone()
         });
     }
@@ -363,7 +363,7 @@ fn add_receiving_dispatch(state: &mut MaterialCircuitStateV2) {
         corridor_id: corridor,
         from_node_id: state.route_legs[1].to_node_id,
         to_node_id: destination,
-        travel_weeks: 1,
+        travel_periods: 1,
         loss_ppm: 0,
     });
     state.supplier_routes.push(SupplierRouteV2 {
@@ -386,7 +386,7 @@ fn add_receiving_dispatch(state: &mut MaterialCircuitStateV2) {
     state.corridor_capacities.push(CorridorCapacityV2 {
         corridor_id: corridor,
         unit_id: state.orders[0].unit_id,
-        week: 3,
+        period: 3,
         available: 4,
     });
 }
@@ -415,7 +415,7 @@ fn intermediate_loss_then_final_arrival_preserves_same_principal_work_and_dispat
     let dispatched = pair(two_leg_work_state());
     assert_eq!(dispatched.2.dispatches.len(), 1);
     assert_eq!(dispatched.2.dispatches[0].quantity, 100);
-    assert_eq!(dispatched.2.dispatches[0].final_arrival_week, 3);
+    assert_eq!(dispatched.2.dispatches[0].final_arrival_period, 3);
     conserved(&complete(&dispatched));
 
     let intermediate = pair(dispatched.1);
@@ -470,20 +470,20 @@ fn arrival_family_retains_multiplicity_without_counting_delivery_or_realization_
     assert_eq!((buyer.arrivals, buyer.closing), (100, 100));
 }
 
-fn michigan_week(preset: MichiganDeliveryPresetV1, week: u64) -> Pair {
+fn michigan_period(preset: MichiganDeliveryPresetV1, period: u64) -> Pair {
     let mut session = MichiganContentPresetV1::new_campaign(preset)
-        .create_foundation()
+        .create_foundation(&crate::test_support::catalog())
         .unwrap()
         .into_session()
         .unwrap();
-    for tick in 1..=week {
+    for tick in 1..=period {
         let actions = OrderedPracticeActionBatchV1::empty(
             session.graph_session().session_identity().clone(),
             tick,
         )
         .unwrap();
         let next = session.prepare_advance(&actions).unwrap();
-        if tick == week {
+        if tick == period {
             return (
                 session.material().state().clone(),
                 next.material().register().state().clone(),
@@ -496,20 +496,20 @@ fn michigan_week(preset: MichiganDeliveryPresetV1, week: u64) -> Pair {
             })
             .unwrap();
     }
-    panic!("fixture requires a completed week");
+    panic!("fixture requires a completed period");
 }
 
 #[test]
 fn delivery_twins_explain_downstream_input_use_and_preserve_unrelated_food() {
-    let standard = michigan_week(MichiganDeliveryPresetV1::Standard, 3);
-    let delayed = michigan_week(MichiganDeliveryPresetV1::Delayed, 3);
+    let standard = michigan_period(MichiganDeliveryPresetV1::Standard, 3);
+    let delayed = michigan_period(MichiganDeliveryPresetV1::Delayed, 3);
     let a = project_material_balance(&standard.1, Some(&standard.0), Some(&standard.2))
         .unwrap()
         .unwrap();
     let b = project_material_balance(&delayed.1, Some(&delayed.0), Some(&delayed.2))
         .unwrap()
         .unwrap();
-    let catalog = michigan_material_catalog_v1().unwrap();
+    let catalog = crate::test_support::catalog();
     let macomb = digest_hex(
         &catalog
             .site("macomb-fabricated-metal")
@@ -543,7 +543,7 @@ fn delivery_twins_explain_downstream_input_use_and_preserve_unrelated_food() {
     conserved(&b);
     // Reading a later pair does not alter a historical account or its inputs.
     let original = standard.clone();
-    let later = michigan_week(MichiganDeliveryPresetV1::Standard, 4);
+    let later = michigan_period(MichiganDeliveryPresetV1::Standard, 4);
     conserved(&complete(&later));
     assert_eq!(standard, original);
     assert_eq!(
@@ -611,7 +611,7 @@ fn incomplete_or_nonadjacent_history_is_never_a_zero_account() {
     wrong.2.resolve_tick += 1;
     refuses_unchanged(&wrong, ProductionProjectionErrorV1::History);
     let mut wrong = actual;
-    wrong.1.week += 1;
+    wrong.1.period += 1;
     refuses_unchanged(&wrong, ProductionProjectionErrorV1::History);
 }
 

@@ -475,7 +475,7 @@ fn update_observation(
             continue;
         }
         text.set_if_neq(Text::new(format!(
-            "{} | week {} | 0..{} {}\nCounty readings | gray: unavailable | controls and encoding: Lenses",
+            "{} | period {} | 0..{} {}\nCounty readings | gray: unavailable | controls and encoding: Lenses",
             projection.label, input.session.viewed_tick, maximum.map_or_else(|| "-".into(), grouped), projection.unit,
         )));
     }

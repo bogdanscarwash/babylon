@@ -1,0 +1,38 @@
+services:
+  babylon-pg:
+    build: ../docker/postgres
+    ports:
+      - "127.0.0.1::5432"
+    environment:
+      POSTGRES_USER: test
+      POSTGRES_PASSWORD: test
+      POSTGRES_DB: babylon_test
+    shm_size: 256m
+    command: ["postgres", "-c", "config_file=/etc/postgresql/postgresql.conf"]
+    volumes:
+      - saves:/var/lib/postgresql/data
+      - ./postgresql.conf:/etc/postgresql/postgresql.conf:ro
+      - ../docker/postgres/initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          pg_isready -U test -d babylon_test &&
+          test "$$(psql -X -qAt -v ON_ERROR_STOP=1 -U test -d babylon_test -c
+          "SELECT pg_catalog.current_setting('server_version_num') = '170011'
+             AND pg_catalog.pg_encoding_to_char(d.encoding) = 'UTF8'
+             AND d.datlocprovider = 'b' AND d.datlocale = 'C.UTF-8'
+             AND (SELECT extversion = '3.5.7' FROM pg_catalog.pg_extension WHERE extname = 'postgis')
+             AND (SELECT extversion = '0.8.5' FROM pg_catalog.pg_extension WHERE extname = 'vector')
+             AND (SELECT default_version = '4.5.0' FROM pg_catalog.pg_available_extensions WHERE name = 'h3')
+             AND (SELECT default_version = '4.5.0' FROM pg_catalog.pg_available_extensions WHERE name = 'h3_postgis')
+             AND pg_catalog.current_setting('synchronous_commit') = 'on'
+            FROM pg_catalog.pg_database AS d
+           WHERE d.datname = pg_catalog.current_database()")" = 't'
+      interval: 2s
+      timeout: 5s
+      retries: 60
+      start_period: 5s
+
+volumes:
+  saves:

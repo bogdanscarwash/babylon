@@ -111,8 +111,8 @@ def load_wkt_from_tiger() -> None:
 
 def generate_h3_cells(state_fips: str | None = "26") -> None:
     """Phase 2: Generate H3 res-7 cells for counties in the given state."""
-    from babylon.domain.economics.substrate.h3_utils import generate_h3_cells as h3_gen
-    from babylon.domain.economics.substrate.h3_utils import wkt_to_geometry
+    from babylon.data.h3_utils import generate_h3_cells as h3_gen
+    from babylon.data.h3_utils import wkt_to_geometry
 
     with get_normalized_session() as session:
         # Build query for counties with geometry

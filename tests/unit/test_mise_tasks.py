@@ -24,11 +24,10 @@ DEVTOOLS_TASKS_TOML = REPOSITORY_ROOT / ".mise" / "tasks" / "devtools.toml"
 HOSTED_STATIC_TASKS = [
     "check:hygiene",
     "check:dynamic-linking-fence",
-    "check:sentinels-static",
-    "check:surface",
+    "check:h3-readers",
+    "check:rust-persistence-cutover",
     "lint:check",
     "format:check",
-    "lint:imports",
     "typecheck",
     "check:lock",
 ]
@@ -122,7 +121,6 @@ class TestMiseTaskDiscoverability:
 
         assert config["min_version"] == "2026.9.1"
         assert config["task_config"]["includes"] == [
-            ".mise/tasks/analysis.toml",
             ".mise/tasks/devtools.toml",
             ".mise/tasks/simulation.toml",
         ]
@@ -133,7 +131,7 @@ class TestMiseTaskDiscoverability:
         task = mise_tasks["sim:e2e-michigan"]
         assert Path(str(task["source"])).resolve() == SIMULATION_TASKS_TOML
         assert len(str(task["description"]).split()) >= 4
-        assert "babylon-runtime run --ticks 520" in _task_run(task)
+        assert "babylon-runtime run --ticks 130" in _task_run(task)
 
     def test_foreground_e2e_is_fresh_while_background_and_probe_share_stable_purpose(
         self, mise_tasks: dict[str, dict[str, object]]
@@ -230,71 +228,12 @@ class TestMiseTaskDiscoverability:
             assert "-m babylon" not in run
             assert "babylon.engine" not in run
 
-    def test_frozen_python_and_analysis_tasks_are_renamed_without_aliases(
-        self, mise_tasks: dict[str, dict[str, object]]
-    ) -> None:
-        retired = {
-            "sim:run",
-            "sim:sweep",
-            "sim:monte-carlo",
-            "sim:archived",
-            "test:optimization",
-        }
-        assert not retired & mise_tasks.keys()
-        assert not {name for name in mise_tasks if name.startswith("tune:")}
-        expected_analysis = {
-            "reference:python-smoke",
-            "analysis:sweep",
-            "analysis:sweep-custom",
-            "analysis:landscape",
-            "analysis:monte-carlo",
-            "analysis:optuna",
-            "analysis:dashboard",
-            "analysis:campaign",
-            "analysis:sensitivity",
-            "analysis:morris",
-            "analysis:sobol",
-            "analysis:test",
-        }
-        assert expected_analysis <= mise_tasks.keys()
-        for name in expected_analysis:
-            assert Path(str(mise_tasks[name]["source"])).resolve() == ANALYSIS_TASKS_TOML
-        assert "uv run python -m babylon" in _task_run(mise_tasks["reference:python-smoke"])
-        assert "tools.devtools.sim_analysis sweep" in _task_run(mise_tasks["analysis:sweep"])
-        assert "tools.devtools.sim_analysis monte-carlo" in _task_run(
-            mise_tasks["analysis:monte-carlo"]
-        )
-        assert _task_run(mise_tasks["analysis:dashboard"]) == (
-            'uv run optuna-dashboard "sqlite:///${usage_database}"'
-        )
-        assert 'help="Local SQLite database path" default="optuna.db"' in str(
-            mise_tasks["analysis:dashboard"]["usage"]
-        )
-        campaign = mise_tasks["analysis:campaign"]
-        assert 'default="weekly"' in str(campaign["usage"])
-        assert _task_run(campaign) == (
-            "uv run python -m tools.devtools.reference_analysis_campaign "
-            '--profile "${usage_profile}"'
-        )
-        optuna_usage = mise_tasks["analysis:optuna"]["usage"]
-        assert isinstance(optuna_usage, str)
-        assert "maximum 384 at the fixed 5200-tick horizon" in optuna_usage
-        for name in ("analysis:sensitivity", "analysis:morris", "analysis:sobol"):
-            run = _task_run(mise_tasks[name])
-            assert '--param-names "${usage_parameters}"' in run
-            assert "--max-ticks ${usage_ticks}" in run
-            assert 'default="economy.base_subsistence,' in str(mise_tasks[name]["usage"])
-        combined = _task_run(mise_tasks["analysis:sensitivity"])
-        assert "sensitivity --method both" in combined
-        assert "--trajectories ${usage_trajectories}" in combined
-        assert "--samples ${usage_samples}" in combined
-
     def test_sim_report_builds_only_runtime_and_uses_stdlib_reporter(
         self, mise_tasks: dict[str, dict[str, object]]
     ) -> None:
         task = mise_tasks["sim:report"]
         run = _task_run(task)
-        assert 'arg "[ticks]" help="Number of Rust simulation ticks" default="60"' in str(
+        assert 'arg "[ticks]" help="Number of four-week simulation periods" default="15"' in str(
             task["usage"]
         )
         assert 'arg "[timeout_seconds]" help="Runtime wall-clock timeout" default="3000"' in str(
@@ -322,6 +261,24 @@ class TestMiseTaskDiscoverability:
         task = mise_tasks["dev:doctor"]
         assert Path(str(task["source"])).resolve() == DEVTOOLS_TASKS_TOML
         assert _task_run(task) == "python3 tools/devtools/doctor.py"
+
+
+def test_release_remainder_excludes_fast_unit_paths_and_keeps_slow_units() -> None:
+    tasks = _tasks()
+    fast = str(tasks["test:unit-ci"]["run"])
+    remainder = str(tasks["test:rest-ci"]["run"])
+    assert "pytest tests/unit" in fast
+    assert "-m 'not slow and not requires_reference_db and not requires_ollama'" in fast
+    assert "pytest tests --ignore=tests/unit" in remainder
+    assert "pytest tests/unit" in remainder
+    assert "-m 'slow and not requires_reference_db and not requires_ollama'" in remainder
+    assert "-m 'not unit" not in remainder
+    assert "non-unit.xml" in remainder and "slow-unit.xml" in remainder
+    # Only the explicitly optional slow-unit shard accepts pytest's empty exit.
+    assert remainder.count("|| slow_unit_status=$?") == 1
+    assert remainder.index("non-unit.xml") < remainder.index("slow_unit_status=0")
+    assert '[ "$slow_unit_status" -ne 0 ] && [ "$slow_unit_status" -ne 5 ]' in remainder
+    assert 'exit "$slow_unit_status"' in remainder
 
 
 def test_docs_rebuild_serializes_clean_before_build(
@@ -377,7 +334,6 @@ def test_check_is_non_mutating_and_keeps_dynamic_probes_explicit() -> None:
     assert tasks["check:full-local"]["depends"] == [
         "check",
         "data:doctor",
-        "check:catalog",
     ]
 
 
@@ -404,7 +360,7 @@ def test_hosted_fast_gate_and_local_static_gate_share_tasks() -> None:
     ]
 
     assert _tasks()["check:static"]["depends"] == HOSTED_STATIC_TASKS
-    assert commands == HOSTED_STATIC_TASKS
+    assert commands == ["check:static"]
 
 
 def test_fixing_is_explicit_and_sequential() -> None:
@@ -483,10 +439,10 @@ def test_retired_cockpit_hooks_are_absent() -> None:
 
 def test_rust_pre_push_uses_exact_push_range_for_every_gate_definition() -> None:
     """The local hook must preserve deleted paths without fetching or building docs."""
-    hook = _local_hook("rust-full-gate")
+    hook = _local_hook("rust-dev-gate")
     entry = str(hook["entry"])
 
-    assert entry == "python3 tools/run_pre_push_gate.py rust-full-gate"
+    assert entry == "python3 tools/run_pre_push_gate.py rust-dev-gate"
     assert hook["pass_filenames"] is False
     assert hook["always_run"] is True
     assert "files" not in hook
@@ -520,6 +476,41 @@ def test_rust_gate_is_single_pass_with_explicit_repo_sentinel_exception() -> Non
     ]
     assert [line for line in commands if line.startswith("cargo run ")] == [
         "cargo run -p bsl-lint --locked -- all"
+    ]
+
+
+@pytest.mark.parametrize("dev", [False, True])
+def test_rust_gate_modes_execute_one_reported_pass_and_preserve_other_legs(
+    tmp_path: Path, dev: bool
+) -> None:
+    """The dev flag narrows only nextest targets; shared checks still execute once."""
+    task = _tasks()["rust:check-no-docs"]
+    assert 'flag "--dev"' in task["usage"]
+    log = tmp_path / "commands"
+    environment = os.environ.copy()
+    environment.pop("usage_dev", None)
+    if dev:
+        environment["usage_dev"] = "true"
+    environment["COMMAND_LOG"] = str(log)
+    stubs = (
+        'cargo() { printf "cargo %s\\n" "$*" >> "$COMMAND_LOG"; }\n'
+        'python3() { printf "python3 %s\\n" "$*" >> "$COMMAND_LOG"; }\n'
+    )
+    subprocess.run(
+        ["sh", "-c", stubs + str(task["run"])],
+        env=environment,
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    report_command = "python3 ../tools/rust_test_report.py run --profile ci --workspace"
+    assert log.read_text().splitlines() == [
+        "cargo fmt --all -- --check",
+        "cargo clippy --workspace --all-targets --locked -- -D warnings -D clippy::cognitive_complexity",
+        report_command + (" --dev" if dev else ""),
+        "cargo test --workspace --doc --locked",
+        "cargo run -p bsl-lint --locked -- all",
     ]
 
 
@@ -580,6 +571,29 @@ def test_single_clippy_pass_preserves_the_existing_pedantic_package_boundary() -
     assert opted_in == sorted(PEDANTIC_RUST_PACKAGES)
 
 
+def test_client_postgres_shard_installs_its_native_headers_and_uses_current_cache_fallback() -> (
+    None
+):
+    action = yaml.safe_load(
+        (REPOSITORY_ROOT / ".github/actions/bootstrap-persistence/action.yml").read_text()
+    )
+    steps = action["runs"]["steps"]
+    headers = next(
+        step for step in steps if step.get("name") == "Install Bevy client system dependencies"
+    )
+    assert headers["if"] == "${{ inputs.cache-key == 'client' }}"
+    assert headers["run"].split() == [
+        "tools/install_ci_apt_packages.sh",
+        "libasound2-dev",
+        "libudev-dev",
+        "libwayland-dev",
+        "libxkbcommon-dev",
+    ]
+    cache = next(step for step in steps if step.get("id") == "cargo-cache")
+    assert "-runtime_smoke-${{" in cache["with"]["restore-keys"]
+    assert "clean_bootstrap" not in cache["with"]["restore-keys"]
+
+
 def test_rust_cache_is_source_keyed_bounded_and_published_only_by_dev() -> None:
     """PRs may restore the cache, while only successful dev pushes may save it."""
     workflow = yaml.safe_load(CI_WORKFLOW.read_text())
@@ -590,13 +604,43 @@ def test_rust_cache_is_source_keyed_bounded_and_published_only_by_dev() -> None:
 
     assert restore["id"] == "cargo-cache"
     assert restore["uses"].startswith("actions/cache/restore@")
-    assert (
-        "hashFiles('rust/**/*.rs', 'rust/**/Cargo.toml', '.mise.toml', "
-        "'.github/workflows/ci.yml')" in restore["with"]["key"]
+    persistence = yaml.safe_load(
+        (REPOSITORY_ROOT / ".github/actions/bootstrap-persistence/action.yml").read_text()
     )
+    persistence_restore = next(
+        step for step in persistence["runs"]["steps"] if step.get("id") == "cargo-cache"
+    )
+    for key in (restore["with"]["key"], persistence_restore["with"]["key"]):
+        # These are actual embedded source/data families, including inputs that
+        # live outside a crate. Target trees are never source inputs.
+        for source_input in (
+            "rust/crates/**",
+            "!rust/crates/**/target/**",
+            "rust/*.toml",
+            "rust/.cargo/**",
+            "rust/.config/**",
+            "contracts/**",
+            "content/**",
+            "assets/**",
+            "docker/postgres/**",
+            "docker-compose*.yml",
+            "src/babylon/data/reference/economy/**",
+            "tests/fixtures/qcew_economics/**",
+            "tools/pr_merge.py",
+            "tools/pr_policy.py",
+            "tools/qcew_county_economics_v1_source_manifest.json",
+            "tools/run_rust_postgres.sh",
+            "tools/rust_test_report.py",
+            ".mise.toml",
+            ".github/**",
+        ):
+            assert repr(source_input) in key
+        assert "'rust/**'" not in key
+        assert "'rust/target/**'" not in key
     assert restore["with"]["restore-keys"].splitlines() == [
-        "cargo-gate-${{ runner.os }}-v4-${{ "
-        "hashFiles('rust/Cargo.lock', 'rust/rust-toolchain.toml') }}-"
+        "cargo-gate-${{ runner.os }}-v4-dev-${{ env.CARGO_PROFILE_DEV_DEBUG }}-"
+        "test-${{ env.CARGO_PROFILE_TEST_DEBUG }}-${{ "
+        "hashFiles('rust/Cargo.lock', 'rust/rust-toolchain.toml', 'rust/Cargo.toml') }}-"
     ]
     cache_paths = restore["with"]["path"].splitlines()
     assert cache_paths == save["with"]["path"].splitlines()
@@ -630,15 +674,15 @@ def test_rustdoc_remains_hosted_and_blocking_after_single_pass_refactor() -> Non
     ci_script = str(tasks["ci:rust"]["run"])
     workflow = yaml.safe_load(CI_WORKFLOW.read_text())
     rust_job = workflow["jobs"]["rust-gate"]
-    hosted_step = next(
-        step
-        for step in rust_job["steps"]
-        if step.get("name") == "Rust full gate (canonical ci:rust task)"
-    )
+    hosted_step = next(step for step in rust_job["steps"] if step.get("name") == "Rust validation")
 
     assert "mise run rust:check-no-docs" in ci_script
     assert "RUSTDOCFLAGS='-D warnings' cargo doc --workspace --no-deps --locked" in ci_script
-    assert hosted_step["run"] == "mise run ci:rust"
+    assert hosted_step["env"]["FULL_QUALIFICATION"] == "${{ needs.scope.outputs.full }}"
+    assert 'if [ "$FULL_QUALIFICATION" = true ]; then' in hosted_step["run"]
+    assert "mise run ci:rust" in hosted_step["run"]
+    assert "mise run rust:check-no-docs -- --dev" in hosted_step["run"]
+    assert "--dev" not in ci_script
     assert "continue-on-error" not in hosted_step
     assert "continue-on-error" not in rust_job
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import importlib.util
 import json
 import re
@@ -23,17 +24,7 @@ _SPEC.loader.exec_module(policy_tool)
 
 POLICY_PATH = Path(__file__).resolve().parents[3] / ".github" / "settings" / "pr-policy.json"
 
-DEV_BLOCKING_CHECKS = (
-    "Fast Gate (hygiene, lint, format, imports, types, lock)",
-    "Unit Tests (xdist, coverage gate)",
-    "Determinism Gate (byte-identical dense goldens)",
-    "Secret Scan (gitleaks, full history)",
-    "IaC Config Scan (trivy, HIGH+CRITICAL blocking)",
-    "Security Audit (pip-audit policy — blocking since item-41)",
-    "Rust Gate (fmt, clippy, test, doc — rust/ workspace)",
-    "Baseline Ceremony Gate (§6.5 provenance)",
-    "Postgres Integration Tier (PG 17, pinned runtime)",
-)
+DEV_BLOCKING_CHECKS = ("CI Gate",)
 GITHUB_ACTIONS_APP_ID = 15368
 GITHUB_ACTIONS_APP_SLUG = "github-actions"
 CODEQL_PROTECTION = {
@@ -53,7 +44,7 @@ MAIN_QUALIFICATION_CHECKS = (
     "Main Qualification / Reference-Data Contracts",
     "Main Qualification / Release Documentation",
     "Main Qualification / Container Image Scan",
-    "Main Qualification / AI Tests (advisory)",
+    "Main Qualification / Native Download / Linux x86_64",
 )
 
 
@@ -67,7 +58,7 @@ def _ruleset(
     contexts = (
         DEV_BLOCKING_CHECKS
         if branch == "dev"
-        else (*DEV_BLOCKING_CHECKS, *MAIN_QUALIFICATION_CHECKS[:6])
+        else (*DEV_BLOCKING_CHECKS, *MAIN_QUALIFICATION_CHECKS)
     )
     return {
         "id": ruleset_id,
@@ -199,7 +190,7 @@ class FakeApi:
                 "name": context,
                 "head_sha": self.dev_sha,
                 "status": "completed",
-                "conclusion": "neutral" if "(advisory)" in context else "success",
+                "conclusion": "success",
                 "started_at": "2026-08-26T00:00:00Z",
                 "app": {
                     "id": GITHUB_ACTIONS_APP_ID,
@@ -319,6 +310,219 @@ class FakeApi:
         return deepcopy(result)
 
 
+class MigrationApi(FakeApi):
+    """A protected old policy and one reviewed replacement-workflow PR."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        desired = _policy()
+        self.ruleset = {"id": 18807584, **deepcopy(desired["dev_ruleset"])}
+        self.main_ruleset = {"id": 18807583, **deepcopy(desired["main_ruleset"])}
+        self.repository = deepcopy(desired["repository"])
+        self.actions_permissions = deepcopy(desired["actions_permissions"])
+        self.labels = [deepcopy(desired["automerge_label"])]
+        for ruleset in (self.ruleset, self.main_ruleset):
+            status = next(r for r in ruleset["rules"] if r["type"] == "required_status_checks")
+            status["parameters"]["required_status_checks"][0]["context"] = "Retiring Gate"
+        self.head_sha = "c" * 40
+        self.pr = {
+            "number": 912,
+            "state": "open",
+            "draft": False,
+            "mergeable": True,
+            "head": {"sha": self.head_sha, "repo": {"full_name": policy_tool.REPOSITORY}},
+            "base": {
+                "sha": self.dev_sha,
+                "ref": "dev",
+                "repo": {"full_name": policy_tool.REPOSITORY},
+            },
+        }
+        self.committed_policy = deepcopy(desired)
+        self.merge_base = self.dev_sha
+        self.move_pr_on_read: int | None = None
+        self.pr_reads = 0
+        self.check_runs = []  # Old dev cannot attest a workflow it has not merged.
+
+    def get_json(self, endpoint: str) -> object:
+        if endpoint.endswith("/pulls/912"):
+            self.calls.append(("GET", endpoint, None))
+            self.pr_reads += 1
+            if self.pr_reads == self.move_pr_on_read:
+                self.pr["head"]["sha"] = "d" * 40
+            return deepcopy(self.pr)
+        if "/compare/" in endpoint:
+            self.calls.append(("GET", endpoint, None))
+            return {"merge_base_commit": {"sha": self.merge_base}}
+        if "/contents/.github/settings/pr-policy.json?ref=" in endpoint:
+            self.calls.append(("GET", endpoint, None))
+            return {
+                "encoding": "base64",
+                "content": base64.b64encode(json.dumps(self.committed_policy).encode()).decode(),
+            }
+        return super().get_json(endpoint)
+
+
+def _migration_apply(api: MigrationApi, tmp_path: Path) -> None:
+    policy_tool.apply_policy(
+        api,
+        _policy(),
+        "a" * 40,
+        tmp_path / "before.json",
+        migration_pr=912,
+        expected_pr_head=api.head_sha,
+    )
+
+
+def test_policy_migration_uses_reviewed_pr_without_unmerged_dev_attestations(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    api = MigrationApi()
+    api.labels[0]["id"] = 99
+    verified: list[tuple[int, str]] = []
+    monkeypatch.setattr(
+        policy_tool, "_verify_migration_pr_checks", lambda pr, sha: verified.append((pr, sha))
+    )
+
+    _migration_apply(api, tmp_path)
+
+    assert verified == [(912, api.head_sha), (912, api.head_sha)]
+    assert policy_tool.check_policy(api, _policy()) == []
+    assert {method for method, _, _ in api.calls if method != "GET"} == {"PUT"}
+    assert json.loads((tmp_path / "before.json").read_text())["dev_sha"] == "a" * 40
+
+
+@pytest.mark.parametrize("failure_at", [1, 2])
+def test_policy_migration_cannot_write_after_pr_verification_refuses(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, failure_at: int
+) -> None:
+    api = MigrationApi()
+    calls = 0
+
+    def refuse(_pr: int, _sha: str) -> None:
+        nonlocal calls
+        calls += 1
+        if calls == failure_at:
+            raise policy_tool.PolicyError("CI failed or review unresolved")
+
+    monkeypatch.setattr(policy_tool, "_verify_migration_pr_checks", refuse)
+    with pytest.raises(policy_tool.PolicyError, match="CI failed or review unresolved"):
+        _migration_apply(api, tmp_path)
+    assert all(method == "GET" for method, _, _ in api.calls)
+
+
+def test_policy_migration_checks_concurrent_settings_after_slow_pr_verification(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    api = MigrationApi()
+    calls = 0
+
+    def concurrent_change(_pr: int, _sha: str) -> None:
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            api.ruleset["name"] = "another operator changed settings"
+
+    monkeypatch.setattr(policy_tool, "_verify_migration_pr_checks", concurrent_change)
+    with pytest.raises(policy_tool.PolicyError, match="settings changed after snapshot"):
+        _migration_apply(api, tmp_path)
+    assert all(method == "GET" for method, _, _ in api.calls)
+
+
+@pytest.mark.parametrize(
+    "fault",
+    ["fork", "closed", "draft", "conflict", "wrong-base", "wrong-head", "ancestry", "policy"],
+)
+def test_policy_migration_refuses_unreviewed_identity_before_mutation(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, fault: str
+) -> None:
+    api = MigrationApi()
+    monkeypatch.setattr(policy_tool, "_verify_migration_pr_checks", lambda *_: None)
+    if fault == "fork":
+        api.pr["head"]["repo"]["full_name"] = "elsewhere/babylon"
+    elif fault == "closed":
+        api.pr["state"] = "closed"
+    elif fault == "draft":
+        api.pr["draft"] = True
+    elif fault == "conflict":
+        api.pr["mergeable"] = False
+    elif fault == "wrong-base":
+        api.pr["base"]["sha"] = "d" * 40
+    elif fault == "wrong-head":
+        api.pr["head"]["sha"] = "d" * 40
+    elif fault == "ancestry":
+        api.merge_base = "d" * 40
+    else:
+        api.committed_policy["repository"]["allow_auto_merge"] = True
+
+    with pytest.raises(policy_tool.PolicyError):
+        _migration_apply(api, tmp_path)
+
+    assert all(method == "GET" for method, _, _ in api.calls)
+
+
+@pytest.mark.parametrize("component", ["ruleset", "repository", "actions_permissions", "label"])
+def test_policy_migration_cannot_change_other_protections(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, component: str
+) -> None:
+    api = MigrationApi()
+    monkeypatch.setattr(policy_tool, "_verify_migration_pr_checks", lambda *_: None)
+    if component == "ruleset":
+        api.ruleset["bypass_actors"] = [
+            {"actor_id": 1, "actor_type": "Team", "bypass_mode": "always"}
+        ]
+    elif component == "repository":
+        api.repository["allow_squash_merge"] = True
+    elif component == "actions_permissions":
+        api.actions_permissions["sha_pinning_required"] = False
+    else:
+        api.labels = []
+
+    with pytest.raises(policy_tool.PolicyError, match="only required status checks"):
+        _migration_apply(api, tmp_path)
+
+    assert all(method == "GET" for method, _, _ in api.calls)
+
+
+@pytest.mark.parametrize("read", [2, 3])
+def test_policy_migration_rechecks_head_and_rolls_back_if_it_moves(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, read: int
+) -> None:
+    api = MigrationApi()
+    before = deepcopy(api.ruleset), deepcopy(api.main_ruleset)
+    api.move_pr_on_read = read
+    monkeypatch.setattr(policy_tool, "_verify_migration_pr_checks", lambda *_: None)
+
+    with pytest.raises(policy_tool.PolicyError, match="head"):
+        _migration_apply(api, tmp_path)
+
+    assert (api.ruleset, api.main_ruleset) == before
+    if read == 2:
+        assert all(method == "GET" for method, _, _ in api.calls)
+
+
+def test_policy_migration_reuses_non_mutating_exact_head_pr_verifier(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[object, dict[str, Any]]] = []
+
+    def failed(args: object, **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        calls.append((args, kwargs))
+        return subprocess.CompletedProcess(args, 1, "", "unresolved review thread")
+
+    monkeypatch.setattr(policy_tool.subprocess, "run", failed)
+    with pytest.raises(policy_tool.PolicyError, match="unresolved review thread"):
+        policy_tool._verify_migration_pr_checks(912, "c" * 40)
+    command, options = calls[0]
+    assert command[-5:] == [
+        "912",
+        "--verify-only",
+        "--expected-head",
+        "c" * 40,
+        "--require-ci-workflow",
+    ]
+    assert options["timeout"] > 0
+
+
 def test_normalizers_strip_read_only_api_fields() -> None:
     normalized_ruleset = policy_tool.normalize_ruleset(_ruleset(strict=False, threads=False))
     normalized_repository = policy_tool.normalize_repository(_repository(merge_only=False))
@@ -434,14 +638,28 @@ def test_ruleset_readback_compares_the_required_check_producer() -> None:
     assert "dev ruleset differs" in policy_tool.check_policy(api, _policy())
 
 
-def test_settings_policy_must_match_the_complete_typed_dev_manifest() -> None:
+@pytest.mark.parametrize(
+    ("replacement", "message"),
+    [
+        (None, "at least one required status check"),
+        ("Unregistered aggregate", "complete dev check manifest"),
+    ],
+    ids=["missing", "wrong-context"],
+)
+def test_settings_policy_requires_the_exact_dev_aggregate(
+    replacement: str | None, message: str
+) -> None:
     policy = _policy()
     status_rule = next(
         rule for rule in policy["dev_ruleset"]["rules"] if rule["type"] == "required_status_checks"
     )
-    status_rule["parameters"]["required_status_checks"].pop()
+    checks = status_rule["parameters"]["required_status_checks"]
+    if replacement is None:
+        checks.clear()
+    else:
+        checks[0]["context"] = replacement
 
-    with pytest.raises(policy_tool.PolicyError, match="complete dev check manifest"):
+    with pytest.raises(policy_tool.PolicyError, match=message):
         policy_tool._validate_policy(policy)
 
 
@@ -459,7 +677,7 @@ def test_settings_policy_must_match_the_complete_typed_main_manifest() -> None:
 def test_settings_policy_context_order_is_not_authoritative() -> None:
     policy = _policy()
     status_rule = next(
-        rule for rule in policy["dev_ruleset"]["rules"] if rule["type"] == "required_status_checks"
+        rule for rule in policy["main_ruleset"]["rules"] if rule["type"] == "required_status_checks"
     )
     status_rule["parameters"]["required_status_checks"].reverse()
 
@@ -669,32 +887,6 @@ def test_apply_refuses_moved_dev_or_non_green_checks_before_mutation(tmp_path: P
     assert all(method == "GET" for method, _endpoint, _payload in red.calls)
 
 
-def test_apply_accepts_the_pr_only_baseline_gate_skipped_on_dev_push(tmp_path: Path) -> None:
-    api = FakeApi()
-    baseline = next(
-        run for run in api.check_runs if run["name"] == "Baseline Ceremony Gate (§6.5 provenance)"
-    )
-    baseline["conclusion"] = "skipped"
-
-    policy_tool.apply_policy(api, _policy(), api.dev_sha, tmp_path / "before.json")
-
-    assert policy_tool.check_policy(api, _policy()) == []
-
-
-@pytest.mark.parametrize("advisory_name", MAIN_QUALIFICATION_CHECKS[-1:])
-def test_apply_accepts_an_explicit_qualification_advisory_failure(
-    tmp_path: Path,
-    advisory_name: str,
-) -> None:
-    api = FakeApi()
-    advisory = next(run for run in api.check_runs if run["name"] == advisory_name)
-    advisory["conclusion"] = "failure"
-
-    policy_tool.apply_policy(api, _policy(), api.dev_sha, tmp_path / "before.json")
-
-    assert policy_tool.check_policy(api, _policy()) == []
-
-
 @pytest.mark.parametrize("conclusion", [None, "failure"])
 def test_apply_requires_green_container_scan_before_ruleset_transition(
     tmp_path: Path,
@@ -714,7 +906,7 @@ def test_apply_requires_green_container_scan_before_ruleset_transition(
     assert all(method == "GET" for method, _endpoint, _payload in api.calls)
 
 
-def test_apply_refuses_any_other_skipped_dev_push_check(tmp_path: Path) -> None:
+def test_apply_refuses_skipped_dev_aggregate(tmp_path: Path) -> None:
     api = FakeApi()
     api.check_runs[0]["conclusion"] = "skipped"
 

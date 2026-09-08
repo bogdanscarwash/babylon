@@ -104,27 +104,111 @@ def test_retired_channel_has_no_live_installer_or_workflow() -> None:
     assert [path for path in retired if (ROOT / path).exists()] == []
 
 
-def test_source_release_runs_locked_environment_smoke_and_regression_before_publish() -> None:
+def test_source_release_runs_locked_environment_smoke_before_publish() -> None:
     steps = _steps("release.yml", "release")
     bootstrap = next(
         index
         for index, step in enumerate(steps)
         if step.get("uses") == "./.github/actions/bootstrap-python"
     )
-    regression = next(
-        index for index, step in enumerate(steps) if step.get("run") == "mise run qa:regression"
-    )
     smoke = next(index for index, step in enumerate(steps) if step.get("name") == "Source smoke")
     lock = next(index for index, step in enumerate(steps) if step.get("run") == "uv lock --check")
     publish = next(
         index for index, step in enumerate(steps) if step.get("name") == "Create GitHub Release"
     )
-    assert bootstrap < lock < regression < publish
     assert bootstrap < lock < smoke < publish
     assert "uv run --frozen python -c" in steps[smoke]["run"]
     assert "uv run --frozen babylon --help" in steps[smoke]["run"]
-    assert "continue-on-error" not in steps[regression]
     assert "continue-on-error" not in steps[smoke]
+    assert not (ROOT / "tools" / "run_regression.py").exists()
+    assert all(step.get("run") != "mise run qa:regression" for step in steps)
+
+
+def test_publication_requires_main_lineage_and_verified_native_download() -> None:
+    workflow = yaml.safe_load((ROOT / ".github/workflows/release.yml").read_text())
+    triggers = workflow.get("on", workflow.get(True))
+    assert triggers["push"] == {"tags": ["v*"]}
+    assert workflow["permissions"] == {"contents": "read"}
+    jobs = workflow["jobs"]
+    identity = jobs["identity"]
+    identity_runs = "\n".join(step.get("run", "") for step in identity["steps"])
+    for guard in (
+        "tools/check_release_tag.py",
+        "tools/release_lineage.py verify",
+        "tools/release_version.py --release-tag",
+    ):
+        assert guard in identity_runs
+    release = jobs["release"]
+    assert release["needs"] == ["identity"]
+    assert release["permissions"] == {"contents": "write", "actions": "read"}
+    assert not any("continue-on-error" in job for job in jobs.values())
+    for job in (identity, release):
+        assert not any("continue-on-error" in step for step in job["steps"])
+    publish = next(step for step in release["steps"] if step.get("name") == "Create GitHub Release")
+    promotion = next(
+        step for step in release["steps"] if "tools/release_artifact.py" in step.get("run", "")
+    )
+    assert release["steps"].index(promotion) < release["steps"].index(publish)
+    assert "--output-dir release-download" in promotion["run"]
+    assert "--verify-tag --draft" in publish["run"]
+    assert "--clobber" not in publish["run"]
+    assert publish["run"].index("gh release upload") < publish["run"].index("--draft=false")
+
+
+def test_native_artifact_upload_requires_unpacked_runtime_exercise() -> None:
+    steps = _steps("main.yml", "native-package")
+    smoke = next(
+        index for index, step in enumerate(steps) if "./babylon --smoke" in step.get("run", "")
+    )
+    upload = next(
+        index
+        for index, step in enumerate(steps)
+        if step.get("uses", "").startswith("actions/upload-artifact@")
+    )
+    assert smoke < upload
+    assert "sha256sum --check" in steps[smoke]["run"]
+    assert "tar --extract" in steps[smoke]["run"]
+    assert "if" not in steps[upload]
+    assert not any("continue-on-error" in step for step in steps)
+    assert steps[upload]["with"]["if-no-files-found"] == "error"
+
+
+def test_native_package_has_no_arbitrary_checkout_input() -> None:
+    assert not (ROOT / ".github/workflows/native-package.yml").exists()
+    workflow = yaml.safe_load((ROOT / ".github/workflows/main.yml").read_text())
+    job = workflow["jobs"]["native-package"]
+    assert "uses" not in job
+    assert job["name"] == "Main Qualification / Native Download / Linux x86_64"
+    assert workflow["permissions"] == {"contents": "read"}
+
+
+def test_native_package_separates_pr_heads_from_dispatch_cache_scope() -> None:
+    workflow = yaml.safe_load((ROOT / ".github/workflows/main.yml").read_text())
+    job = workflow["jobs"]["native-package"]
+    guard = " ".join(job["if"].split())
+    assert guard == (
+        "(github.event_name == 'pull_request' && "
+        "github.event.pull_request.head.repo.full_name == github.repository && "
+        "github.event.pull_request.base.ref == 'main') || "
+        "(github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/dev')"
+    )
+    checkouts = [
+        step for step in job["steps"] if step.get("uses", "").startswith("actions/checkout@")
+    ]
+    assert len(checkouts) == 2
+    pr, dispatch = checkouts
+    assert pr["if"] == "github.event_name == 'pull_request'"
+    assert pr["with"]["ref"] == "${{ github.event.pull_request.head.sha }}"
+    assert dispatch["if"] == "github.event_name == 'workflow_dispatch'"
+    assert "ref" not in dispatch["with"]
+    assert all(step["with"]["persist-credentials"] is False for step in checkouts)
+    identity = next(step for step in job["steps"] if step.get("id") == "identity")
+    assert identity["env"]["SOURCE_SHA"] == (
+        "${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha "
+        "|| github.sha }}"
+    )
+    assert 'test "$(git rev-parse HEAD)" = "$SOURCE_SHA"' in identity["run"]
+    assert 'echo "sha=$SOURCE_SHA" >> "$GITHUB_OUTPUT"' in identity["run"]
 
 
 def test_weekly_rebuild_uses_exact_native_interpreter_and_compares_product_bytes() -> None:

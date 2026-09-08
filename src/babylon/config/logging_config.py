@@ -31,7 +31,7 @@ from typing import TYPE_CHECKING, Any, Literal
 import yaml
 
 from babylon.config.base import BaseConfig
-from babylon.kernel.log import ContextAwareFilter, JSONFormatter
+from babylon.config.log import ContextAwareFilter, JSONFormatter
 
 if TYPE_CHECKING:
     pass
@@ -284,11 +284,11 @@ def _build_dict_config(
                 "datefmt": "%Y-%m-%d %H:%M:%S",
             },
             "jsonl": {
-                "class": "babylon.kernel.log.JSONFormatter",
+                "class": "babylon.config.log.JSONFormatter",
             },
         },
         "filters": {
-            "context": {"()": "babylon.kernel.log.ContextAwareFilter"},
+            "context": {"()": "babylon.config.log.ContextAwareFilter"},
         },
         "handlers": {
             "console": {
@@ -347,44 +347,6 @@ def _setup_default_logging(
     # Apply per-module levels from pyproject.toml (see _build_dict_config's
     # docstring for why this stays a post-step rather than a "loggers" key).
     _apply_module_levels(config.modules)
-
-
-def create_simulation_handler(
-    simulation_id: str,
-    seed: int | None = None,
-) -> RotatingFileHandler:
-    """Create a file handler for a specific simulation run.
-
-    Creates a per-simulation log file for forensic analysis and replay.
-
-    Args:
-        simulation_id: Unique identifier for the simulation.
-        seed: Random seed used for the simulation (optional).
-
-    Returns:
-        Configured RotatingFileHandler for the simulation log.
-    """
-    from datetime import UTC, datetime
-
-    # Ensure simulation logs directory exists
-    sim_log_dir = BaseConfig.LOG_DIR / "simulation"
-    sim_log_dir.mkdir(parents=True, exist_ok=True)
-
-    # Build filename: sim_{timestamp}_{seed}.jsonl
-    timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
-    seed_str = f"_{seed}" if seed is not None else ""
-    filename = f"sim_{timestamp}{seed_str}_{simulation_id}.jsonl"
-
-    handler = RotatingFileHandler(
-        sim_log_dir / filename,
-        maxBytes=MAIN_LOG_MAX_BYTES,
-        backupCount=3,  # Less retention for individual sims
-    )
-    handler.setLevel(logging.INFO)
-    handler.setFormatter(JSONFormatter())
-    handler.addFilter(ContextAwareFilter())
-
-    return handler
 
 
 def create_ingest_handler(

@@ -106,7 +106,7 @@ fn append_supplier_candidates(
         output.extend_from_slice(&row.supplier_site_id.as_bytes());
         output.extend_from_slice(&row.good_id.as_bytes());
         output.extend_from_slice(&row.unit_id.as_bytes());
-        output.extend_from_slice(&row.transit_delay_weeks.to_be_bytes());
+        output.extend_from_slice(&row.transit_delay_periods.to_be_bytes());
     }
     Ok(())
 }
@@ -168,8 +168,8 @@ fn append_transit(
     append_count(output, state.transit.len())?;
     for row in state.transit.iter().take(MAX_MATERIAL_CIRCUIT_ROWS_V1 + 1) {
         output.extend_from_slice(&row.order_id.as_bytes());
-        output.extend_from_slice(&row.dispatch_week.to_be_bytes());
-        output.extend_from_slice(&row.arrival_week.to_be_bytes());
+        output.extend_from_slice(&row.dispatch_period.to_be_bytes());
+        output.extend_from_slice(&row.arrival_period.to_be_bytes());
         output.extend_from_slice(&row.source_site_id.as_bytes());
         output.extend_from_slice(&row.destination_site_id.as_bytes());
         output.extend_from_slice(&row.good_id.as_bytes());
@@ -191,7 +191,7 @@ fn append_capacities(
     {
         output.extend_from_slice(&row.process_id.as_bytes());
         output.extend_from_slice(&row.site_id.as_bytes());
-        output.extend_from_slice(&row.week.to_be_bytes());
+        output.extend_from_slice(&row.period.to_be_bytes());
         output.extend_from_slice(&row.available_batches.to_be_bytes());
     }
     Ok(())
@@ -205,7 +205,7 @@ fn append_labor(
     for row in state.labor.iter().take(MAX_MATERIAL_CIRCUIT_ROWS_V1 + 1) {
         output.extend_from_slice(&row.site_id.as_bytes());
         output.extend_from_slice(&row.unit_id.as_bytes());
-        output.extend_from_slice(&row.week.to_be_bytes());
+        output.extend_from_slice(&row.period.to_be_bytes());
         output.extend_from_slice(&row.available.to_be_bytes());
     }
     Ok(())
@@ -223,7 +223,7 @@ fn append_production_commitments(
     {
         output.extend_from_slice(&row.process_id.as_bytes());
         output.extend_from_slice(&row.site_id.as_bytes());
-        output.extend_from_slice(&row.week.to_be_bytes());
+        output.extend_from_slice(&row.period.to_be_bytes());
         output.extend_from_slice(&row.planned_batches.to_be_bytes());
     }
     Ok(())
@@ -300,7 +300,7 @@ fn decode_supplier_candidates(
             supplier_site_id: SiteIdV1::from_bytes(cursor.array()?),
             good_id: GoodIdV1::from_bytes(cursor.array()?),
             unit_id: UnitIdV1::from_bytes(cursor.array()?),
-            transit_delay_weeks: cursor.u16()?,
+            transit_delay_periods: cursor.u16()?,
         });
     }
     Ok(rows)
@@ -377,8 +377,8 @@ fn decode_transit(cursor: &mut Cursor<'_>) -> Result<Vec<TransitLotV1>, Material
         }
         rows.push(TransitLotV1 {
             order_id: OrderIdV1::from_bytes(cursor.array()?),
-            dispatch_week: cursor.u64()?,
-            arrival_week: cursor.u64()?,
+            dispatch_period: cursor.u64()?,
+            arrival_period: cursor.u64()?,
             source_site_id: SiteIdV1::from_bytes(cursor.array()?),
             destination_site_id: SiteIdV1::from_bytes(cursor.array()?),
             good_id: GoodIdV1::from_bytes(cursor.array()?),
@@ -401,7 +401,7 @@ fn decode_capacities(
         rows.push(CapacityRowV1 {
             process_id: ProcessIdV1::from_bytes(cursor.array()?),
             site_id: SiteIdV1::from_bytes(cursor.array()?),
-            week: cursor.u64()?,
+            period: cursor.u64()?,
             available_batches: cursor.u64()?,
         });
     }
@@ -420,7 +420,7 @@ fn decode_labor(
         rows.push(LaborCapacityRowV1 {
             site_id: SiteIdV1::from_bytes(cursor.array()?),
             unit_id: UnitIdV1::from_bytes(cursor.array()?),
-            week: cursor.u64()?,
+            period: cursor.u64()?,
             available: cursor.u64()?,
         });
     }
@@ -439,7 +439,7 @@ fn decode_production_commitments(
         rows.push(ProductionCommitmentV1 {
             process_id: ProcessIdV1::from_bytes(cursor.array()?),
             site_id: SiteIdV1::from_bytes(cursor.array()?),
-            week: cursor.u64()?,
+            period: cursor.u64()?,
             planned_batches: cursor.u64()?,
         });
     }
@@ -458,7 +458,7 @@ pub fn encode_material_circuit_state_v1(
     output.extend_from_slice(MATERIAL_CIRCUIT_STATE_V1_DOMAIN_BYTES);
     output.push(0);
     output.extend_from_slice(&SCHEMA_VERSION.to_be_bytes());
-    output.extend_from_slice(&canonical.week.to_be_bytes());
+    output.extend_from_slice(&canonical.period.to_be_bytes());
     append_process_outputs(&mut output, &canonical)?;
     append_input_coefficients(&mut output, &canonical)?;
     append_labor_coefficients(&mut output, &canonical)?;
@@ -491,7 +491,7 @@ pub fn decode_material_circuit_state_v1(
         return Err(MaterialCircuitErrorV1::WireVersion);
     }
     let state = MaterialCircuitStateV1 {
-        week: cursor.u64()?,
+        period: cursor.u64()?,
         process_outputs: decode_process_outputs(&mut cursor)?,
         input_coefficients: decode_input_coefficients(&mut cursor)?,
         labor_coefficients: decode_labor_coefficients(&mut cursor)?,

@@ -1,1 +1,0 @@
-"""Static intensive-aggregation sentinel."""

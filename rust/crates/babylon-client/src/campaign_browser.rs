@@ -1,5 +1,6 @@
 //! Native campaign catalog and read-only comparison of separately committed worlds.
 
+use std::collections::BTreeSet;
 use std::fmt::Write as _;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
@@ -7,7 +8,7 @@ use std::path::{Path, PathBuf};
 
 use babylon_persistence::{
     observer_reader::CampaignSummaryV1, CampaignId, ObserverEconomyReaderV1,
-    ObserverEconomySnapshotV1, ObserverVisibilityV1, ProductionSiteV1,
+    ObserverEconomySnapshotV1, ObserverVisibilityV1, ProductionSiteV1, ProductionStaffingAccountV1,
 };
 use bevy::ecs::{query::QueryData, system::SystemParam};
 use bevy::input_focus::tab_navigation::TabGroup;
@@ -398,7 +399,7 @@ fn commands(
 ) {
     for command in messages.read() {
         if session.quit_requested {
-            "Closing the campaign; committed weeks are saved automatically."
+            "Closing the campaign; committed periods are saved automatically."
                 .clone_into(&mut browser.status);
             continue;
         }
@@ -431,7 +432,7 @@ fn commands(
                     continue;
                 }
                 if selected.durable_tick < session.viewed_tick {
-                    browser.status = format!("That campaign is committed only through week {}. Inspect that week or an earlier week first.", selected.durable_tick);
+                    browser.status = format!("That campaign is committed only through period {}. Inspect that period or an earlier period first.", selected.durable_tick);
                     continue;
                 }
                 let target = match parse_campaign(&selected.id) {
@@ -462,7 +463,7 @@ fn commands(
                             .map_err(|error| error.to_string())
                     }),
                 ));
-                browser.status = "Loading the other campaign's committed week...".into();
+                browser.status = "Loading the other campaign's committed period...".into();
                 ui.menu_open = false;
             }
             CampaignBrowserCommand::CloseComparison => {
@@ -569,7 +570,7 @@ fn collect(session: Res<ObserverSession>, mut browser: ResMut<CampaignBrowserSta
                     browser.status.clear();
                 }
                 Ok(_) => browser.status =
-                    "Comparison campaign, perspective or committed week did not match the request."
+                    "Comparison campaign, perspective or committed period did not match the request."
                         .into(),
                 Err(error) => browser.status = error,
             }
@@ -595,8 +596,119 @@ fn receipt_text(site: &ProductionSiteV1, tick: u64) -> String {
     match (site.produced_batches, site.planned_batches) {
         (Some(produced), Some(planned)) => format!("{produced}/{planned} batches produced/planned"),
         (None, None) if tick == 0 => "no production receipt at foundation".into(),
-        (None, None) => "no production receipt this week".into(),
+        (None, None) => "no production receipt this period".into(),
         _ => "production receipt unavailable".into(),
+    }
+}
+
+/// Canonical identities from the authenticated DTO, never display labels.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+struct StaffingIdentity<'a> {
+    pool: &'a str,
+    site: &'a str,
+    unit: &'a str,
+}
+
+impl<'a> From<&'a ProductionStaffingAccountV1> for StaffingIdentity<'a> {
+    fn from(account: &'a ProductionStaffingAccountV1) -> Self {
+        Self {
+            pool: &account.pool_id,
+            site: &account.site_id,
+            unit: &account.unit_id,
+        }
+    }
+}
+
+fn staffing_scope_error(account: &ProductionStaffingAccountV1, tick: u64) -> Option<&'static str> {
+    if tick.checked_add(1) != Some(account.next_opening_period) {
+        return Some("workforce account does not match the selected period");
+    }
+    match (&account.completed, tick) {
+        (None, 0) => None,
+        (Some(_), 0) => Some("foundation unexpectedly has a completed staffing receipt"),
+        (None, _) => Some("no completed staffing receipt for the selected period"),
+        (Some(receipt), _) if receipt.period != tick => {
+            Some("staffing receipt does not match the selected period")
+        }
+        (Some(_), _) => None,
+    }
+}
+
+fn staffing_difference(output: &mut String, label: &str, current: u64, compared: u64) {
+    let difference = i128::from(current) - i128::from(compared);
+    writeln!(
+        output,
+        "{label}: {current} / {compared} people | difference {difference:+}"
+    )
+    .expect("writing to a String cannot fail");
+}
+
+fn compare_staffing(
+    output: &mut String,
+    site_id: &str,
+    tick: u64,
+    current: &[ProductionStaffingAccountV1],
+    compared: &[ProductionStaffingAccountV1],
+) {
+    let identities: BTreeSet<_> = current
+        .iter()
+        .chain(compared)
+        .filter(|account| account.site_id == site_id)
+        .map(StaffingIdentity::from)
+        .collect();
+    if identities.is_empty() {
+        output.push_str(
+            "Modeled workforce unavailable: no staffing account disclosed for this cohort.\n",
+        );
+        return;
+    }
+    for identity in identities {
+        let mut current_accounts = current
+            .iter()
+            .filter(|account| StaffingIdentity::from(*account) == identity);
+        let mut compared_accounts = compared
+            .iter()
+            .filter(|account| StaffingIdentity::from(*account) == identity);
+        let (Some(current), Some(compared)) = (current_accounts.next(), compared_accounts.next())
+        else {
+            output.push_str("Modeled workforce unavailable: no matching pool, site and labor unit in both campaigns.\n");
+            continue;
+        };
+        if current_accounts.next().is_some() || compared_accounts.next().is_some() {
+            output
+                .push_str("Modeled workforce unavailable: duplicate pool, site and labor unit.\n");
+            continue;
+        }
+        writeln!(output, "Modeled workforce: {}", current.subject.local_name)
+            .expect("writing to a String cannot fail");
+        if let Some(error) = staffing_scope_error(current, tick) {
+            writeln!(output, "CURRENT workforce unavailable: {error}.")
+                .expect("writing to a String cannot fail");
+            continue;
+        }
+        if let Some(error) = staffing_scope_error(compared, tick) {
+            writeln!(output, "COMPARED workforce unavailable: {error}.")
+                .expect("writing to a String cannot fail");
+            continue;
+        }
+        let (employed, reserve) = if tick == 0 {
+            ("Foundation employed", "Foundation reserve")
+        } else {
+            ("Closing employed", "Closing reserve")
+        };
+        staffing_difference(output, employed, current.employed, compared.employed);
+        staffing_difference(output, reserve, current.reserve, compared.reserve);
+        if let (Some(current), Some(compared)) = (&current.completed, &compared.completed) {
+            staffing_difference(output, "Hires this period", current.hires, compared.hires);
+            staffing_difference(
+                output,
+                "Separations this period",
+                current.separations,
+                compared.separations,
+            );
+        } else {
+            output.push_str("No completed staffing receipt at foundation; hires and separations are unavailable.\n");
+        }
     }
 }
 
@@ -605,7 +717,7 @@ fn comparison_text(
     other: &ObserverEconomySnapshotV1,
 ) -> String {
     let mut output = format!(
-        "Week {} | {}\nCurrent {}\nCompared {}\n\n",
+        "Period {} | {}\nCurrent {}\nCompared {}\n\n",
         active.resolve_tick,
         match active.visibility {
             ObserverVisibilityV1::FullObserver => "full observer",
@@ -618,7 +730,7 @@ fn comparison_text(
         output.push_str("Material observations are unavailable in this perspective. Missing knowledge is not zero production.");
         return output;
     };
-    writeln!(output, "{}\n{}\nRead the same committed week in both campaigns. No world is advanced by this comparison.\n", current.scenario_label, compared.scenario_label).expect("writing to a String cannot fail");
+    writeln!(output, "{}\n{}\nRead the same committed period in both campaigns. No world is advanced by this comparison.\nCounts read current / compared. Signed difference = current minus compared.\n", current.scenario_label, compared.scenario_label).expect("writing to a String cannot fail");
     for site in &current.sites {
         writeln!(output, "{} | NAICS {}", site.name, site.industry_code)
             .expect("writing to a String cannot fail");
@@ -635,7 +747,7 @@ fn comparison_text(
         .expect("writing to a String cannot fail");
         writeln!(
             output,
-            "Next-week capacity: {} / {} batches (current / compared).",
+            "Next-period capacity: {} / {} batches (current / compared).",
             site.available_batches, other_site.available_batches
         )
         .expect("writing to a String cannot fail");
@@ -653,9 +765,16 @@ fn comparison_text(
             )
             .expect("writing to a String cannot fail");
         }
+        compare_staffing(
+            &mut output,
+            &site.id,
+            active.resolve_tick,
+            &current.staffing_accounts,
+            &compared.staffing_accounts,
+        );
         output.push('\n');
     }
-    output.push_str("Modeled labor-hours stay separate from observed QCEW jobs. Terminal goods are unsold on-hand stocks.");
+    output.push_str("Modeled workforce counts are people, separate from observed QCEW jobs and labor-hours. Staffing receipts do not record wage payments or class migration. Terminal goods are unsold on-hand stocks.");
     output
 }
 
@@ -700,7 +819,7 @@ fn paint(
             String::new()
         } else if let Some(selected) = browser.catalog.get(browser.selected) {
             format!(
-                "{} / {} | {}\n{}\nCommitted week {}\n{}",
+                "{} / {} | {}\n{}\nCommitted period {}\n{}",
                 browser.selected + 1,
                 browser.catalog.len(),
                 selected.label,
@@ -735,9 +854,16 @@ fn paint(
         let value = if !comparison_visible {
             String::new()
         } else if let (Some(active), Some(compared)) = (&frame.0, &browser.comparison) {
+            let scope = BrowserScope {
+                active: context.clone(),
+                generation: browser.generation,
+                target: browser.comparison_target,
+            };
             if active.campaign_id == context.campaign.as_uuid().to_string()
                 && active.resolve_tick == context.tick
                 && active.visibility == compared.visibility
+                && browser.comparison_target != Some(context.campaign)
+                && matches_comparison(compared, &scope)
             {
                 comparison_text(active, compared)
             } else {
@@ -889,6 +1015,349 @@ impl Plugin for CampaignBrowserPlugin {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn staffing_snapshot(
+        campaign: CampaignId,
+        tick: u64,
+        employed: u64,
+        hires: u64,
+        separations: u64,
+    ) -> ObserverEconomySnapshotV1 {
+        use babylon_persistence::{
+            CompletedProductionStaffingV1, ProductionSnapshotV1, ProductionStaffingSubjectV1,
+        };
+
+        let site_id = "1".repeat(64);
+        let opening_employed = employed + separations - hires;
+        ObserverEconomySnapshotV1 {
+            campaign_id: campaign.as_uuid().to_string(),
+            resolve_tick: tick,
+            foundation_digest: "a".repeat(64),
+            nominal_world_hash: Some("b".repeat(64)),
+            tick_content_hash: (tick > 0).then(|| "c".repeat(64)),
+            envelope_digest: (tick > 0).then(|| "d".repeat(64)),
+            visibility: ObserverVisibilityV1::FullObserver,
+            counties: Vec::new(),
+            production: Some(ProductionSnapshotV1 {
+                scenario_label: "Staffing comparison fixture".into(),
+                horizon_period: 520,
+                sites: vec![ProductionSiteV1 {
+                    id: site_id.clone(),
+                    county_geoid: "26163".into(),
+                    name: "Wayne manufacturing cohort".into(),
+                    industry_code: "331".into(),
+                    observed_employment: Some(20),
+                    output_good_id: "4".repeat(64),
+                    output_unit_id: "5".repeat(64),
+                    output_good: "steel".into(),
+                    output_unit: "kg".into(),
+                    output_per_batch: 10,
+                    available_batches: 8,
+                    planned_batches: (tick > 0).then_some(8),
+                    produced_batches: (tick > 0).then_some(7),
+                    inventory: Vec::new(),
+                    inputs: Vec::new(),
+                    labor: Vec::new(),
+                }],
+                staffing_accounts: vec![ProductionStaffingAccountV1 {
+                    pool_id: "2".repeat(64),
+                    site_id,
+                    unit_id: "3".repeat(64),
+                    subject: ProductionStaffingSubjectV1 {
+                        scenario: "fixture".into(),
+                        local_name: "Cohort workforce".into(),
+                    },
+                    hours_per_person: 40,
+                    labor_force: 10,
+                    employed,
+                    reserve: 10 - employed,
+                    previous_unretained_hours: 0,
+                    next_opening_period: tick + 1,
+                    next_opening_hours: employed * 40,
+                    completed: (tick > 0).then_some(CompletedProductionStaffingV1 {
+                        period: tick,
+                        opening_employed,
+                        opening_reserve: 10 - opening_employed,
+                        previous_unretained_hours: 0,
+                        current_unretained_hours: 0,
+                        retained_hours: employed * 40,
+                        target_employed: employed,
+                        hires,
+                        separations,
+                    }),
+                }],
+                routes: Vec::new(),
+                freight: Vec::new(),
+                events: Vec::new(),
+                labor_accounts: Vec::new(),
+                material_balance: None,
+                observed_contexts: Vec::new(),
+                process_attributions: Vec::new(),
+                provenance: Vec::new(),
+            }),
+        }
+    }
+
+    fn staffing_comparison_app(tick: u64) -> (App, Entity) {
+        let campaign = CampaignId::from_uuid(uuid::Uuid::from_u128(1));
+        let other = CampaignId::from_uuid(uuid::Uuid::from_u128(2));
+        let mut session = ObserverSession::new(campaign);
+        session.ready(tick, None);
+        let context = session.context();
+        let mut app = App::new();
+        app.insert_resource(session)
+            .insert_resource(CampaignBrowserState {
+                context: Some(context),
+                comparison_target: Some(other),
+                comparison: Some(staffing_snapshot(other, tick, 4, 0, 1)),
+                ..default()
+            })
+            .insert_resource(ObserverFrame(Some(staffing_snapshot(
+                campaign, tick, 6, 2, 0,
+            ))))
+            .insert_resource(ObserverUiState {
+                menu_open: false,
+                splash_visible: false,
+                comparison_open: true,
+                ..default()
+            })
+            .add_systems(Update, paint);
+        let text = app.world_mut().spawn((Text::new(""), ComparisonText)).id();
+        (app, text)
+    }
+
+    fn painted_comparison(app: &mut App, text: Entity) -> String {
+        app.update();
+        app.world().get::<Text>(text).unwrap().0.clone()
+    }
+
+    #[test]
+    fn comparison_renders_signed_staffing_counts_for_the_selected_completed_period() {
+        let (mut app, text) = staffing_comparison_app(2);
+        let value = painted_comparison(&mut app, text);
+        assert!(value.starts_with("Period 2 | full observer\nCurrent 00000000-0000-0000-0000-000000000001\nCompared 00000000-0000-0000-0000-000000000002"));
+        assert!(value.contains("Signed difference = current minus compared"));
+        assert!(value.contains("Closing employed: 6 / 4 people | difference +2"));
+        assert!(value.contains("Closing reserve: 4 / 6 people | difference -2"));
+        assert!(value.contains("Hires this period: 2 / 0 people | difference +2"));
+        assert!(value.contains("Separations this period: 0 / 1 people | difference -1"));
+        assert!(value.contains("separate from observed QCEW jobs and labor-hours"));
+        assert!(value.contains("do not record wage payments or class migration"));
+    }
+
+    #[test]
+    fn comparison_joins_canonical_staffing_identity_independent_of_names_and_row_order() {
+        let (mut app, text) = staffing_comparison_app(2);
+        let mut extra = app
+            .world()
+            .resource::<ObserverFrame>()
+            .0
+            .as_ref()
+            .unwrap()
+            .production
+            .as_ref()
+            .unwrap()
+            .staffing_accounts[0]
+            .clone();
+        extra.pool_id = "6".repeat(64);
+        extra.subject.local_name = "Second workforce".into();
+        app.world_mut()
+            .resource_mut::<ObserverFrame>()
+            .0
+            .as_mut()
+            .unwrap()
+            .production
+            .as_mut()
+            .unwrap()
+            .staffing_accounts
+            .insert(0, extra.clone());
+        {
+            let mut browser = app.world_mut().resource_mut::<CampaignBrowserState>();
+            let compared = browser
+                .comparison
+                .as_mut()
+                .unwrap()
+                .production
+                .as_mut()
+                .unwrap();
+            compared.sites[0].name = "A renamed cohort".into();
+            compared.staffing_accounts[0].subject.local_name = "A renamed workforce".into();
+            compared.staffing_accounts.push(extra);
+        }
+        let value = painted_comparison(&mut app, text);
+        assert!(value.contains("Closing employed: 6 / 4 people | difference +2"));
+        assert!(value.contains("Closing employed: 6 / 6 people | difference +0"));
+        assert!(!value.contains("workforce unavailable"));
+    }
+
+    #[test]
+    fn comparison_does_not_join_missing_mismatched_or_duplicate_staffing_rows() {
+        for mismatch in ["pool", "site", "unit", "duplicate", "missing"] {
+            let (mut app, text) = staffing_comparison_app(2);
+            {
+                let mut browser = app.world_mut().resource_mut::<CampaignBrowserState>();
+                let accounts = &mut browser
+                    .comparison
+                    .as_mut()
+                    .unwrap()
+                    .production
+                    .as_mut()
+                    .unwrap()
+                    .staffing_accounts;
+                match mismatch {
+                    "pool" => accounts[0].pool_id = "9".repeat(64),
+                    "site" => accounts[0].site_id = "9".repeat(64),
+                    "unit" => accounts[0].unit_id = "9".repeat(64),
+                    "duplicate" => accounts.push(accounts[0].clone()),
+                    "missing" => accounts.clear(),
+                    _ => unreachable!(),
+                }
+            }
+            let value = painted_comparison(&mut app, text);
+            assert!(
+                value.contains("Modeled workforce unavailable:"),
+                "{mismatch}: {value}"
+            );
+            assert!(!value.contains("Closing employed:"), "{mismatch}: {value}");
+            assert!(!value.contains("Hires this period:"), "{mismatch}: {value}");
+        }
+    }
+
+    #[test]
+    fn comparison_distinguishes_foundation_real_zero_and_missing_or_wrong_period_receipts() {
+        let (mut app, text) = staffing_comparison_app(0);
+        let foundation = painted_comparison(&mut app, text);
+        assert!(foundation.contains("Foundation employed: 6 / 4 people | difference +2"));
+        assert!(foundation.contains("No completed staffing receipt at foundation"));
+        assert!(!foundation.contains("Hires this period:"));
+        assert!(!foundation.contains("Closing employed:"));
+
+        let (mut app, text) = staffing_comparison_app(2);
+        {
+            let mut frame = app.world_mut().resource_mut::<ObserverFrame>();
+            let receipt = frame
+                .0
+                .as_mut()
+                .unwrap()
+                .production
+                .as_mut()
+                .unwrap()
+                .staffing_accounts[0]
+                .completed
+                .as_mut()
+                .unwrap();
+            receipt.hires = 0;
+            receipt.opening_employed = 6;
+            receipt.opening_reserve = 4;
+        }
+        {
+            let mut browser = app.world_mut().resource_mut::<CampaignBrowserState>();
+            let receipt = browser
+                .comparison
+                .as_mut()
+                .unwrap()
+                .production
+                .as_mut()
+                .unwrap()
+                .staffing_accounts[0]
+                .completed
+                .as_mut()
+                .unwrap();
+            receipt.separations = 0;
+            receipt.opening_employed = 4;
+            receipt.opening_reserve = 6;
+        }
+        let zero = painted_comparison(&mut app, text);
+        assert!(zero.contains("Hires this period: 0 / 0 people | difference +0"));
+        assert!(zero.contains("Separations this period: 0 / 0 people | difference +0"));
+
+        for mismatch in ["missing receipt", "receipt period", "account period"] {
+            let (mut app, text) = staffing_comparison_app(2);
+            {
+                let mut browser = app.world_mut().resource_mut::<CampaignBrowserState>();
+                let account = &mut browser
+                    .comparison
+                    .as_mut()
+                    .unwrap()
+                    .production
+                    .as_mut()
+                    .unwrap()
+                    .staffing_accounts[0];
+                match mismatch {
+                    "missing receipt" => account.completed = None,
+                    "receipt period" => account.completed.as_mut().unwrap().period = 1,
+                    "account period" => account.next_opening_period = 2,
+                    _ => unreachable!(),
+                }
+            }
+            let value = painted_comparison(&mut app, text);
+            assert!(
+                value.contains("COMPARED workforce unavailable:"),
+                "{mismatch}: {value}"
+            );
+            assert!(!value.contains("Hires this period:"), "{mismatch}: {value}");
+            assert!(!value.contains("Closing employed:"), "{mismatch}: {value}");
+        }
+    }
+
+    #[test]
+    fn comparison_repaint_removes_staffing_counts_outside_its_campaign_period_or_perspective() {
+        for mismatch in [
+            "campaign",
+            "same campaign",
+            "period",
+            "perspective",
+            "active period",
+            "session perspective",
+        ] {
+            let (mut app, text) = staffing_comparison_app(2);
+            assert!(painted_comparison(&mut app, text).contains("Closing employed:"));
+            match mismatch {
+                "active period" => {
+                    app.world_mut()
+                        .resource_mut::<ObserverFrame>()
+                        .0
+                        .as_mut()
+                        .unwrap()
+                        .resolve_tick = 1;
+                }
+                "session perspective" => {
+                    app.world_mut()
+                        .resource_mut::<ObserverSession>()
+                        .set_perspective(Perspective::PlayerKnowledge);
+                }
+                _ => {
+                    let mut browser = app.world_mut().resource_mut::<CampaignBrowserState>();
+                    if mismatch == "same campaign" {
+                        browser.comparison_target =
+                            Some(CampaignId::from_uuid(uuid::Uuid::from_u128(1)));
+                    }
+                    let compared = browser.comparison.as_mut().unwrap();
+                    match mismatch {
+                        "campaign" => compared.campaign_id = uuid::Uuid::from_u128(3).to_string(),
+                        "same campaign" => {
+                            compared.campaign_id = uuid::Uuid::from_u128(1).to_string();
+                        }
+                        "period" => compared.resolve_tick = 1,
+                        "perspective" => compared.visibility = ObserverVisibilityV1::KnownPreview,
+                        _ => unreachable!(),
+                    }
+                }
+            }
+            let value = painted_comparison(&mut app, text);
+            assert!(!value.contains("Closing employed:"), "{mismatch}: {value}");
+            assert!(!value.contains("Hires this period:"), "{mismatch}: {value}");
+        }
+    }
+
+    #[test]
+    fn staffing_difference_preserves_the_full_unsigned_count_range() {
+        let mut output = String::new();
+        staffing_difference(&mut output, "Employed", u64::MAX, 0);
+        staffing_difference(&mut output, "Reserve", 0, u64::MAX);
+        assert!(output.contains("difference +18446744073709551615"));
+        assert!(output.contains("difference -18446744073709551615"));
+    }
 
     fn catalog_handoff_app(with_pipe: bool) -> (App, CampaignId) {
         let campaign = CampaignId::from_uuid(uuid::Uuid::from_u128(1));
@@ -1084,7 +1553,7 @@ mod tests {
                 request
             };
             if keyboard {
-                // The rendered control was enabled before this week began.
+                // The rendered control was enabled before this period began.
                 app.world_mut().trigger(ObserverKeyboardActivate {
                     entity: button,
                     context: Some(context.clone()),
@@ -1285,7 +1754,7 @@ mod tests {
     }
 
     #[test]
-    fn comparison_scope_rejects_changed_perspective_week_campaign_and_generation() {
+    fn comparison_scope_rejects_changed_perspective_period_campaign_and_generation() {
         let first = parse_campaign("81b979ee-a9c1-48fd-8835-06cbfe594675").unwrap();
         let other = parse_campaign("fc7d28a0-a29a-49ea-bf3b-ef07ee163cd4").unwrap();
         let mut session = ObserverSession::new(first);

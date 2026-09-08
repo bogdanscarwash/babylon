@@ -286,7 +286,7 @@ def test_machine_theory_has_exact_t0_schema_and_authority() -> None:
     meta = document["meta"]
     assert isinstance(meta, dict)
     assert meta["version"] == "2.1.0"
-    assert meta["authority"] == "CONSTITUTION.md v4.1.0"
+    assert meta["authority"] == "CONSTITUTION.md v4.2.0"
     assert meta["architecture"] == "docs/concepts/architecture.rst"
     assert meta["reserved_line"] == "Marxist-Leninist-Maoist Third Worldist (MLM-TW)"
     assert document["theory_boundary"] == {

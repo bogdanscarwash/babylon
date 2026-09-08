@@ -4,8 +4,10 @@ use babylon_tick::material_replay::MaterialLaborV1;
 #[test]
 fn current_staffed_foundation_keeps_observed_cohorts_separate_from_five_designed_pools() {
     for preset in MICHIGAN_CONTENT_PRESETS_V1 {
-        let foundation = preset.create_foundation().unwrap();
-        let expected = preset.admitted().unwrap();
+        let foundation = preset
+            .create_foundation(&crate::test_support::catalog())
+            .unwrap();
+        let expected = preset.admitted(&crate::test_support::catalog()).unwrap();
         assert_eq!(foundation.canonical_bytes(), expected.canonical_bytes);
         assert_eq!(foundation.initial_register(), &expected.register);
         assert_eq!(expected.horizon_ticks, 16);
@@ -38,7 +40,7 @@ fn current_staffed_foundation_keeps_observed_cohorts_separate_from_five_designed
             .state()
             .labor
             .iter()
-            .all(|row| row.week == 1));
+            .all(|row| row.period == 1));
         assert_eq!(foundation.initial_register().state().capacities.len(), 80);
         assert_eq!(
             MichiganContentPresetV1::new_campaign(preset.delivery()),
@@ -49,12 +51,12 @@ fn current_staffed_foundation_keeps_observed_cohorts_separate_from_five_designed
 
 #[test]
 fn unsupported_michigan_saves_are_refused_without_a_predecessor_factory() {
-    for version in 1..=3 {
+    for version in 1..=4 {
         for delivery in ["standard", "delayed"] {
             let id = format!("michigan-material-{delivery}-v{version}");
             assert_eq!(MichiganContentPresetV1::from_id(&id), None);
             assert!(matches!(
-                admit_michigan_content_v1(&id, 16, &[0; 32], &[0; 32], 0),
+                admit_michigan_content_v1(&id, 16, &[0; 32], &[0; 32], 0, &[]),
                 Err(MichiganContentErrorV1::UnknownPreset)
             ));
         }
@@ -64,18 +66,17 @@ fn unsupported_michigan_saves_are_refused_without_a_predecessor_factory() {
 #[test]
 fn admission_refuses_mixed_headers_graphs_and_unadmitted_versions() {
     for preset in MICHIGAN_CONTENT_PRESETS_V1 {
-        let expected = preset.admitted().unwrap();
-        assert!(std::ptr::eq(
-            expected,
-            admit_michigan_content_v1(
-                preset.id(),
-                16,
-                &expected.content_digest,
-                &expected.digest,
-                16
-            )
-            .unwrap()
-        ));
+        let expected = preset.admitted(&crate::test_support::catalog()).unwrap();
+        let reopened = admit_michigan_content_v1(
+            preset.id(),
+            16,
+            &expected.content_digest,
+            &expected.digest,
+            16,
+            &expected.canonical_bytes,
+        )
+        .unwrap();
+        assert_eq!(reopened.canonical_bytes, expected.canonical_bytes);
         for tick in [0, 16] {
             assert!(expected
                 .validate_header(16, &expected.content_digest, &expected.digest, tick)
@@ -95,13 +96,14 @@ fn admission_refuses_mixed_headers_graphs_and_unadmitted_versions() {
             if other == preset {
                 continue;
             }
-            let mixed = other.admitted().unwrap();
+            let mixed = other.admitted(&crate::test_support::catalog()).unwrap();
             assert!(admit_michigan_content_v1(
                 preset.id(),
                 16,
                 &mixed.content_digest,
                 &mixed.digest,
-                0
+                0,
+                &expected.canonical_bytes
             )
             .is_err());
             if expected.graph_digest != mixed.graph_digest {
@@ -116,11 +118,12 @@ fn admission_refuses_mixed_headers_graphs_and_unadmitted_versions() {
             }
         }
         assert!(admit_michigan_content_v1(
-            "michigan-material-standard-v5",
+            "michigan-material-standard-v6",
             16,
             &expected.content_digest,
             &expected.digest,
-            0
+            0,
+            &expected.canonical_bytes
         )
         .is_err());
         assert!(admit_michigan_content_v1(
@@ -128,7 +131,8 @@ fn admission_refuses_mixed_headers_graphs_and_unadmitted_versions() {
             16,
             &expected.content_digest[..31],
             &expected.digest,
-            0
+            0,
+            &expected.canonical_bytes
         )
         .is_err());
         assert!(admit_michigan_content_v1(
@@ -136,7 +140,92 @@ fn admission_refuses_mixed_headers_graphs_and_unadmitted_versions() {
             16,
             &expected.content_digest,
             &expected.digest[..31],
-            0
+            0,
+            &expected.canonical_bytes
+        )
+        .is_err());
+    }
+}
+
+#[test]
+fn edited_parameters_change_new_foundations_but_stored_campaign_keeps_its_own_values() {
+    let catalog = crate::test_support::catalog();
+    let preset = MichiganContentPresetV1::FourWeekStandardV5;
+    let original = preset.admitted(&catalog).unwrap();
+    let source = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../../content/scenarios/michigan/defines.toml"
+    ));
+    let edited = MichiganMaterialCatalogV1::from_defines_toml(
+        &source
+            .replace(
+                "WORK_HOURS_PER_PERSON_WEEK = 40",
+                "WORK_HOURS_PER_PERSON_WEEK = 45",
+            )
+            .replace("OPENING_INPUT_UNITS = 600", "OPENING_INPUT_UNITS = 700")
+            .replace("HORIZON_PERIODS = 16", "HORIZON_PERIODS = 8"),
+    )
+    .unwrap();
+    let next = preset.admitted(&edited).unwrap();
+    assert_ne!(original.digest, next.digest);
+    assert_eq!(next.horizon_ticks, 8);
+    assert!(next
+        .validate_header(8, &next.content_digest, &next.digest, 8)
+        .is_ok());
+    assert!(next
+        .validate_header(8, &next.content_digest, &next.digest, 9)
+        .is_err());
+    assert_eq!(edited.staffing().hours_per_worker_period, 180);
+    assert_eq!(
+        edited
+            .processes()
+            .iter()
+            .find(|p| p.key == "sheet-rolling")
+            .unwrap()
+            .labor_capacity_hours_per_period,
+        3600
+    );
+    let reopened = admit_michigan_content_v1(
+        preset.id(),
+        16,
+        &original.content_digest,
+        &original.digest,
+        0,
+        &original.canonical_bytes,
+    )
+    .unwrap();
+    assert_eq!(reopened.catalog.defines_bytes(), catalog.defines_bytes());
+    assert_eq!(reopened.catalog.staffing().hours_per_worker_period, 160);
+    assert_eq!(reopened.register, original.register);
+    assert!(admit_michigan_content_v1(
+        preset.id(),
+        16,
+        &next.content_digest,
+        &next.digest,
+        0,
+        &original.canonical_bytes
+    )
+    .is_err());
+    let mut corrupted = original.canonical_bytes.clone();
+    let end = corrupted.len() - 1;
+    corrupted[end] ^= 1;
+    assert!(admit_michigan_content_v1(
+        preset.id(),
+        16,
+        &original.content_digest,
+        &original.digest,
+        0,
+        &corrupted
+    )
+    .is_err());
+    for length in [0, 32, original.canonical_bytes.len() - 1] {
+        assert!(admit_michigan_content_v1(
+            preset.id(),
+            16,
+            &original.content_digest,
+            &original.digest,
+            0,
+            &original.canonical_bytes[..length]
         )
         .is_err());
     }

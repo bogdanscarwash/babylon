@@ -19,10 +19,10 @@ pub(super) fn project_labor_accounts(
 ) -> Result<Vec<ProductionLaborAccountV1>, ProductionProjectionErrorV1> {
     let next = budgets(state)?;
     let (prior, totals) = match (opening, receipt) {
-        (None, None) if state.week == 1 => (None, Totals::new()),
+        (None, None) if state.period == 1 => (None, Totals::new()),
         (Some(prior), Some(receipt))
-            if prior.week.checked_add(1) == Some(state.week)
-                && receipt.resolve_tick == prior.week =>
+            if prior.period.checked_add(1) == Some(state.period)
+                && receipt.resolve_tick == prior.period =>
         {
             if prior.labor_coefficients != state.labor_coefficients
                 || prior.process_outputs != state.process_outputs
@@ -49,7 +49,7 @@ pub(super) fn project_labor_accounts(
                         .checked_sub(used)
                         .ok_or(ProductionProjectionErrorV1::State)?;
                     Ok::<_, ProductionProjectionErrorV1>(CompletedProductionLaborV1 {
-                        week: state.week - 1,
+                        period: state.period - 1,
                         opening: available,
                         planned,
                         used,
@@ -61,7 +61,7 @@ pub(super) fn project_labor_accounts(
                 site_id: digest_hex(&key.0.as_bytes()),
                 unit_id: digest_hex(&key.1.as_bytes()),
                 unit: "labor-hours".to_owned(),
-                next_opening_week: state.week,
+                next_opening_period: state.period,
                 next_opening_available: next.get(&key).copied().unwrap_or(0),
                 completed,
             })
@@ -72,7 +72,7 @@ pub(super) fn project_labor_accounts(
 /// Missing sparse capacity is zero; a duplicated principal is never summed.
 fn budgets(state: &MaterialCircuitStateV2) -> Result<Budgets, ProductionProjectionErrorV1> {
     let mut result = Budgets::new();
-    for row in state.labor.iter().filter(|row| row.week == state.week) {
+    for row in state.labor.iter().filter(|row| row.period == state.period) {
         if result
             .insert((row.site_id, row.unit_id), row.available)
             .is_some()
@@ -104,7 +104,7 @@ fn completed_totals(
             .iter()
             .find(|row| row.process_id == plan.process_id)
             .ok_or(ProductionProjectionErrorV1::State)?;
-        if plan.week != opening.week
+        if plan.period != opening.period
             || !opening
                 .process_outputs
                 .iter()

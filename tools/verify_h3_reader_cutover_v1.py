@@ -154,6 +154,8 @@ NON_H3_OBSERVER_SURFACES: Final = {
                 "src/reader.rs",
                 "src/stored_tick/source.rs",
                 "tests/observer_material_live.rs",  # proves raw-view denial for known preview
+                # Compares stored material receipts with authenticated twin snapshots.
+                "tests/observer_material_live/persisted_twins.rs",
             }
         ),
     ),

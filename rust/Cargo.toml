@@ -30,6 +30,15 @@ resolver = "2"
 [profile.release]
 overflow-checks = true
 
+# Full Michigan replay and persistence proofs execute production-sized worlds.
+# Optimize their simulation/codec loops and the native development client while
+# retaining invariant checks and recoverable debug symbols. Tests inherit this
+# profile, so bootstrap and tests can also reuse the same compiled libraries.
+[profile.dev]
+opt-level = 1
+debug-assertions = true
+overflow-checks = true
+
 # R1.2 (BSL refactor program, Director-approved 2026-08-18): strip debug
 # symbols from every DEPENDENCY (not this workspace's own crates — cargo's
 # package-name matching for `dev.package."*"` covers only external deps;

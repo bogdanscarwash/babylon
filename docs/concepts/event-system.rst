@@ -19,7 +19,7 @@ see :doc:`/reference/determinism-contract`.
 Events and consequences
 -----------------------
 
-``Consequences`` is one causal partition in the weekly phase schedule. An
+``Consequences`` is one causal partition in the four-week phase schedule. An
 ``event`` is an observational record that an authorized rule can emit from any
 governed phase. The concepts are not synonyms. A Consequence mechanic can
 change material state without an event. A recognizer can emit an event after
@@ -56,7 +56,7 @@ that attribution from their emitting rule.
    author downstream results.
 
 ``Intent``
-   Remains deterministic and can introduce only governed next-week intent
+   Remains deterministic and can introduce only governed next-period intent
    effects. It cannot draw a kernel.
 
 The independent production attribution and effect-allowance ledgers remain

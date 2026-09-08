@@ -11,8 +11,8 @@ use babylon_tick::h3_runtime::{MichiganDynamicHexFoundationV1, MichiganH3R8Child
 use postgres::{Client, Config, GenericClient, IsolationLevel, NoTls, Row, Transaction};
 
 use crate::h3_reference_cohort::MAX_H3_REFERENCE_CLOSURE_ROWS;
-use crate::legacy_adopter::{
-    acquire_lock, release_lock, validate_legacy_connection_target, LegacyAdopterError,
+use crate::postgres_catalog::{
+    acquire_lock, release_lock, validate_connection_target, CatalogError,
 };
 use crate::postgres_diagnostic::PostgresDiagnosticV1;
 use crate::schema_epoch::{
@@ -25,10 +25,7 @@ use crate::{
 };
 
 const H3_REFERENCE_COHORT_FORMAT_VERSION: i16 = 1;
-/// Sole verified pre-cutover prefix admitted before the terminal reader epoch.
-const H3_REFERENCE_INSTALLER_INPUT_EPOCH: usize = 6;
-const H3_REFERENCE_INSTALLER_ALLOWED_EPOCHS: [usize; 2] =
-    [H3_REFERENCE_INSTALLER_INPUT_EPOCH, CURRENT_SCHEMA_EPOCH];
+const H3_REFERENCE_INSTALLER_SCHEMA_EPOCH: usize = CURRENT_SCHEMA_EPOCH;
 const H3_REFERENCE_ARTIFACT_NAME: &str = "bridge_county_h3.parquet";
 const H3_REFERENCE_ARTIFACT_MANIFEST_VERSION: &str = "2.0.0";
 const H3_REFERENCE_SESSION_SETTINGS_SQL: &str = "SET statement_timeout TO '30000ms'";
@@ -247,14 +244,14 @@ pub enum H3ReferenceInstallConflict {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum H3ReferenceInstallError {
     /// The supplied maintenance target violated the local-only connection contract.
-    ConnectionTarget(LegacyAdopterError),
+    ConnectionTarget(CatalogError),
     /// The exact schema advisory lock could not be acquired.
-    Lock(LegacyAdopterError),
+    Lock(CatalogError),
     /// The existing schema epoch or owner contract failed inspection.
     SchemaEpoch(SchemaEpochError),
     /// Installation requires one of the exact verified cutover epochs.
     ExactSchemaEpochRequired {
-        allowed: [usize; 2],
+        expected: usize,
         actual: usize,
         origin: SchemaEpochOrigin,
     },
@@ -296,7 +293,7 @@ pub enum H3ReferenceInstallError {
         reconciliation: Box<H3ReferenceInstallError>,
     },
     /// Explicit schema-lock release failed.
-    Unlock(LegacyAdopterError),
+    Unlock(CatalogError),
     /// A primary failure and explicit unlock failure both occurred.
     FailureAndCleanup {
         primary: Box<H3ReferenceInstallError>,
@@ -611,7 +608,7 @@ where
         usize,
     ) -> Result<CommitAttempt, H3ReferenceInstallError>,
 {
-    validate_legacy_connection_target(config).map_err(H3ReferenceInstallError::ConnectionTarget)?;
+    validate_connection_target(config).map_err(H3ReferenceInstallError::ConnectionTarget)?;
     let bounded = installer_config(config);
     let mut session = LockedInstallSession::connect(&bounded)?;
     let primary = install_under_lock(&bounded, &mut session, bundle, attempt);
@@ -806,12 +803,12 @@ fn require_exact_schema_epoch(client: &mut Client) -> Result<(), H3ReferenceInst
     let (origin, actual) =
         inspect_schema_epoch_under_lock(client).map_err(H3ReferenceInstallError::SchemaEpoch)?;
     if origin == SchemaEpochOrigin::ExistingRustPrefix
-        && H3_REFERENCE_INSTALLER_ALLOWED_EPOCHS.contains(&actual)
+        && actual == H3_REFERENCE_INSTALLER_SCHEMA_EPOCH
     {
         Ok(())
     } else {
         Err(H3ReferenceInstallError::ExactSchemaEpochRequired {
-            allowed: H3_REFERENCE_INSTALLER_ALLOWED_EPOCHS,
+            expected: H3_REFERENCE_INSTALLER_SCHEMA_EPOCH,
             actual,
             origin,
         })
@@ -2368,13 +2365,13 @@ pub(crate) mod live_postgres_tests {
 mod tests {
     use super::{
         database_error, drive_install, installer_config, preserve_rollback_result, CommitAttempt,
-        InstallDriver, InstallPresence, H3_REFERENCE_INSTALLER_ALLOWED_EPOCHS,
+        InstallDriver, InstallPresence, H3_REFERENCE_INSTALLER_SCHEMA_EPOCH,
         H3_REFERENCE_SESSION_SETTINGS_SQL, MAX_H3_REFERENCE_INSTALL_COMMIT_ATTEMPTS,
     };
     use crate::{
         H3ReferenceInstallConflict, H3ReferenceInstallDisposition, H3ReferenceInstallError,
-        H3ReferenceInstallOperation, LEGACY_ADOPTER_CONNECT_TIMEOUT,
-        LEGACY_ADOPTER_STARTUP_OPTIONS, LEGACY_ADOPTER_TCP_USER_TIMEOUT,
+        H3ReferenceInstallOperation, CATALOG_CONNECT_TIMEOUT, CATALOG_STARTUP_OPTIONS,
+        CATALOG_TCP_USER_TIMEOUT,
     };
     use postgres::Config;
     use std::time::Duration;
@@ -2453,14 +2450,14 @@ mod tests {
 
         let bounded = installer_config(&caller);
 
-        assert_eq!(bounded.get_options(), Some(LEGACY_ADOPTER_STARTUP_OPTIONS));
+        assert_eq!(bounded.get_options(), Some(CATALOG_STARTUP_OPTIONS));
         assert_eq!(
             bounded.get_connect_timeout().copied(),
-            Some(LEGACY_ADOPTER_CONNECT_TIMEOUT)
+            Some(CATALOG_CONNECT_TIMEOUT)
         );
         assert_eq!(
             bounded.get_tcp_user_timeout().copied(),
-            Some(LEGACY_ADOPTER_TCP_USER_TIMEOUT)
+            Some(CATALOG_TCP_USER_TIMEOUT)
         );
         assert_eq!(
             H3_REFERENCE_SESSION_SETTINGS_SQL,
@@ -2469,10 +2466,10 @@ mod tests {
     }
 
     #[test]
-    fn typed_epoch_refusal_names_both_exact_installer_epochs() {
-        assert_eq!(H3_REFERENCE_INSTALLER_ALLOWED_EPOCHS, [6, 7]);
+    fn typed_epoch_refusal_names_the_current_installer_epoch() {
+        assert_eq!(H3_REFERENCE_INSTALLER_SCHEMA_EPOCH, 7);
         let refusal = H3ReferenceInstallError::ExactSchemaEpochRequired {
-            allowed: H3_REFERENCE_INSTALLER_ALLOWED_EPOCHS,
+            expected: H3_REFERENCE_INSTALLER_SCHEMA_EPOCH,
             actual: 2,
             origin: crate::SchemaEpochOrigin::ExistingRustPrefix,
         };
@@ -2480,7 +2477,7 @@ mod tests {
         assert_eq!(
             refusal,
             H3ReferenceInstallError::ExactSchemaEpochRequired {
-                allowed: [6, 7],
+                expected: 7,
                 actual: 2,
                 origin: crate::SchemaEpochOrigin::ExistingRustPrefix,
             }

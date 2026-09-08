@@ -41,7 +41,7 @@ def test_changed_paths_preserve_a_deleted_rust_input(tmp_path: Path) -> None:
 
     assert run_pre_push_gate.changed_paths(tmp_path, old, new) == frozenset({"rust/deleted.rs"})
     assert run_pre_push_gate.gate_applies(
-        run_pre_push_gate.Gate.RUST_FULL,
+        run_pre_push_gate.Gate.RUST_DEV,
         {"rust/deleted.rs"},
     )
 
@@ -71,16 +71,33 @@ def test_classifier_changes_run_both_owned_gates() -> None:
     """The selector cannot change without exercising the gates it controls."""
     path = "tools/run_pre_push_gate.py"
 
-    assert run_pre_push_gate.gate_applies(run_pre_push_gate.Gate.RUST_FULL, {path})
+    assert run_pre_push_gate.gate_applies(run_pre_push_gate.Gate.RUST_DEV, {path})
     assert run_pre_push_gate.gate_applies(
         run_pre_push_gate.Gate.BSL_REPO_SENTINELS,
         {path},
     )
 
 
-def test_rust_reporter_changes_run_the_full_rust_gate() -> None:
+def test_rust_reporter_changes_run_the_dev_rust_gate() -> None:
     """The selected runner cannot change without exercising its owned gate."""
     assert run_pre_push_gate.gate_applies(
-        run_pre_push_gate.Gate.RUST_FULL,
+        run_pre_push_gate.Gate.RUST_DEV,
         {"tools/rust_test_report.py"},
     )
+
+
+def test_rust_pre_push_selects_dev_without_changing_the_full_task_default() -> None:
+    """Ordinary pushes request the explicit dev mode of the canonical Rust gate."""
+    assert run_pre_push_gate.GATE_COMMANDS[run_pre_push_gate.Gate.RUST_DEV] == (
+        "mise",
+        "run",
+        "rust:check-no-docs",
+        "--",
+        "--dev",
+    )
+
+
+def test_external_contracts_and_game_content_select_the_rust_gate() -> None:
+    """External fixtures and game parameters can change Rust behavior without Rust edits."""
+    for path in ("contracts/deleted-vector.json", "content/game/material.toml"):
+        assert run_pre_push_gate.gate_applies(run_pre_push_gate.Gate.RUST_DEV, {path})

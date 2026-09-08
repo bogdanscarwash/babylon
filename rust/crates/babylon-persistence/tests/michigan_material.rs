@@ -4,9 +4,7 @@ use babylon_material_circuit::{
     decode_material_circuit_state_v2, encode_material_circuit_state_v2, MaterialCircuitStateV2,
 };
 use babylon_persistence::michigan_content::MichiganContentPresetV1;
-use babylon_persistence::michigan_material::{
-    michigan_material_catalog_v1, MichiganDeliveryPresetV1, MichiganMaterialSiteV1,
-};
+use babylon_persistence::michigan_material::{MichiganDeliveryPresetV1, MichiganMaterialSiteV1};
 use babylon_practice_contract::ordered_action_v1::OrderedPracticeActionBatchV1;
 use babylon_tick::{
     material_replay::{MaterialReplaySessionV3, PreparedMaterialTickV3},
@@ -18,7 +16,7 @@ type Session = MaterialReplaySessionV3<HypergraphStore>;
 
 fn session(preset: MichiganDeliveryPresetV1) -> Session {
     MichiganContentPresetV1::new_campaign(preset)
-        .create_foundation()
+        .create_foundation(&crate::test_support::catalog())
         .unwrap()
         .into_session()
         .unwrap()
@@ -49,7 +47,7 @@ fn advance(session: &mut Session) -> MaterialTickReceiptsV3 {
 }
 
 fn inventory(state: &MaterialCircuitStateV2, site: &str, good: &str) -> u64 {
-    let catalog = michigan_material_catalog_v1().unwrap();
+    let catalog = crate::test_support::catalog();
     let site_id = catalog.site(site).unwrap().id();
     let good_id = catalog.good(good).unwrap().id();
     state
@@ -60,7 +58,7 @@ fn inventory(state: &MaterialCircuitStateV2, site: &str, good: &str) -> u64 {
 }
 
 fn assert_material_conserved(state: &MaterialCircuitStateV2) {
-    let catalog = michigan_material_catalog_v1().unwrap();
+    let catalog = crate::test_support::catalog();
     let mut metal = 0;
     let mut food = 0;
     for (good_key, scale, is_metal) in [
@@ -94,19 +92,19 @@ fn assert_material_conserved(state: &MaterialCircuitStateV2) {
     assert_eq!(
         metal, 600,
         "metal input-equivalent kg at opening {}",
-        state.week
+        state.period
     );
-    assert_eq!(food, 200, "food kg at opening {}", state.week);
+    assert_eq!(food, 200, "food kg at opening {}", state.period);
 }
 
-fn assert_second_week_delivery_delay(
+fn assert_second_period_delivery_delay(
     standard: &MaterialCircuitStateV2,
     delayed: &MaterialCircuitStateV2,
 ) {
-    assert_eq!(inventory(standard, "macomb-fabricated-metal", "sheet"), 80);
+    assert_eq!(inventory(standard, "macomb-fabricated-metal", "sheet"), 320);
     assert_eq!(inventory(delayed, "macomb-fabricated-metal", "sheet"), 0);
-    let transformer = michigan_material_catalog_v1()
-        .unwrap()
+    let catalog = crate::test_support::catalog();
+    let transformer = catalog
         .processes()
         .iter()
         .find(|row| row.key == "panel-forming")
@@ -118,7 +116,7 @@ fn assert_second_week_delivery_delay(
             .find(|row| row.process_id == transformer.id())
             .unwrap()
             .planned_batches,
-        8
+        32
     );
     assert_eq!(
         delayed
@@ -134,18 +132,18 @@ fn assert_second_week_delivery_delay(
 #[test]
 fn presets_share_exact_setup_except_the_single_declared_delay() {
     let standard = MichiganContentPresetV1::new_campaign(MichiganDeliveryPresetV1::Standard)
-        .create_foundation()
+        .create_foundation(&crate::test_support::catalog())
         .unwrap()
         .initial_register()
         .state()
         .clone();
     let mut delayed = MichiganContentPresetV1::new_campaign(MichiganDeliveryPresetV1::Delayed)
-        .create_foundation()
+        .create_foundation(&crate::test_support::catalog())
         .unwrap()
         .initial_register()
         .state()
         .clone();
-    let catalog = michigan_material_catalog_v1().unwrap();
+    let catalog = crate::test_support::catalog();
     let route = catalog
         .routes()
         .iter()
@@ -156,25 +154,25 @@ fn presets_share_exact_setup_except_the_single_declared_delay() {
         .iter_mut()
         .find(|row| row.route_id == route.id())
         .unwrap();
-    assert_eq!(changed.travel_weeks, 3);
-    changed.travel_weeks = 1;
+    assert_eq!(changed.travel_periods, 3);
+    changed.travel_periods = 1;
     assert_eq!(
         encode_material_circuit_state_v2(&standard).unwrap(),
         encode_material_circuit_state_v2(&delayed).unwrap()
     );
-    assert_eq!(standard.week, 1);
+    assert_eq!(standard.period, 1);
     assert_eq!(standard.capacities.len(), 5 * 16);
     // Only current opening hours are authored. Following openings come from
     // the graph-owned workforce through the real Staffed composition.
     assert_eq!(standard.labor.len(), 5);
-    assert!(standard.labor.iter().all(|row| row.week == 1));
-    assert_eq!(catalog.staffing().hours_per_worker_week, 40);
+    assert!(standard.labor.iter().all(|row| row.period == 1));
+    assert_eq!(catalog.staffing().hours_per_worker_period, 160);
     for (key, hours) in [
-        ("sheet-rolling", 800),
-        ("panel-forming", 160),
-        ("subassembly-making", 160),
-        ("meal-milling", 40),
-        ("meal-packaging", 80),
+        ("sheet-rolling", 3200),
+        ("panel-forming", 640),
+        ("subassembly-making", 640),
+        ("meal-milling", 160),
+        ("meal-packaging", 320),
     ] {
         let process = catalog
             .processes()
@@ -193,7 +191,7 @@ fn presets_share_exact_setup_except_the_single_declared_delay() {
             .iter()
             .find(|pool| pool.process_key == key)
             .unwrap();
-        assert_eq!(row.available, seed.employed * 40);
+        assert_eq!(row.available, seed.employed * 160);
     }
     assert_eq!(standard.corridor_capacities.len(), 3 * 16);
     assert_eq!(catalog.terminal_output_disposition(), "on_hand_unsold");
@@ -211,7 +209,7 @@ fn assert_food_disconnected(
     delayed: &MaterialCircuitStateV2,
     b: &MaterialTickReceiptsV3,
 ) {
-    let catalog = michigan_material_catalog_v1().unwrap();
+    let catalog = crate::test_support::catalog();
     let food_sites: Vec<_> = catalog
         .sites()
         .iter()
@@ -282,12 +280,12 @@ fn assert_food_disconnected(
 }
 
 #[test]
-fn delivery_delay_changes_following_week_output_with_food_causally_disconnected() {
+fn delivery_delay_changes_following_period_output_with_food_causally_disconnected() {
     let mut standard = session(MichiganDeliveryPresetV1::Standard);
     let mut delayed = session(MichiganDeliveryPresetV1::Delayed);
     let mut first_standard_output = None;
     let mut first_delayed_output = None;
-    for week in 1..=MichiganDeliveryPresetV1::Standard.horizon_ticks() {
+    for period in 1..=crate::test_support::catalog().horizon_ticks() {
         let a = advance(&mut standard);
         let b = advance(&mut delayed);
         let standard = standard.material().state();
@@ -296,13 +294,13 @@ fn delivery_delay_changes_following_week_output_with_food_causally_disconnected(
         assert_material_conserved(standard);
         assert_material_conserved(delayed);
         if inventory(standard, "wayne-vehicle-parts", "subassembly") > 0 {
-            first_standard_output.get_or_insert(week);
+            first_standard_output.get_or_insert(period);
         }
         if inventory(delayed, "wayne-vehicle-parts", "subassembly") > 0 {
-            first_delayed_output.get_or_insert(week);
+            first_delayed_output.get_or_insert(period);
         }
-        if week == 2 {
-            assert_second_week_delivery_delay(standard, delayed);
+        if period == 2 {
+            assert_second_period_delivery_delay(standard, delayed);
         }
     }
     assert_eq!(first_standard_output, Some(5));
@@ -317,7 +315,7 @@ fn delivery_delay_changes_following_week_output_with_food_causally_disconnected(
             .all(|order| order.ordered == order.delivered
                 && order.realized == order.delivered
                 && order.lost == 0));
-        assert_eq!(state.week, 17);
+        assert_eq!(state.period, 17);
     }
 }
 
@@ -328,8 +326,12 @@ fn every_dispatch_transit_arrival_restart_reproduces_exact_continuation() {
         MichiganDeliveryPresetV1::Delayed,
     ] {
         let mut uninterrupted = session(preset);
-        for week in 1..=preset.horizon_ticks() {
-            let candidate = prepare(&uninterrupted);
+        let mut next = Some(prepare(&uninterrupted));
+        for period in 1..=crate::test_support::catalog().horizon_ticks() {
+            // The previous restart comparison already prepared this exact
+            // continuation. Retain it while still rebuilding every restored
+            // session from a fresh foundation below.
+            let candidate = next.take().unwrap();
             // Restore the complete graph+register checkpoint, including people
             // and retention. The physical state alone is no longer an owner.
             let mut restored = session(preset);
@@ -356,7 +358,7 @@ fn every_dispatch_transit_arrival_restart_reproduces_exact_continuation() {
                 uninterrupted.current_world_hash().unwrap()
             );
             assert_eq!(restored.material(), uninterrupted.material());
-            if week < preset.horizon_ticks() {
+            if period < crate::test_support::catalog().horizon_ticks() {
                 let expected = prepare(&uninterrupted);
                 let actual = prepare(&restored);
                 assert_eq!(actual.identity(), expected.identity());
@@ -373,7 +375,11 @@ fn every_dispatch_transit_arrival_restart_reproduces_exact_continuation() {
                     actual.material().receipt_bytes(),
                     expected.material().receipt_bytes()
                 );
+                next = Some(expected);
             }
         }
     }
 }
+
+#[path = "support/material_config.rs"]
+mod test_support;

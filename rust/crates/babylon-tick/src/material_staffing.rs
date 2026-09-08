@@ -40,7 +40,7 @@ pub const MAX_EXACT_STAFFING_INTEGER_V1: u64 = 1_u64 << 53;
 pub const EMPLOYED_POPULATION: &str = "social-class/employed-population";
 /// Exact reserve persons in that same closed pool.
 pub const RESERVE_POPULATION: &str = "social-class/reserve-population";
-/// Last week's actual unretained work request, never its retained maximum.
+/// Last period's actual unretained work request, never its retained maximum.
 pub const PREVIOUS_UNRETAINED_HOURS: &str = "social-class/previous-unretained-labor-hours";
 /// The composition's complete write footprint, in application order per pool.
 pub const STAFFING_FIELDS_V1: [&str; 3] = [
@@ -56,7 +56,6 @@ pub enum MaterialStaffingErrorV1 {
     NodeBinding,
     NodeOwner,
     DuplicateNode,
-    Schedule,
     ExactInteger,
     EvidenceInteger,
     FieldDeclaration(&'static str),
@@ -109,10 +108,10 @@ pub struct StaffingNodeBindingV1 {
 }
 
 impl StaffingNodeBindingV1 {
-    /// Check the node identity and this composition's explicit forty-hour schedule.
-    /// This shape check does not grant campaign/content admission.
+    /// Check the node identity and exact population with the supplied typed policy.
+    /// The caller admits the authored schedule as part of campaign content.
     /// # Errors
-    /// Refuses another key kind, malformed key, schedule or unrepresentable population.
+    /// Refuses another key kind, malformed key or unrepresentable population.
     pub fn try_new(
         subject: StableElementKeyV1,
         pool: StaffingPoolBindingV1,
@@ -121,9 +120,6 @@ impl StaffingNodeBindingV1 {
             return Err(MaterialStaffingErrorV1::NodeBinding);
         }
         subject.canonical_bytes()?;
-        if pool.policy().hours_per_person() != 40 {
-            return Err(MaterialStaffingErrorV1::Schedule);
-        }
         exact_real(pool.labor_force())?;
         Ok(Self { subject, pool })
     }
@@ -315,7 +311,7 @@ fn read_opening(
     graph: &impl GraphSubstrate,
     context: StaffingEffectContextV1<'_>,
     composition: &StaffingCompositionV1,
-    week: u64,
+    period: u64,
 ) -> Result<(StaffingStateV1, Vec<NodeId>), MaterialStaffingErrorV1> {
     validate_fields(context)?;
     let mut pools = reserved(composition.bindings.len())?;
@@ -334,7 +330,7 @@ fn read_opening(
         )?);
         nodes.push(node);
     }
-    Ok((StaffingStateV1::try_new(week, pools)?, nodes))
+    Ok((StaffingStateV1::try_new(period, pools)?, nodes))
 }
 
 fn staffing_event(
@@ -342,7 +338,7 @@ fn staffing_event(
     receipt: &StaffingReceiptV1,
 ) -> Result<CommittedEventV2, MaterialStaffingErrorV1> {
     let fields = [
-        ("week", receipt.week()),
+        ("period", receipt.period()),
         ("opening-employed", receipt.opening_employed()),
         ("opening-reserve", receipt.opening_reserve()),
         (
@@ -421,10 +417,10 @@ pub fn apply_material_staffing_v1(
     graph: &mut impl GraphSubstrate,
     context: StaffingEffectContextV1<'_>,
     composition: &StaffingCompositionV1,
-    week: u64,
+    period: u64,
     requests: &[StaffingWorkRequestV1],
 ) -> Result<StaffingEffectsV1, MaterialStaffingErrorV1> {
-    let (opening, nodes) = read_opening(graph, context, composition, week)?;
+    let (opening, nodes) = read_opening(graph, context, composition, period)?;
     let transition = advance_staffing_v1(&opening, requests)?;
     let (pending, committed_events) = prepare_effects(&nodes, transition.receipts())?;
     let mut staffing_receipts = reserved(transition.receipts().len())?;

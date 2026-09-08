@@ -4,7 +4,7 @@
 <!-- vale ste.NounClusters = NO -->
 <!-- vale Vale.Spelling = NO -->
 
-**Version 4.1.0**
+**Version 4.2.0**
 
 **Ratified:** 2026-08-22
 
@@ -81,8 +81,8 @@ does not force that state to occur.
 Player and non-player actors act through the same declared causal machinery.
 Actions must have an eligible actor, a target, and a cost or constraint. They
 must also give a preview of what the actor can know and a later receipt that
-shows what occurred. All material effects become next-week intents and enter
-only the next weekly causal interval. The current interval can resolve only
+shows what occurred. All material effects become next-period intents and enter
+only the next four-week causal interval. The current interval can resolve only
 non-material knowledge, previews, and receipts. Those effects must not mutate
 authoritative material state.
 
@@ -134,8 +134,11 @@ Required inputs that are absent or invalid must fail loudly. A subsystem must
 not silently skip its work, substitute a plausible default, or leave a
 declared guardrail inactive.
 
-The Rust engine adjudicates a weekly tick as a pure transformation over a
-working copy. BSL supplies governed rules, shocks, policies, and action
+The Rust engine adjudicates one four-week tick, exactly 28 days, as a pure
+transformation over a working copy. Each period has one causal traversal and
+one atomic commit, with no internal weekly substeps. Thirteen periods span
+one 52-week model year; these periods are not civil calendar months.
+BSL supplies governed rules, shocks, policies, and action
 semantics as content. Database access, wall-clock time, narration, rendering,
 and network services must not take part in adjudication. A failed rule aborts
 the whole working copy. No partial tick becomes visible.
@@ -349,10 +352,38 @@ projection, receipt, persistence, and migration rules live in
 `ai/decisions/ADR248_finite_material_transition_kernels.yaml` and the governed
 BSL and determinism references.
 
+### Amendment AK — Four-Week Simulation Periods
+
+The Director chose a coarser four-week simulation tick to reduce repeated
+advancement work and improve game pacing. Amendment AK replaces the weekly
+interval in Articles III and V. A tick closes one 28-day period through the
+existing causal order. It does not batch four weekly transitions or promise
+the same delivery and production timing as weekly simulation.
+
+Content must state capacities, labor schedules, delays, retention, and any
+rate conversion in the declared period units. Exact stocks, persons,
+per-batch recipes, and observed source units do not change merely because the
+simulation interval changes. Conservation, deferred material effects,
+determinism, and atomic publication remain binding. This amendment adds no
+mathematical primitive and changes no reserved theoretical commitment.
+
+New campaign content binds the duration into its admitted identity.
+Incompatible weekly campaigns remain preserved but cannot resume under the
+new interval. Historical ADRs, contracts, and codec vectors retain their
+bytes; ADR257 records the scoped supersession of their weekly unit semantics.
+Verification must prove a single transition per advance, explicit duration
+admission, current-content replay and restart, conserved accounts, and
+matching period labels and receipts. This amendment records the decision;
+executable and native acceptance require separate evidence.
+
+AK advances the Constitution from v4.1.0 to v4.2.0. Its behavioral contract is
+`contracts/simulation_interval_v1.yaml`; its transition record is
+`ai/decisions/ADR257_four_week_simulation_interval.yaml`.
+
 ---
 
-**Version:** 4.1.0
+**Version:** 4.2.0
 
 **Originally ratified:** 2026-01-30
 
-**Last amended:** 2026-09-01
+**Last amended:** 2026-09-06

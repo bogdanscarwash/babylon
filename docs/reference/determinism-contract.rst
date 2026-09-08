@@ -907,7 +907,7 @@ separate current identities:
 
 ``NominalWorldHash``
    The SHA-256 identity of the current mutable Rust graph-and-tick registers:
-   ``GraphStateHash``, the completed weekly tick, both monotonic graph
+   ``GraphStateHash``, the completed four-week tick, both monotonic graph
    allocator cursors, and the governed static phase-schedule digest.
 
 The frozen Python P27 tick hash below is a reference implementation over a
@@ -1009,20 +1009,19 @@ refusal classes, and asymmetric vectors live in:
 
 - ``contracts/tick_content_hash_v1.yaml``
 - ``contracts/tick_content_hash_v1_vectors.jsonl``
-- ``tools/verify_tick_content_hash_v1.py``
+- ``rust/crates/babylon-tick/tests/tick_content_hash_v1_contract.rs``
 
-The Python verifier uses compiled bounded reads, then reconstructs the canonical
-bodies and linked digests from semantic vector fields. A separate Rust contract
-consumer reconstructs the same corpus. Both execute every operation-specific
-limit and limit-plus-one refusal row. Both also enforce the exact-empty,
+The Rust contract tests use bounded reads, then reconstruct the canonical
+bodies and linked digests from semantic vector fields. They execute every
+operation-specific limit and limit-plus-one refusal row and enforce the exact-empty,
 matching-session, and matching-tick action link before they accept an outer
 identity. Production tests compare the real Rust RNG, graph-owned carrier,
 stable graph, ordered action, BSL section, stable-world, payload, and
 outer-composer paths with those vectors.
 
 Babylon defines one canonical replay-tick identity. P27 bytes do not enter
-``TickContentHashV1``. P27 stays executable as frozen reference evidence, with
-its exact tests and bytes unchanged. No runtime adapter, alias, fallback, or
+``TickContentHashV1``. The ``p27-python-freeze`` tag preserves the historical
+Python implementation and its tests. No runtime adapter, alias, fallback, or
 second identity resolver connects the two encodings.
 
 The current runtime accepts only the exact empty

@@ -1,12 +1,8 @@
 name: Main Qualification
 
-# A pull request to main already runs ci.yml. This workflow adds only the
-# release-only legs, under unique check names, so the combined manifest is the
-# full pre-merge qualification without rerunning or racing the ordinary gates.
-#
-# workflow_dispatch is the proof path required before the Director opens a
-# release PR. It is accepted only on dev. A push to main never starts this
-# workflow because qualification must finish before main advances.
+# Main PRs run full ci.yml validation plus these release contracts.
+# Manual dev qualification is optional diagnostics; a release PR is the
+# authoritative pre-merge proof, so no duplicate preliminary run is required.
 
 on:
   pull_request:
@@ -64,6 +60,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/bootstrap-python
       - uses: ./.github/actions/bootstrap-persistence
+        id: persistence-cache
+        with:
+          cache-key: rollover
       - uses: ./.github/actions/postgres-up
       - name: Activate the Rust-owned canonical schema
         run: mise run db:bootstrap
@@ -72,6 +71,26 @@ jobs:
       - name: Stop Postgres
         if: always()
         run: tools/ci_postgres_compose.sh down
+
+      - name: Save successful persistence cache
+        if: >-
+          success() && github.event_name != 'pull_request' &&
+          (github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/main') &&
+          steps.persistence-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          key: ${{ steps.persistence-cache.outputs.cache-key }}
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            rust/target/.rustc_info.json
+            rust/target/debug/.cargo-lock
+            rust/target/debug/.fingerprint
+            rust/target/debug/build
+            rust/target/debug/deps
+            rust/target/debug/babylon-runtime
+            rust/target/debug/babylon-runtime.d
 
   refdata-tests:
     name: Main Qualification / Reference-Data Contracts
@@ -83,8 +102,6 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/bootstrap-python
       - uses: ./.github/actions/fetch-reference-db
-      - name: Catalog-to-database reconciliation
-        run: uv run python tools/sentinel_check.py catalog --check
       - name: Run reference-data contracts
         run: >-
           uv run pytest tests -m requires_reference_db
@@ -100,29 +117,89 @@ jobs:
       - uses: ./.github/actions/bootstrap-python
         with:
           docs: "true"
-      - name: Run formula doctest examples
-        run: >-
-          uv run pytest --doctest-modules src/babylon/formulas
-          -o addopts="" -vv -ra --tb=long
-      - name: Build the release manual (advisory until warning debt closes)
-        continue-on-error: true
+      - name: Build the release manual
         working-directory: docs
         run: timeout 480 uv run sphinx-build -b html . _build/html
 
-  ai-tests:
-    name: Main Qualification / AI Tests (advisory)
+  native-package:
+    name: Main Qualification / Native Download / Linux x86_64
     needs: [event-contract]
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    continue-on-error: true
+    if: >-
+      (github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.base.ref == 'main') ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/dev')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Check out the exact release PR head
+        if: github.event_name == 'pull_request'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check out the dispatched dev revision
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
       - uses: ./.github/actions/bootstrap-python
-      - name: Run AI unit tests
+      - name: Resolve exact package identity
+        id: identity
+        env:
+          SOURCE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+        run: |
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          echo "sha=$SOURCE_SHA" >> "$GITHUB_OUTPUT"
+          echo "version=$(python3 tools/release_version.py --release-version)" >> "$GITHUB_OUTPUT"
+          echo "artifact-name=native-linux-x86_64" >> "$GITHUB_OUTPUT"
+      - name: Install native build and clean-unpack runtime dependencies
         run: >-
-          uv run pytest tests/unit/ai
-          -o addopts="" -m "not requires_ollama"
-          -vv -ra -l --tb=long --durations=0
+          tools/install_ci_apt_packages.sh
+          libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev libpq5
+          xvfb
+      - name: Install the pinned Rust toolchain
+        run: |
+          CHANNEL="$(sed -n 's/^channel = "\(.*\)"$/\1/p' rust/rust-toolchain.toml)"
+          rustup toolchain install "$CHANNEL" --profile minimal --no-self-update
+      - name: Build both native executables with locked dependencies
+        working-directory: rust
+        run: |
+          cargo fetch --locked --target x86_64-unknown-linux-gnu
+          cargo build --locked --release \
+            -p babylon-client --bin babylon-client \
+            -p babylon-persistence --bin babylon-runtime
+      - name: Assemble the versioned download
+        env:
+          RELEASE_VERSION: ${{ steps.identity.outputs.version }}
+          SOURCE_SHA: ${{ steps.identity.outputs.sha }}
+        run: >-
+          python3 tools/release/package_linux.py
+          --version "$RELEASE_VERSION" --source-sha "$SOURCE_SHA"
+          --binaries-dir rust/target/release --output-dir dist/release
+      - name: Verify and exercise the unpacked download
+        env:
+          RELEASE_VERSION: ${{ steps.identity.outputs.version }}
+        run: |
+          cd dist/release
+          sha256sum --check "babylon-${RELEASE_VERSION}-linux-x86_64.tar.gz.sha256"
+          mkdir unpacked
+          tar --extract --gzip --file="babylon-${RELEASE_VERSION}-linux-x86_64.tar.gz" --directory=unpacked
+          cd "unpacked/babylon-${RELEASE_VERSION}-linux-x86_64"
+          ./babylon --smoke
+      - name: Upload verified download and checksum
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: ${{ steps.identity.outputs.artifact-name }}
+          path: |
+            dist/release/*.tar.gz
+            dist/release/*.sha256
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
 
   trivy-image:
     name: Main Qualification / Container Image Scan

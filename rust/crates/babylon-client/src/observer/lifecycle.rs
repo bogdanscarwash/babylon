@@ -65,7 +65,7 @@ impl ObserverSession {
         if self.quit_requested || self.lifecycle.disconnected {
             return Err("Runtime connection unavailable; close and relaunch Babylon.".into());
         }
-        self.cancel_month();
+        self.pause_playback();
         if self
             .lifecycle
             .switching
@@ -200,7 +200,7 @@ impl ObserverSession {
         self.foundation_digest = None;
         self.error = None;
         self.lifecycle.last_error = None;
-        self.cancel_month();
+        self.pause_playback();
         self.phase = SessionPhase::Connecting;
         Ok(())
     }

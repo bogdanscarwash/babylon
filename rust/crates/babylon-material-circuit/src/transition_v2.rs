@@ -1,4 +1,4 @@
-//! Pure weekly transition for the exact routed material circuit.
+//! Pure per-period transition for the exact routed material circuit.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -73,19 +73,19 @@ fn canonicalize_rows(state: &mut MaterialCircuitStateV2) {
     state.backlog.sort_by_key(|row| row.order_id);
     state
         .freight
-        .sort_by_key(|row| (row.leg_arrival_week, row.lot_id));
+        .sort_by_key(|row| (row.leg_arrival_period, row.lot_id));
     state
         .corridor_capacities
-        .sort_by_key(|row| (row.week, row.corridor_id, row.unit_id));
+        .sort_by_key(|row| (row.period, row.corridor_id, row.unit_id));
     state
         .capacities
-        .sort_by_key(|row| (row.week, row.site_id, row.process_id));
+        .sort_by_key(|row| (row.period, row.site_id, row.process_id));
     state
         .labor
-        .sort_by_key(|row| (row.week, row.site_id, row.unit_id));
+        .sort_by_key(|row| (row.period, row.site_id, row.unit_id));
     state
         .production_commitments
-        .sort_by_key(|row| (row.week, row.site_id, row.process_id));
+        .sort_by_key(|row| (row.period, row.site_id, row.process_id));
 }
 
 fn has_duplicate<T, K: PartialEq>(rows: &[T], key: impl Fn(&T) -> K) -> bool {
@@ -105,7 +105,7 @@ fn validate_unique_rows(state: &MaterialCircuitStateV2) -> Result<(), MaterialCi
         .freight
         .iter()
         .take(MAX_MATERIAL_CIRCUIT_ROWS_V1 + 1)
-        .map(|row| (row.order_id, row.dispatch_week))
+        .map(|row| (row.order_id, row.dispatch_period))
         .collect();
     let duplicate = has_duplicate(&state.site_logistics_nodes, |row| row.site_id)
         || node_ids.len() != state.site_logistics_nodes.len()
@@ -126,7 +126,7 @@ fn validate_unique_rows(state: &MaterialCircuitStateV2) -> Result<(), MaterialCi
         || has_duplicate(&state.freight, |row| row.lot_id)
         || dispatch_ids.len() != state.freight.len()
         || has_duplicate(&state.corridor_capacities, |row| {
-            (row.week, row.corridor_id, row.unit_id)
+            (row.period, row.corridor_id, row.unit_id)
         });
     if duplicate {
         return Err(MaterialCircuitErrorV2::DuplicateRow);
@@ -160,7 +160,7 @@ fn validate_route_legs(legs: &[RouteLegV2]) -> Result<(), MaterialCircuitErrorV2
         .take(MAX_ROUTE_LEGS_PER_ROUTE_V2 + 1)
     {
         if usize::from(leg.leg_index) != index
-            || leg.travel_weeks == 0
+            || leg.travel_periods == 0
             || leg.loss_ppm > FREIGHT_LOSS_PARTS_PER_MILLION_V2
         {
             return Err(MaterialCircuitErrorV2::RouteInvariant);
@@ -244,8 +244,9 @@ fn expected_leg_arrival(
 ) -> Result<u64, MaterialCircuitErrorV2> {
     legs.iter()
         .take(usize::from(lot.current_leg_index) + 1)
-        .try_fold(lot.dispatch_week, |week, leg| {
-            week.checked_add(u64::from(leg.travel_weeks))
+        .try_fold(lot.dispatch_period, |period, leg| {
+            period
+                .checked_add(u64::from(leg.travel_periods))
                 .ok_or(MaterialCircuitErrorV2::Arithmetic)
         })
 }
@@ -271,9 +272,9 @@ fn validate_orders_and_freight(
         );
         let legs = route_legs(state, lot.route_id);
         if lot.quantity == 0
-            || lot.lot_id != freight_lot_id(lot.order_id, lot.dispatch_week)
-            || lot.dispatch_week >= state.week
-            || lot.leg_arrival_week < state.week
+            || lot.lot_id != freight_lot_id(lot.order_id, lot.dispatch_period)
+            || lot.dispatch_period >= state.period
+            || lot.leg_arrival_period < state.period
             || usize::from(lot.current_leg_index) >= legs.len()
             || routes.get(&supplier_key) != Some(&lot.route_id)
             || lot.source_site_id != order.supplier_site_id
@@ -283,7 +284,7 @@ fn validate_orders_and_freight(
         {
             return Err(MaterialCircuitErrorV2::FreightInvariant);
         }
-        if expected_leg_arrival(lot, legs)? != lot.leg_arrival_week {
+        if expected_leg_arrival(lot, legs)? != lot.leg_arrival_period {
             return Err(MaterialCircuitErrorV2::FreightInvariant);
         }
         let total = in_transit.entry(lot.order_id).or_default();
@@ -324,7 +325,7 @@ fn validate_orders_and_freight(
 
 fn production_state(state: &MaterialCircuitStateV2) -> MaterialCircuitStateV1 {
     MaterialCircuitStateV1 {
-        week: state.week,
+        period: state.period,
         process_outputs: state.process_outputs.clone(),
         input_coefficients: state.input_coefficients.clone(),
         labor_coefficients: state.labor_coefficients.clone(),
@@ -356,14 +357,14 @@ pub(crate) fn canonical_state_v2(
     validate_routes(&canonical)?;
     validate_orders_and_freight(&canonical)?;
     canonical_state_v1(&production_state(&canonical)).map_err(MaterialCircuitErrorV2::from)?;
-    if canonical.week == 0
+    if canonical.period == 0
         || canonical
             .corridor_capacities
             .iter()
             .take(MAX_MATERIAL_CIRCUIT_ROWS_V1 + 1)
-            .any(|row| row.week < canonical.week)
+            .any(|row| row.period < canonical.period)
     {
-        return Err(MaterialCircuitErrorV2::WeekInvariant);
+        return Err(MaterialCircuitErrorV2::PeriodInvariant);
     }
     Ok(canonical)
 }
@@ -446,7 +447,7 @@ fn process_due_freight(
     let opening = std::mem::take(&mut state.freight);
     let mut remaining = Vec::with_capacity(opening.len());
     for mut lot in opening.into_iter().take(MAX_MATERIAL_CIRCUIT_ROWS_V1 + 1) {
-        if lot.leg_arrival_week != state.week {
+        if lot.leg_arrival_period != state.period {
             remaining.push(lot);
             continue;
         }
@@ -456,7 +457,7 @@ fn process_due_freight(
             let leg = &legs[index];
             let next_leg = legs
                 .get(index + 1)
-                .map(|next| (next.leg_index, next.travel_weeks));
+                .map(|next| (next.leg_index, next.travel_periods));
             (leg.corridor_id, leg.loss_ppm, next_leg)
         };
         let lost = loss_quantity(lot.quantity, loss_ppm)?;
@@ -478,11 +479,11 @@ fn process_due_freight(
                 quantity: lost,
             });
         }
-        if let Some((next_leg_index, next_travel_weeks)) = next_leg.filter(|_| retained > 0) {
+        if let Some((next_leg_index, next_travel_periods)) = next_leg.filter(|_| retained > 0) {
             lot.current_leg_index = next_leg_index;
-            lot.leg_arrival_week = state
-                .week
-                .checked_add(u64::from(next_travel_weeks))
+            lot.leg_arrival_period = state
+                .period
+                .checked_add(u64::from(next_travel_periods))
                 .ok_or(MaterialCircuitErrorV2::Arithmetic)?;
             lot.quantity = retained;
             remaining.push(lot);
@@ -524,7 +525,7 @@ fn process_due_freight(
 fn capacity_index(state: &MaterialCircuitStateV2, key: CapacityKey) -> Option<usize> {
     state
         .corridor_capacities
-        .binary_search_by_key(&key, |row| (row.week, row.corridor_id, row.unit_id))
+        .binary_search_by_key(&key, |row| (row.period, row.corridor_id, row.unit_id))
         .ok()
 }
 
@@ -570,19 +571,19 @@ fn resource_groups(
             index,
             requested,
         );
-        let mut departure_week = state.week;
+        let mut departure_period = state.period;
         for leg in route_legs(state, *route)
             .iter()
             .take(MAX_ROUTE_LEGS_PER_ROUTE_V2 + 1)
         {
             add_request(
                 &mut groups,
-                FreightResourceKey::Corridor((departure_week, leg.corridor_id, order.unit_id)),
+                FreightResourceKey::Corridor((departure_period, leg.corridor_id, order.unit_id)),
                 index,
                 requested,
             );
-            departure_week = departure_week
-                .checked_add(u64::from(leg.travel_weeks))
+            departure_period = departure_period
+                .checked_add(u64::from(leg.travel_periods))
                 .ok_or(MaterialCircuitErrorV2::Arithmetic)?;
         }
     }
@@ -645,10 +646,10 @@ fn order_allocations(
     Ok(allocations)
 }
 
-fn freight_lot_id(order: OrderIdV1, week: u64) -> FreightLotIdV2 {
+fn freight_lot_id(order: OrderIdV1, period: u64) -> FreightLotIdV2 {
     let mut bytes = b"babylon.freight-lot.v2\0".to_vec();
     bytes.extend_from_slice(&order.as_bytes());
-    bytes.extend_from_slice(&week.to_be_bytes());
+    bytes.extend_from_slice(&period.to_be_bytes());
     FreightLotIdV2::from_bytes(sha256_of(&bytes))
 }
 
@@ -658,22 +659,22 @@ fn reserve_route_capacity(
     unit: UnitIdV1,
     quantity: u64,
 ) -> Result<u64, MaterialCircuitErrorV2> {
-    let mut departure_week = state.week;
-    let mut final_arrival_week = state.week;
+    let mut departure_period = state.period;
+    let mut final_arrival_period = state.period;
     let legs = route_legs(state, route).to_vec();
     for leg in legs.iter().take(MAX_ROUTE_LEGS_PER_ROUTE_V2 + 1) {
-        let key = (departure_week, leg.corridor_id, unit);
+        let key = (departure_period, leg.corridor_id, unit);
         let index = capacity_index(state, key).ok_or(MaterialCircuitErrorV2::CapacityInvariant)?;
         state.corridor_capacities[index].available = state.corridor_capacities[index]
             .available
             .checked_sub(quantity)
             .ok_or(MaterialCircuitErrorV2::Arithmetic)?;
-        final_arrival_week = departure_week
-            .checked_add(u64::from(leg.travel_weeks))
+        final_arrival_period = departure_period
+            .checked_add(u64::from(leg.travel_periods))
             .ok_or(MaterialCircuitErrorV2::Arithmetic)?;
-        departure_week = final_arrival_week;
+        departure_period = final_arrival_period;
     }
-    Ok(final_arrival_week)
+    Ok(final_arrival_period)
 }
 
 fn apply_dispatches(
@@ -701,28 +702,28 @@ fn apply_dispatches(
         );
         let route = routes[&supplier_key];
         let legs = route_legs(state, route);
-        let first_arrival_week = state
-            .week
-            .checked_add(u64::from(legs[0].travel_weeks))
+        let first_arrival_period = state
+            .period
+            .checked_add(u64::from(legs[0].travel_periods))
             .ok_or(MaterialCircuitErrorV2::Arithmetic)?;
         debit_inventory(
             inventory,
             (order.supplier_site_id, order.good_id, order.unit_id),
             quantity,
         )?;
-        let final_arrival_week = reserve_route_capacity(state, route, order.unit_id, quantity)?;
+        let final_arrival_period = reserve_route_capacity(state, route, order.unit_id, quantity)?;
         state.orders[index].shipped = state.orders[index]
             .shipped
             .checked_add(quantity)
             .ok_or(MaterialCircuitErrorV2::Arithmetic)?;
-        let lot_id = freight_lot_id(order.order_id, state.week);
+        let lot_id = freight_lot_id(order.order_id, state.period);
         state.freight.push(RoutedFreightLotV2 {
             lot_id,
             order_id: order.order_id,
             route_id: route,
-            dispatch_week: state.week,
+            dispatch_period: state.period,
             current_leg_index: 0,
-            leg_arrival_week: first_arrival_week,
+            leg_arrival_period: first_arrival_period,
             source_site_id: order.supplier_site_id,
             destination_site_id: order.buyer_site_id,
             good_id: order.good_id,
@@ -734,7 +735,7 @@ fn apply_dispatches(
             order_id: order.order_id,
             route_id: route,
             quantity,
-            final_arrival_week,
+            final_arrival_period,
         });
     }
     Ok(())
@@ -775,45 +776,45 @@ fn execute_production(
 
 fn derive_next_production(
     state: &mut MaterialCircuitStateV2,
-    next_week: u64,
+    next_period: u64,
 ) -> Result<(), MaterialCircuitErrorV2> {
     let mut production = production_state(state);
-    derive_shared_production_v1(&mut production, next_week)
+    derive_shared_production_v1(&mut production, next_period)
         .map_err(MaterialCircuitErrorV2::from)?;
     merge_production_state(state, production);
     Ok(())
 }
 
-fn prune_corridor_capacity(state: &mut MaterialCircuitStateV2, next_week: u64) {
+fn prune_corridor_capacity(state: &mut MaterialCircuitStateV2, next_period: u64) {
     state.corridor_capacities = std::mem::take(&mut state.corridor_capacities)
         .into_iter()
         .take(MAX_MATERIAL_CIRCUIT_ROWS_V1 + 1)
-        .filter(|row| row.week >= next_week)
+        .filter(|row| row.period >= next_period)
         .collect();
 }
 
 /// Detached physical close before next-opening labor and production planning.
 ///
 /// This is not a canonical opening register: newly dispatched freight still
-/// shares its closing week. Only successful final planning yields a successor.
+/// shares its closing period. Only successful final planning yields a successor.
 /// Private fields prevent callers from replacing closed inventory or receipts.
 #[derive(Debug)]
-pub struct ClosedMaterialWeekV2 {
+pub struct ClosedMaterialPeriodV2 {
     transition: MaterialCircuitTransitionV2,
-    next_week: u64,
+    next_period: u64,
 }
 
-impl ClosedMaterialWeekV2 {
+impl ClosedMaterialPeriodV2 {
     /// The interval whose arrivals, production and dispatch have completed.
     #[must_use]
-    pub const fn closing_week(&self) -> u64 {
-        self.transition.state.week
+    pub const fn closing_period(&self) -> u64 {
+        self.transition.state.period
     }
 
     /// The opening interval being requested and planned.
     #[must_use]
-    pub const fn next_week(&self) -> u64 {
-        self.next_week
+    pub const fn next_period(&self) -> u64 {
+        self.next_period
     }
 
     /// Exact closing stock after dispatch, without a second inventory owner.
@@ -824,7 +825,7 @@ impl ClosedMaterialWeekV2 {
 
     /// Request next-opening work from shared inputs and process capacity only.
     ///
-    /// Every process has one request, including zero. The request's `week` is
+    /// Every process has one request, including zero. The request's `period` is
     /// this closing interval, as required by staffing; its work is for the next
     /// opening. Neither current employment nor any scheduled hours limit it.
     ///
@@ -838,7 +839,7 @@ impl ClosedMaterialWeekV2 {
         let owners = staffing_process_owners(bindings)?;
         let requests = derive_shared_labor_requests_v1(
             &production_state(&self.transition.state),
-            self.next_week,
+            self.next_period,
         )?;
         if owners.len() != requests.len() {
             return Err(MaterialCircuitErrorV2::ProcessInvariant);
@@ -853,7 +854,7 @@ impl ClosedMaterialWeekV2 {
                     return Err(MaterialCircuitErrorV2::ProcessInvariant);
                 }
                 Ok(StaffingWorkRequestV1::new(
-                    self.closing_week(),
+                    self.closing_period(),
                     binding.pool_id(),
                     request.process_id,
                     request.site_id,
@@ -871,24 +872,24 @@ impl ClosedMaterialWeekV2 {
     /// shared inputs and supplied labor; requests do not become commitments.
     ///
     /// # Errors
-    /// Refuses missing/foreign/duplicate principals, wrong weeks, row bounds,
+    /// Refuses missing/foreign/duplicate principals, wrong periods, row bounds,
     /// arithmetic and any invalid final circuit. No partial successor escapes.
     pub fn finish_with_labor(
         mut self,
         mut next_labor: Vec<LaborCapacityRowV1>,
     ) -> Result<MaterialCircuitTransitionV2, MaterialCircuitErrorV2> {
-        validate_next_labor(&self.transition.state, self.next_week, &next_labor)?;
+        validate_next_labor(&self.transition.state, self.next_period, &next_labor)?;
         // The allocator performs binary searches before final canonicalization.
-        next_labor.sort_unstable_by_key(|row| (row.week, row.site_id, row.unit_id));
+        next_labor.sort_unstable_by_key(|row| (row.period, row.site_id, row.unit_id));
         self.transition.state.labor = next_labor;
         self.finish()
     }
 
     fn finish(mut self) -> Result<MaterialCircuitTransitionV2, MaterialCircuitErrorV2> {
         let state = &mut self.transition.state;
-        derive_next_production(state, self.next_week)?;
-        prune_corridor_capacity(state, self.next_week);
-        state.week = self.next_week;
+        derive_next_production(state, self.next_period)?;
+        prune_corridor_capacity(state, self.next_period);
+        state.period = self.next_period;
         *state = canonical_state_v2(state)?;
         Ok(self.transition)
     }
@@ -923,7 +924,7 @@ fn staffing_process_owners(
 
 fn validate_next_labor(
     state: &MaterialCircuitStateV2,
-    next_week: u64,
+    next_period: u64,
     rows: &[LaborCapacityRowV1],
 ) -> Result<(), MaterialCircuitErrorV2> {
     if rows.len() > MAX_MATERIAL_CIRCUIT_ROWS_V1 {
@@ -938,8 +939,8 @@ fn validate_next_labor(
         .collect();
     let mut actual = BTreeSet::new();
     for row in rows {
-        if row.week != next_week {
-            return Err(MaterialCircuitErrorV2::WeekInvariant);
+        if row.period != next_period {
+            return Err(MaterialCircuitErrorV2::PeriodInvariant);
         }
         if !actual.insert((row.site_id, row.unit_id)) {
             return Err(MaterialCircuitErrorV2::DuplicateRow);
@@ -951,14 +952,14 @@ fn validate_next_labor(
     Ok(())
 }
 
-/// Close one routed week atomically and return its canonical successor state.
+/// Close one routed period atomically and return its canonical successor state.
 ///
 /// # Errors
 /// Returns the first exact schema, route, conservation, bound, or arithmetic refusal.
 pub fn advance_material_circuit_v2(
     opening: &MaterialCircuitStateV2,
 ) -> Result<MaterialCircuitTransitionV2, MaterialCircuitErrorV2> {
-    close_material_week_v2(opening)?.finish()
+    close_material_period_v2(opening)?.finish()
 }
 
 /// Execute due freight, prior production commitments and dispatch exactly once.
@@ -969,9 +970,9 @@ pub fn advance_material_circuit_v2(
 /// # Errors
 /// Returns the same schema, route, conservation, bound or arithmetic refusals
 /// as the one-shot transition, leaving the opening state unchanged.
-pub fn close_material_week_v2(
+pub fn close_material_period_v2(
     opening: &MaterialCircuitStateV2,
-) -> Result<ClosedMaterialWeekV2, MaterialCircuitErrorV2> {
+) -> Result<ClosedMaterialPeriodV2, MaterialCircuitErrorV2> {
     let mut state = canonical_state_v2(opening)?;
     let mut inventory = take_inventory(&mut state);
     let mut losses = Vec::new();
@@ -993,12 +994,12 @@ pub fn close_material_week_v2(
     dispatch_orders(&mut state, &mut inventory, &mut dispatches)?;
     rebuild_backlog(&mut state);
     publish_inventory(&mut state, inventory);
-    let next_week = state
-        .week
+    let next_period = state
+        .period
         .checked_add(1)
         .ok_or(MaterialCircuitErrorV2::Arithmetic)?;
-    Ok(ClosedMaterialWeekV2 {
-        next_week,
+    Ok(ClosedMaterialPeriodV2 {
+        next_period,
         transition: MaterialCircuitTransitionV2 {
             state,
             production,

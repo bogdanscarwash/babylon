@@ -1,17 +1,4 @@
-"""Babylon - The Fall of America simulation engine.
-
-A geopolitical simulation modeling the collapse of American hegemony
-through MLM-TW (Marxist-Leninist-Maoist Third Worldist) theory and
-topological manifolds.
-
-The simulation models class struggle as deterministic output of material
-conditions within a compact topological phase space.
-
-Example:
-    >>> import babylon
-    >>> babylon.__version__
-    '0.3.0'
-"""
+"""Babylon reference data preparation and operator tools."""
 
 from importlib.metadata import PackageNotFoundError, version
 

@@ -8,7 +8,7 @@
 //! declarations are unordered. Each event includes optional typed delivery evidence
 //! (stage tags 1 arrival, 2 delivery, 3 quantity realization), and an
 //! optional completed material balance after provenance. Each balance encodes
-//! week, row count, then site/good/unit identities and labels followed by
+//! period, row count, then site/good/unit identities and labels followed by
 //! opening/arrivals/produced/consumed/dispatched/closing quantities. V1, V2,
 //! and V3 identities retain their historical meaning; V4 is the sole live encoder.
 //! After the material balance, V4 appends the staffing-account count and rows.
@@ -145,7 +145,7 @@ impl EvidenceEncoder {
 
     fn production(&mut self, rows: &ProductionSnapshotV1) {
         self.text(&rows.scenario_label);
-        self.number(rows.horizon_week);
+        self.number(rows.horizon_period);
         self.count(rows.sites.len());
         for site in &rows.sites {
             self.site(site);
@@ -167,11 +167,11 @@ impl EvidenceEncoder {
             self.text(&account.site_id);
             self.text(&account.unit_id);
             self.text(&account.unit);
-            self.number(account.next_opening_week);
+            self.number(account.next_opening_period);
             self.number(account.next_opening_available);
             self.0.update([u8::from(account.completed.is_some())]);
             if let Some(completed) = &account.completed {
-                self.number(completed.week);
+                self.number(completed.period);
                 self.number(completed.opening);
                 self.number(completed.planned);
                 self.number(completed.used);
@@ -219,7 +219,7 @@ impl EvidenceEncoder {
             account.employed,
             account.reserve,
             account.previous_unretained_hours,
-            account.next_opening_week,
+            account.next_opening_period,
             account.next_opening_hours,
         ] {
             self.number(value);
@@ -227,7 +227,7 @@ impl EvidenceEncoder {
         self.0.update([u8::from(account.completed.is_some())]);
         if let Some(completed) = &account.completed {
             for value in [
-                completed.week,
+                completed.period,
                 completed.opening_employed,
                 completed.opening_reserve,
                 completed.previous_unretained_hours,
@@ -245,7 +245,7 @@ impl EvidenceEncoder {
     fn material_balance(&mut self, balance: Option<&crate::CompletedMaterialBalanceV1>) {
         self.0.update([u8::from(balance.is_some())]);
         if let Some(balance) = balance {
-            self.number(balance.week);
+            self.number(balance.period);
             self.count(balance.rows.len());
             for row in &balance.rows {
                 for value in [
@@ -354,7 +354,7 @@ impl EvidenceEncoder {
             self.text(value);
         }
         for value in [
-            route.travel_weeks,
+            route.travel_periods,
             route.ordered,
             route.shipped,
             route.delivered,
@@ -380,13 +380,13 @@ impl EvidenceEncoder {
             self.text(value);
         }
         self.number(lot.quantity);
-        self.number(lot.dispatch_week);
-        self.number(lot.arrival_week);
+        self.number(lot.dispatch_period);
+        self.number(lot.arrival_period);
     }
 
     fn event(&mut self, event: &ProductionEventV1) {
         self.text(&event.id);
-        self.number(event.week);
+        self.number(event.period);
         self.strings(&event.subject_site_ids);
         self.text(&event.kind);
         self.text(&event.description);

@@ -29,6 +29,42 @@ MAX_LOG_TAIL_LINES: Final = 80
 MAX_SLOW_TESTS: Final = 20
 MAX_SUMMARY_FAILURES: Final = 20
 
+# Other workspace packages retain every integration target. These three packages
+# dominate integration linking; dev keeps their current cross-crate boundaries
+# and inexpensive source contracts. Full local/release runs select everything.
+DEV_INTEGRATION_TARGETS: Final = {
+    "babylon-tick": (
+        "tick_goldens",
+        "causal_contract_conformance",
+        "replay_session",
+        "staffed_material_replay",
+        "probability_projection_contract",
+    ),
+    "babylon-persistence": (
+        "committed_tick_envelope_v2_contract",
+        "material_runtime_v3",
+        "foundation_content_v2",
+        "runtime_foundation_checkpoint_contract",
+        "postgres_catalog_contract",
+        "reader_role_contract",
+        "archive_semantic_contract",
+        "archive_worker_contract",
+        "michigan_material",
+        "schema_epoch_sql_contract",
+        "schema_epoch_v2_shape_contract",
+        "schema_epoch_v2_sql_contract",
+        "schema_epoch_v3_shape_contract",
+        "schema_epoch_v3_sql_contract",
+        "schema_epoch_v4_shape_contract",
+        "schema_epoch_v4_sql_contract",
+        "schema_epoch_v5_shape_contract",
+        "schema_epoch_v5_sql_contract",
+        "schema_epoch_v7_shape_contract",
+        "spatial_reference_installer_contract",
+    ),
+    "babylon-client": ("decision_surface_contract", "dynamic_linking_fence"),
+}
+
 EXIT_CLASSES: Final = {
     0: "success",
     4: "no_tests_selected",
@@ -102,8 +138,9 @@ def _failure_record(case: ET.Element, junit_name: str) -> dict[str, Any] | None:
         body = _element_text(child)
         diagnostic_parts.append("\n".join(part for part in (message, body) if part))
     diagnostic = "\n\n".join(part for part in diagnostic_parts if part)
-    lowered = diagnostic.casefold()
-    if "timeout" in lowered or "timed out" in lowered:
+    # Nextest marks this execution outcome in JUnit's type attribute. Assertion
+    # diagnostics may quote timeout configuration without the test timing out.
+    if any(child.attrib.get("type") == "test timeout" for child in exceptional):
         kind = "timeout"
     elif tags & {"flakyFailure", "flakyError"}:
         kind = "flaky"
@@ -400,11 +437,11 @@ def _tee(command: Sequence[str], cwd: Path, log_path: Path, *, append: bool = Fa
         return 1
 
     assert process.stdout is not None
-    with log_path.open("a" if append else "w", encoding="utf-8") as log:
+    with log_path.open("a" if append else "w", encoding="utf-8", buffering=1) as log:
         if append:
             log.write(f"$ {shlex.join(command)}\n")
         for line in process.stdout:
-            print(line, end="")
+            print(line, end="", flush=True)
             log.write(line)
     return process.wait()
 
@@ -462,11 +499,100 @@ def _append_github_summary(summary_path: Path) -> None:
             stream.write(summary_path.read_text(encoding="utf-8"))
 
 
+def read_cargo_metadata() -> object:
+    """Read the locked workspace target inventory without compiling tests."""
+    command = ["cargo", "metadata", "--no-deps", "--format-version", "1", "--locked"]
+    try:
+        completed = subprocess.run(
+            command, cwd=RUST_ROOT, check=False, capture_output=True, text=True, timeout=30
+        )
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise ValueError(f"dev Rust selection: cargo metadata failed: {error}") from error
+    if completed.returncode != 0:
+        raise ValueError(
+            f"dev Rust selection: cargo metadata exited {completed.returncode}: "
+            f"{_bounded(completed.stderr)}"
+        )
+    try:
+        return json.loads(completed.stdout)
+    except json.JSONDecodeError as error:
+        raise ValueError(f"dev Rust selection: invalid cargo metadata JSON: {error}") from error
+
+
+def _integration_names(package: dict[str, Any]) -> set[str]:
+    targets = package.get("targets")
+    if not isinstance(targets, list) or not targets:
+        raise ValueError("dev Rust selection: package targets must be a nonempty list")
+    names: set[str] = set()
+    for target in targets:
+        if not isinstance(target, dict):
+            raise ValueError("dev Rust selection: invalid target record")
+        name, kind = target.get("name"), target.get("kind")
+        if (
+            not isinstance(name, str)
+            or not re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_-]*", name)
+            or not isinstance(kind, list)
+            or not kind
+            or not all(isinstance(value, str) for value in kind)
+        ):
+            raise ValueError("dev Rust selection: invalid target name or kind")
+        if "test" in kind:
+            names.add(name)
+    return names
+
+
+def dev_target_arguments(metadata: object) -> list[str]:
+    """Select one Cargo union, refusing missing required package/target pairs."""
+    if not isinstance(metadata, dict):
+        raise ValueError("dev Rust selection: metadata must be an object")
+    packages, members = metadata.get("packages"), metadata.get("workspace_members")
+    if (
+        not isinstance(packages, list)
+        or not isinstance(members, list)
+        or not members
+        or not all(isinstance(member, str) for member in members)
+        or len(set(members)) != len(members)
+    ):
+        raise ValueError("dev Rust selection: invalid workspace packages or members")
+    by_name: dict[str, set[str]] = {}
+    seen_members: set[str] = set()
+    for package in packages:
+        if not isinstance(package, dict) or not isinstance(package.get("id"), str):
+            raise ValueError("dev Rust selection: invalid package record")
+        identity = package["id"]
+        if identity not in members:
+            continue
+        name = package.get("name")
+        if not isinstance(name, str) or not name or name in by_name or identity in seen_members:
+            raise ValueError("dev Rust selection: invalid or duplicate workspace package")
+        by_name[name] = _integration_names(package)
+        seen_members.add(identity)
+    if seen_members != set(members):
+        raise ValueError("dev Rust selection: metadata omits a workspace member")
+
+    selected: set[str] = set()
+    for package, names in by_name.items():
+        if package not in DEV_INTEGRATION_TARGETS:
+            selected.update(names)
+    for package, required in DEV_INTEGRATION_TARGETS.items():
+        if package not in by_name:
+            raise ValueError(f"dev Rust selection: required workspace package {package} is missing")
+        missing = set(required) - by_name[package]
+        if missing:
+            raise ValueError(
+                f"dev Rust selection: required targets missing from {package}: "
+                f"{', '.join(sorted(missing))}"
+            )
+        selected.update(required)
+    return ["--lib", "--bins", *(part for name in sorted(selected) for part in ("--test", name))]
+
+
 def run_nextest(
     *,
     profile: str,
     workspace: bool,
     extra_args: Sequence[str],
+    dev: bool = False,
     report_root: Path = DEFAULT_REPORT_ROOT,
 ) -> int:
     """Run nextest once and always finalize a structured receipt."""
@@ -476,12 +602,25 @@ def run_nextest(
     junit_source = RUST_ROOT / "target" / "nextest" / profile / "junit.xml"
     junit_source.unlink(missing_ok=True)
     command = ["cargo", "nextest", "run", "--profile", profile, "--locked"]
-    if workspace:
+    if workspace or dev:
         command.append("--workspace")
-    command.extend(extra_args)
     started_at = _utc_now()
     started = time.monotonic()
-    exit_code = _tee(command, RUST_ROOT, report_dir / "run.log")
+    try:
+        if dev:
+            if extra_args:
+                raise ValueError(
+                    "dev Rust selection: --dev cannot include scoped nextest arguments"
+                )
+            command.extend(dev_target_arguments(read_cargo_metadata()))
+    except ValueError as error:
+        diagnostic = f"{error}\n"
+        (report_dir / "run.log").write_text(diagnostic, encoding="utf-8")
+        print(diagnostic, end="", file=sys.stderr)
+        exit_code = 102
+    else:
+        command.extend(extra_args)
+        exit_code = _tee(command, RUST_ROOT, report_dir / "run.log")
     duration_ms = round((time.monotonic() - started) * 1_000)
     summary = finalize_report(
         report_dir=report_dir,
@@ -768,6 +907,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     run_parser = subparsers.add_parser("run", help="run nextest and finalize a report")
     run_parser.add_argument("--profile", default="ci")
     run_parser.add_argument("--workspace", action="store_true")
+    run_parser.add_argument("--dev", action="store_true", help="select the dev workspace contracts")
     run_parser.add_argument("extra", nargs=argparse.REMAINDER)
     subparsers.add_parser("summarize", help="print the explicit latest report")
     subparsers.add_parser("rerun-failed", help="rerun failure IDs from the latest report")
@@ -779,6 +919,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return run_nextest(
             profile=args.profile,
             workspace=args.workspace,
+            dev=args.dev,
             extra_args=_extra_arguments(args.extra),
         )
     if args.command == "summarize":

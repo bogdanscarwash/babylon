@@ -2,14 +2,15 @@
 # Install: mise run hooks
 # Run manually: uv run pre-commit run --all-files
 
+minimum_pre_commit_version: "4.6.2"
 default_stages: [pre-commit]
 default_install_hook_types: [pre-commit, commit-msg, pre-push]
 
 repos:
   # ==========================================================================
-  # WORKTREE ENVIRONMENT CONTRACT - first and fail_fast (ADR181 R9c): every
-  # later hook trusts the venv/data/lock state this one proves. Five asserts,
-  # each a real past incident — see tools/check_worktree_contract.py.
+  # WORKTREE ENVIRONMENT CONTRACT - first and fail_fast: verify the pinned
+  # interpreter, staged dependency inputs and resolved lock before other hooks.
+  # Dataset and operator prerequisites belong to the tools that consume them.
   # ==========================================================================
   - repo: local
     hooks:
@@ -33,7 +34,7 @@ repos:
   # ==========================================================================
   - repo: https://github.com/astral-sh/ruff-pre-commit
     # Keep the commit hook on the same patch release as the uv-locked CI tool.
-    rev: v0.15.22
+    rev: v0.16.5
     hooks:
       - id: ruff
         name: ruff (lint)
@@ -58,77 +59,6 @@ repos:
         files: '^(src/.*\.py|pyproject\.toml)$'
 
   # ==========================================================================
-  # FAST TESTS - Run on every commit
-  # ==========================================================================
-  - repo: local
-    hooks:
-      - id: pytest-fast
-        name: pytest (fast push gate — NOT CI-predictive)
-        entry: uv run pytest tests/unit/formulas tests/unit/engine -q --tb=no -m "not red_phase and not slow"
-        language: system
-        pass_filenames: false
-        always_run: true
-        stages: [pre-push]
-
-  # ==========================================================================
-  # COMPLEXITY + MAINTAINABILITY GATES - Catch quality regressions before CI
-  # ==========================================================================
-  # R4 (ADR181): the staged-files blind spot — pre-commit hooks see only
-  # staged files, so full-tree contracts (sentinel family, __all__ surface
-  # baseline) kept landing red in PR CI after a clean local commit (≥5
-  # strikes in 12 days). Run them full-tree at pre-push, same tasks as CI.
-  - repo: local
-    hooks:
-      - id: sentinels-static
-        name: sentinel family (full-tree, pre-push CI mirror)
-        entry: mise run check:sentinels-static
-        language: system
-        pass_filenames: false
-        always_run: true
-        stages: [pre-push]
-
-      - id: surface-baseline
-        name: public-surface baseline (full-tree, pre-push CI mirror)
-        entry: mise run check:surface
-        language: system
-        pass_filenames: false
-        always_run: true
-        stages: [pre-push]
-
-  - repo: local
-    hooks:
-      - id: import-boundaries
-        name: import-linter (layer boundaries, program 14)
-        entry: uv run lint-imports
-        language: system
-        pass_filenames: false
-        always_run: true
-        stages: [pre-push]
-
-      # radon has NO CI leg (verified 2026-08-15: grep radon .github/workflows/
-      # is empty) — it is a local-only stricter gate. The four excluded files
-      # are pre-existing C ranks in the FROZEN Python engine estate (Amendment
-      # AE: reference-only, deliberately not refactored), tracked as #580; the
-      # gate stays live for every other file, so any NEW sub-B rank still
-      # fails the push. Removing an exclusion IS fixing #580 — do it file by
-      # file, never by widening this list.
-      - id: radon-mi
-        name: radon (maintainability index >= B)
-        entry: >-
-          bash -c 'set -euo pipefail;
-          excl="src/babylon/topology/graph.py,";
-          excl+="src/babylon/engine/systems/electoral.py,";
-          excl+="src/babylon/sentinels/_ast.py,";
-          excl+="src/babylon/domain/economics/tick/system/__init__.py";
-          output="$(uv run radon mi src/babylon -s -e "$excl")";
-          echo "$output"; if echo "$output" | grep -Eq " - [CDEF]"; then
-          echo "radon: maintainability rank below B detected"; exit 1; fi'
-        language: system
-        pass_filenames: false
-        always_run: true
-        stages: [pre-push]
-
-  # ==========================================================================
   # SEMGREP - Architectural Pattern Enforcement
   # ==========================================================================
   - repo: https://github.com/returntocorp/semgrep
@@ -151,14 +81,15 @@ repos:
         stages: [pre-push]
 
   # ==========================================================================
-  # RUST - the engine estate (Amendment AE). Hosted CI's Rust Gate is `mise run
-  # ci:rust`; the local pre-push gate deliberately stops before Rustdoc because
+  # RUST - the engine estate (Amendment AE). Dev CI and ordinary pre-push use
+  # rust:check-no-docs --dev; full release CI uses ci:rust. Pre-push stops before Rustdoc because
   # repository law prohibits local documentation generation. fmt runs at
   # commit time on staged Rust source or formatter/toolchain policy. At
   # pre-push, pre-commit supplies the exact remote..local refs. Its filename
   # classifier removes deleted paths, so the range runner re-diffs those refs
   # and keeps deletions without another fetch or a dev-specific merge-base
-  # guess. When selected, the gate still runs full-tree. Hosted CI adds Rustdoc.
+  # guess. Both modes retain all-target Clippy, doctests and repository sentinels.
+  # Dev selects integration targets; full release CI adds all tests and Rustdoc.
   # ==========================================================================
   - repo: local
     hooks:
@@ -169,9 +100,9 @@ repos:
         pass_filenames: false
         files: '^(rust/.*\.rs|rust/rustfmt\.toml|rust/rust-toolchain\.toml)$'
 
-      - id: rust-full-gate
-        name: rust:check-no-docs (full local Rust gate, pre-push)
-        entry: python3 tools/run_pre_push_gate.py rust-full-gate
+      - id: rust-dev-gate
+        name: rust:check-no-docs --dev (local Rust dev gate, pre-push)
+        entry: python3 tools/run_pre_push_gate.py rust-dev-gate
         language: system
         pass_filenames: false
         always_run: true
@@ -179,8 +110,8 @@ repos:
 
       # bsl-lint also owns two repository relationships outside rust/: ADR
       # namespace uniqueness and the exact retired Python authority paths.
-      # Rust changes already select rust-full-gate, so this lighter hook covers
-      # only those non-Rust inputs without duplicating the full Cargo gate.
+      # Rust changes already select rust-dev-gate, so this lighter hook covers
+      # only those non-Rust inputs without duplicating the Cargo gate.
       - id: bsl-repo-sentinels
         name: bsl-lint repository sentinels (non-Rust inputs, pre-push)
         entry: python3 tools/run_pre_push_gate.py bsl-repo-sentinels
@@ -314,18 +245,6 @@ repos:
     rev: v8.30.1
     hooks:
       - id: gitleaks
-
-  # ==========================================================================
-  # DEPENDENCY LOCK CONSISTENCY
-  # ==========================================================================
-  - repo: local
-    hooks:
-      - id: uv-lock-consistency
-        name: uv lock --check
-        entry: uv lock --check
-        language: system
-        pass_filenames: false
-        files: '^(pyproject\.toml|uv\.lock)$'
 
   # ==========================================================================
   # YAML LINTING - Advanced YAML validation

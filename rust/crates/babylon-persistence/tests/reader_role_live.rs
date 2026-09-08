@@ -35,7 +35,7 @@ use babylon_persistence::{
     ObserverEconomyReaderV1, ObserverVisibilityV1,
 };
 use babylon_persistence::{
-    install_reader_role_v1, michigan_dynamic_hex_foundation_v1, validate_legacy_connection_target,
+    install_reader_role_v1, michigan_dynamic_hex_foundation_v1, validate_connection_target,
     ArchiveCitationV1, ArchiveDirtyBatchV1, ArchiveKnowledgeGrantV1, ArchiveMaterializeModeV1,
     ArchivePageInputV1, ArchivePageRefV1, ArchiveSchemaDispositionV1, ArchiveSignalV1,
     ArchiveSubjectKindV1, ArchiveSubjectV1, CampaignId, DurableReplayRuntimeV2,
@@ -49,10 +49,10 @@ use babylon_tick::replay_session::ReplayTickSession;
 use postgres::{Config, NoTls};
 use uuid::Uuid;
 
-const DSN_ENV: &str = "BABYLON_LEGACY_ADOPTER_TEST_DSN";
-const ACK_ENV: &str = "BABYLON_LEGACY_ADOPTER_DISPOSABLE_ACK";
-const ACK: &str = "I_UNDERSTAND_PER20_DROPS_SCRATCH_DATABASES_ROLES_AND_CREATED_BABYLON_INTEL";
-const CANARY_ENV: &str = "BABYLON_LEGACY_ADOPTER_DISPOSABLE_CANARY";
+const DSN_ENV: &str = "BABYLON_POSTGRES_TEST_DSN";
+const ACK_ENV: &str = "BABYLON_POSTGRES_DISPOSABLE_ACK";
+const ACK: &str = "I_UNDERSTAND_THIS_DISPOSABLE_RUNTIME_DROPS_ITS_SCRATCH_DATABASES_AND_ROLES";
+const CANARY_ENV: &str = "BABYLON_POSTGRES_DISPOSABLE_CANARY";
 const TEMPLATE_DB_ENV: &str = "BABYLON_RUNTIME_TEMPLATE_DB";
 const READER_DSN_ENV: &str = "BABYLON_READER_DSN";
 const DEFINES: &[u8] = br#"{"alpha":1}"#;
@@ -68,14 +68,14 @@ fn validated_base_config() -> Config {
     assert_eq!(canary.len(), 32);
     let dsn = std::env::var(DSN_ENV).expect("runner supplies the disposable DSN");
     let config = Config::from_str(&dsn).expect("runner DSN parses");
-    validate_legacy_connection_target(&config).expect("loopback target");
+    validate_connection_target(&config).expect("loopback target");
     assert_eq!(config.get_user(), Some("test"));
     assert_eq!(config.get_dbname(), Some("postgres"));
     let actual: Option<String> = config
         .connect(NoTls)
         .expect("canary connection")
         .query_one(
-            "SELECT pg_catalog.current_setting('babylon.per20_disposable', true)",
+            "SELECT pg_catalog.current_setting('babylon.disposable_runtime', true)",
             &[],
         )
         .expect("canary query")
@@ -1406,7 +1406,7 @@ fn assert_material_restart_reconciliation(
         config,
         campaign,
         MichiganContentPresetV1::new_campaign(MichiganDeliveryPresetV1::Standard)
-            .create_foundation()
+            .create_foundation(&crate::test_support::catalog())
             .unwrap()
             .digest(),
     )
@@ -1434,7 +1434,7 @@ fn assert_material_restart_reconciliation(
             config,
             campaign,
             MichiganContentPresetV1::new_campaign(MichiganDeliveryPresetV1::Delayed)
-                .create_foundation()
+                .create_foundation(&crate::test_support::catalog())
                 .unwrap()
                 .digest()
         ),
@@ -1459,7 +1459,7 @@ fn assert_material_corruption_refused(
         config,
         campaign,
         MichiganContentPresetV1::new_campaign(MichiganDeliveryPresetV1::Standard)
-            .create_foundation()
+            .create_foundation(&crate::test_support::catalog())
             .unwrap()
             .digest()
     )
@@ -1511,7 +1511,16 @@ fn assert_material_stdio_advance(
     input.extend(serde_json::to_vec(&stop).unwrap());
     input.push(b'\n');
     let mut output = Vec::new();
-    run_runtime_session_v3(config, std::io::Cursor::new(input), &mut output).unwrap();
+    run_runtime_session_v3(
+        config,
+        std::path::Path::new(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../../content/scenarios/michigan/defines.toml"
+        )),
+        std::io::Cursor::new(input),
+        &mut output,
+    )
+    .unwrap();
     let responses: Vec<RuntimeSessionResponseV3> = output
         .split(|byte| *byte == b'\n')
         .filter(|line| !line.is_empty())
@@ -1558,7 +1567,7 @@ fn live_material_runtime_v3_atomic_restart_identity_and_observer_projection() {
         CampaignId::from_uuid(Uuid::from_u128(0x3190_0000_0000_0000_0000_0000_0000_0003));
     let preset = MichiganDeliveryPresetV1::Standard;
     let foundation = MichiganContentPresetV1::new_campaign(preset)
-        .create_foundation()
+        .create_foundation(&crate::test_support::catalog())
         .unwrap();
     let digest = foundation.digest();
     let mut runtime = DurableMaterialRuntimeV3::create(&config, campaign, foundation).unwrap();
@@ -1613,3 +1622,6 @@ fn live_material_runtime_v3_atomic_restart_identity_and_observer_projection() {
     known_login.cleanup();
     database.cleanup();
 }
+
+#[path = "support/material_config.rs"]
+mod test_support;

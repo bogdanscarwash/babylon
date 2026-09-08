@@ -23,6 +23,7 @@ SCOPE = {
     "slice_id": "michigan-persistence-slice",
     "scenario": "production/michigan-rust-runtime",
     "fixed_replay_seed": 281,
+    "tick_duration_days": 28,
     "parameter_overrides": False,
     "stochastic_draws": False,
     "dynamic_h3_updates": False,
@@ -83,7 +84,7 @@ def _valid_row(
     *,
     reopened_after_commit: bool | None = None,
 ) -> dict[str, object]:
-    reopened = resolve_tick % 52 == 0 if reopened_after_commit is None else reopened_after_commit
+    reopened = resolve_tick % 13 == 0 if reopened_after_commit is None else reopened_after_commit
     return {
         "schema": "babylon.simulation.tick-report.v2",
         "resolve_tick": resolve_tick,
@@ -183,7 +184,7 @@ import time
 
 assert sys.argv[1] == "run"
 assert sys.argv[2] == "--ticks"
-assert sys.argv[4:6] == ["--restart-every", "52"]
+assert sys.argv[4:6] == ["--restart-every", "13"]
 assert sys.argv[6] == "--report-jsonl"
 report_path = pathlib.Path(sys.argv[7])
 config = json.loads(pathlib.Path(sys.argv[0] + ".config.json").read_text(encoding="utf-8"))
@@ -367,6 +368,7 @@ def test_success_creates_unique_secret_safe_artifacts_summary_and_csv(
         "status": "ok",
         "ticks_reported": 2,
         "ticks_requested": 2,
+        "tick_duration_days": 28,
         "totals": {
             "audit_receipts": 4,
             "events": 4,
@@ -739,6 +741,12 @@ def _invalid_row(case: str) -> dict[str, object]:  # noqa: C901 - table-driven m
         row["scope"]["extra"] = False  # type: ignore[index]
     elif case == "scope_seed":
         row["scope"]["fixed_replay_seed"] = 282  # type: ignore[index]
+    elif case == "scope_weekly_duration":
+        row["scope"]["tick_duration_days"] = 7  # type: ignore[index]
+    elif case == "scope_duration_float":
+        row["scope"]["tick_duration_days"] = 28.0  # type: ignore[index]
+    elif case == "scope_duration_missing":
+        del row["scope"]["tick_duration_days"]  # type: ignore[index]
     elif case == "scope_capability":
         row["scope"]["stochastic_draws"] = True  # type: ignore[index]
     elif case == "event_types_unsorted":
@@ -788,6 +796,9 @@ def _invalid_row(case: str) -> dict[str, object]:  # noqa: C901 - table-driven m
         ("scope_extra", "scope fields"),
         ("scope_seed", "scope.fixed_replay_seed"),
         ("scope_capability", "scope.stochastic_draws"),
+        ("scope_weekly_duration", "scope.tick_duration_days"),
+        ("scope_duration_float", "scope.tick_duration_days"),
+        ("scope_duration_missing", "scope fields"),
         ("event_types_unsorted", "events.per_type must be sorted"),
         ("event_type_sum", "per-type event count sum"),
         ("observable_missing", "exactly 5 observables"),
@@ -880,8 +891,8 @@ def test_restart_schedule_requires_intervals_and_only_complete_final_readback(
     tmp_path: Path,
 ) -> None:
     report = tmp_path / "ticks.jsonl"
-    _write_jsonl(report, [_valid_row(52, reopened_after_commit=False)])
-    with pytest.raises(sim_report.JsonlValidationError, match="resolve_tick 52 must be reopened"):
+    _write_jsonl(report, [_valid_row(13, reopened_after_commit=False)])
+    with pytest.raises(sim_report.JsonlValidationError, match="resolve_tick 13 must be reopened"):
         sim_report._validate_jsonl(report, expected_rows=1)
 
     _write_jsonl(
@@ -1430,9 +1441,9 @@ def test_inherited_campaign_id_is_replaced_before_the_runtime_starts(
 def test_help_explains_tick_count_and_fresh_campaign_semantics() -> None:
     help_text = sim_report._parser().format_help()
 
-    assert "count of ticks" in help_text
+    assert "count of four-week periods" in help_text
     assert "BABYLON_CAMPAIGN_ID" in help_text
-    assert "fresh campaign" in help_text
+    assert "fresh campaign" in " ".join(help_text.split())
     assert "inherited value is ignored" in help_text
     assert "maximum 10000" in help_text
     assert "--database-scope {shared,exclusive}" in help_text

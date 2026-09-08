@@ -173,7 +173,7 @@ def _governed_db_views(conn: sqlite3.Connection) -> list[str]:
     """Every governed view in ``conn`` — the view-side twin of
     :func:`make_data_artifacts.governed_db_tables`, scoped by the same
     ``GOVERNED_PREFIXES`` boundary (all reference views are ``view_*``)."""
-    from babylon.sentinels.coverage.catalog import GOVERNED_PREFIXES
+    from babylon.data.catalog import GOVERNED_PREFIXES
 
     rows = conn.execute(
         "SELECT name FROM sqlite_master "

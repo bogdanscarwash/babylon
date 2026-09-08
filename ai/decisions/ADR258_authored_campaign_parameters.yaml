@@ -1,0 +1,73 @@
+ADR258_authored_campaign_parameters:
+  status: accepted
+  date: '2026-09-06'
+  title: Typed authored parameters belong to each committed campaign
+  evidence_class: Designed
+  authority:
+    - Director request for easily edited numeric parameters and review of defines.yaml history
+    - Constitution Articles III, IV, V, and VI
+  partially_supersedes:
+    - ADR257 only where default staffing, throughput, delay, and horizon values could be mistaken for fixed engine admission rules.
+    - ADR255 only where the authored work schedule is restricted to one compiled numeric value.
+  context: |
+    The four-week conversion exposed a repeated 40-hour literal in graph
+    staffing admission, separate from the actual authored schedule. An
+    external values file would remain cosmetic if construction, observation,
+    or restart regenerated compiled defaults. Historical defines.yaml had
+    825 scalar leaves across 51 sections. Its explicit units, validation and
+    canonical hashing are useful; its retired mechanics and defaults are
+    not a current configuration specification.
+  decision: |
+    R1. AUTHORING. content/scenarios/michigan/defines.toml is the numeric
+    authoring source for the current material circuit. Use typed integer
+    values with declared units and closed known process and corridor keys.
+    Reject unknown or missing keys, unsupported durations, invalid bounds,
+    inconsistent resources, and arithmetic overflow. No Python generator,
+    missing-file fallback, parallel JSON numeric authority, or duplicated
+    schema defaults are introduced. The supported simulation interval
+    remains four weeks under ADR257.
+
+    R2. CAPTURE. The native runtime reads the explicitly selected file when
+    creating a campaign. It validates and canonicalizes the effective
+    parameters, derives recurring period budgets once, and binds them into
+    the foundation content identity. Subsequent creation can use edited
+    values. Existing campaigns reconstruct from their own stored validated
+    content, independently of later edits or deletion of the input file.
+    Canonical value equality, not TOML comments or formatting, determines
+    parameter identity.
+
+    R3. MECHANICS. Rust material transitions consume the typed captured
+    coefficients and schedules. BSL remains the rule language where a
+    declared rule requires parameters; this decision adds no new BSL
+    primitive or executable rule. A fixed numeric guard cannot override a
+    valid authored schedule. Positive quantities, exact population and
+    material accounts, checked arithmetic, causal ordering, and detached
+    publication remain required.
+
+    R4. UNITS. Weekly throughput compiles into four-week flow capacity.
+    Initial stocks, people, order totals and per-batch recipes retain their
+    declared units. Initial labor budgets derive from the supplied people
+    and work schedule rather than a second copy of the same number. QCEW
+    employment and weekly wages remain separately admitted Observed facts;
+    they are not mutable Designed knobs. Do not port retired crisis,
+    consciousness, rent, endgame, response-curve, or other unused settings.
+
+    R5. OBSERVATION. Full observation reconstructs the same stored parameter
+    authority as the writer. Restricted preview cannot acquire ungranted
+    initial stocks, people, or other material facts through configuration.
+    Removing compiled-default admission does not grant a broader read
+    capability or authorize trusting a self-hash instead of validated
+    content and committed identity.
+  alternatives_rejected:
+    - Reintroducing the old Python coefficient catalogue or generator.
+    - Replacing one hardcoded schedule with another fixed schedule guard.
+    - Editing knobs while reads or restart silently reconstruct compiled defaults.
+    - Applying new parameter files retroactively to saved campaigns.
+    - Maintaining two numeric configuration formats or silently ignoring unknown keys.
+  verification: |
+    Prove valid nondefault schedules alter actual employment and period
+    budgets; malformed or incoherent parameters refuse before creation;
+    canonical equivalents have equal identity and changed values differ;
+    old saved parameters survive later file edits; and current reader,
+    preview, receipt, checkpoint, and restart boundaries remain effective.
+    Executable acceptance is separate from this accepted design decision.

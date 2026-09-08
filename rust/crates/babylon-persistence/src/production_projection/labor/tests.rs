@@ -10,7 +10,7 @@ fn shared_opening() -> MaterialCircuitStateV2 {
     let site = SiteIdV1::from_bytes([1; 32]);
     let labor_unit = UnitIdV1::from_bytes([2; 32]);
     let mut state = MaterialCircuitStateV2 {
-        week: 1,
+        period: 1,
         site_logistics_nodes: vec![SiteLogisticsNodeV2 {
             site_id: site,
             node_id: LogisticsNodeIdV2::from_bytes([3; 32]),
@@ -46,21 +46,21 @@ fn shared_opening() -> MaterialCircuitStateV2 {
         state.capacities.push(CapacityRowV1 {
             process_id: process,
             site_id: site,
-            week: 1,
+            period: 1,
             available_batches: quantity,
         });
         state.production_commitments.push(ProductionCommitmentV1 {
             process_id: process,
             site_id: site,
-            week: 1,
+            period: 1,
             planned_batches: quantity,
         });
     }
-    for (week, available) in [(1, 12), (2, 30)] {
+    for (period, available) in [(1, 12), (2, 30)] {
         state.labor.push(LaborCapacityRowV1 {
             site_id: site,
             unit_id: labor_unit,
-            week,
+            period,
             available,
         });
     }
@@ -88,12 +88,12 @@ fn shared_principal_is_counted_once_and_time_closes_from_actual_receipts() {
     let (opening, next, receipt) = committed_pair(shared_opening());
     let rows = project_labor_accounts(&next, Some(&opening), Some(&receipt)).unwrap();
     assert_eq!(rows.len(), 1);
-    assert_eq!(rows[0].next_opening_week, 2);
+    assert_eq!(rows[0].next_opening_period, 2);
     assert_eq!(rows[0].next_opening_available, 30);
     assert_eq!(
         rows[0].completed,
         Some(CompletedProductionLaborV1 {
-            week: 1,
+            period: 1,
             opening: 12,
             planned: 13,
             used: 8,

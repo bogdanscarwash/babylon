@@ -13,10 +13,10 @@ Authority and Scope
 .. vale ste.UnapprovedWords = NO
 .. vale ste.Semicolon = NO
 
-`CONSTITUTION.md v4.1.0 <../../CONSTITUTION.md>`__ governs this page and
+`CONSTITUTION.md v4.2.0 <../../CONSTITUTION.md>`__ governs this page and
 reserves Babylon's Marxist-Leninist-Maoist Third Worldist theoretical line.
-:doc:`architecture` separates the live Rust engine from the frozen Python
-reference. This page corrects deterministic interpretations within the
+:doc:`architecture` describes the live Rust engine and retained data tooling.
+This page corrects deterministic interpretations within the
 reserved line; it does not rename or amend that line. It constrains represented
 relations and causal questions. It does not create an executable rule,
 coefficient, threshold, response curve, geographic essence, class essence, or
@@ -266,6 +266,6 @@ See Also
 --------
 
 - :doc:`architecture`
-- ``CONSTITUTION.md`` v4.1.0
+- ``CONSTITUTION.md`` v4.2.0
 - Frozen-reference formula pages are context only. They do not give live
   executable authority.

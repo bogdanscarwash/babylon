@@ -245,7 +245,7 @@ def main(argv: list[str] | None = None) -> int:
             "metadata": "removed",
             "ffmpeg_bitexact": True,
         },
-        "license_scope": "SFX MIDI is CC0; the two legacy theme MIDI compositions retain their unresolved status in LICENSING.md. Rendering does not relicense them.",
+        "license_scope": "SFX MIDI is CC0. On 2026-09-06 the Director confirmed original authorship of Phi and Panopticon and authorized distribution of their MIDI and rendered forms with Babylon. This permission does not assign CC0 to the themes; see LICENSING.md.",
         "assets": rows,
     }
     encoded = json.dumps(manifest, indent=2, sort_keys=True) + "\n"

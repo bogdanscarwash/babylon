@@ -1,6 +1,6 @@
 -- Sole live retained-page composition. Historical atoms and content hashes stay V1.
--- The installer holds the schema lock and excludes predecessor Archive writes,
--- copies and validates every retained head, then inserts the marker last.
+-- Fresh installation requires an empty campaign catalog under the schema lock.
+-- The installer creates current relations, then inserts the marker last.
 CREATE TABLE babylon_meta.archive_revision_schema_v2 (
     singleton BOOLEAN PRIMARY KEY CHECK (singleton),
     migration_sha256 BYTEA NOT NULL CHECK (octet_length(migration_sha256) = 32)

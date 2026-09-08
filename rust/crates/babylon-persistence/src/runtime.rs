@@ -33,13 +33,13 @@ use crate::foundation::{
     FoundationContentLayout,
 };
 use crate::identity::CampaignId;
-use crate::legacy_adopter::{
-    acquire_lock, release_lock, validate_legacy_connection_target, LegacyAdopterError,
-};
 use crate::metadata::{
     advance_campaign_catalog_tick_v1, ensure_campaign_catalog_row_v1, read_campaign_catalog_row_v1,
 };
 use crate::michigan_dynamic_hex_foundation::michigan_dynamic_hex_foundation_v1;
+use crate::postgres_catalog::{
+    acquire_lock, release_lock, validate_connection_target, CatalogError,
+};
 use crate::postgres_diagnostic::PostgresDiagnosticV1;
 use crate::schema_epoch::compiled_committed_tick_v2_activation_migrations;
 use crate::schema_migration::SchemaMigration;
@@ -416,7 +416,7 @@ pub enum RustPersistenceActivationErrorV2 {
         diagnostic: Option<PostgresDiagnosticV1>,
     },
     /// Advisory-lock acquisition failed with its typed database cause.
-    Lock(LegacyAdopterError),
+    Lock(CatalogError),
     /// Existing nonempty authority rows were identified before any activation mutation.
     PreActivationIncompatibleInventory {
         /// Exact sorted relation/count targets from one read-only snapshot.
@@ -429,7 +429,7 @@ pub enum RustPersistenceActivationErrorV2 {
     /// Exact ledger bytes could not be allocated or composed.
     LedgerEncoding,
     /// The advisory-lock cleanup failed after the primary operation.
-    Cleanup(LegacyAdopterError),
+    Cleanup(CatalogError),
 }
 
 impl std::fmt::Display for RustPersistenceActivationErrorV2 {
@@ -903,7 +903,7 @@ fn read_predecessor_authority_ledger_v2(
 pub fn activate_rust_persistence_v2(
     config: &Config,
 ) -> Result<ActivationReportV2, RustPersistenceActivationErrorV2> {
-    validate_legacy_connection_target(config)
+    validate_connection_target(config)
         .map_err(|_| RustPersistenceActivationErrorV2::ConnectionTarget)?;
     preflight_v2_activation_before_mutation(config)?;
     establish_predecessor_authority_v2(config)?;
@@ -1140,6 +1140,8 @@ pub enum RustPersistenceRuntimeErrorV2 {
     },
     /// A requested campaign foundation is absent.
     FoundationAbsent,
+    /// Existing campaigns lack the current foundation schema and cannot be upgraded.
+    FoundationSchemaAbsentForExistingCampaigns,
     /// Durable campaign bytes differ from the requested exact foundation.
     CampaignConflict,
     /// The content bundle's scenario does not reproduce the session's captured graph.
@@ -1536,11 +1538,7 @@ impl DurableReplayRuntimeV2<HypergraphStore> {
             .map(std::str::from_utf8)
             .transpose()
             .map_err(|_| RustPersistenceRuntimeErrorV2::ReplaySource)?;
-        // Upgrade path for campaigns founded before the declared mapping
-        // existed: install the additive schema and reconcile the rows
-        // idempotently. Divergence between stored and declared rows refuses
-        // loudly; durable rows are never overwritten.
-        crate::territory_county_map::reconcile_territory_county_map_v1(
+        crate::territory_county_map::verify_territory_county_map_v1(
             config,
             campaign_id,
             scenario,
@@ -1713,7 +1711,7 @@ pub fn hydrate_campaign_foundation_v1(
     campaign_id: CampaignId,
 ) -> Result<CampaignFoundationV1, RustPersistenceRuntimeErrorV2> {
     let _active = require_active_authority(config)?;
-    validate_legacy_connection_target(config)
+    validate_connection_target(config)
         .map_err(|_| RustPersistenceRuntimeErrorV2::database("validate foundation target"))?;
     let mut client = config.connect(NoTls).map_err(|error| {
         RustPersistenceRuntimeErrorV2::postgres("connect foundation reader", &error)
@@ -1828,7 +1826,7 @@ pub(crate) fn hydrate_campaign_foundation_client_v1(
 pub(crate) fn require_active_authority(
     config: &Config,
 ) -> Result<CommittedTickAuthorityLedgerRowV2, RustPersistenceRuntimeErrorV2> {
-    validate_legacy_connection_target(config)
+    validate_connection_target(config)
         .map_err(|_| RustPersistenceRuntimeErrorV2::ActivationRequired)?;
     let mut client = config.connect(NoTls).map_err(|error| {
         RustPersistenceRuntimeErrorV2::postgres("connect authority reader", &error)
@@ -1888,7 +1886,7 @@ fn persist_campaign_foundation_v1(
     campaign_id: CampaignId,
     foundation: &CampaignFoundationV1,
 ) -> Result<(), RustPersistenceRuntimeErrorV2> {
-    validate_legacy_connection_target(config).map_err(|_| {
+    validate_connection_target(config).map_err(|_| {
         RustPersistenceRuntimeErrorV2::database("validate foundation writer target")
     })?;
     crate::territory_county_map::install_territory_county_map_schema_v1(config)
@@ -2166,7 +2164,7 @@ fn commit_typed_tick_v2(
     }
     let resolve_tick = i64::try_from(claim.resolve_tick())
         .map_err(|_| RustPersistenceRuntimeErrorV2::CampaignConflict)?;
-    validate_legacy_connection_target(config)
+    validate_connection_target(config)
         .map_err(|_| RustPersistenceRuntimeErrorV2::database("validate typed tick target"))?;
     let mut client = config.connect(NoTls).map_err(|error| {
         RustPersistenceRuntimeErrorV2::postgres("connect typed tick writer", &error)
@@ -2694,34 +2692,40 @@ fn insert_typed_graph_rows_v1(
     report: &IdentifiedTickReportV2,
 ) -> Result<(), RustPersistenceRuntimeErrorV2> {
     let rows = report.result_stable_graph().rows();
+    let sink = client.copy_in(
+        "COPY babylon_state.graph_node_v1 (campaign_id, resolve_tick, local_name, node_type) FROM STDIN BINARY",
+    ).map_err(|error| RustPersistenceRuntimeErrorV2::postgres("begin graph node copy", &error))?;
+    let mut writer =
+        BinaryCopyInWriter::new(sink, &[Type::UUID, Type::INT8, Type::TEXT, Type::TEXT]);
     for (local_name, node_type) in rows.nodes() {
-        require_single_insert_v1(
-            client.execute(
-                "INSERT INTO babylon_state.graph_node_v1 \
-                 (campaign_id, resolve_tick, local_name, node_type) VALUES ($1::uuid, $2, $3, $4)",
-                &[campaign_id.as_uuid(), &resolve_tick, local_name, node_type],
-            ),
-            "insert graph node",
-        )?;
+        writer
+            .write(&[campaign_id.as_uuid(), &resolve_tick, local_name, node_type])
+            .map_err(|error| {
+                RustPersistenceRuntimeErrorV2::postgres("write graph node copy", &error)
+            })?;
     }
+    finish_binary_copy_v1(writer, rows.nodes().len(), "finish graph node copy")?;
+    let sink = client.copy_in(
+        "COPY babylon_state.graph_node_f64_v1 (campaign_id, resolve_tick, local_name, qname, value_bits) FROM STDIN BINARY",
+    ).map_err(|error| RustPersistenceRuntimeErrorV2::postgres("begin graph node f64 copy", &error))?;
+    let mut writer = BinaryCopyInWriter::new(
+        sink,
+        &[Type::UUID, Type::INT8, Type::TEXT, Type::TEXT, Type::INT8],
+    );
     for (local_name, qname, bits) in rows.node_f64() {
-        let value_bits = bit_pattern_i64_v1(*bits);
-        require_single_insert_v1(
-            client.execute(
-                "INSERT INTO babylon_state.graph_node_f64_v1 \
-                 (campaign_id, resolve_tick, local_name, qname, value_bits) \
-                 VALUES ($1::uuid, $2, $3, $4, $5)",
-                &[
-                    campaign_id.as_uuid(),
-                    &resolve_tick,
-                    local_name,
-                    qname,
-                    &value_bits,
-                ],
-            ),
-            "insert graph node f64",
-        )?;
+        writer
+            .write(&[
+                campaign_id.as_uuid(),
+                &resolve_tick,
+                local_name,
+                qname,
+                &bit_pattern_i64_v1(*bits),
+            ])
+            .map_err(|error| {
+                RustPersistenceRuntimeErrorV2::postgres("write graph node f64 copy", &error)
+            })?;
     }
+    finish_binary_copy_v1(writer, rows.node_f64().len(), "finish graph node f64 copy")?;
     for (edge_type, source, target, strength_bits) in rows.edges() {
         let strength_bits = bit_pattern_i64_v1(*strength_bits);
         require_single_insert_v1(
@@ -2741,7 +2745,7 @@ fn insert_typed_graph_rows_v1(
             "insert graph edge",
         )?;
     }
-    for (local_name, hyperedge_type, members) in rows.hyperedges() {
+    for (local_name, hyperedge_type, _) in rows.hyperedges() {
         require_single_insert_v1(
             client.execute(
                 "INSERT INTO babylon_state.graph_hyperedge_v1 \
@@ -2750,25 +2754,42 @@ fn insert_typed_graph_rows_v1(
             ),
             "insert graph hyperedge",
         )?;
+    }
+    let sink = client
+        .copy_in(
+            "COPY babylon_state.graph_hyperedge_member_v1 \
+         (campaign_id, resolve_tick, local_name, position, member) FROM STDIN BINARY",
+        )
+        .map_err(|error| {
+            RustPersistenceRuntimeErrorV2::postgres("begin graph hyperedge member copy", &error)
+        })?;
+    let mut writer = BinaryCopyInWriter::new(
+        sink,
+        &[Type::UUID, Type::INT8, Type::TEXT, Type::INT4, Type::TEXT],
+    );
+    let mut expected = 0_usize;
+    for (local_name, _, members) in rows.hyperedges() {
         for (position, member) in members.iter().enumerate() {
-            let position = checked_position_v1(position)?;
-            require_single_insert_v1(
-                client.execute(
-                    "INSERT INTO babylon_state.graph_hyperedge_member_v1 \
-                     (campaign_id, resolve_tick, local_name, position, member) \
-                     VALUES ($1::uuid, $2, $3, $4, $5)",
-                    &[
-                        campaign_id.as_uuid(),
-                        &resolve_tick,
-                        local_name,
-                        &position,
-                        member,
-                    ],
-                ),
-                "insert graph hyperedge member",
-            )?;
+            writer
+                .write(&[
+                    campaign_id.as_uuid(),
+                    &resolve_tick,
+                    local_name,
+                    &checked_position_v1(position)?,
+                    member,
+                ])
+                .map_err(|error| {
+                    RustPersistenceRuntimeErrorV2::postgres(
+                        "write graph hyperedge member copy",
+                        &error,
+                    )
+                })?;
+            expected = expected
+                .checked_add(1)
+                .ok_or(RustPersistenceRuntimeErrorV2::CampaignConflict)?;
         }
     }
+    finish_binary_copy_v1(writer, expected, "finish graph hyperedge member copy")?;
     insert_graph_value_rows_v1(client, campaign_id, resolve_tick, report)
 }
 
@@ -2868,28 +2889,36 @@ fn insert_typed_material_rows_v1(
             ),
             "insert territory state",
         )?;
+    }
+    let campaign = campaign_id.as_uuid().to_string();
+    let tick = resolve_tick.to_string();
+    let mut writer = client
+        .copy_in(
+            "COPY babylon_state.territory_state_field_v1 \
+         (campaign_id, resolve_tick, territory_id, position, field_name, value_tag, int_value, \
+          currency_value, real_bits, ratio_bits, ratio_min_bits, ratio_max_bits, bool_value, \
+          enum_type, enum_member, stable_key) FROM STDIN WITH (FORMAT csv)",
+        )
+        .map_err(|error| {
+            RustPersistenceRuntimeErrorV2::postgres("begin territory field copy", &error)
+        })?;
+    let mut expected = 0_usize;
+    for row in rows.territories().rows() {
+        let territory = bytea_copy_text_v1(&stable_key_bytes_v1(row.territory_id())?);
         for (position, (field_name, value)) in row.ordered_fields().iter().enumerate() {
-            let position = checked_position_v1(position)?;
-            let prefix: [&(dyn ToSql + Sync); 5] = [
-                campaign_id.as_uuid(),
-                &resolve_tick,
-                &territory_id,
-                &position,
-                field_name,
-            ];
-            insert_bsl_value_row_v1(
-                client,
-                "INSERT INTO babylon_state.territory_state_field_v1 \
-                 (campaign_id, resolve_tick, territory_id, position, field_name, value_tag, int_value, \
-                  currency_value, real_bits, ratio_bits, ratio_min_bits, ratio_max_bits, bool_value, \
-                  enum_type, enum_member, stable_key) \
-                 VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8::text::numeric, $9, $10, $11, $12, $13, $14, $15, $16)",
-                &prefix,
+            let position = checked_position_v1(position)?.to_string();
+            write_bsl_csv_row_v1(
+                &mut writer,
+                &[&campaign, &tick, &territory, &position, field_name],
                 value,
-                "insert territory field",
+                "write territory field copy",
             )?;
+            expected = expected
+                .checked_add(1)
+                .ok_or(RustPersistenceRuntimeErrorV2::CampaignConflict)?;
         }
     }
+    finish_csv_copy_v1(writer, expected, "finish territory field copy")?;
     insert_dynamic_hex_rows_v1(client, campaign_id, resolve_tick, report)?;
     insert_organization_state_rows_v1(client, campaign_id, resolve_tick, report)
 }
@@ -2970,23 +2999,32 @@ fn insert_organization_state_rows_v1(
     resolve_tick: i64,
     report: &IdentifiedTickReportV2,
 ) -> Result<(), RustPersistenceRuntimeErrorV2> {
-    for row in report.material_state_rows().organizations().rows() {
-        let organization_id = stable_key_bytes_v1(row.organization_id())?;
-        let prefix: [&(dyn ToSql + Sync); 3] =
-            [campaign_id.as_uuid(), &resolve_tick, &organization_id];
-        insert_bsl_value_row_v1(
-            client,
-            "INSERT INTO babylon_state.organization_state_v1 \
-             (campaign_id, resolve_tick, organization_id, organization_kind_tag, \
-              organization_kind_int, organization_kind_currency, organization_kind_real_bits, \
-              organization_kind_ratio_bits, organization_kind_ratio_min_bits, \
-              organization_kind_ratio_max_bits, organization_kind_bool, \
-              organization_kind_enum_type, organization_kind_enum_member, organization_kind_stable_key) \
-             VALUES ($1::uuid, $2, $3, $4, $5, $6::text::numeric, $7, $8, $9, $10, $11, $12, $13, $14)",
-            &prefix,
+    let rows = report.material_state_rows().organizations().rows();
+    let campaign = campaign_id.as_uuid().to_string();
+    let tick = resolve_tick.to_string();
+    let mut writer = client.copy_in(
+        "COPY babylon_state.organization_state_v1 \
+         (campaign_id, resolve_tick, organization_id, organization_kind_tag, \
+          organization_kind_int, organization_kind_currency, organization_kind_real_bits, \
+          organization_kind_ratio_bits, organization_kind_ratio_min_bits, \
+          organization_kind_ratio_max_bits, organization_kind_bool, \
+          organization_kind_enum_type, organization_kind_enum_member, organization_kind_stable_key) \
+         FROM STDIN WITH (FORMAT csv)",
+    ).map_err(|error| RustPersistenceRuntimeErrorV2::postgres("begin organization state copy", &error))?;
+    for row in rows {
+        let organization = bytea_copy_text_v1(&stable_key_bytes_v1(row.organization_id())?);
+        write_bsl_csv_row_v1(
+            &mut writer,
+            &[&campaign, &tick, &organization],
             row.organization_kind(),
-            "insert organization state",
+            "write organization state copy",
         )?;
+    }
+    finish_csv_copy_v1(writer, rows.len(), "finish organization state copy")?;
+    // Copy each parent family before its children. All ordering is retained in
+    // the explicit position columns; the marker remains the transaction's last row.
+    for row in rows {
+        let organization_id = stable_key_bytes_v1(row.organization_id())?;
         for (position, territory_id) in row.ordered_territory_ids().iter().enumerate() {
             let position = checked_position_v1(position)?;
             let territory_id = stable_key_bytes_v1(territory_id)?;
@@ -3006,29 +3044,140 @@ fn insert_organization_state_rows_v1(
                 "insert organization territory",
             )?;
         }
+    }
+    let mut writer = client
+        .copy_in(
+            "COPY babylon_state.organization_state_field_v1 \
+         (campaign_id, resolve_tick, organization_id, position, field_name, value_tag, int_value, \
+          currency_value, real_bits, ratio_bits, ratio_min_bits, ratio_max_bits, bool_value, \
+          enum_type, enum_member, stable_key) FROM STDIN WITH (FORMAT csv)",
+        )
+        .map_err(|error| {
+            RustPersistenceRuntimeErrorV2::postgres("begin organization field copy", &error)
+        })?;
+    let mut expected = 0_usize;
+    for row in rows {
+        let organization = bytea_copy_text_v1(&stable_key_bytes_v1(row.organization_id())?);
         for (position, (field_name, value)) in row.ordered_fields().iter().enumerate() {
-            let position = checked_position_v1(position)?;
-            let prefix: [&(dyn ToSql + Sync); 5] = [
-                campaign_id.as_uuid(),
-                &resolve_tick,
-                &organization_id,
-                &position,
-                field_name,
-            ];
-            insert_bsl_value_row_v1(
-                client,
-                "INSERT INTO babylon_state.organization_state_field_v1 \
-                 (campaign_id, resolve_tick, organization_id, position, field_name, value_tag, int_value, \
-                  currency_value, real_bits, ratio_bits, ratio_min_bits, ratio_max_bits, bool_value, \
-                  enum_type, enum_member, stable_key) \
-                 VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8::text::numeric, $9, $10, $11, $12, $13, $14, $15, $16)",
-                &prefix,
+            let position = checked_position_v1(position)?.to_string();
+            write_bsl_csv_row_v1(
+                &mut writer,
+                &[&campaign, &tick, &organization, &position, field_name],
                 value,
-                "insert organization field",
+                "write organization field copy",
             )?;
+            expected = expected
+                .checked_add(1)
+                .ok_or(RustPersistenceRuntimeErrorV2::CampaignConflict)?;
         }
     }
+    finish_csv_copy_v1(writer, expected, "finish organization field copy")
+}
+
+fn finish_binary_copy_v1(
+    writer: BinaryCopyInWriter<'_>,
+    expected: usize,
+    operation: &'static str,
+) -> Result<(), RustPersistenceRuntimeErrorV2> {
+    let inserted = writer
+        .finish()
+        .map_err(|error| RustPersistenceRuntimeErrorV2::postgres(operation, &error))?;
+    require_copy_count_v1(inserted, expected, operation)
+}
+
+fn finish_csv_copy_v1(
+    writer: postgres::CopyInWriter<'_>,
+    expected: usize,
+    operation: &'static str,
+) -> Result<(), RustPersistenceRuntimeErrorV2> {
+    let inserted = writer
+        .finish()
+        .map_err(|error| RustPersistenceRuntimeErrorV2::postgres(operation, &error))?;
+    require_copy_count_v1(inserted, expected, operation)
+}
+
+fn require_copy_count_v1(
+    inserted: u64,
+    expected: usize,
+    operation: &'static str,
+) -> Result<(), RustPersistenceRuntimeErrorV2> {
+    let expected =
+        u64::try_from(expected).map_err(|_| RustPersistenceRuntimeErrorV2::CampaignConflict)?;
+    if inserted != expected {
+        return Err(RustPersistenceRuntimeErrorV2::database(operation));
+    }
     Ok(())
+}
+
+fn bytea_copy_text_v1(bytes: &[u8]) -> String {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut encoded = String::from("\\x");
+    for byte in bytes {
+        encoded.push(char::from(HEX[usize::from(byte >> 4)]));
+        encoded.push(char::from(HEX[usize::from(byte & 15)]));
+    }
+    encoded
+}
+
+fn write_bsl_csv_row_v1(
+    writer: &mut impl std::io::Write,
+    prefix: &[&str],
+    value: &StableBslValueV1,
+    operation: &'static str,
+) -> Result<(), RustPersistenceRuntimeErrorV2> {
+    let value = BslSqlValueV1::from_stable(value)?;
+    let fields = [
+        Some(value.tag.to_string()),
+        value.int_value.map(|value| value.to_string()),
+        value.currency_value,
+        value.real_bits.map(|value| value.to_string()),
+        value.ratio_bits.map(|value| value.to_string()),
+        value.ratio_min_bits.map(|value| value.to_string()),
+        value.ratio_max_bits.map(|value| value.to_string()),
+        value.bool_value.map(|value| value.to_string()),
+        value.enum_type,
+        value.enum_member,
+        value.stable_key.as_deref().map(bytea_copy_text_v1),
+    ];
+    let fields = prefix
+        .iter()
+        .map(|value| Some(*value))
+        .chain(fields.iter().map(Option::as_deref));
+    write_csv_row_v1(writer, fields).map_err(|error| {
+        if let Some(postgres) = error
+            .get_ref()
+            .and_then(|error| error.downcast_ref::<postgres::Error>())
+        {
+            RustPersistenceRuntimeErrorV2::postgres(operation, postgres)
+        } else {
+            RustPersistenceRuntimeErrorV2::database(operation)
+        }
+    })
+}
+
+// PostgreSQL CSV distinguishes NULL (unquoted empty) from an empty string
+// (quoted empty). Quote every present field, doubling only embedded quotes;
+// unlike text COPY, CSV leaves bytea's hexadecimal backslash untouched.
+fn write_csv_row_v1<'a>(
+    writer: &mut impl std::io::Write,
+    fields: impl Iterator<Item = Option<&'a str>>,
+) -> std::io::Result<()> {
+    for (position, field) in fields.enumerate() {
+        if position != 0 {
+            writer.write_all(b",")?;
+        }
+        if let Some(field) = field {
+            writer.write_all(b"\"")?;
+            for (part, fragment) in field.split('"').enumerate() {
+                if part != 0 {
+                    writer.write_all(b"\"\"")?;
+                }
+                writer.write_all(fragment.as_bytes())?;
+            }
+            writer.write_all(b"\"")?;
+        }
+    }
+    writer.write_all(b"\n")
 }
 
 fn insert_choice_receipt_rows_v1(
@@ -3527,7 +3676,6 @@ mod live_tests {
     use std::sync::atomic::Ordering;
     use std::sync::{Arc, Barrier};
     use std::thread;
-    use std::time::{Duration, Instant};
 
     use babylon_bsl::rule_pipeline::split_content;
     use babylon_bsl::rules_hash_of;
@@ -3540,10 +3688,10 @@ mod live_tests {
 
     use super::*;
 
-    const DSN_ENV: &str = "BABYLON_LEGACY_ADOPTER_TEST_DSN";
-    const ACK_ENV: &str = "BABYLON_LEGACY_ADOPTER_DISPOSABLE_ACK";
-    const ACK: &str = "I_UNDERSTAND_PER20_DROPS_SCRATCH_DATABASES_ROLES_AND_CREATED_BABYLON_INTEL";
-    const CANARY_ENV: &str = "BABYLON_LEGACY_ADOPTER_DISPOSABLE_CANARY";
+    const DSN_ENV: &str = "BABYLON_POSTGRES_TEST_DSN";
+    const ACK_ENV: &str = "BABYLON_POSTGRES_DISPOSABLE_ACK";
+    const ACK: &str = "I_UNDERSTAND_THIS_DISPOSABLE_RUNTIME_DROPS_ITS_SCRATCH_DATABASES_AND_ROLES";
+    const CANARY_ENV: &str = "BABYLON_POSTGRES_DISPOSABLE_CANARY";
     const TEMPLATE_DB_ENV: &str = "BABYLON_RUNTIME_TEMPLATE_DB";
     const DEFINES: &[u8] = br#"{"alpha":1}"#;
     const REFERENCE_BUNDLE_DOMAIN: &[u8] = b"babylon.h3.reference-bundle-composite.v1\0";
@@ -3554,28 +3702,107 @@ mod live_tests {
     const RUNTIME_CHOICE_DRAW_TICKETS: (u64, u64) =
         (1_146_489_467_234_058_882, 17_919_240_830_411_110_681);
 
-    fn wait_for_access_exclusive_lock(config: &Config, relation_name: &str, timeout_message: &str) {
-        let mut observer = config.connect(NoTls).expect("lock observer connection");
-        let deadline = Instant::now() + Duration::from_secs(10);
-        loop {
-            let access_exclusive_waiting: bool = observer
-                .query_one(
-                    "SELECT EXISTS (\
-                       SELECT 1 FROM pg_catalog.pg_locks AS requested \
-                        WHERE requested.relation = pg_catalog.to_regclass($1) \
-                          AND requested.mode = 'AccessExclusiveLock' \
-                          AND NOT requested.granted)",
-                    &[&relation_name],
-                )
-                .expect("lock wait query")
-                .try_get(0)
-                .expect("lock wait decodes");
-            if access_exclusive_waiting {
-                return;
-            }
-            assert!(Instant::now() < deadline, "{timeout_message}");
-            thread::sleep(Duration::from_millis(10));
+    #[test]
+    #[ignore = "requires the task-owned disposable PostgreSQL runtime"]
+    fn live_bsl_csv_copy_preserves_numeric_extremes_nulls_and_stable_keys() {
+        use babylon_graph::stable_element::StableElementKeyV1;
+        let base = validated_base_config();
+        let database =
+            TestDatabase::create_from_template(&base, &validated_template_name(), "copyvalues");
+        let config = database.config(&base);
+        let node = StableElementKeyV1::Node {
+            scenario: "production/copy".to_owned(),
+            local_name: "source".to_owned(),
+        };
+        let values = [
+            StableBslValueV1::Int(i64::MIN),
+            StableBslValueV1::Int(i64::MAX),
+            StableBslValueV1::CurrencyMicroUnits(i128::MIN),
+            StableBslValueV1::CurrencyMicroUnits(i128::MAX),
+            StableBslValueV1::RealBits((-0.25_f64).to_bits()),
+            StableBslValueV1::RatioBits {
+                value: 0.5_f64.to_bits(),
+                floor: None,
+                cap: Some(1.0_f64.to_bits()),
+            },
+            StableBslValueV1::RatioBits {
+                value: 0.5_f64.to_bits(),
+                floor: Some(0.0_f64.to_bits()),
+                cap: None,
+            },
+            StableBslValueV1::Bool(false),
+            StableBslValueV1::Bool(true),
+            StableBslValueV1::Enum {
+                enum_type: "OrganizationKind".to_owned(),
+                member: "COLLECTIVE".to_owned(),
+            },
+            StableBslValueV1::Node(node),
+            StableBslValueV1::Hyperedge(StableElementKeyV1::Hyperedge {
+                scenario: "production/copy".to_owned(),
+                local_name: "assembly".to_owned(),
+            }),
+            StableBslValueV1::Edge(StableElementKeyV1::Edge {
+                scenario: "production/copy".to_owned(),
+                edge_type: "production/links".to_owned(),
+                source_local_name: "source".to_owned(),
+                target_local_name: "target".to_owned(),
+            }),
+        ];
+        let mut client = config.connect(NoTls).unwrap();
+        let mut tx = client.transaction().unwrap();
+        let mut writer = tx.copy_in(
+            "COPY babylon_state.organization_state_v1 \
+             (campaign_id,resolve_tick,organization_id,organization_kind_tag,organization_kind_int, \
+              organization_kind_currency,organization_kind_real_bits,organization_kind_ratio_bits, \
+              organization_kind_ratio_min_bits,organization_kind_ratio_max_bits,organization_kind_bool, \
+              organization_kind_enum_type,organization_kind_enum_member,organization_kind_stable_key) \
+             FROM STDIN WITH (FORMAT csv)",
+        ).unwrap();
+        for (index, value) in values.iter().enumerate() {
+            let id = bytea_copy_text_v1(&index.to_be_bytes());
+            write_bsl_csv_row_v1(
+                &mut writer,
+                &["00000000-0000-0000-0000-000000000001", "1", &id],
+                value,
+                "copy value proof",
+            )
+            .unwrap();
         }
+        finish_csv_copy_v1(writer, values.len(), "finish value proof").unwrap();
+        for (index, value) in values.iter().enumerate() {
+            let row = tx.query_one(
+                "SELECT organization_kind_tag,organization_kind_int,organization_kind_currency::text, \
+                 organization_kind_real_bits,organization_kind_ratio_bits,organization_kind_ratio_min_bits, \
+                 organization_kind_ratio_max_bits,organization_kind_bool,organization_kind_enum_type, \
+                 organization_kind_enum_member,organization_kind_stable_key \
+                 FROM babylon_state.organization_state_v1 WHERE organization_id=$1", &[&&index.to_be_bytes()[..]],
+            ).unwrap();
+            let expected = BslSqlValueV1::from_stable(value).unwrap();
+            assert_eq!(row.get::<_, i16>(0), expected.tag);
+            assert_eq!(row.get::<_, Option<i64>>(1), expected.int_value);
+            assert_eq!(row.get::<_, Option<String>>(2), expected.currency_value);
+            assert_eq!(row.get::<_, Option<i64>>(3), expected.real_bits);
+            assert_eq!(row.get::<_, Option<i64>>(4), expected.ratio_bits);
+            assert_eq!(row.get::<_, Option<i64>>(5), expected.ratio_min_bits);
+            assert_eq!(row.get::<_, Option<i64>>(6), expected.ratio_max_bits);
+            assert_eq!(row.get::<_, Option<bool>>(7), expected.bool_value);
+            assert_eq!(row.get::<_, Option<String>>(8), expected.enum_type);
+            assert_eq!(row.get::<_, Option<String>>(9), expected.enum_member);
+            assert_eq!(row.get::<_, Option<Vec<u8>>>(10), expected.stable_key);
+        }
+        tx.rollback().unwrap();
+        let count: i64 = client
+            .query_one(
+                "SELECT count(*) FROM babylon_state.organization_state_v1",
+                &[],
+            )
+            .unwrap()
+            .get(0);
+        assert_eq!(
+            count, 0,
+            "COPY rows retain the enclosing transaction's rollback boundary"
+        );
+        database.cleanup();
     }
 
     #[test]
@@ -3707,290 +3934,6 @@ mod live_tests {
             .expect("reference installation absent"));
         assert_eq!(proof.try_get::<_, i64>(3).expect("game rows remain"), 2);
         assert_eq!(proof.try_get::<_, i64>(4).expect("event rows remain"), 1);
-        database.cleanup();
-    }
-
-    #[test]
-    #[ignore = "requires the task-owned disposable PG17 runtime"]
-    fn live_epoch_nine_locks_legacy_table_before_empty_inventory_and_drop() {
-        let base = validated_base_config();
-        let database = TestDatabase::create(&base, "vlegacylock");
-        let config = database.config(&base);
-        bootstrap_h3_reader_epoch_v1(&config).expect("reader predecessor bootstraps");
-        let expected_prepared =
-            PredecessorAuthorityLedgerRowV2::prepared().expect("predecessor prepared row composes");
-        let expected_active = PredecessorAuthorityLedgerRowV2::active(&expected_prepared)
-            .expect("predecessor active row composes");
-        let mut preparation = config.connect(NoTls).expect("preparation connection");
-        execute_predecessor_migration_v2(
-            &mut preparation,
-            MIGRATION_0008_SQL,
-            &expected_prepared,
-            "migration 8 lock fixture",
-        )
-        .expect("epoch 8 preparation commits");
-        preparation
-            .batch_execute("CREATE TABLE public.game_session (id BIGINT PRIMARY KEY)")
-            .expect("exact legacy table fixture exists");
-
-        let mut holder = config.connect(NoTls).expect("writer lock connection");
-        let mut holder_transaction = holder.transaction().expect("writer transaction");
-        holder_transaction
-            .batch_execute("LOCK TABLE public.game_session IN ROW EXCLUSIVE MODE")
-            .expect("legacy writer lock held");
-
-        let worker_config = config.clone();
-        let worker = thread::spawn(move || {
-            let mut client = worker_config
-                .connect(NoTls)
-                .expect("epoch 9 worker connection");
-            execute_predecessor_migration_v2(
-                &mut client,
-                MIGRATION_0009_SQL,
-                &expected_active,
-                "migration 9 lock race",
-            )
-        });
-
-        wait_for_access_exclusive_lock(
-            &config,
-            "public.game_session",
-            "epoch 9 never requested ACCESS EXCLUSIVE on the exact legacy table",
-        );
-
-        holder_transaction
-            .execute("INSERT INTO public.game_session (id) VALUES (1)", &[])
-            .expect("concurrent legacy writer inserts while retaining its lock");
-        holder_transaction
-            .commit()
-            .expect("concurrent legacy writer commits");
-        let Err(RustPersistenceActivationErrorV2::Database {
-            operation: "migration 9 lock race",
-            diagnostic: Some(_),
-        }) = worker.join().expect("epoch 9 worker joins")
-        else {
-            panic!("epoch 9 lock race must retain its server diagnostic");
-        };
-
-        let proof = config
-            .connect(NoTls)
-            .expect("lock-race proof connection")
-            .query_one(
-                "SELECT pg_catalog.to_regclass('public.game_session') IS NOT NULL, \
-                        (SELECT pg_catalog.count(*) FROM public.game_session), \
-                        (SELECT pg_catalog.count(*) \
-                           FROM babylon_meta.persistence_authority_ledger \
-                          WHERE state_tag = 2), \
-                        (SELECT pg_catalog.count(*) \
-                           FROM babylon_meta.python_relation_disposition_v1)",
-                &[],
-            )
-            .expect("lock-race refusal proof");
-        assert!(proof.try_get::<_, bool>(0).expect("legacy table remains"));
-        assert_eq!(proof.try_get::<_, i64>(1).expect("legacy row remains"), 1);
-        assert_eq!(proof.try_get::<_, i64>(2).expect("active row absent"), 0);
-        assert_eq!(
-            proof
-                .try_get::<_, i64>(3)
-                .expect("disposition rows roll back"),
-            0
-        );
-        database.cleanup();
-    }
-
-    #[test]
-    #[ignore = "requires the task-owned disposable PG17 runtime"]
-    fn live_epoch_nine_locks_opaque_rows_before_empty_inventory_and_drop() {
-        let base = validated_base_config();
-        let database = TestDatabase::create(&base, "vopaquelock");
-        let config = database.config(&base);
-        bootstrap_h3_reader_epoch_v1(&config).expect("reader predecessor bootstraps");
-        let prepared = PredecessorAuthorityLedgerRowV2::prepared().expect("prepared row composes");
-        let active =
-            PredecessorAuthorityLedgerRowV2::active(&prepared).expect("active row composes");
-        let mut preparation = config.connect(NoTls).expect("preparation connection");
-        execute_predecessor_migration_v2(
-            &mut preparation,
-            MIGRATION_0008_SQL,
-            &prepared,
-            "migration 8 opaque-lock fixture",
-        )
-        .expect("epoch 8 preparation commits");
-        preparation
-            .batch_execute(
-                "INSERT INTO babylon_state.campaign (\
-                     campaign_id, replay_layout_version, rng_layout_version, replay_session_id, \
-                     rng_seed, defines_hash, rules_hash, ref_digest\
-                 ) SELECT \
-                     '00000000-0000-0000-0000-000000000009'::pg_catalog.uuid, \
-                     1, 2, 'epoch-nine-opaque-race', 0, \
-                     pg_catalog.decode(pg_catalog.repeat('00', 32), 'hex'), \
-                     pg_catalog.decode(pg_catalog.repeat('00', 32), 'hex'), \
-                     ref_digest \
-                 FROM babylon_ref.h3_reference_cohort \
-                 ORDER BY ref_digest \
-                 LIMIT 1; \
-                 INSERT INTO babylon_state.tick_commit (\
-                     campaign_id, resolve_tick, envelope_layout_version, \
-                     tick_content_hash, envelope_digest\
-                 ) VALUES (\
-                     '00000000-0000-0000-0000-000000000009'::pg_catalog.uuid, \
-                     0, 1, \
-                     pg_catalog.decode(pg_catalog.repeat('00', 32), 'hex'), \
-                     pg_catalog.decode(pg_catalog.repeat('00', 32), 'hex')\
-                 )",
-            )
-            .expect("opaque row parent fixture exists");
-
-        let mut holder = config.connect(NoTls).expect("opaque writer connection");
-        let mut holder_transaction = holder.transaction().expect("opaque writer transaction");
-        holder_transaction
-            .batch_execute("LOCK TABLE babylon_state.tick_graph_row IN ROW EXCLUSIVE MODE")
-            .expect("opaque writer lock held");
-
-        let worker_config = config.clone();
-        let worker = thread::spawn(move || {
-            let mut client = worker_config
-                .connect(NoTls)
-                .expect("epoch 9 opaque worker connection");
-            execute_predecessor_migration_v2(
-                &mut client,
-                MIGRATION_0009_SQL,
-                &active,
-                "migration 9 opaque lock race",
-            )
-        });
-
-        wait_for_access_exclusive_lock(
-            &config,
-            "babylon_state.tick_graph_row",
-            "epoch 9 never requested ACCESS EXCLUSIVE on the opaque predecessor table",
-        );
-
-        holder_transaction
-            .execute(
-                "INSERT INTO babylon_state.tick_graph_row (\
-                     campaign_id, resolve_tick, row_ordinal, row_key, row_payload\
-                 ) VALUES (\
-                     '00000000-0000-0000-0000-000000000009'::pg_catalog.uuid, \
-                     0, 0, '\\x01'::pg_catalog.bytea, '\\x'::pg_catalog.bytea\
-                 )",
-                &[],
-            )
-            .expect("concurrent opaque writer inserts while retaining its lock");
-        holder_transaction
-            .commit()
-            .expect("concurrent opaque writer commits");
-        let Err(RustPersistenceActivationErrorV2::Database {
-            operation: "migration 9 opaque lock race",
-            diagnostic: Some(_),
-        }) = worker.join().expect("epoch 9 opaque worker joins")
-        else {
-            panic!("epoch 9 opaque lock race must retain its server diagnostic");
-        };
-
-        let proof = config
-            .connect(NoTls)
-            .expect("opaque lock-race proof connection")
-            .query_one(
-                "SELECT \
-                     pg_catalog.to_regclass('babylon_state.tick_graph_row') IS NOT NULL, \
-                     (SELECT pg_catalog.count(*) FROM babylon_state.tick_graph_row), \
-                     (SELECT pg_catalog.count(*) \
-                        FROM babylon_meta.persistence_authority_ledger \
-                       WHERE state_tag = 2)",
-                &[],
-            )
-            .expect("opaque lock-race refusal proof");
-        assert!(proof.try_get::<_, bool>(0).expect("opaque table remains"));
-        assert_eq!(proof.try_get::<_, i64>(1).expect("opaque row remains"), 1);
-        assert_eq!(proof.try_get::<_, i64>(2).expect("active row absent"), 0);
-        database.cleanup();
-    }
-
-    #[test]
-    #[ignore = "requires the task-owned disposable PG17 runtime"]
-    fn live_epoch_eleven_locks_before_its_serializable_inventory_snapshot() {
-        let base = validated_base_config();
-        let database = TestDatabase::create(&base, "velevenlock");
-        let config = database.config(&base);
-        establish_predecessor_authority_v2(&config).expect("epoch 9 predecessor activates");
-        let expected = expected_v2_activation_report().expect("V2 authority rows compose");
-        let migrations = compiled_committed_tick_v2_activation_migrations()
-            .expect("V2 activation registry composes");
-        let mut preparation = config.connect(NoTls).expect("V2 preparation connection");
-        execute_v2_activation_migration(
-            &mut preparation,
-            migrations[0],
-            &expected.prepared_row,
-            "migration 10 lock fixture",
-        )
-        .expect("epoch 10 preparation commits");
-
-        let mut holder = config.connect(NoTls).expect("V1 event writer connection");
-        let mut holder_transaction = holder.transaction().expect("V1 event writer transaction");
-        holder_transaction
-            .batch_execute("LOCK TABLE babylon_state.tick_event_v1 IN ROW EXCLUSIVE MODE")
-            .expect("V1 event writer lock held");
-
-        let worker_config = config.clone();
-        let active_row = expected.active_row.clone();
-        let worker = thread::spawn(move || {
-            let mut client = worker_config
-                .connect(NoTls)
-                .expect("epoch 11 worker connection");
-            execute_v2_activation_migration(
-                &mut client,
-                migrations[1],
-                &active_row,
-                "migration 11 lock race",
-            )
-        });
-
-        wait_for_access_exclusive_lock(
-            &config,
-            "babylon_state.tick_event_v1",
-            "epoch 11 never requested ACCESS EXCLUSIVE before its inventory snapshot",
-        );
-
-        holder_transaction
-            .execute(
-                "INSERT INTO babylon_state.tick_event_v1 (\
-                     campaign_id, resolve_tick, ordinal, event_type\
-                 ) VALUES (\
-                     '00000000-0000-0000-0000-000000000011'::pg_catalog.uuid, \
-                     1, 0, 'EPOCH_ELEVEN_RACE'\
-                 )",
-                &[],
-            )
-            .expect("concurrent V1 writer inserts while retaining its lock");
-        holder_transaction
-            .commit()
-            .expect("concurrent V1 writer commits");
-        let Err(RustPersistenceActivationErrorV2::Database {
-            operation: "migration 11 lock race",
-            diagnostic: Some(_),
-        }) = worker.join().expect("epoch 11 worker joins")
-        else {
-            panic!("epoch 11 lock race must retain its server diagnostic");
-        };
-
-        let proof = config
-            .connect(NoTls)
-            .expect("epoch 11 lock-race proof connection")
-            .query_one(
-                "SELECT \
-                     pg_catalog.to_regclass('babylon_state.tick_event_v1') IS NOT NULL, \
-                     (SELECT pg_catalog.count(*) FROM babylon_state.tick_event_v1), \
-                     (SELECT pg_catalog.count(*) \
-                        FROM babylon_meta.committed_tick_v2_authority_ledger \
-                       WHERE state_tag = 2)",
-                &[],
-            )
-            .expect("epoch 11 lock-race refusal proof");
-        assert!(proof.try_get::<_, bool>(0).expect("V1 event table remains"));
-        assert_eq!(proof.try_get::<_, i64>(1).expect("V1 event row remains"), 1);
-        assert_eq!(proof.try_get::<_, i64>(2).expect("active row absent"), 0);
         database.cleanup();
     }
 
@@ -4218,7 +4161,6 @@ mod live_tests {
     #[ignore = "requires the task-owned disposable PER-20 PostgreSQL runtime"]
     fn live_marker_last_commit_and_restart_are_atomic() {
         let base = validated_base_config();
-        verify_frozen_python_estate_activation(&base);
         let template = validated_template_name();
         let database = TestDatabase::create_from_template(&base, &template, "runtimeatomic");
         let config = database.config(&base);
@@ -4365,40 +4307,6 @@ mod live_tests {
                 .collect::<Vec<_>>(),
             ["world/michigan", "territory/wayne"]
         );
-    }
-
-    fn verify_frozen_python_estate_activation(base: &Config) {
-        let database = TestDatabase::create(base, "runtimelegacy");
-        let config = database.config(base);
-        crate::schema_epoch::legacy_epoch_fixture::build_frozen_python_estate(&config);
-        let first = activate_rust_persistence_v2(&config)
-            .expect("the exact empty frozen Python estate activates");
-        let second =
-            activate_rust_persistence_v2(&config).expect("terminal Rust activation is idempotent");
-        assert_eq!(first, second);
-        let row = config
-            .connect(NoTls)
-            .expect("disposition connection")
-            .query_one(
-                "SELECT pg_catalog.count(*), \
-                        pg_catalog.bool_and(observed_row_count = 0 \
-                          AND ordered_semantic_sha256 = pg_catalog.sha256(''::pg_catalog.bytea) \
-                          AND disposition_tag = 1), \
-                        pg_catalog.to_regclass('public.game_session') IS NULL, \
-                        pg_catalog.to_regclass('public._babylon_schema_stamp') IS NULL, \
-                        pg_catalog.to_regclass('public.document_chunk') IS NOT NULL \
-                 FROM babylon_meta.python_relation_disposition_v1",
-                &[],
-            )
-            .expect("disposition proof");
-        assert_eq!(row.try_get::<_, i64>(0).expect("disposition count"), 61);
-        assert!(row.try_get::<_, bool>(1).expect("zero-row proof"));
-        assert!(row.try_get::<_, bool>(2).expect("game authority retired"));
-        assert!(row
-            .try_get::<_, bool>(3)
-            .expect("Python schema stamp retired"));
-        assert!(row.try_get::<_, bool>(4).expect("AI periphery retained"));
-        database.cleanup();
     }
 
     #[test]
@@ -4638,13 +4546,48 @@ mod live_tests {
 
     #[test]
     #[ignore = "requires the task-owned disposable PG17 runtime"]
-    fn live_territory_county_map_backfills_when_opening_a_pre_feature_campaign() {
-        // An already-founded campaign whose mapping rows are absent (a
-        // pre-feature foundation) must gain them idempotently on open,
-        // without overwriting any existing row.
+    fn live_open_refuses_unversioned_foundation_without_schema_backfill() {
         let base = validated_base_config();
         let template = validated_template_name();
-        let database = TestDatabase::create_from_template(&base, &template, "countymapbackfill");
+        let database =
+            TestDatabase::create_from_template(&base, &template, "unversionedfoundation");
+        let config = database.config(&base);
+        let campaign_id =
+            CampaignId::from_uuid(Uuid::from_u128(0x2810_0000_0000_0000_0000_0000_0000_00c5));
+        let (session, bundle) = runtime_fixture();
+        let runtime = DurableReplayRuntimeV2::create(&config, campaign_id, session, bundle)
+            .expect("current foundation creates its layout metadata");
+        drop(runtime);
+        let mut admin = config
+            .connect(NoTls)
+            .expect("owned incomplete-schema fixture");
+        admin.batch_execute(
+            "DROP TABLE babylon_state.campaign_foundation_content_layout_v2;              DROP TABLE babylon_meta.foundation_content_schema_v2",
+        ).expect("remove only the owned scratch layout metadata");
+        let Err(error) = DurableReplayRuntimeV2::open(&config, campaign_id) else {
+            panic!("an unversioned foundation must refuse open");
+        };
+        assert_eq!(
+            error,
+            RustPersistenceRuntimeErrorV2::FoundationSchemaAbsentForExistingCampaigns
+        );
+        let row = admin.query_one(
+            "SELECT (SELECT pg_catalog.count(*) FROM babylon_state.campaign_foundation),              pg_catalog.to_regclass('babylon_state.campaign_foundation_content_layout_v2') IS NULL,              pg_catalog.to_regclass('babylon_meta.foundation_content_schema_v2') IS NULL",
+            &[],
+        ).expect("refusal preserves the existing foundation and missing schema");
+        assert_eq!(row.get::<_, i64>(0), 1);
+        assert!(row.get::<_, bool>(1));
+        assert!(row.get::<_, bool>(2));
+        database.cleanup();
+    }
+
+    #[test]
+    #[ignore = "requires the task-owned disposable PG17 runtime"]
+    fn live_territory_county_map_open_refuses_missing_rows_without_repair() {
+        // An incomplete development save is refused rather than silently repaired.
+        let base = validated_base_config();
+        let template = validated_template_name();
+        let database = TestDatabase::create_from_template(&base, &template, "countymapmissing");
         let config = database.config(&base);
         let campaign_id =
             CampaignId::from_uuid(Uuid::from_u128(0x2810_0000_0000_0000_0000_0000_0000_00c4));
@@ -4652,34 +4595,31 @@ mod live_tests {
         let runtime = DurableReplayRuntimeV2::create(&config, campaign_id, session, bundle)
             .expect("runtime constructs after activation");
         drop(runtime);
-        // Simulate the pre-feature state: the campaign exists, the rows do not.
+        // Simulate the incomplete state: the campaign exists, the rows do not.
         let deleted = config
             .connect(NoTls)
-            .expect("pre-feature simulation connection")
+            .expect("incomplete simulation connection")
             .execute(
                 "DELETE FROM babylon_meta.territory_county_map_v1 WHERE campaign_id = $1::uuid",
                 &[campaign_id.as_uuid()],
             )
-            .expect("pre-feature rows removed");
+            .expect("incomplete rows removed");
         assert_eq!(deleted, 1);
         assert!(county_map_rows(&config, campaign_id).is_empty());
 
-        let reopened = DurableReplayRuntimeV2::open(&config, campaign_id)
-            .expect("open backfills the declared mapping");
-        assert_eq!(reopened.last_committed_tick(), None);
-        assert_eq!(
-            county_map_rows(&config, campaign_id),
-            [("wayne".to_owned(), "26163".to_owned())]
-        );
-        // A second open reconciles against identical rows without writing or
-        // refusing.
-        let reopened_again = DurableReplayRuntimeV2::open(&config, campaign_id)
-            .expect("a second open reconciles idempotently");
-        assert_eq!(reopened_again.last_committed_tick(), None);
-        assert_eq!(
-            county_map_rows(&config, campaign_id),
-            [("wayne".to_owned(), "26163".to_owned())]
-        );
+        let Err(error) = DurableReplayRuntimeV2::open(&config, campaign_id) else {
+            panic!("a missing declared mapping must refuse open");
+        };
+        assert!(matches!(
+            error,
+            RustPersistenceRuntimeErrorV2::TerritoryCountyMap(
+                crate::territory_county_map::TerritoryCountyMapErrorV1::StoredMappingDiverged {
+                    stored_rows: 0,
+                    declared_rows: 1,
+                }
+            )
+        ));
+        assert!(county_map_rows(&config, campaign_id).is_empty());
         database.cleanup();
     }
 
@@ -4978,14 +4918,14 @@ mod live_tests {
         assert_eq!(canary.len(), 32);
         let dsn = std::env::var(DSN_ENV).expect("runner supplies the disposable DSN");
         let config = Config::from_str(&dsn).expect("runner DSN parses");
-        validate_legacy_connection_target(&config).expect("loopback target");
+        validate_connection_target(&config).expect("loopback target");
         assert_eq!(config.get_user(), Some("test"));
         assert_eq!(config.get_dbname(), Some("postgres"));
         let actual: Option<String> = config
             .connect(NoTls)
             .expect("canary connection")
             .query_one(
-                "SELECT pg_catalog.current_setting('babylon.per20_disposable', true)",
+                "SELECT pg_catalog.current_setting('babylon.disposable_runtime', true)",
                 &[],
             )
             .expect("canary query")
@@ -5122,6 +5062,10 @@ mod live_tests {
                                 state_tag::pg_catalog.text || ':' || schema_epoch::pg_catalog.text, \
                                 ',' ORDER BY ordinal) \
                         FROM babylon_meta.persistence_authority_ledger), \
+                       (SELECT pg_catalog.string_agg(ordinal::pg_catalog.text || ':' || \
+                                state_tag::pg_catalog.text || ':' || activation_epoch::pg_catalog.text, \
+                                ',' ORDER BY ordinal) \
+                        FROM babylon_meta.committed_tick_v2_authority_ledger), \
                        (SELECT pg_catalog.count(*) FROM babylon_meta.campaign)",
                     &[],
                 )
@@ -5134,7 +5078,13 @@ mod live_tests {
             );
             assert_eq!(
                 observation
-                    .try_get::<_, i64>(1)
+                    .try_get::<_, String>(1)
+                    .expect("current authority ledger decodes"),
+                "1:1:10,2:2:11"
+            );
+            assert_eq!(
+                observation
+                    .try_get::<_, i64>(2)
                     .expect("campaign count decodes"),
                 0
             );
@@ -5175,6 +5125,18 @@ mod live_tests {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn csv_copy_keeps_null_empty_quotes_line_breaks_and_bytea_distinct() {
+        let mut actual = Vec::new();
+        super::write_csv_row_v1(
+            &mut actual,
+            [None, Some(""), Some("a,\"b\"\n\\N"), Some("\\x0001ff")].into_iter(),
+        )
+        .unwrap();
+        assert_eq!(actual, b",\"\",\"a,\"\"b\"\"\n\\N\",\"\\x0001ff\"\n");
+        assert_eq!(super::bytea_copy_text_v1(&[0, 1, 255]), "\\x0001ff");
+    }
+
     use babylon_bsl::rule_pipeline::split_content;
     use babylon_bsl::rules_hash_of;
     use babylon_bsl::structural_verbs::CollectingSink;

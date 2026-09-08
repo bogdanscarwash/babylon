@@ -1,7 +1,6 @@
-//! Authored bundle capture and executable composition; no weekly adjudication here.
+//! Authored bundle capture and executable composition; no period adjudication here.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::sync::OnceLock;
 
 use babylon_material_circuit::{
     BacklogRowV1, CapacityRowV1, CorridorCapacityV2, InputOutputCoefficientV1, InventoryRowV1,
@@ -12,22 +11,18 @@ use babylon_material_circuit::{
 use super::{
     decode_material_circuit_state_v2, encode_material_circuit_state_v2, sha256_of, validate,
     MaterialCircuitStateV2, SectorBundleErrorV1, SectorBundleGoodV1, SectorBundleOwnerV1,
-    SectorBundleProcessV1, SectorBundleSourcesV1, SectorBundleV1, UnitIdV1, HORIZON_TICKS,
+    SectorBundleProcessV1, SectorBundleSourcesV1, SectorBundleV1, UnitIdV1,
+    MICHIGAN_MAX_HORIZON_PERIODS_V1,
 };
 use crate::michigan_cohorts::michigan_business_subject_v2;
 use crate::michigan_material::{
-    michigan_material_catalog_v1, MichiganDeliveryPresetV1, MichiganMaterialCatalogV1,
+    material_topology, MichiganDeliveryPresetV1, MichiganMaterialCatalogV1,
     MichiganMaterialProcessV1, MichiganMaterialRouteV1, MICHIGAN_INDUSTRY_BASELINE_SHA256_V1,
-    MICHIGAN_MATERIAL_SCENARIO_SHA256_V1,
 };
 use crate::michigan_sectors::{
     michigan_county_sectors_v1, MichiganCountySectorV1, QCEW_SECTORS_ARTIFACT_SHA256_V1,
     QCEW_SECTORS_SEMANTIC_SHA256_V1,
 };
-
-fn catalog() -> Result<&'static MichiganMaterialCatalogV1, SectorBundleErrorV1> {
-    michigan_material_catalog_v1().map_err(|_| SectorBundleErrorV1::Source)
-}
 
 fn source(county: &str) -> Result<&'static MichiganCountySectorV1, SectorBundleErrorV1> {
     michigan_county_sectors_v1()
@@ -40,6 +35,7 @@ fn source(county: &str) -> Result<&'static MichiganCountySectorV1, SectorBundleE
 
 fn source_proof(
     row: &MichiganCountySectorV1,
+    defines_hash: [u8; 32],
 ) -> Result<SectorBundleSourcesV1, SectorBundleErrorV1> {
     Ok(SectorBundleSourcesV1 {
         county_source_file: row.source_file().to_owned(),
@@ -47,7 +43,7 @@ fn source_proof(
         sector_artifact_sha256: digest(QCEW_SECTORS_ARTIFACT_SHA256_V1)?,
         sector_semantic_sha256: digest(QCEW_SECTORS_SEMANTIC_SHA256_V1)?,
         industry_artifact_sha256: digest(MICHIGAN_INDUSTRY_BASELINE_SHA256_V1)?,
-        designed_scenario_sha256: digest(MICHIGAN_MATERIAL_SCENARIO_SHA256_V1)?,
+        designed_scenario_sha256: defines_hash,
     })
 }
 
@@ -83,7 +79,7 @@ pub(super) fn validate_sources(
     if owner.subject != michigan_business_subject_v2(row) {
         return Err(SectorBundleErrorV1::Owner);
     }
-    if *evidence != source_proof(row)? {
+    if *evidence != source_proof(row, evidence.designed_scenario_sha256)? {
         return Err(SectorBundleErrorV1::Source);
     }
     Ok(())
@@ -92,7 +88,7 @@ pub(super) fn validate_sources(
 pub(super) fn validate_process_bindings(
     bundle: &SectorBundleV1,
 ) -> Result<(), SectorBundleErrorV1> {
-    let catalog = catalog()?;
+    let catalog = material_topology().map_err(|_| SectorBundleErrorV1::Source)?;
     for good in &bundle.goods {
         if !catalog
             .goods()
@@ -122,8 +118,7 @@ pub(super) fn validate_process_bindings(
             .iter()
             .find(|row| row.process_id == binding.process_id)
             .ok_or(SectorBundleErrorV1::ProcessOwnership)?;
-        let industry = catalog
-            .industry_for_site(site)
+        let industry = crate::michigan_material::MaterialTopology::industry_for_site(site)
             .ok_or(SectorBundleErrorV1::Source)?;
         let node = bundle
             .rows
@@ -147,17 +142,9 @@ pub(super) fn validate_process_bindings(
 /// Capture four nonempty bundles solely from the already admitted Designed content.
 /// # Errors
 /// Refuses observed source drift, ownership ambiguity or invalid material rows.
-pub fn michigan_sector_bundles_v1() -> Result<&'static [SectorBundleV1], SectorBundleErrorV1> {
-    static BUNDLES: OnceLock<Result<Vec<SectorBundleV1>, SectorBundleErrorV1>> = OnceLock::new();
-    BUNDLES
-        .get_or_init(build_bundles)
-        .as_ref()
-        .map(Vec::as_slice)
-        .map_err(|error| *error)
-}
-
-fn build_bundles() -> Result<Vec<SectorBundleV1>, SectorBundleErrorV1> {
-    let catalog = catalog()?;
+pub fn michigan_sector_bundles_v1(
+    catalog: &MichiganMaterialCatalogV1,
+) -> Result<Vec<SectorBundleV1>, SectorBundleErrorV1> {
     let mut by_county = BTreeMap::<&str, Vec<&MichiganMaterialProcessV1>>::new();
     for process in catalog.processes() {
         let site = catalog
@@ -217,7 +204,7 @@ fn build_bundle(
     }
     SectorBundleV1::from_parts(
         owner,
-        source_proof(row)?,
+        source_proof(row, catalog.defines_hash())?,
         goods.into_iter().collect(),
         bindings,
         labor_unit,
@@ -269,25 +256,25 @@ fn append_process(
         unit_id: output.unit_id(),
         quantity: 0,
     });
-    for week in 1..=HORIZON_TICKS {
+    for period in 1..=MICHIGAN_MAX_HORIZON_PERIODS_V1 {
         state.capacities.push(CapacityRowV1 {
             process_id,
             site_id,
-            week,
-            available_batches: process.capacity_batches_per_week,
+            period,
+            available_batches: process.capacity_batches_per_period,
         });
     }
     state.labor.push(LaborCapacityRowV1 {
         site_id,
         unit_id: labor_unit,
-        week: 1,
-        available: process.labor_capacity_hours_per_week,
+        period: 1,
+        available: process.labor_capacity_hours_per_period,
     });
     if process.opening_planned_batches > 0 {
         state.production_commitments.push(ProductionCommitmentV1 {
             process_id,
             site_id,
-            week: 1,
+            period: 1,
             planned_batches: process.opening_planned_batches,
         });
     }
@@ -303,11 +290,11 @@ fn append_process(
 pub fn compile_sector_bundles_v1(
     bundles: &[SectorBundleV1],
     preset: MichiganDeliveryPresetV1,
+    catalog: &MichiganMaterialCatalogV1,
 ) -> Result<MaterialCircuitStateV2, SectorBundleErrorV1> {
     if bundles.len() != 4 {
         return Err(SectorBundleErrorV1::Coverage);
     }
-    let catalog = catalog()?;
     let mut owners = BTreeSet::new();
     let mut processes = BTreeSet::new();
     let mut sites = BTreeSet::new();
@@ -398,7 +385,7 @@ fn append_route(
         corridor_id: route.corridor_id(),
         from_node_id: supplier.node_id(),
         to_node_id: buyer.node_id(),
-        travel_weeks: catalog.travel_weeks(route, preset),
+        travel_periods: catalog.travel_periods(route, preset),
         loss_ppm: 0,
     });
     state.orders.push(OrderRowV2 {
@@ -418,12 +405,12 @@ fn append_route(
         order_id: route.order_id(),
         quantity: route.ordered_quantity,
     });
-    for week in 1..=HORIZON_TICKS {
+    for period in 1..=MICHIGAN_MAX_HORIZON_PERIODS_V1 {
         state.corridor_capacities.push(CorridorCapacityV2 {
             corridor_id: route.corridor_id(),
             unit_id: good.unit_id(),
-            week,
-            available: route.capacity_quantity_per_week,
+            period,
+            available: route.capacity_quantity_per_period,
         });
     }
     Ok(())
@@ -431,7 +418,7 @@ fn append_route(
 
 fn empty_state() -> MaterialCircuitStateV2 {
     MaterialCircuitStateV2 {
-        week: 1,
+        period: 1,
         site_logistics_nodes: Vec::new(),
         process_outputs: Vec::new(),
         input_coefficients: Vec::new(),

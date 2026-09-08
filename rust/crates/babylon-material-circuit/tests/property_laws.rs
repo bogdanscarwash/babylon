@@ -30,7 +30,7 @@ fn allocation_state(available: u64, first: u64, second: u64) -> MaterialCircuitS
         })
         .collect::<Vec<_>>();
     MaterialCircuitStateV1 {
-        week: 1,
+        period: 1,
         process_outputs: Vec::new(),
         input_coefficients: Vec::new(),
         labor_coefficients: Vec::new(),
@@ -39,7 +39,7 @@ fn allocation_state(available: u64, first: u64, second: u64) -> MaterialCircuitS
             supplier_site_id: supplier,
             good_id: good,
             unit_id: unit,
-            transit_delay_weeks: 1,
+            transit_delay_periods: 1,
         }],
         inventory: vec![InventoryRowV1 {
             site_id: supplier,
@@ -119,7 +119,7 @@ fn production_state(input: u64, labor: u64, capacity: u64) -> MaterialCircuitSta
     let labor_unit = UnitIdV1::from_bytes(id::<5>());
     let process = ProcessIdV1::from_bytes(id::<6>());
     MaterialCircuitStateV1 {
-        week: 1,
+        period: 1,
         process_outputs: vec![ProcessOutputV1 {
             process_id: process,
             site_id: site,
@@ -159,19 +159,19 @@ fn production_state(input: u64, labor: u64, capacity: u64) -> MaterialCircuitSta
         capacities: vec![CapacityRowV1 {
             process_id: process,
             site_id: site,
-            week: 1,
+            period: 1,
             available_batches: capacity,
         }],
         labor: vec![LaborCapacityRowV1 {
             site_id: site,
             unit_id: labor_unit,
-            week: 1,
+            period: 1,
             available: labor,
         }],
         production_commitments: vec![ProductionCommitmentV1 {
             process_id: process,
             site_id: site,
-            week: 1,
+            period: 1,
             planned_batches: 10,
         }],
     }
@@ -219,14 +219,14 @@ fn shared_inputs_and_labor_allocate_without_process_order_priority() {
     state.capacities.push(CapacityRowV1 {
         process_id: second_process,
         site_id: SiteIdV1::from_bytes(id::<1>()),
-        week: 1,
+        period: 1,
         available_batches: 4,
     });
     state.production_commitments[0].planned_batches = 4;
     state.production_commitments.push(ProductionCommitmentV1 {
         process_id: second_process,
         site_id: SiteIdV1::from_bytes(id::<1>()),
-        week: 1,
+        period: 1,
         planned_batches: 4,
     });
     let mut reversed = state.clone();

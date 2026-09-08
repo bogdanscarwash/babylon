@@ -1,6 +1,6 @@
 //! Test-only h3-pg semantic oracle for the canonical H3 identity relation.
 
-// `legacy_adopter_postgres` binds this module to the kernel-owned parser and fixture.
+// The native reference test binds the kernel-owned parser and fixture.
 use super::h3_cell_vectors::{
     load_fixture, ValidVector, VectorFixture, INVALID_RAW_VECTOR_COUNT, PENTAGON_VECTOR_COUNT,
     VALID_VECTOR_COUNT,

@@ -632,7 +632,7 @@ mod tests {
                 labor_accounts: Vec::new(),
                 staffing_accounts: Vec::new(),
                 scenario_label: "fixture".into(),
-                horizon_week: 16,
+                horizon_period: 16,
                 sites: vec![supplier, buyer, site("unrelated", "26161")],
                 routes: Vec::new(),
                 freight: Vec::new(),

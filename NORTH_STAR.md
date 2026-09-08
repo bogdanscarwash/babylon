@@ -1,7 +1,7 @@
 # North Star
 
 This page explains the live game direction. It does not make law.
-[`CONSTITUTION.md`](CONSTITUTION.md) v4.1.0 governs Babylon. ADR221 records how
+[`CONSTITUTION.md`](CONSTITUTION.md) v4.2.0 governs Babylon. ADR221 records how
 the prior constitution moved into v4 without a rewrite of history.
 [`ai/mantras.yaml`](ai/mantras.yaml) carries the same orientation as structured
 data for repository tools.
@@ -35,9 +35,11 @@ where can I organize, and what sustains collective action?
 Who bears its costs, and what changes as a result?
 Statistical totals and citations belong in context views and the Archive.
 
-The player plans in months while the engine resolves individual weeks. The
-main control runs to a monthly boundary. The player can pause and resume the
-remaining period. Important developments also pause play for a closer look.
+The player advances in four-week periods. Each advance resolves one 28-day
+simulation tick and then pauses. Continuous play waits for each committed
+observation before requesting the next period. Important developments also
+pause play for a closer look. Thirteen periods form a 52-week model year;
+periods do not claim to be calendar months.
 A briefing explains what changed, why it matters to the organization,
 and links to records that the player can examine. The player makes the
 strategic judgment.
@@ -92,16 +94,15 @@ in-memory audit receipts. The next four executable gates are:
 
 ## The system without political economy
 
-At its highest level, Babylon is a deterministic causal sandbox with weekly
+At its highest level, Babylon is a deterministic causal sandbox with four-week
 steps, limited knowledge, and delayed choice.
 
 <!-- vale ste.UnapprovedWords = NO -->
-Today one weekly tick takes a typed world and governed rules. It produces a new
+Today one four-week tick takes a typed world and governed rules. It produces a new
 world, events, identity-free causal audit receipts, a Rust `TickReport`, and a
 canonical hash. The receipts state which role and evidence class produced each
 actual event and write. They are not durable action receipts. Persisted replay
-and campaign restart belong to Rust. The frozen Python engine remains a
-behavioral reference.
+and campaign restart belong to Rust. The removed Python engine remains available in Git history.
 <!-- vale ste.UnapprovedWords = YES -->
 
 The planned action cycle adds prior intent and durable action receipts. The
@@ -131,7 +132,7 @@ show the planned player-action slice.
 <!-- vale off -->
 ```mermaid
 flowchart LR
-    REF["Pinned reference data"] --> TICK["Pure Rust weekly tick"]
+    REF["Pinned reference data"] --> TICK["Pure Rust four-week tick"]
     BSL["BSL rules"] --> TICK
     INTENT["Prior intent"] -. "planned action cycle" .-> TICK
     TICK --> HASH["Canonical world hash"]
@@ -152,18 +153,17 @@ flowchart LR
 
 The live Rust path uses `babylon-kernel`, `babylon-graph`, `babylon-bsl`,
 `babylon-tick`, `babylon-persistence`, and `babylon-client`.
-`babylon-runtime` owns campaign writes. Bevy requests week advances and reads
+`babylon-runtime` owns campaign writes. Bevy requests period advances and reads
 the committed map, material views, history, and dossiers.
 
-The Python engine is a frozen behavioral reference. Its tests, traces, and
-goldens specify behavior for port and replacement decisions. Python also
-prepares data and runs selected periphery.
+Rust contracts specify current behavior. Historical Python source and traces
+remain available at the frozen Git tag. Python prepares reference data and
+runs current repository and operator tools.
 
 <!-- Vale: this paragraph preserves literal persistence and schema identifiers. -->
 <!-- vale ste.UnapprovedWords = NO -->
 <!-- vale ste.NounClusters = NO -->
-Python keeps its separate mutable SQLite reference store, data and optimization
-tools, and dedicated document stores. Rust owns authoritative replay, checkpoint
+Reference SQLite and Parquet are data-build artifacts. Rust owns authoritative replay, checkpoint
 restart, and Archive dirty receipts. The Rust Archive worker and restricted
 reader supply cited county and place dossiers to Bevy. The card shows Archive
 verification lag and refuses historical pages. BSL-Bevy player actions remain
@@ -197,7 +197,7 @@ footprint to equal its unique allowance rows, so CI rejects dead permissions.
 Planned shocks will add only governed exogenous pressure,
 burden, or capacity effects. In the planned action slice, BSL will let actions
 run, charge costs, choose targets, and encode political results through
-governed next-week intents.
+governed next-period intents.
 
 In planned circuit slices, Rust allocation, routing, settlement, and clearing
 mechanics will enforce conservation.
@@ -237,8 +237,8 @@ after the productive circuit and player agency are live. The engine must derive
 the economic, geographic, class, and political effects.
 
 The COVID benchmark compares a control, a historical shock envelope, a
-strong-capacity counterfactual, and a weak-capacity counterfactual across 104
-weekly ticks. The test asks for causal
+strong-capacity counterfactual, and a weak-capacity counterfactual across 26
+four-week ticks. The test asks for causal
 divergence, heterogeneity, hysteresis, and response to the counterfactual.
 
 Historical agreement is useful information. It does not turn Babylon into a
@@ -280,7 +280,7 @@ scale to the representative v1 world.
 
 ## Stable rules
 
-1. One tick is one week.
+1. One tick is four weeks (28 days), with one transition and one commit.
 2. Equal inputs must produce equal bytes and hashes.
 3. Determinism proves identity, not truth.
 4. The engine judges, AI narrates, and clients show.

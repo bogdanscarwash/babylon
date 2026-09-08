@@ -67,14 +67,17 @@ From the repository root:
 
 The launcher builds the runtime and Bevy client with native Cargo.
 It reuses a reachable local database. It reopens a supported save from the
-same campaign content version at its durable week.
-On first use it creates a new campaign at week zero. The in-game menu provides
-new and saved campaigns. It can compare committed weeks and start a scenario
-with longer ``sheet-transfer`` durations. The window observes the durable runtime.
+same campaign content version at its durable period.
+On first use it creates a new campaign at period zero. Each period advances four
+weeks in one simulation tick. The in-game menu provides new and saved campaigns.
+It compares the same committed period in two campaigns using each campaign's
+saved parameters. The supplied delayed-delivery parameters lengthen the
+``sheet-transfer`` route. The window observes the durable runtime.
 
 The Michigan map has 83 county QCEW baselines. The production scenario
-has five Designed county-industry cohorts and a 16-week horizon, with 3D and
-compact 2D views. Player interventions belong to Gate 5.
+has five Designed county-industry cohorts, with 3D and compact 2D views.
+The supplied horizon is 16 four-week periods (64 weeks); authored parameters can
+select a shorter horizon. Player interventions belong to Gate 5.
 
 To keep saved worlds and open a new campaign:
 
@@ -82,6 +85,12 @@ To keep saved worlds and open a new campaign:
 
    mise run play -- --new
    mise run play -- --new --preset delayed
+
+Edit ``content/scenarios/michigan/defines.toml`` before starting a new campaign,
+or pass ``--defines /absolute/path/to/defines.toml`` to choose another file.
+Each New request validates and saves its parameters. Open uses the campaign's
+saved values even if the source file has changed or disappeared. See
+:doc:`/reference/configuration` for supported parameters and units.
 
 Older development saves with unsupported content versions cannot reopen.
 Use ``mise run play -- --new`` to start a new campaign and keep those saves.
@@ -108,14 +117,11 @@ Running Tests
 
 .. code-block:: bash
 
-   # Run fast math/logic tests
-   uv run pytest -m "not ai"
+   # Run retained Python unit contracts
+   mise run test:unit-ci
 
-   # Run AI/narrative evaluation tests
-   uv run pytest -m "ai"
-
-   # Run a specific test
-   uv run pytest tests/unit/test_foo.py::test_specific
+   # Run a specific operator contract
+   mise run test:q -- tests/unit/tools/test_run_observer_session.py
 
 Linting and Formatting
 ^^^^^^^^^^^^^^^^^^^^^^

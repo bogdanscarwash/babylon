@@ -24,7 +24,7 @@ This checkout implements Gate 2. These four executable gates follow:
 <!-- vale ste.UnapprovedWords = YES -->
 <!-- vale ste.NounClusters = YES -->
 
-Read `CONSTITUTION.md` v4.1.0 before a change to game law. ADR221 maps its predecessors and preserves history. `ai/mantras.yaml` is the canonical machine-readable orientation.
+Read `CONSTITUTION.md` v4.2.0 before a change to game law. ADR221 maps its predecessors and preserves history. `ai/mantras.yaml` is the canonical machine-readable orientation.
 
 ## Constitutional compact
 
@@ -58,19 +58,18 @@ Same-rank rules compose sequentially. `TickSession` publishes graph, events, ide
 completed time, and `NominalWorldHash` only after the detached tick succeeds. `GraphStateHash` stays graph-only.
 The Bevy viewer shows the world hash.
 
-Program 27 froze the Python engine at `p27-python-freeze`. Its 34-system
-`SimulationEngine._DEFAULT_SYSTEMS` is the transcription oracle for Rust's
-executable `phase_order.rs` causal spine. Five `EndgameDetector` labels remain
-reference facts, not promised outcomes. Python also owns data tools and periphery.
+Rust's executable `phase_order.rs` owns the causal schedule. The removed
+Python engine is recoverable at `p27-python-freeze`; BSL citations read that
+Git tag. Historical detector labels are not promised outcomes.
 
-Reference Parquet and deterministic SQLite are build artifacts. The Python
-`RuntimeDatabase` is separate mutable SQLite.
+Reference Parquet and deterministic SQLite are build artifacts. Retained
+Python builds reference data and runs repository and operator tools.
 
 Gate 3 now has the Rust three-schema boundary, committed tick envelope,
 marker-last transaction, checkpoint restart, and Archive dirty receipts. The
 fog-safe decision loop and semantic Archive worker remain. ADR250 reordered the
 later gates: Gate 4 adds the productive and distributive circuit, and Gate 5
-adds next-week intents and Bevy player actions. Gate 6 adds governed
+adds next-period intents and Bevy player actions. Gate 6 adds governed
 external-event rows and the merged COVID benchmark.
 
 <!-- Vale: the accepted Linear status uses a passive state label. -->
@@ -80,35 +79,33 @@ PER-48 is decided.
 <!-- vale ste.PassiveVoice = YES -->
 <!-- vale strunk.ActiveVoice = YES -->
 The one-way cutover is complete. Rust owns authoritative game-managed Postgres.
-Python continues its declared data, AI, document, external-API, optimization,
-and CLI periphery. It has no game-state writer or transition reader. The legacy
-Django browser client lives only in `web/` and does not gate v1.
+Python retains only current data, repository, and operator consumers. It has
+no simulation engine, mutable game SQLite, transition reader, or Django browser.
 <!-- vale ste.NounClusters = YES -->
 <!-- vale ste.UnapprovedWords = YES -->
 
 ## Source rules
 
-Frozen Python uses `kernel < models/formulas < topology < domain < persistence <
-engine`. `intelligence` observes. Check it with `mise run lint:imports`.
-
-Put coefficients in `GameDefines` and `src/babylon/data/defines.yaml`. Regenerate with
-`tools/generate_defines_config.py`. Use native public hyperedges, strict
-types, explicit errors, specific type-ignore codes, and production vocabulary.
-Do not use a `test_` prefix in production source.
+Rust/BSL owns material effects. Author numeric circuit values in
+`content/scenarios/michigan/defines.toml`; the runtime captures typed parameters
+in each new campaign. Keep evidence classes explicit (ADR258).
+Use native public hyperedges, strict types, explicit errors, specific
+type-ignore codes, and production vocabulary. Do not use a `test_` prefix in
+production source.
 
 Use TDD: show RED, make it pass, then refactor. Keep game data typed and
 immutable. Python models use frozen Pydantic types.
 `model_copy(update=...)` skips validation. Pass dependencies explicitly.
 
-Do not run Sphinx, `cargo doc`, or a CI task that generates documentation unless the Director requests it. This includes local `mise run ci:rust` and its `rust:check` compatibility alias.
+Do not run Sphinx, `cargo doc`, or a CI task that generates documentation unless the Director requests it. This includes local `mise run ci:rust`.
 The pre-push hook runs `mise run rust:check-no-docs` when Rust or its gate definitions change. Use only targeted Vale and format checks on changed prose.
 
 ## Tests and behavior contracts
 
 Run the smallest applicable test first and do not overlap heavy gates. `pytest` covers
-data tools for Python, periphery, the frozen reference, and durable
-language-neutral contracts. Retire an engine-specific Python test only after a
-replacement contract exists.
+retained data, repository, and operator tools. Delete implementation-coupled
+tests with obsolete code. Preserve independently needed byte and schema
+contracts and verify the consuming Rust path.
 
 ```bash
 mise run test:q -- tests/unit/path/to/test_file.py
@@ -116,13 +113,10 @@ mise run check
 cd rust && cargo fmt --all -- --check
 cd rust && cargo test -p <changed-crate> --locked
 mise run rust:check-no-docs
-mise run qa:regression
-mise run qa:vault-regression
-mise run check:gate-coverage
 ```
 
 Run `check` for the Python gate. For Rust changes, run the applicable format, scoped test, clippy, and BSL-sentinel legs separately without documentation.
-Engine, economics, and `GameDefines` changes must also run regression, vault, and coverage gates. Reject `NaN`, infinity, unchecked overflow, and an iteration order that can change.
+Mechanics changes also run their Rust conformance and replay contracts. Reject `NaN`, infinity, unchecked overflow, and an iteration order that can change.
 
 Do not edit a baseline to hide a fault. An intentional baseline change requires
 its ceremony, trailer, and `tools/generate_ceremony_message.py` record.
@@ -183,8 +177,6 @@ injection.
 
 - `dynamic_hex_state` is sparse. Read `v_hex_state_asof`. `tick_commit`, not
   `MAX(tick)`, marks durability.
-- Run `mise run check:vocabulary`. A direct worktree run needs
-  `PYTHONPATH="$PWD/src"`.
 - `end-of-file-fixer` can add a trailing newline. Use a tolerant comparison or
   a precise exclusion.
 - Workflow `args` can arrive absent or stringified. Parse first. Use a hard

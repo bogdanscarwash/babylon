@@ -246,25 +246,104 @@ def test_every_postgres_action_caller_uses_checked_cleanup() -> None:
 def test_postgres_action_builds_the_ci_override_with_buildkit_cache() -> None:
     """The shared image build and runtime consume the same Compose fork."""
     action = (ACTIONS_DIR / "postgres-up" / "action.yml").read_text()
+    build = (ACTIONS_DIR / "build-postgres" / "action.yml").read_text()
     ci_compose = yaml.safe_load((REPO_ROOT / "docker-compose.ci.yml").read_text())
 
-    assert "docker-compose.yml" in action
-    assert "docker-compose.ci.yml" in action
-    assert "cache-from=type=gha,scope=babylon-pg" in action
-    assert "cache-to=type=gha,scope=babylon-pg,mode=max" in action
+    assert "uses: ./.github/actions/build-postgres" in action
+    assert "docker-compose.yml" in build
+    assert "docker-compose.ci.yml" in build
+    assert "cache-from=type=gha,scope=babylon-pg" in build
+    assert "cache-to=type=gha,scope=babylon-pg,mode=max" in build
+    assert "github.event_name != 'pull_request'" in build
+    assert "github.event_name != 'pull_request_target'" in build
     assert "tools/ci_postgres_compose.sh up" in action
     assert ci_compose["services"]["babylon-pg"]["restart"] == "no"
 
 
 def test_ci_cargo_caches_track_git_sources_and_toolchain() -> None:
     """Pinned Git sources and compiler changes invalidate the right caches."""
-    workflow = (WORKFLOWS_DIR / "ci.yml").read_text()
-    persistence_bootstrap = (ACTIONS_DIR / "bootstrap-persistence" / "action.yml").read_text()
-    assert "uses: ./.github/actions/bootstrap-persistence" in workflow
-    cache_contracts = f"{workflow}\n{persistence_bootstrap}"
+    workflow = yaml.safe_load((WORKFLOWS_DIR / "ci.yml").read_text())
+    persistence_bootstrap = yaml.safe_load(
+        (ACTIONS_DIR / "bootstrap-persistence" / "action.yml").read_text()
+    )
+    assert any(
+        step.get("uses") == "./.github/actions/bootstrap-persistence"
+        for job in workflow["jobs"].values()
+        for step in job.get("steps", [])
+    )
+    profile_key = "hashFiles('rust/Cargo.lock', 'rust/rust-toolchain.toml', 'rust/Cargo.toml')"
+    for steps in (
+        workflow["jobs"]["rust-gate"]["steps"],
+        persistence_bootstrap["runs"]["steps"],
+    ):
+        cache = next(step for step in steps if step.get("id") == "cargo-cache")["with"]
+        assert any(
+            path == "~/.cargo/git" or path.startswith("~/.cargo/git/")
+            for path in cache["path"].splitlines()
+        )
+        assert profile_key in cache["key"]
+        assert all(profile_key in key for key in cache["restore-keys"].splitlines())
 
-    assert cache_contracts.count("~/.cargo/git") >= 2
-    assert cache_contracts.count("hashFiles('rust/Cargo.lock', 'rust/rust-toolchain.toml')") >= 2
+
+def test_ci_debug_profile_reaches_every_persistence_consumer_and_cache(tmp_path: Path) -> None:
+    """Hosted builds keep source backtraces without restoring full-debug targets."""
+    workflow = yaml.safe_load((WORKFLOWS_DIR / "ci.yml").read_text())
+    rust_job = workflow["jobs"]["rust-gate"]
+    bootstrap = yaml.safe_load((ACTIONS_DIR / "bootstrap-persistence/action.yml").read_text())
+    expected = {
+        "CARGO_PROFILE_DEV_DEBUG": "line-tables-only",
+        "CARGO_PROFILE_TEST_DEBUG": "line-tables-only",
+    }
+    assert {key: rust_job.get("env", {}).get(key) for key in expected} == expected
+
+    steps = bootstrap["runs"]["steps"]
+    configure = next(step for step in steps if step.get("id") == "cargo-profile")
+    restore = next(step for step in steps if step.get("id") == "cargo-cache")
+    assert steps.index(configure) < steps.index(restore)
+    environment_file = tmp_path / "github-env"
+    result = subprocess.run(  # noqa: S603 -- run the repository-owned environment setup
+        ["bash", "-euo", "pipefail", "-c", configure["run"]],  # noqa: S607
+        env={**os.environ, "GITHUB_ENV": str(environment_file)},
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=5,
+    )
+    assert result.returncode == 0, result.stderr
+    assert (
+        dict(line.split("=", 1) for line in environment_file.read_text().splitlines()) == expected
+    )
+
+    rust_restore = next(step for step in rust_job["steps"] if step.get("id") == "cargo-cache")
+    profile_key = "dev-${{ env.CARGO_PROFILE_DEV_DEBUG }}-test-${{ env.CARGO_PROFILE_TEST_DEBUG }}-"
+    for cache in (rust_restore, restore):
+        keys = [cache["with"]["key"], *cache["with"]["restore-keys"].splitlines()]
+        for key in keys:
+            assert profile_key in key
+            assert key.index(profile_key) < key.index("hashFiles(")
+
+    # Bootstrap writes the job environment, so each caller's later commands
+    # inherit the same profiles unless that workflow explicitly overrides them.
+    for path in _workflow_paths():
+        current = yaml.safe_load(path.read_text())
+        for job in current.get("jobs", {}).values():
+            if not any(
+                step.get("uses") == "./.github/actions/bootstrap-persistence"
+                for step in job.get("steps", [])
+            ):
+                continue
+            for environment in [current.get("env", {}), job.get("env", {})]:
+                for key, value in expected.items():
+                    assert environment.get(key, value) == value
+            for step in job["steps"]:
+                for key, value in expected.items():
+                    assert step.get("env", {}).get(key, value) == value
+
+    workspace = tomllib.loads((REPO_ROOT / "rust/Cargo.toml").read_text())
+    profiles = workspace["profile"]
+    local_debug = profiles["dev"].get("debug", 2)
+    assert local_debug == 2
+    assert profiles.get("test", {}).get("debug", local_debug) == 2
 
 
 def test_scheduled_failure_artifacts_survive_failure() -> None:
@@ -286,7 +365,15 @@ def test_rust_ci_installs_and_retains_pinned_agent_reports() -> None:
     upload = next(step for step in steps if step.get("name") == "Upload Rust test reports")
 
     assert install["uses"] == ("taiki-e/install-action@1ed6d7be6168f6c9046541087ff549b6bc581fdf")
-    assert install["with"] == {"tool": "cargo-nextest@0.9.143", "fallback": "none"}
+    assert install["with"] == {
+        "tool": "cargo-nextest@0.9.143,cargo-deny@0.20.2",
+        "fallback": "none",
+    }
+    audit = next(step for step in steps if step.get("name", "").startswith("cargo-deny ("))
+    assert audit["run"] == (
+        "cargo-deny --log-level warn --manifest-path rust/Cargo.toml "
+        "--all-features check advisories bans licenses sources"
+    )
     assert upload["if"] == "always()"
     assert upload["uses"].startswith("actions/upload-artifact@")
     assert upload["with"] == {
@@ -358,15 +445,6 @@ def test_rust_persistence_workflow_dsns_use_a_literal_loopback() -> None:
         assert dsn == HOSTED_RUNTIME_DSN, path
 
 
-def test_analysis_sweep_task_has_a_configurable_finite_tick_budget() -> None:
-    """The Python analysis sweep stays bounded outside the Rust sim namespace."""
-    task = tomllib.loads(ANALYSIS_TASKS_CONFIG.read_text())["analysis:sweep"]
-
-    assert task["usage"] == ('arg "[ticks]" help="Maximum ticks per trial" default="5200"')
-    assert "--max-ticks ${usage_ticks}" in task["run"]
-    assert '--param "economy.extraction_efficiency=0.05:0.50:0.05"' in task["run"]
-
-
 def test_weekly_rust_report_is_scoped_to_the_michigan_persistence_slice() -> None:
     """The scheduled artifact diagnoses the committed embedded Rust slice."""
     weekly_sim = yaml.safe_load((WORKFLOWS_DIR / "weekly-sim-artifacts.yml").read_text())
@@ -384,44 +462,10 @@ def test_weekly_rust_report_is_scoped_to_the_michigan_persistence_slice() -> Non
         step for step in steps if str(step.get("uses", "")).startswith("actions/checkout@")
     )
     assert checkout["with"]["ref"] == "dev"
-    assert report["run"] == "mise run sim:report 520 3000 exclusive"
+    assert report["run"] == "mise run sim:report 130 3000 exclusive"
     assert any(step.get("uses") == "./.github/actions/bootstrap-persistence" for step in steps)
     assert any(step.get("uses") == "./.github/actions/postgres-up" for step in steps)
     assert any(step.get("run") == "mise run db:bootstrap" for step in steps)
     assert str(upload.get("if", "")) == "always()"
     assert str(upload["with"]["name"]).startswith("rust-michigan-simulation-diagnostics-")
     assert upload["with"]["path"] == "reports/sim-runs/"
-
-
-def test_frozen_reference_campaign_is_separate_bounded_and_non_authoritative() -> None:
-    """The Python campaign cannot masquerade as the authoritative Rust report."""
-    workflow = yaml.safe_load((WORKFLOWS_DIR / "weekly-reference-analysis.yml").read_text())
-    job = workflow["jobs"]["reference-analysis"]
-    steps = job["steps"]
-    generate = next(
-        step
-        for step in steps
-        if step.get("name") == "Generate frozen Python reference-analysis artifacts"
-    )
-    upload = next(
-        step for step in steps if str(step.get("uses", "")).startswith("actions/upload-artifact@")
-    )
-
-    assert job["timeout-minutes"] == 60
-    checkout = next(
-        step for step in steps if str(step.get("uses", "")).startswith("actions/checkout@")
-    )
-    assert checkout["with"]["ref"] == "dev"
-    assert any(step.get("uses") == "./.github/actions/bootstrap-python" for step in steps)
-    assert not any(step.get("uses") == "./.github/actions/bootstrap-persistence" for step in steps)
-    assert not any(step.get("uses") == "./.github/actions/postgres-up" for step in steps)
-    assert "weekly|full" in generate["run"]
-    assert 'mise run analysis:campaign -- "$REFERENCE_ANALYSIS_PROFILE"' in generate["run"]
-    assert str(upload.get("if", "")) == "always()"
-    assert upload["with"]["path"] == "reports/frozen-reference-analysis/"
-    assert upload["with"]["retention-days"] == 90
-
-    rendered = (WORKFLOWS_DIR / "weekly-reference-analysis.yml").read_text()
-    assert "BABYLON_RUNTIME_DSN" not in rendered
-    assert "db:bootstrap" not in rendered
-    assert "cargo" not in rendered.lower()

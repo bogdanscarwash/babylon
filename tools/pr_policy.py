@@ -32,58 +32,23 @@ GITHUB_ACTIONS_PRODUCER: Final[CheckProducer] = CheckProducer(
     slug="github-actions",
 )
 
+# These jobs may skip only when their owning successful CI Gate accepted scope.
+# GitHub may display a skipped matrix parent before expanding its focus value.
+SCOPED_CI_CHECKS: Final[frozenset[str]] = frozenset(
+    {
+        "Rust Validation",
+        "Python Tooling Tests",
+        "Security Audit (pip-audit policy — blocking since item-41)",
+        "PostgreSQL Contract",
+        "PostgreSQL Contract ()",
+        "PostgreSQL Contract (runtime_smoke)",
+    }
+)
+
 
 DEV_CHECK_MANIFEST: Final[tuple[CheckRequirement, ...]] = (
     CheckRequirement(
-        "Fast Gate (hygiene, lint, format, imports, types, lock)",
-        "blocking",
-        frozenset({"SUCCESS"}),
-        GITHUB_ACTIONS_PRODUCER,
-    ),
-    CheckRequirement(
-        "Unit Tests (xdist, coverage gate)",
-        "blocking",
-        frozenset({"SUCCESS"}),
-        GITHUB_ACTIONS_PRODUCER,
-    ),
-    CheckRequirement(
-        "Determinism Gate (byte-identical dense goldens)",
-        "blocking",
-        frozenset({"SUCCESS"}),
-        GITHUB_ACTIONS_PRODUCER,
-    ),
-    CheckRequirement(
-        "Secret Scan (gitleaks, full history)",
-        "blocking",
-        frozenset({"SUCCESS"}),
-        GITHUB_ACTIONS_PRODUCER,
-    ),
-    CheckRequirement(
-        "IaC Config Scan (trivy, HIGH+CRITICAL blocking)",
-        "blocking",
-        frozenset({"SUCCESS"}),
-        GITHUB_ACTIONS_PRODUCER,
-    ),
-    CheckRequirement(
-        "Security Audit (pip-audit policy — blocking since item-41)",
-        "blocking",
-        frozenset({"SUCCESS"}),
-        GITHUB_ACTIONS_PRODUCER,
-    ),
-    CheckRequirement(
-        "Rust Gate (fmt, clippy, test, doc — rust/ workspace)",
-        "blocking",
-        frozenset({"SUCCESS"}),
-        GITHUB_ACTIONS_PRODUCER,
-    ),
-    CheckRequirement(
-        BASELINE_CEREMONY_CONTEXT,
-        "blocking",
-        frozenset({"SUCCESS"}),
-        GITHUB_ACTIONS_PRODUCER,
-    ),
-    CheckRequirement(
-        "Postgres Integration Tier (PG 17, pinned runtime)",
+        "CI Gate",
         "blocking",
         frozenset({"SUCCESS"}),
         GITHUB_ACTIONS_PRODUCER,
@@ -91,6 +56,12 @@ DEV_CHECK_MANIFEST: Final[tuple[CheckRequirement, ...]] = (
 )
 
 MAIN_QUALIFICATION_CHECK_MANIFEST: Final[tuple[CheckRequirement, ...]] = (
+    CheckRequirement(
+        "Main Qualification / Native Download / Linux x86_64",
+        "blocking",
+        frozenset({"SUCCESS"}),
+        GITHUB_ACTIONS_PRODUCER,
+    ),
     CheckRequirement(
         "Main Qualification / Event Contract",
         "blocking",
@@ -125,12 +96,6 @@ MAIN_QUALIFICATION_CHECK_MANIFEST: Final[tuple[CheckRequirement, ...]] = (
         "Main Qualification / Container Image Scan",
         "blocking",
         frozenset({"SUCCESS"}),
-        GITHUB_ACTIONS_PRODUCER,
-    ),
-    CheckRequirement(
-        "Main Qualification / AI Tests (advisory)",
-        "advisory",
-        frozenset({"SUCCESS", "FAILURE", "NEUTRAL", "SKIPPED"}),
         GITHUB_ACTIONS_PRODUCER,
     ),
 )

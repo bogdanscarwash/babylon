@@ -5,8 +5,7 @@
 //! [`babylon_bsl::causal_contract::GOVERNED_WRITE_PROHIBITED_NODE_FIELDS`]
 //! refuses every rule write to it at load, so the graph can never rewrite
 //! county identity after foundation. Reopening an already-founded campaign
-//! reconciles the rows idempotently (insert-if-absent; divergence refuses
-//! loudly rather than overwriting).
+//! verifies the stored rows exactly; missing or divergent mappings refuse open.
 
 use std::collections::BTreeMap;
 
@@ -17,8 +16,8 @@ use babylon_graph::substrate::GraphSubstrate;
 use postgres::{Config, GenericClient, IsolationLevel, NoTls};
 
 use crate::identity::CampaignId;
-use crate::legacy_adopter::validate_legacy_connection_target;
 use crate::migration_manifest::SCHEMA_ADVISORY_LOCK_KEY;
+use crate::postgres_catalog::validate_connection_target;
 use crate::postgres_diagnostic::PostgresDiagnosticV1;
 
 /// Exact additive schema for the declared territory-county mapping.
@@ -250,7 +249,7 @@ pub fn extract_declared_territory_county_map_v1(
 pub fn install_territory_county_map_schema_v1(
     config: &Config,
 ) -> Result<TerritoryCountyMapSchemaDispositionV1, TerritoryCountyMapErrorV1> {
-    validate_legacy_connection_target(config).map_err(|_| TerritoryCountyMapErrorV1::Database {
+    validate_connection_target(config).map_err(|_| TerritoryCountyMapErrorV1::Database {
         operation: "validate territory county map schema target",
         diagnostic: None,
     })?;
@@ -386,62 +385,35 @@ fn read_territory_county_map_rows_v1(
         .collect()
 }
 
-/// Reconcile one campaign's stored mapping rows against its declared
-/// scenario mapping — the upgrade path for campaigns founded before this
-/// feature existed.
+/// Verify one current campaign's stored mapping against its immutable declaration.
 ///
-/// Idempotent and exact: when no rows are stored the declared rows are
-/// inserted (insert-if-absent through the primary key); when stored rows
-/// exist they must equal the freshly extracted mapping, compared as an
-/// order-free set, or the call refuses with
-/// [`TerritoryCountyMapErrorV1::StoredMappingDiverged`] — durable rows are
-/// never overwritten. A campaign whose scenario does not declare the field
-/// reconciles as a no-op.
+/// Reopening never installs schema or repairs missing rows. Foundation creation
+/// owns those writes; incomplete development saves must be recreated.
 ///
 /// # Errors
-/// Returns [`TerritoryCountyMapErrorV1`] for a schema, load, divergence, or
-/// database failure.
-pub(crate) fn reconcile_territory_county_map_v1(
+/// Returns [`TerritoryCountyMapErrorV1`] for extraction, missing schema, divergent
+/// stored rows, or a database failure.
+pub(crate) fn verify_territory_county_map_v1(
     config: &Config,
     campaign_id: CampaignId,
     scenario_source: &str,
     prelude_source: Option<&str>,
 ) -> Result<(), TerritoryCountyMapErrorV1> {
-    install_territory_county_map_schema_v1(config)?;
-    let declared = extract_declared_territory_county_map_v1(scenario_source, prelude_source)?;
+    let mut declared = extract_declared_territory_county_map_v1(scenario_source, prelude_source)?;
     let mut client = config
         .connect(NoTls)
-        .map_err(|error| database("connect territory county map reconciler", &error))?;
-    let mut transaction = client
-        .build_transaction()
-        .isolation_level(IsolationLevel::Serializable)
-        .start()
-        .map_err(|error| database("begin territory county map reconcile", &error))?;
-    let stored = read_territory_county_map_rows_v1(&mut transaction, campaign_id)?;
-    if stored.is_empty() {
-        insert_territory_county_map_rows_v1(&mut transaction, campaign_id, &declared)?;
-    } else {
-        let mut stored_sorted = stored.clone();
-        stored_sorted.sort_by(|left, right| {
-            left.territory_local_name
-                .cmp(&right.territory_local_name)
-                .then_with(|| left.county_geoid.cmp(&right.county_geoid))
+        .map_err(|error| database("connect territory county map verifier", &error))?;
+    let stored = read_territory_county_map_rows_v1(&mut client, campaign_id)?;
+    declared.sort_by(|left, right| {
+        left.territory_local_name
+            .cmp(&right.territory_local_name)
+            .then_with(|| left.county_geoid.cmp(&right.county_geoid))
+    });
+    if stored != declared {
+        return Err(TerritoryCountyMapErrorV1::StoredMappingDiverged {
+            stored_rows: stored.len(),
+            declared_rows: declared.len(),
         });
-        let mut declared_sorted = declared.clone();
-        declared_sorted.sort_by(|left, right| {
-            left.territory_local_name
-                .cmp(&right.territory_local_name)
-                .then_with(|| left.county_geoid.cmp(&right.county_geoid))
-        });
-        if stored_sorted != declared_sorted {
-            return Err(TerritoryCountyMapErrorV1::StoredMappingDiverged {
-                stored_rows: stored.len(),
-                declared_rows: declared.len(),
-            });
-        }
     }
-    transaction
-        .commit()
-        .map_err(|error| database("commit territory county map reconcile", &error))?;
     Ok(())
 }

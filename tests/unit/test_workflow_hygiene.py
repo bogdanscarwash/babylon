@@ -198,48 +198,6 @@ def test_automation_paths_include_yaml_workflows(
     assert yaml_workflow in _automation_paths()
 
 
-def _frozen_engine_errors(workflow: dict[str, Any]) -> list[str]:
-    """Return violations in the immutable frozen-engine checkout contract."""
-    errors: list[str] = []
-    steps = ((workflow.get("jobs") or {}).get("frozen-canon") or {}).get("steps") or []
-    checkouts = {
-        (
-            str(step.get("with", {}).get("repository", "")),
-            str(step.get("with", {}).get("ref", "")),
-        ): str(step.get("with", {}).get("path", ""))
-        for step in steps
-        if str(step.get("uses", "")).startswith("actions/checkout")
-    }
-    if checkouts.get(("", FROZEN_REF)) != "babylon":
-        errors.append("frozen source must check out at babylon")
-    if checkouts.get(("percy-raskova/hypergraph-rs", HYPERGRAPH_REF)) != "hypergraph-rs":
-        errors.append("historical hypergraph source must use its full pinned SHA")
-    mise_setup_index = next(
-        (
-            index
-            for index, step in enumerate(steps)
-            if str(step.get("uses", "")).startswith("jdx/mise-action@")
-        ),
-        None,
-    )
-    for index, step in enumerate(steps):
-        run = str(step.get("run", ""))
-        if "mise run" in run and (mise_setup_index is None or mise_setup_index >= index):
-            errors.append(f"frozen mise step#{index} must follow jdx/mise-action")
-        if "mise run" not in run and "uv sync" not in run:
-            continue
-        if step.get("working-directory") != "babylon":
-            errors.append(f"frozen command step#{index} must run in babylon")
-        if str((step.get("env") or {}).get("UV_FROZEN", "")).lower() not in {"1", "true"}:
-            errors.append(f"frozen command step#{index} must set UV_FROZEN")
-    return errors
-
-
-def _frozen_engine_external_action_errors(workflow_text: str) -> list[str]:
-    """Return mutable or unannotated external action references in the frozen gate."""
-    return _external_action_reference_errors(workflow_text, "frozen-engine.yml")
-
-
 def _external_action_reference_errors(workflow_text: str, filename: str) -> list[str]:
     """Return mutable or unannotated external action references."""
     errors: list[str] = []
@@ -289,15 +247,6 @@ class TestWorkflowStepShape:
                 _sibling_fabrication_errors(yaml.safe_load(path.read_text()), str(path))
             )
         assert not violations, "\n".join(violations)
-
-    def test_frozen_engine_supplies_its_immutable_historical_sibling(self) -> None:
-        """The frozen tag gets its real historical path source, never a fabricated one."""
-        assert _frozen_engine_errors(yaml.safe_load(FROZEN_ENGINE_PATH.read_text())) == []
-
-    def test_frozen_engine_external_actions_are_sha_pinned_and_release_annotated(self) -> None:
-        """Frozen gate action references must be immutable and auditably versioned."""
-        errors = _frozen_engine_external_action_errors(FROZEN_ENGINE_PATH.read_text())
-        assert not errors, "\n".join(errors)
 
     def test_no_step_mixes_run_and_with(self) -> None:
         violations: list[str] = []

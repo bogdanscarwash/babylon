@@ -3,8 +3,11 @@
 //! The authoritative session owns advancement, publication and the finite horizon.
 //! This module constructs an exact initial state; it does not run mechanics.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
+use std::path::Path;
 use std::sync::OnceLock;
+
+use crate::michigan_defines::{MichiganDefinesErrorV1, MichiganDefinesV1};
 
 use babylon_bsl::causal_contract::EvidenceClass;
 use babylon_kernel::sha256_of;
@@ -17,15 +20,14 @@ use serde::{Deserialize, Serialize};
 /// Exact observed five-row public industry source artifact.
 pub const MICHIGAN_INDUSTRY_BASELINE_SHA256_V1: &str =
     "eb486d7e11b8b63fc58c53ab918eff84b341b293a66faf422ddb9304fb2b553e";
-/// Exact Designed content artifact, shared by both delay presets.
-pub const MICHIGAN_MATERIAL_SCENARIO_SHA256_V1: &str =
-    "4a0005706af4acbe5bae5389358aa30142fde7daff1c8c944b3580f985938c66";
 const INDUSTRY_BYTES: &[u8] =
     include_bytes!("../../../../contracts/fixtures/michigan_industry_baseline_v1.json");
-const SCENARIO_BYTES: &[u8] =
-    include_bytes!("../../../../contracts/fixtures/michigan_material_scenario_v1.json");
+const TOPOLOGY_BYTES: &[u8] =
+    include_bytes!("../../../../content/scenarios/michigan/topology.json");
 const ID_DOMAIN: &str = "babylon.michigan-material.v1";
 const SOURCE_URL: &str = "https://data.bls.gov/cew/data/files/2024/csv/2024_annual_by_area.zip";
+
+pub const MICHIGAN_MAX_HORIZON_PERIODS_V1: u64 = 16;
 
 /// Separately committed comparisons; no player intervention is implied.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -37,19 +39,15 @@ impl MichiganDeliveryPresetV1 {
     #[must_use]
     pub const fn id(self) -> &'static str {
         match self {
-            Self::Standard => "michigan-material-standard-v4",
-            Self::Delayed => "michigan-material-delayed-v4",
+            Self::Standard => "michigan-material-standard-v5",
+            Self::Delayed => "michigan-material-delayed-v5",
         }
-    }
-    #[must_use]
-    pub const fn horizon_ticks(self) -> u64 {
-        16
     }
     #[must_use]
     pub fn from_id(id: &str) -> Option<Self> {
         match id {
-            "michigan-material-standard-v4" => Some(Self::Standard),
-            "michigan-material-delayed-v4" => Some(Self::Delayed),
+            "michigan-material-standard-v5" => Some(Self::Standard),
+            "michigan-material-delayed-v5" => Some(Self::Delayed),
             _ => None,
         }
     }
@@ -127,9 +125,9 @@ pub struct MichiganMaterialProcessV1 {
     pub input_quantity_per_batch: u64,
     pub output_good_key: String,
     pub output_quantity_per_batch: u64,
-    pub capacity_batches_per_week: u64,
+    pub capacity_batches_per_period: u64,
     pub labor_hours_per_batch: u64,
-    pub labor_capacity_hours_per_week: u64,
+    pub labor_capacity_hours_per_period: u64,
     pub opening_input_quantity: u64,
     pub opening_planned_batches: u64,
 }
@@ -168,8 +166,8 @@ pub struct MichiganStaffingDesignV1 {
     pub role: String,
     pub evidence_class: String,
     pub placement: String,
-    pub hours_per_worker_week: u64,
-    pub retention_weeks: u8,
+    pub hours_per_worker_period: u64,
+    pub retention_periods: u8,
     pub pools: Vec<MichiganWorkforceSeedV1>,
 }
 
@@ -182,8 +180,9 @@ pub struct MichiganMaterialRouteV1 {
     pub buyer_site_key: String,
     pub good_key: String,
     pub ordered_quantity: u64,
-    pub capacity_quantity_per_week: u64,
-    pub travel_weeks: u16,
+    pub capacity_quantity_per_period: u64,
+    pub travel_periods: u16,
+    pub delayed_travel_periods: u16,
 }
 impl MichiganMaterialRouteV1 {
     #[must_use]
@@ -237,11 +236,9 @@ struct ScenarioArtifact {
     schema: String,
     evidence_class: String,
     horizon_ticks: u64,
+    tick_duration_days: u64,
     geographic_scale: String,
     terminal_output_disposition: String,
-    delayed_route_key: String,
-    standard_travel_weeks: u16,
-    delayed_travel_weeks: u16,
     sites: Vec<MichiganMaterialSiteV1>,
     goods: Vec<MichiganMaterialGoodV1>,
     processes: Vec<MichiganMaterialProcessV1>,
@@ -253,8 +250,40 @@ struct ScenarioArtifact {
 pub struct MichiganMaterialCatalogV1 {
     industry: IndustryArtifact,
     scenario: ScenarioArtifact,
+    defines_bytes: Vec<u8>,
 }
 impl MichiganMaterialCatalogV1 {
+    /// Load fresh parameters for a new campaign. No missing-file fallback exists.
+    /// # Errors
+    /// Refuses missing, oversized, malformed, unknown or invalid parameter values.
+    pub fn load_defines(path: &Path) -> Result<Self, MichiganDefinesErrorV1> {
+        Self::from_defines(&MichiganDefinesV1::load(path)?)
+    }
+    /// Parse explicit values; useful for authored content and independent tests.
+    /// # Errors
+    /// Refuses malformed or materially inconsistent values.
+    pub fn from_defines_toml(text: &str) -> Result<Self, MichiganDefinesErrorV1> {
+        Self::from_defines(&MichiganDefinesV1::parse(text)?)
+    }
+    pub(crate) fn from_stored_defines(bytes: &[u8]) -> Result<Self, MichiganDefinesErrorV1> {
+        Self::from_defines(&MichiganDefinesV1::decode(bytes)?)
+    }
+    fn from_defines(defines: &MichiganDefinesV1) -> Result<Self, MichiganDefinesErrorV1> {
+        compile_catalog(INDUSTRY_BYTES, defines)
+    }
+    #[must_use]
+    pub fn defines_bytes(&self) -> &[u8] {
+        &self.defines_bytes
+    }
+    #[must_use]
+    pub fn defines_hash(&self) -> [u8; 32] {
+        sha256_of(&self.defines_bytes)
+    }
+    #[must_use]
+    pub const fn horizon_ticks(&self) -> u64 {
+        self.scenario.horizon_ticks
+    }
+
     #[must_use]
     pub fn staffing(&self) -> &MichiganStaffingDesignV1 {
         &self.scenario.staffing
@@ -318,17 +347,14 @@ impl MichiganMaterialCatalogV1 {
         self.goods().iter().find(|row| row.key == key)
     }
     #[must_use]
-    pub fn travel_weeks(
+    pub fn travel_periods(
         &self,
         route: &MichiganMaterialRouteV1,
         preset: MichiganDeliveryPresetV1,
     ) -> u16 {
-        if preset == MichiganDeliveryPresetV1::Delayed
-            && route.key == self.scenario.delayed_route_key
-        {
-            self.scenario.delayed_travel_weeks
-        } else {
-            route.travel_weeks
+        match preset {
+            MichiganDeliveryPresetV1::Delayed => route.delayed_travel_periods,
+            MichiganDeliveryPresetV1::Standard => route.travel_periods,
         }
     }
 }
@@ -341,17 +367,214 @@ fn valid_key(key: &str) -> bool {
             .all(|byte| byte.is_ascii_lowercase() || byte == b'-')
 }
 
-fn parse_catalog(
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct MaterialTopology {
+    pub sites: Vec<MichiganMaterialSiteV1>,
+    pub goods: Vec<MichiganMaterialGoodV1>,
+    pub processes: Vec<ProcessTopology>,
+    pub routes: Vec<RouteTopology>,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct ProcessTopology {
+    pub key: String,
+    pub site_key: String,
+    pub input_good_key: String,
+    pub output_good_key: String,
+}
+impl ProcessTopology {
+    pub fn id(&self) -> ProcessIdV1 {
+        ProcessIdV1::from_bytes(identity("process", &self.key))
+    }
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct RouteTopology {
+    key: String,
+    supplier_site_key: String,
+    buyer_site_key: String,
+    good_key: String,
+}
+/// Only immutable topology is cached; numeric campaign values never enter this cache.
+pub(crate) fn material_topology() -> Result<&'static MaterialTopology, MichiganMaterialErrorV1> {
+    static TOPOLOGY: OnceLock<Result<MaterialTopology, MichiganMaterialErrorV1>> = OnceLock::new();
+    TOPOLOGY
+        .get_or_init(|| {
+            serde_json::from_slice(TOPOLOGY_BYTES)
+                .map_err(|_| MichiganMaterialErrorV1::ArtifactDecode)
+        })
+        .as_ref()
+        .map_err(|e| *e)
+}
+
+impl MaterialTopology {
+    pub fn goods(&self) -> &[MichiganMaterialGoodV1] {
+        &self.goods
+    }
+    pub fn processes(&self) -> &[ProcessTopology] {
+        &self.processes
+    }
+    pub fn site(&self, key: &str) -> Option<&MichiganMaterialSiteV1> {
+        self.sites.iter().find(|s| s.key == key)
+    }
+    pub fn industry_for_site(
+        site: &MichiganMaterialSiteV1,
+    ) -> Option<&'static MichiganIndustryBaselineRowV1> {
+        static SOURCE: OnceLock<Result<IndustryArtifact, MichiganMaterialErrorV1>> =
+            OnceLock::new();
+        SOURCE
+            .get_or_init(|| {
+                if crate::michigan_economy::digest_hex(&sha256_of(INDUSTRY_BYTES))
+                    != MICHIGAN_INDUSTRY_BASELINE_SHA256_V1
+                {
+                    return Err(MichiganMaterialErrorV1::ArtifactDigest);
+                }
+                let source: IndustryArtifact = serde_json::from_slice(INDUSTRY_BYTES)
+                    .map_err(|_| MichiganMaterialErrorV1::ArtifactDecode)?;
+                validate_industry_rows(&source)?;
+                Ok(source)
+            })
+            .as_ref()
+            .ok()?
+            .rows
+            .iter()
+            .find(|r| r.area_fips == site.county_geoid && r.industry_code == site.naics)
+    }
+}
+
+fn compile_catalog(
     industry_bytes: &[u8],
-    scenario_bytes: &[u8],
-) -> Result<MichiganMaterialCatalogV1, MichiganMaterialErrorV1> {
-    let industry: IndustryArtifact = serde_json::from_slice(industry_bytes)
-        .map_err(|_| MichiganMaterialErrorV1::ArtifactDecode)?;
-    let scenario: ScenarioArtifact = serde_json::from_slice(scenario_bytes)
-        .map_err(|_| MichiganMaterialErrorV1::ArtifactDecode)?;
-    let catalog = MichiganMaterialCatalogV1 { industry, scenario };
-    validate_catalog(&catalog)?;
+    defines: &MichiganDefinesV1,
+) -> Result<MichiganMaterialCatalogV1, MichiganDefinesErrorV1> {
+    use MichiganDefinesErrorV1::Material;
+    if crate::michigan_economy::digest_hex(&sha256_of(industry_bytes))
+        != MICHIGAN_INDUSTRY_BASELINE_SHA256_V1
+    {
+        return Err(Material(MichiganMaterialErrorV1::ArtifactDigest));
+    }
+    let industry = serde_json::from_slice(industry_bytes)
+        .map_err(|_| Material(MichiganMaterialErrorV1::ArtifactDecode))?;
+    let topology = material_topology().map_err(Material)?;
+    let mut processes = Vec::new();
+    let mut pools = Vec::new();
+    let hours = defines.hours_per_period();
+    for binding in &topology.processes {
+        let values = defines
+            .process
+            .get(&binding.key.replace('-', "_"))
+            .ok_or(Material(MichiganMaterialErrorV1::ContentReference))?;
+        let labor = values
+            .employed_people
+            .checked_mul(hours)
+            .ok_or(Material(MichiganMaterialErrorV1::ContentValue))?;
+        processes.push(MichiganMaterialProcessV1 {
+            key: binding.key.clone(),
+            site_key: binding.site_key.clone(),
+            input_good_key: binding.input_good_key.clone(),
+            output_good_key: binding.output_good_key.clone(),
+            input_quantity_per_batch: values.input_units_per_batch,
+            output_quantity_per_batch: values.output_units_per_batch,
+            capacity_batches_per_period: values.batches_per_week
+                * babylon_kernel::clock::WEEKS_PER_TICK,
+            labor_hours_per_batch: values.labor_hours_per_batch,
+            labor_capacity_hours_per_period: labor,
+            opening_input_quantity: values.opening_input_units,
+            opening_planned_batches: values.opening_planned_batches,
+        });
+        pools.push(MichiganWorkforceSeedV1 {
+            process_key: binding.key.clone(),
+            employed: values.employed_people,
+            reserve: values.reserve_people,
+            previous_unretained_hours: labor,
+        });
+    }
+    pools.sort_unstable_by(|a, b| a.process_key.cmp(&b.process_key));
+    let mut routes = Vec::new();
+    for binding in &topology.routes {
+        let values = defines
+            .corridor
+            .get(&binding.key.replace('-', "_"))
+            .ok_or(Material(MichiganMaterialErrorV1::ContentReference))?;
+        routes.push(MichiganMaterialRouteV1 {
+            key: binding.key.clone(),
+            supplier_site_key: binding.supplier_site_key.clone(),
+            buyer_site_key: binding.buyer_site_key.clone(),
+            good_key: binding.good_key.clone(),
+            ordered_quantity: values.ordered_units,
+            capacity_quantity_per_period: values.units_per_week
+                * babylon_kernel::clock::WEEKS_PER_TICK,
+            travel_periods: values.travel_periods,
+            delayed_travel_periods: values.delayed_travel_periods,
+        });
+    }
+    let catalog = MichiganMaterialCatalogV1 {
+        industry,
+        defines_bytes: defines.encode()?,
+        scenario: ScenarioArtifact {
+            schema: "MichiganMaterialScenarioV2".to_owned(),
+            evidence_class: "Designed".to_owned(),
+            horizon_ticks: defines.horizon_periods,
+            tick_duration_days: defines.tick_duration_days,
+            geographic_scale: "county_industry_aggregate".to_owned(),
+            terminal_output_disposition: "on_hand_unsold".to_owned(),
+            sites: topology.sites.clone(),
+            goods: topology.goods.clone(),
+            processes,
+            routes,
+            staffing: MichiganStaffingDesignV1 {
+                composition_id: "g4-workforce-staffing".to_owned(),
+                role: "Mechanic".to_owned(),
+                evidence_class: "Designed".to_owned(),
+                placement: "after-metabolism-material-base".to_owned(),
+                hours_per_worker_period: hours,
+                retention_periods: 1,
+                pools,
+            },
+        },
+    };
+    validate_inventory_bounds(&catalog)?;
+    validate_catalog(&catalog).map_err(Material)?;
     Ok(catalog)
+}
+
+/// Bound every possible local inventory addition over the admitted campaign.
+/// This is machine representability, independent of which supplies actually arrive.
+fn validate_inventory_bounds(
+    catalog: &MichiganMaterialCatalogV1,
+) -> Result<(), MichiganDefinesErrorV1> {
+    use MichiganDefinesErrorV1::Value;
+    const REFUSAL: &str =
+        "opening stock, horizon production, and incoming orders exceed inventory integer bounds";
+    let mut ceilings: BTreeMap<(String, String), u64> = BTreeMap::new();
+    let mut add = |site: &str, good: &str, quantity: u64| -> Result<(), MichiganDefinesErrorV1> {
+        let ceiling = ceilings
+            .entry((site.to_owned(), good.to_owned()))
+            .or_default();
+        *ceiling = ceiling.checked_add(quantity).ok_or(Value(REFUSAL))?;
+        Ok(())
+    };
+    for process in catalog.processes() {
+        add(
+            &process.site_key,
+            &process.input_good_key,
+            process.opening_input_quantity,
+        )?;
+        let output = process
+            .capacity_batches_per_period
+            .checked_mul(process.output_quantity_per_batch)
+            .and_then(|quantity| quantity.checked_mul(catalog.horizon_ticks()))
+            .ok_or(Value(REFUSAL))?;
+        add(&process.site_key, &process.output_good_key, output)?;
+    }
+    for route in catalog.routes() {
+        add(
+            &route.buyer_site_key,
+            &route.good_key,
+            route.ordered_quantity,
+        )?;
+    }
+    Ok(())
 }
 
 fn validate_catalog(catalog: &MichiganMaterialCatalogV1) -> Result<(), MichiganMaterialErrorV1> {
@@ -363,17 +586,16 @@ fn validate_catalog(catalog: &MichiganMaterialCatalogV1) -> Result<(), MichiganM
         || source.source_url != SOURCE_URL
         || source.documentation_url != "https://www.bls.gov/cew/downloadable-data-files.htm"
         || source.rows.len() != 5
-        || design.schema != "MichiganMaterialScenarioV1"
+        || design.schema != "MichiganMaterialScenarioV2"
         || design.evidence_class != "Designed"
-        || design.horizon_ticks != MichiganDeliveryPresetV1::Standard.horizon_ticks()
+        || design.tick_duration_days != babylon_kernel::clock::DAYS_PER_TICK
+        || !(1..=MICHIGAN_MAX_HORIZON_PERIODS_V1).contains(&design.horizon_ticks)
         || design.geographic_scale != "county_industry_aggregate"
         || design.terminal_output_disposition != "on_hand_unsold"
         || design.sites.len() != 5
         || design.goods.len() != 7
         || design.processes.len() != 5
         || design.routes.len() != 3
-        || design.standard_travel_weeks != 1
-        || design.delayed_travel_weeks != 3
     {
         return Err(MichiganMaterialErrorV1::ArtifactShape);
     }
@@ -390,8 +612,8 @@ fn validate_staffing(catalog: &MichiganMaterialCatalogV1) -> Result<(), Michigan
         || design.role != "Mechanic"
         || design.evidence_class != "Designed"
         || design.placement != "after-metabolism-material-base"
-        || design.hours_per_worker_week != 40
-        || design.retention_weeks != 1
+        || design.hours_per_worker_period == 0
+        || design.retention_periods != 1
         || design.pools.len() != catalog.processes().len()
         || design
             .pools
@@ -406,10 +628,10 @@ fn validate_staffing(catalog: &MichiganMaterialCatalogV1) -> Result<(), Michigan
             .iter()
             .find(|p| p.key == seed.process_key)
             .ok_or(MichiganMaterialErrorV1::ContentReference)?;
-        if seed.reserve != 0
-            || seed.employed == 0
-            || seed.employed.checked_mul(40) != Some(process.labor_capacity_hours_per_week)
-            || seed.previous_unretained_hours != process.labor_capacity_hours_per_week
+        if seed.employed == 0
+            || seed.employed.checked_mul(design.hours_per_worker_period)
+                != Some(process.labor_capacity_hours_per_period)
+            || seed.previous_unretained_hours != process.labor_capacity_hours_per_period
             || seed.previous_unretained_hours > (1_u64 << 53)
         {
             return Err(MichiganMaterialErrorV1::ContentValue);
@@ -507,11 +729,11 @@ fn validate_processes(catalog: &MichiganMaterialCatalogV1) -> Result<(), Michiga
         if process.input_quantity_per_batch == 0
             || process.output_quantity_per_batch == 0
             || process.labor_hours_per_batch == 0
-            || process.capacity_batches_per_week == 0
-            || process.labor_capacity_hours_per_week == 0
-            || process.opening_planned_batches > process.capacity_batches_per_week
+            || process.capacity_batches_per_period == 0
+            || process.labor_capacity_hours_per_period == 0
+            || process.opening_planned_batches > process.capacity_batches_per_period
             || input_needed > process.opening_input_quantity
-            || labor_needed > process.labor_capacity_hours_per_week
+            || labor_needed > process.labor_capacity_hours_per_period
         {
             return Err(MichiganMaterialErrorV1::ContentValue);
         }
@@ -520,7 +742,6 @@ fn validate_processes(catalog: &MichiganMaterialCatalogV1) -> Result<(), Michiga
 }
 
 fn validate_routes(catalog: &MichiganMaterialCatalogV1) -> Result<(), MichiganMaterialErrorV1> {
-    let design = &catalog.scenario;
     let mut keys = BTreeSet::new();
     for route in catalog.routes() {
         if !valid_key(&route.key)
@@ -539,71 +760,43 @@ fn validate_routes(catalog: &MichiganMaterialCatalogV1) -> Result<(), MichiganMa
             return Err(MichiganMaterialErrorV1::ContentReference);
         }
         if route.ordered_quantity == 0
-            || route.capacity_quantity_per_week == 0
-            || route.travel_weeks != design.standard_travel_weeks
+            || route.capacity_quantity_per_period == 0
+            || route.travel_periods == 0
+            || route.delayed_travel_periods < route.travel_periods
         {
             return Err(MichiganMaterialErrorV1::ContentValue);
         }
     }
-    if !catalog
-        .routes()
-        .iter()
-        .any(|route| route.key == design.delayed_route_key)
-    {
-        return Err(MichiganMaterialErrorV1::ContentReference);
-    }
+
     Ok(())
 }
 
-/// Read the exact bounded artifacts once, independent of the acquisition host.
-/// # Errors
-/// Refuses changed bytes, malformed fields, suppressed sources or invalid content.
-pub fn michigan_material_catalog_v1(
-) -> Result<&'static MichiganMaterialCatalogV1, MichiganMaterialErrorV1> {
-    static CATALOG: OnceLock<Result<MichiganMaterialCatalogV1, MichiganMaterialErrorV1>> =
-        OnceLock::new();
-    CATALOG
-        .get_or_init(|| {
-            if crate::michigan_economy::digest_hex(&sha256_of(INDUSTRY_BYTES))
-                != MICHIGAN_INDUSTRY_BASELINE_SHA256_V1
-                || crate::michigan_economy::digest_hex(&sha256_of(SCENARIO_BYTES))
-                    != MICHIGAN_MATERIAL_SCENARIO_SHA256_V1
-            {
-                return Err(MichiganMaterialErrorV1::ArtifactDigest);
-            }
-            parse_catalog(INDUSTRY_BYTES, SCENARIO_BYTES)
-        })
-        .as_ref()
-        .map_err(|error| *error)
-}
-
 #[cfg(test)]
-mod tests {
+mod parameter_bounds_tests {
     use super::*;
-
+    const SOURCE: &str = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../../content/scenarios/michigan/defines.toml"
+    ));
     #[test]
-    fn suppressed_source_zeros_are_refused() {
-        let mut source: serde_json::Value = serde_json::from_slice(INDUSTRY_BYTES).unwrap();
-        source["rows"][0]["disclosure_code"] = "N".into();
-        source["rows"][0]["annual_avg_emplvl"] = 0.into();
-        assert_eq!(
-            parse_catalog(&serde_json::to_vec(&source).unwrap(), SCENARIO_BYTES),
-            Err(MichiganMaterialErrorV1::SourceSuppressed)
+    fn horizon_output_accumulation_and_future_arrivals_must_fit_inventory() {
+        let huge_output = SOURCE.replace(
+            "OUTPUT_UNITS_PER_BATCH = 10",
+            "OUTPUT_UNITS_PER_BATCH = 500000000000000000",
         );
-    }
-
-    #[test]
-    fn absent_source_binding_and_extra_factory_coordinates_refuse() {
-        let mut design: serde_json::Value = serde_json::from_slice(SCENARIO_BYTES).unwrap();
-        design["sites"][0]["county_geoid"] = "01001".into();
-        assert_eq!(
-            parse_catalog(INDUSTRY_BYTES, &serde_json::to_vec(&design).unwrap()),
-            Err(MichiganMaterialErrorV1::ContentReference)
-        );
-        design["sites"][0]["latitude"] = 42.into();
-        assert_eq!(
-            parse_catalog(INDUSTRY_BYTES, &serde_json::to_vec(&design).unwrap()),
-            Err(MichiganMaterialErrorV1::ArtifactDecode)
-        );
+        assert!(matches!(
+            MichiganMaterialCatalogV1::from_defines_toml(&huge_output),
+            Err(MichiganDefinesErrorV1::Value(_))
+        ));
+        let mut stored = MichiganDefinesV1::parse(SOURCE).unwrap();
+        stored
+            .process
+            .get_mut("panel_forming")
+            .unwrap()
+            .opening_input_units = u64::MAX;
+        assert!(matches!(
+            MichiganMaterialCatalogV1::from_stored_defines(&stored.encode().unwrap()),
+            Err(MichiganDefinesErrorV1::Value(_))
+        ));
     }
 }

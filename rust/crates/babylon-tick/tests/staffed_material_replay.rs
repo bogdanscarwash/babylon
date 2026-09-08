@@ -60,7 +60,7 @@ const SCENARIO: &str = r"
   (node workers NodeType/SOCIAL_CLASS
     (social-class/employed-population 1)
     (social-class/reserve-population 0)
-    (social-class/previous-unretained-labor-hours 40)
+    (social-class/previous-unretained-labor-hours 160)
     (social-class/seen-employed 1)
     (social-class/probability 0.9p)))
 ";
@@ -118,18 +118,18 @@ fn process() -> ProcessIdV1 {
     ProcessIdV1::from_bytes([1; 32])
 }
 
-fn labor(week: u64, available: u64) -> LaborCapacityRowV1 {
+fn labor(period: u64, available: u64) -> LaborCapacityRowV1 {
     LaborCapacityRowV1 {
         site_id: site(1),
         unit_id: unit(1),
-        week,
+        period,
         available,
     }
 }
 
 fn opening() -> MaterialCircuitStateV2 {
     let mut state = MaterialCircuitStateV2 {
-        week: 1,
+        period: 1,
         site_logistics_nodes: [1, 2]
             .map(|id| SiteLogisticsNodeV2 {
                 site_id: site(id),
@@ -167,14 +167,14 @@ fn opening() -> MaterialCircuitStateV2 {
         freight: Vec::new(),
         corridor_capacities: Vec::new(),
         capacities: (1..=8)
-            .map(|week| CapacityRowV1 {
+            .map(|period| CapacityRowV1 {
                 process_id: process(),
                 site_id: site(1),
-                week,
+                period,
                 available_batches: 1,
             })
             .collect(),
-        labor: vec![labor(1, 40)],
+        labor: vec![labor(1, 160)],
         production_commitments: Vec::new(),
     };
     install_freight(&mut state);
@@ -198,7 +198,7 @@ fn install_freight(state: &mut MaterialCircuitStateV2) {
         corridor_id: corridor,
         from_node_id: LogisticsNodeIdV2::from_bytes([2; 32]),
         to_node_id: LogisticsNodeIdV2::from_bytes([1; 32]),
-        travel_weeks: 2,
+        travel_periods: 2,
         loss_ppm: 0,
     });
     state.orders.push(OrderRowV2 {
@@ -221,7 +221,7 @@ fn install_freight(state: &mut MaterialCircuitStateV2) {
     state.corridor_capacities.push(CorridorCapacityV2 {
         corridor_id: corridor,
         unit_id: unit(2),
-        week: 1,
+        period: 1,
         available: 4,
     });
 }
@@ -232,7 +232,7 @@ fn staffed_labor() -> MaterialLaborV1 {
         site(1),
         unit(1),
         1,
-        StaffingPolicyV1::one_week(40).unwrap(),
+        StaffingPolicyV1::one_period(160).unwrap(),
         vec![process()],
     )
     .unwrap();
@@ -398,24 +398,24 @@ fn owned_checkpoint_rows(rows: &MaterialStateRowsV1) -> MaterialStateRowsV1 {
 }
 
 #[test]
-fn one_empty_week_holds_then_releases_and_real_arrival_rehires_for_next_week() {
+fn one_empty_period_holds_then_releases_and_real_arrival_rehires_for_next_period() {
     let mut session = session("");
     let mut sink = CollectingSink::default();
     let first = prepare(&session);
     assert_eq!(staffing_field(&first, "current-unretained-hours"), 0);
-    assert_eq!(staffing_field(&first, "retained-hours"), 40);
+    assert_eq!(staffing_field(&first, "retained-hours"), 160);
     assert_eq!(staffing_field(&first, "separations"), 0);
     let receipts = decode_material_receipts_v3(first.material().receipt_bytes()).unwrap();
     assert_eq!(
         (
             receipts.dispatches[0].quantity,
-            receipts.dispatches[0].final_arrival_week
+            receipts.dispatches[0].final_arrival_period
         ),
         (4, 3)
     );
     commit(&mut session, &mut sink, first);
     assert_people(&session, 1.0, 0.0, 0.0);
-    assert_eq!(session.material().state().labor, vec![labor(2, 40)]);
+    assert_eq!(session.material().state().labor, vec![labor(2, 160)]);
 
     let second = prepare(&session);
     assert_eq!(staffing_field(&second, "separations"), 1);
@@ -438,7 +438,7 @@ fn one_empty_week_holds_then_releases_and_real_arrival_rehires_for_next_week() {
     );
     commit(&mut session, &mut sink, arrival);
     assert_people(&session, 1.0, 0.0, 40.0);
-    assert_eq!(session.material().state().labor, vec![labor(4, 40)]);
+    assert_eq!(session.material().state().labor, vec![labor(4, 160)]);
 
     let fourth = advance(&mut session, &mut sink);
     let fifth = advance(&mut session, &mut sink);
@@ -542,7 +542,7 @@ fn successful_acknowledgement_publishes_stable_staffing_and_identity_free_audit_
         .fields()
         .contains(&("subject".to_owned(), StableBslValueV1::Node(subject()))));
     for (name, expected) in [
-        ("week", 2),
+        ("period", 2),
         ("opening-employed", 1),
         ("opening-reserve", 0),
         ("closing-employed", 0),
@@ -752,7 +752,7 @@ fn staffed_admission_refuses_every_native_field_in_early_late_and_untaken_writes
             } else if field == RESERVE_POPULATION {
                 0.0
             } else {
-                40.0
+                160.0
             };
             assert_stock(
                 &scheduled,

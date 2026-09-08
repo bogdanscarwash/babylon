@@ -263,5 +263,5 @@ See Also
 
 - :doc:`/concepts/simulation-systems` - Why systems work this way
 - :doc:`/reference/systems` - API reference for built-in systems
-- :doc:`parameter-tuning` - Configure system parameters
+- :doc:`/reference/configuration` - Configure authored campaign parameters
 - :py:mod:`babylon.engine.systems` - System implementations

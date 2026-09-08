@@ -25,7 +25,7 @@ const MAX_BUNDLE_BYTES: usize = 1_048_576;
 const MAX_BUNDLE_TEXT_BYTES: usize = 4_096;
 const MAX_BUNDLE_GOODS: usize = 8;
 const MAX_BUNDLE_PROCESSES: usize = 2;
-const HORIZON_TICKS: u64 = 16;
+use crate::michigan_material::MICHIGAN_MAX_HORIZON_PERIODS_V1;
 
 /// Closed content refusals; an absent productive bundle never means zero output.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -215,7 +215,7 @@ impl SectorBundleV1 {
     }
     #[must_use]
     pub const fn horizon_ticks(&self) -> u64 {
-        HORIZON_TICKS
+        MICHIGAN_MAX_HORIZON_PERIODS_V1
     }
     #[must_use]
     pub fn goods(&self) -> &[SectorBundleGoodV1] {

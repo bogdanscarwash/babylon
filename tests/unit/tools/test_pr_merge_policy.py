@@ -35,17 +35,7 @@ SOURCE_SUITE_ID = 78264088632
 CLASSIFIER_SUITE_ID = 78264088701
 MERGE_COMMIT_SHA = "d" * 40
 
-DEV_BLOCKING_CHECKS = (
-    "Fast Gate (hygiene, lint, format, imports, types, lock)",
-    "Unit Tests (xdist, coverage gate)",
-    "Determinism Gate (byte-identical dense goldens)",
-    "Secret Scan (gitleaks, full history)",
-    "IaC Config Scan (trivy, HIGH+CRITICAL blocking)",
-    "Security Audit (pip-audit policy — blocking since item-41)",
-    "Rust Gate (fmt, clippy, test, doc — rust/ workspace)",
-    "Baseline Ceremony Gate (§6.5 provenance)",
-    "Postgres Integration Tier (PG 17, pinned runtime)",
-)
+DEV_BLOCKING_CHECKS = ("CI Gate",)
 
 MAIN_BLOCKING_CHECKS = (
     *DEV_BLOCKING_CHECKS,
@@ -55,9 +45,8 @@ MAIN_BLOCKING_CHECKS = (
     "Main Qualification / Reference-Data Contracts",
     "Main Qualification / Release Documentation",
     "Main Qualification / Container Image Scan",
+    "Main Qualification / Native Download / Linux x86_64",
 )
-
-MAIN_ADVISORY_CHECKS = ("Main Qualification / AI Tests (advisory)",)
 
 
 def test_merge_outcomes_are_stable_for_trusted_workflow_consumers() -> None:
@@ -506,6 +495,84 @@ def _run_pr_merge(
     return result, calls
 
 
+def _scoped_ci_scenario() -> dict[str, object]:
+    scenario = _default_scenario()
+    base_url = f"https://github.com/percy-raskova/babylon/actions/runs/{SOURCE_RUN_ID}/job"
+    gate = scenario["manifest_check_runs"]["check_runs"][0]
+    gate.update({"details_url": f"{base_url}/1", "check_suite": {"id": SOURCE_SUITE_ID}})
+    skipped = _manifest_check_run("Rust Validation", run_id=2, conclusion="skipped")
+    skipped.update({"details_url": f"{base_url}/2", "check_suite": {"id": SOURCE_SUITE_ID}})
+    scenario["manifest_check_runs"]["check_runs"].append(skipped)
+    scenario["manifest_check_runs"]["total_count"] = 2
+    entry = _check("Rust Validation", conclusion="SKIPPED")
+    entry["detailsUrl"] = f"{base_url}/2"
+    scenario["view"]["statusCheckRollup"].append(entry)
+    return scenario
+
+
+def test_verified_ci_scope_can_skip_a_native_job_without_fabricating_success(
+    tmp_path: Path,
+) -> None:
+    result, calls = _run_pr_merge(tmp_path, "--verify-only", scenario=_scoped_ci_scenario())
+
+    assert result.returncode == 0, result.stderr
+    assert not any(call[:2] == ["pr", "merge"] for call in calls)
+
+
+@pytest.mark.parametrize("fault", ["workflow", "head", "suite", "app", "run", "unknown", "gate"])
+def test_scoped_skips_require_the_exact_successful_ci_workflow(tmp_path: Path, fault: str) -> None:
+    scenario = _scoped_ci_scenario()
+    skipped = scenario["manifest_check_runs"]["check_runs"][1]
+    if fault == "workflow":
+        scenario["source_run"]["workflow_id"] = 9
+    elif fault == "head":
+        scenario["source_run"]["head_sha"] = OTHER_SHA
+    elif fault == "suite":
+        skipped["check_suite"]["id"] = 9
+    elif fault == "app":
+        skipped["app"]["id"] = 9
+    elif fault == "run":
+        skipped["details_url"] = skipped["details_url"].replace(str(SOURCE_RUN_ID), "9")
+    elif fault == "unknown":
+        skipped["name"] = "Unregistered Optional Check"
+        scenario["view"]["statusCheckRollup"][1]["name"] = skipped["name"]
+    else:
+        scenario["manifest_check_runs"]["check_runs"][0]["conclusion"] = "failure"
+
+    result, calls = _run_pr_merge(tmp_path, scenario=scenario)
+
+    assert result.returncode == 1, result.stderr
+    assert not any(call[:2] == ["pr", "merge"] for call in calls)
+
+
+def test_policy_migration_can_require_workflow_identity_without_skipped_jobs(
+    tmp_path: Path,
+) -> None:
+    scenario = _scoped_ci_scenario()
+    scenario["view"]["statusCheckRollup"] = scenario["view"]["statusCheckRollup"][:1]
+    scenario["source_run"]["workflow_id"] = 9
+
+    result, calls = _run_pr_merge(
+        tmp_path, "--verify-only", "--require-ci-workflow", scenario=scenario
+    )
+
+    assert result.returncode == 1, result.stderr
+    assert not any(call[:2] == ["pr", "merge"] for call in calls)
+
+
+def test_newer_scoped_failure_invalidates_an_older_skip_receipt(tmp_path: Path) -> None:
+    scenario = _scoped_ci_scenario()
+    newer = copy.deepcopy(scenario["manifest_check_runs"]["check_runs"][1])
+    newer.update({"id": 3, "conclusion": "failure"})
+    scenario["manifest_check_runs"]["check_runs"].append(newer)
+    scenario["manifest_check_runs"]["total_count"] = 3
+
+    result, calls = _run_pr_merge(tmp_path, scenario=scenario)
+
+    assert result.returncode == 1, result.stderr
+    assert not any(call[:2] == ["pr", "merge"] for call in calls)
+
+
 def _view(scenario: dict[str, object]) -> dict[str, object]:
     view = scenario["view"]
     assert isinstance(view, dict)
@@ -517,19 +584,10 @@ def _merge_calls(calls: list[list[str]]) -> list[list[str]]:
 
 
 def _use_main_manifest(scenario: dict[str, object]) -> None:
-    _view(scenario)["statusCheckRollup"] = [
-        *(_check(name) for name in MAIN_BLOCKING_CHECKS),
-        *(_check(name, conclusion="NEUTRAL") for name in MAIN_ADVISORY_CHECKS),
-    ]
+    _view(scenario)["statusCheckRollup"] = [_check(name) for name in MAIN_BLOCKING_CHECKS]
     runs = [
-        *(
-            _manifest_check_run(name, run_id=index)
-            for index, name in enumerate(MAIN_BLOCKING_CHECKS, start=1)
-        ),
-        *(
-            _manifest_check_run(name, run_id=index, conclusion="neutral")
-            for index, name in enumerate(MAIN_ADVISORY_CHECKS, start=50)
-        ),
+        _manifest_check_run(name, run_id=index)
+        for index, name in enumerate(MAIN_BLOCKING_CHECKS, start=1)
     ]
     scenario["manifest_check_runs"] = {
         "total_count": len(runs),
@@ -856,28 +914,6 @@ def test_director_main_accepts_only_sanctioned_main_sources(tmp_path: Path, head
     assert len(_merge_calls(calls)) == 1
 
 
-@pytest.mark.parametrize("advisory_name", MAIN_ADVISORY_CHECKS)
-def test_director_main_accepts_an_explicit_advisory_failure(
-    tmp_path: Path,
-    advisory_name: str,
-) -> None:
-    scenario = _default_scenario()
-    _view(scenario).update({"baseRefName": "main", "headRefName": "dev"})
-    _use_main_manifest(scenario)
-    advisory = next(run for run in _manifest_runs(scenario) if run["name"] == advisory_name)
-    advisory["conclusion"] = "failure"
-
-    result, calls = _run_pr_merge(
-        tmp_path,
-        "--director-main",
-        "--verify-only",
-        scenario=scenario,
-    )
-
-    assert result.returncode == 0, result.stderr
-    assert _merge_calls(calls) == []
-
-
 def test_director_main_refuses_container_image_scan_failure(tmp_path: Path) -> None:
     scenario = _default_scenario()
     _view(scenario).update({"baseRefName": "main", "headRefName": "dev"})
@@ -1106,12 +1142,12 @@ def test_copilot_only_api_failure_is_a_bounded_advisory(
     ("name", "conclusion", "status"),
     [
         (DEV_BLOCKING_CHECKS[0], "", "IN_PROGRESS"),
-        (DEV_BLOCKING_CHECKS[1], "SKIPPED", "COMPLETED"),
-        (DEV_BLOCKING_CHECKS[2], "NEUTRAL", "COMPLETED"),
+        (DEV_BLOCKING_CHECKS[0], "SKIPPED", "COMPLETED"),
+        (DEV_BLOCKING_CHECKS[0], "NEUTRAL", "COMPLETED"),
     ],
     ids=["late", "skipped", "neutral"],
 )
-def test_every_dev_blocking_check_requires_explicit_success(
+def test_dev_aggregate_requires_explicit_success(
     tmp_path: Path,
     name: str,
     conclusion: str,

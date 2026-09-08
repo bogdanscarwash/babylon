@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 from typing import Any
@@ -11,6 +12,140 @@ import pytest
 from tools import run_observer_session as launcher
 
 CAMPAIGN = UUID("81b979ee-a9c1-48fd-8835-06cbfe594675")
+
+
+def test_packaged_preparation_uses_only_the_bundled_binaries(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    calls: list[list[str]] = []
+    monkeypatch.setattr(launcher, "database_reachable", lambda _: True)
+    monkeypatch.setattr(launcher, "bootstrap_required", lambda _: True)
+    monkeypatch.setattr(launcher, "_run", lambda args, *_: calls.append(args))
+    monkeypatch.setattr(
+        launcher, "provision_readers", lambda _: launcher.ReaderCredentials("observer", "known")
+    )
+    runtime, client, _ = launcher.prepare(
+        tmp_path, {"CARGO_TARGET_DIR": "/unrelated/build"}, no_build=False, distribution=True
+    )
+    assert runtime == tmp_path / "bin/babylon-runtime"
+    assert client == tmp_path / "bin/babylon-client"
+    assert calls == [[str(runtime), "bootstrap"], [str(runtime), "observer-schema"]]
+
+
+def test_missing_packaged_database_cannot_start_the_developer_service(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(launcher, "database_reachable", lambda _: False)
+    calls: list[object] = []
+    monkeypatch.setattr(launcher, "_run", lambda *args: calls.append(args))
+    with pytest.raises(launcher.ObserverLaunchError, match="database is unavailable"):
+        launcher.prepare(tmp_path, {}, no_build=True, distribution=True)
+    assert not calls
+
+
+def test_packaged_database_owns_its_loopback_port_project_and_state(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "release.json").write_text(
+        json.dumps(
+            {
+                "schema": 1,
+                "version": "0.4.0",
+                "platform": "linux-x86_64",
+            }
+        )
+    )
+    calls: list[tuple[list[str], dict[str, str]]] = []
+
+    def run(args: list[str], **kwargs: Any) -> Any:
+        calls.append((args, kwargs["env"]))
+        return launcher.subprocess.CompletedProcess(args, 0, stdout="127.0.0.1:49177\n")
+
+    monkeypatch.setattr(launcher.subprocess, "run", run)
+    monkeypatch.setattr(launcher.os, "getuid", lambda: 4242)
+    environment = launcher.distribution_environment(
+        tmp_path,
+        {
+            "DOCKER_HOST": "unix:///run/docker.sock",
+            "COMPOSE_FILE": "/private/compose.yaml",
+            "COMPOSE_PROJECT_NAME": "unrelated",
+            "BABYLON_PG_DATA": "/private/saves",
+            "BABYLON_RUNTIME_DSN": "private credentials",
+            "PGPASSWORD": "secret",
+            "XDG_STATE_HOME": str(tmp_path / "state"),
+            "XDG_DATA_HOME": str(tmp_path / "data"),
+        },
+    )
+    assert launcher._target_parameters(environment["BABYLON_RUNTIME_DSN"])["port"] == "49177"
+    assert environment["XDG_STATE_HOME"] == str(tmp_path / "state/babylon-preview/0.4.0")
+    assert environment["XDG_DATA_HOME"] == str(tmp_path / "data/babylon-preview/0.4.0")
+    assert len(calls) == 2
+    assert calls[0][0][:5] == [
+        "docker",
+        "compose",
+        "--project-name",
+        "babylon-preview-4242-0-4-0",
+        "--file",
+    ]
+    for _, child_environment in calls:
+        assert "COMPOSE_FILE" not in child_environment
+        assert "COMPOSE_PROJECT_NAME" not in child_environment
+        assert "BABYLON_PG_DATA" not in child_environment
+        assert "PGPASSWORD" not in child_environment
+
+
+@pytest.mark.parametrize("endpoint", ["tcp://host.example:2376", "ssh://host.example"])
+def test_packaged_start_refuses_remote_docker_without_mutation(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    endpoint: str,
+) -> None:
+    calls: list[object] = []
+    monkeypatch.setattr(launcher.subprocess, "run", lambda *args, **_kwargs: calls.append(args))
+    with pytest.raises(launcher.ObserverLaunchError, match="local Docker"):
+        launcher.distribution_docker_environment(tmp_path, {"DOCKER_HOST": endpoint})
+    assert not calls
+
+
+def test_selected_remote_context_cannot_hide_behind_a_local_docker_host(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(
+        launcher.subprocess,
+        "run",
+        lambda *args, **_kwargs: launcher.subprocess.CompletedProcess(
+            args, 0, stdout="ssh://remote.example\n"
+        ),
+    )
+    with pytest.raises(launcher.ObserverLaunchError, match="local Docker"):
+        launcher.distribution_docker_environment(
+            tmp_path,
+            {
+                "DOCKER_HOST": "unix:///run/docker.sock",
+                "DOCKER_CONTEXT": "remote",
+            },
+        )
+
+
+def test_installation_check_refuses_a_different_reopened_tail(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    observations = iter(
+        [
+            ("foundation", {"resolve_tick": 1, "tick_content_hash": "a" * 64}),
+            ("foundation", {"resolve_tick": 1, "tick_content_hash": "b" * 64}),
+        ]
+    )
+    monkeypatch.setattr(launcher, "_check_session", lambda *_args, **_kwargs: next(observations))
+    with pytest.raises(launcher.ObserverLaunchError, match="different foundation or durable tail"):
+        launcher.check_installation(
+            tmp_path / "runtime", tmp_path / "client", tmp_path, {}, {}, tmp_path / "defines"
+        )
 
 
 @pytest.mark.parametrize("exit_code", [20, 21, 22, 23])
@@ -168,6 +303,37 @@ def test_corrupt_saved_campaign_refuses_without_replacing_it(tmp_path: Path) -> 
     assert state.read_text() == "damaged"
 
 
+@pytest.mark.parametrize("saved_pointer", [b"damaged", b"x" * 65])
+def test_smoke_ignores_damaged_saved_campaign_preferences(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, saved_pointer: bytes
+) -> None:
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
+    state = launcher.preference_path(dict(os.environ))
+    state.parent.mkdir(parents=True, exist_ok=True)
+    state.write_bytes(saved_pointer)
+    runtime, client = tmp_path / "runtime", tmp_path / "client"
+    calls: list[tuple[Any, ...]] = []
+    monkeypatch.setattr(
+        launcher,
+        "prepare",
+        lambda *_args, **_kwargs: (
+            runtime,
+            client,
+            launcher.ReaderCredentials("observer", "known"),
+        ),
+    )
+
+    def installation(*args: Any) -> int:
+        calls.append(args)
+        return 0
+
+    monkeypatch.setattr(launcher, "check_installation", installation)
+    assert launcher.main(["--smoke", "--no-build"]) == 0
+    assert len(calls) == 1
+    assert calls[0][:2] == (runtime, client)
+    assert state.read_bytes() == saved_pointer
+
+
 @pytest.mark.parametrize("preset", [None, "standard", "delayed"])
 def test_two_anonymous_pipes_connect_children_without_parent_forwarding(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, preset: str | None
@@ -200,6 +366,7 @@ def test_two_anonymous_pipes_connect_children_without_parent_forwarding(
         tmp_path,
         {"BABYLON_RUNTIME_DSN": "writer"},
         {"BABYLON_SESSION_STDIO": "1"},
+        defines_path=tmp_path / "custom values.toml",
         initial_target=(
             launcher.OpenCampaignTarget(CAMPAIGN)
             if preset is None
@@ -209,7 +376,13 @@ def test_two_anonymous_pipes_connect_children_without_parent_forwarding(
     assert code == 0
     assert len(fds) == 4 and len(children) == 2
     runtime, client = children
-    assert runtime["args"] == [str(tmp_path / "runtime"), "session", "--stdio"]
+    assert runtime["args"] == [
+        str(tmp_path / "runtime"),
+        "session",
+        "--stdio",
+        "--defines",
+        str(tmp_path / "custom values.toml"),
+    ]
     assert client["args"] == (
         [str(tmp_path / "client"), "--campaign", str(CAMPAIGN)]
         if preset is None
@@ -271,11 +444,20 @@ def test_runtime_shutdown_allows_commit_grace_before_bounded_exact_child_stop(
     arguments = (tmp_path / "runtime", tmp_path / "client", tmp_path, {}, {})
     if behavior == "graceful":
         assert (
-            launcher.run_pair(*arguments, initial_target=launcher.OpenCampaignTarget(CAMPAIGN)) == 0
+            launcher.run_pair(
+                *arguments,
+                defines_path=tmp_path / "defines.toml",
+                initial_target=launcher.OpenCampaignTarget(CAMPAIGN),
+            )
+            == 0
         )
     else:
         with pytest.raises(launcher.ObserverLaunchError, match="runtime shutdown deadline"):
-            launcher.run_pair(*arguments, initial_target=launcher.OpenCampaignTarget(CAMPAIGN))
+            launcher.run_pair(
+                *arguments,
+                defines_path=tmp_path / "defines.toml",
+                initial_target=launcher.OpenCampaignTarget(CAMPAIGN),
+            )
     # A normal game session has no time limit; shutdown starts after client EOF.
     assert client.calls == [("wait", None)]
     expected: list[tuple[str, float | None]] = [("wait", 150)]
@@ -315,6 +497,7 @@ def test_interrupted_startup_closes_pipes_and_preserves_runtime_grace(
             tmp_path,
             {},
             {},
+            defines_path=tmp_path / "defines.toml",
             initial_target=launcher.OpenCampaignTarget(CAMPAIGN),
         )
     assert runtime.calls == [("wait", 150)]

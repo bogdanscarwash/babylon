@@ -5,7 +5,8 @@
 Babylon splits its license by kind of content, not by directory tree shape:
 
 - **Code and the Bevy image estate: AGPL-3.0-or-later.** Read [`LICENSE`](LICENSE).
-- **Shipped audio estates: CC0-1.0.** Read [`LICENSE-ASSETS`](LICENSE-ASSETS).
+- **CC0 audio estates: CC0-1.0.** Read [`LICENSE-ASSETS`](LICENSE-ASSETS).
+- **Phi and Panopticon themes: author-authorized distribution.** See the permission below.
 
 The project verified `LICENSE` against the FSF canonical text at
 `https://www.gnu.org/licenses/agpl-3.0.txt`. `LICENSE-ASSETS` has a two-line pointer header. The
@@ -57,6 +58,17 @@ This section covers source, configuration, and docs-as-code:
 The new Bevy image estate described above does not change the CC0-1.0 classification of these
 audio estates.
 
+## Original themes — distribution permission
+
+On 2026-09-06, the Director confirmed original authorship of the Phi and
+Panopticon MIDI compositions and authorized their distribution with Babylon.
+This covers `assets/music/babylon_theme_phi.mid` and
+`assets/music/babylon_theme_panopticon.mid`, their corresponding `.ogg` renders,
+and those renders embedded in the native binary and GitHub downloads.
+
+This records the author's distribution permission. No CC0 dedication was made
+for these two themes; the separate CC0 audio estates above retain their licenses.
+
 ## Third-party license
 
 <!-- vale off -->
@@ -74,7 +86,7 @@ disposition does not have a ruling. This explicit list prevents an "AGPL by defa
 <!-- vale off -->
 <!-- Exact unresolved paths and historical provenance notes. -->
 - **`assets/music/`** (legacy: `crisis/`, `fascist/`, `revolutionary/`
-  suites + `babylon_theme_panopticon.mid` / `babylon_theme_phi.mid`, with legacy
+  suites, with legacy
   generators now in `tools/audio/music/legacy/`). Predates the CC0 estates by about seven
   months and was never folded into ADR152/ADR153's CC0 dedication.
   Believed to be original project composition (same generator-script

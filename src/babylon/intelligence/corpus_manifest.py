@@ -307,17 +307,8 @@ def load_manifest(path: Path) -> CorpusManifest:
 def load_bundled_manifest() -> CorpusManifest:
     """Load the manifest shipped in the package (``babylon/data/corpus/manifest.yaml``).
 
-    Loaded via a filesystem-relative path from this module's own location —
-    the same convention every other consumer under ``babylon/data/`` uses
-    (e.g. ``GameDefines.default_yaml_path`` in
-    :mod:`babylon.config.defines._assembler`), rather than
-    :mod:`importlib.resources`. ``babylon/data/`` and ``babylon/data/corpus/``
-    carry no ``__init__.py`` (unlike :mod:`babylon.intelligence.data`, the one
-    true ``importlib.resources`` package in this tree, which
-    :mod:`babylon.intelligence.model_manifest` reads from) — resolving them as
-    ``importlib.resources`` packages would lean on implicit namespace-package
-    behavior that the rest of ``babylon/data/`` deliberately does not depend
-    on for a packaged wheel.
+    Resolve the bundled data beside the installed Python package. The
+    manifest records corpus provenance; it does not configure game mechanics.
     """
     manifest_path = Path(__file__).parent.parent / "data" / "corpus" / "manifest.yaml"
     return load_manifest(manifest_path)

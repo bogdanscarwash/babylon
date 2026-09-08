@@ -8,7 +8,6 @@ pub(crate) mod publication;
 mod read;
 mod read_history;
 mod record;
-mod recovery;
 pub(crate) mod schema;
 mod storage;
 mod tick_knowledge;

@@ -7,6 +7,7 @@ use std::sync::OnceLock;
 use babylon_bsl::{rule_pipeline::split_content, rules_hash_of};
 use babylon_graph::hypergraph_store::HypergraphStore;
 use babylon_kernel::{
+    clock::DAYS_PER_TICK,
     replay::{ReplaySeed, ReplaySessionIdV1},
     sha256_of,
     tick_content_hash::RefDigestV1,
@@ -38,7 +39,6 @@ const ARTIFACT: &[u8] = include_bytes!(
 );
 const HEADER: &str = "county_geoid,annual_avg_estabs_count,annual_avg_emplvl,total_annual_wages,annual_avg_wkly_wage";
 const MAX_DECODED_BYTES: u64 = 33_554_432;
-const DEFINES: &[u8] = br#"{"qcew_vintage":2024}"#;
 const REFERENCE_DOMAIN: &[u8] = b"babylon.h3.reference-bundle-composite.v1\0";
 
 /// One unrounded, unsuppressed, exact row from the pinned public artifact.
@@ -229,10 +229,13 @@ fn build_observer_foundation(
     ),
     MichiganEconomyErrorV1,
 > {
+    let defines = format!(
+        "{{\"qcew_vintage\":{QCEW_ECONOMICS_VINTAGE_V1},\"tick_duration_days\":{DAYS_PER_TICK}}}"
+    );
     observer_foundation_from_source(
         economy.scenario_source(),
         "g4/michigan-observer-v1",
-        DEFINES,
+        defines.as_bytes(),
         FoundationContentBundleV1::try_new,
     )
 }
@@ -318,6 +321,45 @@ mod tests {
         include_str!("../../../../tests/fixtures/qcew_economics/baseline.csv");
     const GENERATED_CHANGED: &str =
         include_str!("../../../../tests/fixtures/qcew_economics/changed.csv");
+
+    #[test]
+    fn diagnostic_interval_changes_foundation_identity_without_rescaling_source_facts() {
+        let economy = michigan_economy_v1().unwrap();
+        let (session, bundle) = build_observer_foundation(economy).unwrap();
+        let defines: serde_json::Value = serde_json::from_slice(bundle.defines_bytes()).unwrap();
+        assert_eq!(defines["qcew_vintage"], 2024);
+        assert_eq!(defines["tick_duration_days"], 28);
+        let current = CampaignFoundationV1::capture(&session, bundle).unwrap();
+        assert_eq!(
+            sha256_of(current.canonical_bytes()),
+            michigan_observer_foundation_digest_v1().unwrap()
+        );
+
+        for incompatible in [
+            br#"{"qcew_vintage":2024}"#.as_slice(),
+            br#"{"qcew_vintage":2024,"tick_duration_days":7}"#.as_slice(),
+            br#"{"qcew_vintage":2024,"tick_duration_days":29}"#.as_slice(),
+        ] {
+            let (old_session, old_bundle) = observer_foundation_from_source(
+                economy.scenario_source(),
+                "g4/michigan-observer-v1",
+                incompatible,
+                FoundationContentBundleV1::try_new,
+            )
+            .unwrap();
+            let old = CampaignFoundationV1::capture(&old_session, old_bundle).unwrap();
+            assert_ne!(
+                sha256_of(old.canonical_bytes()),
+                sha256_of(current.canonical_bytes()),
+                "missing or incompatible time units must not share admission identity"
+            );
+            assert_eq!(
+                old.stable_graph_bytes(),
+                current.stable_graph_bytes(),
+                "annual observations and weekly wage source values must remain unchanged"
+            );
+        }
+    }
 
     fn advance_observation(
         session: &mut ReplayTickSession<HypergraphStore>,

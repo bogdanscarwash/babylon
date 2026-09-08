@@ -358,7 +358,7 @@ fn explicit_refresh_uses_the_driver_and_preserves_its_request_identity() {
 }
 
 #[test]
-fn failed_commit_and_duplicate_tail_never_publish_a_second_week() {
+fn failed_commit_and_duplicate_tail_never_publish_a_second_period() {
     for failed in [false, true] {
         let mut backend = backend();
         backend.fail_commit = failed;

@@ -1,38 +1,25 @@
-"""Integration tests for spec-067 US3: downstream consumer query refactor.
+"""Reference-data checks for normalized QCEW leaves after spec-067.
 
-The retained reference-data ``county_aggregation.py`` path computes
-c/v/employment_proxy via ``SUM`` over canonical leaves instead of selecting
-the ``industry_id = 1 AND ownership_id = 1`` rollup row.
-
-These tests verify:
-  * No spec-066 hotfix filters remain in production paths (SC-004).
-  * Wayne County 2010 employment via the post-067 path returns the SUM(leaves)
-    figure — acknowledging that for QCEW the BLS-publication ±5% target is
-    infeasible at the 6-digit naics_level due to BLS confidentiality
-    suppression (see research.md T036 finding).
-  * The Michigan-wide delta distribution between pre- and post-067 employment
-    SUMs is monotonic (SUM(leaves) ≤ SUM(rollup)) — sanity check.
+These checks retain the Wayne County annual-wage and Michigan county-year
+invariants independently of the retired Python runtime.
 """
 
 from __future__ import annotations
 
-import re
 from collections.abc import Iterator
-from pathlib import Path
 
 import pytest
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from babylon.reference.database import NORMALIZED_DB_PATH, get_reference_session
+from babylon.reference.database import get_reference_session
 
 
 @pytest.fixture
 def post_067_session() -> Iterator[Session]:
     """Reference DB session AFTER the spec-067 migration has been applied.
 
-    Tests under this fixture are SKIPPED at collection time if the live
-    reference DB still contains rollup rows (T036 has not yet been run).
+    Skip during fixture setup if the reference DB still contains rollup rows.
     """
 
     with get_reference_session() as session:
@@ -50,43 +37,17 @@ def post_067_session() -> Iterator[Session]:
         if rollups_remaining > 0:
             pytest.skip(
                 f"reference DB still has {rollups_remaining:,} rollup rows; "
-                "run `poetry run python tools/normalize_qcew_rollups.py --apply` first"
+                "run `mise exec -- uv run --frozen python tools/normalize_qcew_rollups.py --apply` first"
             )
         yield session
 
 
-@pytest.fixture
-def wayne_county_2010_handle(post_067_session: Session) -> tuple[int, int]:
-    """Return ``(county_id, time_id)`` for Wayne County, MI in 2010."""
-
-    row = post_067_session.execute(
-        text(
-            "SELECT c.county_id, t.time_id "
-            "FROM dim_county c, dim_time t "
-            "WHERE c.fips = '26163' AND t.year = 2010 AND t.is_annual = 1 "
-            "LIMIT 1"
-        )
-    ).fetchone()
-    if row is None:
-        pytest.skip("Wayne County / 2010 not present in reference DB")
-    return (row[0], row[1])
-
-
 # T038 — Wayne County 2010 via the post-067 SUM-of-leaves path.
 @pytest.mark.requires_reference_db
-def test_post_067_wayne_2010_via_hex_hydrator_within_bls_band(
+def test_post_067_wayne_2010_has_positive_total_wages(
     post_067_session: Session,
 ) -> None:
-    """Wayne 2010 total wages via the post-067 query returns a non-zero value.
-
-    NOTE: The original SC-001 target was "within ±5% of BLS publication."
-    Empirical measurement (research.md T036 finding) shows QCEW data has
-    ~10-30% suppression at 6-digit NAICS detail vs. the Total Covered
-    rollup. This test verifies the post-067 path produces a coherent
-    non-zero SUM whose value lies between 60% and 100% of the BLS rollup
-    target (matching observed QCEW suppression). The strict ±5% target is
-    deferred to a follow-up spec amendment.
-    """
+    """Canonical Wayne County leaves have a nonzero annual wage sum."""
 
     actual_wages = post_067_session.execute(
         text(
@@ -134,30 +95,3 @@ def test_post_067_michigan_county_years_have_non_zero_employment(
         f"{len(zero_county_years)} Michigan county-years have zero post-067 rows: "
         f"{zero_county_years[:5]}"
     )
-
-
-# T040 — Build-time grep enforcement (SC-004).
-def test_post_067_no_filter_lines_remain_in_production_paths() -> None:
-    """No spec-066 hotfix filter remains in the production query paths.
-
-    Pure-Python scan (was an ``rg`` subprocess — hosted CI runners have no
-    ripgrep, which made this test FileNotFoundError on its first-ever CI run,
-    2026-07-11).
-    """
-    pattern = re.compile(
-        r"WHERE\s+ownership_id\s*=\s*1|WHERE\s+industry_id\s*=\s*1|"
-        r"AND\s+(?:fq\.)?ownership_id\s*=\s*1|AND\s+(?:fq\.)?industry_id\s*=\s*1"
-    )
-    repo_root = Path(__file__).resolve().parents[2]
-    target_files = [repo_root / "src/babylon/persistence/county_aggregation.py"]
-    hits: list[str] = []
-    for target in target_files:
-        for lineno, line in enumerate(target.read_text().splitlines(), start=1):
-            if pattern.search(line):
-                hits.append(f"{target}:{lineno}: {line.strip()}")
-    assert not hits, (
-        "spec-066 hotfix filter pattern still present in production code:\n" + "\n".join(hits)
-    )
-    # Sanity: silence unused-variable lint for NORMALIZED_DB_PATH at module
-    # scope without actually importing the path during the grep check.
-    _ = NORMALIZED_DB_PATH

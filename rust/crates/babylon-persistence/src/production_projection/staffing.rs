@@ -25,7 +25,7 @@ use crate::{
 type Result<T> = std::result::Result<T, ProductionProjectionErrorV1>;
 const EVENT: &str = "WORKFORCE_STAFFING";
 const INTEGER_FIELDS: [&str; 12] = [
-    "week",
+    "period",
     "opening-employed",
     "opening-reserve",
     "previous-unretained-hours",
@@ -49,7 +49,7 @@ pub(crate) fn project_staffing_accounts_v1(
     let tick = register.completed_tick();
     if (tick == 0) != opening.is_none()
         || (tick == 0 && !events.is_empty())
-        || tick.checked_add(1) != Some(register.state().week)
+        || tick.checked_add(1) != Some(register.state().period)
         || opening.is_some_and(|prior| prior.scenario_scope() != graph.scenario_scope())
     {
         return Err(ProductionProjectionErrorV1::History);
@@ -99,7 +99,7 @@ pub(crate) fn project_staffing_accounts_v1(
         let mut labor = register.state().labor.iter().filter(|row| {
             row.site_id == pool.site_id()
                 && row.unit_id == pool.unit_id()
-                && row.week == register.state().week
+                && row.period == register.state().period
         });
         if labor.next().map(|row| row.available) != Some(next_hours) || labor.next().is_some() {
             return Err(ProductionProjectionErrorV1::State);
@@ -135,7 +135,7 @@ pub(crate) fn project_staffing_accounts_v1(
             employed: closing.employed,
             reserve: closing.reserve,
             previous_unretained_hours: closing.previous,
-            next_opening_week: register.state().week,
+            next_opening_period: register.state().period,
             next_opening_hours: next_hours,
             completed,
         });
@@ -253,9 +253,9 @@ fn completed_account(
     next_hours: u64,
     values: [u64; 12],
 ) -> Result<CompletedProductionStaffingV1> {
-    let [week, opening_employed, opening_reserve, previous_unretained_hours, current_unretained_hours, retained_hours, target_employed, hires, separations, closing_employed, closing_reserve, next_opening_hours] =
+    let [period, opening_employed, opening_reserve, previous_unretained_hours, current_unretained_hours, retained_hours, target_employed, hires, separations, closing_employed, closing_reserve, next_opening_hours] =
         values;
-    if week != tick
+    if period != tick
         || opening_employed != opening.employed
         || opening_reserve != opening.reserve
         || previous_unretained_hours != opening.previous
@@ -281,7 +281,7 @@ fn completed_account(
         return Err(ProductionProjectionErrorV1::History);
     }
     Ok(CompletedProductionStaffingV1 {
-        week,
+        period,
         opening_employed,
         opening_reserve,
         previous_unretained_hours,

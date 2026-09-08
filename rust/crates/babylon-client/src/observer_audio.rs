@@ -99,7 +99,7 @@ fn feedback(
             | ObserverCommand::CycleGood(_)
             | ObserverCommand::Perspective => bank.tab.clone(),
             ObserverCommand::Archive | ObserverCommand::Menu => bank.open.clone(),
-            ObserverCommand::PreviousWeek | ObserverCommand::Live => bank.back.clone(),
+            ObserverCommand::PreviousPeriod | ObserverCommand::Live => bank.back.clone(),
             _ => bank.select.clone(),
         });
     }

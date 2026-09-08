@@ -5,7 +5,7 @@ meta:
   version: "2.0.1"
   updated: "2026-09-04"
   purpose: "Capture recurring insights as memorable principles"
-  authority: "CONSTITUTION.md v4.1.0"
+  authority: "CONSTITUTION.md v4.2.0"
   product: "entertainment-first emergent political-economy game"
   forecast: false
   scientific_reproduction: false
@@ -62,8 +62,8 @@ mantras:
   state_is_data:
     text: "State is pure data. Engine is pure transformation. They never mix."
     meaning: |
-      The live Rust world types contain only data. The frozen Python WorldState
-      remains a behavioral reference built from Pydantic models.
+      The live Rust world types contain only data. Historical Python source
+      is recoverable from Git and supplies no live authority.
       TickSession holds the world, prepared rules, tick counter, and session
       identity across advances. It is a deliberate session boundary. Game
       judgment remains in typed transformations, not in data classes.

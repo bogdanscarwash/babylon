@@ -1,15 +1,13 @@
 //! Exact historical staffing and complete-envelope refusal in an owned clone.
 
 use super::{
-    advance_material_week, assert_known_material_absence, install_observer_economy_schema_v1,
+    advance_material_period, assert_known_material_absence, install_observer_economy_schema_v1,
     install_reader_role_v1, CampaignId, Config, DisposableTarget, DurableMaterialRuntimeV3,
     MichiganContentPresetV1, NoTls, ObserverEconomyErrorV1, ObserverEconomyReaderV1,
     ObserverVisibilityV1, Uuid,
 };
 use babylon_graph::stable_element::StableElementKeyV1;
-use babylon_persistence::{
-    michigan_material::michigan_material_catalog_v1, ObserverEconomySnapshotV1,
-};
+use babylon_persistence::ObserverEconomySnapshotV1;
 use postgres::{
     types::{FromSqlOwned, ToSql},
     Client,
@@ -29,8 +27,8 @@ impl Fixture {
     fn new() -> Self {
         let mut target = DisposableTarget::create();
         let campaign = CampaignId::from_uuid(Uuid::from_u128(41_101));
-        let foundation = MichiganContentPresetV1::StaffedDelayedV4
-            .create_foundation()
+        let foundation = MichiganContentPresetV1::FourWeekDelayedV5
+            .create_foundation(&crate::test_support::catalog())
             .unwrap();
         let foundation_digest = foundation.digest();
         let runtime =
@@ -63,7 +61,7 @@ impl Fixture {
 
     fn advance_to(&mut self, tick: u64) {
         while self.runtime.session().completed_tick() < tick {
-            advance_material_week(&mut self.runtime);
+            advance_material_period(&mut self.runtime);
         }
     }
 }
@@ -71,7 +69,7 @@ impl Fixture {
 fn assert_foundation(fixture: &Fixture) {
     let snapshot = fixture.read(0);
     let production = snapshot.production.as_ref().unwrap();
-    let catalog = michigan_material_catalog_v1().unwrap();
+    let catalog = crate::test_support::catalog();
     assert_eq!(production.staffing_accounts.len(), 5);
     let mut employed = Vec::new();
     for seed in &catalog.staffing().pools {
@@ -87,9 +85,9 @@ fn assert_foundation(fixture: &Fixture) {
             seed.previous_unretained_hours
         );
         assert_eq!(account.labor_force, seed.employed + seed.reserve);
-        assert_eq!(account.hours_per_person, 40);
-        assert_eq!(account.next_opening_week, 1);
-        assert_eq!(account.next_opening_hours, seed.employed * 40);
+        assert_eq!(account.hours_per_person, 160);
+        assert_eq!(account.next_opening_period, 1);
+        assert_eq!(account.next_opening_hours, seed.employed * 160);
         assert!(account.completed.is_none());
         employed.push(account.employed);
     }
@@ -111,7 +109,7 @@ fn assert_foundation(fixture: &Fixture) {
 }
 
 #[test]
-#[ignore = "requires the task-owned disposable PostgreSQL harness; serial clone ownership"]
+#[ignore = "requires the task-owned disposable PostgreSQL harness; independent clone ownership"]
 fn held_staffing_history_survives_advance_reopen_and_does_not_mutate_authority() {
     let mut fixture = Fixture::new();
     assert_foundation(&fixture);
@@ -120,9 +118,10 @@ fn held_staffing_history_survives_advance_reopen_and_does_not_mutate_authority()
     let digest = held.production_evidence_digest().unwrap();
     let accounts = &held.production.as_ref().unwrap().staffing_accounts;
     assert_eq!(accounts.len(), 5);
-    assert!(accounts
-        .iter()
-        .all(|row| row.completed.as_ref().is_some_and(|week| week.week == 2)));
+    assert!(accounts.iter().all(|row| row
+        .completed
+        .as_ref()
+        .is_some_and(|period| period.period == 2)));
     fixture.advance_to(4);
     let committed = *fixture.runtime.tail().unwrap();
     let world = fixture.runtime.session().current_world_hash().unwrap();
@@ -375,7 +374,7 @@ fn assert_commit_faults(
 }
 
 #[test]
-#[ignore = "requires the task-owned disposable PostgreSQL harness; serial clone ownership"]
+#[ignore = "requires the task-owned disposable PostgreSQL harness; independent clone ownership"]
 fn complete_marker_authentication_refuses_independent_staffing_and_auxiliary_row_corruption() {
     let mut fixture = Fixture::new();
     fixture.advance_to(4);

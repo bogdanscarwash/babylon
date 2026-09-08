@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 #[serde(deny_unknown_fields)]
 pub struct ProductionSnapshotV1 {
     pub scenario_label: String,
-    pub horizon_week: u64,
+    pub horizon_period: u64,
     pub sites: Vec<ProductionSiteV1>,
     pub routes: Vec<ProductionRouteV1>,
     pub freight: Vec<ProductionFreightV1>,
@@ -22,7 +22,7 @@ pub struct ProductionSnapshotV1 {
     /// Exact graph-owned modeled people and retained work requests at this scope.
     /// A missing account is not an observed zero; foundation has no completed event.
     pub staffing_accounts: Vec<ProductionStaffingAccountV1>,
-    /// Exact completed-week stock accounting; absent at foundation.
+    /// Exact completed-period stock accounting; absent at foundation.
     pub material_balance: Option<crate::CompletedMaterialBalanceV1>,
     /// Deduplicated public 2024 source cells, never current modeled employment.
     pub observed_contexts: Vec<ObservedManufacturingContextV1>,
@@ -91,7 +91,7 @@ pub struct ProductionSiteV1 {
     pub output_good: String,
     pub output_unit: String,
     pub output_per_batch: u64,
-    /// Capacity at the next opening week, in exact process batches.
+    /// Capacity at the next opening period, in exact process batches.
     pub available_batches: u64,
     /// Last committed production-family reading; absent at foundation.
     /// Omitted zero commitments in a complete family read as zero without
@@ -140,16 +140,16 @@ pub struct ProductionLaborAccountV1 {
     pub site_id: String,
     pub unit_id: String,
     pub unit: String,
-    pub next_opening_week: u64,
+    pub next_opening_period: u64,
     pub next_opening_available: u64,
-    /// Absent at foundation; unused time expires within its completed week.
+    /// Absent at foundation; unused time expires within its completed period.
     pub completed: Option<CompletedProductionLaborV1>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CompletedProductionLaborV1 {
-    pub week: u64,
+    pub period: u64,
     pub opening: u64,
     pub planned: u64,
     pub used: u64,
@@ -164,7 +164,7 @@ pub struct ProductionStaffingSubjectV1 {
     pub local_name: String,
 }
 
-/// Modeled population stocks at the selected committed week, separate from QCEW jobs.
+/// Modeled population stocks at the selected committed period, separate from QCEW jobs.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ProductionStaffingAccountV1 {
@@ -177,7 +177,7 @@ pub struct ProductionStaffingAccountV1 {
     pub employed: u64,
     pub reserve: u64,
     pub previous_unretained_hours: u64,
-    pub next_opening_week: u64,
+    pub next_opening_period: u64,
     pub next_opening_hours: u64,
     /// Absent at foundation; present only with exact committed staffing evidence.
     pub completed: Option<CompletedProductionStaffingV1>,
@@ -187,7 +187,7 @@ pub struct ProductionStaffingAccountV1 {
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CompletedProductionStaffingV1 {
-    pub week: u64,
+    pub period: u64,
     pub opening_employed: u64,
     pub opening_reserve: u64,
     pub previous_unretained_hours: u64,
@@ -209,7 +209,7 @@ pub struct ProductionRouteV1 {
     pub unit_id: String,
     pub good: String,
     pub unit: String,
-    pub travel_weeks: u64,
+    pub travel_periods: u64,
     pub ordered: u64,
     pub shipped: u64,
     pub delivered: u64,
@@ -231,15 +231,15 @@ pub struct ProductionFreightV1 {
     pub good: String,
     pub unit: String,
     pub quantity: u64,
-    pub dispatch_week: u64,
-    pub arrival_week: u64,
+    pub dispatch_period: u64,
+    pub arrival_period: u64,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ProductionEventV1 {
     pub id: String,
-    pub week: u64,
+    pub period: u64,
     pub subject_site_ids: Vec<String>,
     pub kind: String,
     pub description: String,

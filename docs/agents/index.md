@@ -4,12 +4,12 @@ Content-oriented catalog of all agent-facing documentation. Updated after every 
 
 ## Architecture & Code
 
-- [Architecture Overview](architecture.md) — Trinity, engine systems, formulas, GameDefines
+- [Architecture Overview](architecture.md) — canonical Rust, persistence, and observer boundary
 - [Coding Standards](coding-standards.md) — Pydantic, TDD, commits, docstrings, imports
 
 ## Operations
 
-- [Testing](testing.md) — Test constants, factories, fixtures, markers
+- [Testing](testing.md) — proportionate native and data-tool validation
 - [Commands](commands.md) — mise tasks reference
 - [Gotchas](gotchas.md) — Common pitfalls and debugging lessons
 

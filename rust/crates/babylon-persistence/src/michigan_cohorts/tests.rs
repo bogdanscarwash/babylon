@@ -253,7 +253,7 @@ fn full_foundation_and_checkpoint_roundtrip_preserve_memberships_and_identity() 
 }
 
 /// Reproduce the pre-extraction constructor independently to protect V1 saves.
-fn original_v1_constructor() -> (
+fn explicit_observer_constructor() -> (
     ReplayTickSession<HypergraphStore>,
     FoundationContentBundleV1,
 ) {
@@ -263,7 +263,11 @@ fn original_v1_constructor() -> (
         digest_hex(&sha256_of(source.as_bytes())),
         "84650f5a5ab3a6913eb125def04b606653217a50eaf67f515f148fb37283d1fa"
     );
-    let defines = br#"{"qcew_vintage":2024}"#;
+    let defines = format!(
+        "{{\"qcew_vintage\":2024,\"tick_duration_days\":{}}}",
+        babylon_kernel::clock::DAYS_PER_TICK
+    );
+    let defines = defines.as_bytes();
     let content = ContentDigest {
         defines_hash: sha256_of(defines),
         rules_hash: babylon_bsl::rules_hash_of(&[]).unwrap(),
@@ -290,8 +294,8 @@ fn original_v1_constructor() -> (
 }
 
 #[test]
-fn shared_constructor_keeps_existing_v1_foundation_bytes_identical() {
-    let (expected, expected_bundle) = original_v1_constructor();
+fn shared_constructor_matches_explicit_current_interval_foundation() {
+    let (expected, expected_bundle) = explicit_observer_constructor();
     let (actual, actual_bundle) = michigan_observer_foundation_v1().unwrap();
     assert_eq!(
         CampaignFoundationV1::capture(&actual, actual_bundle)

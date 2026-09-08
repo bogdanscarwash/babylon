@@ -1,31 +1,34 @@
 name: Release
 
-# Program 15 Phase 8, owner ruling 4 (2026-07-11): releases are TAG-DRIVEN.
-# Version bumps are a deliberate untagged commit on dev. After the qualified
-# Director merge, `mise run release:tag -- --yes` attaches vX.Y.Z to main and
-# pushes it to fire this workflow. The old push-to-main auto-bump is retired:
-# with dev 762 conventional commits ahead, an unguarded ff would have
-# auto-published a giant surprise release on arrival (the exact failure
-# mode that stale-froze main last time).
-
+# Public downloads are tag-driven and must identify qualified main history.
+# Dev commits only produce CI/version evidence. Tags are never moved and an
+# existing release is never silently overwritten by a retry.
 on:
   push:
     tags: ["v*"]
   workflow_dispatch:
     inputs:
       tag:
-        description: "Existing v* tag to (re)publish a GitHub release for"
+        description: Existing main vX.Y.Z tag to publish
         required: true
         type: string
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
 
 jobs:
-  release:
-    name: Publish GitHub Release
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
+  identity:
+    name: Verify Main Release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+      sha: ${{ steps.verify.outputs.sha }}
+      version: ${{ steps.verify.outputs.version }}
     steps:
       - name: Resolve tag
         id: tag
@@ -33,84 +36,97 @@ jobs:
           INPUT_TAG: ${{ inputs.tag }}
         run: |
           if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
-            TAG="${INPUT_TAG}"
+            TAG="$INPUT_TAG"
           else
             TAG="${GITHUB_REF#refs/tags/}"
           fi
-          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then
-            echo "::error::'$TAG' is not a canonical v* tag"
-            exit 1
-          fi
+          [[ "$TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ steps.tag.outputs.tag }}
           fetch-depth: 0
           fetch-tags: true
-
-      - name: Fetch protected release ancestry
-        run: >-
-          git fetch --no-tags origin
-          +refs/heads/main:refs/remotes/origin/main
-          +refs/heads/dev:refs/remotes/origin/dev
-
-      - name: Verify tag is attached to main history
-        env:
-          RELEASE_TAG: ${{ steps.tag.outputs.tag }}
-        run: python3 tools/check_release_tag.py --tag "$RELEASE_TAG"
-
-      - name: Verify protected main returned to dev before publication
+      - name: Verify exact source, protected ancestry and version
+        id: verify
         env:
           RELEASE_TAG: ${{ steps.tag.outputs.tag }}
         run: |
+          git fetch --no-tags origin \
+            +refs/heads/main:refs/remotes/origin/main \
+            +refs/heads/dev:refs/remotes/origin/dev
+          python3 tools/check_release_tag.py --tag "$RELEASE_TAG"
           MAIN_SHA="$(git rev-parse HEAD)"
-          if ! git merge-base --is-ancestor "$MAIN_SHA" refs/remotes/origin/dev; then
-            echo "::error::release main is absent from protected dev history"
-            exit 1
-          fi
+          git merge-base --is-ancestor "$MAIN_SHA" refs/remotes/origin/dev
           python3 tools/release_lineage.py verify \
-            --ref refs/remotes/origin/dev \
-            --tag "$RELEASE_TAG" \
-            --main-sha "$MAIN_SHA"
+            --ref refs/remotes/origin/dev --tag "$RELEASE_TAG" --main-sha "$MAIN_SHA"
+          echo "version=$(python3 tools/release_version.py --release-tag "$RELEASE_TAG")" >> "$GITHUB_OUTPUT"
+          echo "sha=$MAIN_SHA" >> "$GITHUB_OUTPUT"
+          ./tools/check_release_pins.sh
 
-      - name: Verify native toolchain and reference byte-contract pins
-        run: ./tools/check_release_pins.sh
-
+  release:
+    name: Publish GitHub Release
+    needs: [identity]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.identity.outputs.sha }}
+          fetch-depth: 0
       - uses: ./.github/actions/bootstrap-python
-
       - name: Verify dependency lock matches source declarations
         run: uv lock --check
-
       - name: Source smoke
         run: |
           uv run --frozen python -c "import babylon"
           uv run --frozen babylon --help
-
-      - name: Regression gate against committed baselines
-        run: mise run qa:regression
-
-      - name: Extract release notes for this tag
-        id: notes
+      - name: Promote the exact main-qualified native package
         env:
-          RELEASE_TAG: ${{ steps.tag.outputs.tag }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ needs.identity.outputs.tag }}
         run: |
-          TAG="$RELEASE_TAG"
-          # The bump commit (made by `mise run release:bump` on dev) updated
-          # CHANGELOG.md; extract this version's section for the release body.
-          uv run --frozen cz changelog "${TAG#v}" --dry-run > release-notes.md || {
-            echo "::warning::cz changelog extraction failed — falling back to full CHANGELOG.md"
-            cp CHANGELOG.md release-notes.md
-          }
-          head -5 release-notes.md
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3
-        with:
-          tag_name: ${{ steps.tag.outputs.tag }}
-          name: ${{ steps.tag.outputs.tag }}
-          body_path: release-notes.md
-          draft: false
-          prerelease: false
+          git fetch --no-tags origin \
+            +refs/heads/main:refs/remotes/origin/main \
+            +refs/heads/dev:refs/remotes/origin/dev
+          python3 tools/release_artifact.py --tag "$RELEASE_TAG" \
+            --repository "$GITHUB_REPOSITORY" --output-dir release-download
+      - name: Verify release download checksums
+        working-directory: release-download
+        run: sha256sum --check ./*.sha256
+      - name: Extract release notes for this tag
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_VERSION: ${{ needs.identity.outputs.version }}
+        run: |
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          heading = f"## v{os.environ['RELEASE_VERSION']} ("
+          lines = Path("CHANGELOG.md").read_text().splitlines(keepends=True)
+          starts = [index for index, line in enumerate(lines) if line.startswith(heading)]
+          if len(starts) != 1:
+              raise SystemExit("Expected one canonical changelog section for this release")
+          start = starts[0]
+          end = next((index for index in range(start + 1, len(lines))
+                      if lines[index].startswith("## ")), len(lines))
+          Path("release-notes.md").write_text("".join(lines[start:end]))
+          PY
+          cat tools/release/DOWNLOAD.md >> release-notes.md
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ needs.identity.outputs.tag }}
+          RELEASE_VERSION: ${{ needs.identity.outputs.version }}
+        run: |
+          options=()
+          if [[ "$RELEASE_VERSION" == 0.* ]]; then options+=(--prerelease); fi
+          gh release create "$RELEASE_TAG" --verify-tag --draft \
+            --title "Babylon $RELEASE_VERSION — native observer preview" \
+            --notes-file release-notes.md "${options[@]}"
+          gh release upload "$RELEASE_TAG" release-download/*.tar.gz \
+            release-download/*.sha256 release-download/release-provenance.json
+          gh release edit "$RELEASE_TAG" --draft=false

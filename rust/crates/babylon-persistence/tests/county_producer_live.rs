@@ -12,13 +12,8 @@ use std::str::FromStr;
 
 #[path = "support/archive_reader.rs"]
 mod archive_reader;
-#[path = "support/legacy_archive.rs"]
-mod legacy_archive;
 use archive_reader::{scope_at, with_reader};
-use babylon_persistence::archive_revision::{
-    ArchiveDossierBoundsV2, ArchiveDossierPageV2, ArchiveDossierPendingV2, ArchiveDossierStateV2,
-    ArchiveDossierUnavailableV2, ArchiveReadScopeV2,
-};
+use babylon_persistence::archive_revision::{ArchiveDossierBoundsV2, ArchiveDossierStateV2};
 
 use babylon_bsl::rule_pipeline::split_content;
 use babylon_bsl::rules_hash_of;
@@ -29,7 +24,7 @@ use babylon_kernel::sha256_of;
 use babylon_kernel::tick_content_hash::RefDigestV1;
 use babylon_kernel::ContentDigest;
 use babylon_persistence::{
-    michigan_dynamic_hex_foundation_v1, validate_legacy_connection_target, ArchiveCitationV1,
+    michigan_dynamic_hex_foundation_v1, validate_connection_target, ArchiveCitationV1,
     ArchiveKnowledgeGrantV1, ArchivePageRefV1, ArchiveReceiptDispositionV1,
     ArchiveSchemaDispositionV1, ArchiveSubjectKindV1, ArchiveWorkerV1, CampaignId,
     CountyDossierProducerV1, DurableReplayRuntimeV2, FoundationContentBundleV1,
@@ -41,10 +36,10 @@ use babylon_tick::replay_session::ReplayTickSession;
 use postgres::{Config, NoTls};
 use uuid::Uuid;
 
-const DSN_ENV: &str = "BABYLON_LEGACY_ADOPTER_TEST_DSN";
-const ACK_ENV: &str = "BABYLON_LEGACY_ADOPTER_DISPOSABLE_ACK";
-const ACK: &str = "I_UNDERSTAND_PER20_DROPS_SCRATCH_DATABASES_ROLES_AND_CREATED_BABYLON_INTEL";
-const CANARY_ENV: &str = "BABYLON_LEGACY_ADOPTER_DISPOSABLE_CANARY";
+const DSN_ENV: &str = "BABYLON_POSTGRES_TEST_DSN";
+const ACK_ENV: &str = "BABYLON_POSTGRES_DISPOSABLE_ACK";
+const ACK: &str = "I_UNDERSTAND_THIS_DISPOSABLE_RUNTIME_DROPS_ITS_SCRATCH_DATABASES_AND_ROLES";
+const CANARY_ENV: &str = "BABYLON_POSTGRES_DISPOSABLE_CANARY";
 const TEMPLATE_DB_ENV: &str = "BABYLON_RUNTIME_TEMPLATE_DB";
 const DEFINES: &[u8] = br#"{"alpha":1}"#;
 const REFERENCE_BUNDLE_DOMAIN: &[u8] = b"babylon.h3.reference-bundle-composite.v1\0";
@@ -188,14 +183,14 @@ fn validated_base_config() -> Config {
     assert_eq!(canary.len(), 32);
     let dsn = std::env::var(DSN_ENV).expect("runner supplies the disposable DSN");
     let config = Config::from_str(&dsn).expect("runner DSN parses");
-    validate_legacy_connection_target(&config).expect("loopback target");
+    validate_connection_target(&config).expect("loopback target");
     assert_eq!(config.get_user(), Some("test"));
     assert_eq!(config.get_dbname(), Some("postgres"));
     let actual: Option<String> = config
         .connect(NoTls)
         .expect("canary connection")
         .query_one(
-            "SELECT pg_catalog.current_setting('babylon.per20_disposable', true)",
+            "SELECT pg_catalog.current_setting('babylon.disposable_runtime', true)",
             &[],
         )
         .expect("canary query")
@@ -686,131 +681,4 @@ fn live_county_producer_grant_refresh_republicates_revealed_page() {
         3
     );
     target.finish();
-}
-
-#[test]
-#[ignore = "requires the task-owned disposable PostgreSQL runtime and committed ticks"]
-fn live_adoption_retains_exact_current_head_and_validates_quiet_tail_without_a_tick() {
-    let target = LiveCountyTarget::create(
-        "countyadoption",
-        0x2200_0000_0000_0000_0000_0000_0000_00ca,
-        3,
-    );
-    let producer = CountyDossierProducerV1::try_new(&target.config).expect("county producer");
-    let store = SemanticArchiveStoreV1::new(&target.config);
-    grant_county_fields(&store, target.campaign_id);
-    let report = ArchiveWorkerV1::new(&target.config)
-        .sweep_once(target.campaign_id, &producer)
-        .expect("publish then quiet drain");
-    assert_eq!(report.verified_tick(), 3);
-    let subject = ArchivePageRefV1::try_new(ArchiveSubjectKindV1::County, "26163".to_owned())
-        .expect("subject");
-    let scope = scope_at(&target.config, target.campaign_id, 3);
-    let old = with_reader(&target.config, |reader| {
-        let read = reader
-            .dossier_as_of(&scope, &subject, &ArchiveDossierBoundsV2::default())
-            .expect("original exact page");
-        let ArchiveDossierStateV2::Ready { page, .. } = read.state else {
-            panic!("original ready");
-        };
-        page
-    });
-    assert_eq!(old.content_source.tick(), 1);
-    legacy_archive::restore_legacy_heads(&target.config);
-    assert_eq!(
-        store
-            .install_schema()
-            .expect("adopt original retained bytes"),
-        ArchiveSchemaDispositionV1::Installed
-    );
-    assert_pending_adoption(&target, &scope, &subject, &old);
-    let report = ArchiveWorkerV1::new(&target.config)
-        .sweep_once(target.campaign_id, &producer)
-        .expect("validate adopted complete desired set");
-    assert!(
-        report.dispositions().is_empty(),
-        "maintenance creates no receipt or game tick"
-    );
-    assert!(report.retention_ready());
-    assert_eq!(report.verified_tick(), 3);
-    assert_eq!(
-        receipt_consumption_count(&target.config, target.campaign_id),
-        3
-    );
-    assert_eq!(scope_at(&target.config, target.campaign_id, 3), scope);
-    with_reader(&target.config, |reader| {
-        let read = reader
-            .dossier_as_of(&scope, &subject, &ArchiveDossierBoundsV2::default())
-            .expect("verified adopted head");
-        let ArchiveDossierStateV2::Ready {
-            page,
-            verified_through_tick: 3,
-        } = read.state
-        else {
-            panic!("cutover ready");
-        };
-        assert_eq!(page.markdown, old.markdown);
-        assert_eq!(page.atoms, old.atoms);
-        assert_eq!(page.content_source, old.content_source);
-        assert_eq!(page.content_sha256, old.content_sha256);
-        assert_eq!(page.effective_tick, 3);
-        assert!(
-            page.changes.changes.is_empty(),
-            "adoption is the baseline, not invented older change history"
-        );
-    });
-    assert_eq!(
-        store.install_schema().expect("strict immutable reinstall"),
-        ArchiveSchemaDispositionV1::AlreadyCurrent
-    );
-    target.config.connect(NoTls).expect("corruption connection").execute(
-        "DELETE FROM babylon_meta.archive_revision_atom_v2 WHERE campaign_id=$1 AND subject_kind='county' AND subject_id='26163' AND origin=0 AND position=0",
-        &[target.campaign_id.as_uuid()]
-    ).expect("remove one original adopted membership");
-    assert_eq!(
-        store.install_schema(),
-        Err(babylon_persistence::SemanticArchiveErrorV1::StoredPageMismatch),
-        "reinstall must still validate the entire original adoption"
-    );
-    target.finish();
-}
-
-fn assert_pending_adoption(
-    target: &LiveCountyTarget,
-    scope: &ArchiveReadScopeV2,
-    subject: &ArchivePageRefV1,
-    old: &ArchiveDossierPageV2,
-) {
-    with_reader(&target.config, |reader| {
-        let read = reader
-            .dossier_as_of(scope, subject, &ArchiveDossierBoundsV2::default())
-            .expect("pending adopted head");
-        assert_eq!(read.history_floor_tick, 3);
-        assert_eq!(
-            read.processed_tick, 3,
-            "an old consumed prefix does not prove cutover composition"
-        );
-        let ArchiveDossierStateV2::Pending {
-            page: Some(page),
-            reason: ArchiveDossierPendingV2::CutoverValidation,
-        } = read.state
-        else {
-            panic!("adoption requires validation even P=D");
-        };
-        assert_eq!(page.markdown, old.markdown);
-        assert_eq!(page.atoms, old.atoms);
-        assert_eq!(page.content_source, old.content_source);
-        assert_eq!(page.content_sha256, old.content_sha256);
-        let earlier = reader
-            .dossier_as_of(
-                &scope_at(&target.config, target.campaign_id, 2),
-                subject,
-                &ArchiveDossierBoundsV2::default(),
-            )
-            .expect("honest earlier absence");
-        assert_eq!(
-            earlier.state,
-            ArchiveDossierStateV2::Unavailable(ArchiveDossierUnavailableV2::HistoryNotRetained)
-        );
-    });
 }

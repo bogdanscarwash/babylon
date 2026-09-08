@@ -1,85 +1,41 @@
-# Copilot Rules
+# Babylon code review
 
-Read [`CLAUDE.md`](../CLAUDE.md) before each check. It links to the Constitution
-and the test rules.
+Read `CLAUDE.md` for current boundaries. `CONSTITUTION.md` governs
+game law; `NORTH_STAR.md` describes intended play. Linear owns current scope.
 
-[`CONSTITUTION.md`](../CONSTITUTION.md) v4.0.0 is the authority.
-[`NORTH_STAR.md`](../NORTH_STAR.md) explains the game direction and the first
-three gates. Do not say that a planned system is complete.
+Review changed behavior from its real input through authoritative Rust state,
+committed PostgreSQL rows, observer projection, and visible result. Report a
+defect only when you can identify its trigger and consequence. Give a precise
+code location and a small reproducer or concrete example.
 
-<!-- Vale: this paragraph preserves exact Linear fields and GitHub Project
-     names from the control-surface contract. -->
-<!-- vale ste.UnapprovedWords = NO -->
-<!-- vale ste.NounClusters = NO -->
-Linear is canonical for current work. GitHub owns source control, pull
-requests, reviews, and historical evidence. The team closed GitHub Project #7
-and Project #8. They are historical inputs. The migration is complete. See
-[`docs/agents/governance.md`](../docs/agents/governance.md) for scope or status
-disputes.
-<!-- vale ste.NounClusters = YES -->
-<!-- vale ste.UnapprovedWords = YES -->
+- Equal input bytes must produce equal output bytes and hashes. Check ordering,
+  finite values, checked arithmetic, explicit errors, and replay identity.
+- Rust owns mechanics and game-managed PostgreSQL writes. An observation,
+  narrator, or Bevy display must not create a second authority path.
+- Check transaction boundaries, exact commit markers, failed-write rollback,
+  restart behavior, reader privileges, visibility, and campaign isolation.
+- Trace allocations, repeated serialization, database round trips, and query
+  plans when changes affect tick or observer latency.
+- Authored Michigan values live in `content/scenarios/michigan/defines.toml`.
+  Check units, validation, one 28-day tick, and the saved campaign identity.
+  Editing the file must not change the parameters of an existing campaign.
+- BSL rules need material causes and governed evidence. Flag a new primitive,
+  fixed response curve, or downstream outcome imposed by an external event.
+- Delete obsolete implementations and their coupled tests. Keep something only
+  for a current consumer or a unique necessary contract. Git preserves history;
+  the frozen Python tag supplies old citations, not current game authority.
+- For CI, check changed-input selection, deleted paths, failure propagation,
+  trusted cache publication, and complete release qualification. A skipped
+  prerequisite must not turn the required result green.
+- Public downloads require a qualified main release and exact source evidence.
+  Check the unpacked launcher, saved-state reopen, asset notices, checksums,
+  and artifact provenance. Dev pushes must not publish a release. Commitizen
+  validates new commit messages; development versions derive from Git history.
 
-## Report these defects
+Skip formatting, naming preferences, speculative abstractions, compatibility
+layers, and requests to restore deleted code without a current consumer.
+Do not repeat lint output or treat missing Copilot feedback as a merge blocker.
+Do not claim that passing tests proves a human understood the game surface.
 
-### Tick identity
-
-Each tick must have the same hash for the same input. Report each observable
-iteration with an order that is not stable. Report values such as `NaN`, `inf`,
-and `-0.0`. Report each game rule that reads the wall clock.
-
-### Causal forms
-
-ADR172 forbids a fixed sigmoid, logistic, `tanh`, or `softmax` curve in a game
-rule. The engine must derive an S-curve from its population data. Report each
-new fixed curve in Python, Rust, or coefficient data.
-
-### Frozen models
-
-`model_copy(update=...)` skips validation. Report each use that writes a
-constrained value. Examples include `Probability`, `Currency`, `Intensity`,
-and `Coefficient`.
-
-### Native hyperedges
-
-The public `graph` model uses first-class hyperedges. Incidence data can be an
-internal storage method. Report each public pairwise expansion of a member list.
-
-### Rust ports
-
-Rust ports must keep the frozen Python behavior. `babylon.kernel` and
-`docs/reference/bsl-language.rst` give the contracts. Report changed
-semantics, unlicensed currency operations, or silent error defaults.
-
-### Honest vocabulary
-
-Fixtures must use node types, edge types, and fields that production creates.
-Report invented type strings and fixture-only fields.
-
-### Frozen Python engine
-
-The Python engine is a behavioral reference at `p27-python-freeze`. New engine
-features belong in Rust. Python changes can repair the reference or strengthen
-a language-neutral contract.
-
-### Workflow safety
-
-Report `gh pr merge --auto`. Report `restore-keys` on Python
-virtual-environment caches. A fallback for a non-venv cache can be correct.
-Report a scheduled workflow that is not on the default `branch`.
-
-## Skip these comments
-
-Do not report format, import order, line length, or name preferences.
-The project tools own those checks. Do not propose unrelated flexibility.
-
-## Repository facts
-
-Python `graph code` uses `rustworkx` through `BabylonGraph`. Rust uses the
-`GraphSubstrate` trait. The Archive uses `pgvector` with Postgres.
-
-Game coefficients belong in `GameDefines` and `defines.yaml`. Report each new
-coefficient that game logic hard-codes.
-
-The Director holds the reserved theory line. Agents follow the merge protocol
-in `CLAUDE.md`. Write one actionable defect for each comment. Include its effect
-and its path.
+One actionable defect per comment. If a concern lacks evidence, state the
+uncertainty instead of presenting it as a confirmed fault.

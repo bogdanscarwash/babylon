@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import os
+import shutil
 import subprocess
+import sys
+import tomllib
 from pathlib import Path
 from typing import Any
 
@@ -117,6 +121,105 @@ def test_bump_commit_and_main_tag_are_separate_owner_actions() -> None:
     assert 'git push origin "refs/tags/$TAG"' in tag
 
 
+@pytest.mark.parametrize("branch", ["feature/release", "dev", "main"])
+def test_release_bump_updates_only_version_files_on_an_ordinary_lane(
+    tmp_path: Path, branch: str
+) -> None:
+    """Exercise real Commitizen and uv; a bump neither commits nor publishes."""
+    uv = shutil.which("uv")
+    assert uv is not None, "release tests require the project-pinned uv executable"
+    repo = tmp_path / "release"
+    repo.mkdir()
+    (repo / "pyproject.toml").write_text(
+        '[project]\nname = "release-fixture"\nversion = "0.3.0"\n'
+        'requires-python = ">=3.12"\ndependencies = ["fixture-dependency==1.0.0"]\n'
+        '[tool.uv.sources]\nfixture-dependency = { path = "dependency" }\n'
+        '[tool.commitizen]\nname = "cz_conventional_commits"\nversion_provider = "uv"\n'
+        'version_scheme = "semver"\nmajor_version_zero = true\ntag_format = "v$version"\n'
+        "update_changelog_on_bump = true\n",
+        encoding="utf-8",
+    )
+    (repo / "dependency").mkdir()
+    (repo / "dependency/pyproject.toml").write_text(
+        '[project]\nname = "fixture-dependency"\nversion = "1.0.0"\n', encoding="utf-8"
+    )
+    (repo / "CHANGELOG.md").write_text("## v0.3.0\n", encoding="utf-8")
+    binaries = repo / "commands"
+    binaries.mkdir()
+    environment = {
+        **os.environ,
+        "UV_PYTHON": sys.executable,
+        "UV_CACHE_DIR": str(tmp_path / "uv-cache"),
+    }
+    environment.pop("UV_FROZEN", None)
+    subprocess.run(
+        (uv, "lock", "--offline"),
+        cwd=repo,
+        env=environment,
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=20,
+    )
+    original_lock = tomllib.loads((repo / "uv.lock").read_text(encoding="utf-8"))
+
+    def executable(path: Path, source: str) -> None:
+        path.write_text(f"#!{sys.executable}\n{source}", encoding="utf-8")
+        path.chmod(0o755)
+
+    executable(
+        binaries / "uv",
+        "import os, sys\n"
+        "if sys.argv[1:4] == ['run', '--frozen', 'cz']:\n"
+        "    os.execv(sys.executable, [sys.executable, '-m', 'commitizen', *sys.argv[4:]])\n"
+        "else:\n"
+        f"    os.execv({uv!r}, [{uv!r}, *sys.argv[1:]])\n",
+    )
+    (repo / "tools").mkdir()
+    executable(repo / "tools/check_release_pins.sh", "pass\n")
+    shutil.copyfile(ROOT / "tools/release_version.py", repo / "tools/release_version.py")
+    _git(repo, "init", f"--initial-branch={branch}")
+    _git(repo, "config", "user.name", "Release Contract")
+    _git(repo, "config", "user.email", "release-contract@example.invalid")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-m", "test: release bump fixture")
+    _git(repo, "tag", "v0.3.0")
+    _git(repo, "commit", "--allow-empty", "-m", "feat: next release")
+    original_head = _git(repo, "rev-parse", "HEAD")
+    environment["PATH"] = f"{binaries}{os.pathsep}{environment.get('PATH', '')}"
+    environment["UV_FROZEN"] = "1"
+    script = tomllib.loads(MISE_PATH.read_text(encoding="utf-8"))["tasks"]["release:bump"]["run"]
+    result = subprocess.run(
+        ("bash", "-s", "--", "--yes"),
+        input=script,
+        cwd=repo,
+        env=environment,
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert _git(repo, "rev-parse", "HEAD") == original_head
+    assert _git(repo, "tag", "--list") == "v0.3.0"
+    assert _git(repo, "diff", "--cached", "--name-only") == ""
+    if branch in {"dev", "main"}:
+        assert result.returncode != 0
+        assert "ordinary lane" in result.stderr
+        assert _git(repo, "status", "--porcelain") == ""
+        return
+    assert result.returncode == 0, result.stdout + result.stderr
+    changed_lock = tomllib.loads((repo / "uv.lock").read_text(encoding="utf-8"))
+    assert tomllib.loads((repo / "pyproject.toml").read_text())["project"]["version"] == "0.4.0"
+    assert (
+        next(p["version"] for p in changed_lock["package"] if p["name"] == "release-fixture")
+        == "0.4.0"
+    )
+    assert [p for p in changed_lock["package"] if p["name"] != "release-fixture"] == [
+        p for p in original_lock["package"] if p["name"] != "release-fixture"
+    ]
+    assert (repo / "CHANGELOG.md").read_text().startswith("## v0.4.0")
+
+
 @pytest.mark.parametrize("path", RELEASE_WORKFLOWS)
 def test_every_publisher_requires_a_main_reachable_tag(path: Path) -> None:
     workflow = _workflow(path)
@@ -136,9 +239,9 @@ def test_manual_tag_input_never_enters_shell_source(path: Path) -> None:
     text = path.read_text(encoding="utf-8")
 
     assert "INPUT_TAG: ${{ inputs.tag }}" in text
-    assert 'TAG="${INPUT_TAG}"' in text
+    assert 'TAG="$INPUT_TAG"' in text
     assert 'TAG="${{ inputs.tag }}"' not in text
-    assert 'if [[ ! "$TAG" =~ ^v' in text
+    assert '[[ "$TAG" =~ ^v' in text
     assert "RELEASE_TAG: ${{ steps.tag.outputs.tag }}" in text
     assert '--tag "$RELEASE_TAG"' in text
 
@@ -148,20 +251,33 @@ def test_manual_tag_input_never_enters_shell_source(path: Path) -> None:
     ("tag", "accepted"),
     [
         ("v1.2.3", True),
-        ("v1.2.3-rc.1", True),
-        ("v1.2.3+build.7", True),
-        ("v1.2.3-rc.1+build.7", True),
+        ("v0.4.0", True),
+        ("v1.2.3-rc.1", False),
+        ("v1.2.3+build.7", False),
+        ("v1.2.3-rc.1+build.7", False),
+        ("v00.4.0", False),
+        ("v0.4.0\nextra", False),
         ("release-1.2.3", False),
     ],
 )
 def test_publisher_shell_regex_accepts_canonical_semver_tags(
-    path: Path, tag: str, accepted: bool
+    path: Path, tag: str, accepted: bool, tmp_path: Path
 ) -> None:
-    text = path.read_text(encoding="utf-8")
-    condition = next(line.strip() for line in text.splitlines() if '"$TAG" =~' in line)
-    pattern = condition.split("=~ ", maxsplit=1)[1].split(" ]];", maxsplit=1)[0]
+    step = next(
+        step
+        for step in _workflow(path)["jobs"]["identity"]["steps"]
+        if step.get("name") == "Resolve tag"
+    )
+    output_path = tmp_path / "output"
     result = subprocess.run(
-        ("bash", "-c", '[[ "$1" =~ $2 ]]', "bash", tag, pattern),
+        ("bash", "-e", "-s"),
+        input=step["run"],
+        env={
+            **os.environ,
+            "INPUT_TAG": tag,
+            "GITHUB_EVENT_NAME": "workflow_dispatch",
+            "GITHUB_OUTPUT": str(output_path),
+        },
         check=False,
         capture_output=True,
         text=True,
@@ -169,6 +285,10 @@ def test_publisher_shell_regex_accepts_canonical_semver_tags(
     )
 
     assert (result.returncode == 0) is accepted
+    if accepted:
+        assert output_path.read_text() == f"tag={tag}\n"
+    else:
+        assert not output_path.exists()
 
 
 def test_release_ceremony_tags_only_after_the_director_main_merge() -> None:

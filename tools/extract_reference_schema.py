@@ -62,7 +62,7 @@ def extract_schema_sql(conn: sqlite3.Connection) -> str:
     :param conn: Open connection to the source DB.
     :returns: The full ``schema.sql`` text (header + statements).
     """
-    from babylon.sentinels.coverage.catalog import GOVERNED_PREFIXES
+    from babylon.data.catalog import GOVERNED_PREFIXES
 
     rows = conn.execute(
         "SELECT sql, tbl_name FROM sqlite_master "
@@ -86,7 +86,7 @@ def schema_census(conn: sqlite3.Connection) -> dict[str, int]:
         NULL-``sql`` auto-indexes, and non-governed utility objects never
         count).
     """
-    from babylon.sentinels.coverage.catalog import GOVERNED_PREFIXES
+    from babylon.data.catalog import GOVERNED_PREFIXES
 
     rows = conn.execute(
         "SELECT type, tbl_name FROM sqlite_master "

@@ -33,7 +33,7 @@ truth.
 Engine and content
 ------------------
 
-The shipping path uses Rust. The relation, BSL, and tick crates judge the weekly
+The shipping path uses Rust. The relation, BSL, and tick crates judge the four-week
 tick. Live BSL expresses governed causal rules. No executable shocks run.
 In the planned action slice, BSL will let actions run, charge costs, choose
 targets, and encode political results.

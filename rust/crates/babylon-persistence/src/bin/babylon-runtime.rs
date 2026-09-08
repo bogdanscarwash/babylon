@@ -28,7 +28,7 @@ use babylon_persistence::{
     ArchiveSchemaDispositionV1, CampaignFoundationV1, CampaignId, CommittedResolveTickV1,
     CommittedTickReceiptV2, CompositeArchiveDossierProducerV1, CountyDossierProducerV1,
     DurableReplayRuntimeV2, FoundationContentBundleV1, PlaceDossierProducerV1,
-    PostgresDiagnosticV1, RustPersistenceRuntimeErrorV2, SemanticArchiveStoreV1,
+    PostgresDiagnosticV1, SemanticArchiveStoreV1,
 };
 use babylon_practice_contract::ordered_action_v1::OrderedPracticeActionBatchV1;
 use babylon_tick::choice_receipt::ChoiceReceiptV1;
@@ -41,8 +41,8 @@ use uuid::Uuid;
 const DSN_ENV: &str = "BABYLON_RUNTIME_DSN";
 const CAMPAIGN_ENV: &str = "BABYLON_CAMPAIGN_ID";
 const DEFAULT_CAMPAIGN_UUID: u128 = 0x2810_0000_0000_0000_0000_0000_0000_0001;
-const MICHIGAN_SMOKE_TICKS: u64 = 60;
-const MICHIGAN_SMOKE_RESTART_TICKS: &[u64] = &[1, 51, 52, 60];
+const MICHIGAN_SMOKE_TICKS: u64 = 15;
+const MICHIGAN_SMOKE_RESTART_TICKS: &[u64] = &[1, 12, 13, 15];
 const TICK_REPORT_SCHEMA_V2: &str = "babylon.simulation.tick-report.v2";
 const CHOICE_RECEIPT_REPORT_SCHEMA_V1: &str = "babylon.simulation.choice-receipts.v1";
 const TICK_REPORT_SLICE_ID: &str = "michigan-persistence-slice";
@@ -98,7 +98,7 @@ const RULE: &str = r#"
   :material-basis "At the annual boundary, wage and imperial-rent-supported savings change class accumulation"
   :fuel 128
   (bindings
-    (binding phase-of-year :tick-in-cycle 52)
+    (binding phase-of-year :tick-in-cycle 13)
     (binding median-wage :field territory/median-wage)
     (binding phi-adjustment :field territory/phi-savings-adjustment)
     (binding hours-per-year :const class-dynamics/hours-per-year)
@@ -170,7 +170,9 @@ enum Command {
         restart_every: Option<u64>,
     },
     Probe,
-    Session,
+    Session {
+        defines: PathBuf,
+    },
     ObserverSchema,
     Archive,
     ArchiveWorker,
@@ -183,7 +185,7 @@ enum Command {
 fn main() -> ExitCode {
     let Ok(command) = parse_command(std::env::args_os().skip(1)) else {
         eprintln!(
-            "babylon-runtime: expected activate, bootstrap, preflight, diagnostic run --ticks N [--report-jsonl PATH] [--choice-receipts-jsonl PATH] [--restart-every N], probe, archive, archive-worker --once, diagnostic michigan-smoke [--report-jsonl PATH] [--choice-receipts-jsonl PATH], observer-schema, or session --stdio"
+            "babylon-runtime: expected activate, bootstrap, preflight, run --ticks N [--report-jsonl PATH] [--choice-receipts-jsonl PATH] [--restart-every N], probe, archive, archive-worker --once, michigan-smoke [--report-jsonl PATH] [--choice-receipts-jsonl PATH], observer-schema, or session --stdio --defines PATH"
         );
         return ExitCode::from(2);
     };
@@ -275,8 +277,8 @@ fn execute(command: Command, config: &Config) -> Result<(), String> {
                 choice_receipt_writer.as_mut(),
             )?;
         }
-        Command::Session => {
-            babylon_persistence::run_runtime_session_stdio_v3(config)
+        Command::Session { defines } => {
+            babylon_persistence::run_runtime_session_stdio_v3(config, &defines)
                 .map_err(|error| error.to_string())?;
         }
         Command::ObserverSchema => {
@@ -570,6 +572,7 @@ impl SimulationTickReportV2 {
             "commit_disposition": self.commit_disposition,
             "scope": {
                 "slice_id": TICK_REPORT_SLICE_ID,
+                "tick_duration_days": babylon_kernel::clock::DAYS_PER_TICK,
                 "scenario": self.scenario.as_str(),
                 "fixed_replay_seed": if self.scenario == babylon_persistence::MICHIGAN_OBSERVER_SCENARIO_V1 { 319 } else { 281 },
                 "parameter_overrides": false,
@@ -972,27 +975,36 @@ fn open_or_create_runtime(
     config: &Config,
     campaign: CampaignId,
 ) -> Result<DurableReplayRuntimeV2<HypergraphStore>, String> {
-    match DurableReplayRuntimeV2::open(config, campaign) {
-        Ok(runtime) => {
-            let economy =
-                babylon_persistence::michigan_economy_v1().map_err(|error| error.to_string())?;
-            if runtime
-                .foundation()
-                .content_bundle()
-                .scenario_source_bytes()
-                != economy.scenario_source().as_bytes()
-            {
-                return Err("campaign scenario differs from the Michigan observer foundation; choose another campaign identity".to_owned());
-            }
-            Ok(runtime)
+    let expected = babylon_persistence::michigan_economy::michigan_observer_foundation_digest_v1()
+        .map_err(|error| error.to_string())?;
+    // Generic reopen reconciles territory mappings. Refuse incompatible time
+    // content before it reaches that path, without changing the stored campaign.
+    let stored = {
+        let mut client = config.connect(NoTls).map_err(|error| error.to_string())?;
+        client
+            .query_opt(
+                "SELECT foundation_sha256 FROM babylon_state.campaign_foundation WHERE campaign_id = $1",
+                &[campaign.as_uuid()],
+            )
+            .map_err(|error| error.to_string())?
+    };
+    let runtime = if let Some(row) = stored {
+        let digest: Vec<u8> = row.try_get(0).map_err(|error| error.to_string())?;
+        if digest != expected {
+            return Err("campaign foundation does not match the current four-week diagnostic content; choose a fresh campaign identity".to_owned());
         }
-        Err(RustPersistenceRuntimeErrorV2::FoundationAbsent) => {
-            let (session, bundle) = runtime_foundation()?;
-            DurableReplayRuntimeV2::create(config, campaign, session, bundle)
-                .map_err(|error| error.to_string())
-        }
-        Err(error) => Err(error.to_string()),
+        DurableReplayRuntimeV2::open(config, campaign).map_err(|error| error.to_string())?
+    } else {
+        let (session, bundle) = runtime_foundation()?;
+        DurableReplayRuntimeV2::create(config, campaign, session, bundle)
+            .map_err(|error| error.to_string())?
+    };
+    if sha256_of(runtime.foundation().canonical_bytes()) != expected {
+        return Err(
+            "reconstructed campaign differs from the admitted diagnostic foundation".to_owned(),
+        );
     }
+    Ok(runtime)
 }
 
 fn runtime_foundation() -> Result<
@@ -1228,10 +1240,14 @@ fn parse_command(mut args: impl Iterator<Item = OsString>) -> Result<Command, ()
             if args.next() != Some(OsString::from("--stdio")) {
                 return Err(());
             }
-            if args.next().is_some() {
+            if args.next() != Some(OsString::from("--defines")) {
                 return Err(());
             }
-            Ok(Command::Session)
+            let defines = PathBuf::from(args.next().ok_or(())?);
+            if defines.as_os_str().is_empty() || args.next().is_some() {
+                return Err(());
+            }
+            Ok(Command::Session { defines })
         }
         value if value == OsStr::new("observer-schema") && args.next().is_none() => {
             Ok(Command::ObserverSchema)
@@ -1535,6 +1551,10 @@ mod tests {
         assert_eq!(row["scope"]["slice_id"], "michigan-persistence-slice");
         assert_eq!(row["scope"]["scenario"], "production/michigan-rust-runtime");
         assert_eq!(row["scope"]["fixed_replay_seed"], 281);
+        assert_eq!(
+            row["scope"]["tick_duration_days"],
+            babylon_kernel::clock::DAYS_PER_TICK
+        );
         assert_eq!(row["scope"]["parameter_overrides"], false);
         assert_eq!(row["scope"]["stochastic_draws"], false);
         assert_eq!(row["scope"]["dynamic_h3_updates"], false);
@@ -1605,13 +1625,13 @@ mod tests {
     }
 
     #[test]
-    fn michigan_smoke_drives_phi_accumulation_on_the_tick_52_rollover() {
+    fn michigan_smoke_drives_phi_accumulation_on_the_tick_13_rollover() {
         let session_id = SessionId::new("per281/michigan-rollover-contract")
             .expect("the fixed smoke identity is nonempty");
         let mut session = TickSession::new(SCENARIO, RULE, HypergraphStore::new(), session_id)
             .expect("the production Michigan smoke content must load");
 
-        for tick in 1..=51 {
+        for tick in 1..babylon_kernel::clock::TICKS_PER_YEAR {
             let report = session
                 .advance(&mut CollectingSink::default())
                 .unwrap_or_else(|error| panic!("Michigan pre-rollover tick {tick}: {error}"));
@@ -1622,7 +1642,7 @@ mod tests {
                     .find(|(rule, _)| rule == "class-dynamics/a01-rollover-accumulation-smoke")
                     .map(|(_, fired)| *fired),
                 Some(0),
-                "the annual mechanics stay inert before tick 52"
+                "the annual mechanics stay inert before tick 13"
             );
             assert_eq!(
                 territory_value(&session, "territory/rate-accumulation").to_bits(),
@@ -1639,7 +1659,7 @@ mod tests {
 
         let report = session
             .advance(&mut CollectingSink::default())
-            .expect("Michigan tick 52 must cross the annual boundary");
+            .expect("Michigan tick 13 must cross the annual boundary");
         assert_eq!(
             report
                 .per_rule_fired
@@ -1647,7 +1667,7 @@ mod tests {
                 .find(|(rule, _)| rule == "class-dynamics/a01-rollover-accumulation-smoke")
                 .map(|(_, fired)| *fired),
             Some(1),
-            "the real class-dynamics accumulation path fires at tick 52"
+            "the real class-dynamics accumulation path fires at tick 13"
         );
         assert_eq!(
             territory_value(&session, "territory/dist-year").to_bits(),
@@ -1663,8 +1683,8 @@ mod tests {
 
     #[test]
     fn michigan_smoke_restarts_at_the_initial_rollover_and_terminal_boundaries() {
-        assert_eq!(MICHIGAN_SMOKE_TICKS, 60);
-        assert_eq!(MICHIGAN_SMOKE_RESTART_TICKS, [1, 51, 52, 60]);
+        assert_eq!(MICHIGAN_SMOKE_TICKS, 15);
+        assert_eq!(MICHIGAN_SMOKE_RESTART_TICKS, [1, 12, 13, 15]);
     }
 
     #[test]

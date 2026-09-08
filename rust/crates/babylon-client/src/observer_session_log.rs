@@ -25,8 +25,8 @@ macro_rules! scoped_info {
     ($session:expr, $($fields:tt)*) => {
         bevy::log::info!(target: "session",
             campaign = %$session.campaign.as_uuid(),
-            viewed_week = $session.viewed_tick,
-            durable_week = $session.durable_tick,
+            viewed_period = $session.viewed_tick,
+            durable_period = $session.durable_tick,
             perspective = $session.perspective.label(),
             generation = $session.generation,
             $($fields)*)
@@ -65,8 +65,8 @@ fn observer_command_name(command: ObserverCommand) -> &'static str {
         ObserverCommand::Step => "step",
         ObserverCommand::Speed => "speed",
         ObserverCommand::Perspective => "perspective",
-        ObserverCommand::PreviousWeek => "previous_week",
-        ObserverCommand::NextWeek => "next_week",
+        ObserverCommand::PreviousPeriod => "previous_period",
+        ObserverCommand::NextPeriod => "next_period",
         ObserverCommand::Live => "live",
         ObserverCommand::Lens(_) => "lens",
         ObserverCommand::MaterialLens(_) => "material_lens",
@@ -146,7 +146,6 @@ struct SessionSnapshot {
     archive: u64,
     phase: SessionPhase,
     playing: bool,
-    month_target: Option<u64>,
     speed: f64,
     failed: bool,
 }
@@ -158,8 +157,7 @@ fn log_session(session: Res<ObserverSession>, mut last: Local<Option<SessionSnap
         archive: session.archive_verified_tick,
         phase: session.phase,
         playing: session.playing,
-        month_target: session.month_target_tick(),
-        speed: session.weeks_per_second,
+        speed: session.periods_per_second,
         failed: session.error.is_some(),
     };
     if last.as_ref() == Some(&next) {
@@ -169,13 +167,13 @@ fn log_session(session: Res<ObserverSession>, mut last: Local<Option<SessionSnap
         if previous.context.campaign == next.context.campaign && next.durable > previous.durable {
             scoped_info!(
                 session,
-                previous_week = previous.durable,
+                previous_period = previous.durable,
                 "observer durable progress acknowledged"
             );
         }
     }
     scoped_info!(session, phase = ?next.phase, playing = next.playing,
-        month_target_week = ?next.month_target, speed = next.speed, archive_processed_week = next.archive, failed = next.failed,
+        speed = next.speed, archive_processed_period = next.archive, failed = next.failed,
         "observer session applied");
     *last = Some(next);
 }
@@ -538,7 +536,7 @@ fn log_camera(
             continue;
         };
         bevy::log::debug!(target: "session", campaign = %session.campaign.as_uuid(),
-            viewed_week = session.viewed_tick, durable_week = session.durable_tick,
+            viewed_period = session.viewed_tick, durable_period = session.durable_tick,
             perspective = session.perspective.label(), generation = session.generation,
             view = ?view, projection = pose.kind, lens = pose.lens, aspect_or_width = pose.aspect_or_width,
             position = ?pose.position.to_array(), rotation = ?pose.rotation.to_array(),
@@ -574,7 +572,7 @@ mod tests {
                 labor_accounts: Vec::new(),
                 staffing_accounts: Vec::new(),
                 scenario_label: "Designed telemetry fixture".into(),
-                horizon_week: 16,
+                horizon_period: 16,
                 sites: vec![ProductionSiteV1 {
                     id: HIDDEN_SITE.into(),
                     name: HIDDEN_LABEL.into(),
@@ -724,7 +722,7 @@ mod tests {
             assert!(session.acknowledge(request, 1, Some("committed".into())));
             session.archive_verified_tick = 1;
             session.playing = true;
-            session.weeks_per_second = 2.0;
+            session.periods_per_second = 2.0;
             app.update();
             let mut ui = app.world_mut().resource_mut::<ObserverUiState>();
             ui.history_open = true;
@@ -752,8 +750,8 @@ mod tests {
         assert!(requested < acknowledged, "{log}");
         assert!(log.contains("command=\"step\""), "{log}");
         for field in [
-            "durable_week=1",
-            "archive_processed_week=1",
+            "durable_period=1",
+            "archive_processed_period=1",
             "playing=true",
             "speed=2",
             "history=true",
@@ -778,7 +776,7 @@ mod tests {
     fn denied_clicks_log_each_revision_without_repeating_visible_feedback() {
         let log = captured(|app| {
             app.insert_resource(ObserverFeedback {
-                message: Some("Wait for the current week to finish."),
+                message: Some("Wait for the current period to finish."),
                 revision: 1,
                 expires_at: 10.0,
             });
@@ -793,7 +791,8 @@ mod tests {
         });
         assert_eq!(log.matches("observer command rejected").count(), 2, "{log}");
         assert_eq!(
-            log.matches("Wait for the current week to finish.").count(),
+            log.matches("Wait for the current period to finish.")
+                .count(),
             2,
             "{log}"
         );
@@ -815,7 +814,7 @@ mod tests {
                 .set_perspective(Perspective::PlayerKnowledge);
             app.world_mut().resource_mut::<ObserverUiState>().lens =
                 crate::map_economy_lens::MapLens::Material {
-                    kind: crate::map_economy_lens::MaterialLensKind::ProducedThisWeek,
+                    kind: crate::map_economy_lens::MaterialLensKind::ProducedThisPeriod,
                     good: Some(crate::map_economy_lens::MaterialGoodKey {
                         good_id: "hidden-good-id".into(),
                         unit_id: "hidden-unit-id".into(),

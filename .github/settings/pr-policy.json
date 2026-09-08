@@ -19,7 +19,9 @@
     "conditions": {
       "ref_name": {
         "exclude": [],
-        "include": ["refs/heads/dev"]
+        "include": [
+          "refs/heads/dev"
+        ]
       }
     },
     "rules": [
@@ -32,7 +34,9 @@
       {
         "type": "pull_request",
         "parameters": {
-          "allowed_merge_methods": ["merge"],
+          "allowed_merge_methods": [
+            "merge"
+          ],
           "dismiss_stale_reviews_on_push": false,
           "required_reviewers": [],
           "require_code_owner_review": false,
@@ -49,39 +53,7 @@
           "do_not_enforce_on_create": false,
           "required_status_checks": [
             {
-              "context": "Fast Gate (hygiene, lint, format, imports, types, lock)",
-              "integration_id": 15368
-            },
-            {
-              "context": "Unit Tests (xdist, coverage gate)",
-              "integration_id": 15368
-            },
-            {
-              "context": "Determinism Gate (byte-identical dense goldens)",
-              "integration_id": 15368
-            },
-            {
-              "context": "Secret Scan (gitleaks, full history)",
-              "integration_id": 15368
-            },
-            {
-              "context": "IaC Config Scan (trivy, HIGH+CRITICAL blocking)",
-              "integration_id": 15368
-            },
-            {
-              "context": "Security Audit (pip-audit policy — blocking since item-41)",
-              "integration_id": 15368
-            },
-            {
-              "context": "Rust Gate (fmt, clippy, test, doc — rust/ workspace)",
-              "integration_id": 15368
-            },
-            {
-              "context": "Baseline Ceremony Gate (§6.5 provenance)",
-              "integration_id": 15368
-            },
-            {
-              "context": "Postgres Integration Tier (PG 17, pinned runtime)",
+              "context": "CI Gate",
               "integration_id": 15368
             }
           ]
@@ -109,7 +81,9 @@
     "conditions": {
       "ref_name": {
         "exclude": [],
-        "include": ["refs/heads/main"]
+        "include": [
+          "refs/heads/main"
+        ]
       }
     },
     "rules": [
@@ -122,7 +96,9 @@
       {
         "type": "pull_request",
         "parameters": {
-          "allowed_merge_methods": ["merge"],
+          "allowed_merge_methods": [
+            "merge"
+          ],
           "dismiss_stale_reviews_on_push": false,
           "required_reviewers": [],
           "require_code_owner_review": false,
@@ -139,39 +115,7 @@
           "do_not_enforce_on_create": false,
           "required_status_checks": [
             {
-              "context": "Fast Gate (hygiene, lint, format, imports, types, lock)",
-              "integration_id": 15368
-            },
-            {
-              "context": "Unit Tests (xdist, coverage gate)",
-              "integration_id": 15368
-            },
-            {
-              "context": "Determinism Gate (byte-identical dense goldens)",
-              "integration_id": 15368
-            },
-            {
-              "context": "Secret Scan (gitleaks, full history)",
-              "integration_id": 15368
-            },
-            {
-              "context": "IaC Config Scan (trivy, HIGH+CRITICAL blocking)",
-              "integration_id": 15368
-            },
-            {
-              "context": "Security Audit (pip-audit policy — blocking since item-41)",
-              "integration_id": 15368
-            },
-            {
-              "context": "Rust Gate (fmt, clippy, test, doc — rust/ workspace)",
-              "integration_id": 15368
-            },
-            {
-              "context": "Baseline Ceremony Gate (§6.5 provenance)",
-              "integration_id": 15368
-            },
-            {
-              "context": "Postgres Integration Tier (PG 17, pinned runtime)",
+              "context": "CI Gate",
               "integration_id": 15368
             },
             {
@@ -196,6 +140,10 @@
             },
             {
               "context": "Main Qualification / Container Image Scan",
+              "integration_id": 15368
+            },
+            {
+              "context": "Main Qualification / Native Download / Linux x86_64",
               "integration_id": 15368
             }
           ]

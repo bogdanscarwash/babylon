@@ -26,12 +26,11 @@ use postgres::{Config, NoTls};
 
 use crate::archive::{database, decode, decode_digest, SemanticArchiveErrorV1};
 use crate::identity::CampaignId;
-use crate::legacy_adopter::{
-    validate_legacy_connection_target, LegacyAdopterError, LegacyConnectionTargetRejection,
-    LEGACY_ADOPTER_CONNECT_TIMEOUT, LEGACY_ADOPTER_STARTUP_OPTIONS,
-    LEGACY_ADOPTER_TCP_USER_TIMEOUT,
-};
 use crate::migration_manifest::SCHEMA_ADVISORY_LOCK_KEY;
+use crate::postgres_catalog::{
+    validate_connection_target, CatalogError, ConnectionTargetRejection, CATALOG_CONNECT_TIMEOUT,
+    CATALOG_STARTUP_OPTIONS, CATALOG_TCP_USER_TIMEOUT,
+};
 use crate::postgres_diagnostic::PostgresDiagnosticV1;
 
 /// Environment variable admitting the read-only reader DSN.
@@ -273,7 +272,7 @@ pub enum SemanticArchiveReaderErrorV1 {
     /// The reader DSN did not parse as one `PostgreSQL` configuration.
     InvalidDsn,
     /// The parsed target violated the local-only connection contract.
-    ConnectionTarget(LegacyConnectionTargetRejection),
+    ConnectionTarget(ConnectionTargetRejection),
     /// An existing `babylon_reader` role does not have the exact locked attributes.
     RoleMismatch,
     /// The view exists without the exact pinned identity (plain-view relkind
@@ -403,10 +402,10 @@ fn reader_schema_markers(
     ))
 }
 
-fn connection_target_error(error: &LegacyAdopterError) -> SemanticArchiveReaderErrorV1 {
+fn connection_target_error(error: &CatalogError) -> SemanticArchiveReaderErrorV1 {
     // The validator is a pure target check: its only failure construction is
     // one bounded target rejection, so any other variant is an internal fault.
-    let LegacyAdopterError::UnsupportedConnectionTarget { reason } = error else {
+    let CatalogError::UnsupportedConnectionTarget { reason } = error else {
         unreachable!("connection target validation only reports target rejections")
     };
     SemanticArchiveReaderErrorV1::ConnectionTarget(*reason)
@@ -460,8 +459,7 @@ impl SemanticArchiveReaderV1 {
     /// caller-supplied startup options, host-address overrides, multi-host or
     /// multi-port targets, a missing host, or a non-loopback TCP target.
     pub fn new(config: &Config) -> Result<Self, SemanticArchiveReaderErrorV1> {
-        validate_legacy_connection_target(config)
-            .map_err(|error| connection_target_error(&error))?;
+        validate_connection_target(config).map_err(|error| connection_target_error(&error))?;
         Ok(Self {
             config: config.clone(),
         })
@@ -527,9 +525,9 @@ impl SemanticArchiveReaderV1 {
         // exact target, not the bounded startup options added here.
         let mut bounded = self.config.clone();
         bounded
-            .connect_timeout(LEGACY_ADOPTER_CONNECT_TIMEOUT)
-            .tcp_user_timeout(LEGACY_ADOPTER_TCP_USER_TIMEOUT)
-            .options(LEGACY_ADOPTER_STARTUP_OPTIONS);
+            .connect_timeout(CATALOG_CONNECT_TIMEOUT)
+            .tcp_user_timeout(CATALOG_TCP_USER_TIMEOUT)
+            .options(CATALOG_STARTUP_OPTIONS);
         let mut client = bounded
             .connect(NoTls)
             .map_err(|error| database_error(operation, &error))?;
@@ -596,7 +594,7 @@ fn confine_reader_authority(
 pub fn install_reader_role_v1(
     config: &Config,
 ) -> Result<ReaderRoleDispositionV1, SemanticArchiveReaderErrorV1> {
-    validate_legacy_connection_target(config).map_err(|error| connection_target_error(&error))?;
+    validate_connection_target(config).map_err(|error| connection_target_error(&error))?;
     let mut client = config
         .connect(NoTls)
         .map_err(|error| database_error("connect reader role installer", &error))?;

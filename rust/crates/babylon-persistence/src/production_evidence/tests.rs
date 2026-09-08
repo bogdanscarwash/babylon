@@ -31,7 +31,7 @@ fn published_observations() -> &'static [ObserverEconomySnapshotV1] {
     OBSERVATIONS.get_or_init(|| {
         let preset = MichiganDeliveryPresetV1::Standard;
         let foundation = MichiganContentPresetV1::new_campaign(preset)
-            .create_foundation()
+            .create_foundation(&crate::test_support::catalog())
             .unwrap();
         let foundation_digest = foundation.digest();
         let MaterialLaborV1::Staffed(composition) = foundation.labor().clone() else {
@@ -49,7 +49,14 @@ fn published_observations() -> &'static [ObserverEconomySnapshotV1] {
             visibility: ObserverVisibilityV1::FullObserver,
             counties: vec![],
             production: Some(
-                project_material_observation_v1(preset, session.material(), None, &[]).unwrap(),
+                project_material_observation_v1(
+                    &crate::test_support::catalog(),
+                    preset,
+                    session.material(),
+                    None,
+                    &[],
+                )
+                .unwrap(),
             ),
         };
         observation.production.as_mut().unwrap().staffing_accounts = project_staffing_accounts_v1(
@@ -99,6 +106,7 @@ fn published_observations() -> &'static [ObserverEconomySnapshotV1] {
             observation.nominal_world_hash = Some(digest_hex(&ack.result_world_hash()));
             observation.production = Some(
                 project_material_observation_v1(
+                    &crate::test_support::catalog(),
                     preset,
                     session.material(),
                     Some(&opening),
@@ -299,7 +307,7 @@ fn missing_production_and_foundation_absence_do_not_masquerade_as_zero() {
     let mut invented_labor = foundation.clone();
     invented_labor.production.as_mut().unwrap().labor_accounts[0].completed =
         Some(crate::CompletedProductionLaborV1 {
-            week: 0,
+            period: 0,
             opening: 0,
             planned: 0,
             used: 0,
@@ -316,7 +324,7 @@ fn missing_production_and_foundation_absence_do_not_masquerade_as_zero() {
         .as_mut()
         .unwrap()
         .material_balance = Some(crate::CompletedMaterialBalanceV1 {
-        week: 0,
+        period: 0,
         rows: Vec::new(),
     });
     assert_ne!(
@@ -475,12 +483,12 @@ fn digest_is_identical_in_two_fresh_processes() {
 // context presentation family; no source totals allocate modeled workers.
 fn contextual_observation() -> ObserverEconomySnapshotV1 {
     let mut snapshot = published_observations()[2].clone();
-    let admitted = crate::michigan_content::MichiganContentPresetV1::StaffedStandardV4
-        .admitted()
+    let admitted = crate::michigan_content::MichiganContentPresetV1::FourWeekStandardV5
+        .admitted(&crate::test_support::catalog())
         .unwrap();
     snapshot.foundation_digest = digest_hex(&admitted.digest());
     crate::production_projection::context::attach_observed_context_v1(
-        admitted,
+        &admitted,
         ObserverVisibilityV1::FullObserver,
         snapshot.production.as_mut().unwrap(),
     )
@@ -768,10 +776,10 @@ fn staffing_observation() -> ObserverEconomySnapshotV1 {
         employed: 2,
         reserve: 2,
         previous_unretained_hours: 80,
-        next_opening_week: 2,
+        next_opening_period: 2,
         next_opening_hours: 80,
         completed: Some(CompletedProductionStaffingV1 {
-            week: 1,
+            period: 1,
             opening_employed: 4,
             opening_reserve: 0,
             previous_unretained_hours: 40,
@@ -845,7 +853,7 @@ fn staffing_order_multiplicity_and_completed_absence_are_distinct() {
     let mut zero = absent.clone();
     zero.production.as_mut().unwrap().staffing_accounts[0].completed = Some(
         crate::production_observation::CompletedProductionStaffingV1 {
-            week: 0,
+            period: 0,
             opening_employed: 0,
             opening_reserve: 0,
             previous_unretained_hours: 0,

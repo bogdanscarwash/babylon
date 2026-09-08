@@ -2,8 +2,8 @@ name: Weekly — Postgres Integration
 
 # ADR181 R3(ii): per-leg split of the monolithic nightly. Weekly tempo.
 # The Michigan rollover smoke has its own daily lane
-# (nightly-michigan-smoke.yml). This workflow owns only the exhaustive Rust
-# live migration/adoption matrix.
+# (nightly-michigan-smoke.yml). This workflow exercises every current Rust
+# database, reference, reader, Archive and client contract against a fresh runtime.
 
 on:
   schedule:
@@ -18,15 +18,48 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  exhaustive-legacy-adopter:
-    name: Exhaustive Rust legacy adopter matrix (dev HEAD)
+  runtime-contracts:
+    name: Fresh Rust PostgreSQL (${{ matrix.focus }}, dev HEAD)
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 55
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        focus: [runtime_smoke, reference_integrity, runtime, archive, reader, client]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: dev
       - uses: ./.github/actions/bootstrap-persistence
-      - name: Exhaustive adopter matrix and rollback proof
-        timeout-minutes: 31
-        run: tools/run_rust_legacy_adopter_pg.sh
+        id: persistence-cache
+        with:
+          cache-key: ${{ matrix.focus }}
+      - uses: ./.github/actions/build-postgres
+        id: postgres-image
+      - name: Current Rust PostgreSQL contract
+        timeout-minutes: 45
+        env:
+          BABYLON_POSTGRES_LIVE_FOCUS: ${{ matrix.focus }}
+          BABYLON_POSTGRES_IMAGE_ID: ${{ steps.postgres-image.outputs.image-id }}
+        run: tools/run_rust_postgres.sh
+
+      - name: Save successful persistence cache
+        if: >-
+          success() && github.event_name != 'pull_request' &&
+          (github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/main') &&
+          steps.persistence-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          key: ${{ steps.persistence-cache.outputs.cache-key }}
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            rust/target/.rustc_info.json
+            rust/target/debug/.cargo-lock
+            rust/target/debug/.fingerprint
+            rust/target/debug/build
+            rust/target/debug/deps
+            rust/target/debug/babylon-runtime
+            rust/target/debug/babylon-runtime.d

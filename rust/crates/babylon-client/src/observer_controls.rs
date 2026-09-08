@@ -1,9 +1,9 @@
 //! Shared button and dispatch decisions for one observer transport.
-//! Only an acknowledged runtime commit changes the displayed durable week.
+//! Only an acknowledged runtime commit changes the displayed durable period.
 
 use crate::observer::{ObserverSession, SessionPhase};
-use crate::observer_calendar::CampaignMonth;
 use crate::observer_ui::ObserverCommand;
+use babylon_kernel::clock::{DAYS_PER_TICK, TICKS_PER_YEAR, WEEKS_PER_TICK};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum ControlAvailability {
@@ -11,14 +11,17 @@ pub(crate) enum ControlAvailability {
     Disabled(&'static str),
 }
 
-pub(crate) const MONTH_ADVANCE_HELP: &str = "Campaign months are relative planning periods, not calendar dates: twelve periods span 52 weeks. Their ends round up to weekly commits (weeks 5, 9, 13, 18, and so on); lengths repeat 5, 4, 4 weeks. Run month stops at the next month boundary, or at the scenario horizon if earlier. Pause finishes the outstanding week; Resume month keeps the same target. Disclosed freight loss pauses a running month; Stop on delivery adds delivery pauses. Advance one week is a diagnostic control. Production follows the previous week's committed plan. New deliveries enter planning for the following week. Time changes only after a confirmed commit.";
+pub(crate) fn period_advance_help() -> String {
+    format!("One period advances {WEEKS_PER_TICK} weeks / {DAYS_PER_TICK} days in one simulation tick. {TICKS_PER_YEAR} periods make a 52-week model year; these are not calendar months. Advance submits one period and then pauses. Play advances periods one at a time, waiting for each committed observation. Pause finishes the outstanding period. Disclosed freight loss pauses play; Stop on delivery adds delivery pauses. Production follows the previous period's committed plan. New deliveries enter planning for the following period. Time changes only after a confirmed commit.")
+}
 
 const PENDING: ControlAvailability =
-    ControlAvailability::Disabled("Wait for the current week to finish committing");
+    ControlAvailability::Disabled("Wait for the current period to finish committing");
 const HISTORICAL: ControlAvailability =
     ControlAvailability::Disabled("Return Live before advancing the campaign");
-const CLOSING: ControlAvailability =
-    ControlAvailability::Disabled("Closing the campaign; committed weeks are saved automatically");
+const CLOSING: ControlAvailability = ControlAvailability::Disabled(
+    "Closing the campaign; committed periods are saved automatically",
+);
 
 fn view_availability(state: &ObserverSession) -> ControlAvailability {
     match state.phase {
@@ -62,11 +65,13 @@ fn advance_availability(state: &ObserverSession) -> ControlAvailability {
     }
     if state.advance_pending() && pending_finishes_scenario(state) {
         return ControlAvailability::Disabled(
-            "This is the final week; further play is unavailable",
+            "This is the final period; further play is unavailable",
         );
     }
     if state.durable_tick.checked_add(1).is_none() {
-        return ControlAvailability::Disabled("The campaign has reached its supported week limit");
+        return ControlAvailability::Disabled(
+            "The campaign has reached its supported period limit",
+        );
     }
     ControlAvailability::Enabled
 }
@@ -87,8 +92,8 @@ pub(crate) fn availability(
 ) -> ControlAvailability {
     use ControlAvailability::{Disabled, Enabled};
     use ObserverCommand::{
-        Live, NewCampaign, NewDelayedCampaign, NextWeek, Perspective, PreviousWeek, ReopenCampaign,
-        Step, TogglePlay,
+        Live, NewCampaign, NewDelayedCampaign, NextPeriod, Perspective, PreviousPeriod,
+        ReopenCampaign, Step, TogglePlay,
     };
 
     if command == ObserverCommand::Quit {
@@ -127,9 +132,6 @@ pub(crate) fn availability(
             if advance != Enabled {
                 return advance;
             }
-            if CampaignMonth::after_week(state.durable_tick).is_none() {
-                return Disabled("The campaign has reached its supported month limit");
-            }
             match state.phase {
                 // This queues transport, never a second outstanding advance.
                 SessionPhase::Ready | SessionPhase::Loading | SessionPhase::Advancing => Enabled,
@@ -144,15 +146,17 @@ pub(crate) fn availability(
                 view
             }
         }
-        PreviousWeek | NextWeek | Live | Perspective => {
+        PreviousPeriod | NextPeriod | Live | Perspective => {
             let view = inspection_availability(state);
             if view != Enabled {
                 return view;
             }
             match command {
-                PreviousWeek if state.viewed_tick == 0 => Disabled("Already at the opening week"),
-                NextWeek | Live if state.viewed_tick >= state.durable_tick => {
-                    Disabled("Already viewing the live committed week")
+                PreviousPeriod if state.viewed_tick == 0 => {
+                    Disabled("Already at the opening period")
+                }
+                NextPeriod | Live if state.viewed_tick >= state.durable_tick => {
+                    Disabled("Already viewing the live committed period")
                 }
                 _ => Enabled,
             }
@@ -172,16 +176,13 @@ pub(crate) struct TurnPresentation {
 
 fn pending_status(state: &ObserverSession) -> String {
     let target = state.durable_tick.checked_add(1).map_or_else(
-        || "the requested week".to_owned(),
-        |week| format!("week {week}"),
+        || "the requested period".to_owned(),
+        |period| format!("period {period}"),
     );
     if state.playing {
-        state.month_plan().map_or_else(
-            || format!("Advancing to {target}..."),
-            |month| format!("Running month {}; processing {target}...", month.number),
-        )
+        format!("Playing; advancing to {target}...")
     } else {
-        format!("Finishing {target}; paused after this week.")
+        format!("Finishing {target}; paused after this period.")
     }
 }
 
@@ -190,10 +191,10 @@ fn turn_status(state: &ObserverSession) -> String {
         return if state.advance_pending()
             && !matches!(state.phase, SessionPhase::Failed | SessionPhase::Closed)
         {
-            "Finishing the current week before closing. Completed weeks are saved automatically."
+            "Finishing the current period before closing. Completed periods are saved automatically."
                 .into()
         } else {
-            "Closing the campaign. Completed weeks are saved automatically.".into()
+            "Closing the campaign. Completed periods are saved automatically.".into()
         };
     }
     if state.phase == SessionPhase::Failed {
@@ -222,87 +223,56 @@ fn turn_status(state: &ObserverSession) -> String {
     match state.phase {
         SessionPhase::Connecting => "Opening the campaign...".into(),
         SessionPhase::Loading if historical => format!(
-            "Loading committed week {} (live {}).",
+            "Loading committed period {} (live {}).",
             state.viewed_tick, state.durable_tick,
         ),
         SessionPhase::Loading if state.durable_tick == 0 => {
             "Loading the opening campaign observation...".into()
         }
-        SessionPhase::Loading => format!("Loading committed week {}...", state.durable_tick),
+        SessionPhase::Loading => format!("Loading committed period {}...", state.durable_tick),
         SessionPhase::Complete => "Scenario complete. History remains available.".into(),
         SessionPhase::Ready if historical => format!(
             "History {} / live {}. Return Live to advance.",
             state.viewed_tick, state.durable_tick
         ),
-        SessionPhase::Ready => month_status(state),
+        SessionPhase::Ready if state.playing => "Playing; awaiting the next period.".into(),
+        SessionPhase::Ready => "Paused. Advance one four-week period when ready.".into(),
         SessionPhase::Advancing | SessionPhase::Failed | SessionPhase::Closed => {
             unreachable!("handled above")
         }
     }
 }
 
-fn month_status(state: &ObserverSession) -> String {
-    if let Some(month) = state.month_plan() {
-        if state.playing {
-            return format!("Running campaign month {}.", month.number);
-        }
-        if state.durable_tick == month.closing_week {
-            return format!(
-                "Campaign month {} complete. Plan the next month.",
-                month.number
-            );
-        }
-    }
-    CampaignMonth::after_week(state.durable_tick).map_or_else(
-        || "Campaign month limit reached.".into(),
-        |month| {
-            if month.opening_week < state.durable_tick {
-                format!(
-                    "Paused within campaign month {}. Resume when ready.",
-                    month.number
-                )
-            } else {
-                format!("Paused. Run campaign month {} when ready.", month.number)
-            }
-        },
-    )
-}
-
 pub(crate) fn turn_presentation(state: &ObserverSession) -> TurnPresentation {
     let pending = state.advance_pending() || state.phase == SessionPhase::Advancing;
     let next = state.durable_tick.checked_add(1);
     let historical = state.viewed_tick < state.durable_tick;
-    let month = CampaignMonth::at_week(state.viewed_tick);
-    let period = if historical {
-        format!("CAMPAIGN MONTH {} / HISTORY", month.number)
-    } else {
-        format!("CAMPAIGN MONTH {}", month.number)
-    };
+    let period = format!(
+        "PERIOD {}{}\n{WEEKS_PER_TICK} weeks / {DAYS_PER_TICK} days",
+        state.viewed_tick,
+        if historical { " / HISTORY" } else { "" },
+    );
     let play_label = if state.playing {
         "Pause"
     } else if pending && pending_finishes_scenario(state) {
-        "Month unavailable"
-    } else if CampaignMonth::after_week(state.durable_tick)
-        .is_some_and(|month| month.opening_week < state.durable_tick)
-    {
-        "Resume month"
+        "Play unavailable"
     } else {
-        "Run month"
+        "Play"
     };
     let step_label = match state.phase {
         SessionPhase::Failed | SessionPhase::Closed | SessionPhase::Connecting => {
             "Advance unavailable".into()
         }
         _ if pending => next.map_or_else(
-            || "Processing week".into(),
-            |week| format!("Processing week {week}"),
+            || "Processing period".into(),
+            |period| format!("Processing period {period}"),
         ),
         _ if historical => "Advance unavailable".into(),
-        SessionPhase::Loading => format!("Loading week {}", state.viewed_tick),
+        SessionPhase::Loading => format!("Loading period {}", state.viewed_tick),
         SessionPhase::Complete => "Scenario complete".into(),
         _ => next.map_or_else(
-            || "Week limit reached".into(),
-            |week| format!("Advance to week {week}"),
+            || "Period limit reached".into(),
+            |period| format!("Advance to period {period}"),
         ),
     };
     TurnPresentation {
@@ -327,39 +297,37 @@ mod tests {
     }
 
     #[test]
-    fn month_labels_distinguish_resume_completion_and_partial_scenario_horizon() {
+    fn period_labels_identify_one_four_week_tick_and_a_thirteen_period_model_year() {
         let mut state = ready(0);
-        assert_eq!(turn_presentation(&state).period, "CAMPAIGN MONTH 1");
-        assert_eq!(turn_presentation(&state).play_label, "Run month");
-        assert!(state.run_or_resume_month());
-        for week in 1..=5 {
-            let request = state.begin_advance().unwrap();
-            assert!(state.acknowledge(request, week, None));
-            assert!(state.installed(&state.context()));
-            if week == 2 {
-                state.pause_month();
-                assert_eq!(turn_presentation(&state).play_label, "Resume month");
-                assert!(turn_presentation(&state)
-                    .status
-                    .contains("within campaign month 1"));
-                assert!(state.run_or_resume_month());
-            }
-        }
-        assert_eq!(turn_presentation(&state).play_label, "Run month");
+        assert_eq!(
+            turn_presentation(&state).period,
+            "PERIOD 0\n4 weeks / 28 days"
+        );
+        assert_eq!(turn_presentation(&state).play_label, "Play");
+        assert_eq!(turn_presentation(&state).step_label, "Advance to period 1");
+        let request = state.begin_advance().unwrap();
+        assert!(state.acknowledge(request, 1, None));
+        assert!(state.installed(&state.context()));
+        assert_eq!(
+            turn_presentation(&state).period,
+            "PERIOD 1\n4 weeks / 28 days"
+        );
+        assert!(!state.playing);
+        assert!(turn_presentation(&state).status.starts_with("Paused."));
+        assert_eq!(
+            turn_presentation(&ready(13)).period,
+            "PERIOD 13\n4 weeks / 28 days"
+        );
+        assert_eq!(
+            turn_presentation(&ready(14)).period,
+            "PERIOD 14\n4 weeks / 28 days"
+        );
+        assert!(period_advance_help().contains("13 periods make a 52-week model year"));
+        state.horizon_tick = Some(1);
+        state.complete();
         assert!(turn_presentation(&state)
             .status
-            .contains("month 1 complete"));
-        state.ready(15, None);
-        state.horizon_tick = Some(16);
-        assert!(state.installed(&state.context()));
-        assert!(state.run_or_resume_month());
-        let request = state.begin_advance().unwrap();
-        assert!(state.acknowledge(request, 16, None));
-        assert!(state.installed(&state.context()));
-        let presentation = turn_presentation(&state);
-        assert_eq!(presentation.period, "CAMPAIGN MONTH 4");
-        assert!(presentation.status.starts_with("Scenario complete"));
-        assert!(!presentation.status.contains("month 4 complete"));
+            .starts_with("Scenario complete"));
     }
 
     #[test]
@@ -374,7 +342,7 @@ mod tests {
         assert_eq!(inspection_availability(&state), CLOSING);
         assert!(turn_presentation(&state)
             .status
-            .contains("Finishing the current week before closing"));
+            .contains("Finishing the current period before closing"));
         assert!(matches!(
             availability(ObserverCommand::TogglePlay, &state),
             ControlAvailability::Disabled(_)
@@ -402,9 +370,9 @@ mod tests {
         assert_eq!(availability(ObserverCommand::Step, &state), PENDING);
         assert_eq!(availability(ObserverCommand::Perspective, &state), PENDING);
         let presentation = turn_presentation(&state);
-        assert_eq!(presentation.period, "CAMPAIGN MONTH 1");
-        assert!(presentation.status.contains("Finishing week 4"));
-        assert_eq!(presentation.step_label, "Processing week 4");
+        assert_eq!(presentation.period, "PERIOD 3\n4 weeks / 28 days");
+        assert!(presentation.status.contains("Finishing period 4"));
+        assert_eq!(presentation.step_label, "Processing period 4");
     }
 
     #[test]
@@ -424,15 +392,21 @@ mod tests {
         );
         assert!(turn_presentation(&state)
             .status
-            .contains("paused after this week"));
+            .contains("paused after this period"));
         assert!(!state.acknowledge(request + 1, 4, None));
         assert!(!state.acknowledge(request, 5, None));
-        assert_eq!(turn_presentation(&state).period, "CAMPAIGN MONTH 1");
+        assert_eq!(
+            turn_presentation(&state).period,
+            "PERIOD 3\n4 weeks / 28 days"
+        );
         assert!(state.acknowledge(request, 4, None));
-        assert_eq!(turn_presentation(&state).period, "CAMPAIGN MONTH 1");
+        assert_eq!(
+            turn_presentation(&state).period,
+            "PERIOD 4\n4 weeks / 28 days"
+        );
         assert!(turn_presentation(&state)
             .status
-            .contains("Loading committed week 4"));
+            .contains("Loading committed period 4"));
         assert!(matches!(
             availability(ObserverCommand::Step, &state),
             ControlAvailability::Disabled(_)
@@ -453,7 +427,7 @@ mod tests {
     fn history_bounds_and_loading_have_explicit_reasons() {
         let mut state = ready(3);
         assert!(matches!(
-            availability(ObserverCommand::NextWeek, &state),
+            availability(ObserverCommand::NextPeriod, &state),
             ControlAvailability::Disabled(_)
         ));
         assert!(matches!(
@@ -463,10 +437,10 @@ mod tests {
         state.inspect_tick(0);
         assert!(turn_presentation(&state)
             .status
-            .contains("Loading committed week 0"));
+            .contains("Loading committed period 0"));
         assert_eq!(turn_presentation(&state).step_label, "Advance unavailable");
         assert!(matches!(
-            availability(ObserverCommand::PreviousWeek, &state),
+            availability(ObserverCommand::PreviousPeriod, &state),
             ControlAvailability::Disabled(_)
         ));
         assert!(state.installed(&state.context()));
@@ -476,7 +450,7 @@ mod tests {
             HISTORICAL
         );
         assert_eq!(
-            availability(ObserverCommand::NextWeek, &state),
+            availability(ObserverCommand::NextPeriod, &state),
             ControlAvailability::Enabled
         );
         assert_eq!(
@@ -484,12 +458,12 @@ mod tests {
             ControlAvailability::Enabled
         );
         assert!(matches!(
-            availability(ObserverCommand::PreviousWeek, &state),
+            availability(ObserverCommand::PreviousPeriod, &state),
             ControlAvailability::Disabled(_)
         ));
         assert_eq!(
             turn_presentation(&state).period,
-            "CAMPAIGN MONTH 1 / HISTORY"
+            "PERIOD 0 / HISTORY\n4 weeks / 28 days"
         );
     }
 
@@ -499,8 +473,8 @@ mod tests {
         state.begin_advance().unwrap();
         for command in [
             ObserverCommand::Perspective,
-            ObserverCommand::PreviousWeek,
-            ObserverCommand::NextWeek,
+            ObserverCommand::PreviousPeriod,
+            ObserverCommand::NextPeriod,
             ObserverCommand::Live,
         ] {
             assert_eq!(availability(command, &state), PENDING);
@@ -518,7 +492,10 @@ mod tests {
             availability(ObserverCommand::ReopenCampaign, &state),
             ControlAvailability::Enabled
         );
-        assert_eq!(turn_presentation(&state).period, "CAMPAIGN MONTH 1");
+        assert_eq!(
+            turn_presentation(&state).period,
+            "PERIOD 3\n4 weeks / 28 days"
+        );
         assert!(turn_presentation(&state)
             .status
             .contains("Reopen to reconcile"));
@@ -542,7 +519,7 @@ mod tests {
             ));
         }
         assert_eq!(
-            availability(ObserverCommand::PreviousWeek, &state),
+            availability(ObserverCommand::PreviousPeriod, &state),
             ControlAvailability::Enabled
         );
         assert_eq!(
@@ -573,15 +550,18 @@ mod tests {
     }
 
     #[test]
-    fn final_pending_week_can_pause_but_cannot_promise_further_play() {
+    fn final_pending_period_can_pause_but_cannot_promise_further_play() {
         let mut state = ready(15);
         state.horizon_tick = Some(16);
         state.begin_advance().unwrap();
-        assert_eq!(turn_presentation(&state).period, "CAMPAIGN MONTH 4");
-        assert_eq!(turn_presentation(&state).play_label, "Month unavailable");
+        assert_eq!(
+            turn_presentation(&state).period,
+            "PERIOD 15\n4 weeks / 28 days"
+        );
+        assert_eq!(turn_presentation(&state).play_label, "Play unavailable");
         assert_eq!(
             availability(ObserverCommand::TogglePlay, &state),
-            ControlAvailability::Disabled("This is the final week; further play is unavailable")
+            ControlAvailability::Disabled("This is the final period; further play is unavailable")
         );
         state.playing = true;
         assert_eq!(turn_presentation(&state).play_label, "Pause");

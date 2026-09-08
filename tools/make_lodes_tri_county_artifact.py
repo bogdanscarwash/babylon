@@ -4,7 +4,7 @@
 Reads the raw LODES OD ``.csv.gz`` files + ``us_xwalk.csv.gz`` crosswalk from the
 ``babylon-data`` drive (build-time-only — this script is NEVER invoked by tests or
 CI; the CI-no-drive rule forbids that) and re-aggregates them, through the real,
-unmodified :class:`~babylon.domain.economics.lodes_commute_matrix.LODESCommuteMatrixLoader`
+unmodified :class:`~babylon.data.lodes_commute_matrix.LODESCommuteMatrixLoader`
 filter/aggregation semantics (:meth:`_read_one_state_file`), into a synthetic-but-
 faithful pair of checked-in ``.csv.gz`` files at hex resolution:
 
@@ -75,15 +75,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 import h3  # noqa: E402
 
-from babylon.domain.economics.lodes_commute_matrix import (  # noqa: E402
+from babylon.data.lodes_commute_matrix import (  # noqa: E402
     LODESCommuteMatrixLoader,
     build_year_matrix,
 )
-from babylon.domain.economics.lodes_study_area import (  # noqa: E402
+from babylon.data.lodes_study_area import (  # noqa: E402
     LODES_STUDY_AREA_STATES,
     lodes_tri_county_hexes_res7,
 )
-from babylon.domain.economics.node_kinds import NodeKind  # noqa: E402
+from babylon.data.node_kinds import NodeKind  # noqa: E402
 
 _GZIP_COMPRESSLEVEL = 9
 _YEAR_FILE_RE = re.compile(r"^mi_od_main_JT00_(\d{4})\.csv\.gz$")

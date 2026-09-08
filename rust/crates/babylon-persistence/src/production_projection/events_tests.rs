@@ -24,16 +24,16 @@ fn delivery_receipts(order_id: OrderIdV1) -> MaterialTickReceiptsV3 {
 
 #[test]
 fn typed_delivery_preserves_original_rows_identifiers_sequence_and_descriptions() {
-    let catalog = michigan_material_catalog_v1().unwrap();
+    let catalog = crate::test_support::catalog();
     let route = &catalog.routes()[0];
     let supplier = catalog.site(&route.supplier_site_key).unwrap();
     let buyer = catalog.site(&route.buyer_site_key).unwrap();
     let good = catalog.good(&route.good_key).unwrap();
     let mut receipts = delivery_receipts(route.order_id());
     let mut events = Vec::new();
-    project_events(catalog, &receipts, [1; 32], &mut events).unwrap();
+    project_events(&catalog, &receipts, [1; 32], &mut events).unwrap();
     receipts.resolve_tick = 3;
-    project_events(catalog, &receipts, [2; 32], &mut events).unwrap();
+    project_events(&catalog, &receipts, [2; 32], &mut events).unwrap();
     assert_eq!(events.len(), 8);
     let expected = [
         ("arrival", ProductionDeliveryStageV1::Arrival, 3),
@@ -51,7 +51,7 @@ fn typed_delivery_preserves_original_rows_identifiers_sequence_and_descriptions(
         let digest = digest_hex(&digest);
         assert_eq!(event.id, format!("{digest}:{index}"));
         assert_eq!(event.receipt_digest, digest);
-        assert_eq!(event.week, if index < 4 { 2 } else { 3 });
+        assert_eq!(event.period, if index < 4 { 2 } else { 3 });
         assert_eq!(event.kind, kind);
         assert_eq!(
             event.subject_site_ids,
@@ -83,12 +83,12 @@ fn typed_delivery_preserves_original_rows_identifiers_sequence_and_descriptions(
 
 #[test]
 fn undisclosed_orders_refuse_typed_delivery_projection() {
-    let catalog = michigan_material_catalog_v1().unwrap();
+    let catalog = crate::test_support::catalog();
     let missing = OrderIdV1::from_bytes([0xfa; 32]);
     assert!(!catalog.routes().iter().any(|row| row.order_id() == missing));
     assert_eq!(
         project_events(
-            catalog,
+            &catalog,
             &delivery_receipts(missing),
             [1; 32],
             &mut Vec::new()

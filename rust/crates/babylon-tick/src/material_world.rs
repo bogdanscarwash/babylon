@@ -16,7 +16,7 @@ const RECEIPT_DOMAIN: &[u8] = b"babylon.material-tick-receipts.v3\0";
 /// Shared identity ceiling inherited by the aggregate replay envelope.
 pub const MAX_MATERIAL_WORLD_REGISTER_BYTES_V2: usize = 67_108_864;
 
-/// One checked complete material register at a completed weekly boundary.
+/// One checked complete material register at a completed four-week boundary.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MaterialWorldRegisterV2 {
     completed_tick: u64,
@@ -29,7 +29,7 @@ pub struct MaterialWorldRegisterV2 {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MaterialWorldErrorV2 {
     Circuit(MaterialCircuitErrorV2),
-    WeekMismatch,
+    PeriodMismatch,
     Arithmetic,
     ByteLimit,
     Allocation,
@@ -48,9 +48,9 @@ impl From<MaterialCircuitErrorV2> for MaterialWorldErrorV2 {
 }
 
 impl MaterialWorldRegisterV2 {
-    /// Own and validate the full opening state for the next weekly interval.
+    /// Own and validate the full opening state for the next four-week interval.
     /// # Errors
-    /// Refuses invalid circuit state, week mismatch, overflow or aggregate byte bound.
+    /// Refuses invalid circuit state, period mismatch, overflow or aggregate byte bound.
     pub fn try_new(
         completed_tick: u64,
         state: MaterialCircuitStateV2,
@@ -58,9 +58,9 @@ impl MaterialWorldRegisterV2 {
         if completed_tick
             .checked_add(1)
             .ok_or(MaterialWorldErrorV2::Arithmetic)?
-            != state.week
+            != state.period
         {
-            return Err(MaterialWorldErrorV2::WeekMismatch);
+            return Err(MaterialWorldErrorV2::PeriodMismatch);
         }
         let state_bytes = encode_material_circuit_state_v2(&state)?;
         let state = decode_material_circuit_state_v2(&state_bytes)?;
@@ -140,9 +140,9 @@ impl MaterialWorldRegisterV2 {
         Ok(register)
     }
 
-    /// Prepare one next-week successor without mutating this register.
+    /// Prepare one next-period successor without mutating this register.
     /// The existing material transition executes arrivals, prior commitments,
-    /// dispatch and following-week commitments in its governed order.
+    /// dispatch and following-period commitments in its governed order.
     /// # Errors
     /// Refuses any circuit or receipt encoding failure without changing this owner.
     pub fn prepare_next(&self) -> Result<PreparedMaterialWorldV3, MaterialWorldErrorV2> {
@@ -150,15 +150,15 @@ impl MaterialWorldRegisterV2 {
         self.prepare_transition(transition)
     }
 
-    /// Seal the result of the shared closed-week planner on this exact opening.
+    /// Seal the result of the shared closed-period planner on this exact opening.
     pub(crate) fn prepare_transition(
         &self,
         transition: MaterialCircuitTransitionV2,
     ) -> Result<PreparedMaterialWorldV3, MaterialWorldErrorV2> {
-        if self.state.week.checked_add(1) != Some(transition.state.week) {
-            return Err(MaterialWorldErrorV2::WeekMismatch);
+        if self.state.period.checked_add(1) != Some(transition.state.period) {
+            return Err(MaterialWorldErrorV2::PeriodMismatch);
         }
-        let receipts = encode_material_receipts_v3(self.state.week, &transition)?;
+        let receipts = encode_material_receipts_v3(self.state.period, &transition)?;
         let next = self
             .completed_tick
             .checked_add(1)
@@ -273,7 +273,7 @@ fn encode_material_receipts_v3(
                     bytes.extend_from_slice(&row.order_id.as_bytes());
                     bytes.extend_from_slice(&row.route_id.as_bytes());
                     bytes.extend_from_slice(&row.quantity.to_be_bytes());
-                    bytes.extend_from_slice(&row.final_arrival_week.to_be_bytes());
+                    bytes.extend_from_slice(&row.final_arrival_period.to_be_bytes());
                 }
             }
             2 => {
@@ -397,8 +397,8 @@ pub fn decode_material_receipts_v3(
                     let order_id = OrderIdV1::from_bytes(cursor.take()?);
                     let route_id = RouteIdV2::from_bytes(cursor.take()?);
                     let quantity = cursor.positive()?;
-                    let final_arrival_week = cursor.u64()?;
-                    if final_arrival_week <= resolve_tick {
+                    let final_arrival_period = cursor.u64()?;
+                    if final_arrival_period <= resolve_tick {
                         return Err(MaterialWorldErrorV2::Wire);
                     }
                     result.dispatches.push(RoutedDispatchReceiptV2 {
@@ -406,7 +406,7 @@ pub fn decode_material_receipts_v3(
                         order_id,
                         route_id,
                         quantity,
-                        final_arrival_week,
+                        final_arrival_period,
                     });
                 }
                 3 => {

@@ -1,4 +1,4 @@
-//! Bounded lifecycle and empty-action weekly control over parent-owned pipes.
+//! Bounded lifecycle and empty-action four-week control over parent-owned pipes.
 
 use postgres::Config;
 use serde::{Deserialize, Serialize};
@@ -25,6 +25,10 @@ pub enum RuntimeSessionErrorCodeV3 {
     StorageBusy,
     StorageCanceled,
     ScenarioMismatch,
+    DefinesMissing,
+    DefinesTooLarge,
+    DefinesMalformed,
+    DefinesInvalid,
     PipeFailure,
     HorizonComplete,
 }
@@ -65,13 +69,14 @@ fn emit(
 /// failures are scoped protocol responses and permit another explicit Switch.
 pub fn run_runtime_session_v3(
     config: &Config,
+    defines_path: &std::path::Path,
     input: impl BufRead + Send + 'static,
     output: &mut impl Write,
 ) -> Result<(), RuntimeSessionErrorCodeV3> {
     coordinator::serve(
         input,
         output,
-        |target| backend::open(config, target),
+        |target| backend::open(config, target, defines_path),
         |campaign, events| {
             crate::archive_driver::ArchiveDriverV1::start(config, campaign, events)
                 .map_err(|_| RuntimeSessionErrorCodeV3::ArchiveRefused)
@@ -82,9 +87,13 @@ pub fn run_runtime_session_v3(
 /// Bind the lifecycle service to the inherited standard streams.
 /// # Errors
 /// See [`run_runtime_session_v3`].
-pub fn run_runtime_session_stdio_v3(config: &Config) -> Result<(), RuntimeSessionErrorCodeV3> {
+pub fn run_runtime_session_stdio_v3(
+    config: &Config,
+    defines_path: &std::path::Path,
+) -> Result<(), RuntimeSessionErrorCodeV3> {
     run_runtime_session_v3(
         config,
+        defines_path,
         std::io::BufReader::new(std::io::stdin()),
         &mut std::io::stdout().lock(),
     )

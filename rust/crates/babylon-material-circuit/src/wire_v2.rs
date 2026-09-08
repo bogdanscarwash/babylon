@@ -136,7 +136,7 @@ fn append_route_legs(
         bytes.extend_from_slice(&row.corridor_id.as_bytes());
         bytes.extend_from_slice(&row.from_node_id.as_bytes());
         bytes.extend_from_slice(&row.to_node_id.as_bytes());
-        bytes.extend_from_slice(&row.travel_weeks.to_be_bytes());
+        bytes.extend_from_slice(&row.travel_periods.to_be_bytes());
         bytes.extend_from_slice(&row.loss_ppm.to_be_bytes());
     })
 }
@@ -187,9 +187,9 @@ fn append_freight(
         bytes.extend_from_slice(&row.lot_id.as_bytes());
         bytes.extend_from_slice(&row.order_id.as_bytes());
         bytes.extend_from_slice(&row.route_id.as_bytes());
-        bytes.extend_from_slice(&row.dispatch_week.to_be_bytes());
+        bytes.extend_from_slice(&row.dispatch_period.to_be_bytes());
         bytes.extend_from_slice(&row.current_leg_index.to_be_bytes());
-        bytes.extend_from_slice(&row.leg_arrival_week.to_be_bytes());
+        bytes.extend_from_slice(&row.leg_arrival_period.to_be_bytes());
         bytes.extend_from_slice(&row.source_site_id.as_bytes());
         bytes.extend_from_slice(&row.destination_site_id.as_bytes());
         bytes.extend_from_slice(&row.good_id.as_bytes());
@@ -205,7 +205,7 @@ fn append_corridor_capacities(
     append_rows(output, rows, |bytes, row| {
         bytes.extend_from_slice(&row.corridor_id.as_bytes());
         bytes.extend_from_slice(&row.unit_id.as_bytes());
-        bytes.extend_from_slice(&row.week.to_be_bytes());
+        bytes.extend_from_slice(&row.period.to_be_bytes());
         bytes.extend_from_slice(&row.available.to_be_bytes());
     })
 }
@@ -217,7 +217,7 @@ fn append_capacities(
     append_rows(output, rows, |bytes, row| {
         bytes.extend_from_slice(&row.process_id.as_bytes());
         bytes.extend_from_slice(&row.site_id.as_bytes());
-        bytes.extend_from_slice(&row.week.to_be_bytes());
+        bytes.extend_from_slice(&row.period.to_be_bytes());
         bytes.extend_from_slice(&row.available_batches.to_be_bytes());
     })
 }
@@ -229,7 +229,7 @@ fn append_labor(
     append_rows(output, rows, |bytes, row| {
         bytes.extend_from_slice(&row.site_id.as_bytes());
         bytes.extend_from_slice(&row.unit_id.as_bytes());
-        bytes.extend_from_slice(&row.week.to_be_bytes());
+        bytes.extend_from_slice(&row.period.to_be_bytes());
         bytes.extend_from_slice(&row.available.to_be_bytes());
     })
 }
@@ -241,7 +241,7 @@ fn append_commitments(
     append_rows(output, rows, |bytes, row| {
         bytes.extend_from_slice(&row.process_id.as_bytes());
         bytes.extend_from_slice(&row.site_id.as_bytes());
-        bytes.extend_from_slice(&row.week.to_be_bytes());
+        bytes.extend_from_slice(&row.period.to_be_bytes());
         bytes.extend_from_slice(&row.planned_batches.to_be_bytes());
     })
 }
@@ -318,7 +318,7 @@ fn decode_route_legs(cursor: &mut Cursor<'_>) -> Result<Vec<RouteLegV2>, Materia
             corridor_id: CorridorIdV2::from_bytes(bytes.array()?),
             from_node_id: LogisticsNodeIdV2::from_bytes(bytes.array()?),
             to_node_id: LogisticsNodeIdV2::from_bytes(bytes.array()?),
-            travel_weeks: bytes.u16()?,
+            travel_periods: bytes.u16()?,
             loss_ppm: bytes.u32()?,
         })
     })
@@ -377,9 +377,9 @@ fn decode_freight(
             lot_id: FreightLotIdV2::from_bytes(bytes.array()?),
             order_id: OrderIdV1::from_bytes(bytes.array()?),
             route_id: RouteIdV2::from_bytes(bytes.array()?),
-            dispatch_week: bytes.u64()?,
+            dispatch_period: bytes.u64()?,
             current_leg_index: bytes.u16()?,
-            leg_arrival_week: bytes.u64()?,
+            leg_arrival_period: bytes.u64()?,
             source_site_id: SiteIdV1::from_bytes(bytes.array()?),
             destination_site_id: SiteIdV1::from_bytes(bytes.array()?),
             good_id: GoodIdV1::from_bytes(bytes.array()?),
@@ -396,7 +396,7 @@ fn decode_corridor_capacities(
         Ok(CorridorCapacityV2 {
             corridor_id: CorridorIdV2::from_bytes(bytes.array()?),
             unit_id: UnitIdV1::from_bytes(bytes.array()?),
-            week: bytes.u64()?,
+            period: bytes.u64()?,
             available: bytes.u64()?,
         })
     })
@@ -409,7 +409,7 @@ fn decode_capacities(
         Ok(CapacityRowV1 {
             process_id: ProcessIdV1::from_bytes(bytes.array()?),
             site_id: SiteIdV1::from_bytes(bytes.array()?),
-            week: bytes.u64()?,
+            period: bytes.u64()?,
             available_batches: bytes.u64()?,
         })
     })
@@ -422,7 +422,7 @@ fn decode_labor(
         Ok(LaborCapacityRowV1 {
             site_id: SiteIdV1::from_bytes(bytes.array()?),
             unit_id: UnitIdV1::from_bytes(bytes.array()?),
-            week: bytes.u64()?,
+            period: bytes.u64()?,
             available: bytes.u64()?,
         })
     })
@@ -435,7 +435,7 @@ fn decode_commitments(
         Ok(ProductionCommitmentV1 {
             process_id: ProcessIdV1::from_bytes(bytes.array()?),
             site_id: SiteIdV1::from_bytes(bytes.array()?),
-            week: bytes.u64()?,
+            period: bytes.u64()?,
             planned_batches: bytes.u64()?,
         })
     })
@@ -453,7 +453,7 @@ pub fn encode_material_circuit_state_v2(
     output.extend_from_slice(MATERIAL_CIRCUIT_STATE_V2_DOMAIN_BYTES);
     output.push(0);
     output.extend_from_slice(&SCHEMA_VERSION.to_be_bytes());
-    output.extend_from_slice(&canonical.week.to_be_bytes());
+    output.extend_from_slice(&canonical.period.to_be_bytes());
     append_site_nodes(&mut output, &canonical.site_logistics_nodes)?;
     append_process_outputs(&mut output, &canonical.process_outputs)?;
     append_input_coefficients(&mut output, &canonical.input_coefficients)?;
@@ -489,7 +489,7 @@ pub fn decode_material_circuit_state_v2(
         return Err(MaterialCircuitErrorV2::WireVersion);
     }
     let state = MaterialCircuitStateV2 {
-        week: cursor.u64()?,
+        period: cursor.u64()?,
         site_logistics_nodes: decode_site_nodes(&mut cursor)?,
         process_outputs: decode_process_outputs(&mut cursor)?,
         input_coefficients: decode_input_coefficients(&mut cursor)?,

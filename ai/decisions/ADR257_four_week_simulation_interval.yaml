@@ -1,0 +1,85 @@
+ADR257_four_week_simulation_interval:
+  status: accepted
+  date: '2026-09-06'
+  title: Amendment AK makes one four-week period the simulation tick
+  evidence_class: Designed
+  authority:
+    - Director choice on 2026-09-06 to use one four-week simulation tick
+    - Constitution Articles III, IV, V, VI, and VIII
+  partially_supersedes:
+    - ADR223 only for weekly tick duration; detached adjudication and atomic publication remain binding.
+    - ADR238 only for weekly material ordinal units; conservation, allocation, and codec bytes remain binding.
+    - ADR239 only for weekly freight and capacity units; routing, reservation, loss, and codec bytes remain binding.
+    - ADR251 only for weekly advancement and observation units; runtime ownership and exact read identity remain binding.
+    - ADR255 only for weekly schedules and retention duration; staffing ownership, arithmetic, and composition remain binding.
+  context: |
+    The existing client scheduled several weekly commits to reach a displayed
+    planning month. That repeated adjudication, persistence, and observer work
+    for one user advance. The Director explicitly chose a coarser four-week
+    simulation tick and accepted that delivery and production timing can
+    change. The choice does not authorize preserving the weekly engine behind
+    a monthly label or asserting equivalence to four weekly transitions.
+  decision: |
+    R1. INTERVAL. Amendment AK changes Articles III and V and advances the
+    Constitution from v4.1.0 to v4.2.0. One tick means exactly 28 days: one
+    causal traversal, one detached transition, and one successful atomic
+    commit. The ordinal advances by one. Thirteen periods span a 52-week model
+    year; these are not twelve civil calendar months. Material effects enter
+    the next period. No new primitive or weaker prohibition is introduced.
+
+    R2. CONTENT. Admit only Michigan V5 standard and delayed presets. Stored
+    sector definitions V3 encode the 28-day duration within the foundation's
+    hashed content. Missing, changed, or predecessor interval content refuses
+    admission. Preserve existing databases and unique data; do not migrate or
+    reinterpret weekly saves, add a compatibility runtime, or dual-write.
+
+    R3. UNITS. Author recurring Michigan production and corridor capacities,
+    initial production commitments, and previous unretained labor hours at
+    four times their prior interval quantities. The Designed schedule is
+    160 hours per person per period. Retention compares current and previous
+    unretained period requests. Exact people, initial stocks, order totals,
+    per-batch recipes, and loss fractions retain their own units and values.
+    Standard and delayed sheet routes take one and three periods, or four and
+    twelve weeks; the Designed horizon is sixteen periods. These are content
+    choices, not observed travel times or a claim of unchanged weekly outcomes.
+
+    R4. OBSERVATIONS. Annual observed facts remain annual. QCEW mean weekly
+    wage remains a weekly source statistic and does not become a period wage
+    or wage payment. A rate conversion needs a declared transformation; no
+    blanket scaling applies to stocks, nonlinear rules, or probabilities.
+    Bevy advances one period and labels staffing, deliveries, comparisons,
+    held history, and Archive evidence under the same authenticated ordinal.
+
+    R5. HISTORY. contracts/simulation_interval_v1.yaml is the current interval
+    contract. It supersedes weekly unit semantics in the scoped predecessors.
+    Preserve historical ADRs, material contract YAML, golden vectors, wire
+    layouts, and refusal discriminants. Their codec evidence remains useful
+    without granting current weekly admission. Rename live material APIs and
+    payload unit names to period terminology without aliases.
+  alternatives_rejected:
+    - Hiding four weekly transitions behind one monthly button.
+    - Relabeling weekly budgets while claiming a four-week simulation.
+    - Multiplying stocks, people, total orders, recipes, or all observed facts by four.
+    - Calling thirteen four-week periods twelve civil calendar months.
+    - Reinterpreting old campaign bytes under new time units.
+  consequences:
+    - Coarser intervals can change shortages, staffing, delivery, and production timing.
+    - A single advance requires fewer repeated transitions than the old multi-week control.
+    - Wall-clock speed and CI duration still require measurement; no performance target is claimed here.
+    - Existing weekly campaigns remain stored but require a fresh V5 campaign for current play.
+    - This decision does not complete G4, player actions, or wage payments.
+  transition:
+    previous_constitution:
+      version: '4.1.0'
+      git_blob: a884cc64802a8a496d62d079e276bed636ba844a
+    new_constitution_version: '4.2.0'
+    amendment: AK
+    contract: contracts/simulation_interval_v1.yaml
+  verification: |
+    Prove one transition and durable marker per advance; explicit duration
+    admission; deterministic new-content replay and restart; dispatch,
+    transit, arrival, staffing, and conservation receipts; unchanged codec
+    vectors; and matching native history/comparison/Archive period labels.
+    Refused weekly admission must leave stored campaign bytes unchanged.
+    Exact-head executable and native acceptance remain to be verified; the
+    accepted decision is not a report that these checks have passed.
