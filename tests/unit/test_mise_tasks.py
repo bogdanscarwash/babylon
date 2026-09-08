@@ -387,8 +387,8 @@ def test_pre_commit_installs_every_governed_git_hook_by_default() -> None:
         "commit-msg",
         "pre-push",
     ]
-    assert tasks["hooks"]["run"] == "uv run --frozen pre-commit install"
-    assert "uv run --frozen pre-commit install" in str(tasks["setup"]["run"])
+    assert tasks["hooks"]["run"] == "uv run --frozen python tools/install_git_hooks.py"
+    assert "uv run --frozen python tools/install_git_hooks.py" in str(tasks["setup"]["run"])
 
 
 def test_pre_commit_file_selectors_resolve_to_tracked_paths() -> None:
