@@ -33,7 +33,11 @@ Two modes (Constitution III.11 — both fail loudly):
     ``baseline-ceremony-range`` hook, against the merge-base with the
     upstream ``dev`` ref — closing the commit-msg leg's best-effort gap
     *before a push leaves the box*) and again in CI on every PR (the
-    authoritative leg, diffing the PR's base..head).
+    authoritative leg, diffing the PR's base..head). CI also passes
+    ``--respect-introduction`` with exact endpoint SHAs: it requires the
+    pinned introduction commit in head ancestry and excludes only its strict
+    ancestors. The introduction, subsequent commits and later side-branch
+    integrations remain checked. Missing history fails closed.
 
 Authoring a ceremony message by hand is unnecessary: once the baseline
 drift is staged, ``tools/generate_ceremony_message.py`` computes the
@@ -58,6 +62,10 @@ from pathlib import Path
 # behavioral-contract artifact (regression baselines, dense goldens, the
 # mutation and storage-budget baselines); moving any of it is a ceremony.
 BASELINE_PREFIXES: tuple[str, ...] = ("tests/baselines/",)
+
+# This immutable commit introduced the machine-required trailer. Its strict
+# ancestors remain historical evidence; the introduction itself is enforced.
+CEREMONY_INTRODUCTION = "2655fbfa17e40acdb85fb7170098f4f909b21815"
 
 # Strict trailer grammar: a full line, lowercase slug, no empty blessing.
 _TRAILER_RE = re.compile(r"^Baselines: blessed\([a-z0-9][a-z0-9-]*\)$", re.MULTILINE)
@@ -120,7 +128,9 @@ def _is_merge_commit(sha: str, repo_root: Path) -> bool:
     return len(parent_tokens) > 2
 
 
-def check_range(range_spec: str, repo_root: Path) -> list[str]:
+def check_range(
+    range_spec: str, repo_root: Path, *, respect_introduction: bool = False
+) -> list[str]:
     """CI leg: every commit in the range must declare its ceremony.
 
     Non-merge commits are diffed against their parent. Merge commits are
@@ -129,7 +139,14 @@ def check_range(range_spec: str, repo_root: Path) -> list[str]:
     yields no such paths and needs no trailer of its own; an evil merge
     that hand-resolves a baseline file is a ceremony in its own right.
     """
-    shas_raw = _git(repo_root, "rev-list", range_spec)
+    exclusions: list[str] = []
+    if respect_introduction:
+        if re.fullmatch(r"[0-9a-f]{40}\.\.[0-9a-f]{40}", range_spec) is None:
+            raise ValueError("introduction boundary requires an exact BASE_SHA..HEAD_SHA range")
+        head = range_spec.split("..", 1)[1]
+        _git(repo_root, "merge-base", "--is-ancestor", CEREMONY_INTRODUCTION, head)
+        exclusions = ["--not", f"{CEREMONY_INTRODUCTION}^"]
+    shas_raw = _git(repo_root, "rev-list", range_spec, *exclusions)
     violations: list[str] = []
     for sha in [line for line in shas_raw.splitlines() if line]:
         if _is_merge_commit(sha, repo_root):
@@ -163,12 +180,20 @@ def main(argv: list[str] | None = None) -> int:
         help="CI mode: git revision range (BASE..HEAD) to inspect",
     )
     parser.add_argument(
+        "--respect-introduction",
+        action="store_true",
+        help="Enforce from the pinned trailer introduction, preserving its strict ancestors",
+    )
+    parser.add_argument(
         "--repo",
         type=Path,
         default=Path.cwd(),
         help="repository root (default: current directory)",
     )
     args = parser.parse_args(argv)
+
+    if args.respect_introduction and args.range_spec is None:
+        parser.error("--respect-introduction requires --range")
 
     if args.commit_msg_file is None and args.range_spec is None:
         parser.print_usage(sys.stderr)
@@ -179,11 +204,13 @@ def main(argv: list[str] | None = None) -> int:
         if args.commit_msg_file is not None:
             violations = check_commit_msg(args.commit_msg_file, args.repo)
         else:
-            violations = check_range(args.range_spec, args.repo)
+            violations = check_range(
+                args.range_spec, args.repo, respect_introduction=args.respect_introduction
+            )
     except subprocess.CalledProcessError as exc:
         print(f"check_baseline_ceremony: git failed: {exc.stderr.strip()}", file=sys.stderr)
         return 2
-    except OSError as exc:
+    except (OSError, ValueError) as exc:
         print(f"check_baseline_ceremony: {exc}", file=sys.stderr)
         return 2
 

@@ -21,8 +21,8 @@ CAMPAIGN_ID = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"
 
 SCOPE = {
     "slice_id": "michigan-persistence-slice",
-    "scenario": "production/michigan-rust-runtime",
-    "fixed_replay_seed": 281,
+    "scenario": "production/michigan-observer-v1",
+    "fixed_replay_seed": 319,
     "tick_duration_days": 28,
     "parameter_overrides": False,
     "stochastic_draws": False,
@@ -44,11 +44,10 @@ PROVENANCE = {
 }
 
 OBSERVABLE_FIELDS = (
-    ("territory/median-wage", "configured_input", 21.0),
-    ("territory/phi-hour", "configured_input", 1.0),
-    ("territory/phi-savings-adjustment", "dynamic", 0.047619047619047616),
-    ("territory/rate-accumulation", "dynamic", 0.0),
-    ("territory/dist-year", "dynamic", 2010.0),
+    ("territory/qcew-establishments", 214.0),
+    ("territory/qcew-employment", 1494.0),
+    ("territory/qcew-total-annual-wages", 62042985.0),
+    ("territory/qcew-average-weekly-wage", 798.0),
 )
 
 
@@ -61,16 +60,16 @@ def _bits_hex(value: float) -> str:
 
 
 def _observable(
+    entity: str,
     field: str,
-    role: str,
     before_value: float,
     after_value: float,
 ) -> dict[str, object]:
     return {
-        "name": f"{SCOPE['scenario']}::wayne::{field}",
-        "entity": "wayne",
+        "name": f"{SCOPE['scenario']}::{entity}::{field}",
+        "entity": entity,
         "field": field,
-        "role": role,
+        "role": "observed_baseline",
         "kind": "f64",
         "before_value": before_value,
         "before_bits_hex": _bits_hex(before_value),
@@ -121,7 +120,9 @@ def _valid_row(
             ],
         },
         "observables": [
-            _observable(field, role, value, value) for field, role, value in OBSERVABLE_FIELDS
+            _observable(f"county-26{county:03}", field, value, value)
+            for county in range(1, 166, 2)
+            for field, value in OBSERVABLE_FIELDS
         ],
         "audit_receipts": {"count": 2},
         "choice_receipts": {"count": 1, "digest_sha256": _digest(resolve_tick + 600)},
@@ -349,9 +350,8 @@ def test_success_creates_unique_secret_safe_artifacts_summary_and_csv(
                 "scope.no_dynamic_h3_updates",
                 "rule.never_fired",
                 "material_rows.constant",
-                "observable.dynamic_flat",
             ],
-            "notice_count": 8,
+            "notice_count": 5,
         },
         "final": {
             "administrative_graph_sha256": _digest(3),
@@ -391,7 +391,7 @@ def test_success_creates_unique_secret_safe_artifacts_summary_and_csv(
     assert "final administrative graph:" in first_console.out
     assert "final stable graph:" in first_console.out
     assert "\nfinal graph:" not in first_console.out
-    assert "diagnostic notices: 8" in first_console.out
+    assert "diagnostic notices: 5" in first_console.out
     assert "diagnostic codes:" in first_console.out
     assert first_console.err == ""
 
@@ -409,15 +409,12 @@ def test_success_creates_unique_secret_safe_artifacts_summary_and_csv(
     assert csv_rows[1]["reopened_after_commit"] == "True"
     assert csv_rows[0]["choice_receipt_count"] == "1"
     assert csv_rows[0]["choice_receipt_digest_sha256"] == _digest(601)
-    for prefix in (
-        "median_wage",
-        "phi_hour",
-        "phi_savings_adjustment",
-        "rate_accumulation",
-        "dist_year",
-    ):
-        for suffix in ("before_value", "before_bits_hex", "after_value", "after_bits_hex"):
-            assert f"{prefix}_{suffix}" in sim_report.CSV_COLUMNS
+    for county in range(1, 166, 2):
+        for field, value in OBSERVABLE_FIELDS:
+            prefix = f"county_26{county:03}_{field.removeprefix('territory/').replace('-', '_')}"
+            for suffix in ("before_value", "before_bits_hex", "after_value", "after_bits_hex"):
+                assert f"{prefix}_{suffix}" in sim_report.CSV_COLUMNS
+            assert float(csv_rows[0][f"{prefix}_after_value"]) == value
 
     persisted = "".join(
         file.read_text(encoding="utf-8") for file in first_artifact.iterdir() if file.is_file()
@@ -805,7 +802,7 @@ def _invalid_row(case: str) -> dict[str, object]:  # noqa: C901 - table-driven m
         ("scope_duration_missing", "scope fields"),
         ("event_types_unsorted", "events.per_type must be sorted"),
         ("event_type_sum", "per-type event count sum"),
-        ("observable_missing", "exactly 5 observables"),
+        ("observable_missing", "exactly 332 observables"),
         ("observable_order", "observable 0 field"),
         ("observable_role", "observable 0 role"),
         ("observable_nonfinite", "observable 2 after_value must be finite"),
@@ -963,6 +960,7 @@ def test_diagnostics_exposes_plateaus_rule_event_material_and_observable_trends(
     assert isinstance(second_events, dict)
     second_events["count"] = 0
     second_events["per_type"] = []
+    _set_observable(rows[0], 3, before_value=0.0, after_value=0.0)
     _set_observable(rows[1], 3, before_value=0.0, after_value=1e-12)
     _set_observable(rows[2], 3, before_value=1e-12, after_value=2e-12)
     _set_observable(rows[2], 4, before_value=2010.0, after_value=2011.0)
@@ -1068,7 +1066,7 @@ def test_diagnostics_exposes_plateaus_rule_event_material_and_observable_trends(
     }
     observables = diagnostics["observables"]
     assert isinstance(observables, list)
-    assert observables[0]["role"] == "configured_input"
+    assert observables[0]["role"] == "observed_baseline"
     assert observables[0]["unique_values"] == 1
     assert observables[2]["change_count"] == 0
     assert observables[2]["first_change_tick"] is None
@@ -1088,8 +1086,8 @@ def test_diagnostics_exposes_plateaus_rule_event_material_and_observable_trends(
     ]
     assert "rule.never_fired" in notice_codes
     assert "rule.fired_on_unchanged_administrative_graph" in notice_codes
-    assert "observable.dynamic_flat" in notice_codes
-    assert "observable.dynamic_near_flat" in notice_codes
+    assert "observable.observed_baseline_changed" in notice_codes
+    assert not any(code.startswith("observable.dynamic_") for code in notice_codes)
 
 
 def test_tick_one_stable_and_observable_movement_is_not_reported_flat() -> None:
@@ -1105,12 +1103,12 @@ def test_tick_one_stable_and_observable_movement_is_not_reported_flat() -> None:
     flat_subjects = {
         notice["subject"]
         for notice in diagnostics["notices"]
-        if notice["code"] in {"stable_graph.flat", "observable.dynamic_flat"}
+        if notice["code"] == "stable_graph.flat"
     }
     assert observable["name"] not in flat_subjects
 
 
-def test_dynamic_observable_that_changes_once_then_stalls_is_reported_plateaued() -> None:
+def test_observed_baseline_movement_remains_visible_after_a_long_unchanged_run() -> None:
     rows = [_valid_row(tick) for tick in range(1, 105)]
     _set_observable(rows[0], 2, before_value=0.0, after_value=0.25)
     for row in rows[1:]:
@@ -1121,7 +1119,7 @@ def test_dynamic_observable_that_changes_once_then_stalls_is_reported_plateaued(
     observable = diagnostics["observables"][2]  # type: ignore[index]
     assert observable["last_change_tick"] == 1
     assert {(notice["code"], notice["subject"]) for notice in diagnostics["notices"]} >= {
-        ("observable.dynamic_plateau", observable["name"])
+        ("observable.observed_baseline_changed", observable["name"])
     }
     assert all(notice["code"] != "stable_graph.flat" for notice in diagnostics["notices"])
 
@@ -1483,3 +1481,26 @@ def test_choice_receipt_digest_must_be_canonical(digest: object) -> None:
     row["choice_receipts"] = {"count": 0, "digest_sha256": digest}
     with pytest.raises(sim_report.JsonlValidationError, match="choice_receipts.digest_sha256"):
         sim_report._validate_tick_row(row, line_number=1, previous_tick=None)
+
+
+@pytest.mark.parametrize(
+    "fault", ["retired-scenario", "retired-seed", "county", "duplicate", "field"]
+)
+def test_report_rejects_retired_or_incomplete_observer_inventory(
+    tmp_path: Path, fault: str
+) -> None:
+    row = _valid_row(1)
+    if fault == "retired-scenario":
+        row["scope"]["scenario"] = "production/michigan-rust-runtime"
+    elif fault == "retired-seed":
+        row["scope"]["fixed_replay_seed"] = 281
+    elif fault == "county":
+        row["observables"][-1]["entity"] = "county-26167"
+    elif fault == "duplicate":
+        row["observables"][-1] = copy.deepcopy(row["observables"][0])
+    else:
+        row["observables"][-1]["field"] = "territory/median-wage"
+    path = tmp_path / "ticks.jsonl"
+    path.write_text(json.dumps(row) + "\n")
+    with pytest.raises(sim_report.JsonlValidationError):
+        sim_report._validate_jsonl(path)
