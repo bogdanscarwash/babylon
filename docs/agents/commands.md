@@ -15,7 +15,7 @@ Use the checkout's own pinned environment. Create a sibling worktree from
 
 ```bash
 git fetch origin
-git worktree add -b codex/PER-123-short-name /media/user/data/worktrees/PER-123/babylon origin/dev
+GIT_LFS_SKIP_SMUDGE=1 git worktree add -b codex/PER-123-short-name /media/user/data/worktrees/PER-123/babylon origin/dev
 cd /media/user/data/worktrees/PER-123/babylon
 CODEX_WORKTREE_PATH="$PWD" python3 - <<'PYTHON'
 import subprocess
@@ -28,7 +28,8 @@ PYTHON
 ```
 
 The Codex setup installs pinned tools, the locked editable `.venv`,
-and hooks, then checks local imports and the worktree's Rust target. It does
+and shared hooks that resolve the current checkout's `.venv` at execution,
+then checks local imports and the worktree's Rust target. It does
 not copy reference data or start Postgres. Data tasks check their own
 inputs. Nested worktrees must exclude the parent checkout's Mise configuration.
 `mise config ls` shows the files loaded.

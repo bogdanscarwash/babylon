@@ -93,7 +93,7 @@ set -e
 mise install --locked
 rustup toolchain install 1.91.1 --profile minimal --component rustfmt --component clippy
 uv sync --extra ops --frozen
-uv run --frozen pre-commit install
+uv run --frozen python tools/install_git_hooks.py
 mise run db:up
 (cd rust && CARGO_BUILD_JOBS=4 cargo build -p babylon-persistence --bin babylon-runtime --locked)
 export PATH="$PWD/rust/target/debug:$PATH"
@@ -811,7 +811,7 @@ depends = ["check"]
 
 [tasks.hooks]
 description = "Install the configured pre-commit, commit-msg, and pre-push hooks"
-run = "uv run --frozen pre-commit install"
+run = "uv run --frozen python tools/install_git_hooks.py"
 
 [tasks."hooks:run"]
 description = "Run all pre-commit hooks on all files"

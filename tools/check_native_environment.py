@@ -30,8 +30,16 @@ def environment_faults(
     if "/nix/store/" in environment.get("LD_LIBRARY_PATH", ""):
         faults.append("LD_LIBRARY_PATH still injects Nix libraries; open a native shell")
     expected_environment = root.resolve() / ".venv"
-    if expected_environment.is_symlink() or Path(prefix).resolve() != expected_environment:
-        faults.append("Python must run from this checkout-local .venv; run uv sync --frozen")
+    if expected_environment.is_symlink():
+        faults.append(
+            "Python must run from this checkout-local .venv; remove only the symlink with "
+            "unlink .venv (preserving its target), then run mise run install"
+        )
+    elif Path(prefix).resolve() != expected_environment:
+        faults.append(
+            "Python must run from this checkout-local .venv; run mise run install, "
+            "then mise run check:env-contract"
+        )
     expected_origin = root / "src" / "babylon" / "__init__.py"
     if module_origin is None or Path(module_origin).resolve() != expected_origin.resolve():
         faults.append("babylon imports do not resolve to this checkout; run uv sync --frozen")

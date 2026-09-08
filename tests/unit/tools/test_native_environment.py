@@ -75,3 +75,13 @@ def test_symlinked_environment_is_rejected(checkout: Path, tmp_path: Path) -> No
         str(checkout / "src/babylon/__init__.py"),
     )
     assert any("checkout-local .venv" in fault for fault in faults)
+
+
+def test_symlink_remediation_preserves_the_environment_target(checkout: Path) -> None:
+    target = checkout / "valuable-environment"
+    target.mkdir()
+    (checkout / ".venv").symlink_to(target, target_is_directory=True)
+    faults = environment_faults(checkout, {}, "3.12.14", "/opt/python", str(target), None)
+    assert any("unlink .venv" in fault and "preserving its target" in fault for fault in faults)
+    assert target.is_dir()
+    assert (checkout / ".venv").is_symlink()
