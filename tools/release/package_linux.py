@@ -259,6 +259,8 @@ def archive_tree(source: Path, archive_path: Path, timestamp: int) -> None:
         info.uid = info.gid = 0
         info.uname = info.gname = "root"
         info.mtime = timestamp
+        if info.isdir():
+            info.mode = 0o755
         return info
 
     with (

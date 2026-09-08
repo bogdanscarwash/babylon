@@ -303,6 +303,37 @@ def test_corrupt_saved_campaign_refuses_without_replacing_it(tmp_path: Path) -> 
     assert state.read_text() == "damaged"
 
 
+@pytest.mark.parametrize("saved_pointer", [b"damaged", b"x" * 65])
+def test_smoke_ignores_damaged_saved_campaign_preferences(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, saved_pointer: bytes
+) -> None:
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
+    state = launcher.preference_path(dict(os.environ))
+    state.parent.mkdir(parents=True, exist_ok=True)
+    state.write_bytes(saved_pointer)
+    runtime, client = tmp_path / "runtime", tmp_path / "client"
+    calls: list[tuple[Any, ...]] = []
+    monkeypatch.setattr(
+        launcher,
+        "prepare",
+        lambda *_args, **_kwargs: (
+            runtime,
+            client,
+            launcher.ReaderCredentials("observer", "known"),
+        ),
+    )
+
+    def installation(*args: Any) -> int:
+        calls.append(args)
+        return 0
+
+    monkeypatch.setattr(launcher, "check_installation", installation)
+    assert launcher.main(["--smoke", "--no-build"]) == 0
+    assert len(calls) == 1
+    assert calls[0][:2] == (runtime, client)
+    assert state.read_bytes() == saved_pointer
+
+
 @pytest.mark.parametrize("preset", [None, "standard", "delayed"])
 def test_two_anonymous_pipes_connect_children_without_parent_forwarding(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, preset: str | None

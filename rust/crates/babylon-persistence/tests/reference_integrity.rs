@@ -25,6 +25,48 @@ const VALID_DISPOSABLE_CANARY: &str = "0123456789abcdef0123456789abcdef";
 
 #[test]
 #[ignore = "requires an owned disposable runtime in BABYLON_POSTGRES_TEST_DSN"]
+fn live_scratch_login_requires_scram() {
+    let base = config_from_env();
+    preflight_disposable_harness(&base);
+    let admin = admin_config(&base);
+    let mut client = admin.connect(NoTls).unwrap();
+    client
+        .batch_execute("SET password_encryption = 'md5'")
+        .unwrap();
+    let name = scratch_name("scram");
+    let password = create_scratch_login(&mut client, &name);
+    let role = ScratchRole {
+        name,
+        password,
+        admin,
+        active: true,
+    };
+    let encoded: bool = client.query_one(
+        "SELECT rolpassword LIKE 'SCRAM-SHA-256$%' FROM pg_catalog.pg_authid WHERE rolname = $1",
+        &[&role.name],
+    ).unwrap().get(0);
+    let mut login = base.clone();
+    login.user(role.name()).password(role.password());
+    let accepts_generated = login.connect(NoTls).is_ok();
+    login.password(format!("{}x", role.password()));
+    let rejects_wrong = login.connect(NoTls).is_err();
+    role.cleanup();
+    assert!(
+        encoded,
+        "scratch login must store a SCRAM verifier even with an MD5 session default"
+    );
+    assert!(
+        accepts_generated,
+        "generated scratch credential must authenticate"
+    );
+    assert!(
+        rejects_wrong,
+        "scratch login must reject an incorrect credential"
+    );
+}
+
+#[test]
+#[ignore = "requires an owned disposable runtime in BABYLON_POSTGRES_TEST_DSN"]
 fn live_reference_bundle_integrity() {
     let base = config_from_env();
     preflight_disposable_harness(&base);
@@ -250,20 +292,7 @@ impl ScratchRole {
         let name = scratch_name("owner");
         let admin = admin_config(base);
         let mut client = admin.connect(NoTls).unwrap();
-        let password: String = client
-            .query_one("SELECT pg_catalog.gen_random_uuid()::text", &[])
-            .unwrap()
-            .get(0);
-        client
-            .batch_execute(
-                format!(
-                    "CREATE ROLE {} LOGIN PASSWORD '{}' NOSUPERUSER NOCREATEDB NOCREATEROLE",
-                    quote_identifier(&name),
-                    password
-                )
-                .as_str(),
-            )
-            .unwrap();
+        let password = create_scratch_login(&mut client, &name);
         Self {
             name,
             password,
@@ -298,6 +327,28 @@ impl ScratchRole {
         );
         client.batch_execute(&sql)
     }
+}
+
+fn create_scratch_login(client: &mut postgres::Client, name: &str) -> String {
+    // Generate and register the credential server-side, so client SQL never
+    // contains its cleartext value. The catalog receives a SCRAM verifier.
+    client
+        .batch_execute(
+            "CREATE FUNCTION pg_temp.create_scratch_login(role_name text) RETURNS text
+         LANGUAGE plpgsql SET password_encryption = 'scram-sha-256' AS $$
+         DECLARE generated_password text := pg_catalog.gen_random_uuid()::text;
+         BEGIN
+             EXECUTE pg_catalog.format(
+                 'CREATE ROLE %I LOGIN PASSWORD %L NOSUPERUSER NOCREATEDB NOCREATEROLE',
+                 role_name, generated_password);
+             RETURN generated_password;
+         END $$",
+        )
+        .unwrap();
+    client
+        .query_one("SELECT pg_temp.create_scratch_login($1)", &[&name])
+        .unwrap()
+        .get(0)
 }
 
 impl Drop for ScratchRole {

@@ -1,4 +1,4 @@
-"""Reference LODES destination categories."""
+"""Boundary-register endpoint and flow-kind classification."""
 
 from __future__ import annotations
 

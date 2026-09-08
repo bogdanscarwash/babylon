@@ -88,20 +88,26 @@ def test_even_a_pinned_wheel_cannot_write_outside_its_package(tmp_path: Path) ->
 
 
 def test_archive_is_repeatable_and_preserves_the_executable_entrypoint(tmp_path: Path) -> None:
-    tree = tmp_path / "babylon-0.4.0-linux-x86_64"
-    tree.mkdir()
-    executable = tree / "babylon"
-    executable.write_text("#!/usr/bin/env python3\n")
-    executable.chmod(0o755)
     first, second = tmp_path / "first.tar.gz", tmp_path / "second.tar.gz"
-    package.archive_tree(tree, first, 1_700_000_000)
-    package.archive_tree(tree, second, 1_700_000_000)
+    for umask, output in ((0o022, first), (0o077, second)):
+        previous_umask = os.umask(umask)
+        try:
+            tree = tmp_path / str(umask) / "babylon-0.4.0-linux-x86_64"
+            (tree / "assets").mkdir(parents=True)
+            executable = tree / "babylon"
+            executable.write_text("#!/usr/bin/env python3\n")
+            executable.chmod(0o755)
+            package.archive_tree(tree, output, 1_700_000_000)
+        finally:
+            os.umask(previous_umask)
     assert first.read_bytes() == second.read_bytes()
+    assert package.digest(first) == package.digest(second)
     assert (
         first.with_name("first.tar.gz.sha256").read_text()
         == f"{package.digest(first)}  first.tar.gz\n"
     )
     with tarfile.open(first) as archive:
+        assert all(member.mode == 0o755 for member in archive.getmembers() if member.isdir())
         entry = archive.getmember("babylon-0.4.0-linux-x86_64/babylon")
         assert entry.mode == 0o755
         assert entry.mtime == 1_700_000_000

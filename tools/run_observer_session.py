@@ -745,14 +745,15 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.distribution:
             environment = distribution_environment(ROOT, environment)
-        state_file = preference_path(environment)
-        initial_target = select_initial_target(
-            environment,
-            state_file=state_file,
-            explicit=args.campaign,
-            new=args.new,
-            preset=args.preset,
-        )
+        initial_target = None
+        if not args.smoke:
+            initial_target = select_initial_target(
+                environment,
+                state_file=preference_path(environment),
+                explicit=args.campaign,
+                new=args.new,
+                preset=args.preset,
+            )
         runtime, client, credentials = prepare(
             ROOT, environment, no_build=args.no_build, distribution=args.distribution
         )
@@ -766,6 +767,7 @@ def main(argv: list[str] | None = None) -> int:
                 reader_environment,
                 args.defines.expanduser().resolve(),
             )
+        assert initial_target is not None
         # Never echo the ambient filter: field selectors may contain private values.
         print(f"Observer log targets enabled: {OBSERVER_CAPTURE_FILTER}", file=sys.stderr)
         return run_pair(
