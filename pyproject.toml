@@ -343,9 +343,3 @@ build-backend = "hatchling.build"
 
 [tool.pyright]
 extraPaths = ["."]
-
-# ── Import-boundary contracts (Program 14, Phase 1) ─────────────────────────
-# Runtime layering law: kernel < models/formulas < domain < engine. Engine may
-# import downward; nothing imports the engine back. TYPE_CHECKING imports are
-# excluded — annotations may reference upward, the import graph may not.
-# Run: poetry run lint-imports (wired into mise check + pre-commit + CI).

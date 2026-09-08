@@ -284,7 +284,7 @@ jobs:
   # declare its ceremony with a `Baselines: blessed(<slug>)` trailer. PR-only:
   # dev/main only move via PRs, so the PR range is the authoritative boundary
   # (the commit-msg pre-commit hook is the best-effort local leg). Stdlib-only
-  # script — no poetry bootstrap needed.
+  # script — no project dependency installation needed.
   ceremony-gate:
     name: Baseline Ceremony Gate (§6.5 provenance)
     runs-on: ubuntu-latest

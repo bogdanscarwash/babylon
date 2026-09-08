@@ -8,7 +8,7 @@ recreates table on each run.
 
 Usage::
 
-    poetry run python -m tools.ingest.bea_final_demand
+    mise exec -- uv run --frozen python -m tools.ingest.bea_final_demand
 """
 
 from __future__ import annotations

@@ -32,7 +32,7 @@ from babylon.config.logging_config import (
 def temp_pyproject(tmp_path: Path) -> Path:
     """Create a temporary pyproject.toml with logging config."""
     content = """
-[tool.poetry]
+[project]
 name = "test-project"
 
 [tool.babylon.logging]
@@ -54,7 +54,7 @@ file_level = "TRACE"
 def temp_pyproject_minimal(tmp_path: Path) -> Path:
     """Create a minimal pyproject.toml without logging config."""
     content = """
-[tool.poetry]
+[project]
 name = "test-project"
 """
     pyproject_path = tmp_path / "pyproject.toml"
@@ -232,7 +232,7 @@ class TestFindPyprojectToml:
         """_find_pyproject_toml finds pyproject.toml in current directory."""
         # Create pyproject.toml in temp dir
         pyproject = tmp_path / "pyproject.toml"
-        pyproject.write_text("[tool.poetry]\nname = 'test'")
+        pyproject.write_text("[project]\nname = 'test'")
 
         original_cwd = os.getcwd()
         try:
