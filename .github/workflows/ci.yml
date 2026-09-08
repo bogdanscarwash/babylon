@@ -299,6 +299,7 @@ jobs:
         run: >-
           python3 tools/check_baseline_ceremony.py
           --range "${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"
+          --respect-introduction
 
   test-unit:
     name: Python Tooling Tests
