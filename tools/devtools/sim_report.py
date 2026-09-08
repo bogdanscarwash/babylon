@@ -124,6 +124,7 @@ TOP_LEVEL_FIELDS: Final = frozenset(
         "rules",
         "events",
         "audit_receipts",
+        "choice_receipts",
         "material_rows",
         "observables",
         "tick_content_hash",
@@ -153,6 +154,7 @@ FOUNDATION_FIELDS: Final = frozenset(
     {"foundation_sha256", "defines_sha256", "rules_sha256", "reference_sha256"}
 )
 AUDIT_RECEIPT_FIELDS: Final = frozenset({"count"})
+CHOICE_RECEIPT_FIELDS: Final = frozenset({"count", "digest_sha256"})
 MATERIAL_ROW_FIELDS: Final = frozenset({"count", "digest_sha256"})
 LOWER_HEX_DIGEST: Final = re.compile(r"[0-9a-f]{64}")
 LOWER_HEX_F64_BITS: Final = re.compile(r"[0-9a-f]{16}")
@@ -207,6 +209,8 @@ CSV_COLUMNS: Final = (
     "dist_year_after_value",
     "dist_year_after_bits_hex",
     "audit_receipt_count",
+    "choice_receipt_count",
+    "choice_receipt_digest_sha256",
     "material_row_count",
     "material_row_digest_sha256",
     "tick_content_hash",
@@ -915,6 +919,23 @@ def _validate_tick_row(
         location="audit_receipts.count",
     )
 
+    choices = _require_fields(
+        row["choice_receipts"],
+        CHOICE_RECEIPT_FIELDS,
+        line_number=line_number,
+        location="choice_receipts",
+    )
+    _require_nonnegative_integer(
+        choices["count"],
+        line_number=line_number,
+        location="choice_receipts.count",
+    )
+    _require_digest(
+        choices["digest_sha256"],
+        line_number=line_number,
+        location="choice_receipts.digest_sha256",
+    )
+
     material_rows = _require_fields(
         row["material_rows"],
         MATERIAL_ROW_FIELDS,
@@ -1545,6 +1566,9 @@ def _evidence_summary(
         "audit_receipts": sum(
             cast("int", _nested_mapping(row, "audit_receipts")["count"]) for row in rows
         ),
+        "choice_receipts": sum(
+            cast("int", _nested_mapping(row, "choice_receipts")["count"]) for row in rows
+        ),
         "material_rows": sum(
             cast("int", _nested_mapping(row, "material_rows")["count"]) for row in rows
         ),
@@ -1625,6 +1649,7 @@ def render_summary(summary: Mapping[str, object]) -> str:
                 (
                     f"events: {totals['events']}; "
                     f"audit receipts: {totals['audit_receipts']}; "
+                    f"choice receipts: {totals['choice_receipts']}; "
                     f"material rows: {totals['material_rows']}"
                 ),
                 f"final administrative graph: {final['administrative_graph_sha256']}",
@@ -1667,6 +1692,7 @@ def _csv_row(row: Mapping[str, object]) -> dict[str, object]:
     rules = _nested_mapping(row, "rules")
     events = _nested_mapping(row, "events")
     receipts = _nested_mapping(row, "audit_receipts")
+    choices = _nested_mapping(row, "choice_receipts")
     material_rows = _nested_mapping(row, "material_rows")
     persistence = _nested_mapping(row, "persistence")
     rendered: dict[str, object] = {
@@ -1684,6 +1710,8 @@ def _csv_row(row: Mapping[str, object]) -> dict[str, object]:
         "event_count": events["count"],
         "event_digest_sha256": events["digest_sha256"],
         "audit_receipt_count": receipts["count"],
+        "choice_receipt_count": choices["count"],
+        "choice_receipt_digest_sha256": choices["digest_sha256"],
         "material_row_count": material_rows["count"],
         "material_row_digest_sha256": material_rows["digest_sha256"],
         "tick_content_hash": row["tick_content_hash"],

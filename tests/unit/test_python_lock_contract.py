@@ -5,6 +5,7 @@ from __future__ import annotations
 import io
 import os
 import subprocess
+import sys
 import tarfile
 import tempfile
 from pathlib import Path
@@ -133,7 +134,7 @@ def _run_archive_lock_check(ref: str) -> subprocess.CompletedProcess[str]:
         lock_environment = os.environ.copy()
         lock_environment.pop("UV_FROZEN", None)
         result = subprocess.run(  # noqa: S603
-            [_pinned_uv(), "lock", "--check"],  # noqa: S607
+            [_pinned_uv(), "lock", "--check", "--python", sys.executable],  # noqa: S607
             cwd=archive_root,
             capture_output=True,
             text=True,
@@ -173,3 +174,18 @@ def test_archive_lock_check_unsets_uv_frozen(
             f"uv lock --check failed (exit {result.returncode})\n{_subprocess_diagnostics(result)}"
         )
     assert captured_environment.read_text() == "absent"
+
+
+def test_archive_lock_check_uses_the_executing_python(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The forward-compatibility lane must not require the production interpreter."""
+    commands: list[list[str]] = []
+
+    def capture(command: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        commands.append(command)
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr(__name__ + "._extract_archive", lambda *_args: None)
+    monkeypatch.setattr(__name__ + "._pinned_uv", lambda: "/pinned/uv")
+    monkeypatch.setattr(subprocess, "run", capture)
+    _run_archive_lock_check("HEAD")
+    assert commands == [["/pinned/uv", "lock", "--check", "--python", sys.executable]]

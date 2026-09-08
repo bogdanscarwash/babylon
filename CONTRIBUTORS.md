@@ -116,8 +116,10 @@ stop and correct the fault.
 Before a merge, complete these steps:
 
 1. Confirm the base branch and record the exact reviewed head SHA.
-2. Confirm that all reported checks completed successfully for that exact
-   reviewed head SHA and base branch.
+2. Confirm that blocking checks completed successfully for that exact reviewed
+   head SHA and base branch. Verified asynchronous CodeQL scans do not delay
+   `dev`; known open findings still block. CodeQL gates PRs to `main` as
+   [the acceptance policy](docs/agents/governance.md#pr-acceptance) requires.
 3. Inspect the available Copilot input.
 4. Treat absent, stale, incomplete, identity-mismatched, or API-failed Copilot
    input as advisory.

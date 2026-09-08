@@ -4,14 +4,14 @@ name: "CodeQL Security Scan"
 # - Python and Rust cover the live engine and periphery.
 # - Actions covers the CI supply chain, and JavaScript/TypeScript covers the
 #   remaining executable repository tooling.
-# - Protected-branch pull requests run CodeQL before merge. Push + weekly cron
-#   keep the default-branch alert database fresh after integration.
+# - Main pull requests require CodeQL before merge. Protected-branch pushes,
+#   weekly scans and manual runs refresh security findings asynchronously.
 # - `paths-ignore` excludes non-executable design material and two intentionally
 #   malformed nested Rust-workspace fixtures that cannot be extracted.
 
 on:
   pull_request:
-    branches: [main, dev]
+    branches: [main]
   push:
     branches: [main, dev]
   schedule:

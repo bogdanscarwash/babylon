@@ -27,8 +27,10 @@ Exact reviewed head SHA: <!-- Use the full 40-character commit SHA. -->
 - [ ] For a `main` target, current `origin/main` is an ancestor of the exact
       reviewed head before `main.yml` passed on that head.
 - [ ] For a `main` target, this PR produced the complete combined manifest.
-- [ ] All reported checks completed successfully for the exact reviewed head
-      SHA and base branch above.
+- [ ] Blocking checks completed successfully for the exact reviewed head
+      SHA and base branch above. Verified asynchronous CodeQL scans may remain
+      active on `dev`; known findings still block. A `main` target requires
+      successful exact-head CodeQL and zero open PR findings.
 - [ ] Copilot evidence is advisory when absent, stale, incomplete, API-failed,
       identity-mismatched, or without a reply.
 - [ ] No unresolved review thread remains. Any unresolved review thread blocks

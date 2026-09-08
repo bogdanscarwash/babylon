@@ -70,7 +70,7 @@ def test_every_external_action_uses_a_documented_immutable_commit() -> None:
     assert violations == []
 
 
-def test_codeql_covers_protected_branch_pull_requests_with_least_privilege() -> None:
+def test_codeql_gates_main_and_scans_protected_branches_with_least_privilege() -> None:
     workflow = _workflow("codeql.yml")
     triggers = _triggers(workflow)
     analyze = workflow["jobs"]["analyze"]
@@ -80,7 +80,7 @@ def test_codeql_covers_protected_branch_pull_requests_with_least_privilege() -> 
     codeql_config = yaml.safe_load(init["with"]["config"])
     ignored_paths = codeql_config["paths-ignore"]
 
-    assert triggers["pull_request"] == {"branches": ["main", "dev"]}
+    assert triggers["pull_request"] == {"branches": ["main"]}
     assert triggers["push"] == {"branches": ["main", "dev"]}
     assert workflow["concurrency"]["cancel-in-progress"] is True
     assert analyze["permissions"] == {

@@ -124,6 +124,7 @@ def _valid_row(
             _observable(field, role, value, value) for field, role, value in OBSERVABLE_FIELDS
         ],
         "audit_receipts": {"count": 2},
+        "choice_receipts": {"count": 1, "digest_sha256": _digest(resolve_tick + 600)},
         "material_rows": {
             "count": 3,
             "digest_sha256": _digest(resolve_tick + 300),
@@ -371,6 +372,7 @@ def test_success_creates_unique_secret_safe_artifacts_summary_and_csv(
         "tick_duration_days": 28,
         "totals": {
             "audit_receipts": 4,
+            "choice_receipts": 2,
             "events": 4,
             "material_rows": 6,
             "rules_considered": 6,
@@ -405,6 +407,8 @@ def test_success_creates_unique_secret_safe_artifacts_summary_and_csv(
         csv_rows = list(csv.DictReader(csv_file))
     assert csv_rows[0]["reopened_after_commit"] == "False"
     assert csv_rows[1]["reopened_after_commit"] == "True"
+    assert csv_rows[0]["choice_receipt_count"] == "1"
+    assert csv_rows[0]["choice_receipt_digest_sha256"] == _digest(601)
     for prefix in (
         "median_wage",
         "phi_hour",
@@ -1243,6 +1247,7 @@ def test_nonzero_runtime_preserves_valid_partial_evidence_and_actual_status(
     assert result.summary["last_resolve_tick"] == 2
     assert result.summary["totals"] == {
         "audit_receipts": 4,
+        "choice_receipts": 2,
         "events": 4,
         "material_rows": 6,
         "rules_considered": 6,
@@ -1462,3 +1467,19 @@ def test_runtime_path_must_be_an_executable_file(tmp_path: Path) -> None:
 
     with pytest.raises(sim_report.ReportError, match="not executable"):
         sim_report.run_report(runtime=runtime, ticks=1, output_root=tmp_path / "out")
+
+
+@pytest.mark.parametrize("value", [True, -1, 1.0, "1"])
+def test_choice_receipt_count_must_be_a_nonnegative_integer(value: object) -> None:
+    row = _valid_row(1)
+    row["choice_receipts"] = {"count": value, "digest_sha256": _digest(601)}
+    with pytest.raises(sim_report.JsonlValidationError, match="choice_receipts.count"):
+        sim_report._validate_tick_row(row, line_number=1, previous_tick=None)
+
+
+@pytest.mark.parametrize("digest", ["bad", "A" * 64, None])
+def test_choice_receipt_digest_must_be_canonical(digest: object) -> None:
+    row = _valid_row(1)
+    row["choice_receipts"] = {"count": 0, "digest_sha256": digest}
+    with pytest.raises(sim_report.JsonlValidationError, match="choice_receipts.digest_sha256"):
+        sim_report._validate_tick_row(row, line_number=1, previous_tick=None)

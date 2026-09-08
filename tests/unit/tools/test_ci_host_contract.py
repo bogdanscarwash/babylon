@@ -401,6 +401,7 @@ def test_weekly_rust_coverage_is_advisory_and_single_run() -> None:
     upload = next(step for step in steps if step.get("name") == "Upload Rust coverage receipts")
 
     assert checkout["with"]["ref"] == "dev"
+    assert checkout["with"]["fetch-depth"] == 0
     assert install["uses"] == ("taiki-e/install-action@7b8d4719ee4aaa279bdf55df38dacb9ebfe12a6c")
     assert install["with"] == {
         "tool": "cargo-nextest@0.9.143,cargo-llvm-cov@0.9.0",

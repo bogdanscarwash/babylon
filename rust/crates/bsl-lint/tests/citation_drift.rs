@@ -12,35 +12,38 @@ fn fixture_path() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/rules/stale_citation.bsl")
 }
 
-fn run_citation_drift() -> (i32, String) {
+fn run_citation_drift() -> (i32, String, String) {
     let output = Command::new(env!("CARGO_BIN_EXE_bsl-lint"))
         .arg("citation-drift")
         .arg(fixture_path())
         .output()
         .expect("bsl-lint must run");
     let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
-    (output.status.code().unwrap_or(-1), stdout)
+    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+    (output.status.code().unwrap_or(-1), stdout, stderr)
 }
 
 #[test]
 fn a_span_beyond_the_frozen_files_line_count_fails() {
-    let (code, stdout) = run_citation_drift();
-    assert_eq!(code, 1, "stdout was:\n{stdout}");
+    let (code, stdout, stderr) = run_citation_drift();
+    assert_eq!(code, 1, "stdout was:\n{stdout}\nstderr was:\n{stderr}");
     assert!(
         stdout.contains("E-SENTINEL citation-drift")
             && stdout.contains("out of bounds")
             && stdout.contains("solidarity.py:97-999"),
-        "expected an out-of-bounds FAIL line, got:\n{stdout}"
+        "expected an out-of-bounds FAIL line, got:\n{stdout}\nstderr was:\n{stderr}"
     );
 }
 
 #[test]
 fn an_in_bounds_span_with_no_nearby_keyword_warns_not_fails() {
-    let (_, stdout) = run_citation_drift();
+    let (_, stdout, stderr) = run_citation_drift();
     let warn_line = stdout
         .lines()
         .find(|l| l.contains("solidarity.py:1-3"))
-        .unwrap_or_else(|| panic!("expected a solidarity.py:1-3 line, got:\n{stdout}"));
+        .unwrap_or_else(|| {
+            panic!("expected a solidarity.py:1-3 line, got:\n{stdout}\nstderr was:\n{stderr}")
+        });
     assert!(
         warn_line.starts_with("W-SENTINEL"),
         "keyword-miss must WARN, not FAIL: {warn_line}"
@@ -50,10 +53,10 @@ fn an_in_bounds_span_with_no_nearby_keyword_warns_not_fails() {
 
 #[test]
 fn a_grounded_in_bounds_citation_with_a_nearby_keyword_is_clean() {
-    let (_, stdout) = run_citation_drift();
+    let (_, stdout, stderr) = run_citation_drift();
     assert!(
         !stdout.contains("solidarity.py:1-14"),
-        "the clean citation must produce no finding at all:\n{stdout}"
+        "the clean citation must produce no finding at all:\n{stdout}\nstderr was:\n{stderr}"
     );
 }
 
