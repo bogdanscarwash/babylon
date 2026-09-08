@@ -132,7 +132,7 @@ def _actions_permissions(*, sha_pinning_required: bool) -> dict[str, Any]:
 
 
 def _policy() -> dict[str, Any]:
-    return {
+    policy = {
         "repository": policy_tool.normalize_repository(_repository(merge_only=True)),
         "actions_permissions": policy_tool.normalize_actions_permissions(
             _actions_permissions(sha_pinning_required=True)
@@ -152,6 +152,11 @@ def _policy() -> dict[str, Any]:
             "description": "Patch/minor Dependabot update eligible for exact-head merge",
         },
     }
+
+    policy["dev_ruleset"]["rules"] = [
+        rule for rule in policy["dev_ruleset"]["rules"] if rule["type"] != "code_scanning"
+    ]
+    return policy
 
 
 class FakeApi:
@@ -317,6 +322,9 @@ class MigrationApi(FakeApi):
         super().__init__()
         desired = _policy()
         self.ruleset = {"id": 18807584, **deepcopy(desired["dev_ruleset"])}
+        self.ruleset["rules"].insert(
+            0, {"type": "code_scanning", "parameters": deepcopy(CODEQL_PROTECTION)}
+        )
         self.main_ruleset = {"id": 18807583, **deepcopy(desired["main_ruleset"])}
         self.repository = deepcopy(desired["repository"])
         self.actions_permissions = deepcopy(desired["actions_permissions"])
@@ -690,10 +698,9 @@ def test_checked_in_settings_policy_satisfies_all_owned_contracts() -> None:
     policy_tool._validate_policy(policy)
 
 
-@pytest.mark.parametrize("branch", ["dev", "main"])
-def test_settings_policy_requires_codeql_at_the_zero_alert_floor(branch: str) -> None:
+def test_main_settings_policy_requires_codeql_at_the_zero_alert_floor() -> None:
     policy = _policy()
-    rules = policy[f"{branch}_ruleset"]["rules"]
+    rules = policy["main_ruleset"]["rules"]
     code_scanning = next(rule for rule in rules if rule["type"] == "code_scanning")
 
     assert code_scanning["parameters"] == CODEQL_PROTECTION
@@ -706,7 +713,7 @@ def test_settings_policy_requires_codeql_at_the_zero_alert_floor(branch: str) ->
 @pytest.mark.parametrize("threshold", ["none", "errors", "errors_and_warnings"])
 def test_settings_policy_cannot_weaken_codeql_alert_protection(threshold: str) -> None:
     policy = _policy()
-    rule = next(rule for rule in policy["dev_ruleset"]["rules"] if rule["type"] == "code_scanning")
+    rule = next(rule for rule in policy["main_ruleset"]["rules"] if rule["type"] == "code_scanning")
     rule["parameters"]["code_scanning_tools"][0]["alerts_threshold"] = threshold
 
     with pytest.raises(policy_tool.PolicyError, match="zero-alert floor"):
@@ -1291,3 +1298,60 @@ def test_manual_rollback_refuses_a_different_ruleset_id_before_mutation(tmp_path
         policy_tool.rollback_policy(api, snapshot)
 
     assert all(method == "GET" for method, _endpoint, _payload in api.calls)
+
+
+def test_dev_settings_policy_keeps_codeql_asynchronous() -> None:
+    policy = _policy()
+    assert all(rule["type"] != "code_scanning" for rule in policy["dev_ruleset"]["rules"])
+    policy["dev_ruleset"]["rules"].append(
+        {"type": "code_scanning", "parameters": deepcopy(CODEQL_PROTECTION)}
+    )
+    with pytest.raises(policy_tool.PolicyError, match="dev CodeQL scans must be asynchronous"):
+        policy_tool._validate_policy(policy)
+
+
+def test_codeql_only_migration_preserves_all_other_settings_and_can_restore_gate(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    api = MigrationApi()
+    desired = _policy()
+    for branch, ruleset in (("dev", api.ruleset), ("main", api.main_ruleset)):
+        current = next(r for r in ruleset["rules"] if r["type"] == "required_status_checks")
+        expected = next(
+            r
+            for r in desired[f"{branch}_ruleset"]["rules"]
+            if r["type"] == "required_status_checks"
+        )
+        current["parameters"] = deepcopy(expected["parameters"])
+    before = {"dev_sha": api.dev_sha, **policy_tool._current_state(api)}
+    monkeypatch.setattr(policy_tool, "_verify_migration_pr_checks", lambda *_: None)
+
+    _migration_apply(api, tmp_path)
+
+    assert all(r["type"] != "code_scanning" for r in api.ruleset["rules"])
+    saved = policy_tool.load_snapshot(tmp_path / "before.json")
+    assert saved == before
+    writes = [(method, endpoint) for method, endpoint, _ in api.calls if method != "GET"]
+    assert writes == [("PUT", policy_tool.DEV_RULESET_ENDPOINT.format(ruleset_id=18807584))]
+    policy_tool.rollback_policy(api, saved)
+    assert {"dev_sha": api.dev_sha, **policy_tool._current_state(api)} == before
+
+
+@pytest.mark.parametrize("fault", ["threshold", "security-threshold", "extra-tool", "main-rule"])
+def test_codeql_migration_refuses_any_other_scanning_transition(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, fault: str
+) -> None:
+    api = MigrationApi()
+    rules = api.main_ruleset["rules"] if fault == "main-rule" else api.ruleset["rules"]
+    rule = next(r for r in rules if r["type"] == "code_scanning")
+    if fault == "main-rule":
+        rules.remove(rule)
+    elif fault == "extra-tool":
+        rule["parameters"]["code_scanning_tools"].append({"tool": "Other"})
+    else:
+        field = "alerts_threshold" if fault == "threshold" else "security_alerts_threshold"
+        rule["parameters"]["code_scanning_tools"][0][field] = "none"
+    monkeypatch.setattr(policy_tool, "_verify_migration_pr_checks", lambda *_: None)
+    with pytest.raises(policy_tool.PolicyError):
+        _migration_apply(api, tmp_path)
+    assert all(method == "GET" for method, _, _ in api.calls)

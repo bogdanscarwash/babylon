@@ -133,7 +133,7 @@ elif args[:2] == ["api", "graphql"]:
 elif args[0] == "api" and args[1].startswith(
     "repos/{owner}/{repo}/code-scanning/alerts?state=open"
 ):
-    print(json.dumps(scenario["alerts"]))
+    print(json.dumps(scenario.get("pr_alerts", []) if "ref=refs/pull/" in args[1] else scenario["alerts"]))
 elif args[:2] == ["pr", "list"]:
     print(json.dumps(scenario["children"]))
 elif args[:2] == ["pr", "merge"]:
@@ -600,6 +600,10 @@ def _use_main_manifest(scenario: dict[str, object]) -> None:
         _manifest_check_run(name, run_id=index)
         for index, name in enumerate(MAIN_BLOCKING_CHECKS, start=1)
     ]
+    codeql = _manifest_check_run("CodeQL", run_id=90)
+    codeql["app"] = {"id": 57789, "slug": "github-advanced-security"}
+    runs.append(codeql)
+    _view(scenario)["statusCheckRollup"].append(_check("CodeQL"))
     scenario["manifest_check_runs"] = {
         "total_count": len(runs),
         "check_runs": runs,
@@ -1950,4 +1954,159 @@ def test_verified_scoped_native_skip_is_not_allowed_for_main(tmp_path: Path, job
     result, calls = _run_pr_merge(tmp_path, "--director-main", "--verify-only", scenario=scenario)
     assert result.returncode == 1, result.stderr
     assert f"{job_name}: SKIPPED" in result.stderr
+    assert not _merge_calls(calls)
+
+
+def _async_codeql_scenario(branch: str = "dev") -> dict[str, object]:
+    scenario = _default_scenario()
+    job = _manifest_check_run("Analyze rust", run_id=95, conclusion=None, status="in_progress")
+    url = f"https://github.com/percy-raskova/babylon/actions/runs/{SOURCE_RUN_ID}/job/95"
+    job.update({"details_url": url, "check_suite": {"id": SOURCE_SUITE_ID}})
+    scenario["manifest_check_runs"]["check_runs"].append(job)
+    scenario["manifest_check_runs"]["total_count"] += 1
+    rollup = _check("Analyze rust", conclusion=None, status="IN_PROGRESS")
+    rollup["detailsUrl"] = url
+    scenario["view"]["statusCheckRollup"].append(rollup)
+    scenario["source_run"].update(
+        {
+            "workflow_id": 218754705,
+            "path": ".github/workflows/codeql.yml",
+            "event": "push",
+            "head_branch": branch,
+            "status": "in_progress",
+            "conclusion": None,
+        }
+    )
+    return scenario
+
+
+@pytest.mark.parametrize("branch", ["dev", "main"])
+def test_dev_does_not_wait_for_verified_same_sha_post_merge_codeql(
+    tmp_path: Path, branch: str
+) -> None:
+    result, calls = _run_pr_merge(
+        tmp_path, "--verify-only", scenario=_async_codeql_scenario(branch)
+    )
+    assert result.returncode == 0, result.stderr
+    assert not _merge_calls(calls)
+
+
+@pytest.mark.parametrize(
+    "fault",
+    [
+        "producer",
+        "workflow",
+        "path",
+        "head",
+        "check-head",
+        "repository",
+        "suite",
+        "event",
+        "branch",
+        "url",
+    ],
+)
+def test_dev_does_not_ignore_unproven_codeql_jobs(tmp_path: Path, fault: str) -> None:
+    scenario = _async_codeql_scenario()
+    job = scenario["manifest_check_runs"]["check_runs"][-1]
+    run = scenario["source_run"]
+    if fault == "producer":
+        job["app"]["id"] = 9
+    elif fault == "workflow":
+        run["workflow_id"] = 9
+    elif fault == "path":
+        run["path"] = ".github/workflows/forged.yml"
+    elif fault == "head":
+        run["head_sha"] = OTHER_SHA
+    elif fault == "check-head":
+        job["head_sha"] = OTHER_SHA
+    elif fault == "url":
+        job["details_url"] += "999"
+    elif fault == "repository":
+        run["head_repository"]["full_name"] = "outsider/babylon"
+    elif fault == "suite":
+        job["check_suite"]["id"] = 9
+    elif fault == "event":
+        run["event"] = "pull_request"
+    else:
+        run["head_branch"] = "feature/unreviewed"
+    result, calls = _run_pr_merge(tmp_path, "--verify-only", scenario=scenario)
+    assert result.returncode == 1, result.stderr
+    assert not _merge_calls(calls)
+
+
+@pytest.mark.parametrize(
+    "fault", ["absent", "pending", "failure", "producer", "slug", "head", "finding"]
+)
+def test_main_requires_exact_codeql_success_and_zero_pr_findings(
+    tmp_path: Path, fault: str
+) -> None:
+    scenario = _default_scenario()
+    _view(scenario).update({"baseRefName": "main", "headRefName": "dev"})
+    _use_main_manifest(scenario)
+    runs = scenario["manifest_check_runs"]["check_runs"]
+    aggregate = next(run for run in runs if run["name"] == "CodeQL")
+    if fault == "absent":
+        runs.remove(aggregate)
+        scenario["manifest_check_runs"]["total_count"] -= 1
+    elif fault == "pending":
+        aggregate.update({"status": "in_progress", "conclusion": None})
+    elif fault == "failure":
+        aggregate["conclusion"] = "failure"
+    elif fault == "producer":
+        aggregate["app"]["id"] = 15368
+    elif fault == "slug":
+        aggregate["app"]["slug"] = "github-actions"
+    elif fault == "head":
+        aggregate["head_sha"] = OTHER_SHA
+    else:
+        scenario["pr_alerts"] = [{"number": 62, "state": "open"}]
+    result, calls = _run_pr_merge(tmp_path, "--director-main", "--verify-only", scenario=scenario)
+    assert result.returncode == 1, result.stderr
+    assert "CodeQL" in result.stderr or "PR-specific" in result.stderr
+    assert not _merge_calls(calls)
+
+
+@pytest.mark.parametrize("fault", [None, "producer", "slug", "head", "url", "known-alert"])
+def test_dev_aggregate_exception_requires_canonical_identity_and_keeps_known_alert_floor(
+    tmp_path: Path, fault: str | None
+) -> None:
+    scenario = _default_scenario()
+    job = _manifest_check_run("CodeQL", run_id=96, conclusion="failure")
+    url = "https://github.com/percy-raskova/babylon/runs/96"
+    job.update({"details_url": url, "app": {"id": 57789, "slug": "github-advanced-security"}})
+    scenario["manifest_check_runs"]["check_runs"].append(job)
+    scenario["manifest_check_runs"]["total_count"] += 1
+    rollup = _check("CodeQL", conclusion="FAILURE")
+    rollup["detailsUrl"] = url
+    scenario["view"]["statusCheckRollup"].append(rollup)
+    if fault == "producer":
+        job["app"]["id"] = 15368
+    elif fault == "slug":
+        job["app"]["slug"] = "github-actions"
+    elif fault == "head":
+        job["head_sha"] = OTHER_SHA
+    elif fault == "url":
+        job["details_url"] = "https://github.com/outsider/babylon/runs/96"
+    elif fault == "known-alert":
+        scenario["alerts"] = [{"number": 81, "state": "open"}]
+    result, calls = _run_pr_merge(tmp_path, "--verify-only", scenario=scenario)
+    assert result.returncode == (0 if fault is None else 1), result.stderr
+    if fault == "known-alert":
+        assert "1 open code-scanning alert" in result.stderr
+    assert not _merge_calls(calls)
+
+
+def test_main_queries_actual_pull_request_merge_analysis_ref(tmp_path: Path) -> None:
+    scenario = _default_scenario()
+    _view(scenario).update({"baseRefName": "main", "headRefName": "dev"})
+    _use_main_manifest(scenario)
+    result, calls = _run_pr_merge(tmp_path, "--director-main", "--verify-only", scenario=scenario)
+    assert result.returncode == 0, result.stderr
+    assert [
+        call[1] for call in calls if call[0] == "api" and "/code-scanning/alerts?" in call[1]
+    ] == [
+        "repos/{owner}/{repo}/code-scanning/alerts?state=open&per_page=100",
+        "repos/{owner}/{repo}/code-scanning/alerts?state=open&per_page=100&ref=refs/pull/742/merge",
+    ]
     assert not _merge_calls(calls)

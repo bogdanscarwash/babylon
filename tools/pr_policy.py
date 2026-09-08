@@ -32,6 +32,16 @@ GITHUB_ACTIONS_PRODUCER: Final[CheckProducer] = CheckProducer(
     slug="github-actions",
 )
 
+CODEQL_PRODUCER: Final[CheckProducer] = CheckProducer(
+    integration_id=57789,
+    slug="github-advanced-security",
+)
+# GitHub's native code-scanning rule owns this server-side gate. The merge
+# verifier separately requires the exact-head aggregate, not a default-branch scan.
+MAIN_CODEQL_CHECK_MANIFEST: Final[tuple[CheckRequirement, ...]] = (
+    CheckRequirement("CodeQL", "blocking", frozenset({"SUCCESS"}), CODEQL_PRODUCER),
+)
+
 # These jobs may skip only when their owning successful CI Gate accepted scope.
 # GitHub may display a skipped matrix parent before expanding its focus value.
 SCOPED_CI_CHECKS: Final[frozenset[str]] = frozenset(

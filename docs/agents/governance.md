@@ -165,9 +165,14 @@ Use the merge rules in `CONTRIBUTORS.md` for all other pull requests.
 <!-- vale ste.UnapprovedWords = NO -->
 ## PR acceptance
 
-The merge record identifies the base branch and exact reviewed head SHA. All
-reported checks must complete successfully against that exact reviewed head
-SHA and base branch.
+The merge record identifies the base branch and exact reviewed head SHA.
+Blocking checks must complete successfully against that head and base branch.
+CodeQL gates pull requests to `main`: the exact-head aggregate must succeed and
+its pull-request analysis must have no open findings. Scans after pushes to
+`dev` and `main`, weekly scans, and manual scans refresh security findings
+asynchronously. Verified asynchronous CodeQL checks do not delay merges to
+`dev`; known open findings on the default branch still block all merges.
+Dependency and workflow security checks remain part of the development gate.
 
 Copilot review evidence is advisory. An absent, stale, incomplete,
 identity-mismatched, or API-failed review does not block a merge. A top-level
