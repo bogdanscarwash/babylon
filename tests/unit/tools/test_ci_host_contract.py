@@ -364,7 +364,7 @@ def test_rust_ci_installs_and_retains_pinned_agent_reports() -> None:
     install = next(step for step in steps if step.get("name") == "Install Rust test reporter")
     upload = next(step for step in steps if step.get("name") == "Upload Rust test reports")
 
-    assert install["uses"] == ("taiki-e/install-action@1ed6d7be6168f6c9046541087ff549b6bc581fdf")
+    assert install["uses"] == ("taiki-e/install-action@7b8d4719ee4aaa279bdf55df38dacb9ebfe12a6c")
     assert install["with"] == {
         "tool": "cargo-nextest@0.9.143,cargo-deny@0.20.2",
         "fallback": "none",
@@ -401,7 +401,7 @@ def test_weekly_rust_coverage_is_advisory_and_single_run() -> None:
     upload = next(step for step in steps if step.get("name") == "Upload Rust coverage receipts")
 
     assert checkout["with"]["ref"] == "dev"
-    assert install["uses"] == ("taiki-e/install-action@1ed6d7be6168f6c9046541087ff549b6bc581fdf")
+    assert install["uses"] == ("taiki-e/install-action@7b8d4719ee4aaa279bdf55df38dacb9ebfe12a6c")
     assert install["with"] == {
         "tool": "cargo-nextest@0.9.143,cargo-llvm-cov@0.9.0",
         "fallback": "none",
