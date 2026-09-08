@@ -13,7 +13,7 @@ Build algorithm (every point is a fixed determinism decision):
 
 1. Assert the runtime ``sqlite3.sqlite_version`` matches :data:`PINNED_SQLITE_VERSION`.
 2. Fresh output file (unlink first); ``PRAGMA page_size``, ``PRAGMA
-   journal_mode=DELETE`` before any DDL.
+   journal_mode=DELETE`` and ``PRAGMA secure_delete=ON`` before any DDL.
 3. Split ``schema.sql`` into statements, classify each by leading keyword
    (``CREATE TABLE`` / ``CREATE [UNIQUE] INDEX`` / ``CREATE VIEW`` /
    ``CREATE TRIGGER``) — an unclassifiable statement is a hard error. An
@@ -434,6 +434,8 @@ def build_reference_db(
     try:
         conn.execute(f"PRAGMA page_size={PAGE_SIZE}")
         conn.execute("PRAGMA journal_mode=DELETE")
+        # Preserve the historical build bytes regardless of the host SQLite default.
+        conn.execute("PRAGMA secure_delete=ON")
         # VACUUM spills a full copy of the DB to sqlite's temp dir, which
         # defaults to /tmp — a 16G tmpfs on the dev box, where a ~4.6GB
         # spill dies "database or disk is full" (cutover Step 4, 2026-07-20).
