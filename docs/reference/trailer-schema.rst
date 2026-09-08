@@ -118,8 +118,8 @@ one enforced trailer`_ below). ``mise run commit`` (``.mise.toml``) already
 exists as a **hook-safe commit wrapper** (pre-runs hooks, re-stages fixes,
 verifies HEAD moved) but does **not** today inject ``Task``/``Train``/
 ``Lane``/``Safety``/``Pinned``/``Session`` automatically from worktree-local
-env — §5.3 describes that injection as sourced from env ``wt:new`` sets, and
-``wt:new``/``wt:done`` is item 2, a separate, not-yet-built doctrine item.
+environment. The project retired its obsolete worktree helpers. Explicit Git
+or Codex worktree creation does not inject these trailers.
 This item (1) ships the schema and the generator that *consumes* trailers
 where present, not the injection mechanism. Do not read this document as
 asserting that every commit in this repository already carries the full

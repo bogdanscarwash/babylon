@@ -93,7 +93,7 @@ set -e
 mise install --locked
 rustup toolchain install 1.91.1 --profile minimal --component rustfmt --component clippy
 uv sync --extra ops --frozen
-uv run --frozen pre-commit install
+uv run --frozen python tools/install_git_hooks.py
 mise run db:up
 (cd rust && CARGO_BUILD_JOBS=4 cargo build -p babylon-persistence --bin babylon-runtime --locked)
 export PATH="$PWD/rust/target/debug:$PATH"
@@ -270,25 +270,13 @@ fi
 description = "pip-audit through the expiring-ignores policy wrapper (program 15): security/pip-audit-ignores.toml entries need reason + expiry; expired entries hard-fail"
 run = "uv run python tools/run_pip_audit.py"
 
-[tasks."wt:new"]
-description = "Git-doctrine item 2: create .claude/worktrees/NAME on a fresh wt/NAME branch off the current branch; prints the shadow-venv + lint-imports usage recipe (worktrees never get their own venv)"
-usage = 'arg "<name>" help="Worktree slug: lowercase alnum segments joined by single hyphens"'
-run = 'uv run python tools/worktree_tool.py new "$usage_name"'
-
-[tasks."wt:done"]
-description = "Git-doctrine item 2: retire .claude/worktrees/NAME — refuses unless the worktree is clean AND wt/NAME is fully merged into the current branch (pass --force to bypass); removes the worktree and deletes the branch"
-usage = '''
-arg "<name>" help="Worktree slug to retire"
-flag "--force" help="Bypass the clean/merged checks (force-remove worktree, -D delete branch)"
-'''
-run = 'uv run python tools/worktree_tool.py done "$usage_name" ${usage_force:+--force}'
-
 [tasks.commit]
 description = "Hook-safe commit: pre-run hooks, re-stage fixes, retry on hook-rewrite, VERIFY HEAD moved. Pass - to read the message from stdin (multi-line bodies)."
 usage = 'arg "<message>" help="Conventional commit message, or - to read from stdin"'
 run = '''
 set -euo pipefail
-if git diff --cached --quiet; then
+# A pending merge can add ancestry even when its tree equals HEAD.
+if git diff --cached --quiet && ! git rev-parse --verify --quiet MERGE_HEAD >/dev/null; then
   echo "[commit] nothing staged — git add first"; exit 1
 fi
 
@@ -823,7 +811,7 @@ depends = ["check"]
 
 [tasks.hooks]
 description = "Install the configured pre-commit, commit-msg, and pre-push hooks"
-run = "uv run --frozen pre-commit install"
+run = "uv run --frozen python tools/install_git_hooks.py"
 
 [tasks."hooks:run"]
 description = "Run all pre-commit hooks on all files"

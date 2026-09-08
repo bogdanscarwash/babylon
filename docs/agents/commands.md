@@ -10,8 +10,29 @@ mise run hooks
 mise run dev:doctor
 ```
 
-Use the checkout's own pinned environment. Nested worktrees must exclude the
-parent checkout's Mise configuration; `mise config ls` shows the files loaded.
+Use the checkout's own pinned environment. Create a sibling worktree from
+`origin/dev` with Git or Codex. First update the remote reference:
+
+```bash
+git fetch origin
+GIT_LFS_SKIP_SMUDGE=1 git worktree add -b codex/PER-123-short-name /media/user/data/worktrees/PER-123/babylon origin/dev
+cd /media/user/data/worktrees/PER-123/babylon
+CODEX_WORKTREE_PATH="$PWD" python3 - <<'PYTHON'
+import subprocess
+import tomllib
+
+with open(".codex/environments/environment.toml", "rb") as stream:
+    setup = tomllib.load(stream)["setup"]["linux"]["script"]
+subprocess.run(["bash", "-c", setup], check=True)
+PYTHON
+```
+
+The Codex setup installs pinned tools, the locked editable `.venv`,
+and shared hooks that resolve the current checkout's `.venv` at execution,
+then checks local imports and the worktree's Rust target. It does
+not copy reference data or start Postgres. Data tasks check their own
+inputs. Nested worktrees must exclude the parent checkout's Mise configuration.
+`mise config ls` shows the files loaded.
 
 ```bash
 mise run check:static                 # Retained static contracts, lint, types, lock

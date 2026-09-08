@@ -160,7 +160,7 @@ def render_trailers_section(commits: list[Commit]) -> str:
     distinct ``Baselines`` state. A commit missing a trailer simply doesn't
     contribute a value for it; this section reports what *is* declared, it
     does not itself enforce that every commit declares everything (that is
-    ``mise run wt:done`` / the ceremony gate's job, not this generator's).
+    the applicable commit and baseline ceremony checks' job).
     """
     values: dict[str, set[str]] = {}
     for commit in commits:
