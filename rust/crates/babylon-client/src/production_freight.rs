@@ -68,9 +68,46 @@ fn route_label(route: &ProductionRouteV1, snapshot: &ProductionSnapshotV1) -> St
             .map(|site| site.name.as_str())
     };
     match (name(&route.supplier_site_id), name(&route.buyer_site_id)) {
-        (Some(supplier), Some(buyer)) => format!("{supplier} -> {buyer} / {}", route.good),
+        (Some(supplier), Some(buyer)) => format!(
+            "{} -> {} / {}",
+            supplier.trim_end_matches(" cohort"),
+            buyer.trim_end_matches(" cohort"),
+            route.good
+        ),
         _ => "Route endpoints unavailable in this observation".into(),
     }
+}
+
+/// The relationship rail keeps the capacity principal visible; full route
+/// accounts live in the Freight reading.
+pub(crate) fn account_brief(account: &ProductionFreightCapacityAccountV1) -> String {
+    let mut output = format!("{}\n", account.corridor_label);
+    if let Some(completed) = &account.completed {
+        for reservation in &completed.reservations {
+            writeln!(
+                output,
+                "Reservation period {}\n{} {} opening · {} reserved · {} remaining",
+                reservation.reservation_period,
+                reservation.opening_available,
+                account.unit,
+                reservation.newly_reserved,
+                reservation.remaining_available
+            )
+            .expect("String write");
+        }
+        if completed.reservations.is_empty() {
+            output.push_str("No new reservations this period.\n");
+        }
+    } else {
+        output.push_str("Foundation; no completed reservations.\n");
+    }
+    writeln!(
+        output,
+        "Period {} opening: {} {}\nCapacity reservations; arrivals are separate.",
+        account.next_opening_period, account.next_opening_available, account.unit
+    )
+    .expect("String write");
+    output
 }
 
 pub(crate) fn account_reading(
@@ -79,15 +116,11 @@ pub(crate) fn account_reading(
 ) -> String {
     let mut output = format!("{}\n", account.corridor_label);
     let routes = participating_routes(account, snapshot);
-    output.push_str("SHARED BY\n");
-    for route in &routes {
-        writeln!(output, "{}", route_label(route, snapshot)).expect("String write");
-    }
     if let Some(completed) = &account.completed {
         writeln!(output, "COMMITTED DISPATCH / PERIOD {}", completed.period).expect("String write");
         for reservation in &completed.reservations {
             writeln!(output,
-                "Reservation period {} / 28 days\nOpening {} {} | newly reserved {} {} | remaining {} {}",
+                "Reservation period {} / 28 days\nOpening {} {}\nNewly reserved {} {}\nRemaining {} {}\n",
                 reservation.reservation_period, reservation.opening_available, account.unit,
                 reservation.newly_reserved, account.unit, reservation.remaining_available, account.unit,
             ).expect("String write");
@@ -101,7 +134,7 @@ pub(crate) fn account_reading(
                 };
                 writeln!(
                     output,
-                    "{}\nRequested {} {} | dispatched {} {} | unshipped {} {}",
+                    "{}\nRequested {} {} | dispatched {} {}\nUnshipped {} {}\n",
                     route_label(route, snapshot),
                     order.requested,
                     account.unit,
@@ -119,7 +152,21 @@ pub(crate) fn account_reading(
     } else {
         output.push_str("No completed freight reservations at foundation.\n");
     }
-    writeln!(output, "Next opening (period {}): {} {} available\nReservations use capacity; goods arrive after travel. Read arrivals, output and workforce in each participant's Readings.",
+    // Keep membership visible even when a route has no new request this period.
+    let named: BTreeSet<_> = account
+        .completed
+        .iter()
+        .flat_map(|completed| &completed.reservations)
+        .flat_map(|reservation| &reservation.orders)
+        .map(|order| order.route_id.as_str())
+        .collect();
+    for route in routes
+        .iter()
+        .filter(|route| !named.contains(route.id.as_str()))
+    {
+        writeln!(output, "Participant: {}\n", route_label(route, snapshot)).expect("String write");
+    }
+    writeln!(output, "Next opening (period {}): {} {} available\nReservations use capacity; goods arrive after travel. Follow arrivals in Flow and staffing in Work.",
         account.next_opening_period, account.next_opening_available, account.unit,
     ).expect("String write");
     output
@@ -432,11 +479,11 @@ pub(crate) mod tests {
         let text = account_reading(accounts[0], &snapshot);
         assert_eq!(text.matches("Designed regional freight pool").count(), 1);
         assert_eq!(text.lines().next(), Some("Designed regional freight pool"));
-        assert!(text.contains("Opening 160 kg | newly reserved 160 kg | remaining 0 kg"));
-        assert!(text.contains("steel -> panels / sheets"));
-        assert!(text.contains("mill -> meals / meal"));
-        assert!(text.contains("Requested 600 kg | dispatched 120 kg | unshipped 480 kg"));
-        assert!(text.contains("Requested 200 kg | dispatched 40 kg | unshipped 160 kg"));
+        assert!(text.contains("Opening 160 kg\nNewly reserved 160 kg\nRemaining 0 kg"));
+        assert_eq!(text.matches("steel -> panels / sheets").count(), 1);
+        assert_eq!(text.matches("mill -> meals / meal").count(), 1);
+        assert!(text.contains("Requested 600 kg | dispatched 120 kg\nUnshipped 480 kg"));
+        assert!(text.contains("Requested 200 kg | dispatched 40 kg\nUnshipped 160 kg"));
         assert!(text.contains("Reservations use capacity; goods arrive after travel"));
     }
 
@@ -447,7 +494,9 @@ pub(crate) mod tests {
         snapshot.freight_capacity_accounts[0].next_opening_period = 1;
         let text = account_reading(&snapshot.freight_capacity_accounts[0], &snapshot);
         assert!(text.contains("No completed freight reservations at foundation"));
-        assert!(!text.contains("newly reserved 0"));
+        assert!(text.contains("Participant: steel -> panels / sheets"));
+        assert!(text.contains("Participant: mill -> meals / meal"));
+        assert!(!text.contains("Newly reserved 0"));
         let mut snapshot = fixture();
         let reservation = &mut snapshot.freight_capacity_accounts[0]
             .completed
@@ -461,7 +510,7 @@ pub(crate) mod tests {
             order.remaining_unshipped = order.requested;
         }
         let text = account_reading(&snapshot.freight_capacity_accounts[0], &snapshot);
-        assert!(text.contains("newly reserved 0 kg | remaining 160 kg"));
+        assert!(text.contains("Newly reserved 0 kg\nRemaining 160 kg"));
         assert!(!text.contains("at foundation"));
     }
 

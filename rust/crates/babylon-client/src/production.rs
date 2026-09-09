@@ -28,7 +28,9 @@ use crate::production_brief::{
     committed_plan_status, dependency_flow_summary, dependency_sites, describe_brief,
     describe_overview, opening_site, DependencyDirection,
 };
-use crate::production_freight::{account_reading, competitor_sites, shared_accounts};
+use crate::production_freight::{
+    account_brief, account_reading, competitor_sites, shared_accounts,
+};
 use crate::production_layout::{path_point, place_label, relation_path, ProductionLayout};
 
 #[derive(Resource, Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -43,7 +45,28 @@ pub struct ProductionNavigation {
     pub selected_site: Option<String>,
     pub flat: bool,
     pub details_open: bool,
+    pub(crate) reading_section: ProductionReadingSection,
     history: Vec<String>,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ProductionReadingSection {
+    #[default]
+    Flow,
+    Freight,
+    Work,
+    Sources,
+}
+
+impl ProductionReadingSection {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Flow => "Flow",
+            Self::Freight => "Freight",
+            Self::Work => "Work",
+            Self::Sources => "Sources",
+        }
+    }
 }
 
 #[derive(Resource)]
@@ -86,6 +109,10 @@ struct ProductionDisclosureLabel;
 #[derive(Component)]
 struct ProductionDetails;
 #[derive(Component)]
+struct ProductionReadingSubject;
+#[derive(Component)]
+struct ProductionReadingHeadline;
+#[derive(Component)]
 struct ProductionBrief;
 #[derive(Component)]
 struct ProductionDependencies;
@@ -100,6 +127,7 @@ pub enum ProductionCommand {
     Map,
     Flat,
     Details,
+    Reading(ProductionReadingSection),
     Back,
     Select {
         site_id: String,
@@ -144,7 +172,9 @@ impl ProductionControlAvailability {
     fn display(&self, command: &ProductionCommand) -> Option<Display> {
         let available = match command {
             ProductionCommand::Back => self.previous_index.is_some(),
-            ProductionCommand::Details | ProductionCommand::Flat => self.scene,
+            ProductionCommand::Details
+            | ProductionCommand::Flat
+            | ProductionCommand::Reading(_) => self.scene,
             _ => return None,
         };
         Some(if available {
@@ -169,6 +199,9 @@ impl ProductionControlAvailability {
                 Some("Display controls need disclosed production relationships.")
             }
             ProductionCommand::Details if !self.scene && !navigation.details_open => {
+                Some("Exact readings need disclosed production relationships.")
+            }
+            ProductionCommand::Reading(_) if !self.scene => {
                 Some("Exact readings need disclosed production relationships.")
             }
             ProductionCommand::Select { site_id, context }
@@ -215,8 +248,18 @@ type SceneGeometry = Or<(
     With<ProductionLabel>,
     With<ProductionLeader>,
 )>;
-type ReadingMarkers = Or<(With<ProductionDetails>, With<ProductionBrief>)>;
-type ReadingText = (&'static mut Text, Option<&'static ProductionBrief>);
+type ReadingMarkers = Or<(
+    With<ProductionDetails>,
+    With<ProductionBrief>,
+    With<ProductionReadingSubject>,
+    With<ProductionReadingHeadline>,
+)>;
+type ReadingText = (
+    &'static mut Text,
+    Option<&'static ProductionBrief>,
+    Option<&'static ProductionReadingSubject>,
+    Option<&'static ProductionReadingHeadline>,
+);
 type PanelParts = (&'static mut Visibility, &'static mut Node);
 type CameraParts = (
     &'static mut Camera,
@@ -451,48 +494,84 @@ fn setup_readings_panel(commands: &mut Commands) {
             BorderColor::all(theme::PAPER),
             ZIndex(8),
         ))
-        .with_children(|panel| {
-            panel
-                .spawn(Node {
-                    justify_content: JustifyContent::SpaceBetween,
-                    align_items: AlignItems::Center,
-                    column_gap: px(8),
-                    flex_shrink: 0.0,
-                    ..default()
-                })
-                .with_children(|header| {
-                    header.spawn(text("R E A D I N G S", 17.0, theme::YELLOW));
-                    button(header, "CLOSE", ProductionCommand::Details);
-                });
-            panel
-                .spawn((
-                    ProductionReadingBody,
-                    Node {
-                        flex_direction: FlexDirection::Column,
-                        row_gap: px(12),
-                        flex_grow: 1.0,
-                        min_height: px(0),
-                        min_width: px(0),
-                        max_width: percent(100),
-                        overflow: Overflow::scroll_y(),
-                        ..default()
-                    },
-                ))
-                .with_children(|details| {
-                    button(details, "3D / 2D  [V]", ProductionCommand::Flat);
-                    details.spawn((
-                        text("", 14.0, theme::PAPER),
-                        ProductionDetails,
-                        ObserverFocusTarget::reading(None),
-                        Node {
-                            flex_shrink: 0.0,
-                            min_width: px(0),
-                            max_width: percent(100),
-                            ..default()
-                        },
-                    ));
-                });
+        .with_children(readings_contents);
+}
+
+fn readings_contents(panel: &mut ChildSpawnerCommands) {
+    panel
+        .spawn(Node {
+            justify_content: JustifyContent::SpaceBetween,
+            align_items: AlignItems::Center,
+            column_gap: px(8),
+            flex_shrink: 0.0,
+            ..default()
+        })
+        .with_children(|header| {
+            header.spawn(text("READINGS", 13.0, theme::GRAY));
+            button(header, "CLOSE", ProductionCommand::Details);
         });
+    panel
+        .spawn((
+            text("", 23.0, theme::PAPER),
+            ProductionReadingSubject,
+            Node {
+                flex_shrink: 0.0,
+                ..default()
+            },
+        ))
+        .insert(crate::observer_ui::ObserverFontRole::Display);
+    panel.spawn((
+        text("", 15.0, theme::PAPER),
+        ProductionReadingHeadline,
+        Node {
+            flex_shrink: 0.0,
+            ..default()
+        },
+    ));
+    panel
+        .spawn(Node {
+            column_gap: px(4),
+            flex_shrink: 0.0,
+            ..default()
+        })
+        .with_children(|tabs| {
+            for section in [
+                ProductionReadingSection::Flow,
+                ProductionReadingSection::Freight,
+                ProductionReadingSection::Work,
+                ProductionReadingSection::Sources,
+            ] {
+                button(tabs, section.label(), ProductionCommand::Reading(section));
+            }
+        });
+    panel
+        .spawn((
+            ProductionReadingBody,
+            Node {
+                flex_direction: FlexDirection::Column,
+                row_gap: px(12),
+                flex_grow: 1.0,
+                min_height: px(0),
+                min_width: px(0),
+                max_width: percent(100),
+                overflow: Overflow::scroll_y(),
+                ..default()
+            },
+        ))
+        .with_children(|details| {
+            details.spawn((
+                text("", 15.0, theme::PAPER),
+                ProductionDetails,
+                ObserverFocusTarget::reading(None),
+                Node {
+                    flex_shrink: 0.0,
+                    min_width: px(0),
+                    max_width: percent(100),
+                    ..default()
+                },
+            ));
+        });
+    button(panel, "3D / 2D  [V]", ProductionCommand::Flat);
 }
 
 fn orbit_input(
@@ -765,6 +844,10 @@ fn navigate(
             ProductionCommand::Details => {
                 navigation.details_open = !navigation.details_open;
             }
+            ProductionCommand::Reading(section) => {
+                navigation.reading_section = *section;
+                navigation.details_open = true;
+            }
             ProductionCommand::Back => {
                 if let Some(index) = available.previous_index {
                     navigation.selected_site = Some(navigation.history[index].clone());
@@ -903,34 +986,31 @@ type InspectorScrolls<'w, 's> = Query<
     Or<(With<ProductionPanel>, With<ProductionReadingBody>)>,
 >;
 
+#[derive(PartialEq, Eq)]
+struct InspectorScrollScope {
+    campaign: babylon_persistence::CampaignId,
+    perspective: crate::observer::Perspective,
+    site: Option<String>,
+    section: ProductionReadingSection,
+}
+
 /// New subjects start at their brief; a new period preserves the reader's place.
 fn reset_inspector_scroll(
     state: Res<ObserverSession>,
     navigation: Res<ProductionNavigation>,
     mut panels: InspectorScrolls,
-    mut previous: Local<
-        Option<(
-            babylon_persistence::CampaignId,
-            crate::observer::Perspective,
-            Option<String>,
-        )>,
-    >,
+    mut previous: Local<Option<InspectorScrollScope>>,
 ) {
-    if previous
-        .as_ref()
-        .is_some_and(|(campaign, perspective, site)| {
-            *campaign == state.campaign
-                && *perspective == state.perspective
-                && *site == navigation.selected_site
-        })
-    {
+    let scope = InspectorScrollScope {
+        campaign: state.campaign,
+        perspective: state.perspective,
+        site: navigation.selected_site.clone(),
+        section: navigation.reading_section,
+    };
+    if previous.as_ref() == Some(&scope) {
         return;
     }
-    *previous = Some((
-        state.campaign,
-        state.perspective,
-        navigation.selected_site.clone(),
-    ));
+    *previous = Some(scope);
     for mut position in &mut panels {
         if position.0 != Vec2::ZERO {
             position.0 = Vec2::ZERO;
@@ -1294,21 +1374,86 @@ fn spawn_freight(
     }
 }
 
-fn describe(site: &ProductionSiteV1, snapshot: &ProductionSnapshotV1) -> String {
-    let mut value = format!(
-        "{}\nCounty aggregate | NAICS {}\n\n",
-        site.name, site.industry_code
-    );
-    if let (Some(done), Some(plan)) = (site.produced_batches, site.planned_batches) {
+fn describe(
+    site: &ProductionSiteV1,
+    snapshot: &ProductionSnapshotV1,
+    section: ProductionReadingSection,
+) -> String {
+    match section {
+        ProductionReadingSection::Flow => describe_flow(site, snapshot),
+        ProductionReadingSection::Freight => describe_freight(site, snapshot),
+        ProductionReadingSection::Work => describe_work(site, snapshot),
+        ProductionReadingSection::Sources => describe_sources(site, snapshot),
+    }
+}
+
+fn reading_headline(
+    site: &ProductionSiteV1,
+    snapshot: &ProductionSnapshotV1,
+    period: u64,
+) -> String {
+    let mut value = if period == 0 {
+        "Foundation / Designed\n".to_owned()
+    } else {
+        format!("Period {period} / committed reading\n")
+    };
+    let output = snapshot.material_balance.as_ref().and_then(|balance| {
+        balance.rows.iter().find(|row| {
+            row.site_id == site.id
+                && row.good_id == site.output_good_id
+                && row.unit_id == site.output_unit_id
+        })
+    });
+    if let Some(output) = output {
         writeln!(
-            &mut value,
-            "COMMITTED PRODUCTION\n{done} of {plan} planned batches"
+            value,
+            "{} {} produced / Derived",
+            grouped(output.produced),
+            output.unit
+        )
+        .expect("String write");
+    } else {
+        writeln!(value, "{}", committed_plan_status(site)).expect("String write");
+    }
+    let accounts: Vec<_> = snapshot
+        .staffing_accounts
+        .iter()
+        .filter(|account| account.site_id == site.id)
+        .collect();
+    if accounts.is_empty() {
+        value.push_str("Modeled workforce not disclosed");
+    }
+    for account in accounts {
+        writeln!(
+            value,
+            "{} employed · {} reserve / {}",
+            grouped(account.employed),
+            grouped(account.reserve),
+            if account.completed.is_some() {
+                "Derived"
+            } else {
+                "Designed"
+            }
         )
         .expect("String write");
     }
+    value.trim_end().to_owned()
+}
+
+fn describe_flow(site: &ProductionSiteV1, snapshot: &ProductionSnapshotV1) -> String {
+    let mut value = String::new();
+    if let (Some(done), Some(plan)) = (site.produced_batches, site.planned_batches) {
+        writeln!(
+            value,
+            "COMMITTED PRODUCTION\n{done} of {plan} planned batches"
+        )
+        .expect("String write");
+    } else {
+        writeln!(value, "{}", committed_plan_status(site)).expect("String write");
+    }
     writeln!(
-        &mut value,
-        "{} {} / batch\nNext-period capacity: {} batches\n\nINPUTS / ON HAND",
+        value,
+        "{} {} / batch (Designed)\nNext-period capacity: {} batches\n\nINPUTS / ON HAND",
         grouped(site.output_per_batch),
         site.output_unit,
         grouped(site.available_batches)
@@ -1316,46 +1461,22 @@ fn describe(site: &ProductionSiteV1, snapshot: &ProductionSnapshotV1) -> String 
     .expect("String write");
     for input in &site.inputs {
         writeln!(
-            &mut value,
-            "{}: {} {} | {} / batch",
+            value,
+            "{}: {} {}",
             input.good,
             grouped(input.on_hand),
-            input.unit,
-            grouped(input.quantity_per_batch)
+            input.unit
         )
         .expect("String write");
     }
-    for account in shared_accounts(snapshot, Some(&site.id)) {
-        value.push('\n');
-        value.push_str(&account_reading(account, snapshot));
+    if site.inputs.is_empty() {
+        value.push_str("No material inputs in this recipe.\n");
     }
     describe_material_balance(&mut value, site, snapshot);
-    describe_staffing_accounts(&mut value, site, snapshot);
-    describe_labor_accounts(&mut value, site, snapshot);
-    value.push_str("\nLABOR BUDGET / DERIVED\n");
-    for labor in &site.labor {
-        writeln!(
-            &mut value,
-            "{} {} available | {} / batch (Designed)",
-            grouped(labor.available),
-            labor.unit,
-            grouped(labor.quantity_per_batch)
-        )
-        .expect("String write");
-    }
-    if let Some(jobs) = site.observed_employment {
-        writeln!(
-            &mut value,
-            "Observed industry employment: {} annual-average jobs (QCEW 2024; separate from modeled hours)",
-            grouped(jobs)
-        )
-        .expect("String write");
-    }
-    describe_sector_context(&mut value, site, snapshot);
     value.push_str("\nINVENTORY\n");
     for stock in &site.inventory {
         writeln!(
-            &mut value,
+            value,
             "{}: {} {}",
             stock.good,
             grouped(stock.quantity),
@@ -1363,7 +1484,20 @@ fn describe(site: &ProductionSiteV1, snapshot: &ProductionSnapshotV1) -> String 
         )
         .expect("String write");
     }
-    value.push_str("\nDELIVERIES / DEPENDENCIES\n");
+    value
+}
+
+fn describe_freight(site: &ProductionSiteV1, snapshot: &ProductionSnapshotV1) -> String {
+    let mut value = String::new();
+    let accounts = shared_accounts(snapshot, Some(&site.id));
+    if accounts.is_empty() {
+        value.push_str("No shared freight pool disclosed for this subject.\n");
+    }
+    for account in accounts {
+        value.push_str(&account_reading(account, snapshot));
+        value.push('\n');
+    }
+    value.push_str("\nPHYSICAL DELIVERIES / TO DATE\n");
     for route in snapshot
         .routes
         .iter()
@@ -1380,8 +1514,8 @@ fn describe(site: &ProductionSiteV1, snapshot: &ProductionSnapshotV1) -> String 
             .find(|site| site.id == *other)
             .map_or(other.as_str(), |site| site.name.as_str());
         writeln!(
-            &mut value,
-            "{} | {} periods\n{} / {} {} delivered | {} unshipped",
+            value,
+            "{} | {} periods travel\n{} / {} {} delivered | {} unshipped\n",
             name,
             route.travel_periods,
             grouped(route.delivered),
@@ -1391,7 +1525,50 @@ fn describe(site: &ProductionSiteV1, snapshot: &ProductionSnapshotV1) -> String 
         )
         .expect("String write");
     }
-    value.push_str("\nRealization here records delivered quantities, not payment.\nSCENE KEY\nEqual-height structures identify county cohorts; height and spacing carry no quantity or geography. Arrows point from disclosed suppliers to buyers. Cyan links enter the selection; copper links leave it. Packets are actual in-transit lots at static schematic positions.\n");
+    value.push_str("Deliveries record quantities, not payments.\n");
+    value
+}
+
+fn describe_work(site: &ProductionSiteV1, snapshot: &ProductionSnapshotV1) -> String {
+    let mut value = String::new();
+    describe_staffing_accounts(&mut value, site, snapshot);
+    describe_labor_accounts(&mut value, site, snapshot);
+    value.push_str("\nLABOR BUDGET / DERIVED\n");
+    for labor in &site.labor {
+        writeln!(
+            value,
+            "{} {} available | {} / batch (Designed)",
+            grouped(labor.available),
+            labor.unit,
+            grouped(labor.quantity_per_batch)
+        )
+        .expect("String write");
+    }
+    value.trim_start().to_owned()
+}
+
+fn describe_sources(site: &ProductionSiteV1, snapshot: &ProductionSnapshotV1) -> String {
+    let mut value = format!(
+        "COUNTY AGGREGATE / NAICS {}\n\nRECIPE / DESIGNED\n{} {} / batch\n",
+        site.industry_code,
+        grouped(site.output_per_batch),
+        site.output_unit
+    );
+    for input in &site.inputs {
+        writeln!(
+            value,
+            "{}: {} {} / batch",
+            input.good,
+            grouped(input.quantity_per_batch),
+            input.unit
+        )
+        .expect("String write");
+    }
+    if let Some(jobs) = site.observed_employment {
+        writeln!(value, "\nINDUSTRY EMPLOYMENT / OBSERVED 2024\n{} annual-average jobs (QCEW; separate from modeled people and hours)", grouped(jobs)).expect("String write");
+    }
+    describe_sector_context(&mut value, site, snapshot);
+    value.push_str("\nSCENE KEY\nEqual-height structures identify county cohorts; height and spacing carry no quantity or geography. Arrows point from disclosed suppliers to buyers. Cyan links enter the selection; copper links leave it. Packets are actual in-transit lots at static schematic positions.\n");
     value
 }
 
@@ -1533,7 +1710,7 @@ fn describe_staffing_accounts(
         if let Some(completed) = &account.completed {
             writeln!(
                 value,
-                "STAFFING / PERIOD {}\nOpening: {} employed, {} reserve\nHires: {} | separations: {} | target: {} employed\nWork request: {} hours | prior period: {} hours\nOne-period retention: {} hours",
+                "\nSTAFFING / PERIOD {}\nOpening: {} employed, {} reserve\nHires: {} | separations: {} | target: {} employed\nWork request: {} hours | prior period: {} hours\nOne-period retention: {} hours\n",
                 completed.period,
                 grouped(completed.opening_employed),
                 grouped(completed.opening_reserve),
@@ -1623,7 +1800,7 @@ fn rebuild_dependencies(
         commands.entity(root).with_children(|panel| {
             for account in shared_accounts(snapshot, Some(&site.id)) {
                 panel.spawn((
-                    text(account_reading(account, snapshot), 13.0, theme::PAPER),
+                    text(account_brief(account), 15.0, theme::PAPER),
                     ProductionFreightReading,
                     Node {
                         flex_shrink: 0.0,
@@ -1753,6 +1930,7 @@ fn paint_buttons(
             ProductionCommand::Map => *view == PrimaryView::Map,
             ProductionCommand::Flat => navigation.flat,
             ProductionCommand::Details => navigation.details_open,
+            ProductionCommand::Reading(section) => navigation.reading_section == *section,
             ProductionCommand::Select { site_id, .. } => {
                 navigation.selected_site.as_ref() == Some(site_id)
             }
@@ -1969,10 +2147,23 @@ fn paint_readings(
                 .as_ref()
                 .and_then(|id| snapshot.sites.iter().find(|site| site.id == *id))
         });
-        for (mut text, brief) in &mut details {
+        for (mut text, brief, subject, headline) in &mut details {
+            if subject.is_some() || headline.is_some() {
+                text.0 = match (snapshot, site) {
+                    (Some(snapshot), Some(site)) if navigation.details_open => {
+                        if subject.is_some() {
+                            site.name.trim_end_matches(" cohort").into()
+                        } else {
+                            reading_headline(site, snapshot, state.viewed_tick)
+                        }
+                    }
+                    _ => String::new(),
+                };
+                continue;
+            }
             text.0 = match (snapshot, site, brief.is_some()) {
                 (Some(snapshot), Some(site), true) => describe_brief(site, snapshot),
-                (Some(snapshot), Some(site), false) if navigation.details_open => describe(site, snapshot),
+                (Some(snapshot), Some(site), false) if navigation.details_open => describe(site, snapshot, navigation.reading_section),
                 (Some(snapshot), None, true) => describe_overview(snapshot),
                 (None, _, true) => "No production relationships are disclosed at this period and perspective. Open Geography to explore the information available to you.".into(),
                 _ => String::new(),
@@ -2100,6 +2291,49 @@ mod tests {
     }
 
     #[test]
+    fn reading_headline_uses_exact_output_identity_and_keeps_absence_distinct_from_zero() {
+        use babylon_persistence::{CompletedMaterialBalanceV1, ProductionMaterialBalanceRowV1};
+        let mut snapshot = snapshot();
+        let mut selected = snapshot.sites[0].clone();
+        selected.planned_batches = None;
+        selected.produced_batches = None;
+        let foundation = reading_headline(&selected, &snapshot, 0);
+        assert!(foundation.contains("Foundation / Designed"));
+        assert!(foundation.contains("no committed production"));
+        assert!(foundation.contains("Modeled workforce not disclosed"));
+        assert!(!foundation.contains("0 employed"));
+        snapshot.material_balance = Some(CompletedMaterialBalanceV1 {
+            period: 5,
+            rows: vec![ProductionMaterialBalanceRowV1 {
+                site_id: selected.id.clone(),
+                good_id: selected.output_good_id.clone(),
+                unit_id: "another-unit".into(),
+                good: selected.output_good.clone(),
+                unit: "other unit".into(),
+                opening: 0,
+                arrivals: 0,
+                produced: 999,
+                consumed: 0,
+                dispatched: 0,
+                closing: 999,
+            }],
+        });
+        assert!(!reading_headline(&selected, &snapshot, 5).contains("999"));
+        let row = &mut snapshot.material_balance.as_mut().unwrap().rows[0];
+        row.unit_id.clone_from(&selected.output_unit_id);
+        row.unit.clone_from(&selected.output_unit);
+        row.produced = 0;
+        row.closing = 0;
+        snapshot
+            .staffing_accounts
+            .push(staffing_account(&selected.id));
+        let completed = reading_headline(&selected, &snapshot, 5);
+        assert!(completed.contains(&format!("0 {} produced / Derived", selected.output_unit)));
+        assert!(completed.contains("2 employed · 2 reserve / Derived"));
+        assert!(!completed.contains("Foundation"));
+    }
+
+    #[test]
     fn stock_readings_keep_units_and_subjects_separate_and_do_not_invent_foundation_flows() {
         use babylon_persistence::{CompletedMaterialBalanceV1, ProductionMaterialBalanceRowV1};
 
@@ -2185,7 +2419,11 @@ mod tests {
                 completed: None,
             },
         ];
-        let text = describe(&snapshot.sites[0], &snapshot);
+        let text = describe(
+            &snapshot.sites[0],
+            &snapshot,
+            ProductionReadingSection::Work,
+        );
         assert!(text.contains("COMMITTED WORK TIME / PERIOD 5 / DERIVED"));
         assert!(text.contains("80 used + 40 unused = 120 available"));
         assert!(text.contains("Planned: 100 labor-hours"));
@@ -2208,7 +2446,11 @@ mod tests {
             next_opening_available: 120,
             completed: None,
         }];
-        let text = describe(&snapshot.sites[0], &snapshot);
+        let text = describe(
+            &snapshot.sites[0],
+            &snapshot,
+            ProductionReadingSection::Work,
+        );
         assert!(!text.contains("COMMITTED WORK TIME"));
         assert!(text.contains("Next opening (period 1): 120 labor-hours (Derived)"));
     }
@@ -2268,7 +2510,11 @@ mod tests {
                     unused: 120,
                 }),
             });
-        let text = describe(&snapshot.sites[0], &snapshot);
+        let text = describe(
+            &snapshot.sites[0],
+            &snapshot,
+            ProductionReadingSection::Work,
+        );
         assert!(text.contains("MODELED WORKFORCE / DERIVED"));
         assert!(text.contains("2 employed + 2 reserve = 4 people"));
         assert!(text.contains("40 hours per person / period (Designed)"));
@@ -2303,7 +2549,11 @@ mod tests {
                 next_opening_available: 80,
                 completed: None,
             });
-        let foundation = describe(&snapshot.sites[0], &snapshot);
+        let foundation = describe(
+            &snapshot.sites[0],
+            &snapshot,
+            ProductionReadingSection::Work,
+        );
         assert!(foundation.contains("Opening workforce; no completed staffing period."));
         assert!(foundation.contains("MODELED WORKFORCE / DESIGNED"));
         assert!(!foundation.contains("MODELED WORKFORCE / DERIVED"));
@@ -2311,7 +2561,11 @@ mod tests {
         assert!(!foundation.contains("STAFFING / PERIOD"));
         assert!(foundation.contains("Next opening (period 1): 80 labor-hours (Derived)"));
         assert_eq!(foundation.matches("Next opening").count(), 1);
-        let missing = describe(&snapshot.sites[2], &snapshot);
+        let missing = describe(
+            &snapshot.sites[2],
+            &snapshot,
+            ProductionReadingSection::Work,
+        );
         assert!(missing.contains("No workforce account disclosed for this subject."));
         assert!(!missing.contains("0 employed"));
         let completed = staffing_account("a").completed.unwrap();
@@ -2333,7 +2587,11 @@ mod tests {
                 used: 40,
                 unused: 40,
             });
-        let quiet = describe(&snapshot.sites[0], &snapshot);
+        let quiet = describe(
+            &snapshot.sites[0],
+            &snapshot,
+            ProductionReadingSection::Work,
+        );
         assert!(quiet.contains("Hires: 0 | separations: 0"));
         assert!(!quiet.contains("no completed staffing period"));
         assert!(quiet.contains("Next opening (period 6): 80 labor-hours (Derived)"));
@@ -2387,7 +2645,11 @@ mod tests {
     #[test]
     fn inspector_distinguishes_shared_sector_context_from_process_workers() {
         let snapshot = attributed_snapshot();
-        let text = describe(&snapshot.sites[0], &snapshot);
+        let text = describe(
+            &snapshot.sites[0],
+            &snapshot,
+            ProductionReadingSection::Sources,
+        );
         assert!(text.contains("SECTOR CONTEXT / OBSERVED 2024"));
         assert!(text.contains("Manufacturing | NAICS 31-33"));
         assert_eq!(text.matches("1,234 annual-average jobs").count(), 1);
@@ -2396,7 +2658,12 @@ mod tests {
         assert!(text.contains("Modeled processes sharing this context: Cohort a; Cohort b"));
         assert!(text.contains("This county-sector total does not assign workers to a process."));
         assert!(!text.contains("2,468"));
-        assert!(!describe(&snapshot.sites[2], &snapshot).contains("SECTOR CONTEXT"));
+        assert!(!describe(
+            &snapshot.sites[2],
+            &snapshot,
+            ProductionReadingSection::Sources
+        )
+        .contains("SECTOR CONTEXT"));
     }
 
     #[test]
@@ -2406,7 +2673,11 @@ mod tests {
         context.annual_avg_emplvl = None;
         context.total_annual_wages = Some(0);
         context.annual_avg_wkly_wage = None;
-        let text = describe(&snapshot.sites[0], &snapshot);
+        let text = describe(
+            &snapshot.sites[0],
+            &snapshot,
+            ProductionReadingSection::Sources,
+        );
         assert!(text.contains("Annual-average jobs: not disclosed"));
         assert!(text.contains("USD 0 annual payroll"));
         assert!(text.contains("Mean weekly wage: not disclosed"));
@@ -2611,7 +2882,7 @@ mod tests {
                 .to_bits(),
             240.0_f32.to_bits()
         );
-        for change in 0..3 {
+        for change in 0..4 {
             app.world_mut()
                 .entity_mut(panel)
                 .get_mut::<ScrollPosition>()
@@ -2628,9 +2899,14 @@ mod tests {
                         .resource_mut::<ObserverSession>()
                         .perspective = crate::observer::Perspective::PlayerKnowledge;
                 }
-                _ => {
+                2 => {
                     app.world_mut().resource_mut::<ObserverSession>().campaign =
                         CampaignId::from_uuid(uuid::Uuid::from_u128(1));
+                }
+                _ => {
+                    app.world_mut()
+                        .resource_mut::<ProductionNavigation>()
+                        .reading_section = ProductionReadingSection::Work;
                 }
             }
             app.update();
@@ -3366,7 +3642,7 @@ mod tests {
             app.world().get::<Node>(group).unwrap().display,
             Display::Flex
         );
-        assert!(panel_text::<ProductionDetails>(&mut app).contains("LABOR BUDGET / DERIVED"));
+        assert!(panel_text::<ProductionDetails>(&mut app).contains("INPUTS / ON HAND"));
         press_site(&mut app, "a");
         app.update();
         assert!(app.world().resource::<ProductionNavigation>().details_open);
@@ -3382,11 +3658,18 @@ mod tests {
         );
         assert!(panel_text::<ProductionDetails>(&mut app).is_empty());
         assert!(!panel_text::<ProductionBrief>(&mut app).contains("Cohort"));
+        assert!(panel_text::<ProductionReadingSubject>(&mut app).is_empty());
+        assert!(panel_text::<ProductionReadingHeadline>(&mut app).is_empty());
     }
 
     #[test]
     fn shared_freight_participant_buttons_navigate_and_expire_with_observation_scope() {
+        use bevy::ecs::system::RunSystemOnce;
         let mut app = dependency_navigation_app();
+        app.world_mut()
+            .run_system_once(|mut commands: Commands| setup_readings_panel(&mut commands))
+            .unwrap();
+        app.add_systems(Update, paint_readings.after(navigate));
         app.world_mut()
             .resource_mut::<ObserverFrame>()
             .0
@@ -3410,7 +3693,14 @@ mod tests {
             .join("\n");
         assert_eq!(text.matches("Designed regional freight pool").count(), 1);
         assert!(text.contains("OTHER PARTICIPANTS / SHARED FREIGHT"));
-        assert!(text.contains("Requested 200 kg | dispatched 40 kg"));
+        assert!(text.contains("160 kg opening · 160 reserved · 0 remaining"));
+        send_command(
+            &mut app,
+            ProductionCommand::Reading(ProductionReadingSection::Freight),
+        );
+        assert!(panel_text::<ProductionDetails>(&mut app)
+            .contains("Requested 200 kg | dispatched 40 kg"));
+        send_command(&mut app, ProductionCommand::Details);
         press_site(&mut app, "mill");
         app.update();
         assert_eq!(
@@ -3693,6 +3983,42 @@ mod tests {
     }
 
     #[test]
+    fn reading_sections_switch_by_keyboard_without_changing_the_observed_period() {
+        use bevy::input_focus::InputFocus;
+        let ReadingsFocusFixture {
+            mut app, window, ..
+        } = readings_focus_app();
+        let period = app.world().resource::<ObserverSession>().viewed_tick;
+        let work = {
+            let world = app.world_mut();
+            world
+                .query::<(&Text, &ChildOf)>()
+                .iter(world)
+                .find_map(|(text, parent)| (text.0 == "Work").then_some(parent.parent()))
+                .expect("a visible Work section control")
+        };
+        assert!(panel_text::<ProductionDetails>(&mut app).contains("INPUTS / ON HAND"));
+        assert!(!panel_text::<ProductionDetails>(&mut app).contains("LABOR BUDGET"));
+        app.world_mut().resource_mut::<InputFocus>().set(work);
+        readings_key(&mut app, window, KeyCode::Enter);
+        let reading = panel_text::<ProductionDetails>(&mut app);
+        assert!(reading.contains("LABOR BUDGET / DERIVED"));
+        assert!(!reading.contains("INPUTS / ON HAND"));
+        assert!(!reading.contains("SECTOR CONTEXT"));
+        assert_eq!(
+            app.world().resource::<ObserverSession>().viewed_tick,
+            period
+        );
+        assert_eq!(
+            app.world()
+                .resource::<ProductionNavigation>()
+                .selected_site
+                .as_deref(),
+            Some("b")
+        );
+    }
+
+    #[test]
     fn readings_tab_order_reaches_the_text_after_controls_and_pages_its_scroll_ancestor() {
         use bevy::input_focus::InputFocus;
         let ReadingsFocusFixture {
@@ -3705,13 +4031,24 @@ mod tests {
             footer,
         } = readings_focus_app();
         app.world_mut().resource_mut::<InputFocus>().set(close);
-        readings_key(&mut app, window, KeyCode::Tab);
-        assert_eq!(app.world().resource::<InputFocus>().get(), Some(flat));
+        for section in [
+            ProductionReadingSection::Flow,
+            ProductionReadingSection::Freight,
+            ProductionReadingSection::Work,
+            ProductionReadingSection::Sources,
+        ] {
+            readings_key(&mut app, window, KeyCode::Tab);
+            let focused = app.world().resource::<InputFocus>().get().unwrap();
+            assert!(
+                matches!(&app.world().get::<ProductionButton>(focused).unwrap().0,
+                ProductionCommand::Reading(current) if *current == section)
+            );
+        }
         readings_key(&mut app, window, KeyCode::Tab);
         assert_eq!(
             app.world().resource::<InputFocus>().get(),
             Some(reading),
-            "the long readings follow their 3D/2D control before the next panel"
+            "the reading follows its section controls"
         );
         let period = app.world().resource::<ObserverSession>().viewed_tick;
         readings_key(&mut app, window, KeyCode::PageDown);
@@ -3737,6 +4074,8 @@ mod tests {
             period
         );
         assert!(app.world().resource::<ProductionNavigation>().details_open);
+        readings_key(&mut app, window, KeyCode::Tab);
+        assert_eq!(app.world().resource::<InputFocus>().get(), Some(flat));
         readings_key(&mut app, window, KeyCode::Tab);
         assert_eq!(app.world().resource::<InputFocus>().get(), Some(footer));
     }

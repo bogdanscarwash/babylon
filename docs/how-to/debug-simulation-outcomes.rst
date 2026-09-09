@@ -60,6 +60,16 @@ inputs, committed deliveries, production recipe, labor account, and closing
 inventory. Distinguish foundation stocks, unavailable evidence, and a present
 completed-period receipt with a real zero.
 
+Open Readings beside the selected site. Its heading keeps the subject, period,
+output, and modeled employed/reserve counts visible while the account scrolls.
+Choose Flow for production and stock movement, or Freight for reservations and
+physical deliveries. Work shows staffing and labor hours. Sources holds recipe
+assumptions and observed QCEW context.
+
+Tab reaches each section and its reading. Enter opens a section.
+Page Up, Page Down, Home, and End scroll the focused reading.
+A new subject or section starts at the top.
+
 The Designed Standard and Delayed presets differ in sheet-transfer travel time:
 one period (four weeks) or three periods (twelve weeks). Their per-period
 flow and hour budgets use the four-week interval. Initial stocks, people,
@@ -83,12 +93,15 @@ regional freight service. The shared capacity alone changes: 800 or 160 kg per
 28-day period. Panel freight retains its independent capacity. The service
 does not claim a physical road or border crossing.
 
-In Production, select the sheet or meal chain. The shared-capacity reading
-names both participating routes and shows the pool once. At completed period 1,
+In Production, select the sheet or meal chain. The relationship panel summarizes
+the shared pool beside the other-participant links. Open Readings and choose
+Freight for both participating routes and their full account. At completed period 1,
 compare opening capacity, newly reserved quantity, remaining capacity, and each
 order's requested and dispatched quantities. The ``unshipped`` field shows
 the remaining backlog. Use ``Other participants`` to inspect the competing
-chain. Capacity reservations are not physical arrivals.
+chain.
+
+Capacity reservations are not physical arrivals.
 
 .. list-table:: Baseline shared freight comparison
    :header-rows: 1
