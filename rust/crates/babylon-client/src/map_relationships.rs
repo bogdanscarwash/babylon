@@ -20,6 +20,9 @@ use crate::observer_ui::{ObserverFrame, ObserverUiState, ObserverViewport, RoadL
 use crate::production::PrimaryView;
 use crate::production_layout::place_label;
 
+#[path = "map_network.rs"]
+mod network;
+
 const MAX_RELATIONSHIPS: usize = 6;
 const ROAD_CREDIT: &str = "© OpenStreetMap contributors\nODbL · openstreetmap.org/copyright";
 const CONNECTION_HEIGHT: f32 = BASE_HEIGHT + DATA_HEIGHT + 22.0;
@@ -636,7 +639,9 @@ fn rebuild(
     for entity in &old {
         commands.entity(entity).despawn();
     }
-    if *observation.view != PrimaryView::Map {
+    if *observation.view != PrimaryView::Map
+        || observation.ui.road_layer == RoadLayer::EconomyNetwork
+    {
         return;
     }
     let projection = project(
@@ -745,6 +750,7 @@ fn relationship_heading(
         )
     };
     match layer {
+        RoadLayer::EconomyNetwork => "Economy network".into(),
         RoadLayer::SelectedPaths => format!("Selected paths\n{heading}"),
         RoadLayer::CapturedRoads if network.is_none_or(BTreeMap::is_empty) => format!("Captured roads unavailable in this observation.\n{heading}"),
         RoadLayer::CapturedRoads => format!("Captured roads / campaign physical route network\nSelected shipment paths highlighted\n{heading}"),
@@ -960,6 +966,7 @@ fn place_labels(mut placement: LabelPlacement) {
 }
 
 pub(super) fn install(app: &mut App) {
+    network::install(app);
     app.init_resource::<RelationshipScope>()
         .add_systems(Startup, setup)
         .add_systems(Update, input.in_set(ObserverSet::Input))
@@ -1053,7 +1060,7 @@ mod tests {
         }
     }
 
-    fn fixture() -> (ObserverSession, ObserverFrame, CountyAnchors) {
+    pub(super) fn fixture() -> (ObserverSession, ObserverFrame, CountyAnchors) {
         let mut session = ObserverSession::new(CampaignId::from_uuid(uuid::Uuid::from_u128(1)));
         session.ready(3, Some("committed".into()));
         assert!(session.installed(&session.context()));
@@ -1330,6 +1337,7 @@ mod tests {
             .insert_resource(ObserverUiState {
                 menu_open: false,
                 splash_visible: false,
+                road_layer: RoadLayer::SelectedPaths,
                 lens: crate::map_economy_lens::MapLens::Material {
                     kind: crate::map_economy_lens::MaterialLensKind::OnHand,
                     good: Some(crate::map_economy_lens::MaterialGoodKey {
@@ -1348,6 +1356,9 @@ mod tests {
         app.world_mut()
             .resource_mut::<crate::production::ProductionNavigation>()
             .selected_site = Some("a".into());
+        network::install(&mut app);
+        app.init_resource::<ObserverViewport>()
+            .init_resource::<UiScale>();
         app
     }
 
@@ -1363,6 +1374,28 @@ mod tests {
             .into_iter()
             .map(|(batch, handle)| (batch, meshes.get(&handle).unwrap().count_vertices()))
             .collect()
+    }
+
+    #[test]
+    fn world_opens_with_the_whole_economy_before_a_county_or_cohort_is_selected() {
+        let mut app = road_layer_app();
+        *app.world_mut().resource_mut::<ObserverUiState>() = ObserverUiState {
+            menu_open: false,
+            splash_visible: false,
+            ..default()
+        };
+        app.world_mut().resource_mut::<SelectedCounty>().0 = None;
+        app.world_mut()
+            .resource_mut::<crate::production::ProductionNavigation>()
+            .selected_site = None;
+        app.update();
+        assert!(
+            app.world_mut()
+                .query::<&Text>()
+                .iter(app.world())
+                .any(|text| text.0.contains("ECONOMY NETWORK") && text.0.contains("3 cohorts")),
+            "World must disclose the whole admitted economy without first selecting a chain"
+        );
     }
 
     #[test]

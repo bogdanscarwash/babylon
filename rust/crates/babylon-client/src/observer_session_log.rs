@@ -102,6 +102,10 @@ fn observer_command_name(command: ObserverCommand) -> &'static str {
         ObserverCommand::Evidence => "evidence",
         ObserverCommand::EconomicDetails => "economic_details",
         ObserverCommand::Relationships => "relationships",
+        ObserverCommand::NetworkSector(_) => "network_sector",
+        ObserverCommand::RoadLayer(crate::observer_ui::RoadLayer::EconomyNetwork) => {
+            "economy_network"
+        }
         ObserverCommand::RoadLayer(crate::observer_ui::RoadLayer::SelectedPaths) => {
             "selected_paths_layer"
         }
@@ -143,6 +147,7 @@ fn log_requests(
             ProductionCommand::Details => "production_details",
             ProductionCommand::Reading(_) => "production_reading_section",
             ProductionCommand::Select { .. } => "production_select",
+            ProductionCommand::Focus { .. } => "production_focus",
             ProductionCommand::Page { .. } => "production_page",
             ProductionCommand::Process { .. } => "production_process",
         };
@@ -223,6 +228,8 @@ fn log_feedback(
 // These are independent applied controls, not mutually exclusive session states.
 #[allow(clippy::struct_excessive_bools)]
 struct PresentationSnapshot {
+    network_layer: crate::observer_ui::RoadLayer,
+    network_sector: crate::observer_ui::NetworkSector,
     perspective: Perspective,
     lens: String,
     view: PrimaryView,
@@ -296,6 +303,8 @@ fn log_presentation(
     });
     let next = PresentationSnapshot {
         perspective: session.perspective,
+        network_layer: ui.road_layer,
+        network_sector: ui.network_sector,
         lens: ui.lens.label_for_log(snapshot),
         view: view.as_deref().copied().unwrap_or_default(),
         flat: navigation
@@ -332,7 +341,7 @@ fn log_presentation(
     if last.as_ref() == Some(&next) {
         return;
     }
-    scoped_info!(session, lens = %next.lens, view = ?next.view, flat = next.flat,
+    scoped_info!(session, lens = %next.lens, network_layer = ?next.network_layer, network_sector = ?next.network_sector, view = ?next.view, flat = next.flat,
         details = next.details, reading_section = ?next.reading_section, disclosure = next.disclosure, evidence = next.evidence, economic_details = next.economic_details,
         selected_site = next.site.as_deref().unwrap_or("none_or_undisclosed"),
         county = next.county.as_deref().unwrap_or("none"), archive = next.archive,

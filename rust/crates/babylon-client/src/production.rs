@@ -196,6 +196,10 @@ pub enum ProductionCommand {
         context: ObservationContext,
     },
     Back,
+    Focus {
+        site_id: String,
+        context: ObservationContext,
+    },
     Select {
         site_id: String,
         context: ObservationContext,
@@ -326,6 +330,7 @@ impl ProductionControlAvailability {
                 Some("This page is unavailable in the current observation.")
             }
             ProductionCommand::Select { site_id, context }
+            | ProductionCommand::Focus { site_id, context }
                 if !state.accepts(context)
                     || !snapshot.is_some_and(|snapshot| {
                         snapshot.sites.iter().any(|site| site.id == *site_id)
@@ -802,6 +807,7 @@ fn inputs(
 fn production_command_context(command: &ProductionCommand) -> Option<&ObservationContext> {
     match command {
         ProductionCommand::Select { context, .. }
+        | ProductionCommand::Focus { context, .. }
         | ProductionCommand::Page { context, .. }
         | ProductionCommand::Process { context, .. } => Some(context),
         _ => None,
@@ -997,10 +1003,15 @@ fn navigate(
                 navigation.competitor_page = 0;
                 navigation.selected_process = None;
             }
-            ProductionCommand::Select { site_id: id, .. } => {
+            ProductionCommand::Select { site_id: id, .. }
+            | ProductionCommand::Focus { site_id: id, .. } => {
                 navigation.select_site(id);
                 sync_county = true;
-                *view = PrimaryView::Production;
+                *view = if matches!(event, ProductionCommand::Focus { .. }) {
+                    PrimaryView::Map
+                } else {
+                    PrimaryView::Production
+                };
                 ui.archive_open = false;
                 ui.disclosure = None;
             }
@@ -2389,7 +2400,8 @@ fn paint_buttons(
             ProductionCommand::Flat => navigation.flat,
             ProductionCommand::Details => navigation.details_open,
             ProductionCommand::Reading(section) => navigation.reading_section == *section,
-            ProductionCommand::Select { site_id, .. } => {
+            ProductionCommand::Select { site_id, .. }
+            | ProductionCommand::Focus { site_id, .. } => {
                 navigation.selected_site.as_ref() == Some(site_id)
             }
             ProductionCommand::Process { process_id, .. } => {
@@ -4393,6 +4405,59 @@ mod tests {
         app.world_mut()
             .resource_mut::<ObserverSession>()
             .set_perspective(crate::observer::Perspective::PlayerKnowledge);
+        app.update();
+        assert!(app
+            .world()
+            .resource::<ProductionNavigation>()
+            .selected_site
+            .is_none());
+        assert!(app.world().resource::<ObserverFeedback>().message.is_some());
+    }
+
+    #[test]
+    fn world_focus_keeps_the_overview_and_reuses_authenticated_circuit_navigation() {
+        let mut app = dependency_navigation_app();
+        app.update();
+        let context = app.world().resource::<ObserverSession>().context();
+        app.world_mut()
+            .resource_mut::<Messages<ProductionCommand>>()
+            .write(ProductionCommand::Focus {
+                site_id: "b".into(),
+                context: context.clone(),
+            });
+        app.update();
+        assert_eq!(*app.world().resource::<PrimaryView>(), PrimaryView::Map);
+        assert_eq!(
+            app.world()
+                .resource::<ProductionNavigation>()
+                .selected_site
+                .as_deref(),
+            Some("b")
+        );
+        app.world_mut()
+            .resource_mut::<Messages<ProductionCommand>>()
+            .write(ProductionCommand::Open);
+        app.update();
+        assert_eq!(
+            *app.world().resource::<PrimaryView>(),
+            PrimaryView::Production
+        );
+        assert_eq!(
+            app.world()
+                .resource::<ProductionNavigation>()
+                .selected_site
+                .as_deref(),
+            Some("b")
+        );
+        app.world_mut()
+            .resource_mut::<ObserverSession>()
+            .set_perspective(crate::observer::Perspective::PlayerKnowledge);
+        app.world_mut()
+            .resource_mut::<Messages<ProductionCommand>>()
+            .write(ProductionCommand::Focus {
+                site_id: "a".into(),
+                context,
+            });
         app.update();
         assert!(app
             .world()

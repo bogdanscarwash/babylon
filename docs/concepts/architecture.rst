@@ -245,16 +245,25 @@ Client and Archive Boundary
 The Bevy client still reads an administrative world view and displays the
 nominal world hash. It does not submit a player intent.
 
-World starts with modeled employed people and offers modeled reserve and
-separate observed QCEW lenses. Physical lenses need a specific good and
+World opens with the complete disclosed economy as a schematic network over
+level county geography. All admitted owner cohorts remain visible, including isolated
+cohorts. Commodity links preserve supplier and buyer identities; county-local
+transfers and finite retail orders connect merchants to end buyers. Display
+offsets separate aggregate owners without claiming factory locations.
+Selecting a node highlights its direct links while retaining the wider network.
+Industry filters retain the selected industry and its direct trading neighbors.
+
+Modeled employed people, modeled reserve, and observed QCEW have separate
+height lenses. Physical lenses need a specific good and
 unit. They do not add unlike goods into an output total. Workforce totals
 count each pool once.
 
 A county selection leads to paged owner cohorts, then
 Circuit detail with at most six incident relationship groups per page.
 Shared-capacity competitors have their own navigation rather than appearing
-as suppliers. Selected roads reuse captured geometry. Schematic relations
-remain visually distinct.
+as suppliers. Physical road layers reuse captured geometry and remain separate
+from the schematic economy network. Both read the authenticated observation;
+neither introduces a supplier graph or allocation engine of its own.
 
 The Readings panel retains subject, period, output or handling, and workforce
 context above its Flow, Freight, Work, and Sources sections. Foundation

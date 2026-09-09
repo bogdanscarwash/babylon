@@ -60,8 +60,44 @@ impl ObserverFrame {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum RoadLayer {
     #[default]
+    EconomyNetwork,
     SelectedPaths,
     CapturedRoads,
+}
+
+/// Industry filters affect presentation only; neighboring supplier/buyer endpoints stay visible.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
+pub enum NetworkSector {
+    #[default]
+    All,
+    Agriculture,
+    Mining,
+    Manufacturing,
+    Wholesale,
+    Retail,
+    EndBuyers,
+}
+impl NetworkSector {
+    pub const GROUPS: [Self; 6] = [
+        Self::Agriculture,
+        Self::Mining,
+        Self::Manufacturing,
+        Self::Wholesale,
+        Self::Retail,
+        Self::EndBuyers,
+    ];
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::All => "All industries",
+            Self::Agriculture => "Agriculture / forestry",
+            Self::Mining => "Extraction",
+            Self::Manufacturing => "Manufacturing",
+            Self::Wholesale => "Wholesale",
+            Self::Retail => "Retail",
+            Self::EndBuyers => "End buyers",
+        }
+    }
 }
 
 // These are independent presentation preferences and disclosures, not transport phases.
@@ -70,6 +106,7 @@ pub enum RoadLayer {
 pub struct ObserverUiState {
     pub lens: MapLens,
     pub road_layer: RoadLayer,
+    pub network_sector: NetworkSector,
     pub archive_open: bool,
     pub reduced_motion: bool,
     pub menu_open: bool,
@@ -84,8 +121,9 @@ pub struct ObserverUiState {
 impl Default for ObserverUiState {
     fn default() -> Self {
         Self {
-            lens: MapLens::default(),
+            lens: MapLens::Relationships,
             road_layer: RoadLayer::default(),
+            network_sector: NetworkSector::default(),
             archive_open: false,
             reduced_motion: false,
             menu_open: true,
@@ -162,6 +200,7 @@ pub enum ObserverCommand {
     EconomicDetails,
     Relationships,
     RoadLayer(RoadLayer),
+    NetworkSector(NetworkSector),
 }
 
 #[derive(Component, Clone, Copy)]
@@ -652,7 +691,37 @@ fn spawn_lens_controls(panel: &mut ChildSpawnerCommands) {
             ObserverCommand::Workforce(crate::map_economy_lens::WorkforceMetric::Reserve),
         );
     });
-    button(panel, "Relationships", ObserverCommand::Relationships);
+    panel.spawn(row()).with_children(|bar| {
+        button(
+            bar,
+            "Economy network",
+            ObserverCommand::RoadLayer(RoadLayer::EconomyNetwork),
+        );
+        button(bar, "Level geography", ObserverCommand::Relationships);
+    });
+    panel.spawn(block_label(
+        "Network / industry and its trading neighbors",
+        12.0,
+        theme::GRAY,
+    ));
+    for group in [
+        vec![
+            NetworkSector::All,
+            NetworkSector::Agriculture,
+            NetworkSector::Mining,
+        ],
+        vec![
+            NetworkSector::Manufacturing,
+            NetworkSector::Wholesale,
+            NetworkSector::Retail,
+        ],
+    ] {
+        panel.spawn(row()).with_children(|bar| {
+            for sector in group {
+                button(bar, sector.label(), ObserverCommand::NetworkSector(sector));
+            }
+        });
+    }
     panel.spawn(block_label(
         "Road layer / campaign physical route network",
         12.0,
@@ -1022,6 +1091,7 @@ fn button_visible(
         }
         ObserverCommand::Relationships
         | ObserverCommand::RoadLayer(_)
+        | ObserverCommand::NetworkSector(_)
         | ObserverCommand::Workforce(_)
         | ObserverCommand::Lens(_)
         | ObserverCommand::MaterialLens(_) => {
@@ -1242,6 +1312,7 @@ fn paint_buttons(
         let selected = match (button.command, &ui.lens) {
             (ObserverCommand::Relationships, MapLens::Relationships) => true,
             (ObserverCommand::RoadLayer(layer), _) => layer == ui.road_layer,
+            (ObserverCommand::NetworkSector(sector), _) => sector == ui.network_sector,
             (ObserverCommand::Workforce(metric), MapLens::Workforce(current)) => metric == *current,
             (ObserverCommand::EconomicDetails, _) => ui.economic_details_open,
             (ObserverCommand::Lens(metric), MapLens::Qcew(current)) => metric == *current,

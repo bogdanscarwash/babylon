@@ -575,6 +575,11 @@ fn apply_presentation_command(command: ObserverCommand, context: &mut CommandCon
             ui.lens = crate::map_economy_lens::MapLens::Relationships;
             ui.disclosure = None;
         }
+        ObserverCommand::NetworkSector(sector) => {
+            ui.network_sector = sector;
+            ui.road_layer = crate::observer_ui::RoadLayer::EconomyNetwork;
+            ui.disclosure = None;
+        }
         ObserverCommand::RoadLayer(layer) => {
             ui.road_layer = layer;
             ui.disclosure = None;

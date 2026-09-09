@@ -55,8 +55,23 @@ Explain the material change
 ---------------------------
 
 Open the Bevy session with ``mise run play``. Hold the same completed period
-and perspective when comparing campaigns. Start in World, whose default lens
-shows modeled employed people.
+and perspective when comparing campaigns. World opens with the whole admitted
+economy: producer and merchant cohorts, their commodity relationships, and
+county end buyers. It uses level county geography so the network stays readable.
+Choose Employed or Reserve to compare modeled workforce counts by height.
+
+The colored nodes separate agriculture and forestry, extraction, manufacturing,
+wholesale, retail, and end buyers. Positions within each county separate the
+aggregate owners for reading; they do not locate factories. Arrows are schematic
+supplier-to-buyer relationships, including local transfers and finite retail
+orders. They do not assert current dispatch, physical roads, or consumption.
+Isolated cohorts remain visible.
+
+Click an industry node to highlight its connections while keeping the wider
+network visible. Open Circuit to inspect that owner's accounts. In Map lens,
+an industry filter retains that industry's direct trading neighbors. A specific
+good and unit filters the network to that commodity. All industries restores
+the full industry scope; the chosen material filter still applies.
 
 The reserve lens shows unused modeled workforce.
 
@@ -79,14 +94,15 @@ These links are separate from the supplier list. Relationship and competitor
 pages each show at most six groups or participants. Return to World with its
 control or M to choose another county.
 
-Return to World to highlight the selected cohort's shipment paths. Selecting
-another county clears those paths until you choose one of its cohorts.
-In World's drawer, choose Selected paths or Captured roads. The second layer
+In World's drawer, switch from Economy network to Selected paths or Captured
+roads to inspect physical transport. Selecting another county clears the old
+cohort's selected paths. The Captured roads layer
 shows the campaign's captured physical route network behind the selected
 shipment paths. It does not show every OSM road or draw all commodity flows.
 Shared segments appear once, even when routes traverse them in opposite
-directions. Tab and Enter reach both layer controls. Loading, failed, stale,
-and restricted observations disclose no captured road geometry.
+directions. Tab and Enter reach the layer and industry controls. Loading,
+failed, stale, and restricted observations disclose neither the economic
+network nor captured road geometry.
 
 Trace a selected producer's output through opening inputs, its recipe, work,
 movement, and closing inventory. If an owner has more than one process, choose
@@ -213,7 +229,7 @@ interventions in :doc:`/reference/configuration`. The Mackinac shared freight
 service changes from 100,000 kg to 1,000 kg per period. The packaging shortage
 changes one Mackinac food producer's opening paper packaging from 160 kg to
 80 kg. These Designed quantities give the finite game visible consequences.
-they do not estimate real bridge throughput or industrial productivity.
+They do not estimate real bridge throughput or industrial productivity.
 
 Check saved campaigns against these committed engine readings.
 

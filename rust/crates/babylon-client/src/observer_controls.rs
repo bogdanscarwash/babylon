@@ -174,11 +174,11 @@ pub(crate) fn availability(
                 _ => Enabled,
             }
         }
-        ObserverCommand::RoadLayer(_) => {
+        ObserverCommand::RoadLayer(_) | ObserverCommand::NetworkSector(_) => {
             if state.perspective == crate::observer::Perspective::FullObserver {
                 inspection_availability(state)
             } else {
-                Disabled("Captured road geometry is unavailable in player knowledge")
+                Disabled("Economic networks are unavailable in player knowledge")
             }
         }
         // Presentation controls and deliberate campaign choices remain usable.
