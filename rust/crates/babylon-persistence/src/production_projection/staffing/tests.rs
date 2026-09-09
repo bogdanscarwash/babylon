@@ -40,7 +40,7 @@ struct PublishedFixture {
 fn fixture() -> &'static PublishedFixture {
     static FIXTURE: OnceLock<PublishedFixture> = OnceLock::new();
     FIXTURE.get_or_init(|| {
-        let foundation = MichiganContentPresetV1::FourWeekStandardV5
+        let foundation = MichiganContentPresetV1::FourWeekStandardV6
             .create_foundation(&crate::test_support::catalog())
             .unwrap();
         let MaterialLaborV1::Staffed(composition) = foundation.labor().clone() else {

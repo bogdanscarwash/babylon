@@ -508,7 +508,9 @@ fn apply_command(command: ObserverCommand, context: &mut CommandContext) {
         }
         ObserverCommand::NewCampaign
         | ObserverCommand::ReopenCampaign
-        | ObserverCommand::NewDelayedCampaign => {
+        | ObserverCommand::NewDelayedCampaign
+        | ObserverCommand::NewSharedFreightAmpleCampaign
+        | ObserverCommand::NewSharedFreightConstrainedCampaign => {
             if pipe.is_none() {
                 feedback.reject(LAUNCHER_REQUIRED, time.elapsed_secs_f64());
                 return;
@@ -520,10 +522,15 @@ fn apply_command(command: ObserverCommand, context: &mut CommandContext) {
                 },
                 _ => RuntimeSessionTargetV3::New {
                     campaign_id: uuid::Uuid::new_v4().to_string(),
-                    preset: if command == ObserverCommand::NewDelayedCampaign {
-                        RuntimeSessionPresetV3::Delayed
-                    } else {
-                        RuntimeSessionPresetV3::Standard
+                    preset: match command {
+                        ObserverCommand::NewSharedFreightAmpleCampaign => {
+                            RuntimeSessionPresetV3::SharedFreightAmple
+                        }
+                        ObserverCommand::NewSharedFreightConstrainedCampaign => {
+                            RuntimeSessionPresetV3::SharedFreightConstrained
+                        }
+                        ObserverCommand::NewDelayedCampaign => RuntimeSessionPresetV3::Delayed,
+                        _ => RuntimeSessionPresetV3::Standard,
                     },
                 },
             };
@@ -1049,6 +1056,8 @@ pub(crate) mod tests {
         for command in [
             ObserverCommand::NewCampaign,
             ObserverCommand::NewDelayedCampaign,
+            ObserverCommand::NewSharedFreightAmpleCampaign,
+            ObserverCommand::NewSharedFreightConstrainedCampaign,
             ObserverCommand::ReopenCampaign,
         ] {
             let (mut app, _) = command_app();
@@ -1076,6 +1085,8 @@ pub(crate) mod tests {
         for command in [
             ObserverCommand::NewCampaign,
             ObserverCommand::NewDelayedCampaign,
+            ObserverCommand::NewSharedFreightAmpleCampaign,
+            ObserverCommand::NewSharedFreightConstrainedCampaign,
             ObserverCommand::ReopenCampaign,
         ] {
             let (mut app, requests) = command_app();
@@ -1105,6 +1116,20 @@ pub(crate) mod tests {
                     ObserverCommand::NewDelayedCampaign,
                     RuntimeSessionTargetV3::New {
                         preset: RuntimeSessionPresetV3::Delayed,
+                        ..
+                    },
+                )
+                | (
+                    ObserverCommand::NewSharedFreightAmpleCampaign,
+                    RuntimeSessionTargetV3::New {
+                        preset: RuntimeSessionPresetV3::SharedFreightAmple,
+                        ..
+                    },
+                )
+                | (
+                    ObserverCommand::NewSharedFreightConstrainedCampaign,
+                    RuntimeSessionTargetV3::New {
+                        preset: RuntimeSessionPresetV3::SharedFreightConstrained,
                         ..
                     },
                 ) => {}
@@ -1617,6 +1642,7 @@ pub(crate) mod tests {
             visibility: ObserverVisibilityV1::FullObserver,
             counties: Vec::new(),
             production: Some(babylon_persistence::ProductionSnapshotV1 {
+                freight_capacity_accounts: Vec::new(),
                 material_balance: None,
                 labor_accounts: Vec::new(),
                 staffing_accounts: Vec::new(),

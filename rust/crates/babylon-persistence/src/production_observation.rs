@@ -16,6 +16,8 @@ pub struct ProductionSnapshotV1 {
     pub sites: Vec<ProductionSiteV1>,
     pub routes: Vec<ProductionRouteV1>,
     pub freight: Vec<ProductionFreightV1>,
+    /// Each corridor/unit principal is disclosed once, with distinct reservation periods.
+    pub freight_capacity_accounts: Vec<ProductionFreightCapacityAccountV1>,
     pub events: Vec<ProductionEventV1>,
     /// Each exact site/unit labor principal occurs once, across all its processes.
     pub labor_accounts: Vec<ProductionLaborAccountV1>,
@@ -210,6 +212,8 @@ pub struct ProductionRouteV1 {
     pub good: String,
     pub unit: String,
     pub travel_periods: u64,
+    /// Ordered physical legs identify shared capacity even before any shipment.
+    pub corridor_legs: Vec<ProductionRouteCorridorLegV1>,
     pub ordered: u64,
     pub shipped: u64,
     pub delivered: u64,
@@ -266,4 +270,62 @@ pub struct ProductionDeliveryEvidenceV1 {
     pub good_id: String,
     pub unit_id: String,
     pub quantity: u64,
+}
+
+/// One leg of a route; the explicit index determines physical order.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ProductionRouteCorridorLegV1 {
+    pub leg_index: u16,
+    pub corridor_id: String,
+    pub travel_periods: u64,
+}
+
+/// Unreserved capacity, shared across all participating routes of an exact unit.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ProductionFreightCapacityAccountV1 {
+    pub corridor_id: String,
+    pub corridor_label: String,
+    pub unit_id: String,
+    pub unit: String,
+    pub route_ids: Vec<String>,
+    pub next_opening_period: u64,
+    pub next_opening_available: u64,
+    /// Absent at foundation. Completed zero reservations remain explicit.
+    pub completed: Option<CompletedProductionFreightCapacityV1>,
+}
+
+/// Reservations made by the latest completed dispatch family, not arrivals.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CompletedProductionFreightCapacityV1 {
+    pub period: u64,
+    /// Each reservation departure period occurs once within its corridor/unit.
+    pub reservations: Vec<ProductionFreightReservationV1>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ProductionFreightReservationV1 {
+    /// A later route leg reserves future capacity during the completed tick.
+    pub reservation_period: u64,
+    pub opening_available: u64,
+    pub newly_reserved: u64,
+    pub remaining_available: u64,
+    pub orders: Vec<ProductionFreightCapacityOrderV1>,
+}
+
+/// One order's opening request and actual committed dispatch for a reservation.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ProductionFreightCapacityOrderV1 {
+    pub order_id: String,
+    pub route_id: String,
+    pub good_id: String,
+    pub unit_id: String,
+    pub requested: u64,
+    pub dispatched: u64,
+    /// Ordered minus shipped, distinct from the route's undelivered backlog.
+    pub remaining_unshipped: u64,
 }

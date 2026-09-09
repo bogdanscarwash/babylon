@@ -3,7 +3,7 @@ Persistence Reference
 
 ``babylon-persistence``, composed by ``babylon-runtime``, owns authoritative
 campaign state. The live observer session uses ``DurableMaterialRuntimeV3``
-with a V5 Michigan foundation. Python prepares reference artifacts and runs
+with a V6 Michigan foundation. Python prepares reference artifacts and runs
 operator tools; it has no campaign writer or transition reader.
 
 Commands and Bootstrap
@@ -109,7 +109,7 @@ Foundation, Restart, and Reads
 
 The foundation preserves the exact graph, world registers, resolver manifest,
 prepared environment, replay identity, seed, content, and reference digests.
-V5 material admission decodes the saved canonical defines, rebuilds the complete
+V6 material admission decodes the saved canonical defines, rebuilds the complete
 foundation, and compares its bytes. Editing or deleting an external TOML file
 cannot change an existing campaign's parameters.
 
@@ -122,6 +122,13 @@ The full observer reads authenticated committed material evidence. The player
 knowledge preview treats material parameters as opaque: it does not query the
 hidden foundation bytes and returns no production or nominal-world projection.
 Public campaign metadata alone cannot grant access to those values.
+
+Production evidence digest V5 binds route legs and freight-capacity accounts
+alongside stocks, dispatch, arrivals, output, and staffing. Capacity readings
+compare adjacent authenticated material registers against actual dispatch
+receipts. Foundation has no completed reservation account. A completed period
+can have a present account with zero dispatch. This projection uses the existing
+SQL layout, material envelope, and session protocol.
 
 The Archive dirty receipt participates in the envelope comparison. The Archive
 worker can publish after the tick becomes durable, so the window reports its

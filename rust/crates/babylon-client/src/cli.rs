@@ -18,7 +18,7 @@ pub const HEADLESS_FLAG: &str = "--headless";
 pub const CAMPAIGN_FLAG: &str = "--campaign";
 /// Request a new campaign with an explicit identity; never reinterpret an Open.
 pub const NEW_CAMPAIGN_FLAG: &str = "--new-campaign";
-/// Delivery preset, valid only alongside [`NEW_CAMPAIGN_FLAG`].
+/// Scenario preset, valid only alongside [`NEW_CAMPAIGN_FLAG`].
 pub const PRESET_FLAG: &str = "--preset";
 /// Environment fallback for the campaign identity when `--campaign` is
 /// absent.
@@ -44,7 +44,7 @@ babylon-client — the Babylon viewer and headless dossier CLI
 
 usage:
   babylon-client --campaign <uuid>
-  babylon-client --new-campaign <uuid> [--preset standard|delayed]
+  babylon-client --new-campaign <uuid> [--preset <scenario>]
   babylon-client --headless [--campaign <uuid>] <command>
 
 commands:
@@ -69,7 +69,8 @@ options:
   --headless    run one command against the fog-safe reader and exit.
   --campaign    open an existing canonical campaign UUID; falls back to BABYLON_CAMPAIGN_ID.
   --new-campaign create an absent campaign with this canonical UUID.
-  --preset      new campaign delivery preset: standard (default) or delayed.
+  --preset      new campaign scenario: standard (default), delayed,
+                shared-freight-ample or shared-freight-constrained.
   Open the connected window with `mise run play`.
 ";
 
@@ -341,10 +342,12 @@ fn windowed_target(
         let preset = match preset.as_deref() {
             None | Some("standard") => RuntimeSessionPresetV3::Standard,
             Some("delayed") => RuntimeSessionPresetV3::Delayed,
+            Some("shared-freight-ample") => RuntimeSessionPresetV3::SharedFreightAmple,
+            Some("shared-freight-constrained") => RuntimeSessionPresetV3::SharedFreightConstrained,
             Some(_) => {
                 return Err(CliError::at(
                     concat!(file!(), ":", line!()),
-                    "new campaign preset must be standard or delayed".into(),
+                    "new campaign preset must be standard, delayed, shared-freight-ample or shared-freight-constrained".into(),
                 ))
             }
         };
@@ -588,12 +591,41 @@ mod tests {
                 vec!["--preset", "delayed", "--new-campaign", CAMPAIGN],
                 RuntimeSessionPresetV3::Delayed,
             ),
+            (
+                vec![
+                    "--new-campaign",
+                    CAMPAIGN,
+                    "--preset",
+                    "shared-freight-ample",
+                ],
+                RuntimeSessionPresetV3::SharedFreightAmple,
+            ),
+            (
+                vec![
+                    "--new-campaign",
+                    CAMPAIGN,
+                    "--preset",
+                    "shared-freight-constrained",
+                ],
+                RuntimeSessionPresetV3::SharedFreightConstrained,
+            ),
         ] {
             let request = parse(os(&flags)).expect("explicit New target admits");
             assert!(matches!(request,
                 CliRequest::Windowed { initial_target: RuntimeSessionTargetV3::New { campaign_id, preset } }
                 if campaign_id == CAMPAIGN && preset == expected
             ));
+        }
+    }
+
+    #[test]
+    fn shared_freight_presets_are_available_through_new_campaign() {
+        for preset in ["shared-freight-ample", "shared-freight-constrained"] {
+            let request = parse(os(&["--new-campaign", CAMPAIGN, "--preset", preset]));
+            assert!(
+                request.is_ok(),
+                "the {preset} campaign must be selectable: {request:?}"
+            );
         }
     }
 

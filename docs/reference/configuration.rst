@@ -40,14 +40,20 @@ capabilities.
 The launcher accepts ``--campaign UUID``, ``--new``, ``--preset``,
 ``--defines PATH``, and ``--no-build``. Its ``--help`` output owns the exact
 combinations. A new campaign
-preserves existing worlds. V5 admission refuses older weekly campaign content.
+preserves existing worlds. V6 admission refuses V1 through V5 campaign content
+and retains those saves without rewriting them.
+
+New Campaign offers Standard, Delayed, Shared freight — ample, and Shared
+freight — constrained. The launcher accepts ``--preset standard``,
+``delayed``, ``shared-freight-ample``, or ``shared-freight-constrained``.
 
 Authored campaign values
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-``content/scenarios/michigan/defines.toml`` contains 56 required numeric fields:
+``content/scenarios/michigan/defines.toml`` contains 58 required numeric fields:
 The campaign has three fields and staffing has one. Each of five
-processes has eight fields. Each of three corridors has four fields.
+processes has eight fields. Each of three independent corridors has one field,
+each route has three, and the shared freight pool has two.
 
 All fields have the ``Designed`` evidence class.
 Observed QCEW jobs and wages do not supply these quantities. The parser rejects
@@ -65,8 +71,9 @@ remains part of the stored identity.
 
 The inventory below groups repeated fields. Process values follow source order:
 sheet rolling, panel forming, subassembly making, meal milling, meal packaging.
-Corridor values follow sheet transfer, panel transfer, food transfer. Each
-``process.*`` row covers five fields. Each ``corridor.*`` row covers three.
+Corridor and route values follow sheet transfer, panel transfer, food transfer.
+Each ``process.*`` row covers five fields. Each ``corridor.*`` or ``route.*``
+row covers three.
 
 ``Consequential`` denotes a live causal consumer within the supported horizon.
 It does not assert that every valid change changes output.
@@ -82,8 +89,8 @@ is redundant across all supported campaigns according to the current audit.
      - Constraints and four-week conversion
      - Consumer and consequence
    * - ``SCHEMA_VERSION``
-     - ``1``. Format version
-     - Exactly ``1``
+     - ``2``. Format version
+     - Exactly ``2``
      - Canonical content admission. Fixed contract
    * - ``TICK_DURATION_DAYS``
      - ``28`` days
@@ -134,20 +141,28 @@ is redundant across all supported campaigns according to the current audit.
    * - ``corridor.*.UNITS_PER_WEEK``
      - ``80 kg, 8 panels, 20 kg`` per week
      - Positive. Becomes ``320 kg, 32 panels, 80 kg`` per period
-     - Freight capacity and arrival timing. Increases are redundant at baseline
-       supply, decreases can constrain dispatch
-   * - ``corridor.*.TRAVEL_PERIODS``
+     - Independent freight budgets in Standard and Delayed. Only panel capacity
+       applies in the shared presets. Decreases can constrain dispatch
+   * - ``route.*.TRAVEL_PERIODS``
      - ``1, 1, 1`` four-week periods
      - Positive 16-bit unsigned integer. Unscaled
-     - Route leg for Standard. Consequential there, dormant in Delayed
-   * - ``corridor.*.DELAYED_TRAVEL_PERIODS``
+     - Route legs for Standard and both shared presets. Dormant in Delayed
+   * - ``route.*.DELAYED_TRAVEL_PERIODS``
      - ``3, 1, 1`` four-week periods
      - 16-bit unsigned integer, at least normal travel. Unscaled
-     - Route leg for Delayed. Consequential there, dormant in Standard
-   * - ``corridor.*.ORDERED_UNITS``
+     - Route legs for Delayed. Dormant in the other presets
+   * - ``route.*.ORDERED_UNITS``
      - ``600 kg, 60 panels, 200 kg`` total
      - Positive. Unscaled. Joint buyer-inventory bound
      - Initial orders, backlog and shipment totals. Consequential
+   * - ``shared_freight.AMPLE_UNITS_PER_WEEK``
+     - ``200 kg`` per week
+     - Positive, at least constrained capacity. Becomes ``800 kg`` per period
+     - One shared sheet and meal budget in Shared freight — ample
+   * - ``shared_freight.CONSTRAINED_UNITS_PER_WEEK``
+     - ``40 kg`` per week
+     - Positive, no greater than ample capacity. Becomes ``160 kg`` per period
+     - One shared sheet and meal budget in Shared freight — constrained
 
 Only weekly work hours, process throughput, and corridor throughput multiply
 by four. The authored stock, plans, people, recipes, travel periods, and order
@@ -168,18 +183,28 @@ All five baseline labor budgets equal full-capacity labor demand:
 Raising throughput alone need not raise production. Extra opening stock
 does not create a period-1 commitment when its opening plan remains zero.
 
-With the other baseline values fixed, raising process or corridor capacity
-does not raise output. Milling can demand more labor while its one-person
+In Standard and Delayed, with other baseline values fixed, raising process or
+corridor capacity does not raise output. Milling can demand more labor while its one-person
 pool still limits production. Added reserves change the reserve account, but
 baseline requests never exceed the workforce already supplied. These are
 conditional results, not reasons to remove the underlying fields.
 
-Equal panel and food travel values in both presets do not make their fields
+Equal panel and food travel values in Standard and Delayed do not make their fields
 redundant. The old Python ``defines.yaml`` catalog remains in Git history
 and is not a source for current play.
 
-See :doc:`/how-to/debug-simulation-outcomes` for the bounded delivery-time and
-opening-stock comparison.
+``topology.json`` links route legs to capacity principals separately from
+their numeric orders and travel times. In both shared presets, sheet metal and
+milled meal compete for one kilogram pool. Panel freight has its own
+32-panel period budget. The regional service has the ``Designed`` evidence
+class. It does not identify a road or the Detroit–Windsor crossing. The compiler
+emits each corridor, unit, and period budget once, even when two routes use it.
+
+The allocator weights outstanding orders, floors each proportional share,
+and then limits dispatch by available supplier stock. It does not redistribute
+unused shares. A reservation consumes a capacity budget. The shipment arrives
+after its authored travel time. See :doc:`/how-to/debug-simulation-outcomes`
+for the shared-capacity and delivery-time comparisons.
 
 Simulation Interval
 ~~~~~~~~~~~~~~~~~~~
@@ -204,7 +229,7 @@ are defined in ``babylon_kernel::clock`` and are not runtime overrides:
      - 13
      - Periods in a modeled 364-day year
 
-V5 Michigan content validates ``TICK_DURATION_DAYS = 28`` in its authored
+V6 Michigan content validates ``TICK_DURATION_DAYS = 28`` in its authored
 parameters and stores the duration in canonical foundation definitions.
 Admission refuses a different duration or
 an older weekly preset. Observed source units, including QCEW weekly wages,

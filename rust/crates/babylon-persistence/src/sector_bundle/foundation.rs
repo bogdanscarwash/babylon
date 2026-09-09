@@ -17,7 +17,7 @@ use crate::{
 use babylon_tick::material_replay::MaterialLaborV1;
 
 const DEFINES_DOMAIN: &[u8] = b"babylon.sector-bundle-defines.v3\0";
-const CONTENT_DOMAIN: &[u8] = b"babylon.michigan-material-content.v5\0";
+const CONTENT_DOMAIN: &[u8] = b"babylon.michigan-material-content.v6\0";
 const MAX_OBSERVED_DEFINES: usize = 65_536;
 const MAX_DEFINES_BYTES: usize = 4 * MAX_BUNDLE_BYTES + MAX_OBSERVED_DEFINES + 65_536;
 
@@ -189,15 +189,12 @@ pub(crate) fn validate_stored_material_authority(
 }
 
 /// Compile graph and material from the exact decoded staffing and bundle content.
-pub(crate) fn create_bundle_foundation_v5(
+pub(crate) fn create_bundle_foundation_v6(
     preset_id: &str,
     delivery: MichiganDeliveryPresetV1,
     catalog: &MichiganMaterialCatalogV1,
 ) -> Result<MaterialRuntimeFoundationV2, SectorBundleErrorV1> {
-    let expected = match delivery {
-        MichiganDeliveryPresetV1::Standard => "michigan-material-standard-v5",
-        MichiganDeliveryPresetV1::Delayed => "michigan-material-delayed-v5",
-    };
+    let expected = delivery.id();
     if preset_id != expected {
         return Err(SectorBundleErrorV1::Preset);
     }
@@ -336,16 +333,16 @@ mod tests {
     fn actual_staffed_initial_register_is_compiled_from_its_exact_stored_bundle_rows() {
         for (id, delivery) in [
             (
-                "michigan-material-standard-v5",
+                "michigan-material-standard-v6",
                 MichiganDeliveryPresetV1::Standard,
             ),
             (
-                "michigan-material-delayed-v5",
+                "michigan-material-delayed-v6",
                 MichiganDeliveryPresetV1::Delayed,
             ),
         ] {
             let foundation =
-                create_bundle_foundation_v5(id, delivery, &crate::test_support::catalog()).unwrap();
+                create_bundle_foundation_v6(id, delivery, &crate::test_support::catalog()).unwrap();
             let graph = foundation.graph_foundation();
             let decoded = decode_stored_bundle_defines_v3(
                 graph.content_bundle().defines_bytes(),
@@ -363,7 +360,7 @@ mod tests {
             assert_eq!(foundation.spec().horizon_ticks, 16);
         }
         assert!(matches!(
-            create_bundle_foundation_v5(
+            create_bundle_foundation_v6(
                 "michigan-material-standard-v2",
                 MichiganDeliveryPresetV1::Standard,
                 &crate::test_support::catalog()

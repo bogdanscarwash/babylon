@@ -332,6 +332,27 @@ pub fn compile_sector_bundles_v1(
     for route in catalog.routes() {
         append_route(&mut state, catalog, route, preset)?;
     }
+    // Capacity belongs to the corridor, never to each of its participating routes.
+    let mut emitted = BTreeSet::new();
+    for route in catalog.routes() {
+        let corridor = catalog
+            .corridor_for_route(route, preset)
+            .ok_or(SectorBundleErrorV1::Owner)?;
+        let unit = catalog
+            .good(&route.good_key)
+            .ok_or(SectorBundleErrorV1::GoodUnit)?
+            .unit_id();
+        if emitted.insert((corridor.id(), unit)) {
+            for period in 1..=MICHIGAN_MAX_HORIZON_PERIODS_V1 {
+                state.corridor_capacities.push(CorridorCapacityV2 {
+                    corridor_id: corridor.id(),
+                    unit_id: unit,
+                    period,
+                    available: corridor.capacity_per_period(preset),
+                });
+            }
+        }
+    }
     let bytes = encode_material_circuit_state_v2(&state)?;
     decode_material_circuit_state_v2(&bytes).map_err(Into::into)
 }
@@ -382,7 +403,10 @@ fn append_route(
     state.route_legs.push(RouteLegV2 {
         route_id: route.id(),
         leg_index: 0,
-        corridor_id: route.corridor_id(),
+        corridor_id: catalog
+            .corridor_for_route(route, preset)
+            .ok_or(SectorBundleErrorV1::Owner)?
+            .id(),
         from_node_id: supplier.node_id(),
         to_node_id: buyer.node_id(),
         travel_periods: catalog.travel_periods(route, preset),
@@ -405,14 +429,6 @@ fn append_route(
         order_id: route.order_id(),
         quantity: route.ordered_quantity,
     });
-    for period in 1..=MICHIGAN_MAX_HORIZON_PERIODS_V1 {
-        state.corridor_capacities.push(CorridorCapacityV2 {
-            corridor_id: route.corridor_id(),
-            unit_id: good.unit_id(),
-            period,
-            available: route.capacity_quantity_per_period,
-        });
-    }
     Ok(())
 }
 

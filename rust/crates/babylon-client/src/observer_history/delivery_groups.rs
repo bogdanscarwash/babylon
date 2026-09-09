@@ -369,6 +369,7 @@ mod tests {
 
     fn snapshot() -> ProductionSnapshotV1 {
         ProductionSnapshotV1 {
+            freight_capacity_accounts: Vec::new(),
             scenario_label: "Designed delivery evidence fixture".into(),
             horizon_period: 16,
             sites: vec![
@@ -376,6 +377,7 @@ mod tests {
                 site("buyer", "Macomb parts"),
             ],
             routes: vec![ProductionRouteV1 {
+                corridor_legs: Vec::new(),
                 id: "route".into(),
                 supplier_site_id: "supplier".into(),
                 buyer_site_id: "buyer".into(),

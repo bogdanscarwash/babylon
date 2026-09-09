@@ -92,7 +92,8 @@ pub(crate) fn availability(
 ) -> ControlAvailability {
     use ControlAvailability::{Disabled, Enabled};
     use ObserverCommand::{
-        Live, NewCampaign, NewDelayedCampaign, NextPeriod, Perspective, PreviousPeriod,
+        Live, NewCampaign, NewDelayedCampaign, NewSharedFreightAmpleCampaign,
+        NewSharedFreightConstrainedCampaign, NextPeriod, Perspective, PreviousPeriod,
         ReopenCampaign, Step, TogglePlay,
     };
 
@@ -102,8 +103,14 @@ pub(crate) fn availability(
     if state.quit_requested {
         return CLOSING;
     }
-    if matches!(command, NewCampaign | NewDelayedCampaign | ReopenCampaign)
-        && state.runtime_disconnected()
+    if matches!(
+        command,
+        NewCampaign
+            | NewDelayedCampaign
+            | NewSharedFreightAmpleCampaign
+            | NewSharedFreightConstrainedCampaign
+            | ReopenCampaign
+    ) && state.runtime_disconnected()
     {
         return Disabled("Runtime connection unavailable; close and relaunch Babylon");
     }
@@ -482,6 +489,8 @@ mod tests {
         for command in [
             ObserverCommand::NewCampaign,
             ObserverCommand::NewDelayedCampaign,
+            ObserverCommand::NewSharedFreightAmpleCampaign,
+            ObserverCommand::NewSharedFreightConstrainedCampaign,
             ObserverCommand::ReopenCampaign,
         ] {
             assert_eq!(availability(command, &state), ControlAvailability::Enabled);

@@ -30,12 +30,18 @@ pub struct RuntimeSessionTailV3 {
 pub enum RuntimeSessionPresetV3 {
     Standard,
     Delayed,
+    #[serde(rename = "shared-freight-ample")]
+    SharedFreightAmple,
+    #[serde(rename = "shared-freight-constrained")]
+    SharedFreightConstrained,
 }
 impl RuntimeSessionPresetV3 {
     pub(super) const fn delivery(self) -> MichiganDeliveryPresetV1 {
         match self {
             Self::Standard => MichiganDeliveryPresetV1::Standard,
             Self::Delayed => MichiganDeliveryPresetV1::Delayed,
+            Self::SharedFreightAmple => MichiganDeliveryPresetV1::SharedFreightAmple,
+            Self::SharedFreightConstrained => MichiganDeliveryPresetV1::SharedFreightConstrained,
         }
     }
 }

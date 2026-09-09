@@ -575,6 +575,7 @@ mod tests {
             visibility: ObserverVisibilityV1::FullObserver,
             counties: vec![],
             production: Some(ProductionSnapshotV1 {
+                freight_capacity_accounts: Vec::new(),
                 material_balance: None,
                 labor_accounts: Vec::new(),
                 staffing_accounts: Vec::new(),
@@ -586,6 +587,7 @@ mod tests {
                     site("buyer", "26099", 'b', 0),
                 ],
                 routes: vec![ProductionRouteV1 {
+                    corridor_legs: Vec::new(),
                     id: "route".into(),
                     supplier_site_id: "source".into(),
                     buyer_site_id: "buyer".into(),

@@ -17,8 +17,10 @@ use super::observe::{self, PeriodRow};
 pub const BASELINE: &str = include_str!("../../../../../content/scenarios/michigan/defines.toml");
 pub const PERIODS: u64 = 16;
 // Accepted numeric baseline, independent of TOML comments and table order.
+// ADR259 moves route fields to schema V2 and adds shared-preset capacities.
+// Standard/Delayed quantities and the four-case expected outcomes are unchanged.
 const ACCEPTED_DEFINES_SHA256: &str =
-    "f2f86ec9fce76bae10c644fb7ff8721bce678ad7ea23656428e4d0fb55834ab1";
+    "e65cf3ced65e95fb42d61e00da0081003cac9df0c6b879e6bed02341b73130e1";
 
 #[derive(Clone, Copy)]
 pub struct CaseSpec {

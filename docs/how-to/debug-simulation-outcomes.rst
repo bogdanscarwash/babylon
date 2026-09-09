@@ -48,9 +48,8 @@ For a background Michigan run, inspect its recorded process and campaign tail:
 
 ``sim:probe`` honors an explicit ``BABYLON_CAMPAIGN_ID`` or the worktree's
 recorded default. ``sim:report`` always creates a fresh campaign. Preserve
-existing campaign data when comparing source revisions; V5 content refuses
-weekly campaign presets rather than interpreting their ordinals as four-week
-periods.
+existing campaign data when comparing source revisions. V6 content refuses
+older presets without deleting or reinterpreting their saved state.
 
 Explain the material change
 ---------------------------
@@ -61,11 +60,98 @@ inputs, committed deliveries, production recipe, labor account, and closing
 inventory. Distinguish foundation stocks, unavailable evidence, and a present
 completed-period receipt with a real zero.
 
-The Designed Michigan presets differ in the sheet-transfer travel time:
+Open Readings beside the selected site. Its heading keeps the subject, period,
+output, and modeled employed/reserve counts visible while the account scrolls.
+Choose Flow for production and stock movement, or Freight for reservations and
+physical deliveries. Work shows staffing and labor hours. Sources holds recipe
+assumptions and observed QCEW context.
+
+Tab reaches each section and its reading. Enter opens a section.
+Page Up, Page Down, Home, and End scroll the focused reading.
+A new subject or section starts at the top.
+
+The Designed Standard and Delayed presets differ in sheet-transfer travel time:
 one period (four weeks) or three periods (twelve weeks). Their per-period
 flow and hour budgets use the four-week interval. Initial stocks, people,
 order totals, and physical recipes keep their original units. QCEW wages
 remain observed weekly rates and do not become modeled payroll.
+
+Compare shared freight capacity
+-------------------------------
+
+Choose Shared freight — ample and Shared freight — constrained in New Campaign,
+or launch either explicitly:
+
+.. code-block:: bash
+
+   mise run play -- --new --preset shared-freight-ample
+   mise run play -- --new --preset shared-freight-constrained
+
+Both campaigns use one-period travel, the same finite orders, and the same
+opening production and workforce. Sheet metal and milled meal share a Designed
+regional freight service. The shared capacity alone changes: 800 or 160 kg per
+28-day period. Panel freight retains its independent capacity. The service
+does not claim a physical road or border crossing.
+
+In Production, select the sheet or meal chain. The relationship panel summarizes
+the shared pool beside the other-participant links. Open Readings and choose
+Freight for both participating routes and their full account. At completed period 1,
+compare opening capacity, newly reserved quantity, remaining capacity, and each
+order's requested and dispatched quantities. The ``unshipped`` field shows
+the remaining backlog. Use ``Other participants`` to inspect the competing
+chain.
+
+Capacity reservations are not physical arrivals.
+
+.. list-table:: Baseline shared freight comparison
+   :header-rows: 1
+   :widths: 50 25 25
+
+   * - Reading
+     - Ample
+     - Constrained
+   * - Period-1 sheet dispatch
+     - 320 kg
+     - 120 kg
+   * - Period-1 meal dispatch
+     - 80 kg
+     - 40 kg
+   * - Period-1 remaining shared capacity
+     - 400 kg
+     - 0 kg
+   * - Period-3 panel output
+     - 32 panels
+     - 12 panels
+   * - Period-3 packaged-meal output
+     - 80 kg
+     - 40 kg
+
+The opening orders total 600 kg of sheet and 200 kg of meal. At 160 kg
+capacity their proportional shares are 120 and 40 kg. At 800 kg capacity,
+supplier stock after period-1 production limits dispatch to 320 and 80 kg. Unused
+shares stay unused.
+
+For the order comparison, copy ``defines.toml`` and change only
+``route.food_transfer.ORDERED_UNITS`` from 200 to 80. Create a new campaign with
+``--new --preset shared-freight-constrained --defines /absolute/path/to/copy.toml``.
+First dispatch becomes 141 kg of sheet and 18 kg of meal, with 1 kg left by flooring.
+Editing the file cannot change a saved campaign.
+
+Follow these dispatches to period-2 arrivals, then period-3 production. Compare
+each site's employed and reserve counts and its ``Work request`` for the
+next period. A temporary input shortage can reduce work and move people into reserve.
+The full workforce account must still conserve people.
+
+Compare saved campaigns at the same completed period. Return to a campaign
+through Open and check its
+continued identity and saved parameters. Hold an earlier period while advancing
+to distinguish historical evidence from the current tail. Restricted knowledge
+preview does not expose these material or capacity accounts.
+
+Run the native discovery, comparison, and resume check at 1366×768 and
+1920×1080. Automated receipts prove the recorded operations. The Director's
+session supplies comprehension acceptance. This remains a partial PER-31
+delivery within Gate 4.
 
 Compare delivery time and opening stock
 ---------------------------------------

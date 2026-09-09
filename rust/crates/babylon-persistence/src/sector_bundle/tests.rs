@@ -187,20 +187,29 @@ fn row_and_bundle_insertion_order_cannot_change_canonical_identity_or_execution(
         assert_eq!(*bundle, original);
     }
     reordered.reverse();
-    let expected = compile_sector_bundles_v1(
-        &bundles(),
+    for preset in [
         MichiganDeliveryPresetV1::Standard,
-        &crate::test_support::catalog(),
-    )
-    .unwrap();
-    let actual = compile_sector_bundles_v1(
-        &reordered,
-        MichiganDeliveryPresetV1::Standard,
-        &crate::test_support::catalog(),
-    )
-    .unwrap();
-    assert_eq!(expected, actual);
-    assert_eq!(trace(expected, 4), trace(actual, 4));
+        MichiganDeliveryPresetV1::Delayed,
+        MichiganDeliveryPresetV1::SharedFreightAmple,
+        MichiganDeliveryPresetV1::SharedFreightConstrained,
+    ] {
+        let expected =
+            compile_sector_bundles_v1(&bundles(), preset, &crate::test_support::catalog()).unwrap();
+        let mut actual =
+            compile_sector_bundles_v1(&reordered, preset, &crate::test_support::catalog()).unwrap();
+        assert_eq!(expected, actual);
+        // Route/order/capacity insertion order cannot change a shared allocation.
+        actual.supplier_routes.reverse();
+        actual.route_legs.reverse();
+        actual.orders.reverse();
+        actual.backlog.reverse();
+        actual.corridor_capacities.reverse();
+        assert_eq!(
+            babylon_material_circuit::encode_material_circuit_state_v2(&expected).unwrap(),
+            babylon_material_circuit::encode_material_circuit_state_v2(&actual).unwrap(),
+        );
+        assert_eq!(trace(expected, 4), trace(actual, 4));
+    }
 }
 
 #[test]

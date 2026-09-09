@@ -73,19 +73,25 @@
       "buyer_site_key": "macomb-fabricated-metal",
       "good_key": "sheet",
       "key": "sheet-transfer",
-      "supplier_site_key": "wayne-primary-metal"
+      "supplier_site_key": "wayne-primary-metal",
+      "corridor_key": "sheet-transfer",
+      "shared_corridor_key": "shared-freight"
     },
     {
       "buyer_site_key": "wayne-vehicle-parts",
       "good_key": "panel",
       "key": "panel-transfer",
-      "supplier_site_key": "macomb-fabricated-metal"
+      "supplier_site_key": "macomb-fabricated-metal",
+      "corridor_key": "panel-transfer",
+      "shared_corridor_key": "panel-transfer"
     },
     {
       "buyer_site_key": "oakland-food",
       "good_key": "meal",
       "key": "food-transfer",
-      "supplier_site_key": "washtenaw-food"
+      "supplier_site_key": "washtenaw-food",
+      "corridor_key": "food-transfer",
+      "shared_corridor_key": "shared-freight"
     }
   ],
   "sites": [
@@ -118,6 +124,28 @@
       "key": "oakland-food",
       "label": "Oakland food-packaging cohort",
       "naics": "311"
+    }
+  ],
+  "corridors": [
+    {
+      "key": "sheet-transfer",
+      "label": "Sheet transfer",
+      "unit_key": "kg"
+    },
+    {
+      "key": "panel-transfer",
+      "label": "Panel transfer",
+      "unit_key": "panel"
+    },
+    {
+      "key": "food-transfer",
+      "label": "Food transfer",
+      "unit_key": "kg"
+    },
+    {
+      "key": "shared-freight",
+      "label": "Designed regional freight pool",
+      "unit_key": "kg"
     }
   ]
 }

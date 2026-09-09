@@ -334,7 +334,9 @@ def test_smoke_ignores_damaged_saved_campaign_preferences(
     assert state.read_bytes() == saved_pointer
 
 
-@pytest.mark.parametrize("preset", [None, "standard", "delayed"])
+@pytest.mark.parametrize(
+    "preset", [None, "standard", "delayed", "shared-freight-ample", "shared-freight-constrained"]
+)
 def test_two_anonymous_pipes_connect_children_without_parent_forwarding(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, preset: str | None
 ) -> None:
@@ -636,7 +638,9 @@ def test_bootstrap_probe_is_read_only_and_requires_active_marker(
     assert all(statement.startswith("SELECT") for statement in statements[1:])
 
 
-@pytest.mark.parametrize("preset", ["standard", "delayed"])
+@pytest.mark.parametrize(
+    "preset", ["standard", "delayed", "shared-freight-ample", "shared-freight-constrained"]
+)
 def test_first_launch_has_an_explicit_new_preset_but_saved_resume_cannot_override_it(
     tmp_path: Path, preset: str
 ) -> None:

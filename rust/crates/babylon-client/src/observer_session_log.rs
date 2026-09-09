@@ -75,6 +75,10 @@ fn observer_command_name(command: ObserverCommand) -> &'static str {
         ObserverCommand::Menu => "menu",
         ObserverCommand::NewCampaign => "new_campaign",
         ObserverCommand::NewDelayedCampaign => "new_delayed_campaign",
+        ObserverCommand::NewSharedFreightAmpleCampaign => "new_shared_freight_ample_campaign",
+        ObserverCommand::NewSharedFreightConstrainedCampaign => {
+            "new_shared_freight_constrained_campaign"
+        }
         ObserverCommand::ReopenCampaign => "reopen_campaign",
         ObserverCommand::Quit => "quit",
         ObserverCommand::UiScale => "ui_scale",
@@ -122,6 +126,7 @@ fn log_requests(
             ProductionCommand::Flat => "production_flat",
             ProductionCommand::Back => "production_back",
             ProductionCommand::Details => "production_details",
+            ProductionCommand::Reading(_) => "production_reading_section",
             ProductionCommand::Select { .. } => "production_select",
         };
         scoped_info!(session, command = name, "observer command requested");
@@ -206,6 +211,7 @@ struct PresentationSnapshot {
     view: PrimaryView,
     flat: bool,
     details: bool,
+    reading_section: crate::production::ProductionReadingSection,
     disclosure: &'static str,
     evidence: bool,
     economic_details: bool,
@@ -281,6 +287,10 @@ fn log_presentation(
         details: navigation
             .as_ref()
             .is_some_and(|navigation| navigation.details_open),
+        reading_section: navigation
+            .as_ref()
+            .map(|navigation| navigation.reading_section)
+            .unwrap_or_default(),
         disclosure: match ui.disclosure {
             Some(ObserverDisclosure::Time) => "time",
             Some(ObserverDisclosure::Lens) => "lens",
@@ -306,7 +316,7 @@ fn log_presentation(
         return;
     }
     scoped_info!(session, lens = %next.lens, view = ?next.view, flat = next.flat,
-        details = next.details, disclosure = next.disclosure, evidence = next.evidence, economic_details = next.economic_details,
+        details = next.details, reading_section = ?next.reading_section, disclosure = next.disclosure, evidence = next.evidence, economic_details = next.economic_details,
         selected_site = next.site.as_deref().unwrap_or("none_or_undisclosed"),
         county = next.county.as_deref().unwrap_or("none"), archive = next.archive,
         menu = next.menu, splash = next.splash, history = next.history,
@@ -568,6 +578,7 @@ mod tests {
             visibility: ObserverVisibilityV1::FullObserver,
             counties: Vec::new(),
             production: Some(ProductionSnapshotV1 {
+                freight_capacity_accounts: Vec::new(),
                 material_balance: None,
                 labor_accounts: Vec::new(),
                 staffing_accounts: Vec::new(),
@@ -735,6 +746,9 @@ mod tests {
             app.world_mut()
                 .resource_mut::<ProductionNavigation>()
                 .details_open = true;
+            app.world_mut()
+                .resource_mut::<ProductionNavigation>()
+                .reading_section = crate::production::ProductionReadingSection::Freight;
             app.world_mut().resource_mut::<UiScale>().0 = 1.15;
             let mut audio = app.world_mut().resource_mut::<ObserverAudioSettings>();
             audio.track = 1;
@@ -758,6 +772,7 @@ mod tests {
             "reduced_motion=true",
             "comparison=true",
             "details=true",
+            "reading_section=Freight",
             "disclosure=\"time\"",
             "evidence=true",
             "ui_scale=1.15",

@@ -187,7 +187,7 @@ class NewCampaignTarget:
     """An explicit request to found one absent campaign after the runtime Hello."""
 
     campaign: UUID
-    preset: Literal["standard", "delayed"]
+    preset: Literal["standard", "delayed", "shared-freight-ample", "shared-freight-constrained"]
 
 
 @dataclass(frozen=True)
@@ -202,6 +202,10 @@ def _new_target(campaign: UUID, preset: str | None) -> NewCampaignTarget:
         return NewCampaignTarget(campaign, "standard")
     if preset == "delayed":
         return NewCampaignTarget(campaign, "delayed")
+    if preset == "shared-freight-ample":
+        return NewCampaignTarget(campaign, "shared-freight-ample")
+    if preset == "shared-freight-constrained":
+        return NewCampaignTarget(campaign, "shared-freight-constrained")
     raise ObserverLaunchError("unknown material scenario preset")
 
 
@@ -725,8 +729,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--preset",
-        choices=("standard", "delayed"),
-        help="choose a new world's delivery preset; requires New rather than Open",
+        choices=("standard", "delayed", "shared-freight-ample", "shared-freight-constrained"),
+        help="choose a new world's material preset; requires New rather than Open",
     )
     args = parser.parse_args(argv)
     try:

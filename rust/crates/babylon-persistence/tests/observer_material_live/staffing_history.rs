@@ -27,7 +27,7 @@ impl Fixture {
     fn new() -> Self {
         let mut target = DisposableTarget::create();
         let campaign = CampaignId::from_uuid(Uuid::from_u128(41_101));
-        let foundation = MichiganContentPresetV1::FourWeekDelayedV5
+        let foundation = MichiganContentPresetV1::FourWeekDelayedV6
             .create_foundation(&crate::test_support::catalog())
             .unwrap();
         let foundation_digest = foundation.digest();

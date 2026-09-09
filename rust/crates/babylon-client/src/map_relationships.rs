@@ -628,6 +628,7 @@ mod tests {
             visibility: ObserverVisibilityV1::FullObserver,
             counties: Vec::new(),
             production: Some(ProductionSnapshotV1 {
+                freight_capacity_accounts: Vec::new(),
                 material_balance: None,
                 labor_accounts: Vec::new(),
                 staffing_accounts: Vec::new(),

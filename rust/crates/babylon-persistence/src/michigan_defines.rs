@@ -57,6 +57,11 @@ pub(crate) struct ProcessDefines {
 #[serde(deny_unknown_fields, rename_all = "SCREAMING_SNAKE_CASE")]
 pub(crate) struct CorridorDefines {
     pub units_per_week: u64,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields, rename_all = "SCREAMING_SNAKE_CASE")]
+pub(crate) struct RouteDefines {
     pub travel_periods: u16,
     pub delayed_travel_periods: u16,
     pub ordered_units: u64,
@@ -64,7 +69,14 @@ pub(crate) struct CorridorDefines {
 
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields, rename_all = "SCREAMING_SNAKE_CASE")]
-pub(crate) struct MichiganDefinesV1 {
+pub(crate) struct SharedFreightDefines {
+    pub ample_units_per_week: u64,
+    pub constrained_units_per_week: u64,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields, rename_all = "SCREAMING_SNAKE_CASE")]
+pub(crate) struct MichiganDefinesV2 {
     pub schema_version: u16,
     pub tick_duration_days: u64,
     pub horizon_periods: u64,
@@ -74,8 +86,12 @@ pub(crate) struct MichiganDefinesV1 {
     pub process: BTreeMap<String, ProcessDefines>,
     #[serde(rename = "corridor")]
     pub corridor: BTreeMap<String, CorridorDefines>,
+    #[serde(rename = "route")]
+    pub route: BTreeMap<String, RouteDefines>,
+    #[serde(rename = "shared_freight")]
+    pub shared_freight: SharedFreightDefines,
 }
-impl MichiganDefinesV1 {
+impl MichiganDefinesV2 {
     pub fn load(path: &Path) -> Result<Self, MichiganDefinesErrorV1> {
         let file = std::fs::File::open(path).map_err(MichiganDefinesErrorV1::Read)?;
         let mut bytes = Vec::new();
@@ -116,8 +132,8 @@ impl MichiganDefinesV1 {
     }
     fn validate(&self) -> Result<(), MichiganDefinesErrorV1> {
         use MichiganDefinesErrorV1::Value;
-        if self.schema_version != 1 {
-            return Err(Value("SCHEMA_VERSION must equal 1"));
+        if self.schema_version != 2 {
+            return Err(Value("SCHEMA_VERSION must equal 2"));
         }
         if self.tick_duration_days != DAYS_PER_TICK {
             return Err(Value(
@@ -153,17 +169,36 @@ impl MichiganDefinesV1 {
         for value in self.process.values() {
             validate_process(value, self.hours_per_period())?;
         }
-        for value in self.corridor.values() {
-            if value.units_per_week == 0
-                || value.ordered_units == 0
+        if !self.route.keys().map(String::as_str).eq(corridor_keys) {
+            return Err(Value(
+                "route tables must name exactly the three known transfers",
+            ));
+        }
+        for value in self.route.values() {
+            if value.ordered_units == 0
                 || value.travel_periods == 0
                 || value.delayed_travel_periods < value.travel_periods
-                || value.units_per_week.checked_mul(WEEKS_PER_TICK).is_none()
             {
                 return Err(Value(
-                    "corridor quantities must be positive and delayed travel cannot be shorter",
+                    "route orders and travel must be positive; delayed travel cannot be shorter",
                 ));
             }
+        }
+        for rate in self.corridor.values().map(|v| v.units_per_week).chain([
+            self.shared_freight.ample_units_per_week,
+            self.shared_freight.constrained_units_per_week,
+        ]) {
+            if rate == 0 || rate.checked_mul(WEEKS_PER_TICK).is_none() {
+                return Err(Value(
+                    "corridor capacities must be positive and fit period units",
+                ));
+            }
+        }
+        if self.shared_freight.constrained_units_per_week > self.shared_freight.ample_units_per_week
+        {
+            return Err(Value(
+                "constrained shared freight capacity cannot exceed ample capacity",
+            ));
         }
         Ok(())
     }
@@ -242,25 +277,39 @@ mod tests {
     ));
     #[test]
     fn equivalent_toml_has_one_canonical_identity_and_stored_values_round_trip() {
-        let original = MichiganDefinesV1::parse(SOURCE).unwrap();
+        let original = MichiganDefinesV2::parse(SOURCE).unwrap();
         let reformatted =
-            MichiganDefinesV1::parse(&format!("# author note\n\n{SOURCE}\n")).unwrap();
+            MichiganDefinesV2::parse(&format!("# author note\n\n{SOURCE}\n")).unwrap();
         assert_eq!(original.encode().unwrap(), reformatted.encode().unwrap());
         assert_eq!(
-            MichiganDefinesV1::decode(&original.encode().unwrap()).unwrap(),
+            MichiganDefinesV2::decode(&original.encode().unwrap()).unwrap(),
             original
         );
         let mut padded = original.encode().unwrap();
         padded.push(b' ');
         assert!(matches!(
-            MichiganDefinesV1::decode(&padded),
+            MichiganDefinesV2::decode(&padded),
             Err(MichiganDefinesErrorV1::Canonical)
         ));
     }
     #[test]
     fn missing_unknown_fractional_and_invalid_units_are_refused() {
         for changed in [
-            SOURCE.replace("SCHEMA_VERSION = 1", "UNUSED_COEFFICIENT = 1"),
+            SOURCE.replace("SCHEMA_VERSION = 2", "UNUSED_COEFFICIENT = 1"),
+            SOURCE.replace("SCHEMA_VERSION = 2", "SCHEMA_VERSION = 1"),
+            SOURCE.replace("[route.sheet_transfer]", "[route.unknown_transfer]"),
+            SOURCE.replace(
+                "CONSTRAINED_UNITS_PER_WEEK = 40",
+                "CONSTRAINED_UNITS_PER_WEEK = 0",
+            ),
+            SOURCE.replace(
+                "CONSTRAINED_UNITS_PER_WEEK = 40",
+                "CONSTRAINED_UNITS_PER_WEEK = 201",
+            ),
+            SOURCE.replace(
+                "AMPLE_UNITS_PER_WEEK = 200",
+                "AMPLE_UNITS_PER_WEEK = 9223372036854775807",
+            ),
             SOURCE.replace(
                 "WORK_HOURS_PER_PERSON_WEEK = 40",
                 "WORK_HOURS_PER_PERSON_WEEK = 40.5",
@@ -280,12 +329,12 @@ mod tests {
             format!("{SOURCE}\nUNKNOWN = 1\n"),
         ] {
             assert!(
-                MichiganDefinesV1::parse(&changed).is_err(),
+                MichiganDefinesV2::parse(&changed).is_err(),
                 "unexpectedly admitted {changed}"
             );
         }
         assert!(matches!(
-            MichiganDefinesV1::parse(&" ".repeat(MAX_MICHIGAN_DEFINES_BYTES + 1)),
+            MichiganDefinesV2::parse(&" ".repeat(MAX_MICHIGAN_DEFINES_BYTES + 1)),
             Err(MichiganDefinesErrorV1::TooLarge)
         ));
     }
@@ -302,7 +351,7 @@ mod tests {
                     &format!("LABOR_HOURS_PER_BATCH = {coefficient}"),
                 );
             assert!(matches!(
-                MichiganDefinesV1::parse(&changed),
+                MichiganDefinesV2::parse(&changed),
                 Err(MichiganDefinesErrorV1::Value(
                     "maximal period staffing request exceeds the exact integer bound"
                 ))

@@ -22,13 +22,13 @@ Babylon has these primary boundaries:
 
 One tick judges one fixed 28-day interval and produces one durable commit.
 There are 13 periods in a modeled year; this is a 364-day simulation calendar,
-not variable-length Gregorian months. V5 Michigan campaigns bind the interval
+not variable-length Gregorian months. V6 Michigan campaigns bind the interval
 in their canonical content. Their authored TOML defines the work schedule,
 recipes, workforce, stocks, orders, throughput, route durations, and a stop
 horizon of 1 through 16 periods. The supplied values yield 160 Designed labor
 hours per person per period and 16 periods (64 weeks). New reads the selected
 file and stores its canonical values in the foundation. Open uses those saved
-values. Older weekly campaigns are refused; their stored data is retained.
+values. Admission refuses V1 through V5 campaigns and keeps their stored data.
 The interval contract is ``contracts/simulation_interval_v1.yaml``.
 
 The current Michigan material campaign admits an empty BSL rule set. Its
@@ -36,6 +36,15 @@ production, freight, and staffing run through the typed material transition.
 The built-in ``production.bsl`` annual labor calibration remains a conformance
 reference; it does not parameterize this campaign. Observed annual QCEW facts
 and source weekly wages retain their original units.
+
+Standard and Delayed keep independent freight capacities. The two shared
+freight presets route sheet metal and milled meal through one Designed regional
+kilogram pool, with 800 or 160 kg per period. Panel freight stays independent.
+The existing material allocator reserves capacity once per corridor, unit,
+and departure period, with proportional flooring and unused residuals.
+Authenticated Production readings derive reservations and dispatch from
+committed registers and receipts. They distinguish reserved capacity from
+physical arrivals and link the competing chains to production and staffing.
 
 Ordinary BSL rules derive and write world data through governed causal
 operations. External shocks must not write downstream results directly.
@@ -89,7 +98,7 @@ Authoritative Persistence
 
 ``babylon-runtime`` is the sole production composition root. It activates the
 Rust schema and serves the live observer session through
-``DurableMaterialRuntimeV3``. That runtime admits a V5 Michigan foundation,
+``DurableMaterialRuntimeV3``. That runtime admits a V6 Michigan foundation,
 judges one period, and commits ``CommittedMaterialTickEnvelopeV3`` containing
 both graph and material evidence. Callers cannot submit a pre-judged report or
 construct a second writer authority.
@@ -97,7 +106,7 @@ construct a second writer authority.
 Material campaigns retain the V2 graph replay and schema-authority contracts
 inside their V3 material envelope. Graph-only diagnostic campaigns exercise
 ``DurableReplayRuntimeV2`` separately. The observer session refuses those
-campaigns and older weekly material content. Refusal leaves stored data intact.
+campaigns and older material content. Refusal leaves stored data intact.
 
 The epoch 8/9 predecessor ledger is append-only historical cutover evidence:
 
