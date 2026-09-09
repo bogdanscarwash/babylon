@@ -5,7 +5,7 @@ formatters:
     format: '%(asctime)s [%(levelname)s] %(name)s: %(message)s'
   json:
     # Use custom JSONFormatter - no external dependencies
-    class: babylon.kernel.log.JSONFormatter
+    class: babylon.config.log.JSONFormatter
 
 handlers:
   console:
