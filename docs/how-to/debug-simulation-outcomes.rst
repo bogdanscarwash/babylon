@@ -192,8 +192,8 @@ The full workforce account must still conserve people.
 
 Compare saved campaigns at the same completed period. Return to a campaign
 through Open and check its
-continued identity and saved parameters. Hold an earlier period while advancing
-to distinguish historical evidence from the current tail. Restricted knowledge
+continued identity and saved parameters. Return Live before advancing, then
+revisit an earlier period to distinguish its evidence from the current tail. Restricted knowledge
 preview does not expose these material or capacity accounts.
 
 Run the native discovery, comparison, and resume check at 1366×768 and
@@ -323,8 +323,8 @@ match. Missing or incompatible accounts make a total unavailable.
 
 Open reconstructs the saved graph, source observations, recipes, paths, and
 parameters. Editing or moving current source files cannot supply new facts to
-that saved campaign. Check resume against its retained identities and hold an
-earlier period while advancing the current tail. Production-evidence V6 binds
+that saved campaign. Check resume against its retained identities. Return Live
+to advance, then revisit the earlier reading. Production-evidence V6 binds
 the complete authorized reading, including absent versus completed-zero
 accounts and ordered physical paths. Restricted previews disclose none of
 these material accounts.
