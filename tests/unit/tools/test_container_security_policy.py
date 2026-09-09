@@ -226,7 +226,17 @@ else:
 
 
 @pytest.mark.parametrize(
-    "focus", ["runtime_smoke", "reference_integrity", "runtime", "archive", "reader", "client"]
+    "focus",
+    [
+        "runtime_smoke",
+        "reference_integrity",
+        "runtime",
+        "archive",
+        "reader",
+        "statewide_synthetic",
+        "statewide_qualified",
+        "client",
+    ],
 )
 def test_current_runtime_focuses_finish_with_checked_owned_cleanup(
     tmp_path: Path, focus: str
@@ -247,6 +257,13 @@ def test_current_runtime_focuses_finish_with_checked_owned_cleanup(
         in call["args"]
     ]
     assert len(writer_probes) == (1 if focus == "runtime" else 0)
+    if focus in {"statewide_synthetic", "statewide_qualified"}:
+        selected = "statewide::" if focus == "statewide_synthetic" else "statewide_qualified::"
+        tests = [
+            call["args"] for call in calls if call["name"] == "cargo" and call["args"][0] == "test"
+        ]
+        assert len(tests) == 1
+        assert selected in tests[0] and "--ignored" in tests[0]
     if focus == "reference_integrity":
         assert not any(call["name"] == "mise" for call in calls)
         assert any(

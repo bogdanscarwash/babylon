@@ -4,7 +4,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use babylon_persistence::ProductionSnapshotV1;
+use babylon_persistence::ProductionSnapshotV2;
 use bevy::prelude::{Rect, Vec2, Vec3};
 
 use crate::production_brief::{dependency_sites, DependencyDirection};
@@ -18,11 +18,31 @@ pub(crate) struct ProductionLayout {
 }
 
 impl ProductionLayout {
-    pub(crate) fn new(snapshot: &ProductionSnapshotV1) -> Self {
-        let ids: Vec<_> = snapshot
-            .sites
+    pub(crate) fn focused(
+        snapshot: &ProductionSnapshotV2,
+        selected: Option<&str>,
+        page: usize,
+    ) -> Self {
+        let selected = selected.and_then(|id| snapshot.sites.iter().find(|site| site.id == id));
+        let neighbors = selected
+            .map(|site| dependency_sites(site, snapshot))
+            .unwrap_or_default();
+        let groups: Vec<_> = neighbors
             .iter()
+            .map(|(_, site)| site.id.as_str())
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect();
+        let ids: Vec<_> = selected
+            .into_iter()
             .map(|site| site.id.clone())
+            .chain(
+                groups
+                    .into_iter()
+                    .skip(page.saturating_mul(6))
+                    .take(6)
+                    .map(str::to_owned),
+            )
             .collect::<BTreeSet<_>>()
             .into_iter()
             .collect();
@@ -33,8 +53,13 @@ impl ProductionLayout {
             .collect();
         let mut edges = BTreeSet::new();
         for site in &snapshot.sites {
+            if !indices.contains_key(site.id.as_str()) {
+                continue;
+            }
             for (direction, buyer) in dependency_sites(site, snapshot) {
-                if direction == DependencyDirection::Downstream {
+                if direction == DependencyDirection::Downstream
+                    && indices.contains_key(buyer.id.as_str())
+                {
                     edges.insert((indices[site.id.as_str()], indices[buyer.id.as_str()]));
                 }
             }

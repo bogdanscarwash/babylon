@@ -9,8 +9,8 @@ use super::{
     ObserverEconomyReaderV1, ObserverVisibilityV1, Uuid,
 };
 use babylon_kernel::sha256_of;
-use babylon_persistence::{ObserverEconomySnapshotV1, ProductionSnapshotV1};
-use babylon_tick::material_world::{decode_material_receipts_v3, MaterialTickReceiptsV3};
+use babylon_persistence::{ObserverEconomySnapshotV1, ProductionSnapshotV2};
+use babylon_tick::material_world::{decode_material_receipts_v4, MaterialTickReceiptsV4};
 use postgres::Client;
 
 // Both downstream onset periods and their following continuation are inside this
@@ -136,7 +136,7 @@ fn authenticated_receipts(
     connection: &mut Client,
     runtime: &DurableMaterialRuntimeV3,
     snapshot: &ObserverEconomySnapshotV1,
-) -> MaterialTickReceiptsV3 {
+) -> MaterialTickReceiptsV4 {
     let tail = runtime.tail().unwrap();
     let tick = i64::try_from(tail.resolve_tick()).unwrap();
     let bytes: Vec<u8> = connection
@@ -166,17 +166,17 @@ fn authenticated_receipts(
         Some(identity_hex(tail.result_world_hash()))
     );
     assert!(snapshot.envelope_digest.is_some());
-    assert!(snapshot.production_evidence_digest().is_some());
-    let receipts = decode_material_receipts_v3(&bytes).unwrap();
+    assert!(snapshot.production_evidence_digest().unwrap().is_some());
+    let receipts = decode_material_receipts_v4(&bytes).unwrap();
     assert_eq!(receipts.resolve_tick, snapshot.resolve_tick);
     receipts
 }
 
-fn production(snapshot: &ObserverEconomySnapshotV1) -> &ProductionSnapshotV1 {
+fn production(snapshot: &ObserverEconomySnapshotV1) -> &ProductionSnapshotV2 {
     snapshot.production.as_ref().unwrap()
 }
 
-fn stock(rows: &ProductionSnapshotV1, site: &str, good: &str, unit: &str) -> u64 {
+fn stock(rows: &ProductionSnapshotV2, site: &str, good: &str, unit: &str) -> u64 {
     rows.sites
         .iter()
         .find(|row| row.id == site)
@@ -190,7 +190,7 @@ fn stock(rows: &ProductionSnapshotV1, site: &str, good: &str, unit: &str) -> u64
 fn assert_reconciled(
     prior: &ObserverEconomySnapshotV1,
     current: &ObserverEconomySnapshotV1,
-    receipts: &MaterialTickReceiptsV3,
+    receipts: &MaterialTickReceiptsV4,
 ) {
     assert_material_accounts(current);
     assert_eq!(prior.resolve_tick + 1, current.resolve_tick);
@@ -202,9 +202,9 @@ fn assert_reconciled(
 }
 
 fn assert_inventory(
-    before: &ProductionSnapshotV1,
-    after: &ProductionSnapshotV1,
-    receipts: &MaterialTickReceiptsV3,
+    before: &ProductionSnapshotV2,
+    after: &ProductionSnapshotV2,
+    receipts: &MaterialTickReceiptsV4,
 ) {
     let catalog = crate::test_support::catalog();
     let stock_key = |site_key: &str, good_key: &str| {
@@ -258,17 +258,24 @@ fn assert_inventory(
             .iter()
             .find(|site| site.id == row.site_id)
             .unwrap();
-        let batches = u128::from(site.produced_batches.unwrap());
-        let produced = if site.output_good_id == row.good_id && site.output_unit_id == row.unit_id {
-            batches * u128::from(site.output_per_batch)
-        } else {
-            0
-        };
-        let consumed: u128 = site
-            .inputs
+        let produced: u128 = site
+            .processes
             .iter()
-            .filter(|input| input.good_id == row.good_id && input.unit_id == row.unit_id)
-            .map(|input| batches * u128::from(input.quantity_per_batch))
+            .filter(|process| {
+                process.output_good_id == row.good_id && process.output_unit_id == row.unit_id
+            })
+            .map(|process| {
+                u128::from(process.produced_batches.unwrap()) * u128::from(process.output_per_batch)
+            })
+            .sum();
+        let consumed: u128 = site
+            .processes
+            .iter()
+            .flat_map(|process| process.inputs.iter().map(move |input| (process, input)))
+            .filter(|(_, input)| input.good_id == row.good_id && input.unit_id == row.unit_id)
+            .map(|(process, input)| {
+                u128::from(process.produced_batches.unwrap()) * u128::from(input.quantity_per_batch)
+            })
             .sum();
         assert_eq!(u128::from(row.produced), produced);
         assert_eq!(u128::from(row.consumed), consumed);
@@ -282,22 +289,24 @@ fn assert_inventory(
         "every arrival credits its destination stock"
     );
     for site in &after.sites {
-        let receipt = receipts
-            .production
-            .iter()
-            .find(|row| identity_hex(row.site_id.as_bytes()) == site.id);
-        assert_eq!(
-            site.produced_batches,
-            Some(receipt.map_or(0, |row| row.produced_batches))
-        );
-        assert_eq!(
-            site.planned_batches,
-            Some(receipt.map_or(0, |row| row.planned_batches))
-        );
+        for process in &site.processes {
+            let receipt = receipts.production.iter().find(|row| {
+                identity_hex(row.site_id.as_bytes()) == site.id
+                    && identity_hex(row.process_id.as_bytes()) == process.id
+            });
+            assert_eq!(
+                process.produced_batches,
+                Some(receipt.map_or(0, |row| row.produced_batches))
+            );
+            assert_eq!(
+                process.planned_batches,
+                Some(receipt.map_or(0, |row| row.planned_batches))
+            );
+        }
     }
 }
 
-fn assert_labor(before: &ProductionSnapshotV1, after: &ProductionSnapshotV1, tick: u64) {
+fn assert_labor(before: &ProductionSnapshotV2, after: &ProductionSnapshotV2, tick: u64) {
     for labor in &after.labor_accounts {
         let completed = labor.completed.as_ref().unwrap();
         let previous = before
@@ -310,12 +319,15 @@ fn assert_labor(before: &ProductionSnapshotV1, after: &ProductionSnapshotV1, tic
             .iter()
             .find(|site| site.id == labor.site_id)
             .unwrap();
-        let per_batch: u128 = site
-            .labor
+        let production_hours: u128 = site
+            .processes
             .iter()
-            .map(|row| u128::from(row.quantity_per_batch))
+            .map(|process| {
+                assert_eq!(process.labor.len(), 1);
+                u128::from(process.produced_batches.unwrap())
+                    * u128::from(process.labor[0].quantity_per_batch)
+            })
             .sum();
-        assert_eq!(site.labor.len(), 1);
         assert_eq!(completed.period, tick);
         assert_eq!(completed.opening, previous.next_opening_available);
         assert_eq!(
@@ -325,7 +337,7 @@ fn assert_labor(before: &ProductionSnapshotV1, after: &ProductionSnapshotV1, tic
         assert!(completed.used <= completed.planned && completed.planned <= completed.opening);
         assert_eq!(
             u128::from(completed.used),
-            u128::from(site.produced_batches.unwrap()) * per_batch
+            production_hours + u128::from(completed.handling_used)
         );
     }
     for pool in &after.staffing_accounts {
@@ -336,9 +348,9 @@ fn assert_labor(before: &ProductionSnapshotV1, after: &ProductionSnapshotV1, tic
 }
 
 fn assert_freight(
-    before: &ProductionSnapshotV1,
-    after: &ProductionSnapshotV1,
-    receipts: &MaterialTickReceiptsV3,
+    before: &ProductionSnapshotV2,
+    after: &ProductionSnapshotV2,
+    receipts: &MaterialTickReceiptsV4,
 ) {
     let mut lots = BTreeSet::new();
     assert!(after.freight.iter().all(|lot| lots.insert(&lot.id)));
@@ -390,7 +402,7 @@ fn is_restart_boundary(
     preset: MichiganDeliveryPresetV1,
     tick: u64,
     snapshot: &ObserverEconomySnapshotV1,
-    receipts: &MaterialTickReceiptsV3,
+    receipts: &MaterialTickReceiptsV4,
 ) -> bool {
     let catalog = crate::test_support::catalog();
     let sheet = catalog
@@ -433,7 +445,7 @@ fn is_restart_boundary(
     true
 }
 
-fn assert_food_disconnected(standard: &ProductionSnapshotV1, delayed: &ProductionSnapshotV1) {
+fn assert_food_disconnected(standard: &ProductionSnapshotV2, delayed: &ProductionSnapshotV2) {
     let food: BTreeSet<_> = standard
         .sites
         .iter()
@@ -528,7 +540,7 @@ fn persisted_delivery_twins_reconcile_and_restart_at_dispatch_transit_and_arriva
         .find(|route| route.key == "sheet-transfer")
         .unwrap();
     let delayed_leg = normalized
-        .route_legs
+        .route_stages
         .iter_mut()
         .find(|leg| leg.route_id == sheet.id())
         .unwrap();
@@ -681,8 +693,10 @@ fn shared_freight_competition_is_committed_restart_safe_and_scope_confined() {
         ] {
             let id = identity_hex(catalog.site(key).unwrap().id().as_bytes());
             let site = third.sites.iter().find(|site| site.id == id).unwrap();
+            assert_eq!(site.processes.len(), 1);
+            let process = &site.processes[0];
             assert_eq!(
-                site.produced_batches.unwrap() * site.output_per_batch,
+                process.produced_batches.unwrap() * process.output_per_batch,
                 output
             );
             let staffing = third
@@ -710,12 +724,22 @@ fn assert_shared_reservations(
         assert_eq!(completed.period, tick);
         for reservation in &completed.reservations {
             assert_eq!(
-                reservation.opening_available,
-                reservation.newly_reserved + reservation.remaining_available
+                reservation.opening_available_grams,
+                reservation.newly_reserved_grams + reservation.remaining_available_grams
             );
             assert_eq!(
-                reservation.newly_reserved,
-                reservation.orders.iter().map(|o| o.dispatched).sum::<u64>()
+                reservation.newly_reserved_grams,
+                reservation
+                    .orders
+                    .iter()
+                    .map(|order| {
+                        assert_eq!(
+                            order.reserved_grams,
+                            order.dispatched * order.grams_per_unit
+                        );
+                        order.reserved_grams
+                    })
+                    .sum::<u64>()
             );
         }
     }
@@ -723,12 +747,15 @@ fn assert_shared_reservations(
         let shared = accounts.iter().find(|a| a.route_ids.len() == 2).unwrap();
         let reservation = &shared.completed.as_ref().unwrap().reservations[0];
         let expected = if preset == MichiganDeliveryPresetV1::SharedFreightAmple {
-            (800, 400)
+            (800_000, 400_000)
         } else {
-            (160, 160)
+            (160_000, 160_000)
         };
         assert_eq!(
-            (reservation.opening_available, reservation.newly_reserved),
+            (
+                reservation.opening_available_grams,
+                reservation.newly_reserved_grams
+            ),
             expected
         );
     }

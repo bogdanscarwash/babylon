@@ -1,0 +1,80 @@
+version: 1
+name: Michigan County Path Matrix V1
+schema: MichiganCountyPathMatrixV1
+producer: tools/qualify_michigan_road_terminals.py
+authority:
+  physical_paths: Michigan Road Network V1, validated by its exact SHA-256
+  routing: RoadRouter, with the same integer costs and restriction-prefix history
+  anchors: committed assets/map/county_atlas.bin Michigan interior-land anchors
+  atlas_pin: rust/crates/babylon-client/tests/fixtures/michigan_atlas_land_probes.json
+  county_geography: existing county identity and atlas land remain unchanged
+  terminal_choice: Designed county aggregate, never a factory location
+  capacity: absent; paths and attachment distances do not establish throughput
+configuration:
+  attachment_limit: content/scenarios/michigan/defines.toml statewide.TERMINAL_ATTACHMENT_LIMIT_METERS
+  vehicle_profile: must equal the graph profile, authored transport truck fields and DEFAULT_MAXHEIGHT_MM
+  evidence_class: Designed
+terminal_policy:
+  county_count: 83
+  anchor_conversion: invert the atlas grid through EPSG5070 to EPSG4326, then nearest E7 integer
+  coordinate_ties: half away from zero
+  candidate: physical graph node with at least one incoming and one outgoing edge
+  ranking: WGS84 geodesic attachment distance in integer millimetres, then numeric OSM node ID
+  attachment_distance: nearest millimetre, half up, minimum one millimetre
+  attachment_limit: inclusive
+  no_candidate: retain county identity, null node and attachment fields, explicit diagnostic
+  connectivity: do not replace an attached disconnected node with a farther connected component
+  attachment_semantics: a Designed spatial association, not an inserted physical road edge
+wire:
+  media_type: application/gzip
+  payload: compact sorted-key ASCII-safe JSON, one trailing newline
+  gzip: level 9, mtime 0, empty filename
+  sha256: hash of the exact compressed bytes
+  top_level_fields: [schema, source_pins, policy, terminals, paths, diagnostics]
+  source_pins:
+    graph_sha256: exact uncompressed Michigan Road Network V1 artifact bytes
+    atlas_sha256: complete existing atlas file, checked against atlas_pin
+    atlas_pin_sha256: exact existing land-evidence JSON file
+    defines_sha256: exact authored TOML bytes
+  terminal:
+    fields:
+      - county_geoid
+      - county_name
+      - anchor_lon_e7
+      - anchor_lat_e7
+      - atlas_grid_x
+      - atlas_grid_y
+      - node_id
+      - node_lon_e7
+      - node_lat_e7
+      - attachment_distance_mm
+      - status
+      - evidence_class
+    order: county_geoid ascending
+    node_id: exact positive OSM node identity, or null when unattached
+    status: attached or no_usable_node_within_limit
+  path_row:
+    fields: [source_county_geoid, destination_county_geoid, path]
+    order: source_county_geoid, then destination_county_geoid
+    count: 6889
+    path: null or an object with exactly distance_mm and edge_ids
+    distance_mm: checked sum of physical directed road edge distances; excludes attachment distances
+    edge_ids: exact ordered directed edge IDs from the pinned graph
+    attached_diagonal: zero distance and empty edge sequence
+    unattached_or_unreachable: null, including the diagonal of an unattached county
+  diagnostics:
+    unattached: county_geoid and no_usable_node_within_limit code
+    disconnected: source_county_geoid, destination_county_geoid and no_directed_road_path code
+resource_behavior:
+  input: verify graph hash before streaming JSON rows
+  retained_graph: node coordinates, directed edge routing fields, turn rules and small source metadata
+  released_graph: shape polylines, drawing tags, and other non-routing metadata
+  algorithm: one RoadRouter index and one multi-target search per attached origin county
+  memory_reporting: loaded counts and RSS before the matrix, followed by each completed origin
+  host_metrics: progress output only; never included in canonical artifact identity
+  budget: explicit CLI memory-growth budget, checked during load and between origins
+publication:
+  atomic: complete compressed temporary file, fsync, then same-directory replace
+  failure: existing output remains unchanged
+  successful_build: does not establish all-county connectivity or economic qualification
+  consumer: commodity qualifier consumes this artifact directly; no separate path export

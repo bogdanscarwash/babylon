@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 
 use babylon_persistence::{
-    ObserverCountyEconomyV1, ObserverEconomySnapshotV1, ProductionSnapshotV1,
+    ObserverCountyEconomyV1, ObserverEconomySnapshotV1, ProductionSnapshotV2,
 };
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -93,16 +93,36 @@ pub struct MaterialGoodChoice {
     pub unit: String,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum MapLens {
     /// Schematic relationships, without a numeric county encoding.
-    #[default]
     Relationships,
+    Workforce(WorkforceMetric),
     Qcew(EconomyMetric),
     Material {
         kind: MaterialLensKind,
         good: Option<MaterialGoodKey>,
     },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WorkforceMetric {
+    Employed,
+    Reserve,
+}
+impl WorkforceMetric {
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Employed => "Modeled employed",
+            Self::Reserve => "Modeled reserve",
+        }
+    }
+}
+impl Default for MapLens {
+    fn default() -> Self {
+        Self::Workforce(WorkforceMetric::Employed)
+    }
 }
 
 impl MapLens {
@@ -112,6 +132,7 @@ impl MapLens {
     pub fn label_for_log(&self, snapshot: Option<&ObserverEconomySnapshotV1>) -> String {
         match self {
             Self::Relationships => "Supply relationships".to_owned(),
+            Self::Workforce(metric) => metric.label().to_owned(),
             Self::Qcew(metric) => metric.label().to_owned(),
             Self::Material { kind, good } => snapshot
                 .and_then(|snapshot| material_choices(snapshot, *kind).ok())
@@ -295,7 +316,7 @@ pub fn material_choices(
     let mut choices = BTreeMap::new();
     match kind {
         MaterialLensKind::ProducedThisPeriod => {
-            for site in &production.sites {
+            for site in production.sites.iter().flat_map(|site| &site.processes) {
                 add_choice(
                     &mut choices,
                     &site.output_good_id,
@@ -380,6 +401,9 @@ pub fn project_map_lens(
             .collect();
         return result;
     }
+    if let MapLens::Workforce(metric) = lens {
+        return project_workforce(snapshot, *metric, result);
+    }
     let MapLens::Material { kind, good } = lens else {
         return result;
     };
@@ -418,6 +442,64 @@ pub fn project_map_lens(
     result
 }
 
+fn project_workforce(
+    snapshot: &ObserverEconomySnapshotV1,
+    metric: WorkforceMetric,
+    mut result: MapLensProjection,
+) -> MapLensProjection {
+    result.label = metric.label().into();
+    result.unit = "people".into();
+    result.evidence = if snapshot.resolve_tick == 0 {
+        "DESIGNED | modeled workforce at foundation"
+    } else {
+        "DERIVED | committed modeled workforce"
+    };
+    let Some(production) = snapshot
+        .production
+        .as_ref()
+        .filter(|_| snapshot.visibility == babylon_persistence::ObserverVisibilityV1::FullObserver)
+    else {
+        result.unavailable = LensUnavailable::CapabilityUnavailable;
+        return result;
+    };
+    result.unavailable = LensUnavailable::NotModeled;
+    let mut identities = std::collections::BTreeSet::new();
+    for account in &production.staffing_accounts {
+        let Some(site) = production
+            .sites
+            .iter()
+            .find(|site| site.id == account.site_id)
+        else {
+            result.counties.clear();
+            result.unavailable = LensUnavailable::InvalidObservation;
+            return result;
+        };
+        if !identities.insert((&account.pool_id, &account.site_id, &account.unit_id))
+            || account.employed.checked_add(account.reserve) != Some(account.labor_force)
+            || snapshot.resolve_tick.checked_add(1) != Some(account.next_opening_period)
+            || (snapshot.resolve_tick == 0) != account.completed.is_none()
+            || account
+                .completed
+                .as_ref()
+                .is_some_and(|completed| completed.period != snapshot.resolve_tick)
+        {
+            result.counties.clear();
+            result.unavailable = LensUnavailable::InvalidObservation;
+            return result;
+        }
+        let quantity = match metric {
+            WorkforceMetric::Employed => account.employed,
+            WorkforceMetric::Reserve => account.reserve,
+        };
+        if add_quantity(&mut result.counties, &site.county_geoid, Some(quantity)).is_err() {
+            result.counties.clear();
+            result.unavailable = LensUnavailable::Arithmetic;
+            return result;
+        }
+    }
+    result
+}
+
 fn add_quantity(
     counties: &mut BTreeMap<String, CountyLensReading>,
     county: &str,
@@ -438,24 +520,26 @@ fn add_quantity(
 }
 
 fn project_material_counties(
-    production: &ProductionSnapshotV1,
+    production: &ProductionSnapshotV2,
     kind: MaterialLensKind,
     good: &MaterialGoodKey,
 ) -> Result<BTreeMap<String, CountyLensReading>, MapLensError> {
     let mut counties = BTreeMap::new();
     match kind {
         MaterialLensKind::ProducedThisPeriod => {
-            for site in &production.sites {
-                if good.matches(&site.output_good_id, &site.output_unit_id) {
-                    let produced = site
-                        .produced_batches
-                        .map(|batches| {
-                            batches
-                                .checked_mul(site.output_per_batch)
-                                .ok_or(MapLensError::Arithmetic)
-                        })
-                        .transpose()?;
-                    add_quantity(&mut counties, &site.county_geoid, produced)?;
+            for owner in &production.sites {
+                for site in &owner.processes {
+                    if good.matches(&site.output_good_id, &site.output_unit_id) {
+                        let produced = site
+                            .produced_batches
+                            .map(|batches| {
+                                batches
+                                    .checked_mul(site.output_per_batch)
+                                    .ok_or(MapLensError::Arithmetic)
+                            })
+                            .transpose()?;
+                        add_quantity(&mut counties, &owner.county_geoid, produced)?;
+                    }
                 }
             }
         }
@@ -511,9 +595,8 @@ fn project_material_counties(
 #[cfg(test)]
 mod tests {
     #[test]
-    fn relationships_are_the_default_without_fabricating_numeric_county_readings() {
-        let lens = super::MapLens::default();
-        assert_eq!(lens, super::MapLens::Relationships);
+    fn relationships_do_not_fabricate_numeric_county_readings() {
+        let lens = super::MapLens::Relationships;
         let observation = snapshot();
         for observation in [None, Some(&observation)] {
             let projection = super::project_map_lens(observation, &lens);
@@ -526,7 +609,7 @@ mod tests {
 
     use super::*;
     use babylon_persistence::{
-        ObserverVisibilityV1, ProductionFreightV1, ProductionRouteV1, ProductionSiteV1,
+        ObserverVisibilityV1, ProductionFreightV2, ProductionRouteV2, ProductionSiteV2,
         ProductionStockV1,
     };
 
@@ -537,21 +620,13 @@ mod tests {
         }
     }
 
-    fn site(id: &str, county: &str, good: char, quantity: u64) -> ProductionSiteV1 {
-        ProductionSiteV1 {
+    fn site(id: &str, county: &str, good: char, quantity: u64) -> ProductionSiteV2 {
+        ProductionSiteV2 {
             id: id.into(),
             county_geoid: county.into(),
             name: id.into(),
             industry_code: "331".into(),
             observed_employment: None,
-            output_good_id: key(good).good_id,
-            output_unit_id: key(good).unit_id,
-            output_good: format!("Good {good}"),
-            output_unit: "kg".into(),
-            output_per_batch: 5,
-            available_batches: 10,
-            planned_batches: Some(2),
-            produced_batches: Some(2),
             inventory: vec![ProductionStockV1 {
                 good_id: key(good).good_id,
                 unit_id: key(good).unit_id,
@@ -559,8 +634,22 @@ mod tests {
                 unit: "kg".into(),
                 quantity,
             }],
-            inputs: vec![],
-            labor: vec![],
+            role: babylon_persistence::ProductionSiteRoleV2::Production,
+            sector_code: "31-33".into(),
+            processes: vec![babylon_persistence::ProductionProcessV2 {
+                id: "fixture-process".into(),
+                name: "Fixture process".into(),
+                output_good_id: key(good).good_id,
+                output_unit_id: key(good).unit_id,
+                output_good: format!("Good {good}"),
+                output_unit: "kg".into(),
+                output_per_batch: 5,
+                available_batches: 10,
+                planned_batches: Some(2),
+                produced_batches: Some(2),
+                inputs: vec![],
+                labor: vec![],
+            }],
         }
     }
 
@@ -574,7 +663,12 @@ mod tests {
             envelope_digest: Some("b".repeat(64)),
             visibility: ObserverVisibilityV1::FullObserver,
             counties: vec![],
-            production: Some(ProductionSnapshotV1 {
+            production: Some(ProductionSnapshotV2 {
+                content_authority_sha256: "a".repeat(64),
+                road_source: None,
+                physical_edges: Vec::new(),
+                merchant_handling_accounts: Vec::new(),
+                final_demand_accounts: Vec::new(),
                 freight_capacity_accounts: Vec::new(),
                 material_balance: None,
                 labor_accounts: Vec::new(),
@@ -586,8 +680,12 @@ mod tests {
                     site("other", "26163", 'b', 500),
                     site("buyer", "26099", 'b', 0),
                 ],
-                routes: vec![ProductionRouteV1 {
-                    corridor_legs: Vec::new(),
+                routes: vec![ProductionRouteV2 {
+                    physical_edge_ids: Vec::new(),
+                    distance_mm: None,
+                    transport_kind: babylon_persistence::ProductionRouteTransportV2::Staged,
+                    grams_per_unit: 1000,
+                    stages: Vec::new(),
                     id: "route".into(),
                     supplier_site_id: "source".into(),
                     buyer_site_id: "buyer".into(),
@@ -603,7 +701,10 @@ mod tests {
                     realized: 60,
                     backlog: 10,
                 }],
-                freight: vec![ProductionFreightV1 {
+                freight: vec![ProductionFreightV2 {
+                    current_stage_index: 0,
+                    grams_per_unit: 1000,
+                    mass_grams: 1000,
                     id: "lot".into(),
                     route_id: "route".into(),
                     source_site_id: "source".into(),
@@ -651,10 +752,76 @@ mod tests {
     }
 
     #[test]
+    fn modeled_workforce_counts_the_owner_once_across_processes_and_refuses_preview() {
+        use babylon_persistence::{ProductionStaffingAccountV1, ProductionStaffingSubjectV1};
+        let mut snapshot = snapshot();
+        snapshot.resolve_tick = 0;
+        let production = snapshot.production.as_mut().unwrap();
+        let mut second_process = production.sites[0].processes[0].clone();
+        second_process.id = "another-process".into();
+        second_process.output_good_id = "different-output".into();
+        production.sites[0].processes.push(second_process);
+        production
+            .staffing_accounts
+            .push(ProductionStaffingAccountV1 {
+                pool_id: "owner-pool".into(),
+                site_id: "source".into(),
+                unit_id: "hours".into(),
+                subject: ProductionStaffingSubjectV1 {
+                    scenario: "fixture".into(),
+                    local_name: "owner-pool".into(),
+                },
+                hours_per_person: 100,
+                labor_force: 20,
+                employed: 12,
+                reserve: 8,
+                previous_unretained_hours: 0,
+                next_opening_period: 1,
+                next_opening_hours: 1200,
+                completed: None,
+            });
+        assert_eq!(
+            MapLens::default(),
+            MapLens::Workforce(WorkforceMetric::Employed)
+        );
+        assert_eq!(
+            project_map_lens(Some(&snapshot), &MapLens::default()).county("26163"),
+            CountyLensReading::Available(12)
+        );
+        assert_eq!(
+            project_map_lens(
+                Some(&snapshot),
+                &MapLens::Workforce(WorkforceMetric::Reserve)
+            )
+            .county("26163"),
+            CountyLensReading::Available(8)
+        );
+        assert_eq!(
+            project_map_lens(Some(&snapshot), &MapLens::default()).county("26099"),
+            CountyLensReading::Unavailable(LensUnavailable::NotModeled)
+        );
+        snapshot.visibility = ObserverVisibilityV1::KnownPreview;
+        let restricted = project_map_lens(Some(&snapshot), &MapLens::default());
+        assert!(restricted.counties.is_empty());
+        assert_eq!(
+            restricted.unavailable,
+            LensUnavailable::CapabilityUnavailable
+        );
+        snapshot.visibility = ObserverVisibilityV1::FullObserver;
+        let production = snapshot.production.as_mut().unwrap();
+        production
+            .staffing_accounts
+            .push(production.staffing_accounts[0].clone());
+        let duplicate = project_map_lens(Some(&snapshot), &MapLens::default());
+        assert!(duplicate.counties.is_empty());
+        assert_eq!(duplicate.unavailable, LensUnavailable::InvalidObservation);
+    }
+
+    #[test]
     fn foundation_unavailable_and_committed_zero_are_distinct() {
         let mut snapshot = snapshot();
         let site = &mut snapshot.production.as_mut().unwrap().sites[0];
-        site.produced_batches = None;
+        site.processes[0].produced_batches = None;
         snapshot.resolve_tick = 0;
         let projected =
             project_map_lens(Some(&snapshot), &lens(MaterialLensKind::ProducedThisPeriod));
@@ -662,7 +829,7 @@ mod tests {
             projected.county("26163"),
             CountyLensReading::Unavailable(LensUnavailable::NoProductionPeriod)
         );
-        snapshot.production.as_mut().unwrap().sites[0].produced_batches = Some(0);
+        snapshot.production.as_mut().unwrap().sites[0].processes[0].produced_batches = Some(0);
         snapshot.resolve_tick = 1;
         assert_eq!(
             project_map_lens(Some(&snapshot), &lens(MaterialLensKind::ProducedThisPeriod))
@@ -695,7 +862,7 @@ mod tests {
     #[test]
     fn multiplication_and_county_sum_overflow_refuse_the_whole_reading() {
         let mut snapshot = snapshot();
-        snapshot.production.as_mut().unwrap().sites[0].output_per_batch = u64::MAX;
+        snapshot.production.as_mut().unwrap().sites[0].processes[0].output_per_batch = u64::MAX;
         assert_eq!(
             project_map_lens(Some(&snapshot), &lens(MaterialLensKind::ProducedThisPeriod))
                 .unavailable,
@@ -717,7 +884,7 @@ mod tests {
     #[test]
     fn identities_are_required_even_when_labels_match() {
         let mut snapshot = snapshot();
-        snapshot.production.as_mut().unwrap().sites[0]
+        snapshot.production.as_mut().unwrap().sites[0].processes[0]
             .output_good_id
             .clear();
         let result = project_map_lens(Some(&snapshot), &lens(MaterialLensKind::ProducedThisPeriod));
@@ -741,7 +908,7 @@ mod tests {
         let historical = snapshot();
         let mut live = historical.clone();
         live.resolve_tick = 2;
-        live.production.as_mut().unwrap().sites[0].produced_batches = Some(7);
+        live.production.as_mut().unwrap().sites[0].processes[0].produced_batches = Some(7);
         let selection = lens(MaterialLensKind::ProducedThisPeriod);
         assert_eq!(
             project_map_lens(Some(&historical), &selection).county("26163"),

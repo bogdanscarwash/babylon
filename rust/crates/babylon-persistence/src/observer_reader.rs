@@ -59,7 +59,7 @@ pub struct ObserverEconomySnapshotV1 {
     pub envelope_digest: Option<String>,
     pub visibility: ObserverVisibilityV1,
     pub counties: Vec<ObserverCountyEconomyV1>,
-    pub production: Option<crate::ProductionSnapshotV1>,
+    pub production: Option<crate::ProductionSnapshotV2>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -187,6 +187,14 @@ impl ObserverEconomyReaderV1 {
             .read_only(true)
             .start()
             .map_err(|_| ObserverEconomyErrorV1::Database)?;
+        if self.visibility == ObserverVisibilityV1::FullObserver {
+            // Authentication reconstructs the captured statewide circuit in Rust
+            // between queries. Bound that work like material runtime reads while
+            // retaining the five-second SQL, lock and connection limits.
+            transaction
+                .batch_execute("SET LOCAL idle_in_transaction_session_timeout = '120s'")
+                .map_err(|_| ObserverEconomyErrorV1::Database)?;
+        }
         let foundation = transaction.query_opt("SELECT campaign_id, foundation_sha256, scenario_sha256 FROM public.v_observer_economy_foundation_v1 WHERE campaign_id = $1", &[campaign.as_uuid()]).map_err(|_| ObserverEconomyErrorV1::Database)?.ok_or(ObserverEconomyErrorV1::CampaignAbsent)?;
         let found_campaign: uuid::Uuid = foundation
             .try_get(0)
@@ -699,7 +707,10 @@ mod tests {
     fn material_headers_bind_the_matching_graph_and_graph_only_is_separate() {
         let (graph, scenario) = graph_only_observer_identity().unwrap();
         assert!(validate_observer_graph(None, &graph, &scenario).is_ok());
-        for preset in MICHIGAN_CONTENT_PRESETS_V1 {
+        for preset in MICHIGAN_CONTENT_PRESETS_V1
+            .into_iter()
+            .filter(|preset| !preset.delivery().is_statewide())
+        {
             let entry = preset.admitted(&crate::test_support::catalog()).unwrap();
             assert!(validate_observer_graph(
                 Some(&entry),
@@ -710,7 +721,10 @@ mod tests {
             let baseline_only =
                 validate_observer_graph(None, &entry.graph_digest, &entry.scenario_digest);
             assert_eq!(baseline_only, Err(ObserverEconomyErrorV1::ScenarioMismatch));
-            for other in MICHIGAN_CONTENT_PRESETS_V1 {
+            for other in MICHIGAN_CONTENT_PRESETS_V1
+                .into_iter()
+                .filter(|preset| !preset.delivery().is_statewide())
+            {
                 let other = other.admitted(&crate::test_support::catalog()).unwrap();
                 assert_eq!(
                     validate_observer_graph(

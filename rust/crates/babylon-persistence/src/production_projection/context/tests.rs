@@ -5,7 +5,7 @@ use crate::{
     production_projection::project_material_observation_v1,
 };
 
-fn opening() -> ProductionSnapshotV1 {
+fn opening() -> ProductionSnapshotV2 {
     let preset = MichiganDeliveryPresetV1::Standard;
     let foundation = MichiganContentPresetV1::new_campaign(preset)
         .create_foundation(&crate::test_support::catalog())
@@ -25,7 +25,7 @@ fn five_designed_processes_share_four_cited_observed_contexts_without_allocating
     let mut snapshot = opening();
     let before = snapshot.clone();
     attach_observed_context_v1(
-        &MichiganContentPresetV1::FourWeekStandardV6
+        &MichiganContentPresetV1::FourWeekStandardV7
             .admitted(&crate::test_support::catalog())
             .unwrap(),
         ObserverVisibilityV1::FullObserver,
@@ -58,7 +58,13 @@ fn five_designed_processes_share_four_cited_observed_contexts_without_allocating
         assert_eq!(context.evidence_class, ArchiveEvidenceClassV1::Observed);
         assert_eq!(context.vintage, 2024);
         assert_eq!(context.sector_code, "31-33");
-        assert_eq!(context.artifact_sha256, QCEW_SECTORS_ARTIFACT_SHA256_V1);
+        assert_eq!(
+            context.artifact_sha256,
+            crate::test_support::catalog()
+                .owner_source(&context.county_geoid, &context.sector_code)
+                .unwrap()
+                .sector_artifact_sha256
+        );
         assert_eq!(context.source_sha256.len(), 64);
         assert!(context
             .source_file
@@ -79,57 +85,54 @@ fn five_designed_processes_share_four_cited_observed_contexts_without_allocating
 }
 
 #[test]
-fn source_identity_mismatch_or_missing_subject_refuses_without_partial_publication() {
+fn missing_or_misidentified_visible_owner_refuses_without_partial_publication() {
     let catalog = crate::test_support::catalog();
-    let sectors = michigan_county_sectors_v1().unwrap();
-    let sector = sectors
-        .rows()
-        .iter()
-        .find(|row| row.county_geoid() == "26163" && row.sector_code().as_str() == "31-33")
+    let admitted = MichiganContentPresetV1::FourWeekStandardV7
+        .admitted(&catalog)
         .unwrap();
-    let site = catalog.site("wayne-primary-metal").unwrap();
-    let industry = catalog.industry_for_site(site).unwrap();
-    for field in 0..3 {
-        let mut changed = industry.clone();
-        match field {
-            0 => changed.source_sha256.replace_range(..1, "x"),
-            1 => changed.source_file.push_str(" changed"),
-            _ => changed.area_fips = "26099".to_owned(),
-        }
-        assert_eq!(
-            checked_context(sector, &changed, catalog.source_url()),
-            Err(ProductionProjectionErrorV1::Content)
-        );
+    for mutate in [
+        |snapshot: &mut ProductionSnapshotV2| {
+            snapshot.sites.pop();
+        },
+        |snapshot: &mut ProductionSnapshotV2| {
+            snapshot.sites[0].sector_code = "11".to_owned();
+        },
+        |snapshot: &mut ProductionSnapshotV2| {
+            snapshot.sites[0].processes.clear();
+        },
+    ] {
+        let mut snapshot = opening();
+        mutate(&mut snapshot);
+        let unchanged = snapshot.clone();
+        assert!(attach_observed_context_v1(
+            &admitted,
+            ObserverVisibilityV1::FullObserver,
+            &mut snapshot
+        )
+        .is_err());
+        assert_eq!(snapshot, unchanged);
     }
-    let snapshot = opening();
-    let missing = sectors
-        .rows()
-        .iter()
-        .filter(|row| row.county_geoid() != "26163")
-        .cloned()
-        .collect::<Vec<_>>();
-    assert_eq!(
-        context_rows(&catalog, &missing, &snapshot),
-        Err(ProductionProjectionErrorV1::Content)
-    );
-    let mut absent = snapshot.clone();
-    absent.sites.pop();
-    let unchanged = absent.clone();
-    assert!(attach_observed_context_v1(
-        &MichiganContentPresetV1::FourWeekStandardV6
-            .admitted(&crate::test_support::catalog())
-            .unwrap(),
-        ObserverVisibilityV1::FullObserver,
-        &mut absent
-    )
-    .is_err());
-    assert_eq!(absent, unchanged);
+}
+
+#[test]
+fn captured_disclosure_retains_absent_source_cells_instead_of_inventing_zero() {
+    let catalog = crate::test_support::catalog();
+    let mut source = catalog.owners()[0].clone();
+    source.annual_avg_emplvl = None;
+    source.total_annual_wages = None;
+    source.annual_avg_wkly_wage = None;
+    let absent = checked_context(&source, catalog.source_url()).unwrap();
+    assert_eq!(absent.annual_avg_emplvl, None);
+    source.annual_avg_emplvl = Some(0);
+    let zero = checked_context(&source, catalog.source_url()).unwrap();
+    assert_eq!(zero.annual_avg_emplvl, Some(0));
+    assert_ne!(absent, zero);
 }
 
 #[test]
 fn preview_clears_context_for_both_current_staffed_presets() {
     let mut disclosed = opening();
-    let admitted = MichiganContentPresetV1::FourWeekStandardV6
+    let admitted = MichiganContentPresetV1::FourWeekStandardV7
         .admitted(&crate::test_support::catalog())
         .unwrap();
     attach_observed_context_v1(
@@ -138,7 +141,10 @@ fn preview_clears_context_for_both_current_staffed_presets() {
         &mut disclosed,
     )
     .unwrap();
-    for preset in crate::michigan_content::MICHIGAN_CONTENT_PRESETS_V1 {
+    for preset in crate::michigan_content::MICHIGAN_CONTENT_PRESETS_V1
+        .into_iter()
+        .filter(|preset| !preset.delivery().is_statewide())
+    {
         for visibility in [
             ObserverVisibilityV1::FullObserver,
             ObserverVisibilityV1::KnownPreview,
@@ -168,8 +174,8 @@ fn delivery_presets_share_observed_context_without_assigning_jobs() {
     let mut standard = opening();
     let mut delayed = standard.clone();
     for (preset, snapshot) in [
-        (MichiganContentPresetV1::FourWeekStandardV6, &mut standard),
-        (MichiganContentPresetV1::FourWeekDelayedV6, &mut delayed),
+        (MichiganContentPresetV1::FourWeekStandardV7, &mut standard),
+        (MichiganContentPresetV1::FourWeekDelayedV7, &mut delayed),
     ] {
         attach_observed_context_v1(
             &preset.admitted(&crate::test_support::catalog()).unwrap(),
@@ -178,22 +184,24 @@ fn delivery_presets_share_observed_context_without_assigning_jobs() {
         )
         .unwrap();
     }
-    assert_eq!(standard, delayed);
+    assert_eq!(standard.observed_contexts, delayed.observed_contexts);
+    assert_eq!(
+        standard.process_attributions.len(),
+        delayed.process_attributions.len()
+    );
+    assert_ne!(
+        standard.process_attributions[0].scenario_artifact_sha256,
+        delayed.process_attributions[0].scenario_artifact_sha256
+    );
 }
 
 #[test]
 fn source_and_visible_site_order_does_not_change_context_or_duplicate_wayne_jobs() {
     let catalog = crate::test_support::catalog();
-    let sectors = michigan_county_sectors_v1().unwrap();
     let mut snapshot = opening();
-    let expected = context_rows(&catalog, sectors.rows(), &snapshot).unwrap();
+    let expected = context_rows(&catalog, &snapshot).unwrap();
     snapshot.sites.reverse();
-    let mut reversed = sectors.rows().to_vec();
-    reversed.reverse();
-    assert_eq!(
-        context_rows(&catalog, &reversed, &snapshot).unwrap(),
-        expected
-    );
+    assert_eq!(context_rows(&catalog, &snapshot).unwrap(), expected);
     assert_eq!(
         expected
             .0

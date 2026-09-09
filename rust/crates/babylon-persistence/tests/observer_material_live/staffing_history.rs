@@ -27,7 +27,7 @@ impl Fixture {
     fn new() -> Self {
         let mut target = DisposableTarget::create();
         let campaign = CampaignId::from_uuid(Uuid::from_u128(41_101));
-        let foundation = MichiganContentPresetV1::FourWeekDelayedV6
+        let foundation = MichiganContentPresetV1::FourWeekDelayedV7
             .create_foundation(&crate::test_support::catalog())
             .unwrap();
         let foundation_digest = foundation.digest();
@@ -115,7 +115,7 @@ fn held_staffing_history_survives_advance_reopen_and_does_not_mutate_authority()
     assert_foundation(&fixture);
     fixture.advance_to(2);
     let held = fixture.read(2);
-    let digest = held.production_evidence_digest().unwrap();
+    let digest = held.production_evidence_digest().unwrap().unwrap();
     let accounts = &held.production.as_ref().unwrap().staffing_accounts;
     assert_eq!(accounts.len(), 5);
     assert!(accounts.iter().all(|row| row
@@ -141,7 +141,7 @@ fn held_staffing_history_survives_advance_reopen_and_does_not_mutate_authority()
         assert_eq!(snapshot.resolve_tick, tick);
         assert_known_material_absence(&fixture.preview.snapshot(fixture.campaign, tick).unwrap());
         if tick == 2 {
-            assert_eq!(snapshot.production_evidence_digest(), Some(digest));
+            assert_eq!(snapshot.production_evidence_digest().unwrap(), Some(digest));
             assert_eq!(snapshot, held);
         }
         assert_eq!(fixture.runtime.session().completed_tick(), 4);

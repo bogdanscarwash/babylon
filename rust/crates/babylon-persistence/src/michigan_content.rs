@@ -5,7 +5,7 @@
 
 use babylon_graph::stable_state::StableGraphStateV1;
 use babylon_kernel::sha256_of;
-use babylon_tick::material_world::MaterialWorldRegisterV2;
+use babylon_tick::material_world::MaterialWorldRegisterV3;
 use babylon_tick::{material_replay::MaterialLaborV1, material_staffing::StaffingCompositionV1};
 
 use crate::{
@@ -17,16 +17,20 @@ use crate::{
 /// Graph content revisions are separate from the logical delivery choice.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MichiganContentPresetV1 {
-    FourWeekStandardV6,
-    FourWeekDelayedV6,
-    SharedFreightAmpleV6,
-    SharedFreightConstrainedV6,
+    FourWeekStandardV7,
+    FourWeekDelayedV7,
+    SharedFreightAmpleV7,
+    SharedFreightConstrainedV7,
+    StatewideBaselineV7,
+    StatewideFreightConstraintV7,
+    StatewidePackagingShortageV7,
+    StatewideBothV7,
 }
 
-/// All admitted content revisions retain this exact bounded physical projection.
+/// All admitted presets use the same normalized physical projection.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MichiganPhysicalProjectionV1 {
-    FiveProcessV1,
+    NormalizedV2,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -44,31 +48,38 @@ impl std::fmt::Display for MichiganContentErrorV1 {
 }
 impl std::error::Error for MichiganContentErrorV1 {}
 
-pub const MICHIGAN_CONTENT_PRESETS_V1: [MichiganContentPresetV1; 4] = [
-    MichiganContentPresetV1::FourWeekStandardV6,
-    MichiganContentPresetV1::FourWeekDelayedV6,
-    MichiganContentPresetV1::SharedFreightAmpleV6,
-    MichiganContentPresetV1::SharedFreightConstrainedV6,
+pub const MICHIGAN_CONTENT_PRESETS_V1: [MichiganContentPresetV1; 8] = [
+    MichiganContentPresetV1::FourWeekStandardV7,
+    MichiganContentPresetV1::FourWeekDelayedV7,
+    MichiganContentPresetV1::SharedFreightAmpleV7,
+    MichiganContentPresetV1::SharedFreightConstrainedV7,
+    MichiganContentPresetV1::StatewideBaselineV7,
+    MichiganContentPresetV1::StatewideFreightConstraintV7,
+    MichiganContentPresetV1::StatewidePackagingShortageV7,
+    MichiganContentPresetV1::StatewideBothV7,
 ];
 
 impl MichiganContentPresetV1 {
     #[must_use]
     pub const fn new_campaign(delivery: MichiganDeliveryPresetV1) -> Self {
         match delivery {
-            MichiganDeliveryPresetV1::Standard => Self::FourWeekStandardV6,
-            MichiganDeliveryPresetV1::Delayed => Self::FourWeekDelayedV6,
-            MichiganDeliveryPresetV1::SharedFreightAmple => Self::SharedFreightAmpleV6,
-            MichiganDeliveryPresetV1::SharedFreightConstrained => Self::SharedFreightConstrainedV6,
+            MichiganDeliveryPresetV1::Standard => Self::FourWeekStandardV7,
+            MichiganDeliveryPresetV1::Delayed => Self::FourWeekDelayedV7,
+            MichiganDeliveryPresetV1::SharedFreightAmple => Self::SharedFreightAmpleV7,
+            MichiganDeliveryPresetV1::SharedFreightConstrained => Self::SharedFreightConstrainedV7,
+            MichiganDeliveryPresetV1::StatewideBaseline => Self::StatewideBaselineV7,
+            MichiganDeliveryPresetV1::StatewideFreightConstraint => {
+                Self::StatewideFreightConstraintV7
+            }
+            MichiganDeliveryPresetV1::StatewidePackagingShortage => {
+                Self::StatewidePackagingShortageV7
+            }
+            MichiganDeliveryPresetV1::StatewideBoth => Self::StatewideBothV7,
         }
     }
     #[must_use]
     pub const fn id(self) -> &'static str {
-        match self {
-            Self::FourWeekStandardV6 => "michigan-material-standard-v6",
-            Self::FourWeekDelayedV6 => "michigan-material-delayed-v6",
-            Self::SharedFreightAmpleV6 => "michigan-material-shared-freight-ample-v6",
-            Self::SharedFreightConstrainedV6 => "michigan-material-shared-freight-constrained-v6",
-        }
+        self.delivery().id()
     }
     #[must_use]
     pub fn from_id(id: &str) -> Option<Self> {
@@ -79,10 +90,18 @@ impl MichiganContentPresetV1 {
     #[must_use]
     pub const fn delivery(self) -> MichiganDeliveryPresetV1 {
         match self {
-            Self::FourWeekStandardV6 => MichiganDeliveryPresetV1::Standard,
-            Self::FourWeekDelayedV6 => MichiganDeliveryPresetV1::Delayed,
-            Self::SharedFreightAmpleV6 => MichiganDeliveryPresetV1::SharedFreightAmple,
-            Self::SharedFreightConstrainedV6 => MichiganDeliveryPresetV1::SharedFreightConstrained,
+            Self::FourWeekStandardV7 => MichiganDeliveryPresetV1::Standard,
+            Self::FourWeekDelayedV7 => MichiganDeliveryPresetV1::Delayed,
+            Self::SharedFreightAmpleV7 => MichiganDeliveryPresetV1::SharedFreightAmple,
+            Self::SharedFreightConstrainedV7 => MichiganDeliveryPresetV1::SharedFreightConstrained,
+            Self::StatewideBaselineV7 => MichiganDeliveryPresetV1::StatewideBaseline,
+            Self::StatewideFreightConstraintV7 => {
+                MichiganDeliveryPresetV1::StatewideFreightConstraint
+            }
+            Self::StatewidePackagingShortageV7 => {
+                MichiganDeliveryPresetV1::StatewidePackagingShortage
+            }
+            Self::StatewideBothV7 => MichiganDeliveryPresetV1::StatewideBoth,
         }
     }
     #[must_use]
@@ -92,10 +111,14 @@ impl MichiganContentPresetV1 {
     #[must_use]
     pub const fn label(self) -> &'static str {
         match self {
-            Self::FourWeekStandardV6 => "Michigan: standard delivery (four active cohorts)",
-            Self::FourWeekDelayedV6 => "Michigan: delayed delivery (four active cohorts)",
-            Self::SharedFreightAmpleV6 => "Shared freight — ample",
-            Self::SharedFreightConstrainedV6 => "Shared freight — constrained",
+            Self::FourWeekStandardV7 => "Michigan: standard delivery (four active cohorts)",
+            Self::FourWeekDelayedV7 => "Michigan: delayed delivery (four active cohorts)",
+            Self::SharedFreightAmpleV7 => "Shared freight — ample",
+            Self::SharedFreightConstrainedV7 => "Shared freight — constrained",
+            Self::StatewideBaselineV7 => "Statewide Michigan — baseline",
+            Self::StatewideFreightConstraintV7 => "Statewide Michigan — freight constraint",
+            Self::StatewidePackagingShortageV7 => "Statewide Michigan — packaging shortage",
+            Self::StatewideBothV7 => "Statewide Michigan — both constraints",
         }
     }
     /// # Errors
@@ -119,7 +142,7 @@ impl MichiganContentPresetV1 {
         self,
         catalog: &MichiganMaterialCatalogV1,
     ) -> Result<MaterialRuntimeFoundationV2, MichiganContentErrorV1> {
-        crate::sector_bundle::foundation::create_bundle_foundation_v6(
+        crate::sector_bundle::foundation::create_bundle_foundation_v7(
             self.id(),
             self.delivery(),
             catalog,
@@ -130,7 +153,10 @@ impl MichiganContentPresetV1 {
         self,
         catalog: &MichiganMaterialCatalogV1,
     ) -> Result<MichiganContentAdmissionV1, MichiganContentErrorV1> {
-        let foundation = self.build_foundation(catalog)?;
+        let catalog = catalog
+            .with_preset(self.delivery())
+            .map_err(|_| MichiganContentErrorV1::MaterialSource)?;
+        let foundation = self.build_foundation(&catalog)?;
         let graph = foundation.graph_foundation();
         let component_identity = MaterialComponentIdentityV1::from_foundation(graph);
         let graph_digest = sha256_of(graph.canonical_bytes());
@@ -162,7 +188,7 @@ impl MichiganContentPresetV1 {
             foundation_graph,
             staffing,
             component_identity,
-            physical_projection: MichiganPhysicalProjectionV1::FiveProcessV1,
+            physical_projection: MichiganPhysicalProjectionV1::NormalizedV2,
         })
     }
 }
@@ -177,7 +203,7 @@ pub struct MichiganContentAdmissionV1 {
     pub(crate) graph_digest: [u8; 32],
     pub(crate) scenario_digest: [u8; 32],
     pub(crate) canonical_bytes: Vec<u8>,
-    pub(crate) register: MaterialWorldRegisterV2,
+    pub(crate) register: MaterialWorldRegisterV3,
     pub(crate) foundation_graph: StableGraphStateV1,
     pub(crate) staffing: StaffingCompositionV1,
     pub(crate) component_identity: MaterialComponentIdentityV1,
@@ -238,7 +264,7 @@ pub fn admit_michigan_content_v1(
 ) -> Result<MichiganContentAdmissionV1, MichiganContentErrorV1> {
     let preset = validate_michigan_header_v1(preset_id, horizon, content, foundation, tick)?;
     let wrapped = stored_defines_from_material_foundation(foundation_bytes)?;
-    let decoded = crate::sector_bundle::foundation::decode_stored_bundle_defines_v3(
+    let decoded = crate::sector_bundle::foundation::decode_stored_bundle_defines_v4(
         wrapped,
         sha256_of(wrapped),
     )

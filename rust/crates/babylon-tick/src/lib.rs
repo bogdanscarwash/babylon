@@ -1867,7 +1867,7 @@ impl<C> ExecutionIdentity<'_, C> {
 struct TickTransactionResult {
     report: TickReport,
     replay: Option<replay_session::ReplayIdentityArtifactsV2>,
-    material: Option<material_world::PreparedMaterialWorldV3>,
+    material: Option<material_world::PreparedMaterialWorldV4>,
 }
 
 struct TransactionPrelude {
@@ -1887,7 +1887,7 @@ struct ExecutedRules<G> {
     audit_receipts: Vec<AuditReceipt>,
     choice_receipts: Vec<choice_receipt::ChoiceReceiptV1>,
     committed_events: Vec<committed_event::CommittedEventV2>,
-    material: Option<material_world::PreparedMaterialWorldV3>,
+    material: Option<material_world::PreparedMaterialWorldV4>,
 }
 
 enum TickTransactionError {
@@ -1943,7 +1943,7 @@ pub(crate) fn run_prepared_replay_tick<G, C>(
 ) -> Result<
     (
         IdentifiedTickReportV2,
-        Option<material_world::PreparedMaterialWorldV3>,
+        Option<material_world::PreparedMaterialWorldV4>,
     ),
     ReplayTickError,
 >

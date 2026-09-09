@@ -1,8 +1,15 @@
 # Designed Michigan material parameters. Existing campaigns retain their stored values.
 # One simulation period is four weeks; weekly rates are multiplied once when a campaign starts.
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 TICK_DURATION_DAYS = 28 # Fixed supported interval.
 HORIZON_PERIODS = 16 # Campaign stop bound: 1..=16 four-week periods.
+
+# Designed transport masses; these are not observed item weights.
+[regional_mass]
+EVIDENCE_CLASS = "Designed"
+KILOGRAM_GRAMS_PER_UNIT = 1000
+PANEL_GRAMS_PER_UNIT = 10000
+SUBASSEMBLY_GRAMS_PER_UNIT = 20000
 
 [staffing]
 WORK_HOURS_PER_PERSON_WEEK = 40 # Positive integer, at most 168 hours.
@@ -85,3 +92,276 @@ ORDERED_UNITS = 200
 [shared_freight]
 AMPLE_UNITS_PER_WEEK = 200 # 800 kg per 28-day period.
 CONSTRAINED_UNITS_PER_WEEK = 40 # 160 kg per 28-day period.
+
+# Statewide physical catalogue. All coefficients and stocks below are Designed.
+# QCEW establishments qualify a template; observed jobs never set these amounts.
+[statewide]
+EVIDENCE_CLASS = "Designed"
+FINITE_ORDER_PERIODS = 4
+TERMINAL_ATTACHMENT_LIMIT_METERS = 50000
+
+[statewide.EXPERIMENT]
+FREIGHT_CAPACITY_KEY = "mackinac-bridge-freight"
+CONSTRAINED_GRAMS_PER_PERIOD = 1000000 # Designed 1 tonne per 28-day period.
+FOOD_PROCESS_KEY = "26097-31-33-prepared_food" # Mackinac County manufacturing.
+PACKAGING_GOOD_KEY = "paper_packaging"
+SHORTAGE_OPENING_UNITS = 80 # kg; the baseline opening stock is 160 kg.
+
+[transport]
+EVIDENCE_CLASS = "Designed"
+ROAD_TRAVEL_PERIODS = 1 # One journey stage, irrespective of its physical edge count.
+TRUCK_GROSS_WEIGHT_KG = 40000
+TRUCK_HEIGHT_MM = 4000
+TRUCK_WIDTH_MM = 2550
+TRUCK_LENGTH_MM = 16500
+DEFAULT_MAXHEIGHT_MM = 4000 # Designed bound for OSM maxheight=default; not measured clearance.
+ROAD_CAPACITY_GRAMS_PER_PERIOD = 100000000
+EXTRACTION_BUFFER_DEGREES_E7 = 100000 # 0.01 degree angular clipping buffer.
+
+[merchant]
+EVIDENCE_CLASS = "Designed"
+HANDLING_GRAMS_PER_PERIOD = 5000000
+LABOR_HOURS_PER_KG = 1
+LABOR_HOURS_PER_ITEM = 10
+EMPLOYED_PEOPLE = 20
+RESERVE_PEOPLE = 4
+
+[commodity.crop_feedstock]
+UNIT = "kg"
+GRAMS_PER_UNIT = 1000
+DISPOSITION = "finite_opening"
+[commodity.animal_feedstock]
+UNIT = "kg"
+GRAMS_PER_UNIT = 1000
+DISPOSITION = "finite_opening"
+[commodity.timber_feedstock]
+UNIT = "kg"
+GRAMS_PER_UNIT = 1000
+DISPOSITION = "finite_opening"
+[commodity.hydrocarbon_deposit]
+UNIT = "kg"
+GRAMS_PER_UNIT = 1000
+DISPOSITION = "finite_opening"
+[commodity.ore_deposit]
+UNIT = "kg"
+GRAMS_PER_UNIT = 1000
+DISPOSITION = "finite_opening"
+[commodity.mineral_deposit]
+UNIT = "kg"
+GRAMS_PER_UNIT = 1000
+DISPOSITION = "finite_opening"
+[commodity.water]
+UNIT = "kg"
+GRAMS_PER_UNIT = 1000
+DISPOSITION = "finite_opening"
+[commodity.grain]
+UNIT = "kg"
+GRAMS_PER_UNIT = 1000
+DISPOSITION = "traded"
+[commodity.animal_products]
+UNIT = "kg"
+GRAMS_PER_UNIT = 1000
+DISPOSITION = "traded"
+[commodity.logs]
+UNIT = "kg"
+GRAMS_PER_UNIT = 1000
+DISPOSITION = "traded"
+[commodity.hydrocarbon_feedstock]
+UNIT = "kg"
+GRAMS_PER_UNIT = 1000
+DISPOSITION = "traded"
+[commodity.metal_ore]
+UNIT = "kg"
+GRAMS_PER_UNIT = 1000
+DISPOSITION = "traded"
+[commodity.mineral_feedstock]
+UNIT = "kg"
+GRAMS_PER_UNIT = 1000
+DISPOSITION = "traded"
+[commodity.prepared_food]
+UNIT = "kg"
+GRAMS_PER_UNIT = 1000
+DISPOSITION = "traded"
+[commodity.packaged_beverages]
+UNIT = "kg"
+GRAMS_PER_UNIT = 1000
+DISPOSITION = "traded"
+[commodity.wood_products]
+UNIT = "kg"
+GRAMS_PER_UNIT = 1000
+DISPOSITION = "traded"
+[commodity.paper_packaging]
+UNIT = "kg"
+GRAMS_PER_UNIT = 1000
+DISPOSITION = "traded"
+[commodity.industrial_chemicals]
+UNIT = "kg"
+GRAMS_PER_UNIT = 1000
+DISPOSITION = "traded"
+[commodity.metal_stock]
+UNIT = "kg"
+GRAMS_PER_UNIT = 1000
+DISPOSITION = "traded"
+[commodity.metal_parts]
+UNIT = "kg"
+GRAMS_PER_UNIT = 1000
+DISPOSITION = "traded"
+[commodity.machinery]
+UNIT = "item"
+GRAMS_PER_UNIT = 50000
+DISPOSITION = "traded"
+[commodity.electrical_goods]
+UNIT = "item"
+GRAMS_PER_UNIT = 15000
+DISPOSITION = "traded"
+[commodity.household_wares]
+UNIT = "item"
+GRAMS_PER_UNIT = 15000
+DISPOSITION = "traded"
+
+# Finite opening resources support at most sixteen periods at nameplate capacity.
+# Traded inputs start with one period of stock and then depend on circulation.
+[template.grain]
+OUTPUT_GOOD = "grain"
+OUTPUT_UNITS_PER_BATCH = 100
+INPUT_UNITS_PER_BATCH = { crop_feedstock = 100 }
+OPENING_INPUT_UNITS = { crop_feedstock = 25600 }
+BATCHES_PER_WEEK = 4
+LABOR_HOURS_PER_BATCH = 20
+EMPLOYED_PEOPLE = 8
+RESERVE_PEOPLE = 4
+[template.animal_products]
+OUTPUT_GOOD = "animal_products"
+OUTPUT_UNITS_PER_BATCH = 50
+INPUT_UNITS_PER_BATCH = { animal_feedstock = 80 }
+OPENING_INPUT_UNITS = { animal_feedstock = 20480 }
+BATCHES_PER_WEEK = 4
+LABOR_HOURS_PER_BATCH = 40
+EMPLOYED_PEOPLE = 8
+RESERVE_PEOPLE = 4
+[template.logs]
+OUTPUT_GOOD = "logs"
+OUTPUT_UNITS_PER_BATCH = 100
+INPUT_UNITS_PER_BATCH = { timber_feedstock = 120 }
+OPENING_INPUT_UNITS = { timber_feedstock = 30720 }
+BATCHES_PER_WEEK = 4
+LABOR_HOURS_PER_BATCH = 40
+EMPLOYED_PEOPLE = 8
+RESERVE_PEOPLE = 4
+[template.hydrocarbon_feedstock]
+OUTPUT_GOOD = "hydrocarbon_feedstock"
+OUTPUT_UNITS_PER_BATCH = 100
+INPUT_UNITS_PER_BATCH = { hydrocarbon_deposit = 100 }
+OPENING_INPUT_UNITS = { hydrocarbon_deposit = 25600 }
+BATCHES_PER_WEEK = 4
+LABOR_HOURS_PER_BATCH = 60
+EMPLOYED_PEOPLE = 8
+RESERVE_PEOPLE = 4
+[template.metal_ore]
+OUTPUT_GOOD = "metal_ore"
+OUTPUT_UNITS_PER_BATCH = 100
+INPUT_UNITS_PER_BATCH = { ore_deposit = 100 }
+OPENING_INPUT_UNITS = { ore_deposit = 25600 }
+BATCHES_PER_WEEK = 4
+LABOR_HOURS_PER_BATCH = 60
+EMPLOYED_PEOPLE = 8
+RESERVE_PEOPLE = 4
+[template.mineral_feedstock]
+OUTPUT_GOOD = "mineral_feedstock"
+OUTPUT_UNITS_PER_BATCH = 100
+INPUT_UNITS_PER_BATCH = { mineral_deposit = 100 }
+OPENING_INPUT_UNITS = { mineral_deposit = 25600 }
+BATCHES_PER_WEEK = 4
+LABOR_HOURS_PER_BATCH = 40
+EMPLOYED_PEOPLE = 8
+RESERVE_PEOPLE = 4
+[template.prepared_food]
+OUTPUT_GOOD = "prepared_food"
+OUTPUT_UNITS_PER_BATCH = 100
+INPUT_UNITS_PER_BATCH = { grain = 60, animal_products = 20, paper_packaging = 10, water = 10 }
+OPENING_INPUT_UNITS = { grain = 960, animal_products = 320, paper_packaging = 160, water = 2560 }
+BATCHES_PER_WEEK = 4
+LABOR_HOURS_PER_BATCH = 40
+EMPLOYED_PEOPLE = 8
+RESERVE_PEOPLE = 4
+[template.packaged_beverages]
+OUTPUT_GOOD = "packaged_beverages"
+OUTPUT_UNITS_PER_BATCH = 100
+INPUT_UNITS_PER_BATCH = { grain = 10, water = 85, paper_packaging = 5 }
+OPENING_INPUT_UNITS = { grain = 160, water = 21760, paper_packaging = 80 }
+BATCHES_PER_WEEK = 4
+LABOR_HOURS_PER_BATCH = 40
+EMPLOYED_PEOPLE = 8
+RESERVE_PEOPLE = 4
+[template.wood_products]
+OUTPUT_GOOD = "wood_products"
+OUTPUT_UNITS_PER_BATCH = 80
+INPUT_UNITS_PER_BATCH = { logs = 100 }
+OPENING_INPUT_UNITS = { logs = 1600 }
+BATCHES_PER_WEEK = 4
+LABOR_HOURS_PER_BATCH = 40
+EMPLOYED_PEOPLE = 8
+RESERVE_PEOPLE = 4
+[template.paper_packaging]
+OUTPUT_GOOD = "paper_packaging"
+OUTPUT_UNITS_PER_BATCH = 90
+INPUT_UNITS_PER_BATCH = { logs = 100, water = 20 }
+OPENING_INPUT_UNITS = { logs = 1600, water = 5120 }
+BATCHES_PER_WEEK = 4
+LABOR_HOURS_PER_BATCH = 60
+EMPLOYED_PEOPLE = 8
+RESERVE_PEOPLE = 4
+[template.industrial_chemicals]
+OUTPUT_GOOD = "industrial_chemicals"
+OUTPUT_UNITS_PER_BATCH = 100
+INPUT_UNITS_PER_BATCH = { hydrocarbon_feedstock = 100, water = 20, mineral_feedstock = 10 }
+OPENING_INPUT_UNITS = { hydrocarbon_feedstock = 1600, water = 5120, mineral_feedstock = 160 }
+BATCHES_PER_WEEK = 4
+LABOR_HOURS_PER_BATCH = 60
+EMPLOYED_PEOPLE = 8
+RESERVE_PEOPLE = 4
+[template.metal_stock]
+OUTPUT_GOOD = "metal_stock"
+OUTPUT_UNITS_PER_BATCH = 80
+INPUT_UNITS_PER_BATCH = { metal_ore = 100, hydrocarbon_feedstock = 20, mineral_feedstock = 10 }
+OPENING_INPUT_UNITS = { metal_ore = 1600, hydrocarbon_feedstock = 320, mineral_feedstock = 160 }
+BATCHES_PER_WEEK = 4
+LABOR_HOURS_PER_BATCH = 80
+EMPLOYED_PEOPLE = 8
+RESERVE_PEOPLE = 4
+[template.metal_parts]
+OUTPUT_GOOD = "metal_parts"
+OUTPUT_UNITS_PER_BATCH = 60
+INPUT_UNITS_PER_BATCH = { metal_stock = 80 }
+OPENING_INPUT_UNITS = { metal_stock = 1280 }
+BATCHES_PER_WEEK = 4
+LABOR_HOURS_PER_BATCH = 60
+EMPLOYED_PEOPLE = 8
+RESERVE_PEOPLE = 4
+[template.machinery]
+OUTPUT_GOOD = "machinery"
+OUTPUT_UNITS_PER_BATCH = 1
+INPUT_UNITS_PER_BATCH = { metal_parts = 50 }
+OPENING_INPUT_UNITS = { metal_parts = 800 }
+BATCHES_PER_WEEK = 4
+LABOR_HOURS_PER_BATCH = 80
+EMPLOYED_PEOPLE = 8
+RESERVE_PEOPLE = 4
+[template.electrical_goods]
+OUTPUT_GOOD = "electrical_goods"
+OUTPUT_UNITS_PER_BATCH = 1
+INPUT_UNITS_PER_BATCH = { metal_parts = 10, industrial_chemicals = 5 }
+OPENING_INPUT_UNITS = { metal_parts = 160, industrial_chemicals = 80 }
+BATCHES_PER_WEEK = 4
+LABOR_HOURS_PER_BATCH = 80
+EMPLOYED_PEOPLE = 8
+RESERVE_PEOPLE = 4
+[template.household_wares]
+OUTPUT_GOOD = "household_wares"
+OUTPUT_UNITS_PER_BATCH = 1
+INPUT_UNITS_PER_BATCH = { wood_products = 10, metal_parts = 5 }
+OPENING_INPUT_UNITS = { wood_products = 160, metal_parts = 80 }
+BATCHES_PER_WEEK = 4
+LABOR_HOURS_PER_BATCH = 60
+EMPLOYED_PEOPLE = 8
+RESERVE_PEOPLE = 4

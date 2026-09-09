@@ -3,14 +3,14 @@ use std::collections::BTreeMap;
 
 use babylon_bsl::identity_codec::StableBslValueV1;
 use babylon_graph::{hypergraph_store::HypergraphStore, stable_element::StableElementKeyV1};
-use babylon_material_circuit::{MaterialCircuitStateV2, SiteIdV1};
+use babylon_material_circuit::{MaterialCircuitStateV3, SiteIdV1};
 use babylon_persistence::michigan_material::{
-    MichiganMaterialCatalogV1, MichiganMaterialProcessV1,
+    MichiganMaterialCatalogV1, MichiganMaterialInputV2, MichiganMaterialProcessV1,
 };
 use babylon_tick::{
     material_replay::PreparedMaterialTickV3,
     material_staffing::STAFFING_COMPOSITION_ID_V1,
-    material_world::{decode_material_receipts_v3, MaterialTickReceiptsV3},
+    material_world::{decode_material_receipts_v4, MaterialTickReceiptsV4},
     replay_session::SuccessfulEventV2,
 };
 use serde::Serialize;
@@ -157,7 +157,7 @@ fn total(mut values: impl Iterator<Item = u64>) -> Result<u64> {
 
 pub fn stock(
     catalog: &MichiganMaterialCatalogV1,
-    state: &MaterialCircuitStateV2,
+    state: &MaterialCircuitStateV3,
     site: SiteIdV1,
     good: &str,
 ) -> Result<u64> {
@@ -239,7 +239,7 @@ fn staffing(
     Ok(rows)
 }
 
-fn capacity(state: &MaterialCircuitStateV2, process: &MichiganMaterialProcessV1) -> Result<u64> {
+fn capacity(state: &MaterialCircuitStateV3, process: &MichiganMaterialProcessV1) -> Result<u64> {
     state
         .capacities
         .iter()
@@ -252,7 +252,7 @@ fn capacity(state: &MaterialCircuitStateV2, process: &MichiganMaterialProcessV1)
         .ok_or_else(|| contract("missing period capacity"))
 }
 
-fn labor(state: &MaterialCircuitStateV2, process: &MichiganMaterialProcessV1) -> Result<u64> {
+fn labor(state: &MaterialCircuitStateV3, process: &MichiganMaterialProcessV1) -> Result<u64> {
     state
         .labor
         .iter()
@@ -261,7 +261,7 @@ fn labor(state: &MaterialCircuitStateV2, process: &MichiganMaterialProcessV1) ->
         .ok_or_else(|| contract("missing period labor"))
 }
 
-fn plan(state: &MaterialCircuitStateV2, process: &MichiganMaterialProcessV1) -> u64 {
+fn plan(state: &MaterialCircuitStateV3, process: &MichiganMaterialProcessV1) -> u64 {
     state
         .production_commitments
         .iter()
@@ -278,9 +278,10 @@ fn minima(values: &[(&'static str, u64)]) -> Vec<&'static str> {
 }
 
 fn next_opening(
-    state: &MaterialCircuitStateV2,
+    state: &MaterialCircuitStateV3,
     process: &MichiganMaterialProcessV1,
     input: u64,
+    input_recipe: &MichiganMaterialInputV2,
     staffing: &Staffing,
 ) -> Result<Option<NextOpening>> {
     if state.period > PERIODS {
@@ -297,7 +298,7 @@ fn next_opening(
             "staffing request/labor does not match single-process account",
         ));
     }
-    let input_batches = input / process.input_quantity_per_batch;
+    let input_batches = input / input_recipe.quantity_per_batch;
     let labor_batches = labor_hours / process.labor_hours_per_batch;
     let material_requested_batches =
         staffing.current_unretained_hours / process.labor_hours_per_batch;
@@ -319,9 +320,10 @@ fn next_opening(
 }
 
 fn production(
-    receipts: &MaterialTickReceiptsV3,
-    opening: &MaterialCircuitStateV2,
+    receipts: &MaterialTickReceiptsV4,
+    opening: &MaterialCircuitStateV3,
     process: &MichiganMaterialProcessV1,
+    input_recipe: &MichiganMaterialInputV2,
 ) -> Result<Option<Production>> {
     let receipt = receipts
         .production
@@ -343,7 +345,7 @@ fn production(
     Ok(Some(Production {
         planned_batches: planned,
         produced_batches: row.produced_batches,
-        consumed_input_units: multiply(row.produced_batches, process.input_quantity_per_batch)?,
+        consumed_input_units: multiply(row.produced_batches, input_recipe.quantity_per_batch)?,
         produced_output_units: multiply(row.produced_batches, process.output_quantity_per_batch)?,
         used_labor_hours: multiply(row.produced_batches, process.labor_hours_per_batch)?,
     }))
@@ -351,9 +353,9 @@ fn production(
 
 fn processes(
     case: &Case,
-    opening: &MaterialCircuitStateV2,
-    closing: &MaterialCircuitStateV2,
-    receipts: &MaterialTickReceiptsV3,
+    opening: &MaterialCircuitStateV3,
+    closing: &MaterialCircuitStateV3,
+    receipts: &MaterialTickReceiptsV4,
     mut staffing: BTreeMap<String, Staffing>,
 ) -> Result<Vec<ProcessRow>> {
     let catalog = &case.catalog;
@@ -361,31 +363,37 @@ fn processes(
         .processes()
         .iter()
         .map(|process| {
+            let [input_recipe] = process.inputs.as_slice() else {
+                return Err(contract(
+                    "regional comparison expects one input per process",
+                ));
+            };
             let seed = catalog
                 .staffing()
                 .pools
                 .iter()
-                .find(|pool| pool.process_key == process.key)
+                .find(|pool| {
+                    pool.site_key == process.site_key && pool.process_keys.contains(&process.key)
+                })
                 .ok_or_else(|| contract("unbound process workforce"))?;
             let staffing = staffing
                 .remove(&seed.local_name())
                 .ok_or_else(|| contract("missing process staffing receipt"))?;
             let input = catalog
-                .good(&process.input_good_key)
+                .good(&input_recipe.good_key)
                 .ok_or_else(|| contract("missing input good"))?;
             let output = catalog
                 .good(&process.output_good_key)
                 .ok_or_else(|| contract("missing output good"))?;
-            let closing_input =
-                stock(catalog, closing, process.site_id(), &process.input_good_key)?;
+            let closing_input = stock(catalog, closing, process.site_id(), &input_recipe.good_key)?;
             Ok(ProcessRow {
                 process: process.key.clone(),
                 site_id: hex(&process.site_id().as_bytes()),
-                input_good: process.input_good_key.clone(),
+                input_good: input_recipe.good_key.clone(),
                 output_good: process.output_good_key.clone(),
                 input_unit: input.unit_key.clone(),
                 output_unit: output.unit_key.clone(),
-                opening_input: stock(catalog, opening, process.site_id(), &process.input_good_key)?,
+                opening_input: stock(catalog, opening, process.site_id(), &input_recipe.good_key)?,
                 closing_input,
                 opening_output: stock(
                     catalog,
@@ -401,8 +409,14 @@ fn processes(
                 )?,
                 completed_capacity_batches: capacity(opening, process)?,
                 completed_available_labor_hours: labor(opening, process)?,
-                completed_receipt: production(receipts, opening, process)?,
-                next_opening: next_opening(closing, process, closing_input, &staffing)?,
+                completed_receipt: production(receipts, opening, process, input_recipe)?,
+                next_opening: next_opening(
+                    closing,
+                    process,
+                    closing_input,
+                    input_recipe,
+                    &staffing,
+                )?,
                 staffing,
             })
         })
@@ -410,7 +424,7 @@ fn processes(
 }
 
 fn transit(
-    state: &MaterialCircuitStateV2,
+    state: &MaterialCircuitStateV3,
     route: babylon_material_circuit::RouteIdV2,
 ) -> Vec<Transit> {
     state
@@ -421,16 +435,51 @@ fn transit(
             lot_id: hex(&row.lot_id.as_bytes()),
             quantity: row.quantity,
             dispatch_period: row.dispatch_period,
-            arrival_period: row.leg_arrival_period,
+            arrival_period: row.stage_arrival_period,
         })
         .collect()
 }
 
+fn regional_route_capacity(
+    opening: &MaterialCircuitStateV3,
+    route: babylon_material_circuit::RouteIdV2,
+    grams_per_unit: u64,
+) -> Result<(u16, u64)> {
+    let stages: Vec<_> = opening
+        .route_stages
+        .iter()
+        .filter(|stage| stage.route_id == route)
+        .collect();
+    let [stage] = stages.as_slice() else {
+        return Err(contract(
+            "regional comparison expects one timed stage per route",
+        ));
+    };
+    let memberships: Vec<_> = opening
+        .route_stage_capacities
+        .iter()
+        .filter(|row| row.route_id == route && row.stage_index == stage.stage_index)
+        .collect();
+    let [membership] = memberships.as_slice() else {
+        return Err(contract(
+            "regional comparison expects one mass principal per route",
+        ));
+    };
+    let capacity_grams = opening
+        .corridor_capacities
+        .iter()
+        .find(|row| row.corridor_id == membership.corridor_id && row.period == opening.period)
+        .map(|row| row.available_grams)
+        .ok_or_else(|| contract("missing corridor mass capacity"))?;
+    let capacity = capacity_grams / grams_per_unit;
+    Ok((stage.travel_periods, capacity))
+}
+
 fn routes(
     case: &Case,
-    opening: &MaterialCircuitStateV2,
-    closing: &MaterialCircuitStateV2,
-    receipts: &MaterialTickReceiptsV3,
+    opening: &MaterialCircuitStateV3,
+    closing: &MaterialCircuitStateV3,
+    receipts: &MaterialTickReceiptsV4,
     processes: &[ProcessRow],
 ) -> Result<Vec<RouteRow>> {
     case.catalog
@@ -477,23 +526,14 @@ fn routes(
                 .ordered
                 .checked_sub(prior.shipped)
                 .ok_or_else(|| contract("order shipped exceeds ordered"))?;
-            let leg = opening
-                .route_legs
-                .iter()
-                .find(|leg| leg.route_id == route.id())
-                .ok_or_else(|| contract("missing route leg"))?;
-            let capacity = opening
-                .corridor_capacities
-                .iter()
-                .find(|row| row.corridor_id == leg.corridor_id && row.period == opening.period)
-                .map(|row| row.available)
-                .ok_or_else(|| contract("missing corridor capacity"))?;
+            let (travel_periods, capacity) =
+                regional_route_capacity(opening, route.id(), good.grams_per_unit)?;
             Ok(RouteRow {
                 route: route.key.clone(),
                 route_id: hex(&route.id().as_bytes()),
                 good: route.good_key.clone(),
                 unit: good.unit_key.clone(),
-                travel_periods: leg.travel_periods,
+                travel_periods,
                 capacity,
                 ordered: order.ordered,
                 unshipped_before: unshipped,
@@ -534,7 +574,7 @@ fn routes(
         .collect()
 }
 
-fn conserved(case: &Case, state: &MaterialCircuitStateV2) -> Result<(u64, u64)> {
+fn conserved(case: &Case, state: &MaterialCircuitStateV3) -> Result<(u64, u64)> {
     let mut metal = 0;
     let mut food = 0;
     for (key, weight, is_metal) in [
@@ -579,11 +619,11 @@ fn conserved(case: &Case, state: &MaterialCircuitStateV2) -> Result<(u64, u64)> 
 
 pub fn period(
     case: &Case,
-    opening: &MaterialCircuitStateV2,
+    opening: &MaterialCircuitStateV3,
     candidate: &PreparedMaterialTickV3<HypergraphStore>,
 ) -> Result<PeriodRow> {
     let closing = candidate.material().register().state();
-    let receipts = decode_material_receipts_v3(candidate.material().receipt_bytes())
+    let receipts = decode_material_receipts_v4(candidate.material().receipt_bytes())
         .map_err(|error| contract(format!("material receipt decode: {error:?}")))?;
     let identity = candidate.identity();
     if receipts.resolve_tick != opening.period || closing.period != opening.period + 1 {

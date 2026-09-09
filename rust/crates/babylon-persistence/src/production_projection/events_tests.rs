@@ -1,12 +1,15 @@
 use super::*;
 use babylon_material_circuit::{ArrivalReceiptV1, DeliveryReceiptV1, RealizationReceiptV1};
 
-fn delivery_receipts(order_id: OrderIdV1) -> MaterialTickReceiptsV3 {
-    MaterialTickReceiptsV3 {
+fn delivery_receipts(order_id: OrderIdV1) -> MaterialTickReceiptsV4 {
+    MaterialTickReceiptsV4 {
         resolve_tick: 2,
         production: Vec::new(),
         dispatches: Vec::new(),
         losses: Vec::new(),
+        handling: Vec::new(),
+        local_fulfillments: Vec::new(),
+        local_transfers: Vec::new(),
         // Two distinct original receipt rows on the same exact principal.
         arrivals: [3, 5]
             .map(|quantity| ArrivalReceiptV1 { order_id, quantity })

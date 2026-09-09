@@ -1,5 +1,7 @@
 //! Native campaign catalog and read-only comparison of separately committed worlds.
 
+mod aggregate;
+
 use std::collections::BTreeSet;
 use std::fmt::Write as _;
 use std::fs::{self, OpenOptions};
@@ -8,7 +10,7 @@ use std::path::{Path, PathBuf};
 
 use babylon_persistence::{
     observer_reader::CampaignSummaryV1, CampaignId, ObserverEconomyReaderV1,
-    ObserverEconomySnapshotV1, ObserverVisibilityV1, ProductionSiteV1, ProductionStaffingAccountV1,
+    ObserverEconomySnapshotV1, ObserverVisibilityV1, ProductionStaffingAccountV1,
 };
 use bevy::ecs::{query::QueryData, system::SystemParam};
 use bevy::input_focus::tab_navigation::TabGroup;
@@ -432,7 +434,10 @@ fn commands(
                     continue;
                 }
                 if selected.durable_tick < session.viewed_tick {
-                    browser.status = format!("That campaign is committed only through period {}. Inspect that period or an earlier period first.", selected.durable_tick);
+                    browser.status = format!(
+                        "That campaign is committed only through period {}. Inspect that period or an earlier period first.",
+                        selected.durable_tick
+                    );
                     continue;
                 }
                 let target = match parse_campaign(&selected.id) {
@@ -592,7 +597,7 @@ fn matches_comparison(snapshot: &ObserverEconomySnapshotV1, scope: &BrowserScope
         && (snapshot.resolve_tick == 0 || snapshot.tick_content_hash.is_some())
 }
 
-fn receipt_text(site: &ProductionSiteV1, tick: u64) -> String {
+fn receipt_text(site: &babylon_persistence::ProductionProcessV2, tick: u64) -> String {
     match (site.produced_batches, site.planned_batches) {
         (Some(produced), Some(planned)) => format!("{produced}/{planned} batches produced/planned"),
         (None, None) if tick == 0 => "no production receipt at foundation".into(),
@@ -712,9 +717,40 @@ fn compare_staffing(
     }
 }
 
+fn comparison_cohort_ids<'a>(
+    current: &'a babylon_persistence::ProductionSnapshotV2,
+    selected_site: Option<&str>,
+) -> BTreeSet<&'a str> {
+    let mut cohort_ids = BTreeSet::new();
+    if let Some(site) = selected_site.and_then(|id| current.sites.iter().find(|site| site.id == id))
+    {
+        cohort_ids.insert(site.id.as_str());
+        for (_, neighbor) in crate::production_brief::dependency_sites(site, current)
+            .into_iter()
+            .take(6)
+        {
+            cohort_ids.insert(neighbor.id.as_str());
+        }
+    } else {
+        for id in current
+            .sites
+            .iter()
+            .map(|site| site.id.as_str())
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .take(6)
+        {
+            cohort_ids.insert(id);
+        }
+    }
+    cohort_ids
+}
+
 fn comparison_text(
     active: &ObserverEconomySnapshotV1,
     other: &ObserverEconomySnapshotV1,
+    selected_site: Option<&str>,
+    lens: &crate::map_economy_lens::MapLens,
 ) -> String {
     let mut output = format!(
         "Period {} | {}\nCurrent {}\nCompared {}\n\n",
@@ -726,36 +762,66 @@ fn comparison_text(
         active.campaign_id,
         other.campaign_id
     );
+    if active.visibility != ObserverVisibilityV1::FullObserver
+        || other.visibility != ObserverVisibilityV1::FullObserver
+        || active.resolve_tick != other.resolve_tick
+    {
+        output.push_str(
+            "Material comparison unavailable: matching full-observer periods are required.",
+        );
+        return output;
+    }
     let (Some(current), Some(compared)) = (&active.production, &other.production) else {
         output.push_str("Material observations are unavailable in this perspective. Missing knowledge is not zero production.");
         return output;
     };
     writeln!(output, "{}\n{}\nRead the same committed period in both campaigns. No world is advanced by this comparison.\nCounts read current / compared. Signed difference = current minus compared.\n", current.scenario_label, compared.scenario_label).expect("writing to a String cannot fail");
+    aggregate::write(&mut output, active, other, lens);
+    let cohort_ids = comparison_cohort_ids(current, selected_site);
+    writeln!(output, "Comparing {} disclosed cohorts; select a cohort in Circuit to compare its neighborhood. Materials retain their exact good and unit identities.", cohort_ids.len()).expect("String write");
     output.push_str(&crate::production_freight::comparison_reading(
         active.resolve_tick,
         current,
         compared,
+        selected_site,
     ));
-    for site in &current.sites {
+    for site in current
+        .sites
+        .iter()
+        .filter(|site| cohort_ids.contains(site.id.as_str()))
+    {
         writeln!(output, "{} | NAICS {}", site.name, site.industry_code)
             .expect("writing to a String cannot fail");
         let Some(other_site) = compared.sites.iter().find(|other| other.id == site.id) else {
             output.push_str("Comparable cohort unavailable.\n\n");
             continue;
         };
-        writeln!(
-            output,
-            "CURRENT  {}\nCOMPARED  {}",
-            receipt_text(site, active.resolve_tick),
-            receipt_text(other_site, other.resolve_tick)
-        )
-        .expect("writing to a String cannot fail");
-        writeln!(
-            output,
-            "Next-period capacity: {} / {} batches (current / compared).",
-            site.available_batches, other_site.available_batches
-        )
-        .expect("writing to a String cannot fail");
+        for process in &site.processes {
+            let Some(other_process) = other_site.processes.iter().find(|other| {
+                other.id == process.id
+                    && other.output_good_id == process.output_good_id
+                    && other.output_unit_id == process.output_unit_id
+            }) else {
+                writeln!(output, "{}: compatible process unavailable.", process.name)
+                    .expect("String write");
+                continue;
+            };
+            writeln!(
+                output,
+                "{} / {} ({})\nCURRENT  {}\nCOMPARED  {}\nNext-period capacity: {} / {} batches.",
+                process.name,
+                process.output_good,
+                process.output_unit,
+                receipt_text(process, active.resolve_tick),
+                receipt_text(other_process, other.resolve_tick),
+                process.available_batches,
+                other_process.available_batches
+            )
+            .expect("String write");
+        }
+        if site.processes.is_empty() {
+            output.push_str("Merchant owner / handling and distribution; no productive output.\n");
+        }
         for stock in &site.inventory {
             let other_stock = other_site
                 .inventory
@@ -779,7 +845,7 @@ fn comparison_text(
         );
         output.push('\n');
     }
-    output.push_str("Modeled workforce counts are people, separate from observed QCEW jobs and labor-hours. Staffing receipts do not record wage payments or class migration. Terminal goods are unsold on-hand stocks.");
+    output.push_str("Modeled workforce counts are people, separate from observed QCEW jobs and labor-hours. Staffing receipts do not record wage payments or class migration. Retail fulfillment records delivery to final demand; remaining inventory stays on hand.");
     output
 }
 
@@ -796,6 +862,7 @@ struct BrowserPaintInput<'w> {
     ui: Res<'w, ObserverUiState>,
     browser: Res<'w, CampaignBrowserState>,
     frame: Res<'w, ObserverFrame>,
+    navigation: Option<Res<'w, crate::production::ProductionNavigation>>,
 }
 
 fn paint(
@@ -810,6 +877,7 @@ fn paint(
         ui,
         browser,
         frame,
+        navigation,
     } = input;
     let valid = browser
         .context
@@ -853,6 +921,8 @@ fn paint(
     }
     if browser.is_changed()
         || frame.is_changed()
+        || ui.is_changed()
+        || navigation.as_ref().is_some_and(DetectChanges::is_changed)
         || context_changed
         || previous.comparison_visible != comparison_visible
     {
@@ -870,7 +940,14 @@ fn paint(
                 && browser.comparison_target != Some(context.campaign)
                 && matches_comparison(compared, &scope)
             {
-                comparison_text(active, compared)
+                comparison_text(
+                    active,
+                    compared,
+                    navigation
+                        .as_ref()
+                        .and_then(|navigation| navigation.selected_site.as_deref()),
+                    &ui.lens,
+                )
             } else {
                 "Waiting for the current campaign's matching observation...".into()
             }
@@ -1020,6 +1097,7 @@ impl Plugin for CampaignBrowserPlugin {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use babylon_persistence::ProductionSiteV2;
 
     fn staffing_snapshot(
         campaign: CampaignId,
@@ -1029,7 +1107,7 @@ mod tests {
         separations: u64,
     ) -> ObserverEconomySnapshotV1 {
         use babylon_persistence::{
-            CompletedProductionStaffingV1, ProductionSnapshotV1, ProductionStaffingSubjectV1,
+            CompletedProductionStaffingV1, ProductionSnapshotV2, ProductionStaffingSubjectV1,
         };
 
         let site_id = "1".repeat(64);
@@ -1043,27 +1121,38 @@ mod tests {
             envelope_digest: (tick > 0).then(|| "d".repeat(64)),
             visibility: ObserverVisibilityV1::FullObserver,
             counties: Vec::new(),
-            production: Some(ProductionSnapshotV1 {
+            production: Some(ProductionSnapshotV2 {
+                content_authority_sha256: "a".repeat(64),
+                road_source: None,
+                physical_edges: Vec::new(),
+                merchant_handling_accounts: Vec::new(),
+                final_demand_accounts: Vec::new(),
                 freight_capacity_accounts: Vec::new(),
                 scenario_label: "Staffing comparison fixture".into(),
                 horizon_period: 520,
-                sites: vec![ProductionSiteV1 {
+                sites: vec![ProductionSiteV2 {
                     id: site_id.clone(),
                     county_geoid: "26163".into(),
                     name: "Wayne manufacturing cohort".into(),
                     industry_code: "331".into(),
                     observed_employment: Some(20),
-                    output_good_id: "4".repeat(64),
-                    output_unit_id: "5".repeat(64),
-                    output_good: "steel".into(),
-                    output_unit: "kg".into(),
-                    output_per_batch: 10,
-                    available_batches: 8,
-                    planned_batches: (tick > 0).then_some(8),
-                    produced_batches: (tick > 0).then_some(7),
                     inventory: Vec::new(),
-                    inputs: Vec::new(),
-                    labor: Vec::new(),
+                    role: babylon_persistence::ProductionSiteRoleV2::Production,
+                    sector_code: "31-33".into(),
+                    processes: vec![babylon_persistence::ProductionProcessV2 {
+                        id: "fixture-process".into(),
+                        name: "Fixture process".into(),
+                        output_good_id: "4".repeat(64),
+                        output_unit_id: "5".repeat(64),
+                        output_good: "steel".into(),
+                        output_unit: "kg".into(),
+                        output_per_batch: 10,
+                        available_batches: 8,
+                        planned_batches: (tick > 0).then_some(8),
+                        produced_batches: (tick > 0).then_some(7),
+                        inputs: Vec::new(),
+                        labor: Vec::new(),
+                    }],
                 }],
                 staffing_accounts: vec![ProductionStaffingAccountV1 {
                     pool_id: "2".repeat(64),
@@ -1135,6 +1224,362 @@ mod tests {
     fn painted_comparison(app: &mut App, text: Entity) -> String {
         app.update();
         app.world().get::<Text>(text).unwrap().0.clone()
+    }
+
+    fn edit_comparison_production(
+        app: &mut App,
+        mut edit: impl FnMut(&mut babylon_persistence::ProductionSnapshotV2),
+    ) {
+        edit(
+            app.world_mut()
+                .resource_mut::<ObserverFrame>()
+                .0
+                .as_mut()
+                .unwrap()
+                .production
+                .as_mut()
+                .unwrap(),
+        );
+        edit(
+            app.world_mut()
+                .resource_mut::<CampaignBrowserState>()
+                .comparison
+                .as_mut()
+                .unwrap()
+                .production
+                .as_mut()
+                .unwrap(),
+        );
+    }
+
+    fn retail_comparison_app(tick: u64) -> (App, Entity) {
+        use babylon_persistence::{
+            CompletedProductionFinalDemandV2, ProductionFinalDemandAccountV2,
+            ProductionFinalDemandOrderV2, ProductionSiteRoleV2, ProductionStockV1,
+        };
+        let (mut app, text) = staffing_comparison_app(tick);
+        edit_comparison_production(&mut app, |snapshot| {
+            let mut retailer = snapshot.sites[0].clone();
+            retailer.id = "retailer".into();
+            retailer.role = ProductionSiteRoleV2::Retail;
+            retailer.processes.clear();
+            let mut workforce = snapshot.staffing_accounts[0].clone();
+            workforce.pool_id = "retail-workforce".into();
+            workforce.site_id.clone_from(&retailer.id);
+            snapshot.staffing_accounts.push(workforce);
+            for (unit_id, unit, stock, fulfilled) in [("5", "kg", 10, 3), ("6", "tonne", 900, 11)] {
+                let fulfilled = if tick == 0 { 0 } else { fulfilled };
+                retailer.inventory.push(ProductionStockV1 {
+                    good_id: "4".repeat(64),
+                    unit_id: unit_id.repeat(64),
+                    good: "Steel".into(),
+                    unit: unit.into(),
+                    quantity: stock,
+                });
+                snapshot
+                    .final_demand_accounts
+                    .push(ProductionFinalDemandAccountV2 {
+                        demand_principal_id: format!("demand-{unit}"),
+                        county_geoid: "26163".into(),
+                        good_id: "4".repeat(64),
+                        unit_id: unit_id.repeat(64),
+                        good: "Steel".into(),
+                        unit: unit.into(),
+                        ordered: 20,
+                        fulfilled,
+                        outstanding: 20 - fulfilled,
+                        retail_stock_on_hand: stock,
+                        retailer_site_ids: vec![retailer.id.clone()],
+                        orders: vec![ProductionFinalDemandOrderV2 {
+                            order_id: format!("retail-order-{unit}"),
+                            retailer_site_id: retailer.id.clone(),
+                            ordered: 20,
+                            fulfilled,
+                            outstanding: 20 - fulfilled,
+                        }],
+                        completed: (tick > 0).then_some(CompletedProductionFinalDemandV2 {
+                            period: tick,
+                            opening_fulfilled: 0,
+                            newly_fulfilled: fulfilled,
+                            closing_fulfilled: fulfilled,
+                        }),
+                    });
+            }
+            snapshot.sites.push(retailer);
+        });
+        app.world_mut().resource_mut::<ObserverUiState>().lens =
+            crate::map_economy_lens::MapLens::Material {
+                kind: crate::map_economy_lens::MaterialLensKind::OnHand,
+                good: Some(crate::map_economy_lens::MaterialGoodKey {
+                    good_id: "4".repeat(64),
+                    unit_id: "5".repeat(64),
+                }),
+            };
+        (app, text)
+    }
+
+    #[test]
+    fn comparison_aggregate_covers_every_owner_once_beyond_neighborhood_paging() {
+        let (mut app, text) = staffing_comparison_app(2);
+        edit_comparison_production(&mut app, |snapshot| {
+            for index in 0..7 {
+                let mut site = snapshot.sites[0].clone();
+                site.id = format!("owner-{index}");
+                site.processes[0].id = format!("process-{index}");
+                let mut workforce = snapshot.staffing_accounts[0].clone();
+                workforce.site_id.clone_from(&site.id);
+                workforce.pool_id = format!("workforce-{index}");
+                snapshot.sites.push(site);
+                snapshot.staffing_accounts.push(workforce);
+            }
+        });
+        app.world_mut()
+            .resource_mut::<CampaignBrowserState>()
+            .comparison
+            .as_mut()
+            .unwrap()
+            .production
+            .as_mut()
+            .unwrap()
+            .staffing_accounts
+            .reverse();
+        let reading = painted_comparison(&mut app, text);
+        assert!(reading.contains("MODELED CAMPAIGN TOTALS / 8 owners / 1 counties"));
+        assert_eq!(
+            reading
+                .matches("All modeled employed: 48 / 32 people")
+                .count(),
+            1
+        );
+        assert!(reading.contains("All modeled reserve: 32 / 48 people"));
+        assert!(reading.contains("Comparing 6 disclosed cohorts"));
+    }
+
+    #[test]
+    fn comparison_aggregate_refuses_duplicate_principals_and_incompatible_owner_coverage() {
+        for mismatch in [
+            "duplicate workforce",
+            "duplicate owner",
+            "owner coverage",
+            "missing workforce",
+            "bad balance",
+            "overflow",
+        ] {
+            let (mut app, text) = staffing_comparison_app(2);
+            {
+                let mut browser = app.world_mut().resource_mut::<CampaignBrowserState>();
+                let snapshot = browser
+                    .comparison
+                    .as_mut()
+                    .unwrap()
+                    .production
+                    .as_mut()
+                    .unwrap();
+                match mismatch {
+                    "duplicate workforce" => snapshot
+                        .staffing_accounts
+                        .push(snapshot.staffing_accounts[0].clone()),
+                    "duplicate owner" => snapshot.sites.push(snapshot.sites[0].clone()),
+                    "owner coverage" => snapshot.sites[0].county_geoid = "26001".into(),
+                    "missing workforce" => snapshot.staffing_accounts.clear(),
+                    "bad balance" => snapshot.staffing_accounts[0].reserve = 100,
+                    "overflow" => snapshot.staffing_accounts[0].employed = u64::MAX,
+                    _ => unreachable!(),
+                }
+            }
+            let reading = painted_comparison(&mut app, text);
+            assert!(
+                reading.contains("Aggregate workforce unavailable:"),
+                "{mismatch}: {reading}"
+            );
+            assert!(
+                !reading.contains("All modeled employed:"),
+                "{mismatch}: {reading}"
+            );
+        }
+    }
+
+    #[test]
+    fn comparison_aggregate_uses_the_exact_world_good_and_unit_and_repaints_selection() {
+        let (mut app, text) = retail_comparison_app(2);
+        let reading = painted_comparison(&mut app, text);
+        assert!(reading.contains("Selected material / Steel / kg"));
+        assert!(reading.contains("Inventory on hand: 10 / 10 kg"));
+        assert!(reading.contains("Delivered to end buyers to date: 3 / 3 kg"));
+        assert!(reading.contains("Unsold retail stock: 10 / 10 kg"));
+        if let crate::map_economy_lens::MapLens::Material {
+            good: Some(good), ..
+        } = &mut app.world_mut().resource_mut::<ObserverUiState>().lens
+        {
+            good.unit_id = "6".repeat(64);
+        }
+        let reading = painted_comparison(&mut app, text);
+        assert!(reading.contains("Inventory on hand: 900 / 900 tonne"));
+        assert!(reading.contains("Delivered to end buyers to date: 11 / 11 tonne"));
+        assert!(reading.contains("Unsold retail stock: 900 / 900 tonne"));
+        assert!(!reading.contains("Inventory on hand: 910"));
+        app.world_mut().resource_mut::<ObserverUiState>().lens =
+            crate::map_economy_lens::MapLens::default();
+        let reading = painted_comparison(&mut app, text);
+        assert!(reading.contains("Select an exact good and unit in World's material lens"));
+        assert!(!reading.contains("Delivered to end buyers to date:"));
+    }
+
+    #[test]
+    fn comparison_aggregate_refuses_missing_or_duplicate_selected_material_principals() {
+        for mismatch in [
+            "missing stock",
+            "duplicate stock",
+            "wrong unit",
+            "duplicate process",
+        ] {
+            let (mut app, text) = retail_comparison_app(2);
+            if mismatch == "duplicate process" {
+                if let crate::map_economy_lens::MapLens::Material { kind, .. } =
+                    &mut app.world_mut().resource_mut::<ObserverUiState>().lens
+                {
+                    *kind = crate::map_economy_lens::MaterialLensKind::ProducedThisPeriod;
+                }
+            }
+            {
+                let mut browser = app.world_mut().resource_mut::<CampaignBrowserState>();
+                let snapshot = browser
+                    .comparison
+                    .as_mut()
+                    .unwrap()
+                    .production
+                    .as_mut()
+                    .unwrap();
+                match mismatch {
+                    "missing stock" => {
+                        snapshot.sites[1].inventory.remove(0);
+                    }
+                    "duplicate stock" => {
+                        let duplicate = snapshot.sites[1].inventory[0].clone();
+                        snapshot.sites[1].inventory.push(duplicate);
+                    }
+                    "wrong unit" => snapshot.sites[1].inventory[0].unit_id = "7".repeat(64),
+                    "duplicate process" => {
+                        let duplicate = snapshot.sites[0].processes[0].clone();
+                        snapshot.sites[0].processes.push(duplicate);
+                    }
+                    _ => unreachable!(),
+                }
+            }
+            let reading = painted_comparison(&mut app, text);
+            assert!(
+                reading.contains("Selected material unavailable:"),
+                "{mismatch}: {reading}"
+            );
+            assert!(
+                !reading.contains("Inventory on hand:"),
+                "{mismatch}: {reading}"
+            );
+            assert!(
+                !reading.contains("Production this period:"),
+                "{mismatch}: {reading}"
+            );
+        }
+    }
+
+    #[test]
+    fn comparison_aggregate_distinguishes_zero_production_from_foundation() {
+        for tick in [0, 2] {
+            let (mut app, text) = retail_comparison_app(tick);
+            if let crate::map_economy_lens::MapLens::Material { kind, .. } =
+                &mut app.world_mut().resource_mut::<ObserverUiState>().lens
+            {
+                *kind = crate::map_economy_lens::MaterialLensKind::ProducedThisPeriod;
+            }
+            edit_comparison_production(&mut app, |snapshot| {
+                snapshot.sites[0].processes[0].produced_batches = (tick > 0).then_some(0);
+            });
+            let reading = painted_comparison(&mut app, text);
+            if tick == 0 {
+                assert!(reading.contains(
+                    "Selected material unavailable: foundation; no completed production period"
+                ));
+                assert!(!reading.contains("Production this period:"));
+            } else {
+                assert!(reading.contains("Production this period: 0 / 0 kg"));
+            }
+        }
+    }
+
+    #[test]
+    fn comparison_aggregate_refuses_unmatched_retail_principals_and_missing_periods() {
+        for mismatch in [
+            "order",
+            "county",
+            "duplicate",
+            "missing",
+            "receipt period",
+            "retailer",
+        ] {
+            let (mut app, text) = retail_comparison_app(2);
+            {
+                let mut browser = app.world_mut().resource_mut::<CampaignBrowserState>();
+                let rows = &mut browser
+                    .comparison
+                    .as_mut()
+                    .unwrap()
+                    .production
+                    .as_mut()
+                    .unwrap()
+                    .final_demand_accounts;
+                match mismatch {
+                    "order" => rows[0].orders[0].order_id = "different-order".into(),
+                    "county" => rows[0].county_geoid = "26001".into(),
+                    "duplicate" => rows.push(rows[0].clone()),
+                    "missing" => rows[0].completed = None,
+                    "receipt period" => rows[0].completed.as_mut().unwrap().period = 1,
+                    "retailer" => rows[0].retailer_site_ids = vec!["withheld".into()],
+                    _ => unreachable!(),
+                }
+            }
+            let reading = painted_comparison(&mut app, text);
+            assert!(
+                reading.contains("Retail totals unavailable:"),
+                "{mismatch}: {reading}"
+            );
+            assert!(
+                !reading.contains("Delivered to end buyers this period:"),
+                "{mismatch}: {reading}"
+            );
+            assert!(
+                !reading.contains("Unsold retail stock:"),
+                "{mismatch}: {reading}"
+            );
+        }
+    }
+
+    #[test]
+    fn comparison_aggregate_distinguishes_completed_zero_from_foundation() {
+        for tick in [0, 2] {
+            let (mut app, text) = retail_comparison_app(tick);
+            edit_comparison_production(&mut app, |snapshot| {
+                let row = &mut snapshot.final_demand_accounts[0];
+                row.fulfilled = 0;
+                row.outstanding = 20;
+                row.retail_stock_on_hand = 0;
+                row.orders[0].fulfilled = 0;
+                row.orders[0].outstanding = 20;
+                if let Some(completed) = &mut row.completed {
+                    completed.newly_fulfilled = 0;
+                    completed.closing_fulfilled = 0;
+                }
+                snapshot.sites[1].inventory[0].quantity = 0;
+            });
+            let reading = painted_comparison(&mut app, text);
+            assert!(reading.contains("Unsold retail stock: 0 / 0 kg"));
+            if tick == 0 {
+                assert!(reading.contains("Foundation; no completed retail deliveries"));
+                assert!(!reading.contains("Delivered to end buyers this period:"));
+            } else {
+                assert!(reading.contains("Delivered to end buyers this period: 0 / 0 kg"));
+                assert!(!reading.contains("Foundation; no completed retail deliveries"));
+            }
+        }
     }
 
     #[test]

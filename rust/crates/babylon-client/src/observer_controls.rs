@@ -93,7 +93,9 @@ pub(crate) fn availability(
     use ControlAvailability::{Disabled, Enabled};
     use ObserverCommand::{
         Live, NewCampaign, NewDelayedCampaign, NewSharedFreightAmpleCampaign,
-        NewSharedFreightConstrainedCampaign, NextPeriod, Perspective, PreviousPeriod,
+        NewSharedFreightConstrainedCampaign, NewStatewideBaselineCampaign,
+        NewStatewideBothCampaign, NewStatewideFreightConstraintCampaign,
+        NewStatewidePackagingShortageCampaign, NextPeriod, Perspective, PreviousPeriod,
         ReopenCampaign, Step, TogglePlay,
     };
 
@@ -109,6 +111,10 @@ pub(crate) fn availability(
             | NewDelayedCampaign
             | NewSharedFreightAmpleCampaign
             | NewSharedFreightConstrainedCampaign
+            | NewStatewideBaselineCampaign
+            | NewStatewideFreightConstraintCampaign
+            | NewStatewidePackagingShortageCampaign
+            | NewStatewideBothCampaign
             | ReopenCampaign
     ) && state.runtime_disconnected()
     {
@@ -166,6 +172,13 @@ pub(crate) fn availability(
                     Disabled("Already viewing the live committed period")
                 }
                 _ => Enabled,
+            }
+        }
+        ObserverCommand::RoadLayer(_) => {
+            if state.perspective == crate::observer::Perspective::FullObserver {
+                inspection_availability(state)
+            } else {
+                Disabled("Captured road geometry is unavailable in player knowledge")
             }
         }
         // Presentation controls and deliberate campaign choices remain usable.

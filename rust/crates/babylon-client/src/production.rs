@@ -3,7 +3,7 @@
 
 use std::fmt::Write as _;
 
-use babylon_persistence::{ProductionSiteV1, ProductionSnapshotV1};
+use babylon_persistence::{ProductionSiteV2, ProductionSnapshotV2};
 use bevy::camera::{visibility::RenderLayers, ScalingMode, Viewport};
 use bevy::ecs::system::SystemParam;
 use bevy::input_focus::tab_navigation::TabGroup;
@@ -29,7 +29,7 @@ use crate::production_brief::{
     describe_overview, opening_site, DependencyDirection,
 };
 use crate::production_freight::{
-    account_brief, account_reading, competitor_sites, shared_accounts,
+    account_brief, account_reading, competitor_sites, format_freight_mass, shared_accounts,
 };
 use crate::production_layout::{path_point, place_label, relation_path, ProductionLayout};
 
@@ -43,10 +43,66 @@ pub enum PrimaryView {
 #[derive(Resource, Default)]
 pub struct ProductionNavigation {
     pub selected_site: Option<String>,
+    pub selected_process: Option<String>,
+    pub(crate) county_geoid: Option<String>,
+    pub(crate) county_open: bool,
+    cohort_page: usize,
+    relationship_page: usize,
+    competitor_page: usize,
     pub flat: bool,
     pub details_open: bool,
     pub(crate) reading_section: ProductionReadingSection,
     history: Vec<String>,
+}
+
+impl ProductionNavigation {
+    fn open_county(&mut self, county_geoid: &str, snapshot: Option<&ProductionSnapshotV2>) {
+        self.county_geoid = Some(county_geoid.to_owned());
+        let resume = snapshot.is_some_and(|snapshot| {
+            snapshot.sites.iter().any(|site| {
+                self.selected_site.as_ref() == Some(&site.id) && site.county_geoid == county_geoid
+            })
+        });
+        if !resume {
+            self.county_open = true;
+            self.cohort_page = 0;
+            self.selected_site = None;
+            self.history.clear();
+        }
+    }
+
+    fn select_site(&mut self, id: &str) {
+        if let Some(previous) = self.selected_site.take() {
+            if previous != id {
+                if self.history.len() == 128 {
+                    self.history.remove(0);
+                }
+                self.history.push(previous);
+            }
+        }
+        self.selected_site = Some(id.to_owned());
+        self.county_open = false;
+        self.relationship_page = 0;
+        self.competitor_page = 0;
+        self.selected_process = None;
+    }
+
+    pub(crate) fn process<'a>(
+        &self,
+        site: &'a ProductionSiteV2,
+    ) -> Option<&'a babylon_persistence::ProductionProcessV2> {
+        site.processes
+            .iter()
+            .find(|process| self.selected_process.as_ref() == Some(&process.id))
+            .or_else(|| site.processes.iter().min_by(|a, b| a.id.cmp(&b.id)))
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum ProductionPage {
+    Cohorts,
+    Relationships,
+    Competitors,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -128,6 +184,15 @@ pub enum ProductionCommand {
     Flat,
     Details,
     Reading(ProductionReadingSection),
+    Page {
+        kind: ProductionPage,
+        page: usize,
+        context: ObservationContext,
+    },
+    Process {
+        process_id: String,
+        context: ObservationContext,
+    },
     Back,
     Select {
         site_id: String,
@@ -151,15 +216,19 @@ struct ProductionUi<'w> {
 struct ProductionControlAvailability {
     scene: bool,
     previous_index: Option<usize>,
+    county_back: bool,
 }
 
 impl ProductionControlAvailability {
     fn for_snapshot(
-        snapshot: Option<&ProductionSnapshotV1>,
+        snapshot: Option<&ProductionSnapshotV2>,
         navigation: &ProductionNavigation,
     ) -> Self {
         Self {
             scene: snapshot.is_some_and(|snapshot| !snapshot.sites.is_empty()),
+            county_back: navigation.selected_site.is_some()
+                && navigation.county_geoid.is_some()
+                && !navigation.county_open,
             previous_index: snapshot.and_then(|snapshot| {
                 navigation.history.iter().rposition(|id| {
                     navigation.selected_site.as_ref() != Some(id)
@@ -171,7 +240,7 @@ impl ProductionControlAvailability {
 
     fn display(&self, command: &ProductionCommand) -> Option<Display> {
         let available = match command {
-            ProductionCommand::Back => self.previous_index.is_some(),
+            ProductionCommand::Back => self.previous_index.is_some() || self.county_back,
             ProductionCommand::Details
             | ProductionCommand::Flat
             | ProductionCommand::Reading(_) => self.scene,
@@ -187,12 +256,12 @@ impl ProductionControlAvailability {
     fn refusal(
         &self,
         command: &ProductionCommand,
-        snapshot: Option<&ProductionSnapshotV1>,
+        snapshot: Option<&ProductionSnapshotV2>,
         navigation: &ProductionNavigation,
         state: &ObserverSession,
     ) -> Option<&'static str> {
         match command {
-            ProductionCommand::Back if self.previous_index.is_none() => {
+            ProductionCommand::Back if self.previous_index.is_none() && !self.county_back => {
                 Some("There is no previous work view in this observation.")
             }
             ProductionCommand::Flat if !self.scene => {
@@ -203,6 +272,56 @@ impl ProductionControlAvailability {
             }
             ProductionCommand::Reading(_) if !self.scene => {
                 Some("Exact readings need disclosed production relationships.")
+            }
+            ProductionCommand::Page { context, .. }
+            | ProductionCommand::Process { context, .. }
+                if !state.accepts(context) || !self.scene =>
+            {
+                Some("This circuit control belongs to another observation.")
+            }
+            ProductionCommand::Process { process_id, .. }
+                if !snapshot.is_some_and(|snapshot| {
+                    snapshot.sites.iter().any(|site| {
+                        navigation.selected_site.as_ref() == Some(&site.id)
+                            && site
+                                .processes
+                                .iter()
+                                .any(|process| process.id == *process_id)
+                    })
+                }) =>
+            {
+                Some("This process is not disclosed for the selected owner.")
+            }
+            ProductionCommand::Page { kind, page, .. }
+                if !snapshot.is_some_and(|snapshot| {
+                    let count = match kind {
+                        ProductionPage::Cohorts => snapshot
+                            .sites
+                            .iter()
+                            .filter(|site| {
+                                navigation.county_geoid.as_ref() == Some(&site.county_geoid)
+                            })
+                            .count(),
+                        ProductionPage::Relationships => navigation
+                            .selected_site
+                            .as_ref()
+                            .and_then(|id| snapshot.sites.iter().find(|site| site.id == *id))
+                            .map_or(0, |site| {
+                                dependency_sites(site, snapshot)
+                                    .iter()
+                                    .map(|(_, site)| &site.id)
+                                    .collect::<std::collections::BTreeSet<_>>()
+                                    .len()
+                            }),
+                        ProductionPage::Competitors => navigation
+                            .selected_site
+                            .as_deref()
+                            .map_or(0, |id| competitor_sites(id, snapshot).len()),
+                    };
+                    *page < count.div_ceil(6).max(1)
+                }) =>
+            {
+                Some("This page is unavailable in the current observation.")
             }
             ProductionCommand::Select { site_id, context }
                 if !state.accepts(context)
@@ -222,7 +341,7 @@ pub(crate) fn readings_panel_visible(
     view: PrimaryView,
     navigation: &ProductionNavigation,
     ui: &ObserverUiState,
-    snapshot: Option<&ProductionSnapshotV1>,
+    snapshot: Option<&ProductionSnapshotV2>,
 ) -> bool {
     view == PrimaryView::Production
         && navigation.details_open
@@ -680,7 +799,9 @@ fn inputs(
 
 fn production_command_context(command: &ProductionCommand) -> Option<&ObservationContext> {
     match command {
-        ProductionCommand::Select { context, .. } => Some(context),
+        ProductionCommand::Select { context, .. }
+        | ProductionCommand::Page { context, .. }
+        | ProductionCommand::Process { context, .. } => Some(context),
         _ => None,
     }
 }
@@ -827,11 +948,7 @@ fn navigate(
                 ui.archive_open = false;
                 ui.disclosure = None;
                 if let Some(county) = selected.0.and_then(|index| atlas.county(index)) {
-                    if let Some(site) = snapshot.and_then(|snapshot| {
-                        county_site(snapshot, county.fips, navigation.selected_site.as_deref())
-                    }) {
-                        navigation.selected_site = Some(site.id.clone());
-                    }
+                    navigation.open_county(county.fips, snapshot);
                 }
             }
             ProductionCommand::Map => {
@@ -848,6 +965,19 @@ fn navigate(
                 navigation.reading_section = *section;
                 navigation.details_open = true;
             }
+            ProductionCommand::Page { kind, page, .. } => {
+                let target = match kind {
+                    ProductionPage::Cohorts => &mut navigation.cohort_page,
+                    ProductionPage::Relationships => &mut navigation.relationship_page,
+                    ProductionPage::Competitors => &mut navigation.competitor_page,
+                };
+                *target = *page;
+            }
+            ProductionCommand::Process { process_id, .. } => {
+                navigation.selected_process = Some(process_id.clone());
+                ui.history_open = true;
+                navigation.details_open = false;
+            }
             ProductionCommand::Back => {
                 if let Some(index) = available.previous_index {
                     navigation.selected_site = Some(navigation.history[index].clone());
@@ -856,18 +986,17 @@ fn navigate(
                     *view = PrimaryView::Production;
                     ui.archive_open = false;
                     ui.disclosure = None;
+                } else if available.county_back {
+                    navigation.county_open = true;
+                    navigation.selected_site = None;
+                    navigation.details_open = false;
                 }
+                navigation.relationship_page = 0;
+                navigation.competitor_page = 0;
+                navigation.selected_process = None;
             }
             ProductionCommand::Select { site_id: id, .. } => {
-                if let Some(previous) = navigation.selected_site.take() {
-                    if &previous != id {
-                        if navigation.history.len() == 128 {
-                            navigation.history.remove(0);
-                        }
-                        navigation.history.push(previous);
-                    }
-                }
-                navigation.selected_site = Some(id.clone());
+                navigation.select_site(id);
                 sync_county = true;
                 *view = PrimaryView::Production;
                 ui.archive_open = false;
@@ -880,37 +1009,28 @@ fn navigate(
         if !sync_county {
             continue;
         }
-        if let Some(site) = snapshot.and_then(|snapshot| {
-            snapshot
-                .sites
-                .iter()
-                .find(|site| navigation.selected_site.as_ref() == Some(&site.id))
-        }) {
-            selected.0 = (0..atlas.len()).find(|index| {
-                atlas
-                    .county(*index)
-                    .is_some_and(|county| county.fips == site.county_geoid)
-            });
-        }
+        sync_selected_county(&navigation, snapshot, &atlas, &mut selected);
     }
 }
 
-fn county_site<'a>(
-    snapshot: &'a ProductionSnapshotV1,
-    county: &str,
-    selected_site: Option<&str>,
-) -> Option<&'a ProductionSiteV1> {
-    snapshot
-        .sites
-        .iter()
-        .find(|site| selected_site == Some(site.id.as_str()) && site.county_geoid == county)
-        .or_else(|| {
-            snapshot
-                .sites
-                .iter()
-                .filter(|site| site.county_geoid == county)
-                .min_by(|left, right| left.id.cmp(&right.id))
-        })
+fn sync_selected_county(
+    navigation: &ProductionNavigation,
+    snapshot: Option<&ProductionSnapshotV2>,
+    atlas: &CountyAtlas,
+    selected: &mut SelectedCounty,
+) {
+    if let Some(site) = snapshot.and_then(|snapshot| {
+        snapshot
+            .sites
+            .iter()
+            .find(|site| navigation.selected_site.as_ref() == Some(&site.id))
+    }) {
+        selected.0 = (0..atlas.len()).find(|index| {
+            atlas
+                .county(*index)
+                .is_some_and(|county| county.fips == site.county_geoid)
+        });
+    }
 }
 
 fn invalidate_navigation(
@@ -928,6 +1048,12 @@ fn invalidate_navigation(
     let current = (state.campaign, state.perspective, state.lifecycle_epoch());
     if scope.as_ref() != Some(&current) {
         navigation.selected_site = None;
+        navigation.selected_process = None;
+        navigation.county_open = false;
+        navigation.county_geoid = None;
+        navigation.relationship_page = 0;
+        navigation.competitor_page = 0;
+        navigation.cohort_page = 0;
         navigation.details_open = false;
         navigation.history.clear();
         *scope = Some(current);
@@ -961,7 +1087,10 @@ fn focus_opening(
     atlas: Res<CountyAtlas>,
     mut selected: ResMut<SelectedCounty>,
 ) {
-    if *view != PrimaryView::Production || navigation.selected_site.is_some() {
+    if *view != PrimaryView::Production
+        || navigation.selected_site.is_some()
+        || navigation.county_open
+    {
         return;
     }
     let Some(site) = frame
@@ -1041,6 +1170,14 @@ fn block(
     ));
 }
 
+#[derive(PartialEq)]
+struct ProductionGeometryContext {
+    observation: ObservationContext,
+    flat: bool,
+    selected_site: Option<String>,
+    relationship_page: usize,
+}
+
 fn rebuild(
     mut commands: Commands,
     observation: ProductionObservation,
@@ -1048,15 +1185,16 @@ fn rebuild(
     old: Query<Entity, (SceneGeometry, Without<ChildOf>)>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    mut last_context: Local<Option<(ObservationContext, bool, Option<String>)>>,
+    mut last_context: Local<Option<ProductionGeometryContext>>,
 ) {
     let ProductionObservation { frame, state } = observation;
     let context = state.context();
-    let geometry_key = (
-        context.clone(),
-        navigation.flat,
-        navigation.selected_site.clone(),
-    );
+    let geometry_key = ProductionGeometryContext {
+        observation: context.clone(),
+        flat: navigation.flat,
+        selected_site: navigation.selected_site.clone(),
+        relationship_page: navigation.relationship_page,
+    };
     if !frame.is_changed() && last_context.as_ref() == Some(&geometry_key) {
         return;
     }
@@ -1070,7 +1208,11 @@ fn rebuild(
     else {
         return;
     };
-    let layout = ProductionLayout::new(snapshot);
+    let layout = ProductionLayout::focused(
+        snapshot,
+        navigation.selected_site.as_deref(),
+        navigation.relationship_page,
+    );
     for (center, size) in &layout.platforms {
         block(
             &mut commands,
@@ -1111,7 +1253,7 @@ fn spawn_sites(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
     materials: &mut Assets<StandardMaterial>,
-    snapshot: &ProductionSnapshotV1,
+    snapshot: &ProductionSnapshotV2,
     navigation: &ProductionNavigation,
     context: &ObservationContext,
     layout: &ProductionLayout,
@@ -1169,7 +1311,7 @@ fn spawn_sites(
 
 fn spawn_site_label(
     commands: &mut Commands,
-    site: &ProductionSiteV1,
+    site: &ProductionSiteV2,
     context: &ObservationContext,
     anchor: Vec3,
     selected: bool,
@@ -1309,7 +1451,7 @@ fn rail(
 // travel motion or geographic progress between committed observations.
 #[allow(clippy::cast_precision_loss)]
 fn freight_markers(
-    snapshot: &ProductionSnapshotV1,
+    snapshot: &ProductionSnapshotV2,
     layout: &ProductionLayout,
     viewed_tick: u64,
 ) -> Vec<Vec3> {
@@ -1358,7 +1500,7 @@ fn spawn_freight(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
     materials: &mut Assets<StandardMaterial>,
-    snapshot: &ProductionSnapshotV1,
+    snapshot: &ProductionSnapshotV2,
     layout: &ProductionLayout,
     viewed_tick: u64,
 ) {
@@ -1375,8 +1517,8 @@ fn spawn_freight(
 }
 
 fn describe(
-    site: &ProductionSiteV1,
-    snapshot: &ProductionSnapshotV1,
+    site: &ProductionSiteV2,
+    snapshot: &ProductionSnapshotV2,
     section: ProductionReadingSection,
 ) -> String {
     match section {
@@ -1388,8 +1530,8 @@ fn describe(
 }
 
 fn reading_headline(
-    site: &ProductionSiteV1,
-    snapshot: &ProductionSnapshotV1,
+    site: &ProductionSiteV2,
+    snapshot: &ProductionSnapshotV2,
     period: u64,
 ) -> String {
     let mut value = if period == 0 {
@@ -1397,22 +1539,38 @@ fn reading_headline(
     } else {
         format!("Period {period} / committed reading\n")
     };
-    let output = snapshot.material_balance.as_ref().and_then(|balance| {
-        balance.rows.iter().find(|row| {
-            row.site_id == site.id
-                && row.good_id == site.output_good_id
-                && row.unit_id == site.output_unit_id
-        })
-    });
-    if let Some(output) = output {
-        writeln!(
-            value,
-            "{} {} produced / Derived",
-            grouped(output.produced),
-            output.unit
-        )
-        .expect("String write");
-    } else {
+    let mut outputs = std::collections::BTreeSet::new();
+    for process in &site.processes {
+        if !outputs.insert((&process.output_good_id, &process.output_unit_id)) {
+            continue;
+        }
+        let output = snapshot.material_balance.as_ref().and_then(|balance| {
+            balance.rows.iter().find(|row| {
+                row.site_id == site.id
+                    && row.good_id == process.output_good_id
+                    && row.unit_id == process.output_unit_id
+            })
+        });
+        if let Some(output) = output {
+            writeln!(
+                value,
+                "{} {} produced / Derived · {}",
+                grouped(output.produced),
+                output.unit,
+                process.output_good
+            )
+            .expect("String write");
+        } else {
+            writeln!(
+                value,
+                "{}: {}",
+                process.output_good,
+                crate::production_brief::process_plan_status(process)
+            )
+            .expect("String write");
+        }
+    }
+    if site.processes.is_empty() {
         writeln!(value, "{}", committed_plan_status(site)).expect("String write");
     }
     let accounts: Vec<_> = snapshot
@@ -1440,37 +1598,56 @@ fn reading_headline(
     value.trim_end().to_owned()
 }
 
-fn describe_flow(site: &ProductionSiteV1, snapshot: &ProductionSnapshotV1) -> String {
+fn describe_flow(site: &ProductionSiteV2, snapshot: &ProductionSnapshotV2) -> String {
     let mut value = String::new();
-    if let (Some(done), Some(plan)) = (site.produced_batches, site.planned_batches) {
+    for process in &site.processes {
         writeln!(
             value,
-            "COMMITTED PRODUCTION\n{done} of {plan} planned batches"
+            "{} / {}\n{}",
+            process.name,
+            process.output_good,
+            crate::production_brief::process_plan_status(process)
         )
         .expect("String write");
-    } else {
+        if let (Some(done), Some(plan)) = (process.produced_batches, process.planned_batches) {
+            writeln!(
+                value,
+                "COMMITTED PRODUCTION\n{done} of {plan} planned batches"
+            )
+            .expect("String write");
+        }
+        writeln!(
+            value,
+            "{} {} / batch (Designed)\nNext-period capacity: {} batches\n\nINPUTS / ON HAND",
+            grouped(process.output_per_batch),
+            process.output_unit,
+            grouped(process.available_batches)
+        )
+        .expect("String write");
+        for input in &process.inputs {
+            writeln!(
+                value,
+                "{}: {} {}",
+                input.good,
+                grouped(input.on_hand),
+                input.unit
+            )
+            .expect("String write");
+        }
+        if process.inputs.is_empty() {
+            value.push_str("No material inputs in this recipe.\n");
+        }
+        value.push('\n');
+    }
+    if site.processes.is_empty() {
         writeln!(value, "{}", committed_plan_status(site)).expect("String write");
     }
-    writeln!(
-        value,
-        "{} {} / batch (Designed)\nNext-period capacity: {} batches\n\nINPUTS / ON HAND",
-        grouped(site.output_per_batch),
-        site.output_unit,
-        grouped(site.available_batches)
-    )
-    .expect("String write");
-    for input in &site.inputs {
-        writeln!(
-            value,
-            "{}: {} {}",
-            input.good,
-            grouped(input.on_hand),
-            input.unit
-        )
-        .expect("String write");
-    }
-    if site.inputs.is_empty() {
-        value.push_str("No material inputs in this recipe.\n");
+    for account in snapshot
+        .final_demand_accounts
+        .iter()
+        .filter(|account| account.retailer_site_ids.contains(&site.id))
+    {
+        writeln!(value, "COUNTY FINAL DEMAND / {}\n{} {} ordered · {} fulfilled · {} outstanding\nDelivery to end buyers; consumption is not recorded.", account.good, grouped(account.ordered), account.unit, grouped(account.fulfilled), grouped(account.outstanding)).expect("String write");
     }
     describe_material_balance(&mut value, site, snapshot);
     value.push_str("\nINVENTORY\n");
@@ -1487,13 +1664,16 @@ fn describe_flow(site: &ProductionSiteV1, snapshot: &ProductionSnapshotV1) -> St
     value
 }
 
-fn describe_freight(site: &ProductionSiteV1, snapshot: &ProductionSnapshotV1) -> String {
+fn describe_freight(site: &ProductionSiteV2, snapshot: &ProductionSnapshotV2) -> String {
     let mut value = String::new();
     let accounts = shared_accounts(snapshot, Some(&site.id));
     if accounts.is_empty() {
         value.push_str("No shared freight pool disclosed for this subject.\n");
     }
-    for account in accounts {
+    if accounts.len() > 3 {
+        writeln!(value, "{} shared capacity accounts; showing the three with least next-opening availability.\n", accounts.len()).expect("String write");
+    }
+    for account in accounts.into_iter().take(3) {
         value.push_str(&account_reading(account, snapshot));
         value.push('\n');
     }
@@ -1515,13 +1695,21 @@ fn describe_freight(site: &ProductionSiteV1, snapshot: &ProductionSnapshotV1) ->
             .map_or(other.as_str(), |site| site.name.as_str());
         writeln!(
             value,
-            "{} | {} periods travel\n{} / {} {} delivered | {} unshipped\n",
+            "{} | {}\n{} / {} {} delivered | {} unshipped\n",
             name,
-            route.travel_periods,
+            match route.transport_kind {
+                babylon_persistence::ProductionRouteTransportV2::Local =>
+                    "Local inter-owner transfer".into(),
+                babylon_persistence::ProductionRouteTransportV2::Staged =>
+                    format!("{} periods travel", route.travel_periods),
+            },
             grouped(route.delivered),
             grouped(route.ordered),
             route.unit,
-            grouped(route.backlog)
+            route
+                .ordered
+                .checked_sub(route.shipped)
+                .map_or_else(|| "unavailable".into(), grouped)
         )
         .expect("String write");
     }
@@ -1529,12 +1717,12 @@ fn describe_freight(site: &ProductionSiteV1, snapshot: &ProductionSnapshotV1) ->
     value
 }
 
-fn describe_work(site: &ProductionSiteV1, snapshot: &ProductionSnapshotV1) -> String {
+fn describe_work(site: &ProductionSiteV2, snapshot: &ProductionSnapshotV2) -> String {
     let mut value = String::new();
     describe_staffing_accounts(&mut value, site, snapshot);
     describe_labor_accounts(&mut value, site, snapshot);
     value.push_str("\nLABOR BUDGET / DERIVED\n");
-    for labor in &site.labor {
+    for labor in site.processes.iter().flat_map(|process| &process.labor) {
         writeln!(
             value,
             "{} {} available | {} / batch (Designed)",
@@ -1544,38 +1732,85 @@ fn describe_work(site: &ProductionSiteV1, snapshot: &ProductionSnapshotV1) -> St
         )
         .expect("String write");
     }
+    for handling in snapshot
+        .merchant_handling_accounts
+        .iter()
+        .filter(|account| account.site_id == site.id)
+    {
+        value.push_str("\nMERCHANT HANDLING\n");
+        if let Some(done) = &handling.completed {
+            writeln!(
+                value,
+                "Period {}: {} handled · {} / {} labor-hours used / needed",
+                done.period,
+                format_freight_mass(done.handled_grams),
+                grouped(done.used_hours),
+                grouped(done.needed_hours)
+            )
+            .expect("String write");
+        } else {
+            value.push_str("Foundation; no completed handling work.\n");
+        }
+        value.push_str("Handling moves existing goods; it does not create productive output.\n");
+    }
     value.trim_start().to_owned()
 }
 
-fn describe_sources(site: &ProductionSiteV1, snapshot: &ProductionSnapshotV1) -> String {
+fn describe_sources(site: &ProductionSiteV2, snapshot: &ProductionSnapshotV2) -> String {
     let mut value = format!(
-        "COUNTY AGGREGATE / NAICS {}\n\nRECIPE / DESIGNED\n{} {} / batch\n",
-        site.industry_code,
-        grouped(site.output_per_batch),
-        site.output_unit
+        "COUNTY-SECTOR OWNER / NAICS {}\nSector {} · {:?}\n",
+        site.industry_code, site.sector_code, site.role
     );
-    for input in &site.inputs {
+    for process in &site.processes {
         writeln!(
             value,
-            "{}: {} {} / batch",
-            input.good,
-            grouped(input.quantity_per_batch),
-            input.unit
+            "\nRECIPE / DESIGNED / {}\n{} {} / batch",
+            process.name,
+            grouped(process.output_per_batch),
+            process.output_unit
         )
         .expect("String write");
+        for input in &process.inputs {
+            writeln!(
+                value,
+                "{}: {} {} / batch",
+                input.good,
+                grouped(input.quantity_per_batch),
+                input.unit
+            )
+            .expect("String write");
+        }
     }
     if let Some(jobs) = site.observed_employment {
         writeln!(value, "\nINDUSTRY EMPLOYMENT / OBSERVED 2024\n{} annual-average jobs (QCEW; separate from modeled people and hours)", grouped(jobs)).expect("String write");
     }
     describe_sector_context(&mut value, site, snapshot);
+    writeln!(
+        value,
+        "\nCAPTURED AUTHORITY\n{}",
+        snapshot.content_authority_sha256
+    )
+    .expect("String write");
+    if let Some(source) = &snapshot.road_source {
+        writeln!(
+            value,
+            "Road extract: {}\nReplication: {}\nRouting profile: {}\nGraph: {}",
+            source.pbf_url,
+            source.replication_timestamp,
+            source.routing_profile_version,
+            source.graph_sha256
+        )
+        .expect("String write");
+        value.push_str("Road data © OpenStreetMap contributors, available under the Open Database License (ODbL).\nhttps://www.openstreetmap.org/copyright\n");
+    }
     value.push_str("\nSCENE KEY\nEqual-height structures identify county cohorts; height and spacing carry no quantity or geography. Arrows point from disclosed suppliers to buyers. Cyan links enter the selection; copper links leave it. Packets are actual in-transit lots at static schematic positions.\n");
     value
 }
 
 fn describe_material_balance(
     value: &mut String,
-    site: &ProductionSiteV1,
-    snapshot: &ProductionSnapshotV1,
+    site: &ProductionSiteV2,
+    snapshot: &ProductionSnapshotV2,
 ) {
     let Some(balance) = &snapshot.material_balance else {
         value.push_str("\nNo completed stock-movement account at this point.\n");
@@ -1592,6 +1827,11 @@ fn describe_material_balance(
     }
     writeln!(value, "\nSTOCK MOVEMENT / PERIOD {}", balance.period).expect("String write");
     for row in rows {
+        if row.local_received != 0 || row.local_transferred != 0 || row.final_demand_fulfilled != 0
+        {
+            writeln!(value, "{} / {}\nOpened {} + arrived {} + received locally {} + produced {}\n= consumed {} + dispatched {} + transferred locally {} + final demand {} + closed {}", row.good, row.unit, grouped(row.opening), grouped(row.arrivals), grouped(row.local_received), grouped(row.produced), grouped(row.consumed), grouped(row.dispatched), grouped(row.local_transferred), grouped(row.final_demand_fulfilled), grouped(row.closing)).expect("String write");
+            continue;
+        }
         writeln!(
             value,
             "{} / {}\nOpened {} + arrived {} + produced {}\n= consumed {} + dispatched {} + closed {}",
@@ -1610,8 +1850,8 @@ fn describe_material_balance(
 
 fn describe_sector_context(
     value: &mut String,
-    site: &ProductionSiteV1,
-    snapshot: &ProductionSnapshotV1,
+    site: &ProductionSiteV2,
+    snapshot: &ProductionSnapshotV2,
 ) {
     let subjects: std::collections::BTreeSet<_> = snapshot
         .process_attributions
@@ -1683,8 +1923,8 @@ fn describe_sector_context(
 
 fn describe_staffing_accounts(
     value: &mut String,
-    site: &ProductionSiteV1,
-    snapshot: &ProductionSnapshotV1,
+    site: &ProductionSiteV2,
+    snapshot: &ProductionSnapshotV2,
 ) {
     let mut disclosed = false;
     for account in snapshot
@@ -1735,8 +1975,8 @@ fn describe_staffing_accounts(
 
 fn describe_labor_accounts(
     value: &mut String,
-    site: &ProductionSiteV1,
-    snapshot: &ProductionSnapshotV1,
+    site: &ProductionSiteV2,
+    snapshot: &ProductionSnapshotV2,
 ) {
     for account in snapshot
         .labor_accounts
@@ -1746,7 +1986,7 @@ fn describe_labor_accounts(
         if let Some(completed) = &account.completed {
             writeln!(
                 value,
-                "\nCOMMITTED WORK TIME / PERIOD {} / DERIVED\n{} used + {} unused = {} available\nPlanned: {} {}",
+                "\nCOMMITTED WORK TIME / PERIOD {} / DERIVED\n{} used + {} unused = {} available\nProduction planned: {} {}",
                 completed.period,
                 grouped(completed.used),
                 grouped(completed.unused),
@@ -1755,6 +1995,19 @@ fn describe_labor_accounts(
                 account.unit,
             )
             .expect("String write");
+            if site.processes.is_empty()
+                || completed.handling_needed != 0
+                || completed.handling_used != 0
+            {
+                writeln!(
+                    value,
+                    "Handling: {} needed · {} used {}",
+                    grouped(completed.handling_needed),
+                    grouped(completed.handling_used),
+                    account.unit
+                )
+                .expect("String write");
+            }
             value.push_str("Time accounts do not measure job losses.\n");
         }
         writeln!(
@@ -1765,6 +2018,164 @@ fn describe_labor_accounts(
             account.unit,
         )
         .expect("String write");
+    }
+}
+
+fn page_controls(
+    panel: &mut ChildSpawnerCommands,
+    kind: ProductionPage,
+    page: usize,
+    total: usize,
+    context: &ObservationContext,
+) {
+    if total <= 6 {
+        return;
+    }
+    panel.spawn(text(
+        format!("Page {} of {} · six per page", page + 1, total.div_ceil(6)),
+        13.0,
+        theme::GRAY,
+    ));
+    if page > 0 {
+        button(
+            panel,
+            "Previous page",
+            ProductionCommand::Page {
+                kind,
+                page: page - 1,
+                context: context.clone(),
+            },
+        );
+    }
+    if page + 1 < total.div_ceil(6) {
+        button(
+            panel,
+            "Next page",
+            ProductionCommand::Page {
+                kind,
+                page: page + 1,
+                context: context.clone(),
+            },
+        );
+    }
+}
+
+fn spawn_county_cohorts(
+    panel: &mut ChildSpawnerCommands,
+    snapshot: &ProductionSnapshotV2,
+    navigation: &ProductionNavigation,
+    context: &ObservationContext,
+) {
+    let mut sites: Vec<_> = snapshot
+        .sites
+        .iter()
+        .filter(|site| navigation.county_geoid.as_ref() == Some(&site.county_geoid))
+        .collect();
+    sites.sort_by(|a, b| (&a.sector_code, &a.id).cmp(&(&b.sector_code, &b.id)));
+    panel.spawn(text(
+        format!("COUNTY COHORTS / {} disclosed", sites.len()),
+        15.0,
+        theme::YELLOW,
+    ));
+    panel.spawn(text(
+        "Commodity production and circulation are active. Other sectors remain reference context.",
+        13.0,
+        theme::GRAY,
+    ));
+    page_controls(
+        panel,
+        ProductionPage::Cohorts,
+        navigation.cohort_page,
+        sites.len(),
+        context,
+    );
+    for site in sites
+        .into_iter()
+        .skip(navigation.cohort_page.saturating_mul(6))
+        .take(6)
+    {
+        let accounts: Vec<_> = snapshot
+            .staffing_accounts
+            .iter()
+            .filter(|account| account.site_id == site.id)
+            .collect();
+        let workforce = if accounts.len() == 1 {
+            format!(
+                "{} employed · {} reserve",
+                grouped(accounts[0].employed),
+                grouped(accounts[0].reserve)
+            )
+        } else {
+            "Workforce accounts in Work".into()
+        };
+        button(
+            panel,
+            &format!(
+                "{} / {:?}\n{} · {}",
+                site.name, site.role, site.sector_code, workforce
+            ),
+            ProductionCommand::Select {
+                site_id: site.id.clone(),
+                context: context.clone(),
+            },
+        );
+    }
+}
+
+fn spawn_freight_participants(
+    panel: &mut ChildSpawnerCommands,
+    site: &ProductionSiteV2,
+    snapshot: &ProductionSnapshotV2,
+    navigation: &ProductionNavigation,
+    context: &ObservationContext,
+) {
+    for account in shared_accounts(snapshot, Some(&site.id))
+        .into_iter()
+        .take(1)
+    {
+        panel.spawn((
+            text(account_brief(account), 15.0, theme::PAPER),
+            ProductionFreightReading,
+            Node {
+                flex_shrink: 0.0,
+                min_width: px(0),
+                max_width: percent(100),
+                ..default()
+            },
+            ObserverFocusTarget::reading(Some(context.clone())),
+        ));
+    }
+    let competitors = competitor_sites(&site.id, snapshot);
+    if !competitors.is_empty() {
+        panel.spawn(text(
+            "OTHER PARTICIPANTS / SHARED FREIGHT",
+            13.0,
+            theme::YELLOW,
+        ));
+        page_controls(
+            panel,
+            ProductionPage::Competitors,
+            navigation.competitor_page,
+            competitors.len(),
+            context,
+        );
+        for competitor in competitors
+            .into_iter()
+            .skip(navigation.competitor_page.saturating_mul(6))
+            .take(6)
+        {
+            button(
+                panel,
+                &format!(
+                    "{}\nInspect shared-freight participant",
+                    competitor.name.trim_end_matches(" cohort")
+                ),
+                ProductionCommand::Select {
+                    site_id: competitor.id.clone(),
+                    context: context.clone(),
+                },
+            );
+        }
     }
 }
 
@@ -1789,6 +2200,12 @@ fn rebuild_dependencies(
         let Some(snapshot) = snapshot else {
             continue;
         };
+        if navigation.county_open {
+            commands.entity(root).with_children(|panel| {
+                spawn_county_cohorts(panel, snapshot, &navigation, &context);
+            });
+            continue;
+        }
         let Some(site) = snapshot
             .sites
             .iter()
@@ -1796,52 +2213,44 @@ fn rebuild_dependencies(
         else {
             continue;
         };
+        let layout =
+            ProductionLayout::focused(snapshot, Some(&site.id), navigation.relationship_page);
         let links = dependency_sites(site, snapshot);
+        let group_count = links
+            .iter()
+            .map(|(_, site)| &site.id)
+            .collect::<std::collections::BTreeSet<_>>()
+            .len();
         commands.entity(root).with_children(|panel| {
-            for account in shared_accounts(snapshot, Some(&site.id)) {
-                panel.spawn((
-                    text(account_brief(account), 15.0, theme::PAPER),
-                    ProductionFreightReading,
-                    Node {
-                        flex_shrink: 0.0,
-                        min_width: px(0),
-                        max_width: percent(100),
-                        ..default()
-                    },
-                    ObserverFocusTarget::reading(Some(context.clone())),
-                ));
-            }
-            let competitors = competitor_sites(&site.id, snapshot);
-            if !competitors.is_empty() {
-                panel.spawn(text(
-                    "OTHER PARTICIPANTS / SHARED FREIGHT",
-                    13.0,
-                    theme::YELLOW,
-                ));
-                for competitor in competitors {
+            for process in &site.processes {
+                if site.processes.len() > 1 {
                     button(
                         panel,
-                        &format!(
-                            "{}\nInspect shared-freight participant",
-                            competitor.name.trim_end_matches(" cohort")
-                        ),
-                        ProductionCommand::Select {
-                            site_id: competitor.id.clone(),
+                        &format!("Chart {} / {}", process.name, process.output_unit),
+                        ProductionCommand::Process {
+                            process_id: process.id.clone(),
                             context: context.clone(),
                         },
                     );
                 }
             }
+            spawn_freight_participants(panel, site, snapshot, &navigation, &context);
+            page_controls(
+                panel,
+                ProductionPage::Relationships,
+                navigation.relationship_page,
+                group_count,
+                &context,
+            );
             for direction in [
                 DependencyDirection::Upstream,
                 DependencyDirection::Downstream,
             ] {
                 panel.spawn(text(direction.label(), 13.0, theme::YELLOW));
                 let mut count = 0;
-                for (_, neighbor) in links
-                    .iter()
-                    .filter(|(candidate, _)| *candidate == direction)
-                {
+                for (_, neighbor) in links.iter().filter(|(candidate, neighbor)| {
+                    *candidate == direction && layout.positions.contains_key(&neighbor.id)
+                }) {
                     count += 1;
                     button(
                         panel,
@@ -1857,11 +2266,7 @@ fn rebuild_dependencies(
                     );
                 }
                 if count == 0 {
-                    panel.spawn(text(
-                        "No visible relation in this observation.",
-                        13.0,
-                        theme::GRAY,
-                    ));
+                    panel.spawn(text("No relation on this page.", 13.0, theme::GRAY));
                 }
             }
         });
@@ -1934,7 +2339,10 @@ fn paint_buttons(
             ProductionCommand::Select { site_id, .. } => {
                 navigation.selected_site.as_ref() == Some(site_id)
             }
-            ProductionCommand::Back => false,
+            ProductionCommand::Process { process_id, .. } => {
+                navigation.selected_process.as_ref() == Some(process_id)
+            }
+            ProductionCommand::Back | ProductionCommand::Page { .. } => false,
         };
         let next = match interaction {
             Interaction::Pressed => theme::RED.with_alpha(0.5),
@@ -2164,6 +2572,7 @@ fn paint_readings(
             text.0 = match (snapshot, site, brief.is_some()) {
                 (Some(snapshot), Some(site), true) => describe_brief(site, snapshot),
                 (Some(snapshot), Some(site), false) if navigation.details_open => describe(site, snapshot, navigation.reading_section),
+                (Some(snapshot), None, true) if navigation.county_open => format!("COUNTY {}\nChoose a commodity cohort to follow its circuit.\n{}", navigation.county_geoid.as_deref().unwrap_or("unavailable"), snapshot.scenario_label),
                 (Some(snapshot), None, true) => describe_overview(snapshot),
                 (None, _, true) => "No production relationships are disclosed at this period and perspective. Open Geography to explore the information available to you.".into(),
                 _ => String::new(),
@@ -2220,40 +2629,51 @@ mod tests {
     use super::*;
     use babylon_persistence::{
         CampaignId, ObserverEconomySnapshotV1, ObserverVisibilityV1, ProductionInputV1,
-        ProductionRouteV1,
+        ProductionRouteV2,
     };
 
-    fn site(id: &str, suppliers: &[&str]) -> ProductionSiteV1 {
-        ProductionSiteV1 {
+    fn site(id: &str, suppliers: &[&str]) -> ProductionSiteV2 {
+        ProductionSiteV2 {
             id: id.into(),
             county_geoid: "26163".into(),
             name: format!("Cohort {id}"),
             industry_code: "331".into(),
             observed_employment: Some(20),
-            output_good_id: "a".repeat(64),
-            output_unit_id: "b".repeat(64),
-            output_good: "steel".into(),
-            output_unit: "kg".into(),
-            output_per_batch: 10,
-            available_batches: 8,
-            planned_batches: Some(8),
-            produced_batches: Some(7),
             inventory: Vec::new(),
-            labor: Vec::new(),
-            inputs: vec![ProductionInputV1 {
-                good_id: "a".repeat(64),
-                unit_id: "b".repeat(64),
-                good: "input".into(),
-                unit: "kg".into(),
-                quantity_per_batch: 1,
-                on_hand: 20,
-                supplier_site_ids: suppliers.iter().map(|id| (*id).into()).collect(),
+            role: babylon_persistence::ProductionSiteRoleV2::Production,
+            sector_code: "31-33".into(),
+            processes: vec![babylon_persistence::ProductionProcessV2 {
+                id: "fixture-process".into(),
+                name: "Fixture process".into(),
+                output_good_id: "a".repeat(64),
+                output_unit_id: "b".repeat(64),
+                output_good: "steel".into(),
+                output_unit: "kg".into(),
+                output_per_batch: 10,
+                available_batches: 8,
+                planned_batches: Some(8),
+                produced_batches: Some(7),
+                labor: Vec::new(),
+                inputs: vec![ProductionInputV1 {
+                    good_id: "a".repeat(64),
+                    unit_id: "b".repeat(64),
+                    good: "input".into(),
+                    unit: "kg".into(),
+                    quantity_per_batch: 1,
+                    on_hand: 20,
+                    supplier_site_ids: suppliers.iter().map(|id| (*id).into()).collect(),
+                }],
             }],
         }
     }
 
-    fn snapshot() -> ProductionSnapshotV1 {
-        ProductionSnapshotV1 {
+    fn snapshot() -> ProductionSnapshotV2 {
+        ProductionSnapshotV2 {
+            content_authority_sha256: "a".repeat(64),
+            road_source: None,
+            physical_edges: Vec::new(),
+            merchant_handling_accounts: Vec::new(),
+            final_demand_accounts: Vec::new(),
             freight_capacity_accounts: Vec::new(),
             material_balance: None,
             labor_accounts: Vec::new(),
@@ -2267,8 +2687,12 @@ mod tests {
                 site("b", &["a", "withheld"]),
                 site("c", &["b"]),
             ],
-            routes: vec![ProductionRouteV1 {
-                corridor_legs: Vec::new(),
+            routes: vec![ProductionRouteV2 {
+                physical_edge_ids: Vec::new(),
+                distance_mm: None,
+                transport_kind: babylon_persistence::ProductionRouteTransportV2::Staged,
+                grams_per_unit: 1000,
+                stages: Vec::new(),
                 id: "a-b".into(),
                 supplier_site_id: "a".into(),
                 buyer_site_id: "b".into(),
@@ -2291,24 +2715,60 @@ mod tests {
     }
 
     #[test]
+    fn focused_circuit_pages_six_incident_groups_and_keeps_unrelated_owners_out() {
+        let mut snapshot = snapshot();
+        snapshot.sites = vec![site("center", &[])];
+        for index in 0..14 {
+            snapshot
+                .sites
+                .push(site(&format!("buyer-{index:02}"), &["center"]));
+        }
+        snapshot.sites.push(site("unrelated", &[]));
+        snapshot.routes.clear();
+        let first = ProductionLayout::focused(&snapshot, Some("center"), 0);
+        let second = ProductionLayout::focused(&snapshot, Some("center"), 1);
+        assert_eq!(first.positions.len(), 7);
+        assert_eq!(second.positions.len(), 7);
+        assert_eq!(first.links.len(), 6);
+        assert_eq!(second.links.len(), 6);
+        assert!(first.positions.contains_key("center"));
+        assert!(!first.positions.contains_key("unrelated"));
+        assert!(first
+            .positions
+            .keys()
+            .filter(|id| id.as_str() != "center")
+            .all(|id| !second.positions.contains_key(id)));
+        snapshot.sites.reverse();
+        let permuted = ProductionLayout::focused(&snapshot, Some("center"), 0);
+        assert_eq!(first.positions, permuted.positions);
+        assert_eq!(first.links, permuted.links);
+        assert!(ProductionLayout::focused(&snapshot, Some("withheld"), 0)
+            .positions
+            .is_empty());
+    }
+
+    #[test]
     fn reading_headline_uses_exact_output_identity_and_keeps_absence_distinct_from_zero() {
-        use babylon_persistence::{CompletedMaterialBalanceV1, ProductionMaterialBalanceRowV1};
+        use babylon_persistence::{CompletedMaterialBalanceV2, ProductionMaterialBalanceRowV2};
         let mut snapshot = snapshot();
         let mut selected = snapshot.sites[0].clone();
-        selected.planned_batches = None;
-        selected.produced_batches = None;
+        selected.processes[0].planned_batches = None;
+        selected.processes[0].produced_batches = None;
         let foundation = reading_headline(&selected, &snapshot, 0);
         assert!(foundation.contains("Foundation / Designed"));
         assert!(foundation.contains("no committed production"));
         assert!(foundation.contains("Modeled workforce not disclosed"));
         assert!(!foundation.contains("0 employed"));
-        snapshot.material_balance = Some(CompletedMaterialBalanceV1 {
+        snapshot.material_balance = Some(CompletedMaterialBalanceV2 {
             period: 5,
-            rows: vec![ProductionMaterialBalanceRowV1 {
+            rows: vec![ProductionMaterialBalanceRowV2 {
+                local_received: 0,
+                local_transferred: 0,
+                final_demand_fulfilled: 0,
                 site_id: selected.id.clone(),
-                good_id: selected.output_good_id.clone(),
+                good_id: selected.processes[0].output_good_id.clone(),
                 unit_id: "another-unit".into(),
-                good: selected.output_good.clone(),
+                good: selected.processes[0].output_good.clone(),
                 unit: "other unit".into(),
                 opening: 0,
                 arrivals: 0,
@@ -2320,22 +2780,26 @@ mod tests {
         });
         assert!(!reading_headline(&selected, &snapshot, 5).contains("999"));
         let row = &mut snapshot.material_balance.as_mut().unwrap().rows[0];
-        row.unit_id.clone_from(&selected.output_unit_id);
-        row.unit.clone_from(&selected.output_unit);
+        row.unit_id
+            .clone_from(&selected.processes[0].output_unit_id);
+        row.unit.clone_from(&selected.processes[0].output_unit);
         row.produced = 0;
         row.closing = 0;
         snapshot
             .staffing_accounts
             .push(staffing_account(&selected.id));
         let completed = reading_headline(&selected, &snapshot, 5);
-        assert!(completed.contains(&format!("0 {} produced / Derived", selected.output_unit)));
+        assert!(completed.contains(&format!(
+            "0 {} produced / Derived",
+            selected.processes[0].output_unit
+        )));
         assert!(completed.contains("2 employed · 2 reserve / Derived"));
         assert!(!completed.contains("Foundation"));
     }
 
     #[test]
     fn stock_readings_keep_units_and_subjects_separate_and_do_not_invent_foundation_flows() {
-        use babylon_persistence::{CompletedMaterialBalanceV1, ProductionMaterialBalanceRowV1};
+        use babylon_persistence::{CompletedMaterialBalanceV2, ProductionMaterialBalanceRowV2};
 
         let mut snapshot = snapshot();
         let selected = snapshot.sites[0].clone();
@@ -2343,7 +2807,10 @@ mod tests {
         describe_material_balance(&mut value, &selected, &snapshot);
         assert!(value.contains("No completed stock-movement account"));
         assert!(!value.contains("Opened 0"));
-        let kilograms = ProductionMaterialBalanceRowV1 {
+        let kilograms = ProductionMaterialBalanceRowV2 {
+            local_received: 0,
+            local_transferred: 0,
+            final_demand_fulfilled: 0,
             site_id: selected.id.clone(),
             good_id: "ore".into(),
             unit_id: "kg".into(),
@@ -2356,7 +2823,7 @@ mod tests {
             dispatched: 6,
             closing: 10,
         };
-        let tonnes = ProductionMaterialBalanceRowV1 {
+        let tonnes = ProductionMaterialBalanceRowV2 {
             unit_id: "tonne".into(),
             unit: "tonne".into(),
             opening: 1,
@@ -2367,12 +2834,15 @@ mod tests {
             closing: 3,
             ..kilograms.clone()
         };
-        let unrelated = ProductionMaterialBalanceRowV1 {
+        let unrelated = ProductionMaterialBalanceRowV2 {
+            local_received: 0,
+            local_transferred: 0,
+            final_demand_fulfilled: 0,
             site_id: "b".into(),
             good: "Unrelated stock".into(),
             ..kilograms.clone()
         };
-        snapshot.material_balance = Some(CompletedMaterialBalanceV1 {
+        snapshot.material_balance = Some(CompletedMaterialBalanceV2 {
             period: 5,
             rows: vec![kilograms, tonnes, unrelated],
         });
@@ -2382,7 +2852,9 @@ mod tests {
         assert!(value.contains(
             "Ore / kg\nOpened 10 + arrived 5 + produced 4\n= consumed 3 + dispatched 6 + closed 10"
         ));
-        assert!(value.contains("Ore / tonne\nOpened 1 + arrived 2 + produced 0\n= consumed 0 + dispatched 0 + closed 3"));
+        assert!(value.contains(
+            "Ore / tonne\nOpened 1 + arrived 2 + produced 0\n= consumed 0 + dispatched 0 + closed 3"
+        ));
         assert!(!value.contains("Unrelated stock"));
         value.clear();
         describe_material_balance(&mut value, &snapshot.sites[2], &snapshot);
@@ -2391,18 +2863,90 @@ mod tests {
     }
 
     #[test]
+    fn merchant_reading_has_no_fake_production_and_separates_local_goods_from_arrivals() {
+        use babylon_persistence::{
+            CompletedMaterialBalanceV2, ProductionMaterialBalanceRowV2, ProductionRouteTransportV2,
+            ProductionSiteRoleV2,
+        };
+        let mut snapshot = snapshot();
+        let merchant = &mut snapshot.sites[1];
+        merchant.role = ProductionSiteRoleV2::Retail;
+        merchant.processes.clear();
+        snapshot.routes[0].transport_kind = ProductionRouteTransportV2::Local;
+        snapshot.routes[0].travel_periods = 0;
+        snapshot.material_balance = Some(CompletedMaterialBalanceV2 {
+            period: 1,
+            rows: vec![ProductionMaterialBalanceRowV2 {
+                site_id: "b".into(),
+                good_id: "meal".into(),
+                unit_id: "kg".into(),
+                good: "Meal".into(),
+                unit: "kg".into(),
+                opening: 10,
+                arrivals: 0,
+                local_received: 2,
+                produced: 0,
+                consumed: 0,
+                dispatched: 0,
+                local_transferred: 3,
+                final_demand_fulfilled: 4,
+                closing: 5,
+            }],
+        });
+        let flow = describe_flow(&snapshot.sites[1], &snapshot);
+        assert!(flow.contains("Retail / delivery to final demand"));
+        assert!(!flow.contains("batch"));
+        assert!(flow.contains("arrived 0 + received locally 2"));
+        assert!(flow.contains("transferred locally 3 + final demand 4 + closed 5"));
+        let freight = describe_freight(&snapshot.sites[1], &snapshot);
+        assert!(freight.contains("Local inter-owner transfer"));
+        assert!(!freight.contains("periods travel"));
+    }
+
+    #[test]
+    fn merchant_handling_reading_uses_exact_kilograms_without_changing_work_hours() {
+        use babylon_persistence::{
+            CompletedProductionMerchantHandlingV2, ProductionMerchantHandlingAccountV2,
+            ProductionSiteRoleV2,
+        };
+        let mut snapshot = snapshot();
+        snapshot.sites[1].role = ProductionSiteRoleV2::Retail;
+        snapshot.sites[1].processes.clear();
+        snapshot.merchant_handling_accounts = vec![ProductionMerchantHandlingAccountV2 {
+            site_id: "b".into(),
+            capacity_id: "merchant-handling".into(),
+            labor_unit_id: "hours".into(),
+            coefficients: Vec::new(),
+            completed: Some(CompletedProductionMerchantHandlingV2 {
+                period: 1,
+                needed_hours: 8,
+                used_hours: 3,
+                handled_grams: 160_001,
+                orders: Vec::new(),
+            }),
+        }];
+        let reading = describe_work(&snapshot.sites[1], &snapshot);
+        assert!(reading.contains("Period 1: 160.001 kg handled · 3 / 8 labor-hours used / needed"));
+        assert!(reading
+            .contains("Handling moves existing goods; it does not create productive output."));
+        assert!(!describe_work(&snapshot.sites[0], &snapshot).contains("MERCHANT HANDLING"));
+    }
+
+    #[test]
     fn inspector_separates_committed_work_time_from_next_opening_and_other_sites() {
-        use babylon_persistence::{CompletedProductionLaborV1, ProductionLaborAccountV1};
+        use babylon_persistence::{CompletedProductionLaborV2, ProductionLaborAccountV2};
 
         let mut snapshot = snapshot();
         snapshot.labor_accounts = vec![
-            ProductionLaborAccountV1 {
+            ProductionLaborAccountV2 {
                 site_id: "a".into(),
                 unit_id: "hours".into(),
                 unit: "labor-hours".into(),
                 next_opening_period: 6,
                 next_opening_available: 160,
-                completed: Some(CompletedProductionLaborV1 {
+                completed: Some(CompletedProductionLaborV2 {
+                    handling_needed: 0,
+                    handling_used: 0,
                     period: 5,
                     opening: 120,
                     planned: 100,
@@ -2410,7 +2954,7 @@ mod tests {
                     unused: 40,
                 }),
             },
-            ProductionLaborAccountV1 {
+            ProductionLaborAccountV2 {
                 site_id: "b".into(),
                 unit_id: "other-hours".into(),
                 unit: "other site's private work time".into(),
@@ -2426,7 +2970,7 @@ mod tests {
         );
         assert!(text.contains("COMMITTED WORK TIME / PERIOD 5 / DERIVED"));
         assert!(text.contains("80 used + 40 unused = 120 available"));
-        assert!(text.contains("Planned: 100 labor-hours"));
+        assert!(text.contains("Production planned: 100 labor-hours"));
         assert!(text.contains("Next opening (period 6): 160 labor-hours (Derived)"));
         assert!(!text.contains("private work time"));
         assert!(!text.contains("987"));
@@ -2435,10 +2979,10 @@ mod tests {
 
     #[test]
     fn foundation_labor_account_does_not_invent_a_completed_work_period() {
-        use babylon_persistence::ProductionLaborAccountV1;
+        use babylon_persistence::ProductionLaborAccountV2;
 
         let mut snapshot = snapshot();
-        snapshot.labor_accounts = vec![ProductionLaborAccountV1 {
+        snapshot.labor_accounts = vec![ProductionLaborAccountV2 {
             site_id: "a".into(),
             unit_id: "hours".into(),
             unit: "labor-hours".into(),
@@ -2496,13 +3040,15 @@ mod tests {
         snapshot.staffing_accounts = vec![staffing_account("a"), unrelated];
         snapshot
             .labor_accounts
-            .push(babylon_persistence::ProductionLaborAccountV1 {
+            .push(babylon_persistence::ProductionLaborAccountV2 {
                 site_id: "a".into(),
                 unit_id: "labor-hours".into(),
                 unit: "labor-hours".into(),
                 next_opening_period: 6,
                 next_opening_available: 80,
-                completed: Some(babylon_persistence::CompletedProductionLaborV1 {
+                completed: Some(babylon_persistence::CompletedProductionLaborV2 {
+                    handling_needed: 0,
+                    handling_used: 0,
                     period: 5,
                     opening: 160,
                     planned: 40,
@@ -2541,7 +3087,7 @@ mod tests {
         snapshot.staffing_accounts.push(account);
         snapshot
             .labor_accounts
-            .push(babylon_persistence::ProductionLaborAccountV1 {
+            .push(babylon_persistence::ProductionLaborAccountV2 {
                 site_id: "a".into(),
                 unit_id: "labor-hours".into(),
                 unit: "labor-hours".into(),
@@ -2580,7 +3126,9 @@ mod tests {
         snapshot.staffing_accounts[0].next_opening_period = 6;
         snapshot.labor_accounts[0].next_opening_period = 6;
         snapshot.labor_accounts[0].completed =
-            Some(babylon_persistence::CompletedProductionLaborV1 {
+            Some(babylon_persistence::CompletedProductionLaborV2 {
+                handling_needed: 0,
+                handling_used: 0,
                 period: 5,
                 opening: 80,
                 planned: 40,
@@ -2598,9 +3146,9 @@ mod tests {
         assert_eq!(quiet.matches("Next opening").count(), 1);
     }
 
-    fn attributed_snapshot() -> ProductionSnapshotV1 {
+    fn attributed_snapshot() -> ProductionSnapshotV2 {
         use babylon_persistence::{
-            ArchiveEvidenceClassV1, DesignedProcessAttributionV1, ObservedManufacturingContextV1,
+            ArchiveEvidenceClassV1, DesignedProcessAttributionV1, ObservedSectorContextV2,
             ProductionBusinessSubjectV1,
         };
         let mut snapshot = snapshot();
@@ -2608,24 +3156,22 @@ mod tests {
             scenario: "observed-fixture".into(),
             local_name: "business-26163-31-33".into(),
         };
-        snapshot
-            .observed_contexts
-            .push(ObservedManufacturingContextV1 {
-                subject: subject.clone(),
-                county_geoid: "26163".into(),
-                sector_code: "31-33".into(),
-                sector_title: "Manufacturing".into(),
-                vintage: 2024,
-                annual_avg_estabs_count: 11,
-                annual_avg_emplvl: Some(1_234),
-                total_annual_wages: Some(12_345_678),
-                annual_avg_wkly_wage: Some(987),
-                source_url: "https://www.bls.gov/cew/".into(),
-                source_file: "county-source.csv".into(),
-                source_sha256: "a".repeat(64),
-                artifact_sha256: "b".repeat(64),
-                evidence_class: ArchiveEvidenceClassV1::Observed,
-            });
+        snapshot.observed_contexts.push(ObservedSectorContextV2 {
+            subject: subject.clone(),
+            county_geoid: "26163".into(),
+            sector_code: "31-33".into(),
+            sector_title: "Manufacturing".into(),
+            vintage: 2024,
+            annual_avg_estabs_count: 11,
+            annual_avg_emplvl: Some(1_234),
+            total_annual_wages: Some(12_345_678),
+            annual_avg_wkly_wage: Some(987),
+            source_url: "https://www.bls.gov/cew/".into(),
+            source_file: "county-source.csv".into(),
+            source_sha256: "a".repeat(64),
+            artifact_sha256: "b".repeat(64),
+            evidence_class: ArchiveEvidenceClassV1::Observed,
+        });
         for site in &snapshot.sites[..2] {
             snapshot
                 .process_attributions
@@ -2738,7 +3284,7 @@ mod tests {
         let clip_from_world = projection.get_clip_from_view() * transform.to_matrix().inverse();
         let mut production = snapshot();
         production.sites.extend([site("d", &[]), site("e", &["d"])]);
-        let layout = ProductionLayout::new(&production);
+        let layout = ProductionLayout::focused(&production, Some("b"), 0);
         let mut points = vec![Vec3::ZERO];
         for position in layout.positions.values() {
             points.extend([*position, *position + Vec3::Y * 110.0]);
@@ -3693,7 +4239,7 @@ mod tests {
             .join("\n");
         assert_eq!(text.matches("Designed regional freight pool").count(), 1);
         assert!(text.contains("OTHER PARTICIPANTS / SHARED FREIGHT"));
-        assert!(text.contains("160 kg opening · 160 reserved · 0 remaining"));
+        assert!(text.contains("160 kg opening · 160 kg reserved · 0 kg remaining"));
         send_command(
             &mut app,
             ProductionCommand::Reading(ProductionReadingSection::Freight),
@@ -3752,8 +4298,14 @@ mod tests {
             entity: button,
             context: Some(context.clone()),
         });
-        assert_eq!(app.world().resource::<ProductionNavigation>().selected_site.as_deref(), Some("b"),
-            "keyboard activation queues the existing command; it does not mutate navigation in PreUpdate");
+        assert_eq!(
+            app.world()
+                .resource::<ProductionNavigation>()
+                .selected_site
+                .as_deref(),
+            Some("b"),
+            "keyboard activation queues the existing command; it does not mutate navigation in PreUpdate"
+        );
         app.update();
         assert_eq!(
             app.world()
@@ -3780,6 +4332,87 @@ mod tests {
             .selected_site
             .is_none());
         assert!(app.world().resource::<ObserverFeedback>().message.is_some());
+    }
+
+    #[test]
+    fn keyboard_pages_the_disclosed_county_then_enters_a_circuit_and_back() {
+        let mut app = dependency_navigation_app();
+        app.add_observer(keyboard_activate);
+        {
+            let mut frame = app.world_mut().resource_mut::<ObserverFrame>();
+            let snapshot = frame.0.as_mut().unwrap().production.as_mut().unwrap();
+            snapshot.sites = (0..14)
+                .map(|index| site(&format!("owner-{index:02}"), &[]))
+                .collect();
+            snapshot.routes.clear();
+        }
+        {
+            let mut navigation = app.world_mut().resource_mut::<ProductionNavigation>();
+            navigation.county_geoid = Some("26163".into());
+            navigation.county_open = true;
+        }
+        app.update();
+        let context = app.world().resource::<ObserverSession>().context();
+        let page_button = {
+            let world = app.world_mut();
+            world
+                .query::<(Entity, &ProductionButton)>()
+                .iter(world)
+                .find_map(|(entity, button)| {
+                    matches!(
+                        button.0,
+                        ProductionCommand::Page {
+                            kind: ProductionPage::Cohorts,
+                            page: 1,
+                            ..
+                        }
+                    )
+                    .then_some(entity)
+                })
+                .expect("a real focusable next-page control")
+        };
+        app.world_mut().trigger(ObserverKeyboardActivate {
+            entity: page_button,
+            context: Some(context.clone()),
+        });
+        app.update();
+        assert_eq!(
+            app.world().resource::<ProductionNavigation>().cohort_page,
+            1
+        );
+        press_site(&mut app, "owner-06");
+        app.update();
+        assert_eq!(
+            app.world()
+                .resource::<ProductionNavigation>()
+                .selected_site
+                .as_deref(),
+            Some("owner-06")
+        );
+        assert!(!app.world().resource::<ProductionNavigation>().county_open);
+        send_command(&mut app, ProductionCommand::Back);
+        assert!(app.world().resource::<ProductionNavigation>().county_open);
+        assert_eq!(
+            app.world().resource::<ProductionNavigation>().cohort_page,
+            1
+        );
+        send_command(
+            &mut app,
+            ProductionCommand::Page {
+                kind: ProductionPage::Cohorts,
+                page: 2,
+                context,
+            },
+        );
+        app.world_mut()
+            .resource_mut::<ObserverSession>()
+            .set_perspective(crate::observer::Perspective::PlayerKnowledge);
+        app.update();
+        assert!(app
+            .world()
+            .resource::<ProductionNavigation>()
+            .county_geoid
+            .is_none());
     }
 
     #[test]
@@ -4277,7 +4910,7 @@ mod tests {
         hidden.id = "hidden-route".into();
         hidden.buyer_site_id = "withheld".into();
         snapshot.routes.push(hidden);
-        let original = ProductionLayout::new(&snapshot);
+        let original = ProductionLayout::focused(&snapshot, Some("b"), 0);
         assert_eq!(original.positions.len(), 3);
         assert_eq!(
             original.links,
@@ -4288,15 +4921,15 @@ mod tests {
         snapshot.sites.reverse();
         snapshot.routes.reverse();
         for site in &mut snapshot.sites {
-            for input in &mut site.inputs {
+            for input in &mut site.processes[0].inputs {
                 input.supplier_site_ids.reverse();
             }
         }
-        let reordered = ProductionLayout::new(&snapshot);
+        let reordered = ProductionLayout::focused(&snapshot, Some("b"), 0);
         assert_eq!(original.positions, reordered.positions);
         assert_eq!(original.links, reordered.links);
         snapshot.sites.retain(|site| site.id != "a");
-        let scoped = ProductionLayout::new(&snapshot);
+        let scoped = ProductionLayout::focused(&snapshot, Some("b"), 0);
         assert_eq!(scoped.links, [("b".into(), "c".into())]);
         assert!(!scoped.positions.contains_key("a"));
         assert!(!scoped.positions.contains_key("withheld"));
@@ -4304,15 +4937,18 @@ mod tests {
 
     #[test]
     fn only_actual_visible_in_transit_lots_get_static_markers() {
-        use babylon_persistence::ProductionFreightV1;
+        use babylon_persistence::ProductionFreightV2;
 
         let mut snapshot = snapshot();
-        let layout = ProductionLayout::new(&snapshot);
+        let layout = ProductionLayout::focused(&snapshot, Some("b"), 0);
         assert!(
             freight_markers(&snapshot, &layout, 1).is_empty(),
             "orders and deliveries alone must not generate freight"
         );
-        let lot = ProductionFreightV1 {
+        let lot = ProductionFreightV2 {
+            current_stage_index: 0,
+            grams_per_unit: 1000,
+            mass_grams: 1000,
             id: "actual-lot".into(),
             route_id: "a-b".into(),
             source_site_id: "a".into(),

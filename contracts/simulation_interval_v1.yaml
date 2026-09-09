@@ -3,7 +3,7 @@ meta:
   schema_version: 1
   status: accepted
   evidence_class: Designed
-  authority: Constitution v4.2.0 Amendment AK and ADR257
+  authority: Constitution v4.2.0 Amendment AK, ADR257 and ADR260
 
 interval:
   days_per_tick: 28
@@ -31,12 +31,18 @@ ordinals:
 
 admission:
   presets:
-    - michigan-material-standard-v5
-    - michigan-material-delayed-v5
-  stored_defines_version: 3
+    - michigan-material-standard-v7
+    - michigan-material-delayed-v7
+    - michigan-material-shared-freight-ample-v7
+    - michigan-material-shared-freight-constrained-v7
+    - michigan-material-statewide-baseline-v7
+    - michigan-material-statewide-freight-constraint-v7
+    - michigan-material-statewide-packaging-shortage-v7
+    - michigan-material-statewide-both-v7
+  stored_defines_version: 4
   duration_days: 28
   duration_is_hashed_foundation_content: true
-  incompatible_weekly_content: refuse without changing stored data
+  incompatible_prior_content: refuse without changing stored data
   malformed_or_missing_duration: refuse
   compatibility_runtime: forbidden
 
@@ -44,27 +50,39 @@ causal_order:
   steps:
     - Credit due arrivals at the opening of the period.
     - Execute only previously committed production through current resource limits.
-    - Dispatch against the shared exact inventory and corridor capacity principals.
-    - Derive feasible next-period work before applying staffing limits.
+    - Allocate outbound orders against native stock and shared gram capacity principals.
+    - Charge actual merchant handling once against current opening labor and handling grams.
+    - Credit finite retail final-demand accounts without physical freight or implied consumption.
+    - Credit local internal buyers after all outbound grants and stock debits are fixed.
+    - Derive next-period production need and recorded feasible merchant work before staffing limits.
     - Resolve staffing and its graph effects, then plan the next opening.
     - Publish all state, events, receipts, and time only after total success.
   note: >-
     The existing phase composition and within-period ordering remain binding.
     New arrivals can feed planning for the following period; they do not
     enlarge an already committed production plan in the arrival period.
+    Physical arrivals can supply current merchant handling. Local internal
+    credits cannot feed another outbound order in the same close. Employment
+    derived at this close supplies the next opening, including after zero work.
 
 content_units:
   recurring_process_capacity: batches per period
-  recurring_corridor_capacity: quantity per departure period
+  recurring_corridor_capacity: grams per departure period
+  merchant_handling_capacity: grams per departure period
+  merchant_handling_labor: positive exact hours per native outbound unit
+  freight_mass: positive exact grams per native good-unit quantity
   labor_schedule: hours per person per period
   staffing_retention: current and previous unretained period work requests
-  route_duration: positive whole periods
+  route_duration: positive whole periods per timed stage
+  physical_edges: Ordered captured geometry; many edges may form one timed stage.
+  local_transfer: No timed stage, physical road reservation or freight lot.
+  final_fulfillment: Native quantities credited once against finite county end-buyer orders.
   unchanged_principals:
     - exact inventory stocks
     - persons in employment and reserve
     - total order quantities and cumulative order accounts
     - per-batch physical inputs, outputs, and recipe hours
-  michigan_v5_design:
+  regional_design:
     recurring_capacity_multiplier: 4
     hours_per_person_per_period: 160
     initial_commitment_multiplier: 4
@@ -79,18 +97,19 @@ content_units:
     probability, nonlinear response, or stock receives an implicit fourfold
     multiplier. Every rate conversion needs its own declared transformation.
 
+current_contracts:
+  - contracts/material_circuit_v3.yaml
+  - contracts/material_world_register_v3.yaml
+  - contracts/committed_material_tick_v3.yaml
+  - contracts/nominal_material_world_v3.yaml
 historical_contracts:
-  preserves_bytes:
-    - contracts/material_circuit_v1.yaml
-    - contracts/material_circuit_v1_vectors.jsonl
-    - contracts/material_circuit_v2.yaml
-    - contracts/material_circuit_v2_vectors.jsonl
-  superseded_scope: >-
-    For current admitted content, all material ordinal fields formerly named
-    week, weeks, or weekly mean periods. Their integer widths, field ordering,
-    domain bytes, canonical ordering, refusal discriminants, and codec vector
-    bytes remain unchanged. Historical vectors prove those codec properties;
-    they do not admit a weekly campaign or define current game duration.
+  status: Retired source and vectors are historical evidence, with no live compatibility codec.
+  revision: 8c71be68bdc2c292b9b58ad98b2023213edb6b98
+  sources:
+    - https://github.com/percy-raskova/babylon/blob/8c71be68bdc2c292b9b58ad98b2023213edb6b98/contracts/material_circuit_v1.yaml
+    - https://github.com/percy-raskova/babylon/blob/8c71be68bdc2c292b9b58ad98b2023213edb6b98/contracts/material_circuit_v1_vectors.jsonl
+    - https://github.com/percy-raskova/babylon/blob/8c71be68bdc2c292b9b58ad98b2023213edb6b98/contracts/material_circuit_v2.yaml
+    - https://github.com/percy-raskova/babylon/blob/8c71be68bdc2c292b9b58ad98b2023213edb6b98/contracts/material_circuit_v2_vectors.jsonl
 
 required_evidence:
   - One advance traverses the causal schedule once and creates one durable marker.

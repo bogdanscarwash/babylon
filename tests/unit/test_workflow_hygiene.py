@@ -15,9 +15,10 @@ Four invariants, one per failure mode:
    (``with:`` only ever accompanies ``uses:``).
 2. Every ``actions/checkout`` step in the scheduled deep-leg workflows
    (``nightly-*.yml`` / ``weekly-*.yml``, the ADR181 R3 split) pins
-   ``ref: dev`` — scheduled workflows execute the file from the default
-   branch, so an unpinned checkout tests the wrong ref without erroring on a
-   dispatch from a non-default ref.
+   ``dev`` for scheduled executions. Manual qualification may instead pin
+   ``github.sha`` through the exact admitted schedule/dispatch expression.
+   Scheduled workflows execute the file from the default branch, so an
+   unconditional SHA or unpinned checkout would test the wrong branch.
 3. Every workflow carrying a ``schedule:`` trigger also declares
    ``workflow_dispatch`` — a cron-only workflow cannot be proof-run, which
    is how the monolithic nightly stayed red 76/76 without a diagnosis loop
@@ -297,7 +298,7 @@ class TestWorkflowStepShape:
 
 
 def _unpinned_checkouts(workflow: dict[str, Any], filename: str) -> list[str]:
-    """Return one message per ``actions/checkout`` step not pinning ``ref: dev``."""
+    """Refuse checkouts that do not pin scheduled execution to ``dev``."""
     violations: list[str] = []
     for job_name, job in (workflow.get("jobs") or {}).items():
         for index, step in enumerate(job.get("steps") or []):
@@ -305,7 +306,10 @@ def _unpinned_checkouts(workflow: dict[str, Any], filename: str) -> list[str]:
             if not uses.startswith("actions/checkout"):
                 continue
             ref = (step.get("with") or {}).get("ref")
-            if ref != "dev":
+            if ref not in (
+                "dev",
+                "${{ github.event_name == 'schedule' && 'dev' || github.sha }}",
+            ):
                 violations.append(f"{filename} job={job_name} step#{index}: checkout ref={ref!r}")
     return violations
 
@@ -445,6 +449,25 @@ class TestScheduledWorkflows:
         assert _unpinned_checkouts(broken, "weekly-test-rest.yml") == [
             "weekly-test-rest.yml job=test-rest step#0: checkout ref=None"
         ]
+
+    @pytest.mark.parametrize(
+        ("ref", "accepted"),
+        [
+            ("${{ github.event_name == 'schedule' && 'dev' || github.sha }}", True),
+            ("${{ github.event_name == 'schedule' && 'main' || github.sha }}", False),
+            ("${{ github.event_name == 'workflow_dispatch' && 'dev' || github.sha }}", False),
+            ("${{ github.sha }}", False),
+        ],
+    )
+    def test_manual_commit_pin_preserves_the_scheduled_branch(
+        self, ref: str, accepted: bool
+    ) -> None:
+        workflow = {
+            "jobs": {
+                "contracts": {"steps": [{"uses": "actions/checkout@v7", "with": {"ref": ref}}]}
+            }
+        }
+        assert (not _unpinned_checkouts(workflow, "weekly-pg-integration.yml")) is accepted
 
     def test_checker_catches_a_cron_only_workflow(self) -> None:
         # Mutation validation: yaml parses bare `on:` as the boolean True key.

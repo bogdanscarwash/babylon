@@ -6,21 +6,21 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use babylon_material_circuit::{
-    GoodIdV1, MaterialCircuitStateV2, OrderIdV1, OrderRowV2, ProcessIdV1, SiteIdV1, UnitIdV1,
+    GoodIdV1, MaterialCircuitStateV3, OrderIdV1, OrderRowV2, ProcessIdV1, SiteIdV1, UnitIdV1,
 };
-use babylon_tick::material_world::MaterialTickReceiptsV3;
+use babylon_tick::material_world::MaterialTickReceiptsV4;
 use serde::{Deserialize, Serialize};
 
 use super::ProductionProjectionErrorV1;
-use crate::{michigan_economy::digest_hex, michigan_material::material_topology};
+use crate::{michigan_economy::digest_hex, michigan_material::MichiganMaterialCatalogV1};
 
 /// One complete committed period's local inventory accounts. Absent at foundation.
 /// The enclosing authorized observation binds campaign, perspective and evidence.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct CompletedMaterialBalanceV1 {
+pub struct CompletedMaterialBalanceV2 {
     pub period: u64,
-    pub rows: Vec<ProductionMaterialBalanceRowV1>,
+    pub rows: Vec<ProductionMaterialBalanceRowV2>,
 }
 
 /// Exact local stock account for one site/good/unit, never a sum across units.
@@ -28,7 +28,7 @@ pub struct CompletedMaterialBalanceV1 {
 /// additional stock credits. All quantities are Derived from committed evidence.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct ProductionMaterialBalanceRowV1 {
+pub struct ProductionMaterialBalanceRowV2 {
     pub site_id: String,
     pub good_id: String,
     pub unit_id: String,
@@ -36,6 +36,9 @@ pub struct ProductionMaterialBalanceRowV1 {
     pub unit: String,
     pub opening: u64,
     pub arrivals: u64,
+    pub local_received: u64,
+    pub local_transferred: u64,
+    pub final_demand_fulfilled: u64,
     pub produced: u64,
     pub consumed: u64,
     pub dispatched: u64,
@@ -52,6 +55,9 @@ type Movements = BTreeMap<OrderIdV1, Movement>;
 struct Amounts {
     opening: u64,
     arrivals: u64,
+    local_received: u64,
+    local_transferred: u64,
+    final_demand_fulfilled: u64,
     produced: u64,
     consumed: u64,
     dispatched: u64,
@@ -76,6 +82,7 @@ struct OrderPrincipal {
 #[derive(Default)]
 struct Movement {
     dispatched: u64,
+    local_transferred: u64,
     arrived: u64,
     lost: u64,
     delivered: u64,
@@ -85,11 +92,11 @@ struct Movement {
 /// Inputs have already passed the enclosing material identity verification.
 /// A missing completed family is legitimate only at the true foundation.
 pub(super) fn project_material_balance(
-    current: &MaterialCircuitStateV2,
-    prior: Option<&MaterialCircuitStateV2>,
-    receipt: Option<&MaterialTickReceiptsV3>,
-) -> Result<Option<CompletedMaterialBalanceV1>, ProductionProjectionErrorV1> {
-    let catalog = material_topology().map_err(|_| ProductionProjectionErrorV1::Content)?;
+    catalog: &MichiganMaterialCatalogV1,
+    current: &MaterialCircuitStateV3,
+    prior: Option<&MaterialCircuitStateV3>,
+    receipt: Option<&MaterialTickReceiptsV4>,
+) -> Result<Option<CompletedMaterialBalanceV2>, ProductionProjectionErrorV1> {
     project_with_labels(current, prior, receipt, |good, unit| {
         catalog
             .goods()
@@ -100,11 +107,11 @@ pub(super) fn project_material_balance(
 }
 
 fn project_with_labels(
-    current: &MaterialCircuitStateV2,
-    prior: Option<&MaterialCircuitStateV2>,
-    receipt: Option<&MaterialTickReceiptsV3>,
+    current: &MaterialCircuitStateV3,
+    prior: Option<&MaterialCircuitStateV3>,
+    receipt: Option<&MaterialTickReceiptsV4>,
     labels: impl Fn(GoodIdV1, UnitIdV1) -> Option<(String, String)>,
-) -> Result<Option<CompletedMaterialBalanceV1>, ProductionProjectionErrorV1> {
+) -> Result<Option<CompletedMaterialBalanceV2>, ProductionProjectionErrorV1> {
     let (prior, receipt) = match (prior, receipt) {
         (None, None) if current.period == 1 => return Ok(None),
         (Some(prior), Some(receipt))
@@ -116,6 +123,7 @@ fn project_with_labels(
         }
         _ => return Err(ProductionProjectionErrorV1::History),
     };
+    super::outbound::completed_facts(prior, current, receipt)?;
     let processes = process_map(prior)?;
     let orders = order_map(prior)?;
     if processes != process_map(current)? || orders != order_map(current)? {
@@ -124,17 +132,18 @@ fn project_with_labels(
     let mut ledger = inventory_ledger(prior, current)?;
     add_production(prior, receipt, &processes, &mut ledger)?;
     add_transport(prior, current, receipt, &orders, &mut ledger)?;
+    add_final_demand(prior, receipt, &mut ledger)?;
     let rows = ledger
         .into_iter()
         .map(|(key, amounts)| finish_row(key, &amounts, &labels))
         .collect::<Result<_, _>>()?;
-    Ok(Some(CompletedMaterialBalanceV1 {
+    Ok(Some(CompletedMaterialBalanceV2 {
         period: receipt.resolve_tick,
         rows,
     }))
 }
 
-fn process_map(state: &MaterialCircuitStateV2) -> Result<Processes, ProductionProjectionErrorV1> {
+fn process_map(state: &MaterialCircuitStateV3) -> Result<Processes, ProductionProjectionErrorV1> {
     let mut processes = Processes::new();
     for row in &state.process_outputs {
         if row.quantity_per_batch == 0
@@ -168,7 +177,7 @@ fn process_map(state: &MaterialCircuitStateV2) -> Result<Processes, ProductionPr
     Ok(processes)
 }
 
-fn order_map(state: &MaterialCircuitStateV2) -> Result<Orders, ProductionProjectionErrorV1> {
+fn order_map(state: &MaterialCircuitStateV3) -> Result<Orders, ProductionProjectionErrorV1> {
     let mut orders = Orders::new();
     for row in &state.orders {
         if row.shipped > row.ordered
@@ -196,8 +205,8 @@ fn order_map(state: &MaterialCircuitStateV2) -> Result<Orders, ProductionProject
 }
 
 fn inventory_ledger(
-    prior: &MaterialCircuitStateV2,
-    current: &MaterialCircuitStateV2,
+    prior: &MaterialCircuitStateV3,
+    current: &MaterialCircuitStateV3,
 ) -> Result<Ledger, ProductionProjectionErrorV1> {
     let mut ledger = Ledger::new();
     for (state, opening) in [(prior, true), (current, false)] {
@@ -219,8 +228,8 @@ fn inventory_ledger(
 }
 
 fn add_production(
-    prior: &MaterialCircuitStateV2,
-    receipt: &MaterialTickReceiptsV3,
+    prior: &MaterialCircuitStateV3,
+    receipt: &MaterialTickReceiptsV4,
     processes: &Processes,
     ledger: &mut Ledger,
 ) -> Result<(), ProductionProjectionErrorV1> {
@@ -276,9 +285,9 @@ fn add_production(
 }
 
 fn add_transport(
-    prior: &MaterialCircuitStateV2,
-    current: &MaterialCircuitStateV2,
-    receipt: &MaterialTickReceiptsV3,
+    prior: &MaterialCircuitStateV3,
+    current: &MaterialCircuitStateV3,
+    receipt: &MaterialTickReceiptsV4,
     orders: &Orders,
     ledger: &mut Ledger,
 ) -> Result<(), ProductionProjectionErrorV1> {
@@ -293,6 +302,7 @@ fn add_transport(
     }
     add_dispatches(current, receipt, orders, &mut movements, ledger)?;
     add_losses(prior, receipt, orders, &mut movements)?;
+    add_local_transfers(receipt, orders, &mut movements, ledger)?;
     for row in &receipt.arrivals {
         let principal = orders
             .get(&row.order_id)
@@ -348,8 +358,8 @@ fn add_transport(
 }
 
 fn add_dispatches(
-    current: &MaterialCircuitStateV2,
-    receipt: &MaterialTickReceiptsV3,
+    current: &MaterialCircuitStateV3,
+    receipt: &MaterialTickReceiptsV4,
     orders: &Orders,
     movements: &mut Movements,
     ledger: &mut Ledger,
@@ -371,8 +381,8 @@ fn add_dispatches(
             || lot.route_id != row.route_id
             || lot.quantity != row.quantity
             || lot.dispatch_period != receipt.resolve_tick
-            || lot.current_leg_index != 0
-            || lot.leg_arrival_period <= receipt.resolve_tick
+            || lot.current_stage_index != 0
+            || lot.stage_arrival_period <= receipt.resolve_tick
             || (
                 lot.source_site_id,
                 lot.destination_site_id,
@@ -403,8 +413,8 @@ fn add_dispatches(
 }
 
 fn add_losses(
-    prior: &MaterialCircuitStateV2,
-    receipt: &MaterialTickReceiptsV3,
+    prior: &MaterialCircuitStateV3,
+    receipt: &MaterialTickReceiptsV4,
     orders: &Orders,
     movements: &mut Movements,
 ) -> Result<(), ProductionProjectionErrorV1> {
@@ -416,17 +426,18 @@ fn add_losses(
             .find(|lot| lot.lot_id == row.lot_id)
             .ok_or(ProductionProjectionErrorV1::State)?;
         let leg = prior
-            .route_legs
+            .route_stages
             .iter()
-            .find(|leg| leg.route_id == lot.route_id && leg.leg_index == lot.current_leg_index)
+            .find(|leg| leg.route_id == lot.route_id && leg.stage_index == lot.current_stage_index)
             .ok_or(ProductionProjectionErrorV1::State)?;
         if row.quantity == 0
             || row.quantity > lot.quantity
             || !seen.insert(row.lot_id)
             || !orders.contains_key(&row.order_id)
             || lot.order_id != row.order_id
-            || lot.leg_arrival_period != receipt.resolve_tick
-            || leg.corridor_id != row.corridor_id
+            || lot.stage_arrival_period != receipt.resolve_tick
+            || leg.route_id != row.route_id
+            || leg.stage_index != row.stage_index
         {
             return Err(ProductionProjectionErrorV1::State);
         }
@@ -439,17 +450,87 @@ fn add_losses(
     Ok(())
 }
 
+/// A local internal handoff is one debit and one credit of the same native good.
+/// The caller has authenticated receipt identity and order deltas through the
+/// common outbound facts; no freight lot, arrival or new allocator is involved.
+fn add_local_transfers(
+    receipt: &MaterialTickReceiptsV4,
+    orders: &Orders,
+    movements: &mut Movements,
+    ledger: &mut Ledger,
+) -> Result<(), ProductionProjectionErrorV1> {
+    for row in &receipt.local_transfers {
+        let principal = orders
+            .get(&row.order_id)
+            .ok_or(ProductionProjectionErrorV1::State)?;
+        add(
+            &mut ledger
+                .entry((principal.supplier, principal.good, principal.unit))
+                .or_default()
+                .local_transferred,
+            row.quantity,
+        )?;
+        add(
+            &mut ledger
+                .entry((principal.buyer, principal.good, principal.unit))
+                .or_default()
+                .local_received,
+            row.quantity,
+        )?;
+        add(
+            &mut movements.entry(row.order_id).or_default().local_transferred,
+            row.quantity,
+        )?;
+    }
+    Ok(())
+}
+
+/// Finite end-buyer fulfillment is a terminal stock sink, not consumption.
+fn add_final_demand(
+    prior: &MaterialCircuitStateV3,
+    receipt: &MaterialTickReceiptsV4,
+    ledger: &mut Ledger,
+) -> Result<(), ProductionProjectionErrorV1> {
+    for order in &prior.final_demand_orders {
+        ledger
+            .entry((order.retailer_site_id, order.good_id, order.unit_id))
+            .or_default();
+    }
+    for row in &receipt.local_fulfillments {
+        add(
+            &mut ledger
+                .entry((row.retailer_site_id, row.good_id, row.unit_id))
+                .or_default()
+                .final_demand_fulfilled,
+            row.quantity,
+        )?;
+    }
+    Ok(())
+}
+
 fn check_movement(
     prior: &OrderRowV2,
     current: &OrderRowV2,
     movement: &Movement,
 ) -> Result<(), ProductionProjectionErrorV1> {
+    let shipped = movement
+        .dispatched
+        .checked_add(movement.local_transferred)
+        .ok_or(ProductionProjectionErrorV1::Arithmetic)?;
+    let delivered = movement
+        .arrived
+        .checked_add(movement.local_transferred)
+        .ok_or(ProductionProjectionErrorV1::Arithmetic)?;
+    let realized = movement
+        .realized
+        .checked_add(movement.local_transferred)
+        .ok_or(ProductionProjectionErrorV1::Arithmetic)?;
     if prior.ordered != current.ordered
         || prior.access_mode != current.access_mode
-        || current.shipped.checked_sub(prior.shipped) != Some(movement.dispatched)
-        || current.delivered.checked_sub(prior.delivered) != Some(movement.arrived)
+        || current.shipped.checked_sub(prior.shipped) != Some(shipped)
+        || current.delivered.checked_sub(prior.delivered) != Some(delivered)
         || current.lost.checked_sub(prior.lost) != Some(movement.lost)
-        || current.realized.checked_sub(prior.realized) != Some(movement.realized)
+        || current.realized.checked_sub(prior.realized) != Some(realized)
         || movement.delivered != movement.arrived
         || movement.realized != movement.arrived
     {
@@ -474,20 +555,29 @@ fn finish_row(
     key: Principal,
     amounts: &Amounts,
     labels: &impl Fn(GoodIdV1, UnitIdV1) -> Option<(String, String)>,
-) -> Result<ProductionMaterialBalanceRowV1, ProductionProjectionErrorV1> {
-    let total = |a: u64, b: u64, c: u64| {
-        u128::from(a)
-            .checked_add(u128::from(b))
-            .and_then(|sum| sum.checked_add(u128::from(c)))
+) -> Result<ProductionMaterialBalanceRowV2, ProductionProjectionErrorV1> {
+    let total = |values: &[u64]| {
+        values
+            .iter()
+            .try_fold(0_u128, |sum, value| sum.checked_add(u128::from(*value)))
             .ok_or(ProductionProjectionErrorV1::Arithmetic)
     };
-    if total(amounts.opening, amounts.arrivals, amounts.produced)?
-        != total(amounts.consumed, amounts.dispatched, amounts.closing)?
-    {
+    if total(&[
+        amounts.opening,
+        amounts.arrivals,
+        amounts.local_received,
+        amounts.produced,
+    ])? != total(&[
+        amounts.consumed,
+        amounts.dispatched,
+        amounts.local_transferred,
+        amounts.final_demand_fulfilled,
+        amounts.closing,
+    ])? {
         return Err(ProductionProjectionErrorV1::State);
     }
     let (good, unit) = labels(key.1, key.2).ok_or(ProductionProjectionErrorV1::Content)?;
-    Ok(ProductionMaterialBalanceRowV1 {
+    Ok(ProductionMaterialBalanceRowV2 {
         site_id: digest_hex(&key.0.as_bytes()),
         good_id: digest_hex(&key.1.as_bytes()),
         unit_id: digest_hex(&key.2.as_bytes()),
@@ -495,6 +585,9 @@ fn finish_row(
         unit,
         opening: amounts.opening,
         arrivals: amounts.arrivals,
+        local_received: amounts.local_received,
+        local_transferred: amounts.local_transferred,
+        final_demand_fulfilled: amounts.final_demand_fulfilled,
         produced: amounts.produced,
         consumed: amounts.consumed,
         dispatched: amounts.dispatched,

@@ -2,21 +2,29 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use babylon_material_circuit::{MaterialCircuitStateV2, ProcessIdV1, SiteIdV1, UnitIdV1};
-use babylon_tick::material_world::MaterialTickReceiptsV3;
+use babylon_material_circuit::{MaterialCircuitStateV3, ProcessIdV1, SiteIdV1, UnitIdV1};
+use babylon_tick::material_world::MaterialTickReceiptsV4;
 
 use super::ProductionProjectionErrorV1;
-use crate::{michigan_economy::digest_hex, CompletedProductionLaborV1, ProductionLaborAccountV1};
+use crate::{michigan_economy::digest_hex, CompletedProductionLaborV2, ProductionLaborAccountV2};
 
 type Principal = (SiteIdV1, UnitIdV1);
 type Budgets = BTreeMap<Principal, u64>;
-type Totals = BTreeMap<Principal, (u64, u64)>;
+type Totals = BTreeMap<Principal, LaborTotals>;
+
+#[derive(Clone, Copy, Default)]
+struct LaborTotals {
+    planned: u64,
+    used: u64,
+    handling_needed: u64,
+    handling_used: u64,
+}
 
 pub(super) fn project_labor_accounts(
-    state: &MaterialCircuitStateV2,
-    opening: Option<&MaterialCircuitStateV2>,
-    receipt: Option<&MaterialTickReceiptsV3>,
-) -> Result<Vec<ProductionLaborAccountV1>, ProductionProjectionErrorV1> {
+    state: &MaterialCircuitStateV3,
+    opening: Option<&MaterialCircuitStateV3>,
+    receipt: Option<&MaterialTickReceiptsV4>,
+) -> Result<Vec<ProductionLaborAccountV2>, ProductionProjectionErrorV1> {
     let next = budgets(state)?;
     let (prior, totals) = match (opening, receipt) {
         (None, None) if state.period == 1 => (None, Totals::new()),
@@ -24,8 +32,13 @@ pub(super) fn project_labor_accounts(
             if prior.period.checked_add(1) == Some(state.period)
                 && receipt.resolve_tick == prior.period =>
         {
-            if prior.labor_coefficients != state.labor_coefficients
-                || prior.process_outputs != state.process_outputs
+            if !super::outbound::same_rows(&prior.labor_coefficients, &state.labor_coefficients)
+                || !super::outbound::same_rows(&prior.process_outputs, &state.process_outputs)
+                || !super::outbound::same_rows(&prior.merchants, &state.merchants)
+                || !super::outbound::same_rows(
+                    &prior.handling_coefficients,
+                    &state.handling_coefficients,
+                )
             {
                 return Err(ProductionProjectionErrorV1::State);
             }
@@ -44,20 +57,23 @@ pub(super) fn project_labor_accounts(
                 .as_ref()
                 .map(|prior| {
                     let available = prior.get(&key).copied().unwrap_or(0);
-                    let (planned, used) = totals.get(&key).copied().unwrap_or((0, 0));
+                    let account = totals.get(&key).copied().unwrap_or_default();
+                    let used = account.used;
                     let unused = available
                         .checked_sub(used)
                         .ok_or(ProductionProjectionErrorV1::State)?;
-                    Ok::<_, ProductionProjectionErrorV1>(CompletedProductionLaborV1 {
+                    Ok::<_, ProductionProjectionErrorV1>(CompletedProductionLaborV2 {
                         period: state.period - 1,
                         opening: available,
-                        planned,
+                        planned: account.planned,
                         used,
                         unused,
+                        handling_needed: account.handling_needed,
+                        handling_used: account.handling_used,
                     })
                 })
                 .transpose()?;
-            Ok(ProductionLaborAccountV1 {
+            Ok(ProductionLaborAccountV2 {
                 site_id: digest_hex(&key.0.as_bytes()),
                 unit_id: digest_hex(&key.1.as_bytes()),
                 unit: "labor-hours".to_owned(),
@@ -70,7 +86,7 @@ pub(super) fn project_labor_accounts(
 }
 
 /// Missing sparse capacity is zero; a duplicated principal is never summed.
-fn budgets(state: &MaterialCircuitStateV2) -> Result<Budgets, ProductionProjectionErrorV1> {
+fn budgets(state: &MaterialCircuitStateV3) -> Result<Budgets, ProductionProjectionErrorV1> {
     let mut result = Budgets::new();
     for row in state.labor.iter().filter(|row| row.period == state.period) {
         if result
@@ -90,12 +106,17 @@ fn budgets(state: &MaterialCircuitStateV2) -> Result<Budgets, ProductionProjecti
             .entry((process.site_id, coefficient.unit_id))
             .or_insert(0);
     }
+    for merchant in &state.merchants {
+        result
+            .entry((merchant.site_id, merchant.labor_unit_id))
+            .or_insert(0);
+    }
     Ok(result)
 }
 
 fn completed_totals(
-    opening: &MaterialCircuitStateV2,
-    receipt: &MaterialTickReceiptsV3,
+    opening: &MaterialCircuitStateV3,
+    receipt: &MaterialTickReceiptsV4,
 ) -> Result<Totals, ProductionProjectionErrorV1> {
     let mut processes = BTreeMap::<ProcessIdV1, (Principal, u64, u64)>::new();
     for plan in &opening.production_commitments {
@@ -133,13 +154,42 @@ fn completed_totals(
             return Err(ProductionProjectionErrorV1::State);
         }
         let account = totals.entry(key).or_default();
-        account.0 = add_time(account.0, planned, coefficient)?;
-        account.1 = add_time(account.1, row.produced_batches, coefficient)?;
+        account.planned = add_time(account.planned, planned, coefficient)?;
+        account.used = add_time(account.used, row.produced_batches, coefficient)?;
     }
     if !processes.is_empty() {
         return Err(ProductionProjectionErrorV1::State);
     }
+    add_handling_time(opening, receipt, &mut totals)?;
     Ok(totals)
+}
+
+fn add_handling_time(
+    opening: &MaterialCircuitStateV3,
+    receipt: &MaterialTickReceiptsV4,
+    totals: &mut Totals,
+) -> Result<(), ProductionProjectionErrorV1> {
+    let mut seen = BTreeSet::new();
+    for row in &receipt.handling {
+        let merchant = opening
+            .merchants
+            .iter()
+            .find(|merchant| merchant.site_id == row.site_id)
+            .ok_or(ProductionProjectionErrorV1::State)?;
+        if !seen.insert(row.order)
+            || row.handled_quantity > row.feasible_quantity
+            || row.used_hours > row.needed_hours
+        {
+            return Err(ProductionProjectionErrorV1::State);
+        }
+        let account = totals
+            .entry((row.site_id, merchant.labor_unit_id))
+            .or_default();
+        account.handling_needed = add_time(account.handling_needed, row.needed_hours, 1)?;
+        account.handling_used = add_time(account.handling_used, row.used_hours, 1)?;
+        account.used = add_time(account.used, row.used_hours, 1)?;
+    }
+    Ok(())
 }
 
 fn add_time(

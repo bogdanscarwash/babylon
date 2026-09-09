@@ -95,9 +95,15 @@ class TestSyntheticViolations:
         violations = check_large_non_lfs_blobs(lines)
         assert violations == ["tests/fat_fixture.json (2097152 bytes)"]
 
-    @pytest.mark.parametrize("theme", ["phi", "panopticon"])
-    def test_embedded_themes_have_an_exact_two_mib_budget(self, theme: str) -> None:
-        path = f"assets/music/babylon_theme_{theme}.ogg"
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "assets/music/babylon_theme_phi.ogg",
+            "assets/music/babylon_theme_panopticon.ogg",
+            "content/scenarios/michigan/statewide-physical.json.gz",
+        ],
+    )
+    def test_named_runtime_assets_have_an_exact_two_mib_budget(self, path: str) -> None:
         boundary = 2_097_152
         assert check_large_non_lfs_blobs([f"100644 blob abc123 {boundary}\t{path}"]) == []
         assert check_large_non_lfs_blobs([f"100644 blob abc123 {boundary + 1}\t{path}"]) == [
@@ -110,6 +116,9 @@ class TestSyntheticViolations:
             "assets/music/babylon_theme_other.ogg",
             "assets/music/unrelated.ogg",
             "other/assets/music/babylon_theme_phi.ogg",
+            "content/scenarios/michigan/statewide-physical.json.gz.bak",
+            "content/scenarios/michigan/other-network.json.gz",
+            "other/content/scenarios/michigan/statewide-physical.json.gz",
         ]
         size = 1_048_577
         assert check_large_non_lfs_blobs(

@@ -1,0 +1,59 @@
+version: 3
+name: material_world_register_v3
+authority: [ADR251, ADR260]
+purpose: Complete current material state owned by the explicit material replay session.
+related_contracts:
+  - contracts/material_circuit_v3.yaml
+  - contracts/simulation_interval_v1.yaml
+  - contracts/nominal_material_world_v3.yaml
+clock:
+  completed_tick: unsigned_64_big_endian
+  circuit_period: completed_tick_plus_one_checked
+  days_per_period: 28
+encoding:
+  domain: "babylon.material-world-register.v3\0"
+  fields:
+    - u32_big_endian_version_3
+    - u64_big_endian_completed_tick
+    - u64_big_endian_state_byte_length
+    - exact_material_circuit_state_v3_bytes
+  digest: sha256_exact_bytes
+  maximum_complete_bytes: 67108864
+  decoder: reject_unknown_version_truncated_trailing_or_noncanonical_bytes
+transition:
+  authority: MaterialCircuitV3
+  implementation: advance_material_circuit_v3_or_its_single_detached_close_and_finish
+  order:
+    - Complete due transport stages, attribute native loss and credit final physical arrivals.
+    - Execute prior production commitments against current stock and opening labor.
+    - Allocate delivery and final-demand orders against stock and shared mass capacities.
+    - Constrain merchant handling with opening labor and debit only actual outbound quantities.
+    - Publish local internal buyer credits after every outbound grant and debit is fixed.
+    - Derive next-period production work and recorded feasible merchant handling need.
+    - Resolve staffing, replace next-period labor and form next-period production commitments.
+  causal_barriers:
+    - Arrivals cannot enlarge an existing production commitment.
+    - Arrived goods may satisfy current merchant handling and dispatch.
+    - Local internal buyer credits cannot feed another outbound order in the same close.
+    - New employment supplies the next period and cannot enlarge current handling work.
+  capacity:
+    principal: corridor_id_and_departure_period
+    unit: grams
+    request: native_quantity_times_positive_exact_grams_per_unit
+    reservation: actual_dispatch_grams_once_per_unique_principal
+    physical_path: Many captured edges may share one timed stage; edges do not advance time.
+    residual: Proportional-floor and cross-resource residuals remain unused.
+  quantity_realization: Delivered internal commodity quantity; no payment or claim.
+  final_demand: Finite county orders credited once at retail handoff; no implied consumption.
+publication:
+  owner: MaterialReplaySessionV3
+  prepare: Detached graph and material candidates with exact MaterialTickReceiptsV4 bytes.
+  commit: Preflight all publication allocations before the one durable operation.
+  success: Infallible moves publish graph, material register, completed tick and graph event sink.
+  failure: Graph, material register, identity, completed tick and event sink remain unchanged.
+  horizon: Refuse before adjudication when the captured finite content horizon is complete.
+compatibility:
+  runtime: Only the current register and material codec are live.
+  incompatible_campaign: Refuse reopening without modifying stored data.
+history:
+  predecessor: https://github.com/percy-raskova/babylon/blob/8c71be68bdc2c292b9b58ad98b2023213edb6b98/contracts/material_world_register_v2.yaml

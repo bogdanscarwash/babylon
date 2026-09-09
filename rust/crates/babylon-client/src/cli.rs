@@ -70,7 +70,7 @@ options:
   --campaign    open an existing canonical campaign UUID; falls back to BABYLON_CAMPAIGN_ID.
   --new-campaign create an absent campaign with this canonical UUID.
   --preset      new campaign scenario: standard (default), delayed,
-                shared-freight-ample or shared-freight-constrained.
+                shared-freight-ample, shared-freight-constrained, statewide-baseline, statewide-freight-constraint, statewide-packaging-shortage or statewide-both.
   Open the connected window with `mise run play`.
 ";
 
@@ -342,12 +342,16 @@ fn windowed_target(
         let preset = match preset.as_deref() {
             None | Some("standard") => RuntimeSessionPresetV3::Standard,
             Some("delayed") => RuntimeSessionPresetV3::Delayed,
+            Some("statewide-baseline") => RuntimeSessionPresetV3::StatewideBaseline,
+            Some("statewide-freight-constraint") => RuntimeSessionPresetV3::StatewideFreightConstraint,
+            Some("statewide-packaging-shortage") => RuntimeSessionPresetV3::StatewidePackagingShortage,
+            Some("statewide-both") => RuntimeSessionPresetV3::StatewideBoth,
             Some("shared-freight-ample") => RuntimeSessionPresetV3::SharedFreightAmple,
             Some("shared-freight-constrained") => RuntimeSessionPresetV3::SharedFreightConstrained,
             Some(_) => {
                 return Err(CliError::at(
                     concat!(file!(), ":", line!()),
-                    "new campaign preset must be standard, delayed, shared-freight-ample or shared-freight-constrained".into(),
+                    "new campaign preset must be standard, delayed, shared-freight-ample, shared-freight-constrained, statewide-baseline, statewide-freight-constraint, statewide-packaging-shortage or statewide-both".into(),
                 ))
             }
         };
@@ -620,7 +624,14 @@ mod tests {
 
     #[test]
     fn shared_freight_presets_are_available_through_new_campaign() {
-        for preset in ["shared-freight-ample", "shared-freight-constrained"] {
+        for preset in [
+            "shared-freight-ample",
+            "shared-freight-constrained",
+            "statewide-baseline",
+            "statewide-freight-constraint",
+            "statewide-packaging-shortage",
+            "statewide-both",
+        ] {
             let request = parse(os(&["--new-campaign", CAMPAIGN, "--preset", preset]));
             assert!(
                 request.is_ok(),

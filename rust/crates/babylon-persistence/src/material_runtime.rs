@@ -24,14 +24,14 @@ use crate::{
 use babylon_bsl::structural_verbs::CollectingSink;
 use babylon_graph::hypergraph_store::HypergraphStore;
 use babylon_kernel::sha256_of;
-use babylon_material_circuit::MaterialCircuitStateV2;
+use babylon_material_circuit::MaterialCircuitStateV3;
 use babylon_practice_contract::ordered_action_v1::OrderedPracticeActionBatchV1;
 use babylon_tick::{
     material_replay::{
         IdentifiedMaterialTickV3, MaterialCommitErrorV3, MaterialReplayErrorV3,
         MaterialReplaySessionV3,
     },
-    material_world::{MaterialWorldErrorV2, MaterialWorldRegisterV2},
+    material_world::{MaterialWorldErrorV3, MaterialWorldRegisterV3},
     replay_session::{ReplayCommitDispositionV1, ReplayTickSession},
 };
 use postgres::{Config, GenericClient, NoTls};
@@ -73,7 +73,7 @@ pub struct MaterialFoundationSpecV2 {
 pub struct MaterialRuntimeFoundationV2 {
     graph: ReplayTickSession<HypergraphStore>,
     graph_foundation: CampaignFoundationV1,
-    register: MaterialWorldRegisterV2,
+    register: MaterialWorldRegisterV3,
     spec: MaterialFoundationSpecV2,
     bytes: Vec<u8>,
     digest: [u8; 32],
@@ -84,7 +84,7 @@ pub struct MaterialRuntimeFoundationV2 {
 pub enum MaterialRuntimeErrorV3 {
     Graph(RustPersistenceRuntimeErrorV2),
     Replay(MaterialReplayErrorV3),
-    Register(MaterialWorldErrorV2),
+    Register(MaterialWorldErrorV3),
     Database(postgres::Error),
     DatabaseLockRefused(postgres::Error),
     DatabaseStatementCanceled(postgres::Error),
@@ -115,8 +115,8 @@ impl From<MaterialReplayErrorV3> for MaterialRuntimeErrorV3 {
         Self::Replay(error)
     }
 }
-impl From<MaterialWorldErrorV2> for MaterialRuntimeErrorV3 {
-    fn from(error: MaterialWorldErrorV2) -> Self {
+impl From<MaterialWorldErrorV3> for MaterialRuntimeErrorV3 {
+    fn from(error: MaterialWorldErrorV3) -> Self {
         Self::Register(error)
     }
 }
@@ -159,12 +159,12 @@ impl MaterialRuntimeFoundationV2 {
     pub fn capture_v2(
         graph: ReplayTickSession<HypergraphStore>,
         bundle: FoundationContentBundleV2,
-        state: MaterialCircuitStateV2,
+        state: MaterialCircuitStateV3,
         spec: MaterialFoundationSpecV2,
     ) -> Result<Self, MaterialRuntimeErrorV3> {
         validate_foundation_spec(&spec)?;
         let graph_foundation = CampaignFoundationV1::capture_v2(&graph, bundle)?;
-        let register = MaterialWorldRegisterV2::try_new(0, state)?;
+        let register = MaterialWorldRegisterV3::try_new(0, state)?;
         Self::from_parts(graph, graph_foundation, register, spec)
     }
 
@@ -173,7 +173,7 @@ impl MaterialRuntimeFoundationV2 {
     fn from_parts(
         graph: ReplayTickSession<HypergraphStore>,
         graph_foundation: CampaignFoundationV1,
-        register: MaterialWorldRegisterV2,
+        register: MaterialWorldRegisterV3,
         spec: MaterialFoundationSpecV2,
     ) -> Result<Self, MaterialRuntimeErrorV3> {
         validate_foundation_spec(&spec)?;
@@ -239,7 +239,7 @@ impl MaterialRuntimeFoundationV2 {
         &self.bytes
     }
     #[must_use]
-    pub const fn initial_register(&self) -> &MaterialWorldRegisterV2 {
+    pub const fn initial_register(&self) -> &MaterialWorldRegisterV3 {
         &self.register
     }
     #[must_use]
@@ -649,7 +649,7 @@ fn reconstruct_material_foundation_v2(
     {
         return Err(MaterialRuntimeErrorV3::FoundationMismatch);
     }
-    let register = MaterialWorldRegisterV2::decode(&stored.initial_register_bytes)?;
+    let register = MaterialWorldRegisterV3::decode(&stored.initial_register_bytes)?;
     if register.completed_tick() != 0 {
         return Err(MaterialRuntimeErrorV3::FoundationMismatch);
     }
@@ -702,7 +702,7 @@ pub(crate) struct StoredMaterialTickV3 {
     pub(crate) graph: babylon_graph::stable_state::StableGraphStateV1,
     material: babylon_tick::material_state::MaterialStateRowsV1,
     sections: Vec<Vec<u8>>,
-    pub(crate) register: MaterialWorldRegisterV2,
+    pub(crate) register: MaterialWorldRegisterV3,
     pub(crate) events: Vec<StoredEventV2>,
 }
 
@@ -780,7 +780,7 @@ fn read_stored_material_tick_rows(
     let identity = IdentifiedMaterialTickV3::decode(&row.try_get::<_, Vec<u8>>(0)?)?;
     let register: Vec<u8> = row.try_get(1)?;
     let receipts: Vec<u8> = row.try_get(2)?;
-    let decoded_register = MaterialWorldRegisterV2::decode(&register)?;
+    let decoded_register = MaterialWorldRegisterV3::decode(&register)?;
     if identity.resolve_tick() != tick || decoded_register.completed_tick() != tick {
         return Err(MaterialRuntimeErrorV3::InvalidCheckpoint);
     }

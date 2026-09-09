@@ -1,0 +1,159 @@
+ADR260_statewide_commodity_circulation:
+  status: accepted
+  date: '2026-09-09'
+  title: Finite statewide commodities use captured physical paths and merchant accounts
+  evidence_class: Designed
+  authority:
+    - Director-approved statewide Michigan commodity production and circulation plan
+    - Director instruction to prioritize entertainment during development
+    - Director instruction that development updates need no backward compatibility
+  partially_supersedes:
+    - ADR259 R4 content and receipt versions; its four regional experiments retain their economic behavior.
+  context: |
+    The regional freight experiment exposes competition between two chains.
+    Statewide circulation needs source-supported producer eligibility, physical
+    connections, merchandise handling, and finite destinations for output.
+    County employment and payroll observations cannot supply physical recipes
+    or transport capacity. The game needs readable causes and regional
+    consequences; additional realism must earn its development cost.
+  decision: |
+    R1. CONTENT. Admit 397 county-sector owners across Michigan's 83 counties:
+    83 agriculture and forestry, 65 extractive mining, 83 manufacturing,
+    83 wholesale, and 83 retail. Five mining cohorts with only support services
+    remain context. Positive establishments in pinned detailed QCEW records
+    establish template eligibility. Suppressed employment and wage observations
+    stay unavailable. Recipes, stocks, labor, freight mass coefficients,
+    operational capacities, and finite commitments are Designed.
+
+    Enroll a dominant eligible productive template by establishment count and
+    exact NAICS tie-breaking. Add eligible upstream processes where required
+    for reachable input supply, using qualified path distance and stable county
+    identity. Processes within one statewide owner share stock and workforce.
+    Select one supplier per buyer/input and coalesce duplicate relationships.
+    Self-sourcing between an owner's processes is shared inventory, not a sale
+    or transport order. Every producer has an outbound commitment; merchants
+    have sources and destinations. Unresolved coverage or disconnected supply
+    is explicit and cannot invent a producer or physical connection.
+
+    R2. TRANSPORT. Pin source bytes, hashes, extraction settings, vehicle
+    profile, and routing version. Roads use actual OSM node references, access
+    and direction restrictions, grade separation, and turn restrictions.
+    The Designed regional freight network admits motorway, trunk, primary,
+    secondary, and tertiary roads and their link classes. Residential roads,
+    driveways, service roads, and unclassified local roads are outside this
+    aggregate model. This admission keeps the real regional connections useful
+    for a game without compiling millions of unrelated last-mile segments.
+    Aggregate county terminals and their attachments are Designed locations,
+    not factory coordinates. Paths use positive integer distances and stable
+    edge identity. Retain OpenStreetMap attribution and transport-only
+    connectors outside Michigan; those connectors add no economic owners.
+    An explicit Designed default-height bound interprets OSM maxheight=default
+    records. It does not claim a measured clearance or remove a signed or
+    physical restriction. Capture the bound with the vehicle profile.
+
+    The two Mackinac Bridge carriageways share one Designed freight service.
+    Other selected edges share a service within each connected component of
+    an OSM route reference, road name, or unnamed way. These memberships choose
+    economic constraints without changing physical connectivity or travel time.
+
+    Separate physical geometry, travel time, and capacity. A road journey is
+    one 28-day stage, regardless of its number of physical edges. Each stage
+    reserves its distinct shared capacity principals once. Native commodity
+    units retain positive exact grams-per-unit coefficients. Use the existing
+    proportional-floor allocator for stock, mass capacity, and merchant labor.
+    Dispatch the minimum grant, debit only actual movement, and leave unused
+    residuals. Capacity reservations are not physical arrivals.
+
+    R3. MERCHANTS AND DESTINATIONS. Merchants own merchandise, finite orders,
+    handling capacity, labor, and employed/reserve accounts. Handling preserves
+    commodity identity and quantity. Calculate physically feasible handling
+    need before the current labor constraint, so zero employment can cause
+    unmet work and subsequent hiring. Routed arrivals precede handling.
+
+    County-local transfers between different owners use the same outbound
+    allocation. They debit the supplier, credit the buyer, and complete the
+    finite supply order without a road stage, transit lot, or physical-arrival
+    receipt. Fix all outbound grants and debit their sources before crediting
+    local buyers; no recursive forwarding occurs within that close. Separate
+    local-transfer receipts disclose these movements.
+
+    Local retail fulfillment debits merchandise, consumes handling resources,
+    and increments a finite end-buyer order atomically. It creates neither
+    freight nor household stock. Derive county totals from fulfilled orders
+    and label them delivered to end buyers. Unsold merchandise remains stock.
+
+    R4. CAPTURE AND IDENTITY. Definitions V3, Michigan content V7, generalized
+    sector bundles, material circuit/register V3, receipts V4, tagged staffing
+    work sources, and production evidence V6 express the new accounts. Regional
+    and statewide authoring normalize into one current compiler and encoder.
+    Capture parameters, observed-source authority, resolved paths, terminal
+    attachments, and network identity in each campaign. Reopening reconstructs
+    captured authority; it does not consult changed network files or reroute.
+    Retain existing outer envelope and SQL framing wherever their opaque
+    payload contracts suffice. Measure complete row and byte bounds.
+
+    Development updates need no backward compatibility. Refuse unsupported
+    content clearly and retain no compatibility implementation. This rule
+    does not authorize deletion of unique user data or unrelated work.
+
+    R5. OBSERVATION AND COMPARISON. World provides a county overview of modeled
+    employed/reserve counts with separate observed-source lenses. Physical
+    amounts require an exact commodity and unit. County selection leads to a
+    paged cohort list and focused Circuit detail with at most six incident
+    relationship groups. Shared-capacity competitors are distinct from
+    suppliers. Selected physical paths share deduplicated geometry. Preserve
+    the subject/period/output/workforce header and Flow, Freight, Work, and
+    Sources sections. Merchant output is handling, not invented production.
+
+    Compare four persisted statewide runs: baseline, one physical freight
+    constraint, one food producer's opening packaging shortage, and both.
+    Freeze the intervention identities and quantities after network
+    qualification and require committed causal witnesses. All other parameters
+    are equal. Workforce principals are counted once and heterogeneous output
+    quantities are never summed. Held history, resume, keyboard access, loading
+    and refusal states remain coherent. Restricted previews gain no material
+    facts. Evidence V6 binds the complete canonical typed projection, preserving
+    ordered paths and events while sorting true multisets.
+
+    The qualified comparison uses mackinac-bridge-freight: 100,000,000 grams
+    per period in baseline and 1,000,000 under the freight constraint. The
+    packaging intervention changes only process 26097-31-33-prepared_food from
+    160 to 80 kilograms of opening paper packaging. These Designed values were
+    selected for visible consequences in the finite game, not traffic forecasts.
+
+    R6. BOUNDARIES. Retain 16 periods, 28-day ticks, finite orders, and the
+    existing staffing retention rule. Payments, prices, credit, household
+    behavior, recurring demand, regeneration, and player actions stay outside
+    this slice. Qualify rail and water terminals and transfers as subsequent
+    transport stages through the same runtime. A later bounded maintenance
+    stage has one Wayne provider and one metal-parts consumer; provider labor,
+    spare parts, and expiring service capacity constrain whole jobs enabling
+    next-period production. Prospective material/nameplate capacity determines
+    requested jobs before maintenance and labor constraints.
+  alternatives_rejected:
+    - Using observed jobs or payroll as physical production or freight capacity.
+    - An all-pairs supplier graph, runtime supplier substitution, or recurring demand.
+    - Giving each road segment a separate 28-day travel interval.
+    - Inventing freight routes for local handoffs or treating sales as consumption.
+    - A second allocation engine in the observer or merchant implementation.
+    - Compatibility compilers, old save migrations, and duplicated content authority.
+  consequences: |
+    Representative chains expose regional bottlenecks without claiming to
+    forecast Michigan. The observer can trace goods through production,
+    movement, handling, and finite delivery while explaining workforce effects.
+    Richer geography and accounts require measured bounds and focused detail.
+    This decision defines delivery requirements; it does not certify completed
+    implementation, hosted qualification, or Director comprehension acceptance.
+  verification: |
+    Begin with integrated failing cases. Verify source eligibility and
+    suppression, independently binding inputs, mixed-unit and simultaneous
+    freight constraints, residuals, unique reservations, restriction-aware
+    paths, one arrival per journey, merchant conservation and zero-worker
+    recovery, finite fulfillment, and no recursive or duplicate delivery.
+    Exercise all 16 periods through PostgreSQL, restart and held history,
+    reconstruction after source files change, permutation identity, evidence
+    mutation, and failed-tick publication atomicity. Preserve the four regional
+    experiment results. Measure compilation, creation, advance, projection,
+    resume, rows, and bytes at full size. Run scoped Rust and data gates without
+    documentation generation. Exact-head hosted and native evidence at
+    1366x768 and 1920x1080 supports, but never replaces, the Director walkthrough.

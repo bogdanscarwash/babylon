@@ -1,12 +1,13 @@
 use super::{
-    advance_staffing_v1, StaffingErrorV1, StaffingPolicyV1, StaffingPoolBindingV1,
-    StaffingPoolIdV1, StaffingPoolStateV1, StaffingReceiptV1, StaffingStateV1,
-    StaffingWorkRequestV1,
+    advance_staffing_v2, StaffingErrorV2, StaffingPolicyV1, StaffingPoolBindingV2,
+    StaffingPoolIdV1, StaffingPoolStateV2, StaffingReceiptV2, StaffingStateV2,
+    StaffingWorkRequestV2,
 };
+use crate::StaffingWorkSourceV2;
 use crate::{ProcessIdV1, SiteIdV1, UnitIdV1, MAX_MATERIAL_CIRCUIT_ROWS_V1};
 
-fn binding(key: u8, labor_force: u64, schedule: u64, process_keys: &[u8]) -> StaffingPoolBindingV1 {
-    StaffingPoolBindingV1::try_new(
+fn binding(key: u8, labor_force: u64, schedule: u64, process_keys: &[u8]) -> StaffingPoolBindingV2 {
+    StaffingPoolBindingV2::try_new(
         StaffingPoolIdV1::from_bytes([key; 32]),
         SiteIdV1::from_bytes([key; 32]),
         UnitIdV1::from_bytes([9; 32]),
@@ -14,42 +15,42 @@ fn binding(key: u8, labor_force: u64, schedule: u64, process_keys: &[u8]) -> Sta
         StaffingPolicyV1::one_period(schedule).expect("explicit positive schedule"),
         process_keys
             .iter()
-            .map(|key| ProcessIdV1::from_bytes([*key; 32]))
+            .map(|key| StaffingWorkSourceV2::Production(ProcessIdV1::from_bytes([*key; 32])))
             .collect(),
     )
     .expect("explicit disjoint binding")
 }
 
-fn pool(binding: StaffingPoolBindingV1, employed: u64, previous: u64) -> StaffingPoolStateV1 {
+fn pool(binding: StaffingPoolBindingV2, employed: u64, previous: u64) -> StaffingPoolStateV2 {
     let reserve = binding.labor_force() - employed;
-    StaffingPoolStateV1::try_new(binding, employed, reserve, previous).expect("conserved pool")
+    StaffingPoolStateV2::try_new(binding, employed, reserve, previous).expect("conserved pool")
 }
 
-fn request(binding: &StaffingPoolBindingV1, process: u8, hours: u64) -> StaffingWorkRequestV1 {
+fn request(binding: &StaffingPoolBindingV2, process: u8, hours: u64) -> StaffingWorkRequestV2 {
     request_at(1, binding, process, hours)
 }
 
 fn request_at(
     period: u64,
-    binding: &StaffingPoolBindingV1,
+    binding: &StaffingPoolBindingV2,
     process: u8,
     hours: u64,
-) -> StaffingWorkRequestV1 {
-    StaffingWorkRequestV1::new(
+) -> StaffingWorkRequestV2 {
+    StaffingWorkRequestV2::new(
         period,
         binding.pool_id(),
-        ProcessIdV1::from_bytes([process; 32]),
+        StaffingWorkSourceV2::Production(ProcessIdV1::from_bytes([process; 32])),
         binding.site_id(),
         binding.unit_id(),
         hours,
     )
 }
 
-fn state(pools: Vec<StaffingPoolStateV1>) -> StaffingStateV1 {
-    StaffingStateV1::try_new(1, pools).expect("complete opening state")
+fn state(pools: Vec<StaffingPoolStateV2>) -> StaffingStateV2 {
+    StaffingStateV2::try_new(1, pools).expect("complete opening state")
 }
 
-fn conservation(receipt: &StaffingReceiptV1) {
+fn conservation(receipt: &StaffingReceiptV2) {
     let labor_force = u128::from(receipt.binding().labor_force());
     assert_eq!(
         u128::from(receipt.opening_employed()) + u128::from(receipt.opening_reserve()),
@@ -79,7 +80,7 @@ fn conservation(receipt: &StaffingReceiptV1) {
 fn one_empty_period_is_retained_but_a_second_releases_then_recovery_rehires() {
     let owned = binding(1, 7, 3, &[1]);
     let opening = state(vec![pool(owned.clone(), 5, 15)]);
-    let brief = advance_staffing_v1(&opening, &[request(&owned, 1, 0)]).expect("brief shortage");
+    let brief = advance_staffing_v2(&opening, &[request(&owned, 1, 0)]).expect("brief shortage");
     assert_eq!(brief.state().pools()[0].employed(), 5);
     assert_eq!(brief.state().pools()[0].previous_unretained_hours(), 0);
     assert_eq!(brief.receipts()[0].retained_hours(), 15);
@@ -88,7 +89,7 @@ fn one_empty_period_is_retained_but_a_second_releases_then_recovery_rehires() {
     assert_eq!(brief.next_labor()[0].available, 15);
     conservation(&brief.receipts()[0]);
 
-    let sustained = advance_staffing_v1(brief.state(), &[request_at(2, &owned, 1, 0)])
+    let sustained = advance_staffing_v2(brief.state(), &[request_at(2, &owned, 1, 0)])
         .expect("sustained shortage");
     assert_eq!(sustained.state().pools()[0].employed(), 0);
     assert_eq!(sustained.state().pools()[0].reserve(), 7);
@@ -97,7 +98,7 @@ fn one_empty_period_is_retained_but_a_second_releases_then_recovery_rehires() {
     assert_eq!(sustained.next_labor()[0].available, 0);
     conservation(&sustained.receipts()[0]);
 
-    let recovered = advance_staffing_v1(sustained.state(), &[request_at(3, &owned, 1, 10)])
+    let recovered = advance_staffing_v2(sustained.state(), &[request_at(3, &owned, 1, 10)])
         .expect("rehire independently of prior labor cap");
     assert_eq!(recovered.state().pools()[0].employed(), 4);
     assert_eq!(recovered.state().pools()[0].reserve(), 3);
@@ -112,7 +113,7 @@ fn one_empty_period_is_retained_but_a_second_releases_then_recovery_rehires() {
 fn forty_hour_period_pools_before_rounding_and_remembers_only_current_work() {
     let owned = binding(1, 4, 40, &[1, 2]);
     let opening = state(vec![pool(owned.clone(), 3, 120)]);
-    let first = advance_staffing_v1(&opening, &[request(&owned, 1, 20), request(&owned, 2, 20)])
+    let first = advance_staffing_v2(&opening, &[request(&owned, 1, 20), request(&owned, 2, 20)])
         .expect("one period of retained staffing under the explicit forty-hour schedule");
     assert_eq!(first.receipts()[0].current_unretained_hours(), 40);
     assert_eq!(first.receipts()[0].retained_hours(), 120);
@@ -120,7 +121,7 @@ fn forty_hour_period_pools_before_rounding_and_remembers_only_current_work() {
     assert_eq!(first.state().pools()[0].employed(), 3);
     assert_eq!(first.next_labor()[0].available, 120);
 
-    let second = advance_staffing_v1(
+    let second = advance_staffing_v2(
         first.state(),
         &[request_at(2, &owned, 1, 20), request_at(2, &owned, 2, 20)],
     )
@@ -131,7 +132,7 @@ fn forty_hour_period_pools_before_rounding_and_remembers_only_current_work() {
     assert_eq!(second.state().pools()[0].reserve(), 3);
     assert_eq!(second.next_labor()[0].available, 40);
 
-    let third = advance_staffing_v1(
+    let third = advance_staffing_v2(
         second.state(),
         &[request_at(3, &owned, 1, 20), request_at(3, &owned, 2, 21)],
     )
@@ -157,9 +158,9 @@ fn forty_hour_period_pools_before_rounding_and_remembers_only_current_work() {
 fn declining_request_does_not_retain_a_historical_peak_forever() {
     let owned = binding(1, 10, 2, &[1]);
     let opening = state(vec![pool(owned.clone(), 8, 16)]);
-    let first = advance_staffing_v1(&opening, &[request(&owned, 1, 6)]).expect("first decline");
+    let first = advance_staffing_v2(&opening, &[request(&owned, 1, 6)]).expect("first decline");
     let second =
-        advance_staffing_v1(first.state(), &[request_at(2, &owned, 1, 6)]).expect("second decline");
+        advance_staffing_v2(first.state(), &[request_at(2, &owned, 1, 6)]).expect("second decline");
     assert_eq!(first.state().pools()[0].employed(), 8);
     assert_eq!(first.state().pools()[0].previous_unretained_hours(), 6);
     assert_eq!(second.state().pools()[0].employed(), 3);
@@ -168,7 +169,7 @@ fn declining_request_does_not_retain_a_historical_peak_forever() {
 }
 
 #[test]
-fn shared_processes_pool_hours_before_rounding_and_leave_unrelated_work_unchanged() {
+fn shared_work_sources_pool_hours_before_rounding_and_leave_unrelated_work_unchanged() {
     let shared = binding(1, 10, 3, &[2, 1]);
     let food = binding(2, 5, 7, &[3]);
     let opening = state(vec![pool(food.clone(), 2, 14), pool(shared.clone(), 0, 0)]);
@@ -177,7 +178,7 @@ fn shared_processes_pool_hours_before_rounding_and_leave_unrelated_work_unchange
         request(&food, 3, 14),
         request(&shared, 1, 1),
     ];
-    let result = advance_staffing_v1(&opening, &requests).expect("pooled request");
+    let result = advance_staffing_v2(&opening, &requests).expect("pooled request");
     assert_eq!(result.receipts().len(), 2);
     let pooled = &result.receipts()[0];
     assert_eq!(pooled.current_unretained_hours(), 2);
@@ -203,7 +204,7 @@ fn shared_processes_pool_hours_before_rounding_and_leave_unrelated_work_unchange
     conservation(unaffected);
     let mut reordered = requests;
     reordered.reverse();
-    assert_eq!(advance_staffing_v1(&opening, &reordered), Ok(result));
+    assert_eq!(advance_staffing_v2(&opening, &reordered), Ok(result));
 }
 
 #[test]
@@ -211,7 +212,7 @@ fn large_request_caps_at_available_people_without_ceiling_overflow() {
     let owned = binding(1, 2, 2, &[1]);
     let opening = state(vec![pool(owned.clone(), 0, 0)]);
     let result =
-        advance_staffing_v1(&opening, &[request(&owned, 1, u64::MAX)]).expect("bounded pool");
+        advance_staffing_v2(&opening, &[request(&owned, 1, u64::MAX)]).expect("bounded pool");
     assert_eq!(result.receipts()[0].retained_hours(), u64::MAX);
     assert_eq!(result.receipts()[0].target_employed(), 2);
     assert_eq!(result.receipts()[0].next_opening_hours(), 4);
@@ -223,12 +224,12 @@ fn zero_population_and_empty_world_are_explicit_valid_states() {
     let owned = binding(1, 0, 3, &[1]);
     let empty_pool = state(vec![pool(owned.clone(), 0, 0)]);
     let result =
-        advance_staffing_v1(&empty_pool, &[request(&owned, 1, 8)]).expect("no available people");
+        advance_staffing_v2(&empty_pool, &[request(&owned, 1, 8)]).expect("no available people");
     assert_eq!(result.receipts()[0].hires(), 0);
     assert_eq!(result.receipts()[0].closing_reserve(), 0);
     assert_eq!(result.next_labor()[0].available, 0);
     conservation(&result.receipts()[0]);
-    let empty_world = advance_staffing_v1(&state(vec![]), &[]).expect("declared empty state");
+    let empty_world = advance_staffing_v2(&state(vec![]), &[]).expect("declared empty state");
     assert!(empty_world.state().pools().is_empty());
     assert!(empty_world.receipts().is_empty());
     assert!(empty_world.next_labor().is_empty());
@@ -236,12 +237,12 @@ fn zero_population_and_empty_world_are_explicit_valid_states() {
 }
 
 fn refusal(
-    opening: &StaffingStateV1,
-    requests: &[StaffingWorkRequestV1],
-    expected: StaffingErrorV1,
+    opening: &StaffingStateV2,
+    requests: &[StaffingWorkRequestV2],
+    expected: StaffingErrorV2,
 ) {
     let before = opening.clone();
-    assert_eq!(advance_staffing_v1(opening, requests), Err(expected));
+    assert_eq!(advance_staffing_v2(opening, requests), Err(expected));
     assert_eq!(opening, &before);
 }
 
@@ -251,21 +252,21 @@ fn incomplete_duplicate_foreign_and_cross_unit_requests_refuse() {
     let opening = state(vec![pool(owned.clone(), 3, 6)]);
     let first = request(&owned, 1, 0);
     let second = request(&owned, 2, 0);
-    refusal(&opening, &[first], StaffingErrorV1::MissingRequest);
+    refusal(&opening, &[first], StaffingErrorV2::MissingRequest);
     refusal(
         &opening,
         &[first, second, first],
-        StaffingErrorV1::DuplicateRequest,
+        StaffingErrorV2::DuplicateRequest,
     );
     refusal(
         &opening,
         &[first, request(&owned, 9, 0)],
-        StaffingErrorV1::UnknownRequest,
+        StaffingErrorV2::UnknownRequest,
     );
-    let wrong_unit = StaffingWorkRequestV1::new(
+    let wrong_unit = StaffingWorkRequestV2::new(
         1,
         owned.pool_id(),
-        second.process_id(),
+        second.work_source(),
         owned.site_id(),
         UnitIdV1::from_bytes([8; 32]),
         0,
@@ -273,12 +274,12 @@ fn incomplete_duplicate_foreign_and_cross_unit_requests_refuse() {
     refusal(
         &opening,
         &[first, wrong_unit],
-        StaffingErrorV1::RequestBinding,
+        StaffingErrorV2::RequestBinding,
     );
-    let wrong_site = StaffingWorkRequestV1::new(
+    let wrong_site = StaffingWorkRequestV2::new(
         1,
         owned.pool_id(),
-        second.process_id(),
+        second.work_source(),
         SiteIdV1::from_bytes([8; 32]),
         owned.unit_id(),
         0,
@@ -286,12 +287,12 @@ fn incomplete_duplicate_foreign_and_cross_unit_requests_refuse() {
     refusal(
         &opening,
         &[first, wrong_site],
-        StaffingErrorV1::RequestBinding,
+        StaffingErrorV2::RequestBinding,
     );
-    let wrong_pool = StaffingWorkRequestV1::new(
+    let wrong_pool = StaffingWorkRequestV2::new(
         1,
         StaffingPoolIdV1::from_bytes([8; 32]),
-        second.process_id(),
+        second.work_source(),
         owned.site_id(),
         owned.unit_id(),
         0,
@@ -299,7 +300,7 @@ fn incomplete_duplicate_foreign_and_cross_unit_requests_refuse() {
     refusal(
         &opening,
         &[first, wrong_pool],
-        StaffingErrorV1::RequestBinding,
+        StaffingErrorV2::RequestBinding,
     );
 }
 
@@ -310,7 +311,7 @@ fn overflow_at_request_sum_or_late_pool_publishes_no_partial_transition() {
     refusal(
         &opening,
         &[request(&shared, 1, u64::MAX), request(&shared, 2, 1)],
-        StaffingErrorV1::Arithmetic,
+        StaffingErrorV2::Arithmetic,
     );
 
     let ordinary = binding(1, 3, 3, &[1]);
@@ -323,11 +324,11 @@ fn overflow_at_request_sum_or_late_pool_publishes_no_partial_transition() {
     refusal(
         &mixed,
         &[request(&ordinary, 1, 3), request(&overflowing, 2, u64::MAX)],
-        StaffingErrorV1::Arithmetic,
+        StaffingErrorV2::Arithmetic,
     );
     assert_eq!(
-        StaffingPoolStateV1::try_new(overflowing, 2, 0, 0),
-        Err(StaffingErrorV1::Arithmetic),
+        StaffingPoolStateV2::try_new(overflowing, 2, 0, 0),
+        Err(StaffingErrorV2::Arithmetic),
     );
 }
 
@@ -338,14 +339,14 @@ fn next_schedule_overflow_and_period_overflow_refuse_without_mutation() {
     refusal(
         &opening,
         &[request(&owned, 1, u64::MAX)],
-        StaffingErrorV1::Arithmetic,
+        StaffingErrorV2::Arithmetic,
     );
-    let last_period = StaffingStateV1::try_new(u64::MAX, vec![pool(owned.clone(), 0, 0)])
+    let last_period = StaffingStateV2::try_new(u64::MAX, vec![pool(owned.clone(), 0, 0)])
         .expect("representable current period");
     refusal(
         &last_period,
         &[request_at(u64::MAX, &owned, 1, 0)],
-        StaffingErrorV1::Arithmetic,
+        StaffingErrorV2::Arithmetic,
     );
 }
 
@@ -353,21 +354,21 @@ fn next_schedule_overflow_and_period_overflow_refuse_without_mutation() {
 fn missing_schedule_or_nonconserved_person_inputs_refuse() {
     assert_eq!(
         StaffingPolicyV1::one_period(0),
-        Err(StaffingErrorV1::ZeroSchedule)
+        Err(StaffingErrorV2::ZeroSchedule)
     );
     let owned = binding(1, 5, 2, &[1]);
     assert_eq!(
-        StaffingPoolStateV1::try_new(owned, 3, 3, 0),
-        Err(StaffingErrorV1::PopulationInvariant)
+        StaffingPoolStateV2::try_new(owned, 3, 3, 0),
+        Err(StaffingErrorV2::PopulationInvariant)
     );
     let maximum = binding(1, u64::MAX, 1, &[1]);
     assert_eq!(
-        StaffingPoolStateV1::try_new(maximum, u64::MAX, 1, 0),
-        Err(StaffingErrorV1::Arithmetic)
+        StaffingPoolStateV2::try_new(maximum, u64::MAX, 1, 0),
+        Err(StaffingErrorV2::Arithmetic)
     );
     assert_eq!(
-        StaffingStateV1::try_new(0, vec![]),
-        Err(StaffingErrorV1::PeriodInvariant)
+        StaffingStateV2::try_new(0, vec![]),
+        Err(StaffingErrorV2::PeriodInvariant)
     );
 }
 
@@ -376,37 +377,39 @@ fn shared_pool_ownership_refuses_duplicate_process_pool_and_site_unit() {
     let original = binding(1, 5, 2, &[1]);
     let first = pool(original.clone(), 2, 4);
     assert_eq!(
-        StaffingStateV1::try_new(1, vec![first.clone(), first.clone()]),
-        Err(StaffingErrorV1::DuplicatePool)
+        StaffingStateV2::try_new(1, vec![first.clone(), first.clone()]),
+        Err(StaffingErrorV2::DuplicatePool)
     );
     let other = pool(binding(2, 5, 2, &[1]), 2, 4);
     assert_eq!(
-        StaffingStateV1::try_new(1, vec![first.clone(), other]),
-        Err(StaffingErrorV1::DuplicateProcess)
+        StaffingStateV2::try_new(1, vec![first.clone(), other]),
+        Err(StaffingErrorV2::DuplicateWorkSource)
     );
-    let alias = StaffingPoolBindingV1::try_new(
+    let alias = StaffingPoolBindingV2::try_new(
         StaffingPoolIdV1::from_bytes([2; 32]),
         original.site_id(),
         original.unit_id(),
         5,
         original.policy(),
-        vec![ProcessIdV1::from_bytes([2; 32])],
+        vec![StaffingWorkSourceV2::Production(ProcessIdV1::from_bytes(
+            [2; 32],
+        ))],
     )
-    .expect("binding alone has unique processes");
+    .expect("binding alone has unique work_sources");
     assert_eq!(
-        StaffingStateV1::try_new(1, vec![first, pool(alias, 2, 4)]),
-        Err(StaffingErrorV1::DuplicateSiteUnit)
+        StaffingStateV2::try_new(1, vec![first, pool(alias, 2, 4)]),
+        Err(StaffingErrorV2::DuplicateSiteUnit)
     );
     assert_eq!(
-        StaffingPoolBindingV1::try_new(
+        StaffingPoolBindingV2::try_new(
             original.pool_id(),
             original.site_id(),
             original.unit_id(),
             5,
             original.policy(),
-            vec![ProcessIdV1::from_bytes([1; 32]); 2]
+            vec![StaffingWorkSourceV2::Production(ProcessIdV1::from_bytes([1; 32])); 2]
         ),
-        Err(StaffingErrorV1::DuplicateProcess),
+        Err(StaffingErrorV2::DuplicateWorkSource),
     );
 }
 
@@ -414,7 +417,7 @@ fn shared_pool_ownership_refuses_duplicate_process_pool_and_site_unit() {
 fn empty_or_overbound_process_membership_and_requests_refuse() {
     let owned = binding(1, 5, 2, &[1]);
     assert_eq!(
-        StaffingPoolBindingV1::try_new(
+        StaffingPoolBindingV2::try_new(
             owned.pool_id(),
             owned.site_id(),
             owned.unit_id(),
@@ -422,24 +425,27 @@ fn empty_or_overbound_process_membership_and_requests_refuse() {
             owned.policy(),
             vec![]
         ),
-        Err(StaffingErrorV1::EmptyProcesses)
+        Err(StaffingErrorV2::EmptyWorkSources)
     );
     assert_eq!(
-        StaffingPoolBindingV1::try_new(
+        StaffingPoolBindingV2::try_new(
             owned.pool_id(),
             owned.site_id(),
             owned.unit_id(),
             5,
             owned.policy(),
-            vec![ProcessIdV1::from_bytes([1; 32]); MAX_MATERIAL_CIRCUIT_ROWS_V1 + 1]
+            vec![
+                StaffingWorkSourceV2::Production(ProcessIdV1::from_bytes([1; 32]));
+                MAX_MATERIAL_CIRCUIT_ROWS_V1 + 1
+            ]
         ),
-        Err(StaffingErrorV1::RowLimit)
+        Err(StaffingErrorV2::RowLimit)
     );
     let opening = state(vec![pool(owned.clone(), 2, 4)]);
     refusal(
         &opening,
         &vec![request(&owned, 1, 0); MAX_MATERIAL_CIRCUIT_ROWS_V1 + 1],
-        StaffingErrorV1::RowLimit,
+        StaffingErrorV2::RowLimit,
     );
 }
 
@@ -450,17 +456,17 @@ fn a_request_from_another_period_is_not_current_work() {
     refusal(
         &opening,
         &[request_at(0, &owned, 1, 3)],
-        StaffingErrorV1::PeriodInvariant,
+        StaffingErrorV2::PeriodInvariant,
     );
     refusal(
         &opening,
         &[request_at(2, &owned, 1, 3)],
-        StaffingErrorV1::PeriodInvariant,
+        StaffingErrorV2::PeriodInvariant,
     );
-    let second = advance_staffing_v1(&opening, &[request(&owned, 1, 3)]).expect("current request");
+    let second = advance_staffing_v2(&opening, &[request(&owned, 1, 3)]).expect("current request");
     refusal(
         second.state(),
         &[request(&owned, 1, 3)],
-        StaffingErrorV1::PeriodInvariant,
+        StaffingErrorV2::PeriodInvariant,
     );
 }

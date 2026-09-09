@@ -41,8 +41,11 @@ Python launcher dependency set is included; Rust owns simulation and persistence
 | N / D | New standard / delayed-delivery campaign from the menu |
 | Q | Quit from the menu |
 
-New campaigns read `content/scenarios/michigan/defines.toml`; existing campaigns
-retain their saved parameters. The initial window is 1366 × 768.
+The campaign menu separates Regional proofs from Statewide Michigan. Statewide
+offers baseline, freight constraint, packaging shortage, and both constraints.
+New campaigns read `content/scenarios/michigan/defines.toml` and the adjacent
+pinned statewide source files; existing campaigns retain their saved parameters
+and routes. The initial window is 1366 × 768.
 
 For a check without a window, run `./babylon --smoke`. It creates a campaign,
 commits one period, restarts the runtime, reopens that state without reading the
@@ -64,6 +67,7 @@ launcher dependency hashes. `sha256sum --check SHA256SUMS` verifies all extracte
 files. Project, font, audio-rendering and Rust dependency notices are under
 `notices/`; Python dependency notices are in their bundled `.dist-info` directories.
 The original theme music is included with its author's distribution permission.
+Road source attribution is in `content/scenarios/michigan/NOTICE`.
 
 The adjacent `release-provenance.json` links this tested archive to the main
 release commit and its GitHub qualification run. The source commit recorded

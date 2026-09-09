@@ -398,19 +398,18 @@ def test_heavy_children_and_enclosing_ci_have_truthful_deadlines() -> None:
         "run_phase client 900 cargo test",
     ):
         assert invocation in runner
-    # The longest hosted path builds600, bootstraps180 and runs two readers600
-    # each. Reserve600 for all bounded Docker/SQL probes, readiness and cleanup.
-    longest_hosted_seconds = 600 + 180 + 2 * 600 + 600
-    for relative, job_name in (
-        (".github/workflows/ci.yml", "pg-integration-shards"),
-        (".github/workflows/weekly-pg-integration.yml", "runtime-contracts"),
+    # Reserve600 for bounded Docker/SQL probes, readiness and cleanup. The
+    # weekly/manual workflow also runs the full actual-source statewide case.
+    for relative, job_name, contract_seconds in (
+        (".github/workflows/ci.yml", "pg-integration-shards", 2 * 600),
+        (".github/workflows/weekly-pg-integration.yml", "runtime-contracts", 3600),
     ):
         workflow = yaml.safe_load((ROOT / relative).read_text())
         job = workflow["jobs"][job_name]
         step = next(
             step for step in job["steps"] if step.get("run") == "tools/run_rust_postgres.sh"
         )
-        assert step["timeout-minutes"] * 60 >= longest_hosted_seconds
+        assert step["timeout-minutes"] * 60 >= 600 + 180 + contract_seconds + 600
         assert job["timeout-minutes"] >= step["timeout-minutes"] + 10
 
 

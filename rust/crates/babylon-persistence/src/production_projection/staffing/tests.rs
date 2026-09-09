@@ -14,7 +14,7 @@ use crate::michigan_content::MichiganContentPresetV1;
 struct Window {
     opening: Option<StableGraphStateV1>,
     graph: StableGraphStateV1,
-    register: MaterialWorldRegisterV2,
+    register: MaterialWorldRegisterV3,
     events: Vec<StoredEventV2>,
 }
 
@@ -40,7 +40,7 @@ struct PublishedFixture {
 fn fixture() -> &'static PublishedFixture {
     static FIXTURE: OnceLock<PublishedFixture> = OnceLock::new();
     FIXTURE.get_or_init(|| {
-        let foundation = MichiganContentPresetV1::FourWeekStandardV6
+        let foundation = MichiganContentPresetV1::FourWeekStandardV7
             .create_foundation(&crate::test_support::catalog())
             .unwrap();
         let MaterialLaborV1::Staffed(composition) = foundation.labor().clone() else {
@@ -510,7 +510,7 @@ fn next_labor_budget_and_pool_conservation_cannot_be_invented() {
         .unwrap()
         .available += 1;
     changed.register =
-        MaterialWorldRegisterV2::try_new(changed.register.completed_tick(), state).unwrap();
+        MaterialWorldRegisterV3::try_new(changed.register.completed_tick(), state).unwrap();
     assert_eq!(changed.project(), Err(ProductionProjectionErrorV1::State));
     let mut changed = original.clone();
     let mut state = changed.register.state().clone();
@@ -518,7 +518,7 @@ fn next_labor_budget_and_pool_conservation_cannot_be_invented() {
         .labor
         .retain(|row| row.site_id != pool.site_id() || row.unit_id != pool.unit_id());
     changed.register =
-        MaterialWorldRegisterV2::try_new(changed.register.completed_tick(), state).unwrap();
+        MaterialWorldRegisterV3::try_new(changed.register.completed_tick(), state).unwrap();
     assert_eq!(changed.project(), Err(ProductionProjectionErrorV1::State));
     let mut changed = original;
     let event = &mut changed.events[0];

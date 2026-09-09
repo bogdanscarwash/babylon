@@ -48,27 +48,70 @@ For a background Michigan run, inspect its recorded process and campaign tail:
 
 ``sim:probe`` honors an explicit ``BABYLON_CAMPAIGN_ID`` or the worktree's
 recorded default. ``sim:report`` always creates a fresh campaign. Preserve
-existing campaign data when comparing source revisions. V6 content refuses
+existing campaign data when comparing source revisions. V7 content refuses
 older presets without deleting or reinterpreting their saved state.
 
 Explain the material change
 ---------------------------
 
 Open the Bevy session with ``mise run play``. Hold the same completed period
-and perspective when comparing campaigns. Trace an output through its opening
-inputs, committed deliveries, production recipe, labor account, and closing
-inventory. Distinguish foundation stocks, unavailable evidence, and a present
-completed-period receipt with a real zero.
+and perspective when comparing campaigns. Start in World, whose default lens
+shows modeled employed people.
 
-Open Readings beside the selected site. Its heading keeps the subject, period,
-output, and modeled employed/reserve counts visible while the account scrolls.
-Choose Flow for production and stock movement, or Freight for reservations and
-physical deliveries. Work shows staffing and labor hours. Sources holds recipe
-assumptions and observed QCEW context.
+The reserve lens shows unused modeled workforce.
+
+Keep the observed QCEW employment and wage lenses separate. Those annual jobs
+and source wages are not the circuit's workers or payroll.
+
+For physical amounts, choose production, inventory, or inbound transit, then a
+specific good and unit. Compare the same commodity across counties. Do not add
+unlike outputs into one total. A reference-only county-sector cohort has no
+modeled workforce account, which differs from an admitted account with zero
+workers.
+
+Select a county. Open Circuit with its control or P. Browse the county
+cohorts with Previous page and Next page. Each page shows at most six.
+Select a producer or merchant to focus its relationships.
+
+Follow Upstream and Downstream links for suppliers and buyers.
+Other participants / Shared freight links identify competitors for capacity.
+These links are separate from the supplier list. Relationship and competitor
+pages each show at most six groups or participants. Return to World with its
+control or M to choose another county.
+
+In World's drawer, choose Selected paths or Captured roads. The second layer
+shows the campaign's captured physical route network behind the selected
+shipment paths. It does not show every OSM road or draw all commodity flows.
+Shared segments appear once, even when routes traverse them in opposite
+directions. Tab and Enter reach both layer controls. Loading, failed, stale,
+and restricted observations disclose no captured road geometry.
+
+Trace a selected producer's output through opening inputs, its recipe, work,
+movement, and closing inventory. If an owner has more than one process, choose
+its Chart control for the process and output unit of interest. These processes
+share inventory and workforce. Do not count the owner again for every recipe.
+
+Open Readings beside the selected owner. Its heading retains subject, period,
+output or handling, and modeled employed/reserve counts while the account
+scrolls. Choose a section for its account.
+
+* Flow: how did production and movement change stock?
+* Freight: how much capacity did shipments reserve? What moved locally or
+  by a timed route? Which owners share capacity?
+* Work: how did handling or production hours compare with ``Work request``?
+  How did employed and reserve counts change?
+* Sources: which quantities carry the Designed evidence class? What observed
+  QCEW evidence supports this owner's participation?
+
+Distinguish foundation stocks, unavailable evidence, and a completed account
+with a real zero. A completed reservation is not a physical arrival. The
+account records local transfers separately from routed dispatch and arrival.
 
 Tab reaches each section and its reading. Enter opens a section.
 Page Up, Page Down, Home, and End scroll the focused reading.
-A new subject or section starts at the top.
+A new subject or section starts at the top. Keyboard controls act on the
+current campaign and observation. Loading or refused observations do not
+license navigation through stale material details.
 
 The Designed Standard and Delayed presets differ in sheet-transfer travel time:
 one period (four weeks) or three periods (twelve weeks). Their per-period
@@ -93,17 +136,20 @@ regional freight service. The shared capacity alone changes: 800 or 160 kg per
 28-day period. Panel freight retains its independent capacity. The service
 does not claim a physical road or border crossing.
 
-In Production, select the sheet or meal chain. The relationship panel summarizes
+In Circuit, select the sheet or meal producer. The relationship panel summarizes
 the shared pool beside the other-participant links. Open Readings and choose
 Freight for both participating routes and their full account. At completed period 1,
-compare opening capacity, newly reserved quantity, remaining capacity, and each
+compare opening capacity, newly reserved mass, remaining capacity, and each
 order's requested and dispatched quantities. The ``unshipped`` field shows
 the remaining backlog. Use ``Other participants`` to inspect the competing
 chain.
 
-Capacity reservations are not physical arrivals.
+Capacity reservations are not physical arrivals. Shared capacity uses exact
+grams internally. The interface displays kilograms without losing fractional
+mass. 800 kg is 800,000 grams and 160 kg is 160,000 grams. Dispatch and stock
+keep their native good units.
 
-.. list-table:: Baseline shared freight comparison
+.. list-table:: Regional shared freight regression landmarks
    :header-rows: 1
    :widths: 50 25 25
 
@@ -152,6 +198,172 @@ Run the native discovery, comparison, and resume check at 1366×768 and
 1920×1080. Automated receipts prove the recorded operations. The Director's
 session supplies comprehension acceptance. This remains a partial PER-31
 delivery within Gate 4.
+
+Inspect merchants and statewide comparisons
+-------------------------------------------
+
+The statewide selections use the qualified physical road paths and frozen
+interventions in :doc:`/reference/configuration`. The Mackinac shared freight
+service changes from 100,000 kg to 1,000 kg per period. The packaging shortage
+changes one Mackinac food producer's opening paper packaging from 160 kg to
+80 kg. These Designed quantities give the finite game visible consequences.
+they do not estimate real bridge throughput or industrial productivity.
+
+Check saved campaigns against these committed engine readings.
+
+The engine experiment alone does not certify saved campaigns
+or Director comprehension.
+
+.. list-table:: Statewide comparison landmarks. Outcomes: Derived
+   :header-rows: 1
+   :widths: 40 15 15 15 15
+
+   * - Reading
+     - Baseline
+     - Freight only
+     - Packaging only
+     - Both
+   * - Period 1 bridge dispatch, kg
+     - 2,207
+     - 709
+     - 2,207
+     - 709
+   * - Period 1 Mackinac food output, kg
+     - 1,600
+     - 1,600
+     - 800
+     - 800
+   * - Period 3 Mackinac food output, kg
+     - 300
+     - 100
+     - 400
+     - 100
+   * - Period 3 Chippewa household wares, items
+     - 8
+     - 1
+     - 8
+     - 1
+   * - Period 2 Chippewa manufacturing employed / reserve
+     - 3 / 9
+     - 1 / 11
+     - 3 / 9
+     - 1 / 11
+
+The packaging shortage leaves 480 kg of grain and 160 kg of animal products
+unused after period 1. Later packaging arrivals allow some catch-up. Compare
+the full history: the period 3 food increase does not erase the earlier
+shortfall.
+
+In the freight case, 291 kg of first-period bridge capacity stays
+unused. This includes the effects of simultaneous stock and capacity grants.
+Rounding alone does not explain it. Reservations still equal actual dispatch
+mass, and the allocator does not redistribute the unused grants.
+
+Read the road display as a Designed freight network between county aggregates.
+It admits motorway, trunk, primary, secondary, and tertiary roads and their
+link classes. Residential, service, living-street, and unclassified roads
+remain outside this game model. Read terminal markers as Designed county
+attachments, not factory locations.
+
+Physical routes still follow original node connections and admitted road
+restrictions. Treat disconnected supply as a qualification failure, never as
+an implied connection between nearby counties. See
+:doc:`/reference/configuration` for the exact road-class policy.
+
+For an admitted merchant account, read Flow as merchandise handling and
+finite delivery rather than factory output. Reconcile its stock using opening
+inventory, routed arrivals, local receipts, outbound shipments, local
+transfers, end-buyer fulfillment, and closing inventory. Native commodity
+identity and quantity must remain consistent through resale.
+
+In Freight, distinguish these three movements:
+
+Routed shipment
+   It reserves shared mass capacity and stays in transit until its timed
+   arrival. Captured road geometry describes the physical path. Schematic
+   regional links do not claim a road.
+
+County-local transfer
+   It moves goods between different owners without a road stage or transit
+   lot. The allocator fixes all outbound grants before these credits.
+   The buyer cannot forward newly received local goods during the same close.
+
+Local retail fulfillment
+   It debits merchandise and advances a finite end-buyer order. Read it as
+   delivery to end buyers. It records no household stock, consumption, or
+   payment.
+
+Read Work alongside a merchant's pending outbound orders. Handling has its
+own mass and labor accounts. A zero employed count can coexist with
+unmet handling work and a reserve available for later hiring. Check the
+next opening and conservation of the whole workforce before attributing a
+shortfall to transport.
+
+For a qualified four-run comparison, read the same completed period in all
+saved campaigns. Identify the single freight principal and opening packaging
+stock changed by the captured definitions. Follow dispatch, arrival,
+production or handling, end-buyer delivery, and employed/reserve differences.
+The comparison does not advance either campaign. Count each workforce pool
+once and compare production only within an exact good and unit.
+Its bounded list of six shared freight accounts puts changed capacities
+first, so the intervention remains visible among the statewide road services.
+
+Read ``MODELED CAMPAIGN TOTALS`` for all disclosed owners, including those
+outside the current relationship page. Owner and workforce identities must
+match for these totals. For material totals, select an exact good and unit
+in World's material lens. The comparison also shows delivery to end buyers
+and unsold retail stock for that selection when the final-demand accounts
+match. Missing or incompatible accounts make a total unavailable.
+
+Open reconstructs the saved graph, source observations, recipes, paths, and
+parameters. Editing or moving current source files cannot supply new facts to
+that saved campaign. Check resume against its retained identities and hold an
+earlier period while advancing the current tail. Production-evidence V6 binds
+the complete authorized reading, including absent versus completed-zero
+accounts and ordered physical paths. Restricted previews disclose none of
+these material accounts.
+
+Record the exact source revision, campaign identities, completed periods, and
+observations for a native session at 1366×768 and 1920×1080. Hosted and
+automated evidence supports the Director's discovery, comparison, and resume
+session. It does not supply comprehension acceptance. ADR260 records the
+statewide boundary.
+
+Qualify a statewide intervention
+--------------------------------
+
+Use ``statewide_experiment`` after physical path and commodity qualification.
+It runs the same staffed material replay session for baseline, freight-only,
+packaging-only, and combined candidates, each for 16 periods. It reads committed
+receipts and does not write saved campaigns or change authored content.
+
+Build from ``rust/`` when no other heavy gate is running:
+
+.. code-block:: bash
+
+   cargo build -p babylon-persistence --example statewide_experiment --locked
+   target/debug/examples/statewide_experiment --help
+
+Supply ``--defines``, ``--qualification``, and ``--physical`` with matching
+TOML and decoded JSON sources. Select a captured ``--capacity-key`` and
+``--food-process``. Set ``--constrained-grams`` below the baseline freight
+capacity and ``--shortage-opening`` below that food producer's opening paper
+packaging stock. The shortage may be zero. Use ``--output`` for a new absolute
+JSON file path; the runner refuses an existing output.
+
+Read ``qualified`` and ``witnesses`` in the report. Freight qualification needs
+less dispatch through the selected capacity and later downstream differences
+in both production and employed/reserve counts. Packaging qualification needs
+a changed output at the selected food producer. A missing witness returns a
+nonzero exit status while retaining the complete candidate report. Invalid
+inputs produce no report. Reports must fit 64 MiB.
+
+Choose a demonstration whose receipts explain affected and unaffected places.
+More constrained freight can leave inputs at a supplier and change its own
+production. A difference alone does not explain the chain of causes. Keep
+quantities Designed and tune their effects for readable play. This check does
+not estimate Michigan's real productivity or replace persisted and native
+qualification.
 
 Compare delivery time and opening stock
 ---------------------------------------
@@ -219,8 +431,8 @@ The watchdog can time out after the manifest write and still report a failure.
 An absent completed production receipt means no prior production plan. The
 input, labor and capacity ceilings describe the next opening and keep ties.
 These diagnostics have the ``Derived`` evidence class. They apply to the
-fixed topology of one process per site. They are not causal labels from the
-engine.
+regional experiment, whose authored topology has one process per site. They are
+not causal labels from the engine.
 
 A zero labor budget can follow from no ``material request``.
 Compare the recorded ``material request`` with the next plan
@@ -280,10 +492,26 @@ Investigate disagreement with these landmarks. The result describes the
 Designed material circuit. Its in-memory receipts do not prove ``PostgreSQL``
 durability, Bevy
 comprehension, historical calibration, or a player milestone. See
-:doc:`/reference/configuration` for all 56 fields, their units and validation.
+:doc:`/reference/configuration` for the regional and statewide fields, their
+units, and validation.
 
 Inspect performance
 -------------------
+
+The full observer keeps one repeatable-read transaction while authenticating
+the captured circuit. Its idle transaction limit is 120 seconds, matching
+material runtime reads. SQL execution, lock and connection limits remain five
+seconds. Report actual observation latency separately from these refusal limits.
+
+Use ``BABYLON_POSTGRES_LIVE_FOCUS=statewide_synthetic mise run test:rust-postgres``
+for the full-roster persistence regression. Once the canonical sources are
+qualified, ``BABYLON_POSTGRES_LIVE_FOCUS=statewide_qualified mise run test:rust-postgres``
+runs all four actual statewide presets through 16 periods in an owned disposable
+database. The ordinary reader focus excludes this longer source qualification.
+For hosted evidence, dispatch ``weekly-pg-integration.yml`` at the exact lane
+revision with ``focus=statewide_qualified``. Manual runs check out that event's
+commit. Scheduled runs check current ``dev``. This path runs no documentation
+generation.
 
 Set ``BABYLON_TIMINGS=1`` when launching a material session. Its bounded stderr
 record includes ``campaign``, ``period``, ``simulation_us``, ``preparation_us``,

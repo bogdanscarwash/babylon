@@ -13,7 +13,7 @@ use babylon_tick::{
         StaffingCompositionV1, StaffingNodeBindingV1, EMPLOYED_POPULATION,
         PREVIOUS_UNRETAINED_HOURS, RESERVE_POPULATION, STAFFING_COMPOSITION_ID_V1,
     },
-    material_world::MaterialWorldRegisterV2,
+    material_world::MaterialWorldRegisterV3,
 };
 
 use super::ProductionProjectionErrorV1;
@@ -42,7 +42,7 @@ const INTEGER_FIELDS: [&str; 12] = [
 pub(crate) fn project_staffing_accounts_v1(
     composition: &StaffingCompositionV1,
     graph: &StableGraphStateV1,
-    register: &MaterialWorldRegisterV2,
+    register: &MaterialWorldRegisterV3,
     opening: Option<&StableGraphStateV1>,
     events: &[StoredEventV2],
 ) -> Result<Vec<ProductionStaffingAccountV1>> {

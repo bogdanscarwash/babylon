@@ -353,7 +353,9 @@ fn apply_response(
                     state.campaign,
                     state.generation,
                 ) {
-                    log::warn!("Campaign opened, but its continuation preference could not be saved: {error}");
+                    log::warn!(
+                        "Campaign opened, but its continuation preference could not be saved: {error}"
+                    );
                 }
             }
         }
@@ -510,7 +512,11 @@ fn apply_command(command: ObserverCommand, context: &mut CommandContext) {
         | ObserverCommand::ReopenCampaign
         | ObserverCommand::NewDelayedCampaign
         | ObserverCommand::NewSharedFreightAmpleCampaign
-        | ObserverCommand::NewSharedFreightConstrainedCampaign => {
+        | ObserverCommand::NewSharedFreightConstrainedCampaign
+        | ObserverCommand::NewStatewideBaselineCampaign
+        | ObserverCommand::NewStatewideFreightConstraintCampaign
+        | ObserverCommand::NewStatewidePackagingShortageCampaign
+        | ObserverCommand::NewStatewideBothCampaign => {
             if pipe.is_none() {
                 feedback.reject(LAUNCHER_REQUIRED, time.elapsed_secs_f64());
                 return;
@@ -522,16 +528,7 @@ fn apply_command(command: ObserverCommand, context: &mut CommandContext) {
                 },
                 _ => RuntimeSessionTargetV3::New {
                     campaign_id: uuid::Uuid::new_v4().to_string(),
-                    preset: match command {
-                        ObserverCommand::NewSharedFreightAmpleCampaign => {
-                            RuntimeSessionPresetV3::SharedFreightAmple
-                        }
-                        ObserverCommand::NewSharedFreightConstrainedCampaign => {
-                            RuntimeSessionPresetV3::SharedFreightConstrained
-                        }
-                        ObserverCommand::NewDelayedCampaign => RuntimeSessionPresetV3::Delayed,
-                        _ => RuntimeSessionPresetV3::Standard,
-                    },
+                    preset: campaign_preset(command),
                 },
             };
             if let Err(error) = state.queue_campaign(target) {
@@ -539,6 +536,28 @@ fn apply_command(command: ObserverCommand, context: &mut CommandContext) {
             }
         }
         _ => apply_presentation_command(command, context),
+    }
+}
+
+fn campaign_preset(command: ObserverCommand) -> RuntimeSessionPresetV3 {
+    match command {
+        ObserverCommand::NewStatewideBaselineCampaign => RuntimeSessionPresetV3::StatewideBaseline,
+        ObserverCommand::NewStatewideFreightConstraintCampaign => {
+            RuntimeSessionPresetV3::StatewideFreightConstraint
+        }
+        ObserverCommand::NewStatewidePackagingShortageCampaign => {
+            RuntimeSessionPresetV3::StatewidePackagingShortage
+        }
+        ObserverCommand::NewStatewideBothCampaign => RuntimeSessionPresetV3::StatewideBoth,
+
+        ObserverCommand::NewSharedFreightAmpleCampaign => {
+            RuntimeSessionPresetV3::SharedFreightAmple
+        }
+        ObserverCommand::NewSharedFreightConstrainedCampaign => {
+            RuntimeSessionPresetV3::SharedFreightConstrained
+        }
+        ObserverCommand::NewDelayedCampaign => RuntimeSessionPresetV3::Delayed,
+        _ => RuntimeSessionPresetV3::Standard,
     }
 }
 
@@ -556,7 +575,15 @@ fn apply_presentation_command(command: ObserverCommand, context: &mut CommandCon
             ui.lens = crate::map_economy_lens::MapLens::Relationships;
             ui.disclosure = None;
         }
+        ObserverCommand::RoadLayer(layer) => {
+            ui.road_layer = layer;
+            ui.disclosure = None;
+        }
         ObserverCommand::EconomicDetails => ui.economic_details_open = !ui.economic_details_open,
+        ObserverCommand::Workforce(metric) => {
+            ui.lens = crate::map_economy_lens::MapLens::Workforce(metric);
+            ui.disclosure = None;
+        }
         ObserverCommand::Lens(metric) => {
             ui.economic_details_open = true;
             ui.lens = crate::map_economy_lens::MapLens::Qcew(metric);
@@ -567,7 +594,8 @@ fn apply_presentation_command(command: ObserverCommand, context: &mut CommandCon
             let good = match &ui.lens {
                 crate::map_economy_lens::MapLens::Material { good, .. } => good.clone(),
                 crate::map_economy_lens::MapLens::Relationships
-                | crate::map_economy_lens::MapLens::Qcew(_) => None,
+                | crate::map_economy_lens::MapLens::Qcew(_)
+                | crate::map_economy_lens::MapLens::Workforce(_) => None,
             };
             ui.lens = crate::map_economy_lens::MapLens::Material { kind, good };
             ui.lens.reconcile(frame.for_session(state), false);
@@ -1015,6 +1043,60 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn road_layer_commands_are_read_only_and_require_an_inspectable_full_observation() {
+        use crate::observer_ui::RoadLayer;
+        let (mut app, receiver) = command_app();
+        let context = app.world().resource::<ObserverSession>().context();
+        dispatch(
+            &mut app,
+            &[ObserverCommand::RoadLayer(RoadLayer::CapturedRoads)],
+        );
+        assert_eq!(
+            app.world().resource::<ObserverUiState>().road_layer,
+            RoadLayer::CapturedRoads
+        );
+        assert_eq!(app.world().resource::<ObserverSession>().context(), context);
+        assert!(receiver.try_recv().is_err());
+        for phase in [SessionPhase::Loading, SessionPhase::Failed] {
+            app.world_mut().resource_mut::<ObserverSession>().phase = phase;
+            dispatch(
+                &mut app,
+                &[ObserverCommand::RoadLayer(RoadLayer::SelectedPaths)],
+            );
+            assert_eq!(
+                app.world().resource::<ObserverUiState>().road_layer,
+                RoadLayer::CapturedRoads
+            );
+        }
+        app.world_mut().resource_mut::<ObserverSession>().phase = SessionPhase::Ready;
+        app.world_mut()
+            .resource_mut::<ObserverSession>()
+            .viewed_tick = 2;
+        dispatch(
+            &mut app,
+            &[ObserverCommand::RoadLayer(RoadLayer::SelectedPaths)],
+        );
+        assert_eq!(
+            app.world().resource::<ObserverUiState>().road_layer,
+            RoadLayer::SelectedPaths
+        );
+        app.world_mut()
+            .resource_mut::<ObserverSession>()
+            .set_perspective(Perspective::PlayerKnowledge);
+        app.world_mut().resource_mut::<ObserverSession>().phase = SessionPhase::Ready;
+        dispatch(
+            &mut app,
+            &[ObserverCommand::RoadLayer(RoadLayer::CapturedRoads)],
+        );
+        assert_eq!(
+            app.world().resource::<ObserverUiState>().road_layer,
+            RoadLayer::SelectedPaths
+        );
+        assert_eq!(app.world().resource::<ObserverSession>().durable_tick, 3);
+        assert!(receiver.try_recv().is_err());
+    }
+
+    #[test]
     fn relationship_lens_and_economic_disclosure_do_not_advance_the_campaign() {
         let (mut app, requests) = command_app();
         dispatch(&mut app, &[ObserverCommand::EconomicDetails]);
@@ -1075,7 +1157,9 @@ pub(crate) mod tests {
             assert_eq!(app.world().resource::<ObserverSession>().context(), context);
             assert_eq!(
                 app.world().resource::<ObserverFeedback>().message,
-                Some("This window has no launcher connection. Close it and start Babylon through its launcher.")
+                Some(
+                    "This window has no launcher connection. Close it and start Babylon through its launcher."
+                )
             );
         }
     }
@@ -1641,7 +1725,12 @@ pub(crate) mod tests {
             envelope_digest: None,
             visibility: ObserverVisibilityV1::FullObserver,
             counties: Vec::new(),
-            production: Some(babylon_persistence::ProductionSnapshotV1 {
+            production: Some(babylon_persistence::ProductionSnapshotV2 {
+                content_authority_sha256: "a".repeat(64),
+                road_source: None,
+                physical_edges: Vec::new(),
+                merchant_handling_accounts: Vec::new(),
+                final_demand_accounts: Vec::new(),
                 freight_capacity_accounts: Vec::new(),
                 material_balance: None,
                 labor_accounts: Vec::new(),

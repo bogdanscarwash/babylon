@@ -88,7 +88,7 @@ fn empty_actions_bind_exact_session_tick_layout_digest_and_bytes() {
 
 #[test]
 fn captured_foundation_and_live_session_have_identical_component_admission() {
-    let foundation = crate::michigan_content::MichiganContentPresetV1::FourWeekStandardV6
+    let foundation = crate::michigan_content::MichiganContentPresetV1::FourWeekStandardV7
         .create_foundation(&crate::test_support::catalog())
         .unwrap();
     let retained = MaterialComponentIdentityV1::from_foundation(foundation.graph_foundation());

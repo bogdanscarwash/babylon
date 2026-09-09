@@ -224,11 +224,16 @@ repos:
         # The two embedded theme renders have a separate 2 MiB check below.
         # Their exact source, render recipe and bytes are pinned in
         # assets/audio-renders.json; this changes no licensing decision.
-        exclude: ^tests/baselines/.*\.json$|^src/babylon/data/game/balkanization/seed_influences\.json$|^uv\.lock$|^assets/map/county_atlas\.bin$|^assets/music/babylon_theme_(phi|panopticon)\.ogg$
+        # The captured statewide road paths are 1.18 MB compressed (6.26 MB
+        # decoded). New Campaign needs their pinned bytes without an external
+        # network fetch. The same 2 MiB publication bound below covers this
+        # named artifact; the source manifest and runtime also verify its hash
+        # and decoded-content bound.
+        exclude: ^tests/baselines/.*\.json$|^src/babylon/data/game/balkanization/seed_influences\.json$|^uv\.lock$|^assets/map/county_atlas\.bin$|^assets/music/babylon_theme_(phi|panopticon)\.ogg$|^content/scenarios/michigan/statewide-physical\.json\.gz$
       - id: check-added-large-files
-        name: check embedded theme size (2 MiB per named render)
+        name: check bounded game assets (2 MiB per named artifact)
         args: ['--maxkb=2048', '--enforce-all']
-        files: ^assets/music/babylon_theme_(phi|panopticon)\.ogg$
+        files: ^assets/music/babylon_theme_(phi|panopticon)\.ogg$|^content/scenarios/michigan/statewide-physical\.json\.gz$
       - id: check-merge-conflict
       - id: check-case-conflict
       - id: forbid-new-submodules

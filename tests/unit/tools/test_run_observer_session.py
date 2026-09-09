@@ -144,7 +144,7 @@ def test_installation_check_refuses_a_different_reopened_tail(
     monkeypatch.setattr(launcher, "_check_session", lambda *_args, **_kwargs: next(observations))
     with pytest.raises(launcher.ObserverLaunchError, match="different foundation or durable tail"):
         launcher.check_installation(
-            tmp_path / "runtime", tmp_path / "client", tmp_path, {}, {}, tmp_path / "defines"
+            tmp_path / "runtime", tmp_path / "client", tmp_path, {}, {}, tmp_path / "defines", None
         )
 
 
@@ -639,7 +639,17 @@ def test_bootstrap_probe_is_read_only_and_requires_active_marker(
 
 
 @pytest.mark.parametrize(
-    "preset", ["standard", "delayed", "shared-freight-ample", "shared-freight-constrained"]
+    "preset",
+    [
+        "standard",
+        "delayed",
+        "shared-freight-ample",
+        "shared-freight-constrained",
+        "statewide-baseline",
+        "statewide-freight-constraint",
+        "statewide-packaging-shortage",
+        "statewide-both",
+    ],
 )
 def test_first_launch_has_an_explicit_new_preset_but_saved_resume_cannot_override_it(
     tmp_path: Path, preset: str
@@ -765,3 +775,144 @@ def test_prepare_builds_with_native_rustup_from_the_pinned_workspace(
     ]
     assert cwd == tmp_path / "rust"
     assert environment["CARGO_TARGET_DIR"] == str(tmp_path / "rust" / "target")
+
+
+def _smoke_transcript_children(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, *, refused: bool = False
+) -> list[list[str]]:
+    """Keep the real launcher/session code; replace only native process boundaries."""
+    calls: list[list[str]] = []
+    tail = {"resolve_tick": 1, "tick_content_hash": "a" * 64}
+    scope = {"session_id": "fixture", "generation": 1}
+
+    class RuntimeChild:
+        def __init__(self, args: list[str], **_kwargs: Any) -> None:
+            new = not calls
+            calls.append(args)
+            self.stdin = (tmp_path / f"requests-{len(calls)}.jsonl").open("wb")
+            rows: list[dict[str, Any]] = [{"type": "hello", "protocol_version": 3, "scope": scope}]
+            if refused:
+                rows.append({"type": "error", "request_id": 1, "code": "invalid_defines"})
+            else:
+                rows.append(
+                    {
+                        "type": "ready",
+                        "request_id": 1,
+                        "scope": scope,
+                        "foundation_digest": "b" * 64,
+                        "tail": {"resolve_tick": 0, "tick_content_hash": None} if new else tail,
+                    }
+                )
+                if new:
+                    rows.append(
+                        {"type": "committed", "request_id": 2, "scope": scope, "tail": tail}
+                    )
+                rows.append({"type": "stopped", "request_id": 3 if new else 2})
+            read_fd, write_fd = os.pipe()
+            self.stdout = os.fdopen(read_fd, "rb")
+            with os.fdopen(write_fd, "wb") as output:
+                output.write(b"".join(json.dumps(row).encode("ascii") + b"\n" for row in rows))
+
+        def wait(self, timeout: float | None = None) -> int:
+            return 0
+
+        def poll(self) -> int:
+            return 0
+
+    def readback(args: list[str], **_kwargs: Any) -> Any:
+        assert not refused, "a refused New cannot proceed to native readback"
+        assert args[1:] == ["--headless", "--campaign", str(CAMPAIGN), "tick", "status"]
+        return launcher.subprocess.CompletedProcess(
+            args,
+            0,
+            stdout=json.dumps(
+                {"campaign_id": str(CAMPAIGN), "durable_tick": 1, "tick_content_hash": "a" * 64}
+            ),
+        )
+
+    monkeypatch.setattr(launcher, "uuid4", lambda: CAMPAIGN)
+    monkeypatch.setattr(
+        launcher,
+        "prepare",
+        lambda *_args, **_kwargs: (
+            tmp_path / "runtime",
+            tmp_path / "client",
+            launcher.ReaderCredentials("observer", "known"),
+        ),
+    )
+    monkeypatch.setattr(launcher.subprocess, "Popen", RuntimeChild)
+    monkeypatch.setattr(launcher.subprocess, "run", readback)
+    return calls
+
+
+@pytest.mark.parametrize(
+    "preset",
+    [
+        None,
+        "standard",
+        "delayed",
+        "shared-freight-ample",
+        "shared-freight-constrained",
+        "statewide-baseline",
+        "statewide-freight-constraint",
+        "statewide-packaging-shortage",
+        "statewide-both",
+    ],
+)
+def test_smoke_request_preserves_selected_preset_through_new_restart_and_readback(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    preset: str | None,
+) -> None:
+    calls = _smoke_transcript_children(monkeypatch, tmp_path)
+    defines = tmp_path / "captured defines.toml"
+    args = ["--smoke", "--no-build", "--defines", str(defines)]
+    if preset is not None:
+        args.extend(["--preset", preset])
+    assert launcher.main(args) == 0
+    assert len(calls) == 2
+    requests = [
+        [
+            json.loads(line)
+            for line in (tmp_path / f"requests-{index}.jsonl").read_text().splitlines()
+        ]
+        for index in (1, 2)
+    ]
+    selected = preset or "standard"
+    assert requests[0][0]["target"] == {
+        "type": "new",
+        "campaign_id": str(CAMPAIGN),
+        "preset": selected,
+    }
+    assert requests[1][0]["target"] == {"type": "open", "campaign_id": str(CAMPAIGN)}
+    assert [request["type"] for request in requests[0]] == ["switch", "advance", "stop"]
+    assert [request["type"] for request in requests[1]] == ["switch", "stop"]
+    assert calls[0][-2:] == ["--defines", str(defines)]
+    assert calls[1][-2:] == ["--defines", "/dev/null"]
+    report = json.loads(capsys.readouterr().out)
+    assert report["preset"] == selected
+    assert report["reopened_without_defines"] and report["periods"] == 1
+
+
+def test_smoke_request_refusal_never_falls_back_to_another_preset(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    calls = _smoke_transcript_children(monkeypatch, tmp_path, refused=True)
+    assert launcher.main(["--smoke", "--no-build", "--preset", "statewide-both"]) == 1
+    assert len(calls) == 1
+    request = json.loads((tmp_path / "requests-1.jsonl").read_text())
+    assert request["target"]["preset"] == "statewide-both"
+    output = capsys.readouterr()
+    assert "invalid_defines" in output.err
+    assert not output.out
+
+
+def test_smoke_request_rejects_existing_campaign_before_preparing_services(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    calls: list[object] = []
+    monkeypatch.setattr(launcher, "prepare", lambda *_args, **_kwargs: calls.append("prepare"))
+    assert launcher.main(["--smoke", "--campaign", str(CAMPAIGN)]) == 1
+    assert not calls
+    assert "--smoke creates a new campaign and cannot use --campaign" in capsys.readouterr().err

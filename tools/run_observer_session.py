@@ -187,7 +187,16 @@ class NewCampaignTarget:
     """An explicit request to found one absent campaign after the runtime Hello."""
 
     campaign: UUID
-    preset: Literal["standard", "delayed", "shared-freight-ample", "shared-freight-constrained"]
+    preset: Literal[
+        "standard",
+        "delayed",
+        "shared-freight-ample",
+        "shared-freight-constrained",
+        "statewide-baseline",
+        "statewide-freight-constraint",
+        "statewide-packaging-shortage",
+        "statewide-both",
+    ]
 
 
 @dataclass(frozen=True)
@@ -206,6 +215,14 @@ def _new_target(campaign: UUID, preset: str | None) -> NewCampaignTarget:
         return NewCampaignTarget(campaign, "shared-freight-ample")
     if preset == "shared-freight-constrained":
         return NewCampaignTarget(campaign, "shared-freight-constrained")
+    if preset == "statewide-baseline":
+        return NewCampaignTarget(campaign, "statewide-baseline")
+    if preset == "statewide-freight-constraint":
+        return NewCampaignTarget(campaign, "statewide-freight-constraint")
+    if preset == "statewide-packaging-shortage":
+        return NewCampaignTarget(campaign, "statewide-packaging-shortage")
+    if preset == "statewide-both":
+        return NewCampaignTarget(campaign, "statewide-both")
     raise ObserverLaunchError("unknown material scenario preset")
 
 
@@ -469,9 +486,7 @@ def _check_session(
     root: Path,
     environment: Mapping[str, str],
     defines: Path,
-    campaign: UUID,
-    *,
-    new: bool,
+    target: NewCampaignTarget | OpenCampaignTarget,
 ) -> tuple[str, dict[str, object]]:
     """Exercise the installed lifecycle protocol with one bounded native process."""
     child = subprocess.Popen(
@@ -538,10 +553,11 @@ def _check_session(
         hello = receive("hello")
         if hello.get("protocol_version") != 3:
             raise ObserverLaunchError("installation check requires runtime session protocol 3")
-        target = {"type": "new" if new else "open", "campaign_id": str(campaign)}
-        if new:
-            target["preset"] = "standard"
-        send("switch", 1, hello["scope"], target=target)
+        new = isinstance(target, NewCampaignTarget)
+        requested = {"type": "new" if new else "open", "campaign_id": str(target.campaign)}
+        if isinstance(target, NewCampaignTarget):
+            requested["preset"] = target.preset
+        send("switch", 1, hello["scope"], target=requested)
         ready = receive("ready", 1)
         tail = ready["tail"]
         scope = ready["scope"]
@@ -588,11 +604,15 @@ def check_installation(
     writer: Mapping[str, str],
     reader: Mapping[str, str],
     defines: Path,
+    preset: str | None,
 ) -> int:
     """Prove New, one period, process restart, Open, and the real native reader."""
     campaign = uuid4()
-    first = _check_session(runtime, root, writer, defines, campaign, new=True)
-    reopened = _check_session(runtime, root, writer, Path("/dev/null"), campaign, new=False)
+    target = _new_target(campaign, preset)
+    first = _check_session(runtime, root, writer, defines, target)
+    reopened = _check_session(
+        runtime, root, writer, Path("/dev/null"), OpenCampaignTarget(campaign)
+    )
     if reopened != first:
         raise ObserverLaunchError(
             "installation check reopened a different foundation or durable tail"
@@ -624,6 +644,7 @@ def check_installation(
             {
                 "check": "passed",
                 "campaign_id": str(campaign),
+                "preset": target.preset,
                 "periods": 1,
                 "foundation_digest": first[0],
                 "tail": first[1],
@@ -729,7 +750,16 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--preset",
-        choices=("standard", "delayed", "shared-freight-ample", "shared-freight-constrained"),
+        choices=(
+            "standard",
+            "delayed",
+            "shared-freight-ample",
+            "shared-freight-constrained",
+            "statewide-baseline",
+            "statewide-freight-constraint",
+            "statewide-packaging-shortage",
+            "statewide-both",
+        ),
         help="choose a new world's material preset; requires New rather than Open",
     )
     args = parser.parse_args(argv)
@@ -750,6 +780,8 @@ def main(argv: list[str] | None = None) -> int:
         if args.distribution:
             environment = distribution_environment(ROOT, environment)
         initial_target = None
+        if args.smoke and args.campaign is not None:
+            raise ObserverLaunchError("--smoke creates a new campaign and cannot use --campaign")
         if not args.smoke:
             initial_target = select_initial_target(
                 environment,
@@ -770,6 +802,7 @@ def main(argv: list[str] | None = None) -> int:
                 writer_environment,
                 reader_environment,
                 args.defines.expanduser().resolve(),
+                args.preset,
             )
         assert initial_target is not None
         # Never echo the ambient filter: field selectors may contain private values.

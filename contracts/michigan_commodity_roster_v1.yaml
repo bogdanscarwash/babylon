@@ -1,0 +1,127 @@
+meta:
+  contract: MichiganCommodityRosterV1
+  version: 1
+  issue: PER-29
+  parent: PER-10
+  delivery: commodity-eligibility-artifact
+
+classifications:
+  source_fields: Observed
+  family_catalogue_and_selection: Designed
+  coverage_and_digests: Derived
+
+source:
+  manifest: tools/qcew_county_economics_v1_source_manifest.json
+  manifest_sha256: 048c02b5890115e655e0a61553472adf2cbf8ef5c016731c0ffc0bfd0f2f667e
+  files: 83
+  year: "2024"
+  qtr: A
+  own_code: "5"
+  size_code: "0"
+  detail_aggregation_levels: ["75", "76"]
+  admission: positive-establishments
+
+context:
+  path: src/babylon/data/reference/economy/qcew_county_sectors_mi_2024.csv.gz
+  sha256: 1cac80bee20c086be2e1f268643b0caab5d8d63030251817a9f149123755d71a
+  rows: 1603
+  sector_codes:
+    - "11"
+    - "21"
+    - "22"
+    - "23"
+    - "31-33"
+    - "42"
+    - "44-45"
+    - "48-49"
+    - "51"
+    - "52"
+    - "53"
+    - "54"
+    - "55"
+    - "56"
+    - "61"
+    - "62"
+    - "71"
+    - "72"
+    - "81"
+    - "99"
+
+selection:
+  actor_identity: [county_geoid, sector_code]
+  commodity_sectors: ["11", "21", "31-33", "42", "44-45"]
+  primary: greatest-positive-establishments-then-exact-industry-code-ascending
+  mining: choose-211-or-212-first-then-four-digit-child-of-212
+  support_only_excluded: ["115", "213", "425"]
+  physical_wholesale: ["423", "424"]
+  unmapped_primary: refuse
+  alternatives: every-positive-exact-catalogue-industry-row
+  merchant_family: null
+
+families:
+  "111": grain
+  "112": animal_products
+  "113": logs
+  "211": hydrocarbon_feedstock
+  "2122": metal_ore
+  "2123": mineral_feedstock
+  "311": prepared_food
+  "312": packaged_beverages
+  "321": wood_products
+  "322": paper_packaging
+  "325": industrial_chemicals
+  "331": metal_stock
+  "332": metal_parts
+  "333": machinery
+  "334": electrical_goods
+  "339": household_wares
+
+artifact:
+  name: michigan_commodity_roster_mi_2024
+  path: src/babylon/data/reference/economy/michigan_commodity_roster_mi_2024.json.gz
+  format: json.gz
+  compression: gzip-mtime-0
+  ordering: county-geoid-then-exact-code-ascending
+  semantic_domain: babylon.michigan-commodity-roster.v1
+  sha256: a56de97bf8a0ba59a41cdfb2fc237781faf3a89b8c0a68bdb7e852ddd170389d
+  semantic_sha256: c5c3b115c35315d9034575df1eddf63e6ef2da2d0900533dd34accf3604d24d1
+  actors: 397
+  producers: 231
+  wholesalers: 83
+  retailers: 83
+  counties: 83
+  industries: 2603
+  suppressed_industries: 1198
+  excluded_cohorts: 5
+
+bounds:
+  artifact_bytes: 1048576
+  artifact_uncompressed_bytes: 4194304
+  industry_rows: 8000
+  actors: 415
+  integer_maximum: 9223372036854775807
+
+semantics:
+  establishments: annual-average-establishments-not-operating-capacity
+  employment: annual-average-jobs-not-distinct-people-or-modeled-workers
+  total_annual_wages: calendar-year-total-USD-not-engine-money
+  annual_avg_wkly_wage: annual-average-USD-per-employee-per-week-not-median
+  suppression: N-retains-establishments-other-three-metrics-null
+  disclosed_zero: exact-observed-zero
+  absent_row: absent-not-zero
+  nested_industries: preserved-never-added-together
+  provenance: county-geoid-joins-one-exact-source-filename-and-sha256
+
+authority:
+  reference_only: true
+  family_meaning: Designed-representative-goods-not-observed-products-or-factories
+  excluded:
+    - recipes
+    - operating-quantities
+    - workforce-allocation
+    - supplier-selection
+    - routes
+    - physical-capacity
+    - payments
+    - services
+    - PER-29-completion

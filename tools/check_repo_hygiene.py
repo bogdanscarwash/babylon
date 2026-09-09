@@ -142,9 +142,14 @@ MAX_BLOB_BYTES: int = 1_048_576
 # These two embedded, quality-5 Vorbis themes need 1.5 and 1.8 MiB. Keep a
 # finite per-file budget: assets/audio-renders.json pins their MIDI sources,
 # soundfont, render recipe, and exact output hashes. Licensing is unchanged.
-RUNTIME_THEME_BLOB_LIMITS: dict[str, int] = {
+RUNTIME_ASSET_BLOB_LIMITS: dict[str, int] = {
     "assets/music/babylon_theme_phi.ogg": 2_097_152,
     "assets/music/babylon_theme_panopticon.ogg": 2_097_152,
+    # ADR260: New Campaign needs the captured 1.18 MB compressed road paths
+    # without a source download. statewide-sources.json pins their exact bytes;
+    # the content reader separately bounds decoded content. Match the named
+    # 2 MiB pre-commit publication bound without exempting other network files.
+    "content/scenarios/michigan/statewide-physical.json.gz": 2_097_152,
 }
 
 #: Fixed upper bound on git output lines (Power-of-10 rule 2). The repo
@@ -232,7 +237,7 @@ def check_large_non_lfs_blobs(ls_tree_lines: list[str]) -> list[str]:
         size_field = fields[3]
         if not size_field.isdigit():
             continue
-        if int(size_field) > RUNTIME_THEME_BLOB_LIMITS.get(path, MAX_BLOB_BYTES):
+        if int(size_field) > RUNTIME_ASSET_BLOB_LIMITS.get(path, MAX_BLOB_BYTES):
             violations.append(f"{path} ({size_field} bytes)")
     return sorted(violations)
 

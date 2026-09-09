@@ -44,7 +44,7 @@ if [ "${BABYLON_POSTGRES_IMAGE_ID+x}" = x ] &&
 fi
 
 case "$LIVE_FOCUS" in
-  runtime_smoke | reference_integrity | runtime | archive | reader | client) ;;
+  runtime_smoke | reference_integrity | runtime | archive | reader | statewide_synthetic | statewide_qualified | client) ;;
   *) die "unsupported live focus: $LIVE_FOCUS" ;;
 esac
 
@@ -393,9 +393,18 @@ if [ "$status" -eq 0 ]; then
         reader_threads=1
         [ "$reader_suite" != observer_material_live ] || reader_threads=4
         run_phase "$reader_suite" 600 cargo test -p babylon-persistence --test "$reader_suite" \
-          --locked -- --nocapture --ignored --test-threads="$reader_threads" || status=$?
+          --locked -- --nocapture --ignored --skip statewide_qualified:: --test-threads="$reader_threads" || status=$?
         [ "$status" -eq 0 ] || break
       done
+      ;;
+    statewide_synthetic)
+      run_phase statewide_synthetic 600 cargo test -p babylon-persistence --test observer_material_live \
+        statewide:: --locked -- --nocapture --ignored --test-threads=1 || status=$?
+      ;;
+    statewide_qualified)
+      # Actual-source four-preset qualification is separate from routine reader checks.
+      run_phase statewide_qualified 3600 cargo test -p babylon-persistence --test observer_material_live \
+        statewide_qualified:: --locked -- --nocapture --ignored --test-threads=1 || status=$?
       ;;
     client)
       run_phase client 900 cargo test -p babylon-client --test dossier_cli_live \
