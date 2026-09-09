@@ -164,7 +164,9 @@ fn foundation(case: &Case) -> Result<(Value, MaterialReplaySessionV3<HypergraphS
 
 pub fn run_case(case: &Case, mut emit: impl FnMut(&PeriodRow) -> Result<()>) -> Result<CaseResult> {
     let (identity, mut session) = foundation(case)?;
-    let mut rows = Vec::with_capacity(16);
+    let period_count =
+        usize::try_from(PERIODS).map_err(|_| contract("period bound exceeds platform capacity"))?;
+    let mut rows = Vec::with_capacity(period_count);
     for period in 1..=PERIODS {
         let actions = OrderedPracticeActionBatchV1::empty(
             session.graph_session().session_identity().clone(),
@@ -242,11 +244,13 @@ fn comparison(results: &[CaseResult], left: usize, right: usize, label: &str) ->
 }
 
 pub fn summarize(results: &[CaseResult]) -> Result<Value> {
+    let period_count =
+        usize::try_from(PERIODS).map_err(|_| contract("period bound exceeds platform capacity"))?;
     if results.len() != 4
         || results
             .iter()
             .zip(SPECS)
-            .any(|(result, spec)| result.case != spec.id || result.rows.len() != 16)
+            .any(|(result, spec)| result.case != spec.id || result.rows.len() != period_count)
     {
         return Err(contract(
             "summary requires the exact complete four-case matrix",

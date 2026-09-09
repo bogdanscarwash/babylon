@@ -165,7 +165,7 @@ that goods will arrive before the stop.
 
 All five baseline labor budgets equal full-capacity labor demand:
 ``3200, 640, 640, 160, 320`` hours/period. These constraints interact.
-raising throughput alone need not raise production. Extra opening stock
+Raising throughput alone need not raise production. Extra opening stock
 does not create a period-1 commitment when its opening plan remains zero.
 
 With the other baseline values fixed, raising process or corridor capacity
