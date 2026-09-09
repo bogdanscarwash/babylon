@@ -10,10 +10,84 @@ observes the campaign. Player interventions belong to Gate 5.
 
 ## Download the native preview
 
-The [0.4.0 release](https://github.com/percy-raskova/babylon/releases/tag/v0.4.0)
-provides the native observer for Ubuntu 24.04 x86_64. Read the
-[download instructions](tools/release/DOWNLOAD.md) for prerequisites and controls.
-Unpack the archive and run `./babylon`; you do not need to compile the game.
+The [0.4.0 preview](https://github.com/percy-raskova/babylon/releases/tag/v0.4.0)
+lets you observe the Michigan economy, advance four-week periods, inspect
+production and staffing, and compare saved campaigns. Player actions are not
+implemented yet.
+
+### Prerequisites
+
+<!-- Vale: these prerequisites name the actual graphics API and C library. -->
+<!-- vale Vale.Spelling = NO -->
+Use an Ubuntu 24.04 x86_64 desktop (glibc 2.39+) and Python 3.12 or newer.
+You also need a Vulkan graphics driver and local Docker Engine with the Docker Compose
+plugin. We qualify this preview on Ubuntu 24.04 x86_64 only.
+<!-- vale Vale.Spelling = YES -->
+Install any missing desktop libraries and the download tool:
+
+```sh
+sudo apt-get install curl python3 libpq5 libasound2t64 libudev1 libwayland-client0 \
+  libxkbcommon0 libxkbcommon-x11-0 libx11-6 libxi6 libxrandr2 libxcursor1 \
+  libvulkan1 mesa-vulkan-drivers
+```
+
+Docker must be running and usable by your account. Check it before continuing:
+
+```sh
+docker info
+docker compose version
+```
+
+### Download, check, and start
+
+Download the archive and checksum file into the directory where you want to keep
+the preview:
+
+```sh
+curl -fLO https://github.com/percy-raskova/babylon/releases/download/v0.4.0/babylon-0.4.0-linux-x86_64.tar.gz
+curl -fLO https://github.com/percy-raskova/babylon/releases/download/v0.4.0/babylon-0.4.0-linux-x86_64.tar.gz.sha256
+sha256sum --check babylon-0.4.0-linux-x86_64.tar.gz.sha256
+```
+
+After the archive check reports `OK`, extract it and check the contents:
+
+```sh
+tar -xzf babylon-0.4.0-linux-x86_64.tar.gz
+cd babylon-0.4.0-linux-x86_64
+sha256sum --check SHA256SUMS
+```
+
+After all files pass, run the smoke check and open the observer:
+
+```sh
+./babylon --smoke && ./babylon
+```
+
+The smoke check creates a campaign, commits one period, restarts the runtime,
+and verifies the saved state without a window. It does not test your GPU.
+`./babylon` opens the observer.
+
+The first launch downloads and builds the packaged Postgres image through Docker.
+It needs internet access and free disk space for the image and database.
+Later launches reuse the build cache and database. The runtime and window run as
+native programs. Only the database runs in Docker.
+
+The archive includes the native binaries, assets, and Python launcher dependencies.
+You do not need a checkout or Rust compiler. Campaigns persist in a Docker volume
+isolated by your user and preview version. The database listens on the local
+computer only.
+
+When you quit the observer, the database remains available.
+`./babylon --stop-database` stops it and retains saves.
+Keep the volume and old archive to revisit that version's campaigns.
+Saves cannot move between preview versions.
+
+Read the [download guide](tools/release/DOWNLOAD.md) for controls, save locations,
+and notices. The release's
+[`release-provenance.json`](https://github.com/percy-raskova/babylon/releases/download/v0.4.0/release-provenance.json)
+identifies the exact source and qualification run for the download.
+
+## Development milestones
 
 The four executable gates are:
 
@@ -98,7 +172,7 @@ Python tooling does not write the campaign shown in Bevy.
 <!-- vale ste.NounClusters = YES -->
 <!-- vale ste.UnapprovedWords = YES -->
 
-## Install and check
+## Develop from source
 
 The repository uses `mise.lock` to pin tool downloads and checksums. Start in a new clone:
 
@@ -117,7 +191,7 @@ Run the repository check:
 mise run check
 ```
 
-Open or continue the native observer game:
+Open or continue the native observer:
 
 ```bash
 mise run play
