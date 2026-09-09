@@ -118,6 +118,14 @@ fn observer_app() -> App {
         ui.menu_open = false;
         ui.history_open = true;
     }
+    // World now waits for an explicit cohort choice before drawing shipments
+    // or production. Exercise that same command in the shipped composition.
+    let context = app.world().resource::<ObserverSession>().context();
+    app.world_mut()
+        .write_message(babylon_client::production::ProductionCommand::Select {
+            site_id: "source".into(),
+            context,
+        });
     app.update(); // Exercise committed event buttons without requesting history.
     app
 }
