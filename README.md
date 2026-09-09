@@ -20,8 +20,9 @@ implemented yet.
 <!-- Vale: these prerequisites name the actual graphics API and C library. -->
 <!-- vale Vale.Spelling = NO -->
 Use an Ubuntu 24.04 x86_64 desktop (glibc 2.39+) and Python 3.12 or newer.
-You also need a Vulkan graphics driver and local Docker Engine with the Docker Compose
-plugin. We qualify this preview on Ubuntu 24.04 x86_64 only.
+You also need a Vulkan graphics driver and local
+[Docker Engine with the Docker Compose plugin](https://docs.docker.com/engine/install/ubuntu/).
+We qualify this preview on Ubuntu 24.04 x86_64 only.
 <!-- vale Vale.Spelling = YES -->
 Install any missing desktop libraries and the download tool:
 
