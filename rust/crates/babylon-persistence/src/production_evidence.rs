@@ -1,6 +1,6 @@
 //! Presentation identity for the already-authorized production observation.
 //!
-//! V4 uses a fixed domain/version, big-endian u64 quantities and lengths,
+//! V5 uses a fixed domain/version, big-endian u64 quantities and lengths,
 //! length-prefixed UTF-8, and explicit 0/1 option tags. Unordered rows sort by
 //! their complete typed fields (including exact good/unit identities), after
 //! nested collections have been sorted. Duplicates retain their multiplicity.
@@ -10,11 +10,16 @@
 //! optional completed material balance after provenance. Each balance encodes
 //! period, row count, then site/good/unit identities and labels followed by
 //! opening/arrivals/produced/consumed/dispatched/closing quantities. V1, V2,
-//! and V3 identities retain their historical meaning; V4 is the sole live encoder.
-//! After the material balance, V4 appends the staffing-account count and rows.
+//! V3, and V4 identities retain their historical meaning; V5 is the sole live encoder.
+//! After the material balance, the layout appends the staffing-account count and rows.
 //! Each row follows its DTO field order: pool/site/unit, stable subject strings,
 //! seven u64 stocks/policy/opening values, then an optional completed account
 //! containing its nine u64 values. None and completed zero flows remain distinct.
+//! V5 adds each route's ordered corridor-leg rows after its quantities, then
+//! appends freight-capacity accounts after staffing. Account fields follow DTO
+//! order; optional completed accounts encode dispatch period and reservation rows.
+//! Reservations encode departure period, opening/new/remaining quantities, then
+//! order rows with exact IDs and requested/dispatched/remaining quantities.
 //! Changing this layout requires a new version.
 //!
 //! This is neither a world hash nor an authorization proof. It commits to what
@@ -30,13 +35,13 @@ use crate::{
     ProductionStockV1,
 };
 
-const DOMAIN: &[u8] = b"babylon.production-observation-evidence.v4\0";
+const DOMAIN: &[u8] = b"babylon.production-observation-evidence.v5\0";
 
 /// SHA-256 of one scope-bound production presentation, distinct from world identity.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct ProductionEvidenceDigestV4([u8; 32]);
+pub struct ProductionEvidenceDigestV5([u8; 32]);
 
-impl ProductionEvidenceDigestV4 {
+impl ProductionEvidenceDigestV5 {
     #[must_use]
     pub const fn as_bytes(&self) -> &[u8; 32] {
         &self.0
@@ -57,11 +62,11 @@ impl ObserverEconomySnapshotV1 {
     /// session; the digest does not validate provenance or confer read authority.
     /// Compute on observation installation or evidence disclosure, not per frame.
     #[must_use]
-    pub fn production_evidence_digest(&self) -> Option<ProductionEvidenceDigestV4> {
+    pub fn production_evidence_digest(&self) -> Option<ProductionEvidenceDigestV5> {
         let production = canonical_production(self.production.as_ref()?);
         let mut encoder = EvidenceEncoder(Sha256::new());
         encoder.0.update(DOMAIN);
-        encoder.0.update(4_u32.to_be_bytes());
+        encoder.0.update(5_u32.to_be_bytes());
         encoder.text(&self.campaign_id);
         encoder.number(self.resolve_tick);
         encoder.text(&self.foundation_digest);
@@ -73,7 +78,7 @@ impl ObserverEconomySnapshotV1 {
             ObserverVisibilityV1::KnownPreview => 1,
         }]);
         encoder.production(&production);
-        Some(ProductionEvidenceDigestV4(encoder.0.finalize().into()))
+        Some(ProductionEvidenceDigestV5(encoder.0.finalize().into()))
     }
 }
 
@@ -95,7 +100,20 @@ fn canonical_production(source: &ProductionSnapshotV1) -> ProductionSnapshotV1 {
     }
     rows.observed_contexts.sort_unstable();
     rows.process_attributions.sort_unstable();
+    for route in &mut rows.routes {
+        route.corridor_legs.sort_unstable();
+    }
     rows.routes.sort_unstable();
+    for account in &mut rows.freight_capacity_accounts {
+        account.route_ids.sort_unstable();
+        if let Some(completed) = &mut account.completed {
+            for reservation in &mut completed.reservations {
+                reservation.orders.sort_unstable();
+            }
+            completed.reservations.sort_unstable();
+        }
+    }
+    rows.freight_capacity_accounts.sort_unstable();
     rows.freight.sort_unstable();
     for event in &mut rows.events {
         event.subject_site_ids.sort_unstable();
@@ -197,6 +215,53 @@ impl EvidenceEncoder {
         self.count(rows.staffing_accounts.len());
         for account in &rows.staffing_accounts {
             self.staffing_account(account);
+        }
+        self.count(rows.freight_capacity_accounts.len());
+        for account in &rows.freight_capacity_accounts {
+            self.freight_capacity_account(account);
+        }
+    }
+
+    fn freight_capacity_account(&mut self, account: &crate::ProductionFreightCapacityAccountV1) {
+        for value in [
+            &account.corridor_id,
+            &account.corridor_label,
+            &account.unit_id,
+            &account.unit,
+        ] {
+            self.text(value);
+        }
+        self.strings(&account.route_ids);
+        self.number(account.next_opening_period);
+        self.number(account.next_opening_available);
+        self.0.update([u8::from(account.completed.is_some())]);
+        if let Some(completed) = &account.completed {
+            self.number(completed.period);
+            self.count(completed.reservations.len());
+            for row in &completed.reservations {
+                for value in [
+                    row.reservation_period,
+                    row.opening_available,
+                    row.newly_reserved,
+                    row.remaining_available,
+                ] {
+                    self.number(value);
+                }
+                self.count(row.orders.len());
+                for order in &row.orders {
+                    for value in [
+                        &order.order_id,
+                        &order.route_id,
+                        &order.good_id,
+                        &order.unit_id,
+                    ] {
+                        self.text(value);
+                    }
+                    for value in [order.requested, order.dispatched, order.remaining_unshipped] {
+                        self.number(value);
+                    }
+                }
+            }
         }
     }
 
@@ -363,6 +428,12 @@ impl EvidenceEncoder {
             route.backlog,
         ] {
             self.number(value);
+        }
+        self.count(route.corridor_legs.len());
+        for leg in &route.corridor_legs {
+            self.number(u64::from(leg.leg_index));
+            self.text(&leg.corridor_id);
+            self.number(leg.travel_periods);
         }
     }
 

@@ -51,7 +51,7 @@ fn current_staffed_foundation_keeps_observed_cohorts_separate_from_five_designed
 
 #[test]
 fn unsupported_michigan_saves_are_refused_without_a_predecessor_factory() {
-    for version in 1..=4 {
+    for version in 1..=5 {
         for delivery in ["standard", "delayed"] {
             let id = format!("michigan-material-{delivery}-v{version}");
             assert_eq!(MichiganContentPresetV1::from_id(&id), None);
@@ -118,7 +118,7 @@ fn admission_refuses_mixed_headers_graphs_and_unadmitted_versions() {
             }
         }
         assert!(admit_michigan_content_v1(
-            "michigan-material-standard-v6",
+            "michigan-material-standard-v7",
             16,
             &expected.content_digest,
             &expected.digest,
@@ -150,7 +150,7 @@ fn admission_refuses_mixed_headers_graphs_and_unadmitted_versions() {
 #[test]
 fn edited_parameters_change_new_foundations_but_stored_campaign_keeps_its_own_values() {
     let catalog = crate::test_support::catalog();
-    let preset = MichiganContentPresetV1::FourWeekStandardV5;
+    let preset = MichiganContentPresetV1::FourWeekStandardV6;
     let original = preset.admitted(&catalog).unwrap();
     let source = include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
@@ -226,6 +226,74 @@ fn edited_parameters_change_new_foundations_but_stored_campaign_keeps_its_own_va
             &original.digest,
             0,
             &original.canonical_bytes[..length]
+        )
+        .is_err());
+    }
+}
+
+#[test]
+fn stored_shared_freight_capacities_reconstruct_without_current_default_substitution() {
+    let source = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../../content/scenarios/michigan/defines.toml"
+    ));
+    let defaults = crate::test_support::catalog();
+    let authored = MichiganMaterialCatalogV1::from_defines_toml(
+        &source
+            .replace("AMPLE_UNITS_PER_WEEK = 200", "AMPLE_UNITS_PER_WEEK = 201")
+            .replace(
+                "CONSTRAINED_UNITS_PER_WEEK = 40",
+                "CONSTRAINED_UNITS_PER_WEEK = 41",
+            ),
+    )
+    .unwrap();
+    for (preset, capacity) in [
+        (MichiganContentPresetV1::SharedFreightAmpleV6, 804),
+        (MichiganContentPresetV1::SharedFreightConstrainedV6, 164),
+    ] {
+        let original = preset.admitted(&authored).unwrap();
+        let default_campaign = preset.admitted(&defaults).unwrap();
+        assert_ne!(original.digest, default_campaign.digest);
+        let reopened = admit_michigan_content_v1(
+            preset.id(),
+            16,
+            &original.content_digest,
+            &original.digest,
+            0,
+            &original.canonical_bytes,
+        )
+        .unwrap();
+        assert_eq!(reopened.catalog.defines_bytes(), authored.defines_bytes());
+        assert_ne!(reopened.catalog.defines_bytes(), defaults.defines_bytes());
+        assert_eq!(reopened.register, original.register);
+        assert_eq!(reopened.canonical_bytes, original.canonical_bytes);
+        let sheet = reopened
+            .catalog
+            .routes()
+            .iter()
+            .find(|route| route.key == "sheet-transfer")
+            .unwrap();
+        let shared = reopened
+            .catalog
+            .corridor_for_route(sheet, preset.delivery())
+            .unwrap();
+        assert_eq!(shared.capacity_per_period(preset.delivery()), capacity);
+        let capacities: Vec<_> = reopened
+            .register
+            .state()
+            .corridor_capacities
+            .iter()
+            .filter(|row| row.corridor_id == shared.id())
+            .collect();
+        assert_eq!(capacities.len(), 16);
+        assert!(capacities.iter().all(|row| row.available == capacity));
+        assert!(admit_michigan_content_v1(
+            preset.id(),
+            16,
+            &default_campaign.content_digest,
+            &default_campaign.digest,
+            0,
+            &original.canonical_bytes,
         )
         .is_err());
     }

@@ -369,6 +369,7 @@ mod tests {
     }
     fn chain() -> ProductionSnapshotV1 {
         ProductionSnapshotV1 {
+            freight_capacity_accounts: Vec::new(),
             material_balance: None,
             labor_accounts: Vec::new(),
             staffing_accounts: Vec::new(),
@@ -521,6 +522,7 @@ mod tests {
 
     fn route() -> ProductionRouteV1 {
         ProductionRouteV1 {
+            corridor_legs: Vec::new(),
             id: "route-a-b".into(),
             supplier_site_id: "a".into(),
             buyer_site_id: "b".into(),

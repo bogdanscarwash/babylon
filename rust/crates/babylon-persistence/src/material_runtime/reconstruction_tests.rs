@@ -44,7 +44,7 @@ fn stored_copy(original: &MaterialRuntimeFoundationV2) -> StoredMaterialFoundati
 }
 
 fn alternate_foundation() -> MaterialRuntimeFoundationV2 {
-    let original = crate::michigan_content::MichiganContentPresetV1::FourWeekStandardV5
+    let original = crate::michigan_content::MichiganContentPresetV1::FourWeekStandardV6
         .create_foundation(&crate::test_support::catalog())
         .unwrap();
     let bundle = original.graph_foundation.content_bundle();
@@ -121,7 +121,7 @@ fn stored_content_reconstructs_exact_alternate_session_and_seed_without_factory_
 
 #[test]
 fn reconstruction_refuses_component_changes_and_an_unadmitted_expected_identity() {
-    let original = crate::michigan_content::MichiganContentPresetV1::FourWeekStandardV5
+    let original = crate::michigan_content::MichiganContentPresetV1::FourWeekStandardV6
         .create_foundation(&crate::test_support::catalog())
         .unwrap();
     let expected = original.digest();
@@ -157,7 +157,7 @@ fn reconstruction_refuses_component_changes_and_an_unadmitted_expected_identity(
 
 #[test]
 fn reconstruction_rejects_a_different_valid_graph_and_a_nonzero_initial_register() {
-    let original = crate::michigan_content::MichiganContentPresetV1::FourWeekStandardV5
+    let original = crate::michigan_content::MichiganContentPresetV1::FourWeekStandardV6
         .create_foundation(&crate::test_support::catalog())
         .unwrap();
     let alternate = alternate_foundation();
@@ -245,7 +245,7 @@ fn persisted_layout_is_exact_and_unknown_layouts_are_refused() {
 
 #[test]
 fn large_v2_stored_sources_reconstruct_the_same_circuit_without_factory_substitution() {
-    let original = crate::michigan_content::MichiganContentPresetV1::FourWeekStandardV5
+    let original = crate::michigan_content::MichiganContentPresetV1::FourWeekStandardV6
         .create_foundation(&crate::test_support::catalog())
         .unwrap();
     assert_eq!(
@@ -292,8 +292,8 @@ fn large_v2_stored_sources_reconstruct_the_same_circuit_without_factory_substitu
 fn admitted_bundle_foundations_reconstruct_exactly_through_dispatch_transit_and_arrival() {
     use crate::michigan_content::MichiganContentPresetV1;
     for preset in [
-        MichiganContentPresetV1::FourWeekStandardV5,
-        MichiganContentPresetV1::FourWeekDelayedV5,
+        MichiganContentPresetV1::FourWeekStandardV6,
+        MichiganContentPresetV1::FourWeekDelayedV6,
     ] {
         let original = preset
             .create_foundation(&crate::test_support::catalog())
@@ -331,7 +331,7 @@ fn admitted_bundle_foundations_reconstruct_exactly_through_dispatch_transit_and_
             if period == 1 {
                 assert_workforce_seed_evidence(&left);
             }
-            if preset == MichiganContentPresetV1::FourWeekDelayedV5 {
+            if preset == MichiganContentPresetV1::FourWeekDelayedV6 {
                 assert_delayed_panel_retention(&left, period);
             }
             let checkpoint =
@@ -365,7 +365,7 @@ fn admitted_bundle_foundations_reconstruct_exactly_through_dispatch_transit_and_
 #[test]
 fn bundle_reconstruction_refuses_alternate_content_and_individually_valid_changed_stock() {
     use crate::michigan_content::MichiganContentPresetV1;
-    let preset = MichiganContentPresetV1::FourWeekStandardV5;
+    let preset = MichiganContentPresetV1::FourWeekStandardV6;
     let original = preset
         .create_foundation(&crate::test_support::catalog())
         .unwrap();
@@ -450,7 +450,7 @@ fn assert_delayed_panel_retention(
 
 #[test]
 fn unwrapped_definitions_and_changed_opening_workforce_are_not_scheduled_fallbacks() {
-    let current = crate::michigan_content::MichiganContentPresetV1::FourWeekStandardV5
+    let current = crate::michigan_content::MichiganContentPresetV1::FourWeekStandardV6
         .create_foundation(&crate::test_support::catalog())
         .unwrap();
     let original = current.graph_foundation().content_bundle();

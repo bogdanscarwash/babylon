@@ -1,6 +1,6 @@
 # Designed Michigan material parameters. Existing campaigns retain their stored values.
 # One simulation period is four weeks; weekly rates are multiplied once when a campaign starts.
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 TICK_DURATION_DAYS = 28 # Fixed supported interval.
 HORIZON_PERIODS = 16 # Campaign stop bound: 1..=16 four-week periods.
 
@@ -59,18 +59,29 @@ RESERVE_PEOPLE = 0
 
 [corridor.sheet_transfer]
 UNITS_PER_WEEK = 80
+
+[route.sheet_transfer]
 TRAVEL_PERIODS = 1
 DELAYED_TRAVEL_PERIODS = 3
 ORDERED_UNITS = 600
 
 [corridor.panel_transfer]
 UNITS_PER_WEEK = 8
+
+[route.panel_transfer]
 TRAVEL_PERIODS = 1
 DELAYED_TRAVEL_PERIODS = 1
 ORDERED_UNITS = 60
 
 [corridor.food_transfer]
 UNITS_PER_WEEK = 20
+
+[route.food_transfer]
 TRAVEL_PERIODS = 1
 DELAYED_TRAVEL_PERIODS = 1
 ORDERED_UNITS = 200
+
+# One Designed regional freight allotment; not a physical road or border.
+[shared_freight]
+AMPLE_UNITS_PER_WEEK = 200 # 800 kg per 28-day period.
+CONSTRAINED_UNITS_PER_WEEK = 40 # 160 kg per 28-day period.

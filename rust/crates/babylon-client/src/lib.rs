@@ -57,4 +57,5 @@ pub mod observer_performance;
 pub mod observer_theme;
 pub mod production;
 pub(crate) mod production_brief;
+pub(crate) mod production_freight;
 mod production_layout;

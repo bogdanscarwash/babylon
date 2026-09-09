@@ -1,6 +1,7 @@
 //! Projection of exact committed material registers and evidence, without adjudication.
 
 pub(crate) mod context;
+mod freight;
 mod labor;
 pub(crate) mod material_balance;
 pub(crate) mod staffing;
@@ -54,6 +55,12 @@ pub(crate) fn project_material_observation_v1(
         opening.map(MaterialWorldRegisterV2::state),
         history.last().map(|(receipt, _)| receipt),
     )?;
+    let freight_capacity_accounts = freight::project_freight_capacity_accounts(
+        catalog,
+        state,
+        opening.map(MaterialWorldRegisterV2::state),
+        history.last().map(|(receipt, _)| receipt),
+    )?;
     let sites = project_sites(catalog, state, history.last().map(|(receipt, _)| receipt))?;
     let routes = project_routes(catalog, state)?;
     let mut freight = Vec::new();
@@ -92,8 +99,10 @@ pub(crate) fn project_material_observation_v1(
         scenario_label: match preset {
             MichiganDeliveryPresetV1::Standard => "Michigan: standard delivery",
             MichiganDeliveryPresetV1::Delayed => "Michigan: delayed delivery",
+            MichiganDeliveryPresetV1::SharedFreightAmple => "Michigan: shared freight — ample",
+            MichiganDeliveryPresetV1::SharedFreightConstrained => "Michigan: shared freight — constrained",
         }.to_owned(),
-        horizon_period: catalog.horizon_ticks(), sites, routes, freight, events, labor_accounts, material_balance,
+        horizon_period: catalog.horizon_ticks(), sites, routes, freight, events, labor_accounts, material_balance, freight_capacity_accounts,
         staffing_accounts: Vec::new(), observed_contexts: Vec::new(), process_attributions: Vec::new(),
         provenance: vec![
             format!("Designed {}-period ({}-week) physical demonstration: county-industry aggregates; no factory locations.", catalog.horizon_ticks(), catalog.horizon_ticks() * babylon_kernel::clock::WEEKS_PER_TICK),
@@ -301,6 +310,7 @@ fn project_routes(
                 good: good.label.clone(),
                 unit: good.unit_key.clone(),
                 travel_periods,
+                corridor_legs: freight::project_route_legs(state, route.id())?,
                 ordered: order.ordered,
                 shipped: order.shipped,
                 delivered: order.delivered,
@@ -512,7 +522,10 @@ mod tests {
             &[],
         )
         .unwrap();
-        assert_eq!(initial.provenance[0], "Designed 16-period (64-week) physical demonstration: county-industry aggregates; no factory locations.");
+        assert_eq!(
+            initial.provenance[0],
+            "Designed 16-period (64-week) physical demonstration: county-industry aggregates; no factory locations."
+        );
         assert!(initial.freight.is_empty());
         assert!(initial.events.is_empty());
         assert!(initial.material_balance.is_none());
@@ -603,7 +616,7 @@ mod tests {
             &source.replace("HORIZON_PERIODS = 16", "HORIZON_PERIODS = 8"),
         )
         .unwrap();
-        let foundation = MichiganContentPresetV1::FourWeekStandardV5
+        let foundation = MichiganContentPresetV1::FourWeekStandardV6
             .create_foundation(&catalog)
             .unwrap();
         let stored = crate::sector_bundle::foundation::decode_stored_bundle_defines_v3(
@@ -623,7 +636,10 @@ mod tests {
         )
         .unwrap();
         assert_eq!(snapshot.horizon_period, 8);
-        assert_eq!(snapshot.provenance[0], "Designed 8-period (32-week) physical demonstration: county-industry aggregates; no factory locations.");
+        assert_eq!(
+            snapshot.provenance[0],
+            "Designed 8-period (32-week) physical demonstration: county-industry aggregates; no factory locations."
+        );
     }
 
     fn period_three(preset: MichiganDeliveryPresetV1) -> ProductionSnapshotV1 {

@@ -146,6 +146,7 @@ fn production_observation() -> babylon_persistence::ProductionSnapshotV1 {
         labor: Vec::new(),
     };
     ProductionSnapshotV1 {
+        freight_capacity_accounts: Vec::new(),
         material_balance: None,
         labor_accounts: Vec::new(),
         staffing_accounts: Vec::new(),
@@ -153,6 +154,7 @@ fn production_observation() -> babylon_persistence::ProductionSnapshotV1 {
         horizon_period: 16,
         sites: vec![site("source"), site("destination")],
         routes: vec![ProductionRouteV1 {
+            corridor_legs: Vec::new(),
             id: "route".into(),
             supplier_site_id: "source".into(),
             buyer_site_id: "destination".into(),

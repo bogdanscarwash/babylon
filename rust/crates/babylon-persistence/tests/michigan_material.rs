@@ -46,6 +46,144 @@ fn advance(session: &mut Session) -> MaterialTickReceiptsV3 {
     receipts
 }
 
+#[test]
+fn shared_freight_capacity_changes_two_chains_through_the_authoritative_session() {
+    for (name, sheet, meal, panels) in [
+        ("michigan-material-shared-freight-ample-v6", 320, 80, 32),
+        (
+            "michigan-material-shared-freight-constrained-v6",
+            120,
+            40,
+            12,
+        ),
+    ] {
+        let preset = MichiganContentPresetV1::from_id(name)
+            .expect("shared freight must be admitted campaign content");
+        let mut session = preset
+            .create_foundation(&crate::test_support::catalog())
+            .unwrap()
+            .into_session()
+            .unwrap();
+        let catalog = crate::test_support::catalog();
+        advance(&mut session);
+        let shipped = |key: &str| {
+            let id = catalog
+                .routes()
+                .iter()
+                .find(|r| r.key == key)
+                .unwrap()
+                .order_id();
+            session
+                .material()
+                .state()
+                .orders
+                .iter()
+                .find(|r| r.order_id == id)
+                .unwrap()
+                .shipped
+        };
+        assert_eq!(shipped("sheet-transfer"), sheet);
+        assert_eq!(shipped("food-transfer"), meal);
+        assert_material_conserved(session.material().state());
+        advance(&mut session);
+        let third = advance(&mut session);
+        let produced = |key: &str| {
+            let id = catalog
+                .processes()
+                .iter()
+                .find(|p| p.key == key)
+                .unwrap()
+                .id();
+            third
+                .production
+                .iter()
+                .filter(|r| r.process_id == id)
+                .map(|r| {
+                    r.produced_batches
+                        * catalog
+                            .processes()
+                            .iter()
+                            .find(|p| p.id() == id)
+                            .unwrap()
+                            .output_quantity_per_batch
+                })
+                .sum::<u64>()
+        };
+        assert_eq!(produced("panel-forming"), panels);
+        assert_eq!(produced("meal-packaging"), meal);
+        assert_material_conserved(session.material().state());
+    }
+}
+
+#[test]
+fn shared_freight_has_one_capacity_principal_and_competing_order_demand() {
+    let catalog = crate::test_support::catalog();
+    let opening = |preset| {
+        MichiganContentPresetV1::new_campaign(preset)
+            .create_foundation(&catalog)
+            .unwrap()
+            .initial_register()
+            .state()
+            .clone()
+    };
+    let ample = opening(MichiganDeliveryPresetV1::SharedFreightAmple);
+    let mut constrained = opening(MichiganDeliveryPresetV1::SharedFreightConstrained);
+    assert_eq!(ample.corridor_capacities.len(), 2 * 16);
+    let sheet = catalog
+        .routes()
+        .iter()
+        .find(|r| r.key == "sheet-transfer")
+        .unwrap();
+    let shared = catalog
+        .corridor_for_route(sheet, MichiganDeliveryPresetV1::SharedFreightAmple)
+        .unwrap()
+        .id();
+    for row in &mut constrained.corridor_capacities {
+        if row.corridor_id == shared {
+            assert_eq!(row.available, 160);
+            row.available = 800;
+        }
+    }
+    assert_eq!(
+        ample, constrained,
+        "capacity is the only changed material input"
+    );
+
+    let text = include_str!("../../../../content/scenarios/michigan/defines.toml")
+        .replace("ORDERED_UNITS = 200", "ORDERED_UNITS = 80");
+    let changed =
+        babylon_persistence::michigan_material::MichiganMaterialCatalogV1::from_defines_toml(&text)
+            .unwrap();
+    let mut session =
+        MichiganContentPresetV1::new_campaign(MichiganDeliveryPresetV1::SharedFreightConstrained)
+            .create_foundation(&changed)
+            .unwrap()
+            .into_session()
+            .unwrap();
+    let receipts = advance(&mut session);
+    let dispatched = |key| {
+        let id = changed
+            .routes()
+            .iter()
+            .find(|r| r.key == key)
+            .unwrap()
+            .order_id();
+        receipts
+            .dispatches
+            .iter()
+            .filter(|r| r.order_id == id)
+            .map(|r| r.quantity)
+            .sum::<u64>()
+    };
+    assert_eq!(dispatched("sheet-transfer"), 141);
+    assert_eq!(dispatched("food-transfer"), 18);
+    assert_eq!(
+        160 - dispatched("sheet-transfer") - dispatched("food-transfer"),
+        1
+    );
+    assert_material_conserved(session.material().state());
+}
+
 fn inventory(state: &MaterialCircuitStateV2, site: &str, good: &str) -> u64 {
     let catalog = crate::test_support::catalog();
     let site_id = catalog.site(site).unwrap().id();
@@ -324,6 +462,8 @@ fn every_dispatch_transit_arrival_restart_reproduces_exact_continuation() {
     for preset in [
         MichiganDeliveryPresetV1::Standard,
         MichiganDeliveryPresetV1::Delayed,
+        MichiganDeliveryPresetV1::SharedFreightAmple,
+        MichiganDeliveryPresetV1::SharedFreightConstrained,
     ] {
         let mut uninterrupted = session(preset);
         let mut next = Some(prepare(&uninterrupted));

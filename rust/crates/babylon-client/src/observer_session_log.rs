@@ -75,6 +75,10 @@ fn observer_command_name(command: ObserverCommand) -> &'static str {
         ObserverCommand::Menu => "menu",
         ObserverCommand::NewCampaign => "new_campaign",
         ObserverCommand::NewDelayedCampaign => "new_delayed_campaign",
+        ObserverCommand::NewSharedFreightAmpleCampaign => "new_shared_freight_ample_campaign",
+        ObserverCommand::NewSharedFreightConstrainedCampaign => {
+            "new_shared_freight_constrained_campaign"
+        }
         ObserverCommand::ReopenCampaign => "reopen_campaign",
         ObserverCommand::Quit => "quit",
         ObserverCommand::UiScale => "ui_scale",
@@ -568,6 +572,7 @@ mod tests {
             visibility: ObserverVisibilityV1::FullObserver,
             counties: Vec::new(),
             production: Some(ProductionSnapshotV1 {
+                freight_capacity_accounts: Vec::new(),
                 material_balance: None,
                 labor_accounts: Vec::new(),
                 staffing_accounts: Vec::new(),

@@ -17,8 +17,10 @@ use crate::{
 /// Graph content revisions are separate from the logical delivery choice.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MichiganContentPresetV1 {
-    FourWeekStandardV5,
-    FourWeekDelayedV5,
+    FourWeekStandardV6,
+    FourWeekDelayedV6,
+    SharedFreightAmpleV6,
+    SharedFreightConstrainedV6,
 }
 
 /// All admitted content revisions retain this exact bounded physical projection.
@@ -42,24 +44,30 @@ impl std::fmt::Display for MichiganContentErrorV1 {
 }
 impl std::error::Error for MichiganContentErrorV1 {}
 
-pub const MICHIGAN_CONTENT_PRESETS_V1: [MichiganContentPresetV1; 2] = [
-    MichiganContentPresetV1::FourWeekStandardV5,
-    MichiganContentPresetV1::FourWeekDelayedV5,
+pub const MICHIGAN_CONTENT_PRESETS_V1: [MichiganContentPresetV1; 4] = [
+    MichiganContentPresetV1::FourWeekStandardV6,
+    MichiganContentPresetV1::FourWeekDelayedV6,
+    MichiganContentPresetV1::SharedFreightAmpleV6,
+    MichiganContentPresetV1::SharedFreightConstrainedV6,
 ];
 
 impl MichiganContentPresetV1 {
     #[must_use]
     pub const fn new_campaign(delivery: MichiganDeliveryPresetV1) -> Self {
         match delivery {
-            MichiganDeliveryPresetV1::Standard => Self::FourWeekStandardV5,
-            MichiganDeliveryPresetV1::Delayed => Self::FourWeekDelayedV5,
+            MichiganDeliveryPresetV1::Standard => Self::FourWeekStandardV6,
+            MichiganDeliveryPresetV1::Delayed => Self::FourWeekDelayedV6,
+            MichiganDeliveryPresetV1::SharedFreightAmple => Self::SharedFreightAmpleV6,
+            MichiganDeliveryPresetV1::SharedFreightConstrained => Self::SharedFreightConstrainedV6,
         }
     }
     #[must_use]
     pub const fn id(self) -> &'static str {
         match self {
-            Self::FourWeekStandardV5 => "michigan-material-standard-v5",
-            Self::FourWeekDelayedV5 => "michigan-material-delayed-v5",
+            Self::FourWeekStandardV6 => "michigan-material-standard-v6",
+            Self::FourWeekDelayedV6 => "michigan-material-delayed-v6",
+            Self::SharedFreightAmpleV6 => "michigan-material-shared-freight-ample-v6",
+            Self::SharedFreightConstrainedV6 => "michigan-material-shared-freight-constrained-v6",
         }
     }
     #[must_use]
@@ -71,8 +79,10 @@ impl MichiganContentPresetV1 {
     #[must_use]
     pub const fn delivery(self) -> MichiganDeliveryPresetV1 {
         match self {
-            Self::FourWeekStandardV5 => MichiganDeliveryPresetV1::Standard,
-            Self::FourWeekDelayedV5 => MichiganDeliveryPresetV1::Delayed,
+            Self::FourWeekStandardV6 => MichiganDeliveryPresetV1::Standard,
+            Self::FourWeekDelayedV6 => MichiganDeliveryPresetV1::Delayed,
+            Self::SharedFreightAmpleV6 => MichiganDeliveryPresetV1::SharedFreightAmple,
+            Self::SharedFreightConstrainedV6 => MichiganDeliveryPresetV1::SharedFreightConstrained,
         }
     }
     #[must_use]
@@ -82,8 +92,10 @@ impl MichiganContentPresetV1 {
     #[must_use]
     pub const fn label(self) -> &'static str {
         match self {
-            Self::FourWeekStandardV5 => "Michigan: standard delivery (four active cohorts)",
-            Self::FourWeekDelayedV5 => "Michigan: delayed delivery (four active cohorts)",
+            Self::FourWeekStandardV6 => "Michigan: standard delivery (four active cohorts)",
+            Self::FourWeekDelayedV6 => "Michigan: delayed delivery (four active cohorts)",
+            Self::SharedFreightAmpleV6 => "Shared freight — ample",
+            Self::SharedFreightConstrainedV6 => "Shared freight — constrained",
         }
     }
     /// # Errors
@@ -107,7 +119,7 @@ impl MichiganContentPresetV1 {
         self,
         catalog: &MichiganMaterialCatalogV1,
     ) -> Result<MaterialRuntimeFoundationV2, MichiganContentErrorV1> {
-        crate::sector_bundle::foundation::create_bundle_foundation_v5(
+        crate::sector_bundle::foundation::create_bundle_foundation_v6(
             self.id(),
             self.delivery(),
             catalog,

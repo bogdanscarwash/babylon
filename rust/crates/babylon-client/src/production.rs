@@ -28,6 +28,7 @@ use crate::production_brief::{
     committed_plan_status, dependency_flow_summary, dependency_sites, describe_brief,
     describe_overview, opening_site, DependencyDirection,
 };
+use crate::production_freight::{account_reading, competitor_sites, shared_accounts};
 use crate::production_layout::{path_point, place_label, relation_path, ProductionLayout};
 
 #[derive(Resource, Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -88,6 +89,8 @@ struct ProductionDetails;
 struct ProductionBrief;
 #[derive(Component)]
 struct ProductionDependencies;
+#[derive(Component)]
+struct ProductionFreightReading;
 #[derive(Component, Clone)]
 struct ProductionButton(ProductionCommand);
 
@@ -650,6 +653,7 @@ type ProductionFocusOwners = Or<(
     With<ProductionButton>,
     With<ProductionDetails>,
     With<ProductionBrief>,
+    With<ProductionFreightReading>,
 )>;
 
 fn focus_eligibility(
@@ -1321,6 +1325,10 @@ fn describe(site: &ProductionSiteV1, snapshot: &ProductionSnapshotV1) -> String 
         )
         .expect("String write");
     }
+    for account in shared_accounts(snapshot, Some(&site.id)) {
+        value.push('\n');
+        value.push_str(&account_reading(account, snapshot));
+    }
     describe_material_balance(&mut value, site, snapshot);
     describe_staffing_accounts(&mut value, site, snapshot);
     describe_labor_accounts(&mut value, site, snapshot);
@@ -1613,6 +1621,40 @@ fn rebuild_dependencies(
         };
         let links = dependency_sites(site, snapshot);
         commands.entity(root).with_children(|panel| {
+            for account in shared_accounts(snapshot, Some(&site.id)) {
+                panel.spawn((
+                    text(account_reading(account, snapshot), 13.0, theme::PAPER),
+                    ProductionFreightReading,
+                    Node {
+                        flex_shrink: 0.0,
+                        min_width: px(0),
+                        max_width: percent(100),
+                        ..default()
+                    },
+                    ObserverFocusTarget::reading(Some(context.clone())),
+                ));
+            }
+            let competitors = competitor_sites(&site.id, snapshot);
+            if !competitors.is_empty() {
+                panel.spawn(text(
+                    "OTHER PARTICIPANTS / SHARED FREIGHT",
+                    13.0,
+                    theme::YELLOW,
+                ));
+                for competitor in competitors {
+                    button(
+                        panel,
+                        &format!(
+                            "{}\nInspect shared-freight participant",
+                            competitor.name.trim_end_matches(" cohort")
+                        ),
+                        ProductionCommand::Select {
+                            site_id: competitor.id.clone(),
+                            context: context.clone(),
+                        },
+                    );
+                }
+            }
             for direction in [
                 DependencyDirection::Upstream,
                 DependencyDirection::Downstream,
@@ -2021,6 +2063,7 @@ mod tests {
 
     fn snapshot() -> ProductionSnapshotV1 {
         ProductionSnapshotV1 {
+            freight_capacity_accounts: Vec::new(),
             material_balance: None,
             labor_accounts: Vec::new(),
             staffing_accounts: Vec::new(),
@@ -2034,6 +2077,7 @@ mod tests {
                 site("c", &["b"]),
             ],
             routes: vec![ProductionRouteV1 {
+                corridor_legs: Vec::new(),
                 id: "a-b".into(),
                 supplier_site_id: "a".into(),
                 buyer_site_id: "b".into(),
@@ -3341,6 +3385,64 @@ mod tests {
     }
 
     #[test]
+    fn shared_freight_participant_buttons_navigate_and_expire_with_observation_scope() {
+        let mut app = dependency_navigation_app();
+        app.world_mut()
+            .resource_mut::<ObserverFrame>()
+            .0
+            .as_mut()
+            .unwrap()
+            .production = Some(crate::production_freight::tests::fixture());
+        let context = app.world().resource::<ObserverSession>().context();
+        send_command(
+            &mut app,
+            ProductionCommand::Select {
+                site_id: "panels".into(),
+                context: context.clone(),
+            },
+        );
+        let world = app.world_mut();
+        let text = world
+            .query::<&Text>()
+            .iter(world)
+            .map(|text| text.0.as_str())
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert_eq!(text.matches("Designed regional freight pool").count(), 1);
+        assert!(text.contains("OTHER PARTICIPANTS / SHARED FREIGHT"));
+        assert!(text.contains("Requested 200 kg | dispatched 40 kg"));
+        press_site(&mut app, "mill");
+        app.update();
+        assert_eq!(
+            app.world()
+                .resource::<ProductionNavigation>()
+                .selected_site
+                .as_deref(),
+            Some("mill")
+        );
+        app.world_mut()
+            .resource_mut::<ObserverSession>()
+            .set_perspective(crate::observer::Perspective::PlayerKnowledge);
+        send_command(
+            &mut app,
+            ProductionCommand::Select {
+                site_id: "panels".into(),
+                context,
+            },
+        );
+        assert!(app
+            .world()
+            .resource::<ProductionNavigation>()
+            .selected_site
+            .is_none());
+        let world = app.world_mut();
+        assert!(!world
+            .query::<&Text>()
+            .iter(world)
+            .any(|text| text.0.contains("Designed regional freight pool")));
+    }
+
+    #[test]
     fn keyboard_dependency_activation_uses_the_pointer_queue_and_rejects_changed_scope() {
         let mut app = dependency_navigation_app();
         app.add_observer(keyboard_activate);
@@ -3637,6 +3739,77 @@ mod tests {
         assert!(app.world().resource::<ProductionNavigation>().details_open);
         readings_key(&mut app, window, KeyCode::Tab);
         assert_eq!(app.world().resource::<InputFocus>().get(), Some(footer));
+    }
+
+    #[test]
+    fn shared_freight_reading_enters_tab_order_and_pages_its_scroll_ancestor() {
+        use bevy::input_focus::{tab_navigation::TabIndex, InputFocus};
+        let ReadingsFocusFixture {
+            mut app,
+            window,
+            footer,
+            ..
+        } = readings_focus_app();
+        app.world_mut()
+            .resource_mut::<ObserverFrame>()
+            .0
+            .as_mut()
+            .unwrap()
+            .production = Some(crate::production_freight::tests::fixture());
+        {
+            let mut navigation = app.world_mut().resource_mut::<ProductionNavigation>();
+            navigation.selected_site = Some("panels".into());
+            navigation.details_open = false;
+        }
+        let body = app
+            .world_mut()
+            .query_filtered::<Entity, With<ProductionDependencies>>()
+            .single(app.world())
+            .unwrap();
+        app.world_mut().entity_mut(body).insert((
+            Node {
+                overflow: Overflow::scroll_y(),
+                ..default()
+            },
+            TabGroup::new(10),
+            ComputedNode {
+                size: Vec2::new(300.0, 160.0),
+                content_size: Vec2::new(300.0, 1200.0),
+                inverse_scale_factor: 1.0,
+                ..default()
+            },
+            ScrollPosition::default(),
+        ));
+        app.update(); // Rebuild the actual shared-pool reading and competitor buttons.
+        app.update(); // Ownership must admit the initially unavailable reading.
+        let reading = app
+            .world_mut()
+            .query_filtered::<Entity, With<ProductionFreightReading>>()
+            .single(app.world())
+            .unwrap();
+        let target = app.world().get::<ObserverFocusTarget>(reading).unwrap();
+        assert!(target.available);
+        assert!(app.world().get::<TabIndex>(reading).is_some());
+        app.world_mut().resource_mut::<InputFocus>().set(footer);
+        readings_key(&mut app, window, KeyCode::Tab);
+        assert_eq!(app.world().resource::<InputFocus>().get(), Some(reading));
+        readings_key(&mut app, window, KeyCode::PageDown);
+        assert!(app.world().get::<ScrollPosition>(body).unwrap().0.y > 0.0);
+        let period = app.world().resource::<ObserverSession>().viewed_tick;
+        readings_key(&mut app, window, KeyCode::Enter);
+        assert_eq!(
+            app.world().resource::<ObserverSession>().viewed_tick,
+            period
+        );
+        app.world_mut().resource_mut::<ObserverUiState>().menu_open = true;
+        app.update();
+        assert!(
+            !app.world()
+                .get::<ObserverFocusTarget>(reading)
+                .unwrap()
+                .available
+        );
+        assert!(app.world().get::<TabIndex>(reading).is_none());
     }
 
     #[test]

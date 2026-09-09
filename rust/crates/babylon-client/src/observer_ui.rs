@@ -131,6 +131,8 @@ pub enum ObserverCommand {
     Menu,
     NewCampaign,
     NewDelayedCampaign,
+    NewSharedFreightAmpleCampaign,
+    NewSharedFreightConstrainedCampaign,
     ReopenCampaign,
     Quit,
     UiScale,
@@ -727,6 +729,14 @@ fn menu_campaign(panel: &mut ChildSpawnerCommands) {
         (
             "New delivery-delay scenario [D]",
             ObserverCommand::NewDelayedCampaign,
+        ),
+        (
+            "Shared freight — ample",
+            ObserverCommand::NewSharedFreightAmpleCampaign,
+        ),
+        (
+            "Shared freight — constrained",
+            ObserverCommand::NewSharedFreightConstrainedCampaign,
         ),
     ] {
         scoped_button(panel, title, command, true);

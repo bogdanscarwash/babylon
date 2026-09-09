@@ -7,7 +7,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 use std::sync::OnceLock;
 
-use crate::michigan_defines::{MichiganDefinesErrorV1, MichiganDefinesV1};
+use crate::michigan_defines::{MichiganDefinesErrorV1, MichiganDefinesV2};
 
 use babylon_bsl::causal_contract::EvidenceClass;
 use babylon_kernel::sha256_of;
@@ -34,20 +34,28 @@ pub const MICHIGAN_MAX_HORIZON_PERIODS_V1: u64 = 16;
 pub enum MichiganDeliveryPresetV1 {
     Standard,
     Delayed,
+    SharedFreightAmple,
+    SharedFreightConstrained,
 }
 impl MichiganDeliveryPresetV1 {
     #[must_use]
     pub const fn id(self) -> &'static str {
         match self {
-            Self::Standard => "michigan-material-standard-v5",
-            Self::Delayed => "michigan-material-delayed-v5",
+            Self::Standard => "michigan-material-standard-v6",
+            Self::Delayed => "michigan-material-delayed-v6",
+            Self::SharedFreightAmple => "michigan-material-shared-freight-ample-v6",
+            Self::SharedFreightConstrained => "michigan-material-shared-freight-constrained-v6",
         }
     }
     #[must_use]
     pub fn from_id(id: &str) -> Option<Self> {
         match id {
-            "michigan-material-standard-v5" => Some(Self::Standard),
-            "michigan-material-delayed-v5" => Some(Self::Delayed),
+            "michigan-material-standard-v6" => Some(Self::Standard),
+            "michigan-material-delayed-v6" => Some(Self::Delayed),
+            "michigan-material-shared-freight-ample-v6" => Some(Self::SharedFreightAmple),
+            "michigan-material-shared-freight-constrained-v6" => {
+                Some(Self::SharedFreightConstrained)
+            }
             _ => None,
         }
     }
@@ -180,7 +188,8 @@ pub struct MichiganMaterialRouteV1 {
     pub buyer_site_key: String,
     pub good_key: String,
     pub ordered_quantity: u64,
-    pub capacity_quantity_per_period: u64,
+    pub corridor_key: String,
+    pub shared_corridor_key: String,
     pub travel_periods: u16,
     pub delayed_travel_periods: u16,
 }
@@ -190,12 +199,41 @@ impl MichiganMaterialRouteV1 {
         RouteIdV2::from_bytes(identity("route", &self.key))
     }
     #[must_use]
-    pub fn corridor_id(&self) -> CorridorIdV2 {
+    pub fn order_id(&self) -> OrderIdV1 {
+        OrderIdV1::from_bytes(identity("order", &self.key))
+    }
+}
+
+/// One capacity principal; a shared allotment is not a named physical road.
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MichiganMaterialCorridorV1 {
+    pub key: String,
+    pub label: String,
+    pub unit_key: String,
+    capacity: MichiganCorridorCapacityV1,
+}
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
+enum MichiganCorridorCapacityV1 {
+    Independent(u64),
+    SharedFreight { ample: u64, constrained: u64 },
+}
+impl MichiganMaterialCorridorV1 {
+    #[must_use]
+    pub fn id(&self) -> CorridorIdV2 {
         CorridorIdV2::from_bytes(identity("corridor", &self.key))
     }
     #[must_use]
-    pub fn order_id(&self) -> OrderIdV1 {
-        OrderIdV1::from_bytes(identity("order", &self.key))
+    pub fn capacity_per_period(&self, preset: MichiganDeliveryPresetV1) -> u64 {
+        match self.capacity {
+            MichiganCorridorCapacityV1::Independent(value) => value,
+            MichiganCorridorCapacityV1::SharedFreight { constrained, .. }
+                if preset == MichiganDeliveryPresetV1::SharedFreightConstrained =>
+            {
+                constrained
+            }
+            MichiganCorridorCapacityV1::SharedFreight { ample, .. } => ample,
+        }
     }
 }
 
@@ -243,6 +281,7 @@ struct ScenarioArtifact {
     goods: Vec<MichiganMaterialGoodV1>,
     processes: Vec<MichiganMaterialProcessV1>,
     routes: Vec<MichiganMaterialRouteV1>,
+    corridors: Vec<MichiganMaterialCorridorV1>,
 }
 
 /// Checked metadata shared with read-only projections; observations stay separate.
@@ -257,18 +296,18 @@ impl MichiganMaterialCatalogV1 {
     /// # Errors
     /// Refuses missing, oversized, malformed, unknown or invalid parameter values.
     pub fn load_defines(path: &Path) -> Result<Self, MichiganDefinesErrorV1> {
-        Self::from_defines(&MichiganDefinesV1::load(path)?)
+        Self::from_defines(&MichiganDefinesV2::load(path)?)
     }
     /// Parse explicit values; useful for authored content and independent tests.
     /// # Errors
     /// Refuses malformed or materially inconsistent values.
     pub fn from_defines_toml(text: &str) -> Result<Self, MichiganDefinesErrorV1> {
-        Self::from_defines(&MichiganDefinesV1::parse(text)?)
+        Self::from_defines(&MichiganDefinesV2::parse(text)?)
     }
     pub(crate) fn from_stored_defines(bytes: &[u8]) -> Result<Self, MichiganDefinesErrorV1> {
-        Self::from_defines(&MichiganDefinesV1::decode(bytes)?)
+        Self::from_defines(&MichiganDefinesV2::decode(bytes)?)
     }
-    fn from_defines(defines: &MichiganDefinesV1) -> Result<Self, MichiganDefinesErrorV1> {
+    fn from_defines(defines: &MichiganDefinesV2) -> Result<Self, MichiganDefinesErrorV1> {
         compile_catalog(INDUSTRY_BYTES, defines)
     }
     #[must_use]
@@ -355,7 +394,32 @@ impl MichiganMaterialCatalogV1 {
         match preset {
             MichiganDeliveryPresetV1::Delayed => route.delayed_travel_periods,
             MichiganDeliveryPresetV1::Standard => route.travel_periods,
+            MichiganDeliveryPresetV1::SharedFreightAmple
+            | MichiganDeliveryPresetV1::SharedFreightConstrained => route.travel_periods,
         }
+    }
+    #[must_use]
+    pub fn corridor_for_route(
+        &self,
+        route: &MichiganMaterialRouteV1,
+        preset: MichiganDeliveryPresetV1,
+    ) -> Option<&MichiganMaterialCorridorV1> {
+        let key = match preset {
+            MichiganDeliveryPresetV1::Standard | MichiganDeliveryPresetV1::Delayed => {
+                &route.corridor_key
+            }
+            MichiganDeliveryPresetV1::SharedFreightAmple
+            | MichiganDeliveryPresetV1::SharedFreightConstrained => &route.shared_corridor_key,
+        };
+        self.scenario.corridors.iter().find(|c| &c.key == key)
+    }
+    #[must_use]
+    pub fn corridor_label(&self, id: CorridorIdV2) -> Option<&str> {
+        self.scenario
+            .corridors
+            .iter()
+            .find(|c| c.id() == id)
+            .map(|c| c.label.as_str())
     }
 }
 
@@ -374,6 +438,7 @@ pub(crate) struct MaterialTopology {
     pub goods: Vec<MichiganMaterialGoodV1>,
     pub processes: Vec<ProcessTopology>,
     pub routes: Vec<RouteTopology>,
+    corridors: Vec<CorridorTopology>,
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -392,9 +457,18 @@ impl ProcessTopology {
 #[serde(deny_unknown_fields)]
 pub(crate) struct RouteTopology {
     key: String,
+    corridor_key: String,
+    shared_corridor_key: String,
     supplier_site_key: String,
     buyer_site_key: String,
     good_key: String,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CorridorTopology {
+    key: String,
+    label: String,
+    unit_key: String,
 }
 /// Only immutable topology is cached; numeric campaign values never enter this cache.
 pub(crate) fn material_topology() -> Result<&'static MaterialTopology, MichiganMaterialErrorV1> {
@@ -445,7 +519,7 @@ impl MaterialTopology {
 
 fn compile_catalog(
     industry_bytes: &[u8],
-    defines: &MichiganDefinesV1,
+    defines: &MichiganDefinesV2,
 ) -> Result<MichiganMaterialCatalogV1, MichiganDefinesErrorV1> {
     use MichiganDefinesErrorV1::Material;
     if crate::michigan_economy::digest_hex(&sha256_of(industry_bytes))
@@ -493,7 +567,7 @@ fn compile_catalog(
     let mut routes = Vec::new();
     for binding in &topology.routes {
         let values = defines
-            .corridor
+            .route
             .get(&binding.key.replace('-', "_"))
             .ok_or(Material(MichiganMaterialErrorV1::ContentReference))?;
         routes.push(MichiganMaterialRouteV1 {
@@ -502,10 +576,35 @@ fn compile_catalog(
             buyer_site_key: binding.buyer_site_key.clone(),
             good_key: binding.good_key.clone(),
             ordered_quantity: values.ordered_units,
-            capacity_quantity_per_period: values.units_per_week
-                * babylon_kernel::clock::WEEKS_PER_TICK,
+            corridor_key: binding.corridor_key.clone(),
+            shared_corridor_key: binding.shared_corridor_key.clone(),
             travel_periods: values.travel_periods,
             delayed_travel_periods: values.delayed_travel_periods,
+        });
+    }
+    let mut corridors = Vec::new();
+    for binding in &topology.corridors {
+        let capacity = if binding.key == "shared-freight" {
+            MichiganCorridorCapacityV1::SharedFreight {
+                ample: defines.shared_freight.ample_units_per_week
+                    * babylon_kernel::clock::WEEKS_PER_TICK,
+                constrained: defines.shared_freight.constrained_units_per_week
+                    * babylon_kernel::clock::WEEKS_PER_TICK,
+            }
+        } else {
+            let value = defines
+                .corridor
+                .get(&binding.key.replace('-', "_"))
+                .ok_or(Material(MichiganMaterialErrorV1::ContentReference))?;
+            MichiganCorridorCapacityV1::Independent(
+                value.units_per_week * babylon_kernel::clock::WEEKS_PER_TICK,
+            )
+        };
+        corridors.push(MichiganMaterialCorridorV1 {
+            key: binding.key.clone(),
+            label: binding.label.clone(),
+            unit_key: binding.unit_key.clone(),
+            capacity,
         });
     }
     let catalog = MichiganMaterialCatalogV1 {
@@ -522,6 +621,7 @@ fn compile_catalog(
             goods: topology.goods.clone(),
             processes,
             routes,
+            corridors,
             staffing: MichiganStaffingDesignV1 {
                 composition_id: "g4-workforce-staffing".to_owned(),
                 role: "Mechanic".to_owned(),
@@ -596,6 +696,7 @@ fn validate_catalog(catalog: &MichiganMaterialCatalogV1) -> Result<(), MichiganM
         || design.goods.len() != 7
         || design.processes.len() != 5
         || design.routes.len() != 3
+        || design.corridors.len() != 4
     {
         return Err(MichiganMaterialErrorV1::ArtifactShape);
     }
@@ -742,6 +843,16 @@ fn validate_processes(catalog: &MichiganMaterialCatalogV1) -> Result<(), Michiga
 }
 
 fn validate_routes(catalog: &MichiganMaterialCatalogV1) -> Result<(), MichiganMaterialErrorV1> {
+    let mut corridor_keys = BTreeSet::new();
+    for corridor in &catalog.scenario.corridors {
+        if !valid_key(&corridor.key)
+            || corridor.label.is_empty()
+            || !corridor_keys.insert(&corridor.key)
+        {
+            return Err(MichiganMaterialErrorV1::ContentValue);
+        }
+    }
+    let mut used_corridors = BTreeSet::new();
     let mut keys = BTreeSet::new();
     for route in catalog.routes() {
         if !valid_key(&route.key)
@@ -759,15 +870,32 @@ fn validate_routes(catalog: &MichiganMaterialCatalogV1) -> Result<(), MichiganMa
         {
             return Err(MichiganMaterialErrorV1::ContentReference);
         }
+        for preset in [
+            MichiganDeliveryPresetV1::Standard,
+            MichiganDeliveryPresetV1::SharedFreightAmple,
+            MichiganDeliveryPresetV1::SharedFreightConstrained,
+        ] {
+            let corridor = catalog
+                .corridor_for_route(route, preset)
+                .ok_or(MichiganMaterialErrorV1::ContentReference)?;
+            let good = catalog
+                .good(&route.good_key)
+                .ok_or(MichiganMaterialErrorV1::ContentReference)?;
+            if good.unit_key != corridor.unit_key || corridor.capacity_per_period(preset) == 0 {
+                return Err(MichiganMaterialErrorV1::ContentValue);
+            }
+            used_corridors.insert(&corridor.key);
+        }
         if route.ordered_quantity == 0
-            || route.capacity_quantity_per_period == 0
             || route.travel_periods == 0
             || route.delayed_travel_periods < route.travel_periods
         {
             return Err(MichiganMaterialErrorV1::ContentValue);
         }
     }
-
+    if used_corridors != corridor_keys {
+        return Err(MichiganMaterialErrorV1::ContentReference);
+    }
     Ok(())
 }
 
@@ -788,7 +916,7 @@ mod parameter_bounds_tests {
             MichiganMaterialCatalogV1::from_defines_toml(&huge_output),
             Err(MichiganDefinesErrorV1::Value(_))
         ));
-        let mut stored = MichiganDefinesV1::parse(SOURCE).unwrap();
+        let mut stored = MichiganDefinesV2::parse(SOURCE).unwrap();
         stored
             .process
             .get_mut("panel_forming")

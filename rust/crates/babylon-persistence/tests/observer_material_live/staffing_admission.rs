@@ -31,7 +31,7 @@ const FOREIGN_WRITER: &str = r#"
 "#;
 
 fn captured_foreign_writer() -> MaterialRuntimeFoundationV2 {
-    let original = MichiganContentPresetV1::FourWeekStandardV5
+    let original = MichiganContentPresetV1::FourWeekStandardV6
         .create_foundation(&crate::test_support::catalog())
         .unwrap();
     let foundation = original.graph_foundation();
@@ -118,7 +118,7 @@ fn live_staffing_owner_refusal_rolls_back_foundation_grants_and_enrollment() {
     );
 
     // A valid retry uses the same UUID, proving the refused attempt retained no owner.
-    let valid = MichiganContentPresetV1::FourWeekStandardV5
+    let valid = MichiganContentPresetV1::FourWeekStandardV6
         .create_foundation(&crate::test_support::catalog())
         .unwrap();
     let digest = valid.digest();

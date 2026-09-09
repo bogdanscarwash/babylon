@@ -982,6 +982,7 @@ mod tests {
             visibility: ObserverVisibilityV1::FullObserver,
             counties: vec![],
             production: Some(ProductionSnapshotV1 {
+                freight_capacity_accounts: Vec::new(),
                 labor_accounts: Vec::new(),
                 staffing_accounts: Vec::new(),
                 scenario_label: "Designed test campaign".into(),
@@ -1169,6 +1170,7 @@ mod tests {
             delivery_site("buyer", "Macomb parts"),
         ];
         snapshot.routes = vec![ProductionRouteV1 {
+            corridor_legs: Vec::new(),
             id: "route".into(),
             supplier_site_id: "supplier".into(),
             buyer_site_id: "buyer".into(),

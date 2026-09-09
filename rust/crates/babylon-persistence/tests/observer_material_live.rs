@@ -786,7 +786,7 @@ fn live_content_revisions_resume_exactly_and_catalog_filters_before_its_limit() 
         );
     }
     let before = observer.campaigns().unwrap();
-    assert_eq!(before.len(), 2);
+    assert_eq!(before.len(), 4);
     assert_eq!(
         before
             .iter()

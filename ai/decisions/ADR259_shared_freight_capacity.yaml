@@ -1,0 +1,70 @@
+ADR259_shared_freight_capacity:
+  status: accepted
+  date: '2026-09-08'
+  title: Michigan supply chains share one Designed freight-capacity account
+  evidence_class: Designed
+  authority:
+    - Director-approved PER-31 shared freight implementation plan
+    - ADR239 material freight allocation and ADR258 captured campaign parameters
+  partially_supersedes:
+    - ADR258 only where corridor capacity, route orders, and travel times share one authored table.
+  context: |
+    The material allocator already supports routes sharing a capacity
+    principal. Michigan's independent route budgets do not expose competition
+    between its metal and food chains. A visible comparison needs one
+    authoritative account and consequences in the existing production and
+    workforce observations.
+  decision: |
+    R1. CONTENT. Add Shared freight — ample and Shared freight — constrained.
+    Both reuse the five production sites, three routes, stocks, recipes,
+    finite orders, workforce, one-period travel, and 16-period horizon.
+    Sheet metal and milled meal share one kilogram capacity principal.
+    The sole comparison difference is 800 versus 160 kg per 28-day period.
+    Panel freight retains its independent 32-panel capacity. These values
+    describe a Designed regional transport service, not an observed road,
+    crossing, or transport measurement. Standard and Delayed keep their
+    independent capacities and existing physical behavior.
+
+    R2. AUTHORITY. Separate route orders and travel times from capacity in
+    authored content. Compile each corridor, unit, and period budget once.
+    Use the existing allocator's proportional flooring and unused residuals;
+    do not redistribute stock-limited shares or add another allocation path.
+    Capacity reservations and physical arrivals remain different facts.
+
+    R3. OBSERVATION. Full Production observation derives capacity accounts
+    from adjacent committed registers and dispatch receipts. Show opening
+    availability, new reservations, remaining capacity, participating routes,
+    requested quantities, actual dispatch, and remaining backlog. Link the
+    competing chains and compare their arrivals, output, and employed/reserve
+    counts. Foundation absence differs from a completed zero. The restricted
+    knowledge preview gains no material facts.
+
+    R4. IDENTITY. Definitions schema V2 and Michigan content V6 capture the
+    new parameter authority. Open reconstructs saved values. Preserve older
+    save data and refuse its admission; retain one live compiler and encoder.
+    Production-evidence digest V5 binds the added route and capacity readings.
+    Existing material state, tick envelope, SQL, and session protocol formats
+    suffice. No new primitive, game law, geography, or player action is added.
+  alternatives_rejected:
+    - Duplicating the shared budget on each participating route.
+    - Modeling an observed road or Detroit–Windsor crossing without evidence.
+    - Reallocating unused capacity with a second observer-side calculation.
+    - Reopening older content through a compatibility compiler.
+    - Adding payments, recurring demand, supplier substitution, or player actions.
+  consequences: |
+    Shared capacity can change two downstream production and staffing paths
+    with fixed orders and travel. Unused capacity is an expected consequence
+    of proportional flooring and supplier stock limits. Content V6 requires
+    new campaigns; prior saves remain recoverable with their original source.
+    This is partial PER-31 delivery. Gate 4 and native comprehension acceptance
+    remain open until their broader requirements and Director session pass.
+  verification: |
+    First sheet/meal dispatch is 320/80 kg with ample capacity and 120/40 kg
+    with constrained capacity. Period-3 panel/packaged-meal output is 32/80
+    versus 12/40. At fixed 160 kg capacity, a meal order of 80 kg produces
+    141/18 kg dispatch and a 1 kg residual. Verify conserved material and
+    workforce accounts, unique capacities, permutation identity, refused-tick
+    publication, saved-parameter reconstruction, PostgreSQL restart and held
+    history, authenticated evidence, and scoped competitor navigation.
+    Automated native evidence at both supported window sizes does not replace
+    the Director's comprehension session.

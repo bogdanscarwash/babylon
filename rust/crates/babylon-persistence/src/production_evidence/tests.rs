@@ -164,6 +164,19 @@ fn reverse_unordered(snapshot: &mut ProductionSnapshotV1) {
     snapshot.observed_contexts.reverse();
     snapshot.process_attributions.reverse();
     snapshot.routes.reverse();
+    for route in &mut snapshot.routes {
+        route.corridor_legs.reverse();
+    }
+    snapshot.freight_capacity_accounts.reverse();
+    for account in &mut snapshot.freight_capacity_accounts {
+        account.route_ids.reverse();
+        if let Some(completed) = &mut account.completed {
+            completed.reservations.reverse();
+            for reservation in &mut completed.reservations {
+                reservation.orders.reverse();
+            }
+        }
+    }
     snapshot.freight.reverse();
     snapshot.provenance.reverse();
     for site in &mut snapshot.sites {
@@ -483,7 +496,7 @@ fn digest_is_identical_in_two_fresh_processes() {
 // context presentation family; no source totals allocate modeled workers.
 fn contextual_observation() -> ObserverEconomySnapshotV1 {
     let mut snapshot = published_observations()[2].clone();
-    let admitted = crate::michigan_content::MichiganContentPresetV1::FourWeekStandardV5
+    let admitted = crate::michigan_content::MichiganContentPresetV1::FourWeekStandardV6
         .admitted(&crate::test_support::catalog())
         .unwrap();
     snapshot.foundation_digest = digest_hex(&admitted.digest());
@@ -700,7 +713,7 @@ fn historical_v3_wire_vector_keeps_its_exact_bytes_without_a_live_encoder() {
 }
 
 #[test]
-fn v4_independent_wire_vectors_bind_staffing_options_order_and_exact_integers() {
+fn historical_v4_wire_vectors_keep_exact_bytes_without_a_live_encoder() {
     let fixture: Value = serde_json::from_str(include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/../../../contracts/fixtures/production_evidence_v4.json"
@@ -710,23 +723,15 @@ fn v4_independent_wire_vectors_bind_staffing_options_order_and_exact_integers() 
     let vectors = fixture["vectors"].as_array().unwrap();
     assert_eq!(vectors.len(), 2);
     for vector in vectors {
-        let snapshot: ObserverEconomySnapshotV1 =
-            serde_json::from_value(vector["snapshot"].clone()).unwrap();
+        assert!(
+            serde_json::from_value::<ObserverEconomySnapshotV1>(vector["snapshot"].clone())
+                .is_err()
+        );
         let wire = fixture_wire(vector);
         assert!(wire.starts_with(b"babylon.production-observation-evidence.v4\0\0\0\0\x04"));
         assert_eq!(vector["byte_length"], wire.len());
         let expected = vector["sha256"].as_str().unwrap();
         assert_eq!(digest_hex(&Sha256::digest(&wire)), expected);
-        assert_eq!(
-            snapshot.production_evidence_digest().unwrap().to_hex(),
-            expected
-        );
-        let mut twin = snapshot.clone();
-        reverse_unordered(twin.production.as_mut().unwrap());
-        assert_eq!(
-            snapshot.production_evidence_digest(),
-            twin.production_evidence_digest()
-        );
     }
 }
 
@@ -868,4 +873,150 @@ fn staffing_order_multiplicity_and_completed_absence_are_distinct() {
         zero.production_evidence_digest(),
         absent.production_evidence_digest()
     );
+}
+
+/// This V5 vector extends the independently authored historical foundation
+/// vector. Its expected hash was calculated with an independent Python encoder
+/// using length-prefixed UTF-8 and unsigned big-endian integers, including >2^53.
+fn freight_evidence_vector() -> ObserverEconomySnapshotV1 {
+    let fixture: Value = serde_json::from_str(include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../../contracts/fixtures/production_evidence_v4.json"
+    )))
+    .unwrap();
+    let mut value = fixture["vectors"][1]["snapshot"].clone();
+    value["production"]["freight_capacity_accounts"] = serde_json::json!([{
+        "corridor_id": "c", "corridor_label": "Regional freight", "unit_id": "u", "unit": "kg",
+        "route_ids": ["r2", "r1"], "next_opening_period": 2, "next_opening_available": 40,
+        "completed": {"period": 1, "reservations": [
+            {"reservation_period": 2, "opening_available": 160, "newly_reserved": 120, "remaining_available": 40,
+             "orders": [{"order_id": "a", "route_id": "r1", "good_id": "g1", "unit_id": "u", "requested": 600, "dispatched": 120, "remaining_unshipped": 480}]},
+            {"reservation_period": 1, "opening_available": 9007199254740993_u64, "newly_reserved": 160, "remaining_available": 9007199254740833_u64,
+             "orders": [
+                {"order_id": "z", "route_id": "r2", "good_id": "g2", "unit_id": "u", "requested": 200, "dispatched": 40, "remaining_unshipped": 160},
+                {"order_id": "a", "route_id": "r1", "good_id": "g1", "unit_id": "u", "requested": 600, "dispatched": 120, "remaining_unshipped": 480}
+             ]}
+        ]}
+    }]);
+    serde_json::from_value(value).unwrap()
+}
+
+#[test]
+fn v5_independent_digest_vector_binds_shared_capacity_and_future_reservations() {
+    let original = freight_evidence_vector();
+    assert_eq!(
+        original.production_evidence_digest().unwrap().to_hex(),
+        "a830b341a08dad4e4efe6ea360f7725831c191a802c1e71f30ca03d4021b7e62"
+    );
+    let mut twin = original.clone();
+    reverse_unordered(twin.production.as_mut().unwrap());
+    assert_eq!(
+        original.production_evidence_digest(),
+        twin.production_evidence_digest()
+    );
+    let value = serde_json::to_value(original.production.as_ref().unwrap()).unwrap();
+    let mut paths = Vec::new();
+    scalar_paths(
+        &value["freight_capacity_accounts"],
+        "/freight_capacity_accounts",
+        &mut paths,
+    );
+    assert!(paths
+        .iter()
+        .any(|path| path.ends_with("/reservation_period")));
+    assert!(paths
+        .iter()
+        .any(|path| path.ends_with("/remaining_unshipped")));
+    for path in paths {
+        let mut changed = value.clone();
+        let field = changed.pointer_mut(&path).unwrap();
+        *field = changed_production_scalar(field, &path);
+        let mut twin = original.clone();
+        twin.production = Some(serde_json::from_value(changed).unwrap());
+        assert_ne!(
+            original.production_evidence_digest(),
+            twin.production_evidence_digest(),
+            "{path}"
+        );
+    }
+}
+
+#[test]
+fn freight_account_multiplicity_and_completed_zero_are_hash_distinct() {
+    let original = freight_evidence_vector();
+    for duplicate in [0, 1, 2, 3] {
+        let mut twin = original.clone();
+        let accounts = &mut twin.production.as_mut().unwrap().freight_capacity_accounts;
+        match duplicate {
+            0 => accounts.push(accounts[0].clone()),
+            1 => {
+                let duplicate_route = accounts[0].route_ids[0].clone();
+                accounts[0].route_ids.push(duplicate_route);
+            }
+            2 => {
+                let rows = &mut accounts[0].completed.as_mut().unwrap().reservations;
+                rows.push(rows[0].clone());
+            }
+            _ => {
+                let rows = &mut accounts[0].completed.as_mut().unwrap().reservations[0].orders;
+                rows.push(rows[0].clone());
+            }
+        }
+        assert_ne!(
+            original.production_evidence_digest(),
+            twin.production_evidence_digest()
+        );
+    }
+    let mut absent = original.clone();
+    absent
+        .production
+        .as_mut()
+        .unwrap()
+        .freight_capacity_accounts[0]
+        .completed = None;
+    let mut zero = absent.clone();
+    zero.production.as_mut().unwrap().freight_capacity_accounts[0].completed =
+        Some(crate::CompletedProductionFreightCapacityV1 {
+            period: 1,
+            reservations: vec![crate::ProductionFreightReservationV1 {
+                reservation_period: 1,
+                opening_available: 0,
+                newly_reserved: 0,
+                remaining_available: 0,
+                orders: vec![],
+            }],
+        });
+    assert_ne!(
+        absent.production_evidence_digest(),
+        zero.production_evidence_digest()
+    );
+}
+
+#[test]
+fn freight_account_shape_is_required_and_unknown_fields_are_refused() {
+    let original = serde_json::to_value(freight_evidence_vector()).unwrap();
+    let mut missing = original.clone();
+    missing["production"]
+        .as_object_mut()
+        .unwrap()
+        .remove("freight_capacity_accounts");
+    assert!(serde_json::from_value::<ObserverEconomySnapshotV1>(missing).is_err());
+    for pointer in [
+        "/production/freight_capacity_accounts/0",
+        "/production/freight_capacity_accounts/0/completed",
+        "/production/freight_capacity_accounts/0/completed/reservations/0",
+        "/production/freight_capacity_accounts/0/completed/reservations/0/orders/0",
+    ] {
+        let mut changed = original.clone();
+        changed
+            .pointer_mut(pointer)
+            .unwrap()
+            .as_object_mut()
+            .unwrap()
+            .insert("unsupported".into(), Value::Bool(true));
+        assert!(
+            serde_json::from_value::<ObserverEconomySnapshotV1>(changed).is_err(),
+            "{pointer}"
+        );
+    }
 }

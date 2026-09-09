@@ -398,10 +398,10 @@ fn is_restart_boundary(
         .iter()
         .find(|route| route.key == "sheet-transfer")
         .unwrap();
-    let arrival = if preset == MichiganDeliveryPresetV1::Standard {
-        2
-    } else {
+    let arrival = if preset == MichiganDeliveryPresetV1::Delayed {
         4
+    } else {
+        2
     };
     if tick == 1 {
         assert!(receipts
@@ -600,4 +600,128 @@ fn persisted_delivery_twins_reconcile_and_restart_at_dispatch_transit_and_arriva
         .unwrap()
         .iter()
         .all(|campaign| campaign.durable_tick == PROOF_PERIODS));
+}
+
+#[test]
+#[ignore = "requires the task-owned disposable PostgreSQL harness; independent clone ownership"]
+fn shared_freight_competition_is_committed_restart_safe_and_scope_confined() {
+    let mut target = DisposableTarget::create();
+    let mut ample = RunPair::create(
+        &target,
+        MichiganDeliveryPresetV1::SharedFreightAmple,
+        331_001,
+    );
+    let mut constrained = RunPair::create(
+        &target,
+        MichiganDeliveryPresetV1::SharedFreightConstrained,
+        331_003,
+    );
+    install_reader_role_v1(&target.writer).unwrap();
+    install_observer_economy_schema_v1(&target.writer).unwrap();
+    let observer_config = target.login("babylon_observer", "sharedfreight");
+    let observer =
+        ObserverEconomyReaderV1::connect(&observer_config, ObserverVisibilityV1::FullObserver)
+            .unwrap();
+    let preview = ObserverEconomyReaderV1::connect(
+        &target.login("babylon_reader", "sharedpreview"),
+        ObserverVisibilityV1::KnownPreview,
+    )
+    .unwrap();
+    let mut connection = observer_config.connect(NoTls).unwrap();
+    for pair in [&mut ample, &mut constrained] {
+        let initial = pair.snapshots(&observer);
+        let accounts = &production(&initial[0]).freight_capacity_accounts;
+        assert_eq!(accounts.len(), 2);
+        assert!(accounts.iter().all(|a| a.completed.is_none()));
+        assert_eq!(
+            accounts.iter().filter(|a| a.route_ids.len() == 2).count(),
+            1
+        );
+        pair.history.push(initial);
+    }
+    for tick in 1..=PROOF_PERIODS {
+        for pair in [&mut ample, &mut constrained] {
+            pair.advance(&target, &observer, &mut connection);
+            let snapshot = &pair.history.last().unwrap()[0];
+            let accounts = &production(snapshot).freight_capacity_accounts;
+            for account in accounts {
+                let completed = account.completed.as_ref().unwrap();
+                assert_eq!(completed.period, tick);
+                for reservation in &completed.reservations {
+                    assert_eq!(
+                        reservation.opening_available,
+                        reservation.newly_reserved + reservation.remaining_available
+                    );
+                    assert_eq!(
+                        reservation.newly_reserved,
+                        reservation.orders.iter().map(|o| o.dispatched).sum::<u64>()
+                    );
+                }
+            }
+            if tick == 1 {
+                let shared = accounts.iter().find(|a| a.route_ids.len() == 2).unwrap();
+                let reservation = &shared.completed.as_ref().unwrap().reservations[0];
+                let expected = if pair.preset == MichiganDeliveryPresetV1::SharedFreightAmple {
+                    (800, 400)
+                } else {
+                    (160, 160)
+                };
+                assert_eq!(
+                    (reservation.opening_available, reservation.newly_reserved),
+                    expected
+                );
+            }
+            super::assert_known_material_absence(
+                &preview
+                    .snapshot(pair.uninterrupted.campaign_id(), tick)
+                    .unwrap(),
+            );
+        }
+    }
+    let catalog = crate::test_support::catalog();
+    for (pair, first_sheet, first_meal, panels, meals, panel_people, meal_people) in [
+        (&ample, 320, 80, 32, 80, (4, 0), (2, 0)),
+        (&constrained, 120, 40, 12, 40, (2, 2), (1, 1)),
+    ] {
+        let first = production(&pair.history[1][0]);
+        let shared = first
+            .freight_capacity_accounts
+            .iter()
+            .find(|a| a.route_ids.len() == 2)
+            .unwrap();
+        for (key, expected) in [("sheet", first_sheet), ("meal", first_meal)] {
+            let good_id = identity_hex(catalog.good(key).unwrap().id().as_bytes());
+            assert_eq!(
+                shared.completed.as_ref().unwrap().reservations[0]
+                    .orders
+                    .iter()
+                    .find(|order| order.good_id == good_id)
+                    .unwrap()
+                    .dispatched,
+                expected
+            );
+        }
+        let third = production(&pair.history[3][0]);
+        for (key, output, people) in [
+            ("macomb-fabricated-metal", panels, panel_people),
+            ("oakland-food", meals, meal_people),
+        ] {
+            let id = identity_hex(catalog.site(key).unwrap().id().as_bytes());
+            let site = third.sites.iter().find(|site| site.id == id).unwrap();
+            assert_eq!(
+                site.produced_batches.unwrap() * site.output_per_batch,
+                output
+            );
+            let staffing = third
+                .staffing_accounts
+                .iter()
+                .find(|account| account.site_id == id)
+                .unwrap();
+            assert_eq!((staffing.employed, staffing.reserve), people);
+        }
+    }
+    for pair in [&ample, &constrained] {
+        assert_eq!(pair.restart_periods, [1, 2]);
+        pair.assert_held_history(&observer);
+    }
 }

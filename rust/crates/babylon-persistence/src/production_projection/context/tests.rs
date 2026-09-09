@@ -25,7 +25,7 @@ fn five_designed_processes_share_four_cited_observed_contexts_without_allocating
     let mut snapshot = opening();
     let before = snapshot.clone();
     attach_observed_context_v1(
-        &MichiganContentPresetV1::FourWeekStandardV5
+        &MichiganContentPresetV1::FourWeekStandardV6
             .admitted(&crate::test_support::catalog())
             .unwrap(),
         ObserverVisibilityV1::FullObserver,
@@ -116,7 +116,7 @@ fn source_identity_mismatch_or_missing_subject_refuses_without_partial_publicati
     absent.sites.pop();
     let unchanged = absent.clone();
     assert!(attach_observed_context_v1(
-        &MichiganContentPresetV1::FourWeekStandardV5
+        &MichiganContentPresetV1::FourWeekStandardV6
             .admitted(&crate::test_support::catalog())
             .unwrap(),
         ObserverVisibilityV1::FullObserver,
@@ -129,7 +129,7 @@ fn source_identity_mismatch_or_missing_subject_refuses_without_partial_publicati
 #[test]
 fn preview_clears_context_for_both_current_staffed_presets() {
     let mut disclosed = opening();
-    let admitted = MichiganContentPresetV1::FourWeekStandardV5
+    let admitted = MichiganContentPresetV1::FourWeekStandardV6
         .admitted(&crate::test_support::catalog())
         .unwrap();
     attach_observed_context_v1(
@@ -168,8 +168,8 @@ fn delivery_presets_share_observed_context_without_assigning_jobs() {
     let mut standard = opening();
     let mut delayed = standard.clone();
     for (preset, snapshot) in [
-        (MichiganContentPresetV1::FourWeekStandardV5, &mut standard),
-        (MichiganContentPresetV1::FourWeekDelayedV5, &mut delayed),
+        (MichiganContentPresetV1::FourWeekStandardV6, &mut standard),
+        (MichiganContentPresetV1::FourWeekDelayedV6, &mut delayed),
     ] {
         attach_observed_context_v1(
             &preset.admitted(&crate::test_support::catalog()).unwrap(),

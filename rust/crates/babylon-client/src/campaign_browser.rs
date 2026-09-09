@@ -731,6 +731,11 @@ fn comparison_text(
         return output;
     };
     writeln!(output, "{}\n{}\nRead the same committed period in both campaigns. No world is advanced by this comparison.\nCounts read current / compared. Signed difference = current minus compared.\n", current.scenario_label, compared.scenario_label).expect("writing to a String cannot fail");
+    output.push_str(&crate::production_freight::comparison_reading(
+        active.resolve_tick,
+        current,
+        compared,
+    ));
     for site in &current.sites {
         writeln!(output, "{} | NAICS {}", site.name, site.industry_code)
             .expect("writing to a String cannot fail");
@@ -1039,6 +1044,7 @@ mod tests {
             visibility: ObserverVisibilityV1::FullObserver,
             counties: Vec::new(),
             production: Some(ProductionSnapshotV1 {
+                freight_capacity_accounts: Vec::new(),
                 scenario_label: "Staffing comparison fixture".into(),
                 horizon_period: 520,
                 sites: vec![ProductionSiteV1 {
@@ -1348,6 +1354,43 @@ mod tests {
             assert!(!value.contains("Closing employed:"), "{mismatch}: {value}");
             assert!(!value.contains("Hires this period:"), "{mismatch}: {value}");
         }
+    }
+
+    #[test]
+    fn comparison_paints_freight_with_output_and_staffing_and_clears_on_scope_change() {
+        let (mut app, text) = staffing_comparison_app(1);
+        let freight = crate::production_freight::tests::fixture();
+        {
+            let mut frame = app.world_mut().resource_mut::<ObserverFrame>();
+            let production = frame.0.as_mut().unwrap().production.as_mut().unwrap();
+            production.routes = freight.routes.clone();
+            production.freight_capacity_accounts = freight.freight_capacity_accounts.clone();
+            production.sites.extend(freight.sites.clone());
+        }
+        {
+            let mut browser = app.world_mut().resource_mut::<CampaignBrowserState>();
+            let production = browser
+                .comparison
+                .as_mut()
+                .unwrap()
+                .production
+                .as_mut()
+                .unwrap();
+            production.routes = freight.routes;
+            production.freight_capacity_accounts = freight.freight_capacity_accounts;
+            production.sites.extend(freight.sites);
+        }
+        let value = painted_comparison(&mut app, text);
+        assert_eq!(value.matches("Designed regional freight pool").count(), 1);
+        assert!(value.contains("Dispatched: 120 / 120 kg"));
+        assert!(value.contains("Closing employed:"));
+        assert!(value.contains("Next-period capacity:"));
+        app.world_mut()
+            .resource_mut::<ObserverSession>()
+            .set_perspective(Perspective::PlayerKnowledge);
+        let value = painted_comparison(&mut app, text);
+        assert!(!value.contains("Dispatched:"));
+        assert!(!value.contains("Designed regional freight pool"));
     }
 
     #[test]

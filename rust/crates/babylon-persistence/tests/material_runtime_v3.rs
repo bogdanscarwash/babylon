@@ -27,45 +27,77 @@ fn actions(session: &MaterialReplaySessionV3<HypergraphStore>) -> OrderedPractic
 }
 #[test]
 fn material_commit_failure_leaves_graph_circuit_world_time_and_sink_unchanged() {
-    let mut session = session(MichiganDeliveryPresetV1::Standard);
-    let graph = session.graph_session().graph().state_hash().unwrap();
-    let register = session.material().canonical_bytes().to_vec();
-    let world = session.current_world_hash().unwrap();
-    let candidate = session.prepare_advance(&actions(&session)).unwrap();
-    let hash = candidate.identity().tick_content_hash();
-    let mut sink = CollectingSink::default();
-    let refused = session.commit_prepared_and_publish(&mut sink, candidate, |_| {
-        Err::<ReplayCommitDispositionV1, _>("refused before marker")
-    });
-    assert!(matches!(
-        refused,
-        Err(MaterialCommitErrorV3::Commit("refused before marker"))
-    ));
-    assert_eq!(session.completed_tick(), 0);
-    assert_eq!(session.material().canonical_bytes(), register);
-    assert_eq!(session.graph_session().graph().state_hash().unwrap(), graph);
-    assert_eq!(session.current_world_hash().unwrap(), world);
-    assert!(sink.events.is_empty());
-    let retry = session.prepare_advance(&actions(&session)).unwrap();
-    assert_eq!(retry.identity().tick_content_hash(), hash);
-    let (ack, _) = session
-        .commit_prepared_and_publish(&mut sink, retry, |_| {
-            Ok::<_, ()>(ReplayCommitDispositionV1::Committed)
-        })
-        .unwrap();
-    assert_eq!(session.completed_tick(), 1);
-    assert_eq!(session.graph_session().completed_tick(), 1);
-    assert_ne!(session.graph_session().graph().state_hash().unwrap(), graph);
-    assert_ne!(session.current_world_hash().unwrap(), world);
-    assert_eq!(
-        ack.result_world_hash(),
-        session.current_world_hash().unwrap()
-    );
+    for preset in [
+        MichiganDeliveryPresetV1::Standard,
+        MichiganDeliveryPresetV1::SharedFreightAmple,
+        MichiganDeliveryPresetV1::SharedFreightConstrained,
+    ] {
+        let mut session = session(preset);
+        let graph = session.graph_session().graph().state_hash().unwrap();
+        let register = session.material().canonical_bytes().to_vec();
+        let world = session.current_world_hash().unwrap();
+        let candidate = session.prepare_advance(&actions(&session)).unwrap();
+        let prepared_receipt_bytes = candidate.material().receipt_bytes().to_vec();
+        let receipts = decode_material_receipts_v3(&prepared_receipt_bytes).unwrap();
+        let catalog = crate::test_support::catalog();
+        let (sheet, meal) = if preset == MichiganDeliveryPresetV1::SharedFreightConstrained {
+            (120, 40)
+        } else {
+            (320, 80)
+        };
+        for (key, expected) in [("sheet-transfer", sheet), ("food-transfer", meal)] {
+            let order_id = catalog
+                .routes()
+                .iter()
+                .find(|route| route.key == key)
+                .unwrap()
+                .order_id();
+            assert_eq!(
+                receipts
+                    .dispatches
+                    .iter()
+                    .find(|row| row.order_id == order_id)
+                    .unwrap()
+                    .quantity,
+                expected
+            );
+        }
+        let hash = candidate.identity().tick_content_hash();
+        let mut sink = CollectingSink::default();
+        let refused = session.commit_prepared_and_publish(&mut sink, candidate, |_| {
+            Err::<ReplayCommitDispositionV1, _>("refused before marker")
+        });
+        assert!(matches!(
+            refused,
+            Err(MaterialCommitErrorV3::Commit("refused before marker"))
+        ));
+        assert_eq!(session.completed_tick(), 0);
+        assert_eq!(session.material().canonical_bytes(), register);
+        assert_eq!(session.graph_session().graph().state_hash().unwrap(), graph);
+        assert_eq!(session.current_world_hash().unwrap(), world);
+        assert!(sink.events.is_empty());
+        let retry = session.prepare_advance(&actions(&session)).unwrap();
+        assert_eq!(retry.identity().tick_content_hash(), hash);
+        assert_eq!(retry.material().receipt_bytes(), prepared_receipt_bytes);
+        let (ack, _) = session
+            .commit_prepared_and_publish(&mut sink, retry, |_| {
+                Ok::<_, ()>(ReplayCommitDispositionV1::Committed)
+            })
+            .unwrap();
+        assert_eq!(session.completed_tick(), 1);
+        assert_eq!(session.graph_session().completed_tick(), 1);
+        assert_ne!(session.graph_session().graph().state_hash().unwrap(), graph);
+        assert_ne!(session.current_world_hash().unwrap(), world);
+        assert_eq!(
+            ack.result_world_hash(),
+            session.current_world_hash().unwrap()
+        );
+    }
 }
 #[test]
 fn material_transition_failure_abandons_prepared_graph_and_identity() {
     let (graph, _) = michigan_observer_foundation_v1().unwrap();
-    let mut initial = MichiganContentPresetV1::FourWeekStandardV5
+    let mut initial = MichiganContentPresetV1::FourWeekStandardV6
         .create_foundation(&crate::test_support::catalog())
         .unwrap()
         .initial_register()
