@@ -67,6 +67,135 @@ flow and hour budgets use the four-week interval. Initial stocks, people,
 order totals, and physical recipes keep their original units. QCEW wages
 remain observed weekly rates and do not become modeled payroll.
 
+Compare delivery time and opening stock
+---------------------------------------
+
+Run ``michigan_experiment`` for the PER-309 comparison.
+It runs the admitted material replay path in memory. It reads production,
+logistics, and staffing receipts. It needs no ``PostgreSQL`` service. Keep the
+accepted baseline file unchanged. The example embeds it at compilation.
+
+The four cases select Standard or Delayed delivery.
+They set only ``process.panel_forming.OPENING_INPUT_UNITS`` to zero or 320 kg
+of sheet.
+``OPENING_PLANNED_BATCHES`` stays zero in all four cases.
+
+Coordinate Cargo compilation and execution with the release session. Compile
+from ``rust/`` when the host is available:
+
+.. code-block:: bash
+
+   cargo build -p babylon-persistence --example michigan_experiment --locked
+
+After compilation, run the comparison with a fresh absolute output directory
+owned by this task. Commit the prepared source first: measured runs need a
+clean source tree and refuse a binary whose embedded harness sources differ
+from the checkout. The parent of the new output directory must already exist.
+Store artifacts outside the checkout or in ignored ``reports/``.
+
+.. code-block:: bash
+
+   cargo run -p babylon-persistence --example michigan_experiment --locked -- --output /absolute/task-owned-dir
+
+The only experiment argument is ``--output DIR``. The fixed bound is four
+cases of 16 four-week periods, with a 60-second execution limit after build
+and at most 4 MiB of output. Replay uses the admitted seed ``319``.
+It has no seed override or stochastic sweep. If the run fails or reaches a bound,
+keep its failure evidence and do not treat partial output as a comparison.
+Defer merging the exploration until release qualification finishes.
+
+Read the four output files together:
+
+* ``inputs.json`` retains canonical resolved numeric definitions and the fixed
+  case matrix, including when a later transition fails.
+* ``manifest.json`` records the resolved case definitions, source and campaign
+  identities, output checksums, and execution bounds.
+* ``periods.jsonl`` records process, route, and workforce evidence for each
+  completed period.
+* ``summary.json`` reports production milestones, constraint durations, and
+  the food-chain comparison. Preserve absent milestones as absent. Do not
+  substitute period zero.
+
+The period records connect delivery, available work, production,
+``unretained hours``, and the next period's staffing.
+
+The example pins the accepted canonical numeric baseline. TOML formatting is
+not part of that numeric identity. A changed baseline needs a new reviewed
+experiment. The execution record includes a binary digest and checks embedded
+harness sources against the clean checkout. It does not claim complete build
+attestation.
+
+``failure.json`` identifies the failed case and last recorded
+completed period. Accept a comparison only with exit code zero, a complete
+manifest, matching output checksums, and no ``failure.json``.
+The watchdog can time out after the manifest write and still report a failure.
+
+An absent completed production receipt means no prior production plan. The
+input, labor and capacity ceilings describe the next opening and keep ties.
+These diagnostics have the ``Derived`` evidence class. They apply to the
+fixed topology of one process per site. They are not causal labels from the
+engine.
+
+A zero labor budget can follow from no ``material request``.
+Compare the recorded ``material request`` with the next plan
+before interpreting labor as an independent constraint. Dispatch ceilings
+report finite orders separately from supplier stock and corridor capacity.
+
+Check the Standard and Delayed pair without a buffer against the accepted delivery
+comparison first. Then compare the stock effect within each delivery preset.
+The 320 kg buffer provides one full period of panel input. The unchanged
+zero opening plan still prevents panel production in period 1.
+
+Keep the food chain as the unchanged control. Examine staffing as well as
+completion time. A buffer can change a gap in work without eliminating a
+later gap.
+
+The bounded Rust contract tests reproduce these subassembly milestones:
+
+.. list-table:: Subassembly milestones
+   :header-rows: 1
+   :widths: 35 25 20 20
+
+   * - Delivery preset
+     - Opening sheet at panel forming
+     - First subassembly period
+     - Period reaching 30 ``subassemblies``
+   * - Standard
+     - 0 kg
+     - 5
+     - 6
+   * - Delayed
+     - 0 kg
+     - 7
+     - 8
+   * - Standard
+     - 320 kg
+     - 4
+     - 5
+   * - Delayed
+     - 320 kg
+     - 4
+     - 7
+
+Both buffered cases finish with 32 unsold panels at ``Macomb``. They start with
+920 kg of material measured as metal input, compared with 600 kg without the
+buffer. The fixed 60-panel order limits terminal subassembly output to 30 in
+every case.
+The buffer removes the first-output delay gap, but the completion
+gap remains two periods. Buffered delayed subassembly production also causes
+hires in periods 3 and 6, with a separation in period 5. The food branch stays
+equal across all four cases.
+
+This comparison adds an endowment of material.
+It does not prove equal-resource efficiency or entertainment value.
+
+Keep the emitted source and identity evidence with any measured comparison.
+Investigate disagreement with these landmarks. The result describes the
+Designed material circuit. Its in-memory receipts do not prove ``PostgreSQL``
+durability, Bevy
+comprehension, historical calibration, or a player milestone. See
+:doc:`/reference/configuration` for all 56 fields, their units and validation.
+
 Inspect performance
 -------------------
 
