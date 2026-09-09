@@ -393,8 +393,8 @@ impl MichiganMaterialCatalogV1 {
     ) -> u16 {
         match preset {
             MichiganDeliveryPresetV1::Delayed => route.delayed_travel_periods,
-            MichiganDeliveryPresetV1::Standard => route.travel_periods,
-            MichiganDeliveryPresetV1::SharedFreightAmple
+            MichiganDeliveryPresetV1::Standard
+            | MichiganDeliveryPresetV1::SharedFreightAmple
             | MichiganDeliveryPresetV1::SharedFreightConstrained => route.travel_periods,
         }
     }
@@ -582,31 +582,7 @@ fn compile_catalog(
             delayed_travel_periods: values.delayed_travel_periods,
         });
     }
-    let mut corridors = Vec::new();
-    for binding in &topology.corridors {
-        let capacity = if binding.key == "shared-freight" {
-            MichiganCorridorCapacityV1::SharedFreight {
-                ample: defines.shared_freight.ample_units_per_week
-                    * babylon_kernel::clock::WEEKS_PER_TICK,
-                constrained: defines.shared_freight.constrained_units_per_week
-                    * babylon_kernel::clock::WEEKS_PER_TICK,
-            }
-        } else {
-            let value = defines
-                .corridor
-                .get(&binding.key.replace('-', "_"))
-                .ok_or(Material(MichiganMaterialErrorV1::ContentReference))?;
-            MichiganCorridorCapacityV1::Independent(
-                value.units_per_week * babylon_kernel::clock::WEEKS_PER_TICK,
-            )
-        };
-        corridors.push(MichiganMaterialCorridorV1 {
-            key: binding.key.clone(),
-            label: binding.label.clone(),
-            unit_key: binding.unit_key.clone(),
-            capacity,
-        });
-    }
+    let corridors = compile_corridors(topology, defines)?;
     let catalog = MichiganMaterialCatalogV1 {
         industry,
         defines_bytes: defines.encode()?,
@@ -636,6 +612,39 @@ fn compile_catalog(
     validate_inventory_bounds(&catalog)?;
     validate_catalog(&catalog).map_err(Material)?;
     Ok(catalog)
+}
+
+fn compile_corridors(
+    topology: &MaterialTopology,
+    defines: &MichiganDefinesV2,
+) -> Result<Vec<MichiganMaterialCorridorV1>, MichiganDefinesErrorV1> {
+    use MichiganDefinesErrorV1::Material;
+    let mut corridors = Vec::new();
+    for binding in &topology.corridors {
+        let capacity = if binding.key == "shared-freight" {
+            MichiganCorridorCapacityV1::SharedFreight {
+                ample: defines.shared_freight.ample_units_per_week
+                    * babylon_kernel::clock::WEEKS_PER_TICK,
+                constrained: defines.shared_freight.constrained_units_per_week
+                    * babylon_kernel::clock::WEEKS_PER_TICK,
+            }
+        } else {
+            let value = defines
+                .corridor
+                .get(&binding.key.replace('-', "_"))
+                .ok_or(Material(MichiganMaterialErrorV1::ContentReference))?;
+            MichiganCorridorCapacityV1::Independent(
+                value.units_per_week * babylon_kernel::clock::WEEKS_PER_TICK,
+            )
+        };
+        corridors.push(MichiganMaterialCorridorV1 {
+            key: binding.key.clone(),
+            label: binding.label.clone(),
+            unit_key: binding.unit_key.clone(),
+            capacity,
+        });
+    }
+    Ok(corridors)
 }
 
 /// Bound every possible local inventory addition over the admitted campaign.

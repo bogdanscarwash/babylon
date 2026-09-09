@@ -891,7 +891,7 @@ fn freight_evidence_vector() -> ObserverEconomySnapshotV1 {
         "completed": {"period": 1, "reservations": [
             {"reservation_period": 2, "opening_available": 160, "newly_reserved": 120, "remaining_available": 40,
              "orders": [{"order_id": "a", "route_id": "r1", "good_id": "g1", "unit_id": "u", "requested": 600, "dispatched": 120, "remaining_unshipped": 480}]},
-            {"reservation_period": 1, "opening_available": 9007199254740993_u64, "newly_reserved": 160, "remaining_available": 9007199254740833_u64,
+            {"reservation_period": 1, "opening_available": 9_007_199_254_740_993_u64, "newly_reserved": 160, "remaining_available": 9_007_199_254_740_833_u64,
              "orders": [
                 {"order_id": "z", "route_id": "r2", "good_id": "g2", "unit_id": "u", "requested": 200, "dispatched": 40, "remaining_unshipped": 160},
                 {"order_id": "a", "route_id": "r1", "good_id": "g1", "unit_id": "u", "requested": 600, "dispatched": 120, "remaining_unshipped": 480}

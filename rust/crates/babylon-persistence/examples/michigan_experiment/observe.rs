@@ -477,30 +477,23 @@ fn routes(
                 .ordered
                 .checked_sub(prior.shipped)
                 .ok_or_else(|| contract("order shipped exceeds ordered"))?;
-            let corridor_id = opening
+            let leg = opening
                 .route_legs
                 .iter()
                 .find(|leg| leg.route_id == route.id())
-                .ok_or_else(|| contract("missing route leg"))?
-                .corridor_id;
+                .ok_or_else(|| contract("missing route leg"))?;
             let capacity = opening
                 .corridor_capacities
                 .iter()
-                .find(|row| row.corridor_id == corridor_id && row.period == opening.period)
+                .find(|row| row.corridor_id == leg.corridor_id && row.period == opening.period)
                 .map(|row| row.available)
                 .ok_or_else(|| contract("missing corridor capacity"))?;
-            let travel_periods = opening
-                .route_legs
-                .iter()
-                .find(|row| row.route_id == route.id())
-                .ok_or_else(|| contract("missing route leg"))?
-                .travel_periods;
             Ok(RouteRow {
                 route: route.key.clone(),
                 route_id: hex(&route.id().as_bytes()),
                 good: route.good_key.clone(),
                 unit: good.unit_key.clone(),
-                travel_periods,
+                travel_periods: leg.travel_periods,
                 capacity,
                 ordered: order.ordered,
                 unshipped_before: unshipped,

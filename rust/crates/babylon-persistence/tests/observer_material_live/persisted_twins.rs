@@ -643,34 +643,7 @@ fn shared_freight_competition_is_committed_restart_safe_and_scope_confined() {
         for pair in [&mut ample, &mut constrained] {
             pair.advance(&target, &observer, &mut connection);
             let snapshot = &pair.history.last().unwrap()[0];
-            let accounts = &production(snapshot).freight_capacity_accounts;
-            for account in accounts {
-                let completed = account.completed.as_ref().unwrap();
-                assert_eq!(completed.period, tick);
-                for reservation in &completed.reservations {
-                    assert_eq!(
-                        reservation.opening_available,
-                        reservation.newly_reserved + reservation.remaining_available
-                    );
-                    assert_eq!(
-                        reservation.newly_reserved,
-                        reservation.orders.iter().map(|o| o.dispatched).sum::<u64>()
-                    );
-                }
-            }
-            if tick == 1 {
-                let shared = accounts.iter().find(|a| a.route_ids.len() == 2).unwrap();
-                let reservation = &shared.completed.as_ref().unwrap().reservations[0];
-                let expected = if pair.preset == MichiganDeliveryPresetV1::SharedFreightAmple {
-                    (800, 400)
-                } else {
-                    (160, 160)
-                };
-                assert_eq!(
-                    (reservation.opening_available, reservation.newly_reserved),
-                    expected
-                );
-            }
+            assert_shared_reservations(snapshot, pair.preset, tick);
             super::assert_known_material_absence(
                 &preview
                     .snapshot(pair.uninterrupted.campaign_id(), tick)
@@ -723,5 +696,40 @@ fn shared_freight_competition_is_committed_restart_safe_and_scope_confined() {
     for pair in [&ample, &constrained] {
         assert_eq!(pair.restart_periods, [1, 2]);
         pair.assert_held_history(&observer);
+    }
+}
+
+fn assert_shared_reservations(
+    snapshot: &ObserverEconomySnapshotV1,
+    preset: MichiganDeliveryPresetV1,
+    tick: u64,
+) {
+    let accounts = &production(snapshot).freight_capacity_accounts;
+    for account in accounts {
+        let completed = account.completed.as_ref().unwrap();
+        assert_eq!(completed.period, tick);
+        for reservation in &completed.reservations {
+            assert_eq!(
+                reservation.opening_available,
+                reservation.newly_reserved + reservation.remaining_available
+            );
+            assert_eq!(
+                reservation.newly_reserved,
+                reservation.orders.iter().map(|o| o.dispatched).sum::<u64>()
+            );
+        }
+    }
+    if tick == 1 {
+        let shared = accounts.iter().find(|a| a.route_ids.len() == 2).unwrap();
+        let reservation = &shared.completed.as_ref().unwrap().reservations[0];
+        let expected = if preset == MichiganDeliveryPresetV1::SharedFreightAmple {
+            (800, 400)
+        } else {
+            (160, 160)
+        };
+        assert_eq!(
+            (reservation.opening_available, reservation.newly_reserved),
+            expected
+        );
     }
 }

@@ -208,14 +208,14 @@ fn completed_reservations(
             .ok_or(ProductionProjectionErrorV1::State)?;
         let route = order_route(opening, order)?;
         let dispatch = dispatches.remove(&order.order_id);
-        let dispatched = dispatch.map_or(0, |row| row.quantity);
+        let quantity = dispatch.map_or(0, |row| row.quantity);
         if order.ordered != closing.ordered
             || order.access_mode != closing.access_mode
             || order.supplier_site_id != closing.supplier_site_id
             || order.buyer_site_id != closing.buyer_site_id
             || order.good_id != closing.good_id
             || order.unit_id != closing.unit_id
-            || order.shipped.checked_add(dispatched) != Some(closing.shipped)
+            || order.shipped.checked_add(quantity) != Some(closing.shipped)
             || dispatch.is_some_and(|row| row.route_id != route)
         {
             return Err(ProductionProjectionErrorV1::State);
@@ -239,7 +239,7 @@ fn completed_reservations(
                     good_id: digest_hex(&order.good_id.as_bytes()),
                     unit_id: digest_hex(&order.unit_id.as_bytes()),
                     requested,
-                    dispatched,
+                    dispatched: quantity,
                     remaining_unshipped,
                 });
             departure = departure
@@ -253,6 +253,16 @@ fn completed_reservations(
     if !dispatches.is_empty() || !closing_orders.is_empty() {
         return Err(ProductionProjectionErrorV1::State);
     }
+    reconcile_reservation_budgets(&prior_budgets, next_budgets, next.period, reservations)
+}
+
+/// Reconcile every retained period, including reservations for later route legs.
+fn reconcile_reservation_budgets(
+    prior_budgets: &Budgets,
+    next_budgets: &Budgets,
+    next_period: u64,
+    reservations: Reservations,
+) -> Result<BTreeMap<CapacityKey, ProductionFreightReservationV1>, ProductionProjectionErrorV1> {
     let mut expected_next = prior_budgets.clone();
     let mut result = BTreeMap::new();
     for (key, mut orders) in reservations {
@@ -279,7 +289,7 @@ fn completed_reservations(
             },
         );
     }
-    expected_next.retain(|(_, period), _| *period >= next.period);
+    expected_next.retain(|(_, period), _| *period >= next_period);
     if expected_next != *next_budgets {
         return Err(ProductionProjectionErrorV1::State);
     }
