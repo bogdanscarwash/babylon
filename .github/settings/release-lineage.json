@@ -1,4 +1,8 @@
 {
   "schema_version": 1,
-  "latest_main_release": null
+  "latest_main_release": {
+    "tag": "v0.4.0",
+    "main_sha": "07b05e19f2d05266d8cc62ebfdbb24c115fc4751",
+    "release_pr": 924
+  }
 }

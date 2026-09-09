@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -51,12 +50,6 @@ def test_lineage_payload_records_the_exact_release_identity() -> None:
         },
     }
     assert validate_stored_lineage(payload, expected_tag="v1.2.3", expected_sha=MAIN_SHA) == 767
-
-
-def test_checked_in_lineage_manifest_bootstraps_the_versioned_schema() -> None:
-    payload = json.loads((ROOT / MANIFEST_PATH).read_text(encoding="utf-8"))
-
-    assert payload == {"schema_version": 1, "latest_main_release": None}
 
 
 def test_lineage_manifest_write_failure_is_a_bounded_refusal(tmp_path: Path) -> None:
