@@ -69,9 +69,9 @@ unlike outputs into one total. A reference-only county-sector cohort has no
 modeled workforce account, which differs from an admitted account with zero
 workers.
 
-Select a county. Open Circuit with its control or P. Browse the county
-cohorts with Previous page and Next page. Each page shows at most six.
-Select a producer or merchant to focus its relationships.
+Select a county in World. Its side panel lists the county cohorts, with
+Previous page and Next page when needed. Each page shows at most six.
+Select a producer or merchant to open its relationships in Circuit.
 
 Follow Upstream and Downstream links for suppliers and buyers.
 Other participants / Shared freight links identify competitors for capacity.
@@ -79,6 +79,8 @@ These links are separate from the supplier list. Relationship and competitor
 pages each show at most six groups or participants. Return to World with its
 control or M to choose another county.
 
+Return to World to highlight the selected cohort's shipment paths. Selecting
+another county clears those paths until you choose one of its cohorts.
 In World's drawer, choose Selected paths or Captured roads. The second layer
 shows the campaign's captured physical route network behind the selected
 shipment paths. It does not show every OSM road or draw all commodity flows.
@@ -201,6 +203,10 @@ delivery within Gate 4.
 
 Inspect merchants and statewide comparisons
 -------------------------------------------
+
+The campaign menu groups the four Statewide Michigan presets and the four
+Regional proofs. Saved campaigns follow these groups. Choose Open to resume
+the selected save, or Compare to read it beside the current campaign.
 
 The statewide selections use the qualified physical road paths and frozen
 interventions in :doc:`/reference/configuration`. The Mackinac shared freight

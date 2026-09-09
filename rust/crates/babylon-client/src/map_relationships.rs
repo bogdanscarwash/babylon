@@ -270,7 +270,9 @@ fn project(
         total: 0,
         available: snapshot.is_some(),
     };
-    let (Some(snapshot), Some(county)) = (snapshot, anchors.selected(selected)) else {
+    let (Some(snapshot), Some(county), Some(selected_site)) =
+        (snapshot, anchors.selected(selected), selected_site)
+    else {
         return result;
     };
     let sites: BTreeMap<_, _> = snapshot
@@ -278,6 +280,12 @@ fn project(
         .iter()
         .map(|site| (site.id.as_str(), site))
         .collect();
+    if sites
+        .get(selected_site)
+        .is_none_or(|site| site.county_geoid != county)
+    {
+        return result;
+    }
     let edges = physical_index(snapshot);
     for (key, (good, unit)) in declared_relations(snapshot) {
         if material
@@ -285,7 +293,7 @@ fn project(
         {
             continue;
         }
-        if selected_site.is_some_and(|id| key.supplier != id && key.buyer != id) {
+        if key.supplier != selected_site && key.buyer != selected_site {
             continue;
         }
         let (Some(supplier), Some(buyer)) = (
@@ -697,6 +705,7 @@ fn rebuild(
     let heading = relationship_heading(
         &projection,
         observation.selected.0,
+        observation.navigation.selected_site.is_some(),
         observation.ui.road_layer,
         network.as_ref(),
     );
@@ -716,6 +725,7 @@ fn rebuild(
 fn relationship_heading(
     projection: &RelationshipProjection,
     selected: Option<usize>,
+    cohort_selected: bool,
     layer: RoadLayer,
     network: Option<&RoadSegments>,
 ) -> String {
@@ -723,8 +733,10 @@ fn relationship_heading(
         "Supply links unavailable in this observation.".to_owned()
     } else if selected.is_none() {
         "Select a county to trace its supply relationships.".to_owned()
+    } else if !cohort_selected {
+        "Choose a county cohort, then return to World to trace its shipment paths.".to_owned()
     } else if projection.total == 0 {
-        "No disclosed supply links for this county.".to_owned()
+        "No disclosed supply links for this cohort and commodity selection.".to_owned()
     } else {
         format!(
             "Selected relationships: {} of {}\nSolid: captured roads · dashed: schematic",
@@ -1122,9 +1134,26 @@ mod tests {
     }
 
     #[test]
+    fn county_overview_waits_for_an_explicit_cohort_before_drawing_shipments() {
+        let (session, frame, anchors) = fixture();
+        let overview = project(&frame, &session, Some(1), &anchors, None, None);
+        assert!(overview.available);
+        assert!(overview.rows.is_empty());
+        assert_eq!(overview.total, 0);
+        let selected = project(&frame, &session, Some(1), &anchors, Some("a"), None);
+        assert_eq!(selected.total, 2);
+        assert!(
+            project(&frame, &session, Some(2), &anchors, Some("a"), None)
+                .rows
+                .is_empty(),
+            "moving to another county clears the previous cohort's paths"
+        );
+    }
+
+    #[test]
     fn selected_incident_dependencies_keep_goods_units_and_direction_separate() {
         let (session, mut frame, anchors) = fixture();
-        let rows = project(&frame, &session, Some(1), &anchors, None, None);
+        let rows = project(&frame, &session, Some(1), &anchors, Some("a"), None);
         assert_eq!(rows.total, 2);
         assert!(rows.rows.iter().all(|row| row.outbound));
         assert_eq!(rows.rows[0].caption, "Wayne -> Macomb\nore | tonne");
@@ -1141,14 +1170,14 @@ mod tests {
             .sites
             .reverse();
         assert_eq!(
-            project(&frame, &session, Some(1), &anchors, None, None)
+            project(&frame, &session, Some(1), &anchors, Some("a"), None)
                 .rows
                 .iter()
                 .map(|row| row.key.clone())
                 .collect::<Vec<_>>(),
             keys
         );
-        let inbound = project(&frame, &session, Some(2), &anchors, None, None);
+        let inbound = project(&frame, &session, Some(2), &anchors, Some("b"), None);
         assert!(inbound.rows.iter().all(|row| !row.outbound));
         assert_eq!(
             project(&frame, &session, Some(3), &anchors, None, None).total,
@@ -1316,6 +1345,9 @@ mod tests {
             .init_resource::<Assets<StandardMaterial>>()
             .add_systems(Startup, setup)
             .add_systems(Update, rebuild);
+        app.world_mut()
+            .resource_mut::<crate::production::ProductionNavigation>()
+            .selected_site = Some("a".into());
         app
     }
 
@@ -1336,6 +1368,18 @@ mod tests {
     #[test]
     fn road_layer_batches_deduplicated_network_and_keeps_selected_paths_highlighted() {
         let mut app = road_layer_app();
+        app.world_mut()
+            .resource_mut::<crate::production::ProductionNavigation>()
+            .selected_site = None;
+        app.update();
+        assert!(road_batch_vertices(&mut app).is_empty());
+        app.world_mut().resource_mut::<ObserverUiState>().road_layer = RoadLayer::CapturedRoads;
+        app.update();
+        assert_eq!(road_batch_vertices(&mut app), [(RoadBatch::Captured, 24)]);
+        app.world_mut().resource_mut::<ObserverUiState>().road_layer = RoadLayer::SelectedPaths;
+        app.world_mut()
+            .resource_mut::<crate::production::ProductionNavigation>()
+            .selected_site = Some("a".into());
         app.update();
         assert_eq!(road_batch_vertices(&mut app), [(RoadBatch::Selected, 18)]);
         app.world_mut().resource_mut::<ObserverUiState>().road_layer = RoadLayer::CapturedRoads;
@@ -1522,7 +1566,7 @@ mod tests {
         let (session, frame, mut anchors) = fixture();
         anchors.0.get_mut("26163").unwrap().name = "Disclosed district".into();
         assert_eq!(
-            project(&frame, &session, Some(1), &anchors, None, None).rows[0].caption,
+            project(&frame, &session, Some(1), &anchors, Some("a"), None).rows[0].caption,
             "Disclosed district -> Macomb\nore | tonne"
         );
         assert_eq!(county_label("Wayne County, NE"), "Wayne County, NE");
@@ -1533,7 +1577,7 @@ mod tests {
         let (session, mut frame, mut anchors) = fixture();
         anchors.0.remove("26099");
         assert_eq!(
-            project(&frame, &session, Some(1), &anchors, None, None).total,
+            project(&frame, &session, Some(1), &anchors, Some("a"), None).total,
             0
         );
         let (_, _, anchors) = fixture();
@@ -1547,7 +1591,7 @@ mod tests {
             .sites
             .retain(|site| site.id != "a");
         assert_eq!(
-            project(&frame, &session, Some(2), &anchors, None, None).total,
+            project(&frame, &session, Some(2), &anchors, Some("b"), None).total,
             0
         );
     }
@@ -1555,7 +1599,7 @@ mod tests {
     #[test]
     fn scope_and_known_capability_clear_relationships_and_refuse_stale_navigation() {
         let (mut session, mut frame, anchors) = fixture();
-        let row = project(&frame, &session, Some(1), &anchors, None, None)
+        let row = project(&frame, &session, Some(1), &anchors, Some("a"), None)
             .rows
             .remove(0);
         let jump = RelationshipJump {
@@ -1572,19 +1616,21 @@ mod tests {
             None
         );
         frame.0.as_mut().unwrap().resolve_tick = 2;
-        assert!(project(&frame, &session, Some(1), &anchors, None, None)
-            .rows
-            .is_empty());
+        assert!(
+            project(&frame, &session, Some(1), &anchors, Some("a"), None)
+                .rows
+                .is_empty()
+        );
         assert_eq!(
             jump_target(&jump, &frame, &session, Some(1), &anchors),
             None
         );
         frame.0.as_mut().unwrap().resolve_tick = 3;
         session.set_perspective(Perspective::PlayerKnowledge);
-        assert!(!project(&frame, &session, Some(1), &anchors, None, None).available);
+        assert!(!project(&frame, &session, Some(1), &anchors, Some("a"), None).available);
         frame.0.as_mut().unwrap().visibility = ObserverVisibilityV1::KnownPreview;
         frame.0.as_mut().unwrap().production = None;
-        assert!(!project(&frame, &session, Some(1), &anchors, None, None).available);
+        assert!(!project(&frame, &session, Some(1), &anchors, Some("a"), None).available);
         assert_eq!(
             jump_target(&jump, &frame, &session, Some(1), &anchors),
             None
@@ -1593,9 +1639,11 @@ mod tests {
         let (_, valid, _) = fixture();
         frame = valid;
         frame.0.as_mut().unwrap().campaign_id = uuid::Uuid::from_u128(9).to_string();
-        assert!(project(&frame, &session, Some(1), &anchors, None, None)
-            .rows
-            .is_empty());
+        assert!(
+            project(&frame, &session, Some(1), &anchors, Some("a"), None)
+                .rows
+                .is_empty()
+        );
     }
 
     #[test]
@@ -1629,7 +1677,7 @@ mod tests {
                 .inputs
                 .push(next);
         }
-        let projection = project(&frame, &session, Some(1), &anchors, None, None);
+        let projection = project(&frame, &session, Some(1), &anchors, Some("a"), None);
         assert_eq!(projection.total, 12);
         assert_eq!(projection.rows.len(), MAX_RELATIONSHIPS);
     }
@@ -1637,7 +1685,7 @@ mod tests {
     #[test]
     fn relationship_button_follows_county_only_in_the_visible_unblocked_map() {
         let (session, frame, anchors) = fixture();
-        let key = project(&frame, &session, Some(1), &anchors, None, None)
+        let key = project(&frame, &session, Some(1), &anchors, Some("a"), None)
             .rows
             .remove(0)
             .key;

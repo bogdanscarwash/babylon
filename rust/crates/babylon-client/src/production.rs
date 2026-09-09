@@ -173,6 +173,8 @@ struct ProductionBrief;
 #[derive(Component)]
 struct ProductionDependencies;
 #[derive(Component)]
+pub(crate) struct ProductionCountyCohorts;
+#[derive(Component)]
 struct ProductionFreightReading;
 #[derive(Component, Clone)]
 struct ProductionButton(ProductionCommand);
@@ -1030,6 +1032,28 @@ fn sync_selected_county(
                 .county(*index)
                 .is_some_and(|county| county.fips == site.county_geoid)
         });
+    }
+}
+
+fn sync_world_county(
+    observation: ProductionObservation,
+    view: Res<PrimaryView>,
+    atlas: Res<CountyAtlas>,
+    selected: Res<SelectedCounty>,
+    mut navigation: ResMut<ProductionNavigation>,
+) {
+    if *view != PrimaryView::Map {
+        return;
+    }
+    let snapshot = observation
+        .frame
+        .for_session(&observation.state)
+        .and_then(|frame| frame.production.as_ref());
+    let county = selected.0.and_then(|index| atlas.county(index));
+    if let (Some(snapshot), Some(county)) = (snapshot, county) {
+        if navigation.county_geoid.as_deref() != Some(county.fips) {
+            navigation.open_county(county.fips, Some(snapshot));
+        }
     }
 }
 
@@ -2273,6 +2297,35 @@ fn rebuild_dependencies(
     }
 }
 
+fn rebuild_county_cohorts(
+    mut commands: Commands,
+    roots: Query<Entity, With<ProductionCountyCohorts>>,
+    observation: ProductionObservation,
+    navigation: Res<ProductionNavigation>,
+    mut last_context: Local<Option<ObservationContext>>,
+) {
+    let context = observation.state.context();
+    if !observation.frame.is_changed()
+        && !navigation.is_changed()
+        && last_context.as_ref() == Some(&context)
+    {
+        return;
+    }
+    *last_context = Some(context.clone());
+    let snapshot = observation
+        .frame
+        .for_session(&observation.state)
+        .and_then(|frame| frame.production.as_ref());
+    for root in &roots {
+        commands.entity(root).despawn_related::<Children>();
+        if let Some(snapshot) = snapshot {
+            commands.entity(root).with_children(|panel| {
+                spawn_county_cohorts(panel, snapshot, &navigation, &context);
+            });
+        }
+    }
+}
+
 fn paint_disclosure(
     navigation: Res<ProductionNavigation>,
     observation: ProductionObservation,
@@ -2598,7 +2651,12 @@ impl Plugin for ProductionPlugin {
             .add_systems(Update, (inputs, orbit_input).in_set(ObserverSet::Input))
             .add_systems(
                 Update,
-                (invalidate_navigation, navigate, focus_opening)
+                (
+                    invalidate_navigation,
+                    navigate,
+                    sync_world_county,
+                    focus_opening,
+                )
                     .chain()
                     .after(ObserverSet::Install)
                     .before(ObserverSet::Paint),
@@ -2612,6 +2670,7 @@ impl Plugin for ProductionPlugin {
                 (
                     rebuild,
                     rebuild_dependencies,
+                    rebuild_county_cohorts,
                     paint_scene,
                     paint_labels,
                     paint_readings,
@@ -3767,7 +3826,9 @@ mod tests {
                     inputs,
                     invalidate_navigation,
                     navigate,
+                    sync_world_county,
                     rebuild_dependencies,
+                    rebuild_county_cohorts,
                 )
                     .chain(),
             );
@@ -4072,6 +4133,13 @@ mod tests {
                 .as_deref(),
             Some("b")
         );
+        // Returning through World also supplies the county as a final Back destination.
+        assert_eq!(
+            control_display(&mut app, &ProductionCommand::Back),
+            Display::Flex
+        );
+        send_command(&mut app, ProductionCommand::Back);
+        assert!(app.world().resource::<ProductionNavigation>().county_open);
         assert_eq!(
             control_display(&mut app, &ProductionCommand::Back),
             Display::None
@@ -4332,6 +4400,100 @@ mod tests {
             .selected_site
             .is_none());
         assert!(app.world().resource::<ObserverFeedback>().message.is_some());
+    }
+
+    #[test]
+    fn world_county_list_enters_the_selected_circuit_and_rejects_old_observations() {
+        let mut app = dependency_navigation_app();
+        app.add_observer(keyboard_activate);
+        let county_index = |app: &App, fips: &str| {
+            let atlas = app.world().resource::<CountyAtlas>();
+            (0..atlas.len())
+                .find(|index| atlas.county(*index).unwrap().fips == fips)
+                .unwrap()
+        };
+        let wayne = county_index(&app, "26163");
+        app.world_mut().resource_mut::<SelectedCounty>().0 = Some(wayne);
+        let root = app
+            .world_mut()
+            .spawn((Node::default(), ProductionCountyCohorts))
+            .id();
+        app.update();
+        assert_eq!(*app.world().resource::<PrimaryView>(), PrimaryView::Map);
+        assert_eq!(
+            app.world()
+                .resource::<ProductionNavigation>()
+                .county_geoid
+                .as_deref(),
+            Some("26163")
+        );
+        let button = {
+            let world = app.world_mut();
+            world.query::<(Entity, &ProductionButton, &ChildOf)>().iter(world)
+                .find_map(|(entity, button, parent)| {
+                    (parent.parent() == root && matches!(&button.0, ProductionCommand::Select { site_id, .. } if site_id == "b"))
+                        .then_some(entity)
+                }).expect("World exposes the real cohort selection control")
+        };
+        let context = app.world().resource::<ObserverSession>().context();
+        app.world_mut().trigger(ObserverKeyboardActivate {
+            entity: button,
+            context: Some(context.clone()),
+        });
+        app.update();
+        assert_eq!(
+            *app.world().resource::<PrimaryView>(),
+            PrimaryView::Production
+        );
+        assert_eq!(
+            app.world()
+                .resource::<ProductionNavigation>()
+                .selected_site
+                .as_deref(),
+            Some("b")
+        );
+        send_command(&mut app, ProductionCommand::Map);
+        assert_eq!(
+            app.world()
+                .resource::<ProductionNavigation>()
+                .selected_site
+                .as_deref(),
+            Some("b")
+        );
+        let macomb = county_index(&app, "26099");
+        app.world_mut().resource_mut::<SelectedCounty>().0 = Some(macomb);
+        app.update();
+        assert_eq!(
+            app.world()
+                .resource::<ProductionNavigation>()
+                .county_geoid
+                .as_deref(),
+            Some("26099")
+        );
+        assert!(app
+            .world()
+            .resource::<ProductionNavigation>()
+            .selected_site
+            .is_none());
+        app.world_mut()
+            .resource_mut::<ObserverSession>()
+            .set_perspective(crate::observer::Perspective::PlayerKnowledge);
+        send_command(
+            &mut app,
+            ProductionCommand::Select {
+                site_id: "b".into(),
+                context,
+            },
+        );
+        assert!(app
+            .world()
+            .resource::<ProductionNavigation>()
+            .selected_site
+            .is_none());
+        assert!(app
+            .world()
+            .get::<Children>(root)
+            .is_none_or(RelationshipTarget::is_empty));
     }
 
     #[test]

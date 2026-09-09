@@ -454,11 +454,11 @@ fn spawn_inspector(commands: &mut Commands) {
                 ObserverText::Production,
                 ObserverFocusTarget::reading(None),
             ));
-            crate::production::button(
-                panel,
-                "Follow its work [P]",
-                crate::production::ProductionCommand::Open,
-            );
+            panel.spawn((
+                context_column(),
+                crate::production::ProductionCountyCohorts,
+                DeclaredSurface::new(SurfaceId::ObserverProduction),
+            ));
             panel.spawn((
                 block_label("", 15.0, theme::GRAY),
                 ObserverText::Developments,
@@ -778,38 +778,40 @@ fn menu_campaign(panel: &mut ChildSpawnerCommands) {
         );
     });
     panel.spawn(block_label("Statewide Michigan", 14.0, theme::YELLOW));
-    for (title, command) in [
-        ("Baseline", ObserverCommand::NewStatewideBaselineCampaign),
-        (
-            "Freight constrained",
-            ObserverCommand::NewStatewideFreightConstraintCampaign,
-        ),
-        (
-            "Packaging shortage",
-            ObserverCommand::NewStatewidePackagingShortageCampaign,
-        ),
-        (
-            "Both constraints",
-            ObserverCommand::NewStatewideBothCampaign,
-        ),
-    ] {
-        scoped_button(panel, title, command, true);
-    }
+    preset_grid(
+        panel,
+        &[
+            ("Baseline", ObserverCommand::NewStatewideBaselineCampaign),
+            (
+                "Freight constrained",
+                ObserverCommand::NewStatewideFreightConstraintCampaign,
+            ),
+            (
+                "Packaging shortage",
+                ObserverCommand::NewStatewidePackagingShortageCampaign,
+            ),
+            (
+                "Both constraints",
+                ObserverCommand::NewStatewideBothCampaign,
+            ),
+        ],
+    );
     panel.spawn(block_label("Regional proofs", 14.0, theme::YELLOW));
-    for (title, command) in [
-        ("Standard [N]", ObserverCommand::NewCampaign),
-        ("Delayed [D]", ObserverCommand::NewDelayedCampaign),
-        (
-            "Shared freight — ample",
-            ObserverCommand::NewSharedFreightAmpleCampaign,
-        ),
-        (
-            "Shared freight — constrained",
-            ObserverCommand::NewSharedFreightConstrainedCampaign,
-        ),
-    ] {
-        scoped_button(panel, title, command, true);
-    }
+    preset_grid(
+        panel,
+        &[
+            ("Standard [N]", ObserverCommand::NewCampaign),
+            ("Delayed [D]", ObserverCommand::NewDelayedCampaign),
+            (
+                "Shared freight — ample",
+                ObserverCommand::NewSharedFreightAmpleCampaign,
+            ),
+            (
+                "Shared freight — constrained",
+                ObserverCommand::NewSharedFreightConstrainedCampaign,
+            ),
+        ],
+    );
     panel.spawn(block_label(
         "A new campaign preserves your existing world.",
         12.0,
@@ -826,6 +828,24 @@ fn menu_campaign(panel: &mut ChildSpawnerCommands) {
         },
         ObserverCampaignCatalog,
     ));
+}
+
+fn preset_grid(panel: &mut ChildSpawnerCommands, presets: &[(&str, ObserverCommand)]) {
+    panel
+        .spawn(Node {
+            display: Display::Grid,
+            grid_template_columns: RepeatedGridTrack::flex(2, 1.0),
+            column_gap: px(8),
+            row_gap: px(8),
+            min_width: px(0),
+            flex_shrink: 0.0,
+            ..default()
+        })
+        .with_children(|grid| {
+            for (title, command) in presets {
+                scoped_button(grid, title, *command, true);
+            }
+        });
 }
 
 fn menu_settings(panel: &mut ChildSpawnerCommands) {
@@ -1483,46 +1503,21 @@ pub fn format_lens_reading(reading: CountyLensReading, unit: &str) -> String {
     }
 }
 
-fn local_relationships(
+fn county_circuit_intro(
     snapshot: &babylon_persistence::ProductionSnapshotV2,
     county: Option<&str>,
 ) -> String {
     let Some(county) = county else {
         return "Select a county to follow its work and dependencies.".into();
     };
-    let mut sites: Vec<_> = snapshot
+    let available = snapshot
         .sites
         .iter()
-        .filter(|site| site.county_geoid == county)
-        .collect();
-    sites.sort_by(|a, b| a.id.cmp(&b.id));
-    if sites.is_empty() {
+        .any(|site| site.county_geoid == county);
+    if !available {
         return "No production relationships are modeled here yet. The Archive contains the observed county context.".into();
     }
-    let mut lines = Vec::new();
-    for site in sites {
-        if lines.len() >= 6 {
-            break;
-        }
-        let relations = crate::production_brief::dependency_sites(site, snapshot);
-        if relations.is_empty() {
-            lines.push(format!("{} / no disclosed supply relationships", site.name));
-        }
-        for (direction, other) in relations.into_iter().take(6 - lines.len()) {
-            lines.push(match direction {
-                crate::production_brief::DependencyDirection::Upstream => {
-                    format!("{} depends on {}", site.name, other.name)
-                }
-                crate::production_brief::DependencyDirection::Downstream => {
-                    format!("{} supplies {}", site.name, other.name)
-                }
-            });
-        }
-    }
-    format!(
-        "SUPPLY RELATIONSHIPS\n{}\n\nCounty cohorts; select Circuit to browse owners and follow their relationships.",
-        lines.join("\n\n")
-    )
+    "Choose a cohort to follow its commodities, freight and workers in Circuit.".into()
 }
 
 fn county_developments(snapshot: Option<&ObserverEconomySnapshotV1>, county: &str) -> String {
@@ -1699,7 +1694,7 @@ fn repaint(
             ObserverText::Developments => county.as_ref().map_or_else(String::new, |county| county_developments(installed, county.fips)),
             ObserverText::Production => installed.and_then(|snapshot| snapshot.production.as_ref())
                 .map_or_else(|| "Production relationships are unavailable in this observation.".into(), |production|
-                    local_relationships(production, county.as_ref().map(|county| county.fips))),
+                    county_circuit_intro(production, county.as_ref().map(|county| county.fips))),
         };
         text.set_if_neq(Text::new(value));
     }
