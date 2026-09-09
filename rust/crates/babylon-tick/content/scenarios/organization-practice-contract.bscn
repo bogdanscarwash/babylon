@@ -1,0 +1,18 @@
+(scenario organization/practice-contract
+  (defvocabulary NodeType (SOCIAL_CLASS TERRITORY ORGANIZATION))
+  (defvocabulary EdgeType
+    (MEMBERSHIP PRESENCE COMMAND TRANSACTIONAL SOLIDARISTIC SOLIDARITY
+     TENANCY ADJACENCY))
+  (node practice-organization NodeType/ORGANIZATION
+    (organization/kind OrgKind/CIVIL_SOCIETY)
+    (organization/active 1)
+    (organization/cadre-level 0.5p)
+    (organization/cohesion 0.5p)
+    (organization/consciousness-tendency ConsciousnessTendency/REVOLUTIONARY)
+    (organization/action-budget 1))
+  (node practice-territory NodeType/TERRITORY)
+  (node practice-class NodeType/SOCIAL_CLASS)
+  (edge EdgeType/PRESENCE practice-organization practice-territory 1)
+  (edge EdgeType/TENANCY practice-class practice-territory 1)
+  (edge EdgeType/SOLIDARITY practice-organization practice-class 0.5p)
+  (edge EdgeType/MEMBERSHIP practice-organization practice-class 1))

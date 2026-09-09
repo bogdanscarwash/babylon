@@ -1,0 +1,98 @@
+ADR187_article_v_3x3_ratified:
+  status: "accepted"
+  date: "2026-08-10"
+  title: >
+    The Article V 3×3 RATIFIED — the Director approved the workforce draft
+    (reports/article-v-3x3-draft-2026-08-10.md) in session: the aid stem
+    hosts BUILD (with expropriate and restore beside it), the column
+    reading is confirmed (a verb's column follows whose state the motion
+    writes), the funding cell stays EMPTY BY DESIGN (replenishment is a
+    system consequence, never a verb), the clandestinity posture lands on
+    both faces (reproduce:security inward, investigate:counter_intel
+    outward) as per-tick re-measured sub-modes, ratified labels stay, the
+    STRIKE enum retirement folds into the Phase 2 vocabulary ceremony —
+    and OQ-5 (what restore writes against the metabolic rift) stays
+    RESERVED for a dedicated Director theory ruling.
+  context: |
+    ADR176 items (15), (16), (37) ruled BUILD_INFRASTRUCTURE, the
+    clandestinity/metabolic charters, and EXPROPRIATE's home onto "an
+    existing stem" without naming the stem, and the 2026-07-29 session
+    left the Article V 3×3 as the one drafting residual on #378: the
+    workforce drafts, the Director ratifies. The draft shipped on PR #472
+    (adversarially verified: all nine stems, no invented tenth key,
+    ADR176 placements verbatim-in-substance, every contested cell routed
+    to eight OPEN QUESTIONS with recommendations where the evidence
+    supported one). The Director ruled "i approve all" in the 2026-08-10
+    session — this ADR transcribes that approval question by question,
+    adopting the draft's recommendation wherever it made one and
+    reserving the one question the draft itself declined to recommend on.
+  decision: |
+    THE GRID IS RATIFIED as drawn in reports/article-v-3x3-draft-2026-08-10.md
+    §2 — nine ratified stems (ADR177 V1 unchanged), sub-mode layer as
+    proposed, including the three dagger-marked proposals
+    (reproduce:security, aid:build / aid:expropriate / aid:restore,
+    investigate:counter_intel).
+
+    OQ-1 — RATIFIED (a): the AID stem hosts BUILD. aid:build carries
+        BUILD_INFRASTRUCTURE (ADR176 (15)), aid:expropriate follows
+        (ADR176 (37)), aid:restore is the metabolic surface's home
+        (ADR176 (16)). No tenth key; VERB_RESOLVERS stays at nine.
+    OQ-2 — RATIFIED: the column reading is confirmed — a verb's column
+        follows whose state the motion writes, not what the player
+        targets. The move stem's existing placement depends on this
+        reading; it now binds the whole sub-mode layer.
+    OQ-3 — RATIFIED (c): replenishment is a SYSTEM consequence, never a
+        verb. Dues follow from MEMBERSHIP mass, institutional money from
+        office tenure, Φ from tribute (ADR184 R5). The
+        (manage_resources, organization) cell stays EMPTY BY DESIGN —
+        the org's money follows from what it already IS. No fundraise
+        stem; no funding sub-modes. The empty cell is the pedagogy.
+    OQ-4 — RATIFIED both faces: reproduce:security (inward — cadre
+        discipline, compartmentalization, hardening the P(S|R)
+        denominator on the org's own node) AND investigate:counter_intel
+        (outward — the existing ActionType.COUNTER_INTEL member gains a
+        resolver). Shape: per-tick sub-modes whose effect the engine
+        re-measures fresh each tick — no persistent-posture construct,
+        keeping ADR172 ruling 5 satisfied; standing orders (ADR176 (22))
+        carry the persistence ergonomics.
+    OQ-5 — RESERVED, still open. What restore writes against
+        ΔB = R − (E·η) — raise R, lower E, or repair B directly, and on
+        what budget footing — states a theory of what an organization
+        can do to a metabolic rift. The draft made no recommendation and
+        the blanket approval is NOT read as deciding it. A dedicated
+        Director ruling disposes it before aid:restore's resolver lands.
+    OQ-6 — RATIFIED: keep the ratified labels ("Manage resources",
+        "aid"); interface copy carries the pedagogy. No row or stem
+        rename; the ratified matrix keys stand.
+    OQ-7 — RATIFIED (fold): ActionType.STRIKE's dead enum member, its
+        eligibility row and base_cost_strike retire inside the Phase 2
+        BSL vocabulary ceremony alongside the five dead edge types
+        ADR176 (34) already retires — one ceremony, one record.
+    OQ-8 — RATIFIED: this fresh ADR is the recording vehicle; ADR177's
+        ratification record stays clean and is named in related.
+  consequences: |
+    IMMEDIATE:
+    - reports/article-v-3x3-draft-2026-08-10.md status flips to RATIFIED
+      (OQ-5 reserved) — recorded in the doc header, history untouched.
+    - #378's drafting residual closes; the issue stays open for
+      implementation consequences only.
+    IMPLEMENTATION (the consequence queue, in dependency order):
+    - resolve_build registers as the aid stem's build sub-mode mapped
+      onto the tested resolver — sub-mode registration, not a tenth
+      VERB_RESOLVERS key.
+    - aid:expropriate's resolver lands on the value-transfer footing
+      (transfers value, never destroys it, ADR176 (37)).
+    - aid:restore BLOCKS on the OQ-5 ruling.
+    - reproduce:security and investigate:counter_intel resolvers land as
+      per-tick re-measured sub-modes.
+    - The funding cell ships nothing; ADR184 R5 replenishment mechanics
+      carry the system-consequence load.
+    - The STRIKE enum retirement rides the Phase 2 vocabulary ceremony.
+    - The sub-mode layer gets its own sentinel (option-universe coverage
+      over sub-modes, per the tutorial-coverage family's pattern).
+  supersedes: []
+  related:
+    - ADR177_verb_matrix_ratified_main_ruleset
+    - ADR176_director_rulings_batch_gds_dispositions
+    - ADR184_capacity_belongs_to_organizations
+    - ADR186_bevy_cutover_amendment_af

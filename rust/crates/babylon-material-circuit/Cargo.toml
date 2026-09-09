@@ -1,0 +1,18 @@
+[package]
+name = "babylon-material-circuit"
+description = "Exact conserved production, inventory, order, and realization transitions"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+babylon-kernel = { path = "../babylon-kernel" }
+
+[dev-dependencies]
+serde_json = "1"
+
+[lib]
+name = "babylon_material_circuit"
+path = "src/lib.rs"

@@ -1,0 +1,123 @@
+ADR239_routed_material_circuit_v2:
+  status: "accepted"
+  date: "2026-08-26"
+  title: >-
+    Routed Material Circuit V2 reserves exact corridor capacity and advances
+    one authoritative freight-lot state before delivery and realization
+  crate: babylon-material-circuit
+  production_dependencies:
+    - babylon-kernel
+  forbidden_dependencies:
+    - babylon-graph
+    - babylon-bsl
+    - babylon-tick
+    - babylon-persistence
+    - babylon-client
+  live_activation: false
+  context: |
+    PER-31 must propagate material shortages through named routes, transit
+    time, and finite corridor capacity. Material Circuit V1 owns exact
+    inventory and orders, but its supplier relation carries only one local
+    delay and its lot jumps directly from source to destination. Adding a
+    second freight register beside that state would duplicate the transit
+    principal and make conservation depend on reconciliation.
+
+    The first routed slice does not yet have the exact organization-money,
+    claim, or escrow ledger that PER-36 owns. A freight implementation cannot
+    invent temporary currency buckets or call quantity realization monetary
+    settlement. Selected sovereigns, residual trade blocs, route choice, and
+    rerouting also need real consumers before their identities become state.
+  decision: |
+    `MaterialCircuitStateV2` is a versioned successor in the existing
+    `babylon-material-circuit` crate. V1 types, bytes, digest, transition, and
+    refusal registry remain frozen. V2 reuses unchanged exact production,
+    inventory, capacity, labor, and identity rows while replacing local
+    supplier delays and local transit lots with site-to-logistics-node rows,
+    supplier-route rows, ordered route legs, corridor-week capacity rows, an
+    order row with attributed cumulative loss, and one routed freight-lot row.
+
+    A supplier route is unique for one buyer, supplier, good, and unit in this
+    slice. Each route has between one and 16 contiguous positive-duration
+    legs. The leg ceiling is a Designed transition-fuel bound, not a geographic
+    or political limit. Route identity and connected node endpoints determine
+    the path; canonical order never chooses a route.
+
+    Dispatch groups every open order request by its exact supplier-inventory
+    principal and by every `(corridor, departure week, unit)` reservation that
+    its route needs. Each group grants
+    `floor(available * request / total requests)`. One order's dispatch is the
+    minimum of all its grants. Residual inventory and capacity remain in their
+    principals. The transition debits the exact shipped inventory and reserves
+    the same opening quantity on every future route leg before it creates one
+    freight lot. Future reservations are conservative: later physical loss
+    does not release capacity that was already committed.
+
+    One freight lot names one order, route, current leg, leg-arrival week,
+    source, destination, good, unit, dispatch week, and exact quantity. It is
+    the sole transit state for that principal. A leg completion applies its
+    exact parts-per-million loss with checked integer arithmetic, attributes
+    the loss to the order and corridor, and either advances the same lot to the
+    next leg or consumes it at the destination. Only final retained arrival
+    credits destination inventory, accepted delivery, and commodity quantity
+    realization. At every opening state, shipped quantity equals delivered
+    quantity plus attributed loss plus the exact quantity in the order's one
+    or more live freight lots.
+
+    Complete V2 state bytes use the `babylon.material-circuit-state.v2`
+    domain, schema version 2, fixed field order, unsigned big-endian integers,
+    raw 32-byte identities, canonical rows, and closed access-mode tags. The
+    decoder refuses a wrong domain or version, malformed topology, duplicate
+    identity, noncanonical order, truncation, or trailing bytes. SHA-256 names
+    the validated complete state.
+
+    V2 remains a detached Rust transition. It does not alter graph state,
+    BSL, `TickSession`, nominal world identity, persistence, Archive, or Bevy.
+    It does not activate gameplay or complete PER-31. A later PER-31 slice may
+    add jurisdiction-bearing border policy and participant-selected rerouting
+    only with named consumers. PER-36 alone may add exact money, claims,
+    escrow, default, and double-entry settlement.
+  consequences: |
+    Corridor capacity and route duration now have a direct causal path to
+    dispatch, inventory, loss, delivery, realization, and following-week
+    production. Removing one corridor-week capacity can leave orders on other
+    routes unchanged, so spatially heterogeneous shortages can emerge without
+    country actors or all-pairs supply edges.
+
+    Conservative whole-route reservation avoids a waiting-lot split that
+    would place one lot identity in two transit states. It can leave capacity
+    unused after a downstream bottleneck or later loss. That residual is an
+    explicit cost of the first bounded contract, not canonical-order priority.
+
+    The V2 wire contract must freeze before any world-hash or persistence
+    successor binds it. The later live cutover must select V2 as the sole
+    material register and retire the V1 gameplay path rather than dual-write.
+  verification: |
+    Scenario and property tests must prove dispatch-before-arrival, final-leg
+    delivery, route continuity, capacity reservation, stock and transit
+    conservation, cumulative attributed loss, order-neutral scarcity,
+    insertion-order identity, checked-overflow atomicity, exact bytes and
+    digest, decoder refusal, maximum route legs, and a severed-corridor twin
+    with heterogeneous inventory and realization effects.
+
+    `contracts/material_circuit_v2.yaml` freezes the 1,053-byte base state and
+    its SHA-256 digest
+    `a0ca4c774cf74110ffc3611aa1bd7609cbee07e360477e99363f268b93d7cf31`.
+    Its shared JSONL corpus binds those values, the 16-leg ceiling, and the
+    derived 1,114,112-resource-group ceiling to executable Rust tests.
+
+    Formatting and Clippy pedantic checks run with warnings denied. V1 exact
+    bytes, digest, decoder refusals, scenario laws, and property laws remain
+    unchanged.
+  preserves:
+    - ADR223 TickSession atomicity and NominalWorldHash V1 bytes
+    - ADR224 BSL causal roles, exact effects, and audit receipts
+    - ADR229 Rust gameplay-contract authority and frozen Python boundary
+    - ADR232 material causality, successor versioning, and no authored sigmoid
+    - ADR238 Material Circuit V1 bytes, digest, transition, and refusals
+  supersedes: []
+  related:
+    - ADR220_rust_owned_postgresql_persistence_boundary
+    - ADR223_whole_tick_atomicity_world_hash
+    - ADR229_rust_gameplay_contract_authority
+    - ADR232_neel_integration_program_architecture
+    - ADR238_material_circuit_v1

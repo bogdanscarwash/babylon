@@ -96,112 +96,6 @@ def michigan_state_id(db: sqlite3.Connection) -> int:
 
 
 # ===========================================================================
-# 1. BEA Economic Areas (Spec 040 — Mid-tier Zoom)
-# ===========================================================================
-
-
-@pytest.mark.integration
-@pytest.mark.ledger
-@pytest.mark.empirical
-class TestBEAEconomicAreas:
-    """Validate BEA EA dimension and county-to-EA bridge tables."""
-
-    def test_bea_ea_table_exists(self, db: sqlite3.Connection) -> None:
-        """dim_bea_economic_area table exists in the database."""
-        row = db.execute(
-            "SELECT count(*) AS n FROM sqlite_master "
-            "WHERE type='table' AND name='dim_bea_economic_area'"
-        ).fetchone()
-        assert row is not None
-        assert row["n"] == 1, "dim_bea_economic_area table does not exist"
-
-    def test_bea_ea_bridge_table_exists(self, db: sqlite3.Connection) -> None:
-        """bridge_county_bea_ea table exists in the database."""
-        row = db.execute(
-            "SELECT count(*) AS n FROM sqlite_master "
-            "WHERE type='table' AND name='bridge_county_bea_ea'"
-        ).fetchone()
-        assert row is not None
-        assert row["n"] == 1, "bridge_county_bea_ea table does not exist"
-
-    def test_bea_ea_has_expected_count(self, db: sqlite3.Connection) -> None:
-        """Should have exactly 8 BEA EAs relevant to Michigan."""
-        row = db.execute("SELECT count(*) AS n FROM dim_bea_economic_area").fetchone()
-        assert row is not None
-        assert row["n"] == BEA_EA_COUNT
-
-    def test_bea_ea_codes_match(self, db: sqlite3.Connection) -> None:
-        """All expected EA codes are present."""
-        rows = db.execute("SELECT ea_code FROM dim_bea_economic_area").fetchall()
-        actual_codes = {r["ea_code"] for r in rows}
-        assert actual_codes == BEA_EA_CODES
-
-    def test_all_michigan_counties_mapped_to_ea(
-        self, db: sqlite3.Connection, michigan_state_id: int
-    ) -> None:
-        """Every Michigan county (83) has a bridge_county_bea_ea row."""
-        row = db.execute(
-            """
-            SELECT count(DISTINCT c.county_id) AS n
-            FROM dim_county c
-            JOIN bridge_county_bea_ea b ON c.county_id = b.county_id
-            WHERE c.state_id = ?
-              AND c.fips != '26999'
-            """,
-            (michigan_state_id,),
-        ).fetchone()
-        assert row is not None
-        assert row["n"] == MICHIGAN_COUNTY_COUNT, (
-            f"Expected {MICHIGAN_COUNTY_COUNT} counties with BEA EA, got {row['n']}"
-        )
-
-    def test_cross_border_ea_berrien_is_chicago(self, db: sqlite3.Connection) -> None:
-        """Berrien County should be assigned to Chicago EA (cross-border)."""
-        row = db.execute(
-            """
-            SELECT ea.ea_code
-            FROM bridge_county_bea_ea b
-            JOIN dim_county c ON b.county_id = c.county_id
-            JOIN dim_bea_economic_area ea ON b.bea_ea_id = ea.bea_ea_id
-            WHERE c.fips = ?
-            """,
-            (BERRIEN_FIPS,),
-        ).fetchone()
-        assert row is not None
-        assert row["ea_code"] == "CHI", f"Berrien should be CHI (Chicago), got {row['ea_code']}"
-
-    def test_wayne_county_is_detroit_ea(self, db: sqlite3.Connection) -> None:
-        """Wayne County belongs to Detroit EA."""
-        row = db.execute(
-            """
-            SELECT ea.ea_code
-            FROM bridge_county_bea_ea b
-            JOIN dim_county c ON b.county_id = c.county_id
-            JOIN dim_bea_economic_area ea ON b.bea_ea_id = ea.bea_ea_id
-            WHERE c.fips = ?
-            """,
-            (WAYNE_FIPS,),
-        ).fetchone()
-        assert row is not None
-        assert row["ea_code"] == "DET"
-
-    def test_marquette_is_upper_peninsula_ea(self, db: sqlite3.Connection) -> None:
-        """Marquette County belongs to the Upper Peninsula EA."""
-        row = db.execute(
-            """
-            SELECT ea.ea_code
-            FROM bridge_county_bea_ea b
-            JOIN dim_county c ON b.county_id = c.county_id
-            JOIN dim_bea_economic_area ea ON b.bea_ea_id = ea.bea_ea_id
-            WHERE c.fips = ?
-            """,
-            (MARQUETTE_FIPS,),
-        ).fetchone()
-        assert row is not None
-        assert row["ea_code"] == "MQT"
-
-
-# ===========================================================================
 # 2. H3 Res-7 Hex Inventory (Spec 040 — Hex Zoom Tier)
 # ===========================================================================
 
@@ -413,11 +307,31 @@ class TestZoomHierarchyCompleteness:
         assert row is not None
         assert row["n"] == 1
 
-    def test_bea_tier_exists(self, db: sqlite3.Connection) -> None:
-        """BEA tier: at least 1 BEA EA exists."""
-        row = db.execute("SELECT count(*) AS n FROM dim_bea_economic_area").fetchone()
-        assert row is not None
-        assert row["n"] >= 1
+    def test_bea_tier_exists(self) -> None:
+        """BEA tier: at least 1 BEA EA exists — read from the successor CSV.
+
+        ``dim_bea_economic_area`` was amputated from the reference DB by
+        ADR076 (36f4cb98) with a committed CSV successor registered in
+        ``data-artifacts.yaml``. That commit migrated the whole
+        ``TestBEAEconomicAreas`` class but missed this straggler, which kept
+        querying the dropped table (nightly Reference-Data red since
+        2026-07-17). The zoom-hierarchy claim now reads the successor the
+        same way ``tests/unit/reference/test_data_artifacts.py`` does; that
+        file additionally pins the full 8-row content.
+        """
+        import csv
+
+        csv_path = (
+            Path(__file__).resolve().parents[2]
+            / "src"
+            / "babylon"
+            / "data"
+            / "reference"
+            / "dim_bea_economic_area.csv"
+        )
+        with csv_path.open(encoding="utf-8") as handle:
+            rows = list(csv.DictReader(handle))
+        assert len(rows) >= 1
 
     def test_msa_tier_exists(self, db: sqlite3.Connection) -> None:
         """MSA tier: at least 1 metro area exists."""

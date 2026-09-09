@@ -1,0 +1,42 @@
+# Test-estate process rules (ADR181 R9a — scar #7: wall-clock tests).
+#
+# Scanned by the dedicated pre-push hook:
+#   semgrep --config .semgrep-tests.yml --severity ERROR --error --quiet tests/
+#
+# Exemption protocol (the documented bounded-poll exemption): a genuinely
+# bounded poll, retry backoff, or mtime nudge suppresses with
+#   # nosemgrep: <rule-id>
+# on the flagged line, with a comment naming the bound on or above it.
+
+rules:
+  - id: babylon.determinism.no-wall-clock-sleep-in-tests
+    message: >-
+      time.sleep() in a test is the wall-clock class that red'd main
+      probabilistically under load (Program 15: wall-clock tests are
+      determinism poison). Poll a condition with a bounded deadline or use
+      event hooks instead. A genuinely bounded poll/nudge may suppress with
+      `# nosemgrep: babylon.determinism.no-wall-clock-sleep-in-tests` plus a
+      comment naming the bound.
+    severity: ERROR
+    languages: [python]
+    pattern: time.sleep(...)
+    paths:
+      include:
+        - tests
+
+  - id: babylon.determinism.no-wall-clock-assertions-in-tests
+    message: >-
+      Asserting on a live clock read (datetime.now/utcnow, time.time) couples
+      the test's verdict to host timing and load. Inject a clock, freeze
+      time, or assert on recorded values instead.
+    severity: ERROR
+    languages: [python]
+    pattern-either:
+      - pattern: assert <... datetime.now(...) ...>
+      - pattern: assert <... datetime.datetime.now(...) ...>
+      - pattern: assert <... datetime.utcnow() ...>
+      - pattern: assert <... datetime.datetime.utcnow() ...>
+      - pattern: assert <... time.time() ...>
+    paths:
+      include:
+        - tests

@@ -443,7 +443,7 @@ To add or move an industry:
 2. Remove it from its current department list (if present).
 3. Add it to the correct department list.
 4. Add a note in ``[metadata].notes`` explaining the rationale.
-5. Re-run tests: ``poetry run pytest tests/unit/economics/tensor_hierarchy/``.
+5. Re-run tests: ``uv run pytest tests/unit/economics/tensor_hierarchy/``.
 
 **How DefaultDepartmentAggregator reads it:**
 

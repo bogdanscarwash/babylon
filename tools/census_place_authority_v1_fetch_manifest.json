@@ -1,0 +1,11 @@
+{
+  "contract": "CensusPlaceAuthorityV1",
+  "version": 1,
+  "entries": [
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/PLACE/tl_2023_26_place.zip",
+      "dest": "tiger/place/tl_2023_26_place.zip",
+      "sha256": "d37f3b4d9d9a3f43a9cd3417fa1500c37a604e10030ecf566e261d7a05b3b57f"
+    }
+  ]
+}

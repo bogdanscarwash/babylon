@@ -1,0 +1,190 @@
+meta:
+  contract: PracticeIntentV2
+  schema_version: 2
+  status: accepted
+  evidence_class: Designed
+  live_activation: false
+  rust_owner: babylon-practice-contract
+
+preserves:
+  - practice_contract_v1.yaml and every V1 byte and digest vector
+  - PracticeInputAuthorityV2 bytes and ledger law
+
+domains:
+  intent: babylon.practice-intent.v2
+  terminator_hex: "00"
+
+encoding:
+  byte_order: big-endian
+  integer_encoding: unsigned-fixed-width
+  collection_count_encoding: u16
+  digest_encoding: raw-32-bytes
+  stable_target_identity_encoding: raw-32-bytes
+  input_authority_id_encoding: raw-16-byte-rfc4122-network-order
+  proposal_nonce_encoding: raw-16-bytes
+  trailing_bytes: forbidden
+
+intent_field_order:
+  - schema_version
+  - submit_after_tick
+  - resolve_tick
+  - input_authority_id
+  - actor_org_id
+  - practice_id
+  - tagged_target_identity
+  - proposal_nonce
+  - quoted_content_digest
+  - quoted_resource_contract_digest
+  - parameters
+  - evidence_digests
+
+wire_layout:
+  intent:
+    - domain_ascii
+    - terminator_u8
+    - schema_version_u16
+    - submit_after_tick_u64
+    - resolve_tick_u64
+    - input_authority_id_16
+    - actor_org_id_u64
+    - practice_id_u8
+    - target_tag_u8
+    - target_identity_digest_32
+    - proposal_nonce_16
+    - quoted_content_digest_32
+    - quoted_resource_contract_digest_32
+    - parameters_count_u16
+    - length_framed_parameters
+    - evidence_count_u16
+    - evidence_digests_lexicographic
+
+practice_ids:
+  ORGANIZE: 1
+  AGITATE: 2
+  MUTUAL_AID: 3
+  STRIKE: 4
+  BLOCKADE: 5
+  OCCUPATION: 6
+  DAMAGE: 7
+  CAPITAL_STRIKE: 8
+
+target_tags:
+  SOCIAL_CLASS: 1
+  LABOR_PROCESS: 2
+  ROUTE: 3
+  SHIPMENT_CLASS: 4
+  ACCESS_POINT: 5
+  FACILITY: 6
+  TERRITORY: 7
+  STOCK: 8
+  INVESTMENT_COMMITMENT: 9
+  CREDIT_COMMITMENT: 10
+  PROCUREMENT_COMMITMENT: 11
+  PRODUCTION_COMMITMENT: 12
+
+target_allowlists:
+  ORGANIZE:
+    - SOCIAL_CLASS
+  AGITATE:
+    - SOCIAL_CLASS
+  MUTUAL_AID:
+    - SOCIAL_CLASS
+  STRIKE:
+    - LABOR_PROCESS
+  BLOCKADE:
+    - ROUTE
+    - SHIPMENT_CLASS
+    - ACCESS_POINT
+  OCCUPATION:
+    - FACILITY
+    - TERRITORY
+    - ACCESS_POINT
+  DAMAGE:
+    - FACILITY
+    - STOCK
+  CAPITAL_STRIKE:
+    - INVESTMENT_COMMITMENT
+    - CREDIT_COMMITMENT
+    - PROCUREMENT_COMMITMENT
+    - PRODUCTION_COMMITMENT
+
+parameter_contract:
+  representation_ceiling: 16
+  value_byte_ceiling: 256
+  semantic_allowlists: empty
+  refusal: intent_parameter_unsupported
+  rationale: >-
+    V2 proposals name a target, evidence, authority, content, and resource
+    contract. Material magnitudes and participant decisions belong to their
+    versioned resource and participant resolvers, not opaque intent values.
+  strike_participation_or_withholding_parameter: forbidden
+
+limits:
+  parameters:
+    value: 16
+    classification: Designed
+    purpose: representation and decode-fuel ceiling, not actor capacity
+  parameter_value_bytes:
+    value: 256
+    classification: Designed
+    purpose: representation and decode-fuel ceiling
+  evidence_digests:
+    value: 64
+    classification: Designed
+    purpose: serialization and decode-fuel ceiling
+  intent_canonical_bytes:
+    value: 16384
+    classification: Designed
+    purpose: serialization and allocation ceiling
+
+proposal_key_field_order:
+  - resolve_tick
+  - input_authority_id
+  - actor_org_id
+  - practice_id
+  - tagged_target_identity
+  - proposal_nonce
+
+laws:
+  - resolve_tick equals checked_add(submit_after_tick, 1)
+  - input authority, actor organization, and resolve tick match one active authority row
+  - evidence digests sort lexicographically and remain unique
+  - proposal_nonce distinguishes proposals and grants no priority
+  - canonical sort order grants no material priority
+  - tagged target identity is stable and cannot contain a runtime graph allocator id
+  - STRIKE targets only LABOR_PROCESS
+  - a strike parameter cannot name participation or withholding
+  - acceptance grants no material eligibility and changes no game state
+  - V1 and V2 decoders refuse the other domain
+
+error_codes:
+  intent_domain: 1
+  intent_schema_version: 2
+  intent_enum_code: 3
+  intent_truncated: 4
+  intent_trailing_bytes: 5
+  intent_length: 6
+  intent_tick_overflow: 7
+  intent_tick_mismatch: 8
+  intent_parameter_limit: 9
+  intent_parameter_length: 10
+  intent_parameter_unsupported: 11
+  intent_evidence_limit: 12
+  intent_evidence_order: 13
+  intent_evidence_duplicate: 14
+  intent_target_mismatch: 15
+
+authority_error_composition:
+  intent_errors: PracticeIntentV2Error
+  authority_errors: PracticeAuthorityV2Error
+  lossless_wrapper: PracticeIntentAuthorityV2Error
+
+excluded_surfaces:
+  - accepted-input ledger or ResolvedPracticeBatchV2
+  - resource reservation or capacity allocation
+  - graph or auxiliary-register lookup
+  - material connection or practice eligibility
+  - worker participation or labor withholding
+  - BSL effect or graph mutation
+  - persistence, receipt, Archive, or Bevy action
+  - gameplay activation

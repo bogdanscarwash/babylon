@@ -6,10 +6,10 @@ package. The download functionality remains available standalone.
 
 Usage:
     # Download only (no database import)
-    poetry run python tools/ingest_lodes_od.py --download-only
+    uv run python tools/ingest_lodes_od.py --download-only
 
     # Single state download
-    poetry run python tools/ingest_lodes_od.py --download-only --states mi
+    uv run python tools/ingest_lodes_od.py --download-only --states mi
 """
 
 from __future__ import annotations

@@ -126,7 +126,7 @@ assert no global mutable state changed.
 ## Success Criteria *(mandatory)*
 
 - **SC-094-01**: `mise run web:check` green (tsc + eslint + prettier + Vitest).
-- **SC-094-02**: `PYTHONPATH=src poetry run pytest tests/unit/web/ -q` green, including
+- **SC-094-02**: `PYTHONPATH=src uv run pytest tests/unit/web/ -q` green, including
   narrator-determinism test, Article III structural test, euphemism-sync tests, and
   provider-swap test.
 - **SC-094-03**: Narrator-determinism test passes: same events → byte-identical output.

@@ -1,0 +1,137 @@
+id: ADR179
+title: "Topology spine — Director rulings on ADJACENCY, hash naming, graph storage, and topology persistence"
+status: accepted
+date: 2026-07-30
+supersedes: []
+superseded_by: []
+related:
+  - ADR172  # Amendment AE — Rust is the engine language
+  - ADR176  # ruling 31, checkpoint-only hydration (BINDING)
+  - ADR178  # C4 — all lanes run
+  - ADR173  # no imposed functional forms
+
+context: >
+  reports/social-topology-spine-dossier.md §8 reserved five questions to the
+  Director. Four were put to her on 2026-07-30 while Lane B (the tick content
+  hash, PR #416) was in flight; Lane D was fully blocked on the first. Her
+  answers are recorded verbatim in each ruling's `director_words`. Two answers
+  went beyond the options offered — T2 delegated the choice with a constraint,
+  and T4 named a mechanism (a dedicated Postgres object, ideally AGE-queryable)
+  that none of the offered options contained. Both are recorded as given, not
+  normalized into the menu they were asked from.
+
+rulings:
+  - id: T1
+    subject: "ADJACENCY producer — derive now, FULLY LIVE"
+    director_words: "Derive now, fully live"
+    decision: >
+      Build the ADJACENCY producer from the Phase 0-D pinned TIGER county
+      adjacency estate AND wire its readers in the same motion. Spatial
+      contiguity becomes live physics. The agent had recommended a shadow-first
+      landing to avoid baseline movement; the Director chose the fuller option,
+      so the baseline drift is EXPECTED and declared, not a surprise.
+    consequences:
+      - "Lane D unblocks immediately; every spatial algorithm gains a real substrate."
+      - >
+        Moves baselines — one declared §6.5 ceremony, drift table attributed to
+        spatial contiguity entering the physics. This is a PHYSICS change, so
+        the ceremony must say so plainly rather than describing it as a data
+        addition.
+      - >
+        The dossier recorded ADJACENCY as having readers and no writer; those
+        readers stop being dead code, which means their behavior becomes
+        load-bearing for the first time and needs its own tests, not just the
+        producer's.
+    open: >
+      Which readers are in scope for "fully live" is an engineering call left
+      to the implementing PR, but every reader activated must be named in the
+      ceremony body.
+
+  - id: T2
+    subject: "The two hashes — rename the old one; no accumulated debt"
+    director_words: "whatever you recommend just keep it consistent, dont accumulate technical debt, do it correctly"
+    decision: >
+      Delegated to the agent with a binding constraint (consistency, no debt,
+      correctness). The agent's recommendation therefore governs and is hereby
+      the ruling: KEEP BOTH hashes with honest names —
+      `tick_commit.determinism_hash` is renamed `replay_identity_hash`, the new
+      per-tick graph digest lands as `content_hash`, and Constitution III.7's
+      wording is repointed at the content hash. III.7's own text ("a
+      deterministic SHA-256 hash of its inputs: World state + player actions +
+      random seed") already describes the content hash and never described the
+      session-identity formula.
+    rationale: >
+      The "keep both, keep names" option was rejected under the no-debt
+      constraint: a field named `determinism_hash` that cannot detect a
+      determinism failure is precisely the mislabeling that kept this gap
+      invisible. "Upgrade in place" was rejected because it destroys the
+      replay-identity role — two sessions with identical state would collide.
+    consequences:
+      - "A migration renaming the column, plus a rename sweep across both tick loops."
+      - "Constitution III.7 text change — a constitutional edit, so it rides its own PR."
+      - "The Python-era `babylon_meta.campaign.content_digest` NULL note is superseded."
+
+  - id: T3
+    subject: "babylon-graph storage — consume hypergraph-rs, with the gap acknowledged"
+    director_words: "i choose 2 but be aware hypergraph-rs may not be copmletely one-for-one swappable for xgi. i still may need to develop that repository"
+    decision: >
+      babylon-graph's concrete storage CONSUMES hypergraph-rs rather than
+      reimplementing native-hyperedge storage in-tree. The Director attached an
+      explicit caveat: hypergraph-rs is not necessarily a one-for-one
+      replacement for xgi, and she may still need to develop that repository.
+      Adopting it is therefore a decision to INVEST in the sibling repo, not an
+      assumption that it is already sufficient.
+    consequences:
+      - >
+        Amendment AE's charter for hypergraph-rs expands beyond client-side
+        raster. This ADR is the disclosure; if the expansion needs constitutional
+        text, that is an amendment, not an improvisation.
+      - >
+        The `GraphSubstrate` trait (PR #415, merged) is now load-bearing as an
+        INSULATION layer, not just a compile target: wherever hypergraph-rs
+        falls short of xgi's model, the shortfall must be absorbed behind the
+        trait or fixed upstream — never leaked into engine code.
+      - >
+        Phase 2 must open with a written xgi-vs-hypergraph-rs capability
+        delta before any storage code lands, so "may not be one-for-one" becomes
+        an enumerated list rather than a caveat.
+    open: "The capability delta is unwritten. It gates Phase 2 storage work."
+
+  - id: T4
+    subject: "Topology persistence — a dedicated Postgres object, ideally AGE-queryable"
+    director_words: "this should be stored in postgres as a dedicated object and ideally even queryable with Apache AGE in Postgres"
+    decision: >
+      The social topology is persisted as a DEDICATED Postgres object rather
+      than being reconstructed from per-entity tables, and the aspiration is
+      that it be queryable as a graph via the Apache AGE extension. This
+      supersedes all three options the agent offered (checkpoint-only,
+      every-tick, interactive-only) — none of them proposed a graph-native
+      store.
+    binding_vs_aspirational: >
+      BINDING: a dedicated topology object in Postgres. ASPIRATIONAL ("ideally"):
+      AGE queryability. If AGE proves infeasible, the dedicated object still
+      ships; the fallback is not "reconstruct from entity tables."
+    feasibility_verified_2026_07_30:
+      - "Apache AGE 1.6.0 supports PostgreSQL 17, which is our pinned major."
+      - >
+        The runtime image is already custom-built (docker/postgres/Dockerfile)
+        and already installs three extensions (postgis, vector, uuid-ossp), so
+        adding one more is a known-shaped change, not new ground.
+      - >
+        NOT yet verified: AGE + PostGIS coexistence in one image, AGE's
+        interaction with the digest-pinned CI container, and whether AGE has an
+        upgrade script path. These are the real risks and must be settled before
+        the extension is added to the schema bootstrap.
+    consequences:
+      - "Cadence (every tick vs checkpoint-only) is now an open sub-question — the ruling named the SHAPE, not the frequency. ADR176 ruling 31's checkpoint-only hydration is the presumptive default until ruled otherwise."
+      - "Closes the dossier's R2 'two runtimes lying past each other' finding by construction: there is one topology object, not two divergent persistence paths."
+
+agent_decided_not_reserved:
+  note: >
+    Recorded here for traceability because they change a cross-implementation
+    byte contract, but they are engineering calls made under standing autonomy,
+    not Director rulings.
+  items:
+    - "The P27 tick hash's worked example contradicted its own Booleans rule (quoted \"true\" vs bare true). The normative prose governs; the example was corrected from 248 bytes/ea6f1d10… to 246 bytes/b256dbbc…. Nothing depended on the old value."
+    - "Three encoding rules were missing from the spec and were added after hashing live graphs: `null` for unset optionals, canonical member ordering for sets, and loud failure for non-string enum values and non-string record keys."
+    - "`legal_authorities` is a frozenset ON A NODE — a second live instance of the shape Amendment D sub-ruling D-4 declined to grandfather for ECONOMIC_SECTOR. Recorded as evidence, not acted on."

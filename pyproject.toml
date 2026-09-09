@@ -1,183 +1,158 @@
 [project]
 name = "babylon"
-version = "0.3.0"
-description = "A Marxist text-based role playing game powered by Claude. It aims to educate and entertain by turning the immortal science of dialectical materialism into a game engine."
+version = "0.4.0"
+description = "Reference data preparation and operator tools for the Babylon Rust game."
 readme = "README.md"
 license = "AGPL-3.0-or-later"
-authors = [
-    { name = "Persephone Raskova", email = "percy@babylonrpg.com" },
-]
-keywords = [
-    "ai",
-    "llm",
-    "marxism",
-    "rpg",
-    "dystopian",
-]
+authors = [{ name = "Persephone Raskova", email = "percy@babylonrpg.com" }]
+keywords = ["ai", "llm", "marxism", "rpg", "dystopian"]
 requires-python = ">=3.12,<4.0"
-# Poetry 2.x hybrid mode (PEP 621 metadata + Poetry dependency tables):
-# classifiers are auto-derived; dependencies stay under [tool.poetry.*].
-dynamic = ["classifiers", "dependencies"]
-
-[tool.poetry]
-packages = [
-    { include = "babylon", from = "src" },
-    # babylon_data: thin Python wrapper around the data trove at
-    # /media/user/data/babylon-data/. src/babylon_data is a symlink to that
-    # path (committed in git). Restored from commit 4ce7c96a^ in the
-    # post-Spec-059 skip-remediation pass. See ADR-037.
-    { include = "babylon_data", from = "src" },
+# Static classifiers, transcribed byte-for-byte from the last poetry-core
+# wheel's METADATA before the hatchling cutover (2026-07-22; poetry-core
+# emits no license classifier under PEP 639 — the [project] license
+# expression carries that). Bump the list when requires-python moves.
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
 ]
+
+# PyQt6, PyQt6-WebEngine, pydeck removed in Spec 059 follow-up
+# (commit chore(ui): delete PyQt6 dashboard) — desktop dashboard at
+# src/babylon/ui/dashboard/ and the legacy Django/React client were deleted;
+# the live client is the Rust Bevy ``babylon-client`` crate.
+dependencies = [
+  "pydantic>=2.13.5",
+  "numpy>=2.5.2",
+  "sqlalchemy>=2.0.52",
+  "pandas>=3.0.5",
+  "jsonschema>=4.25.1,<5.0.0",
+  "referencing>=0.37.0,<0.38.0",
+  "openpyxl>=3.1.5,<4.0.0",
+  "openai>=3.8.0,<4.0.0",
+  "pydantic-ai-slim[openai]>=2.40.0,<3.0.0",
+  "typer>=0.27.2",
+  "rich>=13.9.4",
+  "h3>=4.2.0,<5.0.0",
+  "geopandas>=1.0.0",
+  "pyproj>=3.6.0",
+  "shapely>=2.0.0",
+  "pyyaml>=6.0.2",
+  "python-dotenv>=1.2.3",
+  "scipy>=1.18.1",
+  "psycopg>=3.3.5,<4.0.0",
+  "pyarrow==25.0.0",
+  "tqdm>=4.70.0,<5.0.0",
+  "markdown-it-py>=4.2.0,<5.0.0",
+  "pillow>=12.3.0",
+]
+
+[project.optional-dependencies]
+# Operator-only automation and prose tooling. The retired Django server stack
+# was removed by PER-258; this extra preserves the unrelated Ansible/RST/Boto
+# tools used by repository automation.
+ops = [
+  "ansible-dev-tools>=26.8.0,<27.0.0",
+  "rstcheck>=6.3.0,<7.0.0",
+  "doc8>=2.0.0,<3.0.0",
+  "boto3>=1.43.88,<2.0.0",
+]
+
+[dependency-groups]
+dev = [
+  "pytest>=9.0.3,<10.0.0",
+  "pytest-xdist>=3.8.0,<4.0.0",
+  "pytest-mock>=3.14.0,<4.0.0",
+  "pytest-asyncio>=1.0.0,<2.0.0",
+  "pytest-cov>=7.0.0,<8.0.0",
+  "mypy>=1.13.0,<3.0.0",
+  "ruff>=0.16.6,<0.17.0",
+  "pre-commit>=4.6.2,<5.0.0",
+  "commitizen>=4.18.0,<5.0.0",
+  "types-jsonschema>=4.25.1.20251009,<5.0.0",
+  "types-pyyaml>=6.0.12.20260815,<7.0.0",
+  "midiutil>=1.2.1,<2.0.0",
+  "markdownify>=1.2.2,<2.0.0",
+  "yamllint>=1.37.1,<2.0.0",
+  "mido>=1.3.3,<2.0.0",
+  "linkify-it-py>=2.1.1,<3.0.0",
+  "pip-audit>=2.7.3,<3.0.0",
+  "pytest-randomly>=4.0.1,<5.0.0",
+  "deptry>=0.25.1,<0.26.0",
+  "types-docutils>=0.23.0.20260827,<0.24.0",
+  "types-tqdm>=4.70.0.20260827,<5.0.0",
+  "hypothesis>=6.165.10,<7.0.0",
+  "pytest-json-report>=1.5.0,<2.0.0",
+  "pytest-html>=4.1.0,<5.0.0",
+  "pytest-timeout>=2.4.0,<3.0.0",
+]
+docs = [
+  "sphinx>=9,<10",
+  "sphinx-rtd-theme>=3.0.2,<4.0.0",
+  "sphinx-autodoc-typehints<3.14",
+  "myst-parser>=5.0.0,<6.0.0",
+  "sphinx-autobuild>=2025.8,<2026.0.0",
+  "sphinxcontrib-mermaid>=2.1.1,<3.0.0",
+]
+[tool.hatch.build.targets.wheel]
+# babylon lives under src/ (src-layout): map src/babylon -> babylon in the
+# wheel, explicitly — no backend discovery magic.
+# babylon_data (thin wrapper around the data trove at
+# /media/user/data/babylon-data/; src/babylon_data is a committed symlink,
+# ADR-037) is deliberately NOT packaged: the symlink is dead in every build
+# sandbox (CI or `uv build`) and ships in no wheel either way
+# (ADR095's "default install slims toward the player closure"). Unlike
+# poetry-core — which hard-failed on a declared-but-absent include and
+# forced the ADR094/ADR095 workaround note that used to live here —
+# hatchling never touches it because it is not under src/babylon.
+packages = ["src/babylon"]
+
+[tool.hatch.build.targets.sdist]
+# Keep source distributions independent of the external data drive:
+# never ship the dead data symlink.
+exclude = ["/src/babylon_data"]
 
 [project.urls]
 Homepage = "https://babylonrpg.com"
-Documentation = "https://github.com/bogdanscarwash/babylon#readme"
-Issues = "https://github.com/bogdanscarwash/babylon/issues"
-Source = "https://github.com/bogdanscarwash/babylon"
+Documentation = "https://github.com/percy-raskova/babylon#readme"
+Issues = "https://github.com/percy-raskova/babylon/issues"
+Source = "https://github.com/percy-raskova/babylon"
 
-[tool.poetry.dependencies]
-pydantic = ">=2.10.3"
-numpy = ">=1.26.4"
-rustworkx = "^0.18.0"
-sqlalchemy = ">=2.0.36"
-pandas = ">=2.2.3"
-jsonschema = "^4.25.1"
-referencing = "^0.37.0"
-openpyxl = "^3.1.5"
-openai = "^2.9.0"
-tokenizers = ">=0.19.1"
-aiohttp = "^3.13.3"
-backoff = ">=2.2.1"
-ratelimit = ">=2.2.1"
-typer = ">=0.15.1"
-rich = ">=13.9.4"
-coloredlogs = ">=15.0.1"
-# PyQt6, PyQt6-WebEngine, pydeck removed in Spec 059 follow-up
-# (commit chore(ui): delete PyQt6 dashboard) — desktop dashboard at
-# src/babylon/ui/dashboard/ deleted; live UI stack is Django + React
-# (mise run web:dev) at web/ + frontend/.
-h3 = "^4.2"
-geopandas = ">=1.0.0"
-pyproj = ">=3.6.0"
-shapely = ">=2.0.0"
-pyyaml = ">=6.0.2"
-python-dotenv = ">=1.0.1"
-requests = ">=2.32.3"
-certifi = ">=2025.11.12"
-filelock = ">=3.20.3"
-scipy = ">=1.11.0"
-xgi = "^0.10"
-rstcheck = "^6.2.5"
-doc8 = "^2.0.0"
-polars = "^1.38.1"
-psycopg = "^3.3.3"
-psycopg-pool = "^3.3.0"
-pyarrow = "^25.0.0"
-boto3 = "^1.42.59"
-duckdb = "^1.4.4"
-pgvector = "^0.5"
-ansible-dev-tools = "^26.2.0"
-uuid = "^1.30"
-django = ">=5.0,<6.0"
-djangorestframework = ">=3.15"
-django-cors-headers = ">=4.0"
-gunicorn = ">=21.0"
-sentence-transformers = "^5.6"
-tqdm = "^4.66"
-
-[tool.poetry.group.dev.dependencies]
-pytest = "^9.0.3"
-pytest-mock = "^3.14.0"
-pytest-asyncio = "^1.0.0"
-pytest-cov = "^7.0.0"
-mypy = "^1.13.0"
-ruff = "^0.15.12"
-pre-commit = "^4.0.0"
-commitizen = "^4.1.0"
-types-jsonschema = "^4.25.1.20251009"
-types-pyyaml = "^6.0.12.20250915"
-types-ratelimit = "^2.2.0.20250501"
-midiutil = "^1.2.1"
-markdownify = "^1.2.2"
-yamllint = "^1.37.1"
-mido = "^1.3.3"
-linkify-it-py = "^2.0.3"
-pip-audit = "^2.7.3"
-pytest-playwright = "^0.7.2"
-# pytest-qt removed with the PyQt6 dashboard cleanup
-radon = "^6.0.1"
-xenon = "^0.9.3"
-pytest-randomly = "^4.0.1"
-mutmut = "^3.4.0"
-deptry = "^0.25.1"
-salib = "^1.5.2"
-optuna = "^4.9"
-optuna-dashboard = "^0.20"
-types-docutils = "^0.22.3.20251115"
-types-tqdm = "^4.67.0.20250809"
-vulture = "^2.14"
-hypothesis = "^6.149.0"
-pytest-django = "^4.8"
-django-stubs = {version = ">=5.0", extras = ["compatible-mypy"]}
-djangorestframework-stubs = {version = ">=3.15", extras = ["compatible-mypy"]}
-testcontainers = {extras = ["postgres"], version = "^4.14.2"}
-pytest-json-report = "^1.5.0"
-pytest-html = "^4.1.0"
-pytest-timeout = "^2.4.0"
-import-linter = "^2.13"
-
-[tool.poetry.group.docs.dependencies]
-sphinx = ">=9,<10"
-sphinx-rtd-theme = "^3.0.2"
-sphinx-autodoc-typehints = "<3.13"
-myst-parser = "^5.0.0"
-sphinx-autobuild = "^2025.8"
-sphinxcontrib-mermaid = "^2.0"
+[project.scripts]
+babylon = "babylon.cli:app"
 
 [tool.pytest.ini_options]
-DJANGO_SETTINGS_MODULE = "babylon_web.settings.testing"
-pythonpath = [
-    "src",
-    "web",
-]
-testpaths = [
-    "tests",
-]
-norecursedirs = [
-    "mutants",
-    ".mutmut-cache",
-    "html",
-    ".hypothesis",
-]
+pythonpath = ["src"]
+testpaths = ["tests"]
+norecursedirs = ["mutants", ".mutmut-cache", "html", ".hypothesis"]
 asyncio_mode = "strict"
 asyncio_default_fixture_loop_scope = "function"
-doctest_optionflags = [
-    "NORMALIZE_WHITESPACE",
-    "ELLIPSIS",
-]
+doctest_optionflags = ["NORMALIZE_WHITESPACE", "ELLIPSIS"]
 markers = [
-    "unit: Fast unit tests for isolated components (no I/O, no AI)",
-    "math: Deterministic mathematical formulas (fast, pure functions)",
-    "ledger: Economic/Political state tests (fast, deterministic)",
-    "topology: Graph/Network operations (fast, deterministic)",
-    "integration: Database/Postgres tests (medium, I/O bound)",
-    "ai: AI/RAG evaluation tests (slow, non-deterministic)",
-    "red_phase: TDD RED phase tests (intentionally failing until GREEN phase)",
-    "slow: Long-running scenario tests (2000+ ticks, multi-minute runtime)",
-    "scenario: Full simulation scenario tests (multi-tick arcs, state verification)",
-    "theory_rent: Imperial rent and unequal exchange mechanics",
-    "theory_rift: Metabolic rift and ecological limits mechanics",
-    "theory_solidarity: Solidarity transmission and consciousness mechanics",
-    "property: Property-based tests using Hypothesis",
-    "theory: Marxian theory validation tests (Capital Volume 2 reproduction schema)",
-    "empirical: Empirical validation tests requiring real QCEW data (deselect with '-m \"not empirical\"')",
-    "benchmark: Performance and memory benchmarks for tensor operations",
-    "requires_postgres: Tests requiring a running PostgreSQL instance (skipped if unavailable)",
-    "postgres: Tests using testcontainers ephemeral PostgreSQL (requires Docker)",
-    "invariant: Marx value-form & software metamorphic invariant tests (spec-060)",
-    "cross_scale: marks tests for spec 062 cross-scale integration",
-    "contract: Contract tests pinning cross-boundary interfaces (tests/contract/)",
-    "requires_reference_db: Tests needing the reference SQLite DB (data/sqlite/marxist-data-3NF.sqlite) — excluded on the dev CI tier; main/nightly include them via the CI subset artifact (item 40)",
+  "unit: Fast unit tests for isolated components (no I/O, no AI)",
+  "math: Deterministic mathematical formulas (fast, pure functions)",
+  "ledger: Economic/Political state tests (fast, deterministic)",
+  "topology: Graph/Network operations (fast, deterministic)",
+  "integration: Database/Postgres tests (medium, I/O bound)",
+  "ai: AI/RAG evaluation tests (slow, non-deterministic)",
+  "red_phase: TDD RED phase tests (intentionally failing until GREEN phase)",
+  "slow: Long-running scenario tests (2000+ ticks, multi-minute runtime)",
+  "scenario: Full simulation scenario tests (multi-tick arcs, state verification)",
+  "theory_rent: Imperial rent and unequal exchange mechanics",
+  "theory_rift: Metabolic rift and ecological limits mechanics",
+  "theory_solidarity: Solidarity transmission and consciousness mechanics",
+  "property: Property-based tests using Hypothesis",
+  "theory: Marxian theory validation tests (Capital Volume 2 reproduction schema)",
+  "empirical: Empirical validation tests requiring real QCEW data (deselect with '-m \"not empirical\"')",
+  "benchmark: Performance and memory benchmarks for tensor operations",
+  "requires_postgres: Tests requiring a running PostgreSQL instance (skipped if unavailable)",
+  "postgres: Tests using testcontainers ephemeral PostgreSQL (requires Docker)",
+  "invariant: Marx value-form & software metamorphic invariant tests (spec-060)",
+  "cross_scale: marks tests for spec 062 cross-scale integration",
+  "contract: Contract tests pinning cross-boundary interfaces (tests/contract/)",
+  "requires_reference_db: Tests needing the reference SQLite DB (data/sqlite/marxist-data-3NF.sqlite) — excluded on the dev CI tier; main/nightly include them via the CI subset artifact (item 40)",
+  "requires_ollama: needs a live local Ollama daemon + chat model (multi-minute, probabilistic) — excluded from every fast gate; runs via `mise run test:ai`. The bare `ai` marker stays taxonomy-only (2026-07-16 re-tier: mock-based ai-suite tests DO run in fast gates)",
 ]
 # Enforce marker/config strictness via ini options: the --strict-markers /
 # --strict-config addopts entries were a verified NO-OP under pytest 9.0.3
@@ -185,23 +160,33 @@ markers = [
 # the working form — verified: unknown marker now fails collection (exit 2).
 strict_markers = true
 strict_config = true
+# strict_parametrization_ids (pytest 9): duplicate/ambiguous parametrize IDs
+# fail collection instead of silently renaming (audit Phase D, 2026-07-16).
+# strict_xfail deliberately NOT enabled yet: ~10 unmarked xfails (refdb leg)
+# need an XPASS census first — flipping it blind converts any XPASS to a red.
+strict_parametrization_ids = true
+# Loud Failure (Constitution III.11) for first-party deprecations: babylon
+# code calling deprecated babylon APIs is a bug, not a warning. Third-party
+# deprecations stay warnings (their upgrade cadence is not ours).
+filterwarnings = ["error::DeprecationWarning:babylon.*"]
 addopts = [
-    "-v",                      # Verbose output (already have)
-    "--tb=short",              # Short traceback format (already have)
-    "-ra",                     # Show summary of all test outcomes (already have)
+  "-v",         # Verbose output (already have)
+  "--tb=short", # Short traceback format (already have)
+  "-ra",        # Show summary of all test outcomes (already have)
 
-    # Performance
-    "--durations=10",          # Show 10 slowest tests
+  # Performance
+  "--durations=10", # Show 10 slowest tests
 
-    # Coverage (when running with --cov)
-    "--cov-report=term-missing",  # Show lines missing coverage
-    "--cov-report=html",          # Generate HTML coverage report
+  # Coverage (when running with --cov)
+  "--cov-report=term-missing", # Show lines missing coverage
+  "--cov-report=html",         # Generate HTML coverage report
 
-    # Output control
-    "--color=yes",             # Force colored output
+  # Output control: no --color=yes — pytest's auto default already colors
+  # TTYs and honors NO_COLOR/agent-ergonomics envs; forcing yes overrode it
+  # (audit Phase D, 2026-07-16).
 
-    # Debugging aids
-    "-l",                      # Show locals (shorter alias)
+  # Debugging aids
+  "-l", # Show locals (shorter alias)
 
 ]
 
@@ -209,93 +194,63 @@ addopts = [
 # tasks pass --junit-xml=reports/test-results/<task>/junit.xml).
 # Verbose, machine-readable defaults for AI-agent consumption.
 junit_suite_name = "babylon"
-junit_family = "xunit2"            # Modern schema with richer per-testcase metadata
-junit_logging = "all"              # Embed stdout, stderr, AND log records into the XML
-junit_log_passing_tests = true     # Capture logs even for passing tests
-junit_duration_report = "call"     # Test-call duration only (excludes setup/teardown noise)
+junit_family = "xunit2"        # Modern schema with richer per-testcase metadata
+junit_logging = "all"          # Embed stdout, stderr, AND log records into the XML
+junit_log_passing_tests = true # Capture logs even for passing tests
+junit_duration_report = "call" # Test-call duration only (excludes setup/teardown noise)
 
 [tool.ruff]
 line-length = 100
 target-version = "py312"
-src = [
-    "src",
-    "web",
-]
+src = ["src"]
 exclude = [
-    "assets/music/",
-    "specs/",
-    "src/frontend/",
+  ".codex/host/",              # immutable shared Rust host-policy bytes have their own executable law
+  "tools/audio/music/legacy/",
+  "specs/",
+  "**/*.md",                   # ruff 0.16 formats Python blocks in Markdown by default; docs keep their own style
 ]
 
 [tool.ruff.lint]
-select = [
-    "E",
-    "W",
-    "F",
-    "I",
-    "B",
-    "C4",
-    "C90",
-    "UP",
-    "ARG",
-    "SIM",
-    "S",
-]
-ignore = [
-    "E501",
-]
+select = ["E", "W", "F", "I", "B", "C4", "C90", "UP", "ARG", "SIM", "S"]
+ignore = ["E501"]
 
 [tool.ruff.lint.mccabe]
 max-complexity = 15
 
 [tool.ruff.lint.isort]
-known-first-party = [
-    "babylon",
-]
+known-first-party = ["babylon"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = [
-    "ARG001",
-    "ARG002",
-    "S101",  # asserts are pytest's language
-    "S102",  # exec in import-surface tests is the point of the test
-    "S103",  # chmod on fixtures (executable-bit setup)
-    "S105",  # fixture passwords
-    "S106",  # fixture passwords
-    "S108",  # /tmp literals as nonexistent-path/scratch fixtures
-    "S112",  # try/except/continue in property-test harnesses
-    "S301",  # pickle round-trip tests exercise serialization deliberately
-    "S311",  # seeded randomness in strategies
-    "S603",  # subprocess smoke tests invoke our own CLIs with literal args
-    "S607",  # subprocess smoke tests invoke our own CLIs with literal args
-    "S608",  # SQL literals in test fixtures
-]
-"web/**" = [
-    "ARG001",
-]
-# The DEBUG-mode fake bridge: random fake data + best-effort side writes are
-# its design, not a defect (game/apps.py falls back to it without RUN_MAIN).
-"web/game/stub_bridge.py" = [
-    "S110",
-    "S311",
+  "ARG001",
+  "ARG002",
+  "S101",   # asserts are pytest's language
+  "S102",   # exec in import-surface tests is the point of the test
+  "S103",   # chmod on fixtures (executable-bit setup)
+  "S105",   # fixture passwords
+  "S106",   # fixture passwords
+  "S108",   # /tmp literals as nonexistent-path/scratch fixtures
+  "S112",   # try/except/continue in property-test harnesses
+  "S301",   # pickle round-trip tests exercise serialization deliberately
+  "S311",   # seeded randomness in strategies
+  "S603",   # subprocess smoke tests invoke our own CLIs with literal args
+  "S607",   # subprocess smoke tests invoke our own CLIs with literal args
+  "S608",   # SQL literals in test fixtures
 ]
 "tools/**" = [
-    "C901",
-    "SIM",
-    "S101",  # asserts in dev tooling (incl. the qa:regression harness)
-    "S108",  # /tmp scratch in bootstrap tooling
-    "S112",  # audit tooling skips unparseable entries by design
-    "S311",  # seeded sim RNG in benches/monte-carlo — same III.7 rationale as src
-    "S603",  # subprocess for dev tooling
-    "S607",  # subprocess for dev tooling
-    "S608",  # SQL literals in local loaders (operator-run, no external input)
+  "C901",
+  "SIM",
+  "S101", # asserts in dev tooling (incl. the qa:regression harness)
+  "S108", # /tmp scratch in bootstrap tooling
+  "S112", # audit tooling skips unparseable entries by design
+  "S311", # seeded sim RNG in benches/monte-carlo — same III.7 rationale as src
+  "S603", # subprocess for dev tooling
+  "S607", # subprocess for dev tooling
+  "S608", # SQL literals in local loaders (operator-run, no external input)
 ]
-"scripts/**" = [
-    "C901",
-    "SIM",
-]
+"scripts/**" = ["C901", "SIM"]
 "src/**" = [
-    "S311",  # seeded determinism IS the product (Constitution III.7) — sim RNG is never a security token
+  "S311", # seeded determinism IS the product (Constitution III.7) — sim RNG is never a security token
 ]
 
 [tool.ruff.format]
@@ -305,7 +260,7 @@ indent-style = "space"
 [tool.mypy]
 python_version = "3.12"
 strict = true
-mypy_path = "src:web"
+mypy_path = "src"
 explicit_package_bases = true
 warn_return_any = true
 warn_unused_configs = true
@@ -317,33 +272,18 @@ warn_redundant_casts = true
 warn_unused_ignores = true
 show_error_codes = true
 exclude = [
-    "tests/",
-    "build/",
-    "dist/",
-    "assets/music/",
-    "specs/",
-    "src/frontend/",
-    "src/babylon_data/",
+  "tests/",
+  "build/",
+  "dist/",
+  "tools/audio/music/legacy/",
+  "specs/",
+  "src/babylon_data/",
 ]
-plugins = [
-    "pydantic.mypy",
-    "mypy_django_plugin.main",
-]
+plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
-module = [
-    "alembic.*",
-    "h3",
-    "h3.*",
-    "tomli",
-    "pgvector.*",
-    "gunicorn.*",
-    "corsheaders.*",
-]
+module = ["h3", "h3.*", "tomli"]
 ignore_missing_imports = true
-
-[tool.django-stubs]
-django_settings_module = "babylon_web.settings.development"
 
 [tool.pydantic-mypy]
 init_forbid_extra = true
@@ -352,123 +292,36 @@ warn_required_dynamic_aliases = true
 
 [tool.commitizen]
 name = "cz_conventional_commits"
-version = "0.3.0"
+version_provider = "uv"
+version_scheme = "semver"
+major_version_zero = true
 tag_format = "v$version"
-version_files = [
-    "pyproject.toml:version",
-]
 update_changelog_on_bump = true
 
-[tool.mutmut]
-paths_to_mutate = [
-    "src/babylon/formulas/fundamental_theorem.py",
-    "src/babylon/formulas/survival_calculus.py",
-    "src/babylon/formulas/unequal_exchange.py",
-    "src/babylon/formulas/dynamic_balance.py",
-    "src/babylon/formulas/solidarity.py",
-    "src/babylon/formulas/metabolic_rift.py",
-    "src/babylon/formulas/vitality.py",
-    "src/babylon/formulas/trpf.py",
-    "src/babylon/formulas/class_dynamics.py",
-    "src/babylon/engine/systems/economic.py",
-    "src/babylon/engine/systems/struggle.py",
-    "src/babylon/engine/systems/territory.py",
-    "src/babylon/engine/systems/solidarity.py",
-    "src/babylon/engine/systems/ideology.py",
-    "src/babylon/engine/systems/survival.py",
-    "src/babylon/engine/systems/vitality.py",
-    "src/babylon/engine/systems/production.py",
-    "src/babylon/engine/systems/control_ratio.py",
-    "src/babylon/engine/systems/decomposition.py",
-    "src/babylon/engine/systems/metabolism.py",
-    "src/babylon/engine/systems/contradiction.py",
-    "src/babylon/engine/systems/event_template.py",
-    "src/babylon/domain/economics/tensor.py",
-    "src/babylon/domain/economics/capital_stock.py",
-    "src/babylon/domain/economics/depreciation.py",
-    "src/babylon/domain/economics/derived_metrics.py",
-    "src/babylon/domain/economics/shadow_labor.py",
-    "src/babylon/domain/economics/department_mapper.py",
-    "src/babylon/domain/economics/snlt.py",
-    "src/babylon/domain/economics/tensor_registry.py",
-    "src/babylon/domain/economics/hydrator.py",
-    "src/babylon/domain/economics/melt/melt_calculator.py",
-    "src/babylon/domain/economics/melt/class_position.py",
-    "src/babylon/domain/economics/melt/basket_visibility.py",
-    "src/babylon/domain/economics/melt/wealth_proxy.py",
-    "src/babylon/domain/economics/throughput/calculator.py",
-    "src/babylon/domain/economics/throughput/supply_chain.py",
-    "src/babylon/domain/economics/throughput/naics_depth.py",
-    "src/babylon/domain/economics/throughput/analysis.py",
-    "src/babylon/domain/economics/gamma/gamma_iii.py",
-    "src/babylon/domain/economics/gamma/gamma_basket.py",
-    "src/babylon/domain/economics/gamma/gamma_import.py",
-    "src/babylon/domain/economics/gamma/shadow_subsidy.py",
-    "src/babylon/domain/economics/gamma/validation.py",
-    "src/babylon/domain/economics/dynamics/accumulation.py",
-    "src/babylon/domain/economics/dynamics/dispossession.py",
-    "src/babylon/domain/economics/dynamics/savings_schedule.py",
-    "src/babylon/domain/economics/dynamics/crisis.py",
-    "src/babylon/domain/economics/dynamics/validation.py",
-    "src/babylon/domain/economics/dynamics/transition_engine.py",
-    "src/babylon/domain/economics/crisis/bifurcation.py",
-    "src/babylon/domain/economics/crisis/wage_compression.py",
-    "src/babylon/domain/economics/tick/system/__init__.py",
-    "src/babylon/domain/economics/tick/crisis_detector.py",
-    "src/babylon/domain/economics/tick/derived_rates.py",
-    "src/babylon/domain/economics/tick/precarity.py",
-    "src/babylon/domain/economics/tick/smoothing.py",
-    "src/babylon/domain/economics/tick/graph_bridge.py",
-    "src/babylon/domain/economics/tick/initializer.py",
-    "src/babylon/domain/economics/temporal/transitions.py",
-    "src/babylon/domain/economics/temporal/anomaly.py",
-    "src/babylon/domain/economics/temporal/smoothing.py",
-    "src/babylon/domain/economics/temporal/signals.py",
-    "src/babylon/domain/economics/calibration/thresholds.py",
-]
-tests_dir = [
-    "tests/unit/formulas/",
-    "tests/unit/engine/",
-    "tests/unit/economics/",
-]
-also_copy = [
-    "src/",
-    "tools/",
-]
-debug = false
+[tool.babylon.versioning]
+# Native cutover baseline; older canonical tags are on disconnected history.
+# Once v0.4.0 is reachable, release tags supply the version and commit counter.
+bootstrap_commit = "947699e40fe75a65e603e3302d425643f416e917"
+bootstrap_version = "0.3.0"
 
 [tool.rstcheck]
 report_level = "WARNING"
-ignore_roles = [
-    "hope",
-    "hopedim",
-]
+ignore_roles = ["hope", "hopedim"]
 ignore_directives = [
-    "mermaid",
-    "todo",
-    "automodule",
-    "autoclass",
-    "autofunction",
-    "autosummary",
-    "toctree",
-    "only",
+  "mermaid",
+  "todo",
+  "automodule",
+  "autoclass",
+  "autofunction",
+  "autosummary",
+  "toctree",
+  "only",
 ]
-ignore_substitutions = [
-    "release",
-    "version",
-]
+ignore_substitutions = ["release", "version"]
 
 [tool.hypothesis]
 deadline = 500
 max_examples = 100
-
-[tool.babylon.cross_scale]
-# Spec 062 cross-scale integration tunables (FR-029 / FR-029a / FR-046 / FR-004a).
-# These mirror the EconomyDefines fields and document the default values for
-# YAML/CLI overrides. See specs/062-cross-scale-integration/data-model.md §2.5.
-alpha_annual = 0.01            # FR-029: annual capital-equalization rate
-epsilon_conservation = 1e-10   # FR-046: conservation-residual tolerance
-scenario_length_years = 15     # FR-004a: immutable scenario length
 
 [tool.babylon.logging]
 default_level = "INFO"
@@ -476,72 +329,17 @@ console_level = "INFO"
 file_level = "DEBUG"
 
 [tool.babylon.logging.modules]
-"babylon.engine" = "INFO"
-"babylon.engine.systems" = "INFO"
-"babylon.engine.simulation" = "INFO"
-"babylon.rag" = "INFO"
-"babylon.rag.retrieval" = "INFO"
-"babylon.rag.embeddings" = "INFO"
-"babylon.rag.chunker" = "INFO"
 httpx = "WARNING"
 httpcore = "WARNING"
 urllib3 = "WARNING"
 asyncio = "WARNING"
 
 [build-system]
-requires = [
-    "poetry-core>=2.0.0,<3.0.0",
-]
-build-backend = "poetry.core.masonry.api"
+# hatchling replaced poetry-core 2026-07-22 — the last Poetry artifact in
+# the toolchain (tasks/lock/CI went uv in ADR095's train). Chosen over
+# uv_build for explicit src-layout packages= control.
+requires = ["hatchling>=1.32.0"]
+build-backend = "hatchling.build"
 
 [tool.pyright]
 extraPaths = ["."]
-
-# ── Import-boundary contracts (Program 14, Phase 1) ─────────────────────────
-# Runtime layering law: kernel < models/formulas < domain < engine. Engine may
-# import downward; nothing imports the engine back. TYPE_CHECKING imports are
-# excluded — annotations may reference upward, the import graph may not.
-# Run: poetry run lint-imports (wired into mise check + pre-commit + CI).
-[tool.importlinter]
-root_packages = ["babylon"]
-exclude_type_checking_imports = true
-
-[[tool.importlinter.contracts]]
-name = "the domain must not import the engine (kernel abstractions only)"
-type = "forbidden"
-source_modules = ["babylon.domain"]
-forbidden_modules = ["babylon.engine"]
-
-[[tool.importlinter.contracts]]
-name = "persistence must not import the engine"
-type = "forbidden"
-source_modules = ["babylon.persistence"]
-forbidden_modules = ["babylon.engine"]
-
-[[tool.importlinter.contracts]]
-name = "formulas are pure math — no engine imports"
-type = "forbidden"
-source_modules = ["babylon.formulas"]
-forbidden_modules = ["babylon.engine"]
-
-[[tool.importlinter.contracts]]
-name = "kernel is layer 0 — imports nothing above itself"
-type = "forbidden"
-source_modules = ["babylon.kernel"]
-forbidden_modules = [
-    "babylon.engine",
-    "babylon.topology",
-    "babylon.persistence",
-    "babylon.models",
-    "babylon.formulas",
-    "babylon.config",
-    "babylon.ooda",
-    "babylon.intelligence",
-    "babylon.domain",
-]
-
-[[tool.importlinter.contracts]]
-name = "topology (graph substrate) must not import the engine"
-type = "forbidden"
-source_modules = ["babylon.topology"]
-forbidden_modules = ["babylon.engine"]

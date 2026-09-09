@@ -1,0 +1,195 @@
+ADR218_community_port_handoff:
+  status: "accepted"
+  date: "2026-08-22"
+  title: "The Community @6.0 port train handoff (#667 Checkpoint A, plan docs/superpowers/plans/2026-08-18-community-port.md rev 2) — the BSL hyperedge lane live as a NAMED deliverable (#536 rider 3 taken): hyperedge own-field storage (CanonicalState section 0x07, the SEVENTH listing — the plan's '0x06/sixth' projection was overtaken at landing; the dyadic-edge lanes own 0x05/0x06), the type-scoped GraphSubstrate enumerators, the hyperedge query heads and own-field BSL surface, the Element cross-kind Ord ruling (Node < Edge < Hyperedge) discharging rider 4's A5 precondition, and community.bsl c00-c11 — the census, the org-weight decomposition, normalization, the ADR214 floor table (all 14 rows, DG-3), cost modifiers, state decay, the arc, and the DG-2 PUBLISH readout (c07 contestation via the first content declaration of log — D210's 1-ulp divisor note — and c08 dominant-tendency with the ruled tie order). Nine conformance worlds incl. the tie world (§8a row 1's copies-agree landed) and world 5c (the singleton-carrier verdict's executed proof). Eight DIRECTOR GATE questions adjudicated at the 2026-08-18 sitting (delegated provenance, morning-reviewable), recorded here verbatim-in-substance. Community @6.0 counts as PORTED for Checkpoint A per DG-1 — with the asterisk: ported to its production-live surface; the threat-scoring/solidarity-amplification/infrastructure-maintenance phases are chartered post-#653 (issue #692). PRs #680-#691 + #693, each CI-green with Copilot harvested."
+  context: |
+    The Community system (the D66 blocker) was the first real exercise of the
+    Amendment AG hyperedge machinery and the first port whose frozen source is
+    structurally ternary (the community hyperedge carries the (r, l, f)
+    simplex over its member classes). The train's charter riders were staged
+    by #536; the train's gate questions were posted popup-ready to #564 at
+    Task 0 and adjudicated at the 2026-08-18 sitting under the Director's
+    overnight compass delegation — every DG ruling below is DELEGATED
+    provenance, morning-reviewable, and was not overridden at morning review.
+
+    The port's own premise held end to end: the closed BSL algebra covered
+    the port as content — no constitutional amendment was needed anywhere in
+    the train (DG-8's ADR-path ruling for the canonical-state widening is the
+    recorded instance), and the one latent engine gap found at PR #688's
+    harvest (resolve_domain vs subject_type_of can disagree with nothing
+    cross-checking them) is recorded as D223's named follow-up — an engine
+    check, not a language change. The one transcendental the readout needed
+    (log, for the normalized Shannon entropy's log(3) divisor) crossed
+    through the ALREADY-FORMAL intrinsic mechanism (§2.7/§3.10, the #576
+    train's pinned soft-float libm) — content declares what the kernel
+    provides; D210 records the 1-ulp libm-vs-glibc divisor divergence and its
+    pin. The Director's 2026-08-22 ruling on the general intrinsic question
+    is ADR219, a separate train; this ADR records only the Community port.
+  decision: |
+    **1. The two-estate structure and the E1/E2/E3 split, as measured.** The
+    train split into the substrate estate (E1: hyperedge attribute storage,
+    the type-scoped enumerators, the ceiling supply chain — PRs #681, #682,
+    #683) and the content estate (E2: the BSL surface — query heads and
+    own-field read/write, PRs #684, #685; E3: the Community pack itself and
+    its worlds, PRs #687-#691 + #693). The plan §3.3 sizing verdict landed
+    as measured, not as claimed: the engine-side work was ≈ half the train
+    by diff, and the pack-side conformance estate (nine worlds, eight golden
+    pins, the fired-pin arithmetic, the frozen-mirror parity guard) was the
+    other half.
+
+    **2. The three declared boundary crossings.** (a) The type-scoped
+    hyperedge enumerators on GraphSubstrate (the E1d ceiling supply chain);
+    (b) LoadedScenario.hyperedge_types; (c) the babylon-tick driver ceilings
+    (:max-members derived from the seeded population — the ceiling is read
+    off the world's own census rather than hand-stamped, with its fuel
+    consequence recorded in the pack's measurements) — the third sanctioned
+    by the plan's own §3.6 amendment. Each crossing is declared here per the
+    wiring doctrine (ADR109): typed motions with their sentinel rows, never
+    bare import-and-call.
+
+    **3. The III.7 declaration for hyperedge own-field storage — DG-8: ADR
+    PATH, executed.** Section 0x07 (the seventh CanonicalState listing:
+    (hyperedge-id, qname, f64) rows) widens the canonical state field set.
+    DG-8 ruled the ADR path suffices — Amendment D already ratified
+    hyperedges as first-class objects, and ADR198 R1 landed the analogous
+    dyadic-edge widening on a charter+ADR — and this ADR is that path's
+    instrument. The elision proof (no corpse rows into 0x07 on
+    remove_node's cascade sweep — #683's post-merge harvest fix,
+    hypergraph_store.rs:218) is attached in the merged code.
+
+    **4. The Element cross-kind Ord ruling.** Node < Edge < Hyperedge —
+    landed with #684 — discharges rider 4's A5 precondition. #536's rider 4
+    is quoted for the record: the hyperedge lane's deliverables include the
+    ordering law that makes a cross-kind element set deterministic; the
+    ruling is the Ord instance, hash-covered.
+
+    **5. §3.7a's singleton-carrier verdict, executed.** A one-member
+    community is legal content and degenerates honestly (world 5c, the
+    carrier-collision world, is the executed proof — its golden pins did not
+    move at the DG-2 readout landing because its communities are
+    skip-gated).
+
+    **6. The four-of-six-phase scope and the §5 blocked half.** This train
+    ports Community @6.0's production-live surface: census, decomposition,
+    normalization, floors, cost modifiers, decay, the readout. Threat
+    scoring, solidarity amplification and infrastructure maintenance are
+    the blocked half — issue #692, gated on #653 (the Amendment AG(i)
+    membership surfaces: update-membership, membership-field-of, deffield
+    :member, §6.2 family 23 — ratified language awaiting its minting
+    ceremony, a Director act). DG-7's disposition is recorded here in full:
+    DEFER THE WHOLE infrastructure law — decay-without-maintenance is a
+    DIFFERENT law (monotone where frozen is non-monotone), not a partial
+    port; landing it would be a silent theory change in port-as-is
+    clothing. (The frozen law suite does not pin the non-monotonicity —
+    test_law_community_system.py:221 pins only "heat/cohesion never
+    increase; infrastructure stays in [0, 1]"; the non-monotonicity is
+    filed under "Caveats (not laws)" at :49-52.)
+
+    **7. The ADR214 floor table, landed.** All 14 ruled rows declared in
+    every world (DG-3: a complete ruled table, parity-tested, beats
+    declare-what-you-read), values and provenance transcribed from ADR214,
+    ordered as ruled; the cross-world parity test
+    (the_floor_table_is_byte_identical_across_all_three_worlds, extended to
+    all eight worlds at Task 10's guard extension) keeps the ruled values
+    from drifting. The c06 split (c06a/c06b) is expressible within the
+    language (D204 — the pre-state law forces the split; c05's degenerate
+    branch routes through it bit-identically, ×1.0/÷1.0 exact in IEEE-754).
+    **ADR214 Ruling 4's stated trigger is superseded-not-met (§6.3):** the
+    trigger's own terms never fired, and the §6.5 baseline-ceremony
+    deferral's disposition is recorded here: **NOT FIRED** — evidence: the
+    full train's `qa:regression` and `qa:vault-regression-ci` runs green and
+    byte-identical at every PR (#685-#691, #693), with
+    `tests/baselines/**` unmoved by every commit of the train (verified by
+    the baseline-ceremony-range pre-push mirror and the CI ceremony gate on
+    each PR). That recording is what discharges Ruling 4's deferral.
+
+    **8. §2.1's producer seam and §2.2's duplication verdict — DG-2's
+    answer recorded as the thing that decided them.** DG-2: PUBLISH
+    contestation + dominant-tendency (the sitting's rationale: port fidelity
+    — frozen publishes both — plus the events-as-affordances thesis, #502:
+    a community whose tendency is READABLE is lens and drama material). The
+    second declared home for the hegemonic tie-break is parity-guarded:
+    §8a row 1's copies-agree test
+    (dominant_tendency_ties_match_the_class_surface_rule, over the ninth
+    world) makes the two homes drift-proof, and consciousness.bsl's
+    :material-basis amendment is the factual custody correction ("TWO
+    DECLARED HOMES, parity-guarded"), one line, with its frozen-anchor
+    repair (:177-192 → :167-191, epsilon :189) — written only after DG-2's
+    answer, per the theory-line discipline.
+
+    **9. The eight DIRECTOR GATE dispositions (the 2026-08-18 sitting,
+    delegated provenance, morning-reviewable, not overridden).** DG-1: @6.0
+    COUNTS AS PORTED for Checkpoint A on landing — the seam registry records
+    community_memberships as STRUCTURALLY_IMPOSSIBLE in production (the
+    frozen system no-ops every tick), so the train ports the system's entire
+    production-live surface; the tally carries the asterisk ("threat/
+    amplification/maintenance phases chartered post-#653"). DG-2: PUBLISH
+    (decision point 8). DG-3: all 14 floor rows in every world (decision
+    point 7). DG-4: CONFIRMED — CommunityType member order transcribed
+    verbatim, hegemonic poles leading (ADR195's hash-bearing order is
+    determinism law; every world's defenum). DG-5: DEFERRAL CONFIRMED — the
+    national-question pole shape and the county_extraction BoundOpposition
+    registration stay ADR171-line items owned by the post-#653 slice (#664's
+    Phase-2 closure text updates accordingly). DG-6: RE-HOME CONFIRMED —
+    the community_memberships population-weight seeder lands in the
+    post-#653 slice, not this train: a weighted membership IS an AG(i)
+    payload, and building the writer before the payload shape exists would
+    bake in a dyadic workaround (#664's closure text). DG-7: DEFER THE
+    WHOLE LAW (decision point 6). DG-8: ADR PATH (decision point 3).
+
+    **10. The D116 reliance table is this train's Q14 acceptance-criterion
+    input** — recorded here so the Q14 train inherits it as an input rather
+    than rediscovering it.
+
+    **11. Gate evidence.** Every PR green on the full CI matrix (the Rust
+    gate, the Python full-tree legs, the baseline ceremony gate, the
+    determinism gate, docs) with Copilot harvested per ADR181 (zero
+    unaddressed inline comments at each merge; substantive findings during
+    the train — #688's anchor-gate and transcript-fence items, #689's
+    decay-alpha assertions and D203 fuel-row self-consistency, #691's
+    citation-path sharpening — each pushed as a harvest fix commit before
+    merge). Local gates at each commit: rust:check, qa:regression,
+    qa:vault-regression-ci, check:quick, grammar-sync, manifest-sync,
+    digest pins — green throughout.
+
+    **12. ADR number verification (this document's own).** The plan names
+    this ADR "ADR-NF" (next free); at filing, origin/dev tops at ADR217
+    landed plus ADR219 filed by the exact-arithmetic intrinsic rider train
+    (PR #694, merged earlier the same day) — this document takes ADR218,
+    the number the plan's own Task-0 allocation earmarked for it, verified
+    against origin/dev and every open PR at filing time; the D-record map
+    D-NF+1..25 → D198-D225 landed across the train's PRs and is complete in
+    the register.
+  consequences: |
+    - Checkpoint A accounting (ADR208 R14): Community @6.0 counts as ported
+      WITH the DG-1 asterisk; Checkpoint A itself is NOT reached by this
+      train — Substrate @2.5, TickDynamics @4.0 (#669's train) and
+      ReserveArmy @5.0 remain — so WS3 stays HELD. The honest tally lives
+      here and in ai/state.yaml, not in a victory lap.
+    - #595 is discharged and closed with this train's evidence (its gaps
+      1/3/4 landed; gap 2 is #653's own ceremony).
+    - #536's riders are disposed: rider 1 (shape-verb collect-then-apply)
+      UNSPENT BY DESIGN — the port seeds communities in scenarios and never
+      mints them at runtime, so the parked add/remove-hyperedge verbs stayed
+      parked; rider 2 (the membership heads) is #653's ceremony, unchanged;
+      rider 3 (the hyperedge lane live as a named deliverable) TAKEN and
+      discharged; rider 4's A5 precondition discharged by decision point 4.
+    - #653 is now the single gate on the Community system's remainder
+      (#692) and, per its own title, the Allegiance/Electoral first
+      consumer — the strongest argument for scheduling its ceremony.
+    - The frozen-mirror parity guard's lifecycle is on record (ADR217's
+      narration-guard precedent): at the Python deletion ceremony the
+      mirror retires BY NAMED CEREMONY, with the conformance pins (bit-exact
+      against the PORT's arithmetic) already the law.
+  supersedes: []
+  related:
+    - ADR188_intrinsic_rider_slate_dispositions
+    - ADR195_enum_deffield_row
+    - ADR198_program29_substrate_widening_charter
+    - ADR204_worldview_ternary_unification
+    - ADR207_class_surface_ternary_port_handoff
+    - ADR208_docket_sitting_2026_08_17
+    - ADR213_intrinsic_host_train
+    - ADR214_national_incidence_artifact_train
+    - ADR217_b3_wave1_null_hypothesis_viewer_handoff
+    - ADR219_exact_arithmetic_intrinsic_rider_train

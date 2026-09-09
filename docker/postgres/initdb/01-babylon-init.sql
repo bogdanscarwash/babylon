@@ -19,8 +19,13 @@ CREATE EXTENSION IF NOT EXISTS vector;
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
 
--- FR-005: async commit for the sim/test role ONLY (not cluster-wide).
--- Safe: per-tick writes are idempotent (ON CONFLICT DO NOTHING, spec-056)
--- and crash-resume replays deterministically from the last committed tick
--- (Constitution III.7) — a lost async tail is re-created bit-exact.
+-- FR-005: async commit for the sim/test role. On the dev/player config
+-- (docker/postgres/postgresql.conf) this is now redundant with a
+-- cluster-wide `synchronous_commit = off` DECLARED there (ADR176 ruling 32
+-- / P-F completion, issue #382) — kept here so CI (postgresql.ci.conf,
+-- which stays cluster-wide ON) still gets it for the `test` role it shares
+-- with dev. Safe: per-tick writes are idempotent (ON CONFLICT DO NOTHING,
+-- spec-056) and crash-resume replays deterministically from the last
+-- committed tick (Constitution III.7) — a lost async tail is re-created
+-- bit-exact.
 ALTER ROLE test SET synchronous_commit = off;

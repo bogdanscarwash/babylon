@@ -6,9 +6,9 @@ wealth brackets over time. Derives coupled differential equations for
 class wealth dynamics compatible with Babylon's formula system.
 
 Usage:
-    poetry run python tools/analyze_wealth_distribution.py
-    poetry run python tools/analyze_wealth_distribution.py --ascii
-    poetry run python tools/analyze_wealth_distribution.py --fit
+    uv run python tools/analyze_wealth_distribution.py
+    uv run python tools/analyze_wealth_distribution.py --ascii
+    uv run python tools/analyze_wealth_distribution.py --fit
 
 Output:
     - results/wealth_inversion.csv: Time series of population shares

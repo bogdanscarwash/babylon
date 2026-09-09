@@ -75,7 +75,7 @@ To add a new sub-verb (e.g., ``EXTRADITE`` under REPRESS):
 
 9. Run the full test suite::
 
-       poetry run pytest tests/unit/state_ai/ tests/contract/state_ai/ -v
+       uv run pytest tests/unit/state_ai/ tests/contract/state_ai/ -v
 
 
 How to Tune Faction Dynamics
@@ -116,7 +116,7 @@ persistent.
 
 Run the faction dynamics contract tests::
 
-    poetry run pytest tests/contract/state_ai/test_faction_contract.py -v
+    uv run pytest tests/contract/state_ai/test_faction_contract.py -v
 
 These tests verify that convergence, reversion, and shift mechanics
 produce correct behavior under the current configuration.
@@ -172,7 +172,7 @@ The REPRESS pipeline has four sub-verbs, each with tunable parameters:
 
 Run the REPRESS contract tests after changes::
 
-    poetry run pytest tests/contract/state_ai/test_repress_contract.py -v
+    uv run pytest tests/contract/state_ai/test_repress_contract.py -v
 
 
 How to Use God Mode for Debugging
@@ -262,7 +262,7 @@ escalation, de-escalation, and convergence.
 
 ::
 
-    poetry run pytest tests/integration/test_state_ai_integration.py -v
+    uv run pytest tests/integration/test_state_ai_integration.py -v
 
 This test:
 
@@ -275,7 +275,7 @@ This test:
 
 To run all state AI tests (unit + contract + integration)::
 
-    poetry run pytest tests/unit/state_ai/ tests/contract/state_ai/ \
+    uv run pytest tests/unit/state_ai/ tests/contract/state_ai/ \
         tests/integration/test_state_ai_integration.py -v
 
 Expected: 499 tests, all passing.

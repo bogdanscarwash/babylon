@@ -1,0 +1,102 @@
+{
+  "scenario": "syriza",
+  "description": "The captured governance road: capitulate with dual-power organs live; the PASOK slow bleed (U13 golden, ADR140)",
+  "generated_at": "2026-07-30T13:44:18+00:00",
+  "defines_hash": "d35993bdd1f572322d9ec2997a6078b62f595e57d25e07465afdfb8ee60aac8d",
+  "max_ticks": 52,
+  "checkpoints": [
+    {
+      "tick": 0,
+      "p_w_wealth": 0.0,
+      "p_c_wealth": 0.0,
+      "c_b_wealth": 0.5,
+      "c_w_wealth": 0.5,
+      "imperial_rent_pool": 100.0,
+      "exploitation_tension": 0.0,
+      "p_w_consciousness": 0.0,
+      "p_w_p_revolution": 0.0,
+      "p_w_active": false,
+      "content_hash": "1449467219ca0e52b2072821d398acb991ac6d174d2f1abbab1bc3159751c500"
+    },
+    {
+      "tick": 10,
+      "p_w_wealth": 0.0,
+      "p_c_wealth": 0.0,
+      "c_b_wealth": 0.247723,
+      "c_w_wealth": 0.786801,
+      "imperial_rent_pool": 98.06514,
+      "exploitation_tension": 0.521088,
+      "p_w_consciousness": 0.0,
+      "p_w_p_revolution": 0.0,
+      "p_w_active": false,
+      "content_hash": "599d7260d97baf39ed50ad4d0194f1341fc4c97c5276695e027ad4095432f2d2"
+    },
+    {
+      "tick": 20,
+      "p_w_wealth": 0.0,
+      "p_c_wealth": 0.0,
+      "c_b_wealth": 0.01622,
+      "c_w_wealth": 1.05283,
+      "imperial_rent_pool": 96.189175,
+      "exploitation_tension": 0.969655,
+      "p_w_consciousness": 0.0,
+      "p_w_p_revolution": 0.0,
+      "p_w_active": false,
+      "content_hash": "4dc92d5609ea5d2dbaa908c4fe0a4e98be47dbcce03544177d8f640e61a4b8e7"
+    },
+    {
+      "tick": 30,
+      "p_w_wealth": 0.0,
+      "p_c_wealth": 0.0,
+      "c_b_wealth": 0.38453,
+      "c_w_wealth": 1.00283,
+      "imperial_rent_pool": 94.282614,
+      "exploitation_tension": 0.969655,
+      "p_w_consciousness": 0.0,
+      "p_w_p_revolution": 0.0,
+      "p_w_active": false,
+      "content_hash": "3c0423059b059a26efdfd8839ccf0cfaf50bc8b60737640a503910a13be136d3"
+    },
+    {
+      "tick": 40,
+      "p_w_wealth": 0.0,
+      "p_c_wealth": 0.0,
+      "c_b_wealth": 0.76906,
+      "c_w_wealth": 0.95283,
+      "imperial_rent_pool": 92.413843,
+      "exploitation_tension": 0.969655,
+      "p_w_consciousness": 0.0,
+      "p_w_p_revolution": 0.0,
+      "p_w_active": false,
+      "content_hash": "4628fd94b5ae39a6dbfd9e269b347d481b5b89021907d4c7c3e5abf4acf4d388"
+    },
+    {
+      "tick": 50,
+      "p_w_wealth": 0.0,
+      "p_c_wealth": 0.0,
+      "c_b_wealth": 1.15359,
+      "c_w_wealth": 0.90283,
+      "imperial_rent_pool": 90.582112,
+      "exploitation_tension": 0.969655,
+      "p_w_consciousness": 0.0,
+      "p_w_p_revolution": 0.0,
+      "p_w_active": false,
+      "content_hash": "873b24fb881f00b6fc3eaeac8e97eecde3842d20ff9d1dea6c07fbad9bacc721"
+    },
+    {
+      "tick": 52,
+      "p_w_wealth": 0.0,
+      "p_c_wealth": 0.0,
+      "c_b_wealth": 1.230496,
+      "c_w_wealth": 0.89283,
+      "imperial_rent_pool": 90.220146,
+      "exploitation_tension": 0.969655,
+      "p_w_consciousness": 0.0,
+      "p_w_p_revolution": 0.0,
+      "p_w_active": false,
+      "content_hash": "457e9adef86889aea04375e8865b6ada1eb767b099e4fd6d844c02bdfe752ec4"
+    }
+  ],
+  "final_outcome": "SURVIVED",
+  "ticks_survived": 52
+}

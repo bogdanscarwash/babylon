@@ -1,0 +1,167 @@
+id: ADR106
+title: >-
+  Determinism boundary: econophysics citation rule (shape only, never a
+  runtime sampler) + the shipped entry point's missing os.execv
+  re-exec pin (owed to T1.2/T7) + an honest status record for
+  determinism_hash, wall-clock leaks, and narrator-ON non-reproducibility —
+  closing the v1.0.0 Playable Archive program's ruling 12 and spine G
+  (ai/_inbox/PROGRAM_v1_0_0_playable_archive.md).
+status: accepted
+date: '2026-07-21'
+context: >-
+  The v1.0.0 Playable Archive program
+  (ai/_inbox/PROGRAM_v1_0_0_playable_archive.md, ratified 2026-07-21) names a
+  determinism-boundary ADR twice: in the governance batch ("determinism-
+  boundary ADR (econophysics cites distribution SHAPES, never a stochastic
+  runtime sampler)", line 262-263) and in stated assumptions ("books-map
+  mechanic groundings (automorphic-equivalence classes, network-vulnerability
+  repression targeting, RAND COIN doctrine axis, Weinstein/Wood bifurcation,
+  econophysics calibration) land as ADR citations when their trains land, not
+  as v1.0 units", line 314-316). The econophysics texts themselves —
+  Farjoun-Machover *Laws of Chaos* and Cottrell/Cockshott *Classical
+  Econophysics* — are catalogued as "Adjacent (useful)" reading in
+  project/programs/10-spectrum-of-unequal-exchange.md:72, not as load-bearing
+  sources for the ratified spectrum-of-unequal-exchange design; no code in
+  src/babylon/ currently cites either work. Ruling 12 of the same program
+  ("Content-hash chain OUT of v1.0 ... determinism warrant = qa:regression
+  byte-identical + vault goldens + new wall-clock-leak sentinel. Chained
+  per-tick content hash = named post-1.0 unit; verify story must not claim it
+  exists") and spine G ("Determinism at the shipped entry point — No runtime
+  BLAS pin and no PYTHONHASHSEED anywhere in the shipped path (tests only) —
+  and PYTHONHASHSEED cannot be set post-start: the babylon launcher must
+  os.execv re-exec with PYTHONHASHSEED + *_NUM_THREADS=1 set (T1.2 code, T7
+  packaging)") are both verified true against HEAD: `rg PYTHONHASHSEED`
+  across the repo hits only tools/regression_test.py, tests/, and
+  docs/superpowers/plans/** — never src/babylon/; `rg execv` under src/ finds
+  no re-exec anywhere, and the installed console-script entry point is
+  `babylon = "babylon.cli:app"` (pyproject.toml:180) with no hashseed/thread
+  pin of its own. The BLAS/OpenMP/NumExpr/Rayon thread cap is real but
+  test-and-devshell-scoped only: tests/conftest.py pins OMP_NUM_THREADS,
+  OPENBLAS_NUM_THREADS, MKL_NUM_THREADS, NUMEXPR_NUM_THREADS, and
+  RAYON_NUM_THREADS to "1" (guarded by
+  tests/unit/test_blas_thread_cap.py, which fails loudly if the pin is
+  defeated), .mise.toml's `[env]` block carries the same five, and
+  flake.nix's devshells `export` NUMEXPR_NUM_THREADS/RAYON_NUM_THREADS
+  (flake.nix:135,174) — none of these travel with a packaged install a
+  player runs outside a devshell or `mise run`. On the hash side,
+  docs/reference/determinism-contract.rst already carries a thorough,
+  line-cited honesty audit that this ADR verifies rather than restates:
+  `tick_commit.determinism_hash` (computed at
+  src/babylon/engine/headless_runner/runner.py:1600-1602 for tick 0 and
+  :1645-1647 for tick >= 1, both `hashlib.sha256(f"{session_id}:{tick}:
+  {config.random_seed}".encode()).hexdigest()`) is confirmed by direct read
+  of runner.py to depend on nothing but the session UUID, the tick number,
+  and the RNG seed — no world state, no player actions, no engine output —
+  and the reference doc's own "Chaining" section confirms there is no
+  `H_n = H(H_{n-1} || data_n)` construction anywhere in the codebase despite
+  migration 0029_tick_commit.sql's comment calling it "the queryable
+  Constitution-III.7 hash chain". Constitution III.7 (CONSTITUTION.md:361)
+  itself distinguishes replay-integrity (hash equality) from falsifiability
+  (tolerance-bounded value comparison via qa:regression) and calls the
+  per-tick hash a hash "of its inputs (World state + player actions + random
+  seed)" — a definition `tick_commit.determinism_hash` does not meet.
+  Amendment W / III.13 Deterministic Materialization is RATIFIED but
+  `[PENDING CODE]` (CONSTITUTION.md:381,506) — the render/vault
+  determinism obligation this program's Spine F/T5 lean on is not yet
+  implemented, only chartered. `SimulationConfig.rng_seed`
+  (src/babylon/models/config.py:25-40) is confirmed as the one seeded-RNG
+  carrier threaded per run per Constitution III.7's docstring citation.
+decision: >-
+  (1) Econophysics citation rule: Farjoun-Machover *Laws of Chaos* and
+  Cottrell/Cockshott *Classical Econophysics* (probabilistic/statistical
+  value theory) may be cited ONLY for the SHAPE of distributions —
+  invariants such as profit-rate or price-value dispersion patterns, used as
+  calibration targets or sanity checks against emergent sim output — never
+  as a stochastic runtime sampler wired into the tick loop. Any randomness
+  the engine actually consumes stays seeded exclusively through
+  `SimulationConfig.rng_seed` (Constitution III.7); introducing an
+  econophysics-derived distribution as a live sampling source (e.g. drawing
+  per-tick noise from a Boltzmann/exponential fit) requires a constitutional
+  amendment, not a citation. This binds the "econophysics calibration"
+  clause of the program's stated assumptions and the governance-batch
+  determinism-boundary line — both cited above — as the operative rule
+  rather than a loose intention. (2) Shipped-entry-point determinism pin
+  (owed unit, not yet built): because PYTHONHASHSEED cannot be set after the
+  CPython interpreter starts, and because today nothing in the packaged
+  `babylon` entry point (`babylon.cli:app`) sets it or the five
+  thread-count env vars, the `babylon` launcher MUST perform an `os.execv`
+  re-exec of itself early in startup with `PYTHONHASHSEED=0` and
+  `OMP_NUM_THREADS`, `OPENBLAS_NUM_THREADS`, `MKL_NUM_THREADS`, and
+  `NUMEXPR_NUM_THREADS` all set to `"1"` in the re-exec'd process's
+  environment, guarded by an idempotency env var (e.g. a
+  `BABYLON_REEXEC_DONE` sentinel) so the re-exec fires at most once per
+  process tree. This is T1.2 (launcher) code, packaged by T7 (installer
+  env) — RAYON_NUM_THREADS is a devshell/test-only concern (rustworkx
+  centrality parallelism) and is not required in the re-exec set unless a
+  future unit wires rustworkx centrality calls into the shipped tick path.
+  (3) Honesty record (verified, not asserted): `tick_commit.determinism_hash`
+  is an identity/replay key — sha256 of `session_id:tick:random_seed` — not
+  a content hash and not chained; it detects marker-shadowing
+  (crash-recovery duplicate-commit races) and nothing about what the tick
+  actually computed. A distinct, already-implemented mechanism —
+  `compute_determinism_hash()` (src/babylon/persistence/conservation_audit.py
+  :70-111), stored as `conservation_audit_log.determinism_hash` — IS a real
+  content hash (canonical sort-keyed JSON of tick, rng_seed, and the
+  sorted hex-state frame), but per docs/reference/determinism-contract.rst
+  it is narrower than full WorldState (only the 15 `DynamicHexState`
+  fields, not consciousness/demographics/employment/relationship state or
+  national aggregates) and, in the live headless-runner wiring
+  (bridge.py:544-549), never receives `action_list`, so player/organization
+  actions do not currently enter it either — despite III.7's prose naming
+  both world state and actions as inputs. Two tables share the field name
+  `determinism_hash` for two unrelated computations; this ADR does not
+  rename either (that is the reference doc's remit), it records that the
+  overload exists and that only the conservation_audit_log variant deserves
+  the label "content hash." Wall-clock leaks feeding persisted (P-tier)
+  artifacts are confirmed at three call sites named in the program's spine
+  A: src/babylon/engine/observers/metrics.py:209
+  (`"generated_at": datetime.now(UTC).isoformat()` inside
+  `TickStateRecorder.to_json()`); src/babylon/engine/observers/
+  jsonl_recorder.py:90,156,181 (`datetime.now()` for the session-directory
+  timestamp, the `summary.json` `"ended_at"` field, and the debug-zip
+  filename); and the headless-runner manifest
+  (src/babylon/engine/headless_runner/runner.py:1132,1368 capture
+  `wallclock_start`/`wallclock_end`, threaded into
+  `manifest.py:build_manifest` and written as `manifest.json`'s
+  `wallclock_start`/`wallclock_end` fields, manifest.py:285-286).
+  The manifest case is the one already declared and excluded by name —
+  manifest.py's own docstring states byte-identity holds "modulo declared
+  wallclock / hostname fields" (manifest.py:15) — the metrics.py and
+  jsonl_recorder.py cases are not currently declared exclusions anywhere
+  and are exactly what the program's new wall-clock-leak sentinel (spine A,
+  T1.1) is chartered to catch. A real chained per-tick content hash (a
+  genuine `H_n = H(H_{n-1} || data_n)` construction covering full world
+  state) is a declared candidate unit for a post-1.0 train per ruling 12 —
+  it is not built, not scheduled inside v1.0.0, and the T8 verify story
+  must not claim it exists. (4) Narrator-ON non-reproducibility is by
+  design, not a defect: the vault's git backend serializes writer threads
+  with a single process-local `_COMMIT_LOCK`
+  (src/babylon/projection/vault/git_backend.py:37,82,139) but does nothing
+  to order Ollama-latency-dependent narration calls across runs, so the
+  committed vault DAG's shape depends on wall-clock narration timing.
+  Verify stories (qa:regression, qa:vault-regression, T8 DoD) MUST exclude
+  `narrative/**` and state the parity claim exactly as the program records
+  it: "OFF byte-reproducible, ON not, by design."
+consequences: >-
+  T1.2 and T7 now carry an explicit, cited requirement rather than a
+  paraphrase: the `os.execv` re-exec with the five named env vars is a
+  release blocker for v1.0.0, not an optional hardening pass, because it is
+  the only place PYTHONHASHSEED and the thread pins can reach a player's
+  installed binary at all — today they exist only in tests/conftest.py,
+  .mise.toml, and flake.nix devshells, none of which ship. T1.1's
+  wall-clock-leak sentinel has three concrete, file-and-line-cited targets
+  to encode as check cases (metrics.py:209, jsonl_recorder.py:90/156/181,
+  and the already-declared-but-unenforced manifest wallclock fields) rather
+  than needing to rediscover them. Any future PR that cites Farjoun-Machover
+  or Cottrell/Cockshott as justification for adding *runtime* randomness
+  (as opposed to a calibration target checked against emergent output) is
+  out of constitutional compliance under this ADR and needs its own
+  amendment. The v1.0.0 verify story (T8 DoD) inherits two honesty
+  constraints it must not violate: it may not claim a chained content-hash
+  per tick exists (none does; ruling 12's post-1.0 deferral stands), and it
+  may not compare narrator-ON runs byte-for-byte (narrative/** stays
+  excluded). Renaming or unifying the two `determinism_hash` columns, and
+  widening `compute_determinism_hash()`'s inputs to full WorldState +
+  actions, remain open follow-up units owned by whichever train next
+  touches conservation_audit.py or the tick_commit migration — not claimed
+  as done here.

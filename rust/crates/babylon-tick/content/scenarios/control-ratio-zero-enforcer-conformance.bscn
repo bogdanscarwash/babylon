@@ -1,0 +1,89 @@
+; The ZERO-ENFORCER vector of the Pack B conformance family — BLOCKER-4's
+; branch (`docs/superpowers/plans/2026-08-17-decomposition-controlratio-
+; port.md` §4) — Task 5 of the joint Decomposition (@11.0) + ControlRatio
+; (@12.0) port train. See `control-ratio-conformance.bscn`'s own header for
+; the shared roster rationale, the byte-order-hazard note, and the
+; deffield-minimality discipline; this file does not repeat that prose.
+;
+; **THIS SCENARIO'S SINGLE MUTATION-PROVABLE CONSTANT (forward-looking;
+; Task 6 scope, not exercised by Task 5's own c01/c02 tests):**
+; `enforcer-population == 0` — the frozen `_emit_crisis`'s own
+; `actual_ratio = prisoner_pop / enforcer_pop if enforcer_pop > 0 else
+; float("inf")` (`control_ratio.py:185`). `enforcer`'s `population` is
+; SEEDED 0 (not omitted — the node exists, active, contributing 0 to
+; `enforcer-population` through the ordinary census math, exactly as the
+; frozen `_count_enforcer_population` would sum a real but empty
+; CARCERAL_ENFORCER class to 0), with `prisoner-ip`/`prisoner-lumpen`
+; strictly positive (15 + 10 = 25 > 0 = max-controllable = 0 * 4), so `c03`
+; reaches its guard-split emit with `enforcer-population == 0`: BSL cannot
+; represent `float("inf")` (`E-EVAL-014`) or `x/0` (`E-EVAL-012`), so `c03`
+; must take the `(guard (= enforcer-population 0) …)` branch — the payload
+; MINUS `actual-ratio`/`control-ratio` (loud absence, not a fabricated
+; number) — and must NOT abort the tick. Task 5 itself only exercises
+; `c01`/`c02` against this world: `enforcer-population` publishes 0
+; (from a real, active, zero-population CARCERAL_ENFORCER node, not from
+; the ABSENCE of one), `prisoner-population` publishes 25.
+(scenario control-ratio/zero-enforcer-conformance
+  (defvocabulary NodeType (SOCIAL_CLASS INSTITUTION))
+  (defenum SocialRole (CORE_BOURGEOISIE PERIPHERY_PROLETARIAT LABOR_ARISTOCRACY PETTY_BOURGEOISIE LUMPENPROLETARIAT COMPRADOR_BOURGEOISIE INTERNAL_PROLETARIAT CARCERAL_ENFORCER))
+
+  (deffield social-class/role enum SocialRole)
+  (deffield social-class/active int extensive)
+  (deffield social-class/population int extensive)
+  (deffield social-class/organization coefficient intensive)
+  (deffield social-class/enforcer-census-population int extensive)
+  (deffield social-class/prisoner-census-population int extensive)
+  (deffield social-class/prisoner-census-org-weighted real extensive)
+
+  (deffield institution/decomposition-fire-tick int extensive)
+  (deffield institution/decomposition-fired-known int extensive)
+  (deffield institution/decomposition-complete int extensive)
+  (deffield institution/control-crisis-emitted int extensive)
+  (deffield institution/control-crisis-tick int extensive)
+  (deffield institution/terminal-decision-emitted int extensive)
+  (deffield institution/enforcer-population int extensive)
+  (deffield institution/prisoner-population int extensive)
+  (deffield institution/prisoner-org-weighted real extensive)
+
+  (defconst carceral/control-capacity 4)
+  (defconst carceral/revolution-threshold 0.5c)
+  (defconst carceral/control-ratio-delay 0)
+  (defconst carceral/terminal-decision-delay 0)
+
+  (node enforcer NodeType/SOCIAL_CLASS
+    (social-class/role SocialRole/CARCERAL_ENFORCER)
+    (social-class/active 1)
+    (social-class/population 0)
+    (social-class/organization 0.0c)
+    (social-class/enforcer-census-population 0)
+    (social-class/prisoner-census-population 0)
+    (social-class/prisoner-census-org-weighted 0))
+
+  (node prisoner-ip NodeType/SOCIAL_CLASS
+    (social-class/role SocialRole/INTERNAL_PROLETARIAT)
+    (social-class/active 1)
+    (social-class/population 15)
+    (social-class/organization 0.4c)
+    (social-class/enforcer-census-population 0)
+    (social-class/prisoner-census-population 0)
+    (social-class/prisoner-census-org-weighted 0))
+
+  (node prisoner-lumpen NodeType/SOCIAL_CLASS
+    (social-class/role SocialRole/LUMPENPROLETARIAT)
+    (social-class/active 1)
+    (social-class/population 10)
+    (social-class/organization 0.4c)
+    (social-class/enforcer-census-population 0)
+    (social-class/prisoner-census-population 0)
+    (social-class/prisoner-census-org-weighted 0))
+
+  (node carceral-register NodeType/INSTITUTION
+    (institution/decomposition-fire-tick 0)
+    (institution/decomposition-fired-known 1)
+    (institution/decomposition-complete 1)
+    (institution/control-crisis-emitted 0)
+    (institution/control-crisis-tick 0)
+    (institution/terminal-decision-emitted 0)
+    (institution/enforcer-population 0)
+    (institution/prisoner-population 0)
+    (institution/prisoner-org-weighted 0)))

@@ -10,7 +10,7 @@ After installation, you can run a simulation with:
 
 .. code-block:: bash
 
-   poetry run python -m babylon
+   uv run python -m babylon
 
 Understanding the Output
 ------------------------

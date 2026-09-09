@@ -2,8 +2,8 @@
 # How tools are configured and why
 
 meta:
-  version: "1.3.0"
-  updated: "2026-01-01"
+  version: "1.4.0"
+  updated: "2026-09-01"
   purpose: "Document tooling decisions to avoid re-investigation"
 
 # =============================================================================
@@ -12,7 +12,7 @@ meta:
 
 cicd:
   philosophy: "Block on correctness, not style"
-  governance: "Benevolent Dictator model - see ci-workflow.yaml for full details"
+  governance: "Agentic Engineering model (Constitution IX.5 / Amendment AD; ADR151) - Director + gate-licensed agents; see CONTRIBUTORS.md and ci-workflow.yaml"
 
   github_actions:
     ci_yml:
@@ -42,24 +42,25 @@ cicd:
           steps:
             - "poetry run ruff format --check ."
 
-    extended_analysis_yml:
-      file: ".github/workflows/extended-analysis.yml"
-      triggers:
-        - "release (published)"
-        - "schedule (weekly Sunday midnight)"
-        - "workflow_dispatch (manual)"
-      jobs:
-        extended_tests:
-          matrix: ["3.12", "3.13"]
-          purpose: "Python version compatibility"
-        parameter_analysis:
-          commands:
-            - "mise run analyze-trace"
-            - "mise run analyze-sweep"
-          artifacts: "results/"
-        ai_evaluation:
-          condition: "release only"
-          command: "poetry run pytest -m 'ai' --tb=short -q"
+    weekly_py313_yml:
+      file: ".github/workflows/weekly-py313.yml"
+      triggers: ["weekly Sunday 04:00 UTC", "workflow_dispatch"]
+      purpose: "Python 3.13 forward-compatibility suite"
+    weekly_sim_artifacts_yml:
+      file: ".github/workflows/weekly-sim-artifacts.yml"
+      triggers: ["weekly Sunday 04:00 UTC", "workflow_dispatch"]
+      authority: "Authoritative Rust game-managed PostgreSQL path"
+      scope: "Fixed-seed embedded two-rule Michigan Rust persistence slice; not full content-pack coverage"
+      command: "mise run sim:report 520 3000 exclusive"
+      artifact: "reports/sim-runs/"
+      retention_days: 90
+    weekly_reference_analysis_yml:
+      file: ".github/workflows/weekly-reference-analysis.yml"
+      triggers: ["weekly Monday 04:00 UTC", "workflow_dispatch: weekly or full"]
+      authority: "Non-authoritative frozen Python reference at p27-python-freeze"
+      command: "mise run analysis:campaign -- {weekly|full}"
+      artifact: "reports/frozen-reference-analysis/"
+      retention_days: 90
 
   pr_template:
     file: ".github/PULL_REQUEST_TEMPLATE.md"
@@ -316,7 +317,7 @@ code_complexity:
     push_to_main:
       complexity_check: "xenon gate"
       blocks_merge: true
-      rationale: "Redundant safety for direct pushes (BD only)"
+      rationale: "Redundant safety for direct pushes (Director only)"
 
   ci_integration:
     all_branches:
@@ -470,7 +471,7 @@ mutation_testing:
 
   why_only_main:
     - "Mutation testing is slow (full test run per mutation)"
-    - "PRs to main are rare (BD merges only)"
+    - "PRs to main are rare (Director merges only)"
     - "Main is stable release branch - quality gate justified"
     - "Dev branches move fast - don't want to block velocity"
 
@@ -505,8 +506,9 @@ python:
     convention: |
       Tasks use colon-namespaced naming for discoverability:
         test:*   - Testing by scope (unit, int, scenario)
-        sim:*    - Simulation execution and analysis
-        tune:*   - Parameter optimization
+        sim:*    - Rust simulation execution and observability
+        reference:* - Frozen reference-engine tools
+        analysis:*  - Development-only Python analysis
         qa:*     - Quality assurance and verification
         demo:*   - Integration demos
         data:*   - Data pipeline operations
@@ -514,496 +516,114 @@ python:
         mutate:* - Mutation testing
         midi:*   - Music generation
     key_tasks:
-      check: "Fast CI gate: lint + format + typecheck + test:unit"
+      check: "Non-mutating local gate: hosted static leaves + local contracts + test:unit"
+      "check:quick": "Non-mutating lint + format + typecheck"
+      "check:full-local": "Check plus workstation data-path and reference-catalog probes"
+      fix: "Apply Ruff lint fixes and formatting sequentially"
       "test:unit": "Run unit tests only (fast)"
       "test:int": "Run integration tests (mechanics & systems)"
       "test:scenario": "Run scenario tests (slow, full arcs)"
       "test:all": "Run all non-AI tests"
-      "sim:run": "Legacy in-memory smoke test (use sim:e2e-michigan for canonical run)"
-      "sim:e2e-michigan": "Headless Postgres-backed 520-tick (10-year) Michigan + Canada e2e — spec-065 canonical (rescoped from spec-064's 1000 ticks to fit the 2010-2020 real-data window)"
-      "sim:trace": "Time-series CSV + JSON output"
-      "sim:profile": "cProfile performance analysis (spec-064: routed through headless runner)"
-      "qa:e2e-regression": "Run headless e2e with --strict then compare to michigan-e2e baseline (spec-065: --strict default for CI hard-fail on critical conservation violations)"
-      # Spec-065 CLI flag additions:
-      #   --strict           : exit 1 on first severity='alarm' conservation_audit row
-      #   --endgame-detector : optional dotted import path to an EndgameDetector (e.g. babylon.engine.observer.ImperialCollapseDetector)
-      # See specs/065-engine-bridging/contracts/cli_contract.yaml.
-      "tune:optuna": "Bayesian optimization (Optuna TPE)"
-      "tune:landscape": "2D parameter grid search"
-      "tune:dashboard": "Optuna Dashboard visualization"
-      "qa:audit": "Simulation health check"
+      "reference:python-smoke": "Frozen Python one-tick reference smoke; not a persistence-authority path"
+      "analysis:sweep": "Intentional in-memory Python optimization periphery"
+      "analysis:monte-carlo": "Intentional in-memory Python uncertainty analysis"
+      "analysis:campaign": "Bounded non-authoritative frozen-Python reference campaign; weekly by default"
+      "sim:e2e-michigan": "One-shot Rust PostgreSQL/H3 validation; fresh unless BABYLON_CAMPAIGN_ID is explicit"
+      "sim:e2e-bg": "Resume an explicit Rust Michigan campaign, or the worktree-local default, in the background"
+      "sim:status": "Show the background process, its recorded campaign tail, and labeled global totals"
+      "sim:probe": "Probe an explicit campaign, or the worktree-local default, plus labeled global totals"
+      "sim:archive": "Inspect global Rust-owned Archive dirty receipts"
+      "sim:report": "Generate authoritative Rust Michigan observability and persistence evidence"
+      "dev:doctor": "Report worktree and Rust simulation tooling readiness without mutation"
+      "analysis:optuna": "Development-only Bayesian optimization (Optuna TPE)"
+      "analysis:landscape": "Development-only 2D parameter grid search"
+      "analysis:dashboard": "Optuna Dashboard; root optuna.db by default or an explicit campaign SQLite path"
       "qa:verify": "Formula correctness verification"
+      "qa:regression": "Frozen Python language-neutral behavior contract"
+      "qa:vault-regression": "Retained in-process projection-vault byte gate"
       "demo:slice": "Full pipeline demo (Engine->RAG->LLM)"
       "docs:live": "Live-reload documentation server"
+      # Parquet-canonical reference-data pipeline (2026-07-19 plan): sources
+      # (parquet + schema.sql) are canonical; the SQLite reference DB is a
+      # deterministic build product. Pipeline order: artifacts -> schema ->
+      # build-db -> verify-build/verify-roundtrip -> subset.
+      "data:artifacts": "Regenerate ALL reference sources (full-coverage parquet + manifest v2) from the live DB"
+      "data:schema": "Extract canonical schema.sql from the live DB + update the manifest schema block"
+      "data:build-db": "Rebuild the reference DB from parquet sources + schema.sql (product block updated)"
+      "data:verify-build": "Build the reference DB twice from sources and prove byte-identity (dev box only)"
+      "data:verify-roundtrip": "Content-compare the live reference DB against the rebuilt product"
+      "data:subset": "Build the CI subset from the rebuilt product (subset drift dies by construction)"
 
 # =============================================================================
-# PARAMETER TUNING TOOLING
+# AUTHORITATIVE RUST SIMULATION OBSERVABILITY
 # =============================================================================
 
-parameter_tuning:
-  philosophy: "Bayesian Optimization over Grid Search for computational efficiency"
-  migration_date: "2025-12-30"
+rust_simulation_observability:
+  authority: "Authoritative Rust Michigan game-state and PostgreSQL persistence path"
+  command: "mise run sim:report 520 3000 exclusive"
+  workflow: ".github/workflows/weekly-sim-artifacts.yml"
+  artifact_root: "reports/sim-runs/<run>/"
+  fixed_scope:
+    replay_seed: 281
+    parameter_overrides: false
+    stochastic_draws: false
+    dynamic_h3_updates: false
+    content: "Embedded two-rule Michigan persistence slice, not all Rust content packs"
+  persistence_readback: |
+    Reopen PostgreSQL and read back committed state at each 52-tick annual
+    boundary and at the final reported tick. In-process state alone does not
+    satisfy the report contract.
+  bundle:
+    files:
+      - "ticks.jsonl"
+      - "ticks.csv"
+      - "diagnostics.json"
+      - "summary.json"
+      - "summary.txt"
+      - "stdout.txt"
+      - "stderr.txt"
+      - "resources.json"
+    hash_roles:
+      administrative_graph: "GraphStateHash; graph-only administrative persistence identity"
+      stable_named_graph: "Canonical digest over authored stable graph identities"
+      nominal_world: "Stable graph plus governed world registers"
+      tick_content: "Identity of the complete committed tick content"
+  resource_observation:
+    runtime: "Wall, user CPU, and system CPU nanoseconds plus peak RSS bytes for the runtime process only"
+    excluded_runtime_costs:
+      - "Cargo build"
+      - "Report wrapper"
+      - "PostgreSQL"
+      - "Artifact upload"
+      - "Other job processes"
+    database: "Before/after database, Babylon-relation, and cluster-wide WAL size observations"
+    limitations: |
+      The exclusive label states the expected attribution context, not exact
+      per-tick byte accounting. WAL can include background activity, and
+      database allocation, reuse, or delayed reclamation can produce coarse or
+      negative deltas.
 
-  primary_tool:
-    name: "tune_agent.py"
-    location: "tools/tune_agent.py"
-    status: "PLANNED"
-    description: |
-      Autonomous tuning agent using Optuna to optimize simulation parameters
-      against defined objective functions. Uses TPE (Tree-structured Parzen
-      Estimator) for sample-efficient optimization and Hyperband pruning to
-      kill non-viable simulations early.
-
-    algorithm: "TPE (Tree-structured Parzen Estimator)"
-    pruning: "Hyperband (Successive Halving)"
-
-    capabilities:
-      - "Multi-objective optimization (stability + complexity)"
-      - "Early termination of failing simulations"
-      - "Parameter importance analysis"
-      - "Pareto front visualization via Optuna Dashboard"
-
-    usage: |
-      # Run optimization study
-      poetry run python tools/tune_agent.py --n-trials 200 --study-name imperial_circuit
-
-      # Resume existing study
-      poetry run python tools/tune_agent.py --study-name imperial_circuit --resume
-
-      # Launch Optuna Dashboard
-      optuna-dashboard sqlite:///optuna.db
-
-    objective_function: |
-      Maximize: w1*ticks_survived + w2*rent_pool_health + w3*consciousness_variance
-      Subject to: No Comprador death before tick 10 (pruning constraint)
-
-  legacy_tools:
-    - name: "tune_parameters.py"
-      location: "tools/tune_parameters.py"
-      status: "LEGACY - Manual Inspection Only"
-      description: |
-        Original parameter sweeping tool. Useful for quick manual inspection
-        but inefficient for systematic optimization. Retained for debugging
-        and understanding individual parameter effects.
-      recommendation: "Use for one-off explorations, not systematic tuning"
-
-    - name: "parameter_analysis.py"
-      location: "tools/parameter_analysis.py"
-      status: "ACTIVE - Trace/Sweep Commands"
-      description: |
-        Detailed time-series analysis tool. trace command produces full
-        CSV of all entity states per tick. sweep command produces summary
-        statistics. Still valuable for deep-dive analysis after Optuna
-        identifies interesting parameter regions.
-      recommendation: "Use for detailed analysis of Optuna-identified optima"
-
-    - name: "landscape_analysis.py"
-      location: "tools/landscape_analysis.py"
-      status: "ACTIVE - 2D Visualization"
-      description: |
-        2D parameter grid search for visualizing interaction effects.
-        Produces matrix CSV suitable for heatmap visualization. Useful
-        for understanding parameter interactions in reduced dimensions.
-      recommendation: "Use for visualizing 2D slices of parameter space"
-
-  dependencies:
-    optuna:
-      package: "optuna"
-      version: "^3.6"
-      purpose: "Bayesian optimization framework"
-      group: "dev"
-
-    optuna_dashboard:
-      package: "optuna-dashboard"
-      version: "^0.15"
-      purpose: "Web-based visualization of optimization studies"
-      group: "dev"
-      usage: "optuna-dashboard sqlite:///optuna.db"
-
-  storage:
-    database: "sqlite:///optuna.db"
-    location: "Project root (gitignored)"
-    purpose: "Persistent storage of optimization studies for resumption"
-
-  mise_tasks:
-    "tune:optuna":
-      command: "poetry run python tools/tune_agent.py"
-      description: "Run Bayesian optimization (Optuna TPE)"
-
-    "tune:landscape":
-      command: "poetry run python tools/landscape_analysis.py"
-      description: "2D parameter grid search"
-
-    "tune:params":
-      command: "poetry run python tools/tune_parameters.py"
-      description: "1D parameter sensitivity sweep"
-
-    "tune:dashboard":
-      command: "optuna-dashboard sqlite:///optuna.db"
-      description: "Launch Optuna Dashboard for visualization"
-
-# =============================================================================
-# SHARED UTILITIES MODULE (ADR036)
-# =============================================================================
-
-shared_utilities:
-  philosophy: "Single source of truth for simulation tooling utilities"
-  location: "tools/shared.py"
-  added: "2026-01-01"
-  adr: "ADR036"
-
-  purpose: |
-    Centralizes reusable functions that multiple tools need. Eliminates
-    code duplication (parameter_analysis.py previously duplicated utilities).
-    All tools must import from shared.py, never re-implement.
-
-  functions:
-    inject_parameter:
-      signature: "(base_defines: GameDefines, param_path: str, value: float) -> GameDefines"
-      purpose: "Create immutable copy of GameDefines with single parameter override"
-      usage: "inject_parameter(defines, 'economy.extraction_efficiency', 0.5)"
-
-    inject_parameters:
-      signature: "(base_defines: GameDefines, params: dict[str, float]) -> GameDefines"
-      purpose: "Batch parameter injection for Monte Carlo / sensitivity analysis"
-      usage: "inject_parameters(defines, {'economy.extraction_efficiency': 0.5, 'economy.comprador_cut': 0.8})"
-
-    is_dead:
-      signature: "(entity: Any) -> bool"
-      purpose: "Check VitalitySystem's active field (standard death detection)"
-      aligns_with: "VitalitySystem sets active=False when wealth < consumption_needs"
-
-    is_dead_by_wealth:
-      signature: "(wealth: float) -> bool"
-      purpose: "Legacy wealth-threshold check (for compatibility)"
-      threshold: "DEATH_THRESHOLD = 0.001"
-
-    run_simulation:
-      signature: "(defines: GameDefines, max_ticks: int = 52) -> dict[str, Any]"
-      purpose: "Run single simulation, return metrics dict"
-      returns: "ticks_survived, max_tension, outcome, final_wealth, final_state"
-
-    run_simulation_with_collector:
-      signature: "(state, config, defines, max_ticks, mode='batch') -> MetricsCollector"
-      purpose: "Run simulation with MetricsCollector observer for detailed tracing"
-
-    get_tunable_parameters:
-      signature: "() -> dict[str, tuple[float, float]]"
-      purpose: "Enumerate all GameDefines parameters with (min, max) bounds"
-      usage: "For SALib problem specification and Optuna search space"
-
-  constants:
-    PERIPHERY_WORKER_ID: "C001"
-    COMPRADOR_ID: "C002"
-    CORE_BOURGEOISIE_ID: "C003"
-    LABOR_ARISTOCRACY_ID: "C004"
-    DEFAULT_MAX_TICKS: 52
-    DEATH_THRESHOLD: 0.001
-
-  importers:
-    - "tools/parameter_analysis.py"
-    - "tools/landscape_analysis.py"
-    - "tools/audit_simulation.py"
-    - "tools/tune_agent.py"
-    - "tools/monte_carlo.py"
-    - "tools/sensitivity_analysis.py"
-    - "tools/regression_test.py"
-
-# =============================================================================
-# MONTE CARLO UNCERTAINTY QUANTIFICATION
-# =============================================================================
-
-monte_carlo:
-  philosophy: "Capture stochastic variance via N-sample replication"
-  location: "tools/monte_carlo.py"
-  added: "2026-01-01"
-  mise_task: "sim:monte-carlo"
-
-  purpose: |
-    StruggleSystem has stochastic EXCESSIVE_FORCE probability. Single
-    simulation runs don't capture variance. Monte Carlo replication
-    provides confidence intervals on outcomes.
-
-  features:
-    - "N-sample replication with configurable seed"
-    - "Sequential execution (simpler code per user preference)"
-    - "Per-sample metrics: ticks_survived, outcome, max_tension, final_wealth"
-    - "Aggregate statistics: mean, std, 95% CI via t-distribution"
-    - "CSV output + markdown report"
-
-  cli_usage:
-    basic: "mise run sim:monte-carlo 100"
-    with_seed: "mise run sim:monte-carlo 1000 42"
-    with_param: "poetry run python tools/monte_carlo.py --param economy.extraction_efficiency=0.5"
-
-  statistics:
-    confidence_interval:
-      method: "t-distribution"
-      level: 0.95
-      requires: "scipy>=1.11.0"
-
-    reported_metrics:
-      - "n_samples, n_survived, n_died, survival_rate"
-      - "ticks_mean, ticks_std, ticks_ci_lower, ticks_ci_upper"
-      - "tension_mean, tension_std"
-      - "wealth_mean, wealth_std"
-
-  output:
-    csv: "results/monte_carlo.csv"
-    columns: "sample_id, seed, ticks_survived, outcome, max_tension, final_wealth"
-
-  sample_size_guidance:
-    exploratory: "100 samples (fast, rough estimate)"
-    standard: "1000 samples (good precision)"
-    publication: "10000+ samples (NIST recommended)"
-
-  references:
-    - "NIST Monte Carlo Guidelines"
-    - "Modern Monte Carlo Methods for Efficient Uncertainty Quantification (Zhang 2021)"
-
-# =============================================================================
-# GLOBAL SENSITIVITY ANALYSIS (SALib)
-# =============================================================================
-
-sensitivity_analysis:
-  philosophy: "Quantify parameter importance via variance decomposition"
-  location: "tools/sensitivity_analysis.py"
-  added: "2026-01-01"
-  mise_tasks:
-    - "tune:sensitivity"
-    - "tune:morris"
-    - "tune:sobol"
-
-  purpose: |
-    Identify which GameDefines parameters most strongly affect simulation
-    outcomes. Uses two-stage protocol from JASSS best practices:
-    1. Morris screening (fast) - rank parameters by importance
-    2. Sobol analysis (thorough) - quantify variance decomposition
-
-  methods:
-    morris:
-      name: "Morris Elementary Effects"
-      purpose: "Fast screening for parameter importance ranking"
-      outputs:
-        mu_star: "Mean absolute elementary effect (importance)"
-        sigma: "Std dev of effects (non-linearity/interaction indicator)"
-      samples: "~100-200 (fast)"
-      usage: "mise run tune:morris 20"
-      interpretation: |
-        High mu* = important parameter
-        High sigma / mu* = non-linear or interacts with others
-
-    sobol:
-      name: "Sobol Variance Decomposition"
-      purpose: "Quantitative variance attribution"
-      outputs:
-        S1: "First-order index (main effect of single parameter)"
-        ST: "Total-order index (main + all interaction effects)"
-        S2: "Second-order index (pairwise interactions)"
-      samples: "~1000-10000 (slow)"
-      usage: "mise run tune:sobol 512"
-      interpretation: |
-        Sum(S1) = variance explained by main effects
-        Sum(ST) - Sum(S1) = variance from interactions
-
-  default_parameters:
-    - "economy.extraction_efficiency"
-    - "economy.comprador_cut"
-    - "economy.base_subsistence"
-    - "economy.super_wage_rate"
-    - "economy.trpf_coefficient"
-    - "survival.steepness_k"
-    - "consciousness.drift_sensitivity_k"
-    - "solidarity.transmission_rate"
-
-  workflow:
-    discovery: |
-      1. Run Morris screening: mise run tune:morris 20
-      2. Identify top 5-10 parameters by mu*
-      3. Run Sobol on subset: modify DEFAULT_PARAMS, mise run tune:sobol 512
-      4. Use S1/ST to quantify main vs interaction effects
-      5. Focus Optuna tuning on high-ST parameters
-
-  output:
-    morris: "results/morris.json"
-    sobol: "results/sobol.json"
-
-  dependencies:
-    SALib:
-      package: "SALib"
-      version: ">=1.4.7"
-      group: "dev"
-      methods_used: "morris.sample, saltelli.sample, morris.analyze, sobol.analyze"
-
-  references:
-    - "SALib Documentation: https://salib.readthedocs.io/"
-    - "JASSS: Which Sensitivity Analysis Method Should I Use?"
-    - "Saltelli et al., Global Sensitivity Analysis: The Primer (2008)"
-
-# =============================================================================
-# REGRESSION TESTING
-# =============================================================================
-
-regression_testing:
-  philosophy: "Detect formula drift via baseline comparison"
-  location: "tools/regression_test.py"
-  added: "2026-01-01"
-  mise_tasks:
-    - "qa:regression"
-    - "qa:regression-generate"
-
-  purpose: |
-    Store expected simulation outputs as JSON baselines. After code
-    changes, compare current output against baselines to detect
-    unintended formula drift. Critical for maintaining mathematical
-    correctness during refactoring.
-
-  scenarios:
-    imperial_circuit:
-      description: "4-node default scenario"
-      file: "tests/baselines/imperial_circuit.json"
-    two_node:
-      description: "Minimal worker vs owner"
-      file: "tests/baselines/two_node.json"
-    starvation:
-      description: "Low extraction efficiency stress"
-      file: "tests/baselines/starvation.json"
-    glut:
-      description: "High extraction with metabolic overshoot"
-      file: "tests/baselines/glut.json"
-    fascist_bifurcation:
-      description: "Consciousness routing to national identity"
-      file: "tests/baselines/fascist_bifurcation.json"
-
-  checkpointed_metrics:
-    per_tick:
-      - "p_w_wealth, p_c_wealth, c_b_wealth, c_w_wealth"
-      - "imperial_rent_pool"
-      - "exploitation_tension"
-      - "p_w_consciousness"
-      - "p_w_p_revolution"
-    checkpoint_interval: 10
-    final: "outcome (SURVIVED/DIED/etc.)"
-
-  tolerance: 1e-5
-
-  workflow:
-    after_intentional_changes: |
-      1. Make intentional formula changes
-      2. Run: mise run qa:regression-generate
-      3. Review generated baselines
-      4. Commit baselines with code changes
-
-    in_ci: |
-      1. CI runs: mise run qa:regression
-      2. If baselines differ, CI fails
-      3. Developer investigates: intentional or bug?
-
-    investigating_drift: |
-      1. Review failing baseline comparison
-      2. If intentional: regenerate baselines
-      3. If unintentional: fix the regression
-
-  defines_hash:
-    purpose: "Detect GameDefines parameter changes"
-    algorithm: "SHA256 of JSON-serialized defines"
-    warning: "Baseline may need regeneration if defines changed"
-
-# =============================================================================
-# TESTING INFRASTRUCTURE
-# =============================================================================
+# Authored campaign values and current verification.
+campaign_parameters:
+  source: "content/scenarios/michigan/defines.toml"
+  authority: "ADR258_authored_campaign_parameters"
+  consumer: "babylon-runtime session --stdio --defines PATH"
+  capture: "New validates and captures canonical parameters in the campaign foundation"
+  restart: "Open reconstructs the stored parameters without reading the authoring file"
+  interval: "One 28-day simulation transition; 13 periods per 52-week simulation year"
+  scope: "Designed material stocks, schedules, recipes, capacities, orders, and delays"
+  observed_data: "QCEW source values retain separate observed provenance and units"
 
 testing_infrastructure:
-  description: "Consolidated testing tools from Operation Clean Slate refactor (Phase 2.5)"
-  added: "2025-12-12"
-
-  domain_factory:
-    location: "tests/factories/domain.py"
-    status: ACTIVE
-    test_count: 31
-    purpose: "Single source of truth for creating test entities"
-    key_methods:
-      - "create_worker(): SocialClass with periphery proletariat defaults"
-      - "create_owner(): SocialClass with core bourgeoisie defaults"
-      - "create_relationship(): Relationship edge with exploitation defaults"
-      - "create_world_state(): Complete WorldState for simulation tests"
-    usage: |
-      from tests.factories import DomainFactory
-      factory = DomainFactory()
-      worker = factory.create_worker(wealth=100.0)  # Override only what matters
-      state = factory.create_world_state(entities={"C001": worker})
-    replaces: "Manual dictionary creation, scattered fixture definitions"
-
-  babylon_assert:
-    location: "tests/assertions.py"
-    status: ACTIVE
-    test_count: 55
-    purpose: "Fluent assertion library for domain-expressive test verification"
-    key_classes:
-      - "Assert: Entry point for WorldState assertions"
-      - "EntityAssert: SocialClass assertions (wealth, ideology, survival)"
-      - "RelationshipAssert: Relationship assertions (tension, value_flow)"
-    usage: |
-      from tests.assertions import Assert
-      Assert(new_state).entity("C001").is_poorer_than(previous_state)
-      Assert(state).relationship("C001", "C002").has_tension_increased(previous_state)
-    replaces: "Raw assert statements with manual calculations"
-
-  mock_metrics_collector:
-    location: "tests/mocks/metrics_collector.py"
-    status: ACTIVE
-    test_count: 8
-    purpose: "Pure spy pattern for metrics recording (no calculations)"
-    pattern: "Dumb Spy - records calls without computing statistics"
-    key_methods:
-      - "record_cache_event(level, hit): Track cache hits/misses"
-      - "record_metric(name, value, context): Generic metric recording"
-      - "get_recorded_data(): Return raw recorded values"
-      - "get_protocol_calls(): List all protocol method calls"
-      - "clear(): Reset all metrics"
-    usage: |
-      from tests.mocks import MockMetricsCollector
-      collector = MockMetricsCollector()
-      collector.record_cache_event("L1", hit=True)
-      data = collector.get_recorded_data()
-      assert data["cache_hits"]["L1"] == 1
-    note: "Self-contained tests embedded in module (lines 328-456)"
-
-  metrics_collector_protocol:
-    location: "src/babylon/metrics/interfaces.py"
-    status: ACTIVE
-    purpose: "Protocol interface ensuring mocks and real collectors share identical API"
-    key_methods:
-      - "record(name, value, tags, metadata): Record metric value"
-      - "increment(name, value): Increment counter"
-      - "gauge(name, value): Set gauge value"
-      - "time(name) -> ContextManager: Time operations"
-      - "summary() -> dict: Get aggregated metrics"
-      - "clear(): Reset all metrics"
-
-# =============================================================================
-# KNOWN ISSUES AND WORKAROUNDS
-# =============================================================================
-
-known_issues:
-
-  sphinx_duplicate_warnings:
-    problem: "Classes re-exported in __init__.py documented twice"
-    solution: "autosummary_imported_members = False"
-    reference: "ADR022_sphinx_autosummary_config"
-
-  ruff_version_mismatch:
-    problem: "Different ruff versions in Poetry vs pre-commit cause format differences"
-    solution: "Always keep versions in sync: pyproject.toml and .pre-commit-config.yaml"
-    ci_impact: "Style job fails if versions drift"
-
-  yamllint_prose:
-    problem: "Prose files in ai/ exceed line length limits"
-    solution: "Add ai/ to yamllint ignore in .yamllint.yaml"
-    rationale: "Prose is not infrastructure config, line limits don't apply"
-
-  python_313_test_flakiness:
-    problem: "Some tests fail on Python 3.13 due to timing differences"
-    example: "timestamp collision in checkpoint tests"
-    solution: "Add time.sleep(0.01) between time-sensitive operations"
-    note: "Python 3.13 tests run in extended-analysis, not main CI"
+  python: "Retained reference-data, repository, CI, provider, and operator contracts"
+  rust: "Mechanics, BSL, deterministic replay, persistence, and client behavior"
+  fast_python: "mise run test:unit-ci"
+  release_remainder: "mise run test:rest-ci"
+  current_postgres: "mise run test:rust-postgres"
+  rust_without_documentation: "mise run rust:check-no-docs"
+  reports: "tools/rust_test_report.py emits structured nextest results"
+  historical_reference: |
+    Python simulation, parameter sweeps, Monte Carlo, optimization studies,
+    engine factories, and their CI jobs have been retired. Their code and
+    recorded results remain recoverable in Git history; they are not live
+    runtime dependencies or gates.

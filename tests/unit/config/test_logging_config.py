@@ -5,6 +5,7 @@ Tests the centralized logging configuration system that reads from pyproject.tom
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import tempfile
@@ -32,7 +33,7 @@ from babylon.config.logging_config import (
 def temp_pyproject(tmp_path: Path) -> Path:
     """Create a temporary pyproject.toml with logging config."""
     content = """
-[tool.poetry]
+[project]
 name = "test-project"
 
 [tool.babylon.logging]
@@ -54,7 +55,7 @@ file_level = "TRACE"
 def temp_pyproject_minimal(tmp_path: Path) -> Path:
     """Create a minimal pyproject.toml without logging config."""
     content = """
-[tool.poetry]
+[project]
 name = "test-project"
 """
     pyproject_path = tmp_path / "pyproject.toml"
@@ -232,7 +233,7 @@ class TestFindPyprojectToml:
         """_find_pyproject_toml finds pyproject.toml in current directory."""
         # Create pyproject.toml in temp dir
         pyproject = tmp_path / "pyproject.toml"
-        pyproject.write_text("[tool.poetry]\nname = 'test'")
+        pyproject.write_text("[project]\nname = 'test'")
 
         original_cwd = os.getcwd()
         try:
@@ -301,10 +302,63 @@ class TestSetupLogging:
         ):
             setup_logging(default_level="WARNING")
 
-        # Check console handler level
+        # Root always captures all; handlers filter by their own level.
         root = logging.getLogger()
-        # Default level was WARNING, but console uses console_level from config
-        assert root.level == logging.DEBUG  # Root always captures all
+        assert root.level == logging.DEBUG
+
+        # The console handler itself must actually be raised to WARNING —
+        # `default_level` is documented as a console-verbosity override (the
+        # headless runner's `--verbose` flag depends on this), so a caller
+        # passing it must see the console handler's level move, not just
+        # silently keep whatever `LoggingConfig.console_level` defaulted to.
+        console_handlers = [
+            h
+            for h in root.handlers
+            if isinstance(h, logging.StreamHandler) and not isinstance(h, logging.FileHandler)
+        ]
+        assert len(console_handlers) == 1
+        assert console_handlers[0].level == logging.WARNING
+
+    def test_console_stream_defaults_to_stdout(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """With no ``console_stream`` argument, console records still land
+        on stdout — the pre-existing behavior for every caller except the
+        headless runner (CLI, tools/*.py scripts) must be unchanged."""
+        log_dir = tmp_path / "logs"
+
+        with (
+            patch("babylon.config.logging_config.BaseConfig.LOG_DIR", log_dir),
+            patch.dict(os.environ, {}, clear=True),
+        ):
+            setup_logging(default_level="INFO")
+            logging.getLogger("test.console_stream.default").info("stdout marker message")
+
+        captured = capsys.readouterr()
+        assert "stdout marker message" in captured.out
+        assert "stdout marker message" not in captured.err
+
+    def test_console_stream_stderr_keeps_stdout_clean(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """``console_stream="stderr"`` must route console records to stderr
+        and NEVER stdout — this is the headless runner's contract: stdout is
+        reserved for the machine-readable artifact directory path printed by
+        ``main_from_argv`` (command-substitution callers like
+        an artifact-producing subprocess
+        would otherwise capture log text instead of a path)."""
+        log_dir = tmp_path / "logs"
+
+        with (
+            patch("babylon.config.logging_config.BaseConfig.LOG_DIR", log_dir),
+            patch.dict(os.environ, {}, clear=True),
+        ):
+            setup_logging(default_level="INFO", console_stream="stderr")
+            logging.getLogger("test.console_stream.stderr").info("stderr marker message")
+
+        captured = capsys.readouterr()
+        assert "stderr marker message" in captured.err
+        assert "stderr marker message" not in captured.out
 
     def test_applies_module_levels_from_pyproject(
         self, temp_pyproject: Path, tmp_path: Path
@@ -369,6 +423,33 @@ class TestGetCurrentConfig:
 @pytest.mark.unit
 class TestLoggingIntegration:
     """Integration tests for the logging system."""
+
+    def test_shipped_yaml_routes_json_records(
+        self, tmp_path: Path, temp_pyproject_minimal: Path
+    ) -> None:
+        """The shipped YAML loads its formatter and separates error records."""
+        log_dir = tmp_path / "logs"
+        config_path = Path(__file__).resolve().parents[3] / "logging.yaml"
+
+        with patch("babylon.config.logging_config.BaseConfig.LOG_DIR", log_dir):
+            setup_logging(config_path=config_path, pyproject_path=temp_pyproject_minimal)
+            logger = logging.getLogger("test.shipped_yaml")
+            logger.info("Native info message")
+            logger.error("Native error message")
+
+        main_records = [
+            json.loads(line) for line in (log_dir / "babylon.log").read_text().splitlines()
+        ]
+        error_records = [
+            json.loads(line) for line in (log_dir / "errors.log").read_text().splitlines()
+        ]
+        assert [(record["level"], record["logger"], record["msg"]) for record in main_records] == [
+            ("INFO", "test.shipped_yaml", "Native info message"),
+            ("ERROR", "test.shipped_yaml", "Native error message"),
+        ]
+        assert [(record["level"], record["logger"], record["msg"]) for record in error_records] == [
+            ("ERROR", "test.shipped_yaml", "Native error message"),
+        ]
 
     def test_full_setup_and_log(self, tmp_path: Path) -> None:
         """Complete test of setup and logging a message."""

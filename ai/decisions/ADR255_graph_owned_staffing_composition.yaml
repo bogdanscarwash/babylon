@@ -1,0 +1,77 @@
+ADR255_graph_owned_staffing_composition:
+  status: accepted
+  date: '2026-09-06'
+  issue: PER-32
+  title: Graph-owned staffing in the detached material close
+  authority:
+    - Director choices recorded in PER-32 on 2026-09-05
+    - ADR251 explicit durable Michigan material activation
+    - Constitution Articles IV, V, and VI
+  context: |
+    The material circuit accounts for hours but does not move persons between
+    employment and reserve. Hiring demand cannot use the existing labor-capped
+    production plan: a site with no workers would never request a new worker.
+    Staffing must influence the following opening without adding a second
+    population register or writing after graph identity has been finalized.
+  decision: |
+    R1. POLICY. The Director chose 40-hour weeks, retention through one brief
+    weekly supply interruption, and Designed retuning of Michigan. Actual wage
+    payments remain deferred to PER-36. For each closed workforce pool, sum
+    material-feasible process-hours before rounding to persons. Retained demand
+    is the greater of the current request and the previous unretained request.
+    Target employment is the smaller of pool size and the ceiling of retained
+    hours divided by the workweek. Paired hires and separations conserve
+    employed plus reserve. Store the current unretained request as memory;
+    storing the retained maximum would retain a historical peak indefinitely.
+
+    R2. OWNER. Existing SOCIAL_CLASS nodes own employed-population,
+    reserve-population, and previous-unretained-labor-hours as explicitly
+    declared extensive integers. The five Designed site-bound workforce
+    cohorts have political position unassigned. They are not five asserted
+    political classes. Employment changes do not assign a class role.
+    Immutable admitted content owns pool size, schedule, stable subject,
+    site/unit binding, and complete process roster. No second staffing register
+    or automatically seeded population stock exists. All graph values must
+    be exact nonnegative integers no greater than 2^53; arithmetic is checked.
+    Mortality, migration and inactivity are absent in this closed-pool slice.
+
+    R3. COMPOSITION. The native g4-workforce-staffing composition is a Designed
+    Mechanic. Retain its position at the existing after-metabolism material
+    boundary, using the existing rule-ID byte ordering for ties. Preserve all
+    34 phase slots. Inside the detached graph transaction, close due freight,
+    prior production and dispatch; derive following-week work using the same
+    shared allocator with only labor constraints omitted; resolve staffing;
+    apply its three permitted typed Set effects through the observed executor;
+    then install employed times 40 as next-opening labor and run the same full
+    planner. Later BSL rules observe those effects. Finalize graph and combined
+    identities afterward. A failed rule, arithmetic operation or durable
+    transaction publishes no graph, material state, event, receipt or time.
+
+    R4. EVIDENCE. Use ordinary typed events, observed writes and audit receipts.
+    Native staffing adds no fabricated BSL considered/fired counts. Pin its
+    policy, composition identity and bindings in foundation content. Existing
+    graph checkpoint and material register formats retain their distinct
+    principals. The observer must read staffing and physical accounts from
+    the same committed historical tick, with no raw staffing access through
+    the restricted preview. Hours, persons, observed county jobs and paid
+    wages remain distinct quantities.
+
+    R5. CALIBRATION. Scaling Michigan's labor budgets and recipe-hours together
+    by ten, with initial crews 20/4/4/1/2, is an engineering calibration within
+    the Director's retuning choice. It is Designed, not an observed QCEW count
+    or an additional Director-specified population. Final content admission
+    must pin the actual artifact and coefficients. This record does not claim
+    completed runtime, restart, observer or G4 acceptance.
+  alternatives_rejected:
+    - Deriving hiring demand from current employment-limited production.
+    - Retaining the maximum historical work request indefinitely.
+    - Rounding each process to persons before pooling shared work.
+    - Adding a second staffing principal or updating graph state after sealing.
+    - Inferring political class position from employment or observed industry.
+    - Preserving predecessor development saves through an alternate runtime.
+  consequences:
+    - Immediate rehire can satisfy feasible work within the closed pool; no hiring friction is implied.
+    - Current-version restart and atomic publication require executable proof.
+    - Paid wages and broader class migration remain unfinished PER-32 acceptance.
+    - New content invalidates incompatible development foundations without a migration path.
+  evidence_class: Designed

@@ -1,0 +1,113 @@
+ADR251_durable_g4_observer_and_material_activation:
+  status: accepted
+  date: '2026-09-04'
+  issue: PER-10
+  title: >-
+    One durable Michigan observer game, explicit material-circuit activation,
+    and a native three-dimensional presentation
+  authority:
+    - Constitution v4.1.0 Articles IV through VIII
+    - ADR238 material circuit and ADR239 routed successor
+    - ADR250 economy-first gate sequence and public QCEW baseline
+    - Director approval of the G4 implementation plan on 4 September 2026
+  supersedes_scope:
+    - ADR250 R7 composition of the windowed client
+    - Archive worker complete-empty-receipt deferral semantics
+    - PER-319 proposed wage-to-production shortcut
+  context: |
+    The Director requested a substantial economic observer game in Bevy.
+    Full observer is the default; player-knowledge preview is a separate read
+    capability. The existing material circuit has exact transition contracts
+    but requires explicit authoritative ownership, whole-world identity,
+    atomic persistence and restart. A local Alabama simulation beside a
+    Michigan dossier cannot satisfy the single-campaign requirement.
+
+    The Director subsequently requested consolidation of game assets,
+    playback of the Phi and Panopticon themes, and an imposing, austere,
+    futuristic neobrutalist interface. The primary presentation is fully
+    three-dimensional. A compact two-dimensional comparison remains optional.
+  decision: |
+    R1. SINGLE WRITER AND TRANSPORT. babylon-runtime is the composition root
+    and sole campaign writer. The play launcher connects runtime and Bevy
+    through anonymous pipes. The bounded versioned protocol admits one
+    outstanding next-week request with campaign identity and expected durable
+    tail. Acknowledgement follows durable commit. Pause stops further requests;
+    an in-flight commit finishes visibly. Reopen reconciles the stored tail
+    before another advance. Control and observations never adjudicate mechanics
+    on the render thread. G4 submits no player intents.
+
+    R2. OBSERVATION CAPABILITIES. A typed immutable observation binds campaign,
+    committed week, whole-world identity, perspective and provenance. Full
+    observer and known-only preview have distinct confined database roles.
+    Derived facts remain default-deny in preview. Rendering, charts, labels,
+    search, logs and late tasks cannot carry facts across a changed campaign,
+    scope, perspective or request generation. Historical reads name an exact
+    committed week. Current-only Archive content cannot masquerade as an
+    as-of page beside a historical map.
+
+    R3. OBSERVED FOUNDATION. QCEW employment, annual payroll, mean weekly wage
+    and establishments preserve their original units, vintage and citations.
+    They are public baseline observations. A foundation with no top-level BSL
+    rules is valid; malformed declarations remain invalid. Payroll is not a
+    physical production rule, and a mean is not a median. Production enters
+    through the governed exact material circuit.
+
+    R4. EXPLICIT MATERIAL SUCCESSOR. MaterialReplaySessionV3 privately owns the
+    graph adjudicator and MaterialWorldRegisterV2. One detached candidate
+    executes both before publishing either. Material circuit V2 retains its
+    exact transition order: due arrivals cannot enlarge this week's prior
+    production commitments; the resulting inputs affect following-week plans.
+    No new mathematical primitive, authored outcome or financial mechanic is
+    introduced.
+
+    R5. IDENTITY AND DURABILITY. material_campaign_foundation_v2 pins the graph
+    foundation, exact initial register, authored content, preset and horizon.
+    nominal_material_world_v2 combines the unchanged graph nominal identity
+    with the full exact material register. committed_material_tick_v3 binds
+    both worlds and exact material receipts before generating persistence
+    rows. One marker-last transaction records all eight envelope families,
+    graph checkpoint, complete circuit state and Archive receipt. Arithmetic,
+    adjudication or commit failure publishes no partial state. Restart verifies
+    the exact foundation and contiguous combined identities. Historical codecs
+    retain their conformance fixtures; graph-only campaigns do not acquire
+    a circuit implicitly, and material campaigns cannot accept graph-only ticks.
+
+    R6. HONEST ARCHIVE VERIFICATION. A complete empty receipt is consumed
+    without page writes. A partially paged receipt remains pending. The
+    contiguous processed watermark is distinct from a page's content tick;
+    a quiet tick cannot invent a page or content-hash change. CLI and held-open
+    dossiers expose correct freshness and refresh on acknowledged progress.
+
+    R7. THREE-DIMENSIONAL GAME PRESENTATION. Primary view and camera identities
+    are explicit. County geometry remains fixed geography. Economic height,
+    color, columns and flow widths state their units and missing-data meaning.
+    ProductionPlugin consumes a read-only ProductionSnapshotV1 and never runs
+    mechanics. Cohort columns have no invented factory location; native
+    collective relations cannot become pairwise cliques or intermediary actors.
+    Each freight packet corresponds to an actual lot. Music, sound, lighting,
+    camera motion and interface preferences have no mechanics authority.
+
+    R8. BOUNDED CAUSAL DEMONSTRATION. Separate committed Michigan material
+    presets hold productive setup and capacities equal while changing a
+    declared delivery delay. Observed county-industry data identifies the
+    aggregate context; recipes, modeled labor-hour budgets, inventories,
+    demand, routes and the finite horizon are explicitly Designed. Modeled
+    labor is not QCEW employment or an implemented ReserveArmy transition.
+    Quantity realization is not payment. Exact money, escrow, working capital
+    and payment-delay experiments retain PER-36 and downstream ownership.
+
+    R9. ASSETS AND ACCEPTANCE. assets/ is the canonical game-media root;
+    generation tools, source provenance and licenses accompany its outputs.
+    The existing Phi and Panopticon MIDI themes supply the observer soundtrack.
+    G4 observer contracts require explanation, evidence and unavailable-action
+    disclosure without satisfying G5 agency. Executable conservation, failure,
+    restart, visibility and causal-disconnection checks accompany a real
+    exact-head Director session. Passing tests alone cannot close the human
+    comprehension or presentation gate. Linear retains acceptance and work
+    ownership; this record does not claim implementation completion.
+  contracts:
+    - contracts/material_world_register_v2.yaml
+    - contracts/nominal_material_world_v2.yaml
+    - contracts/material_campaign_foundation_v2.yaml
+    - contracts/committed_material_tick_v3.yaml
+  evidence_class: Designed

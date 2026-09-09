@@ -1,0 +1,220 @@
+meta:
+  contract: CountyPlaceH3OverlapV1
+  version: 1
+  issue: PER-277
+  parent: PER-21
+
+classifications:
+  source_url_bytes_vintage_schema_crs_and_members: Observed
+  predecessor_artifact_bytes_and_identity: Observed
+  land_area_measures: Derived
+  semantic_digests_and_fixed_point_shares: Derived
+  projection_overlay_ordering_quantization_and_absences: Designed
+
+bounds:
+  contract_bytes: 131072
+  source_archive_bytes: 104857600
+  source_uncompressed_bytes: 268435456
+  artifact_bytes: 1048576
+  artifact_uncompressed_bytes: 16777216
+  cohort_rows: 65536
+  county_rows: 65536
+  county_place_rows: 65536
+
+source:
+  manifest: tools/county_place_h3_overlap_v1_fetch_manifest.json
+  manifest_sha256: 36a2c4b512e57b401a26497a901574ee66c2d5e2a166a07ae44a60385f009a85
+  url: https://www2.census.gov/geo/tiger/TIGER2023/COUNTY/tl_2023_us_county.zip
+  dest: tiger/county/tl_2023_us_county.zip
+  sha256: 692e12c30c83adcaabdbac0d3954fafa55e1c89a24b36d95e72e02dff938652e
+  bytes: 83451409
+  vintage: 2023
+  state_fips: "26"
+  input_crs: EPSG:4269
+  national_rows: 3235
+  michigan_rows: 83
+  michigan_extent:
+    - -90.418392
+    - 41.696118
+    - -82.122971
+    - 48.306063
+  identity_fixture:
+    path: contracts/fixtures/census_county_geoids_mi_2023.txt
+    format: newline-delimited-ascii
+    rows: 83
+    bytes: 498
+    sha256: 216b281d01b7d457c6d510af24c6026d6d28d918cdca8f6b2ab39975b264faa5
+    semantic_sha256: b0357679c075cc3e56a0709872baa92e67bf42b668871e544282cbab7509bdb6
+  columns:
+    - STATEFP
+    - COUNTYFP
+    - COUNTYNS
+    - GEOID
+    - GEOIDFQ
+    - NAME
+    - NAMELSAD
+    - LSAD
+    - CLASSFP
+    - MTFCC
+    - CSAFP
+    - CBSAFP
+    - METDIVFP
+    - FUNCSTAT
+    - ALAND
+    - AWATER
+    - INTPTLAT
+    - INTPTLON
+    - geometry
+  zip_members:
+    - tl_2023_us_county.cpg
+    - tl_2023_us_county.dbf
+    - tl_2023_us_county.prj
+    - tl_2023_us_county.shp
+    - tl_2023_us_county.shp.ea.iso.xml
+    - tl_2023_us_county.shp.iso.xml
+    - tl_2023_us_county.shx
+
+areawater:
+  manifest: tools/phase0d/fetch_manifest.json
+  manifest_sha256: 49261772713642f7848d8ce98a0240f6aef5c2c8bd7340367585b2976b6bdb22
+  archives: 83
+  input_crs: EPSG:4269
+  url_template: https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_{county_fips}_areawater.zip
+  dest_template: tiger/areawater/tl_2023_{county_fips}_areawater.zip
+  columns:
+    - ANSICODE
+    - HYDROID
+    - FULLNAME
+    - MTFCC
+    - ALAND
+    - AWATER
+    - INTPTLAT
+    - INTPTLON
+    - geometry
+
+predecessors:
+  h3_contract:
+    path: contracts/h3_estate_contract_v1.yaml
+    sha256: 1ea546e572c499424086d52bc62820626328c8336c38d57b6053c337c0b943b5
+    canonical_sha256: b7fcde99da1d68d1f389f3e1f905d8434f97d2a9d620979001ce4d0f793e4db7
+  h3_vectors:
+    path: rust/crates/babylon-kernel/tests/fixtures/h3_cell_id_vectors_v1.txt
+    sha256: 079fd93db1cfb9b2aef79b7b32476f737689a91c194de912864bb3849e578487
+  h3_cohort:
+    url: https://github.com/percy-raskova/babylon/releases/download/ci-data-v8/h3_res7_land_mask.parquet
+    bytes: 295194
+    sha256: 4e6caba297f0111a9ec93d948a83543bb9f7179361fe5dd318bb8a98a5be5194
+    rows: 45572
+    identity_column: h3_index
+    ignored_measure_columns:
+      - county_fips
+      - land_fraction
+    identity_fixture:
+      path: contracts/fixtures/h3_res7_land_mask_ids_v1.txt.gz
+      format: newline-delimited-lowercase-h3-gzip
+      rows: 45572
+      bytes: 111386
+      uncompressed_bytes: 729152
+      sha256: de0ae67607aeb2ba80f5b64092d6c3c98b9020f9554685af135d52e33ea6696f
+      semantic_sha256: 3b6eda7d8b29c6208157ff531f03750c44889535d37e0767c5bed17209a30f5d
+  place_contract:
+    path: contracts/census_place_authority_v1.yaml
+    sha256: 0bced499b9144e51d48bc2356260448bc09ab56b64035ab94c98a7287b462102
+  place_manifest:
+    path: tools/census_place_authority_v1_fetch_manifest.json
+    sha256: 223c1419dd9e7bd855efd8fb07b87199ce4ec88bd549e369890edbb1dea71456
+  place_identity:
+    path: src/babylon/data/reference/spatial/census_place_identity_mi_2023.csv.gz
+    sha256: cb864b4f6f43902bb821e84fe9a4055a9039e0a74d8b8399f209ae6ed26a8be7
+    rows: 745
+  place_geometry:
+    path: src/babylon/data/reference/spatial/census_place_geometry_mi_2023.parquet
+    sha256: cea5b0ada40b75ae2f6996bef7aa4aeb8d13b36ce5bc41d4334da1e8bf17b737
+    rows: 745
+
+toolchain:
+  geopandas: 1.1.4
+  h3: 4.5.0
+  pyarrow: 25.0.0
+  pyogrio: 0.13.0
+  pyproj: 3.7.2
+  shapely: 2.1.2
+  geos: 3.13.1
+  proj: 9.5.1
+
+geometry_method:
+  working_crs: EPSG:5070
+  numeric_model: pinned-binary64
+  grid_snap: none
+  overlay_order:
+    - project_exact_source_geometries
+    - subtract_official_county_areawater
+    - intersect_h3_with_county_land
+    - intersect_place_with_county_land_and_h3
+  dimensional_policy: retain-polygonal-components-only
+  area_quantization: floor-positive-whole-square-metres
+  share_formula: floor(place_land_area_m2*1000000000/cell_mi_land_area_m2)
+  denominator: sum-positive-quantized-cell-county-land-slices
+  ordering:
+    county_cell: cell_id-county_fips-ascending
+    county_place_cell: cell_id-county_fips-place_geoid-ascending
+
+county_cell_artifact:
+  name: census_county_h3_land_overlap_mi_2023
+  path: src/babylon/data/reference/spatial/census_county_h3_land_overlap_mi_2023.parquet
+  format: parquet
+  compression: parquet-zstd-level-22
+  rows: 31881
+  bytes: 136487
+  columns:
+    - cell_id
+    - county_fips
+    - land_area_m2
+  sha256: 7054fe2efa378e4db055a6647b9a3834cc382d822a032652b33894732b55b3c3
+  semantic_sha256: 07b243a38a111a01c0c1f509d12e418549691c31b8024809efa82eafcbff7723
+
+county_place_cell_artifact:
+  name: census_county_place_h3_land_overlap_mi_2023
+  path: src/babylon/data/reference/spatial/census_county_place_h3_land_overlap_mi_2023.parquet
+  format: parquet
+  compression: parquet-zstd-level-22
+  rows: 4813
+  bytes: 58505
+  columns:
+    - cell_id
+    - county_fips
+    - place_geoid
+    - place_land_area_m2
+    - cell_mi_land_area_m2
+    - place_land_area_share_ppb
+  sha256: fcb7baaf63a5422accce8709997de8e409936f7131fa0ef6b0a28762fdfee42f
+  semantic_sha256: 72b92c705c3d456b471d409bd9b55ece3741deb4fecca1db36768527efd5ea7b
+
+evidence:
+  positive_land_cells: 28722
+  cohort_absent_cells: 16850
+  cross_county_cells: 3021
+  maximum_counties_per_cell: 4
+  places_crossing_counties: 30
+  maximum_counties_per_place: 3
+  land_cells_without_place: 24695
+  total_mi_land_area_m2: 146426246267
+  total_place_land_area_m2: 7689548061
+  maximum_share_sum_ppb: 1000000000
+  maximum_place_share_ppb: 1000000000
+  minimum_place_share_ppb: 369
+
+declared_absences:
+  - dominant_county_owner
+  - synthetic_place
+  - normalized_place_share
+  - postgresql_schema
+  - runtime_reader
+  - runtime_writer
+  - writer_cutover
+
+lineage:
+  resolves_historical_gap: county_place_h3_overlap
+  completes_data_substrate_for: PER-21
+  database_dependency_owner: PER-20
+  authority_boundary: checked-artifacts-only-no-postgresql-or-runtime-authority

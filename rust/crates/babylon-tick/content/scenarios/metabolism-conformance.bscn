@@ -1,0 +1,52 @@
+; The ACTIVE conformance world for `metabolism/biocapacity-update`.
+;
+; Three counties, sharing the PRODUCTION-DEFAULT MetabolismDefines
+; coefficients (entropy_factor=1.2, hysteresis_rate=0.005) and the
+; production-default per-node regeneration_rate=0.02 (D-2 in
+; metabolism.bsl: grep-verified uniform across every scenario builder in
+; the frozen engine), discriminated entirely by their per-node
+; biocapacity/max-biocapacity/extraction-intensity seeds:
+;
+;   - nominal-county: a small current stock, full extraction — neither
+;     clamp binds.
+;   - hysteresis-inert-county: extraction-intensity 0 — both the
+;     ecological cost AND the hysteresis damage are exactly zero (pure
+;     regeneration); max-biocapacity is unchanged bit for bit.
+;   - zero-floor-county: at its own ceiling (biocapacity == max-biocapacity,
+;     so the frozen formula suppresses regeneration) with full extraction —
+;     the ecological cost alone drives it deeply negative and the
+;     max(0.0, ...) floor binds at exactly 0.0; max-biocapacity also
+;     strictly decreases from its seed, proving the hysteresis ratchet is
+;     live.
+;
+; See `metabolism_conformance.py` for the provenance script these numbers
+; come from.
+(scenario metabolism/conformance
+  (deffield territory/biocapacity real extensive)
+  (deffield territory/max-biocapacity real extensive)
+  (deffield territory/extraction-intensity int intensive)
+
+  ; MetabolismDefines, src/babylon/data/defines.yaml (metabolism: section) —
+  ; production defaults.
+  (defconst metabolism/regeneration-rate 0.02c)
+  ; D-1 (metabolism.bsl): entropy_factor's declared domain (1.0, 3.0]
+  ; exceeds every [0,1]-capped scaled literal, and Ratio's only operator is
+  ; Currency x Ratio -> Currency (this formula needs Real x Ratio, which
+  ; does not exist) — scaled bare-Int workaround, x1,000,000.
+  (defconst metabolism/entropy-factor-x1e6 1200000)
+  (defconst metabolism/hysteresis-rate 0.005c)
+
+  (node nominal-county NodeType/TERRITORY
+    (territory/biocapacity 5)
+    (territory/max-biocapacity 100)
+    (territory/extraction-intensity 1))
+
+  (node hysteresis-inert-county NodeType/TERRITORY
+    (territory/biocapacity 50)
+    (territory/max-biocapacity 100)
+    (territory/extraction-intensity 0))
+
+  (node zero-floor-county NodeType/TERRITORY
+    (territory/biocapacity 100)
+    (territory/max-biocapacity 100)
+    (territory/extraction-intensity 1)))

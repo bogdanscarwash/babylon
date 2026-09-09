@@ -1,0 +1,441 @@
+{
+  "tiger_vintage": "2023",
+  "lodes": "LODES8",
+  "entries": [
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/BG/tl_2023_26_bg.zip",
+      "dest": "tiger/bg/tl_2023_26_bg.zip",
+      "sha256": "5a2fd7bb94018ca79948ada8603bb199dbdb0efce8ff1c1590f027e8ae3e1286"
+    },
+    {
+      "url": "https://lehd.ces.census.gov/data/lodes/LODES8/mi/wac/mi_wac_S000_JT00_2020.csv.gz",
+      "dest": "lodes/mi_wac_S000_JT00_2020.csv.gz",
+      "sha256": "36fb6fd66bd3a2cf775b2096d24ef9991864d04cd01e5bac92c90c80b90490d1"
+    },
+    {
+      "url": "https://lehd.ces.census.gov/data/lodes/LODES8/mi/mi_xwalk.csv.gz",
+      "dest": "lodes/mi_xwalk.csv.gz",
+      "sha256": "e3a6a1ed60868a0eea04695b9fde0a0941ba18fddc8e65c58a621a710bdf60e2"
+    },
+    {
+      "url": "https://www2.census.gov/programs-surveys/decennial/2020/data/01-Redistricting_File--PL_94-171/Michigan/mi2020.pl.zip",
+      "dest": "census/mi2020.pl.zip",
+      "sha256": "971bd53abeb1d905bb9b09bfe4dc1afe8514a916f24d285b289e0f66ec5cfb62"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26001_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26001_areawater.zip",
+      "sha256": "a2d51f9538fbe796ee07e2a929897ba96057eb1c0f6e4005f5bc33935d80837d"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26003_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26003_areawater.zip",
+      "sha256": "5e9c11747432154d554d1ee06d2465d34b6fb250a9a962e9306ce30225ebe0e9"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26005_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26005_areawater.zip",
+      "sha256": "a438bd9f92b6b58046c11a9bcafaaecfca20a25d87933701a828710e57789a69"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26007_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26007_areawater.zip",
+      "sha256": "208591d9ffaf94ac3204ffb6969367610ed048a6626d00fff1887d6acca3aea3"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26009_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26009_areawater.zip",
+      "sha256": "60a2d4818872d04d82f59645e6524e27586cae0568db3a610bebb2bb410fcfe1"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26011_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26011_areawater.zip",
+      "sha256": "e90f8b790506dae38a2c1d4ffacbb26545e9be4c27b21ddd76a8e1c67586f8ef"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26013_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26013_areawater.zip",
+      "sha256": "94de04bec05c410f72e37db8aa114a6efff9b1ecc6c456e5590cc045966b4d52"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26015_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26015_areawater.zip",
+      "sha256": "46af91fd91e3ead8d70f7936bb8e5899186eeff7be6ca229c45df71e7ec963f9"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26017_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26017_areawater.zip",
+      "sha256": "f87fbf094d62215198d6eb840686fb42394ab0d670fe8ffc972cabfb9843841e"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26019_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26019_areawater.zip",
+      "sha256": "0815a9ce8a721816c9518e6713cb935c1d3b52d99fbdebc5028d47423670889c"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26021_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26021_areawater.zip",
+      "sha256": "fca94c5b01beb255d24bae9f188f892ae0e22d961affe460ab6e81c8f4c9edfb"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26023_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26023_areawater.zip",
+      "sha256": "f892ab6be74568990f3fcbc540c647e24a1010f7b444b67b1c2f3c7841e312d1"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26025_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26025_areawater.zip",
+      "sha256": "bb776b95b2537f3c765c8378dedb7aa9b329c7b8eebdbde3d22164b2f9684193"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26027_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26027_areawater.zip",
+      "sha256": "6571e63e1ed94724e6de4b92957556924f1387cb71e14156eca044af6d9daf8f"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26029_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26029_areawater.zip",
+      "sha256": "2ae9d03ccea096cc7ca5ddee3e5ae46b3dc230c548a4fbcd2884989cdabf3028"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26031_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26031_areawater.zip",
+      "sha256": "4c143169e47036647446b6fc543fe98175b1eb805b0bdc531f5c70e71f7c0e25"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26033_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26033_areawater.zip",
+      "sha256": "62fdbea805dbeb2d889e27d4b043206baf45ce480fdb3f3e2f0d0f2db4e14703"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26035_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26035_areawater.zip",
+      "sha256": "79386739184c702b1d6f75cdbf64491e841c6f2b9f8aa2ee920f8d175023c2e3"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26037_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26037_areawater.zip",
+      "sha256": "d85aecea01d89531797bd6b07fbe13eb18a39582ad7573fd783c5a22495b50ba"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26039_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26039_areawater.zip",
+      "sha256": "a58034c3af2f6cc17b01310f351d216cff58ca52d554174f852eb24337acd3aa"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26041_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26041_areawater.zip",
+      "sha256": "16e4a72c83f4cdc099c8da1f9afc84a5724f162658afed30c940df7ba830f2d6"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26043_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26043_areawater.zip",
+      "sha256": "9fdba03810c757c2fe9649402632ada225191720cef4ae63eb9ccf1ae7e06eda"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26045_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26045_areawater.zip",
+      "sha256": "41ea7cfe020ff6583183675c1d1e1ca31fccde6a27a2fb4b32f2d4eae4825772"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26047_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26047_areawater.zip",
+      "sha256": "1516f55a4ae2bed3e18d19e7b8a09b16800f0c16e6c77e2cd0bac5806505b984"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26049_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26049_areawater.zip",
+      "sha256": "5a22ec308d4a0fb3230f46506d3c499175096b25d3d9dc3b9faeb71261211b83"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26051_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26051_areawater.zip",
+      "sha256": "b7be96cb550f5bdb6524efe18e8a10a98bb6404f8e1a2a85e2361f56b7e9c005"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26053_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26053_areawater.zip",
+      "sha256": "62c41a20ee38b1383e62c8c44463bae39314adf3b6d942abfed58973efce3dd8"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26055_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26055_areawater.zip",
+      "sha256": "cb99c8e20ccedfb3bc830e4b330c360e4132d7f2fab69d30a15a03880b9e4add"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26057_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26057_areawater.zip",
+      "sha256": "e93bea6c3360599dd083bdae73265bece797965afa0122998ee1b844953f2b95"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26059_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26059_areawater.zip",
+      "sha256": "7eee4dd127c54881c2529538bdfc4d7ad040597093116c940cd7fcf0c8fc91de"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26061_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26061_areawater.zip",
+      "sha256": "ce0b730a49d9393c3d2f9498bdd35c16a8b0522faac7c2339df6cb7bd651c0f0"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26063_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26063_areawater.zip",
+      "sha256": "5c0a93e57ad93b5bdb2a76d6cb7190b67b5ce1f9a155169dd0c7b8b1f25f852d"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26065_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26065_areawater.zip",
+      "sha256": "35be333a89feebe720c56523375e78dacf66c25e47a2a084a567b9067bf397d5"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26067_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26067_areawater.zip",
+      "sha256": "6cb7e98967346ed4255af465209f7c2c82018dc10f67dbf557a046a105fc73ac"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26069_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26069_areawater.zip",
+      "sha256": "376e22e8e8d2872bebddddbe8c12c8aec503693a32ddf3cd87f5af4c3b1ae24e"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26071_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26071_areawater.zip",
+      "sha256": "8524824a527c24490e0b0c2acbec597f448b0aa5a05948b9ee5511324afdee4e"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26073_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26073_areawater.zip",
+      "sha256": "c60c6fcae46f0d2a5cf17440df23aae0f50088a7807cb11122782016e4debd29"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26075_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26075_areawater.zip",
+      "sha256": "0c4b130411a9dfcb0d6b41425541e33baab517502ea36ee78ccac1276cbf1ec8"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26077_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26077_areawater.zip",
+      "sha256": "c914d6514aa5f83754a8b702692ff3f5244b04504e46bcc5b0341c4979542972"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26079_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26079_areawater.zip",
+      "sha256": "94eb2cc6572a74b595234e9cebad21030853db52ebea277f7bda1e27bd9d6dff"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26081_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26081_areawater.zip",
+      "sha256": "445eff8b1777b970416d2fd1c0d5ce71542a445fcf1a8bdbf1a50445b7e0b8da"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26083_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26083_areawater.zip",
+      "sha256": "476723ca7b17e8e0968d04e66a181f9f0835d7935e67339575104ab08f0f0e46"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26085_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26085_areawater.zip",
+      "sha256": "47c7a3ca89235d20ef63ab71d5ce6d2949d30e061fd6dd0d44a099edc689c8e1"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26087_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26087_areawater.zip",
+      "sha256": "35b8b98dec6de667c1c5f75b4f007abcb066eb8e106f54ae67a168a07af236f5"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26089_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26089_areawater.zip",
+      "sha256": "4bae0dfa4812fe6248c72754dbb4e5e8c890d62d22bd891cb56fd015f14ec104"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26091_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26091_areawater.zip",
+      "sha256": "8b37d9c79e0fedc9ceae86f094345280e3899756406955aa47f4c1c51c1412f8"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26093_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26093_areawater.zip",
+      "sha256": "13b281f8343098185cf2461d020a13fe02f1c5f723a4eb81cf455a1181ce61fd"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26095_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26095_areawater.zip",
+      "sha256": "7e99a09ba051e0fdd3c5399c4b1849cf6777459b5671f60aef509e7070e320c3"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26097_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26097_areawater.zip",
+      "sha256": "5ffbd7f846f3cd04d1e643820594d73921672a04bf9bfe0172eb6fea0ff49297"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26099_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26099_areawater.zip",
+      "sha256": "45868bb5c2d17963dd07eb4dc647dc06e47b591b40c1f17e9684d219d104e335"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26101_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26101_areawater.zip",
+      "sha256": "9f57962f143f375030518ba0c80a5ab44d4d30c97f754c0357a7575093ee5842"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26103_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26103_areawater.zip",
+      "sha256": "ee2a76c4b2cf2ad43e0e2ab1ed6c4e3f6094961af82cdd21f397836eda5e18b3"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26105_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26105_areawater.zip",
+      "sha256": "4681e12a6d66338ef048db452cf0c35c20f99d199f095fe641ec8342556ab954"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26107_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26107_areawater.zip",
+      "sha256": "b58f864db022901184e9add542d49d86c42fbe9ab6718eeb6a81515e1dbf11bd"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26109_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26109_areawater.zip",
+      "sha256": "764fdc85bb7a14813d1487c784ae81d6a450a1aaba55f4844ec92ea3cfdef7a9"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26111_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26111_areawater.zip",
+      "sha256": "59ca79f125f4deb8290ea27a285ed9267cc25ad3a60bc63e2b7f18203f99107d"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26113_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26113_areawater.zip",
+      "sha256": "89120902eb7b6648534accadf8c0717a4b2a6a5e0259a43c69965f046e32e920"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26115_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26115_areawater.zip",
+      "sha256": "cf5fae92df851c8979c5d56c491aee72ead1b288315f075b079ee09dfeab2530"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26117_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26117_areawater.zip",
+      "sha256": "8912a9fabc678f0b73fe5a4ad3951916a1ba72ea4452508b2c6c827b6af7fbfc"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26119_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26119_areawater.zip",
+      "sha256": "9d8c95eb840a55cd0eb064a134337514718f52f6bd5dedda00187e837f99e2c6"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26121_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26121_areawater.zip",
+      "sha256": "c44736b42987c6103c332c371cc19339dc0f6f544c36f09c979970efe4ad4c35"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26123_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26123_areawater.zip",
+      "sha256": "d7bfd6a514d411f72db9ffbef5b02da1c9ea6c3b31cebe4e08b4467e322500f5"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26125_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26125_areawater.zip",
+      "sha256": "516b5fe2d2b20845a22bcfbf848abc312e5fb123769d2283d0dfd0e4a889e993"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26127_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26127_areawater.zip",
+      "sha256": "6bf7bf7e5cc2c081a27c19f813010ea998e493f12c3f818199b487d91d4ca418"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26129_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26129_areawater.zip",
+      "sha256": "db00612cd3199c77fea4614137c7f6d331ddc88a35d61a96153a996b9a9a3085"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26131_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26131_areawater.zip",
+      "sha256": "07fd7eb12e657399a326a345d3f55a3b7c0a6caf1c03626b66ff993a3de19bd3"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26133_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26133_areawater.zip",
+      "sha256": "409fe240d580fe12986e64dd8d245cc3c5f4af8891acced8ee8a01ea3a975555"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26135_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26135_areawater.zip",
+      "sha256": "99f02ec07927d886fa503134a314a73be447d0e0dee3986ea05961c6ebf6f601"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26137_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26137_areawater.zip",
+      "sha256": "678ad5826b08c7614da180824165dfaaa76800583de398aa62ef59d66127fb66"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26139_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26139_areawater.zip",
+      "sha256": "5b663cc0bfc6c821da18e5f687bf2aa6840bbe9f3674735875362e9d09677ec8"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26141_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26141_areawater.zip",
+      "sha256": "2c917ae9d4bd0b159299f8ea54d3787de50724dbe50b8945432ab798d4c3eeb5"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26143_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26143_areawater.zip",
+      "sha256": "eafa613ce01bd88dd456711b118b7f6e879b4011db825fed72df626f4b3ea867"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26145_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26145_areawater.zip",
+      "sha256": "96fffddb5d8cb16f4d24d89885a68cd9dfc1f5fd7165e506f3963da6aaec4151"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26147_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26147_areawater.zip",
+      "sha256": "0157d1021e7a4ca88ded6169ec17510e298054a1163f8e983ead6796d3c059c9"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26149_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26149_areawater.zip",
+      "sha256": "ecc732099ea928557f80598b52eb18a27f5cc74bb10e8171bbb0fdb296956b72"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26151_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26151_areawater.zip",
+      "sha256": "16004c50a144f95f4e7289664bbea9fdbaea386fdb18073b6148eeee0a4ff877"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26153_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26153_areawater.zip",
+      "sha256": "9a60558d88168e7b33994ad54cae453a2c688a8aa42321ee7308d88497c0030f"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26155_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26155_areawater.zip",
+      "sha256": "0d867bced53c4b7ca9a321a1f3e3bedbe4077809aa9e6b747c7c237b89b5dc33"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26157_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26157_areawater.zip",
+      "sha256": "328e59ec69ef3806865fa04de56c277ca55413a86e91958898ef65b7c6e113b1"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26159_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26159_areawater.zip",
+      "sha256": "9cdc7d84f28ae7f66a50e168e17ce64b6a8dcf94b4d0f139a1ba7ee4ac5c53df"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26161_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26161_areawater.zip",
+      "sha256": "936004f088d9cc1605ca278dc2a1b0b28880755fe17abbe6f1d3cba1adc215ca"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26163_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26163_areawater.zip",
+      "sha256": "bf2d76e9d39d2b6a4af085fbaea3c7d64f565e30b60af1f5b6d909cb577e7cf1"
+    },
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/AREAWATER/tl_2023_26165_areawater.zip",
+      "dest": "tiger/areawater/tl_2023_26165_areawater.zip",
+      "sha256": "3dfe9f4100c01e6436ba565262db4450db03968069bcbd8c6277bb04073e7984"
+    }
+  ]
+}

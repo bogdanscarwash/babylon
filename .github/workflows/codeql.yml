@@ -1,39 +1,76 @@
 name: "CodeQL Security Scan"
 
+# ADR181 R5 (2026-07-30): the SAST budget follows executable authority.
+# - Python and Rust cover the live engine and periphery.
+# - Actions covers the CI supply chain, and JavaScript/TypeScript covers the
+#   remaining executable repository tooling.
+# - Main pull requests require CodeQL before merge. Protected-branch pushes,
+#   weekly scans and manual runs refresh security findings asynchronously.
+# - `paths-ignore` excludes non-executable design material and two intentionally
+#   malformed nested Rust-workspace fixtures that cannot be extracted.
+
 on:
-  push:
-    branches: [main, dev]
   pull_request:
+    branches: [main]
+  push:
     branches: [main, dev]
   schedule:
     # Weekly scan on Sundays at 3am UTC
     - cron: "0 3 * * 0"
+  workflow_dispatch: {}
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   analyze:
-    name: Analyze Python
+    name: Analyze ${{ matrix.language }}
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     permissions:
       actions: read
       contents: read
       security-events: write
 
+    strategy:
+      fail-fast: false
+      matrix:
+        # Keep build-mode explicit per language. All current extractors use
+        # no-build mode, and a future exception must be visible in this row.
+        include:
+          - language: python
+            build-mode: none
+          - language: rust
+            build-mode: none
+          - language: actions
+            build-mode: none
+          - language: javascript-typescript
+            build-mode: none
+
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v4
+        uses: github/codeql-action/init@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
         with:
-          languages: python
-          # security-extended: catches SQL injection, XSS, command injection,
-          # path traversal, etc. Good balance of coverage vs noise.
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+          # security-extended adds lower-precision security queries to the
+          # default suite without turning code-quality findings into blockers.
           queries: security-extended
+          config: |
+            paths-ignore:
+              - .design-sync
+              - design
+              - rust/crates/bsl-lint/tests/fixtures/sfs_non_authorability/reserved-rust/rust
+              - rust/crates/bsl-lint/tests/fixtures/sfs_non_authorability/reserved-two-hop-helper/rust
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v4
+        uses: github/codeql-action/analyze@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
         with:
-          category: "/language:python"
-          # Only fail on error/critical, not warnings
+          category: "/language:${{ matrix.language }}"
+          # Upload findings even if a prior step failed so GitHub can evaluate
+          # the repository's native zero-alert code-scanning protection rule.
           upload: always

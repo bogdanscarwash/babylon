@@ -1,0 +1,103 @@
+meta:
+  contract: SimulationIntervalV1
+  schema_version: 1
+  status: accepted
+  evidence_class: Designed
+  authority: Constitution v4.2.0 Amendment AK and ADR257
+
+interval:
+  days_per_tick: 28
+  weeks_per_tick: 4
+  ticks_per_model_year: 13
+  weeks_per_model_year: 52
+  civil_calendar: false
+  transitions_per_advance: 1
+  commits_per_successful_advance: 1
+  internal_weekly_substeps: 0
+
+ordinals:
+  foundation_completed_tick: 0
+  first_opening_period: 1
+  successor: completed_tick + 1
+  next_opening: completed_tick + 1
+  elapsed_weeks: completed_tick * 4
+  elapsed_days: completed_tick * 28
+  arithmetic: checked integer arithmetic; overflow refuses the operation
+  interpretation: >-
+    Tick and period are ordinal positions in the same causal sequence. A
+    completed period n leaves the opening state for period n+1. Ordinal keys
+    do not jump by four. An elapsed-time display converts the ordinal to weeks
+    or days and does not reinterpret it as a civil month or date.
+
+admission:
+  presets:
+    - michigan-material-standard-v5
+    - michigan-material-delayed-v5
+  stored_defines_version: 3
+  duration_days: 28
+  duration_is_hashed_foundation_content: true
+  incompatible_weekly_content: refuse without changing stored data
+  malformed_or_missing_duration: refuse
+  compatibility_runtime: forbidden
+
+causal_order:
+  steps:
+    - Credit due arrivals at the opening of the period.
+    - Execute only previously committed production through current resource limits.
+    - Dispatch against the shared exact inventory and corridor capacity principals.
+    - Derive feasible next-period work before applying staffing limits.
+    - Resolve staffing and its graph effects, then plan the next opening.
+    - Publish all state, events, receipts, and time only after total success.
+  note: >-
+    The existing phase composition and within-period ordering remain binding.
+    New arrivals can feed planning for the following period; they do not
+    enlarge an already committed production plan in the arrival period.
+
+content_units:
+  recurring_process_capacity: batches per period
+  recurring_corridor_capacity: quantity per departure period
+  labor_schedule: hours per person per period
+  staffing_retention: current and previous unretained period work requests
+  route_duration: positive whole periods
+  unchanged_principals:
+    - exact inventory stocks
+    - persons in employment and reserve
+    - total order quantities and cumulative order accounts
+    - per-batch physical inputs, outputs, and recipe hours
+  michigan_v5_design:
+    recurring_capacity_multiplier: 4
+    hours_per_person_per_period: 160
+    initial_commitment_multiplier: 4
+    previous_unretained_hours_multiplier: 4
+    staffing_retention_periods: 1
+    standard_route_periods: 1
+    delayed_sheet_route_periods: 3
+    horizon_periods: 16
+  observed_source_units: >-
+    Annual observations stay annual. QCEW mean weekly wage remains a weekly
+    source statistic, not a period wage or a payment. No observed value,
+    probability, nonlinear response, or stock receives an implicit fourfold
+    multiplier. Every rate conversion needs its own declared transformation.
+
+historical_contracts:
+  preserves_bytes:
+    - contracts/material_circuit_v1.yaml
+    - contracts/material_circuit_v1_vectors.jsonl
+    - contracts/material_circuit_v2.yaml
+    - contracts/material_circuit_v2_vectors.jsonl
+  superseded_scope: >-
+    For current admitted content, all material ordinal fields formerly named
+    week, weeks, or weekly mean periods. Their integer widths, field ordering,
+    domain bytes, canonical ordering, refusal discriminants, and codec vector
+    bytes remain unchanged. Historical vectors prove those codec properties;
+    they do not admit a weekly campaign or define current game duration.
+
+required_evidence:
+  - One advance traverses the causal schedule once and creates one durable marker.
+  - A successful tick increments the ordinal once and represents four elapsed weeks.
+  - Altered, absent, or predecessor duration content cannot pass admission.
+  - Matching new-content input produces identical state, receipts, and hashes on replay.
+  - Restart agrees with uninterrupted play at dispatch, transit, and arrival boundaries.
+  - Exact stock, freight, order, labor, and person accounts reconcile each period.
+  - History, comparison, Archive, and Bevy label the same authenticated period.
+  - Old stored campaigns remain intact after refused admission.

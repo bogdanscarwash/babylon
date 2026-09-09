@@ -1,0 +1,18 @@
+; The Fundamental Theorem's two cases in one world.
+;
+; A core class whose wages exceed the value its labour produces (the gap is
+; imperial rent), and a periphery class whose produced value exceeds its
+; wages. The second exists so the guard has to discriminate: a rule that
+; fired on every subject would look identical on a one-class world.
+(scenario ft/two-classes
+  (deffield social-class/wages int extensive)
+  (deffield social-class/value-produced int extensive)
+  (deffield social-class/imperial-rent int extensive)
+
+  (node core NodeType/SOCIAL_CLASS
+    (social-class/wages 120)
+    (social-class/value-produced 80))
+
+  (node periphery NodeType/SOCIAL_CLASS
+    (social-class/wages 20)
+    (social-class/value-produced 90)))

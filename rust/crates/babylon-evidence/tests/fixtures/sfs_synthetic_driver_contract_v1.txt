@@ -1,0 +1,7 @@
+schema|1
+predicate|candidate-projection|1
+predicate|cumulative-driver-shape|1
+predicate|persistence-comparison-identity|1
+predicate|aligned-material-sequence|1
+predicate|twin-identity-difference|1
+source|driver.rs|e8a3dc582885b112b71d0709d918b043230344607f5beca573a940bd1e7d439a

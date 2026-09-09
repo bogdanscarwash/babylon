@@ -113,11 +113,11 @@ def _make_fixture_db(path: Path) -> None:
         );
         INSERT INTO fact_bea_national_industry VALUES (1, 2022, 500.0);
 
-        CREATE TABLE fact_qcew_annual__pre_086 (
+        CREATE TABLE fact_retired_skip_example (
             county_id INTEGER NOT NULL,
             employment INTEGER
         );
-        INSERT INTO fact_qcew_annual__pre_086 VALUES (1, 1);
+        INSERT INTO fact_retired_skip_example VALUES (1, 1);
 
         CREATE TABLE dim_time (
             time_id INTEGER PRIMARY KEY,
@@ -147,8 +147,8 @@ FIXTURE_POLICY: dict[str, TablePolicy] = {
         county_columns=("home_county_id", "work_county_id"),
     ),
     "fact_bea_national_industry": TablePolicy(scope="full", reason="National, tiny."),
-    "fact_qcew_annual__pre_086": TablePolicy(
-        scope="skip", reason="Superseded legacy table, no real-DB test reads it."
+    "fact_retired_skip_example": TablePolicy(
+        scope="skip", reason="Synthetic retired table exercising skip behavior."
     ),
 }
 
@@ -472,8 +472,8 @@ class TestCopyTable:
         with pytest.raises(ValueError, match="skip"):
             copy_table(
                 conn,
-                "fact_qcew_annual__pre_086",
-                FIXTURE_POLICY["fact_qcew_annual__pre_086"],
+                "fact_retired_skip_example",
+                FIXTURE_POLICY["fact_retired_skip_example"],
             )
         conn.close()
 
@@ -650,9 +650,9 @@ class TestGenerateSubsetEndToEnd:
         assert manifest["tables"]["fact_qcew_annual"]["scope"] == "michigan"
         assert manifest["tables"]["fact_qcew_annual"]["kept_rows"] == 3
         assert manifest["tables"]["fact_qcew_annual"]["source_rows"] == 5
-        assert manifest["tables"]["fact_qcew_annual__pre_086"]["scope"] == "skip"
-        assert manifest["tables"]["fact_qcew_annual__pre_086"]["kept_rows"] == 0
-        assert manifest["tables"]["fact_qcew_annual__pre_086"]["source_rows"] == 1
+        assert manifest["tables"]["fact_retired_skip_example"]["scope"] == "skip"
+        assert manifest["tables"]["fact_retired_skip_example"]["kept_rows"] == 0
+        assert manifest["tables"]["fact_retired_skip_example"]["source_rows"] == 1
 
     def test_skipped_table_absent_from_output(self, fixture_db: Path, tmp_path: Path) -> None:
         output = tmp_path / "subset.sqlite"
@@ -662,7 +662,7 @@ class TestGenerateSubsetEndToEnd:
         out_conn = sqlite3.connect(output)
         names = get_source_table_names(out_conn)
         out_conn.close()
-        assert "fact_qcew_annual__pre_086" not in names
+        assert "fact_retired_skip_example" not in names
 
     def test_output_is_smaller_than_source_after_filtering(
         self, fixture_db: Path, tmp_path: Path
@@ -733,10 +733,14 @@ class TestGenerateSubsetEndToEnd:
 class TestMainCLI:
     """CLI entry point exit codes."""
 
-    def test_main_success_exit_zero(self, fixture_db: Path, tmp_path: Path, monkeypatch) -> None:
-        import make_reference_subset  # type: ignore[import-not-found]
-
-        monkeypatch.setattr(make_reference_subset, "TABLE", FIXTURE_POLICY)
+    def test_main_success_exit_zero(self, fixture_db: Path, tmp_path: Path) -> None:
+        # main() binds the production TABLE (def-time default), so the
+        # fixture-only synthetic skip table must not be present — every
+        # remaining fixture table is classified in the real policy dict.
+        conn = sqlite3.connect(fixture_db)
+        conn.execute("DROP TABLE fact_retired_skip_example")
+        conn.commit()
+        conn.close()
         output = tmp_path / "subset.sqlite"
         manifest_path = tmp_path / "manifest.json"
 
@@ -803,17 +807,18 @@ class TestProductionPolicyShape:
         ):
             assert TABLE[name].scope == "full", f"{name} must be BLOCKED-FULL"
 
-    def test_faf_is_full_and_pre086_qcew_is_skipped(self) -> None:
+    def test_faf_is_full_and_pre086_qcew_is_amputated(self) -> None:
         # FAF flipped skip -> full for ci-data-v2: sqlite_hydrator (the headless
         # runner's hydration path) reads it — the Determinism Bundle CI job died
         # ENGINE_FAILURE without it on the ci-data-v1 proving run (2026-07-11).
         assert TABLE["fact_faf_commodity_flow"].scope == "full"
-        assert TABLE["fact_qcew_annual__pre_086"].scope == "skip"
+        # A1 amputated 2026-07-17 (ADR075 ruling 1): the __pre_086 backup was
+        # dropped from the DB, so a lingering policy entry would be a phantom.
+        assert "fact_qcew_annual__pre_086" not in TABLE
 
     def test_known_michigan_tables(self) -> None:
         expected_michigan = {
             "fact_qcew_annual",
-            "fact_census_income",
             "fact_county_exposure_by_external",
             "fact_census_rent",
             "fact_coercive_infrastructure",
@@ -823,6 +828,13 @@ class TestProductionPolicyShape:
         }
         for name in expected_michigan:
             assert TABLE[name].scope == "michigan", f"{name} should be michigan-scoped"
+
+    def test_fact_census_income_is_full_not_michigan(self) -> None:
+        # Wave 6 C3: SQLiteCensusIncomeSource.get_county_bracket_ratio queries
+        # ANY county nationwide (Constitution Amendment R canonical scale), so
+        # a Michigan-only subset would silently starve every non-MI county —
+        # flipped to FULL, no longer in expected_michigan above.
+        assert TABLE["fact_census_income"].scope == "full"
 
     def test_all_dim_and_bridge_tables_classified_full_or_skip(self) -> None:
         for name, policy in TABLE.items():

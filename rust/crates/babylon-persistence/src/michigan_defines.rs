@@ -1,0 +1,312 @@
+//! Required, bounded numeric parameters for a newly created Michigan campaign.
+//! Canonical values, not TOML whitespace or a mutable file path, enter identity.
+
+use std::collections::BTreeMap;
+use std::io::Read;
+use std::path::Path;
+
+use babylon_kernel::clock::{DAYS_PER_TICK, WEEKS_PER_TICK};
+use serde::{Deserialize, Serialize};
+
+pub const MAX_MICHIGAN_DEFINES_BYTES: usize = 32_768;
+const MAX_EXACT_INTEGER: u64 = 1 << 53;
+
+#[derive(Debug)]
+pub enum MichiganDefinesErrorV1 {
+    Read(std::io::Error),
+    TooLarge,
+    Utf8(std::string::FromUtf8Error),
+    Toml(toml::de::Error),
+    Canonical,
+    Value(&'static str),
+    Material(super::michigan_material::MichiganMaterialErrorV1),
+}
+impl std::fmt::Display for MichiganDefinesErrorV1 {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Read(error) => write!(f, "defines file read failed: {error}"),
+            Self::TooLarge => write!(f, "defines exceeds {MAX_MICHIGAN_DEFINES_BYTES} bytes"),
+            Self::Utf8(error) => write!(f, "defines is not UTF-8: {error}"),
+            Self::Toml(error) => write!(f, "defines TOML refused: {error}"),
+            Self::Canonical => f.write_str("stored defines are not canonical validated values"),
+            Self::Value(field) => write!(f, "defines value or unit constraint refused: {field}"),
+            Self::Material(error) => write!(f, "defines material composition refused: {error}"),
+        }
+    }
+}
+impl std::error::Error for MichiganDefinesErrorV1 {}
+
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields, rename_all = "SCREAMING_SNAKE_CASE")]
+pub(crate) struct StaffingDefines {
+    pub work_hours_per_person_week: u64,
+}
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields, rename_all = "SCREAMING_SNAKE_CASE")]
+pub(crate) struct ProcessDefines {
+    pub batches_per_week: u64,
+    pub labor_hours_per_batch: u64,
+    pub input_units_per_batch: u64,
+    pub output_units_per_batch: u64,
+    pub opening_input_units: u64,
+    pub opening_planned_batches: u64,
+    pub employed_people: u64,
+    pub reserve_people: u64,
+}
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields, rename_all = "SCREAMING_SNAKE_CASE")]
+pub(crate) struct CorridorDefines {
+    pub units_per_week: u64,
+    pub travel_periods: u16,
+    pub delayed_travel_periods: u16,
+    pub ordered_units: u64,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields, rename_all = "SCREAMING_SNAKE_CASE")]
+pub(crate) struct MichiganDefinesV1 {
+    pub schema_version: u16,
+    pub tick_duration_days: u64,
+    pub horizon_periods: u64,
+    #[serde(rename = "staffing")]
+    pub staffing: StaffingDefines,
+    #[serde(rename = "process")]
+    pub process: BTreeMap<String, ProcessDefines>,
+    #[serde(rename = "corridor")]
+    pub corridor: BTreeMap<String, CorridorDefines>,
+}
+impl MichiganDefinesV1 {
+    pub fn load(path: &Path) -> Result<Self, MichiganDefinesErrorV1> {
+        let file = std::fs::File::open(path).map_err(MichiganDefinesErrorV1::Read)?;
+        let mut bytes = Vec::new();
+        file.take((MAX_MICHIGAN_DEFINES_BYTES + 1) as u64)
+            .read_to_end(&mut bytes)
+            .map_err(MichiganDefinesErrorV1::Read)?;
+        if bytes.len() > MAX_MICHIGAN_DEFINES_BYTES {
+            return Err(MichiganDefinesErrorV1::TooLarge);
+        }
+        Self::parse(&String::from_utf8(bytes).map_err(MichiganDefinesErrorV1::Utf8)?)
+    }
+    pub fn parse(text: &str) -> Result<Self, MichiganDefinesErrorV1> {
+        if text.len() > MAX_MICHIGAN_DEFINES_BYTES {
+            return Err(MichiganDefinesErrorV1::TooLarge);
+        }
+        let value: Self = toml::from_str(text).map_err(MichiganDefinesErrorV1::Toml)?;
+        value.validate()?;
+        Ok(value)
+    }
+    pub fn decode(bytes: &[u8]) -> Result<Self, MichiganDefinesErrorV1> {
+        if bytes.len() > MAX_MICHIGAN_DEFINES_BYTES {
+            return Err(MichiganDefinesErrorV1::TooLarge);
+        }
+        let value: Self =
+            serde_json::from_slice(bytes).map_err(|_| MichiganDefinesErrorV1::Canonical)?;
+        value.validate()?;
+        if value.encode()? != bytes {
+            return Err(MichiganDefinesErrorV1::Canonical);
+        }
+        Ok(value)
+    }
+    pub fn encode(&self) -> Result<Vec<u8>, MichiganDefinesErrorV1> {
+        serde_json::to_vec(self).map_err(|_| MichiganDefinesErrorV1::Canonical)
+    }
+    pub fn hours_per_period(&self) -> u64 {
+        // validate proves the multiplication and physical weekly bound.
+        self.staffing.work_hours_per_person_week * WEEKS_PER_TICK
+    }
+    fn validate(&self) -> Result<(), MichiganDefinesErrorV1> {
+        use MichiganDefinesErrorV1::Value;
+        if self.schema_version != 1 {
+            return Err(Value("SCHEMA_VERSION must equal 1"));
+        }
+        if self.tick_duration_days != DAYS_PER_TICK {
+            return Err(Value(
+                "TICK_DURATION_DAYS must equal the supported 28-day period",
+            ));
+        }
+        if !(1..=super::michigan_material::MICHIGAN_MAX_HORIZON_PERIODS_V1)
+            .contains(&self.horizon_periods)
+        {
+            return Err(Value("HORIZON_PERIODS must be 1..=16"));
+        }
+        if !(1..=168).contains(&self.staffing.work_hours_per_person_week) {
+            return Err(Value("WORK_HOURS_PER_PERSON_WEEK must be 1..=168"));
+        }
+        let process_keys = [
+            "meal_milling",
+            "meal_packaging",
+            "panel_forming",
+            "sheet_rolling",
+            "subassembly_making",
+        ];
+        let corridor_keys = ["food_transfer", "panel_transfer", "sheet_transfer"];
+        if !self.process.keys().map(String::as_str).eq(process_keys) {
+            return Err(Value(
+                "process tables must name exactly the five known processes",
+            ));
+        }
+        if !self.corridor.keys().map(String::as_str).eq(corridor_keys) {
+            return Err(Value(
+                "corridor tables must name exactly the three known transfers",
+            ));
+        }
+        for value in self.process.values() {
+            validate_process(value, self.hours_per_period())?;
+        }
+        for value in self.corridor.values() {
+            if value.units_per_week == 0
+                || value.ordered_units == 0
+                || value.travel_periods == 0
+                || value.delayed_travel_periods < value.travel_periods
+                || value.units_per_week.checked_mul(WEEKS_PER_TICK).is_none()
+            {
+                return Err(Value(
+                    "corridor quantities must be positive and delayed travel cannot be shorter",
+                ));
+            }
+        }
+        Ok(())
+    }
+}
+
+fn validate_process(
+    value: &ProcessDefines,
+    hours_per_period: u64,
+) -> Result<(), MichiganDefinesErrorV1> {
+    use MichiganDefinesErrorV1::Value;
+    if value.batches_per_week == 0
+        || value.labor_hours_per_batch == 0
+        || value.input_units_per_batch == 0
+        || value.output_units_per_batch == 0
+        || value.employed_people == 0
+    {
+        return Err(Value(
+            "process throughput, recipe, labor, and employed-person quantities must be positive",
+        ));
+    }
+    let capacity = value
+        .batches_per_week
+        .checked_mul(WEEKS_PER_TICK)
+        .ok_or(Value("BATCHES_PER_WEEK overflows period capacity"))?;
+    // A future request is computed from input-feasible batches, before
+    // current staffing limits production. Every request enters graph Real.
+    if capacity
+        .checked_mul(value.labor_hours_per_batch)
+        .is_none_or(|hours| hours > MAX_EXACT_INTEGER)
+    {
+        return Err(Value(
+            "maximal period staffing request exceeds the exact integer bound",
+        ));
+    }
+    let people = value
+        .employed_people
+        .checked_add(value.reserve_people)
+        .ok_or(Value("workforce overflows"))?;
+    let budget = value
+        .employed_people
+        .checked_mul(hours_per_period)
+        .ok_or(Value("employed labor-hours overflow"))?;
+    if people > MAX_EXACT_INTEGER
+        || people
+            .checked_mul(hours_per_period)
+            .is_none_or(|hours| hours > MAX_EXACT_INTEGER)
+    {
+        return Err(Value(
+            "workforce or labor-hours exceed the exact integer observation bound",
+        ));
+    }
+    if value.opening_planned_batches > capacity
+        || value
+            .opening_planned_batches
+            .checked_mul(value.input_units_per_batch)
+            .is_none_or(|q| q > value.opening_input_units)
+        || value
+            .opening_planned_batches
+            .checked_mul(value.labor_hours_per_batch)
+            .is_none_or(|hours| hours > budget)
+        || capacity.checked_mul(value.output_units_per_batch).is_none()
+    {
+        return Err(Value(
+            "opening plan exceeds physical input, labor, throughput, or integer bounds",
+        ));
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    const SOURCE: &str = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../../content/scenarios/michigan/defines.toml"
+    ));
+    #[test]
+    fn equivalent_toml_has_one_canonical_identity_and_stored_values_round_trip() {
+        let original = MichiganDefinesV1::parse(SOURCE).unwrap();
+        let reformatted =
+            MichiganDefinesV1::parse(&format!("# author note\n\n{SOURCE}\n")).unwrap();
+        assert_eq!(original.encode().unwrap(), reformatted.encode().unwrap());
+        assert_eq!(
+            MichiganDefinesV1::decode(&original.encode().unwrap()).unwrap(),
+            original
+        );
+        let mut padded = original.encode().unwrap();
+        padded.push(b' ');
+        assert!(matches!(
+            MichiganDefinesV1::decode(&padded),
+            Err(MichiganDefinesErrorV1::Canonical)
+        ));
+    }
+    #[test]
+    fn missing_unknown_fractional_and_invalid_units_are_refused() {
+        for changed in [
+            SOURCE.replace("SCHEMA_VERSION = 1", "UNUSED_COEFFICIENT = 1"),
+            SOURCE.replace(
+                "WORK_HOURS_PER_PERSON_WEEK = 40",
+                "WORK_HOURS_PER_PERSON_WEEK = 40.5",
+            ),
+            SOURCE.replace(
+                "WORK_HOURS_PER_PERSON_WEEK = 40",
+                "WORK_HOURS_PER_PERSON_WEEK = 169",
+            ),
+            SOURCE.replace("TICK_DURATION_DAYS = 28", "TICK_DURATION_DAYS = 7"),
+            SOURCE.replace("HORIZON_PERIODS = 16", "HORIZON_PERIODS = 17"),
+            SOURCE.replace("INPUT_UNITS_PER_BATCH = 10", "INPUT_UNITS_PER_BATCH = 0"),
+            SOURCE.replace(
+                "OPENING_PLANNED_BATCHES = 32",
+                "OPENING_PLANNED_BATCHES = 33",
+            ),
+            SOURCE.replace("[process.sheet_rolling]", "[process.retired_engine]"),
+            format!("{SOURCE}\nUNKNOWN = 1\n"),
+        ] {
+            assert!(
+                MichiganDefinesV1::parse(&changed).is_err(),
+                "unexpectedly admitted {changed}"
+            );
+        }
+        assert!(matches!(
+            MichiganDefinesV1::parse(&" ".repeat(MAX_MICHIGAN_DEFINES_BYTES + 1)),
+            Err(MichiganDefinesErrorV1::TooLarge)
+        ));
+    }
+    #[test]
+    fn future_staffing_demand_must_fit_graph_integers_even_with_no_opening_plan() {
+        for coefficient in ["9007199254740993", "9223372036854775807"] {
+            let changed = SOURCE
+                .replace(
+                    "OPENING_PLANNED_BATCHES = 32",
+                    "OPENING_PLANNED_BATCHES = 0",
+                )
+                .replace(
+                    "LABOR_HOURS_PER_BATCH = 100",
+                    &format!("LABOR_HOURS_PER_BATCH = {coefficient}"),
+                );
+            assert!(matches!(
+                MichiganDefinesV1::parse(&changed),
+                Err(MichiganDefinesErrorV1::Value(
+                    "maximal period staffing request exceeds the exact integer bound"
+                ))
+            ));
+        }
+    }
+}

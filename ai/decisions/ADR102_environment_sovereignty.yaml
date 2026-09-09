@@ -1,0 +1,78 @@
+id: ADR102
+title: >-
+  Environment sovereignty (BD-directed, Amendment Z / v2.14.0): vendor the
+  dev/build devshells into babylon's own flake.nix, unmount the infra/
+  submodule; babylon-infra stays the private sibling ops repo. Root cause of
+  the PYTHONPATH-shadowing bug was nixpkgs python setup-hook leakage (fixed
+  by shellHook unset + check:env-contract guard in BOTH repos), NOT
+  submodule mechanics — the submodule was removed for its independent
+  structural costs.
+status: accepted
+date: '2026-07-21'
+context: >-
+  BD interrupt 2026-07-21 during the PYTHONPATH-poison fix: "i also think
+  some of this might be rooted in how nix and everything react to being a
+  subrepo? ... we can stop the subrepository business, move babylon-infra/
+  into ../ and just copy paste what we need in ... we need to deeply think
+  through this because everything else rests on getting this right."
+  Evidence gathered before ruling: (1) the leak reproduces from the
+  STANDALONE babylon-infra repo at main referenced as a plain git flake
+  (nix develop git+file://...?ref=main#ci) — zero submodule involvement;
+  the mechanism is nixpkgs' python setup hooks exporting every python-built
+  tool's site-packages onto PYTHONPATH (ansible, poetry, gdal, pre-commit,
+  yamllint), which precedes venv site-packages and shadowed babylon's 3.12
+  venv (pathspec 1.0.4 lost to nix 3.13's 0.12.1 -> pre-commit mypy crash
+  -> silent commit aborts -> the `env -u PYTHONPATH git` litany era).
+  (2) Independent submodule costs, all observed: babylon is public,
+  babylon-infra private, so nightly.yml's rebuild-verify carried a
+  read-only-deploy-key fetch dance just to obtain the devshell definition;
+  dual checkout (~/projects/game/babylon-infra edits vs infra/ pin) forced
+  a PR + submodule-bump ceremony per flake change; fresh clones/worktrees
+  needed `git submodule update --init infra`; the sqlite-3.53.1 byte-
+  identity lockstep spanned two repos held together by comments. (3) Design
+  smell: one flake bundled babylon's build env WITH the infra ops toolchain
+  (terraform, ansible + its network-automation closure) — most of the
+  pollution volume was tooling babylon never needs. Options weighed:
+  (A) keep submodule + unset fix only; (B) vendor babylon's own flake,
+  unmount, ops stays private-sibling; (C) sibling path-reference (rejected:
+  kills per-commit toolchain pinning). BD chose B via structured question.
+decision: >-
+  EXECUTED same-cycle: (1) babylon-infra PR #5 (merged): `unset PYTHONPATH`
+  at the end of all three shellHooks (default/ci/dataBuild) + a
+  `check:env-contract` mise task proving the contract per shell
+  (marker-delimited capture — shellHook greetings pollute raw stdout).
+  (2) babylon flake.nix (the ADR094 Player Channel flake) EXTENDED with
+  devShells.default + devShells.dataBuild vendored from babylon-infra:
+  same nixpkgs rev the submodule's lock carried (b6018f87 — store paths
+  unchanged), new rev-pinned nixpkgs-data input (a16c3fde, sqlite 3.53.1;
+  `nix flake update` cannot drift a rev-pinned URL), uv replaces poetry
+  (pure-uv since PR #236), infra-ops packages (terraform/ansible/sops/
+  trivy) deliberately NOT vendored. dataBuild python-env store-path
+  IDENTITY verified against the submodule shell
+  (/nix/store/7hgb2i7...-python3-3.12.13-env both sides) — the reference-DB
+  byte-identity contract is preserved by construction. (3) Submodule
+  unmounted: git rm infra + .gitmodules; .mise.toml `nix` task -> own
+  flake root; nightly.yml deploy-key block deleted, ./infra#dataBuild ->
+  .#dataBuild. (4) tools/check_release_pins.sh rewritten from
+  gitlink-carries-infra-tag to the in-repo lockstep check (flake.lock
+  nixpkgs-data rev == flake.nix declared rev; PINNED_SQLITE_VERSION ==
+  data-artifacts.yaml product sqlite_version) — "releases pin their
+  environment" now holds by construction, the script guards the lockstep;
+  docs/versioning.md section retitled accordingly. (5) babylon
+  check:env-contract task added (default/dataBuild). (6) Constitution
+  v2.14.0 Amendment Z: X.7's flake home revised (Amendment P factual-drift
+  pattern; pinning substance unchanged). CLAUDE.md Environment section
+  rewritten; `env -u PYTHONPATH git` litany retired for shells entered
+  after 2026-07-21.
+consequences: >-
+  Fresh clones/worktrees need no submodule step; `mise run nix -- <cmd>`
+  works immediately. The nightly rebuild-verify needs no secret. The
+  sqlite pin and its interpreter live in one repo — checking out any
+  babylon commit yields its exact toolchain via the committed lock.
+  flake-update.yml's monthly cron re-locks nixpkgs (tool drift, gated by
+  normal CI) but can never move nixpkgs-data. Follow-ups: (a) babylon-infra
+  cleanup PR dropping babylonBuildEnv/dataBuild from its flake once nothing
+  references them (its default shell becomes ops-only); (b) the
+  INFRA_SUBMODULE_DEPLOY_KEY repo secret + the babylon-infra deploy key can
+  be revoked; (c) sessions/shells started before the fix carry the baked
+  poisoned env until restarted.

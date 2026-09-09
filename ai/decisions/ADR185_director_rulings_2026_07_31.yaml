@@ -1,0 +1,167 @@
+ADR185_director_rulings_2026_07_31:
+  status: "accepted"
+  date: "2026-07-31"
+  title: >
+    Director rulings 2026-07-31: the national partition is STRUCTURAL (distinct
+    class nodes per county×pole); node removal CASCADES; measured constants may
+    set SCALE but never SHAPE; ids order numerically and BSL symbols
+    lexicographically; small universes are reported RAW beside their denominator,
+    never clamped; the Chicano pole seeds from dim_race I with the over-inclusion
+    declared; and Ω̂ is NOT an account — it is a derived structural relation.
+  context: |
+    Seven decisions had accumulated as reserved-for-Director across the
+    2026-07-30 design dossier (§5), ADR171's open questions, ADR172 r5's own
+    boundary, and the Phase-2 storage gate (ADR179 T3). They were blocking, in
+    order: the census seeder and the whole National Question train (#47), the
+    Phase-2 storage pick, the family-9 conformance vectors, the tension lens,
+    and the colonial/racial severity gradient.
+
+    The Director asked for all of them at once and ruled them in one sitting.
+    Two of the seven were answered by CORRECTING THE QUESTION rather than
+    picking an option — those are R5 and R7, and both corrections are recorded
+    here as ruled, because in each case the framing offered was itself the
+    error.
+
+  decision: |
+    R1. THE NATIONAL PARTITION IS STRUCTURAL — DISTINCT CLASS NODES PER
+        (COUNTY, POLE). The internal colonies are their own class nodes, not a
+        weighting over shared ones. A New Afrikan internal proletariat in Wayne
+        County is a DIFFERENT NODE from a settler labor aristocracy in Wayne
+        County, with its own wealth, its own edges, its own consciousness.
+
+        Why this and not a weight: under a weighted membership, every class
+        node in a mixed county lands in BOTH poles, and any binary membership
+        test reads everyone as consenting — which is exactly the class↔nation
+        identity ADR171's B+C+I partition exists to DENY. A weight cannot
+        express a national formation; it can only shade one.
+
+        Cost, accepted: ~4x node count, and every county-level mechanic must
+        handle multiple class nodes per county.
+
+    R2. NODE REMOVAL CASCADES. Removing a node removes its incident edges and
+        drops it from every hyperedge's member list. Removal is whole.
+
+        CONSEQUENCE THAT MUST BE ENGINEERED, NOT ASSUMED: the cascade must be
+        OBSERVABLE. The objection to cascade raised at ruling time was that a
+        hyperedge silently shrinks — a class dissolving quietly reduces its
+        industry's membership with no event anybody wrote. That objection is
+        answered by the ADR182 write log, NOT by the substrate: `remove-node`
+        is a BSL structural verb, so the executor records each cascaded edge
+        and membership removal as its own `Write`. Cascade is the semantics;
+        silence is not. A cascade implementation that emits nothing has
+        implemented half the ruling.
+
+        This also makes `PlaceholderGraph::remove_node` a DEFECT with a defined
+        target: it removes from `self.nodes` and nothing else, leaving dangling
+        endpoints in `self.edges` and dead ids in hyperedge member lists.
+
+    R3. MEASURED CONSTANTS MAY SET SCALE, NEVER SHAPE. This is the boundary of
+        ADR172 r5, ruled as a CLASS so it stops being re-litigated per instance.
+
+        ALLOWED (scale): a magnitude taken from data or the historical record —
+        a budget in Currency, a population count, a measured Φ. It says how BIG
+        something is.
+        FORBIDDEN (shape): a curve, an exponent, a THRESHOLD, or a weighting.
+        It says how something RESPONDS. A fitted sigmoid, a `* 0.6` severity
+        weight, and an `if x > 0.7` escalation gate are the same violation in
+        three costumes.
+
+        The review test is one question: does this number change how big
+        something is, or how it responds?
+
+        Settles together: the legitimacy stock magnitude, the replenishment
+        rate, mode 11's LEGAL THEATRE recovery, and deniability.
+
+    R4. NUMERIC AT THE ID LAYER, LEXICOGRAPHIC BYTE ORDER FOR BSL SYMBOLS.
+        `NodeId`/`HyperedgeId` iteration is numeric `Ord` — what ships, and what
+        every ordering test in `placeholder.rs` and `dossier.rs` already
+        assumes. BSL surface symbols (rule ids, type names) order
+        lexicographically by bytes. Resolves the §2.6 / D25 draft-ruling
+        divergence ("10" < "2" under decimal encoding) with no code change; the
+        normative note is owed to `bsl-language.rst` and the trait doc.
+
+    R5. SMALL UNIVERSES ARE REPORTED RAW, BESIDE THEIR DENOMINATOR — NEVER
+        CLAMPED. Ruled by correcting the question. Three options were offered
+        (damping law, suppression threshold, honest null) and the Director
+        rejected the CLASS: "if a number is really really high that warrants
+        investigation and we dont want to artificially clamp it."
+
+        All three options clamp. A damping law reshapes the value; a threshold
+        is a shape by R3's own enumeration; suppressing to a null hides it.
+
+        The ruling: report σ raw AND always carry the universe size `u_o`
+        beside it. Loving County TX reads `σ = +1.0000, u_o = 15`. The PAIRING
+        is what flags it for investigation — a reader sees both and knows what
+        the number rests on. Nothing reshapes σ; `u_o` is a measured magnitude,
+        so this is R3-clean by construction.
+
+        The artifact stops lying by omission rather than by distortion.
+
+    R6. THE CHICANO POLE SEEDS FROM `dim_race` CODE I, WITH THE OVER-INCLUSION
+        DECLARED IN THE ARTIFACT. Code I is "Hispanic or Latino" and spans all
+        Latin American origins — wider than the Mexican-descent Southwest
+        population the Chicano nation names. The census has no finer cut in
+        this table. Seed from what exists; record precisely what it does and
+        does not mean, in the artifact itself, so no downstream reader can
+        mistake the boundary for the theory's.
+
+    R7. Ω̂ IS NOT AN ACCOUNT. Ruled by correcting the model, not the parameter.
+        The question offered three variants of "does the settler bribe become a
+        spendable budget"; the Director rejected the framing: "the settler
+        bribe isn't a literal 'bribe' you get handed in a white envelope, it's
+        a structural dynamic that benefits settlers as a class."
+
+        The error being corrected: importing `Capacity`'s shape (a stock,
+        owned, drawn down) onto something that is not a stock. Nobody
+        administers the bribe, nobody hands it over, and it cannot run dry like
+        a treasury.
+
+        Ω̂ therefore belongs with X, NOT with K — **derived, never stored**,
+        recomputed from live structure whenever asked. It IS the `W_c > V_c`
+        gap: settler wages above value produced, sustained by Φ.
+
+        The failure mode is not a balance hitting zero. It is Φ falling until
+        the differential can no longer be maintained — settler consent eroding
+        STRUCTURALLY and emergently, with no account anywhere. That is the
+        Fundamental Theorem doing mechanical work.
+
+        Needs no §6.5 ceremony: a derived quantity was never shadowed. ADR171
+        OQ6's `shadow=True` on `national_oppression` is not un-shadowed by this
+        ruling; it is made moot for Ω̂ specifically, which is not that field's
+        stored form.
+
+    R8 (operational). RENAME THE WEEKLY WORKFLOWS. Five workflows named
+        "Nightly — …" run `0 6 * * 3` (Wednesdays). Only
+        `nightly-michigan-smoke` is genuinely daily (`0 5 * * *`). A green
+        "nightly" badge implies ≤24h freshness when the result may be 7 days
+        stale. Rename the five to `weekly-*`; michigan-smoke keeps its name.
+
+  consequences: |
+    IMMEDIATE:
+    - `PlaceholderGraph::remove_node` gains the R2 cascade + tests; the trait
+      doc rules the semantics so a second implementor cannot diverge.
+    - The five workflow renames.
+    - `bsl-language.rst` and `substrate.rs` gain the R4 note.
+
+    UNBLOCKED BY THIS ADR:
+    - #47 (census incidence extraction) — R1 gives it a shape to seed into, R6
+      settles the Chicano pole, R5 settles small counties. It can now be built.
+    - The Phase-2 storage pick — R2 was one of two Director questions gating
+      the ADR179 T3 capability delta; R4 was the other. Both now ruled, so the
+      delta document can close rather than escalate.
+    - The colonial/racial severity gradient — R7 gives it a materialist form
+      (derived from the Φ-sustained differential) rather than a stipulated one.
+
+    STILL OPEN:
+    - The write-log/decline dependency-cycle question from ADR184 R9.
+    - The 11-mode catalogue still needs the intrinsic declaration form, which
+      is unbuilt Phase-2 work (`rg E-LOAD-020 rust/` returns one doc comment).
+
+  supersedes: []
+  related:
+    - ADR171_national_question_rulings
+    - ADR172_program_27_refoundation
+    - ADR179_topology_spine_director_rulings
+    - ADR180_lane_rulings
+    - ADR182_derivation_inspector_rulings
+    - ADR184_capacity_belongs_to_organizations

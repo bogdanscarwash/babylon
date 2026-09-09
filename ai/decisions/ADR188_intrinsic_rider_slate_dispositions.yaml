@@ -1,0 +1,92 @@
+ADR188_intrinsic_rider_slate_dispositions:
+  status: "accepted"
+  date: "2026-08-10"
+  title: >
+    The intrinsic-cap rider slate DISPOSED — the Director approved the gap
+    report's §4 recommendations row by row: the transcendental cap stays
+    {exp, log}; two non-transcendental housekeeping riders enter (the
+    floor/trunc Real→Int demotion and the round-half-even affirmation);
+    sqrt and tanh are ELIMINATED by re-derivation as measures; the three
+    stipulated-sigmoid exp sites re-derive as measures under the standing
+    no-imposed-forms ruling; sigmoid is NEVER declared as an intrinsic;
+    no bespoke renormalize; mod/abs/min/max need no intrinsic at all;
+    RNG stays a kernel seam.
+  context: |
+    R10 (the Program 28 roadmap, ADR186) held the intrinsic cap at
+    {exp, log} at most and required any widening to arrive as a rider
+    presented with the gap analysis. The gap analysis (PR #472, §4)
+    presented twelve rows, answering the elimination question first for
+    each: cap-legality is not doctrine-legality — three of the five exp
+    call sites stipulate the exact logistic sigmoid ADR173 and the
+    2026-07-29 no-imposed-sigmoids ruling retire, so a verbatim port
+    would pass the cap check and violate the theory line. The report
+    also recorded that ADR176 r21's own text pins the crossing MECHANISM
+    (pinned soft-float libm, golden vectors per intrinsic), not the
+    membership; {exp, log} is the roadmap's rendering. The Director
+    ruled "i approve all" in the 2026-08-10 session; this ADR transcribes
+    the approval row by row.
+  decision: |
+    THE CAP: the {exp, log} transcendental enumeration is now
+    Director-affirmed as the operative membership (closing the
+    rendering-vs-authority gap the report flagged); the r21 mechanism
+    (pinned soft-float libm, per-intrinsic golden vectors) governs how
+    the two members cross.
+
+    Row 1  mod/floor-div — NO INTRINSIC. SimClock host bindings
+           (:year, :tick-of-year, :tick-in-cycle) carry the calendar;
+           bindings are seams, not mathematics (R10).
+    Row 2  floor/trunc — RIDER RATIFIED (housekeeping, non-transcendental):
+           a Real→Int demotion path enters the intrinsic table; §3.1's
+           one-way promotion otherwise leaves integer-people arithmetic
+           unwritable.
+    Row 3  round-half-even — RIDER RATIFIED (affirmation): the rst's
+           Currency table already obliges the kernel to expose it; the
+           table now says so explicitly.
+    Row 4  abs — NO INTRINSIC: the if-expression rewrite stands.
+    Row 5  scalar min/max — NO INTRINSIC: nested if expresses them and
+           keeps saturation legible (§3.3's anti-quiet-degradation line);
+           the ergonomic cost is recorded and accepted.
+    Row 6  sqrt — ELIMINATED (preferred branch ratified): platform fit
+           re-derives as a measure (the share of a class's interest
+           dimensions a platform satisfies); no norm, no rider. The
+           fallback rider is NOT taken. A silent switch to squared
+           magnitudes remains forbidden.
+    Row 7  exp — the three stipulated-sigmoid sites (P(S|A) survival
+           calculus, the defection probability, the wage-pressure
+           sigmoid) RE-DERIVE AS MEASURES at the port — the S-curve
+           emerges from within-class dispersion (ADR173; the standing
+           no-imposed-forms ruling). The two ordinary in-cap uses (the
+           sustained-exploitation Gaussian, the financialization index)
+           port as-is under exp.
+    Row 8  tanh — ELIMINATED: the scissors balance re-derives as a
+           measure (the share of realised value above and below price);
+           the squash is not kept; no rider.
+    Row 9  sigmoid — NEVER DECLARED as an intrinsic: declaring it would
+           hand content the exact mechanism ADR172 r5 forbids. The rst's
+           transcendental list is illustrative, not a build order.
+    Row 10 entropy — NOTHING: no system asks for it; no proposal exists.
+    Row 11 RNG draw — NOT A RIDER: §2.8's kernel-seeded
+           per-(session, tick, salt) seam stands as specced.
+    Row 12 renormalize — REJECTED as an intrinsic: a bespoke intrinsic
+           for one call site hides a mechanism in the kernel; the
+           faction-balance renormalization lands as a Rust domain-crate
+           binding or a Q14 computed-binding unroll.
+  consequences: |
+    - bsl-language.rst §3.10 (the rider-slate record) updates from
+      "Director-gated proposals" to these dispositions in the spec
+      chapters' follow-up; the two ratified riders get normative
+      intrinsic-table rows + §6.2 vector families + libm golden vectors
+      at implementation.
+    - The three sigmoid re-derivations and the sqrt/tanh measure
+      re-derivations become port-time design obligations on their
+      systems' BSL rule packs (Survival, FactionInfluence/Struggle,
+      MarketScissors, the platform-fit consumer) — each carries its
+      derivation note at the port, per ADR183's repair-at-the-port
+      doctrine.
+    - No BSL rule may ever stipulate a logistic form; the emergence
+      audit's standing test applies to every ported formula.
+  supersedes: []
+  related:
+    - ADR176_director_rulings_batch_gds_dispositions
+    - ADR186_bevy_cutover_amendment_af
+    - ADR173_audit_and_stops_dispositions

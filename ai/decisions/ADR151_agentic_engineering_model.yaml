@@ -1,0 +1,77 @@
+id: ADR151
+title: >-
+  The Agentic Engineering model: name and ratify the project's development
+  model — a human Director who steers direction and holds SOLE authority over
+  the ideological/theoretical line, with autonomous AI agents as the
+  engineering workforce whose autonomy is licensed by the gates. Amendment AD
+  records the constitutional half (adds IX.5); the Benevolent-Dictator model is
+  subsumed as the Director role, not replaced.
+status: accepted
+date: '2026-07-27'
+context: >-
+  The project had, in practice, moved to a working model the governance docs
+  did not describe: many concurrent autonomous AI agent sessions engineering in
+  parallel git-worktree lanes (feature/political-superstructure,
+  feature/raster-cutover, fix/dsn-boot-doctor-mismatch, lane/t7-installer, …
+  live simultaneously), self-merging on green under the determinism / sentinel /
+  behavioral-contract gates, while the human (Persephone Raskova) steered
+  direction and owned the political/theoretical content. The encoded model was
+  still the plain "Benevolent Dictator" (final merge authority to main),
+  documented in CONTRIBUTORS.md, README.md §Contributing, and
+  docs/agents/governance.md, and referenced from CLAUDE.md's Git-&-commits
+  section. That framing captured the AUTHORITY relation but said nothing about
+  the EXECUTION model (agents as the workforce) or — crucially for a Marxist-
+  Leninist-Maoist-Third-Worldist simulation engine, where "ideological
+  direction" is literal, not a metaphor — about the reserved human authority
+  over the political line. The Director directed formalizing the new model
+  ("our model is now Agentic Engineering"), retaining personal control of
+  ideological direction while delegating the bulk of the engineering. Four
+  directional forks were put to the Director and ruled: (name) "Agentic
+  Engineering"; (BD relationship) subsume & reframe; (formality) docs sweep PLUS
+  a Constitution amendment; (the human-role statement) "Director & Ideological
+  Authority" — the ideological line reserved explicitly, agents never author it.
+decision: >-
+  (1) NAME: the development model is "Agentic Engineering" across every doc.
+  (2) THE DIRECTOR: the human authority is recast from "Benevolent Dictator" to
+  "Director" — SUBSUMED, not replaced. The Director holds two powers: final
+  merge authority to main (the BD power, unchanged) AND sole, RESERVED authority
+  over the ideological/theoretical line the simulation encodes (the Article-I
+  MLM-TW commitments, the doctrine trees, political framing, the five canonical
+  terminal outcomes). Agents engineer WITHIN that line — implement, refactor,
+  test, propose — but do not author or alter political content without a
+  Director ruling; a political-line question is an escalation to the Director,
+  not an IX.3 ambiguity. (3) AGENTS AS THE WORKFORCE: autonomous AI agents
+  execute across parallel isolated worktree lanes under the interleaving rule
+  (at most one engine train on the tick pipeline at a time, so determinism
+  baselines never race) with declared lane ownership to prevent collisions.
+  (4) AUTONOMY IS LICENSED BY THE GATES, NOT BY TRUST: determinism (III.7), the
+  sentinel family (built-but-dead / wrong-shape / dead-write detectors),
+  behavioral contracts (III.12 — golden baselines, property laws, byte-identity
+  ceremonies), the TDD red phase, and Loud Failure (III.11). A green gate is a
+  self-merge license; a red gate is a STOP; ceremony discipline (§6.5) is
+  deferred to merge, never taxed on the inner loop. (5) CONSTITUTIONAL HALF:
+  Amendment AD adds IX.5 "Development Model — Agentic Engineering", v2.17.0 ->
+  v2.18.0 (MINOR — a development-model designation; no primitive, tick, or
+  architecture principle changes; branch/PR mechanics unchanged, still in
+  CONTRIBUTORS.md). (6) DOCS SWEEP: CONTRIBUTORS.md rewritten around the model;
+  README.md §Contributing, docs/agents/governance.md, and CLAUDE.md's
+  Git-&-commits section reframed Benevolent-Dictator -> Director / Agentic
+  Engineering.
+consequences: >-
+  POSITIVE: the governance docs now describe the model actually in use, so a new
+  agent session reads its real operating context (parallel lanes, gate-licensed
+  self-merge, the reserved ideological line) instead of a BD-only story that
+  omits it. The ideological-authority reservation is now explicit and
+  constitutional — an agent that would author or alter the political line has a
+  named STOP, and the Aleksandrov/every-construct-traces-to-a-material-relation
+  discipline gains a governance backstop. Continuity is preserved: the BD/ADR/
+  amendment trail is intact because the Director IS the benevolent dictator,
+  renamed for function, not a new office. NEUTRAL/COST: "Agentic Engineering" is
+  now load-bearing vocabulary that must stay consistent across docs; the term
+  will need pruning discipline like any other. NON-GOALS: this changes no branch
+  mechanics (still branch-from-dev, PR-to-dev, BD/Director merges to main), no
+  gate, and no tick behavior — it is a naming-and-authority ratification, and
+  qa:regression/byte-identity are untouched by design (docs-only change).
+  FOLLOW-UP: none required; future refinements to the autonomy envelope (e.g.
+  codifying the self-merge-on-green grant more tightly) would amend IX.5.
+file: ADR151_agentic_engineering_model.yaml

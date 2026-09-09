@@ -1,0 +1,334 @@
+ADR212_decomposition_controlratio_port_handoff:
+  status: "accepted"
+  date: "2026-08-17"
+  title: "The Decomposition (@11.0) + ControlRatio (@12.0) joint port train handoff (Wave A, issue #591 family, umbrella #557, ADR208 R29/C-03, Checkpoint A campaign) — the two frozen Class-D systems land as TWO packs / TEN rules (decomposition.bsl: p01-la-census, p02-superwage-warning, p03-trigger, p04-enforcer-intake, p05-ip-intake, p06-la-deactivate; control-ratio.bsl: c01-prisoner-census, c02-publish-census, c03-crisis, c04-terminal) over two fresh conformance worlds plus a joint five-phase carceral-arc composition scenario; the frozen TickContext.persistent_data state machine re-models onto a single carceral-register singleton INSTITUTION carrier (select-max-over-nodes, not the unserved `the`); the frozen on-demand add-node/_create_target_entity branch is OMITTED (DEFERRED_SHAPE_VERBS refusal), every conformance world pre-seeding its targets instead, follow-on #562; the census reformulates from a frozen find-first graph scan to a per-node fold-sum (D165) with the int-ordinal role workaround both phase-1 inventories recommended REJECTED now that D102 is discharged (D169); control-ratio/c04-terminal transcribes the ADR070/Program-19-RESERVED revolution-vs-genocide branch verbatim, describing not pre-empting the still-open emergent-class-partition cutover (D174); the cross-pack rule-id byte order inverts the frozen @11.0-then-@12.0 tick order (control-ratio/* sorts before decomposition/*, D172), proven benign by a dedicated race fixture; nine new register rows D166-D174 plus the D165 companion; PR A #614 (Tasks 0-4, decomposition pack, MERGED) + PR B (Tasks 5-9, control-ratio pack + the joint arc + this handoff's own permanent records)."
+  context: |
+    ADR208 R29/C-03 (the 2026-08-17 docket sitting) confirmed the
+    Decomposition+ControlRatio joint port train "fully independent of
+    #576" and gave issue #566 ("Wave A: Decomposition @11.0 + ControlRatio
+    @12.0 joint port train") its bookkeeping close. ADR210 (the same-day
+    Checkpoint A campaign rulings) named Decomposition and ControlRatio
+    among the seven Material Base systems still unported at that sitting.
+    The design of record is `docs/superpowers/plans/
+    2026-08-17-decomposition-controlratio-port.md` (Tasks 0-9), preceded
+    by Task 0's byte-verified surface-facts dossier
+    (`reports/decomposition-controlratio-bsl-surface-facts-2026-08-17.md`)
+    correcting six citation-precision drifts against the plan and settling
+    the hyphenated-registration-symbol question (`control-ratio` legal,
+    three independent proofs) definitively.
+
+    **The Task-0 dossier's corrections to the port-estate survey's row
+    11.0.** The adjudicated survey (`reports/port-estate-survey-2026-08-12
+    .md`) graded Decomposition's row 11.0 "PORTABLE WITH D-RECORDS — none
+    blocking." The Task-0 dossier's §3 item 1 confirms this verdict WRONG:
+    the decomposition phase-1 inventory never read `structural_verbs.rs`
+    at all, so it never discovered that `add-node` is one of the six
+    `DEFERRED_SHAPE_VERBS` refused at content load
+    (`structural_verbs.rs:1723-1730`, `check_no_deferred_shape_verbs`,
+    called unconditionally at `rule_pipeline.rs:269`) — a real,
+    load-bearing blocker the survey's row missed entirely, discharged only
+    by the pre-seeded-targets design this train ships (D167). Every other
+    BLOCKER-1 through BLOCKER-5 claim in the plan's own §4 was
+    independently reverified TRUE at the byte by the same dossier; the
+    row-11.0 miss is the one place the survey's own summary needed
+    correcting before this train could trust it.
+
+    The train ran in two PRs on branch `feature/control-ratio-port-bsl`
+    (worktree `wt-decr`): PR A (Tasks 0-4, `feature/decomposition-
+    controlratio-port`, merged as #614) shipped Pack A
+    (`decomposition.bsl`'s six rules, the conformance world, and the
+    frozen mirror). PR B (Tasks 5-9, this branch, off merged `dev`) ships
+    Pack B (`control-ratio.bsl`'s four rules — c01/c02 Task 5, c03 Task 6,
+    c04 Task 7), the joint `carceral-arc-conformance.bscn` five-phase
+    composition scenario (Task 8), and this handoff's own permanent
+    records (Task 9).
+  decision: |
+    **1. Scope landed — two packs, ten rules.**
+    `rust/crates/babylon-tick/content/rules/decomposition.bsl` (six
+    rules: `p01-la-census`, `p02-superwage-warning`, `p03-trigger`,
+    `p04-enforcer-intake`, `p05-ip-intake`, `p06-la-deactivate`; total
+    declared `:fuel` 401 across the pack) and `control-ratio.bsl` (four
+    rules: `c01-prisoner-census`, `c02-publish-census`, `c03-crisis`,
+    `c04-terminal`; total declared `:fuel` 223). Both registered in
+    `lib.rs`'s `systems` HashSet as `"decomposition"`/`"control-ratio"`
+    (Task 1) — the hyphenated spelling is the Task-0 dossier's ruled
+    verdict (§7, three independent proofs: grammar-level
+    `validate_symbol`, registration-level precedent (`"social-class"`
+    already hyphenated), usage-level precedent (`edge_lane_e2e.rs`'s
+    hyphenated rule ids)). Four conformance worlds for Pack B
+    (`control-ratio-conformance.bscn` — the primary genocide world;
+    `-revolution-`; `-within-capacity-`; `-zero-enforcer-`) plus two for
+    Pack A (`decomposition-conformance.bscn`, `-delay-`) plus the joint
+    `carceral-arc-conformance.bscn` (Task 8, both packs loaded together,
+    112-tick horizon, FOUR of the frozen engine's five carceral-arc
+    phases reproduced tick-for-tick: SUPERWAGE_CRISIS@1,
+    CLASS_DECOMPOSITION@53, CONTROL_RATIO_CRISIS@105, TERMINAL_DECISION@106
+    (fixed forward, final review M3: the fifth phase, `metabolic_rift_
+    opened` from the unported `ImperialRentSystem` @9.0, is deliberately
+    NOT reproduced — `carceral_arc_conformance.rs` documents the omission
+    correctly; only this summary previously overstated it as "five-phase").
+
+    **2. The carrier reformulation.** The frozen `TickContext.
+    persistent_data` state machine (`_superwage_crisis_tick`,
+    `_decomposition_complete`, `_class_decomposition_tick` on the
+    Decomposition side; `_terminal_decision_emitted`,
+    `_control_crisis_emitted`, `_control_ratio_crisis_tick` on the
+    ControlRatio side) — a non-graph Python dict with no `WorldState`
+    representation, lost on save/load in the frozen reference itself —
+    becomes `institution/*` fields on a single `carceral-register`
+    singleton `NodeType/INSTITUTION` carrier, reached via
+    `(select-max (nodes NodeType/INSTITUTION) 1)`, never the unserved
+    `the` accessor both phase-1 inventories floated (it sits in
+    `UNSERVED_EXPRESSION_HEADS` tagged `"slice 2"`, and its `E-LOAD-043`
+    singleton guard fires only behind a declared `manifest` form, which
+    zero landed content uses). Every `None`-sentinel on a TICK-valued
+    key (0 is a real tick, not an absence) becomes a companion `*-known`
+    int 0/1 flag (III.11 loud-absence encoding) — `superwage-crisis-known`
+    paired with `superwage-crisis-tick`, `decomposition-fired-known`
+    paired with `decomposition-fire-tick`. The dict's own BOOLEAN
+    latches (`_control_crisis_emitted`, `_terminal_decision_emitted`,
+    `_decomposition_complete`) carry no such companion — they become
+    ordinary 0/1 `int` fields directly (`control-crisis-emitted`,
+    `terminal-decision-emitted`, `decomposition-complete`), since a
+    plain 0/1 value already distinguishes not-yet from happened without
+    a second field to attest to it. Register row: **D166**.
+
+    **3. The omitted `add-node` branch.** The frozen
+    `_create_target_entity`/`_derive_entity_id` create-on-demand path
+    (spec-071) is OMITTED entirely — `add-node` is refused at content
+    load (`DEFERRED_SHAPE_VERBS`). Every conformance world this train
+    ships pre-seeds its own `CARCERAL_ENFORCER`/`INTERNAL_PROLETARIAT`
+    targets instead; a world lacking either pre-seeded target is
+    UNPORTED for that branch, not equivalent to the frozen engine's
+    on-demand creation (the intake rule's own `when` role-filter simply
+    never matches — a silent no-op, not a create). Follow-on: **#562**
+    (the structural-verb execution surface / T5, Program 29) is the
+    placeholder-id design that would eventually serve `add-node` for
+    this branch. Register row: **D167**.
+
+    **4. The D102 correction.** Both 2026-08-12 phase-1 inventories'
+    Adjudications recommend an int-ordinal `SocialRole`/`role` encoding
+    to preserve `field-of`-based query-predicate filterability under
+    D102's THEN-unconditional deferral. That premise no longer holds:
+    D102 is DISCHARGED (Task 1, P27 territory-port train) — `field-of`
+    over an enum-declared field now typechecks and evaluates for real.
+    This port declares the REAL `social-class/role enum SocialRole`
+    instead, because two OTHER, INDEPENDENT laws close the int-ordinal
+    route regardless of D102: `field_ref_for`'s compound-fold-body
+    refusal (D138) and `TypeCode::EnumFoldBody`/`E-TYPE-044` — together
+    they close both escape routes (a direct enum-field fold-body read,
+    and an `if`-filter wrapping one) for an enum-typed field inside a
+    fold body, which is why both packs' census rules gate `role` on the
+    SUBJECT side instead. Register row: **D169** (a companion to D165,
+    which this row does not duplicate — D165 records the FIND-FIRST to
+    PER-NODE-SUM reformulation itself and the multi-LA divergence it
+    inherits; D169 records the REJECTED int-ordinal alternative and the
+    two laws that force it out, plus the `fold mean :weight`-rejected
+    alternative for `avg_organization`).
+
+    **5. The RESERVED-LINE transcription statement, verbatim.**
+    `control-ratio/c04-terminal` transcribes the frozen
+    `_emit_terminal_decision` revolution-vs-genocide branch
+    (`control_ratio.py:210-247`) VERBATIM: the SAME threshold source
+    (`carceral/revolution-threshold`), the SAME `>=` comparison, BOTH
+    outcomes, and the SAME two prisoner roles
+    (`INTERNAL_PROLETARIAT`/`LUMPENPROLETARIAT`) feeding the census.
+    **ADR070/Program 19 rules ControlRatioSystem's revolution-vs-genocide
+    branch explicitly LAST in the emergent-class-partition cutover**
+    (ADR070's own "Cutover roadmap" section,
+    `ai/decisions/ADR070_emergent_class_partition.yaml:100-103`: "no
+    exception, only after low flip-count evidence, with a dedicated
+    high-effort review" — corrected by the 2026-08-17 final whole-branch
+    review's I3 finding; the phrase is ADR070's, not Constitution IX.5's)
+    — this port therefore deliberately does NOT re-base the branch onto a derived
+    class-cell partition. The transcription is consistent with ADR070's
+    own slots-as-positions ruling (role is real, persistent seed
+    vocabulary, not something a port should derive). The
+    emergent-class-partition cutover **remains Director-gated and
+    OPEN** — this port describes the reserved branch; it does not
+    propose or pre-empt the cutover. Cited: the 2026-08-12 ruling (both
+    phase-1 inventories' own RESERVED-LINE confirmations) and its
+    reaffirmation in **ADR208 R29/C-03**, plus **register row 12 of
+    #564** ("ControlRatio revolution-vs-genocide branch — Program 19
+    rules it LAST; does the joint Class-D train respect that or split?"
+    — answered: it respects it, the train does not split the branch
+    onto a derived partition; row 12 is checked off #564). Register row:
+    **D174**.
+
+    **Round-2 gate restoration (fixed forward, final review I2).** The
+    VERBATIM claim above was INCOMPLETE at first landing: `c04`'s
+    original `when` transcribed only the readiness/latch gates and
+    silently dropped TWO more of the frozen `step()`'s five early
+    returns — `if prisoner_pop == 0: return` (`:141-142`) and `if
+    prisoner_pop <= max_controllable: return` (`:150-151`, D-record 3's
+    SAME `<=` boundary) — both re-evaluated on the terminal tick against
+    the FRESH same-tick census, since `step()` is one function
+    re-executed from the top on every call. Restored as two added `when`
+    conjuncts; `c04`'s `:fuel` moved 46 -> 54. Proven by two new
+    mutation-killed fixtures in `control_ratio_conformance.rs`, each
+    cross-checked against the frozen engine. Every `tick_goldens.rs`
+    pin (16 at this train's landing; sibling trains keep adding pins)
+    stayed byte-identical — no committed scenario exercises either
+    dropped-gate path. The RESERVED branch's own comparison, threshold
+    source, and role partition are unchanged; only the surrounding
+    `when`'s completeness moved. Full addendum: `docs/reference/
+    bsl-language.rst`'s D174 row.
+
+    **6. The byte-order disclosure.** `control-ratio/*` sorts BEFORE
+    `decomposition/*` in ascending rule-id byte order (the comparison
+    resolves at the NAMESPACE segment — `'c'` < `'d'` — before ever
+    reaching the rule-local `c01` vs `p01` prefixes), inverting the
+    frozen @11.0-then-@12.0 system order: within every tick, `c01`-`c04`
+    run to completion before `p01`-`p06` start. Benign by construction,
+    not by luck: the only cross-pack datum `control-ratio/*` reads is
+    the carrier's `institution/decomposition-fire-tick`/`-fired-known`,
+    and `control_ratio_delay` is the SHIPPED 52 (never 0) on every
+    scenario this pack loads on its own, so the one-rule-order lag
+    resolves itself 51+ ticks before the delay clears regardless. The
+    authoring constraint: no Pack B scenario may set
+    `carceral/control-ratio-delay` to 0 while relying on
+    `decomposition-fire-tick` being written the SAME tick by a co-loaded
+    `decomposition/p03-trigger` — every scenario in this pack seeds the
+    fire-tick fields directly instead. The test that enforces it,
+    executably: `the_byte_order_inversion_delays_a_same_tick_race_by_
+    exactly_one_tick` (`carceral_arc_conformance.rs`, Task 8) — an
+    isolated fixture with `control-ratio-delay 0` and an UNSEEDED fire
+    tick proves no crisis fires at tick 1 (the SEEDED-0 read) and one
+    fires at tick 2 (the write becomes visible one rule-order later).
+    Register row: **D172**.
+
+    **7. The remaining register rows.** **D170** (the unconditional
+    census publication — the port publishes every tick where the frozen
+    system gates behind a three-early-return readiness check, widening
+    the observable state surface). **D171** (four `emit` payload
+    divergences: flattened nested dicts, dropped `narrative_hint`s, the
+    numeric `outcome` encoding, and the omitted ratio keys in the
+    zero-enforcer case — with the frozen payload's own redundant
+    duplicate `control_ratio`/`actual-ratio` key DELIBERATELY preserved,
+    not simplified away). **D173** (four inherited frozen-code defects,
+    transcribed verbatim per ADR183: docstring drift at THREE sites —
+    fixed forward, final review M5, adding a third —
+    `decomposition.py`'s own "30%/70%" AND `CarceralDefines`'s stale
+    "2.33:1"/"control_capacity >= 3: No crisis" arithmetic in
+    `territory.py:265-267`, both computed off the stale 30/70 split
+    rather than the shipped 15/85, under which `control_capacity = 4`
+    DOES produce a crisis; AND `control_ratio.py:7`'s stale "1:20 ratio"
+    docstring claim against the shipped `control_capacity = 4`
+    (`defines.yaml:294`) — that same file's own `:145` comment already
+    says "US average ~4:1"; the additive/overwrite intake asymmetry; LA
+    population/wealth non-conservation from independent flooring; the
+    bare `2` literal with no `CarceralDefines` backing). **D168** (the
+    event-history read omitted as PROVABLY unreachable, since
+    `ImperialRentSystem` @9.0 — the only other frozen production emitter
+    of `SUPERWAGE_CRISIS` — is itself unported; explicit re-open trigger
+    named for when it ports).
+
+    **8. Task-1 adjudication note carried forward.** `social-class/
+    organization`'s `deffield` type is declared `coefficient intensive`
+    (Task 1's own deviation, disclosed in its report) rather than the
+    plan's default suggestion of `int extensive` — the fixture's
+    fractional seeds (e.g. `lumpen`'s `0.2`) refuse at load under an
+    `int`-declared field, and `coefficient` also fits the frozen domain
+    better (`avg_organization` compares directly against
+    `carceral/revolution-threshold`, itself `coefficient`).
+    **Probability was also viable** and was weighed against
+    `coefficient` at the same adjudication point — the Task 1 review's
+    own exact framing, carried here per this train's own record-keeping
+    obligation rather than re-litigated.
+  consequences: |
+    - The gates (Task 9's own full-gate pass, split per machine-safety
+      instruction): `mise run rust:check` GREEN, exit 0 — full workspace
+      `cargo fmt --check`, workspace clippy `-D warnings` plus all
+      pedantic legs, `cargo doc`, and every test binary, with
+      `carceral_arc_conformance.rs` 5/5, `control_ratio_conformance.rs`
+      22/22 (24/24 post-fix-forward, final review I2's two new gate
+      fixtures), `decomposition_conformance.rs` 20/20, and the
+      `tick_goldens.rs` golden pins (16 at this train's landing; the
+      file keeps growing) — 11 PRE-EXISTING byte-identical
+      (fixed forward, final review M2: the original "all 16 … byte-
+      identical" phrasing here conflated the pin COUNT with the
+      byte-identity claim, which correctly applies only to the 11
+      pre-existing pins; 5 are NEW pins this train measures, matching the
+      pins bullet below's own accurate phrasing). The RST-sync suite
+      (`tests/unit/reference/test_bsl_grammar_sync.py`): **41/41 green**.
+      `vale` on every touched `.rst`/`.md`: `docs/reference/
+      bsl-language.rst` measured base 609 errors (pre-Task-9) + 20 new
+      findings from this task's own D166-D174 content = 629, then 629 -
+      2 (one `'very'`-weasel-word instance trivially reworded) = **627**
+      final — the remaining 20 new findings are passive-voice emphasis-
+      caps (`REJECTED`/`OMITTED`/etc, this document's own established
+      idiom) or closed technical vocabulary (`persistent_data`/
+      `docstring`/`dicts`/`frozenset`/etc) already present throughout
+      the pre-existing baseline, none fixed, matching house style; both
+      inventory UPDATE blocks added **+5/+5** new findings (decomposition
+      91->96, control-ratio 55->60), same house-style pattern, no
+      trivially-fixable ones found. The Python-side heavies (`mise run
+      check`, `qa:regression`, `qa:vault-regression-ci`) were explicitly
+      NOT run — deferred to the controller, single-flight, before PR B
+      opens, since this task touched zero Python production files.
+    - The pins: `tick_goldens.rs` gained five new golden pairs this
+      train — `decomposition_conformance_hashes_are_pinned` (fired 10),
+      `decomposition_delay_conformance_hashes_are_pinned` (fired 8, PR
+      A); `control_ratio_conformance_hashes_are_pinned` (fired 9),
+      `control_ratio_revolution_conformance_hashes_are_pinned` (fired
+      9), `control_ratio_within_capacity_conformance_hashes_are_pinned`
+      (fired 4), `control_ratio_zero_enforcer_conformance_hashes_are_
+      pinned` (fired 6, all four PR B/Task 5-7); and
+      `carceral_arc_conformance_hashes_are_pinned` (fired 13, Task 8) —
+      16 golden pins in the crate at this train's landing (a live
+      count — sibling trains add pins), 11 pre-existing (9 pre-Pack-A +
+      Pack A's 2) plus Pack B's 4 plus the arc's 1, every pre-existing
+      pin verified byte-identical throughout.
+    - The records: register rows D165 (Task 5) + D166-D174 (this task,
+      companion D169 to D165) landed in `docs/reference/bsl-language.rst`;
+      this ADR; `ai/state.yaml`'s closing entry (Material Base tally
+      7/13 -> 9/13 — ADR211's own six-system remainder (TickDynamics,
+      ReserveArmy, Community, ImperialRent, Decomposition, ControlRatio)
+      narrows by the two this train ports, leaving FOUR of the 13:
+      TickDynamics @4.0 (its own charter, #563, ADR210's Option C
+      resolution) and the three gate-cleared systems ReserveArmy,
+      Community, ImperialRent (curve dispositions ruled at ADR202/
+      ADR210) — plus Substrate @2.5, a Director scope question separate
+      from the 13-system count entirely. Checkpoint A (ADR208 R14: all
+      13 Material Base systems ported) is closer but NOT reached, WS3
+      stays HELD).
+    - Issue #566 already CLOSED (bookkeeping close, ADR208 R29). Fresh
+      implementation issue **#644** filed under umbrella #557 tracking
+      this train's own PRs/ADR/follow-ons — stays OPEN, closed with
+      evidence once PR B merges. Issue #578's Material-Base row gains a
+      comment (issuecomment-5318725314) noting the narrowed remainder
+      and the Checkpoint-A-not-reached status.
+    - Two carried freebies executed in this task: the byte-order
+      doc-comment fix in `carceral_arc_conformance.rs` (the stated
+      comparison `'c' < 'p'` corrected to `'c' < 'd'`, the NAMESPACE
+      segment where the sort actually resolves — conclusion unchanged,
+      control-ratio still sorts first); the claimed stale "8
+      pre-existing pins" comment in the two Rust conformance test files
+      was searched for exhaustively and NOT found verbatim in either
+      file — the only "8"-pin-count text located lives in
+      `task-1-report.md` (historical, accurate for its own point in
+      time, left untouched per this repo's immutable-history
+      documentation philosophy) and in `tick_goldens.rs`'s own
+      Task-8-authored comment, which already correctly states "11
+      pre-existing … 9 pre-Pack-A + Pack A's 2."
+    - Follow-ons this train's own D-records name: **#562** (add-node/
+      structural-verb execution surface — discharges D167's placeholder-
+      id gap); **#572** (the `the` accessor's own T2.5 micro-train —
+      D166 records why this train did not need it, not a substitute for
+      landing it); a future ImperialRentSystem @9.0 port must re-examine
+      D168's carrier-latch re-modelling once a second same-tick
+      `SUPERWAGE_CRISIS` producer exists in the ported estate; the
+      emergent-class-partition cutover (ADR070/Program 19) remains
+      Director-gated and open, D174's own transcription changes nothing
+      about when or whether it proceeds.
+  supersedes: []
+  related:
+    - ADR199_territory_port_handoff
+    - ADR200_production_port_handoff
+    - ADR207_class_surface_ternary_port_handoff
+    - ADR211_solidarity_port_train_handoff
+    - ADR183_get_it_right_in_rust
+    - ADR070_emergent_class_partition
+    - ADR198_program29_substrate_widening_charter
+    - ADR208_docket_sitting_2026_08_17
+    - ADR210_checkpoint_a_campaign_rulings

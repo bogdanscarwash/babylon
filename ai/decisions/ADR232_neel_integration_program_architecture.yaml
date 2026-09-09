@@ -1,0 +1,99 @@
+ADR232_neel_integration_program_architecture:
+  status: "accepted"
+  date: "2026-08-26"
+  title: >-
+    Neel integration freezes predecessor contracts, governs source quarantine,
+    and requires an emergent material causal architecture
+  context: |
+    Babylon needs one durable architecture decision for the Director-approved
+    integration of Phil Neel's Hinterland and Hellworld with the permitted
+    Theory of the Party evidence. The predecessor design and the T1, T2, and T3
+    contract trains established useful administrative and synthetic groundwork,
+    but they do not provide a live player organization, attributed membership,
+    conserved political economy, fog-safe territory, or emergent practice path.
+
+    Leaving the program only in a design document would let implementation begin
+    before its source quarantine, supersession boundary, and causal prohibitions
+    had accepted governance. Treating current Linear issue assignments as part
+    of that document would also duplicate the system that owns live work.
+  decision: |
+    The Neel Integration Program design dated 2026-08-25 is the architecture
+    elaboration for this decision. The verified Neel evidence may constrain
+    causal questions but cannot supply executable coefficients or guarantee an
+    outcome. Pannekoek, Bordiga, and Trotsky are excluded transitively from
+    source authority, rationale, vocabulary, coefficients, and mechanics. The
+    supplied Theory of the Party clipping remains bounded by its recorded
+    quarantine. The CPUSA Organizers' Manual chapter 3 is a bounded exception
+    for situated workplace and neighborhood practice; it does not authorize an
+    official party form, remote command, fixed unit sizes, hierarchy, secrecy,
+    entryism, or guaranteed leadership.
+
+    The program supersedes the 2026-08-23 relational-territory and practice
+    design as current program architecture while preserving it as history. Its
+    V1 contract bytes, digests, refusal vectors, administrative RTD boundary,
+    and synthetic SFS evidence remain frozen. Direct solidarity writes, scalar
+    recruitment, solidarity-funded throughput, command-pressure repression,
+    and membership-only emergence remain reference semantics or fixture facts;
+    they cannot become live program authority.
+
+    Rust and BSL are the sole executable gameplay authority. Python remains the
+    frozen reference and declared periphery. Successors use versioned contracts
+    and preserve V1 byte behavior. The one-way Rust persistence cutover, exact
+    accepted-input identity, complete envelope, fog policy, and player surface
+    remain separate governed dependencies rather than inferred authority.
+
+    The player inhabits a materially situated organization without a privileged
+    official party kind. Territory is a relational, actor-, question-, scale-,
+    and tick-scoped projection with no stored hinterland type, rank, stage, or
+    score. Only a materially connected worker organization can propose a strike,
+    and each affected worker cohort independently resolves participation.
+    Strike, blockade, occupation, damage, and capital strike retain distinct
+    carriers and consequences.
+
+    Production, orders, inventory, freight, realization, reproduction,
+    maintenance, exhaustion, ecology, and substitution form conserved causal
+    relations. Actor-scoped knowledge governs dossiers, topology observations,
+    capacity allocation, repression candidates, affected populations, and
+    Backfire. Centrality is a measurement and cannot directly author an outcome.
+
+    Competence, trust evidence, ties, repertoires, organization formation,
+    practical leadership, party projections, and long-run construction arise
+    only from attributed events and consumed material products. No rule may
+    directly write membership, solidarity, victory, legitimacy, political
+    control, or a universal political score. Slow-fast-slow evidence is measured
+    per material channel after commitment. The engine has no authored sigmoid,
+    fixed response curve, stage machine, or required trajectory.
+
+    Linear alone owns current work identity, scope, status, priority,
+    dependencies, horizons, milestones, and schedule. Architecture documents
+    may state technical prerequisites but cannot assign those prerequisites to
+    live issues or replace the canonical Linear portfolio.
+  consequences: |
+    Each dependent implementation slice needs its own accepted boundary when it
+    introduces versioned bytes, identity, persistence, fog, or gameplay law.
+    Every important output needs a real consumer. Verification must cover
+    determinism, conservation, fog, counterfactual responsiveness, causal
+    footprints, mutation controls, persistence, heterogeneity, and emergent
+    traces without presenting synthetic groundwork as live behavior.
+
+    Historical ADRs and V1 fixtures stay intact. A successor ADR must name the
+    exact clauses and byte contracts it preserves or supersedes. Linear can
+    reorder, split, or reassign work without changing this architecture law.
+  verification: |
+    The ADR232 decision-index contract parses this record and the catalog,
+    proves the exact accepted metadata, and pins the source, authority,
+    participation, territory, emergence, and Linear boundaries. Targeted Vale
+    checks validate the architecture design. Dependent code cannot claim this
+    program complete until the design's completion predicates have executable
+    evidence.
+  supersedes: []
+  related:
+    - ADR189_amendment_ag_attributed_membership_lattice_instances
+    - ADR220_rust_owned_postgresql_persistence_boundary
+    - ADR221_game_first_refoundation_v4
+    - ADR223_whole_tick_atomicity_world_hash
+    - ADR224_bsl_causal_composition_contract
+    - ADR226_t3_synthetic_emergence_evidence_boundary
+    - ADR227_practice_contract_groundwork
+    - ADR228_relational_territory_dossier_contract
+    - ADR229_rust_gameplay_contract_authority

@@ -1,0 +1,244 @@
+ADR221_game_first_refoundation_v4:
+  status: "accepted"
+  date: "2026-08-22"
+  title: "Amendment AH — Game-First Refoundation: Constitution v4.0.0 makes emergent entertainment, expressive player agency, declared design liberties, decision-useful presentation, and behavioral historical benchmarks the governing product law while preserving the complete v3.1/v3.2 transition record"
+  context: |
+    The v3 Constitution accumulated ten articles, thirty-two registered
+    amendments, implementation bindings, content vocabulary, deployment
+    details, and a 418-line synchronization report. Its live product promise
+    still said collapse was predetermined and historical reproduction was the
+    test, even though later decisions had already moved the project toward a
+    playable Bevy client, emergent outcomes, and a Rust/BSL engine.
+
+    The Director explicitly ruled that Babylon is an entertainment-first,
+    expressive political-economy game. It remains disciplined by evidence and
+    revolutionary theory, but it is not a forecast or scientific reproduction.
+    Historical cases test causal signatures and counterfactual response; they
+    do not supply a script. The same ruling made every player-facing
+    visualization answer a decision question and made the semantic Archive part
+    of the decision loop.
+
+    Two predecessor snapshots must be preserved. The requested v3.1.0 text is
+    Git blob a265b85120ed2a90be40c72e63ee5bf27fc6e703. The immediate v3.2.0
+    text, which added Amendment AG, is Git blob
+    e905e90d66bddc6e4eca36a3896428f5ce63de5b. Mapping only v3.1 would silently
+    erase AG. Amendment AB never existed in the v3.2 registry; its absence is
+    historical fact, not an omitted row. Every registered amendment is mapped
+    below.
+
+    The immediate v3.2 primitive was `D = (A, Ā, w, T, s)`. Amendment N had
+    reserved sigma for its unequal-exchange spectrum and renamed the dialectic's
+    sublation predicate to `s`. The Director's v4 ruling restores sigma to the
+    dialectic. That is an explicit AH change, not a claim that v3.2 already used
+    sigma.
+  decision: |
+    Amendment AH ratifies Constitution v4.0.0 as eight named articles:
+    Purpose and Player Promise; Theoretical Commitments; Emergence and Agency;
+    Evidence and Design Liberties; Deterministic Architecture;
+    Political-Economy Circuit; Player Knowledge and Presentation; and
+    Behavioral Validation and Governance.
+
+    The live Constitution is law, not an encyclopedia. Detailed equations,
+    content vocabularies, implementation bindings, deployment choices, and
+    work sequencing move to their governed standards, registries, ADRs, and
+    roadmap. Re-homed does not mean discarded: the cited destination continues
+    the authority at the correct rate of change. Retired means the former rule
+    no longer governs. Rewritten means its valid concern survives under a
+    materially changed law. Retained means v4 carries the substance directly.
+
+    Amendment AG survives through a rewritten constitutional core and its exact
+    recording ADR. Attributed membership remains a first-class, typed,
+    hash-covered element, and content may declare instances of the existing
+    lattice/adjunction schema while new mathematical kinds stay amendment-gated.
+  transition:
+    sources:
+      v3_1:
+        version: "3.1.0"
+        blob: "a265b85120ed2a90be40c72e63ee5bf27fc6e703"
+        note: "Requested AF-era predecessor snapshot."
+      v3_2:
+        version: "3.2.0"
+        blob: "e905e90d66bddc6e4eca36a3896428f5ce63de5b"
+        note: "Immediate predecessor and source of Amendment AG authority."
+    citation_resolution:
+      dotted_clauses: >
+        A pre-AH unversioned dotted-clause citation resolves against the pinned v3.2
+        snapshot through transition.clauses.
+      named_sections: >
+        A pre-AH unversioned named or undotted section citation resolves against the
+        pinned v3.2 snapshot through transition.undotted_sections.
+      amendments: >
+        A pre-AH unversioned amendment citation resolves against the pinned v3.2
+        snapshot through transition.amendments. Amendment AB has no row because it
+        was never registered.
+      post_ah: >
+        Post-AH living authority cites a named v4 article or an exact governed
+        destination from its transition row. A versioned historical citation keeps
+        its stated version; no reader invents a decimal translation.
+    primitive_notation:
+      v3_2: "D = (A, Ā, w, T, s)"
+      v4: "D = (A, Ā, w, T, σ)"
+      ruling: >
+        Amendment AH restores sigma as the dialectic's sublation predicate. This
+        ruling does not rewrite the immediate v3.2 text, which used `s`; content
+        descended from Amendment N must use a qualified spectrum name rather than
+        reserve the constitutional glyph.
+    disposition_vocabulary:
+      - "Retained"
+      - "Rewritten"
+      - "Re-homed"
+      - "Retired"
+    clauses:
+      "I.1": {disposition: "Rewritten", destination: "Article II", rationale: "The reserved theoretical line still constrains causality without turning a named contradiction into a scripted result."}
+      "I.2": {disposition: "Rewritten", destination: "Article II; Article VI", rationale: "Imperial rent remains a governing material relation inside the circuit while its exact equation leaves the lean law."}
+      "I.2a": {disposition: "Re-homed", destination: "ai/bsl-architecture-standard.md; ai/decisions/ADR165_p26_director_rulings_trade_slate.yaml", rationale: "The unequal-exchange spectrum implementation belongs in governed theory and content records, subject to AH's qualified-name ruling."}
+      "I.3": {disposition: "Re-homed", destination: "ai/THE_FORMALISM.md; docs/reference/formulas.rst", rationale: "TRPF mechanics and counter-tendencies remain model content."}
+      "I.4": {disposition: "Rewritten", destination: "Article II; Article III", rationale: "Bifurcation remains causal pressure but cannot guarantee a branch."}
+      "I.5": {disposition: "Re-homed", destination: "ai/shadow-labor-spec.yaml; docs/reference/tensor.rst", rationale: "Department III remains governed circuit detail."}
+      "I.6": {disposition: "Re-homed", destination: "docs/reference/dialectical-field-topology.rst; ai/decisions/ADR211_solidarity_port_train_handoff.yaml", rationale: "Solidarity edge modes remain typed content."}
+      "I.7": {disposition: "Re-homed", destination: "docs/reference/dialectical-field-topology.rst; ai/bsl-architecture-standard.md", rationale: "Quantity-to-quality transition rules are executable design detail."}
+      "I.8": {disposition: "Retired", destination: "transition.sources.v3_2; transition.clauses.I.8", rationale: "Predetermined collapse and the denial of player outcome agency directly conflict with Article I and Article III."}
+      "I.9": {disposition: "Rewritten", destination: "Article II; Article VI", rationale: "Ecological metabolism remains in the circuit without an authored collapse destiny."}
+      "I.10": {disposition: "Re-homed", destination: "ai/terminal-crisis.yaml; ai/decisions/ADR139_p25_u12_conjunctures_governance_endgame.yaml", rationale: "The crisis arc may be modeled or recognized but is not constitutional destiny."}
+      "I.11": {disposition: "Rewritten", destination: "Article I; Article III", rationale: "Pedagogy through modeled consequences survives, while the game-first law replaces all-strategies-playable with more than one viable strategy."}
+      "I.12": {disposition: "Re-homed", destination: "docs/reference/dialectical-field-topology.rst; ai/decisions/ADR051_lawverian_dialectics_refactor.yaml", rationale: "Specific catastrophe geometry must earn a running consumer."}
+      "I.13": {disposition: "Re-homed", destination: "src/babylon/domain/dialectics/instances/catalog.py; ai/decisions/ADR051_lawverian_dialectics_refactor.yaml", rationale: "Principal-contradiction selection is executable algebra detail."}
+      "I.14": {disposition: "Re-homed", destination: "docs/reference/dialectical-field-topology.rst; ai/decisions/ADR051_lawverian_dialectics_refactor.yaml", rationale: "Aspect, character, and trajectory remain governed model vocabulary."}
+      "I.15": {disposition: "Re-homed", destination: "src/babylon/engine/systems/edge_transition/_legacy.py; docs/reference/dialectical-field-topology.rst", rationale: "Permissible edge transitions belong with their executable state machine."}
+      "I.16": {disposition: "Rewritten", destination: "Article II; Article III", rationale: "Actors and crystallized relations remain distinct, while exact vocabulary is governed elsewhere."}
+      "I.17": {disposition: "Re-homed", destination: "ai/decisions/ADR060_constitution_v2_8_0.yaml; src/babylon/engine/systems/ooda.py", rationale: "OODA placement is an implementation and content contract."}
+      "I.18": {disposition: "Retained", destination: "Article II", rationale: "Material position and conceived interest remain a central terrain of struggle."}
+      "I.19": {disposition: "Rewritten", destination: "Article II; Article V", rationale: "The dialectic remains irreducible and new kinds stay amendment-gated, while AH explicitly restores sigma and re-homes implementation detail."}
+      "I.20": {disposition: "Retained", destination: "Article II", rationale: "Immutable geography and mutable political overlays remain constitutional."}
+      "I.21": {disposition: "Re-homed", destination: "src/babylon/ooda/attention/sparrow.py; ai/THE_FORMALISM.md", rationale: "Targeting modes are governed action content, not a constitutional roster."}
+      "II.1": {disposition: "Retained", destination: "Article II", rationale: "Class and core/periphery partitions must emerge at declared scales."}
+      "II.2": {disposition: "Re-homed", destination: "ai/architecture.yaml; docs/reference/data-models.rst", rationale: "Store-versus-compute choices follow the durable state schema."}
+      "II.3": {disposition: "Rewritten", destination: "Article V", rationale: "The typed graph and native-hyperedge substance survives without obsolete library prose."}
+      "II.4": {disposition: "Re-homed", destination: "ai/tuning-standard.yaml; docs/reference/tuning.rst", rationale: "Coefficient motion and crisis resets are tuning and mechanic rules."}
+      "II.5": {disposition: "Rewritten", destination: "Article V; Article VII; ai/decisions/ADR093_amendments_v_w_x.yaml; ai/decisions/ADR100_pydantic_ai_adoption.yaml; ai/decisions/ADR186_bevy_cutover_amendment_af.yaml; src/babylon/projection/__init__.py; rust/crates/babylon-client/src/projection.rs", rationale: "The lean law keeps observer-only, fog-safe AI; the exact homes preserve the no-LLM input path and declared projection-seam duties."}
+      "II.6": {disposition: "Retained", destination: "Article V", rationale: "State remains data and the engine remains pure transformation."}
+      "II.7": {disposition: "Rewritten", destination: "Article V; ai/decisions/ADR189_amendment_ag_attributed_membership_lattice_instances.yaml", rationale: "The stale XGI transition wording is replaced by the resolved native-hyperedge model."}
+      "II.8": {disposition: "Rewritten", destination: "Article V; Article VII; ai/decisions/ADR093_amendments_v_w_x.yaml; ai/decisions/ADR186_bevy_cutover_amendment_af.yaml; src/babylon/projection/__init__.py; rust/crates/babylon-client/src/projection.rs", rationale: "Clients remain replaceable projections that emit intent, while the exact observe seam and transport duties continue in the cited records."}
+      "II.9": {disposition: "Re-homed", destination: "ai/graph-abstraction-spec.yaml; ai/decisions/ADR051_lawverian_dialectics_refactor.yaml", rationale: "The exact morphism vocabulary belongs with the typed graph contract."}
+      "II.10": {disposition: "Rewritten", destination: "Article V", rationale: "One adjudication state plus post-tick durability survives without frozen Python bindings."}
+      "II.11": {disposition: "Re-homed", destination: "docs/reference/projection-registry.rst; ai/architecture.yaml", rationale: "Schema boundaries remain binding architecture detail."}
+      "II.12": {disposition: "Re-homed", destination: "ai/graph-abstraction-spec.yaml; docs/reference/tensor-hierarchy.rst", rationale: "Graph, matrix, and operator library bindings are implementation records."}
+      "II.13": {disposition: "Rewritten", destination: "Article VI", rationale: "Transport remains one leg of the circuit; exact modes and edges stay in standards."}
+      "III.1": {disposition: "Rewritten", destination: "Article IV", rationale: "Every substantive value now carries an explicit evidence class and provenance."}
+      "III.2": {disposition: "Rewritten", destination: "Article VIII", rationale: "Falsifiability becomes behavioral signatures, controls, mutations, and counterfactuals."}
+      "III.3": {disposition: "Retained", destination: "Article II", rationale: "Formalism without a material and operational meaning remains invalid."}
+      "III.4": {disposition: "Rewritten", destination: "Article IV", rationale: "Traceability remains, while data additions no longer require constitutional edits."}
+      "III.4.1": {disposition: "Re-homed", destination: "data-catalog.yaml; data-artifacts.yaml", rationale: "Catalog schema and categories are machine-readable reference governance."}
+      "III.4.2": {disposition: "Rewritten", destination: "Article IV; Article V", rationale: "Pinned artifacts remain reproducible inputs and never mutable campaign state."}
+      "III.5": {disposition: "Rewritten", destination: "Article III; Article IV", rationale: "Observed conditions and designed intervention are distinguished by evidence class and causal role."}
+      "III.6": {disposition: "Re-homed", destination: "ai/decisions/ADR099_archive_stack.yaml; ai/decisions/ADR100_pydantic_ai_adoption.yaml", rationale: "Model pins and artifact provenance remain boundary contracts."}
+      "III.7": {disposition: "Rewritten", destination: "Article V", rationale: "Determinism proves computational identity over the combined world, not historical truth."}
+      "III.8": {disposition: "Retained", destination: "Article II", rationale: "The Aleksandrov Test remains explicit constitutional law."}
+      "III.9": {disposition: "Re-homed", destination: "CLAUDE.md", rationale: "Agent context loading is operating guidance, not product law."}
+      "III.10": {disposition: "Rewritten", destination: "Article VIII; ai/bsl-architecture-standard.md", rationale: "New mathematics stays amendment-gated and unused constructs require a disposition."}
+      "III.11": {disposition: "Retained", destination: "Article V; Article VIII", rationale: "Silent degradation remains a defect and a red gate."}
+      "III.12": {disposition: "Retained", destination: "Article V; Article VIII", rationale: "Behavioral contracts remain the durable rewrite specification."}
+      "III.13": {disposition: "Rewritten", destination: "Article V; Article VII; ai/decisions/ADR093_amendments_v_w_x.yaml; ai/decisions/ADR099_archive_stack.yaml; docs/reference/projection-registry.rst", rationale: "Deterministic materialization now includes fog-safe Archive verification and page hashes while the cited records retain ordering, sandbox, byte, and golden-vault duties."}
+      "IV.1": {disposition: "Re-homed", destination: "NORTH_STAR.md; specs/063-vol-ii-circulation/spec.md", rationale: "Detroit-Windsor remains the first proving basin, not universal constitutional scope."}
+      "IV.2": {disposition: "Retired", destination: "transition.sources.v3_2; transition.clauses.IV.2", rationale: "Mandatory reproduction of prior trajectories conflicts with behavioral benchmark validation."}
+      "VI.1": {disposition: "Rewritten", destination: "Article VI", rationale: "The build order becomes a closed playable circuit, not a universal before/after prohibition."}
+      "VI.2": {disposition: "Retained", destination: "Article IV; Article VI", rationale: "Resolution still follows evidence and a named mechanic."}
+      "VI.3": {disposition: "Retired", destination: "Article VI; NORTH_STAR.md; transition.clauses.VI.3", rationale: "A Detroit prediction is no longer the sole scope test; named consumers and playable gates govern scope."}
+      "VII.1": {disposition: "Retained", destination: "Article V", rationale: "UI emits intent and never mutates authoritative state."}
+      "VII.2": {disposition: "Re-homed", destination: "docs/reference/design-system.rst", rationale: "Palette semantics are design-system law."}
+      "VII.3": {disposition: "Rewritten", destination: "Article VII", rationale: "Data ink is subordinate to helping the player decide."}
+      "VII.4": {disposition: "Rewritten", destination: "Article VII", rationale: "Graphs are used when topology answers a decision, not by unconditional primacy."}
+      "VII.5": {disposition: "Retained", destination: "Article VII", rationale: "Available actions and affordances must remain legible."}
+      "VII.6": {disposition: "Re-homed", destination: "docs/reference/design-system.rst", rationale: "Cross-view color invariance belongs in the visual system."}
+      "VII.7": {disposition: "Re-homed", destination: "docs/reference/design-system.rst", rationale: "Visual difference discipline remains a design rule."}
+      "VII.8": {disposition: "Retained", destination: "Article VII", rationale: "Previews and causal receipts are required parts of a decision surface."}
+      "VII.9": {disposition: "Re-homed", destination: "docs/reference/design-system.rst", rationale: "Typography roles are implementation-level design law."}
+      "VII.10": {disposition: "Rewritten", destination: "Article VII", rationale: "The constitutional prohibition is now decisionless gameplay visualization."}
+      "VIII.1": {disposition: "Re-homed", destination: "docs/reference/dialectical-field-topology.rst; ai/decisions/ADR211_solidarity_port_train_handoff.yaml", rationale: "Solidarity representation remains a typed mechanic rule."}
+      "VIII.2": {disposition: "Re-homed", destination: "docs/reference/community-system.rst; ai/THE_FORMALISM.md", rationale: "Union classification is reserved political content, not universal architecture law."}
+      "VIII.3": {disposition: "Retained", destination: "Article III", rationale: "Conditions constrain and pressure but do not mechanically determine outcomes."}
+      "VIII.4": {disposition: "Retained", destination: "Article II", rationale: "Ungrounded formalism still fails the Aleksandrov Test."}
+      "VIII.5": {disposition: "Rewritten", destination: "Article VIII", rationale: "Claims require behavioral evidence, controls, and falsifying interventions."}
+      "VIII.6": {disposition: "Rewritten", destination: "Article IV", rationale: "Unproven constants must be declared Calibrated or Designed rather than disguised as data."}
+      "VIII.7": {disposition: "Rewritten", destination: "Article VI", rationale: "Political effects must close through their material circuit, while vertical slices may start anywhere with the required producers."}
+      "VIII.8": {disposition: "Retained", destination: "Article VII", rationale: "A player-facing visualization without decision use is prohibited."}
+      "VIII.9": {disposition: "Retained", destination: "Article V", rationale: "N-ary community membership may not collapse into combinatorial pairwise edges."}
+      "VIII.10": {disposition: "Re-homed", destination: "docs/reference/community-system.rst; src/babylon/domain/dialectics/core/opposition.py", rationale: "Specific community and oppressor classifications remain Director-governed content."}
+      "VIII.11": {disposition: "Re-homed", destination: "docs/reference/dialectical-field-topology.rst; ai/decisions/ADR051_lawverian_dialectics_refactor.yaml", rationale: "Fresh measured tension and no-ratchet behavior remain executable laws."}
+      "VIII.12": {disposition: "Retained", destination: "Article V", rationale: "Silent no-op behavior remains constitutionally defective."}
+      "VIII.13": {disposition: "Retained", destination: "Article V", rationale: "Load-bearing knowledge must outlive one implementation."}
+      "IX.1": {disposition: "Rewritten", destination: "Article VIII", rationale: "The amendment procedure now requires transition, verification, and explicit supersession."}
+      "IX.2": {disposition: "Rewritten", destination: "Article VIII; transition.clauses; transition.undotted_sections; transition.amendments", rationale: "Affected laws still require explicit translation, without retaining a mandatory numbered-series form."}
+      "IX.3": {disposition: "Re-homed", destination: "CLAUDE.md; CONTRIBUTORS.md", rationale: "Agent escalation procedure is operating guidance under the constitutional boundary."}
+      "IX.4": {disposition: "Re-homed", destination: "CLAUDE.md", rationale: "Context-budget tiers are agent configuration."}
+      "IX.5": {disposition: "Retained", destination: "Article VIII", rationale: "Director authority and gate-licensed agentic engineering remain governing law."}
+      "X.1": {disposition: "Re-homed", destination: "ai/decisions/ADR093_amendments_v_w_x.yaml; ai/decisions/ADR094_nix_channel_deployment.yaml", rationale: "Production host configuration is not game constitutional law."}
+      "X.2": {disposition: "Re-homed", destination: "ai/decisions/ADR093_amendments_v_w_x.yaml; ai/decisions/ADR094_nix_channel_deployment.yaml", rationale: "Provisioning tool responsibilities belong to operations."}
+      "X.3": {disposition: "Re-homed", destination: "ai/decisions/ADR093_amendments_v_w_x.yaml; ai/decisions/ADR094_nix_channel_deployment.yaml", rationale: "Install source and socket policy are implementation details."}
+      "X.4": {disposition: "Re-homed", destination: "ai/decisions/ADR093_amendments_v_w_x.yaml; ai/decisions/ADR094_nix_channel_deployment.yaml", rationale: "Process supervision belongs to operations."}
+      "X.5": {disposition: "Re-homed", destination: "ai/decisions/ADR093_amendments_v_w_x.yaml; ai/decisions/ADR094_nix_channel_deployment.yaml", rationale: "Vendor division of labor is operational architecture."}
+      "X.6": {disposition: "Re-homed", destination: "ai/decisions/ADR093_amendments_v_w_x.yaml", rationale: "The maintenance filter remains a design heuristic outside the live Constitution."}
+      "X.7": {disposition: "Re-homed", destination: "ai/decisions/ADR102_environment_sovereignty.yaml", rationale: "The vendored flake and pinning authority remain build contracts."}
+      "X.8": {disposition: "Re-homed", destination: "ai/decisions/ADR093_amendments_v_w_x.yaml; ai/decisions/ADR094_nix_channel_deployment.yaml", rationale: "Game-managed PostgreSQL and portability commitments continue in architecture and release governance."}
+    undotted_sections:
+      "I.19.Apex": {disposition: "Retained", destination: "Article II", rationale: "No higher formal peer may bypass dialectical motion without amendment."}
+      "IV": {disposition: "Rewritten", destination: "Article VIII; NORTH_STAR.md; specs/063-vol-ii-circulation/spec.md", rationale: "Nationwide scale is a delivery goal, not a reproduction mandate."}
+      "V.Player": {disposition: "Re-homed", destination: "ai/decisions/ADR177_verb_matrix_ratified_main_ruleset.yaml; src/babylon/game/actions/matrix.py; src/babylon/game/actions/registry.py", rationale: "The nine-verb roster remains live content."}
+      "V.Investigate": {disposition: "Re-homed", destination: "ai/decisions/ADR177_verb_matrix_ratified_main_ruleset.yaml; src/babylon/game/actions/registry.py; src/babylon/engine/actions/investigate.py", rationale: "Investigate targeting is executable vocabulary."}
+      "V.State-AI": {disposition: "Re-homed", destination: "src/babylon/models/enums/actions.py; src/babylon/ooda/state_ai/decision.py", rationale: "Institutional action vocabulary is content, not constitutional text."}
+    amendments:
+      "A": {disposition: "Retained", destination: "Article II", rationale: "The dialectic remains primitive."}
+      "B": {disposition: "Retained", destination: "Article II", rationale: "Partitions remain derived and scale-declared; proofs live with implementations."}
+      "C": {disposition: "Re-homed", destination: "ai/decisions/ADR060_constitution_v2_8_0.yaml; ai/architecture.yaml", rationale: "OODA's node-metadata home remains an implementation decision."}
+      "D": {disposition: "Retained", destination: "Article V", rationale: "The authoritative native-hyperedge and no-clique resolution appears directly in Article V; the stale pending registry text does not revive."}
+      "E": {disposition: "Rewritten", destination: "NORTH_STAR.md; specs/063-vol-ii-circulation/spec.md", rationale: "Detroit-Windsor remains a proving basin without mandatory trajectory reproduction."}
+      "F": {disposition: "Re-homed", destination: "ai/architecture.yaml; docs/reference/data-models.rst", rationale: "Subsystem data ownership remains architecture law."}
+      "G": {disposition: "Retained", destination: "Article II", rationale: "Immutable substrate and mutable claims remain constitutional."}
+      "H": {disposition: "Re-homed", destination: "data-catalog.yaml; data-artifacts.yaml", rationale: "Catalog structure remains machine-readable governance."}
+      "I": {disposition: "Rewritten", destination: "Article V; ai/decisions/ADR093_amendments_v_w_x.yaml; ai/decisions/ADR100_pydantic_ai_adoption.yaml", rationale: "Input parsing authority retired; pinning and observer-only AI survive."}
+      "J": {disposition: "Re-homed", destination: "ai/architecture.yaml; src/babylon/game/actions/registry.py; docs/reference/determinism-contract.rst; specs/108-transport-substrate/spec.md", rationale: "Its mixed implementation provisions continue in their owning records."}
+      "K": {disposition: "Rewritten", destination: "Article II; Article V; ai/decisions/ADR051_lawverian_dialectics_refactor.yaml", rationale: "The live law carries executable and earn-its-keep constraints; ADR051 keeps the detailed operators, registries, and regime mechanics."}
+      "L": {disposition: "Re-homed", destination: "ai/decisions/ADR052_rustworkx_graph_substrate.yaml", rationale: "The graph library binding is implementation detail; determinism remains Article V law."}
+      "M": {disposition: "Retired", destination: "specs/090-cold-collapse/article-vii-amendment.md; transition.amendments.M", rationale: "It was superseded without ratification and creates no live constitutional palette."}
+      "N": {disposition: "Re-homed", destination: "ai/decisions/ADR060_constitution_v2_8_0.yaml; ai/decisions/ADR165_p26_director_rulings_trade_slate.yaml", rationale: "The unequal-exchange spectrum remains governed model content under AH's qualified-name ruling."}
+      "O": {disposition: "Re-homed", destination: "specs/108-transport-substrate/spec.md; src/babylon/game/actions/registry.py", rationale: "Corridor types and repair mechanics belong to the circuit implementation."}
+      "P": {disposition: "Retained", destination: "Article V; Article VIII", rationale: "Loud failure and determinism honesty remain constitutional."}
+      "Q": {disposition: "Retained", destination: "Article V; Article VIII", rationale: "Behavioral contracts remain the durable specification."}
+      "R": {disposition: "Rewritten", destination: "Article VIII; NORTH_STAR.md; specs/063-vol-ii-circulation/spec.md", rationale: "Nationwide scale remains a delivery target; forced historical reproduction retires."}
+      "S": {disposition: "Retained", destination: "Article II", rationale: "Dialectical motion remains the highest formal abstraction."}
+      "T": {disposition: "Re-homed", destination: "ai/decisions/ADR072_divergence_channel.yaml; docs/reference/dialectical-field-topology.rst", rationale: "The observes-only divergence channel remains governed model vocabulary."}
+      "U": {disposition: "Rewritten", destination: "Article V; ai/decisions/ADR091_scale_lattice_amendment_u.yaml", rationale: "Article V preserves governed lattice instances while ADR091 retains the exact spatial rungs and adjunction obligations."}
+      "V": {disposition: "Rewritten", destination: "Article V; Article VII; ai/decisions/ADR093_amendments_v_w_x.yaml; ai/decisions/ADR100_pydantic_ai_adoption.yaml; ai/decisions/ADR186_bevy_cutover_amendment_af.yaml; src/babylon/projection/__init__.py; rust/crates/babylon-client/src/projection.rs", rationale: "The lean law keeps observer-only AI and disposable clients; cited records retain the no-input, observe-seam, and transport-neutral duties."}
+      "W": {disposition: "Rewritten", destination: "Article V; Article VII; ai/decisions/ADR093_amendments_v_w_x.yaml; ai/decisions/ADR099_archive_stack.yaml; docs/reference/projection-registry.rst", rationale: "The lean law keeps deterministic materialization; cited records retain ordered reads, sandboxed sim-time templates, byte identity, and golden-vault obligations."}
+      "X": {disposition: "Re-homed", destination: "ai/decisions/ADR093_amendments_v_w_x.yaml; ai/decisions/ADR094_nix_channel_deployment.yaml", rationale: "Distribution commitments continue outside the lean law."}
+      "Y": {disposition: "Re-homed", destination: "ai/decisions/ADR100_pydantic_ai_adoption.yaml", rationale: "SDK choice is replaceable implementation detail."}
+      "Z": {disposition: "Re-homed", destination: "ai/decisions/ADR102_environment_sovereignty.yaml", rationale: "The in-repo flake remains the build authority."}
+      "AA": {disposition: "Re-homed", destination: "ai/decisions/ADR108_windows_portability_horizon.yaml", rationale: "The post-v1 Windows commitment and pre-v1 shield remain release governance."}
+      "AC": {disposition: "Retired", destination: "ai/decisions/ADR186_bevy_cutover_amendment_af.yaml; transition.amendments.AC", rationale: "AF already superseded the Ratatui client in full."}
+      "AD": {disposition: "Retained", destination: "Article VIII", rationale: "Director authority and agentic engineering remain governing law."}
+      "AE": {disposition: "Rewritten", destination: "Article V; Article VI; ai/bsl-architecture-standard.md; ai/decisions/ADR172_amendment_ae_refoundation_ratified.yaml", rationale: "Rust/BSL and pure-engine commitments survive; port-everything-first and obsolete renderer bindings do not."}
+      "AF": {disposition: "Re-homed", destination: "ai/decisions/ADR186_bevy_cutover_amendment_af.yaml", rationale: "Bevy remains the v1 client binding without making a disposable client a constitutional primitive."}
+      "AG": {disposition: "Rewritten", destination: "Article V; ai/decisions/ADR189_amendment_ag_attributed_membership_lattice_instances.yaml", rationale: "Article V carries AG's primitive core; ADR189 keeps ordered membership, effect-only mutation, the membership ceiling, and weighted intensive aggregation exact."}
+  consequences: |
+    - Product decisions now optimize for an emergent, entertaining, expressive
+      game while retaining evidence discipline and the reserved theoretical
+      line.
+    - Historical cases validate causal signatures, heterogeneity, hysteresis,
+      and counterfactual response; they no longer demand a reenacted path.
+    - Exact action vocabularies, formulas, UI bindings, data catalogs,
+      deployment choices, and roadmap order are governed at their natural rate
+      of change instead of bloating the Constitution.
+    - A player-facing visualization without a DecisionSurfaceContract cannot
+      count toward a gameplay milestone. Admin/debug exemptions are explicit
+      and visible.
+    - Every old dotted citation has an auditable disposition. Historical ADRs
+      and documents remain unchanged, and their versioned claims remain true of
+      the time at which they were written.
+  supersedes: []
+  related:
+    - ADR151_agentic_engineering_model
+    - ADR172_amendment_ae_refoundation_ratified
+    - ADR177_verb_matrix_ratified_main_ruleset
+    - ADR186_bevy_cutover_amendment_af
+    - ADR189_amendment_ag_attributed_membership_lattice_instances
+    - ADR217_b3_wave1_null_hypothesis_viewer_handoff

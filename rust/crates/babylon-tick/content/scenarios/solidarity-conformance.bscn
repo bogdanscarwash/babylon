@@ -1,0 +1,235 @@
+; The Solidarity @8.0 port train's conformance world (issue #557 umbrella,
+; Wave C, Task 1 — docs/superpowers/plans/2026-08-17-solidarity-port.md).
+; Neither `edge-write-lane-e2e.bscn` (no consciousness surface, uses a
+; `social-class/shape` discriminator this port must not imitate, plan §2.2)
+; nor `consciousness-ternary-conformance.bscn` (right shape, values tuned
+; for the routing law, would entangle two packs' fixtures) is reusable —
+; built fresh per plan §8, copying the header/declaration DISCIPLINE only.
+;
+; §4.2 SPIKE VERDICT (Task 1 step 2, recorded here per the plan's own
+; instruction): PASS, no fallback needed. After adding "solidarity" to
+; `lib.rs`'s registered `systems` HashSet, a throwaway
+; `solidarity/`-namespaced rule bound to a throwaway
+; `solidarity/`-namespaced defconst loaded and ran cleanly through
+; `run_once` — no `E-LOAD-*` collision between `load_defconst`'s `consts`
+; map and the rule-id anchor/`:field` resolution paths sharing the
+; `solidarity/` prefix, exactly as reading `scenario.rs:517-545` predicted.
+; The fallback this verdict makes unnecessary — reusing the landed
+; `consciousness/solidarity-activation-threshold` /
+; `consciousness/negligible-transmission` const names — is NOT taken; this
+; file declares its own `solidarity/*` defconsts below.
+;
+; ONE rule, ONE subject type (plan §2.1): `(defvocabulary NodeType
+; (SOCIAL_CLASS))` only — org-sourced solidarity is PROVABLY always inert
+; (`Organization.ideology` is a `str`, so `class_consciousness_from_node`
+; returns 0.0 for every org source, failing the >0.3 gate every tick;
+; D-record 5), so this world seeds no ORGANIZATION nodes at all.
+;
+; `social-class/revolutionary` (probability, intensive) is the SAME qname
+; and type `consciousness-ternary-conformance.bscn` declares — deffield
+; registries are scenario-local, so no collision (plan §1: the frozen
+; engine's own `class_consciousness <- revolutionary (delta_r)` mapping,
+; `ideology.py:382-386,410`, is the port's re-point; D-record 1).
+; `social-class/active` (int, intensive) is the 0/1 latch convention
+; (`field_of_node` returns `Value::Real` unconditionally, so `(= (field-of
+; it social-class/active) 1)` is the only expressible liveness read) —
+; seeded on EVERY node below (D-record 6: frozen defaults absent `active`
+; to `True`, but an unwritten attribute is an honest-null error here, so
+; the port's content must seed it, even though the rule's own SOURCE-side
+; read keeps frozen's permissive default via `:optional :default 1`).
+;
+; `solidarity/strength` is DELIBERATELY NOT deffield-declared — it stays
+; implicit (D32): declaring it would be `E-LOAD-001`. It seeds via the
+; `(edge EdgeType/SOLIDARITY <from> <to> <strength>)` 4th slot, kind-blind
+; (any int or p/i/c literal), exactly as `consciousness.bsl`'s own
+; `p2-org-solidarity-push` / `p3-class-solidarity-push` read it.
+;
+; The three defconsts (plan §2.7, verified against `defines.yaml:182-187`
+; and `config/defines/consciousness.py:23-39`):
+;   solidarity/activation-threshold      0.3c  (activation_threshold)
+;   solidarity/mass-awakening-threshold  0.6c  (mass_awakening_threshold)
+;   solidarity/negligible-transmission   0.01c (negligible_transmission)
+; `scaling_factor` (0.5) and `superwage_impact` (1.0) are on the same
+; `SolidarityDefines` model but have ZERO call sites in `solidarity.py` —
+; not declared here (D-record 7).
+;
+; Every strength literal is an exact dyadic rational, c-suffixed EXCEPT
+; two witnesses whose values a p/i/c literal cannot legally carry: the
+; multi-inbound group (which deliberately mirrors the frozen fixture's own
+; 0.9/0.8/0.1/0.3 so the D-record's 0.478-vs-0.31 numbers are EXECUTED,
+; not asserted in prose — plan §7 row 2) and the clamp witness (strength
+; 2, a bare Int — a p/i/c-suffixed literal is lexer-bounded to [0,1]
+; regardless of the field it seeds, `reader.rs`'s `classify_unit_interval`,
+; E-LEX-024, so a >1 coefficient must widen in kind-blind via the Int
+; arm). Every OTHER strength is exact in binary64 (the
+; `edge-write-lane-e2e.bscn` discipline). The one exception to "dyadic
+; rational" among the REVOLUTIONARY-share seeds is the exact-0.6 witness
+; below, whose exactness comes from a different, deliberate trick (see its
+; own comment) rather than from a dyadic fraction.
+;
+; Node census, in declaration order (which fixes the store ids — every
+; later task's `NodeId` literals follow this order):
+;    0  plain-source                witness 1 (plain transmission), source
+;    1  plain-target                witness 1, target
+;    2  awaken-source               witness 2a+2b, shared source
+;    3  mass-awaken-cross-target    witness 2a (crosses PAST 0.6)
+;    4  mass-awaken-stays-target    witness 2b (rises, stays below 0.6)
+;    5  mass-awaken-exact-source    witness 2c, source
+;    6  mass-awaken-exact-target    witness 2c (lands EXACTLY at 0.6)
+;    7  zero-strength-source        witness 3a, source
+;    8  zero-strength-target        witness 3a (strength <= 0 skip)
+;    9  at-threshold-source         witness 3b (source at threshold skip)
+;   10  at-threshold-target         witness 3b, target
+;   11  negligible-source           witness 3c, source
+;   12  negligible-target           witness 3c (|delta| < negligible skip)
+;   13  multi-source-a              witness 4, source A (0.9, fires first)
+;   14  multi-source-b              witness 4, source B (0.8, fires LAST —
+;                                   its write wins under `set`)
+;   15  multi-target                witness 4, shared target
+;   16  inactive-source             extra: inactive-source skip, source
+;   17  inactive-source-target      extra: inactive-source skip, target
+;   18  inactive-target-source      extra: inactive-target skip, source
+;   19  inactive-target             extra: inactive-target skip, target
+;   20  clamp-source                extra: clamp witness, source
+;   21  clamp-target                extra: clamp witness, target
+; See each node group's own comment above the `(node …)` forms for its
+; exact literal values and the arithmetic the witness proves — kept in
+; ONE place (there, not duplicated here) so the numbers cannot drift out
+; of sync with the content that seeds them.
+;
+; delta = strength * (source_r - target_r); new = clamp01(target_r + delta)
+; (plan §2.6). Task 1 asserts only that this world LOADS with the declared
+; census; Tasks 2-3 extend `solidarity_conformance.rs` with the per-witness
+; value/event assertions these shapes exist to prove.
+(scenario solidarity/conformance
+  (defvocabulary NodeType (SOCIAL_CLASS))
+  (defvocabulary EdgeType (SOLIDARITY))
+
+  (deffield social-class/revolutionary probability intensive)
+  (deffield social-class/active int intensive)
+
+  (defconst solidarity/activation-threshold 0.3c)     ; config/defines/consciousness.py:23-28
+  (defconst solidarity/mass-awakening-threshold 0.6c) ; config/defines/consciousness.py:29-34
+  (defconst solidarity/negligible-transmission 0.01c) ; config/defines/consciousness.py:35-39
+
+  ; ---- Witness 1: plain transmission (source above threshold, target
+  ; below, differing r -> nonzero delta, no clamp, no mass awakening) ----
+  ; delta = 0.5*(0.5-0.25) = 0.125; new = 0.25+0.125 = 0.375.
+  (node plain-source NodeType/SOCIAL_CLASS
+    (social-class/revolutionary 0.5p) (social-class/active 1))
+  (node plain-target NodeType/SOCIAL_CLASS
+    (social-class/revolutionary 0.25p) (social-class/active 1))
+
+  ; ---- Witness 2: MASS_AWAKENING crossing (3 sub-cases sharing one
+  ; source where two of the three can) ----
+  ; 2a CROSSES past 0.6 (strict >, not the boundary): delta =
+  ;    0.5*(0.875-0.5625) = 0.15625; new = 0.5625+0.15625 = 0.71875.
+  ; 2b RISES but STAYS below 0.6 (the negative case): delta =
+  ;    0.125*(0.875-0.5) = 0.046875; new = 0.5+0.046875 = 0.546875.
+  (node awaken-source NodeType/SOCIAL_CLASS
+    (social-class/revolutionary 0.875p) (social-class/active 1))
+  (node mass-awaken-cross-target NodeType/SOCIAL_CLASS
+    (social-class/revolutionary 0.5625p) (social-class/active 1))
+  (node mass-awaken-stays-target NodeType/SOCIAL_CLASS
+    (social-class/revolutionary 0.5p) (social-class/active 1))
+  ; 2c LANDS EXACTLY at 0.6 (the frozen `<=` arm, not `<`): source r is the
+  ; SAME literal ("0.6") the mass-awakening-threshold defconst parses, so
+  ; both go through the identical `unscaled/10^scale` division and produce
+  ; the identical double. strength=1c makes delta = 1.0*(0.6d-0.5), and
+  ; Sterbenz's lemma makes that subtraction EXACT (0.5 and 0.6d share one
+  ; binade, [0.5,1.0)) — so `target_r + delta` re-sums to exactly 0.6d,
+  ; bit-for-bit, not merely "close to 0.6". old(0.5) < 0.6d, new(0.6d) <=
+  ; 0.6d: the boundary case a strict `<` would miss.
+  (node mass-awaken-exact-source NodeType/SOCIAL_CLASS
+    (social-class/revolutionary 0.6p) (social-class/active 1))
+  (node mass-awaken-exact-target NodeType/SOCIAL_CLASS
+    (social-class/revolutionary 0.5p) (social-class/active 1))
+
+  ; ---- Witness 3: the three skip gates, each isolated from the other two
+  ; ----
+  ; 3a strength <= 0: source qualifies, target is active, but the edge
+  ;    itself carries no infrastructure (frozen's "Fascist Bifurcation: no
+  ;    infrastructure, no transmission").
+  (node zero-strength-source NodeType/SOCIAL_CLASS
+    (social-class/revolutionary 0.75p) (social-class/active 1))
+  (node zero-strength-target NodeType/SOCIAL_CLASS
+    (social-class/revolutionary 0.25p) (social-class/active 1))
+  ; 3b source at/below threshold (0.3 is NOT > 0.3 — the strict gate):
+  ;    the whole subject never fires, so even a well-formed edge to an
+  ;    active target never transmits.
+  (node at-threshold-source NodeType/SOCIAL_CLASS
+    (social-class/revolutionary 0.3p) (social-class/active 1))
+  (node at-threshold-target NodeType/SOCIAL_CLASS
+    (social-class/revolutionary 0.25p) (social-class/active 1))
+  ; 3c |delta| < negligible-transmission (0.01): delta =
+  ;    0.125*(0.5-0.4375) = 0.0078125 < 0.01 — every OTHER gate passes
+  ;    (source above threshold, strength positive, target active), only
+  ;    the negligible-transmission floor fires.
+  (node negligible-source NodeType/SOCIAL_CLASS
+    (social-class/revolutionary 0.5p) (social-class/active 1))
+  (node negligible-target NodeType/SOCIAL_CLASS
+    (social-class/revolutionary 0.4375p) (social-class/active 1))
+
+  ; ---- Witness 4: multi-inbound divergence (2 sources -> 1 target),
+  ; mirroring the frozen fixture's own shape EXACTLY
+  ; (test_multiple_solidarity_edges,
+  ; tests/unit/engine/systems/test_solidarity_system.py:347-392) so the
+  ; D-record's 0.478 (frozen, sequential: 0.1 -> 0.34 -> 0.478) vs 0.31
+  ; (port, collect-then-apply + `set` last-write-wins: only
+  ; 0.1+0.3*(0.8-0.1)=0.31 survives) numbers are EXECUTED here, not
+  ; asserted in prose. Declaration order matters: `multi-source-a` (0.9)
+  ; is declared, hence iterated, FIRST; `multi-source-b` (0.8) SECOND —
+  ; subjects apply in ascending node-id order (`tick.rs`'s own contract),
+  ; so source-b's write against the UNCHANGED pre-tick target (0.1) is the
+  ; one that survives `set`. ----
+  (node multi-source-a NodeType/SOCIAL_CLASS
+    (social-class/revolutionary 0.9p) (social-class/active 1))
+  (node multi-source-b NodeType/SOCIAL_CLASS
+    (social-class/revolutionary 0.8p) (social-class/active 1))
+  (node multi-target NodeType/SOCIAL_CLASS
+    (social-class/revolutionary 0.1p) (social-class/active 1))
+
+  ; ---- Extra: the inactive-source skip (the subject-side `active`
+  ; latch) — an otherwise-qualifying source (r=0.9 > threshold) that is
+  ; itself dead never even reaches its own edges. ----
+  (node inactive-source NodeType/SOCIAL_CLASS
+    (social-class/revolutionary 0.9p) (social-class/active 0))
+  (node inactive-source-target NodeType/SOCIAL_CLASS
+    (social-class/revolutionary 0.25p) (social-class/active 1))
+
+  ; ---- Extra: the inactive-target skip (the for-each's own inner
+  ; `active` guard) — a qualifying, live source whose only neighbour is
+  ; dead: the subject fires (it passes its own gate) but produces no
+  ; write. ----
+  (node inactive-target-source NodeType/SOCIAL_CLASS
+    (social-class/revolutionary 0.9p) (social-class/active 1))
+  (node inactive-target NodeType/SOCIAL_CLASS
+    (social-class/revolutionary 0.25p) (social-class/active 0))
+
+  ; ---- Extra: the clamp witness — target + delta would overshoot 1.0
+  ; without the verbatim frozen clamp (plan §2.3: `probability`'s
+  ; [0,1] store law is `E-EVAL-020`, NEVER a clamp, so the rule's own
+  ; `if`-expressed clamp is what keeps this write lawful at all). delta =
+  ; 2*(1.0-0.875) = 0.25; raw new = 0.875+0.25 = 1.125 -> clamped to 1.0.
+  ; strength=2 is a BARE Int literal, not `2c` — a p/i/c-suffixed literal
+  ; is lexer-bounded to [0,1] regardless of the field it seeds
+  ; (`reader.rs`'s `classify_unit_interval`, E-LEX-024), so a strength
+  ; above 1 must widen in kind-blind via the Int arm (verdict 1's "any int
+  ; or p/i/c literal" — the Int half is what a >1 coefficient needs). ----
+  (node clamp-source NodeType/SOCIAL_CLASS
+    (social-class/revolutionary 1.0p) (social-class/active 1))
+  (node clamp-target NodeType/SOCIAL_CLASS
+    (social-class/revolutionary 0.875p) (social-class/active 1))
+
+  (edge EdgeType/SOLIDARITY plain-source plain-target 0.5c)
+  (edge EdgeType/SOLIDARITY awaken-source mass-awaken-cross-target 0.5c)
+  (edge EdgeType/SOLIDARITY awaken-source mass-awaken-stays-target 0.125c)
+  (edge EdgeType/SOLIDARITY mass-awaken-exact-source mass-awaken-exact-target 1c)
+  (edge EdgeType/SOLIDARITY zero-strength-source zero-strength-target 0c)
+  (edge EdgeType/SOLIDARITY at-threshold-source at-threshold-target 0.5c)
+  (edge EdgeType/SOLIDARITY negligible-source negligible-target 0.125c)
+  (edge EdgeType/SOLIDARITY multi-source-a multi-target 0.3c)
+  (edge EdgeType/SOLIDARITY multi-source-b multi-target 0.3c)
+  (edge EdgeType/SOLIDARITY inactive-source inactive-source-target 0.5c)
+  (edge EdgeType/SOLIDARITY inactive-target-source inactive-target 0.5c)
+  (edge EdgeType/SOLIDARITY clamp-source clamp-target 2))

@@ -1,0 +1,33 @@
+; The AT-THE-CEILING conformance world for `metabolism/biocapacity-update`
+; — proves the `(>= current max-cap)` regeneration-suppression guard fires
+; at the EXACT boundary `current == max-cap` (F3 fix round, adversarial
+; review of PR #501: mutating this guard's comparator to `>` left all 16
+; prior tests green, because `zero-floor-county`'s discriminating case
+; floors BOTH branches' results to the identical `0.0`).
+;
+; `biocapacity` and `max-biocapacity` are seeded EQUAL (`10`), so the
+; guard's boundary condition is exercised exactly. `entropy-factor-x1e6`
+; near its floor (`1.005`) and a boosted `regeneration-rate` (`0.5`) push
+; the CORRECT branch (regeneration suppressed) just below zero — floored to
+; `0.0` — and the WRONG branch (regeneration firing) comfortably above zero
+; — surviving the floor untouched at `4.949999999999999` — so the two
+; branches are distinguishable in the FINAL clamped output, not merely in
+; an intermediate the floor would otherwise erase.
+;
+; See `metabolism_ceiling_suppression_conformance.py` for the provenance
+; script.
+(scenario metabolism/ceiling-suppression-conformance
+  (deffield territory/biocapacity int extensive)
+  (deffield territory/max-biocapacity int extensive)
+  (deffield territory/extraction-intensity int intensive)
+
+  (defconst metabolism/regeneration-rate 0.5c)
+  ; 1.005 x 1,000,000 — barely above the declared floor (1.0, exclusive).
+  (defconst metabolism/entropy-factor-x1e6 1005000)
+  ; Legal maximum.
+  (defconst metabolism/hysteresis-rate 0.01c)
+
+  (node at-ceiling-county NodeType/TERRITORY
+    (territory/biocapacity 10)
+    (territory/max-biocapacity 10)
+    (territory/extraction-intensity 1)))

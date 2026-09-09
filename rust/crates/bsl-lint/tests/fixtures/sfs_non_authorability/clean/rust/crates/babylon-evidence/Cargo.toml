@@ -1,0 +1,8 @@
+[package]
+name = "babylon-evidence"
+version = "0.0.0"
+
+[dependencies]
+babylon-bsl = { path = "../babylon-bsl" }
+babylon-kernel = { path = "../babylon-kernel" }
+babylon-practice-contract = { path = "../babylon-practice-contract" }

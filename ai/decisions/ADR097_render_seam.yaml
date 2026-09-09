@@ -1,0 +1,66 @@
+ADR097_render_seam:
+  status: "accepted"
+  date: "2026-07-20"
+  title: "The render seam under Amendment W: glyph canon (Tier 0) as the design target rather than the fallback (the entire fleet including GNOME Terminal/VTE and Windows Terminal has no pixel protocol -- everything the game communicates is communicated in character cells), the information-parity rule (Tier 1 pixel plates via textual-image+pillow re-render Tier-0 information and never carry unique content), Tier 2 SVG export through Textual's native mechanism under the ratified III.13 determinism law, babylon doctor probe-once capability semantics (render_tier written to config, no mid-session re-probe, --render override, declared degradation), and the 256-color degraded palette as a DESIGN_BIBLE 9b row -- queue items 15 and 10"
+  context: |
+    Amendment W (CONSTITUTION v2.12.0, ADR093, [PENDING CODE]) ratified
+    III.13 Deterministic Materialization: byte-identical artifacts from
+    identical (state, intel ledger, defines, templates), sandboxed sim-time
+    templates, golden-vault blessing, Loud Failure extended to pixels. It
+    did not rule the render ARCHITECTURE this ADR carries -- nix-plan
+    addendum A11 (babylon-infra ai/.inbox/nix-plan.md, untracked owner
+    drop): what the tiers are, what may depend on pixel protocols, how
+    capability detection works. The terminal landscape (verified 2026-07-20
+    in the nix-plan research pass): sixel is absent from GNOME
+    Terminal/VTE (the Debian 13 default), Alacritty, kitty, and Windows
+    Terminal; kitty and ghostty speak only the Kitty Graphics Protocol;
+    textual-image v0.12.x covers TGP + sixel with cell-based fallbacks.
+    Textual itself is the ruled UI stack (S2) and exports SVG natively.
+  decision: |
+    D1 (Tier 0 -- glyph canon, queue item 15): the design target, not the
+    fallback. Because the default Debian terminal has no pixel protocol,
+    the game must be fully beautiful and fully informative in character
+    cells: hex map as glyph/color art, plots as braille/sextant marks
+    (textual-plotext), Tufte discipline at cell resolution. Everything the
+    game ever communicates is communicated in this tier -- the pixel lane,
+    like the narrator, is never load-bearing (the R4 logic applied to
+    graphics).
+    D2 (Tier 1 -- pixel plates, information parity): where the terminal
+    speaks TGP or sixel, SELECTED plates upgrade (hex map, dense heatmaps,
+    AAR frontispiece) via textual-image (+pillow) -- the sole Tier-1
+    dependency. Tier 1 never carries unique information; it re-renders
+    what Tier 0 shows. SSH/tmux/WSL2/default-GNOME players stay
+    first-class and golden tests stay meaningful.
+    D3 (Tier 2 -- export): plates render to SVG via Textual's native
+    export, governed by the RATIFIED III.13 (cited, not re-proposed):
+    deterministic, snapshot-testable, feeding AAR export, the vault, bug
+    reports. PNG conversion only at the edge if a target demands it.
+    D4 (capability detection, probe-once): babylon doctor probes once
+    (DA1/XTGETTCAP, COLORTERM, TERM, tmux detection), writes render_tier +
+    specifics to config, prints the verdict. Runtime honors config -- no
+    mid-session re-probing, no silent tier switches; babylon
+    --render=glyph|pixel overrides. Degradation is declared, never silent
+    (III.11 applied to aesthetics).
+    D5 (degraded palette, queue item 10): 256-color terminals get a
+    DECLARED degraded palette, recorded as a DESIGN_BIBLE section 9b row --
+    the crimson/gold truecolor canon's honest fallback.
+  consequences: |
+    Closure cost: textual-plotext + textual-image + pillow join textual --
+    pure-python or cached wheels, negligible next to the geo stack.
+    Renderers are presentation-only observers of Hoist plate models: same
+    state + same tier => same frame, so Tier-0/2 frames join the
+    snapshot-golden estate that III.13 already governs
+    (pytest-textual-snapshot is the ecosystem mechanism). The
+    information-parity rule is load-bearing for W: golden tests on Tier 0
+    certify ALL information, because Tier 1 may not add any. Rejecting D2
+    (parity) would force pixel-tier golden baselines per terminal family
+    -- the reason parity is a rule and not a preference.
+  evidence: |
+    CONSTITUTION.md v2.12.0 Amendment W + ADR093; babylon-infra
+    ai/.inbox/nix-plan.md sections A11 and A5, section 3 fact 10 (the
+    terminal-graphics support matrix, verified 2026-07-20 against
+    arewesixelyet.com and the ghostty maintainer stance), section 10 items
+    15/10 (untracked owner drop); Textual's native SVG export underlying
+    pytest-textual-snapshot, the ecosystem's standard snapshot-test
+    mechanism (asserted by nix-plan section A11 from its own 2026-07-20
+    verification pass).

@@ -1,0 +1,86 @@
+ADR066_program16_phase_v:
+  status: "accepted"
+  date: "2026-07-11"
+  title: "Program 16 Phase V: waves 1-4 executed + live-verified; chrome layout single-source-of-truth (chrome/layout.ts) resolves recurring z-strata interception; branch pre-aligned to dev's dependency wave (vite 8 / eslint 10 / prettier 3.9.5)"
+  context: |
+    Following ADR065 (Program 16 structure), the Living Map was built out across
+    four waves of file-disjoint Sonnet/Opus lanes and taken through live
+    verification (Phase V) against a real Django+engine rig, on branch
+    feature/113-living-map. Three classes of issue surfaced that this ADR
+    records the resolution of:
+    (1) A RECURRING z-strata pointer-interception bug (3rd of its class in Phase
+    V): the in-map control clusters (MapControls, z-10) and the HUD rails
+    (FloatingPanel instances, z-20) were two independent absolute-positioning
+    layers, each hard-coding the OTHER's pixel widths as magic offsets recorded
+    only in comments (left-[250px] "clears the outliner 240"). The grouped lens
+    bar (flex-wrap) was anchored only by its right edge, so its wrapping row
+    extended LEFT under the outliner rail (measured live: first lens button at
+    x:87, behind the rail) and stopped taking clicks. jsdom cannot see pointer
+    hit-testing, so 796 unit tests were green while the map was unusable.
+    (2) Percy landed a large dependency-modernization wave on dev (vite 6->8,
+    eslint 9->10, @vitejs/plugin-react 4->6, typescript 5.7->5.9, prettier
+    3.8->3.9.5, @tailwindcss/vite 4.2->4.3; python rustworkx 0.18, numpy 2.5,
+    scipy 1.18, django 5.2.16, starlette 1.x) and asked for a compatibility
+    check before continuing. This branch was built against the old toolchain.
+    (3) Wave-4 agents (map pulse, contested striping, verb deltas, ds-sync
+    previews) were stopped mid-cleanup — they thrashed on `tsc --noEmit` because
+    each saw the other lanes' in-progress files in the shared worktree and could
+    never reach a clean tree.
+  decision: |
+    LAYOUT SINGLE SOURCE OF TRUTH (owner-approved via AskUserQuestion): new
+    src/frontend/src/components/chrome/layout.ts declares every rail width
+    (RAIL_LEFT_W/RAIL_RIGHT_W/HUD_TOP_H/GAP) ONCE; every map-control offset
+    DERIVES from it (MAP_SAFE_LEFT/RIGHT/TOP + MAP_SAFE_MAX_WIDTH_CSS). Map
+    controls are bounded to the inter-rail MAP_SAFE_* box — the lens cluster is
+    right-anchored AND max-width-capped so a wrapping control can never reach a
+    rail BY CONSTRUCTION, not by a numeric coincidence the next width tweak
+    breaks. Consumers rewired to the SoT: MapControls, OutlinerOverlay,
+    EventTray, ObjectivesTray, InspectionStack. Guard: a MapControls unit test
+    pins the right-anchor + max-width bound, and the live 9-lens e2e (all 9
+    clicks) is the end-to-end regression gate (went 1-fail-at-90s-timeout ->
+    4-pass-in-11.5s). Rejected: continuing to hand-tune per-component pixel
+    offsets (the proven-recurring failure mode).
+    TOOLCHAIN PRE-ALIGNMENT: an ultracode audit (empirical build in an isolated
+    worktree + 7 Context7/web analyst lanes) proved the branch FULLY compatible
+    with dev's wave — installing dev's exact toolchain, tsc/eslint/vitest/
+    vite-build all pass; the only gate failure was `prettier --check` on 7
+    pre-existing union-type files (3.9.5 collapses multi-line unions 3.8.1 kept
+    exploded). Decision: adopt dev's exact toolchain NOW (package.json +
+    .pre-commit-config prettier pin + `prettier --write` the 7 files) so the
+    branch develops on the same foundation dev/main use rather than leaving a
+    latent bump. Engine determinism inherits dev's already-byte-identical
+    qa:regression (this branch has zero src/babylon changes, confirmed).
+    WAVE-4 RECOVERY: orchestrator finished the four stalled lanes inline (the
+    code was ~90% done; only 9 real tsc errors + lint). Lesson recorded:
+    file-disjoint lanes still share one `tsc` view — a per-lane clean-tree gate
+    is unreachable in a shared worktree; the orchestrator owns the final gate.
+    POLISH: KeyHints rendered in SIX hosts simultaneously -> kept only the
+    Outliner (persistent) + CriticalEventModal (exclusive take-over dialog);
+    BottomDrawer TimeseriesChart 0-height (shrink-to-fit panel + h-full +
+    ResponsiveContainer height=100% -> 0) fixed with a definite h-48.
+  consequences: |
+    - Live-state audit (real tick-4 Wayne County session) confirms every major
+      state polished: map (county+hex framing), InspectionStack drill +
+      /explain/ provenance (a highlight), DIALECTIC takeover (real tenant<->rent
+      contradiction). WIRE/CHRONICLE are structurally complete but honest-empty
+      (narrator OFF, events UNKNOWN, no terminal outcome) — gated on engine, not
+      frontend defects. Demo gallery (7 states, 4 live) published; shots in
+      output/demos/spec-113-living-map/ + a new committed output/ artifact dir.
+    - OPEN OWNER ITEMS (surfaced, deliberately NOT force-fixed):
+      * Hex InspectionCard reads all "no data" (stubbed get_inspector_hex {})
+        while the hover HexTooltip shows the SAME hex's real values. NOT rewired:
+        resolvers.ts is deliberately a pure/store-free module, AND the tooltip's
+        per-hex data (Pop 8000) differs in GRANULARITY from snapshot.territories
+        (per-county) — sourcing the card from the snapshot would show wrong-
+        granularity data, worse than an honest null. Clean fix = engine
+        implements get_inspector_hex; frontend rewire is an architecture ruling.
+      * Two live e2e tests intentionally RED (engine, charter-forbidden): the
+        same-tick event UniqueViolation that 500s the resolve loop (~tick 18),
+        and events arriving UNKNOWN so nothing classifies urgent (silent wire).
+      * Narrator backend (BABYLON_LLM_NARRATOR) for wire depth; national run for
+        a rich choropleth; ds-sync preview upload (interactive /design-sync).
+    - Branch state: 6 wave/fix commits + 4 doc/output commits; unit 796 green,
+      live e2e 28/30 (only the 2 engine-pinned reds). PR to dev pending owner
+      request; `pytest tests/unit/web/` re-verify is the pre-PR gate.
+  supersedes: ""
+  related: "ADR065 (Program 16 structure), spec-113 integration-ledger.md, HANDOFF-PHASE-V.md, program-15 (dependabot wave on dev)"

@@ -1,0 +1,82 @@
+ADR175_emergence_extension_logging_phi_sign:
+  status: "accepted"
+  date: "2026-07-29"
+  title: >
+    Second ratification-day disposition batch: the ADR173 emergence
+    treatment extends to ALL confirmed imposed-form sites; logging is
+    delegated with agent-observability as the acceptance criterion; the
+    Haskell rigor draft's canonical home is ai/BabylonCoreDraft_2.hs; and
+    negative Phi is ruled REAL for internal colonies (Native-reservation
+    extraction, pollution dumping) — signed with attribution in the Rust
+    engine, the clamp remains the frozen-reference noise floor.
+  context: |
+    The BSL Architecture Standard's verification pass and the proscription
+    audit left four Director-reserved items open: the emergence reading
+    for the non-survival imposed-sigmoid sites (audit OQ-1/OQ-1c:
+    bifurcation consciousness_sigmoid, reactionary.py's defection
+    sigmoid, reserve-army wage pressure, the wealth-distribution spring);
+    the logging-estate supersession proposal (stops-disposition §1 —
+    collapse the game process to one JSONL sink at the PyO3 boundary's
+    death, superseding the 2026-07-28 three-log directive; OQ-31); the
+    canonical home for the triple-copy Haskell rigor draft (OQ-36); and
+    the negative-Phi theory question reserved through the phi_hour clamp
+    fix (structural Leontief rent negatives: Oil&Gas 211 ~ -232k, Metals
+    331 ~ -110k, Forestry 113FF — clamped to zero at the county boundary
+    with loud outlier events, PR #370).
+  decision: |
+    The Director ruled interactively (Claude Code session, 2026-07-29 PM):
+    (1) SIGMOID SITES — "Extend ADR173 treatment": every remaining
+        confirmed imposed-form site gets the survival family's posture —
+        the Python reference freezes as-is (honest about its imposed
+        curves); each site receives an emergent re-derivation from
+        material operations at its Rust/BSL port; each derivation is
+        presented to the Director PER-FAMILY before it lands. Direction:
+        curves appear in outputs, never stipulated in mechanisms. This
+        CLOSES the audit's reading-(a)-vs-(b) question as a posture
+        (derive-at-port with per-family review) while keeping the
+        per-family substance Director-gated.
+    (2) LOGGING — delegated, with the intent recorded as the acceptance
+        criterion (Director verbatim, lightly normalized): "the logs
+        assist AI agents in troubleshooting a live game, in debugging,
+        in tracing things, measuring, looking at outputs of the engine —
+        complete observability into the game state, world state,
+        changes, everything you need." Design consequence (agent's
+        delegated call): the Rust engine process gets ONE structured
+        JSONL DEBUG sink carrying tick, system, and correlation-id
+        fields on every record; the Rust client keeps rust-client.log;
+        client-capture.log retires with the process boundary; the
+        Python AI observer keeps its own sink. Logs cover the causal
+        trace — the envelope/persistence lane and the observe()
+        projection remain the state-observability channels, and the
+        acceptance test for the estate is that an agent can reconstruct
+        what happened in a live game from the sinks plus the envelope
+        without attaching a debugger.
+    (3) HASKELL HOME — ai/BabylonCoreDraft_2.hs is canonical (the
+        standard's citations already point there). The
+        docs/superpowers/specs/ duplicate and the untracked ai/_inbox
+        copy are chartered for deletion in a hygiene PR.
+    (4) NEGATIVE PHI — RULED REAL FOR INTERNAL COLONIES (Director
+        verbatim, lightly normalized): "Phi can be negative within the
+        US in the event of value being extracted from a Native
+        reservation through mining, or pollution in internal colonies,
+        etc." Consequences: county-level Phi is SIGNED in the Rust
+        engine; a negative value is REAL when it carries a named
+        internal-colony extraction attribution (Native-reservation
+        resource extraction, pollution externality dumping) and NOISE
+        otherwise — an unattributed negative remains an error signal.
+        The PR #370 clamp stands as the FROZEN-PYTHON boundary guard
+        and float-noise floor (silent below epsilon, loud beyond); the
+        signed-Phi semantics land with the Rust rent lane, coupled to
+        the ADR171 national-question incidence artifact (internal-colony
+        partition B+C+I) and the sigma-attribution surface. The spec
+        R5 non-negativity axiom is superseded-in-part for county Phi by
+        this ruling at port time.
+  consequences: |
+    The standard's §3.2/S-7/OQ-1 rows narrow: no site is "frozen pending
+    a reading" — the posture is ruled, the per-family derivations are
+    owed at port. The phi_hour outlier events gain a future consumer:
+    they are the candidate feed for internal-colony attribution once the
+    ADR171 Phase 0 incidence artifact exists (Pine Ridge remains a named
+    data hole). The logging design binds Phase 2-3 engine work, not the
+    current estate. The hygiene deletion of the two Haskell duplicates
+    is agent-executable without further sign-off.

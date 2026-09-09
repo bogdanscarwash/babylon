@@ -1,0 +1,17 @@
+[package]
+name = "babylon-evidence"
+description = "Post-commit synthetic evidence contracts"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+babylon-bsl = { path = "../babylon-bsl" }
+babylon-kernel = { path = "../babylon-kernel" }
+babylon-practice-contract = { path = "../babylon-practice-contract" }
+unicode-normalization = "=0.1.25"
+
+[dev-dependencies]
+pretty_assertions = "1"

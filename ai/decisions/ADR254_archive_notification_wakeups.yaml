@@ -1,0 +1,58 @@
+ADR254_archive_notification_wakeups:
+  status: accepted
+  date: '2026-09-05'
+  issue: PER-10
+  title: PostgreSQL wakeups for the owned Archive worker
+  authority:
+    - Director approval of the constrained Archive-only notification scope
+    - ADR251 durable observer and explicit Archive verification boundary
+  context: |
+    Bevy periodically requested Archive maintenance through the runtime pipe.
+    PostgreSQL can signal newly committed work while the existing stored
+    receipts and retained publications provide recovery after missed signals.
+  decision: |
+    R1. DURABLE WORK. Keep the existing Archive worker as the sole publication
+    path. An additive, identity-checked migration installs two AFTER INSERT
+    triggers: committed tick markers and retained campaign enrollment. They
+    emit an empty notification on babylon_archive_wakeup_v1. The function is
+    private to its owner. The channel itself is not a confidentiality boundary.
+    No trigger runs mechanics or carries campaign, subject, or evidence data.
+
+    R2. OWNED DRIVER. One runtime-owned listener commits LISTEN before fresh
+    durable catch-up, both at startup and after reconnect. It drains pending
+    ordered work without requiring another signal. Idle notification timeouts
+    check connection and cancellation state; they do not query for new work.
+    Typed transient failures retry with bounded backoff. Integrity refusals
+    remain explicit. Worker publications report progress through the existing
+    pipe and do not emit their own database wakeups.
+
+    R3. COORDINATOR. Preserve the V2 protocol and launcher pipes. One coordinator
+    owns Advance and stdout. Ready precedes progress; Committed is flushed
+    before processing progress from that advance. A progress result must name
+    the already acknowledged durable tail. Manual refresh uses the same driver
+    and retains request correlation. Bevy removes its maintenance timer and
+    invalidates a held read when admitted progress arrives, including when the
+    processed prefix is unchanged. Only its scoped reader certifies the page.
+
+    R4. SHUTDOWN. Bound command and result queues. Cooperatively stop between
+    atomic Archive publications; canceled uncommitted work rolls back. Never
+    join an unfinished synchronous database thread. Within the existing process
+    shutdown window, wait for actual completion and preserve fatal failures
+    independently of queued events. Timeout refuses successful shutdown;
+    restart reconciles durable records through the existing process boundary.
+
+    This decision changes scheduling, not game law. BSL remains within the
+    authoritative Rust tick. Notifications neither advance time nor introduce
+    player intents, wage payments, a new projection, or a new wire version.
+  alternatives_rejected:
+    - Treating notifications as durable commands or authoritative world state.
+    - Replacing the tick and acknowledgement pipes during the Archive cutover.
+    - Keeping Bevy maintenance polling or adding a second publication path.
+    - Triggering another database wake for each worker publication.
+    - Claiming synchronous connection teardown has a hard cancellation deadline.
+  consequences:
+    - Missed notifications require durable startup and reconnect catch-up.
+    - The listener adds one connection and one owned worker thread.
+    - Notification failure can refuse its enclosing transaction atomically.
+    - G4 and Director human acceptance remain separate from this approval.
+  evidence_class: Designed

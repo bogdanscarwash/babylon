@@ -69,7 +69,7 @@ sync points: `09` §3.
 ### Wave 4 — Strategic Choice
 
 - **spec-080 Doctrine Tree MVP** — depends on 072 (CL/coherence inputs), 070
-  (colonial_stance filtering), 071 (NATIONALISM tag). Build only after all
+  (colonial_stance filtering), 071 (NATIONAL_CHAUVINISM tag). Build only after all
   three are merged.
 - **spec-081 Warlord Trajectory Branching** — end of the critical path.
   - Ship WITH it: the **chronicle end-screen + Journal objectives**

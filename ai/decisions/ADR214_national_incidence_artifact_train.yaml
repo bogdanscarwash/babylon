@@ -1,0 +1,492 @@
+ADR214_national_incidence_artifact_train:
+  status: "accepted"
+  date: "2026-08-17"
+  title: "The #334 national-incidence artifact train (ADR171 Phase 0, ADR208 R29/C-12 flip) — three second-order, hand-maintained artifacts (ADR098/ADR121 disposition) land the per-county x pole poverty-incidence table the 2026-08-12 data-gap audit called 'the Aleksandrov failure the Constitution forbids': county_fips_vintage_crosswalk (A1, 17 rows), national_incidence_county_pole (A2, 12,612 rows), national_reproduction_floor (A3, 15 rows), all sha-pinned and reproduced byte-identical on the pinned SQLite 3.53.1 devshell with data:build-db non-interference proven; eight arithmetic/absence guards (G1-G8) green with mutation legs; the T7 floor-re-derivation popup sitting RULED all four Director questions (shape F-B, the LOW-five confidence demotion, the FIRST_NATIONS>NEW_AFRIKAN ordering accepted, defconst+deferred-ceremony entry); nine errata recorded against the plan/ledger record versus what the real generation run measured (the ninth: the T7-posted NEW_AFRIKAN floor 0.137 corrected to 0.136, a double-rounding artifact caught by T8 review)."
+  context: |
+    ADR171 (2026-07-28) ruled the National Question line (OQ0 MIM+MLP, OQ1
+    the B+C+I named-nations partition with a declared overlap policy, OQ10
+    E-primary/Lambda-secondary rendering) and authorized Phase 0: a
+    per-county x pole poverty-incidence artifact, never built. The
+    2026-08-12 data-gap audit named that absence "the Aleksandrov failure
+    the Constitution forbids" (audit line 142). ADR208's 2026-08-17
+    docket sitting flipped #334 back OPEN on that finding (R29/C-12: "its
+    chartered artifact exists nowhere ... live work, ~6 Mtok / 3 windows")
+    after ADR171's own scope was ruled NARROW (R2, D-02/D-03, #564 rows
+    13/20): ADR171 ruled the LINE, not downstream mechanism transcription
+    — Community's `SUBSTRATE_FLOOR_DEFAULTS` (`consciousness.py:356`,
+    row 13's #536 citation corrected on that record) and the ReserveArmy
+    border-valve each owe their own dedicated ruling. The sibling memo
+    (`reports/register-memos/r2-floors-and-valve-2026-08-17.md`) offered
+    three floor-value options — (a) transcribe verbatim, (b) transcribe
+    with weak rows flagged, (c) re-derive from #334 when it lands — and
+    the Director's second 2026-08-17 sitting selected (c), which promoted
+    #334 onto the Checkpoint A critical path (Community's floor
+    re-derivation gates on this artifact).
+
+    The design of record is
+    `docs/superpowers/plans/2026-08-17-334-incidence-artifact.md` (9
+    tasks, T1-T9). Motion class: W-P projection (data production only —
+    no engine contact, no `BoundOpposition`, no `lens`; Phase 2 stays
+    BLOCKED per ADR171). The train ran on branch
+    `feature/334-national-incidence-artifact`, worktree
+    `/media/user/data/worktrees/wt-334` (moved mid-train from
+    `/home/user/projects/game/wt-334` post-T5, Director directive).
+    Commits: T1 `d5698992` (A1 crosswalk + G7); T2 `11a0802b`/`2d13d09e`
+    (sha-pinned source access, fix round 1); T3a `9f01812d`/`c34a4e78`
+    (G1/G2/G6/G8, fix round 1); T3b `0f17667a` (G3/G4/G5); T4 `78cf10af`
+    (A2/A3 emitters); T5 `e43d37d4`/`29ad6b18` (pre-step + real
+    generation + registration + tripwire); T6 `3d6ec749` (pinned-devshell
+    reproducibility proof + data lane). Every task's implementation was
+    independently reviewed (Sonnet) before the next task started; every
+    review verdict is APPROVE or APPROVE-after-fix-round, zero unresolved
+    Important/Critical findings at T8's landing.
+
+    This ADR is T8: it does not build anything. It records the train's
+    scope, the T5 registration pins, T6's reproducibility/non-interference
+    proof, T7's four Director rulings verbatim-faithful, and the errata
+    the ledger owed against the plan's own planning-pass estimates and one
+    documentation transposition. T9 (issue closure + the community-
+    memberships-seeder consequence-issue filing) is NOT this task's work
+    and remains open after this ADR lands.
+  decision: |
+    **1. Scope landed — three second-order artifacts, no sqlite table,
+    eight guards.** Per ADR098's circularity resolution (the plan's own
+    citation) and the ADR121 hand-maintained-artifact pattern (precedent:
+    `faf_bloc_trade_tons`, `mit_countypres_rep_share`, the LODES tail):
+    all three are derived from REGISTERED PARQUET SOURCES, never from the
+    sqlite build product, get no `schema.sql` table, and sit outside the
+    `data:build-db` fixed point by construction.
+
+    - **A1 `county_fips_vintage_crosswalk`** —
+      `src/babylon/data/reference/national/county_fips_vintage_crosswalk.csv`,
+      **17 rows**, sha256
+      `bb53dad2eb1b5dba6690dd0fde995743d47bfea5898bae4a6e9afb5502ba8efe`.
+      Reconciles the engine territory universe (3,153 counties) against
+      the resolver universe (3,156) against `fact_census_poverty`'s
+      pinned `time_id=23` (2019, OQ11 — never re-cut, the extractor that
+      could re-cut a different vintage is deleted per
+      `data-catalog.yaml:1096`) data-availability gaps. G7: injectivity
+      on `fips_acs2019`, `DECLARED_HOLE` never a crosswalk target.
+    - **A2 `national_incidence_county_pole`** —
+      `src/babylon/data/reference/national/national_incidence_county_pole.csv.gz`,
+      **12,612 rows**, sha256
+      `8995ba396c691f86e9f92b879eca26f826311c1aa2b7fa0d4a9d6a14789531b4`.
+      One row per `(fips, pole)` over the 3,153-county engine universe x
+      4 poles (the ruled B+C+I named-nations partition plus the H
+      settler reference). Absence is a value, never a fabricated `0.0`
+      (G2): `absence_class in {PRESENT, ZERO_DENOMINATOR, ROW_ABSENT,
+      DECLARED_HOLE, SUPPRESSED}`.
+    - **A3 `national_reproduction_floor`** —
+      `src/babylon/data/reference/national/national_reproduction_floor.csv`,
+      **15 rows**, sha256
+      `cb2c5602008b02a53871153963aa931a81fa02e6a9b69b478b3f787ad4775016`.
+      5 aggregate rows (4 poles + 1 B+C+I POOLED) x 3 `universe_variant`s
+      (`artifact_3153`, `scopes_3156`, `unrestricted_3218`) — the lens
+      declares which it renders, all three ship rather than hiding the
+      ~1.3e-6 `p_bar` sensitivity.
+
+      Eight guards (G1 ratio-of-sums / G2 zero-denominator-is-absence /
+      G3 small-count damping `damp(u) = 1 - 1/sqrt(u)`, derived from
+      Poisson CV, no imposed sigmoid / G4 ACS-suppression classification
+      policy / G5 honest-absence reconciliation / G6 T-pole exactness
+      (`T == Sum(A..G)`, exact, zero residual) / G7 FIPS-vintage
+      crosswalk / G8 overlap disclosed-never-netted), each its own pure
+      function with a `TestMutation<G>` class proven to red on neuter —
+      all green, `mise run check` 13990 passed at T5's landing.
+
+      Pole map, stated so it is never re-derived wrong: **B (NEW_AFRIKAN)
+      = census race_id 3; C (FIRST_NATIONS) = census race_id 4 (AIAN); I
+      (CHICANO) = census race_id 10 (Hispanic, any race); H (SETTLER
+      reference) = census race_id 9 (White alone, non-Hispanic)** —
+      confirmed against `tools/make_national_incidence_artifact.py:934`
+      (`POLE_RACE_ID = {"B": 3, "C": 4, "I": 10, "H": 9}`) and against
+      A3's own population magnitudes (pole C sums to ~2.6M, AIAN-scale;
+      pole I sums to ~60.5M, Hispanic-scale). See errata item 4 for the
+      plan's own documentation transposition of this map.
+
+      Two ADR167-class disclosures travel with the pole map, carried in
+      every entry's `material_relation`: **F7** — CHICANO derives from
+      the census's pan-ethnic "Hispanic or Latino" iteration, which folds
+      in Puerto Rican, Cuban, Dominican, and Central/South American
+      populations the census does not separate from the named Chicano
+      nation. **OQ2** — the H (White-non-Hispanic) pole stands in for
+      "the settler nation" as a Director-ruled conservative default, not
+      a census-native nation category. **OQ7** — the universe
+      `B17001_001` structurally excludes the institutionalized
+      group-quarters population and is a point-in-time count MIM's own
+      source material discounts (`mt10.txt:5544-5550`); both biases are
+      accepted because their net direction is CONSERVATIVE (understates,
+      never inflates, the measured oppressed-pole deficit). **F6** — the
+      artifact reaches only 4 of 14 `CommunityType`s; INCARCERATED is
+      unreachable IN PRINCIPLE from this table (the universe excludes the
+      institutionalized population at any vintage), a distinct problem
+      from the other nine non-derivable rows (see T7 ruling 2 below).
+
+    **2. Registration and data-catalog cross-reference.** Three hand
+    entries appended to the `data-artifacts.yaml` EXCEPTION tail (after
+    `faf_bloc_trade_tons`, before `h3_res7_land_mask`); one-line pointer
+    added to the file's own EXCEPTION note. `data-catalog.yaml` carries
+    NO new `tables:` rows — see errata item 2 for why the plan's literal
+    "kind: artifact" instruction does not fit the real schema and how it
+    was resolved instead. Regeneration-wipe tripwire:
+    `tests/unit/tools/test_national_incidence_manifest_entries.py`
+    (2 tests, pinned-content + "not managed by
+    `make_data_artifacts.ARTIFACTS`"), modelled on
+    `test_faf_artifact_manifest_entry.py`.
+
+    **3. T6 — reproducibility and non-interference, on the pinned
+    toolchain.** Two proofs, both against `data-artifacts.yaml`'s
+    registered pins, run inside `mise run nix -- ...` (SQLite 3.53.1
+    hard gate):
+
+    - **Pinned-provenance proof.** The reference-DB build product
+      (`dist/build/marxist-data-3NF.sqlite`, 4,492,881,920 bytes) had
+      already completed at 12:23 that day in an earlier, separately
+      tracked session whose watcher died before the T6 dispatch could
+      observe it; rather than rebuild (an ~8-hour operation), the
+      product's own sha256 was checked directly against the canonical
+      registered pin: **both
+      `5e1e60fc809708a0801f91aa91c90074b1a75c52ef27d9a3ee32a00ab02a808e`
+      — exact match.** Because a byte-identical SQLite build product is
+      only reproducible on the exact pinned toolchain
+      (`PINNED_SQLITE_VERSION = "3.53.1"`), the match IS the proof the
+      12:23 run executed inside the pinned devshell.
+    - **Generator double-run vs the T5 pins.** `tools/
+      make_national_incidence_artifact.py` run twice from the existing
+      sha-verified parquet sources; both runs reproduced A2 and A3's
+      sha256s identically, matching T5's registered pins exactly (A1's
+      own generator, `tools/make_fips_vintage_crosswalk.py`, is a
+      separate script and was checked directly rather than re-run this
+      pass — see errata item 8 for the review's finding on this point).
+    - **Non-interference proof (the ADR's own before/after statement).**
+      `mise run nix -- mise run data:verify-roundtrip` run against the
+      existing 12:23 product: `[roundtrip] 84 objects checked (76
+      tables, 8 views), ok=True`, exit 0 (~15.5 min, detached). Product
+      sha **before** (canonical registered pin) and **after**
+      (measured post-roundtrip) are the SAME value —
+      `5e1e60fc809708a0801f91aa91c90074b1a75c52ef27d9a3ee32a00ab02a808e`
+      — **unchanged.** No source parquet and no `schema.sql` moved
+      during this train: the generator reads only already-registered,
+      sha-pinned sources and writes only the second-order artifact
+      files, never touching the reference-DB build lane. This is the
+      declared non-interference contract (plan §2) proven, not assumed.
+
+    `mise run check:quick` green; the scoped tripwire suite (21 passed,
+    2 pre-existing sqlite-version skips) green;
+    `data:national-incidence` mise task and a "Second-order artifacts"
+    subsection landed in `docs/how-to/reference-data-pipeline.rst`.
+
+    **4. T7 — the floor re-derivation popup sitting: four Director
+    rulings, verbatim-faithful.** The plan's own T7 charter (§6) ordered
+    a memo that presents an option space and makes NO recommendation
+    (Constitution IX.5 — the artifact build is workforce work, the
+    resulting floor VALUES are a reserved-line ruling). What actually
+    executed, per the Director's own delivery ruling, was a popup panel
+    (four questions, each carrying one recommendation) presented the
+    night of 2026-08-17, RULED in full. The four rulings, as posted
+    verbatim to #334:
+
+    - **Ruling 1 — Shape: F-B (`floor = q_pole - p_bar`), the pole's
+      excess over the settler reference rate.** Measured floors
+      (`unrestricted_3218` variant, real A3 data): **NEW_AFRIKAN
+      0.136, FIRST_NATIONS 0.155, CHICANO 0.113, SETTLER 0.0 identically
+      by construction** (the settler pole IS the norm, so its excess
+      over itself is identically zero) — NEW_AFRIKAN corrected from the
+      T7-posted 0.137 to the full-precision derivation
+      `0.232693906 - 0.096223732 = 0.136470174`, 3dp `0.136` (errata item
+      9; the 0.137 posting was a double-rounding artifact, not a shape
+      change) — replacing the frozen
+      0.12/0.12/0.08/0.0 in `consciousness.py`'s
+      `SUBSTRATE_FLOOR_DEFAULTS`. Ruled as the only shape that moves
+      onto a directly measured relation while preserving the ratified
+      hegemonic-default structural claim ("no substrate revolutionary
+      consciousness", `consciousness.py:420-426`) — F-A
+      (`floor = q_pole` alone) would have moved SETTLER to ~0.096, a
+      line change contradicting that claim.
+    - **Ruling 2 — The ten non-derivable `CommunityType` rows: freeze +
+      demote the LOW five.** WOMEN/TRANS/DISABLED/QUEER/UNDOCUMENTED
+      (the five rows whose only cited provenance is the literal string
+      `"estimated"`, no named dataset) have their `confidence` demoted
+      to reflect that honestly; no floor VALUE moves for any of the ten.
+      INCARCERATED's floor (0.18, the table's highest) stands with its
+      problem named explicitly: it is unreachable IN PRINCIPLE from
+      `B17001` (the universe structurally excludes the institutionalized
+      population) — a future ruling needs BJS/Vera-class incarceration
+      data directly, not another ACS pull.
+    - **Ruling 3 — The measured FIRST_NATIONS > NEW_AFRIKAN ordering:
+      ACCEPTED.** The frozen table ties both at 0.12 exactly; F-B breaks
+      the tie for the first time (a ~0.019 gap on `unrestricted_3218`,
+      holding across all three universe variants — not a universe-choice
+      artifact). Ruled as the emergent output of the chosen measure, not
+      a fresh political stipulation.
+    - **Ruling 4 — Entry path: a `defconst` table, with a deferred
+      section-6.5 ceremony.** The value is ruled NOW; it lands as a
+      14-row `defconst` table with ADR-cited provenance once the
+      Community port's `community_memberships` node-local-list-of-structs
+      blocker (#536, port-estate-survey row 6.0, filed BLOCKED) clears —
+      the ceremony fires only if a downstream golden actually moves at
+      that later landing. Ruling the value now costs nothing today: #334
+      touches no baseline or golden file (plan §8), so nothing enters
+      `qa:regression`/`qa:vault-regression-ci` exposure until Community
+      actually ports.
+
+      Numerator disclosure recorded alongside the ruling: the generator
+      proves T-pole exactness (G6) only at `category_id=1`; T6's carried
+      check MEASURED the below-poverty (`category_id=2`) partition exact
+      on all 3,218 counties on the real run (reviewer-reproduced
+      independently) — empirically additive in this pull, guaranteed
+      nowhere by any guard (see errata item 1).
+
+    **5. Errata.** Eight items — each states what the plan/ledger record
+    said, what the real generation run or review measured, and the
+    evidence. None is a defect in what shipped; every one is a disclosed
+    drift between a planning-pass estimate/documentation artifact and
+    the real, sha-pinned data.
+
+    **(1) category_id=2 measured-exact-vs-disclaimed reconciliation.**
+    Said: the generator's own docstring (and T4's review adjudication)
+    disclaim any exactness claim at `category_id=2` — "this module makes
+    no claim about category_id=2 (below-poverty) partition exactness
+    (ACS disclosure-avoidance perturbation may not preserve it)"
+    (`make_national_incidence_artifact.py:1038-1040`); no guard (G1-G8)
+    tests it. True: T6's carried check MEASURED it directly against the
+    sha-verified `fact_census_poverty` parquet — **3,218/3,218 counties
+    exact, 0 mismatched, max |residual| = 0** at `category_id=2` too, the
+    same exactness that provably holds at `category_id=1` (G6). This is
+    informational only; no guard was added, and G6 stays scoped to
+    `category_id=1` per the T4 review's own adjudication (asserting
+    cat-2 exactness as a GUARD would itself be an unverified claim about
+    ACS's disclosure-avoidance perturbation in general, not just this
+    pull). Evidence: `task-6-report.md` §5 item 1; T6 review's
+    independent re-derivation via a fresh pyarrow script (task-6-review.md,
+    "Verification detail" item 5).
+
+    **(2) T5 plan-vs-schema `kind: artifact` erratum.** Said: the T5
+    brief's literal instruction (plan §4.2) was "three `kind: artifact`
+    rows... `subset_policy: n/a (no sqlite table)`" in
+    `data-catalog.yaml`. True: `CatalogTable`
+    (`src/babylon/sentinels/coverage/catalog.py`) is a strict, frozen,
+    `extra="forbid"` Pydantic model with `kind: Literal["table",
+    "view"]` — adding a `kind: artifact` row broke `load_catalog_tables()`
+    outright (2 pre-existing tests went red), and widening the `Literal`
+    would not have been sufficient either: `check_catalog_db_reconciliation`
+    (the DB-probe tier, `check:catalog`) flags any `tables:` row with no
+    matching `sqlite_master` object as a phantom declaration unless
+    `kind == "view"` or `kind == "table" and subset_policy == "skip"` —
+    neither exempts a genuinely new `kind`. Resolved by following the
+    ALREADY-battle-tested ADR121 precedent instead of the plan's literal
+    text: `LODES_OD_HEX` (the same "ADR121 pattern" the brief itself
+    cites) is registered as a `sources:` row under `categories:`,
+    explicitly not a `tables:` row. Since `Census_ACS` already exists as
+    a `sources:` row, an `added_by:` field was added to it (mirroring
+    `MIT_Election_Lab`'s existing `added_by:` field), cross-referencing
+    the three new `data-artifacts.yaml` entries by name
+    (`data-catalog.yaml:137-144`). Review-adjudicated ACCEPT. This is a
+    known gap for any future train that wants a first-class
+    `kind: artifact` concept in `data-catalog.yaml` — real, separate
+    design work, not silently absorbed here. Evidence: `task-5-report.md`
+    ("data-catalog.yaml — real finding, plan deviation"); T5 review
+    verdict (progress.md); `data-catalog.yaml:128-144`.
+
+    **(3) The data-artifacts.yaml clobber note.** Not a record error —
+    a discovered incident, recorded so the next reader of the file's own
+    EXCEPTION-comment warning has a live example. On picking up the
+    worktree for T6, `data-artifacts.yaml` was found corrupted,
+    UNCOMMITTED, in the working tree: the EXCEPTION comment block
+    documenting the hand-maintained-generator risk was deleted, every
+    hand-maintained `generator:` field (LODES, MIT-Election-Lab, FAF,
+    and this train's own three entries) was clobbered to
+    `tools/make_data_artifacts.py`, `source_table: null` was mangled to
+    the literal string `"None"`, and every `material_relation` block was
+    re-flowed from hand-wrapped prose into a single paragraph. Row
+    counts and sha256 values were untouched — metadata corruption, not
+    data loss. Root cause: a stray, uncommitted `make_data_artifacts.py`
+    run with no `--check` flag during an earlier, separately-tracked T6
+    session — a live demonstration of the exact risk
+    `data-artifacts.yaml:19-30`'s own KNOWN RISK note warns about. Fixed
+    by `git checkout -- data-artifacts.yaml` before any T6 work
+    proceeded; nothing was ever committed, so no drift entered history.
+    Evidence: `task-6-report.md` §0.
+
+    **(4) The pole-map §0 documentation transposition.** Said: the
+    plan's own §0 prose (`2026-08-17-334-incidence-artifact.md:40-43`)
+    states "Pole map: B->race_id 3, C(hicano)->race_id 10,
+    I(ndigenous)->race_id 4, settler reference H->race_id 9." True: this
+    reads backwards for the C/I pair. The built code's own
+    `POLE_RACE_ID = {"B": 3, "C": 4, "I": 10, "H": 9}`
+    (`tools/make_national_incidence_artifact.py:934`) — cross-checked
+    against A3's own population magnitudes (pole C sums to ~2.6M,
+    AIAN-scale; pole I sums to ~60.5M, Hispanic-scale) — shows pole **C
+    is FIRST_NATIONS (census AIAN, race_id 4)** and pole **I is CHICANO
+    (census Hispanic, race_id 10)**: the plan's parenthetical labels
+    swapped the nation names onto the wrong pole letters. This is a
+    transposition in the plan's OWN documentation prose, not a code
+    defect — the plan's own later F5 table, the built code, and every
+    downstream artifact and report agree with the correct mapping stated
+    in decision §1 above. Evidence: T7 prep
+    (`.../scratchpad/334-t7-popup-prep.md:27-35`); plan
+    lines 40-43; `tools/make_national_incidence_artifact.py:934`.
+
+    **(5) F3's 466 -> 443 zero-denominator absence-class drift.** Said:
+    the plan's F3 (a planning-pass estimate, §1) — "Per pole, at
+    category_id=1, counties with u=0: B 164, C(AIAN) 287, I(Hispanic) 15,
+    H 0 -> **466 pole-county cells**." True: the real T5 generation run's
+    G5 reconciliation measures `ZERO_DENOMINATOR` = B 164, C 264, I 15,
+    H 0 -> **443 total** — a 23-cell drift, entirely inside the
+    C/FIRST_NATIONS pole (287 planning-estimate vs. 264 measured). G5's
+    ACTUAL reconciliation is what is load-bearing and holds exactly:
+    PRESENT 11,493 + ZERO_DENOMINATOR 443 + SUPPRESSED 624 + ROW_ABSENT
+    44 + DECLARED_HOLE 8 = 12,612 (A2's own row count). The drift was
+    flagged, not investigated further, since the real reconciliation —
+    not the planning-pass estimate — is what T3b's guard actually
+    enforces. Evidence: T7 prep (absence-class table,
+    `.../334-t7-popup-prep.md:94-109`); plan §1 F3
+    (lines 97-103).
+
+    **(6) The two-county DECLARED_HOLE deviation.** Said: the plan's A1
+    description (§2, lines 155-163) budgets "13 recoverable absences ...
+    plus one declared hole row: 46102 Oglala Lakota (Pine Ridge)." True:
+    T1's implementation, independently reverified by its review via
+    fresh read-only DB queries, found only **1 of 14** whole-county
+    absences genuinely recoverable — not 13 — and **two** permanent
+    `DECLARED_HOLE` rows exist: **46102** (Oglala Lakota/Pine Ridge, SD)
+    and **02158** (Kusilvak Census Area, AK — "the identical
+    administrative pattern as Pine Ridge" per A1's own row note): zero
+    `fact_census_poverty` rows under either FIPS at any `time_id`, each
+    predecessor carrying rows only through 2014, neither ever imputed
+    (G5/G7). Both land on the C/FIRST_NATIONS pole — the same pole
+    errata item 5 already flags as carrying the largest measured
+    absence class. T1's original review APPROVED the reclassification
+    (the plan's "13 recoverable" framing would have tripped G7's own
+    injectivity law had it been implemented as written). Evidence:
+    progress.md T1 entries; T7 prep
+    (`.../334-t7-popup-prep.md:111-119`);
+    `county_fips_vintage_crosswalk.csv` row 4 (`relation=DECLARED_HOLE`).
+
+    **(7) F5's stale planning-pass floor values.** Said: the plan's F5
+    table (§1, lines 109-123), computed at planning-pass time, gives
+    `p_bar = 0.096223410` and per-pole `q_pole` B=0.232620, C=0.247566,
+    I=0.209543, yielding F-B candidates NEW_AFRIKAN 0.1364, FIRST_NATIONS
+    0.1513, CHICANO 0.1133. True: the real T5/A3 data (`unrestricted_3218`
+    variant) measures `p_bar = 0.096223732` (last-decimal drift) and
+    `q_pole` B=0.232694, **C=0.251439** (the largest drift, tracking the
+    same C-pole `ZERO_DENOMINATOR` shift as errata item 5), I=0.209595 —
+    yielding the REAL F-B candidates NEW_AFRIKAN 0.136 (full precision
+    `0.232693906 - 0.096223732 = 0.136470174`, 3dp `0.136` — the T7
+    posting's `0.137` was a double-rounding artifact via an intermediate
+    `0.1365`, corrected per errata item 9),
+    **FIRST_NATIONS 0.155** (rounds 0.1552 — the largest single drift
+    from the planning-pass 0.1513), CHICANO 0.113 (rounds 0.1134). T7's
+    popup sitting and the Director's Ruling 1 above used these REAL
+    measured values (modulo the NEW_AFRIKAN rounding fix, errata item 9),
+    never the plan's stale F5 numbers — flagged so no
+    future reader mistakes the plan's own §1 table for the ruled figures.
+    Evidence: plan §1 F5 (lines 109-123); T7 prep Q1 setup table
+    (`.../334-t7-popup-prep.md:127-144`, both universe
+    variants shown); the #334 T7-ruling comment; the #334 correction
+    comment (errata item 9).
+
+    **(8) T6 review Minors 1-2.** Both non-blocking, review verdict
+    APPROVE (0 Critical, 0 Important, 2 Minor). **Minor 1:** the T6
+    landing commit message (`3d6ec749`) states the double-run
+    "reconfirm[s] A1/A2/A3 sha256s" via
+    `make_national_incidence_artifact.py` — but that script only writes
+    A2/A3 (`A2_OUTPUT_PATH`/`A3_OUTPUT_PATH` are its only write targets);
+    A1's own generator is the separate `tools/make_fips_vintage_crosswalk.py`.
+    The underlying claim is TRUE and, if anything, under-cited rather
+    than false: the session's own scratch notes
+    (`t6/round{1,2}.sha256`) show A1's generator WAS independently
+    double-run on-pin earlier in the same session with byte-identical
+    results — neither the commit message nor the T6 report accurately
+    names which script produced which reconfirmation. **Minor 2:** the
+    T6 report's Gates section attributes the `check:quick` (vs. the
+    brief's literal `mise run check`) substitution to "(per brief)" —
+    not actually authorized by the brief's text. The substitution is
+    independently well-justified (this diff touched zero Python source,
+    only `.mise.toml` and a `.rst` doc; CLAUDE.md's machine-safety
+    section explicitly discourages fanned-out full-suite pytest runs
+    across concurrent agents, and three other agents were active in the
+    session) but was mis-sourced as brief-authorized rather than
+    independently justified. Evidence: `task-6-review.md`, "Findings"
+    section (Minor 1, Minor 2).
+
+    **(9) The 0.137 NEW_AFRIKAN double-rounding correction.** Said: T7's
+    popup-sitting posting to #334 and this ADR's first-landed text
+    (T8, `f7d0b53f`) gave the NEW_AFRIKAN F-B floor as **0.137**,
+    computed by first rounding the intermediate difference to `0.1365`
+    and then rounding that to 3dp. True: T8's own review flagged the
+    intermediate rounding as an Important finding — direct 3dp rounding
+    of the full-precision measured values gives
+    `q_pole(B) - p_bar = 0.232693906 - 0.096223732 = 0.136470174`, which
+    rounds to **0.136**, not 0.137. FIRST_NATIONS (0.155) and CHICANO
+    (0.113) round identically either way, so only NEW_AFRIKAN moves.
+    Disposition (controller, in-session, not re-popped to the Director):
+    the Director's Ruling 1 selected the **F-B shape**
+    (`floor = q_pole - p_bar`); the specific decimal values were an
+    ≈-marked presentation of that shape's measurement, not a separate
+    line decision — so this is an arithmetic-fidelity fix to the
+    measurement the ruling already selected, not a new ruling. The
+    correction was posted to #334 and this ADR is amended at T9 to
+    match: 0.137 → 0.136 throughout (Ruling 1 above, errata item 7,
+    and the consequences section). The `defconst` table (Ruling 4)
+    will carry the full-precision measured derivation, with 0.136 as
+    its 3dp presentation. Evidence: T8 review (Important finding); the
+    #334 correction comment ("Arithmetic correction to the T7
+    posting…", posted after the T7-ruling comment).
+  consequences: |
+    - The three artifacts are registered, sha-pinned, and reproduced
+      byte-identical on the pinned toolchain; `data:build-db` /
+      `data:verify-roundtrip` non-interference is proven, not assumed
+      (decision §3). No `qa:regression`/`qa:vault-regression-ci` drift
+      is possible from this train — no baseline or golden file was
+      touched (plan §8), confirmed by the review's independent
+      re-derivation of every claim.
+    - Checkpoint A's Community-floor dependency is DISCHARGED at the
+      ruling level: the four T7 rulings (decision §4) give Community's
+      `SUBSTRATE_FLOOR_DEFAULTS` a ruled replacement table (F-B,
+      0.136/0.155/0.113/0.0, errata item 9) with its entry path fixed (`defconst` +
+      deferred section-6.5 ceremony). The MECHANICAL landing still waits
+      on the Community port's own `community_memberships` blocker
+      (#536, BLOCKED) — this ADR removes the OTHER Director-gated item
+      the plan's §9 named (the floor VALUES), it does not unblock #536.
+    - Nine errata are now the permanent record of where the plan's
+      planning-pass estimates (F3, F5), one documentation transposition
+      (the pole-map §0 prose), two review Minors (T6), and one
+      double-rounding artifact (the NEW_AFRIKAN floor, errata item 9)
+      diverge from what the real, sha-pinned generation run and its
+      reviews measured. None required a code change; all are disclosure
+      corrections.
+    - `community_memberships` seeding (the §7 consequence item — a
+      weighted-membership writer for the three COLONIAL_AXIS
+      `CommunityType`s plus SETTLER, using A2's `(fips, pole,
+      universe_u)` rows as population weights) is OUT of this train's
+      scope, per the plan's own charter-vs-ADR171 verdict (Phase 2 stays
+      BLOCKED). T9 filed it as a fresh issue, #664, distinct from #334,
+      per the plan's own instruction not to smuggle it in; boarded on
+      project 8.
+    - T9 EXECUTED: commented #334 with the artifact paths, manifest line
+      numbers, the guard table, and the mutation-leg evidence
+      (issuecomment-5322548532), then closed it with evidence; filed the
+      community_memberships-seeder consequence issue (#664); verified the
+      ADR208 R2 register-hygiene fix (row 13's #536 citation ->
+      `consciousness.py:356`) was already landed via a comment posted
+      during the 2026-08-17 batched docket sitting — no further action
+      needed. T9 also merged origin/dev into this branch (ADR209-213
+      adjacency, no ADR-number collision — dev has no ADR214) and tracked
+      the plan file under `docs/superpowers/plans/`, per convention.
+    - Standing, pre-existing costs this train did not pay (recorded, not
+      new): the `fact_census_poverty` CI subset flip remains
+      owner-gated (ADR169, `make_reference_subset.py:405`) — every
+      guard in this train ran against fixtures plus this real pinned
+      run, never a CI-executable full-table pass; the deleted census
+      extractor (`data-catalog.yaml:1096`) means no vintage re-cut is
+      possible without reconstructing it, which is why OQ11's pinned
+      `time_id=23` is load-bearing, not incidental; Pine Ridge (46102)
+      and Kusilvak (02158) are permanent declared holes until a source
+      exists, never imputed.
+  supersedes: []
+  related:
+    - ADR171_national_question_rulings
+    - ADR208_docket_sitting_2026_08_17
+    - ADR098_parquet_canonical_reference
+    - ADR070_emergent_class_partition

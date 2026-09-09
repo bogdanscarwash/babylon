@@ -1,0 +1,144 @@
+ADR238_material_circuit_v1:
+  status: "accepted"
+  date: "2026-08-26"
+  title: >-
+    Material Circuit V1 makes orders, exact stocks, delayed delivery,
+    realization, and Leontief production one conserved Rust transition
+  crate: babylon-material-circuit
+  production_dependencies:
+    - babylon-kernel
+  forbidden_dependencies:
+    - babylon-graph
+    - babylon-bsl
+    - babylon-tick
+    - babylon-persistence
+    - babylon-client
+  live_activation: false
+  context: |
+    PER-30 requires orders, input-output coefficients, supplier candidates,
+    inventory, backlog, capacity, and following-week production. The live BSL
+    production conformance pack computes floating production value and credits
+    wealth. It has no exact goods, order, transit, delivery, or realization
+    principal and cannot prove the required stock-flow laws.
+
+    The frozen Python circulation modules remain reference-only under ADR229.
+    Reusing their diagnostic rates, days-of-inventory thresholds, or direct
+    production-to-wealth shortcut would create a second gameplay authority and
+    would not close an exact material ledger.
+
+    Canonical order must also remain computational identity rather than hidden
+    allocation priority. A scarce supplier stock therefore needs a conserved
+    order-neutral allocation law. Transport routing, corridor capacity, loss,
+    rerouting, and monetary settlement remain PER-31 work and must not be
+    smuggled into this local contract.
+  decision: |
+    `babylon-material-circuit` owns `MaterialCircuitStateV1` and the pure
+    `advance_material_circuit_v1` transition. Its language-neutral bytes and
+    laws live in `contracts/material_circuit_v1.yaml` and
+    `contracts/material_circuit_v1_vectors.jsonl`. Rust is the sole executable
+    implementation.
+
+    Every material identity is a distinct 32-byte type. Conserved quantities,
+    weeks, cumulative order quantities, and batch counts use unsigned 64-bit
+    integers. Checked arithmetic refuses overflow. Proportional clearing uses
+    an unsigned 128-bit intermediate, so the product and aggregate of bounded
+    unsigned 64-bit quantities remain exact.
+
+    The complete opening state owns process outputs, input-output and labor
+    coefficients, supplier candidates, inventory, commodity-sale orders,
+    backlog, sparse transit lots, process capacity, labor capacity, and one
+    following-week production commitment per process. Every row family has a
+    Designed 65,536-row serialization and transition-fuel ceiling. It is not a
+    limit on firms, workers, organizations, goods, or material abundance.
+
+    A week first credits due lots to destination inventory. It then records an
+    accepted delivery and commodity realization in that order. Dispatch cannot
+    arrive during its dispatch week. Realized quantity must remain at most
+    delivered quantity, delivered at most shipped, and shipped at most ordered.
+    Backlog always equals ordered minus shipped.
+
+    Current production consumes a prior-week commitment. For each exact labor
+    or material-input principal shared by competing processes, the transition
+    grants `floor(available * requested_i / total_requested)` to every process.
+    Residual stays with the resource principal; canonical process order receives
+    none. Actual batches equal the minimum of planned batches, process capacity,
+    each labor grant divided by labor per batch, and each material grant divided
+    by its exact input coefficient. The transition debits all used inputs and
+    labor before it credits output. Missing stock, labor, capacity, or a supplier
+    relation produces zero or partial material work and backlog; it is not an
+    engine error.
+
+    A prior-week production commitment executes before new order dispatch.
+    That temporal claim is explicit and does not depend on canonical row order.
+    Remaining supplier inventory clears across open orders proportionally by
+    `floor(available * unshipped_i / total_unshipped)`. Integer residual remains
+    supplier inventory. Canonical order receives no remainder and chooses no
+    material winner.
+
+    Dispatch debits supplier inventory and creates one sparse lot with an
+    arrival week at least one week later. Arrival removes the same exact lot and
+    credits destination inventory. Closing delivered inputs, closing labor, and
+    next-week capacity derive the following-week production commitment. That
+    commitment is the next transition's real consumer and is bounded again when
+    it executes.
+
+    Complete state bytes use one fixed domain, a version and opening week,
+    fixed field order, canonical row order, unsigned big-endian integers, and
+    raw 32-byte identities. The decoder refuses the wrong domain or version,
+    unknown access modes, truncation, trailing bytes, and noncanonical order.
+    SHA-256 identifies the validated complete state.
+
+    This slice does not alter graph or BSL state, `TickSession`, nominal world
+    identity, persistence, Archive, or Bevy. It does not activate gameplay and
+    does not claim PER-30 complete. Routed freight, losses, rerouting, price,
+    escrow, default, and settlement remain PER-31. Services, access modes beyond
+    commodity sale, waste, ecology, reproduction, and disruptive practices need
+    their separately governed consumers.
+  consequences: |
+    PER-30 now has an executable exact causal keel rather than a diagnostic
+    inventory ratio. Severing the supplier relation, withholding inputs, or
+    reducing labor or process capacity changes shipments, backlog, and later
+    production through named carriers. Delays prevent arrival, delivery, and
+    realization from collapsing into dispatch.
+
+    The current BSL production pack remains a frozen-port conformance surface;
+    it is not a consumer of this state and cannot certify the new mechanics.
+    Live activation requires the successor auxiliary-register ownership,
+    post-state basis, nominal world hash, envelope, tick integration, and a real
+    decision surface. That later cutover must retire direct production-to-wealth
+    authority where the conserved circuit supersedes it. It must not dual-write.
+
+    V1 graph, BSL, practice, persistence, and nominal-world-hash bytes remain
+    unchanged. PER-31 can extend the sparse local lot contract with routed
+    transit and settlement without redefining order or inventory conservation.
+  verification: |
+    Rust scenario tests prove shipment before arrival, accepted delivery before
+    realization, following-week input timing, Leontief bottlenecks, severed
+    supplier backlog, zero-supply material outcomes, checked-overflow atomicity,
+    canonical permutation identity, exact bytes, exact digest, decode round
+    trip, and wrong-domain, wrong-version, truncation, and trailing-byte
+    refusals. The derived 131,072 production-resource-group ceiling processes
+    its final legal group and refuses the first excess group.
+
+    Exhaustive bounded property tests cover 2,100 small two-order scarcity
+    combinations and 1,183 small input-labor-capacity combinations. They prove
+    stock conservation, shipped at most ordered and available, residual stock,
+    input debit, output credit, capacity bounds, and order-permutation identity.
+    A separate shared-input and shared-labor twin proves that process order
+    grants no material priority. Formatting and Clippy pedantic checks run with
+    warnings denied.
+  preserves:
+    - ADR223 TickSession atomicity and NominalWorldHash V1 bytes
+    - ADR224 BSL causal roles, exact effects, and audit receipts
+    - ADR229 Rust gameplay-contract authority and frozen Python boundary
+    - ADR232 material causality, successor versioning, and no authored sigmoid
+    - ADR236 order-neutral proportional allocation precedent
+  supersedes: []
+  related:
+    - ADR118_vol1_u5_headless_parity
+    - ADR200_production_port_handoff
+    - ADR220_rust_owned_postgresql_persistence_boundary
+    - ADR223_whole_tick_atomicity_world_hash
+    - ADR229_rust_gameplay_contract_authority
+    - ADR232_neel_integration_program_architecture
+    - ADR236_practice_resource_allocation_v2

@@ -1,0 +1,22 @@
+{
+  "grammars": [
+    {
+      "name": "bsl",
+      "camelcase": "Bsl",
+      "scope": "source.bsl",
+      "path": ".",
+      "file-types": ["bsl", "bscn"],
+      "highlights": ["queries/highlights.scm"],
+      "injection-regex": "^bsl$"
+    }
+  ],
+  "metadata": {
+    "version": "0.1.0",
+    "license": "AGPL-3.0-or-later",
+    "description": "Tree-sitter grammar for BSL — DERIVED from docs/reference/bsl.ebnf, non-normative",
+    "authors": [{ "name": "Babylon contributors" }],
+    "links": {
+      "repository": "https://github.com/percy-raskova/babylon"
+    }
+  }
+}

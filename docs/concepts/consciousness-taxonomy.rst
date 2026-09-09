@@ -338,6 +338,136 @@ returns ``True`` for all ``INSTITUTIONAL_EXCLUSION`` communities,
 indicating their structural *potential* for bridging. Whether they
 actually bridge depends on the membership composition at runtime.
 
+The Class-Surface Ternary Port (W10)
+------------------------------------
+
+ADR204's W10 ruling ports the ternary onto the Rust engine's class
+surface: ``social_class`` nodes carry the measured ``(r, l, f)`` shares
+as first-class declared fields — the first ``probability``-lane
+deffields in committed content — computed by the BSL rule pack
+``rust/crates/babylon-tick/content/rules/consciousness.bsl`` (nine
+byte-ordered rules, ``p0``–``p8``) over the
+``consciousness-ternary-conformance.bscn`` world. The four records
+below are the port's standing discharges; the full handoff is ADR207.
+
+A-001's One Home
+~~~~~~~~~~~~~~~~
+
+A-001 — unorganized consciousness reads as the liberal hegemonic
+default (spec 034) — has ONE home in the ported estate, as three
+coordinated clauses of the single pack:
+
+- ``consciousness/p0-position`` positions a materially anchored class
+  with no ternary record at the ruled rest state ``(0, 1, 0)`` — the
+  class-seeding law (Director flag 1, ruled 2026-08-15).
+- ``consciousness/p6-route``'s closure — a verbatim
+  ``normalize_to_simplex`` transcription — assigns a simplex defect's
+  remainder to liberal, and its all-zero branch returns ``(0, 1, 0)``.
+- ``consciousness/p8-dominant-worldview`` resolves argmax ties in the
+  ruled order LIBERAL > REVOLUTIONARY > FASCIST at a strict ``1e-6``.
+
+The frozen estate scattered the same default across seven sites. The
+port re-homes NONE of them — the pack's clauses above are the law's
+only homes; this section names the frozen sites as not-ported-by-law,
+so no future reader "repairs" the port by reintroducing a second home:
+
+- ``src/babylon/formulas/consciousness.py:77-79`` — the unorganized
+  fraction added into ``l``.
+- ``src/babylon/formulas/consciousness.py:83-91`` — zero-total reads as
+  pure liberal plus floor.
+- ``src/babylon/models/entities/consciousness.py:177-192`` — argmax tie
+  reads as LIBERAL.
+- ``src/babylon/formulas/consciousness_routing.py:396-398`` and
+  ``:405-407`` — all-zero reads as ``(0, 1, 0)``; the remainder goes to
+  liberal.
+- ``src/babylon/projection/aggregation.py:69-73`` — both bridge corners
+  read as liberal.
+- ``src/babylon/models/entities/consciousness.py:76-78`` — the field
+  defaults ``l = 0.6``.
+- ``src/babylon/projection/aggregation.py:203-206`` — an empty county
+  reads as ``(0.3, 0.6, 0.1)``.
+
+UNPOSITIONED on the Class Surface (L-ABS)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Absence has no reading. A class with no material anchors and no ternary
+record carries the UNPOSITIONED status: no ``revolutionary`` /
+``liberal`` / ``fascist`` fields and no ``dominant-worldview``, and a
+raw store read errors loud (Constitution III.11 — no defaults, no
+fabrication). Inside
+a rule, absence is observed ONLY through declared literals:
+``:optional`` + ``:default 0.0p`` bindings gated on ``(> (+ r (+ l f))
+0)`` — a positioned class is a simplex point whose shares sum to 1, so
+a zero sum IS "never positioned", by construction, never by epsilon,
+never by a fabricated share.
+
+This idiom is the row-19 disease's death certificate. This section
+names the frozen estate's 0.5-default register — every site a
+fabricated midpoint read as if it were a measurement — so the disease
+stays dead:
+
+- ``src/babylon/engine/systems/ideology.py:74``, ``:82``, ``:89`` —
+  three fabrications inside ``_get_ideology_profile_from_node`` (the
+  fabricated ``national_identity`` 0.5 consumed at ``:359``/``:411``).
+- ``src/babylon/engine/systems/struggle.py:100``, ``:107``, ``:128``,
+  ``:139``, ``:164``, ``:171`` — six updater fabrications; ``:139`` is
+  the ``0.5 + delta`` absent-branch base, a midpoint invented and then
+  added to.
+- ``src/babylon/engine/systems/solidarity.py:66``, ``:73`` —
+  preserve-on-write fabrications.
+- ``src/babylon/models/entities/social_class.py:99`` — the model
+  default ``ni = 0.5`` itself.
+- The retired Python Postgres bridge also carried a ``BASELINE_IDEOLOGY``
+  placeholder (spec-066 T050/ADR043). It is not a live authority path.
+- ``src/babylon/kernel/node_access.py:15-37`` — the twin disease on the
+  cc axis: ``class_consciousness_from_node`` fabricates 0.0 on absence.
+
+The port carries none of these sites; the L-ABS idiom above replaces
+the whole register by law.
+
+The Hegemonic-Community Semantic Inversion
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Spec 034 orders this inversion documented
+(``specs/034-ternary-consciousness/spec.md:178``); the W10 design's
+reference-docs stage discharges that order here. SETTLER and
+PATRIARCHAL hyperedges — ``HEGEMONIC_COMMUNITIES``
+(``src/babylon/models/entities/community.py:83-85``) — carry ternary
+consciousness with INVERTED semantics: **r measures the conscious
+defense of the extraction position** (white nationalism), **l**
+measures the passive beneficiary default, **f** measures active
+exclusionary mobilization. The computation is identical —
+organizational-landscape projection — but the interpretation of the
+revolutionary vertex inverts: same math, inverted reading.
+
+The inversion is doc-law, and this section is its discharge: the frozen
+estate has NO code site for it (the port archaeology digest's A.5d —
+``is_hegemonic`` at ``community.py:106-115`` has zero production
+callers), so there is nothing to transcribe. Its Rust code home arrives
+with the community-carrier port — hyperedge attributes, the attributed
+membership payload (Amendment AG), and the org-overlap formula are
+chartered follow-on work (ADR207's roster), escalating under Amendment
+AE(ii) wherever new BSL surface is needed.
+
+W12: the Value-Flow Coupling — Read Direction Landed
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+W12 rules ideology a gravitational pull that commands labor vis-à-vis
+hegemony: the ternary couples to the value-flow estate, never an inert
+label. This train lands the READ couplings — the pack COMPUTES the
+class ternary from the value-flow estate: the wage inflow (the seeded
+WAGES-edge ``wages/value-flow``, pushed into
+``social-class/wages-inbox`` — #591 item 3 landed the edge-attribute
+seeding a first draft deferred, closing the frozen incoming-WAGES
+fold-sum exactly via push-over-pull; the interim class-side
+``social-class/wages-received`` field is retired), the ``wages-paid`` /
+``value-produced`` anchors and their signed ``wage-balance``, the
+wealth delta, and the SOLIDARITY topology that routes agitation. The
+PULL couplings —
+measured shares modulating the value flow itself — are chartered
+port-stage design work (ADR207's follow-on roster), deliberately
+minting no new formalism.
+
 See Also
 --------
 

@@ -10,9 +10,9 @@ averages across years, and validates against the Shaikh band table.
 
 Usage::
 
-    poetry run python tools/validate_bea_io_against_shaikh.py
-    poetry run python tools/validate_bea_io_against_shaikh.py --year 2020
-    poetry run python tools/validate_bea_io_against_shaikh.py --tolerance 0.3
+    uv run python tools/validate_bea_io_against_shaikh.py
+    uv run python tools/validate_bea_io_against_shaikh.py --year 2020
+    uv run python tools/validate_bea_io_against_shaikh.py --tolerance 0.3
 """
 
 from __future__ import annotations
@@ -25,6 +25,7 @@ from collections.abc import Sequence
 
 from sqlalchemy import select
 
+from babylon.config.logging_config import setup_logging
 from babylon.reference.bea.shaikh_validator import validate_per_industry_c_v
 from babylon.reference.database import get_normalized_session
 from babylon.reference.schema import (
@@ -99,7 +100,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="Band-widening tolerance fraction (default 0.5 for ±50 %%).",
     )
     args = parser.parse_args(argv)
-    logging.basicConfig(level=logging.INFO, format="%(message)s")
+    setup_logging(default_level="INFO")
     log = logging.getLogger("validate_bea_io_against_shaikh")
 
     with get_normalized_session() as session:

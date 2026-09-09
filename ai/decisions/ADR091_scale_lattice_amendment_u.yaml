@@ -1,0 +1,62 @@
+id: ADR091
+title: >-
+  Amendment U — the spatial scale ladder is a LATTICE, not a chain: county is
+  the administrative atom; CZ (ERS 1990, total) / MSA (OMB, partial) / state
+  (total) are PARALLEL county-aggregations, only state nests into nation
+status: accepted
+date: '2026-07-19'
+context: >-
+  The owner's hex/community disposition (2026-07-18) recorded the ladder as
+  county < CZ < [MSA] < state < national and task #39 was scoped to bind
+  ScaleAdjunction to it. The #39 investigation (2026-07-19) surfaced two
+  contradictions: (1) Amendment K's canonical ladder (hex < county < state <
+  nation) carried no CZ/MSA rungs; (2) ERS commuting zones and OMB MSAs both
+  cross state lines, so the recorded chain is geographically unrealizable as a
+  nesting. Owner ruled (AskUserQuestion, 2026-07-19): constitutional
+  amendment wanted; MSA included since its data is already in the reference DB
+  (dim_metro_area/bridge_county_metro); drive checked for CZ data first —
+  CZ-level Chetty outcome tables exist but NO county->CZ crosswalk (the
+  WID_data_CZ.csv candidate is Czechia, the ISO country code), so the USDA ERS
+  1990 crosswalk was acquired (matching the Chetty tables' 1990 vintage).
+  Amendment text with the lattice correction ratified as drafted.
+decision: >-
+  CONSTITUTION.md v2.11.0 adds Amendment U superseding Amendment K's spatial
+  level-lattice clause: hex (res-7, immutable substrate) < county (atom,
+  county_fips, sole economy spatial key via resolve_county_identity); above
+  county, three parallel allocate-adjoint-aggregate adjunctions — CZ (total
+  over the scoped county universe, with 19 declared loud-fail exceptions —
+  see the 2026-07-19 empirical correction below), MSA (partial), state
+  (total); only state < nation nests. Each rung carries an
+  Aleksandrov trace to real data: bridge_county_h3 / bridge_county_cz (new
+  in-repo register-mode artifact, 3141 counties -> 741 CZs) /
+  bridge_county_metro / FIPS prefix / constant. Letter T stays reserved for the
+  drafted Divergence Channel amendment (ADR072).
+consequences: >-
+  ScaleAdjunction's engine binding (task #39 T3/T6) builds three independent
+  county-keyed adjunctions instead of one chain — exactly what the frozen
+  model already supports (independent mapping dicts). The web map's CZ framing
+  (FramingSelector) stops being a silent county fallback once group_key_map
+  gains the cz rung backed by bridge_county_cz. Wayne County's sub-county
+  res-6 territories are out of scope (owner ruling W1: USScenario only;
+  ticket #57). No baseline drift expected from the amendment itself (the 5
+  canonical scenarios are opaque-T-id, county-free).
+evidence:
+  - CONSTITUTION.md Amendment U (v2.11.0)
+  - docs/superpowers/plans/2026-07-19-hex-scale-county-keying.md (ratified draft + rulings W1/W2)
+  - src/babylon/data/reference/bridge_county_cz.csv (commit 5675c868; provenance in the session scratchpad report)
+  - src/babylon/domain/dialectics/instances/scale.py (ScaleAdjunction — independent mapping per rung)
+  - owner ratification: AskUserQuestion 2026-07-19 ~9:05pm, "Ratify as drafted"
+  - >-
+    EMPIRICAL CORRECTION (post-ratification, 2026-07-19, #39 T3): CZ totality
+    verified against dim_county (3285 rows) — 151 rows carry no direct
+    crosswalk entry: 51 synthetic {state}999 placeholders + 78 Puerto Rico
+    municipios (both already outside the established _load_national_fips
+    county scoping) + 3 modern FIPS resolved via vintage-bridging
+    (12086/46102/08014, inheriting the pre-1990 predecessor county's CZ per
+    _FIPS_VINTAGE_BRIDGES, rather than a raw crosswalk row) + 19 genuine
+    post-1990 reorganizations (10 Alaska census-area changes, 9 Connecticut
+    2022 planning regions) with no honest 1:1 predecessor. cz_adjunction()
+    raises a named KeyError for the 19 (no fabricated bridges); pinned by
+    TestCZTotalityOverCountyUniverse in tests/unit/dialectics/test_levels.py.
+    Amendment U text carries the same scope caveat; owner audits the
+    correction in the queue PR ratification thread.

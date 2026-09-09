@@ -1,0 +1,198 @@
+; World 10 of 12 for the ImperialRent BSL port train (Material Base @9.0,
+; Checkpoint A campaign; plan
+; `docs/superpowers/plans/2026-08-18-imperialrent-port.md`, §9's per-world
+; seed matrix, row "10 multi-tribute"; Task 3). Frozen source:
+; `src/babylon/engine/systems/economic.py::ImperialRentSystem
+; ._process_tribute_phase`, `:347-400`.
+;
+; **Sole purpose: measure D184(b) and D200 together, on a comprador with
+; TWO TRIBUTE edges to two distinct CORE_BOURGEOISIE recipients.** Neither
+; divergence is visible on world 1 (one TRIBUTE edge only) — this world
+; exists because a comprador with N >= 2 TRIBUTE edges is the ONLY shape
+; that can distinguish the frozen engine's per-edge SOURCE re-read
+; (`economic.py:375`, `source_attrs["wealth"]` read FRESH at the top of
+; EVERY TRIBUTE-edge loop iteration, so the SECOND edge sees the FIRST
+; edge's already-applied write) from the ported rule-scoped `cut`/`tribute`
+; (computed ONCE from `self`'s pre-state wealth, `r03-tribute`'s own
+; bindings, applied identically per edge).
+;
+; **In numbers, what the frozen loop does** (comprador wealth 800.0,
+; `economy.comprador_cut = 0.9`, both edges reached in NodeId order since
+; `query_edges` insertion order here coincides with declaration order):
+;   edge 1: comprador_wealth = 800.0 (the node's true pre-tick value) =>
+;           cut_amount = 720.0, tribute_amount = 80.0. Writes
+;           `source.wealth = 720.0` (the OVERWRITE, `:385`) BEFORE edge 2
+;           is ever read.
+;   edge 2: comprador_wealth = 720.0 (source_attrs["wealth"] RE-READ off the
+;           node `get_node` just fetched — edge 1's write already applied)
+;           => cut_amount = 648.0, tribute_amount = 72.0. Writes
+;           `source.wealth = 648.0`.
+;   Frozen sequential comprador wealth: 800.0 -> 720.0 -> 648.0. Recipient
+;   A receives 80.0, recipient B receives 72.0 — DIFFERENT amounts, because
+;   the frozen loop's `tribute_amount` is a function of a running total, not
+;   a constant.
+;
+; **What the pack does instead (D200's repeated-`set` semantics, settled
+; Task 0 Step 4(e), proven against the real driver Task 1 Step 5(g)):**
+; `r03-tribute`'s `cut`/`tribute` are rule-scoped `:expr` bindings, evaluated
+; ONCE per rule firing against `self`'s PRE-STATE wealth (800.0), shared by
+; EVERY iteration of the `for-each` over TRIBUTE neighbours — `cut = 720.0`,
+; `tribute = 80.0`, unconditionally, for BOTH edges. The comprador's
+; `(update-node self social-class/wealth (set cut))` effect fires TWICE this
+; tick, both times carrying the IDENTICAL value `720.0` — two `PendingWrite`s
+; on the same `(node, field)` pair, which D200 settles is ACCEPTED (never
+; refused) with last-write-wins semantics; since both writes carry the same
+; value, "last write wins" is idempotent by construction and the comprador
+; ends the tick at EXACTLY `720.0`, not `648.0`. BOTH recipients receive the
+; SAME `tribute = 80.0` (not 80.0/72.0) — the ported `for-each` iterates the
+; SAME rule-scoped `tribute` binding per edge, unlike the frozen loop's
+; per-edge running total.
+;
+; **Ported comprador wealth: 800.0 -> 720.0 (written twice, identically).
+; Frozen sequential comprador wealth: 800.0 -> 720.0 -> 648.0.** Both
+; numbers are asserted side by side, in the assertion message and in a
+; comment, by `the_two_tribute_edges_apply_the_rule_scoped_cut_once`
+; (`imperial_rent_conformance.rs`) — the D183 publication discipline this
+; train's own header already established for world 8's analogous Phase-1
+; divergence (D184(a)).
+;
+; **D184's Phase-2 half and D200, named explicitly per the brief's own
+; instruction:** D184 (`imperial-rent.bsl`'s header, item 4(b)) records that
+; the per-edge sequential SOURCE re-read does not port, in EITHER phase;
+; this world supplies phase 2's own measured fixture (phase 1's own fixture,
+; a multi-EXPLOITATION-edge worker, is world 8, Task 6 — not built here).
+; D200 (item 20) records that the LANGUAGE accepts a repeated `set` of one
+; field within one tick, last-write-wins — this world is the ONLY fixture in
+; the whole suite that exercises a repeated `set` on a NON-degenerate value
+; (world 1's Task 1 Step 5(g) spike used a `set 42` that was trivially
+; identical across five identical iterations; here the SAME identity
+; property is what the assertion actually turns on, not incidental to it).
+;
+; **`social-class/revolutionary` seeded 0.0p on all social-class nodes** —
+; `r03`/`r04` never read it (Phase 2 has no consciousness term); the field
+; is declared (r01/r02, also present in this pack's shared RULE content,
+; reference it) but this world's own comprador/recipient-a/recipient-b
+; narrative carries NO EXPLOITATION edge among THEM, so r01/r02 iterate
+; zero times over any of the three (D127 hash-neutral) — this world
+; exercises Phase 2 in isolation over its own topology, matching the
+; brief's own "one comprador with two TRIBUTE edges" framing. The ONE
+; EXPLOITATION edge this world DOES seed (`dummy-worker` -> `dummy-target`,
+; below) is a load-time necessity, not narrative — see its own inline
+; comment (E-LOAD-045/D76); its source is INACTIVE, so r01/r02 exclude it
+; at the subject level regardless. No periphery-worker/real-EXPLOITATION-
+; edge fixture is built here (that is world 8's job, Task 6).
+;
+; **Both recipients are CORE_BOURGEOISIE** — `r04-tribute-credit` therefore
+; fires for BOTH TRIBUTE edges, crediting `institution/rent-tribute-inflow`/
+; `institution/rent-pool` TWICE this tick (once per edge, reading each
+; edge's own published `tribute/value-flow`, per r04's D116/D197-row-7
+; corrected design) — `Δ(rent-tribute-inflow) == 2 * tribute == 160.0` in
+; the ported world (both edges publish the SAME `tribute`), a further
+; observable consequence of D200's repeated-value semantics distinct from
+; the comprador-wealth overwrite itself.
+;
+; Declaration order fixes NodeId — do not renumber when extending:
+;   comprador (0)      COMPRADOR_BOURGEOISIE, active, wealth 800 — SAME
+;                       wealth as `imperial-rent-conformance.bscn`'s own
+;                       comprador (world 1), so `cut`/`tribute` are directly
+;                       comparable across both worlds.
+;   recipient-a (1)     CORE_BOURGEOISIE, active, wealth 5000 — the first
+;                       TRIBUTE edge's target.
+;   recipient-b (2)     CORE_BOURGEOISIE, active, wealth 2000 — the second
+;                       TRIBUTE edge's target, a DISTINCT recipient (D184(b)
+;                       needs two EDGES off one comprador, not two edges
+;                       into one shared recipient — the divergence is about
+;                       the SOURCE's re-read, not the target).
+;   multi-tribute-register (3)  INSTITUTION — the carrier (D198
+;                       discriminator `rent-carrier 1`, this world's ONLY
+;                       INSTITUTION node so the discriminator and a
+;                       constant-score `select-max` agree by construction
+;                       here, same as world 1).
+;
+; Edges (declaration order = frozen `query_edges` insertion order for THIS
+; world): TWO TRIBUTE (comprador -> recipient-a THEN comprador ->
+; recipient-b, `tribute/value-flow` seeded `0` on both, D156's `edge-attr`
+; idiom) plus ONE inert EXPLOITATION (`dummy-worker` -> `dummy-target`, the
+; E-LOAD-045 load-time necessity above).
+;
+; **§8's defconst roster — the r00-r04 subset only** (this world's own RULE
+; content is the SAME shared `imperial-rent.bsl` as world 1, which still
+; contains only r00-r04 as of THIS task — r01/r02's own consts must be
+; declared even though this world's own narrative seeds no MEANINGFUL
+; EXPLOITATION edge, since `bind_subject` resolves every declared binding,
+; `:const` included, for EVERY subject of the rule's domain regardless of
+; whether `when` or a `for-each` query ultimately finds anything to act on).
+(scenario imperial-rent/multi-tribute-conformance
+  (defvocabulary NodeType (SOCIAL_CLASS INSTITUTION))
+  (defvocabulary EdgeType (EXPLOITATION TRIBUTE))
+  (defenum SocialRole (CORE_BOURGEOISIE PERIPHERY_PROLETARIAT LABOR_ARISTOCRACY PETTY_BOURGEOISIE LUMPENPROLETARIAT COMPRADOR_BOURGEOISIE INTERNAL_PROLETARIAT CARCERAL_ENFORCER))
+
+  (deffield social-class/role enum SocialRole)
+  (deffield social-class/active int intensive)
+  (deffield social-class/wealth real extensive)
+  (deffield social-class/revolutionary probability intensive)
+
+  (deffield institution/rent-carrier int extensive)
+  (deffield institution/rent-pool real extensive)
+  (deffield institution/rent-tribute-inflow real extensive)
+
+  (deffield exploitation/value-flow real intensive)
+  (deffield tribute/value-flow real intensive)
+
+  (defconst economy/extraction-efficiency 0.8c)
+  (defconst economy/comprador-cut 0.9c)
+  (defconst economy/negligible-rent 0.01c)
+  (defconst economy/trpf-coefficient 0.0005c)
+  (defconst economy/trpf-efficiency-floor 0.1c)
+  (defconst timescale/weeks-per-year 52)
+
+  (node comprador NodeType/SOCIAL_CLASS
+    (social-class/role SocialRole/COMPRADOR_BOURGEOISIE)
+    (social-class/active 1)
+    (social-class/wealth 800)
+    (social-class/revolutionary 0.0p))
+
+  (node recipient-a NodeType/SOCIAL_CLASS
+    (social-class/role SocialRole/CORE_BOURGEOISIE)
+    (social-class/active 1)
+    (social-class/wealth 5000)
+    (social-class/revolutionary 0.0p))
+
+  (node recipient-b NodeType/SOCIAL_CLASS
+    (social-class/role SocialRole/CORE_BOURGEOISIE)
+    (social-class/active 1)
+    (social-class/wealth 2000)
+    (social-class/revolutionary 0.0p))
+
+  (node multi-tribute-register NodeType/INSTITUTION
+    (institution/rent-carrier 1)
+    (institution/rent-pool 100)
+    (institution/rent-tribute-inflow 0))
+
+  ; `dummy-worker`/`dummy-target` + the ONE EXPLOITATION edge between them
+  ; are NOT part of this world's narrative — they exist SOLELY to give
+  ; EdgeType/EXPLOITATION a computable static-fuel ceiling (E-LOAD-045,
+  ; D76/§2.9: the shared RULE pack's r01/r02 reference EdgeType/EXPLOITATION
+  ; regardless of this world's own topology, and a queried type with ZERO
+  ; graph instances has no computable bound). `dummy-worker`'s `active 0`
+  ; makes r01's/r02's own `when` gate exclude it entirely at the SUBJECT
+  ; level — hash-neutral in practice (D127), non-empty in the graph's own
+  ; edge-type census.
+  (node dummy-worker NodeType/SOCIAL_CLASS
+    (social-class/role SocialRole/PERIPHERY_PROLETARIAT)
+    (social-class/active 0)
+    (social-class/wealth 1)
+    (social-class/revolutionary 0.0p))
+
+  (node dummy-target NodeType/SOCIAL_CLASS
+    (social-class/role SocialRole/PETTY_BOURGEOISIE)
+    (social-class/active 1)
+    (social-class/wealth 1)
+    (social-class/revolutionary 0.0p))
+
+  (edge EdgeType/TRIBUTE comprador recipient-a 1)
+  (edge-attr EdgeType/TRIBUTE comprador recipient-a tribute/value-flow 0)
+  (edge EdgeType/TRIBUTE comprador recipient-b 1)
+  (edge-attr EdgeType/TRIBUTE comprador recipient-b tribute/value-flow 0)
+  (edge EdgeType/EXPLOITATION dummy-worker dummy-target 1)
+  (edge-attr EdgeType/EXPLOITATION dummy-worker dummy-target exploitation/value-flow 0))

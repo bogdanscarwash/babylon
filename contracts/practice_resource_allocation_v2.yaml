@@ -1,0 +1,217 @@
+meta:
+  contract: PracticeResourceAllocationV2
+  schema_version: 2
+  status: accepted
+  evidence_class: Designed
+  live_activation: false
+  rust_owner: babylon-practice-contract
+
+preserves:
+  - every Practice Contract V1 byte, digest, refusal, and vector
+  - PracticeInputAuthorityV2 bytes and habitation law
+  - PracticeIntentV2 bytes, target law, and proposal-key law
+  - ResolvedPracticeBatchV2 bytes and accepted-intent identity
+
+domains:
+  allocation_contract: babylon.practice-resource-allocation-contract.v2
+  request: babylon.practice-resource-request.v2
+  capacity: babylon.practice-resource-capacity.v2
+  outcome: babylon.practice-resource-allocation-outcome.v2
+  terminator_hex: "00"
+
+encoding:
+  byte_order: big-endian
+  integer_encoding: unsigned-fixed-width
+  quantity_encoding: u64
+  digest_encoding: raw-32-bytes
+  identity_encoding: raw-32-bytes
+  row_count_encoding: u32
+  trailing_bytes: forbidden
+
+allocation_contract_field_order:
+  - schema_version
+  - quantity_width_bits
+  - request_derivation_law
+  - divisible_law
+  - exclusive_tie_law
+  - residual_law
+  - max_requests_per_intent
+  - max_requests_total
+  - max_capacities_total
+
+allocation_contract_values:
+  quantity_width_bits: 64
+  request_derivation_law: 1
+  divisible_law: 1
+  exclusive_tie_law: 1
+  residual_law: 1
+  max_requests_per_intent: 16
+  max_requests_total: 65536
+  max_capacities_total: 65536
+
+proposal_key_field_order:
+  - resolve_tick
+  - input_authority_id
+  - actor_org_id
+  - practice_id
+  - target_tag
+  - target_identity
+  - proposal_nonce
+
+request_field_order:
+  - schema_version
+  - proposal_key
+  - owner
+  - resource_id
+  - unit_id
+  - requested_quantity
+
+capacity_field_order:
+  - schema_version
+  - owner
+  - resource_id
+  - unit_id
+  - allocation_mode
+  - available_quantity
+
+outcome_field_order:
+  - schema_version
+  - allocation_contract_digest
+  - allocations
+  - balances
+
+allocation_row_field_order:
+  - request_digest
+  - allocated_quantity
+
+balance_row_field_order:
+  - capacity_digest
+  - allocated_quantity
+  - unallocated_quantity
+
+owner_tags:
+  shared:
+    code: 1
+    owner_org_id_u64: 0
+  actor_organization:
+    code: 2
+    owner_org_id_u64: actor_org_id
+
+allocation_modes:
+  divisible_pro_rata: 1
+  exclusive_all_or_none: 2
+
+request_derivation:
+  source: sealed-content requirement matched to an accepted PracticeIntentV2
+  quantity_source: sealed content, never an intent parameter
+  required_quote: intent quoted_resource_contract_digest equals allocation contract digest
+  shared_owner: the shared owner tag and zero owner organization identity
+  actor_owner: the intent actor organization identity
+  practice_match: requirement practice_id equals intent practice_id
+  zero_quantity: forbidden
+
+canonical_order:
+  capacity_key:
+    - owner_tag
+    - owner_org_id
+    - resource_id
+    - unit_id
+  request_key:
+    - capacity_key
+    - complete_proposal_key
+  law: input permutations produce the same canonical allocation and balance order
+  priority: canonical order grants no material priority
+
+allocation_law:
+  grouping: requests group by exact capacity key
+  full_allocation: >-
+    if available quantity is at least total requested quantity, every request
+    receives its requested quantity
+  divisible_scarcity: allocated_i = floor(available * requested_i / total_requested)
+  divisible_intermediate: u128 product of two u64 quantities
+  divisible_priority: every request receives the same fulfillment ratio before integer residual
+  exclusive_scarcity: if available quantity is below total requested quantity, every request receives zero
+  cross_actor_contention: a committed material no-allocation outcome, not a submission refusal
+  residual: available quantity minus the sum of allocations remains explicitly unallocated
+
+authority_resource_conflict:
+  group_key:
+    - resolve_tick
+    - input_authority_id
+    - actor_org_id
+  condition: >-
+    two or more distinct proposals in one group make exclusive claims on one
+    capacity and their group quantity exceeds available capacity
+  result: refuse the complete authority group before accepted-input admission
+  order_law: submission order, digest order, and proposal nonce select no winner
+
+conservation_laws:
+  - every allocated quantity is at most its requested quantity
+  - each capacity allocated quantity plus unallocated quantity equals available quantity exactly
+  - division residual remains unallocated and never transfers to a request by canonical order
+  - checked overflow refuses without publishing an outcome
+  - an unused capacity row remains present with zero allocated and all capacity unallocated
+
+limits:
+  requests_per_intent:
+    value: 16
+    classification: Designed
+    purpose: sealed-content and serialization fuel ceiling, not material capacity
+  requests_total:
+    value: 65536
+    formula: 4096 accepted intents times 16 requests per intent
+    classification: Designed
+    purpose: serialization and allocation fuel ceiling, not an actor or organization quota
+  capacities_total:
+    value: 65536
+    classification: Designed
+    purpose: sealed-snapshot and allocation fuel ceiling, not material abundance
+
+canonical_lengths:
+  allocation_contract_bytes: 66
+  request_bytes: 202
+  capacity_bytes: 122
+  allocation_outcome_header_bytes: 90
+  allocation_row_bytes: 40
+  balance_row_bytes: 48
+
+digest_contracts:
+  algorithm: SHA-256
+  allocation_contract_preimage: validated canonical allocation-contract bytes
+  request_preimage: validated canonical request bytes
+  capacity_preimage: validated canonical capacity bytes
+  outcome_preimage: validated canonical outcome bytes
+
+error_codes:
+  resource_domain: 1
+  resource_schema_version: 2
+  resource_enum_code: 3
+  resource_truncated: 4
+  resource_trailing_bytes: 5
+  resource_contract_value: 6
+  resource_contract_digest_mismatch: 7
+  resource_requirement_practice_mismatch: 8
+  resource_request_zero: 9
+  resource_request_limit: 10
+  resource_requests_per_intent_limit: 11
+  resource_request_duplicate: 12
+  resource_owner_mismatch: 13
+  resource_capacity_limit: 14
+  resource_capacity_duplicate: 15
+  resource_capacity_missing: 16
+  authority_resource_conflict: 17
+  resource_arithmetic: 18
+  resource_outcome_limit: 19
+  resource_outcome_conservation: 20
+  resource_outcome_contract_digest: 21
+  resource_outcome_mismatch: 22
+
+excluded_surfaces:
+  - actor-authored request quantity
+  - request priority from submission, nonce, digest, or canonical order
+  - an omniscient optimizer or welfare objective
+  - graph or auxiliary-register capacity extraction
+  - accepted-input persistence transaction
+  - BSL effect, graph mutation, labor withholding, or economic transfer
+  - receipt, Archive, or Bevy action
+  - gameplay activation

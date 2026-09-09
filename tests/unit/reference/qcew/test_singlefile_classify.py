@@ -154,7 +154,7 @@ class TestIdentityResolution:
             year=2015,
         )
         assert {row.area_fips for row in data.leaves} == {"46102"}
-        assert (row.employment for row in data.leaves)
+        assert {row.employment for row in data.leaves} == {52}
         (leaf,) = data.leaves
         assert leaf.employment == 52  # the kept 46102 magnitudes, not Shannon's
         assert set(data.constraints_70) == {"46102"}

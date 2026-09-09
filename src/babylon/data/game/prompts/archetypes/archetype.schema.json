@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://babylon.local/schemas/event-archetype.schema.json",
+  "title": "EventArchetype",
+  "description": "AI-fillable narration template: structure without scripting (emergent-endgames ruling, Program 20 Track B).",
+  "type": "object",
+  "required": ["id", "event_types", "slots", "guidance"],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Archetype identifier; matches the JSON filename stem."
+    },
+    "event_types": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 },
+      "description": "EventType values (uppercased) this archetype narrates. Each string must name a real babylon.models.enums.EventType member."
+    },
+    "slots": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 },
+      "description": "Named facts the AI must fill from observed engine state only, never invented."
+    },
+    "guidance": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Narration instructions steering tone and material grounding."
+    }
+  }
+}

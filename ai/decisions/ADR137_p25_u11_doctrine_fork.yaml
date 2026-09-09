@@ -1,0 +1,217 @@
+ADR137_p25_u11_doctrine_fork:
+  status: "accepted"
+  date: "2026-07-22"
+  title: >-
+    P25 U11 — The Doctrine Fork: the reformist trunk becomes a five-stance
+    electoral fork under trade_unionism, and doctrine stops being a tag ledger.
+    A separate PracticeVariable vocabulary (never pseudo-tags) lets trap
+    conditions read MEASURED PRACTICE; the trap DSL grows an @coeff RHS so
+    thresholds live in defines; liquidationism becomes an absorbing state
+    sprung by practice rather than by punitive acquisition deltas; officeholder
+    capture prices Michels' iron law as a RATE resisted by cadre discipline;
+    line changes resolve as congress SPLITS; DoctrineCapability gives stances
+    real verb parameters (Campaign(Election, run|boycott), Negotiate(coalition),
+    Mobilize(canvass)) on the fixed 9 generators; and the legacy liberal-trap
+    detector is absorbed into the ORGANIZATIONAL half of the political_form
+    opposition. Every reformist stance carries ZERO acquisition tag_deltas —
+    all reformist tag movement flows through the practice drift term.
+    qa:regression byte-identical (metadata-only defines_hash ceremony).
+  supersedes: []
+  relates_to: ["ADR127", "ADR073", "ADR129", "ADR134", "ADR135", "ADR136", "ADR109", "ADR090"]
+  programs: ["25-political-superstructure"]
+
+  decision: |
+    (1) THE MEASURED-PRACTICE VOCABULARY (commit B): PracticeVariable is a
+        SEPARATE StrEnum from DoctrineTag — five members (SOLIDARITY_MASS,
+        CO_OPTIVE_SHARE, OFFICE_TENURE, DELIVERY_DEPENDENCE,
+        PETTY_BOURGEOIS_DRIFT). The tempting shortcut was to add pseudo-tags to
+        DoctrineTag; it was refused. DoctrineTag is pinned in three places as
+        exactly three tags (the exact-dict test, _STARTING_TAG_VALUES, the
+        docstring), and every one of those pins survived U11 untouched BECAUSE
+        the vocabularies are disjoint. A names-and-values disjointness test
+        keeps them that way.
+        PETTY_BOURGEOIS_DRIFT is a CONTINUOUS material proxy (1 − cadre_level,
+        the membership base's class composition), never the discrete
+        class_character label — a label is a name, not a material relation
+        (Aleksandrov).
+    (2) THE @coeff DSL (commit C): the trap-condition grammar grows
+        `operand := INT | COEFF` where `COEFF := '@' snake_case_name`, and
+        variable resolution is tag-first then practice. Still the hand-rolled
+        recursive-descent parser — never eval. An unknown @coeff raises LOUDLY
+        (III.11) rather than defaulting, which is what forced every call site
+        to pass its coefficients explicitly. Backward-compatible and byte-inert:
+        the pre-existing adventurism trap is untouched.
+    (3) THE FORK (commit D): the reformist trunk (electoral_socialism,
+        coalition_politics) is REPLACED by five stances under trade_unionism —
+        abstention_boycott, class_struggle_elections, entryism,
+        independent_ballot_line, governance_road — and liquidationism becomes
+        a tier-2 single-parent absorbing-state trap. 11 → 14 nodes.
+        ALL FIVE CARRY `tag_deltas: {}`. This is the unit's central discipline:
+        a "small" acquisition delta would reintroduce the punitive statics the
+        fork exists to remove. Taking a line does not make you worse; PRACTICING
+        it might.
+    (4) THE ABSORBING STATE (commits D+E1): liquidationism's trap_condition is
+        `SOLIDARITY_MASS <= @solidarity_liquidation_floor AND CO_OPTIVE_SHARE >=
+        @co_optive_liquidation_threshold AND PETTY_BOURGEOIS_DRIFT >=
+        @petty_bourgeois_liquidation_threshold` — three measured practice
+        readings, no tags. Commit D shipped it DORMANT (a practice-var
+        placeholder that reads 0 and needs no coefficients) because the
+        adversarial critique caught that the obvious D/E split would ship a
+        CRASHING intermediate: the tree would reference @coeffs the call site
+        could not yet supply.
+    (5) OFFICEHOLDER CAPTURE (commit E2): office_tenure + institutional_pull
+        become real Organization fields. While an org is a seated governing
+        party (the electoral_governments register, one tick stale = I-ORD) its
+        pull drifts toward 1 at office_capture_rate, RESISTED by
+        cadre_level × cohesion — Michels as a rate a disciplined base can slow,
+        not a destiny. Out of office both persist (hysteresis). The pull then
+        feeds practice→tag drift, so it is not a write nothing reads (III.10).
+        CLASS_ANALYSIS decay is keyed to the delivery GAP, not to "struck"
+        agenda items — the critique caught that nothing ever writes a struck
+        marker to policy_delivery, so the original keying would have been a
+        permanently-dead branch.
+    (6) LINE CHANGES ARE SPLITS (commit F): an org holding more than one
+        reformist stance resolves the line struggle at the Party Congress via
+        the EXISTING DT-5 purge machinery — consolidating to its newest line,
+        shedding the others, retaining only split_asset_retention of its
+        theoretical labour, and publishing LINE_STRUGGLE_SPLIT. Changing your
+        line costs you the comrades who held the old one.
+    (7) CAPABILITIES ARE VERBS (commit G): DoctrineCapability (verb_modes,
+        edge_types, cadre_valve_decouple) gates PARAMETER growth on the fixed
+        nine generators — never a tenth verb (wiring doctrine §3).
+        * Campaign(Election, mode=election:run) — Debs: the classic five-factor
+          consciousness path plus mass-work SOLIDARITY scaled by
+          debs_solidarity_efficiency.
+        * Campaign(Election, mode=election:boycott) — abstention: converts a
+          LIVE T-7 disillusion window at boycott_conversion, and ALWAYS pays
+          sect_isolation_rate in MASS_LINK decay. No window open = zero
+          conversion, full price.
+        * Negotiate(mode=coalition) — entryism: SKIPS the leverage gate (that is
+          the point of entryism) and buys the seat with CO_OPTIVE dependence,
+          which feeds CO_OPTIVE_SHARE and walks the org toward (4).
+        * Mobilize(sub_mode=canvass) — paper membership: the engine's FIRST
+          MEMBERSHIP producer, weighted below 1 because Organization (the
+          P(S|R) numerator) is weighted edge density, not headcount.
+        An unacquired sub-mode is refused LOUDLY, never silently downgraded to
+        the classic path — the silent fallback is the green-test-over-a-dead-
+        feature shape. Mutation-validated: neutering the gate fails 7 tests.
+        cadre_valve_decouple closed the last dead capability field — principled
+        abstention records office tenure (the office is a fact) but takes NO
+        institutional pull, since it seats no cadre to convert.
+    (8) THE LIBERAL TRAP, ABSORBED (commit H): DoctrineSystem @14.7 publishes
+        each org's (self_organization, representation) position to the new
+        political_form_org_positions register; ContradictionSystem @18.0 threads
+        it dict → deterministically SORTED tuple (the wage_value_id_pairs shape)
+        through the SOLE GraphInputs assembly site; _political_form_measure
+        blends the org ratio-of-sums (never a mean of per-org ratios — the named
+        intensive-aggregation error) against U8's national share at
+        political_form_org_weight. Each scale is read only where it EXISTS, so
+        org-less worlds reproduce the U8 reading EXACTLY, party-less-but-org-
+        bearing worlds read the org term alone, and all-zero positions read as
+        absent rather than as a measured 50/50 tie.
+    (9) trap_detection.py THRESHOLDS: DECLARED NOT MIGRATED. Nothing in
+        src/babylon/engine/ calls that module — its only consumers are the
+        legacy web client's serializers (Amendment V) and game_over_trap was
+        never wired to endgame adjudication. Migrating its four hardcoded
+        liberal-score thresholds to GameDefines would add coefficients for a
+        code path the tick never executes, scoring an axis that is now MEASURED
+        rather than thresholded. The reasoning is recorded at the call site.
+        Reopen if the terminal client ever adopts trap surfacing.
+    (10) NEW DEFINES — 10, all Θ_feel, one metadata ceremony
+        blessed(p25-u11-doctrine-defines-hash): solidarity_liquidation_floor,
+        co_optive_liquidation_threshold, petty_bourgeois_liquidation_threshold,
+        debs_solidarity_efficiency, class_analysis_veto_decay,
+        reformist_theory_decay, entryism_cooptation_rate,
+        entryism_membership_weight (commit A); co_optive_dependence_drift
+        (commit E2); political_form_org_weight (commit H). Two PRE-EXISTING
+        but previously UNREAD coefficients — sect_isolation_rate and
+        boycott_conversion — got their first consumers in commit G.
+    (11) DETERMINISM: the DoctrineSystem GOLDEN_CHAIN moved four times, each
+        DELIBERATE and documented in the harness docstring per the ADR073
+        regenerate-and-document obligation: 8a5caa58 → 117cc594 (D, structure)
+        → 6626c287 (E1, the absorbing state goes live) → 095125a1 (E2, capture)
+        → 28ccad1f (F, splits) → 11e0bb2e (G, the cadre valve). The G move was
+        ATTRIBUTED, not assumed: with _decouples_cadre_valve forced False the
+        chain reproduces 28ccad1f byte-for-byte, proving the whole drift is the
+        cadre valve and nothing else.
+    (12) BYTE-SAFETY ARGUMENT: every U11 computation lives inside a
+        per-ORGANIZATION loop or an organization-gated verb sub-mode, and all
+        SIX qa:regression scenarios carry org_count=0. Not one new coefficient
+        is reachable in any scenario the gate covers. The baseline drift is
+        therefore metadata-only — defines_hash + generated_at, 2 cells per file,
+        zero checkpoint movement, dense CSVs not modified at all. (The doctrine
+        module docstring had said FIVE scenarios since before ADR090 added the
+        sixth; corrected in commit I, because an argument resting on a
+        miscounted set is worth less than it looks.)
+    (13) U11(b) FILE-LIST EXPANSION, RATIFIED: the charter's U11 surface is
+        widened to include domain/dialectics/instances/catalog.py,
+        engine/systems/contradiction.py, config/defines/politics.py,
+        sentinels/superstructure/registry.py and engine/actions/*. The
+        opposition could not be given an organizational scale without touching
+        the catalog and the sole GraphInputs assembly site.
+    (14) WIRING ROWS (ADR109): four gap-ledger rows CLOSED — political_form
+        organizational scale (W-𝔇), liberal-trap absorption (W-𝔇), doctrine
+        stances with no verbs (W-C), entryism CO_OPTIVE debt → absorbing state
+        (W-C). The player-surface half of the verb work is explicitly OPEN with
+        its blocking dependency CITED, not worked around: it needs ActionSpec
+        rows in game/actions/registry.py, which is the interface train's
+        surface. No registry rows, no ooda.py/tui/cli/play files were authored
+        by this unit.
+
+  deferral_ledger: |
+    DECLARED RE-HOMING TO U12 — these are RULINGS, not erosion. Each was in the
+    U11 design's problem space, and each is deferred for a stated structural
+    reason, not for convenience:
+
+    * HOST DISCIPLINE PROJECTION (the host machine punishing an entryist bloc
+      that votes against the line) — deferred: the host's DECISION to discipline
+      is a state/CPU-actor behaviour, and the state_ai actor surface is U12's
+      subject. Building it in U11 would put an actor policy inside a doctrine
+      accumulator.
+    * ENTRYISM DERECOGNITION (the host expelling the bloc outright) — same
+      owner, same reason; it is the terminal case of host discipline. U11 ships
+      the entryist's SIDE of the relation (the CO_OPTIVE debt it accrues), which
+      is complete and testable on its own.
+    * SPOILER ARITHMETIC (an independent ballot line splitting the vote and
+      seating the greater evil) — deferred: it is an ELECTORAL-RESULT
+      transformation, and it belongs with U12's conjunctures where the election
+      outcome is already being reshaped. Wiring it into U11 would mean a second,
+      competing edit path into ElectoralSystem's FPTP count.
+
+    U12(a)'s charter is AMENDED to carry all three. They are named here so the
+    deferral is auditable rather than silent.
+
+  consequences: |
+    * The reformist road is now a real strategic space with real costs, and none
+      of those costs are announced at acquisition time. An org can take the
+      class-struggle-elections line and stay revolutionary; the same org can
+      take it, hold office, accrue pull, lose its mass link and fall into
+      liquidationism without a single punitive delta ever firing. That is the
+      intended shape: the material consequences of practice, not a morality tag.
+    * political_form now has two scales and one blend weight. Setting
+      political_form_org_weight to 0 reproduces U8 exactly — the opposition's
+      new half is opt-in and provably so (a pinned test).
+    * The engine gained its first MEMBERSHIP edge producer, which means the
+      vocabulary sentinel's (edge_type, source_type) rule now LEGITIMISES
+      fixtures stamping org→class membership instead of requiring an allowlist
+      entry for them.
+    * OPEN after U11: the player cannot yet reach any of the new verb parameters
+      (ActionSpec rows, interface train); political_form's couplings remain
+      deferred to U12; the five goldens that would exercise a full reformist
+      trajectory land with U13.
+
+  verification: |
+    * qa:regression 6/6 byte-identical + the two-process determinism leg, both
+      before and after the metadata ceremony.
+    * Baseline ceremony blessed(p25-u11-doctrine-defines-hash) — drift table
+      generated by tools/generate_ceremony_message.py, attribution recorded:
+      2 cells per file, defines_hash + generated_at only.
+    * mypy strict clean over 855 source files; ruff lint + format clean.
+    * check:vocabulary clean. Full sentinel suite 807 passed, including the
+      `inert` all-declared-stores-are-wired leg and `defines_passthrough`
+      (proving all 10 new coefficients are actually read).
+    * Doctrine estate: 39 doctrine-system + 24 capability-gated-verb +
+      51 contradiction + 417 dialectics/config tests green.
+    * The capability gate is MUTATION-VALIDATED: forcing grants_verb_mode and
+      grants_edge_type to return True fails 7 tests across all four refusal
+      paths — the gate is proven to gate, not merely proven to be green.

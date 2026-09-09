@@ -1,0 +1,67 @@
+; The NEGATIVE-INPUT (floor AND ceiling) conformance world for
+; `dispossession/territory-transfer` — the adversarial-review follow-up
+; scenario (F2, PR #498).
+;
+; ONE subject reproducing the exact adversarial probes and completing the
+; per-input FLOOR half of the mutation table (`dispossession-ceiling-
+; matrix-conformance.bscn` completes the CEILING half): `foreclosure-rate`
+; DELIBERATELY PAST its ceiling and UNSUFFIXED (`5`, past the `1.0` domain —
+; `E-LEX-024` cannot reject a bare `Int`) — this ALSO anchors the `(when …)`
+; gate open, since a floor test on every one of the three primary rates
+; simultaneously would leave nothing to pass it; `eviction-rate`/
+; `displacement-rate`/`concentrated-ownership`/`absentee-landlord-share` are
+; ALL DELIBERATELY NEGATIVE and UNSUFFIXED (`-3`, `-8`, `-2`, `-9`) — every
+; one of the other four per-input floors, exercised in the same vector.
+; Every clamp lands on the SAME intensity (`0.4`, `weight-foreclosure * 1`
+; alone) as if the four negative inputs had simply been seeded `0` —
+; deliberately: it proves each floor clamp is doing real work (mapping a
+; genuinely different negative input to the SAME zero contribution), not
+; that the seeds "happened not to matter". Deleting any ONE of these five
+; per-input clamps moves the intensity away from `0.4` (see the PR's
+; mutation table for the confirmed numbers per clamp).
+;
+; Proves D-4's per-term floor is structurally different from the total-only
+; floor this pack had before the fix: the frozen engine's `_get_float`
+; floors each of these to EXACTLY `0.0` before it is weighted at all, so it
+; contributes NOTHING to the sum — not a negative term the total-only floor
+; happens to absorb. `intensity` must equal `weight-foreclosure * 1` exactly
+; (`0.4`), and `VALUE_TRANSFER` must fire (the pre-fix predecessor, summing
+; the raw negative values into the weighted total, would have landed on a
+; different number reached by a different, wrong route — see the `.bsl`
+; header's D-4 for the arithmetic).
+;
+; `deadweight-loss-fraction` is ALSO deliberately negative and unsuffixed
+; (`-1`) here, so this one scenario covers BOTH halves of D-2's restored
+; fraction clamp that the saturation scenario's `3` does not reach (its
+; floor half): `fraction = min(max(-1, 0), 1) = 0`, so `deadweight-loss` is
+; `0.0` and the FULL transfer amount is `net-received`.
+;
+; See `dispossession_negative_input_conformance.py` for the frozen-engine
+; provenance.
+(scenario dispossession/negative-input-conformance
+  (deffield territory/wealth int extensive)
+  (deffield territory/dispossession-intensity int intensive)
+
+  ; Deliberately UNSUFFIXED and past its ceiling — see the header (also the
+  ; gate anchor).
+  (defconst dispossession/foreclosure-rate 5)
+  ; Deliberately UNSUFFIXED and NEGATIVE — see the header (per-input floor,
+  ; all four of the following).
+  (defconst dispossession/eviction-rate -3)
+  (defconst dispossession/displacement-rate -8)
+  (defconst dispossession/concentrated-ownership -2)
+  (defconst dispossession/absentee-landlord-share -9)
+
+  (defconst dispossession/weight-foreclosure 0.4c)
+  (defconst dispossession/weight-eviction 0.3c)
+  (defconst dispossession/weight-displacement 0.15c)
+  (defconst dispossession/weight-tax-sale 0.05c)
+  (defconst dispossession/weight-eminent-domain 0.02c)
+  ; Deliberately UNSUFFIXED and NEGATIVE — see the header (floor half of
+  ; D-2's restored fraction clamp).
+  (defconst dispossession/deadweight-loss-fraction -1)
+  (defconst dispossession/transfer-scale 0.01c)
+
+  (node negative-input-county NodeType/TERRITORY
+    (territory/wealth 1000000)
+    (territory/dispossession-intensity 0)))

@@ -1,0 +1,76 @@
+ADR245_dependabot_bounded_retry_and_label_transport:
+  status: accepted
+  date: '2026-08-30'
+  title: >-
+    Dependabot automation uses typed merge outcomes, bounded exact-head
+    evidence retries, and Issues REST label transport
+  issue: PER-264
+  context: |
+    ADR230 removed the old forty-minute check poller and bound unattended
+    Dependabot merging to a completed native CI run plus the sanctioned merge
+    verifier. Two operational gaps remained. GitHub can briefly report the
+    completed workflow_run before every canonical exact-head check run is
+    visible through the REST endpoint, so one immediate verifier call could
+    reject an otherwise valid update. The trusted classification phase also
+    used `gh pr edit` for a presentation label even though that command crosses
+    the GraphQL pull-request edit surface and can demand unrelated project
+    permissions.
+
+    Retrying every refusal would be unsafe. A failed or ambiguous merge request
+    must never be repeated, and identity, provenance, policy, or completed-check
+    failures cannot become acceptable through waiting. Semver-major updates are
+    an expected manual-review class rather than a failed automation run, but
+    that class is trustworthy only after native Dependabot provenance has been
+    authenticated.
+  decision: |
+    1. TYPED OUTCOMES. tools/pr_merge.py exposes five stable process outcomes:
+       0 is success, 1 is a hard refusal, 2 is an indeterminate mutation, 3 is
+       an authenticated Dependabot semver-major that requires manual review and
+       performs no merge, and 4 is exact-head evidence still pending. A hard
+       refusal outranks pending evidence. Outcome 3 is available only after the
+       exact Dependabot pull-request owner, native CI workflow and suite,
+       executing classifier workflow, native job and check, source head, and
+       current commit metadata have all been revalidated.
+
+    2. PENDING IS NARROW. During trusted unattended Dependabot verification, a
+       missing canonical required check, a current exact-head check that is
+       queued or in progress, or an unknown aggregate rollup temporarily
+       reporting NEUTRAL is pending. The ordinary and main qualification modes
+       continue to refuse the same incomplete or neutral evidence without
+       retrying. A completed required-check disallowed conclusion, wrong
+       producer, malformed or truncated response, moved ref, unresolved thread,
+       open security alert, provenance mismatch, or any other policy violation
+       is a hard refusal.
+
+    3. BOUNDED RETRY. The trusted Dependabot workflow invokes the complete
+       verifier at most eight times and waits exactly thirty seconds between
+       attempts. It retries only outcome 4, so every attempt re-reads and
+       revalidates the complete exact-head policy. Outcomes 0 and 3 complete the
+       workflow successfully. Outcomes 1 and 2 stop immediately. An unexpected
+       outcome stops as a failure, and an eighth outcome 4 exits 4. No merge
+       mutation is retried.
+
+    4. LABEL TRANSPORT. The pull_request_target classifier continues to treat
+       `dependencies:automerge` as presentation only. It verifies the managed
+       repository label, reads no more than one hundred issue labels, and adds
+       or removes the label through bounded Issues REST GET, POST, and DELETE
+       calls. It never uses `gh pr edit`, creates label metadata, checks out
+       pull-request code, or grants merge authority through the label.
+
+    5. EVENT AUTHORITY IS UNCHANGED. The workflow remains triggered only by the
+       existing pull_request_target and successful native CI workflow_run
+       events. This decision adds no dispatch, rerun, polling workflow, trigger
+       bypass, or direct GitHub merge command.
+  consequences: |
+    - Short GitHub check-registration lag can converge without a human rerun,
+      while permanent policy failures and ambiguous mutations stop immediately.
+    - Authenticated major updates leave a successful automation record and stay
+      open for the normal reviewed merge path.
+    - Label changes require only the declared Issues permission and remain
+      reversible, bounded, and separate from merge authorization.
+    - This decision refines ADR230's Dependabot transport and execution outcome
+      contract without weakening its exact-head, provenance, or merge rules.
+  related:
+    - ADR181_ci_synergy_rulings
+    - ADR230_exact_head_pr_and_dependabot_policy
+    - ADR241_copilot_advisory_merge_policy

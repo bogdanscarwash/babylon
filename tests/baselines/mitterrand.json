@@ -1,0 +1,102 @@
+{
+  "scenario": "mitterrand",
+  "description": "Reform in office on the Wayne terrain: the 24-item burst, the O'Connor spiral, the forced austerity turn (U13 golden, ADR140)",
+  "generated_at": "2026-07-30T13:44:18+00:00",
+  "defines_hash": "60e65db5256c6c06f106254dc3da9b36423a8ba333c5fcb59b5818a338c384d0",
+  "max_ticks": 52,
+  "checkpoints": [
+    {
+      "tick": 0,
+      "p_w_wealth": 0.0,
+      "p_c_wealth": 0.0,
+      "c_b_wealth": 0.5,
+      "c_w_wealth": 0.5,
+      "imperial_rent_pool": 100.0,
+      "exploitation_tension": 0.0,
+      "p_w_consciousness": 0.0,
+      "p_w_p_revolution": 0.0,
+      "p_w_active": false,
+      "content_hash": "0ca361cd5e30127efa3a93371129b6965bdaff62be0e4450387e7538b153f799"
+    },
+    {
+      "tick": 10,
+      "p_w_wealth": 0.0,
+      "p_c_wealth": 0.0,
+      "c_b_wealth": 0.247723,
+      "c_w_wealth": 0.786801,
+      "imperial_rent_pool": 98.06514,
+      "exploitation_tension": 0.521088,
+      "p_w_consciousness": 0.0,
+      "p_w_p_revolution": 0.0,
+      "p_w_active": false,
+      "content_hash": "ab0c8475807f5aa0a98b6b9263806360af462ae15aa0726a72bfa71e7352d57f"
+    },
+    {
+      "tick": 20,
+      "p_w_wealth": 0.0,
+      "p_c_wealth": 0.0,
+      "c_b_wealth": 0.01622,
+      "c_w_wealth": 1.05283,
+      "imperial_rent_pool": 96.189175,
+      "exploitation_tension": 0.969655,
+      "p_w_consciousness": 0.0,
+      "p_w_p_revolution": 0.0,
+      "p_w_active": false,
+      "content_hash": "15775eb0b66637a900702b2b2b6eea98b214828954aebc8e19eef129d4f56f28"
+    },
+    {
+      "tick": 30,
+      "p_w_wealth": 0.0,
+      "p_c_wealth": 0.0,
+      "c_b_wealth": 0.38453,
+      "c_w_wealth": 1.00283,
+      "imperial_rent_pool": 94.282614,
+      "exploitation_tension": 0.969655,
+      "p_w_consciousness": 0.0,
+      "p_w_p_revolution": 0.0,
+      "p_w_active": false,
+      "content_hash": "82ae16a0fd2d21a33b42911cfb4f82997026d8f34e9ee8c2c24a2b77d8e13372"
+    },
+    {
+      "tick": 40,
+      "p_w_wealth": 0.0,
+      "p_c_wealth": 0.0,
+      "c_b_wealth": 0.76906,
+      "c_w_wealth": 0.95283,
+      "imperial_rent_pool": 92.413843,
+      "exploitation_tension": 0.969655,
+      "p_w_consciousness": 0.0,
+      "p_w_p_revolution": 0.0,
+      "p_w_active": false,
+      "content_hash": "548314ade808c3a166454837cf6cdc7614f76b25b742e679b8b8f081baed768e"
+    },
+    {
+      "tick": 50,
+      "p_w_wealth": 0.0,
+      "p_c_wealth": 0.0,
+      "c_b_wealth": 1.15359,
+      "c_w_wealth": 0.90283,
+      "imperial_rent_pool": 90.582112,
+      "exploitation_tension": 0.969655,
+      "p_w_consciousness": 0.0,
+      "p_w_p_revolution": 0.0,
+      "p_w_active": false,
+      "content_hash": "9406d430d0884b7a9c06f107eb6ab16ba5d66c7fc72a8acdeb5db06d4f682c75"
+    },
+    {
+      "tick": 52,
+      "p_w_wealth": 0.0,
+      "p_c_wealth": 0.0,
+      "c_b_wealth": 1.230496,
+      "c_w_wealth": 0.89283,
+      "imperial_rent_pool": 90.220146,
+      "exploitation_tension": 0.969655,
+      "p_w_consciousness": 0.0,
+      "p_w_p_revolution": 0.0,
+      "p_w_active": false,
+      "content_hash": "37a5a3e80ffd13b8da10a87d976aad95780d5776a66fbfd422ef103c815b0d3b"
+    }
+  ],
+  "final_outcome": "SURVIVED",
+  "ticks_survived": 52
+}

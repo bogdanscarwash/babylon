@@ -1,4 +1,7 @@
-ADR054_spec_103_trade_surfaces:
+# Key corrected ADR054_ -> ADR057_ (P26 U0, 2026-07-27): the file was minted with a
+# stale ADR054 key (054 belongs to spec-071 reactionary-subject); filename and
+# index.yaml always said 057. Content untouched.
+ADR057_spec_103_trade_surfaces:
   status: "accepted"
   date: "2026-07-05"
   title: "Spec 103: Trade surfaces in the product UI — per-bloc lines, import-exposure provenance, trade panel"

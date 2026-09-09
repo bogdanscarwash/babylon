@@ -1,0 +1,263 @@
+ADR213_intrinsic_host_train:
+  status: "accepted"
+  date: "2026-08-17"
+  title: "The intrinsic-host train (#576) — RNG binding + exp/log dispatch closed, sqrt permanently OUT of scope (ADR188 Row 6, not deferred): the libm 0.2.16 (default-features=false) crossing for exp/log with per-intrinsic golden vectors (ADR176 r21) and a rust/clippy.toml disallowed-methods wall; rng-draw lands as a KEYED (never streamed) kernel-seeded draw on [0,1) whose carrier key is (session, tick, domain=firing-rule-id, stable_key=framed(subject, elements..., slot)) — a context-keyed signature that supersedes D69's undeclarable enum-operand domain while preserving D69's purity clause verbatim; content-stable node identity threads via a retained hydration-map inversion (LoadedScenario.node_content_ids) rather than a substrate widening, leaving the graph's canonical state hash untouched; six new register rows D175-D180 plus D69's own supersession annotation; corrected exp/log consumer count (log has 2 ready consumers — Community entropy, MarketScissors monetary anchor; exp has 1, itself blocked on D35/D65 edge storage) against the survey's stale claim of 5 systems / 8 unblocked; PR A #640 (Tasks 0-2) MERGED, Tasks 3-6 (the DrawContext seam, rng-draw, and this handoff's own permanent records) landed on branch feature/576-intrinsic-host, PR not yet opened."
+  context: |
+    Issue #576 ("Intrinsic-host train: RNG binding + exp/log + sqrt dispatch")
+    was scoped by `reports/port-estate-survey-2026-08-12.md` §4.5 as
+    buildable-today with no lane dependencies, gating 8 estate systems. The
+    design of record is `docs/superpowers/plans/
+    2026-08-17-576-intrinsic-host.md` (Tasks 0-7), authored 2026-08-17
+    against ADR208 R29/C-04 (train proceeds, no fresh Director ruling needed
+    for the train itself), ADR176 r20/r21, ADR188 Rows 2/6/7/11, ADR202
+    R7/R8/R9, and the existing `bsl-language.rst` §3.10/D69 record. The
+    plan's own §0 scope verdict opens with a warning worth quoting: "two of
+    the three [charter items] do not survive contact with the ratified
+    record."
+
+    Tasks 0-2 landed on PR A (#640, MERGED into dev before this ADR's own
+    landing). Tasks 3-5 (the DrawContext seam, content-stable node identity,
+    the rng-draw intrinsic) landed on the continuing branch
+    `feature/576-intrinsic-host`, un-PR'd as of this ADR (Task 6, this
+    document's own train). This ADR records the WHOLE train — Tasks 0
+    through 6 — per the plan's own Task 6.7 instruction, not merely the
+    slice already merged.
+  decision: |
+    **1. Scope verdict (§0).** `sqrt` is a HARD STOP, removed from the
+    train's scope entirely — not deferred. The survey called it "a one-line
+    DECLARABLE_INTRINSICS amendment" (survey:137,241,265), but ADR188 Row 6
+    (ratified 2026-08-10, BEFORE the survey) already ELIMINATED it by
+    re-derivation as a measure ("platform fit ... the share of a class's
+    interest dimensions a platform satisfies"), pinned in-tree by
+    `r9_chapters.rs:2604`'s own assertion (inside
+    `exp_log_floor_and_rng_draw_are_declarable`, `:2597-2607`) that
+    `check_intrinsic_cap("sqrt")` fails alongside
+    `tanh`/`entropy`/`renormalize`/`abs`/`trunc`. Verified
+    consumer, re-checked at this ADR's own landing: `src/babylon/formulas/
+    politics.py:145` (`platform_vector`'s L2 norm, `math.sqrt`) and
+    `:227-228` (`interest_fit`'s two cosine-similarity norms) — exactly the
+    platform-fit site Row 6 names. The blocker is doctrinal (a Director
+    ruling already retired the intrinsic), not numerical — IEEE-754
+    specifies `sqrt` exactly, so the determinism argument gating `exp`/`log`
+    would not have gated it. Landing `sqrt` here would mean deleting a
+    Director-ruling assertion, not implementing an undone feature.
+
+    **2. RNG proceeds, in a corrected shape (§0.2, §3).** The survey
+    undersold the RNG gap as "a DECLARABLE_INTRINSICS name plus a
+    KernelIntrinsicHost::call arm" (survey:130,260-261). D69's literal
+    carrier-key signature — `domain` a closed-vocabulary ENUM operand,
+    `stable_key` from "the call's reference operands" — is undeclarable as
+    written: `<intrinsic-decl>`'s `:params` vocabulary is parsed by
+    `parse_intrinsic_type_name` (`declarations.rs:801-813`), which
+    delegates every non-`real` name to `parse_type_name`
+    (`declarations.rs:662-699`); together they admit SEVEN of §3.1's eight
+    rows, refuse `enum` outright at that grammar position, and carry no
+    node/edge-reference row at all. Widening that grammar would move §5.6
+    canonical-AST bytes and
+    `rules_hash` — declared out of scope for this train. The landed design
+    instead keys `domain` on THE FIRING RULE'S OWN ID STRING (kernel-derived,
+    never a call operand) and composes `stable_key` from a NEW `framed()`
+    length-prefix encoder over the subject's content id, the resolved
+    element-content-id chain (outermost-to-innermost), and the draw slot —
+    preserving D69's load-bearing purity clause ("a draw is a pure function
+    of its key, not a stream position") verbatim while being STRONGER than
+    the enum operand on the content-cannot-mint-a-stream axis. Six new
+    register rows (D175-D180, `docs/reference/bsl-language.rst`) record this
+    design; D69's own row gains an inline supersession annotation naming
+    D176 for its superseded half.
+
+    **3. exp/log proceed; the gating count is corrected (§0.3).** Both were
+    already inside R10's cap and already carried kernel signatures
+    (`declarations.rs:110,837-846`) before this train — the only missing
+    pieces were the `KernelIntrinsicHost::call` arm and the ADR176 r21 libm
+    crossing. The survey's "gates 5 systems: Survival, Consciousness,
+    Community, MarketScissors, ImperialRent" (survey:127) is STALE against
+    ADR202: Survival's P(S|A) sigmoid RETIRES under ADR188 Row 7 / ADR173
+    (re-derive as a measure, no transcription); Consciousness's Gaussian
+    RETIRES separately, under ADR202 R7 ALONE, which explicitly REVERSES
+    ADR188 Row 7 for that one site — Row 7's own text says the Gaussian
+    "port[s] as-is under exp" (ADR188...yaml:59-60), and ADR202 R7's own
+    text says "ADR188 Row 7 is REVERSED FOR THIS SITE ONLY: the frozen
+    Gaussian is NOT transcribed" (ADR202...yaml:137-138) — citing ADR188
+    Row 7 as joint authority for the Gaussian's retirement, alongside
+    Survival's sigmoid, would have the row backwards for that half; the
+    conclusion (no live `exp` need at that site) stands, the authority
+    chain does not. MarketScissors's `tanh` retires under ADR202 R8. The
+    corrected, VERIFIED count: `log` has TWO ready, doctrinally-clean
+    consumers (Community @6.0's Shannon-entropy `_LOG3`/`p*log(p)` at
+    `consciousness_routing.py:45,470`; MarketScissors @17.8's monetary anchor
+    `math.log(ratio)` at `domain/economics/monetary/anchor.py:89`); `exp` has
+    exactly ONE (Contradiction @18.0's financialization index,
+    `engine/systems/contradiction.py:455`, `math.exp(clamped)`, ADR202 R9
+    UPHELD verbatim) — itself still blocked on D35/D65 edge-attribute
+    storage (survey C-4). ImperialRent's claimed exp/log dependency is
+    UNVERIFIED: `rg 'math\.(exp|log|sqrt)'` returns nothing against either
+    candidate source file (`src/babylon/engine/systems/phi_distribution.py`,
+    `src/babylon/domain/economics/tick/system/imperial_rent.py`),
+    independently re-verified at this ADR's own landing.
+
+    **4. The determinism policy (§2), stated explicitly.** `exp`/`log` cross
+    via `libm 0.2.16` (`default-features = false`), a direct dependency of
+    `babylon-kernel` wrapped in `babylon_kernel::transcendental`;
+    `f64::exp`/`f64::ln`/`f64::log*`/`f64::exp2`/`f64::exp_m1`/`f64::ln_1p`/
+    `f64::powf` (plus the permanently-retired `f64::tanh`/`f64::sqrt`) are
+    hard-banned at the intrinsic seam by `rust/clippy.toml`'s
+    `disallowed-methods` row (`-D warnings` workspace-wide). Verified
+    dispatch analysis (both source-read, not assumed): `log`'s soft-float
+    path is unconditional; `exp`'s only architecture-dispatch arm is
+    unreachable on `x86_64`/`aarch64`. Per-intrinsic golden vectors
+    (`transcendental_goldens.rs`) turn this into an executable,
+    zero-tolerance guard WITHIN the Rust engine. AGAINST the frozen Python
+    engine only, tolerance is the pre-existing III.12 corollary (b) regime —
+    glibc/MUSL disagree by <=2 ULP, a ~4.44e-16 relative bound, seven-plus
+    orders of magnitude inside the `qa:regression` 1e-5 checkpoint tolerance,
+    so no existing gate widens. Full derivation:
+    `docs/reference/determinism-contract.rst`'s *Transcendental Crossing*
+    chapter (Task 1.5). `rng.rs`'s own `seed_for`/salt/ChaCha8 design is
+    UNCHANGED by this train — the new keying composes a `stable_key` STRING
+    and calls the existing `KernelRng::for_carrier` unmodified.
+
+    **5. The RNG binding design, with its rejected alternatives (§3).**
+    Three seam-threading options were weighed for getting `(session, tick,
+    domain, subject)` to the intrinsic host: (a) interior mutability
+    (`RefCell<KernelRng>` on the host) — REJECTED, models a stream D69
+    forbids, and the host is reconstructed fresh inside the per-rule loop at
+    both production sites, so any held state would silently reset per rule;
+    (b) `&mut dyn IntrinsicHost` — REJECTED, `host` is threaded as a plain
+    parameter through roughly 30 signatures with sibling calls sharing one
+    borrow, and buys the wrong thing (mutation) for a stateless seam; (c)
+    context on `EvalEnv` plus one added trait parameter — CHOSEN, because
+    `EvalEnv` is already threaded everywhere and already carries the element
+    stack `it`/`:as` resolve through. Content-stable node identity (the one
+    real plumbing task, §3.4) keys `stable_key` on CONTENT ids rather than
+    `NodeId` handles — `NodeId(pub u64)` is an insertion-order-dependent
+    opaque handle, and keying on it would be replay-deterministic but
+    insertion-history-dependent, precisely the butterfly ADR176 r20's
+    per-carrier-stream design exists to forbid. `babylon-bsl`'s scenario
+    loader already built a local `named: HashMap<String, NodeId>` and
+    discarded it; this train retains its inverse as
+    `LoadedScenario::node_content_ids`, threaded through `PreparedRules` onto
+    `TickSession` — zero `babylon-graph` change, zero canonical-state-hash
+    change (D178). A reviewer preferring the identity live IN the substrate
+    is naming a Program 29 item with its own III.7 hash question, not
+    something this train improvises.
+
+    **6. Review round 2 (#576 final-review fix-forward, 2026-08-17) — three
+    Important findings against the not-yet-consumed seam, landed BEFORE PR B
+    opens.** All three are corrected in place, per this document's own
+    precedent (round 1's citation/count corrections were folded into the
+    prose directly rather than appended as a dated errata block):
+
+    - **I1 — `Element::Edge`'s chain entry now composes THREE segments, not
+      two.** `EdgeKey` carries `(source, target, edge_type)`, but
+      `evaluator::element_content_id`'s Edge arm composed only the two
+      endpoints — two parallel edges of DIFFERENT types between the SAME
+      node pair (e.g. a `SOLIDARITY` tie and an `EXPLOITATION` relation
+      between the same two carriers) were key-indistinguishable, drawing
+      bit-identical values. Fixed to `framed(&[&source, &target,
+      &key.edge_type])`. D177's byte-layout record is updated to match
+      exactly. No shipped content declares `rng-draw` (unchanged from §0's
+      finding), so this is free today — a value-moving ceremony only once
+      content ships an edge-keyed draw.
+    - **I2 — `node_content_ids` is now `Option`-typed, not
+      `is_empty()`-gated.** The pre-round-2 shape (`&HashMap<...>` plus an
+      `is_empty()` fallback check, landed by round 1) could not distinguish
+      "no scenario was ever hydrated" from "a scenario hydrated with ZERO
+      `(node …)` forms" — both render `is_empty() == true`. A caller
+      handing `TickSession::new`/`run_tick` a PRE-POPULATED graph alongside
+      a declarations-only scenario would silently feed insertion-order
+      `NodeId` handles into `stable_key`, no error, no failing test —
+      exactly the ADR176 r20 butterfly this whole design exists to forbid.
+      `DrawContext::node_content_ids`, `run_tick`'s and `collect_pass`'s own
+      parameter, and `evaluator::element_content_id`'s parameter are now
+      `Option<&HashMap<NodeId, String>>`: `None` means never hydrated (the
+      legitimate NodeId-Debug-rendering fallback), `Some(map)` means
+      hydrated — even when `map` is empty — and a miss against `Some(map)`
+      is ALWAYS a hard error. The two production call sites
+      (`babylon-tick`'s `run_prepared_tick` and `TickSession::advance`)
+      always pass `Some(&prepared.node_content_ids)`, since
+      `PreparedRules::node_content_ids` is always a real hydration.
+    - **I3 — `rng-draw` is now uniformly legal in `:expr` binding position.**
+      Round 1's refusal (a runtime `EvalError` when `rng-draw` appeared in
+      an `:expr` body) carried a rationale the whole-branch review showed
+      false: every `DrawContext` component (`session`/`tick`/`domain`/
+      `subject`) is fixed at `collect_pass`'s per-subject loop head, BEFORE
+      `resolve_expr_bindings` ever runs — the restriction was an artifact of
+      CONSTRUCTION ORDER (the `DrawContext` used to be built four lines
+      AFTER the `resolve_expr_bindings` call), not of meaning. Per D69's own
+      purity clause ("a draw is a pure function of its key"), there is no
+      principled reason `:expr` position should differ from guard/effect
+      position. Fixed by moving `DrawContext` construction before the
+      `resolve_expr_bindings` call and threading it through as a new
+      `Option<&DrawContext<'_>>` parameter — `rng-draw` is now reachable
+      from ANY binding/guard/effect position uniformly. No new E-code, no
+      restriction to document: the capability is now unconditional, and
+      `rule_pipeline.rs:504-520`'s comment is corrected to say so.
+
+    All three land with mutation-caught tests (a hand-verified revert of
+    each fix flips its own new conformance row red — recorded in the fix
+    round's own commit trail and `final-fix-report.md`) and zero drift on
+    every existing baseline: `tick_goldens` 18/18 byte-identical,
+    `fundamental_theorem_tick.rs`'s hash byte-identical, CAS §5.6 bytes
+    unmoved (no grammar touched).
+  consequences: |
+    - Gates: PR A (#640, Tasks 0-2 — the libm crossing, exp/log dispatch,
+      the clippy wall, the first intrinsic-table rows) MERGED. Tasks 3-5
+      (the DrawContext seam, content-id retention, the rng-draw intrinsic
+      plus its 18-test c14 conformance family in `r9_chapters.rs`
+      (`:2653-3492` as of review round 2's fix-forward, 2026-08-17 — grew
+      from the round-1 16-test/`:2651-3257` count by the two new
+      end-to-end conformance rows I1/I3 name (the `Element::Edge`
+      parallel-edge-type row, the `:expr`-position row); the two
+      unrelated, pre-existing modules that immediately follow it in the
+      same file, `verification_repairs` and `reverification_repairs`, are
+      still not part of this train), including 7 pinned bit-pattern f64
+      goldens (5 from round 1, plus 2 from I1's new edge-type row) landed
+      on branch
+      `feature/576-intrinsic-host`; `fundamental_theorem_tick.rs`'s state
+      hash stayed byte-identical through every one of those tasks (no
+      shipped content calls `rng-draw`, so nothing could enter any hash
+      through the new seam). PR B/C were not yet opened as of this ADR's own
+      landing (Task 6, docs-only) — a controller action outside this task's
+      scope.
+    - Records: six new register rows D175-D180
+      (`docs/reference/bsl-language.rst`); D69's own row gains an inline
+      supersession annotation; the "Landed — Task 5" prose note (§3.10) is
+      repointed from "a dedicated D-record is pending" to citing D176
+      directly; this ADR; `ai/state.yaml`'s closing entry; four errata rows
+      appended to `reports/port-estate-survey-2026-08-12.md` (the stale
+      `sqrt` characterization, the stale exp/log consumer count, the
+      RNG-shape undersell, the unverified ImperialRent claim). **Review
+      round 2 (2026-08-17, this document's own decision point 6):** D177's
+      byte-layout clause is amended in place to add `edge_type` as the
+      Edge arm's third `framed` segment and to name the `rand_chacha`
+      version pin; §3.10's normative intrinsic table gains a clause
+      recording `rng-draw` as legal in EVERY binding/guard/effect
+      position (I3 landed unconditional enablement, so no restriction
+      clause was needed after all).
+    - Unblocks, honestly counted: the RNG binding unblocks THREE systems'
+      spark/roll draws (Doctrine @14.7, Struggle @16.0, OODA @14.0) once
+      their own port trains land content calling `rng-draw` — this train
+      ships the seam, not their content. `log` has two doctrinally-clean,
+      ready consumers (Community @6.0, MarketScissors @17.8's monetary
+      anchor); `exp` has one, itself still blocked on the D35/D65
+      edge-storage decision. This is NOT the eight-system unblock the
+      charter's own scope line implied; #576's own closeout comment must
+      state the corrected count.
+    - Follow-ons, named and NOT built here: (i) an emergence-audit sentinel
+      that pattern-matches logistic-shaped subexpressions (an
+      `exp`-of-negated-argument reciprocal-sum shape, the `tanh`-from-`exp`
+      identity) in loaded content — D180's recommendation, its own future
+      issue; (ii) a Program 29 substrate-widening item, if a reviewer wants
+      node content-identity live in `GraphSubstrate` itself rather than the
+      retained hydration map — D178's escalation path, not raised here as a
+      live question; (iii) `babylon-client`'s B2 demo call site still passes
+      the placeholder `SessionId::new("babylon-client-b2-demo")`
+      (`engine_link.rs:130`); adopting D179's `ContentDigest`-hex/scenario-id
+      convention there is separate, undirected follow-on work.
+  supersedes: []
+  related:
+    - ADR176_director_rulings_batch_gds_dispositions
+    - ADR188_intrinsic_rider_slate_dispositions
+    - ADR202_t4_curves_ruling_session
+    - ADR208_docket_sitting_2026_08_17

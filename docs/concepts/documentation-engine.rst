@@ -343,10 +343,10 @@ Testing Documentation
    mise run test:doctest
 
    # Check documentation coverage
-   poetry run sphinx-build -b coverage docs docs/_build/coverage
+   uv run sphinx-build -b coverage docs docs/_build/coverage
 
    # Check for broken links
-   poetry run sphinx-build -b linkcheck docs docs/_build/linkcheck
+   uv run sphinx-build -b linkcheck docs docs/_build/linkcheck
 
 See Also
 --------

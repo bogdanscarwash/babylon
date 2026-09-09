@@ -7,8 +7,8 @@ county-years, and per-county delta distribution.
 
 Usage::
 
-    poetry run python tools/inspect_qcew_audit.py
-    poetry run python tools/inspect_qcew_audit.py --path reports/ingest/qcew_normalization_20260516-220000.json
+    uv run python tools/inspect_qcew_audit.py
+    uv run python tools/inspect_qcew_audit.py --path reports/ingest/qcew_normalization_20260516-220000.json
 """
 
 from __future__ import annotations
@@ -32,7 +32,7 @@ def _resolve_audit_json(explicit_path: Path | None) -> Path:
     if not candidates:
         raise FileNotFoundError(
             f"no audit report under {_DEFAULT_REPORT_DIR} — run "
-            "`poetry run python tools/normalize_qcew_rollups.py --apply` first"
+            "`uv run python tools/normalize_qcew_rollups.py --apply` first"
         )
     return candidates[-1]
 

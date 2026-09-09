@@ -1,0 +1,158 @@
+# yamllint disable rule:line-length rule:commas
+# Exact schema strings and compact selected-coordinate rows are contract bytes.
+schema: babylon.detroit-windsor-rtd-v1-extraction
+schema_version: 1
+default_case_id: detroit-windsor-admin-control
+question_id: territorial-relations/material-conditions
+artifacts:
+  - artifact_id: fact_qcew_county_rollup
+    relative_path: fact_qcew_county_rollup.parquet
+    verification_mode: PHYSICAL
+    sha256: 34c2bbb935f79b3c8076a97092b004b14cca120e8272b93c35b3ac9dc2721d13
+    bytes: 2231358
+    rows: 240488
+    row_groups: 1
+    schema: county_id:int64,time_id:int64,ownership_id:int64,establishments:int64,employment:int64,total_wages_usd:double,disclosure_code:string,is_imputed:bool
+    metric_contracts:
+      - {local_id: production/qcew-county-establishments, producer: fact_qcew_county_rollup, aggregation_rule: PUBLISHED_ROLLUP, reference_artifact: fact_qcew_county_rollup, digest: 34c2bbb935f79b3c8076a97092b004b14cca120e8272b93c35b3ac9dc2721d13}
+      - {local_id: production/qcew-county-employment, producer: fact_qcew_county_rollup, aggregation_rule: PUBLISHED_ROLLUP, reference_artifact: fact_qcew_county_rollup, digest: 34c2bbb935f79b3c8076a97092b004b14cca120e8272b93c35b3ac9dc2721d13}
+      - {local_id: production/qcew-county-total-wages-usd, producer: fact_qcew_county_rollup, aggregation_rule: PUBLISHED_ROLLUP, reference_artifact: fact_qcew_county_rollup, digest: 34c2bbb935f79b3c8076a97092b004b14cca120e8272b93c35b3ac9dc2721d13}
+    selectors: [{time_id: 28, ownership_id: 1, county_ids: [1281, 1294, 1313]}]
+    selected_rows:
+      - {county_id: 1281, fips: '26099', establishments: 19678, establishments_bits: '0000000000004cde', employment: 336295, employment_bits: '00000000000521a7', total_wages_usd: '23892513876.0', total_wages_bits: '4216406b51500000', disclosure_code: null, is_imputed: false}
+      - {county_id: 1294, fips: '26125', establishments: 43047, establishments_bits: '000000000000a827', employment: 723862, employment_bits: '00000000000b0b96', total_wages_usd: '56401482100.0', total_wages_bits: '422a4394a2e80000', disclosure_code: null, is_imputed: false}
+      - {county_id: 1313, fips: '26163', establishments: 36727, establishments_bits: '0000000000008f77', employment: 725504, employment_bits: '00000000000b1200', total_wages_usd: '55436615328.0', total_wages_bits: '4229d08f3d400000', disclosure_code: null, is_imputed: false}
+    provenance_locators: [time_id=28, ownership_id=1, annual=2024]
+  - artifact_id: fact_lodes_commuter_flow
+    relative_path: fact_lodes_commuter_flow.parquet
+    verification_mode: PHYSICAL
+    sha256: d3745f8def09cd8c7a38e1870e6ec2c1853e210b777d8e8358cfce36665bd64d
+    bytes: 19056915
+    rows: 2645347
+    row_groups: 1
+    schema: home_county_id:int64,work_county_id:int64,time_id:int64,total_jobs:int64,jobs_age_29_under:int64,jobs_age_30_54:int64,jobs_age_55_plus:int64,jobs_earn_low:int64,jobs_earn_mid:int64,jobs_earn_high:int64
+    metric_contracts:
+      - {local_id: circulation/lodes-county-commuter-total-jobs, producer: fact_lodes_commuter_flow, aggregation_rule: LOAD_TIME_SUM, reference_artifact: fact_lodes_commuter_flow, digest: d3745f8def09cd8c7a38e1870e6ec2c1853e210b777d8e8358cfce36665bd64d}
+    selectors: [{time_id: 24, county_ids: [1281, 1294, 1313]}]
+    selected_rows:
+      - {home_id: 1281, work_id: 1281, origin: '26099', destination: '26099', total_jobs: 154024, bits: '00000000000259a8'}
+      - {home_id: 1281, work_id: 1294, origin: '26099', destination: '26125', total_jobs: 111077, bits: '000000000001b1e5'}
+      - {home_id: 1281, work_id: 1313, origin: '26099', destination: '26163', total_jobs: 65374, bits: '000000000000ff5e'}
+      - {home_id: 1294, work_id: 1281, origin: '26125', destination: '26099', total_jobs: 51184, bits: '000000000000c7f0'}
+      - {home_id: 1294, work_id: 1294, origin: '26125', destination: '26125', total_jobs: 309277, bits: '000000000004b81d'}
+      - {home_id: 1294, work_id: 1313, origin: '26125', destination: '26163', total_jobs: 111785, bits: '000000000001b4a9'}
+      - {home_id: 1313, work_id: 1281, origin: '26163', destination: '26099', total_jobs: 48174, bits: '000000000000bc2e'}
+      - {home_id: 1313, work_id: 1294, origin: '26163', destination: '26125', total_jobs: 144397, bits: '000000000002340d'}
+      - {home_id: 1313, work_id: 1313, origin: '26163', destination: '26163', total_jobs: 363507, bits: '0000000000058bf3'}
+    provenance_locators: [time_id=24, annual=2020]
+  - artifact_id: fact_census_housing
+    relative_path: fact_census_housing.parquet
+    verification_mode: PHYSICAL
+    sha256: 09ff2d9666b3f5ef267b65cbc77c14e99384f0157b6a4c898ac37df2e67ca59f
+    bytes: 2386094
+    rows: 1351380
+    row_groups: 1
+    schema: county_id:int64,source_id:int64,tenure_id:int64,time_id:int64,race_id:int64,household_count:int64
+    metric_contracts:
+      - {local_id: reproduction/census-housing-households, producer: fact_census_housing, aggregation_rule: NONE, reference_artifact: fact_census_housing, digest: 09ff2d9666b3f5ef267b65cbc77c14e99384f0157b6a4c898ac37df2e67ca59f}
+    selectors: [{source_id: 2, time_id: 27, race_id: 1, county_ids: [1281, 1294, 1313], tenure_ids: [1, 2, 3]}, {source_id: 4, time_id: 27, race_id: 1, expected_rows: 0}]
+    selected_rows:
+      - {county_id: 1281, fips: '26099', total: 356426, total_bits: '000000000005704a', owner: 267161, owner_bits: '0000000000041399', renter: 89265, renter_bits: '0000000000015cb1'}
+      - {county_id: 1294, fips: '26125', total: 528681, total_bits: '0000000000081129', owner: 382057, owner_bits: '000000000005d469', renter: 146624, renter_bits: '0000000000023cc0'}
+      - {county_id: 1313, fips: '26163', total: 693446, total_bits: '00000000000a94c6', owner: 447120, owner_bits: '000000000006d290', renter: 246326, renter_bits: '000000000003c236'}
+    provenance_locators: [source_id=2, time_id=27, race_id=1, source_4_expected_rows=0]
+  - artifact_id: fact_census_rent
+    relative_path: fact_census_rent.parquet
+    verification_mode: PHYSICAL
+    sha256: 4c8cc134ec490ca75961d83485fc97c6bf240b32128e9d0517e00e62d578a99e
+    bytes: 77226
+    rows: 44997
+    row_groups: 1
+    schema: county_id:int64,source_id:int64,time_id:int64,race_id:int64,median_rent_usd:double
+    metric_contracts:
+      - {local_id: reproduction/census-median-rent-usd, producer: fact_census_rent, aggregation_rule: NONE, reference_artifact: fact_census_rent, digest: 4c8cc134ec490ca75961d83485fc97c6bf240b32128e9d0517e00e62d578a99e}
+    selectors: [{source_id: 2, time_id: 27, race_id: 1, county_ids: [1281, 1294, 1313]}, {source_id: 4, time_id: 27, race_id: 1, expected_rows: 0}]
+    selected_rows:
+      - {county_id: 1281, fips: '26099', median_rent_usd: '1175.0', bits: '40925c0000000000'}
+      - {county_id: 1294, fips: '26125', median_rent_usd: '1319.0', bits: '40949c0000000000'}
+      - {county_id: 1313, fips: '26163', median_rent_usd: '1087.0', bits: '4090fc0000000000'}
+    provenance_locators: [source_id=2, time_id=27, race_id=1, source_4_expected_rows=0]
+  - artifact_id: fact_census_rent_burden
+    relative_path: fact_census_rent_burden.parquet
+    verification_mode: PHYSICAL
+    sha256: 8a42a51c17bf3ebee09f0b0b5145d5c8253c7e3446eec8c75714f9951b20df12
+    bytes: 792752
+    rows: 450450
+    row_groups: 1
+    schema: county_id:int64,source_id:int64,burden_id:int64,time_id:int64,race_id:int64,household_count:int64
+    metric_contracts:
+      - {local_id: reproduction/census-rent-burden-households, producer: fact_census_rent_burden, aggregation_rule: NONE, reference_artifact: fact_census_rent_burden, digest: 8a42a51c17bf3ebee09f0b0b5145d5c8253c7e3446eec8c75714f9951b20df12}
+    selectors: [{source_id: 2, time_id: 27, race_id: 1, burden_id: 9, county_ids: [1281, 1294, 1313]}, {source_id: 4, time_id: 27, race_id: 1, expected_rows: 0}]
+    selected_rows:
+      - {county_id: 1281, fips: '26099', household_count: 20707, bits: '00000000000050e3'}
+      - {county_id: 1294, fips: '26125', household_count: 31178, bits: '00000000000079ca'}
+      - {county_id: 1313, fips: '26163', household_count: 67261, bits: '00000000000106bd'}
+    provenance_locators: [source_id=2, time_id=27, race_id=1, burden_id=9, source_4_expected_rows=0]
+  - artifact_id: fact_coercive_infrastructure
+    relative_path: fact_coercive_infrastructure.parquet
+    verification_mode: PHYSICAL
+    sha256: 33e6558d2b438e7aea672021f0e15f743f1ea331ab82407c0805a428b29cf808
+    bytes: 18531
+    rows: 3867
+    row_groups: 1
+    schema: county_id:int64,coercive_type_id:int64,source_id:int64,facility_count:int64,total_capacity:int64
+    metric_contracts:
+      - {local_id: carceral/facility-count, producer: fact_coercive_infrastructure, aggregation_rule: NONE, reference_artifact: fact_coercive_infrastructure, digest: 33e6558d2b438e7aea672021f0e15f743f1ea331ab82407c0805a428b29cf808}
+    selectors: [{source_id: 11, coercive_type_ids: [2, 3], county_ids: [1281, 1294, 1313]}]
+    selected_rows:
+      - {county_id: 1281, fips: '26099', coercive_type_id: 2, facility_count: 1, bits: '0000000000000001'}
+      - {county_id: 1281, fips: '26099', coercive_type_id: 3, facility_count: 2, bits: '0000000000000002'}
+      - {county_id: 1294, fips: '26125', coercive_type_id: 3, facility_count: 4, bits: '0000000000000004'}
+      - {county_id: 1313, fips: '26163', coercive_type_id: 2, facility_count: 1, bits: '0000000000000001'}
+      - {county_id: 1313, fips: '26163', coercive_type_id: 3, facility_count: 4, bits: '0000000000000004'}
+    provenance_locators: [source_id=11, coercive_type_id=2, coercive_type_id=3]
+  - {artifact_id: dim_county, relative_path: dim_county.parquet, verification_mode: PHYSICAL, sha256: 130b7679d0441d5c3c2183a2bef858073d3011039550bfbf015b380566c72032, bytes: 36199, rows: 3285, row_groups: 1, schema: 'county_id:int64,fips:string,state_id:int64,county_fips:string,county_name:string,h3_res4:string', metric_contracts: [], selectors: [{county_ids: [1281, 1294, 1313]}], selected_rows: [{county_id: 1281, fips: '26099', county_name: Macomb County, state_id: 23, h3_res4: null}, {county_id: 1294, fips: '26125', county_name: Oakland County, state_id: 23, h3_res4: null}, {county_id: 1313, fips: '26163', county_name: Wayne County, state_id: 23, h3_res4: null}], provenance_locators: [county_ids=1281,1294,1313]}
+  - {artifact_id: dim_state, relative_path: dim_state.parquet, verification_mode: PHYSICAL, sha256: 22245af6240648b4f3c50b748ad142204c2c985017db80b2451c5140b8898398, bytes: 2099, rows: 52, row_groups: 1, schema: 'state_id:int64,state_fips:string,state_name:string,state_abbrev:string', metric_contracts: [], selectors: [{state_id: 23}], selected_rows: [{state_id: 23, state_fips: '26', state_name: Michigan, state_abbrev: MI}], provenance_locators: [state_id=23]}
+  - {artifact_id: dim_data_source, relative_path: dim_data_source.parquet, verification_mode: PHYSICAL, sha256: cf03d6be85ef94da5cee948896c9147993cabbfdf574be3eba30e0069379929f, bytes: 5628, rows: 21, row_groups: 1, schema: 'source_id:int64,source_code:string,source_name:string,source_url:string,description:string,source_year:int64,source_agency:string,coverage_start_year:int64,coverage_end_year:int64', metric_contracts: [], selectors: [{source_ids: [2, 4, 11]}], selected_rows: [{source_id: 2, source_code: ACS5Y2010_API, source_year: 2010, coverage_start_year: 2006, coverage_end_year: 2010}, {source_id: 4, source_code: ACS5Y2023_API, source_year: 2023, coverage_start_year: 2019, coverage_end_year: 2023}, {source_id: 11, source_code: HIFLD_PRISONS_2024, source_year: 2024}], provenance_locators: [source_ids=2,4,11]}
+  - {artifact_id: dim_time, relative_path: dim_time.parquet, verification_mode: PHYSICAL, sha256: 6049f93d5686eea1aa954d831d19aad91320e449b284250b9dd7a61775ed849b, bytes: 3102, rows: 485, row_groups: 1, schema: 'time_id:int64,year:int64,month:int64,quarter:int64,is_annual:bool', metric_contracts: [], selectors: [{time_ids: [24, 27, 28]}], selected_rows: [{time_id: 24, year: 2020, month: null, quarter: null, is_annual: true}, {time_id: 27, year: 2023, month: null, quarter: null, is_annual: true}, {time_id: 28, year: 2024, month: null, quarter: null, is_annual: true}], provenance_locators: [time_ids=24,27,28]}
+  - {artifact_id: dim_ownership, relative_path: dim_ownership.parquet, verification_mode: PHYSICAL, sha256: d8a50b0d2f293b7daab6771b1fd718faaf2a4fc137da1976b9cac587bc97c54e, bytes: 1601, rows: 7, row_groups: 1, schema: 'ownership_id:int64,own_code:string,own_title:string,is_government:bool,is_private:bool', metric_contracts: [], selectors: [{ownership_id: 1}], selected_rows: [{ownership_id: 1, own_code: '0', own_title: Ownership 0, is_government: false, is_private: false}], provenance_locators: [ownership_id=1]}
+  - {artifact_id: dim_housing_tenure, relative_path: dim_housing_tenure.parquet, verification_mode: PHYSICAL, sha256: f8afedd901c152680f405984c778f97d5c926c6ceeacd152d825ecc06bf28085, bytes: 1448, rows: 3, row_groups: 1, schema: 'tenure_id:int64,tenure_type:string,tenure_label:string,is_owner:bool', metric_contracts: [], selectors: [{tenure_ids: [1, 2, 3]}], selected_rows: [{tenure_id: 1, tenure_type: total}, {tenure_id: 2, tenure_type: owner}, {tenure_id: 3, tenure_type: renter}], provenance_locators: [tenure_ids=1,2,3]}
+  - {artifact_id: dim_race, relative_path: dim_race.parquet, verification_mode: PHYSICAL, sha256: e7fe6e44956d3e3fbdab9aa1099cdd1d402e2ea4d3c1a9e448620ca1d227a02d, bytes: 2591, rows: 10, row_groups: 1, schema: 'race_id:int64,race_code:string,race_name:string,race_short_name:string,is_hispanic_ethnicity:bool,is_indigenous:bool,display_order:int64', metric_contracts: [], selectors: [{race_id: 1}], selected_rows: [{race_id: 1, race_code: T, race_name: Total (all races), display_order: 0}], provenance_locators: [race_id=1]}
+  - {artifact_id: dim_rent_burden, relative_path: dim_rent_burden.parquet, verification_mode: PHYSICAL, sha256: 9f9c850c4c66cbe45faac638a77d65e13ddac693a34ea8990393743b37a558bc, bytes: 2876, rows: 11, row_groups: 1, schema: 'burden_id:int64,bracket_code:string,burden_bracket:string,burden_min_pct:double,burden_max_pct:double,is_cost_burdened:bool,is_severely_burdened:bool,bracket_order:int64', metric_contracts: [], selectors: [{burden_id: 9}], selected_rows: [{burden_id: 9, bracket_code: B25070_010, burden_min_pct: '50.0', is_cost_burdened: true, is_severely_burdened: true, bracket_order: 9}], provenance_locators: [burden_id=9]}
+  - {artifact_id: dim_coercive_type, relative_path: dim_coercive_type.parquet, verification_mode: PHYSICAL, sha256: bc3301f4037e23459a43629e8b8e3c1bd7ffad05e0abd277b19214555da29ecd, bytes: 2101, rows: 15, row_groups: 1, schema: 'coercive_type_id:int64,code:string,name:string,category:string,command_chain:string', metric_contracts: [], selectors: [{coercive_type_ids: [2, 3]}], selected_rows: [{coercive_type_id: 2, code: prison_state, command_chain: state}, {coercive_type_id: 3, code: prison_local, command_chain: local}], provenance_locators: [coercive_type_ids=2,3]}
+  - artifact_id: bridge_county_cz
+    relative_path: src/babylon/data/reference/bridge_county_cz.csv
+    verification_mode: TRACKED_CSV
+    sha256: a04cc4fc2bf0b6e96bc0d2a47c1fc91d29d41174e3e339e15f81481f862808df
+    bytes: 103192
+    rows: 3141
+    row_groups: 0
+    schema: county_fips,cz_id,cz_name
+    metric_contracts: []
+    selectors: [{county_fips: ['26099', '26125', '26163']}]
+    selected_rows: [{county_fips: '26099', cz_id: '11600'}, {county_fips: '26125', cz_id: '11600'}, {county_fips: '26163', cz_id: '11600'}]
+    provenance_locators: [county_fips=26099,26125,26163]
+  - {artifact_id: h3_res7_population, relative_path: h3_res7_population.parquet, verification_mode: REFERENCE_DIGEST_ONLY, sha256: b096a5891284f0ca55bedae9d1a9092eb8ea9e9e32d32b6ace430a9833b53afc, bytes: null, rows: null, row_groups: null, schema: null, metric_contracts: [{local_id: reproduction/h3-population-persons, producer: h3_res7_population, aggregation_rule: BLOCK_INTERNAL_POINT_ASSIGNMENT, reference_artifact: h3_res7_population, digest: b096a5891284f0ca55bedae9d1a9092eb8ea9e9e32d32b6ace430a9833b53afc}], selectors: [], selected_rows: [], provenance_locators: [PER-21]}
+  - {artifact_id: h3_res7_workplace, relative_path: h3_res7_workplace.parquet, verification_mode: REFERENCE_DIGEST_ONLY, sha256: ea2ce1508f4fe51f1e879b9f4a1daf579c4b00349388b12a85f884a8f49eabb6, bytes: null, rows: null, row_groups: null, schema: null, metric_contracts: [{local_id: production/h3-workplace-jobs, producer: h3_res7_workplace, aggregation_rule: BLOCK_COORDINATE_ASSIGNMENT, reference_artifact: h3_res7_workplace, digest: ea2ce1508f4fe51f1e879b9f4a1daf579c4b00349388b12a85f884a8f49eabb6}], selectors: [], selected_rows: [], provenance_locators: [PER-21]}
+  - {artifact_id: h3_res7_land_mask, relative_path: h3_res7_land_mask.parquet, verification_mode: REFERENCE_DIGEST_ONLY, sha256: 4e6caba297f0111a9ec93d948a83543bb9f7179361fe5dd318bb8a98a5be5194, bytes: null, rows: null, row_groups: null, schema: null, metric_contracts: [{local_id: ecology/h3-land-fraction, producer: h3_res7_land_mask, aggregation_rule: EQUAL_AREA_WATER_INTERSECTION, reference_artifact: h3_res7_land_mask, digest: 4e6caba297f0111a9ec93d948a83543bb9f7179361fe5dd318bb8a98a5be5194}], selectors: [], selected_rows: [], provenance_locators: [PER-21]}
+gaps:
+  - {suffix: omb-msa-detroit-tri-county, requested: scale-membership/omb-msa, status: NOT_COMPUTED, reason: MISSING_GOVERNED_OMB_DELINEATION, producer: null, provenance_artifacts: [dim_county], note: 'reject legacy export/code 19820; require pinned governed OMB delineation'}
+  - {suffix: h3-population, requested: reproduction/h3-population-persons, status: NOT_COMPUTED, reason: IDENTITY_CONTRACT_PENDING, producer: PER-21, provenance_artifacts: [h3_res7_population]}
+  - {suffix: h3-workplace, requested: production/h3-workplace-jobs, status: NOT_COMPUTED, reason: IDENTITY_CONTRACT_PENDING, producer: PER-21, provenance_artifacts: [h3_res7_workplace]}
+  - {suffix: h3-land-fraction, requested: ecology/h3-land-fraction, status: NOT_COMPUTED, reason: IDENTITY_CONTRACT_PENDING, producer: PER-21, provenance_artifacts: [h3_res7_land_mask]}
+  - {suffix: census-housing-source-vintage-conflict, requested: reproduction/census-housing-households, status: UNKNOWN, reason: PROVENANCE_COORDINATE_CONFLICT, producer: PER-28, provenance_artifacts: [fact_census_housing, dim_data_source, dim_time, dim_housing_tenure, dim_race]}
+  - {suffix: census-rent-source-vintage-conflict, requested: reproduction/census-median-rent-usd, status: UNKNOWN, reason: PROVENANCE_COORDINATE_CONFLICT, producer: PER-28, provenance_artifacts: [fact_census_rent, dim_data_source, dim_time, dim_race]}
+  - {suffix: census-rent-burden-source-vintage-conflict, requested: reproduction/census-rent-burden-households, status: UNKNOWN, reason: PROVENANCE_COORDINATE_CONFLICT, producer: PER-28, provenance_artifacts: [fact_census_rent_burden, dim_data_source, dim_time, dim_rent_burden, dim_race]}
+  - {suffix: command-administrative-centrality, requested: command/administrative-centrality, status: NOT_COMPUTED, reason: MISSING_GOVERNED_PRODUCER, producer: null, provenance_artifacts: []}
+  - {suffix: freight-road-corridor, requested: circulation/freight-road-corridor-intensity, status: NOT_COMPUTED, reason: MISSING_GOVERNED_PRODUCER, producer: PER-31, provenance_artifacts: []}
+  - {suffix: eviction, requested: reproduction/eviction, status: NOT_COMPUTED, reason: MISSING_GOVERNED_PRODUCER, producer: null, provenance_artifacts: []}
+  - {suffix: foreclosure, requested: reproduction/foreclosure, status: NOT_COMPUTED, reason: MISSING_GOVERNED_PRODUCER, producer: null, provenance_artifacts: []}
+  - {suffix: absentee-ownership, requested: reproduction/absentee-ownership, status: NOT_COMPUTED, reason: MISSING_GOVERNED_PRODUCER, producer: null, provenance_artifacts: []}
+  - {suffix: agricultural-tenure-displacement, requested: extraction/agricultural-tenure-displacement, status: NOT_COMPUTED, reason: MISSING_GOVERNED_PRODUCER, producer: null, provenance_artifacts: []}
+  - {suffix: indigenous-jurisdiction, requested: jurisdiction/indigenous, status: UNKNOWN, reason: REFERENCE_COVERAGE_UNAVAILABLE, producer: null, provenance_artifacts: []}
+  - {suffix: care-capacity, requested: care/capacity, status: NOT_COMPUTED, reason: MISSING_GOVERNED_PRODUCER, producer: null, provenance_artifacts: []}
+  - {suffix: ecology-beyond-land-fraction, requested: ecology/beyond-land-fraction, status: NOT_COMPUTED, reason: MISSING_GOVERNED_PRODUCER, producer: null, provenance_artifacts: []}
+  - {suffix: windsor-essex-spatial-membership, requested: scale-membership/windsor-essex, status: UNKNOWN, reason: REFERENCE_COVERAGE_UNAVAILABLE, producer: null, provenance_artifacts: []}
+  - {suffix: player-fog, requested: player/fog, status: NOT_COMPUTED, reason: PLAYER_BOUNDARY_UNAVAILABLE, producer: PER-22, provenance_artifacts: []}
+  - {suffix: action-eligibility, requested: player/action-eligibility, status: NOT_COMPUTED, reason: PLAYER_BOUNDARY_UNAVAILABLE, producer: PER-27, provenance_artifacts: []}
+  - {suffix: organization-practice-state, requested: organization/practice-state, status: NOT_COMPUTED, reason: PLAYER_BOUNDARY_UNAVAILABLE, producer: PER-56, provenance_artifacts: []}

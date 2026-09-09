@@ -1,0 +1,31 @@
+{
+  "bifurcation_score": 0.0,
+  "biocapacity_sum": null,
+  "c_sum": null,
+  "class_composition": {
+    "bourgeoisie": 0.01,
+    "labor_aristocracy": 0.4,
+    "lumpenproletariat": 0.15,
+    "petit_bourgeoisie": 0.09,
+    "proletariat": 0.35
+  },
+  "consciousness": {
+    "fascist": 0.413715,
+    "liberal": 0.4375,
+    "revolutionary": 0.148785
+  },
+  "hex_count": null,
+  "imperial_rent_pool": 99.023863,
+  "k_sum": null,
+  "kind": "national",
+  "legitimacy": 0.6039,
+  "median_wage": 21.0,
+  "national_id": "USA",
+  "p_acquiescence": 0.924005,
+  "p_revolution": 1.0,
+  "population": 2,
+  "s_sum": null,
+  "sovereign_id": null,
+  "v_sum": null,
+  "verified_tick": 5
+}

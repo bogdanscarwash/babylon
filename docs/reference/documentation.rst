@@ -31,19 +31,19 @@ Direct Sphinx Commands
 .. code-block:: bash
 
    # HTML build
-   poetry run sphinx-build -b html docs docs/_build/html
+   uv run sphinx-build -b html docs docs/_build/html
 
    # LaTeX source generation
-   poetry run sphinx-build -b latex docs docs/_build/latex
+   uv run sphinx-build -b latex docs docs/_build/latex
 
    # PDF compilation (after LaTeX generation)
    cd docs/_build/latex && make all-pdf
 
    # Check documentation coverage
-   poetry run sphinx-build -b coverage docs docs/_build/coverage
+   uv run sphinx-build -b coverage docs docs/_build/coverage
 
    # Check for broken links
-   poetry run sphinx-build -b linkcheck docs docs/_build/linkcheck
+   uv run sphinx-build -b linkcheck docs docs/_build/linkcheck
 
 Sphinx Extensions
 -----------------

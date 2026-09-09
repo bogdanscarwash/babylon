@@ -1,0 +1,178 @@
+ADR197_bsl_query_evaluation_slice1_handoff:
+  status: "accepted"
+  date: "2026-08-11"
+  title: "The BSL query-evaluation Slice-1 handoff (P27 Phase 2) — the four-slice cut, the III.7 read-only-widening rule, PR #464's supersession verdict, and the §4.2 chapter-C4 pre-state repair, all closed by ⟨PR 5⟩'s consumer-handoff evidence"
+  context: |
+    docs/superpowers/plans/2026-08-11-bsl-query-evaluation-plan.md served
+    the BSL graph-query surface (§2.6's six query heads, §2.7's fold/
+    exists/forall/select-*, §2.8's for-each, §2.10's field-of) so that
+    27 GRAPH_SEAM_HEADS could stop refusing at evaluation and the
+    Territory port train could start from evidence instead of optimism.
+    Five PR groups executed the plan's sixteen tasks:
+
+    - ⟨PR 1⟩ (Tasks 1-3, #509): seam-refusal hygiene (every unserved
+      head names its slice), EvalEnv gains the graph + the §2.6 element
+      stack, GraphSubstrate::node_type_of (the ONE read-only method
+      slice 1 adds).
+    - ⟨PR 2⟩ (Tasks 4-9, #514): query materialization (nodes, typed
+      neighbors), fold's five operators, exists/forall, select-max/
+      select-min with the language-level tiebreak, field-of over a
+      NodeRef, :as element naming.
+    - ⟨PR 3⟩ (Tasks 10-12, #519): for-each in effect position,
+      update-node against a computed NodeRef, and the §4.2 chapter-C4
+      pre-state repair (D-row Q1/D103 below).
+    - ⟨PR 4⟩ (Tasks 13-14, #520): the §6.2 conformance families and the
+      aggregation corpus flip from load-time pins to real evaluation
+      (test-only; landed independently of this record).
+    - ⟨PR 5⟩ (Tasks 15-16, this record): the four Territory-shaped
+      end-to-end vectors and this handoff.
+
+    This ADR is the consolidated record Task 16 charters: it does not
+    re-litigate any of the above, it CLOSES the loop by recording, in one
+    place, the four architectural facts the plan's own text scattered
+    across its Architecture/Substrate-widening/Prior-art sections plus
+    the pre-state repair PR 3 actually landed.
+  decision: |
+    **1. The four-slice cut stands, as designed.** Slice 1 (this train,
+    now complete) serves the node-set query lane: nodes/neighbors, fold,
+    exists/forall, select-max/select-min, field-of over a NodeRef,
+    for-each, update-node against a computed ref — everything the
+    Territory port's four blocked shapes needed, and nothing that needs
+    an EdgeRef, an edge attribute, or a hyperedge. Slices 2-4 remain
+    SCOPED, NOT BUILT: slice 2 (the dyadic edge lane — edges,
+    edge-between, field-of over an EdgeRef, the) needs a new Value::
+    EdgeRef/EdgeKey type and one read-only edge-attribute lookup, hash-
+    free; slice 3 (the hyperedge + metric lane — hyperedges, members-of,
+    hyperedges-of, metric-of) is likewise hash-free, a read-only walk of
+    existing CanonicalState sections; slice 4 (edge/hyperedge/membership
+    attribute STORAGE) is the one that widens CanonicalState and
+    ESCALATES to the Director under Constitution III.7 + Amendment AG —
+    it is not chartered by a plan, it needs an ADR of its own, and stays
+    DEFERRED TO ITS FIRST CONSUMER per the Director's third 2026-08-11
+    ruling (same pattern as the Currency-i128 ruling and ADR192's
+    additive sequencing). Every un-served query head keeps a LOUD
+    refusal naming the slice that will serve it (Task 1's
+    UNSERVED_EXPRESSION_HEADS / query.rs's UNSERVED_QUERY_HEADS tables)
+    — a head falling through to eval_intrinsic's generic E-LOAD-021
+    misdiagnosis would be the defect this cut exists to prevent.
+
+    **2. The III.7 read-only-widening rule, exercised exactly as
+    designed.** Slice 1 added ONE new GraphSubstrate method,
+    node_type_of — a read-only report of a fact CanonicalState's section
+    1 (all_nodes -> (NodeId, type)) already hashes, proven byte-invariant
+    by a dedicated fixture-hash test at Task 3's landing
+    (adding_a_read_only_query_method_does_not_move_the_state_hash).
+    Fourteen methods became fifteen; zero CanonicalState sections
+    changed; zero encoder bytes changed. This is the evidence obligation
+    Constraint 7 of the plan demanded of every substrate task, discharged
+    once, at the one substrate task slice 1 needed. Nothing in ⟨PR 5⟩
+    (Task 15's e2e vectors) needed a second substrate method — the four
+    Territory shapes run entirely on nodes/neighbors/field-of/fold/
+    select-max/for-each/update-node, all already served by group 2-3's
+    landing, confirming the plan's own "why this cut" claim empirically
+    rather than merely by design.
+
+    **3. PR #464 ("feat/p2-slice2-query-trait") — SUPERSEDED, verdict
+    ALREADY POSTED AND CLOSED.** The plan's "Prior-art disposition"
+    section ruled HARVEST THREE IDEAS, SUPERSEDE THE BRANCH: (a)
+    members_of(id, hyperedge_type)'s mandatory-type-operand shape,
+    harvested verbatim in reasoning for slice 3; (b) edge_strength's
+    two-distinguishable-error-case argument (dangling endpoint vs. absent
+    edge), harvested and widened for slice 2's general edge-attribute
+    read; (c) the stale neighbors doc-note repair ("contrast
+    hyperedges_of, whose infallible signature predates this ruling" —
+    false on dev since hyperedges_of already returns Result), harvested
+    verbatim at Task 3. Rationale, verified at the plan's writing and
+    unchanged since: #464 is 229 commits behind dev, its implementation
+    target (MemoryGraph) is no longer the production store (ADR179 T3 /
+    ADR193 swapped production to HypergraphStore), it predates the R9
+    spec chapters' four-operand neighbors form entirely, and it carries a
+    live doc-comment defect a merge would have shipped through
+    RUSTDOCFLAGS='-D warnings'. **Verified at THIS record's writing**
+    (2026-08-11, via `gh pr view 464`): the PR is CLOSED
+    (closedAt 2026-08-11T17:29:18Z), with the verdict posted verbatim,
+    citing this plan by path, by the Director herself — Task 16's own
+    checklist item ("post the #464 verdict on the PR and close it") was
+    therefore already discharged before this handoff record was written;
+    this ADR records that fact rather than re-performing the action.
+
+    **4. The §4.2 chapter-C4 pre-state repair — LANDED, Director-ruled to
+    land in this train.** tick.rs::run_tick's pre-Task-12 divergence (D-row
+    Q1, register row D103 in docs/reference/bsl-language.rst) — in-place
+    mutation as the subject loop walked, contradicting chapter C4's own
+    "all firings of one rule observe the same pre-state … applied in
+    that subject order" — is REPAIRED, not merely documented: run_tick now
+    collects every subject's effects against one shared pre-tick borrow,
+    then applies them in subject order (structural_verbs::PendingWrite,
+    EffectExecutor::{collect_effects, apply_pending_write}). Byte-neutral
+    for every rule pack that existed at the repair's landing (verified by
+    grep over every content/rules/*.bsl file: none reads another node's
+    field, so in-place and collect-then-apply were observationally
+    identical for all of them) and confirmed unmoved by tick_goldens.rs
+    (3/3, still byte-identical after ⟨PR 5⟩). ⟨PR 5⟩'s Task 15 is this
+    repair's first END-TO-END witness: query_lane_e2e.rs's
+    shape_a_heat_spillover_reads_pre_tick_neighbour_state test is a
+    four-subject, one-rule fold-sum-over-neighbors vector whose expected
+    values are DERIVED assuming every subject reads the tick's shared
+    pre-state — a regression to in-place mutation would silently produce
+    different, order-dependent numbers, caught by this vector through the
+    real run_once_into seam rather than only at tick.rs's own unit level.
+    The accumulating-read timing question the repair opened (D-row Q2,
+    register row D104) is ruled APPLY TIME, matching §4.2's own
+    accumulation clause. The repair's narrower, STILL-OPEN sibling — two
+    rules at one anchor position do not yet share pre-state, only
+    subjects within one rule do (D-row Q14, register row D116) — is
+    RECORDED, not fixed, deferred to its own train; every ⟨PR 5⟩ vector
+    stays clear of it by construction (one rule per tick, always).
+
+    **A fifth item, found during ⟨PR 5⟩ and recorded here for
+    completeness though it is not one of Task 16's four named topics:**
+    two small, additive, III.7-clean production fixes were prerequisite
+    to Task 15's vectors even existing — babylon-bsl's scenario.rs now
+    censuses EdgeType counts (LoadedScenario::edge_types, mirroring the
+    existing node_types census) and babylon-tick's lib.rs merges that
+    census into CardinalityCeilings, closing a latent gap where
+    run_once_into's driver could never load ANY rule using (neighbors …)
+    at all (neighbors_ceiling needs both a NodeType and an EdgeType
+    ceiling; the driver only ever supplied the former, unexercised until
+    a rule pack finally used neighbors through the scenario-driven path).
+    A second, GENUINE landed-code gap was found and left RECORDED, not
+    fixed, as out of ⟨PR 5⟩'s scope: rule_pipeline::resolve_expr_bindings
+    still passes graph: None unconditionally when resolving a :expr
+    binding — its own doc names this "P6" from the #514 fix round,
+    explicitly waiting on "the same collect-then-apply repair" this
+    record's item 4 confirms DID land, but the callsite itself was never
+    updated. A :expr binding containing a query form therefore still
+    fails loud through the real driver today; every ⟨PR 5⟩ vector routes
+    its query forms through guards/effects instead, both of which
+    already carry the real, graph-bearing environment.
+  consequences: |
+    Slice 1 of the BSL query-evaluation plan is COMPLETE: all sixteen
+    tasks landed across five PR groups, PR #464 is closed with its
+    verdict on record, and the Territory port train (reports/territory-
+    port-phase1-inventory-2026-08-11.md) can proceed from evidence — its
+    verdict section is updated by this same handoff to record the
+    blocking train's landing. Fourteen D-row register entries (D103-D116)
+    are filed in docs/reference/bsl-language.rst, transcribing the plan's
+    own Q1-Q14 table into the document's permanent record; D105 (Q3)
+    additionally documents a real numbering collision the plan's own
+    Task-16 discipline anticipated ("resolve the number when the PR
+    opens, never hard-code it") — E-EVAL-042, the plan's proposed next-
+    free number for Q3, was allocated to an unrelated ruling (D101, the
+    Organization spec's Q12 enum-field law) in the interim between the
+    plan's drafting and this filing; the row records E-EVAL-043 as the
+    actual next-free number as of this ADR, not 042.
+
+    OPEN, NAMED, NOT THIS TRAIN'S: slice 2 (dyadic edge lane), slice 3
+    (hyperedge + metric lane), slice 4 (attribute storage, Director-
+    escalation-gated); D-row Q9 (Territory's closed-enum field-storage
+    gap, restated named for the port's own D-record); D-row Q14 (the
+    cross-rule pre-state gap, deferred to its own collect-then-apply
+    train); the resolve_expr_bindings graph: None gap (item 5 above),
+    which the next slice touching a :expr-bound query form should close
+    before relying on it.
+  supersedes: []
+  related:
+    - ADR193_hypergraph_storage_swap
+    - ADR192_relation_state_delegated_ruling
+    - ADR189_amendment_ag_attributed_membership_lattice_instances

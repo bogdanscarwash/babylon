@@ -1,0 +1,116 @@
+ADR067_optimization_package:
+  status: "accepted"
+  date: "2026-07-11"
+  title: "src/babylon/engine/optimization/ package: migrated the legacy tools sweep stack onto headless_runner, fixed the inert-defines crown bug, sanctioned a fast in-memory backend for tool-space"
+  context: |
+    The old `tools/` sweep stack (monte_carlo, tune_parameters,
+    landscape_analysis, sensitivity_analysis, tune_agent,
+    carceral_scoring) predated spec-064's headless_runner migration and
+    never got a matching audit: it called `headless_runner.run()` with an
+    injected `GameDefines` per trial, but the runner silently ignored the
+    caller's defines and always loaded the compiled/YAML default — every
+    "different" trial in a sweep, Monte Carlo run, or Bayesian search ran
+    bit-identical math regardless of the parameter grid (Constitution
+    III.11 Loud-Failure: this should have raised, not gone quiet). A
+    second question stood open: whether a fast in-memory trial path could
+    exist at all, given spec-064/SC-007 banned `tools/`-space imports of
+    the legacy in-memory engine (`create_*_scenario`,
+    `simulation_engine.step`, `WorldState`) specifically to force
+    Postgres-backed determinism for the six in-scope tools.
+  decision: |
+    (1) New engine-tier package `src/babylon/engine/optimization/`,
+    sibling to `engine/observers/` and `engine/headless_runner/` — zero
+    new import-linter contracts required (optimization sits at the same
+    layer headless_runner already occupies; `babylon.engine` was already
+    the ceiling of the Program-14 layering). Subcommands: sweep,
+    monte-carlo, sensitivity, bayesian, driven by `runner_api.run(defines,
+    seed=, max_ticks=, scope_fips=, scope_name=, backend=,
+    output_dir=)->Result`, `params.get_tunable_parameters()` /
+    `inject_parameter()`, `objectives.carceral_objective`.
+    (2) THE CROWN FIX: `headless_runner.runner._resolve_defines(config)`
+    now honors a caller-supplied `GameDefines` with explicit precedence —
+    `config.defines` (in-process object) > `config.defines_overlay_path`
+    (YAML overlay, per-field merged) > `GameDefines.load_default()`.
+    `SimulationRunConfig` gained an in-process `defines: GameDefines |
+    None` field, excluded from `manifest.json` (an in-process object
+    is not a reproducibility-relevant artifact path; the overlay path
+    string still is).
+    (3) Two backends, selected by `backend=`: `headless` (Postgres,
+    full 26-system chain, the honest-by-default path) and `in_memory`
+    (`simulation_engine.step()`, the pre-Postgres legacy path — fast
+    trial exploration for sweeps/Monte Carlo/Bayesian search where
+    hundreds-to-thousands of trials make Postgres wall-clock
+    prohibitive). The in-memory backend is a SANCTIONED, explicit
+    reversal of the spec-064/SC-007 tools-space ban on the legacy engine:
+    the ban applied to `tools/`-space callers; `engine/optimization/` is
+    engine-tier, where the legacy in-memory path already lives
+    (`engine.simulation_engine.step`, `engine.scenarios`) and is
+    layering-legal. The SC-007 AST-import guard
+    (`tests/integration/test_tools_no_legacy_imports.py`) was pruned to
+    match the six deleted tools — `IN_SCOPE_TOOLS` now lists only
+    `audit_simulation.py`, `parameter_analysis.py`, `profiler.py`,
+    `shared.py`.
+    (4) Diagnostic tooling: the optimization package's contract tests are
+    ungated — NOT wired into `mise run check`. Sweep/Monte
+    Carlo/sensitivity/Bayesian runs are exploratory instruments, not
+    correctness gates; their own runtime (many trials x many ticks) makes
+    them unsuitable for the fast CI lane.
+    (5) Retired tools (`git rm`, superseded by the package):
+    `tools/monte_carlo.py`, `tools/tune_parameters.py`,
+    `tools/landscape_analysis.py`, `tools/sensitivity_analysis.py`,
+    `tools/tune_agent.py`, `tools/carceral_scoring.py`. Kept:
+    `tools/parameter_analysis.py` (trace-based, distinct concern —
+    schedules/analyzes an existing trace rather than driving trials) and
+    `tools/shared.py` (the migration seam other kept tools still route
+    through).
+  consequences: |
+    Every sweep/Monte-Carlo/sensitivity/Bayesian trial from here forward
+    actually varies the coefficient under test — the silent bit-identical
+    failure mode is closed. Tool-space callers keep the SC-007 Postgres
+    determinism guarantee (in-scope tools list shrank, guard logic
+    unchanged); engine-space gets an explicit fast-path escape hatch with
+    its provenance documented in the backend's own docstring
+    (`in_memory.py`: "the same tick-loop shape as
+    tools/regression_test.py's _run_scenario_ticks"). A SECOND
+    pre-existing bug was found and DEFERRED, not fixed here:
+    `EventCapture._extract_event_type` probes `hasattr(event,
+    "event_type")`, but the kernel `Event` dataclass
+    (`babylon/kernel/event_bus.py`) exposes the field as `type`, not
+    `event_type` — the probe always misses, so every captured event
+    degrades to `str(event.__class__.__name__)` ("Event" for all of
+    them). Because `objectives.carceral_objective`'s phase-milestone
+    detection (`SUPERWAGE_CRISIS`, `CLASS_DECOMPOSITION`,
+    `CONTROL_RATIO_CRISIS`, `TERMINAL_DECISION`) matches on the real
+    `EventType`, the headless backend's carceral score is stuck at 0.0
+    regardless of trial outcome — the in-memory backend is unaffected
+    (it reads typed events off `WorldState.events` directly, not through
+    `EventCapture`). This bug is baseline-moving (fixing it changes
+    headless carceral scores from a constant 0.0 to real values) and
+    belongs with a phase that is allowed to move baselines, not this
+    plumbing-only migration.
+  verification: |
+    `_resolve_defines` precedence (defines > overlay > load_default)
+    read directly from `headless_runner/runner.py:851-879`.
+    `SimulationRunConfig.defines` field + manifest exclusion confirmed in
+    the same module. `in_memory.py` docstring confirms it genuinely
+    honors injected `GameDefines` per tick via `step()`. SC-007 guard
+    (`tests/integration/test_tools_no_legacy_imports.py`) confirmed
+    pruned to 4 `IN_SCOPE_TOOLS` (was 6). `git log --diff-filter=D --
+    tools/` confirms the six-tool deletion commit
+    (`1a21f67f refactor(tools): retire 5 superseded optimization tools +
+    carceral_scoring`). `EventCapture._extract_event_type` /
+    `EngineEvent.event_type` vs kernel `Event.type` mismatch confirmed by
+    direct read of both `headless_runner/event_capture.py` and
+    `kernel/event_bus.py`. `pyproject.toml`'s `[tool.importlinter]`
+    contracts confirmed unchanged in count/shape by this package (no new
+    `[[tool.importlinter.contracts]]` block required — `babylon.engine`
+    was already the layering ceiling).
+  references:
+    - "src/babylon/engine/optimization/ (runner_api.py, params.py, objectives.py, backends/{headless,in_memory,types}.py, sweep.py, monte_carlo.py, sensitivity.py, bayesian.py, reproducibility.py, ranges.py, __main__.py)"
+    - "src/babylon/engine/headless_runner/runner.py (_resolve_defines, SimulationRunConfig.defines)"
+    - "src/babylon/engine/headless_runner/event_capture.py (EngineEvent, EventCapture — deferred bug site)"
+    - "tests/integration/test_tools_no_legacy_imports.py (SC-007 guard, pruned IN_SCOPE_TOOLS)"
+    - "ADR041 (spec-064 headless simulation runner — origin of the SC-007 ban this ADR partially reverses)"
+    - "commit bd3772a9 (Phase-1 fix: headless_runner honors injected GameDefines)"
+    - "commit 1a21f67f (tools retirement: 5 superseded optimization tools + carceral_scoring)"
+    - "Constitution III.11 (Loud Failure)"

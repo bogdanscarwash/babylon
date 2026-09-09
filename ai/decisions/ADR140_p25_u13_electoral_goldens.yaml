@@ -1,0 +1,90 @@
+id: ADR140
+title: >-
+  P25 U13 — The five electoral goldens, the step()-parity carriers, and the
+  golden ceremony (§5.5): mitterrand/weimar/debs/syriza/bernie_valve as
+  qa:regression scenarios 7–11, the WorldState superstructure-register
+  carrier, the county-attr restamp, and blessed(electoral-goldens).
+status: accepted
+date: '2026-07-27'
+context: >-
+  U13 is P25's integration capstone: §5.5's five named golden scenarios had
+  to run through the REAL qa harness (tools/regression_test.py driving
+  simulation_engine.step() per tick). That immediately exposed three
+  round-trip amnesia classes invisible to U8-U12's persistent-graph unit
+  tests: (1) none of the eleven superstructure graph registers survived
+  step()'s per-tick WorldState<->graph rebuild — the electoral machine was
+  amnesiac through the exact API the gate uses; (2) the year boundary's
+  county fiscal stamps (tick_taxes_on_surplus/tick_total_surplus/
+  tick_phi_hour/...) died the same way, leaving PolicySystem's funding
+  identity an empty domain 51 ticks of 52; (3) legitimation_index was an
+  excluded graph-only attr, so the electoral refresh could never decay
+  toward the L-SUSPEND floor. Fixture tuning was live-spot-run-driven
+  (ADR090 E1 method) and the engine repeatedly overruled naive seeds on
+  materialist grounds.
+decision: >-
+  CARRIERS (step() parity with the runner's single persistent graph):
+  models/superstructure.py declares the canonical 11-register tuple;
+  WorldState.superstructure_registers rides to_graph/from_graph on the
+  field_stack precedent (honest absence — only present names carry; the
+  party-less six never populate it); electoral_derecognized joins the
+  superstructure sentinel owner map; TickDynamics' non-boundary branch
+  re-stamps county attrs verbatim from the persisted SimulationTickState
+  (III.11 — annual facts stay flat, never interpolated);
+  legitimation_index becomes a declared Territory field (None default,
+  every reader None-safe). FACTORIES (engine/scenarios/electoral_goldens.py
+  over the extracted, parameterized apply_political_terrain):
+  mitterrand/syriza/bernie_valve stand on the Wayne single_county substrate
+  (real hydrator fiscal facts; measured phi=0 engages the U12-E periphery
+  mirror — contracted bars are the scenario truth), weimar/debs on
+  two_node. Registers seed via the carrier (a seated government, a
+  calibration agenda) — the sanctioned scenario convention. Factories
+  return the round-trip fixed point (_warm) and committed entryists
+  pre-seed the popular-front coupling at zero dependence so the dense
+  topology is static from tick 0; a claim-less SOV_MI_STATE collapses
+  in-run, so include_michigan gates it to syriza (whose Michigan holds a
+  live claim — the dual-power organ). EVENTS: ElectionHeldEvent + its
+  builder carry the U12-B spoiler_target/spoiler_shift the typed path had
+  dropped. ESTATE: SCENARIOS=11 with per-golden defines_overrides
+  (sync-mirrored in the behavioral suite); WAYNE_CALCULATOR_SCENARIOS
+  declares the tensor-override set for harness AND truth probe; five
+  ScenarioCoverage entries with live-verified SystemEvidence; the three
+  U8-U10 CoverageGap rows DELETED; check_dead_columns accepts
+  anchored-regex FAMILY at_rest rows (consulted only for dead columns —
+  they cannot mask a live channel's death) for the political overlays'
+  structurally value-inert edges, with material channels exact-row-only.
+  CEREMONY: blessed(electoral-goldens) minted 5 checkpoint JSONs + 5 dense
+  CSVs; the original six stayed byte-identical through every commit;
+  PENDING_CEREMONY (used as the loud mint window mid-unit) emptied in the
+  blessing. SWEEP: tests/unit/config/test_politics_defines_readers.py — a
+  standing gate that every PoliticsDefines field has a production reader
+  (46/46). BEHAVIORAL CONTRACTS: 20 pins in
+  tests/unit/engine/systems/test_electoral_goldens.py — the tournant de la
+  rigueur (bond discipline binds at item 3 of the boundary burst),
+  capture-dominates-organs + the constant-ratio PASOK bleed, the spoiler
+  tax structure + accumulation-anyway, the hope years + derecognition +
+  both window routings split by topology alone, and a REAL fascist ballot
+  victory perturbing FactionBalance toward SETTLER_POPULIST.
+consequences: >-
+  WIN: qa:regression green on 11 scenarios (dense byte-identity + the
+  two-process determinism leg); gate-coverage-truth verifies every declared
+  evidence row over 12 scenarios; the L-* laws now hold over real golden
+  trajectories on top of their formula tables. MATERIALIST VERDICTS the
+  engine handed down during tuning, kept as fixture law: wage income
+  scales with population (a populous class cannot stay desperate — hope
+  dies as wealth grows); a class with no wage relation starves
+  (consumption scales with population); a worker-majority electorate
+  elects the workers' own line (the debs ceiling binds only via a
+  machine-loyal counter-mass); zero repression makes revolt rational at
+  tick 1 (P(S|R) diverges and Struggle severs the wage relation — voters
+  carry small nonzero repression by construction). OPEN, disposed loud:
+  ELECTIONS_SUSPENDED remains un-evidenced at scenario level (two_node's
+  material legitimation sits ~0.60, above the floor — Lifecycle's
+  dual-circuit recomputation is authoritative; the law stays pinned at
+  unit level in TestLSuspend); gap-row prose for systems the goldens now
+  RUN but do not evidence (OODA/Doctrine/Sovereignty/FactionInfluence/
+  Solidarity/CollapseTransition) is scoped to the pre-U13 six — evidence
+  upgrades are post-program work; the political_form couplings row stays
+  with its ADR139 disposition. Merge note: the ceremony commit is the only
+  tests/baselines/** touch and carries its trailer; the end-of-file hook
+  rewrites staged baseline JSONs (re-stage idiom recorded).
+file: ADR140_p25_u13_electoral_goldens.yaml

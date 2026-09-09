@@ -352,7 +352,7 @@ metrics_collector:
     latest: "Property returning most recent TickMetrics"
     history: "Property returning list[TickMetrics]"
     summary: "Property computing SweepSummary from history"
-    to_csv_rows: "Export for parameter_analysis.py CSV output"
+    to_csv_rows: "Export metrics for intentional in-memory analysis"
 
   entity_mapping:
     C001: "p_w (Periphery Worker)"
@@ -391,7 +391,7 @@ metrics_collector:
         fields:
           - "wealth, consciousness, national_identity, agitation"
           - "p_acquiescence, p_revolution, organization"
-        note: "7 fields per entity, correctly aligned with parameter_analysis.py"
+        note: "7 fields per entity, aligned with the metrics CSV contract"
       edge_metrics:
         fields:
           - "exploitation_tension, exploitation_rent, tribute_flow"

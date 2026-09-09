@@ -2,9 +2,24 @@
 # Guiding principles for development decisions
 
 meta:
-  version: "1.0.0"
-  updated: "2025-12-11"
+  version: "2.0.1"
+  updated: "2026-09-04"
   purpose: "Capture recurring insights as memorable principles"
+  authority: "CONSTITUTION.md v4.2.0"
+  product: "entertainment-first emergent political-economy game"
+  forecast: false
+  scientific_reproduction: false
+  theory: "constrains the causal model without predetermining outcomes"
+  determinism_proves: "computational identity"
+  historical_cases_test:
+    - "causal signatures"
+    - "counterfactual behavior"
+  current_client: "Bevy admin/viewer; no player action"
+  next_gates:
+    - "PostgreSQL/H3/Archive decision-loop slice"
+    - "Productive & distributive circuit"
+    - "Player agency"
+    - "COVID emergence benchmark"
 
 # =============================================================================
 # CORE MANTRAS
@@ -19,8 +34,9 @@ mantras:
       Not architectural elegance. Not test coverage. Not theoretical rigor.
 
       A person who hasn't read Marx plays this game and starts asking
-      the right questions about imperial rent, class consciousness,
-      and why revolution happens in the periphery, not the core.
+      the right questions about imperial rent, class formation, and how
+      organization and solidarity can redirect political possibilities in any
+      territory.
 
       Political education through storytelling with a complex backend.
       The backend complexity serves the story. The story serves understanding.
@@ -31,13 +47,13 @@ mantras:
       - "When to ship vs when to polish"
     added: "2025-12-26"
 
-  graph_plus_math:
-    text: "Graph + Math = History"
+  causal_emergence:
+    text: "Causal pressure, player agency, emergent history."
     meaning: |
-      The simulation is fundamentally two things:
-      1. A graph structure (NetworkX) capturing relationships
-      2. Mathematical formulas determining state changes
-      Everything else is presentation. History emerges from these deterministic rules.
+      The simulation joins typed topology, compact registers, BSL rules, and
+      player intent. Theory constrains the causal model but does not predetermine
+      outcomes. Determinism proves computational identity, not scientific truth.
+      Historical cases test causal signatures and counterfactual behavior.
     applies_to:
       - "Engine architecture decisions"
       - "Feature prioritization"
@@ -46,21 +62,23 @@ mantras:
   state_is_data:
     text: "State is pure data. Engine is pure transformation. They never mix."
     meaning: |
-      WorldState contains only data (Pydantic models).
-      Engine contains only functions that transform state.
-      No business logic in data classes. No state in engine classes.
+      The live Rust world types contain only data. Historical Python source
+      is recoverable from Git and supplies no live authority.
+      TickSession holds the world, prepared rules, tick counter, and session
+      identity across advances. It is a deliberate session boundary. Game
+      judgment remains in typed transformations, not in data classes.
     applies_to:
       - "Model design"
       - "System implementation"
       - "Testing strategy"
 
   agitation_without_solidarity:
-    text: "Agitation without solidarity produces fascism, not revolution."
+    text: "Agitation without solidarity increases fascist pressure."
     meaning: |
       Economic crisis creates "agitation energy" with no inherent direction.
-      Without pre-existing solidarity infrastructure (unions, internationals),
-      that energy flows toward scapegoating and fascism.
-      This is why accelerationism fails historically.
+      Weak solidarity can make scapegoating and fascist organization more
+      likely. It does not predetermine an outcome. Organization, state action,
+      player choices, and later feedback can redirect the tendency.
     applies_to:
       - "Bifurcation formula design"
       - "Player strategy guidance"
@@ -249,7 +267,7 @@ mantras:
       - "Alert system implementation"
       - "Color selection for states"
     anti_pattern: "Using red for decorative borders or inactive elements"
-    reference: "ai/design-system.yaml:palette.semantic.phosphor_burn_red"
+    reference: "ai/design-system.yaml:palette.semantic.phosphor_burn_red (file DELETED 2026-07-27, Director ruling — reports/interface-master-plan.md §5.3; palette superseded by ksbc, DESIGN_BIBLE §9b; mantra text awaits Director revision)"
     added: "2025-12-14"
 
   purple_is_life_green_is_data:
@@ -269,7 +287,7 @@ mantras:
       - "Narrative display styling"
       - "Metrics/statistics formatting"
       - "Terminal output design"
-    reference: "ai/design-system.yaml:palette.semantic"
+    reference: "ai/design-system.yaml:palette.semantic (file DELETED 2026-07-27, Director ruling — reports/interface-master-plan.md §5.3; palette superseded by ksbc, DESIGN_BIBLE §9b; mantra text awaits Director revision)"
     added: "2025-12-14"
 
   screen_is_physical:
@@ -289,5 +307,5 @@ mantras:
       - "Root UI container styling"
       - "Visual effect implementation"
       - "Aesthetic consistency reviews"
-    reference: "ai/design-system.yaml:components.crt_overlay"
+    reference: "ai/design-system.yaml:components.crt_overlay (file DELETED 2026-07-27, Director ruling — reports/interface-master-plan.md §5.3; CRT-overlay aesthetic superseded by ksbc, DESIGN_BIBLE §9b; mantra text awaits Director revision)"
     added: "2025-12-14"

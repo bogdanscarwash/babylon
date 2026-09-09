@@ -1,8 +1,8 @@
 {
   "scenario": "glut",
   "description": "High extraction with metabolic overshoot",
-  "generated_at": "2026-07-09T12:35:29+00:00",
-  "defines_hash": "b11ee88c3b14c98f",
+  "generated_at": "2026-07-30T13:44:17+00:00",
+  "defines_hash": "6e56da3142bd192b9ed964adbd1371d5fe4f1a914fba4a307054d195e75d93f0",
   "max_ticks": 52,
   "checkpoints": [
     {
@@ -15,79 +15,86 @@
       "exploitation_tension": 0.0,
       "p_w_consciousness": 0.0,
       "p_w_p_revolution": 0.0,
-      "p_w_active": true
+      "p_w_active": true,
+      "content_hash": "394fef99caa0f7aff4c68cb263dd3974985594808524cec869adc6141112b894"
     },
     {
       "tick": 10,
       "p_w_wealth": 0.739449,
       "p_c_wealth": 0.416134,
       "c_b_wealth": 1.551831,
-      "c_w_wealth": 58.520231,
+      "c_w_wealth": 58.568372,
       "imperial_rent_pool": 98.760374,
-      "exploitation_tension": 0.966398,
+      "exploitation_tension": 0.966425,
       "p_w_consciousness": 0.0,
       "p_w_p_revolution": 0.2,
-      "p_w_active": true
+      "p_w_active": true,
+      "content_hash": "23d9c6af8eed597cbe7bdc7f4fc44f1cb78ff8940325144a3c9bd33118fa37cc"
     },
     {
       "tick": 20,
       "p_w_wealth": 0.870165,
       "p_c_wealth": 0.147904,
       "c_b_wealth": 1.722301,
-      "c_w_wealth": 94.293483,
+      "c_w_wealth": 94.353168,
       "imperial_rent_pool": 97.069911,
-      "exploitation_tension": 0.979012,
+      "exploitation_tension": 0.979025,
       "p_w_consciousness": 0.0,
       "p_w_p_revolution": 0.2,
-      "p_w_active": true
+      "p_w_active": true,
+      "content_hash": "95aa138c7522d044b034b852d8126a7fdef5e6acf5ef462a08fa9279a05973bd"
     },
     {
       "tick": 30,
       "p_w_wealth": 0.992791,
       "p_c_wealth": 0.059087,
       "c_b_wealth": 1.722597,
-      "c_w_wealth": 124.604387,
+      "c_w_wealth": 124.63919,
       "imperial_rent_pool": 95.244944,
-      "exploitation_tension": 0.984077,
+      "exploitation_tension": 0.984081,
       "p_w_consciousness": 0.0,
       "p_w_p_revolution": 0.2,
-      "p_w_active": true
+      "p_w_active": true,
+      "content_hash": "0f6d78fbf1eac1f0e80b16a1cfa39efc3af43bcaad99ce7178c8937a3ed4db22"
     },
     {
       "tick": 40,
       "p_w_wealth": 1.107924,
-      "p_c_wealth": 0.032482,
-      "c_b_wealth": 1.668543,
-      "c_w_wealth": 153.122265,
-      "imperial_rent_pool": 93.402497,
-      "exploitation_tension": 0.987023,
+      "p_c_wealth": 0.032389,
+      "c_b_wealth": 1.663065,
+      "c_w_wealth": 153.107997,
+      "imperial_rent_pool": 93.402475,
+      "exploitation_tension": 0.987022,
       "p_w_consciousness": 0.0,
       "p_w_p_revolution": 0.2,
-      "p_w_active": true
+      "p_w_active": true,
+      "content_hash": "cf98509675e57cb608057857c056df7a3d89656d20734d8de0797628b774de37"
     },
     {
       "tick": 50,
       "p_w_wealth": 1.216119,
-      "p_c_wealth": 0.027247,
-      "c_b_wealth": 1.600154,
-      "c_w_wealth": 181.010083,
-      "imperial_rent_pool": 91.582429,
-      "exploitation_tension": 0.989012,
+      "p_c_wealth": 0.027035,
+      "c_b_wealth": 1.580069,
+      "c_w_wealth": 180.92742,
+      "imperial_rent_pool": 91.582281,
+      "exploitation_tension": 0.989007,
       "p_w_consciousness": 0.0,
       "p_w_p_revolution": 0.2,
-      "p_w_active": true
+      "p_w_active": true,
+      "content_hash": "30028e17a2adb398bd47f93aa664499c8d3875e930403b97ad8972685ce7372e"
     },
     {
       "tick": 52,
       "p_w_wealth": 1.236971,
-      "p_c_wealth": 0.027293,
-      "c_b_wealth": 1.586172,
-      "c_w_wealth": 186.553683,
-      "imperial_rent_pool": 91.222467,
-      "exploitation_tension": 0.989336,
+      "p_c_wealth": 0.027121,
+      "c_b_wealth": 1.566047,
+      "c_w_wealth": 186.455207,
+      "imperial_rent_pool": 91.222279,
+      "exploitation_tension": 0.989331,
       "p_w_consciousness": 0.0,
       "p_w_p_revolution": 0.2,
-      "p_w_active": true
+      "p_w_active": true,
+      "content_hash": "905f8041ab22ff10ebef8f727ae88c02045d41092e590bb73c202781012a8b49"
     }
   ],
   "final_outcome": "SURVIVED",

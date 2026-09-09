@@ -1,0 +1,73 @@
+==================================================
+Scenario file — the unspecified .bscn dialect lands in generic_form (two-classes.bscn TRIMMED and AUGMENTED — see the case note)
+==================================================
+
+; rust/crates/babylon-tick/content/scenarios/two-classes.bscn — TRIMMED
+; (two of its three deffields and one of its two nodes are cut) and
+; AUGMENTED: the trailing (edge …) form is NOT in that file, it is taken
+; from scenario.rs's own module-doc example, because nothing in the tree
+; exercises the scenario dialect's edge form. This case is a GRAMMAR
+; witness, not a byte-regression against the file.
+;
+; The scenario-file format has NO normative home: bsl-language.rst specifies
+; content forms (§2) and the vector fixture format (§6.1) and says nothing
+; about `(scenario …)`, `(node …)` or `(edge …)`. Note also that this
+; dialect's `deffield` is POSITIONAL — `(deffield <qname> <type> <kind>)` —
+; where §2.9's takes `:type` and `:kind` keywords. Both facts are recorded
+; rather than papered over: everything below parses as `generic_form`, the
+; tooling fallback, and none of it is derivable from bsl.ebnf. The
+; normative record of the shape conflict is register row D93; this case
+; is its witness, not its home.
+(scenario ft/two-classes
+  (deffield social-class/wages int extensive)
+  (node core NodeType/SOCIAL_CLASS
+    (social-class/wages 120)
+    (social-class/value-produced 80))
+  (edge EdgeType/SOLIDARITY core periphery 1))
+
+---
+
+(source_file
+  (comment)
+  (comment)
+  (comment)
+  (comment)
+  (comment)
+  (comment)
+  (comment)
+  (comment)
+  (comment)
+  (comment)
+  (comment)
+  (comment)
+  (comment)
+  (comment)
+  (comment)
+  (comment)
+  (generic_form
+    (symbol)
+    (qname)
+    (generic_form
+      (symbol)
+      (qname)
+      (symbol)
+      (symbol))
+    (generic_form
+      (symbol)
+      (symbol)
+      (enum_ref)
+      (generic_form
+        (qname)
+        (literal
+          (int_lit)))
+      (generic_form
+        (qname)
+        (literal
+          (int_lit))))
+    (generic_form
+      (symbol)
+      (enum_ref)
+      (symbol)
+      (symbol)
+      (literal
+        (int_lit)))))

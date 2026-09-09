@@ -1,0 +1,183 @@
+ADR092_us_county_seed_artifact:
+  status: "accepted"
+  date: "2026-07-20"
+  title: "USScenario reads the committed, hash-stamped county-seed artifact (src/babylon/data/game/us_county_territories.json, schema_version 2, 3153 counties) instead of the reference DB at build time -- the deterministic-data-artifacts doctrine applied to the #39 hex-to-county re-keying blocker -- plus close-out of the #39 (hex/scale county-keying) program: T1-T8 all landed and review-clean on feature/queue-2026-07-19"
+  context: |
+    Task #39 (Amendment U / ADR091) re-keys USScenario's territories from
+    res-3 H3 hexes to one Territory per US county (T4), binds ScaleAdjunction
+    into the engine with real SubstrateSystem dynamics (T6), and adds the
+    CZ/MSA scale rungs with real data (T1/T3/T7), closing with two new
+    sentinel gates (T8). This ADR records the T4 blocker adjudication (the
+    committed artifact) as the residual decision the program's other ADR
+    (ADR091, the constitutional amendment) does not cover, and serves as the
+    program's close-out record.
+
+    THE BLOCKER: `_create_us_territories` (`engine/scenarios/_legacy.py`)
+    needs real per-county population + geography to re-key from hexes to
+    counties, but scenario builders must stay reference-DB-free at build/test
+    time (deterministic-data-artifacts doctrine -- CI never touches the data
+    drive; CI unit tier has no reference DB). A live national-scope
+    population query via `ReferenceDataCache` measured ~6.6s per call,
+    unaffordable at the >130 call sites across the test suite that build a
+    `"default"`/`"us_nationwide"` scenario (e.g.
+    `tests/unit/web/test_engine_bridge.py`'s `_make_mock_persistence()`).
+
+    All facts below were independently re-verified against the current tree
+    on 2026-07-20 (artifact content, generator docstring, loader, DB
+    cross-check against `fact_state_minerals`/`dim_county`) rather than taken
+    on faith from the program ledger.
+  decision: |
+    ARTIFACT. `tools/generate_us_county_territories.py` precomputes per-county
+    rows offline from `data/sqlite/marxist-data-3NF.sqlite` into a committed,
+    hash-stamped JSON artifact, `src/babylon/data/game/us_county_territories.json`
+    (schema_version 2, content_hash `3cd1d1d9...fadc87d`), mirroring the
+    `business_seeds.json`/ADR086 precedent. `engine/scenarios/us_county_data.py`
+    loads it at runtime (`load_county_data`); the loader validates
+    `schema_version` explicitly (not just `content_hash`, which alone cannot
+    catch a stale schema -- #39 T6 LOW-2), raising loud on mismatch. Verified:
+    3153 counties, FIPS-sorted (`fips[i] <= fips[i+1]` holds for all i).
+
+    PROVENANCE. Scope mirrors `engine.headless_runner.scopes._load_national_fips`
+    (state fips < '60', excludes `{state}999` synthetic placeholders).
+    Population: `fact_census_income` household-count SUM primary,
+    `fact_qcew_annual` employment SUM x 0.33 fallback -- reused byte-for-byte
+    from `ReferenceDataCache`'s own resolution rule (never reimplemented), so
+    the artifact cannot drift from what `WorldStateBridge` already treats as
+    real per-county population; reference year 2010 (matches
+    `WorldStateBridge.hydrate_initial`'s default `start_year`; best national
+    coverage among years checked). Centroids: `dim_county_geometry`
+    (`centroid_lat`/`centroid_lon`), real TIGER centroids, not the old
+    fabricated hex-cell centroids. `raw_material_value_millions`:
+    `fact_state_minerals.value_millions` (USGS Mineral Commodity Summaries, 50
+    states, Program 22 Wave 1) allocated state -> county by
+    `county_share = area_sq_km / Sum(area_sq_km over the state's scoped
+    counties with a geometry row)` -- the same apportionment key
+    `persistence/hex_hydrator.py` already uses for raw-material stocks
+    ("follows AREA"). Conservation independently re-verified 2026-07-20: all
+    50 `fact_state_minerals` state totals reproduce EXACTLY as the sum of
+    their counties' allocated shares (0 mismatches).
+
+    RETIRED-FIPS DEDUP (declared, cited maps -- generic rename/split inference
+    deliberately rejected as unsound, e.g. it would wrongly collapse Bedford
+    city/County VA). `_RETIRED_FIPS_SUPERSEDED` (one successor each):
+    46113 (Shannon County, SD) -> 46102 (Oglala Lakota County, SD, 2015
+    Census Bureau rename); 02270 (Wade Hampton Census Area, AK) -> 02158
+    (Kusilvak Census Area, AK, 2015 rename). `_RETIRED_FIPS_SPLIT` (two
+    successors, a rename map cannot express this): 02261 (Valdez-Cordova
+    Census Area, AK) -> both 02063 (Chugach) and 02066 (Copper River), 2019
+    dissolution. A retired key is dropped ONLY when ALL its successors are
+    present in the same extraction (recorded in the artifact's `exclusions`
+    list, never silently dropped); a generator self-check asserts no key from
+    the union of both maps survives dedup, failing loud otherwise. Verified:
+    exactly these 3 rows in `exclusions`, county count is exactly 3153 (3156
+    raw national-scope rows minus the 3 dropped duplicates). Bedford
+    51515 (Bedford city, VA) / 51019 (Bedford County, VA) are BOTH present,
+    correctly NOT deduped -- both were legitimately separate entities at the
+    2010 reference year (Bedford city didn't merge into Bedford County until
+    2013).
+
+    EXPLICIT-ABSENCE POLICY: missing population/centroid = null + a
+    generator-emitted reason in the artifact's `gaps` list, never fabricated.
+    Verified 2026-07-20: 21 population/centroid gap rows (12 population -- AK
+    post-1990 geography splits without 2010 Census/QCEW rows, 9 centroid --
+    counties/county-equivalents absent from `dim_county_geometry`, including
+    Bedford city 51515) PLUS 10 `raw_material_value_millions` gaps added by
+    #39 T6's schema_version 2 (9 riding the same no-geometry counties as the
+    centroid gaps -- no area to allocate a share from -- plus DC, which has
+    no `fact_state_minerals` row since USGS covers the 50 states only): 31
+    gap rows total across 22 distinct counties.
+
+    CT DOUBLE-CARRY DISPOSITION (recorded, not fixed): the artifact carries
+    both pre-2022 CT counties (8 rows, real 2010 population, null
+    raw-material value -- no `dim_county_geometry` row) AND post-2022 CT
+    planning regions (9 rows, real raw-material value via area-share, null
+    population -- no 2010 Census/QCEW row under the new FIPS). Verified
+    2026-07-20: field-vintage-disjoint (no county carries both fields), so
+    no aggregate double-counts today; the state-09 raw-material total
+    reproduces the DB's exact value (259.0 = the sum of the 9 planning
+    regions' allocated shares, matching `fact_state_minerals` for state 09
+    exactly). Latent trap ONLY if a future feature sums a field both vintages
+    populate -- revisit if the reference DB ever populates both.
+
+    NAMED DEFECTS RECORDED, DELIBERATELY NOT FIXED HERE (each needs its own
+    ticket/fix; verified live in the tree 2026-07-20):
+      (a) `engine/headless_runner/scopes.py::_load_national_fips` reads
+          `dim_county` with the identical scope filter but applies NO
+          retired-FIPS dedup -- it carries the same 46113/02270/02261
+          duplicates for the headless nationwide path. Pre-existing
+          production defect, out of this artifact's scope.
+      (b) `engine/observers/endgame_detector.py:265` carries a stale
+          "~1100 territories" comment (the old res-3 hex count) that no
+          longer matches the 3153-county reality.
+      (c) The web map's `msa`/`bea` zooms have no write site for
+          `msa_code`/`bea_ea_code`: `engine_bridge.py`'s own docstring
+          (:10056) says these columns have "no Territory/graph analogue in
+          the web session bridge -- left at NULL", so every territory
+          collapses into one grouping bucket for those zooms (a
+          silently-degraded feature, not a crash). `bea_ea` additionally
+          sits in `api.py`'s `VALID_ZOOM_LEVELS` with no entry at all in
+          `group_key_map` (falls through to the `county_fips` default).
+  consequences: |
+    USScenario's territory count changes from ~1118 (res-3 H3 hexes) to 3153
+    (one per US county); `ADJACENCY` edges are absent for the county grain --
+    no real county-adjacency reference source exists, so #39 T4 emits NONE
+    rather than fabricating any (Constitution III.11), a loud gap recorded in
+    the scenario docstring, not silently degraded. `qa:regression` stays 5/5
+    byte-identical: the 5 canonical scenarios are opaque-T-id and
+    county-free, so they cannot observe this change (verified by the T4-T8
+    commit trail; no baseline regeneration was needed for this program).
+
+    Regeneration: `poetry run python tools/generate_us_county_territories.py`
+    (optional `--year`); commit the JSON and note the new `content_hash`.
+
+    Follow-up tickets owed (not opened by this ADR, just recorded so they are
+    not lost): fix defect (a) in `scopes.py` so the headless nationwide path
+    gets the same dedup as the artifact; fix the stale comment in defect (b);
+    give `msa`/`bea`/`bea_ea` map zooms a real write site or retire them from
+    `VALID_ZOOM_LEVELS` (defect (c)).
+  verification: |
+    Independently re-verified against the current tree 2026-07-20 (not taken
+    on faith from the program ledger): artifact JSON parses, schema_version
+    == 2, county_count == 3153, FIPS-sorted, content_hash present; gaps == 31
+    rows / 22 counties (12 population + 9 centroid + 10 raw_material_value,
+    cross-checked field-by-field); exclusions == exactly the 3 documented
+    retired-FIPS rows; Bedford 51019/51515 both present; all 50
+    `fact_state_minerals` state totals reproduce exactly as the sum of
+    counties' allocated `raw_material_value_millions` (0 mismatches, direct
+    SQLite cross-check against `data/sqlite/marxist-data-3NF.sqlite`); CT
+    (state 09) double-carry field-vintage-disjoint, total raw-material value
+    259.0 exact. Named defects (a)/(b)/(c) confirmed live by direct file
+    read: `scopes.py::_load_national_fips` has no dedup logic;
+    `endgame_detector.py:265` still reads "~1100 territories"; `api.py`
+    `VALID_ZOOM_LEVELS` includes both "bea" and "bea_ea", `engine_bridge.py`
+    `group_key_map` (:2785-2791) maps only "bea" -> `bea_ea_code` (unmapped
+    "bea_ea" falls through to `county_fips`) and its own docstring (:10056)
+    confirms neither `bea_ea_code` nor `msa_code` has a write site.
+
+    Existing test coverage (unchanged by this ADR, cited for the record):
+      - `tests/unit/engine/scenarios/test_us_county_data.py` --
+        `TestArtifactProvenance`, `TestSchemaVersionValidation`,
+        `TestRawMaterialValueMillions`, `TestRetiredFipsDedup`,
+        `TestArtifactRederivesFromDB` (drive-gated).
+      - `tests/unit/engine/scenarios/test_us_scenario_county_grain.py` --
+        `TestTerritoriesAreCountyKeyed`, `TestFipsSortedDeterminism`,
+        `TestResolveCountyIdentityAgainstGraph`,
+        `TestOrgTerritoryIdsAndTenancyAreCountyGrain`,
+        `TestNoFabricatedAdjacency`, `TestRawMaterialStockIsStampedFromArtifact`,
+        `TestRawMaterialCapacityIsStampedFromArtifact`.
+
+    Program-level gates (T1-T8 commit trail, `feature/queue-2026-07-19`):
+    each task landed with its own scoped tests green; the consolidated
+    `mise run check` + `mise run qa:regression` + `mise run check:sentinels`
+    pass runs separately, after this docs close-out (T9), per the queue plan.
+  references:
+    - "src/babylon/data/game/us_county_territories.json (artifact, schema_version 2, content_hash 3cd1d1d97706d5ea442eccbda87f24703ee208f2d2830be31608c1872fadc87d)"
+    - "tools/generate_us_county_territories.py (generator, retired-FIPS dedup + area-share allocation)"
+    - "src/babylon/engine/scenarios/us_county_data.py (loader, schema_version validation)"
+    - "src/babylon/engine/scenarios/_legacy.py::_create_us_territories (consumer, #39 T4)"
+    - "ai/decisions/ADR091_scale_lattice_amendment_u.yaml (Amendment U, the constitutional half of #39)"
+    - "ai/decisions/ADR086_business_seeding.yaml (deterministic-data-artifacts precedent this ADR mirrors)"
+    - "docs/superpowers/plans/2026-07-19-hex-scale-county-keying.md (the #39 mini-plan, T1-T9)"
+    - "src/babylon/engine/headless_runner/scopes.py::_load_national_fips (named defect (a), pre-existing, not fixed here)"
+    - "src/babylon/engine/observers/endgame_detector.py:265 (named defect (b), stale comment, not fixed here)"
+    - "web/game/api.py::VALID_ZOOM_LEVELS, web/game/engine_bridge.py::group_key_map (named defect (c), msa/bea/bea_ea zoom write-site gap, not fixed here)"

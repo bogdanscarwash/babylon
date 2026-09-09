@@ -1,0 +1,105 @@
+ADR206_worldview_vocabulary_ceremony:
+  status: "accepted"
+  date: "2026-08-15"
+  title: >
+    The WorldView vocabulary ceremony (ADR204 W10's first train) — the
+    WorldView defenum MINTED into the Rust closed BSL vocabulary as the
+    second content-enum consumer of ADR195's enum deffield row, in the
+    ruled member order REVOLUTIONARY / LIBERAL / FASCIST (declaration
+    order IS the storage ordinal, ADR195); NOTHING retired (the ADR176
+    (34)/ADR187 OQ-7 citation is to the record FORMAT — W11's
+    Ideology-scalar strike already landed in ADR204's own train); the
+    faction-classification enum (W9) does NOT join — its member list is
+    not ruled content-complete — and charters separately.
+  context: |
+    ADR204 (the World-View Ternary unification, twelve Director rulings
+    W1-W12) ruled the political simplex onto spec 034's (r, l, f) ternary
+    as DECLARED CONTENT (W2: ideology is a world view, not a meter) and
+    chartered this ceremony as W10's first train: "the vocabulary
+    ceremony PR minting the `WorldView` defenum via the ADR195/196
+    ceremony machinery, with the mint-and-retire record per ADR176
+    (34)/ADR187 OQ-7." The design of record is
+    `docs/superpowers/specs/2026-08-14-worldview-ternary-unification-design.md`
+    (§4.1 the mint content, §4.5.1 the ceremony scope, §5 the reserved
+    ledger).
+
+    Pre-writing verification by string value (ADR196's record
+    discipline): the frozen Python estate's own consciousness enum is
+    `ConsciousnessTendency(StrEnum)` at
+    `src/babylon/models/enums/consciousness.py:68-85`, members
+    `LIBERAL = "liberal"` (:83), `FASCIST = "fascist"` (:84),
+    `REVOLUTIONARY = "revolutionary"` (:85). Spec 034 A-005
+    (`specs/034-ternary-consciousness/spec.md:268`) rules that this enum
+    maps directly to the ternary vertices and that no new VALUES are
+    needed; the mint transcribes the Director-ruled names. MECHANICALLY
+    LOAD-BEARING ORDER FACT: the Python declaration order (LIBERAL,
+    FASCIST, REVOLUTIONARY) differs from the ruled Rust mint order
+    (REVOLUTIONARY, LIBERAL, FASCIST — design doc §4.1) — because
+    declaration order IS the storage ordinal (ADR195), the Rust ordinals
+    are REVOLUTIONARY=0, LIBERAL=1, FASCIST=2, and any future
+    cross-implementation reading must map by NAME, never by index.
+
+    The mint needs ZERO Rust-source change: content enums are data-driven
+    through `EnumRegistry`/`parse_defenum`
+    (`rust/crates/babylon-bsl/src/declarations.rs:591`,
+    `types.rs:107-110`); the structural `ClosedVocabulary`'s four
+    `EnumKind` variants (`vocabulary.rs:29-41`) gain nothing. The lexical
+    shapes conform: `WorldView` satisfies §1.4's enum-type production
+    (no underscore), the three members the enum-member production.
+  decision: |
+    ONE CEREMONY, ONE RECORD (ADR196's shape).
+
+    MINTED (into the Rust closed BSL vocabulary, content-enum registry):
+    - defenum `WorldView`, members in the RULED order:
+      1. `REVOLUTIONARY` — the articulated pole; content home is the
+         doctrine tree (the line IS the world view, W3).
+      2. `LIBERAL` — hegemonic common sense; no tree; content computed
+         per conjuncture from the ruling bloc (W3).
+      3. `FASCIST` — the capture/degeneration terminus; no tree;
+         parasitism-defense affect keyed to the rent gradient, plus a
+         demagogy flag (W3).
+
+    RETIRED: nothing. The ADR176 (34)/ADR187 OQ-7 citation in ADR204 is
+    to the mint-and-retire record FORMAT. W11's strike of the `Ideology`
+    [-1,1] sort from THE_FORMALISM's LAW table was executed in ADR204's
+    own train (`ai/THE_FORMALISM.md` II.1, pointer note included); the
+    five dead edge types (ADR176 (34)) and ActionType.STRIKE's dead
+    member (ADR187 OQ-7) retire in their own Phase-2 ceremony, not here.
+    The frozen Python enums are NOT edited — "minting" and "retiring"
+    are facts about the Rust content-authoring surface only (ADR196's
+    disclaimer, restated).
+
+    NOT IN THIS CEREMONY: the faction-classification enum (W9) — the
+    Director has not ruled its member list content-complete; it charters
+    separately (ADR204 consequences, verbatim).
+  consequences: |
+    - The pins: `rust/crates/babylon-tick/tests/tick_goldens.rs`'s
+      `worldview_foundation_hashes_are_pinned` anchors the substrate LOAD
+      of the mint scenario byte-for-byte, and its sibling
+      `worldview_member_order_is_the_ruled_ordinal` guards the ruled
+      member order EXPLICITLY through the EnumRegistry — the canonical
+      state hash covers graph facts only (nodes/attributes/edges/
+      hyperedges/edge attributes), so the `defenum` declaration moves no
+      hashed bytes and the ordinal assertion, not the hash, is the member
+      order's guard (a task-review finding of this ceremony's own
+      execution, recorded here so no successor train repeats the claim).
+      The pack's one rule is a never-firing load probe (the rule pipeline
+      refuses zero-rule content sets): `fired == 0` and
+      `before == after` are the honest expectations.
+    - The mint declares NO deffield and seeds NO enum value: the measured
+      ternary's carriers (probability-lane alignment shares, UNPOSITIONED
+      on absence) land with the class-surface migration port — W10's
+      second half, the next train. R-MEASURED (ADR070) forbids assigning
+      alignments; this ceremony only makes the kind NAMEABLE.
+    - `ai/decisions/index.yaml` gains this ADR.
+    - ADR204's consequences close their "next train is the vocabulary
+      ceremony PR" clause with this ADR cited as its disposition; the
+      class-surface migration port and the faction-enum charter remain
+      open backlog.
+  supersedes: []
+  related:
+    - ADR195_enum_deffield_row
+    - ADR196_org_vocabulary_ceremony
+    - ADR204_worldview_ternary_unification
+    - ADR176_director_rulings_batch_gds_dispositions
+    - ADR187_article_v_3x3_ratified

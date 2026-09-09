@@ -1,8 +1,8 @@
 {
   "scenario": "starvation",
   "description": "Low extraction efficiency stress",
-  "generated_at": "2026-07-09T12:35:29+00:00",
-  "defines_hash": "c861b47e144aae45",
+  "generated_at": "2026-07-30T13:44:16+00:00",
+  "defines_hash": "3f9d2ea0d149b678d720bcbfd1678384640b9f1daf2b984b96c2c0899966432c",
   "max_ticks": 52,
   "checkpoints": [
     {
@@ -15,79 +15,86 @@
       "exploitation_tension": 0.0,
       "p_w_consciousness": 0.0,
       "p_w_p_revolution": 0.0,
-      "p_w_active": true
+      "p_w_active": true,
+      "content_hash": "394fef99caa0f7aff4c68cb263dd3974985594808524cec869adc6141112b894"
     },
     {
       "tick": 10,
       "p_w_wealth": 0.782434,
       "p_c_wealth": 0.390514,
       "c_b_wealth": 1.534692,
-      "c_w_wealth": 58.520118,
+      "c_w_wealth": 58.568258,
       "imperial_rent_pool": 98.743382,
-      "exploitation_tension": 0.966398,
+      "exploitation_tension": 0.966425,
       "p_w_consciousness": 0.0,
       "p_w_p_revolution": 0.2,
-      "p_w_active": true
+      "p_w_active": true,
+      "content_hash": "6da788e690b44a24a6632da97764fd65dfd72080df818283711de7476d9ad7e9"
     },
     {
       "tick": 20,
       "p_w_wealth": 0.964271,
       "p_c_wealth": 0.108613,
       "c_b_wealth": 1.667962,
-      "c_w_wealth": 94.293119,
+      "c_w_wealth": 94.3528,
       "imperial_rent_pool": 97.016439,
-      "exploitation_tension": 0.979012,
+      "exploitation_tension": 0.979025,
       "p_w_consciousness": 0.0,
       "p_w_p_revolution": 0.2,
-      "p_w_active": true
+      "p_w_active": true,
+      "content_hash": "1ef17d077c117e3788a59337142a58ba818bff19e9c97c68ea7ec070c3f437b1"
     },
     {
       "tick": 30,
       "p_w_wealth": 1.145519,
       "p_c_wealth": 0.010664,
       "c_b_wealth": 1.619101,
-      "c_w_wealth": 124.60369,
+      "c_w_wealth": 124.638488,
       "imperial_rent_pool": 95.143898,
-      "exploitation_tension": 0.984077,
+      "exploitation_tension": 0.984081,
       "p_w_consciousness": 0.0,
       "p_w_p_revolution": 0.2,
-      "p_w_active": true
+      "p_w_active": true,
+      "content_hash": "01705cb2fc37361e014c4939afe2535fbe3c43e848367f47fa8694e95d9536f3"
     },
     {
       "tick": 40,
       "p_w_wealth": 1.330304,
       "p_c_wealth": 0.005664,
-      "c_b_wealth": 1.519101,
-      "c_w_wealth": 153.121257,
+      "c_b_wealth": 1.514106,
+      "c_w_wealth": 153.106983,
       "imperial_rent_pool": 93.258055,
-      "exploitation_tension": 0.987023,
+      "exploitation_tension": 0.987022,
       "p_w_consciousness": 0.0,
       "p_w_p_revolution": 0.2,
-      "p_w_active": true
+      "p_w_active": true,
+      "content_hash": "418ccadfe0b2b21e8a4f1953790104d27860a50ea8c356e177b993f515c8e424"
     },
     {
       "tick": 50,
       "p_w_wealth": 1.515089,
       "p_c_wealth": 0.005664,
-      "c_b_wealth": 1.419101,
-      "c_w_wealth": 181.008863,
+      "c_b_wealth": 1.40116,
+      "c_w_wealth": 180.926193,
       "imperial_rent_pool": 91.409591,
-      "exploitation_tension": 0.989012,
+      "exploitation_tension": 0.989007,
       "p_w_consciousness": 0.0,
       "p_w_p_revolution": 0.2,
-      "p_w_active": true
+      "p_w_active": true,
+      "content_hash": "653c3dfdb8ae88ea1b3b0896ed8745e07ae591d999a03f948fc5985da257b350"
     },
     {
       "tick": 52,
       "p_w_wealth": 1.552046,
       "p_c_wealth": 0.005664,
-      "c_b_wealth": 1.399101,
-      "c_w_wealth": 186.552423,
+      "c_b_wealth": 1.38116,
+      "c_w_wealth": 186.453939,
       "imperial_rent_pool": 91.044318,
-      "exploitation_tension": 0.989336,
+      "exploitation_tension": 0.989331,
       "p_w_consciousness": 0.0,
       "p_w_p_revolution": 0.2,
-      "p_w_active": true
+      "p_w_active": true,
+      "content_hash": "1ec18b916f5bf53ed963329a31512040454e445bafd920ed3b0aa6f00ddb163c"
     }
   ],
   "final_outcome": "SURVIVED",

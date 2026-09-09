@@ -1,0 +1,163 @@
+id: ADR114
+title: >-
+  Vol I U8 — Defines sweep: every field in ReserveArmyDefines/
+  DispossessionDefines/WorkingDayDefines now names its exact file:function
+  consumer; one genuinely dead field (min_employed_fraction) wired as the
+  reserve_ratio saturation floor; three genuinely dead, unwireable weight
+  fields (weight_wage_theft/weight_incarceration_seizure/
+  weight_pension_default) removed; capital_vol1.py NOT created — the
+  program's "genuinely new mechanics" (U2 theorem, U6 opposition scales)
+  ended up parameter-free by design, so ADR116 ruling (b)'s anticipated
+  file has nothing to hold.
+status: accepted
+date: '2026-07-21'
+context: >-
+  ai/_inbox/vol1-value-production-program-prompt.md §5 and ADR116 ruling
+  (b) charter this unit: extend ReserveArmyDefines/DispossessionDefines/
+  WorkingDayDefines in place for their existing mechanics; author a new
+  capital_vol1.py -> CapitalVolumeIDefines for genuinely new Vol I
+  mechanics with no existing category home (theorem computation U2,
+  accumulation-loop coefficients U3, opposition scales U6); house rules
+  (frozen BaseModel, every field docstring names its exact consumer
+  file:function, gt=0.0 for live divisors, NO field lands unread).
+
+  A full grep sweep across every U1-U7 commit's diff (e5964d9f, 1bda34f8,
+  08e45c1c, 40b9515a, a80616f2, c435d3a6) for hardcoded coefficients found
+  NONE: U2's compute_fundamental_theorem/phi_class/
+  calculate_imperial_rent_gap are pure subtraction/division/ratio formulas
+  with zero tunable scale (confirmed against
+  domain/dialectics/instances/value_form.py and
+  formulas/fundamental_theorem.py); U6's three new oppositions
+  (value_usevalue, labor_laborpower, absolute_relative_surplus) all reuse
+  either the existing zero-parameter ``_ratio_reading`` family or
+  WorkingDayDefines.relative_hours_threshold directly, per U6's own commit
+  message ("No new GameDefines fields; defines.yaml untouched") and U4's
+  ("No new GameDefines fields: reuses WorkingDayDefines.absolute_visibility/
+  relative_visibility... directly"). U3's two new coefficients
+  (mechanization_displacement_rate, firm_failure_conversion_rate) already
+  landed correctly extended in place on ReserveArmyDefines
+  (config/defines/economy_labor.py), exactly matching ADR116 ruling (b)'s
+  own cited example ("accumulation-loop coefficients that parametrize
+  ReserveArmyDynamics itself" as an EXTEND-IN-PLACE case, not a
+  capital_vol1.py case). Net result: every genuinely-new-mechanic
+  coefficient this program needed already has a home; capital_vol1.py
+  would ship with zero fields, which the sweep's own "no unread field"
+  house rule (and the "no placeholders" hard constraint) forbid
+  constructing.
+
+  Auditing the FULL existing field set (not just U1-U7's additions) for
+  live consumers surfaced two pre-existing (spec-021-era) defects, both
+  already flagged by the unrelated
+  specs/027-constants-provenance-audit/reports/constants-inventory.yaml
+  (consumers: [] for both) but never acted on:
+
+  1. ``ReserveArmyDefines.min_employed_fraction`` (default 0.01) had zero
+  consumers. ``DefaultWagePressureCalculator.compute_wage_pressure`` (the
+  ONLY calculator constructed with ``ReserveArmyDefines``, per its own
+  docstring "Args: defines: Configuration with sigmoid_k, sigmoid_r0,
+  wage_pressure_ceiling") never reads it, and no other production code
+  does either (verified via repo-wide grep). Its own docstring ("Minimum
+  fraction of labor force that must remain employed") reads as a genuine
+  design intent for a reserve_ratio ceiling analogous to
+  wage_pressure_ceiling's documented "(prevents total wage elimination)",
+  just never wired.
+
+  2. ``DispossessionDefines.weight_wage_theft`` /
+  ``.weight_incarceration_seizure`` / ``.weight_pension_default``
+  (defaults 0.03/0.03/0.02) had zero consumers.
+  ``DispossessionIntensityCalculator.compute_intensity`` reads exactly 5
+  weights (foreclosure, eviction, displacement directly;
+  tax_sale/eminent_domain via the concentrated_ownership/
+  absentee_landlord_share structural proxies its own docstring documents)
+  — ``TerritoryDispossessionState`` (domain/economics/dispossession/types.py)
+  has no field, and no honest proxy, for wage theft / incarceration
+  seizure / pension default rates. Unlike the tax_sale/eminent_domain
+  proxy substitution (a deliberate, documented design choice), these three
+  have NO substitute path available without new data ingestion — explicitly
+  out of this program's scope (program prompt §2h/§3: no drive-only data
+  blocks Vol I; new ingestion is a parquet-pipeline citizen gated on #46).
+decision: >-
+  1. Wire ``min_employed_fraction`` into
+  ``DefaultAccumulationLoopCalculator.compute_reserve_ratio``
+  (domain/economics/reserve_army/accumulation.py): the derived
+  ``reserve_ratio`` now clamps to ``[0, 1 - min_employed_fraction]``
+  rather than a bare ``[0, 1]`` — mirroring ``wage_pressure_ceiling``'s
+  precedent on the labor-force side of the same mechanic (a reserve ratio
+  of exactly 1.0 would mean zero employment, an unmodeled total-collapse
+  state). TDD: new tests
+  ``test_ratio_never_exceeds_min_employed_floor``/
+  ``test_ratio_floor_scales_with_custom_min_employed_fraction``/
+  ``test_ratio_unaffected_by_floor_in_normal_range``
+  (tests/unit/economics/reserve_army/test_accumulation.py); the
+  pre-existing ``test_ratio_never_exceeds_one`` (asserting a bare 1.0
+  ceiling with employment=0.0) updated to the corrected
+  ``1.0 - min_employed_fraction`` invariant it was testing an incomplete
+  version of.
+
+  2. Remove ``weight_wage_theft``/``weight_incarceration_seizure``/
+  ``weight_pension_default`` from ``DispossessionDefines``
+  (config/defines/economy_labor.py) — confirmed zero production or test
+  references repo-wide before removal; confirmed the removal changes
+  ZERO runtime behavior (they were never read by
+  ``compute_intensity`` or anywhere else, so their removal is pure
+  dead-code elimination, not a coefficient change — no qa:regression
+  drift possible). The ``DispossessionType`` enum's 8 categories (FR-004's
+  per-event-type taxonomy) are UNCHANGED; only the 3 dead AGGREGATE
+  INTENSITY weight coefficients are removed.
+
+  3. Every remaining field across ReserveArmyDefines/DispossessionDefines/
+  WorkingDayDefines (16 fields total after the removal) now names its
+  exact ``module.Class.method`` consumer in its own ``description=`` string
+  (previously only the two U3-added fields did), mirroring the
+  ``capital_vol3.py`` citation convention (ADR089). Class docstrings
+  updated to reflect the true consumer set (ReserveArmyDefines now cites
+  both the wage-pressure calculator AND the accumulation-loop calculator;
+  DispossessionDefines' docstring states the true 5-of-8-type coverage
+  up front rather than implying all 8 are weighted).
+
+  4. ``capital_vol1.py`` -> ``CapitalVolumeIDefines`` NOT created. ADR116
+  ruling (b) anticipated it for genuinely-new-mechanic coefficients with
+  no existing category home; the sweep found that U2 and U6 both ended up
+  parameter-free (reusing existing zero-parameter measures/defines
+  directly), so there is nothing to put in the file. Constructing an
+  empty ``CapitalVolumeIDefines`` model would itself violate this same
+  unit's "NO field lands unread" house rule (an empty model has no
+  fields to be unread, but exists for no reason) and the program's
+  "no placeholders" hard constraint. If a future Vol I unit (or a
+  follow-up program) introduces a genuinely new, parameter-bearing
+  mechanic with no home in the three existing categories, ``capital_vol1.py``
+  should be created THEN, at the point a real field exists to populate it
+  — not preemptively.
+
+  5. ``defines.yaml`` regenerated (``tools/generate_defines_config.py``);
+  only descriptions and the 3 removed keys changed — every retained
+  numeric default is byte-identical.
+
+  6. ``docs/reference/volume-i-production.rst`` corrected to match: the
+  ReserveArmyDefines table's ``min_employed_fraction`` row/note now cites
+  the accumulation-loop calculator instead of implying it feeds
+  ``DefaultWagePressureCalculator``; the DispossessionDefines table drops
+  the 3 removed rows, gains the previously-undocumented ``transfer_scale``
+  row (a real, live field that predated this sweep with no doc row at
+  all), and a note explains the 8-category-enum-vs-5-weighted-type gap.
+consequences: >-
+  Zero qa:regression baseline drift expected: the ``min_employed_fraction``
+  fix only changes behavior in the extreme edge case where an unclamped
+  reserve_ratio would otherwise reach exactly 1.0 (total labor-force
+  reserve-army saturation) — far outside the range any of the 6 canonical
+  scenarios exercise this early in the accumulation loop's activation
+  (U3 landed this same lane, this program); the 3 field removals changed
+  no runtime arithmetic (dead coefficients, never read). Not verified
+  against a live qa:regression run in this lane per the standing hard
+  constraint (controller/merge-time ceremony) — flagged for the
+  controller to confirm at consolidation. Scoped suites green: full
+  tests/unit/economics/{reserve_army,dispossession,working_day}/ (118),
+  tests/unit/economics/tick/ (418), tests/unit/engine/systems/test_
+  {reserve_army,dispossession_event}_system.py, tests/unit/config/
+  test_constants_sync.py (18, defines.yaml regenerated and
+  ``--check``-clean), tests/unit/test_public_import_surface.py; ruff
+  check+format clean; mypy clean on both touched modules (pinned nix
+  devshell); ``check:vocabulary``/``check:inert``/``check:unconsumed``/
+  ``check:defines-passthrough`` static sentinels all clean. U9
+  (monitoring) remains open — the program's final unit before the
+  ceremony.

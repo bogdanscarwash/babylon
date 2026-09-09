@@ -1,0 +1,83 @@
+ADR096_inference_lane_mechanics:
+  status: "accepted"
+  date: "2026-07-20"
+  title: "Inference lane mechanics under Amendment V: bundled CPU llama-server over Ollama as the local default (loopback-only, lifecycle owned by the babylon process, one binary serving /v1/chat/completions and /v1/embeddings from sha256-pinned local gguf weights), provider precedence bundled -> detected-external -> Cloudflare-if-keyed -> mute, the signed model manifest (weights outside the Nix store in ~/.local/share/babylon/models/, hosted in the babylon-data R2 bucket, per-campaign embedding pins), the babylon_intel least-privilege Postgres role (SELECT on Hoist projections + INSERT on narrator-prose/embedding tables only, one migration), and the embedding-dimension schema seam (bge-m3 vector(1024), bge-base-en-v1.5 vector(768)) -- queue items 11/12/13; item 6 resolved by A7.5 (sentence-transformers and torch leave the tree); item 9 premium metering deliberately deferred"
+  context: |
+    Amendment V (CONSTITUTION v2.12.0, ADR093) ratified the POSTURE:
+    narrator-only AI, local model as default provider, remote inference
+    opt-in fallback, mute always legal (D2 ruling), model pinning
+    generalized to all persisted AI artifacts (III.6). It did not rule the
+    IMPLEMENTATION this ADR carries -- nix-plan addendum A7 (babylon-infra
+    ai/.inbox/nix-plan.md, untracked owner drop): which server binary ships,
+    how weights arrive and verify, what the DB write boundary is, and which
+    embedding dimensions the Archive schema declares. A standing tension is
+    resolved here explicitly: the parent local-first doc's D2 was
+    Ollama-first; A7.3 supersedes it with llama-server for the BUNDLED lane
+    (no registry client, no phone-home, verified weights are the running
+    weights), with Ollama retained as a detected EXTERNAL provider. The
+    Cloudflare lane exists as the unmerged drop's api-worker (OpenAI-compat
+    over Workers AI; free plan, 10k neurons/day, cannot bill) -- verified
+    2026-07-20 as NOT deployed.
+  decision: |
+    D1 (bundled lane, queue item 11): the closure bundles llama-server
+    (llama.cpp, nixpkgs, CPU-only build -- works for everyone, fully
+    cached). Loopback HTTP only, port from config; lifecycle owned by the
+    babylon process as a child (the D1 embedded-Postgres pattern); one
+    binary serves /v1/chat/completions AND /v1/embeddings. GPU inference is
+    out of bundled scope (driver-coupling glue fails X.6); GPU players run
+    their own server and Babylon detects it. Ollama is supported as a
+    DETECTED external provider, never installed by us. The pre-existing D2
+    wording amends to: the bubble ships its own CPU baseline; external
+    servers are detected, never required.
+    D2 (precedence, A7.6): bundled llama-server -> detected external ->
+    Cloudflare-if-keyed -> mute. Mute is always legal (Amendment V). The
+    provider seam is the OpenAI-compatible wire protocol (A8): one
+    NarratorProvider implementation parameterized by (base_url, credential
+    ref, model pin, timeout); no LLM framework dependencies (X.6).
+    D3 (model manifest, queue item 12; absorbs infra doc 10.4): weights
+    never enter the Nix store. babylon doctor --provision fetches them per
+    a SIGNED manifest shipped in the closure (URLs + sha256 pins),
+    resumable, into ~/.local/share/babylon/models/. The babylon-data R2
+    bucket hosts payload tarballs and gguf weights. Defaults: one small
+    chat gguf + one small embedding gguf, fully offline. Per-campaign
+    embedding pins per the section 3.4 discipline. Item 6 is RECORDED as
+    resolved by A7.5: sentence-transformers and torch leave the dependency
+    tree (~2 GB off the closure); Archive semantic search rides this lane.
+    D4 (write boundary, queue item 13): a babylon_intel Postgres role with
+    SELECT on Hoist projection views + INSERT on narrator-prose and
+    embedding tables ONLY -- no UPDATE, no DELETE, no DDL, no Ledger
+    access. One migration. Database-enforced impossibility backing V's
+    observes-never-adjudicates posture (A7.2's three-way boundary).
+    D5 (embedding-dimension seam): the allowlisted embedding models pin the
+    Archive column types -- bge-m3 -> vector(1024) (dense dim verified
+    2026-07-20 from BAAI's model card and config.json hidden_size),
+    bge-base-en-v1.5 -> vector(768); both under the pgvector HNSW 2000-dim
+    index cap. A campaign's column dimension is fixed at creation; changing
+    models mid-campaign is a schema migration, not a config change.
+    D6 (deferral, queue item 9): premium billing/metering on the Cloudflare
+    lane is DELIBERATELY DEFERRED -- the api-worker carries no per-key
+    metering; free-tier platform caps are the only backstop. Lands with the
+    real ingest API, not before.
+  consequences: |
+    The closure sheds torch (~2 GB) and gains llama-cpp; the Archive's
+    semantic search and the narrator share one inference lane and one wire
+    protocol across all providers (the section 3.4 cross-provider hash
+    contract is the standing proof nothing leaks into adjudication). The
+    Ollama-first vs llama-server-first tension between the two proposal
+    docs closes with this ruling. The babylon_intel migration is the only
+    schema change this ADR commissions; the vector(N) columns bind at
+    campaign creation. Rejecting D1 reopens the bundled-lane choice but
+    leaves D3-D5 intact for whichever server wins.
+  evidence: |
+    CONSTITUTION.md v2.12.0 Amendment V + ADR093; babylon-infra
+    ai/.inbox/nix-plan.md sections A7 (A7.2/A7.3/A7.5/A7.6), A8, 3.4,
+    section 10 items 11/12/13, 6, 9 (untracked owner drop); the drop's
+    api-worker (babylon-infra ai/.inbox/babyloncloudflaredrop.tar.gz)
+    allowlists @cf/meta/llama-3.1-8b-instruct-fast (default),
+    llama-3.3-70b-instruct-fp8-fast, llama-4-scout-17b-16e-instruct +
+    @cf/baai/bge-m3, bge-base-en-v1.5; babylon-infra
+    ai/reference/local-inference.md (llama-server flags, gguf/quantization,
+    Ollama deltas), ai/reference/cloudflare-ai.md (model catalog, dims
+    resolution 2026-07-20), ai/reference/postgres.md (pgvector caps, the
+    schema seam); live account verification 2026-07-20 (api-worker not
+    deployed).

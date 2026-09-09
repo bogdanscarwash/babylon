@@ -1,0 +1,186 @@
+ADR194_director_rulings_batch2_2026_08_11:
+  status: "accepted"
+  date: "2026-08-11"
+  title: >
+    Director rulings batch 2026-08-11 (second batch today) — four items
+    cleared, three director-gate STOPs and one scheduling call, each
+    presented with options plus a workforce recommendation and RULED by
+    selecting the recommended option in all four: audit Q3 (within-class
+    wealth distribution, issue #491) is ruled an EMPIRICAL QUANTILE SKETCH
+    — data-driven ACS-derived brackets carried as a first-class field, no
+    imposed functional form, consistent with the standing no-imposed-
+    sigmoids and empirical-invariants lines (R1); the Currency-times-
+    unbounded-runtime-coefficient gap (issue #492) is closed with ONE new
+    legal operation — Currency scaled by a defconst-declared positive
+    coefficient whose domain is stated at declaration and enforced loudly
+    at load/eval, read as machinery rather than a mint (R2); the #382 P-B
+    ref_digest re-key is ruled FORWARD-ONLY — new reference data keys by
+    the ADR098 build sha256, existing rows keep their keys until they
+    naturally regenerate, no migration and no data-loss mode (R3); and on
+    scheduling, the current focus holds — B2's tick loop + port lane first,
+    the restoration-channels design train (#380) charters after B2 lands,
+    and #381 (narrator) CLOSES NOW by cross-reference to #27, the four-tier
+    ladder's own tracking issue (R4).
+  context: |
+    `reports/bundle-closure-audit-2026-08-11.md` (read-only workforce sweep
+    of the seven §7-criterion-4 ruling-bundle issues, #376-#382) found all
+    seven still open and scored #381 (narrator) nearest to closure at 5/6
+    consequences code-verified, with the sole remaining item — the
+    four-tier narration ladder (bulletin/dispatch/chapter-52/Book) — being
+    its own already-filed issue, #27. The same audit surfaced #382's true
+    state: P-J/P-H/P-I/P-30-31-34 landed and verified live, P-F landed in
+    this session's earlier PR #496 (the missing player-role half of ruling
+    32's `synchronous_commit=off`), and P-B (the `ref_digest` re-key,
+    ADR176 ruling 29) was investigated and explicitly STOPPED rather than
+    guessed — the ruling text's "content-identity verified across cohorts
+    before any collapse" precondition is a live-data audit the box has no
+    equivalent populated dataset to safely run, so two materially different
+    implementations (a live collapsing migration vs. a forward-looking
+    schema/hydration change) both looked defensible from the ruling text
+    alone (issue #382, comment 2026-08-11T03:33:35Z).
+
+    In parallel, two Rust-port trains returned Phase-1 STOP verdicts that
+    opened their own director-gate issues rather than guess at a reserved
+    theoretical or algebra-surface call:
+
+    - **Issue #491** — the Vitality port train's within-class wealth
+      distribution gap. ADR191 r3 (this session's first batch) had already
+      ruled the mortality family RE-DERIVED AS A MEASURE — attrition
+      deaths are the mass of the within-class wealth distribution failing
+      to clear subsistence, the same emergent quantity ADR173 ruled
+      P(S|A) to be — but that ruling discharged the ADR175 mortality-
+      family review half, not `ai/bsl-architecture-standard.md` §3.2's own
+      open audit Q3 (the diagram's input node is literally labeled
+      "within-class wealth distribution (canonical form OPEN — audit Q3)",
+      candidate forms named, none chosen). `social_class` has no
+      member-population or distribution carrier at all (OQ-1e); a
+      degenerate scalar reading was rejected as unfaithful to the ruling,
+      and synthesizing a CDF from the existing single Gini via an assumed
+      lognormal/Pareto shape would itself be exactly the imposed
+      functional form the no-imposed-forms line forbids.
+    - **Issue #492** — the Territory port train's algebra-surface gap.
+      §3.2's legal `Currency`-mixed operations (`Currency ± Currency`,
+      `Currency × Coefficient` domain `[0,1]`, `Currency ÷ Currency`,
+      `Currency ÷ Int`) have no path for `rent_spike_multiplier` — a
+      runtime-moddable define with domain `(0, ∞)`, tested with modding
+      values like 2.0 — so the whole eviction pipeline (trigger → rent
+      spike → displacement → sink transfer) is un-authorable. The same gap
+      blocks Metabolism's `entropy_factor`, and Lifecycle's PR #493 names
+      the identical construct gap as its own Blocker-1 for the two rules it
+      leaves un-ported (inheritance flow, class mobility) — one ruling
+      clears three systems' worth of blocked content.
+
+    All four items were presented to the Director interactively with
+    options and a workforce recommendation; she selected the recommended
+    option in every case, quoted verbatim below.
+  decision: |
+    THE RULINGS (Director, 2026-08-11, second batch; option text quoted
+    verbatim as presented and selected).
+
+    R1 — ISSUE #491, AUDIT Q3: EMPIRICAL QUANTILE SKETCH.
+      Status: ruled. Selected option, quoted: "Data-driven brackets
+      (ACS-derived quantiles) carried as a first-class field. No imposed
+      functional form — consistent with the no-imposed-sigmoids ruling and
+      the empirical-invariants approach. Costs more data plumbing than a
+      parametric shape." Rejected in the same sitting: a lognormal shape
+      (an imposed functional form on the exact question left open),
+      a Pareto shape (weak lower/middle-mass fit precisely where
+      subsistence-clearing bites — the region the measure cares about
+      most), and staying inert (leaves both Grinding Attrition and the
+      P(S|A) landing dark indefinitely with no forward motion). This
+      resolves audit Q3 IN DIRECTION — the canonical representation is an
+      empirical quantile sketch, not a parametric family — while the
+      concrete field design (bracket count, the quantile schema
+      `social_class` gains, and how OQ-1e's member-population carrier is
+      shaped) remains design work still to charter, not decided by this
+      ruling.
+
+    R2 — ISSUE #492, CURRENCY × UNBOUNDED RUNTIME COEFFICIENT:
+      DECLARED-DOMAIN SCALE OPERATION.
+      Status: ruled. Selected option, quoted: "Add one legal operation:
+      Currency scaled by a defconst-declared positive coefficient whose
+      domain is stated at declaration and enforced loudly at load/eval.
+      Scalar multiplication isn't new mathematics — this reads as
+      machinery, keeps defines' moddable shape intact." Rejected:
+      define-splitting (narrows a `[0,1]` spike-fraction out of the
+      existing define, which reshapes the moddable surface's shape rather
+      than extending its legal operations), and running the question
+      through the full constitutional amendment process (the ruling holds
+      that a declared-domain scalar multiply is machinery under Amendment
+      AE's "mints no new mathematics" test, not a primitive requiring one).
+
+    R3 — ISSUE #382 P-B, REF_DIGEST RE-KEY: FORWARD-ONLY.
+      Status: ruled. Selected option, quoted: "New reference data gets
+      keyed by the ADR098 build sha; existing rows keep their keys until
+      naturally regenerated. No migration, no data-loss mode. The cohort
+      collapse happens organically as data rebuilds." Rejected: a full
+      collapsing migration against live accumulated Postgres rows (the
+      2026-08-11 investigation found this unsafe to execute without the
+      populated dataset the original 2026-07-29 brief's cohort analysis
+      had access to — a 20M-row re-key with a data-loss failure mode if
+      the cohorts are genuinely different geographies), and deferring the
+      whole question to the Rust port (leaves 13 `immutable_reference_*`
+      tables and 6+ consumer modules carrying the ambiguity indefinitely
+      when a safe, code-only path exists now).
+
+    R4 — SCHEDULING, THE TWO BIG UNBLOCKED ITEMS: AFTER B2 LANDS.
+      Status: ruled. Selected option, quoted: "Keep the current focus: B2
+      tick loop + port lane first (the §7 critical path), then charter the
+      restoration-channels design train. #381 closes now by
+      cross-referencing #27." This disposes of both the audit's two
+      "genuinely actionable, no upstream blocker" large items in one call:
+      #380's restoration-channels design train (fascist devaluation, war
+      devaluation, re-division of the periphery — ruling 23's three
+      channels, L-sized, zero code, no blocker) is DEFERRED to charter
+      after B2, not started now; and #381 (narrator) CLOSES IMMEDIATELY —
+      the audit found 5 of its 6 consequences code-verified (prompt voices
+      pinned per rulings 26/27, the §5 constitutional repair executed, the
+      production grounding filter with visible `{absence}` pages, and the
+      NarrationEnvelope/quiet-tick-beat contract), with the sole remaining
+      item — the four-tier narration ladder consuming the envelope
+      estate — being its own pre-existing issue, #27, which becomes the
+      ladder's tracker going forward rather than #381 staying open to
+      duplicate it.
+  consequences: |
+    - R1: audit Q3 is RESOLVED IN DIRECTION but not yet implemented — the
+      bracket-count/quantile-schema/member-population-carrier design is
+      chartered work, not shipped by this ADR. Until that field lands,
+      Grinding Attrition (ADR191 r3's emergent measure) and the P(S|A)
+      landing (ADR173) BOTH STAY BLOCKED — this ruling removes the
+      theoretical uncertainty, not the blocker itself. Issue #491 closes
+      with this ADR cited; the design-chartering step is new backlog, not
+      recorded here as complete.
+    - R2: `bsl-language.rst` §3.2 gains the declared-domain scale
+      operation (a new spec chapter section + D-row), followed by the Rust
+      typecheck/eval implementation. Once both land, Territory's eviction
+      pipeline, Metabolism's `entropy_factor`, and Lifecycle's two
+      verified-inert rules (PR #493's pack header, Blocker-1) all unblock
+      together — one ruling, three systems. Issue #492 closes with this
+      ADR cited; the spec-chapter and implementation legs are new backlog,
+      not recorded here as complete.
+    - R3: P-B (ADR176 ruling 29) is now implementable as a forward-only
+      persistence change — new reference-data writes key by the ADR098
+      build sha256, existing rows are untouched. Ruling 29's original
+      "content-identity verified across cohorts" precondition applies only
+      if/when a deliberate collapse of existing duplication is later
+      chosen as a separate, explicitly-scoped ceremony; it does not gate
+      the forward-only write path this ruling authorizes. #382 stays OPEN
+      — P-D (the live checkpoint-only-hydration correctness gap) and W-I
+      (the five dead edge types) remain, and P-B's own forward-only
+      implementation is itself still unshipped code, not landed by this
+      ruling.
+    - R4: #380 stays OPEN, its restoration-channels train explicitly
+      queued behind B2 rather than started now. #381 CLOSES with this ADR
+      — see the closure comment posted to the issue, which carries the
+      audit's per-item evidence summary; #27 becomes the sole forward
+      tracker for the four-tier narration ladder.
+  supersedes: []
+  related:
+    - ADR191_director_rulings_batch_2026_08_11
+    - ADR192_relation_state_delegated_ruling
+    - ADR193_hypergraph_storage_swap
+    - ADR176_director_rulings_batch_gds_dispositions
+    - ADR172_amendment_ae_refoundation_ratified
+    - ADR173_audit_and_stops_dispositions
+    - ADR175_emergence_extension_logging_phi_sign
+    - ADR185_director_rulings_2026_07_31

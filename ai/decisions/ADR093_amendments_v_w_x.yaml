@@ -1,0 +1,63 @@
+id: ADR093
+title: >-
+  Amendments V/W/X — the Archive-pivot + infrastructure amendment package:
+  narrator-only AI + transport-generalized client (V), deterministic
+  materialization / golden vault (W), infrastructure domain delegation +
+  Nix toolchain authority + local-first Periphery/Metropole distribution (X)
+status: accepted
+date: '2026-07-20'
+context: >-
+  Owner instruction 2026-07-20: implement the babylon-infra suggestions as
+  parent-constitution amendments. The suggestion trail: the babylon-infra
+  constitution v1.0.0 (BD-ratified 2026-07-20; standalone law of the infra
+  domain, mounted as the infra/ submodule by PR #223) and its STATE.md, which
+  flagged the constitutional tensions X.1 "no Nix" and X.6's Grafana
+  rejection; plus the parent-side canon docs it cites:
+  ai/_inbox/tui/tui-roadmap-update.md (whose section 6 is an explicit
+  amendment package authored against v2.10.0 with provisional letters T/U/V)
+  and ai/_inbox/tui/babylonlocalfirstinfrastructure.md (BD design-session
+  rulings D1 embedded player PG17+pgvector, D2 Ollama-first + opt-in remote
+  fallback, D3 Grafana+SQL fleet observability). Same-day owner rulings that
+  ground the IMPLEMENTED halves: the TUI switch (web failures no longer
+  gate), Nix consistency ("import babylon-infra as a proper subrepo, run
+  that nix environment"), the sqlite 3.53.1 pin (PR #222), the submodule
+  mount (PR #223), and the flake's dedicated nixpkgs-data input (babylon-infra
+  9d47d6a). Letters re-assigned: the roadmap's provisional T/U/V become
+  V/W/X because U was taken by the Scale Lattice (v2.11.0) and T stays
+  reserved for the Divergence Channel (ADR072, awaiting BD).
+decision: >-
+  CONSTITUTION.md v2.12.0 (MINOR, one cycle, R+S same-cycle precedent).
+  Amendment V: II.5 narrator-only (no LLM in the input path per ruling R4;
+  Amendment I superseded-in-part; local-first provider stack per D2), II.8
+  transport-generalized (observe() contract over in-process call / HTTP /
+  file materialization; materializations regenerable never authoritative;
+  browser client legacy, terminal Archive client successor), III.6
+  generalized to all persisted AI artifacts keyed (entity, tick, model_pin).
+  Amendment W: new III.13 Deterministic Materialization [PENDING CODE] —
+  ORDER BY projections, sandboxed sim-time-only templates, byte-identical
+  artifacts, golden vault in III.12's artifact list, Loud Failure extends to
+  pixels; III.9 P1 tier gains III.13. Amendment X: X.1 scoped to the
+  production estate (blanket no-Nix letter corrected, Amendment P pattern;
+  production-host substance unchanged); X.6 Grafana+SQL carve-out (D3); new
+  X.7 Toolchain Single Pinning Authority [IMPLEMENTED] (babylon-infra
+  constitution governs the infra domain; the infra/ flake is the sole
+  toolchain pinning authority; nixpkgs-data input in lockstep with
+  PINNED_SQLITE_VERSION 3.53.1; mise = task runner only); new X.8
+  Local-First Distribution [PENDING CODE] (whole Trinity on the player
+  machine; embedded PG17+pgvector unix-socket-only cluster; Nix flake beta
+  channel + R2 binary cache; Debian 13 baseline; Metropole = observability +
+  ingest, observes-never-adjudicates; web serving stack legacy).
+consequences: >-
+  The canon docs are committed under ai/_inbox/tui/ so the amendment's cited
+  sources are in-repo and durable. Held, explicitly NOT ratified here: the
+  roadmap's 6.5 Provenance & Ceremony amendment (BD's call on its home —
+  constitution vs CLAUDE.md+CI — still open); the CCL amendment draft
+  (re-derive against ADR082/083 first); the NLCD data-source amendment
+  (gates Epic 14); Amendments B/D/T unchanged. PENDING-CODE tags authorize
+  building the Archive presentation pipeline, the golden vault, and the
+  local-first distribution — and forbid describing any of them as existing.
+  Engine-side II.6/II.10 text (today's Postgres runtime topology) is
+  deliberately untouched: it describes shipped reality; X.8's player-machine
+  topology supersedes it only when the implementing code lands with its own
+  ceremony. The web/ estate remains kept-validated-never-extended until the
+  cutover the roadmap's P4 gate governs.

@@ -1,0 +1,113 @@
+id: ADR139
+title: >-
+  P25 U12 — Conjunctures + the governance endgame + the Third-Worldist ledger
+  (§3.4/§3.5/§4): popular-front conjuncture, spoiler arithmetic + entryist
+  derecognition + host-discipline clamp (the ADR137 deferrals), the SYRIZA
+  fork with the Allende/synthesis rupture geometry, the periphery mirror,
+  and L-RECEIPTS provenance rows — no flow without a row.
+status: accepted
+date: '2026-07-27'
+context: >-
+  U12 closes the charter's conjuncture/endgame/ledger scope
+  (project/programs/25-political-superstructure.md §U12, the-electoral-
+  question.md §3.4/§3.5/§4) on the machinery U8-U11 built: the delivery
+  ledger's per-class betrayal integral (U9) had no consumer of
+  betrayal_threshold; the governance road had office but no fork at the
+  ceiling; low-Phi sovereigns faced the same gauntlet bars as the rent-fed
+  core; and three flows moved with no provenance row (EXPLOITATION edge
+  rent, the Phi slice consumed by an enactment, the delivered social-wage
+  unit) despite the BoundaryFlowRegister discipline. The unit also absorbed
+  ADR137's three deferrals (host discipline, entryist derecognition,
+  spoiler arithmetic). Commits A-C3 landed 2026-07-23; D1-F landed
+  2026-07-27 under the Amendment-AD agentic model with the per-commit
+  byte-identity gate.
+decision: >-
+  (A) POPULAR FRONT (§3.4): one consolidation-pressure measure in
+  domain/politics/conjuncture.py reproducing EndgameDetector's
+  fascist_consolidation gate arithmetic verbatim, two adapters (the
+  detector delegates; ElectoralSystem evaluates the trigger every tick);
+  crossing popular_front_trigger fires POPULAR_FRONT_CALLED and forces an
+  arm on EVERY line (apparatus-entangled stances COMMIT, else AUTONOMY);
+  the commit arm accrues CO_OPTIVE dependence toward the apex
+  (popular_front_cooptation_rate) and suppression is the committed share
+  of loyal mass. (B) SPOILER ARITHMETIC: independent-line and derecognized
+  orgs' votes subtract from the ideologically-nearest duopoly machine.
+  (C1-C3) DERECOGNITION + HOST DISCIPLINE: HOST_DERECOGNIZED vocabulary;
+  absorbing expulsion past host_threat_threshold; entryist platforms
+  project toward the standing overlay at enactment
+  (host_discipline_clamp_share). (D) THE SYRIZA FORK (§3.5):
+  domain/politics/governance_endgame.py — pure laws: resolve_governance_arm
+  (rupture requires BOTH live dual-power organs on the claimed terrain AND
+  an uncaptured party, institutional_pull < governance_capture_threshold;
+  the organ-less honest reformer capitulates — SYRIZA is the standing
+  math, not a special case), rupture_geometry (synthesis needs SOLIDARITY
+  bridges AND a Phi-starved state, else Allende), dual_power_live (the
+  @17.5 >=2-active-claimants predicate read LIVE over
+  query_territory_claims — organs stand on the terrain at rupture time or
+  they don't; no event-history flag), betrayal_crossed (b(c) = the U9
+  delivery integral vs betrayal_threshold — the previously-unconsumed
+  define's first consumer), phi_share (one measure shared with E).
+  PolicySystem @17.47 detects FIRST ceiling contact in office (preempted /
+  struck / fiscal bound / capital strike, via the _incumbent seam) and
+  stamps the ABSORBING governance_endgame register (10th superstructure
+  register, PolicySystem-owned) + GOVERNANCE_FORK_RESOLVED (CROSSING
+  TERMINAL_ADJACENT); _split_delivery fires BETRAYAL_INTEGRAL_CROSSED
+  (CROSSING INTRA_LEVEL) once per class at the crossing edge.
+  ElectoralSystem @17.45 consumes ONE TICK STALE, punctually
+  (opened_tick+1, no memo state): Allende = the government row falls + the
+  existing L-SUSPEND machinery (a coup IS a suspension); synthesis =
+  office persists + hope spikes through bridged classes
+  (hope_spike_gain); capitulate = nothing here — the delivery-gap
+  machinery IS the PASOK trajectory. Betrayal windows: a class whose
+  integral stands past the threshold gets a disillusion window, durable
+  across pruning. (E) THE PERIPHERY MIRROR (§4): resolve_legislate
+  contracts every gauntlet bar by periphery_ceiling_factor (0.25) for a
+  MEASURED Phi share below periphery_phi_share_floor — CLIENT_STATE
+  conditionality (preemption), the comprador bench (judicial), tighter
+  bond discipline, hair-trigger capital flight; Allende/Arbenz as the
+  DEFAULT geometry. FiscalTerrain.phi_measured carries attribute PRESENCE
+  (III.11: a 0.0 summed from absent tick_phi_hour is unknowable, never
+  peripheral); the D rupture predicate uses the same guard. (F) L-RECEIPTS
+  (§4): NodeKind += sovereign/social_class; BoundaryEdgeKind +=
+  exploitation_flow/fiscal_funding/social_wage; migration 0040 widens the
+  0013 CHECKs (numbered PAST dev's 0039 domain-contracts — never mint into
+  another lane's hole); BoundaryFlowRegister gains a session_id binding at
+  construction (the runner passes its run id); ImperialRent @9 records a
+  row per positive extraction; Policy @17.47 records the Phi slice an
+  enactment consumed (declared decomposition convention: domestic taxes
+  net of debt service absorb first, the pool tops up) and each delivered
+  per-class unit. Every writer guarded: no bound register = clean no-op.
+  EVENTS: vocabulary 98->100, taxonomy 63->65, builders 78->80 — plus the
+  RECONCILIATION FIX: C1 left three cross-file severity pins stale at 62
+  (the staged-files-only hook class); repaired as its own commit before
+  any D work. DEFINES: governance_capture_threshold (0.5),
+  periphery_phi_share_floor (0.05), periphery_ceiling_factor (0.25); two
+  metadata-only ceremonies (p25-u12-governance-defines-hash,
+  p25-u12-periphery-defines-hash) after A/C3's two.
+consequences: >-
+  WIN: the governance road now has its historically-grounded endgame — the
+  fork, both geometries, and the voter curve all standing math over
+  quantities the engine already measured; the Fundamental Theorem's two
+  hemispheres are both playable (the periphery mirror prices reformism
+  without the rent cushion); and the welfare check's provenance is
+  queryable to the extraction that funded it (the rows speak). BYTE
+  SAFETY: every motion sits behind the parties-exist/empty-register/
+  no-government guards — qa:regression 6/6 byte-identical after every
+  commit; the org-less six never write the new register, never row the
+  ledger (no bound register in the gate harness). DUAL_POWER read path and
+  L-RECEIPTS completeness are pinned by tests (charter §U12(c)):
+  test_rupture_requires_organs_on_the_claimed_terrain + the geometry
+  table; test_receipts.py's end-to-end chain assertion. OPEN, disposed
+  loud: the political_form couplings row (wiring-doctrine §4) stays OPEN —
+  its operational sides still absent and a coupling moves the six-scenario
+  DAG, which U12's own gate forbids; owner shifts to U13+/post-program.
+  Deliberate non-build: no new endgame axis or GameOutcome member (I.11 —
+  the detector recognizes, never adjudicates; the fork feeds the EXISTING
+  fascist_consolidation/revolutionary machinery through betrayal routing
+  and suspension). U13 (ADR140) inherits: the five goldens exercise the
+  fork arms (syriza scenario = capitulate; the synthesis window needs the
+  organs+bridges+starved fixture), L-RECEIPTS joins the property-law
+  estate. Merge reconciliation: origin/dev (Amendments AC v2.17.0 + AD
+  v2.18.0, ADR150/151, DSN fix #303, nightly #306) merged at closeout;
+  index.yaml 1.61.0.
+file: ADR139_p25_u12_conjunctures_governance_endgame.yaml

@@ -1,0 +1,334 @@
+; The K=16 rung-ladder wealth-mass carrier — Phase 1, INERT (#491 T4,
+; ADR194 R1). This world declares and seeds the carrier H1 names
+; (docs/superpowers/plans/2026-08-17-491-rung-ladder.md §6.2): sixteen
+; per-class wealth-mass shares, the fifteen grid cuts that will bound them,
+; the household->person crossing, and the subsistence horizon. NO RULE IN
+; THIS PACK READS THEM. Phase 3a (T5, the dual measure `clearing`/
+; `failing_certain` and the P(S|A)/H3 horizon identity) and Phase 3b (T6,
+; Grinding Attrition's kappa) are the tasks that give this carrier its
+; first consumer. Until then this is data alone — "the carrier, inert."
+;
+; UNIT-SYSTEM AUTHORITY: every dimension and every construct named below is
+; DEFINED in reports/subsistence-unit-reconciliation-2026-08-17.md (the
+; #491 T2 deliverable) — this header CITES that record rather than
+; re-deriving its algebra. See that record's §3 for the full unit table,
+; §3.1 for the household->person crossing, §4 for tau, §9 for the
+; Aleksandrov trace of every named construct.
+;
+; PROVISIONAL (issue #510), TWO declared gaps, not one:
+;   (1) GAP-1 -- these masses carry a county ACS B19001 household-INCOME
+;       shape standing in for a within-class WEALTH distribution.
+;       Director-ruled allowed for gameplay and development.
+;   (2) THE HOUSEHOLD CROSSING -- B19001 counts HOUSEHOLDS; this field is
+;       read as a share of MEMBERS. Declared bridge:
+;       household-person-equivalence, assumed rung-independent within a
+;       county (eta_k = 1), which cancels in normalised shares. UNMEASURED
+;       in-repo (reconciliation record §3.1).
+; CLASS ASSIGNMENT is NOT proxied -- it comes from the measured employment
+; relation (B24080), per the 2026-08-17 OQ-F ruling. Nothing in this
+; scenario touches an income or relation-class column at all (that is A1's
+; and A2's business, T7/T8 — this pack seeds only the carrier and a
+; six-class Currency-lane world it shares no fixture identity with).
+;
+; THE FIFTEEN CUTS BELOW ARE A HAND-AUTHORED FIXTURE, NOT THE RULED GRID.
+; `wealth_sketch_grid.csv` (design doc §5.3, T7/T8) is the actual derived,
+; county-anchored universal grid, and it is GATED on DP-4 (the
+; mean_county/midratio ruling), which has not sat. These fifteen values
+; exist only to exercise the K=16 carrier's own load-time contract --
+; strictly positive, monotone non-decreasing (§4.1's RED leg;
+; `wealth-sketch/cut-01` through `cut-15`, `Ratio` defconsts, `r` suffix,
+; ADR194 R1) -- and carry no claim to the real distribution's shape.
+;
+; ETA (household-person-equivalence) and TAU (subsistence-horizon) are
+; BOTH `.bscn` defconsts precisely so neither one moves `defines_hash`
+; (reconciliation record §4.2, the same reasoning ADR210 R14 gives for
+; kappa) -- a `GameDefines` field would fail `qa:regression`'s 11-baseline
+; gate on the spot for a constant the frozen engine has no consumer for.
+;
+; ETA = 1.0r -- DP-7 RULED (posted on #491, 2026-08-18T02:42:38Z):
+; "DP-7 = A: the eta = 1 crossing DECLARED (named defconst, published
+; dual mass columns [T7/T8], Aleksandrov row, extended #510 string); the
+; measured-eta acquisition folded into #510's revisit." Reconciliation
+; record §3.2. The value here is the RULED value, not a placeholder
+; awaiting a ruling.
+;
+; TAU = 1.0r -- DP-5 RULED (posted on #491, 2026-08-18T02:42:38Z):
+; "DP-5 = A now, C as a named revisit at the ReserveArmy port: tau = 1
+; definitional ships; the shared material hold-out horizon (the emergent
+; form) lands when the absorption-flow producer exists." Reconciliation
+; record §4.3. STALE-HEADER CORRECTION (T2 review finding, carried into
+; this task's brief): an earlier draft of this pack's header text read
+; "tau — FIXTURE-DECLARED, DP-5 pending" -- DP-5 sat and ruled BEFORE this
+; task executed, so the value below ships the RULED disposition (option
+; A: the tick's own accounting period, invoking no frozen authority),
+; cited to the sitting record above, not carried forward as an open
+; question. Option C (the H3-symmetric, flow-derived horizon) remains a
+; named, not-yet-executed revisit gated on
+; `src/babylon/domain/economics/reserve_army/accumulation.py:133`'s
+; absorption-flow producer -- this train does not build it.
+;
+; THE CURRENCY LANE (T3, OQ-J): `wealth`, `s-bio` and `s-class` below are
+; re-seeded as `currency` fields -- the SAME six-class shape
+; `vitality-conformance.bscn` carries (core/bourgeoisie/hermit/
+; last-worker/remnant/dissolved), Currency-typed rather than
+; int/real-typed. Declaring even one `currency` node attribute makes
+; `CanonicalState` section `0x06` (T3, D189/D190) MATERIALIZE for this
+; world -- its bytes are NEW pins, measured here for the first time, never
+; derived from the eighteen pre-existing `tick_goldens.rs` pins (whose
+; worlds seed no currency fields at all and stay byte-identical).
+;
+; THE CURRENCY-DRAIN SPIKE (T4.3, named in the reconciliation record §6,
+; B6 of the plan's blockers table). VERDICT: FAILED, as predicted --
+; empirically run once, throwaway, never committed. Retyping
+; `economy/base-subsistence` to `Currency` and attempting the frozen
+; drain's own association order, `cost = (base-subsistence * population) *
+; multiplier`, against a scratch one-class world produced, verbatim:
+;
+;   tick failed in rule vitality/currency-drain-spike-attempt: Currency
+;   x 100 -- the multiplier is outside the Coefficient [0,1] domain, so
+;   the expression is Currency x Real, which is E-TYPE-030 (§3.2); the
+;   typechecker is the primary gate here
+;
+; Confirming the reconciliation record's §6 analysis: `population` is a
+; declared `Int` field, `Currency x Int` (and, as measured, the runtime
+; arm's `Currency x Real` fallback attempt for any out-of-[0,1] value) is
+; `E-TYPE-030` -- the frozen drain's association order has NO expression
+; in the Currency lane as written. This assertion is NEVER weakened to
+; make the spike pass (§9/T4.3's own instruction): the named fallback
+; (reconciliation record §6 route 2 -- a hydrated `currency extensive`
+; cost field, computed at load/seed time outside BSL arithmetic, with its
+; own D-row for the association-order divergence) is T5/T6's to adopt,
+; not this task's. This pack's own probe rule
+; (content/rules/vitality-attrition.bsl) therefore does NOT attempt the
+; drain at all -- it is a load-only smoke, exactly as OQ-D's carrier-only
+; scope requires (§12 item 1: this train supplies the carrier, not the
+; C/G/P derivation under Axiom A0).
+;
+; THE SIX CLASSES exercise the five cases §9/T4.4 names, one class each,
+; plus a sixth (dissolved) exercising a mass spread across four
+; non-adjacent rungs:
+;   core          -- all mass in ONE rung (rung 8)
+;   bourgeoisie   -- an ALL-MASS-AT-THE-TOP class (rung 16, the open rung)
+;   hermit        -- a ONE-MEMBER class (population 1; all mass in rung 4)
+;   last-worker   -- mass SPLIT ACROSS the threshold rung (rungs 1/2, 0.5
+;                    each -- exact in binary64 by construction)
+;   remnant       -- NO MASSES AT ALL -- the absence fence's live subject
+;                    (III.11: every one of the 16 reads is Err, never a
+;                    fabricated 0.0)
+;   dissolved     -- (already `active 0`, mirroring
+;                    vitality-conformance.bscn's own dissolved fixture) a
+;                    FOUR-rung spread (0.25 each, rungs 2/7/11/16) -- a
+;                    bonus case, exact in binary64
+; Every non-absent class's 16 values are written EXPLICITLY (including the
+; zero rungs) -- this is a hand-authored conformance fixture, not seeded
+; production data, so the zero entries are authored fact, not a fabricated
+; substitute for an unmeasured one (L-ABS governs UNMEASURED reality, not
+; an author's own declared zero share).
+(scenario vitality-attrition/conformance
+  (deffield social-class/active int extensive)
+  (deffield social-class/population int extensive)
+  (deffield social-class/wealth currency extensive)
+  (deffield social-class/subsistence-multiplier int intensive)
+  (deffield social-class/s-bio currency intensive)
+  (deffield social-class/s-class currency intensive)
+
+  ; H1's carrier (design doc §6.2): K=16 wealth-mass shares, `coefficient`
+  ; (the [0,1] store-boundary domain, E-EVAL-020) `intensive` (a per-member
+  ; SHARE -- an unweighted mean across classes is the variance error §3.4
+  ; exists to reject).
+  (deffield social-class/wealth-mass-01 coefficient intensive)
+  (deffield social-class/wealth-mass-02 coefficient intensive)
+  (deffield social-class/wealth-mass-03 coefficient intensive)
+  (deffield social-class/wealth-mass-04 coefficient intensive)
+  (deffield social-class/wealth-mass-05 coefficient intensive)
+  (deffield social-class/wealth-mass-06 coefficient intensive)
+  (deffield social-class/wealth-mass-07 coefficient intensive)
+  (deffield social-class/wealth-mass-08 coefficient intensive)
+  (deffield social-class/wealth-mass-09 coefficient intensive)
+  (deffield social-class/wealth-mass-10 coefficient intensive)
+  (deffield social-class/wealth-mass-11 coefficient intensive)
+  (deffield social-class/wealth-mass-12 coefficient intensive)
+  (deffield social-class/wealth-mass-13 coefficient intensive)
+  (deffield social-class/wealth-mass-14 coefficient intensive)
+  (deffield social-class/wealth-mass-15 coefficient intensive)
+  (deffield social-class/wealth-mass-16 coefficient intensive)
+
+  ; The fifteen grid cuts -- HAND-AUTHORED FIXTURE, see header. `Ratio`
+  ; (open domain (0, inf), strictly positive -- `0.0r` or a negative value
+  ; is `E-LEX-027`), monotone non-decreasing by this pack's own posture
+  ; test (rust/crates/babylon-tick/tests/vitality_attrition_conformance.rs).
+  (defconst wealth-sketch/cut-01 0.18r)
+  (defconst wealth-sketch/cut-02 0.25r)
+  (defconst wealth-sketch/cut-03 0.32r)
+  (defconst wealth-sketch/cut-04 0.40r)
+  (defconst wealth-sketch/cut-05 0.50r)
+  (defconst wealth-sketch/cut-06 0.62r)
+  (defconst wealth-sketch/cut-07 0.75r)
+  (defconst wealth-sketch/cut-08 0.90r)
+  (defconst wealth-sketch/cut-09 1.05r)
+  (defconst wealth-sketch/cut-10 1.22r)
+  (defconst wealth-sketch/cut-11 1.40r)
+  (defconst wealth-sketch/cut-12 1.60r)
+  (defconst wealth-sketch/cut-13 1.85r)
+  (defconst wealth-sketch/cut-14 2.15r)
+  (defconst wealth-sketch/cut-15 2.50r)
+
+  ; The declared crossing (DP-7 = A, ruled) and the subsistence horizon
+  ; (DP-5 = A now, ruled) -- see header for full citation.
+  (defconst wealth-sketch/household-person-equivalence 1.0r)
+  (defconst vitality/subsistence-horizon 1.0r)
+
+  ; kappa (T6.3, ADR210 R14) -- the stock->flow time-constant converting
+  ; the certainly-failing mass share into a per-tick death flow; a
+  ; Coefficient, NOT a shape parameter (shape lives entirely in the
+  ; measured K=16 distribution). DERIVED, not picked: fitted at the
+  ; `calibration` node below -- the frozen engine's own canonical
+  ; total-attrition conformance point (coverage_ratio 1.0, inequality 0.8,
+  ; population 100, s-class = 0$ so the frozen and R13 level sets coincide
+  ; at the reference; tests/unit/formulas/test_vitality.py's
+  ; test_coverage_below_threshold_causes_attrition) -- as
+  ; kappa = frozen-rate / failing-certain = 1.0 / 1.0 = 1.0c, fitted
+  ; against DP-6 = B's driver (failing-certain). Replaces
+  ; attrition_base_factor, which ADR191 R3 rules NOT transcribed. D198
+  ; publishes the derivation and the divergence surface (where the two
+  ; forms part) -- exact at the reference by construction, a scale, never
+  ; a curve-bend.
+  (defconst vitality/kappa 1.0c)
+
+  ; core -- all mass in ONE rung (rung 8).
+  (node core NodeType/SOCIAL_CLASS
+    (social-class/active 1)
+    (social-class/population 100)
+    (social-class/wealth 1000$)
+    (social-class/subsistence-multiplier 1)
+    (social-class/s-bio 1$)
+    (social-class/s-class 1$)
+    (social-class/wealth-mass-01 0.0c) (social-class/wealth-mass-02 0.0c)
+    (social-class/wealth-mass-03 0.0c) (social-class/wealth-mass-04 0.0c)
+    (social-class/wealth-mass-05 0.0c) (social-class/wealth-mass-06 0.0c)
+    (social-class/wealth-mass-07 0.0c) (social-class/wealth-mass-08 1.0c)
+    (social-class/wealth-mass-09 0.0c) (social-class/wealth-mass-10 0.0c)
+    (social-class/wealth-mass-11 0.0c) (social-class/wealth-mass-12 0.0c)
+    (social-class/wealth-mass-13 0.0c) (social-class/wealth-mass-14 0.0c)
+    (social-class/wealth-mass-15 0.0c) (social-class/wealth-mass-16 0.0c))
+
+  ; bourgeoisie -- an ALL-MASS-AT-THE-TOP class (rung 16, the open rung).
+  (node bourgeoisie NodeType/SOCIAL_CLASS
+    (social-class/active 1)
+    (social-class/population 4)
+    (social-class/wealth 500$)
+    (social-class/subsistence-multiplier 5)
+    (social-class/s-bio 2$)
+    (social-class/s-class 8$)
+    (social-class/wealth-mass-01 0.0c) (social-class/wealth-mass-02 0.0c)
+    (social-class/wealth-mass-03 0.0c) (social-class/wealth-mass-04 0.0c)
+    (social-class/wealth-mass-05 0.0c) (social-class/wealth-mass-06 0.0c)
+    (social-class/wealth-mass-07 0.0c) (social-class/wealth-mass-08 0.0c)
+    (social-class/wealth-mass-09 0.0c) (social-class/wealth-mass-10 0.0c)
+    (social-class/wealth-mass-11 0.0c) (social-class/wealth-mass-12 0.0c)
+    (social-class/wealth-mass-13 0.0c) (social-class/wealth-mass-14 0.0c)
+    (social-class/wealth-mass-15 0.0c) (social-class/wealth-mass-16 1.0c))
+
+  ; hermit -- a ONE-MEMBER class (population 1; all mass in rung 4).
+  (node hermit NodeType/SOCIAL_CLASS
+    (social-class/active 1)
+    (social-class/population 1)
+    (social-class/wealth 100$)
+    (social-class/subsistence-multiplier 1)
+    (social-class/s-bio 1$)
+    (social-class/s-class 1$)
+    (social-class/wealth-mass-01 0.0c) (social-class/wealth-mass-02 0.0c)
+    (social-class/wealth-mass-03 0.0c) (social-class/wealth-mass-04 1.0c)
+    (social-class/wealth-mass-05 0.0c) (social-class/wealth-mass-06 0.0c)
+    (social-class/wealth-mass-07 0.0c) (social-class/wealth-mass-08 0.0c)
+    (social-class/wealth-mass-09 0.0c) (social-class/wealth-mass-10 0.0c)
+    (social-class/wealth-mass-11 0.0c) (social-class/wealth-mass-12 0.0c)
+    (social-class/wealth-mass-13 0.0c) (social-class/wealth-mass-14 0.0c)
+    (social-class/wealth-mass-15 0.0c) (social-class/wealth-mass-16 0.0c))
+
+  ; last-worker -- mass SPLIT ACROSS the threshold rung (rungs 1/2, 0.5
+  ; each -- exact in binary64 by construction, so the exact-sum posture
+  ; test never trips on a rounding artifact this fixture itself introduced).
+  (node last-worker NodeType/SOCIAL_CLASS
+    (social-class/active 1)
+    (social-class/population 1)
+    (social-class/wealth 1$)
+    (social-class/subsistence-multiplier 1)
+    (social-class/s-bio 1$)
+    (social-class/s-class 1$)
+    (social-class/wealth-mass-01 0.5c) (social-class/wealth-mass-02 0.5c)
+    (social-class/wealth-mass-03 0.0c) (social-class/wealth-mass-04 0.0c)
+    (social-class/wealth-mass-05 0.0c) (social-class/wealth-mass-06 0.0c)
+    (social-class/wealth-mass-07 0.0c) (social-class/wealth-mass-08 0.0c)
+    (social-class/wealth-mass-09 0.0c) (social-class/wealth-mass-10 0.0c)
+    (social-class/wealth-mass-11 0.0c) (social-class/wealth-mass-12 0.0c)
+    (social-class/wealth-mass-13 0.0c) (social-class/wealth-mass-14 0.0c)
+    (social-class/wealth-mass-15 0.0c) (social-class/wealth-mass-16 0.0c))
+
+  ; remnant -- NO MASSES AT ALL: the absence fence's live subject. Every
+  ; one of the 16 `social-class/wealth-mass-*` reads on this node is Err
+  ; (III.11), never a fabricated 0.0 -- the pack's posture test reads this
+  ; directly off the substrate, then separately computes the
+  ; optional-bind-style sum (default 0.0 per absent field) and asserts it
+  ; is exactly 0.0 -- "no distribution", never a fabricated uniform.
+  (node remnant NodeType/SOCIAL_CLASS
+    (social-class/active 1)
+    (social-class/population 1)
+    (social-class/wealth 0$)
+    (social-class/subsistence-multiplier 1)
+    (social-class/s-bio 3$)
+    (social-class/s-class 1$))
+
+  ; dissolved -- mirrors vitality-conformance.bscn's own "already
+  ; dissolved" fixture (active 0); a FOUR-rung spread (0.25 each, rungs
+  ; 2/7/11/16) -- exact in binary64, and a broader structural case than
+  ; the other five (non-adjacent rungs, none of them the top or bottom).
+  (node dissolved NodeType/SOCIAL_CLASS
+    (social-class/active 0)
+    (social-class/population 5)
+    (social-class/wealth 10$)
+    (social-class/subsistence-multiplier 1)
+    (social-class/s-bio 1$)
+    (social-class/s-class 1$)
+    (social-class/wealth-mass-01 0.0c) (social-class/wealth-mass-02 0.25c)
+    (social-class/wealth-mass-03 0.0c) (social-class/wealth-mass-04 0.0c)
+    (social-class/wealth-mass-05 0.0c) (social-class/wealth-mass-06 0.0c)
+    (social-class/wealth-mass-07 0.25c) (social-class/wealth-mass-08 0.0c)
+    (social-class/wealth-mass-09 0.0c) (social-class/wealth-mass-10 0.0c)
+    (social-class/wealth-mass-11 0.25c) (social-class/wealth-mass-12 0.0c)
+    (social-class/wealth-mass-13 0.0c) (social-class/wealth-mass-14 0.0c)
+    (social-class/wealth-mass-15 0.0c) (social-class/wealth-mass-16 0.25c))  ; ------------------------------------------------------------------
+  ; THE T6 CALIBRATION FIXTURE (design doc §3.5's three requirements,
+  ; all satisfied in-file): `calibration` -- the mortality driver's
+  ; reference class. (a) the frozen engine's own canonical
+  ; total-attrition conformance point -- coverage_ratio 1.0, inequality
+  ; 0.8 (tests/unit/formulas/test_vitality.py's
+  ; test_coverage_below_threshold_causes_attrition: rate clamps to 1.0)
+  ; -- the one point where the frozen form and the ported form agree in
+  ; SEMANTICS, not just magnitude ("everyone certainly failing dies this
+  ; tick"); (b) s-class = 0$ so the frozen level set (S = s-bio +
+  ; s-class) and the R13 measure's level set coincide at the reference
+  ; point and kappa absorbs no level-set contamination; (c) all mass in
+  ; rung 1, whose upper edge at the reference (cut-01 x w-bar = 0.18 x
+  ; 1.0 = 0.18 < s-stock = 1.0$) fails WHOLLY, so failing-certain = 1.0
+  ; exactly by construction -- no measurement noise enters the fit.
+  ; kappa = frozen-rate / failing-certain = 1.0 / 1.0 = 1.0c, derived at
+  ; this point (D198's divergence surface publishes everywhere the two
+  ; forms part). population 100, wealth 100$ (w-bar = 1.0 = coverage
+  ; 1.0 against s-bio 1$).
+  (node calibration NodeType/SOCIAL_CLASS
+    (social-class/active 1)
+    (social-class/population 100)
+    (social-class/wealth 100$)
+    (social-class/subsistence-multiplier 1)
+    (social-class/s-bio 1$)
+    (social-class/s-class 0$)
+    (social-class/wealth-mass-01 1.0c) (social-class/wealth-mass-02 0.0c)
+    (social-class/wealth-mass-03 0.0c) (social-class/wealth-mass-04 0.0c)
+    (social-class/wealth-mass-05 0.0c) (social-class/wealth-mass-06 0.0c)
+    (social-class/wealth-mass-07 0.0c) (social-class/wealth-mass-08 0.0c)
+    (social-class/wealth-mass-09 0.0c) (social-class/wealth-mass-10 0.0c)
+    (social-class/wealth-mass-11 0.0c) (social-class/wealth-mass-12 0.0c)
+    (social-class/wealth-mass-13 0.0c) (social-class/wealth-mass-14 0.0c)
+    (social-class/wealth-mass-15 0.0c) (social-class/wealth-mass-16 0.0c))
+)

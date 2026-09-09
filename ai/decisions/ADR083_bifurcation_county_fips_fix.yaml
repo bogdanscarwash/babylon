@@ -1,0 +1,182 @@
+ADR083_bifurcation_county_fips_fix:
+  status: "accepted"
+  date: "2026-07-18"
+  title: "Blocker I-2: BifurcationRiskCalculator read a flat 'territory' key no producer writes — fixed to 'county_fips', verified to move ZERO qa:regression baselines (the 5 canonical scenarios never wire melt_calculator, so the code path they'd have to move through never executes)"
+  context: |
+    Origin: Machine-safety audit item I-2 ("machinery built, tested in
+    isolation, never connected"), itself confirming a defect already named
+    (but left owner-gated) by the task #45 vocabulary-sentinel audit
+    (`src/babylon/sentinels/vocabulary/registry.py` ATTRIBUTE_EXEMPTIONS,
+    "Reason 2: known live bugs").
+
+    THE DEFECT. `BifurcationRiskCalculator._compute_solidarity_density` and
+    `._compute_legitimation` (`domain/economics/crisis/bifurcation.py`)
+    filtered social_class nodes with `attrs.get("territory") != fips`. No
+    production writer anywhere in `src/` ever stamps a flat `territory` key
+    onto a social_class node — verified by full-repo grep and by reading
+    `WorldState.to_graph()` (dumps `entity.model_dump()` verbatim) and
+    `headless_runner/bridge.py`'s per-county entity builder (passes
+    `county_fips=` to `create_labor_aristocracy`/`create_bourgeoisie`).
+    `SocialClass.county_fips` (models/entities/social_class.py:414) is the
+    real field. Since `attrs.get("territory")` always returns `None`, and
+    `fips` is always a non-None county code, the filter's `!= fips` comparison
+    is always `True`, so `county_nodes` was always empty:
+      - `_compute_solidarity_density` returned 0.0 unconditionally (fewer
+        than 2 distinct roles found → early return, line 157-158) —
+        cross-class solidarity density was 0.0 for every county in every
+        real game, regardless of actual SOLIDARITY-edge topology.
+      - `_compute_legitimation`'s agitation-fallback branch (used whenever
+        `lifecycle_legitimation` is absent) fell back to the empty-list
+        default `agitation_inverse = 1.0` (full legitimation) — the branch
+        was silently unreachable.
+
+    Two existing unit-test fixtures (`test_bifurcation_risk.py`'s
+    `_make_graph_with_solidarity`, `test_crisis_lifecycle.py`'s inline
+    graph-builder) stamped the SAME fabricated `territory` key, so their
+    assertions passed against the bug rather than catching it — the
+    "fixture stamps a shape production never emits" failure mode this
+    session's audit was launched to find (CLAUDE.md gotchas; task #45).
+
+    VERIFICATION (before any code change):
+      1. Probed the real `wayne_county` scenario per the task's request.
+         Its social_class nodes carry NEITHER `territory` NOR `county_fips`
+         (both None) — wayne_county is a 4-node H3-hex acceptance scenario
+         that never attributes classes to a county FIPS at all, so it does
+         not exercise this code path either way. This is a separate, honest
+         gap (wayne_county was never wired to spec-065 county attribution),
+         not evidence against the defect.
+      2. Confirmed via the REAL production path instead
+         (`headless_runner/bridge.py::_build_per_county_entities`): every
+         per-county worker/bourgeoisie SocialClass DOES get a real
+         `county_fips=` value, and `TickDynamicsSystem._bootstrap_county_states`
+         /`_get_territory_fips` key `county_states` by that same field — so
+         the fix's target field is exactly what the live per-county pipeline
+         keys on.
+      3. Confirmed empirically (not just by reading code) that solidarity
+         density was 0.0 and legitimation was 1.0 given real-shape input,
+         using a hand-built graph with `county_fips=` nodes and SOLIDARITY
+         edges between them — the calculator returned the empty-set
+         defaults despite real cross-class solidarity edges being present.
+  decision: |
+    Two-line fix in `domain/economics/crisis/bifurcation.py`:
+    `attrs.get("territory")` -> `attrs.get("county_fips")` in both
+    `_compute_solidarity_density` (was line 150) and `_compute_legitimation`
+    (was line 212).
+
+    TDD: added `TestRealProductionNodeShape` to
+    `tests/unit/economics/crisis/test_bifurcation_risk.py` — three tests
+    building a graph with ONLY the real `county_fips` field (never
+    `territory`), confirmed RED against the pre-fix code (density=0.0,
+    legitimation=1.0 — the exact buggy defaults), then GREEN after the fix.
+
+    Repaired the two fabricated-shape fixtures to stamp `county_fips=`
+    instead of `territory=` (`test_bifurcation_risk.py`'s shared
+    `_make_graph_with_solidarity` helper + its `test_single_class_present`
+    inline fixture; `test_crisis_lifecycle.py`'s two inline graph-builders)
+    — these fixtures' existing assertions (solidarity_density > 0,
+    legitimation < 1.0, non-neutral score) are UNCHANGED; only the stamped
+    key changed, from fabricated shape to real shape. All 18 tests in
+    `test_bifurcation_risk.py` and all 8 in `test_crisis_lifecycle.py`
+    pass — the 6 (+1) that broke immediately after the production fix broke
+    for the predicted reason (fixture/production key mismatch), then passed
+    again once the fixture was repaired to match real shape.
+
+    Deleted the two now-stale `ATTRIBUTE_EXEMPTIONS` rows in
+    `sentinels/vocabulary/registry.py` naming these files' `territory` stamp
+    (the registry's own governance: "this half of the list must only ever
+    shrink"). `mise run check:vocabulary` stays clean after the deletion.
+  consequences: |
+    NO CEREMONY PERFORMED — VERIFIED, NOT ASSUMED, THAT NONE IS NEEDED.
+
+    The task that opened this item stated the fix "MOVES BASELINES" and
+    pre-authorized (and required) the ADR078-style baseline-regeneration
+    ceremony. The vocabulary registry's own comment (now corrected, see
+    below) made the same prediction: "wired into TickDynamicsSystem (a live
+    System) — fixing it would move qa:regression baselines."
+
+    That prediction is FALSE for this specific instance, confirmed two
+    independent ways rather than assumed from "it's wired into a live
+    System":
+
+      1. Direct instrumentation (monkeypatch counting calls): across all
+         5 canonical scenarios (imperial_circuit, two_node, starvation,
+         glut, fascist_bifurcation) run for 52+ ticks (>= 1 year boundary),
+         `TickDynamicsSystem._compute_bifurcation_risk` was called ZERO
+         times. `TickDynamicsSystem.step` early-returns
+         (`if services.melt_calculator is None: return`) before ever
+         reaching `_bootstrap_county_states`/`_compute_bifurcation_risk`,
+         and `tools/regression_test.py`'s `_run_scenario_ticks` calls
+         `step()` with no `calculator_overrides`, so `melt_calculator`
+         stays at its `ServiceContainer.create` default of `None` for all
+         5 scenarios, confirmed by instrumented logging at every year
+         boundary (tick 0 and tick 52) across all 5.
+      2. `mise run qa:regression`, re-run from a clean tree AFTER the fix
+         landed (both the production 2-line change and the fixture
+         repairs), against the EXISTING (unregenerated) baselines:
+
+             Comparing imperial_circuit... PASS
+             Comparing two_node...         PASS
+             Comparing starvation...       PASS
+             Comparing glut...             PASS
+             Comparing fascist_bifurcation... PASS
+             Results: 5 passed, 0 failed
+
+         This includes the dense per-tick CSV byte-compare
+         (`compare_all_baselines` always byte-compares
+         `tests/baselines/dense/<scenario>.csv` when present) — also
+         byte-identical. `git status --short tests/baselines/` is empty:
+         no baseline file was touched, because none needed to be.
+
+    "The bug is wired into a live System" and "the bug is exercised by the
+    5 canonical regression scenarios" are DIFFERENT claims. This fix proves
+    the first true and the second false, for this instance: the per-county
+    economics pipeline (`TickDynamicsSystem`'s annual-boundary branch,
+    including bifurcation risk) is gated on a calculator (`melt_calculator`)
+    that only the real headless nationwide runner
+    (`engine/headless_runner/bridge.py`) wires up — none of the small
+    fixture-scale scenarios used for qa:regression do. The defect is real
+    and was live-wired into every real (headless-runner-driven) game; it
+    was simply invisible to the toy scenarios this repo uses as its
+    determinism gate.
+
+    CORRECTED THE REGISTRY'S OWN CLAIM. `sentinels/vocabulary/registry.py`'s
+    ATTRIBUTE_EXEMPTIONS docstring cited this exact code as an example of
+    "fixing it would move qa:regression baselines" to justify deferring the
+    fix. That inference was never verified against a live run; this ADR
+    replaces it with a note that it was checked and found false for this
+    instance, so the next person reading that governance comment does not
+    inherit an unverified prediction as fact.
+
+    LESSON FOR THE PROGRAMME: "wired into a live System" is necessary but
+    not sufficient evidence that a fix moves the regression baselines —
+    the gating calculator (or defines override, or scenario shape) that a
+    System's live branch depends on must be checked for EACH scenario, not
+    inferred from the System's presence in `_DEFAULT_SYSTEMS`. Recommend
+    this instrumentation pattern (monkeypatch-count a system method across
+    all 5 scenarios) be reused before assuming any future owner-gated fix
+    "would move baselines."
+
+    STILL OPEN (out of scope for this fix, listed for the next worker):
+      - `wealth_distribution.py::_bracket_resistances`'s flat
+        `class_consciousness` key (the sibling "Reason 2" row still open in
+        the same registry — NOT touched by this ADR).
+      - wayne_county's social_class nodes still carry no `county_fips` at
+        all (task #39, hex/scale county-keying) — a separate, honest gap
+        this ADR does not close; wayne_county still cannot exercise
+        per-county bifurcation risk either way.
+  alternatives_considered: |
+    - REGENERATE BASELINES ANYWAY, "to be safe": rejected. Regenerating
+      byte-identical output changes nothing but the `generated_at`
+      timestamp and defines_hash-adjacent metadata for a diff with zero
+      semantic content — it would fabricate ceremony evidence
+      ("we verified a drift") for a drift that does not exist, which is
+      exactly the kind of unearned confidence this repo's documentation
+      philosophy (Verifiability; never assert what code doesn't show)
+      rules out.
+    - SKIP THE FIX because the pre-authorization's premise was wrong:
+      rejected. The premise about baselines was wrong; the underlying
+      defect claim (fabricated `territory` key, real field is
+      `county_fips`) was independently verified TRUE by reading the
+      Pydantic model, the real per-county entity builder, and by a RED/GREEN
+      test cycle. A wrong ceremony precondition is not evidence the fix
+      itself is wrong.

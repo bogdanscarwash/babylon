@@ -12,7 +12,32 @@
       "extraction_policy": "intensify",
       "founded_tick": 0,
       "dissolved_tick": null,
-      "initial_claims": []
+      "initial_claims": [
+        {
+          "territory_id": "26163",
+          "control_level": 1.0,
+          "fiscal_status": "taxed",
+          "legal_status": "de_jure",
+          "recognition_level": 1.0,
+          "claimed_since_tick": 0
+        },
+        {
+          "territory_id": "26125",
+          "control_level": 1.0,
+          "fiscal_status": "taxed",
+          "legal_status": "de_jure",
+          "recognition_level": 1.0,
+          "claimed_since_tick": 0
+        },
+        {
+          "territory_id": "26099",
+          "control_level": 1.0,
+          "fiscal_status": "taxed",
+          "legal_status": "de_jure",
+          "recognition_level": 1.0,
+          "claimed_since_tick": 0
+        }
+      ]
     },
     {
       "id": "SOV_CAN_FED",

@@ -1,0 +1,242 @@
+ADR216_kind_straddle_repair_ceremony:
+  status: "accepted"
+  date: "2026-08-18"
+  title: "The 2026-08-18 kind-straddle repair ceremony (#491 T1, E-TYPE-040) — a night of escalating rulings resolving four real, pre-existing kind straddles the new arm found in committed content: repair-now+ceremony (Director popup) on previous-wealth's authoring defect; C1 (p5-agitation, proportional rent) and S1 (p0-transmit, convex combination) shapes (Director popup, both #491 T1's own recommendations from the kind-straddle-repair-options dossier); intensive×intensive->intensive (D182) and intensive÷intensive->intensive (D183) licensed in the arm, plus the pre-existing if-kind-neutral-absorption reading made explicit (D181), all three as controller adjudications under the Director's overnight compass delegation, delegated provenance, morning-reviewable; the class-bribed ternary story change (LIBERAL->FASCIST no longer fires within the two-tick ceremony horizon under C1); and F2's disclosure that S1 relocates rather than resolves its own straddle (D184). Collision note: ADR215 is claimed by the not-yet-merged feature/641-entity-voice branch, ADR214 landed on origin/dev during this same session (#334 national-incidence artifact train, unrelated) — this document lands as ADR216, confirmed next-free against origin/dev at filing time."
+  context: |
+    Issue #491's Task 1 (rung-ladder plan,
+    `.superpowers/sdd/2026-08-17-491-rung-ladder/task-1-brief.md`) charged
+    landing the E-TYPE-040 kind-mixing arm (`rust/crates/babylon-bsl/src/
+    typecheck.rs`, `check_kind_mixing`, wired into `rule_pipeline::
+    load_rule`) — the extensive/intensive kind algebra over `<arith>`/`if`
+    ADR202 R1(c) named and OQ-I asked for. The arm's own first real run
+    against committed content, not a synthetic fixture, found four kind
+    straddles across two rule packs (`consciousness.bsl`, `solidarity.bsl`)
+    and one authoring defect (`previous-wealth`'s deffield kind). Each
+    finding escalated rather than being patched in isolation, per the
+    controller's explicit "no more one-layer-per-round-trip" instruction
+    partway through the night (message 5, T1's task thread): a Director
+    popup ruled the two content shapes; two further arm licensings went to
+    controller adjudication under the Director's own overnight compass
+    delegation, the second preceded by a COMPLETE static sweep (a Python
+    re-implementation of `expr_kind`/`add_sub_kind`/`mul_div_kind`/
+    `if_kind`/`fold_kind`, cross-validated against a known-clean file and a
+    pre-repair historical commit's own known finds) rather than another
+    single-site fix. This ADR is the whole night's record, filed per the
+    full-span code review's finding F3
+    (`.superpowers/sdd/2026-08-17-491-rung-ladder/task-1-review.md`),
+    which verdicted the branch COMPLIANT + APPROVED with no blocking
+    defect and named this filing plus three siblings (F1 a load-path test,
+    F2 a D-row, F4 an `ai/state.yaml` entry) as the pre-merge worklist.
+  decision: |
+    **1. `previous-wealth`'s authoring defect (repair-now, Director
+    popup).** The strengthened E-TYPE-040 arm redded `consciousness/
+    p5-agitation` on its first real-content run: `previous-wealth` (a
+    same-tick snapshot of `wealth`, written by `p7-persist-baselines`) was
+    declared `intensive` in the `.bscn` deffield table, but a snapshot
+    carries its SOURCE field's kind — `wealth` is extensive. Ruled: the
+    arm is right, the content is wrong. Fixed by correcting the deffield
+    declaration (commit `18ad059a`); swept for the same pattern elsewhere
+    (no other snapshot-of-extensive field mis-declared intensive found);
+    confirmed no legality flip elsewhere from the correction.
+
+    **2. C1 and S1 (Director popup, both #491 T1's own recommendations).**
+    The kind-straddle-repair-options dossier
+    (`reports/kind-straddle-repair-options-2026-08-18.md`, commit
+    `497b6ebd`, paper-only, no code) laid out 2-3 restructure candidates
+    per straddle site with dimensional checks and measured before/after
+    values. The Director ruled, by popup, both #491 T1's recommendations:
+
+    - `consciousness/p5-agitation`'s rent term re-expressed as a
+      proportional rate — `Δwealth ÷ previous-wealth` (C1) rather than the
+      frozen reading's raw absolute-currency `Δwealth` — value-changing,
+      typing Intensive end-to-end, coherent at both the arithmetic AND the
+      store boundary (`social-class/agitation` is itself `real
+      intensive`). Commit `6442559c`.
+    - `solidarity/p0-transmit`'s write re-expressed as a convex
+      combination, `(1 - strength) * target + strength * source` (S1) —
+      D181's extensive × intensive licensing applied twice, summed
+      same-kind, VALUE-CHANGING for multi-inbound decimal-literal
+      witnesses (IEEE-754 rounding-order sensitivity, predicted exactly
+      before landing). Commit `8e3e3c1e`.
+
+    Both commits update their rule's `:material-basis` (trimmed under
+    E-LEX-026's 1024-byte cap, detailed rationale moved to a preceding
+    `;`-comment instead) and land with per-rule atomic pin re-pins where
+    the ceremony required one.
+
+    **3. `if`-kind-neutral-absorption made explicit (D181).** Landed in
+    the SAME sitting as the arm's initial implementation, not a separate
+    later ruling: `if` carries the same kind-neutral absorption `+`/`-`/
+    `*`/`/` already state, found live in `lifecycle.bsl`'s
+    `surviving-fraction` binding (Intensive/Neutral branches) — a strict
+    "branches must match" reading would have wrongly rejected already-
+    committed content, and nothing in the arm's design forced that
+    reading. No controller adjudication was needed here (the frozen `+`/
+    `-`/`*`/`/` rule already implied it); recorded for completeness
+    alongside D182/D183 because review finding F8 also touched
+    `if_kind`'s doc comment this same night (decision point 6 below).
+
+    **4. Intensive × intensive -> intensive (D182, controller
+    adjudication).** Licensing D181's `*` arm exposed `consciousness/
+    p6-route`'s own straddle: `delta-r = (* (* consumed eff-sol)
+    routing-scale)`, both `consumed` and `eff-sol` intensive, feeding
+    `r1 = (+ r delta-r)` where `r` (`social-class/revolutionary`) is
+    itself declared intensive — the consumer already expected an
+    intensive result. Controller adjudication, 2026-08-18, under the
+    Director's overnight compass delegation (delegated provenance,
+    morning-reviewable): a rate scaled by a dimensionless coefficient is
+    still a rate, the same "scale by a dimensionless factor" reasoning
+    D181 already used for extensive × intensive, applied to the other
+    pairing — the THIRD instance of the same defect class the Director
+    had already ruled repair-now on. VALUE-PRESERVING: no arithmetic
+    changed, only the computed kind for an expression whose runtime
+    result was always the same number. Licensed for `*` only at landing;
+    `/` left explicitly undecided (D182's own text). Commit `d8694447`.
+    Register row D182, `docs/reference/bsl-language.rst` §3.4.
+
+    **5. Intensive ÷ intensive -> intensive (D183, controller
+    adjudication, preceded by a complete static sweep).** The same
+    controller delegation, same sitting as D182, but explicitly NOT
+    another one-layer-per-round-trip fix: before licensing the division
+    arm, a COMPLETE static sweep walked every `<arith>`/`if` site across
+    all 13 committed rule files (not just `p6-route`) against the
+    post-D182 arm shape, using a bespoke Python analyzer faithfully
+    mirroring `expr_kind`/`add_sub_kind`/`mul_div_kind`/`if_kind`/
+    `fold_kind`, validated two ways before trusting its verdict: zero
+    violations against a known-clean file, and correct reproduction of
+    already-known real finds when run against a historical pre-repair
+    commit. Verdict: exactly 3 violation sites, all `consciousness/
+    p6-route`'s own simplex-renormalization divisions
+    (`consciousness.bsl:344-347`, `r2`/`l2`/`f2` — `r1`/`l1`/`f1`/`total`
+    all intensive, each summed by the now-D182-licensed `delta-*` terms),
+    no other site in any of the 13 files. Division-only, confirmed —
+    licensed: a ratio of two intensive quantities is a dimensionless
+    share, simplex normalization is the canonical intensive operation
+    this coarse two-kind algebra has a name for. Value-preserving, same
+    reasoning and defect class as D182 — the FOURTH straddle site overall.
+    `mul_div_kind`'s `(Intensive, Intensive)` arm widened to cover both
+    operators (no `op` guard needed — `*` and `/` now agree on this
+    cell), D182's "undecided" disposition on `/` annotated superseded by a
+    forward pointer, not rewritten. Commit `00651987`. Register row D183.
+
+    **6. Review response findings (2026-08-18, this document's own
+    landing pass, `.superpowers/sdd/2026-08-17-491-rung-ladder/
+    task-1-review.md`).** Six findings folded into this ADR and its
+    sibling records rather than left as loose worklist items:
+
+    - **F2 -> D184.** S1 (decision point 2) relocates its own kind
+      straddle rather than resolving it: the convex form types Extensive
+      end-to-end and writes whole into probability-intensive
+      `social-class/revolutionary`, loading today only because the arm
+      checks `<arith>`/`if` nodes and has no store-boundary kind rule.
+      Recorded as D184, `docs/reference/bsl-language.rst` §3.4 — no
+      content or arm change, paper only, per the review's own explicit
+      instruction. Re-open trigger named: a future store-boundary
+      write-kind check would immediately re-red `p0-transmit`.
+    - **F5.** The `/` bullet's "an extensive operand paired with an
+      intensive one ... stays E-TYPE-040" framing corrected: this is a
+      NEWLY-MINTED prohibition, not a continuity. The pre-split bullet
+      named that pair TWICE, contradictorily ("extensive if exactly one
+      operand is extensive" and "intensive if exactly one is intensive"
+      both matched it) and resolved it to NEITHER kind nor E-TYPE-040 —
+      D181's split resolves the internal contradiction conservatively,
+      the same posture as the case the bullet did clearly name, but a
+      genuinely new prohibition. D181's register row text corrected in
+      place.
+    - **F7.** Two commits re-pin a `tick_goldens.rs` hash this session:
+      `925eab84` (the consciousness ceremony, D183's completion) carries
+      a `Baselines: blessed(kind-straddle-consciousness-c1)` trailer;
+      `8e3e3c1e` (S1's solidarity re-pin) does NOT carry one, despite
+      moving `solidarity_ternary_foundation_hashes_are_pinned`'s
+      `report.after` the same way. Declared here as a trailer-convention
+      inconsistency — harmless mechanically (`tools/
+      check_baseline_ceremony.py`'s `BASELINE_PREFIXES` only gates
+      `tests/baselines/**`, not `tick_goldens.rs`, so neither commit was
+      ever blocked by the gate either way), but worth naming so the
+      convention tightens going forward rather than silently drifting.
+    - **F8.** `if_kind`'s doc comment overclaimed: it read as though the
+      function always "declines rather than manufactures a false
+      positive." In fact its `(Some(a), None) | (None, Some(a)) =>
+      Ok(Some(a))` arm propagates a determined kind from partial branch
+      information to the enclosing node — which COULD in principle
+      manufacture a refusal one level up if the propagated kind later
+      conflicts with a sibling expression's kind at that enclosing node.
+      The complete static sweep (decision point 5) confirms this path is
+      UNREACHABLE in all 13 committed rule files today, so the function's
+      OBSERVED behavior matches the doc's claim on every real site — the
+      doc comment is corrected to describe the actual propagate-then-
+      recheck mechanism rather than the stronger claim, not the code,
+      since nothing live exercises the gap. `typecheck.rs`'s `if_kind`
+      doc comment corrected in place, this pass.
+    - **F9.** `p5-agitation`'s `:fuel` re-measured post-C1 (the
+      `wealth-rate` binding is new static-bound weight): measured 68 via
+      the temporary-`:fuel`-lowering / E-LOAD-040-message technique
+      D-record precedent already used elsewhere; `:fuel` stays 224 (this
+      pack's own round-block convention: 64/32/128/224/256/96), leaving
+      ~156 units of documented slack rather than solidarity's
+      "measured + 1" convention. Documented in `consciousness.bsl`'s
+      preceding comment block, this pass; no `:fuel` value changed
+      (224 was already large enough), so no pin moved.
+    - **F1, F4, F10 and the sweep-script commit** are recorded in this
+      ADR's consequences section (below) rather than as decision points —
+      they are artifacts landed, not rulings adjudicated.
+
+    **7. The class-bribed ternary story change (observed, not ruled —
+    recorded here for completeness).** Under the frozen absolute-currency
+    rent reading, `class-bribed`'s dominant worldview flipped LIBERAL
+    (tick 1) -> FASCIST (tick 2). Under C1's proportional reading (the
+    same nominal $5 wealth loss now read as ~5.26% of a $90 class wealth,
+    not the raw figure), the flip no longer fires within the ceremony's
+    two-tick horizon: agitation drops ~95x and the class stays LIBERAL
+    through both measured ticks. Ruled INTENDED by C1's own dossier
+    prediction (a rich class's absolute-dollar loss shouldn't radicalize
+    it the way the same absolute loss would a poor class), not a
+    regression — full derivation and the complete measured value table:
+    `.superpowers/sdd/2026-08-17-491-rung-ladder/task-1-report.md`'s
+    ceremony section. Whether a longer run eventually produces the flip
+    anyway is unmeasured, out of this ceremony's two-tick scope.
+  consequences: |
+    - Commits landed this session (`origin/dev..HEAD` at this ADR's own
+      filing): `990395e6` (plan tracking), `1aa8dedc` (the arm itself,
+      extensive ÷ extensive, D181's `/` half), `18ad059a` (previous-wealth
+      fix), `8e3e3c1e` (S1), `6442559c` (C1), `497b6ebd` (the options
+      dossier), `d8694447` (D182), `00651987` (D183), `925eab84` (the
+      consciousness ceremony pin, `Baselines: blessed(...)`). This ADR and
+      its sibling records (F1's test, F4's `ai/state.yaml` entry, F5/F7/F8
+      corrections, F9's fuel documentation, F10's vale disposition, the
+      `tools/`-committed sweep script) land in a following commit.
+    - Records: four new register rows D181-D184
+      (`docs/reference/bsl-language.rst` §3.4); `ai/state.yaml`'s
+      `kind_straddle_estate_491_t1` entry (F4); this ADR; the options
+      dossier (`reports/kind-straddle-repair-options-2026-08-18.md`,
+      paper-only, no code); a new load-path E-TYPE-040 test in
+      `rule_pipeline.rs`'s `kind_mixing_wiring_tests` module (F1, mirrors
+      the sibling 041/042/044 coverage pattern — a fixture whose load
+      fails through `check_kind_mixing`'s actual wiring, so deleting the
+      wiring reds the test, not merely correct-in-isolation coverage); the
+      static-sweep Python script committed under `tools/` (the review's
+      recommendation, one-line doc header).
+    - Pins: exactly TWO `tick_goldens.rs` hashes moved this whole session
+      — `solidarity_ternary_foundation_hashes_are_pinned`'s `report.after`
+      (S1) and `consciousness_ternary_foundation_hashes_are_pinned`'s
+      `report.after`
+      (`4346278b3e075b338b5d4b847de054da6738d74f05895f8945dad78b13f46da9`
+      -> `52ffb5e332cca9bddcaf9b77fcdf3ed1efe8e30e9abf3176fe0569e7aa47ff91`,
+      C1) — both PREDICTED before landing, both `report.before` values and
+      every fired count unchanged. Every other pin in both crates stayed
+      byte-identical across the whole session, including through D182's
+      and D183's arm-only, value-preserving licensings. Final gate:
+      `cargo test -p babylon-bsl --locked` 799+/799+ (F1 adds one),
+      `cargo test -p babylon-tick --locked --no-fail-fast` 258/258.
+    - Open, named, not built here: D184's re-open trigger (a future
+      store-boundary write-kind check would re-red `solidarity/
+      p0-transmit`) — whoever lands that check inherits S1's context via
+      D184 rather than rediscovering it; the review's F8 gap (`if_kind`'s
+      theoretical refusal-propagation path) stays unreachable-but-
+      undocumented-in-code, a doc-only correction, not a code fix, since
+      nothing live exercises it.
+  supersedes: []
+  related:
+    - ADR202_t4_curves_ruling_session
+    - ADR208_docket_sitting_2026_08_17
+    - ADR210_checkpoint_a_campaign_rulings

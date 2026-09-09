@@ -1,0 +1,6 @@
+[package]
+name = "babylon-tick"
+version = "0.0.0"
+
+[dependencies]
+evidence-alias = { package = "babylon-evidence", path = "../babylon-evidence" }

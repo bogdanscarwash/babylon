@@ -1,0 +1,148 @@
+; Community port train world 2 (issue #667, Task 9 Step 6 — plan
+; docs/superpowers/plans/2026-08-18-community-port.md): the FLOOR-BINDING
+; world. NEW_AFRIKAN and FIRST_NATIONS communities seed org landscapes
+; whose normalized r falls BELOW both floors, so both floors bind and the
+; ADR214 Ruling-3 ordering (FIRST_NATIONS 0.155 > NEW_AFRIKAN 0.136 — an
+; emergent output of the chosen measure, never a fresh stipulation) is
+; EXECUTED, not asserted. SETTLER is the identically-0.0 control (the
+; guard `r < floor` is false at floor = 0, §6.2). h0's weak-fash edge
+; gives the redistribution a nonzero f arm, so PROPORTIONALITY (l:f ratio
+; preserved through the remaining/lf scaling) is exercised, not just the
+; l-degenerate arm.
+;
+; Declaration order is id order — never renumber when extending. The
+; 14-row floor table and the decay alphas are re-declared per scenario
+; (§6.2's precedent); the cross-world parity test pins all three worlds'
+; tables equal to the ADR's values. The dyadic-literal discipline and the
+; §3.7a singleton carrier follow world 1's header exactly.
+(scenario community/floor-conformance
+  (defvocabulary NodeType (INSTITUTION SOCIAL_CLASS ORGANIZATION))
+  (defvocabulary EdgeType (MEMBERSHIP))
+  (defvocabulary HyperedgeType (COMMUNITY))
+  (defenum CommunityType
+    (SETTLER PATRIARCHAL NEW_AFRIKAN FIRST_NATIONS CHICANO WOMEN TRANS
+     DISABLED QUEER UNDOCUMENTED INCARCERATED YOUTH ADULT ELDER))
+  (deffield institution/community-carrier int extensive)
+  (deffield social-class/active int extensive)
+  (deffield social-class/community-cost-modifier real intensive)
+  (deffield community/kind enum CommunityType)
+  (deffield community/heat intensity intensive)
+  (deffield community/cohesion intensity intensive)
+  (deffield community/education-pressure intensity intensive)
+  (deffield community/reproduction-cost-modifier real intensive)
+  (deffield community/revolutionary probability intensive)
+  (deffield community/liberal probability intensive)
+  (deffield community/fascist probability intensive)
+  (deffield community/member-count int extensive)
+  (deffield community/r-raw real extensive)
+  (deffield community/l-raw real extensive)
+  (deffield community/f-raw real extensive)
+  (deffield community/density-sum real extensive)
+  ; c06a's cache — written per tick, read by c06b the same tick (the
+  ; pre-state law forces the split; D204).
+  (deffield community/substrate-floor probability intensive)
+  ; DG-2 (PUBLISH, the 2026-08-18 sitting): c07/c08's readout fields.
+  (deffield community/contestation probability intensive)
+  (deffield community/dominant-tendency enum ConsciousnessTendency)
+  (deffield social-class/org-r-weight real extensive)
+  (deffield social-class/org-l-weight real extensive)
+  (deffield social-class/org-f-weight real extensive)
+  (deffield social-class/org-count int extensive)
+
+  ; ---- the 14-row ADR214 floor table (§6.1 verbatim; per-row provenance
+  ; in world 1's file — the parity test pins this table equal to it) ----
+  (defconst community/floor-new-afrikan 0.136p)
+  (defconst community/floor-first-nations 0.155p)
+  (defconst community/floor-chicano 0.113p)
+  (defconst community/floor-settler 0.0p)
+  (defconst community/floor-patriarchal 0.0p)
+  (defconst community/floor-youth 0.0p)
+  (defconst community/floor-adult 0.0p)
+  (defconst community/floor-incarcerated 0.18p)
+  (defconst community/floor-women 0.04p)
+  (defconst community/floor-trans 0.06p)
+  (defconst community/floor-disabled 0.03p)
+  (defconst community/floor-queer 0.04p)
+  (defconst community/floor-undocumented 0.10p)
+  (defconst community/floor-elder 0.02p)
+  (defconst community/heat-decay-alpha 0.05c)
+  (defconst community/cohesion-decay-alpha 0.03c)
+  (defconst community/education-pressure-decay 0.1c)
+
+  ; ---- nodes (id order) ----
+  (node floor-register NodeType/INSTITUTION (institution/community-carrier 1))
+  (node w2-a NodeType/SOCIAL_CLASS (social-class/active 1))
+  (node w2-b NodeType/SOCIAL_CLASS (social-class/active 1))
+  (node w2-s NodeType/SOCIAL_CLASS (social-class/active 1))
+  ; The weak REVOLUTIONARY org: cadre 1/8 x cohesion 1/4 = 0.03125 per push.
+  (node weak-rev NodeType/ORGANIZATION
+    (organization/cadre-level 0.125p) (organization/cohesion 0.25p)
+    (organization/consciousness-tendency ConsciousnessTendency/REVOLUTIONARY))
+  ; The strong LIBERAL org: 1.0 per push — what puts both r's under floor.
+  (node strong-lib NodeType/ORGANIZATION
+    (organization/cadre-level 1.0p) (organization/cohesion 1.0p)
+    (organization/consciousness-tendency ConsciousnessTendency/LIBERAL))
+  ; The weak FASCIST org: 0.25 x 0.5 = 0.125 — h0's nonzero f arm.
+  (node weak-fash NodeType/ORGANIZATION
+    (organization/cadre-level 0.25p) (organization/cohesion 0.5p)
+    (organization/consciousness-tendency ConsciousnessTendency/FASCIST))
+  ; w2-c/w2-d: the low-density witness's members (h3). w2-c has NO org
+  ; edges, w2-d has exactly one — h3's density-sum is (1+0)/2 = 0.5, so
+  ; c05's unorganized = 0.5 folds into l.
+  (node w2-c NodeType/SOCIAL_CLASS (social-class/active 1))
+  (node w2-d NodeType/SOCIAL_CLASS (social-class/active 1))
+
+  (edge EdgeType/MEMBERSHIP weak-rev w2-a 1)
+  (edge EdgeType/MEMBERSHIP weak-rev w2-b 1)
+  (edge EdgeType/MEMBERSHIP strong-lib w2-a 1)
+  (edge EdgeType/MEMBERSHIP strong-lib w2-b 1)
+  (edge EdgeType/MEMBERSHIP strong-lib w2-s 1)
+  (edge EdgeType/MEMBERSHIP weak-fash w2-b 1)
+  (edge EdgeType/MEMBERSHIP weak-rev w2-d 1)
+
+  ; h0: NEW_AFRIKAN over (w2-a, w2-b) — floor BINDS (normalized r ≈ 0.037).
+  (hyperedge na-comm HyperedgeType/COMMUNITY (members w2-a w2-b))
+  (hyperedge-attr na-comm community/kind CommunityType/NEW_AFRIKAN)
+  (hyperedge-attr na-comm community/heat 0.5i)
+  (hyperedge-attr na-comm community/cohesion 0.75i)
+  (hyperedge-attr na-comm community/education-pressure 0.25i)
+  (hyperedge-attr na-comm community/reproduction-cost-modifier 0.875r)
+  (hyperedge-attr na-comm community/revolutionary 0.5p)
+  (hyperedge-attr na-comm community/liberal 0.25p)
+  (hyperedge-attr na-comm community/fascist 0.25p)
+
+  ; h1: FIRST_NATIONS over (w2-a) — floor BINDS at the HIGHER 0.155 (the
+  ; Ruling-3 ordering observable against h0's 0.136 in one tick).
+  (hyperedge fn-comm HyperedgeType/COMMUNITY (members w2-a))
+  (hyperedge-attr fn-comm community/kind CommunityType/FIRST_NATIONS)
+  (hyperedge-attr fn-comm community/heat 0.25i)
+  (hyperedge-attr fn-comm community/cohesion 0.5i)
+  (hyperedge-attr fn-comm community/education-pressure 0.125i)
+  (hyperedge-attr fn-comm community/reproduction-cost-modifier 1.25r)
+  (hyperedge-attr fn-comm community/revolutionary 0.25p)
+  (hyperedge-attr fn-comm community/liberal 0.5p)
+  (hyperedge-attr fn-comm community/fascist 0.25p)
+
+  ; h2: SETTLER over (w2-s) — the identically-0.0 control.
+  (hyperedge settler-comm HyperedgeType/COMMUNITY (members w2-s))
+  (hyperedge-attr settler-comm community/kind CommunityType/SETTLER)
+  (hyperedge-attr settler-comm community/heat 0.75i)
+  (hyperedge-attr settler-comm community/cohesion 0.625i)
+  (hyperedge-attr settler-comm community/education-pressure 0.5i)
+  (hyperedge-attr settler-comm community/reproduction-cost-modifier 1)
+  (hyperedge-attr settler-comm community/revolutionary 0.0p)
+  (hyperedge-attr settler-comm community/liberal 0.75p)
+  (hyperedge-attr settler-comm community/fascist 0.25p)
+
+  ; h3: SETTLER over (w2-c, w2-d) — the LOW-DENSITY witness: density 0.5,
+  ; unorganized 0.5 defaults to liberal; the 0.0 floor never binds, so the
+  ; pure c05 normalization shape is what the test reads.
+  (hyperedge low-density-comm HyperedgeType/COMMUNITY (members w2-c w2-d))
+  (hyperedge-attr low-density-comm community/kind CommunityType/SETTLER)
+  (hyperedge-attr low-density-comm community/heat 0.5i)
+  (hyperedge-attr low-density-comm community/cohesion 0.25i)
+  (hyperedge-attr low-density-comm community/education-pressure 0.375i)
+  (hyperedge-attr low-density-comm community/reproduction-cost-modifier 1)
+  (hyperedge-attr low-density-comm community/revolutionary 0.5p)
+  (hyperedge-attr low-density-comm community/liberal 0.25p)
+  (hyperedge-attr low-density-comm community/fascist 0.25p))

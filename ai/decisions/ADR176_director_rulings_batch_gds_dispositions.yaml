@@ -1,0 +1,160 @@
+ADR176_director_rulings_batch_gds_dispositions:
+  status: "accepted"
+  date: "2026-07-29"
+  title: >
+    The Game Design Standard rulings batch — the Director disposed the
+    Standard's §11 Decision Queue live (~30 rulings across endings,
+    doctrine, the strike lane, multi-res, pacing, narrator, and
+    persistence), unblocking every near-term lane of the playable-game
+    program. Rulings recorded verbatim-in-substance on director-gate
+    issues #376–#382; this ADR is their constitutional record.
+  context: |
+    The Game Design Standard (docs/superpowers/specs/
+    2026-07-29-game-design-standard-design.md, PR #375, MERGED) closed
+    with a 33-item Director Decision Queue (§11) — every taste, scope,
+    ideology, and amendment-surface question the research estate had
+    surfaced, none decidable by agents under IX.5. The Director set the
+    standing vision-complete loop goal, then disposed the queue in a
+    single live session (2026-07-29 evening, eight structured batches).
+    Each ruling was posted to its director-gate issue the same hour
+    (#376 endings/verdicts, #377 doctrine, #378 strike/verbs, #379
+    multi-res/spatial, #380 pacing/long-wave, #381 narrator, #382
+    persistence/CI). Issues remain open until consequences are
+    implemented; #383 (spec §8/§9 review) remains the one un-disposed
+    item.
+  decision: |
+    ENDINGS & VERDICTS (#376):
+    (1) The no-pattern conclusion is a NAMED sixth ending — THE LONG
+        CONTAINMENT — with its own verdict screen, epilogue treatment,
+        and material genealogy.
+    (2) George Jackson routing: a revolution clearing every gate except
+        cross-divide solidarity routes to RED_OGV per the defines
+        documentation (the code's UNRESOLVED routing is the defect), and
+        the verdict NAMES the settler-socialist road and its cost.
+    (3) Crisis sovereignty: all three types minted, each from its own
+        trigger — EMERGENCY from L-SUSPEND; INSURGENT from the
+        consent-insolvency adjunction-failure trigger; OCCUPATION from
+        CLAIMS/fiscal-collapse successors. Bare-string sovereignty_type
+        stamps fixed in the same motion.
+    DOCTRINE SURFACE (#377):
+    (4) The fourth trunk is AUTONOMIST (transcribed from
+        ai/epochs/epoch3/doctrine-tree.yaml:441-500). Player-facing trunk
+        names remain an open Director item.
+    (5) (Major, Minor) mechanics: authorization stays a commutative
+        union; asymmetry lands in COST/EFFICACY (Major full efficacy,
+        Minor strictly worse, Major-first trap exposure, Major-wins
+        precedence). Doctrine never hides or locks a verb.
+    (6) Line origin: CHOOSE the Major at founding; EARN the Minor from
+        measured practice, ratified at the first congress.
+    (7) Congress failure: TRANSPOSITION is the default motion (w flips,
+        the pair persists); SPLIT fires only at extremes.
+    (8) MILITANCY has both faces — raises P(S|R)'s numerator AND
+        multiplies repression exposure on the denominator.
+    (9) is_goal DEMOTES to a projection label (the line's
+        self-understanding; adjudicates nothing).
+    (10) The DoctrineTag namespace opens by AE RIDER (content
+        vocabulary) alongside the trunk transcription; the ADR137 pins
+        update in the same motion.
+    STRIKE LANE & VERB ESTATE (#378):
+    (11) THE BRIBE, NOT THE FIGHT, SETS THE CORE WAGE: a won core wage
+        strike yields organization, tension, and material cost — zero
+        wage gain while Phi holds. Economism is not punished by a
+        debuff; it simply does not work. Narrator + decision-zone
+        legibility required.
+    (12) Strike surface: mobilize:strike SUB-MODE (standing 2026-07-27
+        ruling confirmed; nine keys hold).
+    (13) Strike's permanent product: ORGANIZATION, plus a NARROW CITED
+        SOLIDARITY EXEMPTION to ADR087.
+    (14) Funding is a DOCTRINE-PAIR SURFACE (Director verbatim
+        substance): clandestine lines run illegal economies with the
+        state-attention bill; Autonomists crowdfund and REFUSE party
+        enterprise; Scientific socialists run principled party
+        businesses and keep options open. Ship simple at start.
+    (15) BUILD_INFRASTRUCTURE goes LIVE via an existing stem's sub-mode
+        mapped onto the tested resolver (Article V ruling; no tenth key).
+    (16) CHARTER BOTH absences: a clandestinity/security posture (heat
+        management, illegal funding, P(S|R)-denominator hardening) AND a
+        metabolic/restoration surface (BUILD its natural home).
+    MULTI-RES & AMENDMENT SURFACE (#379):
+    (17) Coarse carriers hold KINDED DISPERSION FIELDS (moments or a
+        fixed-size quantile sketch), amendment-recorded if new
+        mathematics under AE(ii). The Jensen guard holds exactly; the
+        fixed-vs-live rung question dissolves.
+    (18) DATA FIRST: Phase 0-D blocks multi-res engine work; the
+        land/water mask IS in scope; no declared-fabrication interim.
+    (19) The hashed grain register and aggregate_constraint (fibrewise
+        MIN) both record as AE RIDERS; MIN is ruled a G-family use.
+    (20) The per-identity counter-based RNG rider is AUTHORIZED,
+        landing before P27 Phase 1 Task 5 freezes.
+    (21) P27 Task 8: transcendentals cross via a PINNED SOFT-FLOAT LIBM
+        crate with golden vectors per intrinsic.
+    PACING & LONG WAVES (#380):
+    (22) STANDING ORDERS are in scope for v1.0 (declared deterministic
+        verb repetition with material interrupts; amendment-free).
+    (23) ALL THREE restoration channels are v1.0 scope: the fascist
+        devaluation arc, war devaluation, re-division of the periphery.
+    (24) Pacing tuning stays COEFFICIENT-FREE (the K-wave charter's ban
+        binds pacing work; dead stretches get structural fixes).
+    (25) The two verdict-surface checks promote to GATING after the
+        Phase-0 disposition pass.
+    NARRATOR (#381):
+    (26) Register: the EARNED EPISTEMIC POSITION — the wire by default;
+        the underground register achieved materially (press organ,
+        cadre correspondents); the Bondi Algorithm voice for
+        carceral/repression surfaces.
+    (27) THE WIRE FLATTERS the failing reformist (dramatic irony the
+        dossiers contradict); theory's own vocabulary arrives BLUNT
+        through the earned underground register, prompt-pinned against
+        model liberalization.
+    PERSISTENCE & CI (#382):
+    (28) The three live defects fix NOW as declared freeze-discipline
+        exceptions: the torn-tick envelope gap, the archival
+        purge-verification skip, the missing rng_seed+ContentDigest.
+    (29) Reference tier: ref_digest RE-KEY (content-identity verified
+        across cohorts before collapse; determinism pin preserved).
+    (30) h3_index is BIGINT in the Rust schema (ADR138 domain-contract
+        change recorded in the Phase 4 design; Python stays TEXT).
+    (31) BINDING: CHECKPOINT-ONLY HYDRATION — resume = tick_commit +
+        nearest full-frame checkpoint + deterministic replay; SQL
+        reconstruction is never load-bearing for adjudicating state.
+    (32) synchronous_commit=off on the player, DECLARED (delegated to
+        the workforce recommendation); 1-live-session retention
+        ENFORCED IN CODE; disk preflight + mid-run warning confirmed.
+    (33) CI: PG 17 move, the CI config fork, and the postgres image
+        digest-pin (as a ceremony) authorized; the Postgres CI tier
+        un-gating proceeds under the goal's gates-only-tighten license.
+        Director's binding intent verbatim: reproducible; works;
+        installs on any Ubuntu/Debian box without problems; the
+        database functions so perfectly it is 100% in the background.
+    (34) The five dead edge types RETIRE (TARGETS, OWNED_BY,
+        JURISDICTION, RECRUITMENT, EMPLOYMENT); re-mint under BSL in
+        Phase 2 with their own vocabulary ceremony.
+    FINAL BATCH (same session, closing the queue):
+    (35) THE STANDARD IS RATIFIED IN FULL — §8 (Persistence and the
+        Player Machine) and §9 (the Wiring Completeness Doctrine)
+        approved as presented; the spec leaves DRAFT; #383 closes.
+    (36) Player-facing trunk names: KEEP the doctrinal names —
+        Reformist / Scientific / Insurrectionist / Autonomist. The game
+        states its line and proves it in play ("Babylon means exactly
+        what it says").
+    (37) EXPROPRIATE lives as a BUILD-stem sub-mode: seizure-for-
+        construction (dual power) — expropriation TRANSFERS value, it
+        does not destroy it; the Attack framing is rejected.
+    (38) Reformist funding: INSTITUTIONAL MONEY, AND IT IS THE CAPTURE
+        VECTOR — union officialdom dues, campaign finance,
+        foundation/NGO grants, officeholder salaries, each coupled to
+        the existing capture machinery (officeholder capture, the
+        reform ceiling, liquidationism). The money is the leash;
+        pedagogy through the org's own bank account.
+    OPEN ITEMS (workforce, not Director): P-E multi-res persistence
+    shape (needs the full-shape reference run first); P-A hex-delta
+    inertness and P-G sparse-trace-read as evidence-first
+    investigations.
+  consequences: |
+    Every near-term lane of the playable-game program is unblocked. The
+    loop's sequencing gains concrete work: the P-J defect fixes
+    (torn-tick first — a live save-corruption path), the fallback-
+    coverage sentinel, the Autonomist transcription + tag rider, the
+    strike lane's eleven typed motions, the RNG and grain riders, Phase
+    0-D chartering, and the CI authorizations. Consequences tracked on
+    the director-gate issues, which stay open until implemented.

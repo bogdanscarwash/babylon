@@ -1,0 +1,246 @@
+id: ADR115
+title: >-
+  Vol I U9 — Monitoring (program-closing unit): four Feature 021 Territory
+  fields (reserve_ratio/foreclosure_rate/eviction_rate/displacement_rate)
+  that U3 finally activates get their first-ever seam-registry rows; three
+  new liveness-registry rows (fundamental_theorem dormant per its own
+  ADR117 scope boundary, wealth_subsistence_ratio/surplus_strategy_ratio
+  consumed by catalog.py); a doubly-stale engine_bridge.py comment (still
+  claiming productivity_data_source/transition_engine are inert after U3/U4
+  made both false, in the SAME factory call) corrected; U7's
+  dispossession_intensity retirement re-verified intact; the veil-gating
+  question resolved as a documented forward-pin, not new code — nothing
+  this program produced reaches a web-facing endpoint yet, so
+  projection/veil.py's TIER1_VALUE_RELATION_FIELDS has nothing real to gate
+  today.
+status: accepted
+date: '2026-07-21'
+context: >-
+  ai/_inbox/vol1-value-production-program-prompt.md §7 U9 (orientation
+  brief): "seam-registry rows for every new emission this program produces
+  (U2's theorem output, U3's new displacement/reserve-ratio flows, U4's
+  visibility_modifier consumption, U6's new GraphInputs fields); retire
+  U7-item-3's dead dispossession_intensity rows once superseded; gate new
+  value-axis observability behind the veil convention already used for
+  price_value/national." U9 depends on U2-U8 (all landed on this branch:
+  e5964d9f/876bc0ba/1bda34f8/08e45c1c/4627fc23/40b9515a/a80616f2/c435d3a6/
+  18c2e2d9) to know the final emission surface, and is explicitly "not
+  independently re-verified beyond confirming the registry.py mechanism and
+  row locations U7 already checked."
+
+  Re-verified at unit start against every U2-U8 commit + its ADR (109-114):
+
+  1. U7-item-3 (dispossession_intensity retirement) is ALREADY DONE, fully
+  and correctly — confirmed byte-for-byte at sentinels/seam/registry.py
+  (both the MAP-scope row and the TERRITORY-scope row carry the "RETIRED
+  dead-observability characterization (Vol I U3/ADR110...)" paragraph,
+  liveness_class correctly left at DECLARED_CONDITIONAL, prior text
+  preserved not rewritten). Nothing to do here; the brief's phrasing
+  ("retire U7-item-3's dead rows once superseded") describes work U7
+  itself already performed under this same title, not an open item for U9.
+
+  2. U2's "theorem output" (compute_fundamental_theorem's report, stashed
+  by ContradictionSystem._stash_fundamental_theorem onto the new
+  fundamental_theorem graph attribute) is, BY U2'S OWN RECORDED DESIGN
+  (ADR117 point 6), graph-attribute-only — "no WorldState field, no
+  Postgres persistence... Surfacing it through WorldState/persistence, if
+  wanted, is separate follow-on scope (a natural fit for U9's
+  'seam-registry rows for every new emission'), not invented here." Grepped
+  web/game/*.py and src/babylon/persistence/*.py for "fundamental_theorem":
+  zero hits. This quantity does NOT cross the engine->web-bridge->frontend
+  seam sentinels/seam/registry.py's own docstring scopes to (SeamScope has
+  no member for a graph-internal-only attribute) — the correct home is the
+  OTHER declared-producer registry, sentinels/liveness/registry.py, which
+  already carries the exact structural precedent this quantity needs:
+  pole_readings (ContradictionSystem, dormant, "declared dormant... a live
+  producer with zero production readers, recorded rather than hidden").
+
+  3. U3's "new displacement/reserve-ratio flows": traced every write site.
+  TickDynamicsSystem._compute_accumulation_loop
+  (domain/economics/tick/system/__init__.py:1220-1311) writes
+  reserve_ratio/foreclosure_rate/eviction_rate onto Territory nodes;
+  MarketScissors._swell_reserve_army additively tops up reserve_ratio.
+  displacement_rate is deliberately left unfed (no FRED-backed source, U3's
+  own recorded scope boundary). All four are REAL Territory model fields
+  (territory.py:220-261, ge=0.0/le=1.0, default=0.0) that
+  web/game/engine_bridge.py::_serialize_territory (:10373, current line —
+  the registry's own _TERRITORY_EMITTERS constant still cites the
+  pre-drift :6218, an unrelated pre-existing line-number staleness this
+  unit did not touch, out of scope) reads DIRECTLY off the round-tripped
+  model (`t.reserve_ratio`, `t.foreclosure_rate`, `t.eviction_rate`,
+  `t.displacement_rate`) and unconditionally serializes at TERRITORY scope
+  — genuinely player-observable, and NONE of the four had ever been
+  registered in sentinels/seam/registry.py, since Feature 021 first shipped
+  them. This is a real, pre-existing Seam Observatory coverage gap (the
+  registry's own tick_median_wage row even flags the collision by name:
+  "the real, distinct Territory.median_wage field (Feature 021) already on
+  the same _serialize_territory payload" — without giving it a row
+  either), NOT caused by this program, but this program is exactly what
+  makes it consequential: before U3 these four fields were a
+  structurally-live-but-permanently-0.0 case indistinguishable, on the
+  wire, from a correctly-computed zero — the textbook "computed but never
+  populated, renders blank" class the whole Observatory exists to catch,
+  now that renders-a-real-number-most-of-the-time is possible. Registered
+  now as the DECLARED_CONDITIONAL "Group B" (frozen-constant) pattern the
+  registry already uses for exactly this shape (tick_class_distribution,
+  tick_unemployment_rate, etc.) for reserve_ratio/foreclosure_rate/
+  eviction_rate, and NOT_YET_COMPUTED (mirrors tick_ground_rent's honest
+  "second, independent gate, no fabricated proxy" precedent) for
+  displacement_rate.
+
+  4. U4's "visibility_modifier consumption":
+  resolve_working_day_visibility_modifier's product,
+  ConsciousnessSystem/ideology.py's exploitation_visibility, is a
+  MaterialConditions field with ZERO occurrences anywhere in web/game/*.py
+  — also graph-internal-only, no new SeamEntry warranted. But grepping the
+  ACTUAL activation this consumption performs turned up a real defect:
+  web/game/engine_bridge.py:8019-8039 (Task 21b/21b-adjacent comment block,
+  the SAME `_bridge_economics_overrides` call U2c/U3/U4/U5 all touch)
+  still asserted, verbatim, "productivity_data_source has zero tick readers
+  anywhere in src/... so it is inert" and "no transition_engine is wired
+  here... so it is equally inert today" — BOTH claims made false by units
+  in THIS SAME program (U4 gives productivity_data_source its first
+  reader; U3's create_vol1_services now constructs and returns a real
+  transition_engine from the SAME factory call this comment describes),
+  and nobody returned to correct the comment. A stale claim sitting three
+  lines from the exact code it mischaracterizes — precisely the kind of
+  drift a Monitoring unit exists to catch, not merely new-emission
+  bookkeeping. (Its sibling docstring at
+  tests/unit/web/test_engine_bridge.py:5335-5343 carries the identical
+  stale claim; left uncorrected — that whole test module is
+  module-level-skipped, Amendment V/II.8, web = legacy — flagged here, not
+  fixed, per the same "mention, don't fix unrelated code" discipline this
+  file's own CLAUDE.md states.)
+
+  5. U6's "new GraphInputs fields": wealth_subsistence_ratio (value_usevalue)
+  and surplus_strategy_ratio (absolute_relative_surplus) are real new
+  dataclass fields on GraphInputs, fed by ContradictionSystem and consumed
+  by catalog.py's shadow-opposition measures — real, live, production-
+  consumed relationships with zero web-bridge crossing (shadow_opposition_
+  states, the container both ride in, has zero references anywhere in
+  web/game/*.py — grepped). labor_laborpower introduces no new GraphInputs
+  field (U6's own commit: "zero new GraphInputs fields, a third reader of
+  the IDENTICAL (w_paid, v_produced) defect"), so nothing to register for
+  it beyond the wage/imperial rows this program's U2 already documents.
+
+  6. "Gate new value-axis observability behind the veil convention already
+  used for price_value/national" — two DIFFERENT conventions share the
+  word "veil" loosely here, both already satisfied by prior units, with
+  nothing left for U9 to gate: (a) the dialectics shadow=True convention
+  (catalog.py) — U6 ALREADY bound all three new oppositions shadow=True,
+  citing "the ADR077 price_value/national promotion-precedent discipline"
+  verbatim in its own commit; re-verified intact, no edit needed. (b) the
+  ACTUAL projection/veil.py Tier system (TIER1_VALUE_RELATION_FIELDS /
+  TIER2_SCISSORS_FIELDS, the commodity-fetishism disclosure gate a real
+  player org's acquired_doctrine_ids unlocks) — this program has produced
+  NO field that reaches a web-facing wire key yet (per points 2/4/5 above:
+  fundamental_theorem, wealth_subsistence_ratio, surplus_strategy_ratio,
+  exploitation_visibility's new modifier are all graph/dataclass-internal).
+  Aleksandrov Test: there is no real endpoint to gate, so adding literal
+  strings to TIER1_VALUE_RELATION_FIELDS today would be pure speculation,
+  not documentation of a real seam — the module's own "forward pin"
+  precedent (surplus_denied/disrupted_production, pre-registered ahead of
+  their producer) was an ADJUDICATED owner-review ruling for a NAMED,
+  concrete future resolver, not a standing invitation to pre-register
+  every plausible future field name. DECISION: no projection/veil.py edit
+  this unit; the requirement is instead recorded as an explicit,
+  actionable note on the new fundamental_theorem liveness row (below) —
+  the SAME place ADR117 already pointed a future surfacing unit to look.
+decision: >-
+  1. Four new SeamEntry rows, TERRITORY scope
+  (sentinels/seam/registry.py): reserve_ratio, foreclosure_rate,
+  eviction_rate (all DECLARED_CONDITIONAL, liveness_condition citing U3's
+  TickDynamicsSystem._compute_accumulation_loop as the real producer,
+  frozen at the Pydantic 0.0 default otherwise) and displacement_rate
+  (NOT_YET_COMPUTED, honest — no data source exists). All four
+  `nullable=False` (they are required `float` Territory fields, never
+  `None` on the wire — the liveness question is genuine-computation vs.
+  frozen-default, not present-vs-absent).
+
+  2. Three new LivenessRow entries (sentinels/liveness/registry.py), all
+  producer_symbol="ContradictionSystem" (joining the existing market_balance/
+  pole_readings rows under the same producer, so neither the existing
+  nor the new rows trip the correct-but-inert check — ContradictionSystem
+  keeps multiple live rows): fundamental_theorem (dormant, mirrors
+  pole_readings exactly, with the forward-pin note from context point 6
+  above embedded in its dormant_reason so a future surfacing unit finds
+  the requirement without re-deriving it), wealth_subsistence_ratio and
+  surplus_strategy_ratio (both consumed by
+  domain/dialectics/instances/catalog.py, verified by direct grep before
+  writing the row — the same AST-attribute-reference shape
+  check_outputs_have_readers() actually checks).
+
+  3. web/game/engine_bridge.py:8030-8039 (the stale Task 21b/U3/U4 comment):
+  corrected in place, replacing the two now-false claims with an accurate
+  account of what U3 (transition_engine) and U4 (productivity_data_source)
+  each activated, and why neither gate is dark today. Pure comment edit,
+  zero behavior change.
+
+  4. No edit to projection/veil.py, no edit to catalog.py (U6's shadow=True
+  bindings re-verified correct, untouched), no new gated-dormancy registry
+  (item 1, out of scope per ADR103 §10.2 — confirmed still hoisted to the
+  T1.1 keel lane, not reopened here).
+
+  5. Two new test suites added: TestVol1U9TerritoryBaseFieldRows
+  (tests/unit/sentinels/test_seam_registry_check.py) — existence, dtype,
+  nullable=False, and correct liveness_class for all four new rows, plus a
+  Sensor-1-still-green smoke check; and three new functions in
+  tests/unit/sentinels/test_liveness_registry.py — the new names appear in
+  the known-producers superset, fundamental_theorem is confirmed dormant
+  with the veil-forward-pin note present, and both U6 ratio rows are
+  confirmed consumed by catalog.py specifically.
+consequences: >-
+  sentinels/seam/registry.py grows by 4 rows (all TERRITORY scope, all new
+  payloads — no existing key collision); sentinels/liveness/registry.py
+  grows by 3 rows (all under the already-registered ContradictionSystem
+  producer). Gates: full `tests/unit/sentinels/` (552 tests) green,
+  including the two new/extended test files above and all pre-existing
+  seam/liveness/inert/formula-registration suites unaffected. Re-ran the
+  four single-process static sentinel CLIs most load-bearing for this
+  unit's edits directly (`uv run python tools/sentinel_check.py {seam,
+  vocabulary, inert, unconsumed, formula_registration} --check`), all
+  clean — seam Sensor 1 reports "clean — 127 registered observables" (78
+  pre-existing advisory findings, none new); vocabulary clean (confirming
+  U7's flagged-but-not-fixed subsistence_threshold vocabulary violation was
+  independently repaired by the intervening c435d3a6 commit, re-verified
+  here rather than assumed); inert/unconsumed/formula-registration all
+  clean and unaffected by this unit's additive-only registry changes.
+
+  No engine/economics/defines code touched beyond the single engine_bridge.py
+  comment correction (zero behavior change, confirmed by inspection — no
+  code line in that diff, only comment text). No baseline drift possible:
+  every edit this unit makes is either a dev-time registry literal (never
+  read by qa:regression) or a comment. `mise run qa:regression` not run
+  (outside this lane's permitted tool surface; unaffected regardless, per
+  the above).
+
+  Scope boundaries carried forward, not resolved here (matching prior
+  units' own explicit non-closure of these same items): (a) the
+  gated-dormancy registry (program prompt §6.1, ADR103 §10.2's own
+  T1.1-keel-lane hoist) remains unbuilt — out of scope for Vol I entirely,
+  not merely deferred by this unit; (b) ADR110's own open question —
+  whether Sensor 2 (the DYNAMIC liveness check) now witnesses a genuine
+  non-null dispossession_intensity/reserve_ratio/foreclosure_rate/
+  eviction_rate value on a live scenario run — remains unverified from
+  this lane: tests/unit/sentinels/test_seam_liveness.py's own module
+  docstring scopes Sensor 2 to LivenessClass.MUST_BE_LIVE MAP observables
+  ONLY (DECLARED_CONDITIONAL rows, which is what all four new/updated rows
+  are, are explicitly, permanently out of that sensor's asserted scope,
+  checked nightly against the Parquet reference DB instead) — there is no
+  scoped unit test this lane's tool surface can run to close that
+  question; left for the controller/owner to verify at consolidation
+  (`mise run qa:regression` or a live scenario probe), exactly as ADR110
+  itself already scoped it, not a new gap this unit introduces. (c) The
+  pre-existing `_TERRITORY_EMITTERS` line-number drift (registry cites
+  `_serialize_territory (:6218)`; the function is currently at :10373) is
+  a real, PRE-EXISTING staleness affecting every TERRITORY-scope row in
+  the file, not something this unit's four new rows caused — noted, not
+  fixed (a single shared constant touching dozens of unrelated rows is
+  out of this unit's surgical-edit scope; flagged for whoever next does a
+  full-file line-anchor pass).
+
+  This is the program's ninth and final specced unit (§7); the ceremony
+  (single declared baseline pass + drift table + ADR, per §7's own
+  "Ceremony" bullet) is controller/merge-time scope, not built here, per
+  the standing hard constraint reserving baseline/vault ceremonies to the
+  controller.

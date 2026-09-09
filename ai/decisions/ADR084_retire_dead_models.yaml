@@ -1,0 +1,196 @@
+ADR084_retire_dead_models:
+  status: "accepted"
+  date: "2026-07-18"
+  title: "Constitution III.10 formal retirement of dead speculative constructs: KeyFigure (model + graph plumbing) and community_composition() removed; Business INVESTIGATED and KEPT — found live-wired into the engine (OrgType.BUSINESS is processed every tick), so the owner ruling's third target is deferred back to the owner with the live-consumer evidence rather than deleted"
+  context: |
+    Owner ruling 2026-07-18: formally retire the dead speculative models
+    KeyFigure, Business, and community_composition under Constitution III.10
+    (Earn-Its-Keep — a construct ships only if it yields a LAW, a PREDICTION,
+    or a COMPUTATION that runs in production; "vocabulary" alone is banned).
+    Task mandate: re-verify deadness INDEPENDENTLY before deleting, and if any
+    target has a live production instantiation or a live consumer, STOP for
+    that item, keep it, and report the evidence — never delete working code.
+
+    Independent re-verification (grep + call-path tracing across src/, web/,
+    non-test; indirection forms checked: registries, string node-types,
+    OrgType dispatch maps):
+
+    ## KeyFigure — DEAD (retire). Deadness evidence:
+      - The model: `src/babylon/models/entities/organization.py:428`.
+      - Constructed at runtime in exactly two places:
+        (1) `domain/organizations/topology.py:180` inside
+            `identify_key_figures()`, whose ONLY callers are tests
+            (`tests/unit/organizations/test_key_figures.py`,
+            `tests/integration/test_organization_detroit.py`) — no `src/`
+            or `web/` caller exists;
+        (2) `models/world_state.py:934` in `from_graph()`, reached only for
+            graph nodes of `_node_type == "key_figure"`.
+      - `to_graph()` (`world_state.py:707-708`) emits key_figure nodes only
+        by iterating `self.key_figures`, and NOTHING in production ever
+        populates `WorldState.key_figures` (no scenario, seed, OODA, or
+        bridge writes it — verified by full-repo grep for `key_figures=`).
+        The round-trip therefore operates on a permanently-empty dict:
+        zero key_figure nodes are ever emitted or reconstructed in any real
+        game, and `key_figure` appears in NO qa:regression baseline
+        (`tests/baselines/`).
+      - Consumers are all declaration/plumbing: the WorldState field
+        (`world_state.py:571`), the bound-invariant iterator
+        (`engine/invariants.py:194`), the vocabulary registry model-fields
+        row (`sentinels/vocabulary/registry.py:162`), and the enum member
+        `NodeType.KEY_FIGURE` (`models/enums/topology.py:61`). None is a
+        live consumer of key-figure *data*.
+
+    ## community_composition() — DEAD (retire). Deadness evidence:
+      - `src/babylon/domain/organizations/composition.py:73`.
+      - ZERO production callers (only its `__init__.py` export + one test
+        class in `tests/unit/organizations/test_composition.py`).
+      - The vocabulary registry ALREADY documents it as dead: the
+        `node_attribute` exemption for `test_composition.py` states verbatim
+        "no System currently calls it, so this is an orphaned-computation
+        finding (task #45 audit)".
+      - Its siblings are LIVE and are NOT touched:
+        `lifecycle_composition()` and `effective_capacity()` are called by
+        `ooda/lifecycle_capacity.py`; the shared helper
+        `_composition_by_attribute()` stays.
+      - INV-010 ("community is NEVER a graph node") is unrelated:
+        `community_composition()` reads a `community` string ATTRIBUTE off
+        social_class nodes via MEMBERSHIP edges — it never makes community a
+        node. The INV-010 machinery (`engine/invariants.py:438`) references
+        nothing removed here.
+
+    ## Business — LIVE (KEPT, deferred back to owner). Evidence it is NOT dead:
+      The prior catalogue's "built, never connected" is imprecise for
+      Business: the org category IS connected to the engine; only a seeded
+      Business *instance* is (currently) absent. `OrgType.BUSINESS` is a
+      first-class, every-tick engine category:
+        - `ooda/layer0.py:44` — `process_layer0()` iterates the graph for
+          `org_type == OrgType.BUSINESS.value` to auto-generate metabolism
+          EMPLOY ActionResults. `process_layer0` is called UNCONDITIONALLY
+          every tick from `engine/systems/ooda.py:106`, inside `OODASystem`,
+          which is position 14 in `_DEFAULT_SYSTEMS`
+          (`engine/simulation_engine.py:339`). This is live tick code.
+        - `ooda/action_effects.py:381`, `ooda/npc_stub.py:55`,
+          `ooda/action_eligibility.py` (EMPLOY/LOCKOUT are Business-only;
+          PROVIDE_SERVICE is all-except-Business) all branch on Business.
+        - `web/game/engine_bridge.py:5533,5990` filter on `"business"`.
+        - `persistence/postgres_schema.py:752` — the org_type CHECK
+          constraint enumerates `'business'`.
+        - The `Business` MODEL itself is the live from_graph reconstruction
+          target: `models/world_state.py:277`
+          (`_reconstruct_organization`'s `subtype_map[OrgType.BUSINESS] =
+          Business`), imported and mapped on every organization
+          reconstruction. Deleting the model would break that dispatch map
+          and orphan `OrgType.BUSINESS` — a live enum member the engine
+          processes every tick with no model to deserialize it into.
+      Deleting Business would remove the model half of a live (if
+      currently unseeded) engine capability, i.e. delete working code.
+      Per the task's explicit STOP clause and the constitutional bar on
+      silent removal of live plumbing, Business is KEPT.
+  decision: |
+    Retire KeyFigure and community_composition; keep Business.
+
+    ## Removed (KeyFigure):
+      - `KeyFigure` class + module-docstring mention
+        (`models/entities/organization.py`).
+      - `KeyFigure` export (`models/entities/__init__.py`).
+      - `WorldState.key_figures` field + its `to_graph()` emission +
+        `from_graph()` reconstruction branch + the `key_figures=` kwarg
+        (`models/world_state.py`).
+      - `state.key_figures.items()` yield + docstring entry in the
+        bound-invariant iterator (`engine/invariants.py`).
+      - `identify_key_figures()` + its `KeyFigure` import + its `__init__`
+        export + its module-docstring mention
+        (`domain/organizations/topology.py`, `domain/organizations/__init__.py`).
+      - The `NodeType.KEY_FIGURE` model-fields row + `KeyFigure` import in
+        `sentinels/vocabulary/registry.py::MODEL_FIELDS_BY_NODE_TYPE`.
+      - Tests solely covering the retired construct (identify_key_figures
+        test classes; `TestKeyFigureCreation`; the KEY_FIGURE row in the
+        node-type round-trip contract; the KeyFigure-only conftest fixture;
+        the KeyFigure parts of the Detroit integration scenarios), plus the
+        stale `key_figures` entry in `tests/_helpers/invariants/uuid_relabeler.py`.
+
+    ## KEPT deliberately (NodeType.KEY_FIGURE reclassified, NOT removed):
+      `NodeType.KEY_FIGURE` (`models/enums/topology.py`) is reclassified from
+      the "production-stamped" section to the "declared but NOT
+      production-stamped" section (joining HEX/PERSON/ENTITY/COMMUNITY), and
+      dropped from `MODEL_FIELDS_BY_NODE_TYPE`. Rationale: after the model is
+      gone, the enum member does NOT exist ONLY to serve KeyFigure — it still
+      types the COMMAND-edge fixture nodes in `test_topology_classifier.py`,
+      which test `classify_topology()`. `classify_topology()` is NOT part of
+      this ruling (it is a separate, also-tests-only function that the owner
+      did not name), so its test fixtures are left intact. Fully deleting the
+      node-type would force rewriting out-of-scope tests; reclassifying is the
+      accurate minimal change (production genuinely no longer stamps it).
+
+    ## KEPT deliberately (out of scope, operate on IDs not the model):
+      - `cohesion_loss_on_removal()` + `TestCohesionLossOnRemoval` and the
+        `cohesion_loss_per_key_figure` define (`config/defines/organizations.py`):
+        the function takes scalar `(current_cohesion, removed_count)`, never
+        the KeyFigure model. No GameDefines change → no `defines.yaml`
+        regeneration.
+      - `raid_key_figure_capture_base` / `prosecute_key_figure_removal_chance`
+        (`config/defines/state_apparatus.py`) + `ooda/state_ai/repress_effects.py`:
+        the state-apparatus repression subsystem operates on `key_figure_ids`
+        string lists on org nodes, independent of the KeyFigure model.
+
+    ## Removed (community_composition):
+      - `community_composition()` (`composition.py`) + its `__init__` export
+        + its `types.py` docstring mention.
+      - `TestCommunityComposition` + the import
+        (`tests/unit/organizations/test_composition.py`).
+      - The now-obsolete `node_attribute` exemption row for
+        `test_composition.py`'s `community` stamp
+        (`sentinels/vocabulary/registry.py`) — it existed only to license
+        that test's graph-only `community` attribute; with the test gone the
+        exemption is stale and is deleted (the registry's own governance:
+        the fabricated-attribute exemption list must only ever shrink).
+
+    ## Business: NO code change. Retirement deferred back to the owner with
+       the live-consumer evidence above. If the owner still wants Business
+       gone, the correct move is a separate program that ALSO retires the
+       whole live Business org-category (layer-0 auto-metabolism, EMPLOY/
+       LOCKOUT eligibility, NPC business actions, the postgres CHECK member,
+       and OrgType.BUSINESS itself) — not the model in isolation.
+  consequences: |
+    - Recovery path: every retired construct is recoverable from the commit
+      immediately preceding the surgery commit — concretely the branch base
+      `fix/null-play-coupling` @ `193648dc` (this ADR is committed before the
+      removal). `git show 193648dc:src/babylon/models/entities/organization.py`
+      etc. restores any deleted definition verbatim.
+    - Determinism: qa:regression is expected byte-identical (5/5). The
+      retired code paths never execute in the 5 canonical scenarios —
+      `key_figures` is always empty (no key_figure node in any baseline) and
+      `community_composition()` has no caller — so no baseline moves. Verified
+      in the gate run (see commit).
+    - Sentinels: the vocabulary sentinel stays green because
+      `NodeType.KEY_FIGURE` remains a declared member (Rule a — test stamps
+      of "key_figure" stay legal), production no longer stamps OR queries
+      "key_figure" (Rule b closes trivially), and dropping it from
+      `MODEL_FIELDS_BY_NODE_TYPE` removes shape-closure (Rule c) from a
+      model-less type — matching the registry's documented treatment of
+      model-less node types. The `inert`/`unconsumed` sentinels lose two
+      genuinely-dead constructs.
+    - Business remains a KNOWN inert-for-lack-of-seed capability: the engine
+      handles Business orgs every tick but no scenario seeds one. That gap
+      (seed a Business, or retire the whole category) is left for a future
+      owner-directed program; it is NOT closed here.
+  alternatives_considered: |
+    - DELETE Business as ruled: rejected. `OrgType.BUSINESS` is consumed by
+      live every-tick engine code (`process_layer0` via `OODASystem`,
+      action_effects, eligibility, NPC selection, the postgres CHECK) and the
+      `Business` model is the live from_graph reconstruction target for that
+      enum member. Deleting the model orphans a live category and breaks
+      `_reconstruct_organization`'s dispatch map — deleting working code,
+      which the task's STOP clause and Constitution III.11 (no silent removal
+      of live plumbing) forbid. Deferred to the owner with evidence instead.
+    - FULLY REMOVE NodeType.KEY_FIGURE: rejected. It still types the
+      COMMAND-edge fixtures of `test_topology_classifier.py`
+      (`classify_topology`, not in this ruling); removing it would churn
+      out-of-scope tests. Reclassifying to declared-not-stamped is the
+      accurate minimal change.
+    - ALSO retire cohesion_loss_on_removal / classify_topology / the COMMAND
+      edge (all tests-only): rejected as scope creep. The owner named three
+      constructs; these are neither, they do not reference the KeyFigure
+      model, and removing GameDefines entries would force a defines.yaml
+      regeneration and risk baseline drift. Flagged here as a related,
+      separately-rulable dead-Feature-031-topology cluster.

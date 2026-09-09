@@ -68,13 +68,13 @@
         },
         "territory_id": {
           "type": "string",
-          "description": "H3 res-7 hex ID for in-scope territories, or 'canada' / 'rest_of_usa' boundary node IDs."
+          "description": "5-digit county FIPS for in-scope territories (county grain since P25 U6/ADR132 — the Amendment-U substrate contract; res-7 H3 keying retired), or 'canada' / 'rest_of_usa' boundary node IDs."
         },
         "influence_level": {
           "type": "number",
           "minimum": 0.0,
           "maximum": 1.0,
-          "description": "Per-hex influence; for FAC_WORKERS_CONGRESS = union-employment-share prorated by LODES residential density; for FAC_DECOLONIAL = AIANNH intersection area; for FAC_RESTORATIONIST = Republican vote share prorated by LODES; for FAC_LIBERAL_IMPERIAL = complement clamped to liberal_imperial_influence_cap."
+          "description": "Per-county influence; for FAC_WORKERS_CONGRESS = union-employment share (fixture-grade zone model pending the QCEW program); for FAC_DECOLONIAL = AIANNH intersection area (fixture-grade); for FAC_RESTORATIONIST = REAL Republican vote share per county (MIT Election Lab committed artifact, ADR049 — no LODES proration needed at county grain); for FAC_LIBERAL_IMPERIAL = complement clamped to liberal_imperial_influence_cap."
         },
         "support_type": {
           "type": "string",

@@ -1,0 +1,34 @@
+# ~/.config/babylon/config.toml — player-facing configuration (§A3).
+# Three files, three jurisdictions: sim semantics live in defines.yaml,
+# telemetry policy lives in [telemetry] (separate design), and NOTHING
+# secret lives here — credentials go in ~/.config/babylon/credentials (0600).
+#
+# Precedence: wrapper-forced env > explicit env > this file > defaults.
+
+[intelligence]
+# Lane selection: "auto" walks §A7.6 precedence
+#   bundled llama-server → detected external → cloudflare-if-keyed → mute
+# Force a lane with: bundled | external | cloudflare | mute
+mode = "auto"
+
+# Transport timeout for narrate/parse/embed calls (seconds).
+timeout_s = 30.0
+
+# Bundled lane (§A7.3): loopback llama-server owned by the game process.
+# The wrapper env is the authority for binaries; this is just the port.
+bundled_base_url = "http://127.0.0.1:8737/v1"
+
+# Detected-external lane (D2): auto-detected, never installed by us.
+external_base_url = "http://127.0.0.1:11434/v1"
+
+# Cloudflare lane (§A4 premium / dev): the babylon-api Worker.
+# Today (workers.dev, free): set your subdomain from `wrangler deploy` output.
+# Target once percypedia.biz is a zone: https://api.babylon.percypedia.biz/v1
+# Either way, put your beta key in ~/.config/babylon/credentials.
+# cloudflare_base_url = "https://babylon-api.<your-subdomain>.workers.dev/v1"
+
+# Model pins. NOTE (§3.4): the EMBED pin is per-campaign — recorded in campaign
+# metadata at creation; changing it here affects NEW campaigns only. Never mix
+# embedding models within one campaign's Archive.
+cloudflare_chat_model = "@cf/meta/llama-3.1-8b-instruct-fast"
+cloudflare_embed_model = "@cf/baai/bge-m3"

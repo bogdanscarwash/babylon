@@ -1,0 +1,65 @@
+ADR256_same_window_campaign_lifecycle:
+  status: proposed
+  date: '2026-09-06'
+  issue: PER-324
+  title: One window and runtime-owned campaign switching
+  authority:
+    - ADR251 R1 runtime ownership and R2 exact observation identity
+    - ADR254 R2 owned Archive driver and R4 bounded cooperative shutdown
+    - Director report that New and Load close Bevy
+  supersedes_scope:
+    - ADR253 R6 and ADR254 R3 live stdio protocol version 2
+    - Campaign selection through launcher exit codes and process cycling
+  context: |
+    New and Open closed Bevy before runtime admission finished. During startup,
+    this abandoned the response pipe and caused a later Ready write to fail.
+    Loading needs a visible lifecycle inside the existing window, with a way
+    to choose another campaign after admission fails.
+  decision: |
+    R1. ONE LIFECYCLE. Keep one Bevy process, runtime process and anonymous
+    pipe pair. The runtime remains the sole game-state writer. Protocol V3
+    sends Hello before campaign admission. Initial selection, New, Open and
+    Reopen all use Switch. New names a fresh UUID and an admitted preset and
+    requires absence under the founding lock. Open requires an existing
+    admitted campaign. Neither operation silently becomes the other.
+
+    R2. SCOPED ACKNOWLEDGEMENT. Each accepted Switch increments a checked
+    session epoch and acknowledges its target before admission work. Every
+    request and response carries its lifecycle scope, including errors and
+    Stop. Request IDs and client observation generations remain monotonic
+    across switches. Returning to the same UUID cannot admit old work. The
+    client clears old observations and pending reads together with its dossier
+    campaign identity, while retaining presentation preferences and perspective.
+
+    R3. ORDER AND RECOVERY. A pending Advance settles before Switch. Retire
+    the prior Archive driver before starting the target driver. Ready precedes
+    target progress and carries the admitted foundation and durable tail. A
+    continuation preference is written only after Ready. Admission failure
+    leaves the target visibly failed, the old durable campaign intact and
+    the lifecycle service available for another choice. It does not advance
+    the world or fabricate an observation.
+
+    R4. TERMINAL SHUTDOWN. Switch is not Stop. Quit retains its request through
+    an in-flight admission and drains output until matching Stopped or the
+    existing explicit shutdown failure. Preserve bounded queues, cooperative
+    cancellation, finished-only joins and the 150-second shutdown boundary.
+    An unreapable driver or broken process pipe is a fatal boundary failure;
+    this design does not claim to revive a dead runtime through closed pipes.
+
+    Retire the V2 decoder and launcher cycling without compatibility aliases.
+    This transport and presentation change preserves durable formats, hashes,
+    reader capabilities and BSL authority. It adds no player action, payment
+    system, game law or mathematical primitive.
+  alternatives_rejected:
+    - Keeping campaign selection coupled to closing and relaunching Bevy.
+    - Treating a missing Open target as permission to create a campaign.
+    - Reusing campaign UUID alone to admit asynchronous work after Reopen.
+    - Starting another Archive driver before the previous driver has retired.
+    - Adding a process relay or parallel lifecycle transport for this repair.
+  consequences:
+    - Mixed protocol binaries refuse rather than negotiate a fallback.
+    - Admission can take time while the existing window remains responsive.
+    - Failed admission requires an explicit next choice rather than a retry loop.
+    - Native New, Load, recovery and Quit need exact-head qualification.
+    - This record does not claim completed G4 or Director acceptance.
+  evidence_class: Designed

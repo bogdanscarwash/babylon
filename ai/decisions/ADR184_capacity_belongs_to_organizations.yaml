@@ -1,0 +1,176 @@
+ADR184_capacity_belongs_to_organizations:
+  status: "accepted"
+  date: "2026-07-30"
+  title: >
+    Capacity belongs to organizations. Repression and revolutionary action are
+    the SAME allocation under different budgets; the class difference lives
+    entirely in replenishment. StateFinance and RevolutionaryFinance are one
+    construct under two names and do not both survive the port.
+  context: |
+    Lane A's heat reformulation (ADR180 R3-R7, reports/heat-system-dossier.md
+    §5.1) split the indicted [0,1] heat scalar into L (the state's dossier),
+    K (capacity) and X (derived exposure). K shipped 2026-07-30 as
+    rust/crates/babylon-graph/src/capacity.rs and merged in PR #454.
+
+    As shipped, K had no owner. `Capacity` was a bare
+    `BTreeMap<String, u64>` of instrument budgets; the module doc said "the
+    state" eleven times; and `Candidate` carried `instrument`, `mode`,
+    `target`, `expected_yield`, `cost` — a target and NO ACTOR. An action
+    aimed at someone, proposed by nobody.
+
+    The Director put the question directly ("Capacity belongs to Organizations
+    right?") and confirmed the ruling the same session.
+
+    Three facts made the answer unambiguous, all verified before ruling:
+
+    (1) "The state" IS NOT A NODE TYPE. models/enums/topology.py's NodeType
+        vocabulary has ORGANIZATION ("a collective actor that observes and
+        acts" — what OODA runs over), INSTITUTION ("a durable apparatus
+        housing organizations") and SOVEREIGN ("a political authority claiming
+        territories"). A budget owned by "the state" is owned by nothing that
+        exists in the ontology.
+
+    (2) THE FROZEN ENGINE ALREADY BUILT THE SAME CONSTRUCT TWICE.
+        models/entities/state_finance.py:      treasury / police_budget +
+          social_reproduction_budget / tax_rate + tribute_income / debt_level
+        models/entities/revolutionary_finance.py: war_chest / operational_burn
+          / dues_income + expropriation_income + donor_income / (no debt)
+        Same shape — a stock, a per-tick spend, replenishment sources — under
+        two vocabularies. models/entities/organization.py already carries
+        `budget: Currency` (:164), `violence_capacity` (:298) and
+        `surveillance_capacity` (:302).
+
+    (3) ADR180 DID NOT PIN OWNERSHIP. Its rulings speak of the L/K/X split and
+        of organizational structure; nothing in it assigns K to a state actor.
+        This ADR fills a gap rather than amending a ratified decision.
+
+  decision: |
+    R1. CAPACITY BELONGS TO ORGANIZATIONS. `Capacity` carries an `owner:
+        NodeId` and has no `Default` — an unowned budget is the error this
+        ADR removes, so the type must not be constructible without an owner.
+
+    R2. A CANDIDATE HAS AN ACTOR. `Candidate.actor: NodeId` names the
+        organization proposing the action, whose budget pays and over whose
+        Dossier the yield was computed. `Capacity::allocate` REJECTS a
+        candidate whose actor is not the owner (loud GraphError, III.11) —
+        never silently funds another organization's action from this pool.
+
+    R3. REPRESSION AND REVOLUTIONARY ACTION ARE THE SAME ALLOCATION. A union
+        local and a political police force both rank what they could do by
+        yield per unit spent and fund down the list until the money runs out.
+        Neither side gets a privileged mechanic. The allocator cannot tell a
+        police budget from a strike fund, and that is the point — pinned by
+        `the_same_allocation_serves_a_movement_and_a_police_force`.
+
+    R4. THE CLASS DIFFERENCE LIVES IN REPLENISHMENT, NOT IN ALLOCATION. Tax
+        and tribute on one side, dues and expropriation on the other. The
+        historical asymmetry between a state and a movement is the SIZE of
+        the budget and the RELIABILITY of its sources — never a special rule
+        in the ranking.
+
+    R5. Φ MAY FUND CAPACITY (currency -> currency). The heat dossier §6 risk 1
+        and the 2026-07-30 design dossier's emergence audit (item 8) PROHIBIT
+        coupling imperial rent to `expected_yield`: bridging currency-per-
+        labour-hour to a dimensionless component fraction needs a conversion
+        nobody can derive. That prohibition STANDS. But StateFinance's
+        `tribute_income` is documented as "Imperial rent from CLIENT_STATE
+        relationships" — Φ -> REPLENISHMENT is currency to currency, needs no
+        conversion and invents no coefficient. This is the legitimate path
+        for the colonial/racial severity gradient the audit had just declared
+        mechanism-less, and it exists only because capacity now has an owner
+        who can be funded. The Fundamental Theorem does mechanical work:
+        imperial rent buys the repressive budget.
+
+    R6. DO NOT TRANSCRIBE `RevolutionaryFinance.heat`. The field ("State
+        attention level [0,1]. Higher = more surveillance") is the indicted
+        scalar, keyed to the movement's own conduct, sitting on the movement's
+        own finance model. It is exactly the object L/K/X replaced. Goes on
+        the ai/bsl-architecture-standard.md §5.4 do-not-transcribe list.
+
+    R7. STATEFINANCE AND REVOLUTIONARYFINANCE COLLAPSE TO ONE CONSTRUCT AT
+        THE PORT. Per ADR183, the frozen engine is a contract source for
+        structure and ordering, not a correctness oracle: it having built the
+        construct twice is a defect to repair at the port, not a shape to
+        reproduce. §5.4 row.
+
+  consequences: |
+    IMMEDIATE (this ADR's PR):
+    - Capacity gained `owner` + `owner()`, lost `Default`.
+    - Candidate gained `actor`; allocate() gained the owner check.
+    - Module doc rewritten off "the state" onto "an actor".
+    - Two tests added: an_organization_spends_only_its_own_means,
+      the_same_allocation_serves_a_movement_and_a_police_force.
+    - Free of cost: the whole Lane A estate still has ZERO external callers,
+      so re-homing K broke nothing. Deferring it past first use would not
+      have been free.
+
+    ALL THREE OPENS CLOSED — Director rulings, same session 2026-07-30,
+    asked directly and answered:
+
+    R8. CAPACITY IS CURRENCY. `Capacity.budgets` and `Candidate.cost` are
+        `Currency` (kernel i128 micro-units), not an abstract unit. The
+        decisive argument is R5's: an abstract unit would need a declared
+        currency-per-unit rate to accept imperial rent, and THAT RATE IS THE
+        UNDERIVABLE COEFFICIENT ADR172 r5 FORBIDS. Φ -> replenishment is
+        legitimate precisely because it needs no conversion; inventing a unit
+        would manufacture the conversion the prohibition exists to block.
+        Consequences: `replenish` and `total_available` became fallible
+        (checked i128, loud on overflow); the zero-cost guard became a
+        NON-POSITIVE guard, since `Currency` is signed (kernel OQ-28) and a
+        negative cost — an action that PAYS its taker — is newly expressible
+        and equally a content bug; the ranking denominator widens through a
+        loud `micro_units_as_f64` mirroring backfire.rs's discipline rather
+        than casting silently past 2^53. Pinned by
+        `imperial_rent_funds_the_budget_with_no_conversion` and
+        `an_action_that_pays_its_taker_is_loud_too`.
+
+    R9. THE DECLINE IS TYPED. `allocate` returns
+        `AllocationOutcome { funded: Vec<Allocation>, declined: Vec<Declined> }`,
+        where `Declined` carries the candidate AND `remaining` — the
+        shortfall, not merely the refusal, because "wanted the raid, could
+        only afford the wiretap" is the narratable fact. Declines remain
+        derivable (`candidates − funded`), so this buys EXPLICITNESS, not
+        information; it earns the struct because CONSTRAINT IS THE PEDAGOGY
+        and a caller forced to re-derive it mostly will not. Unaffordability
+        is the only decline path — malformed candidates stay hard errors — so
+        `Declined` is a struct and not an enum until a second path exists.
+        An empty `declined` is observably "refused nobody", never "not
+        computed" (III.11), pinned by
+        `nothing_declined_is_an_empty_list_never_a_missing_one`.
+        NOTE: this does NOT resolve the write-log gap. babylon-bsl depends on
+        babylon-graph, so capacity.rs still cannot emit into the ADR182 write
+        log without a dependency cycle, and a decline is not a mutation
+        anyway. The typed return is how a decline becomes observable AT ALL.
+
+    R10. SYMMETRIC FORM, ASYMMETRIC MEANS. `Dossier` gains `owner` and loses
+        `Default`, exactly parallel to R1. Every actor holds a dossier,
+        because R3 makes repression and revolutionary action the same
+        allocation and an allocation runs on BELIEF — a movement misreads the
+        apparatus as the apparatus misreads a movement. What differs is HOW
+        each resolves: a state resolves by SPENDING a surveillance instrument
+        it must fund; a movement resolves by BEING embedded in structures it
+        already stands in, which costs nothing and reaches only that far.
+        That asymmetry lives in the resolution PATHS — content (BSL) and
+        Phase 2 bindings — never in the type. Scott survives rather than
+        being flattened: legibility is still specifically what states do to
+        populations, visible now as the PRICE and REACH of resolution instead
+        of as a privileged type. The state buys a wide, shallow, standardized
+        view; the movement gets a narrow, deep, untransferable one. Pinned by
+        `two_actors_can_hold_different_beliefs_about_one_substrate`, which
+        shows a police force resolving rank-and-file and missing the
+        coordinator while the local knows its own — and the two valuing a
+        strike on that coordinator differently as a result.
+
+    STILL OPEN after R8-R10:
+    - The movement's resolution path (embeddedness) plausibly reads community
+      hyperedges, which needs the `community_memberships` PRODUCER — task #47,
+      itself blocked on the Director's granularity ruling. Recorded so the
+      dependency is not rediscovered.
+    - The write-log/decline dependency-cycle question (see R9's note).
+
+  supersedes: []
+  related:
+    - ADR180_lane_rulings
+    - ADR182_derivation_inspector_rulings
+    - ADR183_get_it_right_in_rust
+    - ADR172_program_27_refoundation

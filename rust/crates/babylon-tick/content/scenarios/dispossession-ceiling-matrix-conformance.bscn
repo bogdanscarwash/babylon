@@ -1,0 +1,51 @@
+; The CEILING-MATRIX conformance world for `dispossession/territory-transfer`
+; — completes the per-input mutation table `dispossession-negative-input-
+; conformance.bscn` starts (that scenario covers `foreclosure-rate`'s
+; ceiling plus every OTHER input's floor; this one covers `eviction-rate`'s
+; ceiling plus every OTHER input's ceiling, and `foreclosure-rate`'s floor).
+;
+; ONE subject: `foreclosure-rate` DELIBERATELY NEGATIVE and UNSUFFIXED
+; (`-6`, past the floor); `eviction-rate`/`displacement-rate`/
+; `concentrated-ownership`/`absentee-landlord-share` ALL DELIBERATELY PAST
+; their ceiling and UNSUFFIXED (`6`, `8`, `9`, `4`) — `eviction-rate`, being
+; positive, ALSO anchors the `(when …)` gate open. Every one of the four
+; ceiling-clamped inputs lands on the SAME `1.0` contribution a `1c` seed
+; would, so `intensity` equals `weight-eviction + weight-displacement +
+; weight-tax-sale + weight-eminent-domain` exactly (`0.3 + 0.15 + 0.05 +
+; 0.02 = 0.52`) — `foreclosure-rate`'s floored `-6` contributes nothing.
+; Deleting any ONE of these five per-input clamps moves the intensity away
+; from `0.52` (see the PR's mutation table for the confirmed numbers per
+; clamp).
+;
+; Between this scenario and `dispossession-negative-input-conformance.bscn`,
+; every one of the ten per-input floor/ceiling clamps D-4 restores is
+; individually mutation-verified: deleting ANY ONE (and only that one)
+; changes the intensity SOME vector asserts, in at least one of the two
+; scenarios.
+;
+; See `dispossession_ceiling_matrix_conformance.py` for the frozen-engine
+; provenance.
+(scenario dispossession/ceiling-matrix-conformance
+  (deffield territory/wealth int extensive)
+  (deffield territory/dispossession-intensity int intensive)
+
+  ; Deliberately UNSUFFIXED and NEGATIVE — see the header.
+  (defconst dispossession/foreclosure-rate -6)
+  ; Deliberately UNSUFFIXED and past its ceiling — see the header (gate
+  ; anchor, all four of the following).
+  (defconst dispossession/eviction-rate 6)
+  (defconst dispossession/displacement-rate 8)
+  (defconst dispossession/concentrated-ownership 9)
+  (defconst dispossession/absentee-landlord-share 4)
+
+  (defconst dispossession/weight-foreclosure 0.4c)
+  (defconst dispossession/weight-eviction 0.3c)
+  (defconst dispossession/weight-displacement 0.15c)
+  (defconst dispossession/weight-tax-sale 0.05c)
+  (defconst dispossession/weight-eminent-domain 0.02c)
+  (defconst dispossession/deadweight-loss-fraction 0.05c)
+  (defconst dispossession/transfer-scale 0.01c)
+
+  (node ceiling-matrix-county NodeType/TERRITORY
+    (territory/wealth 1000000)
+    (territory/dispossession-intensity 0)))

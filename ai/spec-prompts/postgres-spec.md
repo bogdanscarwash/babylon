@@ -1,9 +1,14 @@
 # Postgres Specification: Babylon Runtime Database
 
-**Status**: Draft v3
+**Status**: Historical draft v3 — superseded by the Rust persistence cutover
 **Date**: 2026-03-01
 **Depends On**: Constitution, ADR030/031/032/033, Features 011–032
 **Supersedes**: SQLite runtime database (`babylon/persistence/runtime_db.py`, `runtime_schema.py`)
+
+> This prompt records the retired Python/Django proposal. It is not current
+> architecture. The live boundary is defined by
+> `contracts/rust_persistence_cutover_v2.yaml`,
+> `contracts/h3_estate_contract_v1.yaml`, and `docs/reference/persistence.rst`.
 
 ---
 

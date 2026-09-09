@@ -1,0 +1,83 @@
+ADR229_rust_gameplay_contract_authority:
+  status: "accepted"
+  date: "2026-08-25"
+  title: >-
+    Rust owns the executable Neel gameplay contracts while versioned fixtures
+    remain language-neutral behavioral authority
+  context: |
+    The T1 relational-territory, T2 situated-practice, and T3 synthetic-
+    evidence trains initially shipped parallel Python and Rust contract
+    implementations plus Python generators. That duplication made the
+    transitional Python layer look like a second gameplay engine even after
+    the Rust crates became the intended executable owners. It also made local
+    maintainability gates judge code that Babylon did not intend to operate.
+
+    The language-neutral contracts and fixtures remain valuable. They specify
+    exact schemas, bytes, refusal cases, classifications, and administrative
+    controls that can outlive any implementation language. The defect is the
+    duplicate Python runtime and generator authority, not those behavioral
+    contracts.
+  decision: |
+    The `babylon-practice-contract`, `babylon-rtd`, and `babylon-evidence`
+    crates are the sole executable implementations of the Neel gameplay-
+    contract boundary. Their typed schemas, validators, codecs, classifiers,
+    and bounded fixture consumers are Rust-owned.
+
+    Versioned YAML, JSONL, and literal fixture files remain language-neutral
+    behavioral contracts. Rust source-hash constants and contract tests bind
+    the practice and RTD schema bytes. T3 vector tests consume the committed
+    fixtures directly. Babylon does not retain a production Python gameplay-
+    contract implementation or a Python source generator for those Rust
+    types.
+
+    Semantic BSL invariants stay in `babylon-bsl`, where the language AST and
+    refusal types exist. Cross-crate and repository-relationship checks stay
+    in the Rust `bsl-lint` binary. Its `rust-contract-authority` check refuses
+    the exact retired Python gameplay modules and tools, and mutation tests
+    prove that every forbidden path has enforcement tooth.
+
+    Designed Practice Contract V1 budget terms live with the Rust practice
+    contract as `DEFAULT_PRACTICE_BUDGET_TERMS_V1`. Python `GameDefines` does
+    not carry a duplicate detached-practice budget model. The generator-only
+    `unicodedata2` development dependency retires with the Python T3 vector
+    exporter.
+
+    This ownership cutover activates no practice, player input, persistence
+    writer, Archive producer, membership producer, territorial reducer, or
+    response curve. The Gate 3, Gate 5, PER-44, inventory, freight, and
+    repression blockers recorded by ADR226 through ADR228 remain unchanged.
+  consequences: |
+    Contract behavior remains regenerable from language-neutral schemas,
+    vectors, fixtures, and exact Rust tests without preserving a dormant
+    Python engine. A later implementation in another language must satisfy
+    those behavioral contracts; it does not gain authority by copying Rust
+    internals.
+
+    Python continues to own its declared data, AI, document, external-API,
+    CLI, and frozen-reference periphery. This decision does not authorize a
+    general Python deletion. The broader sentinel estate requires a separate
+    disposition audit and one Rust or BSL witness before each retirement.
+
+    Repository checks now prevent the retired Python gameplay-authority paths
+    from returning. No Radon exclusion is added or widened.
+  verification: |
+    The practice, RTD, evidence, and bsl-lint Rust crate suites pass. Each
+    changed crate passes Clippy with warnings denied through the repository's
+    pinned Nix toolchain, and the Rust workspace passes formatting.
+
+    The authority test starts from a clean temporary root, injects each of the
+    eight retired paths independently, requires an exact failure, rejects more
+    than one root, and proves the real repository is clean. Running all
+    bsl-lint checks also verifies the ADR registry and dependency boundaries.
+
+    The focused surviving Python configuration and hygiene suite passes 314
+    tests. Ruff, mypy, the current lock check, and the exact pre-push Radon
+    maintainability hook pass without a new exclusion.
+  supersedes:
+    - ADR226_t3_synthetic_emergence_evidence_boundary  # Python implementation clauses only
+    - ADR227_practice_contract_groundwork  # Python generation and GameDefines clauses only
+    - ADR228_relational_territory_dossier_contract  # Python implementation clauses only
+  related:
+    - ADR220_rust_owned_postgresql_persistence_boundary
+    - ADR221_game_first_refoundation_v4
+    - ADR224_bsl_causal_composition_contract

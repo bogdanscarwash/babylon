@@ -1,0 +1,295 @@
+ADR249_semantic_atom_content_architecture:
+  status: accepted
+  date: '2026-09-03'
+  title: >-
+    Director design rulings for PER-23: semantic atoms as the atomic content
+    unit, the Babylon Markdown profile with subject-scheme links, fog-safe
+    redlink placeholders, the narrated wiki version chain, and the read-only
+    projection boundary feeding the county/place dossier
+  issue: PER-23
+  owners:
+    atom_storage_and_views: babylon-persistence schema epoch
+    markdown_profile_and_template: babylon-persistence Archive renderer
+    dossier_surface_contract: babylon-client DecisionSurfaceContract
+    headless_cli: babylon-client --headless
+    reader_role_and_dsn: babylon-persistence loopback-admitted reader
+  context: |
+    PER-22 landed the fog-safe semantic Archive: known-only search with
+    SQL-enforced knowledge grants, redlinks, provenance citations, deterministic
+    page hashes with read-time revalidation, and honest verified_tick, proven by
+    language-neutral parity vectors and live PostgreSQL suites. PR #882 pinned
+    the retrieval boundary PER-23 consumes. A seven-axis reconciliation audit
+    (recorded on PER-23, 2026-09-03) then found the presentation half unbuilt:
+    no dossier surface exists in babylon-client, every DecisionSurfaceContract
+    manifest row is administrative, the client holds only an in-process
+    TickSession and has no PostgreSQL read path, no durable-tick versus
+    verified_tick visibility or pending state exists anywhere, and Investigate
+    is absent rather than visibly unavailable. PER-23 was reopened after a
+    premature auto-close triggered by the retrieval boundary's branch name.
+
+    The Director held a design interview on 2026-09-03 (transcript and
+    reconciliation on PER-23) ruling the content architecture before
+    implementation, with the standing instruction that design be nailed down
+    now rather than torn apart later. The interview covered the atom model,
+    storage engineering, link syntax, Markdown standard, content classes,
+    surface governance, demo topology, and agent-first operation.
+
+    Review of this ADR on 2026-09-03 (PR #885) surfaced six findings, which
+    the Director adjudicated the same day. The grant-seeding ruling was
+    refined to the cursory-search tier (existence, identity, and containment
+    public; composition and magnitude earned), the dossier row was made
+    gate-ineligible until Gate 5, the reader role was confined to fog-safe
+    views, numeric atoms were required finite, the Detroit example was
+    corrected to Census place 2622000 per the county-dossier parity
+    authority, and the bare-link chip rule was added so the placeholder
+    stays reachable in the in-game renderer.
+  decision: |
+    R1 — Semantic atoms. The atomic unit of game-truth content is a typed,
+    content-addressed, immutable atom stored in archive_atom_v1 (atom_id =
+    SHA-256 of the canonical encoding). One atom is one signal value at a
+    tick, one relationship/link, or one concept entry — coarse, meaningful,
+    individually citable; phrase-level fragmentation is rejected. Every atom
+    carries subject kind+id, signal key, typed value, evidence class
+    (Observed/Derived/Calibrated/Designed per the constitutional compact),
+    grant_key, citation (source_id + locator), and valid_tick. Numeric atom
+    values must be finite: producers reject NaN and infinities at mint, and
+    the schema contract carries refusal vectors for every non-finite
+    encoding, so immutable content-addressed truth never entombs a
+    noncanonical value. New ticks mint new atoms; atoms never mutate. A join
+    table archive_page_atom_v1 records each page's asserted atom set, serving
+    as both composition record and staleness reverse index. Pages keep their
+    rendered Markdown and content_sha256; existing page contracts and parity
+    vectors are unchanged except for the R4 syntax repin.
+
+    R2 — Tables for invariants, views for compositions. Hard tables hold the
+    invariants and the hash chain (append-only atoms, grant boundary, REVOKE
+    posture). Commonly used compositions live in rebuildable views:
+    v_archive_atom_visible (atoms joined to grants and tick horizon — the
+    known-only set, SQL-enforced fog) and per-surface views such as
+    v_county_card_atoms. Views are derivable, never hashed, and may be dropped
+    and recreated without ceremony; a wrong table is an incident, a wrong view
+    is a rebuild.
+
+    R3 — Grant seeding. Knowledge is tiered by what an ordinary person could
+    learn from a cursory public search. At campaign foundation, every
+    public-reference subject (counties, Census places, public geography) and
+    every glossary concept is granted at tick 0, and with it the cursory
+    public-record atom keys: existence, identity, and containment (a place's
+    county and state; a county's state). Compositional and magnitude
+    knowledge — class composition, industrial composition, product and GDP
+    aggregates, wages, employment, and their derived kin — is earned through
+    investigation or theory derived from investigation. Structure public,
+    magnitudes earned (ADR182). No scenario-authored grant lists and no
+    all-public grant of earned keys in v1. The fully ungranted subject does
+    not occur for public-reference geography in v1; bare-link fog (R5)
+    applies to subjects outside public reference (future kinds such as
+    organizations and people, and modded content). A granted but
+    uninvestigated public subject renders as the R6 stub page.
+
+    R4 — Babylon Markdown profile. Game-content Markdown is GitHub-Flavored
+    Markdown 0.29 (CommonMark plus the GFM extension set) extended with the
+    subject: URI scheme for internal references, and nothing else: no raw
+    HTML, pinned citation-line format, UTF-8 with LF endings. The profile is
+    pinned by a contract fixture corpus with parity vectors proven against the
+    Python oracle, reusing the county-dossier parity machinery. MyST is
+    declined for game content: its parser ecosystem is Python/JavaScript-first,
+    GitHub does not render it (and the R7 Git export must render), its
+    directive power is unneeded because structure lives in typed atoms rather
+    than Markdown syntax, and the in-game egui/pulldown-cmark display path is
+    GFM-flavored. The RST/Sphinx developer-documentation estate is unchanged.
+
+    R5 — Link rule. Internal references are CommonMark links with the
+    subject: URI scheme. Granted subject: [Detroit](subject:place/2622000),
+    matching the county-dossier parity authority that binds Detroit city to
+    Census place 2622000. Ungranted subject: a bare empty-text link
+    [](subject:place/2674900) whose bytes never contain the hidden label —
+    fog is a storage fact, not a display convention, because page Markdown
+    is the AI narrator's input and every downstream consumer reads bytes.
+    Under R3 seeding every public-reference place identity is granted, so in
+    v1 the bare form is exercised by subjects outside public reference; the
+    form is pinned here because the renderer, search, and export must handle
+    it regardless of seeding. Because a bare link has no text run, the
+    in-game renderer must synthesize a visible, clickable chip from the
+    subject kind and id alone ("unknown place · 2674900"); the R6
+    placeholder is reachable only through that chip. Known-but-pending pages
+    (granted, not yet materialized) use strikethrough:
+    ~~[Detroit](subject:…)~~. The prior wikilink form [[key|Label]] is
+    superseded in the same slice that repins the template hash and parity
+    vectors. Git export rewrites subject: targets to relative .md paths and
+    renders bare links as "unknown place · 2674900" placeholder chips;
+    subject IDs are public structure.
+
+    R6 — Redlink and stub placeholders. Presentation-layer placeholders come
+    in two cases, both synthesized from public structure and granted concept
+    atoms, both never stored, hashed, indexed, or searchable, and both
+    reachable only by following links from known pages so ignorance is
+    discovered adjacently. (a) A granted but uninvestigated public subject
+    renders a stub page: its identity, containment, and granted cursory
+    atoms, with the earned tier shown as pending — "Southfield — city in
+    Oakland County, Michigan. Investigation opens the rest of this page —
+    unavailable until Gate 5." (b) A fully ungranted subject outside public
+    reference renders the vague placeholder: "You don't have enough detail
+    on place 2674900. Investigation opens this page — unavailable until
+    Gate 5." Known-only search remains exact in both cases. The placeholder
+    is the wiki redlink's create-page affordance reskinned as the game's
+    investigate affordance, and it names Investigate as visibly unavailable,
+    serving the PER-23 pre-G5 honesty requirement.
+
+    R7 — Two content classes. Adjudicated content (atoms, State dossiers) is
+    hash-pinned; determinism and read-time revalidation continue to apply in
+    full. Narrated content (future AI-composed wiki articles) is an
+    append-only version chain: each version binds the ordered digest of the
+    atom set it asserts, the narrator identity, and a supersedes pointer;
+    prose bytes are explicitly not hash-pinned. Git is an export and
+    publishing artifact, never an authority; the PER-203 recharter line that
+    OpenWiki, Dulwich, and filesystem pages are not v1 authorities stands.
+    The wiki version chain, the beat-feed rebase, per-reader fog, and the AI
+    narrator itself are recorded here and deferred beyond PER-23.
+
+    R8 — Reader boundary. A dedicated read-only PostgreSQL role receives
+    GRANT SELECT on the fog-safe views (v_archive_atom_visible and its kin)
+    and the acknowledged-commit tick-status relation, and nothing else: the
+    base atom, grant, and page tables remain revoked from the role, because
+    client credentials ship with the client and fog is a storage fact — the
+    SQL privilege layer, not client courtesy, enforces the grant boundary.
+    babylon-persistence gains a split read-only reader handle exposing
+    search and projection reads without install_schema or materialize
+    methods. A BABYLON_READER_DSN is admitted through the existing loopback
+    connection validator. The client never holds writer authority;
+    babylon-runtime remains the sole writer.
+
+    R9 — Dossier surface. The county/place dossier is the first
+    Gameplay-role DecisionSurfaceContract row (PER-24), declaring its
+    decision question, visible signals and uncertainty, fog requirements,
+    expected receipts, linked Archive subjects, and admin/debug status;
+    validate() enforces the full set. Actions gain typed availability in the
+    contract, and satisfies_gameplay_gate() requires at least one available
+    action: Investigate appears in the actions slot visibly unavailable, so
+    the dossier row is Gameplay-role but gate-ineligible until Gate 5
+    enables the verb; PER-23 claims no player-agency milestone. The
+    consequence presentation is a changelog strip derived from atom
+    supersession through the join table ("tick 12: median-wage 31.40 → 31.87
+    · verified 11→12"). Durable tick and Archive verified_tick are always
+    separately visible, with an honest pending state while materialization
+    lags.
+
+    R10 — Agent-first headless CLI. The windowed client and the headless
+    Bevy-App path share the one reader. babylon-client --headless boots the
+    real App (MinimalPlugins, no window) and exposes the dossier boundary as
+    subcommands (dossier show, dossier search, tick status, changelog) with
+    JSONL stdout, no color, no spinners, no interactivity, recursive help
+    ("use this command for…"), errors that name the source file path of the
+    failing code path, and nearest-neighbor did-you-mean suggestions.
+    PER-23 acceptance tests drive the real App through this CLI against a
+    disposable PostgreSQL 17, including the restart proof.
+
+    R11 — Demo topology. Three processes: babylon-runtime commits ticks as
+    sole writer, archive-worker sweeps after commits, the client reads. One
+    mise task orchestrates the local demo loop. The client neither drives
+    ticks nor spawns the worker.
+
+    R12 — Glossary concept atoms. PER-23 seeds concept atoms from a
+    versioned fixture covering the terms the dossier displays (median-wage,
+    phi-hour, and their kin), enabling concept tooltips and the R6
+    placeholder composition. Wider theory coverage remains a follow-up.
+
+    Alternatives rejected: wikilink syntax [[key|Label]] (parser extensions
+    against every consumer, unrendered by GitHub and egui); strikethrough
+    carrying unearned labels (fog leak into page bytes and the narrator's
+    context); placeholders as stored archive pages (breaks known-only
+    search, invents dishonest verified_tick and hashes); atoms embedded per
+    page as JSON (no cross-surface reuse, drift between surfaces);
+    all-public grants of earned keys (guts fog); identity fog over public
+    geography (an ordinary person knows Phoenix exists and where it sits —
+    hiding names is false fog); scenario-declared grants (premature
+    authoring schema); fine-grained phrase atoms (count explosion, noisy
+    citations); letting a surface whose every action is unavailable satisfy
+    the gameplay gate (claims player agency before Gate 5); a single dev
+    superprocess or client-spawned worker (erodes the writer/reader boundary
+    PER-23 exists to prove); Git or filesystem as wiki authority (settled by
+    the PER-203 recharter).
+  consequences: |
+    The archive worker's materialization path now writes atoms and
+    page-atom join rows alongside pages; the archive_worker_v1 contract and
+    the PR-#882 retrieval-boundary contract repin (hits gain the structured
+    atom list). The pinned page template and the county/place parity vectors
+    repin for the scheme-link syntax, and the archive_page_v1 fixture's
+    mislabeled place mappings (Detroit bound to 2684000, Riverview bound to
+    2674900) correct in the same repin slice to the parity-authoritative
+    2622000 and 2668880. These baseline ceremonies are paid deliberately
+    now, before the dossier surface accumulates dependents.
+
+    babylon-client gains a read-only PostgreSQL dependency, its first
+    Gameplay-role surface, and a headless binary mode. The capstone sentinel
+    current_client_cannot_claim_a_gameplay_gate remains in force — the
+    dossier row is gate-ineligible until Gate 5 enables Investigate — and
+    the manifest note that every shipped row is administrative updates in
+    lockstep.
+
+    PER-26 inherits a proven dossier surface with an Investigate slot;
+    Gate 5 work becomes enabling the verb, not building the surface. The
+    wiki vision is unblocked in design without pulling its implementation
+    forward.
+
+    No ruling here adds a mathematical primitive, weakens a prohibition, or
+    changes the reserved theory line. The engine's adjudication path is
+    untouched; everything added is persistence, presentation, and retrieval.
+  verification: |
+    Executable proofs land with the PER-23 slices: archive_atom_v1 schema
+    contract and live tests (immutability, content address, grant join);
+    atom-mint refusal vectors for NaN and infinite encodings; foundation
+    grant-seeding test asserting every public-reference subject and concept
+    is granted at tick 0 with exactly the cursory public-record keys
+    (existence, identity, containment) and that compositional and magnitude
+    keys are ungranted; Markdown profile corpus and parity vectors proven
+    against the Python oracle; retrieval-boundary repin asserting structured
+    atom hits and bare-link fog bytes; worker contract repin covering atom
+    and join-row writes; a reader-role privilege test asserting SELECT on
+    the fog-safe views and the tick-status relation and denial on the base
+    atom, grant, and page tables; a renderer test that a bare link produces
+    the synthesized kind+id chip without any label bytes; headless CLI
+    integration tests for dossier show, search, tick status, and changelog,
+    including the restart proof — commit a receipt, reopen the process,
+    re-read the dossier, and assert verified_tick and page-hash stability;
+    the DecisionSurfaceContract manifest gains the Gameplay dossier row with
+    sentinel tests, Investigate's visible unavailability, and a contract
+    test that the row does not satisfy the gameplay gate while every action
+    is unavailable; placeholder tests covering both the stub page and the
+    fully ungranted case and proving nothing is persisted or searchable for
+    either; and a dual-tick pending-state test asserting durable tick versus
+    verified_tick is surfaced honestly while the Archive lags. The issue
+    closes only when these pass and the reconciliation audit's open bullets
+    read done.
+  preserves:
+    - ADR220 one-way writer cutover and babylon-runtime sole writer authority
+    - ADR223 whole-tick atomic publication
+    - ADR225 marker-last schema epoch and cutover interlock
+    - ADR240 TickContentHashV1 ownership and campaign-replay separation
+    - ADR242 TickCommitClaimV1 identity and conflict semantics
+    - ADR243 exact whole-envelope retry equality
+    - ADR244 exact committed-tick storage relations
+    - ADR182 structure-public / magnitudes-earned doctrine
+    - 'ADR221 Constitution v4 compact: determinism on adjudicated content, AI
+      parses/retrieves/narrates and never judges mechanics, evidence
+      classification, no new primitive, no weakened prohibition, reserved
+      theory line untouched'
+    - 'PER-22 retrieval boundary semantics: known-only search, redlink fog
+      bytes, deterministic page hashes, honest verified_tick'
+    - 'PER-203 recharter: OpenWiki, Dulwich, and filesystem pages are not v1
+      authorities'
+    - 'Gate ordering: no player-action rail before Gate 5; PER-26 owns
+      Investigate'
+    - 'Gate 5 player agency: the PER-23 dossier row is Gameplay-role but does
+      not satisfy the gameplay gate while every action is unavailable'
+  related:
+    - ADR182_derivation_inspector_rulings
+    - ADR186_bevy_cutover_amendment_af
+    - ADR208_docket_sitting_2026_08_17
+    - ADR220_rust_owned_postgresql_persistence_boundary
+    - ADR221_game_first_refoundation_v4
+    - ADR223_whole_tick_atomicity_world_hash
+    - ADR225_rust_schema_epoch_and_cutover_interlock
+    - ADR240_replay_action_tick_content_identity
+    - ADR242_tick_commit_claim_v1
+    - ADR243_committed_tick_envelope_v1
+    - ADR244_committed_tick_postgresql_storage_v1

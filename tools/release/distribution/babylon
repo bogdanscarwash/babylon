@@ -1,0 +1,29 @@
+#!/usr/bin/env -S python3 -I -B
+"""Start the packaged observer with its bundled, locked launcher dependencies."""
+
+from __future__ import annotations
+
+import os
+import platform
+import sys
+from pathlib import Path
+
+
+def launch() -> int:
+    if sys.version_info < (3, 12) or platform.system() != "Linux" or platform.machine() != "x86_64":
+        print("This preview needs Linux x86_64 and Python 3.12 or newer.", file=sys.stderr)
+        return 1
+    root = Path(__file__).resolve().parent
+    sys.path[:0] = [str(root / "lib"), str(root / "tools")]
+    # The download bundles only psycopg's pure Python adapter.
+    os.environ["PSYCOPG_IMPL"] = "python"
+    try:
+        from run_observer_session import main
+    except ImportError:
+        print("Cannot load the preview launcher. Install libpq5; see README.md.", file=sys.stderr)
+        return 1
+    return int(main(["--distribution", *sys.argv[1:]]))
+
+
+if __name__ == "__main__":
+    raise SystemExit(launch())

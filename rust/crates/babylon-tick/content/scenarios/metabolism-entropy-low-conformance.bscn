@@ -1,0 +1,23 @@
+; The LOW-ENTROPY conformance world for `metabolism/biocapacity-update` —
+; one half of the mutation-verification pair for the D-1 scaled-Int
+; workaround. entropy-factor-x1e6 here encodes 1.01 (near the declared
+; floor of 1.0, exclusive — legal, MetabolismDefines(entropy_factor=1.01)
+; constructs cleanly with no Pydantic bypass). Its companion,
+; metabolism-entropy-high-conformance.bscn, seeds the IDENTICAL territory
+; with entropy-factor-x1e6 at the declared cap (3.0) instead.
+;
+; See `metabolism_entropy_low_conformance.py` for the provenance script.
+(scenario metabolism/entropy-low-conformance
+  (deffield territory/biocapacity int extensive)
+  (deffield territory/max-biocapacity int extensive)
+  (deffield territory/extraction-intensity int intensive)
+
+  (defconst metabolism/regeneration-rate 0.02c)
+  ; 1.01 x 1,000,000 — near the floor (1.0, exclusive).
+  (defconst metabolism/entropy-factor-x1e6 1010000)
+  (defconst metabolism/hysteresis-rate 0.005c)
+
+  (node low-entropy-county NodeType/TERRITORY
+    (territory/biocapacity 10)
+    (territory/max-biocapacity 100)
+    (territory/extraction-intensity 1)))

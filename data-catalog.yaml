@@ -3,7 +3,7 @@
 # Canonical machine-readable catalog for III.4 Data Source Traceability.
 # Runtime data sources are fetched/updated during operation.
 # Fixtures are pinned snapshots for reproducible tests and NEVER runtime dependencies.
-version: "2.6.3"
+version: "2.7.3"
 categories:
   - name: Federal Economic
     sources:
@@ -20,6 +20,20 @@ categories:
         vintage: Annual
         granularity: County
         cadence: Annual
+        class: Runtime
+      - id: CENSUS_ASM
+        agency: Census
+        dataset: Annual Survey of Manufactures (2022 Economic Census benchmark)
+        vintage: 2018-2021
+        granularity: National x NAICS
+        cadence: Annual
+        class: Runtime
+      - id: LEHD_QWI
+        agency: Census/LEHD
+        dataset: Quarterly Workforce Indicators (R2026Q3; Michigan coverage 2000Q3-2021Q4)
+        vintage: Quarterly vintage
+        granularity: County x NAICS
+        cadence: Quarterly
         class: Runtime
       - id: BEA_TiVA
         agency: BEA
@@ -105,6 +119,26 @@ categories:
         granularity: Recipient/County
         cadence: Quarterly
         class: Runtime
+      - id: LODES_OD_HEX
+        agency: Census Bureau (LEHD)
+        dataset: LODES JT00/S000 Origin-Destination matrix, raw block-resolution
+          .csv.gz (distinct from the county-level fact_lodes_commuter_flow table
+          above, and from the block-level bridge_lodes_block crosswalk — this is
+          the RAW OD source lodes_commute_matrix.py reads directly off disk, not
+          a sqlite-hydrated table)
+        vintage: Annual (2010-2021 for Michigan)
+        granularity: Census block pair (h_geocode/w_geocode), aggregated here to
+          H3 res-7 hex pair for the Detroit tri-county study area
+        cadence: Annual
+        class: Fixture
+        local_path: /media/user/data/babylon-data/lodes/ (raw; drive-only, read
+          ONLY by tools/make_lodes_tri_county_artifact.py at generation time —
+          CI-no-drive)
+        added_by: Vol II Circulation program prompt §3 (data-path gap) / Unit U2.
+          Checked-in, hash-stamped tri-county-hex artifact registered in
+          data-artifacts.yaml (lodes_od_tri_county_hex_* / lodes_xwalk_tri_county_hex
+          — hand-maintained, no sqlite table backs this source, so it carries no
+          `tables:` block row below).
   - name: Federal Demographic
     sources:
       - id: Census_ACS
@@ -114,6 +148,14 @@ categories:
         granularity: Tract/Block
         cadence: Annual
         class: Runtime
+        added_by: >-
+          #334 Phase 0 (ADR171 OQ0/OQ1) named one further Census_ACS derivative use
+          (B17001 poverty-incidence, time_id=23/2019 pinned per OQ11) among the many
+          already reading this source; committed derivatives = data-artifacts.yaml
+          county_fips_vintage_crosswalk / national_incidence_county_pole /
+          national_reproduction_floor (EXCEPTION tail — hand-maintained, no backing
+          sqlite table, so they carry no `tables:` block row below; tripwire
+          tests/unit/tools/test_national_incidence_manifest_entries.py).
       - id: CDC_WONDER
         agency: CDC
         dataset: Multiple cause of death, natality
@@ -156,6 +198,19 @@ categories:
         granularity: National/Region
         cadence: Annual
         class: Runtime
+      - id: MIT_Election_Lab
+        agency: MIT Election Data and Science Lab
+        dataset: County Presidential Election Returns 2000-2024
+        vintage: Static (dataset v20, 2026-02-25; CC0 1.0)
+        granularity: County
+        cadence: Static (per-election releases)
+        class: Fixture
+        provenance_url: https://doi.org/10.7910/DVN/VOQCHQ
+        local_path: /media/user/data/babylon-data/elections/mit_countypres/countypres_2000-2024_mirror.csv
+        added_by: >-
+          spec-070 T118 / ADR049 (ratified P25 U6, ADR132) — FR-039
+          FAC_RESTORATIONIST electoral seed; committed derivative =
+          data-artifacts.yaml mit_countypres_rep_share
   - name: Federal Infrastructure
     sources:
       - id: HIFLD
@@ -170,6 +225,20 @@ categories:
         dataset: Border Crossing Data, TranStats
         vintage: Monthly
         granularity: Port/County
+        cadence: Monthly
+        class: Runtime
+      - id: BTS_TRANSBORDER
+        agency: DOT/BTS
+        dataset: TransBorder Freight Raw Data
+        vintage: Monthly
+        granularity: Port x HS2 Commodity (and State x Port)
+        cadence: Monthly
+        class: Runtime
+      - id: BTS_BORDER_CROSSING
+        agency: DOT/BTS
+        dataset: Border Crossing Entry Data (keg4-3bc2)
+        vintage: Monthly
+        granularity: Port x Measure
         cadence: Monthly
         class: Runtime
       - id: FCC_BDC
@@ -240,6 +309,17 @@ categories:
         provenance_url: https://doi.org/10.1016/j.gloenvcha.2021.102467
         local_path: /media/user/data/babylon-data/babylon_hickel_final.csv
         added_by: Spec 057 (Leontief Imperial Rent Integration) — research.md §R9
+      - id: Ricci_GVC
+        agency: Ricci (academic)
+        dataset: Unequal Exchange in the Age of Global Value Chains (Andrea Ricci, 2019) — region
+          x flow-direction x transfer-type transfer estimates (source_table values like
+          Ricci_Table_6.2)
+        vintage: Static (tables reproduce estimates for 1995/2000/2007/2009)
+        granularity: Region-aggregate (core/semi-periphery/periphery world-system tiers)
+        cadence: Static (no updates planned)
+        class: Fixture
+        local_path: src/babylon/data/reference/babylon_ricci_final.csv
+        added_by: Program 26 U5b (ai/decisions/ADR165_p26_director_rulings_trade_slate.yaml D2/D3)
   - name: Land Cover / Spatial
     sources:
       - id: Natural_Earth
@@ -256,6 +336,11 @@ categories:
         granularity: Polygon
         cadence: Static
         class: Fixture
+      # Cadence caveat (data-gap audit §3.4): upstream publishes annually
+      # (the fields below record the publisher's fact), but any acquisition
+      # must PIN ONE vintage (edition, version, sha256) — USGS explicitly
+      # warns AGAINST reading PAD-US version deltas as ground change, so
+      # never diff vintages to infer dispossession.
       - id: PAD_US
         agency: USGS
         dataset: Protected Areas Database
@@ -263,12 +348,15 @@ categories:
         granularity: Polygon
         cadence: Annual
         class: Fixture
+      # Cadence corrected 2026-08-12 (data-gap audit §3.4): the 5-year epoch
+      # product ended with NLCD 2021; Annual NLCD (1985-present, yearly
+      # releases) superseded it on 2024-10-24.
       - id: NLCD
         agency: USGS
-        dataset: National Land Cover Database
-        vintage: 5-year
+        dataset: National Land Cover Database (Annual NLCD)
+        vintage: Annual
         granularity: 30m pixel
-        cadence: 5-year
+        cadence: Annual
         class: Fixture
       - id: EPA_FRS
         agency: EPA
@@ -307,6 +395,12 @@ categories:
         granularity: Block/Tract
         cadence: Annual
         class: Runtime
+      # NEVER ACQUIRED — commercial, redistribution-prohibited, hard-blocked by
+      # ADR098 (a non-redistributable set cannot be a committed build source).
+      # Killed by the data-gap audit (reports/data-gap-audit-2026-08-12.md §3.4,
+      # §9); retained only as the record of the considered-and-rejected parcel
+      # option. Do NOT plan against this row — the free replacements are HMDA
+      # Modified LAR (flow) + AgCensus Table 45 (agricultural tenure).
       - id: ATTOM_CoreLogic
         agency: Commercial
         dataset: Property/parcel data
@@ -321,3 +415,1241 @@ categories:
         granularity: Tract
         cadence: Static
         class: Fixture
+tables:
+  - name: bridge_cfs_county
+    kind: table
+    source: FAF5
+    extractor: babylon-data src/babylon_data/faf_bridge/ (2026-09-04, PER-31)
+    disposition: keep
+    subset_policy: full
+    material_relation: county-to-CFS-area allocation crosswalk — the geographic key
+      needed to scope FAF/CFS freight flows to counties. 3,148 rows across all
+      132 zones, built from the held FAF5 county-disaggregation factor files.
+    notes: "Weights are Derived, never Observed: the 2022-tonnage-weighted mean
+      of the mode x SCTG-G5 county factors, origin+destination pooled, over
+      modes 1/2/3/5 only (air/intermodal/other excluded). County membership is
+      deterministic; the weight is FAF's modeled allocation. Per-zone weight
+      sums equal the covered-tonnage share (~0.89-1.00, Detroit 261: 0.9882)
+      and are NOT renormalized — the residual is tonnage FAF county factors do
+      not allocate. Loads idempotently via python -m babylon_data.faf_bridge."
+  - name: bridge_county_h3
+    kind: table
+    source: derived
+    extractor: tools/ingest_tiger_geometry.py
+    consumers:
+      - src/babylon/engine/hydration/reference.py
+      - tools/ingest_tiger_geometry.py
+    tests:
+      - tests/integration/mvp/test_hydration.py
+      - tests/integration/test_michigan_reference_data.py
+    disposition: keep
+    subset_policy: full
+    material_relation: county-to-H3-hex spatial index — the hex-grid substrate join
+      enabling territory/hex hydration (Constitution spatial substrate).
+  - name: bridge_county_metro
+    kind: table
+    source: OMB_CBSA
+    extractor: deleted @ 4ce7c96a^ (src/babylon/data/census/cbsa_parser.py)
+    tests:
+      - tests/integration/test_michigan_reference_data.py
+    disposition: keep
+    subset_policy: full
+    material_relation: county-to-Metropolitan-Statistical-Area membership — the urban-agglomeration
+      key for the MSA-tier zoom hierarchy (Detroit MSA tests).
+  - name: bridge_naics_bea
+    kind: table
+    source: BEA_NAICS_CONCORDANCE
+    extractor: tools/load_bea_io.py
+    consumers:
+      - src/babylon/reference/bea/share_lookup_service.py
+      - src/babylon/reference/bea/ingest/stale_share_summary.py
+      - src/babylon/domain/economics/tensor_hierarchy/leontief_rent/industry_to_county_allocator.py
+      - src/babylon/domain/economics/adapters.py
+      - tools/load_bea_io.py
+    tests:
+      - tests/integration/test_tensor_hydration.py
+      - tests/unit/reference/bea/test_share_lookup_service.py
+      - tests/unit/reference/bea/test_stale_share_summary.py
+    disposition: keep
+    subset_policy: full
+    material_relation: NAICS-to-BEA-industry concordance — the crosswalk letting county
+      QCEW industry employment be allocated against BEA's ~70-industry Leontief input-output
+      structure (imperial-rent tensor base).
+  - name: dim_asset_category
+    kind: table
+    source: FRED
+    extractor: deleted @ 4ce7c96a^ (src/babylon/data/fred/z1_loader.py)
+    consumers:
+      - tools/analyze_wealth_distribution.py
+    disposition: keep
+    subset_policy: full
+    material_relation: asset-class taxonomy (real estate, equities, deposits...) for
+      wealth-concentration decomposition — anchors which asset form embodies extracted
+      surplus.
+  - name: dim_bea_industry
+    kind: table
+    source: BEA_IO_NATIONAL_SUPPLY
+    extractor: tools/load_bea_io.py
+    consumers:
+      - src/babylon/domain/economics/tensor_hierarchy/inter_industry.py
+      - src/babylon/domain/economics/tensor_hierarchy/production_chain_rent.py
+      - src/babylon/reference/bea/share_lookup_service.py
+      - src/babylon/reference/bea/shaikh_bands.py
+      - tools/load_bea_io.py
+      - tools/validate_bea_io_against_shaikh.py
+    tests:
+      - tests/integration/economics/test_tensor_hierarchy.py
+      - tests/unit/reference/bea/test_national_writer_upsert.py
+      - tests/unit/economics/tensor_hierarchy/leontief_rent/test_production_chain_rent.py
+    disposition: keep
+    subset_policy: full
+    material_relation: BEA Summary industry classification (~70 sectors) — the fixed
+      industry taxonomy every Leontief IO/tensor-hierarchy table joins against.
+  - name: dim_bea_io_table_type
+    kind: table
+    source: derived
+    extractor: src/babylon/reference/bea/ingest/io_coefficient_writer.py
+    consumers:
+      - src/babylon/domain/economics/tensor_hierarchy/inter_industry.py
+      - src/babylon/domain/economics/tensor_hierarchy/production_chain_rent.py
+      - src/babylon/reference/bea/ingest/io_matrix_parser.py
+      - tools/ingest_bea_imports.py
+    tests:
+      - tests/unit/reference/bea/test_share_lookup_service.py
+    disposition: keep
+    subset_policy: full
+    material_relation: IO-ingest pipeline's table-type enum (USE/TOTAL_REQ/IMPORT_USE)
+      distinguishing which Leontief coefficient matrix a row belongs to.
+  - name: dim_cfs_area
+    kind: table
+    source: CFS
+    extractor: deleted @ 4ce7c96a^ (src/babylon/data/bts/faf_loader.py, on-demand stub
+      creation)
+    consumers:
+      - src/babylon/domain/economics/tensor_hierarchy/geographic_flow.py
+    tests:
+      - tests/unit/economics/tensor_hierarchy/test_geographic_flow.py
+    disposition: fill
+    subset_policy: full
+    material_relation: Commodity Flow Survey area geography — the freight origin/destination
+      zone key for scoping FAF/CFS commodity flows.
+    notes: stub rows only, state_id 100% null; real CFS area definitions never loaded.
+  - name: dim_coercive_type
+    kind: table
+    source: HIFLD
+    disposition: keep
+    subset_policy: full
+    material_relation: carceral/coercive-facility type taxonomy (prison, jail, detention...)
+      — classifies the repressive-apparatus nodes fact_coercive_infrastructure counts.
+  - name: dim_commodity
+    kind: table
+    source: USGS_MCS
+    extractor: deleted @ 4ce7c96a^ (src/babylon/data/materials/loader_3nf.py + parser.py)
+    disposition: keep
+    subset_policy: full
+    material_relation: USGS Mineral Commodity Summaries commodity list (85 strategic
+      materials) — anchors the critical-minerals/extraction-dependency subsystem (owner-ratified
+      Prog-09 stretch).
+    notes: "CRITICALITY RE-DERIVED 2026-07-17 (Program 22 Wave 1): 30/85 rows
+      flagged from the official T4 50-mineral list (REE/PGM fold onto family
+      rows; Cesium+Rubidium have no salient chapter); primary_applications
+      filled from T4. The legacy 13-name dict had matched only 2/85."
+  - name: dim_commodity_metric
+    kind: table
+    source: USGS_MCS
+    extractor: deleted @ 4ce7c96a^ (src/babylon/data/materials/loader_3nf.py + parser.py)
+    disposition: keep
+    subset_policy: full
+    material_relation: USGS MCS per-commodity metric taxonomy (imports/exports/price/production)
+      — the measurement-type dimension for fact_commodity_observation.
+    notes: "owner 2026-07-16: Program 22 — FK parent of fact_commodity_observation"
+  - name: dim_country
+    kind: table
+    source: Comtrade
+    extractor: "tools/ingest/ricci_unequal.py (retired 2026-07-17 with the R2 demotion;
+      country rows persist in the DB)"
+    consumers:
+      - src/babylon/domain/economics/melt/gamma_hydration.py
+    tests:
+      - tests/unit/reference/test_exposure_schema.py
+      - tests/unit/economics/melt/test_gamma_hydration.py
+      - tests/unit/reference/test_unequal_exchange_refdb_sync.py
+    disposition: keep
+    subset_policy: full
+    material_relation: country/bloc registry with world-system-tier classification (core,
+      semi-periphery, periphery) — the geographic key for Phi imperial-rent bloc attribution
+      and bilateral trade.
+  - name: dim_county
+    kind: table
+    source: Census_ACS
+    extractor: deleted @ 4ce7c96a^ (src/babylon/data/census/cbsa_parser.py + census
+      loader tree)
+    consumers:
+      - src/babylon/data/reference_scope.py
+      - src/babylon/engine/hydration/reference.py
+      - src/babylon/persistence/tiger_ingestion.py
+      - src/babylon/domain/economics/county_exposure.py
+      - src/babylon/domain/economics/adapters.py
+      - src/babylon/domain/economics/tensor_registry.py
+      - src/babylon/persistence/county_aggregation.py
+      - src/babylon/reference/bea/ingest/stale_share_summary.py
+      - tools/ingest_tiger_geometry.py
+      - tools/validate_detroit.py
+      - tools/normalize_qcew_rollups.py
+      - tools/demo_substrate.py
+    tests:
+      - tests/integration/test_michigan_reference_data.py
+      - tests/integration/test_db_initialization_queries.py
+      - tests/integration/test_post_067_consumer_queries.py
+      - tests/integration/test_tensor_hydration.py
+      - tests/integration/economics/conftest.py
+      - tests/integration/tensors/conftest.py
+      - tests/unit/engine/hydration/test_hydrate_industry.py
+    disposition: keep
+    subset_policy: full
+    material_relation: the county dimension — the universal geographic join key underlying
+      nearly every Michigan-scoped fact table and the hex/territory substrate.
+  - name: dim_county_geometry
+    kind: table
+    source: TIGER
+    extractor: tools/ingest_tiger_geometry.py
+    consumers:
+      - src/babylon/persistence/tiger_ingestion.py
+      - tools/build_county_atlas.py
+      - tools/ingest_tiger_geometry.py
+    tests:
+      - tests/integration/test_michigan_reference_data.py
+      - tests/integration/test_db_initialization_queries.py
+      - tests/unit/tools/test_make_reference_subset.py
+    disposition: keep
+    subset_policy: full
+    material_relation: county polygon geometry (WKT + area) from TIGER/Line — the spatial
+      substrate hex_hydrator apportions into H3 territory cells.
+  - name: dim_data_source
+    kind: table
+    source: internal
+    tests:
+      - tests/integration/test_db_initialization_queries.py
+    disposition: keep
+    subset_policy: full
+    material_relation: provenance registry (agency/dataset per fact table) — the traceability
+      backbone every fact_* row's source_id FK resolves against (Constitution III.4).
+  - name: dim_education_level
+    kind: table
+    source: Census_ACS
+    extractor: deleted @ 4ce7c96a^ (src/babylon/data/census/loader_3nf.py, table B15003)
+    disposition: investigate
+    subset_policy: full
+    material_relation: ACS educational-attainment taxonomy — classifies fact_census_education's
+      degree-level rows.
+    notes: "A21 amputation DEFERRED 2026-07-17: primary-key FK parent of
+      fact_census_education (disposition investigate) — dropping the dim would
+      orphan a living table. Falls together with that table when its fate is ruled."
+  - name: dim_employment_area
+    kind: table
+    source: QCEW
+    disposition: keep
+    subset_policy: full
+    material_relation: BLS QCEW employment-area geographic definitions — the area-code
+      dimension underlying fact_employment_industry_annual's industry-by-area employment
+      breakdown.
+  - name: dim_employment_status
+    kind: table
+    source: Census_ACS
+    extractor: deleted @ 4ce7c96a^ (src/babylon/data/census/loader_3nf.py, table B23025)
+    disposition: investigate
+    subset_policy: full
+    material_relation: ACS employment-status taxonomy (employed/unemployed/not-in-labor-force)
+      — the classification the Phase-5.1 gamma_III brief plans to join against fact_census_employment.
+  - name: dim_fred_series
+    kind: table
+    source: FRED
+    extractor: deleted @ 4ce7c96a^ (src/babylon/data/fred/loader_3nf.py + z1_loader.py)
+    consumers:
+      - src/babylon/domain/economics/factory.py
+      - src/babylon/domain/economics/melt/adapters.py
+    tests:
+      - tests/integration/economics/test_melt_adapters.py
+      - tests/unit/reference/test_fred_wealth_shares.py
+    disposition: keep
+    subset_policy: full
+    material_relation: FRED series registry (CPI, macro indicators) — the series-code
+      dimension every fact_fred_national/MELT deflator read joins against.
+  - name: dim_gender
+    kind: table
+    source: Census_ACS
+    extractor: deleted @ 4ce7c96a^ (src/babylon/data/census/loader_3nf.py)
+    disposition: investigate
+    subset_policy: full
+    material_relation: gender classification dimension shared by Census worker-class
+      and ATUS time-use breakdowns.
+  - name: dim_geographic_hierarchy
+    kind: table
+    source: derived
+    extractor: deleted @ 4ce7c96a^ (src/babylon/data/geography/loader.py)
+    disposition: fill
+    subset_policy: full
+    material_relation: county population-weight hierarchy derived from Census/QCEW totals
+      — a geographic weighting scheme for allocating national/regional aggregates to
+      counties.
+  - name: dim_housing_tenure
+    kind: table
+    source: Census_ACS
+    extractor: babylon_data/src/babylon_data/census/loader_3nf.py
+    consumers:
+      - src/babylon/domain/economics/throughput/adapters.py
+    tests:
+      - tests/integration/economics/test_unemployment_adapter.py
+    disposition: keep
+    subset_policy: full
+    material_relation: owner/renter housing-tenure taxonomy — the classification behind
+      fact_census_housing's renter_share feeding the tick pipeline's housing-precarity
+      signal.
+  - name: dim_import_source
+    kind: table
+    source: USGS_MCS
+    extractor: python -m babylon_data.materials (aggregates.load_import_sources)
+    tests:
+      - tests/unit/reference/test_minerals_tables.py
+    disposition: keep
+    subset_policy: full
+    material_relation: import-source-country dimension for critical-materials analysis
+      — names which countries supply strategic minerals (import-dependency/unequal-exchange
+      linkage).
+    notes: "FILLED 2026-07-17 (Program 22 Wave 1): 43 countries from MCS2025_Fig3."
+  - name: dim_income_bracket
+    kind: table
+    source: Census_ACS
+    extractor: deleted @ 4ce7c96a^ (src/babylon/data/census/loader_3nf.py:1795)
+    consumers:
+      - src/babylon/domain/economics/throughput/adapters.py
+      - tools/validate_detroit.py
+    tests:
+      - tests/integration/economics/test_unemployment_adapter.py
+    disposition: keep
+    subset_policy: full
+    material_relation: household-income-bracket taxonomy (17 brackets) — the classification
+      behind the top/bottom bracket ratio used as a class-proxy signal (labor-aristocracy
+      banding).
+  - name: dim_industry
+    kind: table
+    source: QCEW
+    extractor: deleted @ 4ce7c96a^ (src/babylon/data/qcew/loader_3nf.py)
+    consumers:
+      - src/babylon/domain/economics/adapters.py
+      - src/babylon/domain/economics/throughput/adapters.py
+      - src/babylon/reference/bea/share_lookup_service.py
+      - src/babylon/sentinels/coverage/registry.py
+      - tools/normalize_qcew_rollups.py
+    tests:
+      - tests/integration/tensors/conftest.py
+      - tests/integration/test_tensor_hydration.py
+      - tests/unit/reference/bea/test_share_lookup_service.py
+      - tests/unit/engine/hydration/test_hydrate_industry.py
+    disposition: keep
+    subset_policy: full
+    material_relation: NAICS industry hierarchy annotated with Marxian class_composition
+      — the industry dimension anchoring QCEW/BEA/Leontief reads across the whole economics
+      subsystem.
+  - name: dim_metro_area
+    kind: table
+    source: OMB_CBSA
+    extractor: babylon_data/src/babylon_data/census/loader_3nf.py
+    tests:
+      - tests/integration/test_michigan_reference_data.py
+    disposition: keep
+    subset_policy: full
+    material_relation: Metropolitan Statistical Area definitions — the MSA-tier geographic
+      zoom level (Detroit MSA) in the living-map zoom hierarchy.
+  - name: dim_occupation
+    kind: table
+    source: Census_ACS
+    extractor: deleted @ 4ce7c96a^ (src/babylon/data/census/loader_3nf.py, table C24010)
+    disposition: investigate
+    subset_policy: full
+    material_relation: occupation taxonomy (74 codes) with an unfinished Marxian productive,
+      unproductive, reproductive, managerial labor_type classification.
+    notes: labor_type 100% NULL — view_labor_type is a guaranteed-empty no-op until
+      backfilled.
+  - name: dim_ownership
+    kind: table
+    source: QCEW
+    extractor: deleted @ 4ce7c96a^ (src/babylon/data/qcew/loader_3nf.py:1529)
+    consumers:
+      - src/babylon/domain/economics/throughput/adapters.py
+      - src/babylon/domain/economics/melt/adapters.py
+      - src/babylon/domain/economics/throughput/data_sources.py
+      - tools/normalize_qcew_rollups.py
+    tests:
+      - tests/unit/reference/qcew/test_schema_086.py
+      - tests/integration/test_qcew_provenance.py
+      - tests/integration/test_post_067_consumer_queries.py
+      - tests/integration/test_normalize_qcew_rollups.py
+      - tests/integration/test_qcew_impute_e2e.py
+    disposition: keep
+    subset_policy: full
+    material_relation: QCEW ownership-sector codes (private/federal/state/local, own_code)
+      — resolves the own_code='0' Total-covered rows every QCEW read filters on.
+  - name: dim_poverty_category
+    kind: table
+    source: Census_ACS
+    extractor: deleted @ 4ce7c96a^ (src/babylon/data/census/loader_3nf.py, table B17001)
+    disposition: keep
+    subset_policy: full
+    material_relation: ACS poverty-status taxonomy (B17001) — the classification the
+      owner-ratified National-Oppression program's poverty analysis is set to consume.
+  - name: dim_race
+    kind: table
+    source: Census_ACS
+    extractor: deleted @ 4ce7c96a^ (src/babylon/data/census/loader_3nf.py)
+    consumers:
+      - src/babylon/domain/economics/throughput/adapters.py
+    tests:
+      - tests/integration/economics/test_unemployment_adapter.py
+    disposition: keep
+    subset_policy: full
+    material_relation: race/ethnicity classification — resolves the race_code='T' (Total)
+      rows the throughput adapter filters on.
+  - name: dim_rent_burden
+    kind: table
+    source: Census_ACS
+    extractor: babylon_data/src/babylon_data/census/loader_3nf.py
+    disposition: investigate
+    subset_policy: full
+    material_relation: rent-burden severity taxonomy (cost-burdened/severely-burdened)
+      — the classification behind view_rent_crisis's housing-precarity metric.
+    notes: healthy live-loader data, zero code consumer; view_rent_crisis dormant and
+      broken.
+  - name: dim_sctg_commodity
+    kind: table
+    source: FAF5
+    extractor: deleted @ 4ce7c96a^ (src/babylon/data/bts/faf_loader.py, on-demand stub
+      creation)
+    disposition: investigate
+    subset_policy: full
+    material_relation: Standard Classification of Transported Goods commodity codes
+      — the freight-commodity dimension FK'd by fact_faf_commodity_flow (KEEP).
+    notes: 100% placeholder '{code}' names; FK of a KEEP table so cannot be dropped
+      outright.
+  - name: dim_hs2_commodity
+    kind: table
+    source: BTS_TRANSBORDER
+    extractor: babylon-data src/babylon_data/bts_transborder/ (2026-09-05, PER-31)
+    disposition: keep
+    subset_policy: full
+    material_relation: Harmonized System 2-digit commodity chapters — the
+      classification axis of fact_transborder_port_commodity (TransBorder
+      COMMODITY2 is HS2, not SCTG; see the pinned codes PDF).
+    notes: "99 rows (chapters 01-98 per the codes PDF + 99 observed in data).
+      Titles transcribed from the pinned PDF into the loader's HS2_CHAPTERS
+      constant. HS2 and SCTG require a governed concordance bridge before any
+      cross-join with FAF/CFS."
+  - name: dim_state
+    kind: table
+    source: Census_ACS
+    extractor: babylon_data/src/babylon_data/census/loader_3nf.py
+    consumers:
+      - src/babylon/persistence/tiger_ingestion.py
+    tests:
+      - tests/integration/test_db_initialization_queries.py
+      - tests/integration/test_michigan_reference_data.py
+      - tests/unit/tools/test_make_reference_subset.py
+      - tests/unit/reference/qcew/test_schema_086.py
+      - tests/unit/reference/test_exposure_schema.py
+    disposition: keep
+    subset_policy: full
+    material_relation: state gazetteer/FIPS dimension — resolves michigan_state_id and
+      every state-level rollup/filter.
+  - name: dim_time
+    kind: table
+    source: derived
+    extractor: src/babylon/reference/bea/ingest/ (get_or_create_time() helpers)
+    consumers:
+      - src/babylon/domain/economics/throughput/adapters.py
+      - src/babylon/engine/hydration/reference.py
+      - src/babylon/domain/economics/tensor_hierarchy/inter_industry.py
+      - src/babylon/reference/bea/ingest/io_matrix_parser.py
+      - tools/load_bea_io.py
+      - tools/ingest_bea_imports.py
+      - tools/ingest/bea_final_demand.py
+      - tools/ingest/hickel_erdi.py
+      - tools/validate_bea_io_against_shaikh.py
+      - tools/normalize_qcew_rollups.py
+    tests:
+      - tests/integration/test_db_initialization_queries.py
+      - tests/integration/test_tensor_hydration.py
+      - tests/unit/engine/hydration/test_hydrate_industry.py
+      - tests/unit/reference/bea/test_stale_share_summary.py
+    disposition: keep
+    subset_policy: full
+    material_relation: the universal year/granularity time dimension every ingest pipeline
+      (Census/QCEW/BEA/FRED/Hickel/Ricci/ATUS) writes into and every fact table joins
+      against.
+  - name: dim_wealth_class
+    kind: table
+    source: FRED
+    extractor: deleted @ 4ce7c96a^ (src/babylon/data/fred/z1_loader.py)
+    consumers:
+      - tools/analyze_wealth_distribution.py
+    tests:
+      - tests/integration/test_db_initialization_queries.py
+      - tests/unit/reference/test_fred_wealth_shares.py
+    disposition: keep
+    subset_policy: full
+    material_relation: wealth-percentile-to-MLM-TW-class mapping (proletariat/labor-aristocracy/bourgeoisie
+      bands) — the classification anchoring wealth-concentration analysis to Babylon's
+      class model.
+  - name: dim_worker_class
+    kind: table
+    source: Census_ACS
+    extractor: deleted @ 4ce7c96a^ (src/babylon/data/census/loader_3nf.py, table B24080)
+    disposition: investigate
+    subset_policy: full
+    material_relation: ACS class-of-worker taxonomy annotated with marxian_class — the
+      classification behind fact_census_worker_class's Marxian class-composition breakdown.
+    notes: 18/22 marxian_class rows populated; view_class_composition written but unconsumed.
+  - name: fact_asm_manufacturing_annual
+    kind: table
+    source: CENSUS_ASM
+    extractor: babylon-data src/babylon_data/asm/ (2026-09-05, PER-30)
+    disposition: keep
+    subset_policy: skip
+    material_relation: ASM manufacturing general statistics — inventory STOCKS by
+      stage of fabrication (materials/WIP/finished/total, begin+end of year),
+      shipments, total cost of materials, value added, employment and
+      production-worker hours; the productive circuit's inventory/turnover
+      substrate (PER-30).
+    notes: "National x NAICS2017 (sector 31-33 + 3-6 digit leaves, nested
+      aggregates kept as distinct published observations) x year, 2022 Economic
+      Census benchmark vintage (2018-2021 revised) from AM2231GS1. ASM publishes
+      no county/state inventory-by-stage product: county inventory is an
+      explicitly derived quantity (national ratios x county QCEW shares), never
+      an observation. Covers the 2019 baseline and 2020-2021 COVID window; no
+      2024 rows. Empty measures are NULL with the ASM annotation flag in flag_*;
+      RSE columns remain in the raw file. subset_policy skip: staged, no runtime
+      consumer yet."
+  - name: fact_transborder_port_commodity
+    kind: table
+    source: BTS_TRANSBORDER
+    extractor: babylon-data src/babylon_data/bts_transborder/ (2026-09-05, PER-31)
+    disposition: keep
+    subset_policy: skip
+    material_relation: BTS TransBorder port x HS2 commodity chapter x mode x month
+      freight value/weight/freight-charges — the observed commodity-by-crossing
+      layer for the Detroit-Windsor productive and freight circuit (PER-31).
+    notes: "Monthly raw files (dot3 part), 2019-01..2024-12, acquired via the
+      BTS raw-data page (Akamai-gated; browser-session download). COMMODITY2 is
+      HS2 (FK dim_hs2_commodity), NOT SCTG — do not join to FAF/CFS without a
+      governed concordance. Blank domestic_foreign/container_code stored as ''
+      to keep the composite PK total. Detroit district ports: 3801/3802/3803/3807.
+      dot2 (state x commodity, no port) remains in the raw files for a later
+      consumer. Covers the 2019 baseline, COVID window AND the 2024 thin slice.
+      subset_policy skip: staged, no runtime consumer yet."
+  - name: fact_transborder_state_port
+    kind: table
+    source: BTS_TRANSBORDER
+    extractor: babylon-data src/babylon_data/bts_transborder/ (2026-09-05, PER-31)
+    disposition: keep
+    subset_policy: skip
+    material_relation: BTS TransBorder state x port x mode x month freight
+      value/weight/freight-charges — crossing-level dollar throughput without
+      commodity detail (dot1 part).
+    notes: "Same vintage/coverage/codes as fact_transborder_port_commodity.
+      Rows with USASTATE=DU ('Unknown' state aggregate, per the codes PDF —
+      11,581 rows, ~0.6%) have no dim_state home and are skipped loudly.
+      subset_policy skip: staged, no runtime consumer yet."
+  - name: fact_border_crossing_throughput
+    kind: table
+    source: BTS_BORDER_CROSSING
+    extractor: babylon-data src/babylon_data/bts_transborder/ (2026-09-05, PER-31)
+    disposition: keep
+    subset_policy: skip
+    material_relation: BTS Border Crossing Entry Data — conveyance/person counts
+      by port x measure x month (both U.S. land borders, through 2026-07);
+      crossing THROUGHPUT, a different quantity than TransBorder's dollar/tonnage
+      flows.
+    notes: "Socrata keg4-3bc2 snapshot (public-domain download, no key).
+      port_code matches TransBorder DEPE codes where ports overlap.
+      subset_policy skip: staged, no runtime consumer yet."
+  - name: fact_bea_county_gdp
+    kind: table
+    source: BEA_GDP
+    extractor: deleted @ 4ce7c96a^ (src/babylon/data/bea/loader_county.py)
+    consumers:
+      - tools/make_reference_subset.py
+    tests:
+      - tests/integration/test_db_initialization_queries.py
+      - tests/unit/tools/test_make_reference_subset.py
+    disposition: keep
+    subset_policy: full
+    material_relation: per-county GDP by industry — the primary county-level Value Produced
+      (V) term feeding hex GDP hydration and the Fundamental Theorem's national GDP
+      total.
+  - name: fact_bea_final_demand_annual
+    kind: table
+    source: BEA_IO_NATIONAL_USE
+    extractor: tools/ingest/bea_final_demand.py
+    consumers:
+      - src/babylon/domain/economics/tensor_hierarchy/leontief_rent/final_demand.py
+      - src/babylon/domain/economics/melt/gamma_hydration.py
+      - tools/ingest/bea_final_demand.py
+    tests:
+      - tests/unit/economics/tensor_hierarchy/leontief_rent/test_final_demand_source.py
+      - tests/unit/economics/melt/test_gamma_hydration.py
+    disposition: keep
+    subset_policy: full
+    material_relation: national final-demand totals by industry — the denominator ImperialRentSystem's
+      Leontief-rent final-demand allocation divides against.
+  - name: fact_bea_io_coefficient
+    kind: table
+    source: BEA_IO_TOTAL_REQ
+    extractor: tools/load_bea_io.py
+    consumers:
+      - src/babylon/domain/economics/tensor_hierarchy/inter_industry.py
+      - src/babylon/domain/economics/tensor_hierarchy/production_chain_rent.py
+      - src/babylon/reference/bea/ingest/io_coefficient_writer.py
+      - tools/load_bea_io.py
+      - tools/ingest_bea_imports.py
+    tests:
+      - tests/integration/economics/tick/test_imperial_rent_real_wiring.py
+      - tests/integration/economics/test_tensor_hierarchy.py
+    disposition: keep
+    subset_policy: full
+    material_relation: national Leontief input-output coefficients (direct + total requirements)
+      — the inter-industry technical-coefficient matrix underlying imperial-rent tensor
+      propagation.
+  - name: fact_bea_national_industry
+    kind: table
+    source: BEA_IO_NATIONAL_SUPPLY
+    extractor: tools/load_bea_io.py
+    consumers:
+      - src/babylon/reference/bea/share_lookup_service.py
+      - src/babylon/reference/bea/ingest/national_writer.py
+      - tools/load_bea_io.py
+      - tools/validate_bea_io_against_shaikh.py
+    tests:
+      - tests/unit/reference/bea/test_share_lookup_service.py
+      - tests/unit/reference/bea/test_national_writer_upsert.py
+      - tests/unit/reference/bea/test_stale_share_summary.py
+    disposition: keep
+    subset_policy: full
+    material_relation: national industry gross-output/value-added — the fallback national
+      GDP source and BEA-share lookup base for county GDP disaggregation.
+  - name: fact_bilateral_trade_annual
+    kind: table
+    source: Comtrade
+    consumers:
+      - src/babylon/domain/economics/melt/gamma_hydration.py
+    tests:
+      - tests/unit/reference/test_exposure_schema.py
+      - tests/unit/economics/melt/test_gamma_hydration.py
+    disposition: keep
+    subset_policy: full
+    material_relation: bloc-to-bloc annual bilateral trade totals — the trade-flow input
+      to D3 Phi-attribution (imperial rent via unequal exchange).
+    notes: schema-only since spec-100; no dedicated loader script, populated additively.
+  - name: fact_bls_unemployment_decomposition
+    kind: table
+    source: BLS_LAUS
+    extractor: babylon_data/bls_unemployment/loader.py
+    consumers:
+      - src/babylon/domain/economics/throughput/adapters.py
+      - src/babylon/domain/economics/tick/system/__init__.py
+    tests:
+      - tests/integration/economics/test_unemployment_adapter.py
+    disposition: keep
+    subset_policy: full
+    material_relation: county-level BLS LAUS U-3 unemployment decomposition — wired
+      into the tick pipeline's per-county unemployment_rate.
+  - name: fact_broadband_coverage
+    kind: table
+    source: FCC_BDC
+    extractor: src/babylon_data/fcc/{loader,downloader,parser}.py
+    consumers:
+      - src/babylon/domain/geography/internet.py
+    tests:
+      - tests/unit/tools/test_make_reference_subset.py
+    disposition: keep
+    subset_policy: michigan
+    material_relation: per-county FCC broadband-coverage percentages — the material
+      basis for hex-level internet/infrastructure-access attributes.
+  - name: fact_census_education
+    kind: table
+    source: Census_ACS
+    extractor: deleted @ 4ce7c96a^ (src/babylon/data/census/loader_3nf.py, table B15003)
+    disposition: investigate
+    subset_policy: skip
+    material_relation: ACS educational-attainment-by-county rows (single-year 2021 run)
+      — a stalled family-scoped repair-vs-drop decision.
+    notes: data_dictionary.md wrongly claims 0 rows / awaiting ETL — stale, 80,525 rows
+      verified.
+  - name: fact_census_employment
+    kind: table
+    source: Census_ACS
+    extractor: deleted @ 4ce7c96a^ (src/babylon/data/census/loader_3nf.py, table B23025)
+    disposition: keep
+    subset_policy: skip
+    material_relation: ACS employment/labor-force-status-by-county rows (single-year
+      2021) — the planned join target for the Phase-5.1 gamma_III employment-status
+      brief.
+    notes: data_dictionary.md wrongly claims 0 rows / awaiting ETL — stale, 22,547 rows
+      verified.
+  - name: fact_census_hours
+    kind: table
+    source: Census_ACS
+    extractor: deleted @ 4ce7c96a^ (src/babylon/data/census/loader_3nf.py, table B23020)
+    disposition: investigate
+    subset_policy: skip
+    material_relation: ACS mean-hours-worked-by-gender rows — aggregate_hours column
+      100% NULL from a silent label-match bug in the deleted loader.
+    notes: aggregate_hours 100% NULL; mean_hours branch appears populated.
+  - name: fact_census_housing
+    kind: table
+    source: Census_ACS
+    extractor: deleted @ 4ce7c96a^ (src/babylon/data/census/loader_3nf.py, table B25003)
+    consumers:
+      - src/babylon/domain/economics/throughput/adapters.py
+      - src/babylon/engine/services.py
+    tests:
+      - tests/integration/economics/test_unemployment_adapter.py
+    disposition: keep
+    subset_policy: full
+    material_relation: ACS housing-tenure-by-county rows — the renter_share source wired
+      into the tick pipeline's housing-precarity signal.
+  - name: fact_census_income
+    kind: table
+    source: Census_ACS
+    extractor: deleted @ 4ce7c96a^ (src/babylon/data/census/loader_3nf.py, table B19001)
+    consumers:
+      - src/babylon/domain/economics/throughput/adapters.py
+      - src/babylon/persistence/county_aggregation.py
+      - src/babylon/data/reference_data_cache.py
+      - src/babylon/domain/economics/tick/system/__init__.py
+      - src/babylon/domain/economics/tick/types.py
+      - src/babylon/domain/economics/tick/graph_bridge.py
+      - src/babylon/engine/services.py
+      - tools/validate_detroit.py
+    tests:
+      - tests/integration/economics/test_unemployment_adapter.py
+      - tests/unit/economics/tick/test_bracket_ratio_source.py
+      - tests/integration/test_db_initialization_queries.py
+      - tests/unit/tools/test_make_reference_subset.py
+    disposition: keep
+    subset_policy: full
+    material_relation: ACS household-income-bracket-by-county rows — the nationwide
+      bracket-ratio source for the labor-aristocracy/class-proxy signal (Constitution
+      Amendment R canonical scale).
+  - name: fact_census_income_sources
+    kind: table
+    source: Census_ACS
+    extractor: deleted @ 4ce7c96a^ (src/babylon/data/census/loader_3nf.py, Pattern F)
+    disposition: fill
+    subset_policy: skip
+    material_relation: ACS income-source-type-by-county rows (wages/self-employment/transfer)
+      — Wave-6/Prog-098 census-wiring target, partially wired.
+  - name: fact_census_institutional_ownership
+    kind: table
+    source: Census_ACS
+    extractor: deleted @ 4ce7c96a^ (src/babylon/data/census_housing/loader.py, Feature-021
+      scaffold)
+    tests:
+      - tests/integration/test_db_initialization_queries.py
+      - tests/unit/tools/test_make_reference_subset.py
+    disposition: fill
+    subset_policy: michigan
+    material_relation: county institutional (absentee) housing-ownership rows — all-zero
+      Feature-021 scaffold pending real ownership data.
+    notes: every numeric column 0 in all 6,570 rows, coverage 2010-2011 only; do not
+      wire an engine consumer until real data lands (owner-queue item 59).
+  - name: fact_census_median_income
+    kind: table
+    source: Census_ACS
+    extractor: deleted @ 4ce7c96a^ (src/babylon/data/census/loader_3nf.py)
+    tests:
+      - tests/unit/reference/test_marxian_views.py
+    disposition: keep
+    subset_policy: michigan
+    material_relation: ACS median-household-income-by-county rows — the rent-to-income
+      denominator in the repaired view_rent_crisis, and a Phase-2 wealth-axis local
+      observable (specs/114 per-county derived sections).
+    notes: "REVIVED 2026-07-17 (ruling 1): the pair's consumer view_rent_crisis was
+      repaired (full-key join) rather than refilled — the 314K rows were always
+      healthy, the view was broken."
+  - name: fact_census_poverty
+    kind: table
+    source: Census_ACS
+    extractor: deleted @ 4ce7c96a^ (src/babylon/data/census/loader_3nf.py)
+    disposition: fill
+    subset_policy: skip
+    material_relation: ACS poverty-status-by-county rows (26.5M, largest poverty table)
+      — the owner-ratified National-Oppression program's poverty-rate data source.
+  - name: fact_census_rent
+    kind: table
+    source: Census_ACS
+    extractor: deleted @ 4ce7c96a^ (src/babylon/data/census/loader_3nf.py)
+    consumers:
+      - tools/repair_rent_crisis_view.py
+    tests:
+      - tests/unit/tools/test_make_reference_subset.py
+    disposition: keep
+    subset_policy: michigan
+    material_relation: ACS median-gross-rent-by-county rows (BEA REIS proxy) — the
+      rent input to the repaired analytical rent-crisis view.
+  - name: fact_census_rent_burden
+    kind: table
+    source: Census_ACS
+    extractor: deleted @ 4ce7c96a^ (src/babylon/data/census/loader_3nf.py:2037)
+    tests:
+      - tests/unit/reference/test_marxian_views.py
+    disposition: keep
+    subset_policy: michigan
+    material_relation: ACS rent-burden-severity-by-county rows — the cost-burdened
+      household counts in the repaired view_rent_crisis, and a Phase-2 wealth-axis
+      local observable (specs/114 per-county derived sections).
+    notes: "REVIVED 2026-07-17 (ruling 1): consumer view repaired (full-key join);
+      the 450K rows were always healthy."
+  - name: fact_census_worker_class
+    kind: table
+    source: Census_ACS
+    extractor: deleted @ 4ce7c96a^ (src/babylon/data/census/loader_3nf.py:1897)
+    disposition: investigate
+    subset_policy: skip
+    material_relation: ACS class-of-worker-by-county rows (900K, marxian_class populated)
+      — the fact volume behind view_class_composition's proletariat/petty-bourgeois/state-worker
+      breakdown.
+  - name: fact_coercive_infrastructure
+    kind: table
+    source: HIFLD
+    extractor: src/babylon_data/hifld/prisons.py
+    consumers:
+      - tools/make_reference_subset.py
+    tests:
+      - tests/unit/tools/test_make_reference_subset.py
+    disposition: keep
+    subset_policy: michigan
+    material_relation: per-county carceral/repressive-facility counts — the material
+      basis of the state's coercive apparatus (the Repression term in P(S|R)).
+  - name: fact_commodity_flow
+    kind: table
+    source: CFS
+    extractor: deleted @ 4ce7c96a^ (src/babylon/data/cfs/loader.py + api_client.py)
+    disposition: fill
+    subset_policy: skip
+    material_relation: county-level Commodity Flow Survey tonnage/value rows — never
+      populated at county disaggregation grain.
+    notes: "owner 2026-07-16: Program 22 — DERIVED county disagg of FAF5 zone
+      flows (employment-weighted; label derived-not-measured). UNBLOCKED
+      2026-09-04 (PER-31): bridge_cfs_county now holds 3,148 derived allocation
+      rows from the FAF5 county-factor files. Remaining: dim_cfs_area names are
+      still 'CFS Area N' stubs (FAF5_metadata.xlsx names not staged)."
+  - name: fact_commodity_observation
+    kind: table
+    source: USGS_MCS
+    extractor: deleted @ 4ce7c96a^ (src/babylon/data/materials/loader_3nf.py + parser.py)
+    tests:
+      - tests/unit/reference/test_minerals_tables.py
+    disposition: keep
+    subset_policy: full
+    material_relation: per-commodity USGS MCS observations (imports/exports/price/production)
+      — the strategic-materials extraction data view_critical_materials surfaces.
+    notes: "REFRESHED 2026-07-17 (Program 22 Wave 1): 4,735 rows, 2020-2024 (the
+      2024 gap closed); extractor revived as python -m babylon_data.materials."
+  - name: fact_county_exposure_by_external
+    kind: table
+    source: derived
+    extractor: src/babylon_data/exposure/{compute,writer,audit,validation}.py
+    consumers:
+      - src/babylon/domain/economics/county_exposure.py
+    tests:
+      - tests/unit/reference/test_exposure_schema.py
+      - tests/unit/tools/test_make_reference_subset.py
+      - tests/unit/economics/test_county_exposure.py
+    disposition: keep
+    subset_policy: michigan
+    material_relation: per-county exposure-weight to external trade blocs — the derived
+      product routing bloc-level Phi imperial rent down to individual counties.
+  - name: fact_eviction_lab_filing
+    kind: table
+    source: Eviction_Lab
+    extractor: src/babylon_data/eviction_lab/loader.py (stub, broken imports)
+    disposition: investigate
+    subset_policy: skip
+    material_relation: county-level eviction-filing/execution rates — an all-zero hardcoded
+      stub; data-shortages.md wants this for the Dispossession/TENANCY edge.
+    notes: all-zero stub; loader's own imports (babylon.data.loader_base) are broken
+      post-Program-14.
+  - name: fact_faf_commodity_flow
+    kind: table
+    source: FAF5
+    extractor: deleted @ 4ce7c96a^ (src/babylon/data/bts/faf_loader.py); pre-populated
+      in shipped DB
+    consumers:
+      - src/babylon/domain/economics/tensor_hierarchy/geographic_flow.py
+    tests:
+      - tests/unit/tools/test_make_reference_subset.py
+      - tests/unit/economics/tensor_hierarchy/test_geographic_flow.py
+    disposition: keep
+    subset_policy: full
+    material_relation: Freight Analysis Framework county-to-county commodity tonnage/value
+      flows — the freight-substrate data required by the headless-runner's Determinism
+      Bundle hydration.
+  - name: fact_foreclosure_rate
+    kind: table
+    source: HUD_Foreclosure
+    extractor: src/babylon_data/foreclosure/loader.py (stub, broken imports)
+    disposition: investigate
+    subset_policy: skip
+    material_relation: county-level foreclosure filing/completion rates — an all-zero
+      hardcoded stub against a weak dispossession-finance want.
+    notes: all-zero stub; no data-catalog.yaml source id names this dataset.
+  - name: fact_fred_national
+    kind: table
+    source: FRED
+    extractor: deleted @ 4ce7c96a^ (src/babylon/data/fred/loader_3nf.py)
+    consumers:
+      - src/babylon/domain/economics/factory.py
+      - src/babylon/domain/economics/melt/adapters.py
+      - src/babylon/domain/economics/tick/system/__init__.py
+    tests:
+      - tests/integration/economics/test_melt_adapters.py
+    disposition: keep
+    subset_policy: full
+    material_relation: national FRED macro series (CPI, etc.) — the CPI deflator read
+      every tick for real-wage/MELT calculations.
+  - name: fact_fred_wealth_levels
+    kind: table
+    source: FRED
+    extractor: deleted @ 4ce7c96a^ (src/babylon/data/fred/z1_loader.py, DFA family)
+    tests:
+      - tests/integration/test_db_initialization_queries.py
+    disposition: keep
+    subset_policy: full
+    material_relation: Federal Reserve Distributional Financial Accounts net-worth-by-class-and-quarter
+      levels — the wealth-concentration time series backing the wealth-distribution
+      invariant tests.
+  - name: fact_fred_wealth_shares
+    kind: table
+    source: FRED
+    extractor: deleted @ 4ce7c96a^ (src/babylon/data/fred/z1_loader.py, DFA family)
+    consumers:
+      - tools/analyze_wealth_distribution.py
+    tests:
+      - tests/unit/reference/test_fred_wealth_shares.py
+      - tests/unit/config/test_wealth_distribution_invariants.py
+    disposition: keep
+    subset_policy: full
+    material_relation: Federal Reserve DFA net-worth percentage shares — the SCF-benchmarked
+      corroboration series for the WID wealth-distribution invariants.
+  - name: fact_hickel_erdi_annual
+    kind: table
+    source: Hickel_HSZ_Drain
+    extractor: tools/ingest/hickel_erdi.py
+    consumers:
+      - src/babylon/domain/economics/melt/gamma_hydration.py
+      - src/babylon/domain/economics/tensor_hierarchy/leontief_rent/periphery_labor_coefficients.py
+      - tools/ingest/hickel_erdi.py
+    tests:
+      - tests/unit/economics/melt/test_gamma_hydration.py
+      - tests/unit/reference/test_unequal_exchange_artifacts.py
+      - tests/unit/reference/test_unequal_exchange_refdb_sync.py
+    disposition: keep
+    subset_policy: full
+    material_relation: Ecologically-adjusted Raw-material Drain Index (ERDI) by bloc/year
+      — the Phi imperial-rent bootstrap and gamma_import periphery-labor-coefficient
+      source.
+  - name: fact_hpms_road_segment
+    kind: table
+    source: HPMS
+    extractor: babylon-data src/babylon_data/dot/ (2026-09-04, PER-31)
+    disposition: keep
+    subset_policy: skip
+    material_relation: FHWA Highway Performance Monitoring System road-segment rows
+      — the Transport Substrate (Program 11, Constitution II.13) corridor-mesh raw material.
+    notes: "352,814 Michigan rows (all 83 counties) from the 2024 HPMS
+      spatial-sections export; every row YEAR_RECORD=2024. Observed per-section
+      AADT with single-unit/combination truck splits, lanes, speed limit,
+      NHS/NHFN flags, section length and WKT geometry. 1,477 source rows
+      skipped for missing FIPS; zero unresolved county keys. Loads idempotently
+      via python -m babylon_data.dot (delete+reload). subset_policy stays skip:
+      not yet wired into a system — corridor capacity/travel-time derivation
+      is a downstream consumer."
+  - name: fact_lodes_commuter_flow
+    kind: table
+    source: LODES
+    extractor: tools/ingest_lodes_od.py (download-only; DB import needs the babylon-data
+      package)
+    consumers:
+      - src/babylon/domain/economics/throughput/adapters_lodes.py
+      - src/babylon/domain/economics/throughput/calculator.py
+      - src/babylon/domain/economics/factory.py
+      - tools/demo_substrate.py
+    tests:
+      - tests/integration/economics/test_throughput_validation.py
+      - tests/integration/test_db_initialization_queries.py
+    disposition: keep
+    subset_policy: michigan
+    material_relation: county-to-county commuter origin-destination flows (LEHD LODES)
+      — the labor-mobility substrate behind inbound/outbound commuter-balance reads
+      (Wayne job-importer / Oakland job-exporter tests).
+    notes: "Distinct from the LODES_OD_HEX source (categories block above) and its
+      lodes_od_tri_county_hex_* / lodes_xwalk_tri_county_hex data-artifacts.yaml
+      entries — those cover the RAW hex/block-resolution OD matrix
+      lodes_commute_matrix.py reads directly (Vol II Program Unit U2), this table
+      is the separate county-level aggregate feeding the throughput calculator."
+  - name: fact_mineral_employment
+    kind: table
+    source: USGS_MCS
+    extractor: python -m babylon_data.materials (aggregates.load_mineral_employment)
+    tests:
+      - tests/unit/reference/test_minerals_tables.py
+    disposition: keep
+    subset_policy: full
+    material_relation: mining-sector employment and weekly earnings by sector (annual,
+      T1 trends) — the variable-capital base of the extraction industries.
+    notes: "FILLED 2026-07-17 (Program 22 Wave 1): 25 rows (5 years x 5 sectors);
+      chemicals carries no T1 earnings series (honest NULL)."
+  - name: fact_mineral_production
+    kind: table
+    source: USGS_MCS
+    extractor: python -m babylon_data.materials (aggregates.load_mineral_production)
+    tests:
+      - tests/unit/reference/test_minerals_tables.py
+    disposition: keep
+    subset_policy: full
+    material_relation: national mineral-production-by-type volumes (metals/industrial/coal,
+      annual, USD millions) — the Altitude-1 national extraction aggregate.
+    notes: "FILLED 2026-07-17 (Program 22 Wave 1): 15 rows from MCS2025_T1."
+  - name: fact_productivity_annual
+    kind: table
+    source: BLS_Productivity
+    extractor: tools/load_productivity_annual.py
+    tests:
+      - tests/unit/tools/test_load_productivity_annual.py
+      - tests/unit/reference/test_marxian_views.py
+    disposition: keep
+    subset_policy: full
+    material_relation: labor-productivity-by-detailed-industry rows (labor compensation
+      vs. sectoral output) — the direct W_c/V_c Fundamental-Theorem inputs view_imperial_rent
+      and view_surplus_value need.
+    notes: "FILLED 2026-07-17 (ruling 1): 17,336 rows from the staged BLS workbook
+      (MachineReadable sheet, 1988-2024, 458 NAICS codes); both value views alive."
+  - name: fact_qcew_annual
+    kind: table
+    source: QCEW
+    extractor: babylon_data/src/babylon_data/qcew/writer.py
+    consumers:
+      - src/babylon/persistence/county_aggregation.py
+      - src/babylon/domain/economics/adapters.py
+      - tools/normalize_qcew_rollups.py
+      - tools/inspect_qcew_audit.py
+    tests:
+      - tests/integration/economics/throughput/test_adapters.py
+      - tests/integration/test_qcew_provenance.py
+      - tests/integration/test_tensor_hydration.py
+    disposition: keep
+    subset_policy: michigan
+    material_relation: per-county-industry QCEW employment and wages — the variable-capital
+      (V) base for county value product and the Fundamental Theorem's core-wage term.
+  - name: fact_qcew_county_rollup
+    kind: table
+    source: QCEW
+    extractor: babylon_data/src/babylon_data/qcew/writer.py
+    consumers:
+      - src/babylon/domain/economics/melt/adapters.py
+      - src/babylon/domain/economics/throughput/adapters.py
+      - src/babylon/sentinels/coverage/registry.py
+      - tools/inspect_qcew_audit.py
+    tests:
+      - tests/integration/economics/test_melt_adapters.py
+      - tests/integration/test_qcew_provenance.py
+      - tests/integration/test_qcew_resume_idempotency.py
+      - tests/unit/sentinels/test_coverage.py
+    disposition: keep
+    subset_policy: full
+    material_relation: own_code='0' Total-Covered per-county employment rollup — the
+      national employment total MELT's [100M,200M] sanity bound depends on.
+  - name: fact_qwi_county_flow
+    kind: table
+    source: LEHD_QWI
+    extractor: babylon-data src/babylon_data/lehd_qwi/ (2026-09-05, PER-32)
+    disposition: keep
+    subset_policy: skip
+    material_relation: LEHD Quarterly Workforce Indicators labor-flow rows — hires,
+      separations, employment stocks, turnover, firm job flows and payroll by county x
+      NAICS x quarter; the observed labor-demand/reserve-army movement substrate for
+      the Gate 4 circuit and the 2020-2021 COVID emergence benchmark.
+    notes: "All-worker totals (sex/age/race/ethnicity/education/firm-age/firm-size
+      total categories) from the R2026Q3 Michigan county files at NAICS 3- and
+      4-digit, private ownership, not seasonally adjusted. Michigan LEHD coverage
+      spans 2000Q3-2021Q4 (partnership lapsed), so the table serves the 2019/2020
+      benchmark baselines and carries NO rows for the 2024 thin slice. QWI cells
+      are noise-infused: empty measures are NULL with the QWI status flag kept in
+      the companion status_* column; nothing is imputed. subset_policy stays skip:
+      not yet wired into a system — labor-demand realization is a downstream
+      consumer."
+  - name: fact_ricci_unequal_exchange_gvc
+    kind: table
+    source: Ricci_GVC
+    extractor: tools/ingest_ricci_gvc.py
+    tests:
+      - tests/unit/tools/test_ingest_ricci_gvc.py
+    disposition: keep
+    subset_policy: full
+    material_relation: Ricci (2019) global-value-chain unequal-exchange transfer series by
+      world-system tier (core/semi-periphery/periphery) and flow direction — grounds the
+      sigma-gradient pipeline's world_stats per Director ruling (a DECLARED partial undo of
+      the 2026-07-17 ADR076 R2 amputation).
+    notes: "P26 U5b re-ingestion of the checked-in babylon_ricci_final.csv
+      (data-artifacts.yaml's register-mode babylon_ricci_final entry, UNCHANGED by this
+      table) as a genuine reference-DB table. Deliberately NOT named
+      fact_ricci_unequal_exchange (the retired, amputated table) and UNRELATED to the
+      Postgres runtime immutable_reference_ricci_unequal (which holds Census bilateral
+      trade data under a legacy name) — see FactRicciUnequalExchangeGvc's docstring in
+      src/babylon/reference/schema.py."
+  - name: fact_state_minerals
+    kind: table
+    source: USGS_MCS
+    extractor: python -m babylon_data.materials (aggregates.load_state_minerals)
+    consumers:
+      - tools/generate_us_county_territories.py
+    tests:
+      - tests/unit/reference/test_minerals_tables.py
+    disposition: keep
+    subset_policy: full
+    material_relation: state-by-state mineral production values — the county-territory
+      artifact builder allocates them by county area within each state.
+    notes: "FILLED 2026-07-17 (Program 22 Wave 1): 50 states from MCS2025_T3
+      (USGS 'Undistributed' remainder row skipped, reported)."
+  - name: fact_trade_monthly
+    kind: table
+    source: Census_Trade
+    extractor: deleted @ 4ce7c96a^ (src/babylon/data/trade/loader_3nf.py + parser.py)
+    consumers:
+      - tools/make_reference_subset.py
+    disposition: keep
+    subset_policy: full
+    material_relation: monthly bilateral country import/export values — the trade-balance
+      data behind the core/periphery unequal-exchange ratio (view_unequal_exchange).
+  - name: view_class_composition
+    kind: view
+    source: derived
+    reads:
+      - fact_census_worker_class
+      - dim_county
+      - dim_state
+      - dim_worker_class
+    disposition: keep
+    subset_policy: skip
+    material_relation: aggregates fact_census_worker_class into county x Marxian-class
+      total-worker counts — the proletariat/petty-bourgeois/state-worker/unpaid-labor
+      composition surface.
+    notes: well-formed, real non-trivial data; zero code consumers, ad hoc analytical
+      query surface only.
+  - name: view_critical_materials
+    kind: view
+    source: derived
+    reads:
+      - fact_commodity_observation
+      - dim_commodity
+      - dim_commodity_metric
+      - dim_time
+    disposition: keep
+    subset_policy: skip
+    material_relation: surfaces USGS MCS commodity observations restricted to is_critical=1
+      — the strategic-materials extraction-dependency view.
+    notes: well-formed, real data; zero code consumers, ad hoc analytical query surface
+      only.
+  - name: view_imperial_rent
+    kind: view
+    source: derived
+    reads:
+      - fact_productivity_annual
+      - dim_industry
+      - dim_time
+    tests:
+      - tests/unit/reference/test_marxian_views.py
+    disposition: keep
+    subset_policy: skip
+    material_relation: computes imperial_rent_millions = wages_core - value_produced
+      (Phi = W_c - V_c) per industry-year, directly implementing the Fundamental Theorem
+      — the labor-aristocracy ratio surface.
+    notes: "ALIVE 2026-07-17: base table filled (ruling 1); mining 2023 W_c/V_c =
+      0.161 — the empirical Fundamental-Theorem surface exists at last."
+  - name: view_rent_crisis
+    kind: view
+    source: derived
+    reads:
+      - fact_census_rent
+      - fact_census_median_income
+      - fact_census_rent_burden
+      - dim_rent_burden
+      - dim_county
+      - dim_state
+      - dim_time
+      - dim_race
+    tests:
+      - tests/unit/reference/test_marxian_views.py
+      - tests/unit/tools/test_repair_rent_crisis_view.py
+    disposition: keep
+    subset_policy: skip
+    material_relation: county rent-to-income ratio and cost-burdened-household counts
+      per (year, race) slice — the housing-precarity surface; a Phase-2 wealth-axis
+      local observable (specs/114).
+    notes: "REPAIRED 2026-07-17 (tools/repair_rent_crisis_view.py, ruling 1): full-key
+      join (county, source, time, race) replaced the Cartesian county+source join;
+      12.0 forces real division (integer-affinity rent truncated ratios to 0)."
+  - name: view_surplus_value
+    kind: view
+    source: derived
+    reads:
+      - fact_productivity_annual
+      - dim_industry
+      - dim_time
+    tests:
+      - tests/unit/reference/test_marxian_views.py
+    disposition: keep
+    subset_policy: skip
+    material_relation: computes surplus_value = gross_output - variable_capital and
+      rate_of_exploitation per industry-year — the classical S/V Marxist surplus-value
+      surface.
+    notes: "ALIVE 2026-07-17: base table filled (ruling 1); 17,336 industry-year
+      rows; the KEEP-emptiness sentinel law now guards it forever."
+  - name: view_trade_annual
+    kind: view
+    source: derived
+    reads:
+      - fact_trade_monthly
+      - dim_country
+      - dim_time
+    disposition: keep
+    subset_policy: skip
+    material_relation: aggregates fact_trade_monthly into country x year annual imports/exports/trade-balance
+      totals.
+    notes: base table is a genuine, alive runtime dependency (read directly by postgres_initialization.py);
+      only the view itself has no direct caller.
+  - name: view_unequal_exchange
+    kind: view
+    source: derived
+    reads:
+      - fact_trade_monthly
+      - dim_country
+      - dim_time
+    disposition: keep
+    subset_policy: skip
+    material_relation: aggregates trade by world-system-tier x year into an unequal_exchange_ratio
+      — the core-appropriates-value-via-trade signature.
+    notes: correct, data-bearing; same ad hoc analytical role as view_trade_annual.
+  - name: view_wealth_concentration
+    kind: view
+    source: derived
+    reads:
+      - fact_fred_wealth_levels
+      - dim_wealth_class
+      - dim_asset_category
+      - dim_time
+      - fact_fred_wealth_shares
+    disposition: keep
+    subset_policy: skip
+    material_relation: aggregates FRED DFA wealth levels/shares by percentile x asset-category
+      x quarter — the wealth-concentration-by-class surface.
+    notes: both base tables are alive and directly tested; only the view itself is unconsumed.

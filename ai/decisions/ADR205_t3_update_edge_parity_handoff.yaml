@@ -1,0 +1,118 @@
+ADR205_t3_update_edge_parity_handoff:
+  status: "accepted"
+  date: "2026-08-14"
+  title: "The T3 PR B handoff (Program 29, issue #560) — ADR198 R3's execution half: update-edge served through the SAME PendingWrite collect-then-apply machinery (the WriteTarget sum-type widening, D145 — a parallel batch declined because the batch's own application law forbids reordering), full set/add/sub/scale parity with apply-time accumulation (D104, mutation-verified), enum set included (E-EVAL-042 at collect AND apply), the two refusal arms SPLIT (update-hyperedge keeps refusing with a corrected hyperedge-only message) and the add-edge field-init refusal retired (inits execute through the same funnel, with E-PARSE-041's runtime echo kept as defense in depth); Write::EdgeAttribute minted in the write log; the one landed refusal-assertion flip (evaluator.rs's refusal_messages_name_their_slice) executed per the enumerate-and-flip discipline; two run_once_into e2e vectors (for-each over edges writing per element with the emit reading PRE-tick strength — the pre-state law on the edge lane; and the D36 edge-between targeted write with the honest-null dual); the §6.2 chapter-C2 family served MINUS its I.15/E-EVAL-030 leg — a declared Phase-2 gap recorded here, not improvised"
+  context: |
+    ADR203 (T3 PR A) landed the storage half: full symmetric
+    edge-attribute storage on both GraphSubstrate backends and the
+    empty-elided fifth canonical section, with `update_edge`/
+    `edge_attribute` as the substrate write/read points. What remained
+    was R3's execution half — the dossier's "keystone inside the
+    keystone": production's tick path is `collect_effects`, serving only
+    update-node/emit/guard/for-each, with `PendingWrite` NodeId-keyed by
+    construction; the two refusal arms (execute and collect paths, shared
+    with update-hyperedge) and the add-edge `<field-init>` execution
+    refusal stood between the verb and the storage. This train completes
+    T3: the apply-path widening, the refusal-arm split, the write-log
+    record, the flip sweep, and the e2e proof — no spec, schema, or
+    golden changes (the tick_goldens 6/6 and the engine_link pin stay
+    byte-identical: no committed content uses update-edge, so no shipped
+    tick's bytes move).
+  decision: |
+    **1. The batch widening (D145).** `PendingWrite`'s `id: NodeId`
+    becomes `target: WriteTarget` — a sum type, `Node(NodeId)` /
+    `Edge(EdgeKey)`. The alternative (a parallel edge-write batch joined
+    at apply time) was declined on the batch's own documented algebra:
+    application is a monoid ACTION that may not be reordered, and two
+    batches cannot interleave without a merge rule that IS a reordering.
+    One flat Vec preserves collection order across node and edge writes
+    by construction. The referent type is T2's `EdgeKey`, shared
+    unmodified (D36). `tick.rs` needed no change — it already handles the
+    batch as an opaque `Vec<PendingWrite>`.
+
+    **2. The verb, both paths.** `update-edge` is served on the collect
+    path (`collect_update_edge` — production's, via `run_tick`) and the
+    immediate execute path (`update_edge` — the retired-from-production
+    test/corpus harness), each mirroring `update-node` operand for
+    operand: §2.10 discipline 1's referent check (E-EVAL-033, reusing
+    `check_edge_referent_type` — the EdgeKey carries its type inline, so
+    unlike the node side no graph round-trip is needed), the four
+    update-ops, `numeric_write_value` (Currency still refused loudly,
+    unchanged), §3.3's `store_range_check` (E-EVAL-020), and the enum
+    guards (E-EVAL-042) at collect AND apply independently — apply-time
+    accumulation (D104) reads the target's CURRENT value through
+    `edge_attribute` at apply time, and the write routes through
+    `GraphSubstrate::update_edge`'s suffix fork (D143: a
+    `<edge-type>/strength` write lands in the 0x03 slot, never a
+    fifth-section row). The enum guard/funnel diagnostics gain the verb
+    label (`update-node`/`update-edge`/`add-node`/`add-edge`) so a
+    refusal names the form that raised it — message text only, no code
+    changes; no test pinned the old prose.
+
+    **3. The refusal-arm split and the field-init execution.** The shared
+    `update-edge | update-hyperedge` refusal arms (execute and collect)
+    SPLIT: `update-edge` serves; `update-hyperedge` keeps refusing with a
+    corrected message that no longer claims an edge is one f64 strength
+    (false since PR A) and still names Constitution III.7 — hyperedge
+    own-field storage is chartered by no Program 29 train (R4's fence
+    stands: MembershipPayload, update-membership, membership-field-of
+    untouched). `add-edge`'s `<field-init>*` tail (D37) now EXECUTES:
+    each init crosses the same funnel (`numeric_write_value` →
+    `store_range_check` → `update_edge` → the write log), with an
+    E-PARSE-041 runtime echo refusing a `strength` init even when the
+    load-time grammar gate never ran (direct-harness defense in depth).
+    The static checks (E-PARSE-041, E-TYPE-014) stay at load, unchanged.
+
+    **4. The write log.** `Write::EdgeAttribute { edge_type, from, to,
+    field, previous, value }` mirrors `NodeAttribute`; `previous` probes
+    through `edge_attribute` under discipline 3 (a never-written edge
+    field records `None`; a strength write records the prior strength).
+    A record is emitted only after the substrate accepts the write,
+    unchanged.
+
+    **5. The flip sweep.** Enumerated per the T2 plan's discipline: the
+    ONLY landed assertion pinning the retired refusal text was
+    `evaluator.rs`'s `refusal_messages_name_their_slice` update-edge leg
+    ("Constitution III.7") — flipped to pin the NEW behavior (a
+    well-formed update-edge writes through the execute path) plus the
+    retained update-hyperedge refusal's corrected message. The r9_chapters
+    cost/CAS rows naming update-edge are unaffected (grammar and §3.7
+    cost rows did not change). No committed rule content uses update-edge
+    (verified by grep over content/rules/*.bsl), so no shipped behavior
+    flips.
+
+    **6. The recorded gap.** The §6.2 chapter-C2 vector family is served
+    MINUS its I.15 leg: no E-EVAL-030 can fire because the I.15 edge-mode
+    machine is a declared Phase-2 gap that no ruling charters this train
+    to build (the dossier's scope tension 1, adjudicated as record-not-
+    improvise). Hydration seeding of edge attributes stays unwidened
+    (load_edge keeps its strength-literal shape — the dossier's minimal
+    reading, tension 3): the only writers of a non-strength edge
+    attribute remain `update-edge` and `add-edge <field-init>*`. No new
+    E-codes minted (E-EVAL-043 et al. remain free).
+  consequences: |
+    T3 is COMPLETE: R1 (storage) + R2 (fifth section) landed in PR A
+    (ADR203); R3 (write parity) lands here. The 11 gated systems of the
+    D35/D65 storage class (ImperialRent, Sovereignty, Contradiction,
+    ContradictionField, FieldDerivative, FascistFaction, EdgeTransition,
+    Electoral C2, Doctrine, ReserveArmy, Struggle) now have both halves
+    of their edge-attribute read/write surface. Proofs: babylon-bsl 547
+    lib tests green incl. 14 new edge-write law tests (four ops, D104
+    accumulation, in-order application, E-EVAL-031/033/020/042 at the
+    named sites, the retained update-hyperedge refusal on both paths,
+    the E-PARSE-041 echo); two run_once_into e2e vectors green with a
+    same-file determinism leg; cargo test --workspace --locked 55 suites
+    green; tick_goldens 6/6 + engine_link byte-identical, untouched.
+    Mutation-verified per the standing sentinel rule: dropping the
+    collect-site referent check reddens the E-EVAL-033 row; dropping the
+    apply-site enum guard reddens the E-EVAL-042 row; dropping the
+    E-PARSE-041 echo reddens its row; skipping the CURRENT read in the
+    edge apply arm (breaking D104) reddens four rows — each perturbation
+    reverted byte-identical (cp/diff discipline).
+  supersedes: []
+  related:
+    - ADR203_t3_edge_attribute_storage_handoff
+    - ADR198_program29_substrate_widening_charter
+    - ADR201_t2_edge_reads_handoff
+    - ADR197_bsl_query_evaluation_slice1_handoff
+    - ADR195_enum_deffield_row

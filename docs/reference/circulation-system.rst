@@ -410,54 +410,77 @@ Inventory (``inventory.py``)
 Crisis Assessment (``crisis.py``)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-``assess_circulation_crisis(circuit_state, turnover, inventory, reproduction_balance, reproduction_analysis) -> CirculationCrisisAssessment``
+``assess_circulation_crisis(circuit_state, turnover, inventory, reproduction_balance, reproduction_analysis, commodity_overhang_threshold=0.3, liquidity_crisis_ratio=0.1) -> CirculationCrisisAssessment``
    Detects realization crisis, turnover disruption, and reproduction
    failure independently. Generates vulnerability strings per the
-   derivation rules above.
+   derivation rules above. ``commodity_overhang_threshold`` and
+   ``liquidity_crisis_ratio`` default to the original hardcoded values;
+   production callers pass ``defines.capital_vol2.commodity_overhang_threshold``
+   / ``defines.capital_vol2.liquidity_crisis_ratio`` (U7 defines sweep,
+   2026-07-21 vol2-circulation-engine program).
 
 Threshold Constants
 ~~~~~~~~~~~~~~~~~~~
 
-All constants are ``Final[float]`` values defined in ``types.py`` with
-data source traceability.
+U7 (defines sweep) migrated most of these off module-level ``Final``
+constants in ``types/_legacy.py`` — five to ``GameDefines``-backed accessor
+functions of the same name (lowercase; consumed inside frozen-model
+``computed_field`` properties, which cannot take a call-time parameter),
+two to ``assess_circulation_crisis`` keyword parameters (above). Only
+``REALIZATION_RATE_NORMAL/SLOWDOWN/RECESSION`` remain bare ``Final``
+constants — ``RealizationCrisis.crisis_severity``'s sole production
+constructor (``compute_realization_metrics``) has zero production callers,
+so migrating them now would repeat the "define with no live consumer"
+anti-pattern the sweep exists to avoid.
 
 .. list-table::
    :header-rows: 1
-   :widths: 35 10 55
+   :widths: 35 10 20 35
 
-   * - Constant
+   * - Name
      - Value
      - Source
-   * - ``OVERPRODUCTION_DAYS_THRESHOLD``
+     - GameDefines key
+   * - ``overproduction_days_threshold()``
      - 60.0
      - Census M3: avg inventory-to-shipments ~1.3 months; 60 = 1.5x normal
-   * - ``SUPPLY_CRISIS_DAYS_THRESHOLD``
+     - ``capital_vol2.overproduction_days_threshold``
+   * - ``supply_crisis_days_threshold()``
      - 7.0
      - Standard JIT minimum buffer (BLS lead time 5-10 days)
-   * - ``COMMODITY_OVERHANG_CRISIS``
+     - ``capital_vol2.supply_crisis_days_threshold``
+   * - ``commodity_overhang_threshold`` (param)
      - 0.3
      - Marx *Capital* II Ch. 16-17: >30% in C form = realization dominates
-   * - ``LIQUIDITY_CRISIS_RATIO``
+     - ``capital_vol2.commodity_overhang_threshold``
+   * - ``liquidity_crisis_ratio`` (param)
      - 0.1
      - Marx *Capital* II Ch. 15: <10% liquid = cannot purchase inputs
+     - ``capital_vol2.liquidity_crisis_ratio``
    * - ``REALIZATION_RATE_NORMAL``
      - 0.95
      - >95% realization = normal friction losses
+     - (not yet migrated — dormant, see above)
    * - ``REALIZATION_RATE_SLOWDOWN``
      - 0.85
      - NBER recession classification thresholds
+     - (not yet migrated — dormant, see above)
    * - ``REALIZATION_RATE_RECESSION``
      - 0.70
      - <70% = systemic realization failure
-   * - ``REPLACEMENT_BOOM_RATIO``
+     - (not yet migrated — dormant, see above)
+   * - ``replacement_boom_ratio()``
      - 1.5
      - BEA Fixed Asset Tables historical correlation
-   * - ``REPLACEMENT_EXPANSION_RATIO``
+     - ``capital_vol2.replacement_boom_ratio``
+   * - ``replacement_expansion_ratio()``
      - 1.0
      - Investment = depreciation = simple reproduction
-   * - ``REPLACEMENT_MAINTENANCE_RATIO``
+     - ``capital_vol2.replacement_expansion_ratio``
+   * - ``replacement_maintenance_ratio()``
      - 0.7
      - <70% of depreciation = active capital destruction
+     - ``capital_vol2.replacement_maintenance_ratio``
 
 Graph Bridge Integration
 ~~~~~~~~~~~~~~~~~~~~~~~~

@@ -1,0 +1,274 @@
+ADR209_bsl_ergonomics_b:
+  status: "accepted"
+  date: "2026-08-17"
+  title: "BSL surface-ergonomics Train B (issue #591 items 6/3/4) — the train record. Item 6: additive BslType::Real (byte-neutral, type tags are never hashed) plus a roster-scoped digest-inventory migration off verbatim-f64-in-int (six packs' primary conformance scenarios; sibling scenarios of those same packs still declare the migrated qnames int — corrected by the 2026-08-17 final whole-branch review, item 5). Item 3: the (edge-attr …) scenario form (D156) discharging D151's narrowing 3 — WAGES edges + wages/value-flow return, wages-received retired, both tick_goldens.rs hashes re-pinned (attribute-set change, zero value drift) with fired 50->63/49->62 SPEC-COMPLIANT (the review's mirror-and-measure adjudication, refuting the charter's 51/50 employer-only prediction). Item 4: load_scenario_with_prelude + EnumRegistry::declare's identical-recognition arm — the WorldView defenum moves to a shared declaration prelude that DUPLICATES (not factors out of) worldview-foundation.bscn's own declaration, consciousness-ternary-conformance.bscn's own re-declaration is deleted, its parity test is a declared test death now enforced by an executable prelude ordinal pin, every hash stays byte-identical; a plan gap surfaced at execution (consciousness_ternary_conformance.rs's own FOUR call sites — three run_once_into_with_prelude + one TickSession::new_with_prelude, not five — not only the golden) forced run_once_into_with_prelude + TickSession::new_with_prelude alongside run_once_with_prelude — the session-path follow-up the charter deferred turned out to have a real same-train consumer."
+  context: |
+    Issue #591 filed six BSL surface-ergonomics gaps found while porting
+    content; the Director split them into two trains (directive
+    2026-08-15) — this ADR closes Train B (items 6/3/4). Charter:
+    `docs/superpowers/specs/2026-08-15-bsl-ergonomics-b-charter.md`
+    (RULED 2026-08-15 — Director approved wholesale, all six §8 decision
+    points adopted as recommended). Plan:
+    `docs/superpowers/plans/2026-08-15-bsl-ergonomics-b.md`. Digest:
+    `ai/scratch/2026-08-15-bsl-ergonomics-b-archaeology.md`. Companion:
+    ADR207 (the W10 class-surface port handoff whose three recorded
+    narrowings — wages-received's single-employer exactness among them —
+    this train discharges one of).
+
+    Execution: worktree `bsl-ergonomics-b`, branch
+    `feature/bsl-ergonomics-b` from `dev` @17971664, subagent-driven per
+    the established pattern (fresh implementer per task, per-task review,
+    scoped re-review on fix rounds). Five tasks, three PRs: PR A #597
+    (Tasks 1-2, item 6) MERGED; PR B #598 (Tasks 3-4, item 3 + the
+    ceremony) MERGED; PR C #604 (this ADR's own PR, Task 5, item 4 + the train
+    records) MERGED 2026-08-17 (merge commit `eb6156e3`) — see
+    `consequences` for the full post-merge state, including the
+    2026-08-17 final whole-branch review's 6 fix-forward items. A session
+    interruption mid-Task-4 (a provider quota 403 killed the first
+    implementer in its read phase, zero edits landed) is recorded in the
+    SDD ledger (`.superpowers/sdd/2026-08-15-bsl-ergonomics-b/progress.md`)
+    — mechanical consequence only (commits from the resume carry the
+    Claude Co-Authored-By trailer instead of Kimi's), no dispatch-prompt
+    drift.
+  decision: |
+    **1. Constitutional posture (§1 of the charter, Director-signed).** All
+    three items are surface ergonomics minting no new mathematics — `real`
+    gives an honest declared home to what the store already does
+    (kind-blind f64 end to end); edge-attribute seeding extends the loader
+    to what the store already holds (runtime edge attributes already exist,
+    section 0x05); scenario-declaration sharing is pure loader composition,
+    zero hash movement. The formalism surface stays closed.
+
+    **2. Item 6 — `BslType::Real` (D155).** Additive, not a tightening of
+    `int` (the tightening fork was evidence-REJECTED: ~20 write sites
+    across 6 committed packs hold non-integral f64 in `int`-typed fields —
+    a content massacre, not a type fix). The digest inventory migrated
+    (Director ruling 3, recommended over the narrower W10-only scope):
+    production `wealth`, vitality `wealth`, lifecycle `pop-p`, metabolism
+    `biocapacity`, dispossession `dispossession-intensity`, consciousness
+    `agitation`/`wage-balance`/`solidarity-inbox` all re-typed `real` in
+    each pack's primary conformance scenario. Byte-neutral by
+    construction — `BslType` is load-time metadata, never hashed
+    (`scenario.rs`) — proved, not assumed: every existing golden
+    byte-identical at landing.
+
+    **CORRECTION (final whole-branch review, 2026-08-17, item 5): "the
+    FULL digest inventory" overstated this migration's scope.** The
+    digest enumerated write sites per RULE PACK, not per declaration
+    site, and each pack has one rule file but several scenarios — so the
+    migration landed on the primary conformance scenario of each of the
+    six packs above while roughly 15 SIBLING scenarios of those same
+    packs still declare the identical qnames `int`, with their own tests
+    pinning non-integral values bit-exactly (proven, not inferred:
+    `metabolism-rounding-divergence-conformance.bscn:18-19` declares
+    `territory/biocapacity`/`territory/max-biocapacity` `int` while
+    `metabolism_rounding_divergence_conformance.rs:78,100` pins `1.4` and
+    `99.985`; `lifecycle-crisis-conformance.bscn:44-51` declares five
+    fields `int` while its own test pins `1858.665`, `2095.195`,
+    `0.6545394347486001`, `0.876370966148252`, `0.6039` — the same
+    pattern, structurally, in the other six metabolism siblings,
+    `production-conformance.bscn:115-116`, the six dispossession
+    siblings, `us-counties-lifecycle-demo.bscn:63-70,75`, and
+    `vitality-lifecycle-combined-conformance.bscn:24-31,38`). Nothing
+    behaves wrongly — `BslType` tags are never hashed, and `real` joins
+    `int`'s no-check lane — but this is precisely the
+    verbatim-f64-in-`int` awkwardness item 6 exists to retire, still live
+    in scenarios this record previously called migrated. Completing the
+    sweep across declaration sites (~26 byte-neutral one-word edits) is a
+    PARKED option — the ruled roster was write-sites-per-pack, so
+    widening to every declaration site is arguably beyond what Director
+    ruling 3 adopted — pending a Director look; recording the scope
+    honestly is the MUST this correction discharges.
+
+    **3. Item 3 — the `(edge-attr …)` form (D156) + the WAGES un-narrowing
+    (D151's narrowing 3, discharged).** `load_edge` was strength-only;
+    `(edge-attr <EdgeType/MEMBER> <from> <to> <field-qname> <value>)` seeds
+    a declared field of an already-minted edge, through the same
+    `attribute_value` per-type literal law (Currency refused identically),
+    the quadruple `(edge-type, source, target, field)` a KEY exactly as
+    D73's triple is (E-LOAD-057 on a double seed), the strength refusal
+    UNCONDITIONAL (D32's implicit field never accepts an explicit
+    re-declaration through this door either). With seeding served, D151's
+    narrowing 3 — the frozen incoming-WAGES `value_flow` fold-sum cut to
+    one class-side `wages-received` field, recorded "exact for
+    single-employer content" only because seeding was unserved — no longer
+    holds as live law: `wages-received` is RETIRED (Director ruling 6,
+    recommended — the fold-sum is exact and now honest, not merely a
+    derived convenience), `wages/value-flow` returns as a `real` edge
+    deffield, three WAGES edges return to
+    `consciousness-ternary-conformance.bscn`, and
+    `consciousness/p2-wages-push` is the new rule reading them into
+    `social-class/wages-inbox` (the push-over-pull accumulator, D136).
+
+    **The ceremony (charter §6, Task 4 Step 5).** Both `tick_goldens.rs`
+    hashes re-pinned — an ATTRIBUTE-SET change (−`wages-received`, +3 WAGES
+    edges, +3 `wages/value-flow` edge attributes on load; −`wages-received`
+    +`wages-inbox` post-tick), zero VALUE drift, proved by
+    `consciousness_ternary_conformance.rs`'s dual-implementation oracle
+    passing bit-exactly with only the two field re-points:
+
+    - pre-tick: ``8a906d31b63d573cc1c2f9cfe7434b4af424cb144b192f08aec336f3e8c79600``
+      -> ``e2582dd4f3537a6baa26fdb273e9aaf39299ab4994cf0dcf2664a90b920821fe``
+    - post-tick: ``7e049462626ddaec6f261c2913ce54cd427e07ca20f68ee6622cbb13a9e3fff9``
+      -> ``4346278b3e075b338b5d4b847de054da6738d74f05895f8945dad78b13f46da9``
+    - fired: 50 -> 63 (tick 1), 49 -> 62 (tick 2, p0 not re-firing)
+
+    **Fired-count adjudication: 63/62 is SPEC-COMPLIANT, not a content
+    bug** (the post-implementation review's finding, ratified by the
+    controller). The charter's own ceremony text predicted "employer
+    only, +1" (51/50) — REFUTED by measurement: `fired` is diagnostic-only
+    (never a hash input), the mirrored `active`-gated shape does not
+    discriminate on WAGES-edge presence, so all thirteen SOCIAL_CLASS
+    subjects fire under `p2-wages-push` (not one), matching the
+    already-established `p3:6` guard-passed-subjects precedent this same
+    file's own header sets. An `exists`-gate follow-up (making `fired`
+    count only subjects that actually pushed a value) was REJECTED — it
+    would re-pin four counts for a prettier diagnostic, and any
+    "fired = subjects that pushed" semantics is a pack-wide redefinition,
+    not a rule patch.
+
+    **4. Item 4 — scenario-declaration sharing (D157).** A **declaration
+    prelude** — a source string holding only `defenum` / `defvocabulary` /
+    `defconst` / `deffield` forms, no `(scenario …)` wrapper, never
+    `node`/`edge`/`edge-attr` — read first via the new
+    `load_scenario_with_prelude(prelude_src, scenario_src, graph)`, its
+    registries threaded into the scenario load that follows
+    (`load_scenario_inner`, the extraction `load_scenario` and
+    `load_scenario_with_prelude` both call, taking pre-seeded registries
+    bundled in one `PreludeRegistries` struct rather than six positional
+    parameters — the minimal-extraction reading the annex flagged as
+    ambiguous, resolved as: a SEPARATE small `load_prelude` pass, never
+    touching `graph`, so the shared loop's own `graph: &mut dyn
+    GraphSubstrate` parameter carries no dead borrow on the prelude path).
+    Driver seam: `run_once_with_prelude(scenario_src, prelude_src,
+    rule_src)` / `run_once_into_with_prelude` (argument order `(scenario,
+    prelude, rule)`, matching `run_once`'s own lead argument); every
+    pre-existing entry point passes no prelude, behaviorally unchanged.
+
+    **The identical-recognition law.** `EnumRegistry::declare` gained an
+    arm: same type name AND same member list, same order, against an
+    EXISTING declaration returns that declaration's own `EnumTypeId`
+    rather than `E-LOAD-001`'s `DuplicateType` — recognition of an
+    identical fact stated twice, never a merge or an override. A
+    re-declaration that disagrees (reordered, renamed, added, or dropped a
+    member) still refuses exactly as before; `Vec<String>: PartialEq`'s
+    exact-order comparison is what decides which, no new comparison logic
+    needed. Pinned by three new `types.rs` tests (identical -> `Ok` with
+    the same id; reordered -> refuses; extra member -> refuses).
+
+    First production use: `content/declarations/worldview.bscn` (the
+    WorldView mint, DUPLICATING `worldview-foundation.bscn:34`'s own
+    `(defenum WorldView …)` — CORRECTION, final whole-branch review
+    2026-08-17 item 3: "factored out of"/"byte-identical to" overstated
+    this. `worldview-foundation.bscn:34` STILL declares `WorldView`
+    itself; nothing was factored out, and the two declarations are not
+    byte-identical either — the prelude's form sits at column 0
+    (`worldview.bscn:21`), the mint's is indented two spaces inside the
+    `(scenario …)` form, so only the declaration TEXT matches, not the
+    line bytes). `consciousness-ternary-conformance.bscn`'s own
+    `(defenum WorldView …)` re-declaration is DELETED — the file now
+    CONSUMES the prelude rather than re-declaring. Declared test death:
+    `tick_goldens.rs`'s `consciousness_ternary_worldview_member_order_is_
+    the_ruled_ordinal` — the re-declaration it guarded is now impossible
+    for this file; the mint's own `worldview_member_order_is_the_ruled_
+    ordinal` survives as one ordinal home, and the final whole-branch
+    review's fix-forward adds a second, `worldview_prelude_member_order_
+    is_the_ruled_ordinal`, asserting the three ordinals AS DECLARED BY
+    `WORLDVIEW_PRELUDE` through the real loader — the executable
+    enforcement this declared test death's justification previously
+    rested on a comment alone to provide.
+
+    **Byte-neutrality proof (charter §6, Task 5 Step 3).**
+    `defenum` declarations are unhashed and the graph content is
+    identical, so the switch moves zero pins — verified, not assumed:
+    `consciousness_ternary_foundation_hashes_are_pinned` passes with the
+    SAME pre/post hashes and the SAME `fired` (63) as the item-3 re-pin it
+    follows.
+
+    **A plan gap the annex could not have caught (execution-discovered,
+    not a citation drift).** The charter and Task 5's brief scoped item 4
+    against `tick_goldens.rs`'s ONE golden call site and explicitly ruled
+    `TickSession::new`'s prelude path "not extended — no consumer today,
+    YAGNI." Deleting the `.bscn`'s own `defenum` line broke call
+    sites the brief never enumerated:
+    `consciousness_ternary_conformance.rs`'s own THREE `run_once_into`
+    uses (`:189, :373, :474`) plus its one `TickSession::new` use
+    (`:669`) — a REAL, same-train consumer, not speculative surface, FOUR
+    call sites total (CORRECTION, final whole-branch review 2026-08-17
+    item 4: this decision and its own title previously said "five," and
+    contradicted itself doing it — "four `run_once_into` uses plus its
+    one `TickSession::new` use" sums to five, but the actual
+    `run_once_into` count is three, verified by count against the file).
+    Fixed by adding the two missing siblings,
+    `run_once_into_with_prelude` (mirroring `run_once_into` exactly as
+    `run_once_with_prelude` mirrors `run_once`) and
+    `TickSession::new_with_prelude`, and re-pointing all four call sites —
+    completing the migration consistently rather than leaving the `.bscn`
+    self-sufficient for one caller and prelude-dependent for another. This
+    is the one deviation from the brief's literal text in this task;
+    the alternative (keep the `.bscn`'s re-declaration, relying on
+    identical-recognition to make it harmless) would have satisfied the
+    brief's words while leaving the "declared test death" unjustified and
+    the sharing mechanism only partially realized.
+  consequences: |
+    - The five tasks: Task 1 (`real` type mint) + Task 2 (roster-scoped
+      digest migration) = PR A #597, MERGED 2026-08-15. Task 3
+      (`(edge-attr …)` form, D156) + Task 4 (the WAGES un-narrowing +
+      ceremony, one fix round for two doc-accuracy findings) = PR B #598,
+      MERGED 2026-08-17. Task 5 (this ADR — `load_scenario_with_prelude`
+      + identical-recognition + the train records) = PR C #604, MERGED
+      2026-08-17 (merge commit `eb6156e3`).
+    - New public surface: `babylon_bsl::scenario::load_scenario_with_
+      prelude`/`PreludeRegistries` (private)/`load_prelude` (private);
+      `babylon_tick::{run_once_with_prelude, run_once_into_with_prelude,
+      TickSession::new_with_prelude}`; `EnumRegistry::declare`'s widened
+      contract. `load_scenario`/`run_once`/`run_once_into`/
+      `TickSession::new` are UNCHANGED callers (`prelude_src: None`) —
+      byte-for-byte identical behavior, proved by the full existing test
+      suite passing unedited.
+    - New content: `rust/crates/babylon-tick/content/declarations/
+      worldview.bscn` (the prelude).
+    - Register rows: D155 (`real`, item 6), D156 (`(edge-attr …)`, item 3),
+      D157 (the prelude + identical-recognition law, item 4) —
+      `docs/reference/bsl-language.rst`. D151's narrowing 3 carries its own
+      retirement note (Task 4).
+    - Declared test death: `consciousness_ternary_worldview_member_order_
+      is_the_ruled_ordinal` (`tick_goldens.rs`) — recorded here and at its
+      deletion site. The final whole-branch review (2026-08-17) found the
+      death's justification guarded by a comment only ("byte-identical to
+      the mint's declaration" — the mint's own line is NOT byte-identical,
+      see the decision section's item-3 correction above); the
+      fix-forward adds `worldview_prelude_member_order_is_the_ruled_
+      ordinal`, an executable pin against `WORLDVIEW_PRELUDE` itself
+      through the real loader.
+    - #591 discharge: items 6, 3, 4 CLOSED with this train — the evidence
+      comment POSTED (`issuecomment-5316503583`), per this train's own
+      established pattern: items 6/3's discharge comments each posted only
+      after their PR merged. Items 1 (push-over-pull as a named canonical
+      pattern — folded a citation-range nit from Task 3's review into its
+      future pass), 2 (`min`/`max`/`abs`/`clamp` intrinsics), and 5
+      (scientific-notation literals) stay OPEN, queued, not this train's
+      scope (charter §7 non-goals).
+    - Follow-up roster: the session-path prelude threading the charter
+      called "YAGNI until production content shares" is now DISCHARGED
+      (this train supplied its own first consumer) — nothing deferred
+      there. CORRECTION (final whole-branch review, 2026-08-17): "No
+      other follow-ups from this train" no longer holds — that same
+      review found 6 fix-forward items (none a red gate), closed by a
+      dedicated branch/PR off `dev`: items 1-2 (prelude-threading test
+      coverage for `deffield`/`defconst`/`defvocabulary` + the executable
+      worldview-prelude ordinal pin above) and items 3-6 (the
+      "factored out"/call-site-count/digest-scope record corrections this
+      ADR now carries, plus this consequences refresh itself). Two items
+      stay PARKED, pending a Director look, not executed by that
+      fix-forward: the ~26-edit sibling-scenario digest sweep (item 5's
+      OPTION half) and factoring `WorldView` out of
+      `worldview-foundation.bscn` for real (item 3's possible future
+      pass — not attempted here; the hash risk was judged not worth it
+      for a record-accuracy fix).
+  supersedes: []
+  related:
+    - ADR207_class_surface_ternary_port_handoff
+    - ADR206_worldview_vocabulary_ceremony
+    - ADR195_enum_deffield_row
+    - ADR204_worldview_ternary_unification

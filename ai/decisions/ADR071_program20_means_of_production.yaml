@@ -1,0 +1,51 @@
+ADR071_program20_means_of_production:
+  status: "accepted"
+  date: "2026-07-15"
+  title: "Program 20 (Means of Production): infra-as-code subrepo + AI modernization — deploy/ extracted via subtree split into a local-only babylon-infra mount, Nix flake devshell as system layer only (Article X.1 scoped to the production host), Cloudflare Terraform grows an AI Gateway + Workers AI surface, VPS Ansible stays a validated mockup while a workstation playbook becomes the real apply target, parent CI infra jobs retire into the infra repo's pre-commit battery"
+  context: |
+    Owner directive 2026-07-14/15 (session 327c9e90): consolidate infrastructure-as-code into a
+    top-level subrepository (local-only for now), standardize the build environment, grow the
+    Cloudflare Terraform an AI surface (Workers AI per Program 07 Decision 3), and modernize the
+    AI narrator stack. Spec: docs/superpowers/specs/2026-07-15-infra-iac-ai-modernization-design.md
+    (owner-approved in-session, "Approved as presented").
+  decision: |
+    1. deploy/ is extracted with history (git subtree split) into a new local repo `babylon-infra`,
+       mounted at top-level infra/, gitignored in the parent until it has a remote, then converted
+       to a git submodule at the same path (ADR069 mechanism).
+    2. Build environment standardization is a Nix flake devshell living in the infra repo
+       (system layer only; Poetry and mise keep their jobs). Article X.1's "no Docker, no Nix"
+       is SCOPED: it binds the production host (every X clause speaks in production vocabulary);
+       dev/build tooling is outside its jurisdiction. This ADR records that interpretation;
+       a one-line clarifying amendment is offered to the owner but not required.
+    3. Terraform grows a Cloudflare AI Gateway + Workers AI surface (Program 07 Decision 3,
+       Constitution X.5 already assigns Workers AI to Cloudflare). No LoRA this program.
+    4. Ansible: VPS roles retained as validated mockup (owner: "mock up the VPS ... fine just
+       with the devbox right now"); a workstation playbook codifying the 2026-07-13
+       mount-displacement learnings is the real apply target (owner-run).
+    5. Parent CI infra-validate/infra-live retire; their checks move into the infra repo's
+       pre-commit battery. Accepted gap: infra validation is local-only until a remote exists.
+  consequences: |
+    - Parent repo loses deploy/ and .tflint.hcl (moved); hygiene allowlist updated.
+    - X.4 names Woodpecker among supervised processes (X.5 assigns CI/CD to Hetzner); reality is GitHub Actions — drift NOTED, not fixed here.
+    - AI narration stays flag-off per D3; Track B builds behind the flag (Mock Doctrine).
+  verification: |
+    Constitution X.1 ("No Docker, no Nix, no containerization... Nothing is installed by hand on
+    the VPS") and X.5 ("Cloudflare handles DNS, SSL, DDoS, WAF, CDN, R2 storage, and Workers AI")
+    read directly from CONSTITUTION.md (Article X, "Deployment Infrastructure"), confirming
+    decision points 2 and 3. docs/superpowers/specs/2026-07-15-infra-iac-ai-modernization-design.md
+    confirmed present and marked "APPROVED by owner ... this session, Approved as presented"; its
+    §2 owner-decisions table and §5 governance paragraph are the source for this ADR's decision and
+    consequences text. ADR number 071 confirmed free by directory listing AND cross-branch check
+    (dev max ADR067, feature/epochs-wave1-spine max ADR069, feature/19-emergent-class-partition max
+    ADR070 — this worktree's own ai/decisions/ only reaches ADR064 because worktree-infra-iac
+    branched before ADR065-070 landed on those other, still-unmerged branches; 071 is free across
+    every branch checked). ADR069's submodule mechanism (subtree/extract -> local repo -> gitignore
+    until a remote exists -> submodule conversion) read directly from
+    ai/decisions/ADR069_program18_c1_frontend_submodule.yaml.
+  references:
+    - "docs/superpowers/specs/2026-07-15-infra-iac-ai-modernization-design.md (owner-approved design; §2 owner decisions, §5 governance)"
+    - "project/programs/20-means-of-production.md (program charter this ADR governs)"
+    - "ADR063 (Program 14 Correspondence — subrepos-per-package rejected in-monorepo; this ADR narrows that rejection for a local-only infra subrepo the way ADR069 narrowed it for src/frontend)"
+    - "ADR064 (Program 15 Gauntlet — infra-validate/infra-live CI jobs this program retires)"
+    - "ADR069 (Program 18 C1 Frontend Submodule — the extract-then-submodule mechanism this decision reuses)"
+    - "CONSTITUTION.md Article X (Deployment Infrastructure, X.1/X.5), IX.1 (infrastructure/deployment change is an explicit ADR trigger)"

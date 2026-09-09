@@ -1,0 +1,71 @@
+ADR132_p25_u6_electoral_faction_seeding:
+  status: "accepted"
+  date: "2026-07-22"
+  title: >-
+    P25 U6 — spec-070 ELECTORAL faction seeding / the FACTION honest-empty
+    repair: the seed pipeline re-keyed from res-7 H3 to county FIPS with the
+    FR-039 electoral component driven by REAL MIT Election Lab 2024 county
+    returns (ADR049 ratified; committed artifact mit_countypres_rep_share);
+    SOV_USA_FED gains literal domestic county-FIPS claims (the LODES-vs-H3
+    namespace fix — the seed is enumerable for the first time);
+    apply_balkanization_seed ports the political layer into engine.scenarios
+    (web bridge delegates); the electoral fixture grounds T001 in Wayne
+    County and carries the full layer — closing the wiring-doctrine W-C row
+    "balkanization FACTION-node seeding".
+  supersedes: []
+  relates_to: ["ADR049", "ADR076", "ADR080", "ADR127", "ADR131"]
+  programs: ["25-political-superstructure"]
+
+  decision: |
+    (1) RE-KEY (Amendment-U substrate contract): seed_influences.json v2.0.0
+        is county-FIPS-keyed (12 edges: tri-county x 4 factions; was 6,456
+        hex edges). County identity resolves through the county_fips
+        ATTRIBUTE, never the node id (Territory.id is pattern-barred from
+        being a FIPS). At county grain the LODES proration step disappears.
+    (2) REAL ELECTORAL BASE: FAC_RESTORATIONIST influence == the 2024
+        presidential Republican vote share per county from the committed
+        MIT Election Lab derivative (data-artifacts.yaml
+        mit_countypres_rep_share, 3,107 counties, hand-maintained
+        EXCEPTION class + regeneration tripwire). Workers/decolonial
+        components remain honestly fixture-grade (county-centroid zone
+        model) pending their own data programs. ADR049 ratified with a
+        ratification_record correcting its four stale claims.
+    (3) SOVEREIGNS FIX: SOV_USA_FED.initial_claims = the three tri-county
+        FIPS (was EMPTY; the file's only claims named external_node
+        registry IDs no scenario territory ever matches). External claims
+        (canada / rest_of_usa) stay in the external namespace by design
+        (ADR080), pinned by test.
+    (4) ENGINE BUILDER: engine/scenarios/balkanization_seed.py
+        apply_balkanization_seed(state, hex_to_county=None) — factions,
+        sovereigns, county-resolved INFLUENCES (intensive constant
+        broadcast to co-county hex territories), literal CLAIMS pass (live
+        for the first time) + ADR080 SOV_USA_FED fallback, exactly one
+        claim per territory. The web bridge's _seed_balkanization_layer is
+        a thin delegate; its hex-parent aggregation, county aggregation
+        helper, bridge_county_h3 DB read and gating helper are retired —
+        wayne's county-FIPS stamp reordered BEFORE seeding, so the whole
+        web session build is reference-DB-free.
+    (5) ELECTORAL FIXTURE INTEGRATION: the fixture's territory carries
+        county_fips="26163" and the builder applies the seed — the first
+        headless terrain where BOTH political entity families exist
+        (PoliticalFaction orgs, U5; BalkanizationFaction nodes, this
+        unit; deliberately disjoint families per charter §U6(e)).
+    (6) DELIBERATE NON-BUILDS: no new detroit_tri_county engine.scenarios
+        file (the headless-runner scope of that name already exists —
+        tools/vault_regression.py + scopes.py — and no U6 gate needs a
+        second namespace holder; U10/U12 integrate seeding where their
+        terrain actually runs). No hex->county reference-DB helper in the
+        engine module (caller-less after the wayne reorder; the
+        hex_to_county DI parameter remains the generic seam and is
+        directly tested). No ADJACENCY edges invented (the _legacy.py
+        III.11 ruling: no adjacency without a real reference source).
+    (7) WIRING ROW CLOSED (W-C dataflow, ADR109): ai/wiring-doctrine.md
+        "balkanization FACTION-node seeding" OPEN -> CLOSED. Sentinel:
+        tests/unit/projection/test_faction.py::TestElectoralScenarioHarvest
+        (the charter-named gate — faction pages project NON-EMPTY on the
+        electoral scenario through the real to_graph() path with the real
+        0.3372 Wayne electoral share) + the engine builder contract suite
+        (tests/unit/engine/scenarios/test_balkanization_seed.py, 12 tests).
+    (8) BYTE-SAFETY: none of the six qa:regression factories applies the
+        seed; qa:regression byte-identical is the unit gate (charter
+        §U6(d)). spec-070 tasks T112/T118 checked.

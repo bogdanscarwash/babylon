@@ -1,0 +1,301 @@
+ADR208_docket_sitting_2026_08_17:
+  status: "accepted"
+  date: "2026-08-17"
+  title: >
+    The 2026-08-17 batched docket sitting — thirty rulings clearing the
+    accumulated Director-gate pileup from the ruling docket
+    (reports/director-ruling-docket-2026-08-17.md): the
+    faction-classification enum ruled the 5-member PARAMETERIZED list
+    (RESTORATIONIST / SOCIAL_DEMOCRATIC / DECOLONIAL / LIBERAL_IMPERIAL /
+    FASCIST_VEHICLE) under the Director's generalized-factions doctrine —
+    fascism as parameter values, never special-cased code; ADR171's scope
+    ruled NARROW (floors + border valve each owe a dedicated ruling);
+    colonial_stance and the George Jackson taxonomy confirmed port-as-is
+    while the chauvinism restraint levels are REOPENED; Doctrine-tree
+    transcription authorized by explicit act (inline annotations rejected
+    as a ruling substitute); Sovereignty's stance→policy order re-derived
+    under ESCALATION ORDERING (§6.5 ceremony owed); the rentier ruled a
+    bourgeois SUB-FRACTION; veteran wiring ruled NATION-CONDITIONED on
+    the MIM corpus (settler-nation veterans raise fascist-recruitment
+    propensity via entitlement seeding, oppressed-nation veterans do
+    not), with the broader Sakai/MIM fascist-base dossier chartered the
+    same day (Dimitrov EXCLUDED by directive); a dedicated FOOD-SECURITY
+    SUBSYSTEM chartered, overruling #546's pre-rejection; the (r,l,f)
+    seeding spec approved as specified; TickDynamics split
+    (engineering now, reserved trio next sitting); CHECKPOINT A DEFINED —
+    all 13 Material Base systems ported, WS3 HELD, state.yaml:3660
+    corrected; all fourteen engineering leans accepted (no-sliver binds,
+    dead outputs retire on WS4, BiocapacityType extends for cropland
+    unblocking T7 whole, EXIOBASE firewalled, `the` folds into T2, the
+    .bscn chapter charters, the ε-gate micro-train approved, P-A/P-G
+    investigations chartered, the radon ratchet and both lock-bump fixes
+    approved); the confirmation batch executed with #334 FLIPPED OPEN
+    (its chartered artifact exists nowhere — an Aleksandrov failure on
+    the audit's own finding) and #335 re-chartered against Bevy.
+  context: |
+    Twenty-nine live Director decisions plus fourteen suspected
+    confirmation-closes had accumulated across the director-gate register
+    (#564 rows 10-24), the faction-enum gate (#589), the data gates
+    (#545/#546, the 2026-08-12 data-gap audit), the Standard §11 gate
+    family (#376-#382/#336), and the P29/WS3 sequencing record. An
+    eight-agent docket sweep assembled them into one session-ordered
+    docket (reports/director-ruling-docket-2026-08-17.md), and a
+    same-day verification pass closed all six of the synthesis's flagged
+    evidence gaps before the sitting — flipping two items in the process:
+    register row 13's cited #536 input is a MISCITATION (the floor
+    defaults actually live at models/entities/consciousness.py:356 with
+    declared provenance), and #334 is NOT stale (its chartered artifact
+    exists nowhere; the audit names the absence an Aleksandrov failure).
+
+    The sitting itself ran interactively, 2026-08-17, in five question
+    batches following the docket's session order: ideological items
+    options-only per Constitution IX.5, engineering items with workforce
+    leans. Two Director directives issued mid-sitting bind downstream
+    work: (1) the generalized-factions doctrine — "a lot of that can be
+    abstracted into generalized factions with specific parameters for
+    fascist"; (2) the fascist-base literature directive — "for the
+    general base of who joins fascism its more than just veterans …
+    especially Sakai but also MIM", with Dimitrov explicitly excluded.
+    The D-11 ruling was deferred mid-sitting for a MIM-corpus research
+    pass (/media/user/data/mim/etext) and ruled on its evidence; the
+    broader Sakai/MIM fascist-base dossier was chartered in-flight as
+    design input to the FascistFaction port and the D-01 parameter rows.
+    The ADR202 curves session is the procedural precedent.
+  decision: |
+    THE RULINGS (Director, batched docket sitting, 2026-08-17; docket
+    item IDs D-01..D-29 + C-01..C-14 refer to
+    reports/director-ruling-docket-2026-08-17.md).
+
+    — A. RESERVED LINE —
+
+    R1 (D-01, #589): FACTION-CLASSIFICATION ENUM — OPTION B, THE
+      5-MEMBER PARAMETERIZED LIST: RESTORATIONIST / SOCIAL_DEMOCRATIC /
+      DECOLONIAL / LIBERAL_IMPERIAL / FASCIST_VEHICLE. Each member
+      carries a declared parameter row (capturable?, spoiler pole,
+      capture-vehicle flag); the four substring-match token homes
+      (reactionary.py:71, allegiance.py:77, electoral.py:139-164,
+      migration.py:32-37) die at mint; FAC_DECOLONIAL's member resolves
+      NEVER-CAPTURABLE (row 9's binding constraint); a mutable
+      capture-state flag layers beside the static enum (W3's
+      capture-terminus survives as state, not membership). The
+      generalized-factions doctrine is recorded as standing direction:
+      fascism is parameter values on shared faction machinery, never a
+      special-cased code path. Port-as-is (ADR183) still sequences the
+      machinery: frozen behavior transcribes first; machinery
+      generalization rides a post-port D-record.
+
+    R2 (D-02 + D-03, #564 rows 13/20): ADR171 SCOPE — NARROW. ADR171
+      ruled the National Question line, NOT downstream mechanism
+      transcription. The Community SUBSTRATE_FLOOR_DEFAULTS floors
+      (actual home: models/entities/consciousness.py:356, keyed by
+      CommunityType with declared provenance — row 13's #536 citation is
+      corrected on the record) and the ReserveArmy border-valve wage
+      throttle EACH owe a dedicated ruling; both are queued for the next
+      sitting with their full content presented (the floor table with
+      provenance; the valve mechanism spec). Neither transcription may
+      proceed on ADR171's authority alone.
+
+    R3 (D-04, #564 row 16): FactionInfluence — CONFIRMED PORT-AS-IS.
+      colonial_stance is THE principal-contradiction axis. Row
+      discharged; the @14.5 port train unblocks.
+
+    R4 (D-05, #564 row 15): Contradiction _STANCE_CHAUVINISM_SCORE —
+      REOPENED, not confirmed. The restraint levels get a fresh decision:
+      the workforce prepares the frozen score table as a decision memo
+      for a dedicated ruling. The row stays open; the national-opposition
+      axis of the Contradiction port train holds behind it.
+
+    R5 (D-06, #564 row 17): Struggle — CONFIRMED PORT-AS-IS. The George
+      Jackson bifurcation model and the SocialRole taxonomy port
+      unchanged, preserving the named theoretical attribution. Row
+      discharged; the Struggle train unblocks.
+
+    R6 (D-07, #564 row 10): DOCTRINE-TREE TRANSCRIPTION — AUTHORIZED BY
+      THIS RULING. The 14-node Doctrine tree may transcribe into .bscn
+      defconsts; this explicit act resolves the record conflict, and the
+      precedent is set the other way: an inline "adjudicator: yes"
+      annotation is NOT a ruling — gates discharge by ruling comment or
+      ADR, never by marginalia. Row discharged; the Doctrine @14.7 train
+      unblocks.
+
+    R7 (D-08, #564 row 11): Sovereignty _STANCE_TO_POLICY — RE-DERIVED
+      under ESCALATION ORDERING: stances declare in order of intensity of
+      the sovereignty claim, most accommodationist first, most ruptural
+      last. Declaration order is hash-bearing (ADR195), so the landing is
+      a declared §6.5 baseline ceremony at the Sovereignty port train;
+      the exact member sequence derives under this principle at the
+      train's charter. Row discharged as to principle.
+
+    R8 (D-09, #564 row 19): CLOSED — THE PORT SUFFICES. The W10 class
+      surface (#588/ADR207) kills the national_identity-0.5 fabrication
+      by law; the frozen Python sites are inert reference-only code. No
+      further re-declaration owed. Row discharged.
+
+    R9 (D-10, #546 item 3): RENTIER — SUB-FRACTION OF THE BOURGEOISIE.
+      No new NodeType; rentier income is tracked as a fraction of the
+      existing bourgeoisie representation, and the receiving entity for
+      compute_ground_rent's rent_from_v/rent_from_s is designed within
+      it. USDA 2024 TOTAL acquisition becomes justifiable under
+      wire-before-buy once that consumer exists.
+
+    R10 (D-11, #546 item 5): VETERAN WIRING — NATION-CONDITIONED. County
+      veteran population wires into fascist-recruitment propensity
+      GATED BY NATIONAL-OPPRESSION STATUS: settler-nation veteran share
+      raises per-class entitlement seeding (the generic parameter
+      calculate_fascist_pull already reads — reactionary.py:127-135);
+      oppressed-nation veteran share carries no such raise. Grounded in
+      the MIM corpus: veterans-as-labor-aristocracy
+      (agitation/iraq/yonkersvet.html), reactionary vets as "the
+      backbone of reactionary organizations" (elections/kerryvsvets.html),
+      AGAINST the flat rule per "revolutionary struggle in the Army"
+      (faq/subjectivismI.html) and oppressed-nation enlistment as
+      economic coercion (agitation/iraq/awol.html). The broader
+      fascist-base question is chartered as the Sakai/MIM dossier
+      (Director directive: the base exceeds veterans; Sakai especially;
+      Dimitrov EXCLUDED) — design input to the FascistFaction port and
+      the R1 parameter rows, not a ruling.
+
+    — B. MIXED —
+
+    R11 (D-12, #546 item 6): FOOD-SECURITY SUBSYSTEM — CHARTERED. The
+      Director overrules #546's pre-rejection of the broader shape: not
+      a bare base_subsistence modifier but a dedicated food-security
+      design, chartered as its own design train. ADR173's
+      no-imposed-forms constraint binds the design (material inputs to
+      the emergent S-curve only); ERS food-atlas acquisition unblocks
+      when the charter names its consumers.
+
+    R12 (D-13, #590): THE (r,l,f) SEEDING SPEC — APPROVED AS SPECIFIED.
+      ACS correlates + 2010-2020 election logit model, spec-first per the
+      declared-not-derived provenance rule. T7 (#545) and spec-034
+      SC-007 unblock; ADR043's uniform placeholder (0.05, 0.50, 0.45)
+      retires at the artifact's landing.
+
+    R13 (D-14, #564 row 21 + #563): TICKDYNAMICS — SPLIT. The
+      engineering half proceeds now: #563's per-scenario dormancy
+      re-read and the ServicesProtocol boundary charter. The reserved
+      trio (bifurcation directional score, five-share ClassDistribution,
+      dispossession_cascade_milestones) returns at the next sitting as a
+      precise question once the charter output exists.
+
+    R14 (D-15, ★): CHECKPOINT A — DEFINED. "MATERIAL BASE COMPLETE"
+      means ALL 13 Material Base systems ported in Rust, not the four
+      gate-trains landed; T2/T3/T4/T6 cleared Checkpoint A's GATES
+      (making the remaining seven systems portable), and the checkpoint
+      itself is reached when they are ported. WS3 is HELD until then —
+      an early sweep catches six systems' workarounds and misses seven.
+      ai/state.yaml:3660 is corrected so the ledger stops misdirecting;
+      #557's closure text ("all six trains and waves A-D merged with
+      evidence") governs; #578's phase-naming inconsistency stands
+      noted.
+
+    — C. ENGINEERING (all leans accepted) —
+
+    R15 (D-16): the no-sliver precedent BINDS — no honest-partial pack
+      exception; a carrier pilot needs its own evidenced proposal.
+    R16 (D-17): field_registry and the five verified-dead outputs
+      (transport_demand_signal, effective_controller_by_territory,
+      sigma_capital_labor/derived_class_cell, wealth_share,
+      MarketScissors' _swell_reserve_army) RETIRE on the WS4 ledger, not
+      port; the WS4 entry carries a fresh zero-readers grep as its own
+      evidence row.
+    R17 (D-18): the slice-4 first-consumer confirmation defers by
+      construction; scheduled as a fast check after #560 merges.
+    R18 (D-19): BiocapacityType EXTENDS for cropland/soil per the
+      existing pattern — biocapacity is stock, terrain stays physical;
+      no fourth TerrainType. T7's sole blocker clears; the entire
+      B-construction train (CDL/Annual NLCD, gSSURGO NCCPI, ERS MLU,
+      NASS) unblocks.
+    R19 (D-20): the agricultural share is ADDED to HexTenureComposition
+      (purely additive; sum-to-1.0 validator updated).
+    R20 (D-21): EXIOBASE 3 NEVER enters sha-pinned build products;
+      admissible only quarantined as a non-redistributed
+      locally-computed input, else declined. ERDI remains the bootstrap.
+      The second blocker (L-MAT-6 / OQ-5 letter collision) is recorded
+      against #546's incomplete framing.
+    R21 (D-22, #572): the `the` accessor FOLDS INTO T2 as an explicit
+      scope widening — hash-free, read-only; Allegiance, Electoral,
+      Policy, WealthDistribution unblock together.
+    R22 (D-23, #522): the normative .bscn scenario-dialect chapter is
+      CHARTERED — it resolves D93 (positional vs keyworded deffield)
+      naturally and discharges the docstring-only documentation debt; a
+      visibility ruling, no new formalism.
+    R23 (D-24, #594): the f→r ε-gate is APPROVED as its own
+      Wiring-Doctrine micro-train (ADR109 typed motion + sentinel row);
+      it forces the PROLETARIANIZATION signal's definition from the
+      ported value-flow estate.
+    R24 (D-25, #379 P-E): HELD until the full-shape reference campaign
+      runs; storage shape decided from measured coverage.
+    R25 (D-26, #382 P-A): the hex-delta-inertness investigation is
+      CHARTERED explicitly — the dropped item gets an owner; the
+      defect-vs-expected question is answered before any ruling.
+    R26 (D-27, #382 P-G): the sparse-trace investigation RUNS FIRST
+      (does the exact-tick read miss rows per the dynamic_hex_state
+      sparsity gotcha?); defect-vs-perf classification follows evidence.
+    R27 (D-28, #529/#580): RADON RATCHET — a cited/dated allowlist of
+      the four C-ranked files per the exemption-governance pattern
+      (EXTRA_STAMPABLE_ATTRIBUTES precedent); burn-down opportunistic;
+      pushes stop needing an undocumented SKIP.
+    R28 (D-29, #527): BOTH lock-bump fixes approved — a LOCK_BUMP
+      override env downgrading check_lock_unmodified to a warning, and
+      hook-side `env -u UV_FROZEN uv lock --check`; bundled into the
+      next lock-touching commit.
+
+    — D. CONFIRMATIONS —
+
+    R29: the confirmation batch EXECUTES as verified: C-01/C-02 stand;
+      #566 gets its bookkeeping close (gate discharged 2026-08-12; the
+      Decomposition+ControlRatio train verified fully independent of
+      #576, whose eight gated systems are Doctrine, Struggle, OODA,
+      Survival, Consciousness, Community, MarketScissors, ImperialRent);
+      #576 proceeds with no ruling needed (C-04); C-05..C-08 and C-10
+      confirm as ruled-and-tracked; a FRESH narration-ladder tracking
+      issue is filed (C-09 — #27 was closed under an unrelated title);
+      C-13's three ruled items remain implementation-only; #334 STAYS
+      OPEN (C-12 verification flip — its chartered per-county × pole
+      incidence artifact exists nowhere; live work, ~6 Mtok / 3 windows).
+    R30 (C-11, #335): RE-CHARTERED AGAINST BEVY. The Glossary/State/
+      Flavor namespace design survives its deleted babylon-md host and
+      re-homes as design input to babylon-client's future
+      reference/codex surface; #335 closes with an ADR186 pointer and a
+      fresh Bevy-lane charter issue carries the design forward.
+  consequences: |
+    - Port trains unblocked outright: FactionInfluence (R3), Struggle
+      (R5), Doctrine @14.7 (R6), Sovereignty (R7, with its §6.5 ceremony
+      owed at landing); the faction-enum defenum ceremony PR (R1) and
+      behind it FascistFaction / Allegiance / Electoral (ADR202 R6).
+      Still held: Contradiction's national-opposition axis (R4 memo
+      owed), Community floors + ReserveArmy valve (R2 dedicated rulings
+      owed), TickDynamics' reserved trio (R13, next sitting).
+    - T7's entire B-construction train unblocks (R18); the (r,l,f) spec
+      train charters (R12); the food-security design train charters
+      (R11); the .bscn chapter (R22), the T2 `the` widening (R21), and
+      the ε-gate micro-train (R23) all start.
+    - WS3 stays parked until 13/13 Material Base systems exist as .bsl
+      (R14); ai/state.yaml:3660 corrected in this train's commit.
+    - Decision memos owed for the NEXT sitting: the chauvinism score
+      table (R4), the floor table with provenance (R2), the border-valve
+      mechanism spec (R2), TickDynamics' reserved trio posed precisely
+      (R13).
+    - The Sakai/MIM fascist-base dossier (in flight at
+      reports/fascist-base-dossier-2026-08-17.md) is DESIGN INPUT to
+      the FascistFaction port and R1's parameter rows — its
+      parameterization choices return to the Director as option spaces.
+    - Bookkeeping executed with this record: ruling comments on #589,
+      #564, #546, #590, #563, #557, #572, #522, #594, #529, #527, #379,
+      #382; #566 closed; #335 closed + Bevy-lane re-charter filed; the
+      narration-ladder tracker filed; #334 explicitly kept open.
+    - Register hygiene: row 13's #536 citation corrected to
+      models/entities/consciousness.py:356.
+  supersedes: []
+  related:
+    - ADR202_t4_curves_ruling_session
+    - ADR204_worldview_ternary_unification
+    - ADR206_worldview_vocabulary_ceremony
+    - ADR207_class_surface_ternary_port_handoff
+    - ADR198_program29_substrate_widening_charter
+    - ADR195_enum_deffield_row
+    - ADR183_get_it_right_in_rust
+    - ADR173_audit_and_stops_dispositions
+    - ADR171_national_question_rulings
+    - ADR109_wiring_doctrine

@@ -1,0 +1,379 @@
+==================================================
+for-each in effect position (§2.8 worked example, D47)
+==================================================
+
+(rule solidarity/decay
+  :material-basis "unmaintained ties decay at the rate practice does not renew"
+  :fuel 4096
+  (bindings)
+  (effects
+    (for-each (edges EdgeType/SOLIDARITY)
+      (update-edge it solidarity/strength (scale 0.95c))
+      (emit EventType/SOLIDARITY_DECAYED (strength (field-of it
+                                                             solidarity/strength))))))
+
+---
+
+(source_file
+  (rule
+    (qname)
+    (material_basis
+      (string))
+    (fuel
+      (int_lit))
+    (bindings)
+    (effects
+      (for_each
+        (edges
+          (enum_ref))
+        (update_edge
+          (symbol)
+          (qname)
+          (update_op
+            (literal
+              (scaled_lit))))
+        (emit
+          (enum_ref)
+          (payload_item
+            (symbol)
+            (field_of
+              (symbol)
+              (qname))))))))
+
+==================================================
+update-edge through edge-between (§2.10 worked example)
+==================================================
+
+(rule solidarity/pairwise-decay
+  :material-basis "a named tie decays where its practice lapsed"
+  :fuel 128
+  (bindings
+    (binding other :field social-class/counterparty))
+  (effects
+    (update-edge (edge-between EdgeType/SOLIDARITY self other)
+                 solidarity/strength (scale 0.95c))))
+
+---
+
+(source_file
+  (rule
+    (qname)
+    (material_basis
+      (string))
+    (fuel
+      (int_lit))
+    (bindings
+      (binding
+        (symbol)
+        (bind_src
+          (qname))))
+    (effects
+      (update_edge
+        (edge_between
+          (enum_ref)
+          (symbol)
+          (symbol))
+        (qname)
+        (update_op
+          (literal
+            (scaled_lit)))))))
+
+==================================================
+Attributed membership: mint with payload, then write it (§2.8, Amendment AG (i))
+==================================================
+
+(rule community/formation
+  :material-basis "a community forms and its memberships carry their weight"
+  :fuel 2048
+  (bindings)
+  (effects
+    (add-hyperedge HyperedgeType/COMMUNITY h
+      (members (member NodeType/SOCIAL_CLASS c1 (community/strength 0.4c)
+                                                (community/visibility 0.5p))
+               (member NodeType/SOCIAL_CLASS c2 (community/strength 0.7c)
+                                                (community/visibility 0.2p))))
+    (for-each (members-of c HyperedgeType/COMMUNITY)
+      (update-membership c it community/visibility (scale 0.9c)))))
+
+---
+
+(source_file
+  (rule
+    (qname)
+    (material_basis
+      (string))
+    (fuel
+      (int_lit))
+    (bindings)
+    (effects
+      (add_hyperedge
+        (enum_ref)
+        (symbol)
+        (members
+          (member
+            (enum_ref)
+            (symbol)
+            (field_init
+              (qname)
+              (literal
+                (scaled_lit)))
+            (field_init
+              (qname)
+              (literal
+                (scaled_lit))))
+          (member
+            (enum_ref)
+            (symbol)
+            (field_init
+              (qname)
+              (literal
+                (scaled_lit)))
+            (field_init
+              (qname)
+              (literal
+                (scaled_lit))))))
+      (for_each
+        (members_of
+          (symbol)
+          (enum_ref))
+        (update_membership
+          (symbol)
+          (symbol)
+          (qname)
+          (update_op
+            (literal
+              (scaled_lit))))))))
+
+==================================================
+The remaining structural verbs, and the four update-ops (§2.8)
+==================================================
+
+(rule sovereignty/collapse
+  :material-basis "a sovereign that cannot reproduce its claims sheds them"
+  :fuel 4096
+  (bindings
+    (binding pressure :field sovereign/pressure))
+  (when (> pressure 0.9i))
+  (effects
+    (add-node NodeType/SOCIAL_CLASS n1 (social-class/wealth 5$))
+    (remove-node n1)
+    (add-edge EdgeType/SOLIDARITY a b :strength 0.5c (solidarity/tension 0.1i))
+    (remove-edge EdgeType/SOLIDARITY a b)
+    (update-hyperedge h community/size (add 1))
+    (update-node self sovereign/pressure (sub 0.1i))
+    (remove-hyperedge h)))
+
+---
+
+(source_file
+  (rule
+    (qname)
+    (material_basis
+      (string))
+    (fuel
+      (int_lit))
+    (bindings
+      (binding
+        (symbol)
+        (bind_src
+          (qname))))
+    (when
+      (comparison
+        (cmp)
+        (symbol)
+        (literal
+          (scaled_lit))))
+    (effects
+      (add_node
+        (enum_ref)
+        (symbol)
+        (field_init
+          (qname)
+          (literal
+            (scaled_lit))))
+      (remove_node
+        (symbol))
+      (add_edge
+        (enum_ref)
+        (symbol)
+        (symbol)
+        (strength
+          (literal
+            (scaled_lit)))
+        (field_init
+          (qname)
+          (literal
+            (scaled_lit))))
+      (remove_edge
+        (enum_ref)
+        (symbol)
+        (symbol))
+      (update_hyperedge
+        (symbol)
+        (qname)
+        (update_op
+          (literal
+            (int_lit))))
+      (update_node
+        (symbol)
+        (qname)
+        (update_op
+          (literal
+            (scaled_lit))))
+      (remove_hyperedge
+        (symbol)))))
+
+==================================================
+A graph-domain rule with an explicit anchor (§2.3, D43)
+==================================================
+
+(rule control-ratio/phase
+  :material-basis "the control ratio is a property of the formation, not a class"
+  :fuel 256
+  (domain :graph)
+  (anchor :after metabolism)
+  (bindings
+    (binding ratio :metric control-ratio))
+  (when (> ratio 0.5c))
+  (effects
+    (update-node (the NodeType/POLITY) polity/phase (set 2))))
+
+---
+
+(source_file
+  (rule
+    (qname)
+    (material_basis
+      (string))
+    (fuel
+      (int_lit))
+    (domain
+      (graph_flag))
+    (anchor
+      (symbol))
+    (bindings
+      (binding
+        (symbol)
+        (bind_src
+          (symbol))))
+    (when
+      (comparison
+        (cmp)
+        (symbol)
+        (literal
+          (scaled_lit))))
+    (effects
+      (update_node
+        (the
+          (enum_ref))
+        (qname)
+        (update_op
+          (literal
+            (int_lit)))))))
+
+==================================================
+Amendment AJ finite kernel and projection (struggle-spark.bsl — ABRIDGED)
+==================================================
+
+(rule struggle/spark-mechanic
+  :role mechanic
+  :evidence designed
+  :material-basis "repression supplies bounded pressure for a finite material transition"
+  :fuel 384
+  (bindings
+    (binding repression-faced :field social-class/repression-faced)
+    (binding spark-scale :const struggle/spark-scale)
+    (binding spark-mass :expr
+      (quantize-mass (* repression-faced spark-scale)))
+    (binding no-incident-mass :expr (- 1m spark-mass)))
+  (effects
+    (choose :sample struggle/spark :slot 0
+      (branch StruggleSparkOutcome/EXCESSIVE_FORCE
+        :mass spark-mass
+        (effects
+          (update-node self social-class/last-incident-known (set 1))))
+      (branch StruggleSparkOutcome/NO_INCIDENT
+        :mass no-incident-mass
+        (effects)))))
+
+(rule struggle/spark-recognizer
+  :role recognizer
+  :evidence derived
+  :projects-kernel struggle/spark
+  :material-basis "the adjacent recognizer observes the selected material branch"
+  :fuel 192
+  (bindings)
+  (effects
+    (emit EventType/EXCESSIVE_FORCE (subject self))))
+
+---
+
+(source_file
+  (rule
+    (qname)
+    (rule_role)
+    (evidence)
+    (material_basis
+      (string))
+    (fuel
+      (int_lit))
+    (bindings
+      (binding
+        (symbol)
+        (bind_src
+          (qname)))
+      (binding
+        (symbol)
+        (bind_src
+          (qname)))
+      (binding
+        (symbol)
+        (bind_src
+          (quantize_mass
+            (arith_expr
+              (arith)
+              (symbol)
+              (symbol)))))
+      (binding
+        (symbol)
+        (bind_src
+          (arith_expr
+            (arith)
+            (literal
+              (mass_lit))
+            (symbol)))))
+    (effects
+      (choose
+        (qname)
+        (u32_lit)
+        (branch
+          (enum_ref)
+          (symbol)
+          (branch_effects
+            (update_node
+              (symbol)
+              (qname)
+              (update_op
+                (literal
+                  (int_lit))))))
+        (branch
+          (enum_ref)
+          (symbol)
+          (branch_effects)))))
+  (rule
+    (qname)
+    (rule_role)
+    (evidence)
+    (projects_kernel
+      (qname))
+    (material_basis
+      (string))
+    (fuel
+      (int_lit))
+    (bindings)
+    (effects
+      (emit
+        (enum_ref)
+        (payload_item
+          (symbol)
+          (symbol))))))

@@ -1,0 +1,151 @@
+id: ADR113
+title: >-
+  Vol I U7 — Sentinels (scoped): new babylon.sentinels.formula_registration
+  family closes the "inert family sees the registration as a satisfied
+  reference" gap for FormulaRegistry entries (labor_aristocracy_ratio /
+  is_labor_aristocracy genuinely live via U2's compute_fundamental_theorem;
+  calculate_consciousness_drift a real, open gap held GREEN via one cited
+  SentinelExemption naming provenance.py's non-invoking reference);
+  sentinels/seam/registry.py's two dispossession_intensity DECLARED_CONDITIONAL
+  rows updated to retire their pre-U3 dead-observability characterization
+  now that TickDynamicsSystem._compute_accumulation_loop (U3/ADR110) feeds a
+  real foreclosure_rate/eviction_rate producer. Item 1 (gated-dormancy
+  registry) is explicitly OUT of this unit's scope (ADR103 §10.2 hoists its
+  construction to the T1.1 keel lane); item 4 (defines-passthrough +
+  vocabulary attribute-shape sentinels) is pure reuse, no build.
+status: accepted
+date: '2026-07-21'
+context: >-
+  ai/_inbox/vol1-value-production-program-prompt.md §6 names four sentinel
+  classes; the orientation brief scoped this unit to items 2-4, excluding
+  item 1 per ADR103's own §10.2 shared-unit assignment (the seam-algebra
+  sentinel family belongs to the T1.1 keel lane; Vol I only supplies
+  registry rows for its three gated-dormancy instances once T1.1 ships it —
+  a cross-lane dependency to track, not build here).
+
+  Item 2 (dead-formula-registration): re-verified §2d's finding on this
+  lane's HEAD. formula_registry.py's FormulaRegistry.default() registers 24
+  formulas; three were named as the Fundamental-Theorem trio with zero
+  production call sites before U2: calculate_labor_aristocracy_ratio,
+  is_labor_aristocracy, calculate_consciousness_drift. U2 (ADR117) wired the
+  first two into value_form.py::compute_fundamental_theorem — verified by
+  direct grep: calculate_labor_aristocracy_ratio is called directly
+  (value_form.py:365); is_labor_aristocracy is called ONLY under a LOCAL
+  IMPORT ALIAS (`from babylon.formulas.fundamental_theorem import
+  is_labor_aristocracy as _is_labor_aristocracy`, value_form.py:121, called
+  as `_is_labor_aristocracy(...)` at :366 — a bare-symbol-name scan would go
+  blind to this and false-positive a genuinely-live formula).
+  calculate_consciousness_drift remains genuinely uncalled: its only
+  reference anywhere is web/game/provenance.py's `consciousness_drift`
+  MetricProvenance entry, which resolves it via
+  `FormulaRegistry.default().get("consciousness_drift")` but only ever reads
+  its `__doc__` (`_consciousness_drift_value`'s own comment: "the formula
+  cannot be honestly invoked without them" — its inputs are formula-default
+  literals, never real tick data). ADR117 independently recorded the same
+  finding as a deliberate scope boundary.
+
+  Verified the `inert` sentinel's own blind spot directly: its rule (b)
+  (`producers_without_production_caller`) counts any ast.Name/ast.Attribute
+  reference as satisfied, including `formulas.calculate_labor_aristocracy_ratio`
+  sitting inside `registry.register("labor_aristocracy_ratio",
+  formulas.calculate_labor_aristocracy_ratio)` itself — the registration act,
+  not downstream consumption. No existing sentinel family targets this
+  specific class.
+
+  Item 3 (retire dispossession_intensity dead-observability seam rows):
+  confirmed present verbatim at sentinels/seam/registry.py (MAP-scope row
+  ~lines 411-432, TERRITORY-scope row ~lines 1160-1183 pre-edit; prompt cited
+  :420/:1168) and untouched by U1-U6 (git log confirms zero commits to this
+  file on this lane before U7). Traced the real producer U3 landed:
+  TickDynamicsSystem._compute_accumulation_loop
+  (domain/economics/tick/system/__init__.py:1220-1311, year boundaries only,
+  System #4 — runs before DispossessionEventSystem #10 in the same tick)
+  writes foreclosure_rate/eviction_rate from the FRED dispossession adapter
+  directly onto territory nodes via graph.update_node(...); U5 (headless
+  parity) makes this live in the canonical headless run, not just the web
+  bridge. DispossessionEventSystem.step (dispossession_events.py:118) then
+  writes dispossession_intensity=intensity — reachable for the first time.
+  qa:regression's own CoverageGap row for DispossessionEventSystem
+  (tools/regression_scenarios.py) is UNTOUCHED and remains accurate — none of
+  the 5 canonical scenarios seed county+FRED coverage that would trigger
+  this path; that is a separate, narrower claim (about the qa:regression
+  scenario estate specifically) from the seam registry's claim (about
+  whether the condition is EVER genuinely witnessable in production), and is
+  explicitly out of this unit's scope (not touched).
+decision: >-
+  1. New babylon.sentinels.formula_registration package (registry.py +
+  checks.py + __init__.py), mirroring the inert/unconsumed family shape
+  exactly: a closed, hand-curated DECLARED_FORMULAS registry (3 rows — NOT
+  an exhaustive audit of all 24 FormulaRegistry entries, matching every
+  sibling sentinel's own "closed, not merely additive" framing), one gating
+  check (formulas_without_production_caller) scanning PRODUCTION_ROOTS =
+  ("src", "web") with FORMULA_REGISTRY_FILE
+  (src/babylon/engine/formula_registry.py) explicitly excluded from counting
+  as a reference source, and one FORMULA_EXEMPTIONS row (consciousness_drift,
+  citing provenance.py's non-invoking reference by name and ADR117's
+  independent scope-boundary finding, owner Persephone Raskova,
+  date 2026-07-21, tracking_task "N/A (ADR117 scope boundary; no committed
+  remediation unit exists)" — no GitHub ticket exists for this pre-recorded,
+  deliberate, non-permanent gap, so N/A is used honestly per the exemption
+  model's own documented convention rather than inventing a ticket number).
+
+  formula_reference_sites(path, symbol) adds import-alias resolution
+  (_local_alias) beyond what inert.checks.producer_reference_sites does —
+  a deliberate, scoped extension (not a change to the inert module itself,
+  which is untouched) needed because is_labor_aristocracy's real caller is
+  invisible to a bare-symbol scan. Verified end to end: WITHOUT alias
+  resolution, formula_reference_sites incorrectly returns [] for
+  is_labor_aristocracy against the real value_form.py; WITH it, [366].
+  WITHOUT the FORMULA_REGISTRY_FILE exclusion, a synthetic formula whose
+  ONLY reference is inside that file's own register() call incorrectly
+  passes; WITH it, the same fixture correctly reds (both proven by dedicated
+  regression tests, not just manual verification).
+
+  Wired into the family CLI (tools/sentinel_check.py's `_SENSORS` dict,
+  key "formula_registration") and .mise.toml (`check:formula-registration`
+  task; folded into `check:sentinels-static`'s depends list and both sentinel
+  counts bumped 14->15 static / 15->16 total, mirroring every prior
+  sentinel's own addition to these same lists). Not added to
+  docs/reference/sentinel-error-classes.rst — that doc is scoped to the six
+  original ADR088-era classes; inert/unconsumed/dangling/masked_arithmetic/
+  synthetic/absence/partition/fog/vocabulary/seam were none of them added
+  there either, an established precedent this unit follows rather than
+  breaks.
+
+  2. sentinels/seam/registry.py: both dispossession_intensity SeamEntry
+  rows' `notes` field gains an appended paragraph citing the real U3
+  producer (TickDynamicsSystem._compute_accumulation_loop) and stating the
+  condition is now genuinely witnessable in production (web bridge already;
+  headless runner since U5) rather than permanently dark — `liveness_class`
+  stays DECLARED_CONDITIONAL (still structurally correct: presence-
+  conditional, not universal) and `liveness_condition`'s existing text is
+  left untouched (it accurately describes the gating shape independent of
+  whether a producer exists). Existing prose is preserved, not rewritten,
+  per the project's own "Immutability of History" documentation principle —
+  the retirement is an appended correction, not an erasure.
+consequences: >-
+  New sentinel: 24 tests (tests/unit/sentinels/test_formula_registration.py)
+  green — efficacy (AST-helper level, tmp_path fixtures covering direct
+  call, module-qualified attribute call, import-aliased call, unrelated
+  string-literal/docstring mentions, Store-context namesakes, keyword-
+  argument namesakes, unparseable source), regression (synthetic-tree
+  monkeypatched _REPO_ROOT proving: genuinely-uncalled reds, real caller
+  clears, alias-only caller clears, registration-file-only caller still
+  reds, test-only caller still reds, exemption skips its own row without
+  leaking onto a different row), and liveness against the real, shipped
+  registry (labor_aristocracy_ratio and is_labor_aristocracy pass without
+  needing an exemption; consciousness_drift is proven to red WITHOUT its
+  recorded exemption and to pass only because of it). CLI dispatch verified
+  (`python tools/sentinel_check.py formula_registration --check` exits 0).
+  `mise run test:q -- tests/unit/sentinels/test_seam_registry_check.py
+  tests/unit/sentinels/test_seam_liveness.py` unaffected (29 green) by the
+  registry.py notes edit. Full `mypy src` clean (791 files) and
+  `ruff check`/`ruff format` clean on every touched file (host venv mypy
+  independently confirmed usable this session once PYTHONPATH's inherited
+  nix-devshell leak is unset — `env -u PYTHONPATH uv run mypy ...` — the
+  same underlying gotcha ai/anti-patterns.yaml already documents, not a new
+  finding). No baseline drift: no engine/economics/defines code changed,
+  only a new dev-time sentinel package + documentation-field edits on
+  seam registry rows never read by qa:regression. U8 (defines sweep) and
+  U9 (monitoring) remain open; U5's still-missing ADR remains a gap from a
+  prior unit, not addressed here.

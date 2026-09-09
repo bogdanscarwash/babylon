@@ -1,0 +1,150 @@
+ADR203_t3_edge_attribute_storage_handoff:
+  status: "accepted"
+  date: "2026-08-14"
+  title: "The T3 PR A handoff (Program 29, issue #560) — full symmetric edge-attribute STORAGE on both GraphSubstrate backends (deffield rows per edge type, f64 binary64 lane, Currency storage still refused), the empty-elided fifth CanonicalState section 0x05 with the canonical-layout versioning convention minted (CANONICAL_LAYOUT_VERSION = 2) and the 0x04/0x05 elision asymmetry recorded per ADR198 R2's own text; the double-storage ruling (D143): a /strength write lands in the existing 0x03 slot, never a fifth-section shadow row; the T2 conformance row superseded in place exactly as its own doc predicted; mutation-verified law tests (four perturbations, each flipped red, each reverted byte-identical); every pre-existing pin byte-identical and untouched (the golden byte vector + digest + provided-method twin, the III.7 hypergraph pin, all 6+1 tick goldens). PR B (the babylon-bsl/tick apply-path widening: PendingWrite edge-keyed, update-edge execution parity, the two refusal arms and the add-edge field-init refusal retired) follows as separate commits"
+  context: |
+    ADR198 R1-R3 (2026-08-12) chartered the D35/D65 keystone: full
+    symmetric edge attributes (R1), a fifth canonical section elided when
+    empty (R2), and full update-node write parity (R3), with AG(i)
+    membership payloads explicitly fenced off (R4 — #536's own ceremony).
+    T2 (issue #559, PRs #574/#575) landed the read half: the
+    `GraphSubstrate::edge_attribute` method under the D141 contract (the
+    suffix check widens to a real per-(edge, qname) lookup; ownership
+    validation never migrates into the substrate; the signature does not
+    change) and the D32 implicit-strength wiring. The scout dossier
+    (reports/t3-storage-keystone-surface-facts-2026-08-12.md) mapped the
+    write side: production's tick path is collect-then-apply over a
+    NodeId-keyed PendingWrite, so R3's parity means widening the
+    collect-then-apply machinery itself (PR B), and the hash side is a
+    genuinely NEW, deliberately asymmetric convention — no CanonicalState
+    section was elided before this train. Two dossier-named hazards were
+    honored: the double-storage hazard (an update-edge against
+    <edge-type>/strength must write the existing 0x03 slot — ruled here,
+    D143) and the I.15 tension (the §6.2 chapter-C2 vector family includes
+    an E-EVAL-030 illegal-mode-transition vector while the I.15 edge-mode
+    machine is a declared, uncharted Phase-2 gap — recorded below, not
+    improvised). Scope split: PR A (this record) is babylon-graph storage
+    + hash; the babylon-bsl/tick apply path is PR B.
+  decision: |
+    **1. Storage (R1).** Both GraphSubstrate backends (MemoryGraph,
+    HypergraphStore) gain `edge_attributes: HashMap<(String, NodeId,
+    NodeId, String), f64>` — deffield rows per edge type in the f64
+    binary64 lane, the same storage discipline node attributes already
+    hold. Currency storage stays refused (R1's own clause): babylon-bsl's
+    `numeric_write_value` rejects a Currency-typed write before it reaches
+    the trait, unchanged. GraphSubstrate gains its seventeenth method,
+    `update_edge(edge_type, from, to, attribute, value)` — the mechanical
+    write point mirroring `update_node`; the add/sub/scale
+    read-modify-write stays the caller's (PR B's apply path), exactly the
+    node-side division. `edge_attribute`'s body widens per the D141
+    contract: suffix routing (`/strength` reads the 0x03 slot; any other
+    qname reads the fifth-section store, two-tier honest-null — "no such
+    edge" vs "never written"), signature unchanged, owner segment still
+    deliberately NOT checked (pinned by the pre-existing conformance row
+    `edge_attribute_does_not_check_the_owner_segment`, unmoved). ADR185
+    R2's cascade extends: `remove_edge` and the `remove_node` cascade both
+    sweep the edge's attribute rows — no internal map holds a key naming a
+    corpse, and a re-minted triple never resurrects its predecessor's
+    fields. HypergraphStore's `update_edge` carries the frozen pre-check;
+    covenant 6's executable list grows to eight mutating methods (the
+    delta document's two prose mentions updated with it).
+
+    **2. The fifth section (R2).** CanonicalState gains a REQUIRED fifth
+    listing, `all_edge_attributes` — required, not defaulted: the
+    dossier's design hazard was taken, because a default-empty method
+    would let a store silently forget to report edge attributes, the exact
+    "reporting different facts" failure the one-encoder design exists to
+    surface. New section tag 0x05; entries `str type ‖ u64 from ‖ u64 to
+    ‖ str qname ‖ u64 value-bits`; sorted ascending (type, from, to,
+    qname) by the ONE provided `encode_state`; written ONLY when at least
+    one edge attribute exists. The elision rule is documented and
+    versioned in state_hash.rs's canonical-layout contract: no version
+    anchor existed, so this train minted the convention —
+    `CANONICAL_LAYOUT_VERSION = 2`, never written into the encoding (the
+    bytes stay self-describing by tag), pinned by a unit test so a bump is
+    a deliberate act. The deliberate asymmetry R2's text orders recorded:
+    sections 0x01-0x04 write UNCONDITIONALLY (a graph with zero hyperedges
+    still writes `0x04 ‖ 0x00000000` — retrofitting elision onto 0x04
+    would itself move every existing hash); section 0x05 is elided when
+    empty; every FUTURE section follows the 0x05 rule. The register rows
+    D143 (the double-storage ruling) and D144 (the fifth section's shape +
+    the versioning convention) file both rulings.
+
+    **3. The strength fork (the hazard no ruling text named).** An
+    `update_edge` against `<edge-type>/strength` writes the edge's
+    EXISTING 0x03-slot strength — a replacement, never a mint — and never
+    a fifth-section row: one datum, one hashed home. The fork keys on the
+    attribute SUFFIX only, exactly the read side's division (ownership is
+    the caller's obligation, D141). Pinned by the new shared conformance
+    row
+    `update_edge_against_strength_writes_the_existing_slot_never_a_fifth_section_row`
+    on both backends, including the hash half: a store whose strength was
+    written via `update_edge` encodes byte-identically to one whose
+    strength was set at `add_edge` time.
+
+    **4. The proof surface.** Conformance: the T2 row
+    `edge_attribute_of_an_unstored_qname_is_loud` superseded IN PLACE —
+    its own T2 doc named the supersession ("T3 (ADR198 R1) widens this"),
+    recorded here by name per the dossier, not silently edited; four new
+    shared rows (write/read-back with set-semantics replacement;
+    missing-edge loudness under both forks with no orphan rows; the
+    strength-fork pin; removal/cascade/no-resurrection with a
+    hash-completeness leg); the order-invariance fixture gains two
+    fifth-section rows in opposite write order; the sensitivity leg gains
+    "an edge-attribute write moves the hash". The differential harness's
+    Twin gains `update_edge` (deffield attributes on two edge types, a
+    -0.0, a strength-fork write, then removal legs shrinking both stores'
+    fifth sections in byte-sync). Covenant 5 gains the exact f64
+    round-trip through `all_edge_attributes`. state_hash.rs unit tests:
+    the fifth section pinned byte for byte (the version-1 golden verbatim
+    as prefix plus the annotated 0x05 block); elision behavior-pinned; the
+    sensitivity dual; the version constant pinned; -0.0 canonicalization
+    and non-finite refusal through the new section. The pre-existing
+    golden byte vector, its digest, and the provided-method twin are
+    UNTOUCHED — the Facts fixture carries an empty fifth listing, so their
+    byte-identity at landing IS R2's proof, executed.
+
+    **5. What this PR deliberately does NOT contain.** The babylon-bsl/tick
+    apply-path widening (R3's execution half): PendingWrite stays
+    NodeId-keyed, the two update-edge refusal arms
+    (structural_verbs.rs's execute and collect paths) and the add-edge
+    field-init refusal stand, and `update_edge` has NO production caller
+    yet — its exercisers are the shared conformance suite (both backends)
+    and the differential harness. The §6.2 chapter-C2 vector family's
+    I.15 leg (E-EVAL-030) is NOT served: the I.15 edge-mode machine is a
+    declared Phase-2 gap no ruling charters here, and this train does not
+    grow an unchartered subsystem — the gap is carried into PR B's scope
+    notes unchanged. Hydration seeding of edge attributes is NOT widened
+    (load_edge keeps its strength-literal shape; the dossier's minimal
+    reading). No new E-codes minted (E-EVAL-043 et al. remain free); no
+    Python file touched; tests/baselines untouched. AG(i) surfaces
+    (MembershipPayload, update-membership, membership-field-of, hyperedge
+    own-fields) untouched per R4.
+  consequences: |
+    Byte-identity at landing, executed not claimed: state_hash's golden
+    byte vector + pinned digest (5e0041a4…fa1c0d8) + provided-method twin,
+    the III.7 hypergraph pin (9577d951…def798ed), tick_goldens 6/6
+    (two-classes, vitality, us-counties-lifecycle, organization-
+    foundation, territory-conformance, production-conformance) and
+    babylon-client's engine_link pin — every pinned hex literal
+    unmodified, all green under `cargo test --workspace --locked`, with
+    the four-leg rust:check gate (fmt / clippy -D warnings incl. the
+    babylon-graph pedantic leg / test / doc -D warnings) clean.
+    Mutation-verified per the standing sentinel rule (four perturbations
+    — elision deleted, the section write dropped, the strength fork
+    inverted, the remove_edge sweep deleted — each flipped the named law
+    tests red; each reverted byte-identical, diff-verified): evidence in
+    the landing commit message. Wave C's storage half is now REAL:
+    Solidarity, Sovereignty, EdgeTransition and the seven sibling systems
+    can read-modify-write edge attributes through a ruled surface the
+    moment PR B wires the verb. The canonical-layout contract is versioned
+    for the first time; the next widening follows the 0x05 rule (new tag,
+    elided when empty) or is a contract change.
+  supersedes: []
+  related:
+    - ADR198_program29_substrate_widening_charter
+    - ADR201_t2_edge_reads_handoff
+    - ADR197_bsl_query_evaluation_slice1_handoff
+    - ADR195_enum_deffield_row
+    - ADR189_amendment_ag_attributed_membership_lattice_instances
+    - ADR185_director_rulings_2026_07_31

@@ -1,0 +1,180 @@
+; The multi-rule conformance world for vitality/subsistence-and-death AND
+; lifecycle/dpd-circuit run together, in ONE content set (Program 28 B2,
+; Phase A Task 5). The executable phase registry now restores the frozen
+; Vitality-then-Lifecycle order regardless of concatenation order. The
+; provenance script still runs both engine and reverse order against the
+; same ten-node state, proving this particular pair commutes because its
+; domains are disjoint rather than relying on that fact for scheduling.
+;
+; A straight UNION of two already-proven fixtures, transcribed byte-for-byte
+; — deffield/defconst blocks and every node's field values, no new numbers:
+;   - vitality-conformance.bscn's six social-class nodes (core, bourgeoisie,
+;     hermit, last-worker, remnant, dissolved).
+;   - lifecycle-conformance.bscn's four territory nodes (core-county,
+;     growing-county, recovering-county, young-county).
+; The Multi-Rule Decision section's collision check already confirms zero
+; deffield/defconst/local-name overlap between the two fixtures, so this is
+; concatenation, not a merge requiring judgment calls.
+(scenario combined/vitality-lifecycle-conformance
+  ; --- territory half (lifecycle) ---
+  (deffield territory/pop-d int extensive)
+  (deffield territory/pop-p int extensive)
+  (deffield territory/pop-d-prime int extensive)
+  (deffield territory/wealth-d-prime int extensive)
+  (deffield territory/dependency-ratio int intensive)
+  (deffield territory/legitimation-index int intensive)
+  (deffield territory/legitimation-crisis int intensive)
+  (deffield territory/transmitted-ideology int intensive)
+
+  ; --- social-class half (vitality) ---
+  ; 0/1 rather than #t/#f: BSL has Bool (§3.1) but `deffield` has no bool
+  ; type and GraphSubstrate attributes are f64. Recorded, not hidden.
+  (deffield social-class/active int extensive)
+  (deffield social-class/population int extensive)
+  (deffield social-class/wealth int extensive)
+  ; Per-head quantities: an unweighted mean of one across classes is the
+  ; variance error §3.4 exists to reject, so they are declared intensive.
+  (deffield social-class/subsistence-multiplier int intensive)
+  (deffield social-class/s-bio int intensive)
+  (deffield social-class/s-class int intensive)
+  ; Declared and seeded, read by NO rule in this pack — see
+  ; vitality-conformance.bscn's own header for why.
+  (deffield social-class/inequality int intensive)
+
+  ; The defines environment (§2.5's `:const`, §4.2's "the defines
+  ; environment (coefficients)"). lifecycle/* transcribed verbatim from
+  ; lifecycle-conformance.bscn:56-76; economy/* from
+  ; vitality-conformance.bscn:43-44.
+  (defconst lifecycle/birth-rate 0.0107c)                         ; :508
+  (defconst lifecycle/rate-d-to-p 0.0556c)                        ; :509
+  (defconst lifecycle/rate-p-to-d-prime 0.0213c)                  ; :510
+  (defconst lifecycle/rate-d-prime-to-death 0.039c)               ; :511
+  (defconst lifecycle/pension-coverage-rate 0.73c)                ; :515
+  (defconst lifecycle/home-ownership-rate 0.656c)                 ; :516
+  (defconst lifecycle/ss-replacement-rate 0.426c)                 ; :517
+  (defconst lifecycle/healthcare-security 0.6c)                   ; :518
+  (defconst lifecycle/retirement-confidence 0.5c)                 ; :519
+  (defconst lifecycle/legit-w-home-ownership 0.35c)               ; :520
+  (defconst lifecycle/legit-w-healthcare-security 0.3c)           ; :521
+  (defconst lifecycle/legit-w-retirement-confidence 0.2c)         ; :522
+  (defconst lifecycle/legit-w-pension-coverage 0.1c)              ; :523
+  (defconst lifecycle/legit-w-ss-replacement 0.05c)               ; :524
+  (defconst lifecycle/legitimation-crisis-threshold 0.3c)         ; :526
+  (defconst lifecycle/legitimation-unstable-threshold 0.5c)       ; :527
+  (defconst lifecycle/ideology-caregiver-weight 0.7c)             ; :540
+  (defconst lifecycle/ideology-institutional-weight 0.3c)         ; :541
+  (defconst lifecycle/ideology-regression-coefficient 0.4c)       ; :542
+  (defconst lifecycle/caregiver-ideology-default 0.5c)            ; D-2, not in defines.yaml
+  (defconst lifecycle/institutional-hegemony-default 0.5c)        ; D-2, not in defines.yaml
+  (defconst economy/base-subsistence 0.0005c)
+  (defconst economy/death-threshold 0.001c)
+
+  ; DPDState docstring's own numbers (domain/economics/lifecycle/types.py:
+  ; 48-53), total population 10,000. PRE-crisis STABLE.
+  (node core-county NodeType/TERRITORY
+    (territory/pop-d 2150)
+    (territory/pop-p 6050)
+    (territory/pop-d-prime 1800)
+    (territory/wealth-d-prime 10000000)
+    (territory/dependency-ratio 0)
+    (territory/legitimation-index 0)
+    (territory/legitimation-crisis 0)
+    (territory/transmitted-ideology 0))
+
+  ; A younger mix, more D-phase relative to P. PRE-crisis UNSTABLE.
+  (node growing-county NodeType/TERRITORY
+    (territory/pop-d 3000)
+    (territory/pop-p 5000)
+    (territory/pop-d-prime 1500)
+    (territory/wealth-d-prime 5000000)
+    (territory/dependency-ratio 0)
+    (territory/legitimation-index 0)
+    (territory/legitimation-crisis 1)
+    (territory/transmitted-ideology 0))
+
+  ; An older, wealthier D' cohort. PRE-crisis CRISIS — this tick's
+  ; classification (STABLE) must fire LEGITIMATION_RECOVERY.
+  (node recovering-county NodeType/TERRITORY
+    (territory/pop-d 2000)
+    (territory/pop-p 7000)
+    (territory/pop-d-prime 2000)
+    (territory/wealth-d-prime 20000000)
+    (territory/dependency-ratio 0)
+    (territory/legitimation-index 0)
+    (territory/legitimation-crisis 2)
+    (territory/transmitted-ideology 0))
+
+  ; No D' cohort at all: pop-d-prime and wealth-d-prime both zero, so
+  ; deaths == 0 and the surviving-fraction guard takes its ELSE branch.
+  (node young-county NodeType/TERRITORY
+    (territory/pop-d 4000)
+    (territory/pop-p 5500)
+    (territory/pop-d-prime 0)
+    (territory/wealth-d-prime 0)
+    (territory/dependency-ratio 0)
+    (territory/legitimation-index 0)
+    (territory/legitimation-crisis 0)
+    (territory/transmitted-ideology 0))
+
+  ; Fed: cost 0.05 against wealth 1000, coverage far above threshold.
+  (node core NodeType/SOCIAL_CLASS
+    (social-class/active 1)
+    (social-class/population 100)
+    (social-class/wealth 1000)
+    (social-class/subsistence-multiplier 1)
+    (social-class/s-bio 1)
+    (social-class/s-class 1)
+    (social-class/inequality 0))
+
+  ; The Drain scaled by a standard of living: five times the per-head cost.
+  ; The elite burns faster per head than the core class it lives off.
+  (node bourgeoisie NodeType/SOCIAL_CLASS
+    (social-class/active 1)
+    (social-class/population 4)
+    (social-class/wealth 500)
+    (social-class/subsistence-multiplier 5)
+    (social-class/s-bio 2)
+    (social-class/s-class 8)
+    (social-class/inequality 0))
+
+  ; A block of one that SURVIVES. Without this subject, `population == 1`
+  ; and "dies this tick" would be indistinguishable in every vector.
+  (node hermit NodeType/SOCIAL_CLASS
+    (social-class/active 1)
+    (social-class/population 1)
+    (social-class/wealth 100)
+    (social-class/subsistence-multiplier 1)
+    (social-class/s-bio 1)
+    (social-class/s-class 1)
+    (social-class/inequality 0))
+
+  ; Starvation: one member, post-drain wealth 0.9995 against needs of 2.
+  (node last-worker NodeType/SOCIAL_CLASS
+    (social-class/active 1)
+    (social-class/population 1)
+    (social-class/wealth 1)
+    (social-class/subsistence-multiplier 1)
+    (social-class/s-bio 1)
+    (social-class/s-class 1)
+    (social-class/inequality 0))
+
+  ; The zombie failsafe: one member, no wealth at all, so the drain floors
+  ; at zero and post-drain wealth falls below death_threshold.
+  (node remnant NodeType/SOCIAL_CLASS
+    (social-class/active 1)
+    (social-class/population 1)
+    (social-class/wealth 0)
+    (social-class/subsistence-multiplier 1)
+    (social-class/s-bio 3)
+    (social-class/s-class 1)
+    (social-class/inequality 0))
+
+  ; Already dissolved: the guard must skip it entirely, wealth untouched.
+  (node dissolved NodeType/SOCIAL_CLASS
+    (social-class/active 0)
+    (social-class/population 5)
+    (social-class/wealth 10)
+    (social-class/subsistence-multiplier 1)
+    (social-class/s-bio 1)
+    (social-class/s-class 1)
+    (social-class/inequality 0)))

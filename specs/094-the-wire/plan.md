@@ -18,7 +18,7 @@ structurally isolated from the engine (Article III): zero `babylon.*` imports, p
 **Language**: Python 3.12 (backend), TypeScript 5.7 (frontend).
 **Stack**: Django 5.x + DRF, React 19 + Zustand 5 + Vite 6 + Vitest + Playwright — all
 already installed.
-**Constraints**: `mise run web:check` green; `PYTHONPATH=src poetry run pytest
+**Constraints**: `mise run web:check` green; `PYTHONPATH=src uv run pytest
 tests/unit/web/` green; no engine dynamics changed (presentation only).
 **Scope of ownership (Lane W)**: `web/**` + `specs/094-the-wire/**` + `tests/unit/web/`.
 MUST NOT touch `src/babylon/**` (engine code, READ ONLY).

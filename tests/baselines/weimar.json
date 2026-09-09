@@ -1,0 +1,102 @@
+{
+  "scenario": "weimar",
+  "description": "Fascist consolidation through the ballot: a real desperation vote perturbs the state apparatus (U13 golden, ADR140)",
+  "generated_at": "2026-07-30T13:44:19+00:00",
+  "defines_hash": "a0f75e1df8b88416b001338b8b6001ec99bd58b6e40b128b2745e0817699281a",
+  "max_ticks": 52,
+  "checkpoints": [
+    {
+      "tick": 0,
+      "p_w_wealth": 0.5,
+      "p_c_wealth": 0.35,
+      "c_b_wealth": 0.0,
+      "c_w_wealth": 0.0,
+      "imperial_rent_pool": 100.0,
+      "exploitation_tension": 0.0,
+      "p_w_consciousness": 0.0,
+      "p_w_p_revolution": 0.0,
+      "p_w_active": true,
+      "content_hash": "3929c782bd005fadb05fcb8bb94c02364b56edea5e6fa696464b495b32eb9e3c"
+    },
+    {
+      "tick": 10,
+      "p_w_wealth": 0.779463,
+      "p_c_wealth": 0.108835,
+      "c_b_wealth": 0.0,
+      "c_w_wealth": 0.0,
+      "imperial_rent_pool": 98.076109,
+      "exploitation_tension": 0.754959,
+      "p_w_consciousness": 0.0,
+      "p_w_p_revolution": 0.4071,
+      "p_w_active": true,
+      "content_hash": "d342035b6ec3acef1c609439e52970da87aba3a96c61b042778cbf40aeb364aa"
+    },
+    {
+      "tick": 20,
+      "p_w_wealth": 1.112394,
+      "p_c_wealth": 0.0,
+      "c_b_wealth": 0.0,
+      "c_w_wealth": 0.0,
+      "imperial_rent_pool": 96.168167,
+      "exploitation_tension": 0.983308,
+      "p_w_consciousness": 0.0,
+      "p_w_p_revolution": 0.438303,
+      "p_w_active": true,
+      "content_hash": "d0b26787fa2116f20ea57b2ea3c13d539c9d6ac88a650da97e70a389d5051c1f"
+    },
+    {
+      "tick": 30,
+      "p_w_wealth": 1.481924,
+      "p_c_wealth": 0.0,
+      "c_b_wealth": 0.0,
+      "c_w_wealth": 0.0,
+      "imperial_rent_pool": 94.262021,
+      "exploitation_tension": 0.983308,
+      "p_w_consciousness": 0.0,
+      "p_w_p_revolution": 0.449277,
+      "p_w_active": true,
+      "content_hash": "f0344ab9b8a8715adfad1a7175c5b03155e302db9ad0cbdce37a11d374220814"
+    },
+    {
+      "tick": 40,
+      "p_w_wealth": 1.851454,
+      "p_c_wealth": 0.0,
+      "c_b_wealth": 0.0,
+      "c_w_wealth": 0.0,
+      "imperial_rent_pool": 92.393658,
+      "exploitation_tension": 0.983308,
+      "p_w_consciousness": 0.0,
+      "p_w_p_revolution": 0.453103,
+      "p_w_active": true,
+      "content_hash": "4b1aeb7b443299aa7e32fa5da6984b8d61204f0ddcf373ef08d3379ea30cce72"
+    },
+    {
+      "tick": 50,
+      "p_w_wealth": 2.220984,
+      "p_c_wealth": 0.0,
+      "c_b_wealth": 0.0,
+      "c_w_wealth": 0.0,
+      "imperial_rent_pool": 90.562327,
+      "exploitation_tension": 0.983308,
+      "p_w_consciousness": 0.0,
+      "p_w_p_revolution": 0.454433,
+      "p_w_active": true,
+      "content_hash": "f2eef785b82136bacdbb7869a070173c1a9c47970a7f5f0f806768b29df82f9f"
+    },
+    {
+      "tick": 52,
+      "p_w_wealth": 2.29489,
+      "p_c_wealth": 0.0,
+      "c_b_wealth": 0.0,
+      "c_w_wealth": 0.0,
+      "imperial_rent_pool": 90.20044,
+      "exploitation_tension": 0.983308,
+      "p_w_consciousness": 0.0,
+      "p_w_p_revolution": 0.454567,
+      "p_w_active": true,
+      "content_hash": "eaab0bce72c6d0301315528c72f681fa6cd1b4266de3033b0faf77ecea1c8b22"
+    }
+  ],
+  "final_outcome": "SURVIVED",
+  "ticks_survived": 52
+}

@@ -4,7 +4,7 @@
 Creates all tables defined in babylon.reference.schema.
 
 Usage:
-    poetry run python tools/init_db.py
+    uv run python tools/init_db.py
 """
 
 

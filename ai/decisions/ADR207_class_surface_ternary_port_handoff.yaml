@@ -1,0 +1,199 @@
+ADR207_class_surface_ternary_port_handoff:
+  status: "accepted"
+  date: "2026-08-15"
+  title: "The W10 class-surface ternary port handoff (ADR204 W10's second half, issue #588) — the measured (r, l, f) ternary landed on the Rust class surface as the nine-rule consciousness.bsl pack (p0-position … p8-dominant-worldview) over the consciousness-ternary-conformance world: the FIRST probability-lane deffields in committed content, the UNPOSITIONED absence idiom (:optional :default 0.0p + the sum-guard — L-ABS, the row-19 0.5-default disease's death certificate), A-001 re-homed to ONE pack (the (0,1,0) seed, the closure remainder, the LIBERAL-first tie-break), the ADR016 routing law RE-POINTED at the stored ternary with Δl APPLIED and closure by a verbatim normalize_to_simplex, the dual-implementation Python oracle pinned bit-exactly (ADR183); PR A #592 (declaration surface + read path) + PR B (the update law + the records); nine register rows D146-D154; the Director's two plan-gate rulings and the controller ruling set recorded; THREE corrections to #588's 'preserved verbatim' framing (the f→r ε-gate is greenfield — no frozen production caller; 'r→f capacity transfer' names a cluster, not a construct; the hegemonic-community semantic inversion is doc-law — discharged as docs); chartered follow-ons rostered (#593 W5 mass-work verbs, #594 the ε-gate micro-train, #595 the community-carrier port; the gap readout + Curve-5 partition ride #491; the W7 seeding spec; the W12 pull couplings)"
+  context: |
+    ADR204 W10 ruled the class-surface migration port onto spec 034's
+    ruled (r, l, f) ternary, superseding ADR198's no-Wave-ports boundary
+    for this workstream; ADR206 minted the `WorldView` defenum (PR #586).
+    Issue #588 chartered the port itself: measured-ternary read path +
+    UNPOSITIONED-on-absence first, practice-coupled updates after, with
+    the frozen Python engine reference-only, every behavioral divergence
+    earning a D-record, and goldens moving only by declared §6.5
+    ceremony. The design of record is
+    `docs/superpowers/specs/2026-08-14-worldview-ternary-unification-design.md`
+    (§4.2 the measured ternary, §4.3 the preserved laws, §4.5.2 the port
+    staging); the execution plan is
+    `docs/superpowers/plans/2026-08-15-class-surface-ternary-port.md`
+    (its Controller-amendments section is binding over the task texts);
+    the verified frozen-site evidence is the archaeology digest
+    `ai/scratch/2026-08-15-class-surface-port-archaeology.md`.
+
+    The train executed in four tasks across two PRs from the
+    `w10-ternary-port` worktree: Task 1 (the declaration surface — the
+    FIRST `probability`-lane deffields in committed content, the
+    UNPOSITIONED idiom, `consciousness/p0-position`), Task 2 (the read
+    path — `consciousness/p8-dominant-worldview`, the hegemonic
+    tie-break's ONE declared home), together PR A #592 (merged
+    1440053a); Task 3 (the measured update law — p1..p7: the inbox
+    reset, the org/class solidarity pushes, the wage balance, the
+    agitation accumulator, the ADR016 routing law re-pointed at the
+    stored ternary, the persisted baselines — plus the
+    dual-implementation Python oracle and the two-tick accumulation
+    witness) and Task 4 (the permanent records, the issue hygiene, and
+    this ADR), together PR B.
+  decision: |
+    **1. Scope landed.** The class surface carries the measured ternary
+    as declared content: `social-class/revolutionary|liberal|fascist`
+    (the first `probability` deffields in committed content — digest
+    B.2), `social-class/dominant-worldview` (the WorldView enum field),
+    and the verbatim-f64 machinery fields (agitation, wage-balance,
+    solidarity-inbox, wages-received, previous-wages, previous-wealth).
+    UNPOSITIONED is the absence law (L-ABS / ADR070): a never-positioned
+    class carries NO ternary and NO dominant readout, a raw store read
+    errors loud (III.11), and rules observe absence only through declared
+    `:optional :default 0.0p` bindings gated on `(> (+ r (+ l f)) 0)` —
+    the row-19 disease (#564's register: the frozen 0.5-default sites,
+    digest A.6) dies by law on this surface. The measured update law
+    re-points the accumulator itself: r += Δr, l += Δl (APPLIED — the
+    frozen engine discards Δl at ideology.py:394), f += Δf·(1 −
+    suppression), closure by a verbatim `normalize_to_simplex`
+    transcription; the cc/ni estate and its read-time bridge are retired
+    (W1/W11). Conformance is the dual implementation
+    (`consciousness_ternary_conformance.py`) pinned bit-exactly — ADR183:
+    the frozen engine is a structure/ordering contract, not a byte
+    oracle; trajectories diverge from frozen BY CONSTRUCTION (D146).
+
+    **2. The Director's two plan-gate rulings (2026-08-15, both as
+    recommended).** Flag 1: the class seed is **(0, 1, 0)** — pure
+    A-001, the ruled unorganized rest state, applied as the
+    class-seeding law by `p0-position`; the frozen bridge default
+    (0, .5, .5) is the row-19 disease and dies; the community-model
+    default (0.3, 0.6, 0.1) stays floor content for communities, never
+    for classes. Flag 2: **transcribe the linear chauvinist term** —
+    ADR202 R7's retirement site is the Gaussian ONLY
+    (`sustained_exploitation.py:198`, the agitation MAGNITUDE component;
+    its replacement rides #491); the separate linear pass-through
+    `max(0, balance) · chauvinist_pressure_scale` (defines.yaml:228; the
+    Emmanuel/MIM direction content, ADR016 untouched) is transcribed
+    verbatim inside the routing law (D147).
+
+    **3. The controller ruling set (the plan's Controller-amendments
+    section, binding).** (a) No micros anywhere — the int lane stores
+    verbatim f64; fractional WRITES land, fractional SEEDS are
+    loader-refused; the rounding D-row reads: no implicit truncation at
+    the store, `floor` is the content-explicit truncation intrinsic,
+    unused in this pack. (b) The wage flow rides the declared class-side
+    `social-class/wages-received` field — scenario-side edge-attribute
+    seeding is unserved (`load_edge` is strength-only,
+    scenario.rs:1296-1302), so the frozen incoming-WAGES fold-sum
+    narrows to one declared flow value per class per tick (exact for
+    single-employer content; a recorded narrowing); the seeding gap is
+    filed as #591 item 3. (c) The pack is NINE rules (p0..p8 — the
+    dominant rule is p8, the pre-amendment texts' "p9" reads as p8).
+    (d) `simplex-epsilon` rides the expr quotient `(/ 1c 10000000000)`
+    — E-LEX-023 caps literal scale at 9; the correctly-rounded quotient
+    is bit-identical to Python's 1e-10; no defconst row exists. (e) The
+    one-home correction: `p0-position` does NOT record dominance — the
+    first draft's fifth p0 effect (writing LIBERAL at positioning) came
+    OUT; dominant-worldview's only writer is `p8-dominant-worldview`.
+    (f) The tie-vector correction: the tie-break's strict `< 1e-6` is
+    transcribed verbatim — a decimal-1e-6 gap is NOT a tie; the
+    tv-strict-gap / tv-tie-all-true pair witnesses both arms against the
+    frozen ground truth. (g) The anchor-cell slip correction (Task-3
+    NEEDS_CONTEXT, Ruling A): class-bribed's tick-1 dominant is LIBERAL
+    — the vector's witness is the ROUTING (Δf +0.12, eff_sol
+    chauvinist-clamped to 0), not a one-tick flip; hegemony erodes, it
+    doesn't snap — with the tick-2 accumulation witness binding (the
+    FASCIST flip lands at tick 2; p7's persisted baselines make tick-2
+    increments exactly zero, the persist machinery's differential
+    witness).
+
+    **4. The D-row roster.** Nine register rows landed in
+    `docs/reference/bsl-language.rst` (D145 verified the tail at
+    execution): D146 (the re-pointed accumulator — the headliner), D147
+    (Curve-5 Gaussian not transcribed, linear chauvinist term
+    transcribed), D148 (wage_deterioration stubbed 0.0c — no graph-attr
+    surface), D149 (popular_front_suppression stubbed 0.0c — exact under
+    register-absent content), D150 (the material_conditions buffer write
+    not ported — no ported consumers), D151 (solidarity pull→push
+    redesign + the per-pair multi-edge unreachability record (both
+    GraphSubstrate backends key edges on (type, from, to) and refuse a
+    duplicate loudly), the strength-≤0-skip and WAGES fold-sum
+    narrowings), D152 (the percolation gate re-pointed at the
+    revolutionary share), D153 (positioned-only agitation), D154 (the
+    same-tick closure heal observed — D116 reliance).
+
+    **5. THREE corrections to #588's "preserved laws transcribed
+    verbatim" framing** (evidence: the digest; each correction's
+    disposition named). (a) **The f→r ε-gate is greenfield, not
+    transcription.** `apply_fr_gate`
+    (`formulas/consciousness_routing.py:474-511`, FR-017) has NO frozen
+    production caller — only a unit test exercises it; the
+    `fr_gate_epsilon` define exists but nothing reads it.
+    Minted-but-unwired in the frozen estate; its port is activation,
+    chartered as its own micro-train (#594) because its
+    proletarianization signal needs a definition from ported state.
+    (b) **"r→f capacity transfer" names a cluster, not a construct.**
+    The frozen fascist-ward flows are three: the router's no-solidarity
+    Δf branch (LANDED here — the ADR016 law's own arm), the
+    FascistFactionSystem pull/capture chain (charters behind the FACTION
+    vocabulary — #589, Director-gated — plus node-ref fields:
+    `aligned_faction_id` has no ref-typed field kind), and
+    StruggleSystem's fascist-revanchism arm (charters behind the
+    Struggle port). (c) **The hegemonic-community semantic inversion is
+    doc-law.** Spec 034 (spec.md:178) ordered it DOCUMENTED; the frozen
+    estate has no code site (digest A.5d — `is_hegemonic` has zero
+    production callers). Discharged as docs in this train: the
+    taxonomy page's inversion section
+    (`docs/concepts/consciousness-taxonomy.rst`); its Rust code home
+    arrives with the community-carrier port (#595).
+
+    **6. The chartered follow-ons roster.** #593 — the W5 mass-work verb
+    surface (the practice rule's verb side; the org-verb/OODA machinery
+    is absent from the ported estate). #594 — the f→r ε-gate wiring
+    micro-train (greenfield; the proletarianization signal's ported
+    definition is its one design dependency). #595 — the
+    community-surface carrier port (hyperedge attributes, the AG
+    membership payload, hyperedge query heads, the org-overlap formula —
+    native Rust + AE(ii) escalation; the semantic inversion's code home;
+    the community ternary is DORMANT in the frozen estate — digest
+    A.3 — so the port is an activation with the frozen formula as
+    oracle). Riding existing records, no new issue: the W4 gap readout
+    (E/P/S quantile sketch carrier) and the Curve-5 magnitude partition
+    ride #491's ruling; the W7 per-county seeding spec (ADR043's named
+    replacement) stands as its own charter; the W12 PULL couplings
+    (measured shares modulating value flow) are chartered port-stage
+    design work — no new formalism — while this train landed the READ
+    couplings (the ternary computed from the wage flow, the anchors, the
+    balance, the wealth delta, and the SOLIDARITY topology).
+  consequences: |
+    - The pins: `tick_goldens.rs`'s
+      `consciousness_ternary_foundation_hashes_are_pinned` (pre-tick
+      `8a906d31…c79600`, post-tick `7e049462…e3fff9`, fired == 50) and
+      `consciousness_ternary_worldview_member_order_is_the_ruled_ordinal`
+      (the ordinal guard for this scenario's own re-declared WorldView
+      defenum — spike 2's verdict: one `(scenario …)` form per load).
+      Every pre-existing golden byte-identical at landing; the one
+      modified pre-existing Rust file is `tests/tick_goldens.rs`
+      (additive pins only).
+    - The records: register rows D146-D154; the taxonomy page's four new
+      sections (A-001's one home + the seven not-ported frozen sites;
+      the UNPOSITIONED death certificate naming the 0.5-default disease
+      register; the semantic-inversion discharge; the W12 read/pull
+      note); this ADR; `ai/state.yaml`'s closing entry.
+    - #588 closes with the split verdict: title scope (read path +
+      UNPOSITIONED + update law) landed; the W5-verb surface, the ε-gate
+      wiring, and the community-carrier port chartered as #593/#594/#595
+      with their machinery gaps named. #564 gains the row-19 discharge
+      evidence pointer.
+    - Issue #588's "preserved verbatim" framing stands corrected by
+      decision 5 — future port trains inherit the discipline: verify a
+      frozen construct's PRODUCTION CALLERS before claiming
+      transcription; a cluster name is not a construct name; a doc-order
+      discharges as docs.
+    - The conformance oracle pattern (a dual-implementation Python
+      generator mirroring the pack binding-order term-for-term, pinned
+      bit-exactly — NOT frozen floats) is now the established shape for
+      ports that diverge from frozen by construction (ADR183's
+      operational form), joining the frozen-golden-generator shape
+      (lifecycle) for verbatim transcriptions.
+  supersedes: []
+  related:
+    - ADR204_worldview_ternary_unification
+    - ADR206_worldview_vocabulary_ceremony
+    - ADR202_t4_curves_ruling_session
+    - ADR183_get_it_right_in_rust
+    - ADR016_fascist_bifurcation
+    - ADR070_emergent_class_partition
+    - ADR195_enum_deffield_row

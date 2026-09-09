@@ -1,0 +1,208 @@
+ADR202_t4_curves_ruling_session:
+  status: "accepted"
+  date: "2026-08-14"
+  title: >
+    The T4 curves ruling session (Program 29, issue #561) — twelve rulings
+    on the curves dossier (reports/p29-t4-curves-dossier-2026-08-12.md):
+    the ADR188 Rows 7-8 estate UPHELD subject to exactly one site reversal
+    (Curve 5 ruled B — a magnitude-only E/P/S partition behind #491
+    replacing the frozen Gaussian, both PROVISIONAL coefficients retired,
+    ADR016's direction law untouched); C1 Survival ruled carrier α — the
+    K=16 ACS rung ladder via #491 behind three prerequisites, unifying
+    Vitality attrition — with audit Q5 ASSERTED on the record (more
+    intra-class inequality ⟹ less switch-like rupture); C3 ImperialRent
+    Phase 4 INHERITED whole by ADR173 behind a client-state seeding
+    D-record (steepness_k removed from canonical_defines.json at landing);
+    C2 Allegiance ruled the band measure as the fourth #491 consumer with
+    a valve_multiplier≡1 D-stub sequencing fallback; C8 ReserveArmy and
+    C4 FascistFaction both ruled A — the full ladder/measure at port, no
+    staged stub, no split port — each OVERRIDING the workforce
+    recommendation in favor of full theoretical rigor over sequencing
+    convenience; C6 scissors ruled Option 3 — the per-county Carrier-B
+    ensemble on territory/price_divergence, wealth-weighted,
+    scissors_balance_scale retired, goldens moving by declared §6.5
+    ceremony with vault-regression drift expected; C7 financialization
+    ruled D with the ±0.7616 balance cap RETIRED (full antagonism must be
+    displayable) and ratio-of-sums recorded data-blocked; rider #572
+    confirmed its own micro-train (T2.5); register rows 9-24 ruled
+    memos-first, async rulings.
+  context: |
+    ADR198 chartered Program 29 and ruled the ADR188 Row-7 curve estate
+    DOSSIER-THEN-SESSION: one curves dossier, one Director ruling pass,
+    following the ADR173 P(S|A)-as-measure pattern. The dossier landed as
+    `reports/p29-t4-curves-dossier-2026-08-12.md` — the eight frozen
+    Python engine sites whose imposed functional forms (sigmoid,
+    Gaussian, tanh, exp, clamp, balance cap) must be re-derived as
+    measures or explicitly retained before the Rust port transcribes
+    them, each presented as frozen form → material reading → derived
+    reformulation → fidelity/divergence table → lettered decision
+    surface with a workforce recommendation (dossier §3 summary, §5
+    agenda).
+
+    The ruling session (issue #561) was held in the run of
+    2026-08-12 → 2026-08-14; an external model-quota outage paused the
+    run after the dossier presentation, and every ruling below was
+    delivered by the Director herself in that session. The running order
+    followed dossier §5: cross-curve dependencies first, then the
+    surfaces in dependency order (C1 Survival, audit Q5, C3 ImperialRent,
+    C2 Allegiance, C8 ReserveArmy, C4 FascistFaction, C5 Consciousness,
+    C6 scissors, C7 financialization), then the rider and register
+    dispositions.
+
+    Dependencies cited throughout: issue #491 / audit Q3 (the
+    within-class wealth distribution) was ruled an EMPIRICAL QUANTILE
+    SKETCH by ADR194 R1 and is the carrier four of these measures
+    consume; OQ-1e is the member-population carrier gap that gates two
+    more; ADR188 Rows 7-8 are the standing estate disposition for frozen
+    curves at port; ADR016 is the bifurcation direction law; ADR189
+    (Amendment AG) governs lattice-instance declarations. The Director
+    overrode the workforce recommendation twice (C8, C4) — in both cases
+    choosing full theoretical rigor over sequencing convenience, and this
+    record says so plainly.
+  decision: |
+    THE RULINGS (Director, T4 curves session, issue #561; director-gate
+    register rows 1-8 on issue #564; recorded 2026-08-14).
+
+    R0 — META: THE ESTATE STANDS. ADR188 Rows 7 and 8 are UPHELD as the
+      standing disposition for the curve estate, subject to exactly one
+      site reversal — R7 below (Curve 5). No other site is exempted from
+      the estate by this session.
+
+    R1 — CURVE 1, SURVIVAL P(S|A): CARRIER α — THE RUNG LADDER.
+      Status: ruled (register row 1 discharged). P(S|A) is re-derived as
+      ADR173's measure — the mass of class members whose wealth clears
+      subsistence — carried by the ADR194-R1 artifact: a K=16 ACS rung
+      ladder on social_class (the #491 empirical quantile sketch), fenced
+      by a NoDataSentinel for classes whose distribution is unseeded. The
+      same measure UNIFIES Vitality's attrition reading (ADR191's
+      mortality family) — one distribution, two readings. Landing is
+      gated on THREE prerequisites, each its own record: (a) the
+      subsistence unit reconciliation; (b) the ACS-household →
+      SocialClass mapping; (c) two language D-rows — E-TYPE-040 and the
+      §3.4 blank result-kind cell.
+
+    R2 — AUDIT Q5: ASSERTED. The open audit question is answered in the
+      affirmative, explicitly and on the record: MORE intra-class
+      inequality ⟹ LESS switch-like rupture. The measure's own shape
+      does the work the frozen sigmoid's steepness approximated; the
+      assertion is a stated theoretical commitment, not an implication
+      left for the reader.
+
+    R3 — CURVE 3, IMPERIALRENT PHASE 4 (the "Iron Lung" subsidy gate):
+      INHERITED BY ADR173. Status: ruled (register row 3 discharged). The
+      subsidy-gate sigmoid is the same P(S|A) measure evaluated on
+      client-state classes — ADR173's reformulation inherits the site
+      whole. Landing is GATED on a D-record: population and inequality
+      must be seeded on client-state classes, which today carry neither,
+      so the measure is unevaluable there until seeded. The frozen
+      `steepness_k` coefficient is REMOVED from
+      `rust/crates/babylon-kernel/tests/fixtures/canonical_defines.json`
+      at landing — no orphaned coefficient survives the inheritance.
+
+    R4 — CURVE 2, ALLEGIANCE counterfactual_hope_gain: BAND MEASURE,
+      FOURTH #491 CONSUMER. Status: ruled (register row 2 discharged).
+      The hope-gain curve is re-derived as the band measure over the same
+      rung ladder — the fourth consumer of the #491 artifact. A D-STUB
+      (`valve_multiplier ≡ 1`) is the sanctioned sequencing fallback if
+      the Allegiance port train reaches the site before the ladder lands;
+      the stub carries a named removal condition and is not a form.
+
+    R5 — CURVE 8, RESERVEARMY / TICKDYNAMICS WAGE PRESSURE: OPTION A —
+      THE FULL LADDER, NOW. Status: ruled (register row 8 discharged),
+      OVERRIDING the workforce recommendation (a staged D-stub). The wage
+      pressure curve is re-derived against the stratum ladder WITH the
+      absorption-flow producer and the organizational arm, in one
+      landing; the port BLOCKS behind the #491 (audit Q3) artifact rather
+      than transcribing an interim form. Recorded facts and sub-rulings:
+      the frozen `expansion_absorption` is hardcoded 0 at
+      `src/babylon/domain/economics/reserve_army/accumulation.py:133`;
+      ownership of the landing is the ReserveArmy port train; on the
+      wage-floor question the Director gave NO floor — super-exploitation
+      stays expressible; the organizational arm's pedagogy stands
+      recorded as "organization holds the line" by the shape of this
+      choice, subject to her later correction.
+
+    R6 — CURVE 4, FASCISTFACTION DEFECTION: OPTION A — THE FULL MEASURE
+      AT PORT. Status: ruled (register row 4 discharged), OVERRIDING the
+      workforce recommendation (C-now-A-later). The defection sigmoid is
+      re-derived as the full measure at the FascistFaction port, after
+      the OQ-1e / #491 carrier lands — NO split port. The
+      class-as-individual transcription error is fixed at the SAME
+      landing, and the routing structure is transcribed exactly per the
+      production port's precedent
+      (`rust/crates/babylon-tick/content/rules/production.bsl:193`).
+
+    R7 — CURVE 5, CONSCIOUSNESS CHAUVINIST-PRESSURE GAUSSIAN
+      (sustained_exploitation.py:198): OPTION B — THE SITE REVERSAL.
+      Status: ruled (register row 5 discharged). ADR188 Row 7 is REVERSED
+      FOR THIS SITE ONLY: the frozen Gaussian is NOT transcribed. In its
+      place, a magnitude-only E/P/S partition behind the #491 carrier,
+      retiring BOTH PROVISIONAL coefficients the site carried. The
+      bifurcation direction law (ADR016) is UNTOUCHED — the partition
+      carries magnitudes only, never directions. The threat-band choice
+      (Φ-trend vs s_class) is DEFERRED to the port packet as design work,
+      not ruled here.
+
+    R8 — CURVE 6, SCISSORS tanh ON price_value: OPTION 3 — THE
+      PER-COUNTY ENSEMBLE. Status: ruled (register row 6 discharged). The
+      scalar tanh is replaced by Carrier B: a per-county ensemble carried
+      on `territory/price_divergence`, with WEALTH as the extensive
+      weight. `scissors_balance_scale` RETIRES at landing. The move
+      shifts goldens — a DECLARED §6.5 ceremony, with vault-regression
+      drift expected and recorded in the ceremony's drift table. The
+      county-rung lattice placement is an Amendment-AG lattice-instance
+      declaration (ADR189) — content-side, minting no new kinds.
+
+    R9 — CURVE 7, FINANCIALIZATION exp (Contradiction @18.0): OPTION D
+      WITH THE CAP RETIRED. Status: ruled (register row 7 discharged).
+      Row 7 is UPHELD for this site — the port transcribes `exp(clamp)`
+      verbatim — BUT the ±0.7616 balance cap DIES: the full antagonism
+      must be displayable, and the cap exists only to protect a rendering
+      convention. The ratio-of-sums reformulation is recorded as
+      DATA-BLOCKED: no per-element claim stock exists to evaluate it.
+
+    R10 — RIDER #572 (the `the` legality gate): CONFIRMED its own
+      micro-train (T2.5). ADR201 already recorded the disposition; this
+      session ratifies it — #572 stays open until that train lands, and
+      no port may improvise the gate inline meanwhile.
+
+    R11 — REGISTER ROWS 9-24: MEMOS FIRST, RULED ASYNC. Status: ruled
+      (process). The sixteen remaining director-gate rows on #564 are
+      distilled into per-row decision memos and presented for ASYNC
+      ruling; no second synchronous session is chartered for them.
+  consequences: |
+    - Checkpoint A gate T4 is satisfiable: register rows 1-8 on issue
+      #564 are marked DISCHARGED, each citing its ruling above; issue
+      #561 receives this record as its evidence and closes.
+    - The #491 artifact (ADR194 R1's empirical quantile sketch — K=16 ACS
+      rung ladder plus NoDataSentinel) is now the critical-path carrier
+      for FOUR ports (Vitality/Survival, Allegiance, ReserveArmy,
+      FascistFaction) plus the Consciousness partition; three prerequisite
+      records (subsistence unit reconciliation, ACS-household →
+      SocialClass mapping, language D-rows E-TYPE-040 + the §3.4 blank
+      result-kind cell) must exist before the Survival landing.
+    - C3's landing removes `steepness_k` from
+      `rust/crates/babylon-kernel/tests/fixtures/canonical_defines.json`;
+      C6's landing retires `scissors_balance_scale` and is a §6.5
+      baseline ceremony with expected vault-regression drift; C7's
+      landing removes the ±0.7616 balance cap, so downstream renderers
+      must tolerate full-antagonism magnitudes.
+    - C5's reversal is site-scoped: ADR188 Rows 7-8 otherwise stand, and
+      any further site exemption requires its own ruling.
+    - Two follow-ups remain UNRULED by design: C5's threat band
+      (Φ-trend vs s_class — deferred to the port packet) and C8's
+      organizational-arm pedagogy emphasis ("organization holds the
+      line", recorded by the choice, correctable by the Director).
+    - Register rows 9-24 proceed async by per-row memo
+      (reports/register-memos/); rider #572's T2.5 micro-train is the
+      only sanctioned path to the `the` legality gate.
+  supersedes: []
+  related:
+    - ADR198_program29_substrate_widening_charter
+    - ADR201_t2_edge_reads_handoff
+    - ADR194_director_rulings_batch2_2026_08_11
+    - ADR191_director_rulings_batch_2026_08_11
+    - ADR188_intrinsic_rider_slate_dispositions
+    - ADR189_amendment_ag_attributed_membership_lattice_instances
+    - ADR173_audit_and_stops_dispositions
+    - ADR016_fascist_bifurcation

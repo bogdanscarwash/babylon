@@ -1,0 +1,1 @@
+(scenario fixture/wave-stage (node NodeType/ORGANIZATION org (sfs/wave-stage 0.5c)))

@@ -1,0 +1,10 @@
+meta:
+  note: >
+    Fixture ADR for bsl-lint's namespace-unique (a) integration test — NOT
+    a real decision. Shares ADR number 900 with ADR900_beta.yaml on purpose
+    (the number-uniqueness RED case).
+decisions:
+  ADR900_alpha:
+    title: 'fixture alpha'
+    status: accepted
+    date: '2026-08-18'

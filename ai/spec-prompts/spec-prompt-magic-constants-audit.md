@@ -91,7 +91,7 @@ These are irreducible parameters that the simulation genuinely needs, whose valu
 - Sensitivity: how much do simulation outcomes change across the plausible range?
 - Calibration source: what historical data or empirical finding constrains this?
 - Recommended sweep range for parameter search
-- Whether existing tooling (`mise run tune:optuna`, `mise run tune:sobol`, `mise run tune:params`) can calibrate it
+- Whether existing tooling (`mise run analysis:optuna`, `mise run analysis:sobol`, `mise run analysis:sweep`) can calibrate it
 
 **Expected candidates** (verify):
 - `crisis.r_threshold` — what profit rate constitutes crisis (Piketty/WID constrains)

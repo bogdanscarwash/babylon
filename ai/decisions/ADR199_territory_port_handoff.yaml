@@ -1,0 +1,176 @@
+ADR199_territory_port_handoff:
+  status: "accepted"
+  date: "2026-08-12"
+  title: "The Territory port handoff (P27 PR B) — territory.bsl's five phase rules land, D102/#551/Q9/D111 discharged by the prerequisite babylon-bsl slice (PR A), P6's graph-threading gap closed, and twelve new D-record register rows (D120-D131, fix round 2026-08-12 corrects the count and adds D131) file the port's own transcription deviations"
+  context: |
+    docs/superpowers/plans/2026-08-12-territory-port-plan.md served the
+    frozen TerritorySystem (src/babylon/engine/systems/territory.py, 378
+    lines, four sequential phases) into BSL content, port-as-is with
+    declared deviations, entering both Rust byte gates. Two PR groups
+    executed the plan's eight tasks:
+
+    - PR A (Tasks 1-2): the babylon-bsl surface slice — discharging the
+      D102 field-of-enum deferral (Territory's own _find_sink_node is the
+      chartered first consumer, reading a NEIGHBOUR's territory_type
+      through field-of, which only a :field binding could reach before)
+      and closing #551 (enum-typed fold bodies refuse at load). Merged
+      to dev before this PR's branch point (af569b0d).
+    - PR B (Tasks 3-8, this record): the content estate itself —
+      territory-conformance.bscn, territory.bsl's five rules, the
+      composition golden, and this handoff's own D-record filing.
+  decision: |
+    **1. The scenario ceremony (Task 3).** territory-conformance.bscn
+    seeds twelve territories and three social classes covering every
+    conformance case in one world: sub-threshold gain/decay, a same-tick
+    eviction latch with the EXTRACTION-priority sink tiebreak
+    (PENAL_COLONY over RESERVATION), a dedicated no-sink case, an
+    already-latched territory feeding a CONCENTRATION_CAMP (proving
+    p2->p4 same-tick sequencing), a three-territory ADJACENCY spillover
+    chain with a near-ceiling clamp case, an isolated exists-fallback
+    territory, and a PENAL_COLONY with two TENANCY-connected classes plus
+    one untouched. territory_conformance.py mirrors the fixture into the
+    frozen engine as the STRUCTURE oracle (ADR183) — every number this
+    port's own conformance suite pins was independently confirmed against
+    this script's printed output before being written into a Rust
+    assertion, never copied from it directly (§4.3: measured, never
+    derived). territory/heat is declared EXTENSIVE, not intensive — a
+    typecheck-forced deviation from the naive kind reading (§3.4's
+    aggregation law refuses fold sum over an intensive field,
+    E-TYPE-041), the same choice the query-evaluation train's own
+    synthetic fixture already made and documented for the identical
+    field; the real field-kind ruling stays open (D111/Q9).
+
+    **2-5. The four phase rules (Tasks 4-7), byte-ordered at ONE anchor
+    position.** territory/p1-heat-dynamics (HIGH_PROFILE gain /
+    LOW_PROFILE decay, the two-sided [0,1] clamp), territory/
+    p2-eviction-pipeline (the threshold latch, the scaled-rent spike, the
+    sink-typed exists-guarded tiebreak-and-transfer), territory/
+    p3-spillover (the pull-side fold over ADJACENCY :any neighbours, the
+    upper-only clamp), territory/p4-camp-decay and territory/
+    p4-penal-suppression (necropolitics — population decay, organization
+    zeroing). All five rely on D116's recorded cross-rule divergence
+    (today's run_once_into/TickSession::advance run each rule in a
+    content set to completion before the next starts) as a DEPENDENCY,
+    not a hazard to route around — the frozen phases are sequential by
+    design, and this pack's own p2->p4 same-tick arrival proof
+    (a concentration camp seeded 500, receiving +100 the same tick from a
+    p2 eviction, ending floor(600*0.8)=480) is the end-to-end witness that
+    the reliance is real and correctly ordered.
+
+    **6. One deviation from the plan's own literal BSL text, forced by a
+    grammar fact confirmed by reading the source, not a judgment call —
+    corrected here from an earlier draft of this record that claimed a
+    SECOND deviation which turned out fabricated (fix round,
+    2026-08-12): the plan's literal rent-spike expression, `(/ (*
+    rent-x1e6 spike-x1e6) 1000000)`, loads and runs unmodified.
+    `rent-x1e6` is an `int`-declared FIELD, and `tick.rs::
+    bind_field_value` renders EVERY non-enum-declared field's `:field`
+    read as `Value::Real` regardless of its declared type — so `rent-x1e6`
+    arrives as `Real`, `apply_arith` routes the `(Real, Int)` pair to the
+    real lane, and `evaluator.rs::arith_int`'s `Int ÷ Int` refusal is
+    never reached for this pair. The `rent-real` Real-zero-promotion
+    binding an earlier draft of territory.bsl added was unnecessary
+    machinery, deleted in the fix round; the 21/21 conformance suite and
+    the pinned golden are unchanged (hash-neutral) with the plan's
+    literal single binding restored.**
+
+    The one real deviation: rule_pipeline.rs::field_ref_for's §3.4
+    fold-body reduction (the module's own "Fold typecheck adapter" gap)
+    accepts only a bare field-of accessor or a nested fold as a fold
+    body — a compound arithmetic body is rejected LOUDLY at load as
+    unverifiable. The plan's literal per-edge-product spillover fold
+    ((* (field-of it territory/heat) rate)) does not load; the rate
+    scaling moves OUTSIDE the fold (query_lane_e2e.rs's own Shape A
+    precedent), applied once to the summed total. Sigma(heat_i)*rate
+    and Sigma(heat_i*rate) are the same real-valued function via a
+    different binary64 program (register row D128); this fixture's
+    inputs happen to agree bit for bit with the frozen mirror.
+
+    **7. P6 closed — the graph-threading gap ADR197 recorded but left
+    open.** rule_pipeline::resolve_expr_bindings unconditionally passed
+    graph: None to a :expr binding's EvalEnv, safe only by coincidence
+    (no landed rule's :expr body contained a query form before
+    p3-spillover's inflow binding). Threaded a
+    graph: Option<&dyn GraphSubstrate> parameter alongside the
+    already-threaded types/enums (never alone — the PR A verifier fix
+    round's own discipline for this exact EvalEnv); tick.rs::collect_pass
+    passes Some(graph) from its own live Pass-1 borrow; the two pure-
+    expression R9-chapter test callers pass None. Filed as register row
+    D130 (Resolved).
+
+    **8. Twelve new D-record register rows (D120-D131) — ten per Task 8's
+    own enumerated deviation, D130 for the P6 closure, and D131 (fix
+    round, 2026-08-12) for the heat-EXTENSIVE storage choice, filed after
+    the fact once the fixture's own false D111/Q9 citation for it was
+    caught** — filed in
+    docs/reference/bsl-language.rst's Draft-Ruling Register with full
+    file:line evidence: phase order relying on D116 (D120), the
+    under-eviction int 0/1 latch (D121), the rent-level-x1e6 scaled
+    bare-Int lane (D122), the directed-vs-any sink/spillover walk
+    asymmetry (D123), the same-type multi-sink tiebreak divergence
+    (D124, both engines' answers independently correct, neither chased),
+    the two-clamp inconsistency (D125), the No-defaults fixture-seeding
+    transcription (D126), the hash-neutral no-op writes (D127), the
+    summation/apply float-order divergence (D128), and the
+    displacement_mode -> EXTRACTION const with the dead AUTO/context
+    override machinery WS1-ledgered to #502 (D129).
+
+    **9. Q9/D111 (the enum-field-storage gap) and D102 discharged before
+    this train needed a workaround.** The Organization foundation
+    train's enum <type-name> row (D101, ADR195) and vocabulary ceremony
+    (ADR196), plus this train's own PR A discharge of D102's field-of
+    deferral, meant territory/profile and territory/territory-type
+    declare enum OperationalProfile/enum TerritoryType directly, in the
+    frozen Python declaration order (hash-bearing) — neither the bool-
+    per-value nor the int-ordinal workaround the phase-1 inventory report
+    proposed was ever built.
+
+    **10. The composition golden (Task 8, Step 2).** tick_goldens.rs
+    gains a fifth pinned pair — territory_conformance_hashes_are_pinned
+    — measured against the full five-rule pack over the twelve-territory/
+    three-class world (fired == 30: 12+4+12+1+1 across the five rules).
+    The four PRE-EXISTING goldens (two-classes, vitality, the
+    us-counties demo, organization-foundation) stay byte-identical;
+    this is an ADDITION, never a mutation of a landed pin.
+
+    **11. The vitality.bsl rider (Task 8).** vitality.bsl's own header
+    still named floor/trunc as Grinding Attrition's blocking gap after
+    floor landed under ADR188 Row 2 and floor_intrinsic_e2e.rs proved it
+    end to end — stale in the same file it lives in. Corrected with a
+    one-paragraph rider naming territory/p2-eviction-pipeline and
+    territory/p4-camp-decay as floor's first PRODUCTION consumers;
+    Grinding Attrition's second, independent blocker (the stipulated
+    P(S|A) functional form, ADR175-gated) is untouched and still stands.
+  consequences: |
+    The Territory port (P27 PR B) is COMPLETE: territory.bsl's five
+    rules, territory-conformance.bscn's twelve-territory/three-class
+    world, a conformance suite (grown from 21 to 22 tests across the
+    fix round) plus a re-pinned tick_goldens.rs golden, and twelve new
+    register rows (D120-D131: ten per Task 8's own deviations, D130 for
+    the P6 closure, D131 for the heat-EXTENSIVE storage choice)
+    filed in docs/reference/bsl-language.rst. reports/territory-port-
+    phase1-inventory-2026-08-11.md's second UPDATE block records the four
+    §6 BLOCKED rows as DISCHARGED (not merely unblocked) and the enum-
+    field-storage finding as resolved by D102/ADR195/ADR196 rather than
+    either workaround the report itself proposed.
+
+    OPEN, NAMED, NOT THIS TRAIN'S: the Q14/D116 cross-rule pre-state
+    repair (this pack's four phases are its own acceptance-criterion
+    input — four distinct sub-positions of territory @2.0, not four
+    rules sharing one, the moment a real anchor registry lands); the
+    rent-level-x1e6 scaled-Int lane, which retires with #502 workstream
+    3's Real x Ratio operator; the displacement_mode override machinery,
+    defines.yaml:243's dead AUTO mode, and defines.yaml:241's unrelated
+    clarity_profile_coefficient, all WS1/WS4-ledgered on #502; and the
+    same-type multi-sink tiebreak divergence (D124), which this port
+    deliberately does not resolve — the frozen engine's last-wins and
+    this language's D45 first-wins each stand as independently correct
+    within their own systems, and this fixture's own two sinks never
+    actually exercise the tie (they differ in priority score, not just
+    type membership).
+  supersedes: []
+  related:
+    - ADR197_bsl_query_evaluation_slice1_handoff
+    - ADR195_enum_deffield_row
+    - ADR196_org_vocabulary_ceremony
+    - ADR183_get_it_right_in_rust

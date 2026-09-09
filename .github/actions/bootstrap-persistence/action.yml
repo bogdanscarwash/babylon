@@ -1,0 +1,90 @@
+# Shared Rust persistence bootstrap for PostgreSQL jobs that advance the
+# authoritative schema epoch. The live runner invokes repository-owned Mise
+# tasks for bootstrap and smoke proofs, so this action installs the same pinned
+# task runner as the other hosted lanes. It stays separate from bootstrap-python
+# so Python-only jobs do not pay for a Rust toolchain or Cargo cache.
+name: Bootstrap Rust Persistence
+description: Install pinned Mise and Rust toolchains and load the persistence Cargo cache
+
+inputs:
+  cache-key:
+    description: Persistence focus whose compiled targets are retained separately
+    default: persistence
+outputs:
+  cache-key:
+    description: Source-qualified Cargo cache key to save after successful trusted validation
+    value: ${{ steps.cargo-cache.outputs.cache-primary-key }}
+  cache-hit:
+    description: Whether this exact source already has a saved Cargo cache
+    value: ${{ steps.cargo-cache.outputs.cache-hit }}
+
+runs:
+  using: composite
+  steps:
+    # Persist the same profiles for every later bootstrap/test command in the
+    # caller's job. Local Cargo profiles and release builds remain unchanged.
+    - name: Configure CI source backtraces
+      id: cargo-profile
+      shell: bash
+      run: |
+        {
+          echo 'CARGO_PROFILE_DEV_DEBUG=line-tables-only'
+          echo 'CARGO_PROFILE_TEST_DEBUG=line-tables-only'
+        } >> "$GITHUB_ENV"
+
+    - name: Set up tools with mise
+      uses: jdx/mise-action@3c2e0cf82a5b2e5249f0d3635a4d83d0ae861518 # v4
+      with:
+        version: 2026.9.1
+        cache: true
+
+    - name: Install pinned Rust toolchain
+      shell: bash
+      run: |
+        CHANNEL="$(sed -n 's/^channel = "\(.*\)"$/\1/p' rust/rust-toolchain.toml)"
+        rustup toolchain install "$CHANNEL" --profile minimal --no-self-update
+
+    # This matrix leg compiles the Bevy client as a real child-process consumer.
+    - name: Install Bevy client system dependencies
+      if: ${{ inputs.cache-key == 'client' }}
+      shell: bash
+      run: >-
+        tools/install_ci_apt_packages.sh
+        libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev
+
+    # Restore here; the caller saves only after a successful trusted run. The
+    # source suffix allows changed code to refresh the cache, while focus keys
+    # prevent the first matrix shard from retaining only its own test binaries.
+    - name: Load persistence Cargo cache
+      id: cargo-cache
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      with:
+        path: |
+          ~/.cargo/registry/index
+          ~/.cargo/registry/cache
+          ~/.cargo/git/db
+          rust/target/.rustc_info.json
+          rust/target/debug/.cargo-lock
+          rust/target/debug/.fingerprint
+          rust/target/debug/build
+          rust/target/debug/deps
+          rust/target/debug/babylon-runtime
+          rust/target/debug/babylon-runtime.d
+        key: "persistence-${{ runner.os }}-v2-dev-${{ env.CARGO_PROFILE_DEV_DEBUG }}-test-${{ \
+             env.CARGO_PROFILE_TEST_DEBUG }}-${{ inputs.cache-key }}-${{ hashFiles('rust/Cargo.lock', \
+             'rust/rust-toolchain.toml', 'rust/Cargo.toml') }}-${{ hashFiles('rust/crates/**', \
+             '!rust/crates/**/target/**', 'rust/*.toml', 'rust/.cargo/**', 'rust/.config/**', 'contracts/**', \
+             'content/**', 'assets/**', 'docker/postgres/**', 'docker-compose*.yml', \
+             'src/babylon/data/reference/economy/**', 'tests/fixtures/qcew_economics/**', 'tools/pr_merge.py', \
+             'tools/pr_policy.py', 'tools/qcew_county_economics_v1_source_manifest.json', \
+             'tools/run_rust_postgres.sh', 'tools/rust_test_report.py', '.mise.toml', '.github/**') }}"
+        restore-keys: "persistence-${{ runner.os }}-v2-dev-${{ env.CARGO_PROFILE_DEV_DEBUG }}-test-${{ \
+                      env.CARGO_PROFILE_TEST_DEBUG }}-${{ inputs.cache-key }}-${{ hashFiles('rust/Cargo.lock', \
+                      'rust/rust-toolchain.toml', 'rust/Cargo.toml') }}-\n\
+                      persistence-${{ runner.os }}-v2-dev-${{ env.CARGO_PROFILE_DEV_DEBUG }}-test-${{ \
+                      env.CARGO_PROFILE_TEST_DEBUG }}-persistence-${{ hashFiles('rust/Cargo.lock', \
+                      'rust/rust-toolchain.toml', 'rust/Cargo.toml') }}-\n\
+                      persistence-${{ runner.os }}-v2-dev-${{ env.CARGO_PROFILE_DEV_DEBUG }}-test-${{ \
+                      env.CARGO_PROFILE_TEST_DEBUG }}-runtime_smoke-${{ hashFiles('rust/Cargo.lock', \
+                      'rust/rust-toolchain.toml', 'rust/Cargo.toml') }}-\n\
+                      "

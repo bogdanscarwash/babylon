@@ -1,0 +1,29 @@
+sequenceDiagram
+    autonumber
+    actor P as Player
+    participant T as TUI
+    participant E as Engine (in-process)
+    participant PG as Embedded PG (unix socket)
+    participant U as Uploader (async)
+    participant M as Metropole ingest
+    participant V as Replay verifier
+
+    P->>T: New Game
+    T->>PG: CREATE DATABASE babylon_save_x TEMPLATE babylon_template
+    PG-->>T: campaign uuid registered in babylon_meta
+    loop every tick
+        T->>E: advance — verbs already queued
+        E->>E: run_tick() → deterministic hash
+        E->>PG: commit deltas + outbox rows (hashes, axis_progress, timings, event counts)
+    end
+    P->>T: Save / Quit
+    T->>PG: pg_dump -Fc → saves dir (the portable save artifact)
+    Note over U: exit never blocks on network
+    U->>PG: drain outbox — committed rows only
+    U->>M: POST batch — beta key, campaign uuid, engine/defines/python/platform pins
+    alt offline or server down
+        U->>U: queue locally, retry with backoff — game never degrades
+    end
+    U->>M: POST milestone dump — same pg_dump artifact
+    M->>V: schedule replay on the matching engine build
+    V->>M: recomputed hash chain — match, or DIVERGENCE flag

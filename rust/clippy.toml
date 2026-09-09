@@ -1,0 +1,38 @@
+# Director ruling 2026-08-15: the Rust estate gets the same complexity gating
+# radon gives Python — clippy's cognitive_complexity lint, with the threshold
+# owned HERE so every clippy invocation (the rust:check gate, editor,
+# rust-analyzer) reads the same number. 25 is clippy's default; written
+# explicitly so lowering it is a deliberate ratchet (its own issue), never
+# drift. Function LENGTH (the power-of-10 ~100-line rule) already rides the
+# pedantic legs on kernel/bsl/graph via clippy::too_many_lines.
+cognitive-complexity-threshold = 25
+
+# ADR176 r21 / Task 1 of the #576 intrinsic-host train: `f64`'s own
+# transcendental methods route to the *platform* libm (glibc/musl/Apple's),
+# the exact non-reproducibility `determinism-contract.rst` names. Every
+# crossing MUST go through `babylon_kernel::transcendental`, which wraps the
+# pinned soft-float `libm` crate (0.2.16, `default-features = false`) instead.
+# `-D warnings` is workspace-wide (`rust:check`), so these are hard errors.
+# `f64::tanh` is banned for a DIFFERENT reason than the rest of this table:
+# ADR188 Row 8 ELIMINATED the intrinsic outright (the scissors balance
+# re-derives as a measure) — a permanent disposition, not an undeclared
+# crossing, so there is no babylon_kernel wrapper to redirect the call to
+# and none is coming. `f64::sqrt` STOOD in this table under the same shape
+# (ADR188 Row 6's elimination) until ADR219 (2026-08-22) took Row 6's
+# fallback rider: sqrt crosses via IEEE-754's correctly-rounded squareRoot —
+# every conforming implementation returns identical bits, so there is no
+# platform divergence to route around, and the call is direct (`f64::sqrt`),
+# the `f64::floor` precedent (ADR188 Row 2) — no kernel wrapper, because a
+# wrapper would pin nothing the standard does not already pin.
+disallowed-methods = [
+  { path = "f64::exp", reason = "platform libm — use babylon_kernel::transcendental::exp (ADR176 r21)" },
+  { path = "f64::ln", reason = "platform libm — use babylon_kernel::transcendental::ln (ADR176 r21)" },
+  { path = "f64::log", reason = "platform libm — no babylon_kernel crossing declared for an arbitrary-base log (ADR176 r21); use ::ln and change of base if one is ever needed" },
+  { path = "f64::log2", reason = "platform libm — no babylon_kernel crossing declared (ADR176 r21)" },
+  { path = "f64::log10", reason = "platform libm — no babylon_kernel crossing declared (ADR176 r21)" },
+  { path = "f64::exp2", reason = "platform libm — no babylon_kernel crossing declared (ADR176 r21)" },
+  { path = "f64::exp_m1", reason = "platform libm — no babylon_kernel crossing declared (ADR176 r21)" },
+  { path = "f64::ln_1p", reason = "platform libm — no babylon_kernel crossing declared (ADR176 r21)" },
+  { path = "f64::powf", reason = "platform libm — no babylon_kernel crossing declared (ADR176 r21)" },
+  { path = "f64::tanh", reason = "no tanh intrinsic — ADR188 Row 8 ELIMINATED it" },
+]

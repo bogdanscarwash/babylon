@@ -1,13 +1,14 @@
 /**
- * MapLegend preview — the ramp swatch strip for metric/heat/habitability
- * lenses. Renders `null` for the three balkanization-derived lenses
- * (stance/faction/collapse) by design — DeckGLMap's sibling legend-label
- * text covers those instead. Pure props (lens), no store.
+ * MapLegend v2 preview (spec-113 Lane B) — the ramp/categorical swatch strip
+ * driven by a `LensLegend` spec (`@/lib/lenses/registry`), NOT the pre-113
+ * `lens` prop. Props: `legend` (ramp | categorical | none), `label`,
+ * `currentValue` (ramp-mode marker, normalized [0,1]), `flash` (one-render
+ * domain-rescale highlight). Pure props, no store.
  */
 import { MapLegend } from "babylon-cockpit";
 
-// Inline style for width: .design-sync/previews/ isn't in Tailwind's
-// content-scan root, so w-[380px] never compiles (see learnings).
+// Inline width: .design-sync/previews/ isn't in Tailwind's content-scan root,
+// so w-[380px] never compiles (see learnings) — style the frame directly.
 function Frame({ children }: { children?: unknown }) {
   return (
     <div className="flex items-center bg-void p-3" style={{ width: 380 }}>
@@ -16,43 +17,72 @@ function Frame({ children }: { children?: unknown }) {
   );
 }
 
-export function HeatRamp() {
+// Cold Collapse ramp: near-black → crimson → gold (the imperial-rent/heat idiom).
+const HEAT_STOPS = ["#12100e", "#5a1a17", "#a83224", "#d98a2b", "#e8c05a"];
+
+export function HeatRampWithMarker() {
   return (
     <Frame>
-      <MapLegend lens={{ kind: "heat" }} />
+      <MapLegend legend={{ kind: "ramp", stops: HEAT_STOPS }} label="Heat" currentValue={0.62} />
     </Frame>
   );
 }
 
-export function HabitabilityRamp() {
+export function RampNoMarkerHonestNull() {
+  // currentValue omitted → no tick drawn (III.11: no marker beats a fabricated one).
   return (
     <Frame>
-      <MapLegend lens={{ kind: "habitability" }} />
+      <MapLegend legend={{ kind: "ramp", stops: HEAT_STOPS }} label="Imperial Rent" />
     </Frame>
   );
 }
 
-export function MetricRampProfitRate() {
+export function RampDomainRescaleFlash() {
+  // flash → one-render highlight after the domain memo reports a would-be rescale.
   return (
     <Frame>
-      <MapLegend lens={{ kind: "metric", metric: "profit_rate" }} />
+      <MapLegend
+        legend={{ kind: "ramp", stops: HEAT_STOPS }}
+        label="Exploitation Rate"
+        currentValue={0.88}
+        flash
+      />
+    </Frame>
+  );
+}
+
+export function StanceCategorical() {
+  return (
+    <Frame>
+      <MapLegend
+        legend={{
+          kind: "categorical",
+          entries: [
+            { label: "Revolutionary", color: [200, 50, 40, 220] },
+            { label: "Reactionary", color: [90, 100, 120, 220] },
+            { label: "Liberal", color: [216, 160, 60, 220] },
+            { label: "Contested", color: [255, 180, 50, 220] },
+          ],
+        }}
+        label="Political Stance"
+      />
     </Frame>
   );
 }
 
 /**
- * Honest-empty: balkanization-derived lenses have no continuous ramp, so
- * MapLegend returns null here — the caption is this preview file's own
- * annotation (outside the component) documenting that the blank space
- * below is the correct, designed render, not a capture failure.
+ * Honest-empty: `legend.kind === "none"` renders null by design (the ramp-less
+ * lenses lean on DeckGLMap's own legend-label text chip instead). The caption
+ * is this preview file's annotation, outside the component, documenting that
+ * the blank below is the correct designed render, not a capture failure.
  */
-export function NoRampForBalkanizationLens() {
+export function NoneRendersNull() {
   return (
     <Frame>
       <span className="text-[10px] italic text-shroud">
-        (MapLegend renders null for lens.kind="stance" — DeckGLMap's legend-label text covers it)
+        (MapLegend renders null for legend.kind="none")
       </span>
-      <MapLegend lens={{ kind: "stance" }} />
+      <MapLegend legend={{ kind: "none" }} label="Faction" />
     </Frame>
   );
 }

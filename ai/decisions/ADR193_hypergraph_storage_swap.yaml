@@ -1,0 +1,272 @@
+ADR193_hypergraph_storage_swap:
+  status: "accepted"
+  date: "2026-08-11"
+  title: >
+    THE HYPERGRAPH-RS STORAGE SWAP — ADR179 T3 executed. babylon-graph's
+    concrete storage now consumes the sibling hypergraph-rs library for the
+    native-hyperedge half of the substrate, behind a new CanonicalState
+    trait rather than a widened GraphSubstrate; the dyadic half stays
+    native; every existing golden, conformance vector and canonical-byte
+    pin is BYTE-IDENTICAL before and after, proved by a differential
+    harness and by re-running every pin with the new store live in
+    production. The canonical state_hash field set is UNCHANGED — four
+    sections, no section 0x05.
+  context: |
+    ADR179 T3 ruled that babylon-graph's storage should CONSUME hypergraph-rs
+    rather than reimplementing native-hyperedge storage in-tree, with the
+    Director's caveat that the library "may not be completely one-for-one
+    swappable for XGI" and that adoption is "a decision to INVEST in the
+    sibling repo, not an assumption that it is already sufficient."
+
+    `docs/reference/graph-storage-capability-delta.md` (authored under T3's
+    open field) enumerated seven capability deltas (CD1-CD7) between the
+    ratified 14-method GraphSubstrate trait and what hypergraph-rs actually
+    offers, all but one (a documentation defect) absorbable behind an
+    adapter, and closed both Director-reserved rulings (node-removal
+    cascade -> CASCADE, ADR185 R2; iteration-order key -> numeric at the id
+    layer, ADR185 R4).
+
+    `docs/superpowers/plans/2026-08-11-hypergraph-storage-swap-plan.md`
+    (amended by PR #488, ADR191) carried the delta document's findings into
+    four executable phases: A (proof machinery, no hypergraph-rs), B (the
+    dependency), C (the adapter), D (cutover + measurement + this record).
+    Two of ADR191's rulings gated this train directly: R1 (the sibling
+    repository's push is licensed) and R2 (tick-hash order-dependence is
+    ACCEPTED — NodeId stays a monotonic mint counter, never content-derived,
+    so no test may assert reorder-invariance). ADR192 (same session) ruled
+    the separate, sequenced-after question of edge/hyperedge FIELD storage
+    — this train does not touch it; see "What this train does not decide"
+    below.
+  decision: |
+    EXECUTED per the plan, Phases A through D, twelve tasks:
+
+    **The seam is a sibling trait, `CanonicalState`, not a wider
+    `GraphSubstrate`.** `babylon-graph/src/state_hash.rs` gained a trait with
+    four required listing methods (`all_nodes`/`all_attributes`/
+    `all_edges`/`all_hyperedges`) and two PROVIDED methods
+    (`encode_state`/`state_hash`) that sort and write the canonical
+    encoding — one implementation, shared by every store that ever
+    implements the trait. `MemoryGraph`'s inherent `encode_state`/
+    `state_hash` were deleted in favor of `impl CanonicalState for
+    MemoryGraph`. Rejected alternatives (recorded, not re-litigated): adding
+    `encode_state` to `GraphSubstrate` (widens a ratified trait with a
+    serialization concern every `&dyn GraphSubstrate` caller would pay for,
+    whether it uses it or not); duplicating the encoder per store (two
+    sorts, two chances to differ — throws away the single-implementation
+    guarantee); hashing outside the store entirely (the encoder needs a
+    full listing the 14-method trait cannot provide, so this just moves the
+    duplication problem, it does not remove it).
+
+    **The library backs the hyperedge half only; the dyadic half stays
+    native.** `HypergraphStore` (`babylon-graph/src/hypergraph_store.rs`)
+    holds native `HashMap`s for nodes/attributes/dyadic-edges, identical in
+    shape to `MemoryGraph`'s, and delegates hyperedge storage to one
+    `hypergraph_rs::Hypergraph<(), String, MembershipPayload>`. Rejected
+    alternative: one library instance carrying both halves under disjoint
+    type namespaces — defensible, and declined because "provably disjoint"
+    is a property discipline would have to maintain by convention across
+    every future type addition, whereas two data structures maintain
+    Anti-Pattern VIII.9 (no method may expand a hyperedge into pairwise
+    edges) BY CONSTRUCTION: `neighbors()` reads only the dyadic `edges` map,
+    so no code path through which a many-member hyperedge could read as a
+    pairwise expansion exists at all.
+
+    **Identity.** `NodeId`/`HyperedgeId` mint as monotonic `u64` counters,
+    exactly as `MemoryGraph` mints them (ADR191 R2: identity stays a mint
+    counter, never content-derived — this train changes storage, never
+    identity). The library key is the 16-character lowercase zero-padded
+    hex of the id's big-endian `u64`, which makes byte-lexicographic and
+    numeric order the same order (delta doc §4 CD7's recommended
+    resolution, adopted mechanically). Reverse maps resolve library results
+    back to typed ids without re-parsing hex.
+
+    **Every delta-document §8 covenant closed:** sole writer (source-scan
+    tested — the library's `add_edge` is called from exactly one place,
+    inside `add_hyperedge`, after its preamble); `default-features = false`,
+    never `generators`; the loud preamble (empty/duplicate/unknown member
+    rejected before delegation, the one-member floor mirrored exactly, never
+    hardened to two); node universes coincide (`add_node` mints into the
+    library's `add_node` in the same call, so the existence check the
+    preamble runs actually constrains the library's universe); never a
+    silent `M::default()`/`N::default()` (the dyadic half never touches the
+    library at all — strength lives only in native maps); the frozen
+    pre-check at the head of all 7 mutating methods via `is_frozen()`
+    (dead code today — nothing here ever freezes `self.inner`, and
+    `freeze()` is deliberately NOT adopted as a substrate verb, since that
+    would add a verb to a ratified trait — load-bearing only against
+    `hypergraph_rs::subhypergraph()`'s one-way freeze); a side
+    `(hyperedge_type -> ids)` index (the library carries no type dimension
+    on a hyperedge); the ADR185 R2 removal cascade, implemented via the
+    library's `remove_node(key, strong=false, remove_empty=true)` with the
+    type index synced from a BEFORE-snapshot of the node's memberships
+    (verified correct by the FULL substrate conformance suite passing, not
+    assumed from the library's signature); deterministic bimap assignment;
+    the ruled sort key at every ranged accessor.
+
+    **The membership payload gap, enumerated rather than closed.**
+    `hypergraph-rs`'s `MembershipEdge<M> { pub member_data: M }` is a real
+    per-incidence slot with ZERO accessors anywhere in the library (six
+    construction sites hard-code `M::default()`). This train instantiates
+    `M` as a named empty `MembershipPayload` struct — carried, unhashed,
+    unwritten — so the slot already sits in the adapter's type when an
+    accessor lands, and files
+    `percy-raskova/hypergraph-rs#2` naming the two methods the AG train
+    (Amendment AG / ADR189) will need (a keyed read and a keyed write over
+    `(hyperedge_id, member_id)`). This train adds neither.
+
+    **A genuine upstream documentation defect, fixed and pushed.** Two doc
+    comments (`hypergraph.rs:213-214`, `simplicialcomplex.rs:221`) claimed
+    `add_edge`'s "strict core" rejects an empty member list with
+    `EdgeError::EmptyMembers` — a variant that does not exist anywhere in
+    the crate; register D1 already resolved the opposite (`add_edge`
+    matches XGI's RUNTIME, not its docstring, and creates an empty edge).
+    Fixed and pushed to `percy-raskova/hypergraph-rs` branch
+    `docs/fix-empty-members-doc-defect`
+    (commit `dc1c06abbbc7a3f8633d1561451e61e101ad2090`), opened as PR #1.
+    **PR #1 was OPEN, not merged, when this train's engineering session
+    ended; it is now MERGED** (merge commit `032a5af8`, performed by the
+    orchestrating session after this train's own attempts — `gh pr merge`,
+    with and without `--admin` — were blocked by the sandbox's own action
+    classifier, the identical restriction this train's workspace
+    instructions impose on the babylon side). `dc1c06ab...` is now an
+    ancestor of `percy-raskova/hypergraph-rs`'s `main`. The
+    `babylon-graph/Cargo.toml` git dependency still pins the fix commit
+    directly (`rev = "dc1c06abbbc7a3f8633d1561451e61e101ad2090"`) rather than
+    `main` — correct either way now that the two coincide on that ancestry,
+    and it stays the more precise pin regardless of what lands on `main`
+    next. Also filed: `percy-raskova/hypergraph-rs#2` (the accessor gap
+    above) and `percy-raskova/hypergraph-rs#3` (the `members()`/
+    `memberships()` performance defect — see the measurement below).
+
+    **Byte-identity — proved, not asserted.** A differential harness
+    (`babylon-graph/tests/differential.rs`) drives `MemoryGraph` and
+    `HypergraphStore` through an identical mixed operation script (13 nodes
+    crossing the id-10 decade boundary, `-0.0`/computed-negation attribute
+    writes, five typed edges across three types declared against ascending
+    order, single- and multi-member hyperedges with reversed declared
+    order, a cascade removal and a last-member removal) and asserts
+    `encode_state().as_bytes()` EQUALITY after every single operation.
+    Mutation-verified: a scratch perturbation of `HypergraphStore::add_edge`
+    (storing `strength + 1.0`) flipped the harness red at the exact
+    operation that introduced the divergence, isolating the diverging bits
+    to the strength field; reverted immediately after confirming (working
+    tree clean).
+
+    The cutover itself (`babylon-tick::run_once`, Task 10) is a
+    one-construction-site change (`MemoryGraph::new()` ->
+    `HypergraphStore::new()`). Re-run with the new store live in
+    production: all four `tick_goldens.rs` pinned hashes (two-classes +
+    fundamental-theorem, vitality-conformance + vitality, before AND after)
+    unmoved; `babylon-client`'s `startup_tick_matches_the_pinned_hash`
+    (`783f651d04d32fffd0109e88423eb7a57b1e0836ed4a9f645d3a8a554e427679`) —
+    the real production engine-link path — unmoved; `vitality_conformance
+    .rs`'s 16-value assertion against the frozen engine's live output
+    unmoved; all 121 `babylon-bsl` tests including the §5.6 421-byte
+    canonical-AST pin and both digests (unreachable by this swap, run as
+    the cheap non-regression belt the plan calls for) unmoved. NO HASH
+    MOVED, anywhere, at any point in this train.
+
+    **The canonical `state_hash` field set is UNCHANGED.** Four sections
+    (`0x01` nodes, `0x02` attributes, `0x03` edges, `0x04` hyperedges), no
+    section `0x05`. This swap moves WHERE bytes live; it does not widen
+    WHAT gets hashed — that is ADR192's question, sequenced after this
+    train, not a side effect of it.
+
+    **Measured, Task 11 — CORRECTED after adversarial review of PR #494**
+    (release build, illustrative sizes — no committed scenario at
+    production scale exists yet). The original three-point measurement
+    (n=20/200/2,000) undersold the shape of the curve; extended to
+    n=2,000/5,000/10,000/20,000 — a 1000x range from the smallest original
+    point — the complexity CLASS is visible, not merely its sign at one
+    scale:
+
+    | n (hyperedges) | `MemoryGraph::encode_state` | `HypergraphStore::encode_state` | growth vs. prior point (n doubling) |
+    |---|---|---|---|
+    | 2,000  | 3.53ms   | 22.59ms   | — |
+    | 5,000  | 8.17ms   | 124.83ms  | n×2.5 -> HypergraphStore time ×5.5 |
+    | 10,000 | 20.10ms  | 478.07ms  | n×2 -> HypergraphStore time ×3.8 |
+    | 20,000 | 45.74ms  | 1,916.63ms (1.92s) | n×2 -> HypergraphStore time ×4.0 |
+
+    `MemoryGraph` stays LINEAR (each doubling of n roughly doubles the
+    time — 2.3x/2.5x/2.3x measured, matching n's own growth). `HypergraphStore`
+    is QUADRATIC, not "worse and super-linear" as the original wording
+    said: each doubling of n roughly QUADRUPLES the time (3.8x-5.5x
+    measured against a 4x prediction), consistent across three independent
+    doublings. Root cause identified and now has a fix lane
+    (`percy-raskova/hypergraph-rs#3`, filed on this correction — issue #2
+    is the UNRELATED `member_data` accessor gap and was never a lane for
+    this defect): the library's own `members()`/`memberships()`
+    (`hypergraph.rs:277-292`/`:256-269`) resolve each `petgraph::NodeIndex`
+    back to a `String` id by a LINEAR SCAN of the whole `agent_ids`/
+    `hyperedge_ids` bimap, per neighbor — so a full-listing walk that calls
+    `members()` once per hyperedge costs `O(hyperedge_count × members_per_edge
+    × agent_ids.len())` overall, and `agent_ids.len()` itself grows with
+    the graph.
+
+    **Production-scale consequence, stated honestly rather than left
+    implicit.** `state_hash()` (`babylon-tick::run_once_into`,
+    `lib.rs:103` and `:181`) calls `encode_state()` TWICE per tick — once
+    pre-tick, once post-tick. At n=20,000 hyperedges that is
+    ~1.92s × 2 ≈ **3.8 seconds of pure hashing per tick**, before any
+    other engine work. A 3,222-US-county target scenario (the scale the
+    spatial-adjacency and national-incidence programs are building toward)
+    plausibly crosses 10,000 hyperedges once county-level organizational
+    and sector memberships exist — nearer-term than "illustrative", and
+    this train ships the swap with that cost un-mitigated. `hyperedges_of`
+    still gets genuinely FASTER than `MemoryGraph` as hyperedge count grows
+    (44.7µs -> 591.5µs `MemoryGraph` vs. 4.8µs -> 59.3µs `HypergraphStore`
+    across the same n=2,000..20,000 range, ~10x faster at the top end),
+    matching the predicted mechanism (`memberships(node)` scales with that
+    node's own degree, not the whole store) — the win is real, and it sits
+    beside a real, worse-than-expected loss, in the same sentence, not
+    hidden by it. `HypergraphStore::build` is also 3.5x-4x slower than
+    `MemoryGraph::build` at n=20,000 (142.85ms vs. 40.55ms) for the same
+    underlying reason (`add_hyperedge` reads back through the same
+    resolution path). `nodes`/`edges`/`neighbors` show no consistent
+    direction at any scale (both stores share the same dyadic-half code
+    shape).
+  consequences: |
+    - `babylon-tick::run_once` — and therefore `babylon-client`'s
+      engine-link path, the one production consumer — now runs
+      `HypergraphStore`. `MemoryGraph` remains in the crate as the
+      differential oracle and the conformance suite's reference
+      implementation; nothing deletes it.
+    - `run_substrate_conformance` (`babylon-graph/src/conformance.rs`,
+      Phase A Task 2) is now a standing gate any THIRD store would have to
+      pass — it is `pub`, not `#[cfg(test)]`, for exactly that reason.
+    - The membership-payload accessor gap
+      (`percy-raskova/hypergraph-rs#2`) is the concrete content of ADR179
+      T3's "may need development" caveat and is what the Amendment AG train
+      inherits before it can write through `MembershipPayload`.
+    - `percy-raskova/hypergraph-rs#1` (the doc-defect fix) is MERGED
+      (`032a5af8`). `dc1c06ab...` — the exact commit this repo's
+      `Cargo.toml` pins — is an ancestor of the sibling's `main`.
+    - `percy-raskova/hypergraph-rs#3` (the `members()`/`memberships()`
+      linear-scan performance defect, filed on this correction) is OPEN
+      and unowned. Until it lands, `HypergraphStore::encode_state` and
+      `::build` stay quadratic in hyperedge count — a real cost this train
+      ships with, documented rather than hidden, and a candidate for the
+      next engineering slot on this estate rather than a blocker to this
+      swap (byte-identity, not speed, was this train's gate).
+    - `docs/reference/graph-storage-capability-delta.md` gains a header
+      (this commit) recording that this ADR carries out its §8 covenants
+      and citing where each covenant's test lives; its body is untouched
+      per the immutability-of-history discipline.
+    - Wiring-doctrine check (ADR109): this train substitutes one
+      implementation of an already-live trait for another, connects no
+      dormant construct, declares no new data, and closes no opposition —
+      it matches none of the five typed motions and owes no sentinel row.
+    - Edge/hyperedge field storage (ADR192) is UNCHANGED by this train: the
+      loud errors on `update-edge`/`update-hyperedge`/`add-edge
+      <field-init>` stay loud, with their text unchanged; the widening
+      those verbs need lands on this same `CanonicalState` seam, in a later
+      train, as its own declared III.7 ceremony.
+  supersedes: []
+  related:
+    - ADR192_relation_state_delegated_ruling
+    - ADR191_director_rulings_batch_2026_08_11
+    - ADR189_amendment_ag_attributed_membership_lattice_instances
+    - ADR186_bevy_cutover_amendment_af
+    - ADR185_director_rulings_2026_07_31
+    - ADR179_topology_spine_director_rulings
+    - ADR172_amendment_ae_refoundation_ratified

@@ -1,0 +1,6 @@
+[package]
+name = "babylon-evidence"
+version = "0.0.0"
+
+[dependencies]
+babylon-tick = { path = "../babylon-tick" }

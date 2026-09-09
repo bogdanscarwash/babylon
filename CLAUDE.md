@@ -1,174 +1,191 @@
-# CLAUDE.md
+# Repository Rules for Agents
 
-Operating guidance for any coding agent working in this repository (Claude Code reads this file
-natively; `AGENTS.md` is a symlink to it, so every tool shares one source of truth).
+`AGENTS.md` points here. Keep this live configuration below 200 lines. Use `NORTH_STAR.md` for game direction, `docs/concepts/architecture.rst` for the live boundary, and `docs/agents/governance.md` for contributor authority.
 
-<!-- This file is living configuration, not documentation. Keep it lean (<200 lines), accurate,
-     and imperative. Push deep reference into ai/ and docs/ that load on demand. -->
+## Babylon
 
-## Babylon — The Fall of America
+Babylon is an entertainment-first emergent political-economy game, not a forecast
+or scientific reproduction. Theory constrains causes but does not predetermine
+results. Determinism proves computational identity, not scientific truth.
+Historical cases test causal signatures and counterfactual behavior. Bevy remains
+an administrative viewer with no player action.
 
-Geopolitical simulation engine modeling the collapse of American hegemony through MLM-TW
-(Marxist-Leninist-Maoist Third Worldist) theory. Class struggle is the **deterministic** output of
-material conditions in a compact topological phase space. **Mantra: Graph + Math = History.**
+This checkout implements Gate 2. These four executable gates follow:
 
-You are a senior engineer on this codebase. You write deterministic, tested, mathematically
-grounded code, and you follow the Babylon Constitution for architectural decisions.
+<!-- Vale: each protected item is a governed gate name. -->
+<!-- vale ste.UnapprovedWords = NO -->
+<!-- vale Vale.Terms = NO -->
+<!-- vale ste.NounClusters = NO -->
+1. **PostgreSQL/H3/Archive decision-loop slice**
+1. **Productive & distributive circuit**
+1. **Player agency**
+1. **COVID emergence benchmark**
+<!-- vale Vale.Terms = YES -->
+<!-- vale ste.UnapprovedWords = YES -->
+<!-- vale ste.NounClusters = YES -->
 
-## Constitutional Compact
+Read `CONSTITUTION.md` v4.2.0 before a change to game law. ADR221 maps its predecessors and preserves history. `ai/mantras.yaml` is the canonical machine-readable orientation.
 
-Irreducible constraints. Full text: `CONSTITUTION.md` (v2.8.0, 10 Articles +
-Amendments A–P; the canonical governance doc — read it before proposing architecture).
+## Constitutional compact
 
-**MUST**
+- Equal input bytes must produce equal output bytes and hashes.
+- The dialectic is primitive. BSL cannot add a mathematical primitive.
+- Each formal element needs a material relation. Geography stays fixed.
+- Political claims use overlays. Public hyperedges stay first-class.
+- AI can parse, retrieve, and narrate. Only the engine judges mechanics.
+- Classify substantive values as `Observed`, `Derived`, `Calibrated`, or `Designed`.
+- An external-event rule can add only an allowed pressure, burden, or capacity effect.
+  It cannot write downstream results.
+- A rule cannot impose a sigmoid or a second fixed response curve.
+- Each game display must answer a decision question. An administrative display
+  cannot pass a game milestone.
 
-- The dialectic `D = (A, Ā, w, T, σ)` is primitive; all partitions emerge from it.
-- Every tick produces a deterministic hash. Non-determinism is a bug.
-- Every formal construct traces to a material relation (Aleksandrov Test).
-- The spatial substrate is immutable; political claims are overlays.
-- AI parses/narrates only; the engine adjudicates the math.
+Stop and ask the Director before a new primitive, weaker prohibition, or change to the reserved theory line. Do not infer live authority from an old ADR.
 
-**MUST NOT**
+## Live architecture
 
-- Mutate the substrate, use ungrounded tensors, or substitute fixtures for runtime data.
-- Invent primitives without a constitutional amendment.
-- Skip the TDD red phase.
+<!-- Vale: these paragraphs preserve literal crate, schema, and Linear identifiers. -->
+<!-- vale ste.UnapprovedWords = NO -->
+<!-- vale ste.NounClusters = NO -->
+The live Rust path is `babylon-kernel`, `babylon-graph`, `babylon-bsl`,
+`babylon-tick`, and `babylon-client`. Every BSL rule declares one causal role
+and evidence class. Built-in declarations must match
+`GOVERNED_RULE_ATTRIBUTIONS`. Unknown mod and fixture IDs remain self-declared.
 
-**Escalation:** if a task requires violating a limit, STOP and propose an amendment.
+Mechanics have typed effects. Recognizers, external events, and intents are exact-allowlist and default-deny. Restricted production footprints must equal their unique allowance rows, so CI rejects dead permissions. Executable shocks and intents do not exist.
 
-## Architecture: The Embedded Trinity
+Same-rank rules compose sequentially. `TickSession` publishes graph, events, identity-free event-then-write `AuditReceipt` rows,
+completed time, and `NominalWorldHash` only after the detached tick succeeds. `GraphStateHash` stays graph-only.
+The Bevy viewer shows the world hash.
 
-Three-layer local system, no external servers. Full map: `ai/architecture.yaml`.
+Rust's executable `phase_order.rs` owns the causal schedule. The removed
+Python engine is recoverable at `p27-python-freeze`; BSL citations read that
+Git tag. Historical detector labels are not promised outcomes.
 
-- **The Ledger** — rigid material state. SQLite reference DB (`data/sqlite/marxist-data-3NF.sqlite`,
-  read-only) + PostgreSQL runtime (`src/babylon/persistence/`) + a few JSON seeds in
-  `src/babylon/data/game/`.
-- **The Topology** — fluid relational state via **rustworkx** (`babylon.topology.BabylonGraph`;
-  its own package since Program 14; NetworkX was removed, Amendment L / ADR052).
-  `WorldState.to_graph()` / `from_graph()`. Foundational node types
-  `social_class` and `territory`; later specs add `organization`, `institution`, `sovereign`,
-  `hex`, `industry`, `key_figure`. Edges: EXPLOITATION, SOLIDARITY, WAGES, TRIBUTE, TENANCY,
-  ADJACENCY, …
-- **The Archive** — semantic history for AI narrative via **pgvector** in Postgres
-  (`persistence/pgvector_store.py`; replaced ChromaDB in spec-037). AI observes, never controls.
+Reference Parquet and deterministic SQLite are build artifacts. Retained
+Python builds reference data and runs repository and operator tools.
 
-**Principle:** state is pure data; the engine is pure transformation; they never mix.
+Gate 3 now has the Rust three-schema boundary, committed tick envelope,
+marker-last transaction, checkpoint restart, and Archive dirty receipts. The
+fog-safe decision loop and semantic Archive worker remain. ADR250 reordered the
+later gates: Gate 4 adds the productive and distributive circuit, and Gate 5
+adds next-period intents and Bevy player actions. Gate 6 adds governed
+external-event rows and the merged COVID benchmark.
 
-## Engine
+<!-- Vale: the accepted Linear status uses a passive state label. -->
+<!-- vale strunk.ActiveVoice = NO -->
+<!-- vale ste.PassiveVoice = NO -->
+PER-48 is decided.
+<!-- vale ste.PassiveVoice = YES -->
+<!-- vale strunk.ActiveVoice = YES -->
+The one-way cutover is complete. Rust owns authoritative game-managed Postgres.
+Python retains only current data, repository, and operator consumers. It has
+no simulation engine, mutable game SQLite, transition reader, or Django browser.
+<!-- vale ste.NounClusters = YES -->
+<!-- vale ste.UnapprovedWords = YES -->
 
-`SimulationEngine.run_tick(graph, services, context)` runs 26 Systems in strict materialist-causality
-order — **source of truth: `simulation_engine._DEFAULT_SYSTEMS`**; annotated order in
-`ai/architecture.yaml`. The three phases:
+## Source rules
 
-1. **Material Base** (positions 1–13, + Substrate @2.5): Vitality, Territory, Production, TickDynamics,
-   ReserveArmy, Community, Lifecycle, Solidarity, ImperialRent, Dispossession, Decomposition,
-   ControlRatio, Metabolism.
-2. **Action** (@14): OODASystem — organizations observe + act.
-3. **Consequences** (14.5–21): FactionInfluence, Survival, Struggle, Consciousness, FascistFaction,
-   Sovereignty, Contradiction, ContradictionField, FieldDerivative, CollapseTransition, EdgeTransition.
+Rust/BSL owns material effects. Author numeric circuit values in
+`content/scenarios/michigan/defines.toml`; the runtime captures typed parameters
+in each new campaign. Keep evidence classes explicit (ADR258).
+Use native public hyperedges, strict types, explicit errors, specific
+type-ignore codes, and production vocabulary. Do not use a `test_` prefix in
+production source.
 
-Key modules: `engine/services.py` (concrete ServiceContainer; the DI *protocol* is
-`kernel/services.py`), `kernel/event_bus.py` (plain-str types; the `EventType` enum — 79 values —
-is in `models/enums/events.py`), `engine/formula_registry.py` (23 hot-swappable formulas),
-`engine/observers/` (`SessionRecorder` black-box replay, `EndgameDetector` for the 5 terminal
-outcomes: REVOLUTIONARY_VICTORY, ECOLOGICAL_COLLAPSE, FASCIST_CONSOLIDATION, RED_OGV,
-FRAGMENTED_COLLAPSE).
+Use TDD: show RED, make it pass, then refactor. Keep game data typed and
+immutable. Python models use frozen Pydantic types.
+`model_copy(update=...)` skips validation. Pass dependencies explicitly.
 
-**Layering (Program 14, enforced by `mise run lint:imports`):** `kernel` < `models`/`formulas` <
-`topology` < `domain` (economics, dialectics, organizations, institution, bifurcation, geography)
-< `persistence` < `engine`; `intelligence` (ai + rag) observes. Nothing imports the engine
-backward; the kernel imports nothing above itself.
+Do not run Sphinx, `cargo doc`, or a CI task that generates documentation unless the Director requests it. This includes local `mise run ci:rust`.
+The pre-push hook runs `mise run rust:check-no-docs` when Rust or its gate definitions change. Use only targeted Vale and format checks on changed prose.
 
-## Mathematical Core
+## Tests and behavior contracts
 
-- **Fundamental Theorem:** revolution in the Core is impossible while `W_c > V_c` (wages > value
-  produced); the gap is Imperial Rent (Φ).
-- **Survival Calculus:** `P(S|A) = Sigmoid(Wealth − Subsistence)`, `P(S|R) = Organization / Repression`;
-  rupture when `P(S|R) > P(S|A)`.
-- **Bifurcation:** when wages fall, agitation routes to Fascism (+1) or Revolution (−1) by SOLIDARITY
-  edge presence.
-- **Metabolic Rift:** `ΔB = R − (E·η)`; overshoot `O = C / B` (O > 1 = ecological overshoot).
-
-Formulas: ~56 functions across 17 modules in `src/babylon/formulas/` (re-exported via `__init__.py`
-`__all__`; the two Epoch-2 placeholder Marx formulas were retired by fork-ledger F12).
-Imperial-rent tensor/Leontief math lives in `src/babylon/domain/economics/`, not `formulas/`.
-
-## Configuration — one moddable source of truth
-
-All tunable coefficients live in `GameDefines` (Pydantic, 39 category sub-models in
-`src/babylon/config/defines/`). The **canonical, player-editable single source of truth** is
-`src/babylon/data/defines.yaml` — generated from the schema by `tools/generate_defines_config.py`,
-read by `GameDefines.load_default()`, sync-guarded by `tests/unit/config/test_constants_sync.py`.
-Modding guide: `docs/how-to/modding-defines.rst`. Never hardcode a coefficient — add a define and
-regenerate the YAML (`poetry run python tools/generate_defines_config.py`).
-
-## Coding standards
-
-- **Pydantic first:** all game objects are frozen `BaseModel`s; use constrained types (`Probability`,
-  `Currency`, `Intensity`, `Coefficient`), never raw dicts or bare floats.
-- **Data-driven:** logic reads from `GameDefines`/`defines.yaml`, not hardcoded conditionals.
-- **Strict typing:** MyPy strict, explicit return types. SQLAlchemy 2.0 `DeclarativeBase` + `Mapped`.
-- **TDD:** red → green → refactor. `@pytest.mark.red_phase` for intentionally-failing tests.
-- **RST docstrings** on all public classes/functions (Sphinx `-W` blocks CI on malformed ones);
-  move heavy theory to `docs/reference/*.rst`. See `docs/how-to/` for the docstring pattern.
-- **No `test_` prefix in production code** (pytest auto-collects it) — use `check_`/`verify_`/`validate_`.
-- **Type-ignore** with a specific code (`# type: ignore[import-untyped]`), never blank.
-- **`SimulationConfig`** is a run-scoped config carrying only `rng_seed` (Constitution III.7) — NOT a
-  coefficient carrier; coefficients are in `GameDefines`.
-
-## Git & commits
-
-Benevolent-Dictator model (Persephone Raskova is BD). Branch from `dev`
-(`feature/|fix/|docs/|refactor/|test/`), never commit directly to `main` or `dev`. Conventional
-commits (`type(scope): desc`). **Commit after each unit of work** — pre-commit hooks test only staged
-files, so intertwined units force ugly giant commits. Use `mise run commit -- "type(scope): msg"`
-(hook-safe: pre-runs hooks, re-stages fixes, verifies HEAD moved). End commit messages with the
-`Co-Authored-By` trailer. Full workflow: `CONTRIBUTORS.md`.
-
-## Definition of done
-
-- `mise run check` — lint + format + typecheck + `test:unit` — green.
-- For any engine/economics/defines change: `mise run qa:regression` **byte-identical** (5 scenarios).
-  If a value moves unintentionally, STOP; if intentionally, regenerate baselines and say so.
-- After significant work: update `ai/state.yaml`; add an ADR in `ai/decisions/` (individual
-  `ADR0NN_*.yaml` files + `index.yaml` catalog) for architectural decisions.
-
-## Commands
-
-`mise tasks` lists all ~120 tasks (full reference: `ai/tooling.yaml`). Agent inner loop:
+Run the smallest applicable test first and do not overlap heavy gates. `pytest` covers
+retained data, repository, and operator tools. Delete implementation-coupled
+tests with obsolete code. Preserve independently needed byte and schema
+contracts and verify the consuming Rust path.
 
 ```bash
-mise run commit -- "type(scope): msg"   # hook-safe commit
-mise run check                          # fast gate: lint + format + typecheck + test:unit
-mise run check:quick                    # same minus the test leg
-mise run test:q -- tests/unit/foo.py    # quiet scoped pytest (keeps cache => --lf works)
-mise run test:failed                    # re-run last failures
-mise run qa:regression                  # 5-scenario byte-identical baseline gate
-mise run sim:status                     # canonical-run status (tick/520, DB size, liveness)
-mise run db:sql -- "SELECT ..."         # one-shot SQL vs babylon_test
+mise run test:q -- tests/unit/path/to/test_file.py
+mise run check
+cd rust && cargo fmt --all -- --check
+cd rust && cargo test -p <changed-crate> --locked
+mise run rust:check-no-docs
 ```
 
-CI (`.github/workflows/ci.yml`) invokes the same mise tasks devs run (`test:unit-ci`, `lint:check`,
-`qa:regression`, …) — the only raw-poetry exceptions are the py3.13 forward-compat leg (`nightly.yml`)
-and a handful of documented one-offs (migrations, doc build, ad hoc pytest legs).
+Run `check` for the Python gate. For Rust changes, run the applicable format, scoped test, clippy, and BSL-sentinel legs separately without documentation.
+Mechanics changes also run their Rust conformance and replay contracts. Reject `NaN`, infinity, unchecked overflow, and an iteration order that can change.
 
-## Gotchas (hard-won; details in `ai/anti-patterns.yaml`)
+Do not edit a baseline to hide a fault. An intentional baseline change requires
+its ceremony, trailer, and `tools/generate_ceremony_message.py` record.
 
-- `WorldState.events` is **per-tick, not cumulative** — a tick with no events is `[]`, never carried over.
-- **Graph round-trip loses data:** `from_graph()` excludes computed fields and defaults missing ones;
-  a `data.get("field", 0.0)` fallback silently masks a missing-field bug.
-- **Systems mutate the shared graph in-place** in strict order — read `graph.nodes[id]["wealth"]`, not
-  model attributes; each system sees prior systems' mutations.
-- **MyPy misses Pydantic dynamic-attribute errors** — runtime tests are essential.
-- **`dynamic_hex_state` is SPARSE** (spec-089 delta persistence): read `v_hex_state_asof`, never
-  `WHERE tick = N` on the raw table; `MAX(tick)` ≠ last committed tick (that's `tick_commit`).
-- **`WorldState` is frozen** — mutate via `model_copy(update={...})`, never assignment.
-- **Inject dependencies explicitly**, don't discover them at runtime.
+## Git and merge rules
 
-## Maintaining this file
+<!-- Vale: these paragraphs preserve exact Linear fields and Git terms. -->
+<!-- vale Vale.Spelling = NO -->
+<!-- vale ste.UnapprovedWords = NO -->
+<!-- vale ste.NounClusters = NO -->
+Linear alone owns current issue identity, scope, status, priority, dependencies,
+horizon, milestones, schedule, and work. GitHub owns source, PRs, reviews, and
+historical evidence. The team closed GitHub Project #7 and Project #8. They are
+historical inputs. The migration is complete, and PER-15 is complete. Neither board is live.
 
-This file is **yours**. You have standing permission to modify `CLAUDE.md` — and to shape your own
-operating instructions more broadly — whenever you see fit, without asking first. When you learn
-something durable (a convention, a corrected fact, a gotcha you hit twice), fix it here and prune what
-went stale; treat it as living config with a lifecycle, not a monument. Keep it lean and link out for
-depth. `AGENTS.md` symlinks to this file, so one edit updates both.
+`ai/state.yaml` is historical implementation evidence, and `project/` is non-live context.
+
+Create regular lanes from `dev` and target `dev`. Use `feature/`, `fix/`, `docs/`,
+`refactor/`, `test/`, or a `codex/PER-123-short-name` lane. Link the PER identity
+as `docs/agents/governance.md` directs: `Part of PER-N` for partial delivery and
+`Fixes PER-N` only for final acceptance. Never commit directly to `dev` or `main`.
+
+Delete obsolete code. Do not add shims, aliases, adapters, deprecated paths, or backward-compatibility layers unless the Director explicitly requires them.
+A critical hotfix alone can branch from and target `main`. Its Director-only merge requires a `dev` backport.
+For a release, prove `origin/main` is an ancestor of `origin/dev`, then qualify exact `dev` with `main.yml`.
+After the Director merge, return main through `release:prepare-dev-sync` before `release:tag` can publish.
+<!-- vale ste.NounClusters = YES -->
+<!-- vale Vale.Spelling = YES -->
+Use `type(scope): description`, one logical unit, and the required co-author
+trailer. Commit with `mise run commit -- "type(scope): description"`.
+
+Before merge, pin green CI to the PR head SHA. Copilot evidence is advisory. An unresolved review thread blocks.
+<!-- vale ste.UnapprovedWords = YES -->
+Use only `mise run pr:merge -- N`. Do not use `gh pr merge --auto`. The Director
+controls all merges to `main`.
+
+Keep unrelated user changes unchanged. Report an unrelated fault unless the owner expands scope.
+
+## Toolchain and host safety
+
+Use native libraries and `.mise.toml`, `mise.lock`, and `.python-version` pins (ADR252). Install with `mise install --locked` and `mise run install`.
+Run Cargo from `rust/` to use `rust-toolchain.toml`. Reference tools use `mise exec -- uv run --frozen python` in the project `.venv`. The builder checks SQLite 3.53.1.
+
+Do not set `PYTHONPATH`. Run heavy gates uncapped and serially. Keep `BLAS=1`.
+
+`earlyoom` is the host backstop. Use `mise run mcp:reap`. Do not use broad
+`pkill`.
+
+## Important traps
+
+<!-- Vale: this block preserves exact identifiers from recurring failures. -->
+<!-- vale Vale.Spelling = NO -->
+<!-- vale ste.UnapprovedWords = NO -->
+<!-- vale ste.NounClusters = NO -->
+Read `docs/agents/gotchas.md` for per-tick `WorldState.events`, graph round-trip
+loss, shared-graph order, Pydantic runtime checks, immutability, and dependency
+injection.
+
+- `dynamic_hex_state` is sparse. Read `v_hex_state_asof`. `tick_commit`, not
+  `MAX(tick)`, marks durability.
+- `end-of-file-fixer` can add a trailing newline. Use a tolerant comparison or
+  a precise exclusion.
+- Workflow `args` can arrive absent or stringified. Parse first. Use a hard
+  fallback only for known values.
+<!-- vale ste.NounClusters = YES -->
+<!-- vale ste.UnapprovedWords = YES -->
+<!-- vale Vale.Spelling = YES -->
+
+## Records
+
+Keep old ADRs and reports unchanged. Add an ADR for a new architecture decision.
+Linear owns status and tasks. Verify source and executable evidence before claiming behavior.

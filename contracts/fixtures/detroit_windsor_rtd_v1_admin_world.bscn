@@ -1,0 +1,9 @@
+(scenario detroit-windsor-rtd-v1/admin-control
+  (deffield territory/administrative-fips int intensive)
+
+  (node macomb NodeType/TERRITORY
+    (territory/administrative-fips 26099))
+  (node oakland NodeType/TERRITORY
+    (territory/administrative-fips 26125))
+  (node wayne NodeType/TERRITORY
+    (territory/administrative-fips 26163)))

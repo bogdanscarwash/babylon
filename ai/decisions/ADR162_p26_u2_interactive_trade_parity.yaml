@@ -1,0 +1,61 @@
+ADR162_p26_u2_interactive_trade_parity:
+  status: "accepted"
+  date: "2026-07-27"
+  title: >
+    P26 U2 — interactive trade parity: the playable game gets the spec-101
+    estate via typed W-C motions (TradeWiring seam, phi-distribution context
+    keys, vol2_step seam-row closure, Leontief overrides wired
+    loud-degradable, Wayne imperial-circuit TRIBUTE seeding).
+  context: |
+    ADR160's audit: spec-101 trade was live ONLY on the headless batch path —
+    interactive campaigns had no external nodes, silent-no-op phi
+    distribution, a zero-stub Leontief pipeline, and zero TRIBUTE edges.
+    Contract pinned BEFORE code (specs/101-trade-activation/
+    u2-interactive-parity-contracts.md, c0f17798); tests written red-first.
+  decision: |
+    (1) TradeWiring (src/babylon/game/trade.py): frozen carrier of
+    boundary_register / external_nodes_phi / county_exposure_by_external /
+    start_year / weeks_per_year / optional vol2_step, with
+    simulated_year(tick) = start_year + tick // weeks_per_year;
+    build_interactive_trade_wiring composes the ALREADY-live pieces
+    (initialize_session, spec-100 county-exposure reader, tick-0
+    external-node phi query) and raises typed TradeDataUnavailableError when
+    the reference DB is absent (III.11 — loud, never a silent stub).
+    (2) GameSession.advance_tick stamps the gate inputs each tick
+    (runner.py:440-447 twin) and folds register DRAIN_EDGE rows into the
+    per-tick envelope (bridge.py:505 twin — buffer hygiene + atomic commit);
+    create_new_campaign/resume_campaign thread trade + economics_overrides;
+    services.boundary_register gets the runner-twin assignment. trade=None
+    is the byte-identical pre-U2 path.
+    (3) WayneCountyTradeScenario (registered, name wayne_county_trade) seeds
+    the canonical imperial circuit — C005 periphery worker abroad
+    -EXPLOITATION-> C006 comprador abroad -TRIBUTE-> C003 Wayne core
+    bourgeoisie, + CLIENT_STATE return — values MIRRORED from
+    create_imperial_circuit_scenario (canonical shape, no improvised theory
+    numbers); the default wayne_county build stays byte-identical (SC-007,
+    qa fixtures, the M3 raster lane's snapshots).
+    (4) cli/play.py composition root: real economics overrides via the
+    headless runner's _build_economics_overrides (documented twin import)
+    over the Detroit tri-county scope + trade wiring for every playable
+    campaign; reference-DB absence degrades LOUDLY (one warning naming
+    every degraded service — the gamma-unwired precedent).
+    (5) Seam row vol2_circulation_vol2_step CLOSED: supplier_files names
+    game/session.py; the F-2 exemption retired; witness ledger
+    re-dispositioned 12 -> 11 with a dated GRADUATED note. DISCLOSED
+    INERT HALF: no production code constructs a Vol2CirculationStep yet
+    (zero constructors existed anywhere, headless included — construction
+    needs LODES study-area design work beyond a wiring motion); the
+    session-side supplier is live, carriage-ready, and the construction
+    lands with the U5 engine train (blocking-dependency citation per
+    ai/wiring-doctrine.md).
+  consequences:
+    positive:
+      - "Phi flows in the PLAYABLE game: a real interactive tick distributes external-node phi into DRAIN_EDGE rows committed with the tick envelope (pinned by test)"
+      - "TRIBUTE has an edge to walk interactively; comprador -> core bourgeoisie transfer verified against a same-seed control run"
+      - "Interactive campaigns run the real gamma/melt/Leontief/Vol I-III calculator stack instead of zero-stub defaults"
+      - "qa:regression AND the golden vault verified byte-identical — the headless estate is untouched"
+    negative:
+      - "First dev-box campaign with the drive mounted may drift interactive vault pages -> declared section-6.5 ceremony when it happens"
+      - "vol2_step remains supplier-wired but unconstructed in production until U5 (disclosed above)"
+      - "New campaigns record scenario=wayne_county_trade — save-compat note for pre-U2 lobby rows (resume path unaffected; it hydrates from the graph)"
+  file: ADR162_p26_u2_interactive_trade_parity.yaml

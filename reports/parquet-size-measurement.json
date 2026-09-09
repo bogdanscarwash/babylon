@@ -1,0 +1,394 @@
+{
+  "db": "data/sqlite/marxist-data-3NF.sqlite",
+  "sqlite_runtime": "3.46.1",
+  "pragmas": {
+    "page_size": 4096,
+    "application_id": 0,
+    "user_version": 0,
+    "encoding": "UTF-8"
+  },
+  "threshold_bytes": 1800000000,
+  "total_parquet_bytes": 268689858,
+  "tables": [
+    {
+      "table": "fact_qcew_annual",
+      "rows": 14670249,
+      "parquet_bytes": 111770701
+    },
+    {
+      "table": "dim_county_geometry",
+      "rows": 3222,
+      "parquet_bytes": 45806955
+    },
+    {
+      "table": "fact_faf_commodity_flow",
+      "rows": 2494901,
+      "parquet_bytes": 31955414
+    },
+    {
+      "table": "fact_census_poverty",
+      "rows": 26576550,
+      "parquet_bytes": 29641401
+    },
+    {
+      "table": "fact_lodes_commuter_flow",
+      "rows": 2645347,
+      "parquet_bytes": 19056915
+    },
+    {
+      "table": "fact_census_income",
+      "rows": 7207200,
+      "parquet_bytes": 8505465
+    },
+    {
+      "table": "fact_bea_county_gdp",
+      "rows": 1995283,
+      "parquet_bytes": 7666344
+    },
+    {
+      "table": "fact_census_housing",
+      "rows": 1351380,
+      "parquet_bytes": 2386094
+    },
+    {
+      "table": "fact_qcew_county_rollup",
+      "rows": 240488,
+      "parquet_bytes": 2231358
+    },
+    {
+      "table": "fact_census_worker_class",
+      "rows": 900900,
+      "parquet_bytes": 1710006
+    },
+    {
+      "table": "fact_bea_io_coefficient",
+      "rows": 162927,
+      "parquet_bytes": 1694500
+    },
+    {
+      "table": "fact_census_median_income",
+      "rows": 314704,
+      "parquet_bytes": 937631
+    },
+    {
+      "table": "fact_county_exposure_by_external",
+      "rows": 384200,
+      "parquet_bytes": 917967
+    },
+    {
+      "table": "fact_census_rent_burden",
+      "rows": 450450,
+      "parquet_bytes": 792752
+    },
+    {
+      "table": "fact_trade_monthly",
+      "rows": 44808,
+      "parquet_bytes": 709623
+    },
+    {
+      "table": "fact_bls_unemployment_decomposition",
+      "rows": 51404,
+      "parquet_bytes": 592778
+    },
+    {
+      "table": "fact_productivity_annual",
+      "rows": 17336,
+      "parquet_bytes": 592662
+    },
+    {
+      "table": "fact_census_income_sources",
+      "rows": 45046,
+      "parquet_bytes": 488412
+    },
+    {
+      "table": "ingest_checkpoint",
+      "rows": 47339,
+      "parquet_bytes": 202048
+    },
+    {
+      "table": "fact_census_education",
+      "rows": 80525,
+      "parquet_bytes": 167001
+    },
+    {
+      "table": "bridge_county_h3",
+      "rows": 48764,
+      "parquet_bytes": 158431
+    },
+    {
+      "table": "fact_census_employment",
+      "rows": 22547,
+      "parquet_bytes": 88934
+    },
+    {
+      "table": "fact_census_rent",
+      "rows": 44997,
+      "parquet_bytes": 77226
+    },
+    {
+      "table": "dim_geographic_hierarchy",
+      "rows": 6468,
+      "parquet_bytes": 57890
+    },
+    {
+      "table": "dim_county",
+      "rows": 3285,
+      "parquet_bytes": 36199
+    },
+    {
+      "table": "dim_industry",
+      "rows": 2660,
+      "parquet_bytes": 35723
+    },
+    {
+      "table": "fact_census_institutional_ownership",
+      "rows": 6570,
+      "parquet_bytes": 33995
+    },
+    {
+      "table": "fact_eviction_lab_filing",
+      "rows": 6570,
+      "parquet_bytes": 33587
+    },
+    {
+      "table": "fact_foreclosure_rate",
+      "rows": 6570,
+      "parquet_bytes": 33587
+    },
+    {
+      "table": "fact_census_hours",
+      "rows": 16062,
+      "parquet_bytes": 28452
+    },
+    {
+      "table": "dim_employment_area",
+      "rows": 1607,
+      "parquet_bytes": 25717
+    },
+    {
+      "table": "fact_broadband_coverage",
+      "rows": 3221,
+      "parquet_bytes": 24025
+    },
+    {
+      "table": "dim_metro_area",
+      "rows": 1119,
+      "parquet_bytes": 22347
+    },
+    {
+      "table": "fact_coercive_infrastructure",
+      "rows": 3867,
+      "parquet_bytes": 18531
+    },
+    {
+      "table": "fact_bea_national_industry",
+      "rows": 1065,
+      "parquet_bytes": 17112
+    },
+    {
+      "table": "fact_commodity_observation",
+      "rows": 4735,
+      "parquet_bytes": 17015
+    },
+    {
+      "table": "fact_bea_final_demand_annual",
+      "rows": 2044,
+      "parquet_bytes": 16759
+    },
+    {
+      "table": "bridge_county_metro",
+      "rows": 3256,
+      "parquet_bytes": 14507
+    },
+    {
+      "table": "dim_commodity_metric",
+      "rows": 593,
+      "parquet_bytes": 12802
+    },
+    {
+      "table": "fact_fred_national",
+      "rows": 1395,
+      "parquet_bytes": 8775
+    },
+    {
+      "table": "dim_data_source",
+      "rows": 21,
+      "parquet_bytes": 5628
+    },
+    {
+      "table": "fact_fred_wealth_levels",
+      "rows": 720,
+      "parquet_bytes": 5625
+    },
+    {
+      "table": "dim_country",
+      "rows": 273,
+      "parquet_bytes": 5402
+    },
+    {
+      "table": "fact_hickel_erdi_annual",
+      "rows": 58,
+      "parquet_bytes": 5359
+    },
+    {
+      "table": "fact_bilateral_trade_annual",
+      "rows": 120,
+      "parquet_bytes": 5204
+    },
+    {
+      "table": "dim_bea_industry",
+      "rows": 107,
+      "parquet_bytes": 4606
+    },
+    {
+      "table": "dim_commodity",
+      "rows": 85,
+      "parquet_bytes": 4497
+    },
+    {
+      "table": "fact_hpms_road_segment",
+      "rows": 0,
+      "parquet_bytes": 4340
+    },
+    {
+      "table": "dim_fred_series",
+      "rows": 41,
+      "parquet_bytes": 3843
+    },
+    {
+      "table": "fact_state_minerals",
+      "rows": 50,
+      "parquet_bytes": 3707
+    },
+    {
+      "table": "dim_occupation",
+      "rows": 74,
+      "parquet_bytes": 3256
+    },
+    {
+      "table": "dim_time",
+      "rows": 485,
+      "parquet_bytes": 3102
+    },
+    {
+      "table": "fact_fred_wealth_shares",
+      "rows": 480,
+      "parquet_bytes": 2899
+    },
+    {
+      "table": "dim_rent_burden",
+      "rows": 11,
+      "parquet_bytes": 2876
+    },
+    {
+      "table": "bridge_naics_bea",
+      "rows": 462,
+      "parquet_bytes": 2731
+    },
+    {
+      "table": "dim_race",
+      "rows": 10,
+      "parquet_bytes": 2591
+    },
+    {
+      "table": "dim_cfs_area",
+      "rows": 132,
+      "parquet_bytes": 2380
+    },
+    {
+      "table": "dim_asset_category",
+      "rows": 3,
+      "parquet_bytes": 2353
+    },
+    {
+      "table": "dim_education_level",
+      "rows": 26,
+      "parquet_bytes": 2300
+    },
+    {
+      "table": "dim_poverty_category",
+      "rows": 60,
+      "parquet_bytes": 2296
+    },
+    {
+      "table": "dim_income_bracket",
+      "rows": 17,
+      "parquet_bytes": 2244
+    },
+    {
+      "table": "dim_worker_class",
+      "rows": 22,
+      "parquet_bytes": 2237
+    },
+    {
+      "table": "dim_coercive_type",
+      "rows": 15,
+      "parquet_bytes": 2101
+    },
+    {
+      "table": "dim_state",
+      "rows": 52,
+      "parquet_bytes": 2099
+    },
+    {
+      "table": "dim_employment_status",
+      "rows": 8,
+      "parquet_bytes": 2038
+    },
+    {
+      "table": "dim_import_source",
+      "rows": 43,
+      "parquet_bytes": 1958
+    },
+    {
+      "table": "fact_commodity_flow",
+      "rows": 0,
+      "parquet_bytes": 1884
+    },
+    {
+      "table": "dim_sctg_commodity",
+      "rows": 42,
+      "parquet_bytes": 1807
+    },
+    {
+      "table": "fact_mineral_employment",
+      "rows": 25,
+      "parquet_bytes": 1765
+    },
+    {
+      "table": "dim_ownership",
+      "rows": 7,
+      "parquet_bytes": 1601
+    },
+    {
+      "table": "dim_wealth_class",
+      "rows": 4,
+      "parquet_bytes": 1563
+    },
+    {
+      "table": "dim_housing_tenure",
+      "rows": 3,
+      "parquet_bytes": 1448
+    },
+    {
+      "table": "dim_bea_io_table_type",
+      "rows": 3,
+      "parquet_bytes": 1358
+    },
+    {
+      "table": "fact_mineral_production",
+      "rows": 15,
+      "parquet_bytes": 1258
+    },
+    {
+      "table": "dim_gender",
+      "rows": 6,
+      "parquet_bytes": 1137
+    },
+    {
+      "table": "bridge_cfs_county",
+      "rows": 0,
+      "parquet_bytes": 724
+    }
+  ]
+}

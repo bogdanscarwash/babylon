@@ -1,0 +1,439 @@
+# Closed registry rows stay one physical line for row-level mutation review.
+# yamllint disable rule:line-length
+schema: babylon.relational-territory-dossier
+schema_version: 1
+hash_domain_separator: babylon.relational-territory-dossier.v1
+draft_record: RtdDossierDraftV1
+sealed_record: RelationalTerritoryDossierV1
+
+scalar_types:
+  string:
+    json_type: string
+    nfc: true
+  u16:
+    json_type: unsigned_integer
+    minimum: 0
+    maximum: 65535
+  u64:
+    json_type: unsigned_integer
+    minimum: 0
+    maximum: 18446744073709551615
+  digest_hex:
+    json_type: string
+    nfc: true
+    utf8_bytes: 64
+    pattern: "^[0-9a-f]{64}$"
+  bits64_hex:
+    json_type: string
+    nfc: true
+    utf8_bytes: 16
+    pattern: "^[0-9a-f]{16}$"
+    uint64_encoding: big_endian_bits
+    float64_encoding: finite_ieee754_binary64_bits
+    normalize_negative_zero: true
+  vintage:
+    json_type: string
+    nfc: true
+    minimum_utf8_bytes: 1
+    maximum_utf8_bytes_limit: max_vintage_bytes
+  producer_issue:
+    json_type: string
+    nfc: true
+    minimum_utf8_bytes: 1
+    maximum_utf8_bytes_limit: max_required_producer_bytes
+    pattern: "^PER-[1-9][0-9]*$"
+
+limits:
+  max_collection_items: 65535
+  max_focus: 64
+  max_reference_digests: 4096
+  max_scale_memberships: 65535
+  max_facets: 65535
+  max_dyads: 65535
+  max_hyperedges: 65535
+  max_flows: 65535
+  max_gaps: 65535
+  max_provenance: 65535
+  max_coordinates: 32
+  max_hyperedge_members: 1024
+  max_payload_facets: 256
+  max_decision_surface_refs: 256
+  max_provenance_refs: 8192
+  max_identity_component_bytes: 256
+  max_vintage_bytes: 256
+  max_provenance_locator_bytes: 1024
+  max_required_producer_bytes: 64
+  max_canonical_bytes: 67108864
+
+enums:
+  AudienceV1: [ADMIN_MATERIAL, PLAYER_KNOWLEDGE]
+  DurabilityV1: [IN_MEMORY, COMMITTED]
+  EvidenceClassV1: [Observed, Derived, Calibrated, Designed]
+  StatusV1: [PRESENT, ABSENT, UNKNOWN, NOT_COMPUTED, REDACTED]
+  ValueKindV1: [UINT64_BITS, FLOAT64_BITS]
+  CoverageV1: [COMPLETE, PARTIAL, NOT_APPLICABLE, UNKNOWN]
+  MembershipKindV1:
+    - ADMINISTRATIVE
+    - NATIONAL
+    - COMMUTING_ZONE
+    - METROPOLITAN
+    - WEIGHTED_OVERLAP
+  FacetFamilyV1:
+    - COMMAND_ADMINISTRATION
+    - PRODUCTION_CIRCULATION
+    - REPRODUCTION_SETTLEMENT_ACCESS
+    - EXTRACTION_ABANDONMENT_CARCERAL
+    - ECOLOGY_CARE
+    - ORGANIZATION_ROOTEDNESS
+  DyadKindV1: [PRESENCE, MEMBERSHIP, SOLIDARITY, COMMAND]
+  HyperedgeKindV1: [PUBLIC_RELATION]
+  FlowKindV1: [COMMUTER_JOBS, BORDER_SYNTHESIS]
+  RelationPayloadModeV1: [EMPTY, SINGLE_METRIC_FACET, IMPLICIT_RELATION]
+  GapReasonV1:
+    - MISSING_GOVERNED_OMB_DELINEATION
+    - IDENTITY_CONTRACT_PENDING
+    - MISSING_GOVERNED_PRODUCER
+    - REFERENCE_COVERAGE_UNAVAILABLE
+    - PLAYER_BOUNDARY_UNAVAILABLE
+    - PROVENANCE_COORDINATE_CONFLICT
+  MetricRepresentationV1: [FACET, REFERENCE_FLOW, DYAD]
+  AggregationRuleV1:
+    - NONE
+    - PUBLISHED_ROLLUP
+    - LOAD_TIME_SUM
+    - BLOCK_INTERNAL_POINT_ASSIGNMENT
+    - BLOCK_COORDINATE_ASSIGNMENT
+    - EQUAL_AREA_WATER_INTERSECTION
+    - TYPED_RELATION_PROJECTION
+  RtdCollectionKindV1:
+    - FOCUS
+    - REFERENCE_DIGESTS
+    - SCALE_MEMBERSHIPS
+    - FACETS
+    - DYADS
+    - HYPEREDGES
+    - FLOWS
+    - GAPS
+    - PROVENANCE
+    - COORDINATES
+    - MEMBER_REFS
+    - PAYLOAD_FACETS
+    - DISPLAY_REFS
+    - PROVENANCE_REFS
+
+records:
+  TypedIdentityV1:
+    fields:
+      - {name: domain, type: string, bound: max_identity_component_bytes}
+      - {name: authority, type: string, bound: max_identity_component_bytes}
+      - {name: local_id, type: string, bound: max_identity_component_bytes}
+  ReferenceDigestV1:
+    fields:
+      - {name: reference_id, type: identity}
+      - {name: sha256_hex, type: digest_hex}
+      - {name: artifact_schema_id_or_null, type: identity, nullable: true}
+      - {name: vintage, type: vintage, bound: max_vintage_bytes}
+      - {name: evidence_class, type: EvidenceClassV1}
+  DimensionCoordinateV1:
+    fields:
+      - {name: dimension_ref, type: identity}
+      - {name: member_ref, type: identity}
+  ScaleMembershipV1:
+    fields:
+      - {name: membership_id, type: identity}
+      - {name: member_ref, type: identity}
+      - {name: scale_ref, type: identity}
+      - {name: membership_kind, type: MembershipKindV1}
+      - {name: status, type: StatusV1}
+      - {name: weight_status, type: StatusV1}
+      - {name: weight_bits_or_null, type: bits64_hex, nullable: true}
+      - {name: coverage, type: CoverageV1}
+      - {name: evidence_class, type: EvidenceClassV1}
+      - {name: provenance_refs, type: "list[identity]", bound: max_provenance_refs, sort_key: identity}
+  FacetV1:
+    fields:
+      - {name: facet_id, type: identity}
+      - {name: family, type: FacetFamilyV1}
+      - {name: subject_ref, type: identity}
+      - {name: metric_id, type: identity}
+      - {name: unit_id, type: identity}
+      - {name: native_scale, type: identity}
+      - {name: coordinates, type: "list[DimensionCoordinateV1]", bound: max_coordinates, sort_key: dimension_ref}
+      - {name: vintage, type: vintage, bound: max_vintage_bytes}
+      - {name: status, type: StatusV1}
+      - {name: value_kind, type: ValueKindV1}
+      - {name: value_bits_or_null, type: bits64_hex, nullable: true}
+      - {name: coverage, type: CoverageV1}
+      - {name: evidence_class, type: EvidenceClassV1}
+      - {name: provenance_refs, type: "list[identity]", bound: max_provenance_refs, sort_key: identity}
+  DyadV1:
+    fields:
+      - {name: relation_id, type: identity}
+      - {name: relation_kind, type: DyadKindV1}
+      - {name: from_ref, type: identity}
+      - {name: to_ref, type: identity}
+      - {name: native_scale, type: identity}
+      - {name: status, type: StatusV1}
+      - {name: coverage, type: CoverageV1}
+      - {name: payload_facets, type: "list[identity]", bound: max_payload_facets, sort_key: identity}
+      - {name: evidence_class, type: EvidenceClassV1}
+      - {name: provenance_refs, type: "list[identity]", bound: max_provenance_refs, sort_key: identity}
+  HyperedgeV1:
+    fields:
+      - {name: hyperedge_id, type: identity}
+      - {name: hyperedge_kind, type: HyperedgeKindV1}
+      - {name: member_refs, type: "list[identity]", bound: max_hyperedge_members, sort_key: identity}
+      - {name: native_scale, type: identity}
+      - {name: status, type: StatusV1}
+      - {name: coverage, type: CoverageV1}
+      - {name: payload_facets, type: "list[identity]", bound: max_payload_facets, sort_key: identity}
+      - {name: evidence_class, type: EvidenceClassV1}
+      - {name: provenance_refs, type: "list[identity]", bound: max_provenance_refs, sort_key: identity}
+  ReferenceFlowV1:
+    fields:
+      - {name: flow_id, type: identity}
+      - {name: flow_kind, type: FlowKindV1}
+      - {name: origin_ref, type: identity}
+      - {name: destination_ref, type: identity}
+      - {name: payload_facets, type: "list[identity]", bound: max_payload_facets, sort_key: identity}
+      - {name: native_scale, type: identity}
+      - {name: status, type: StatusV1}
+      - {name: coverage, type: CoverageV1}
+      - {name: evidence_class, type: EvidenceClassV1}
+      - {name: provenance_refs, type: "list[identity]", bound: max_provenance_refs, sort_key: identity}
+  GapV1:
+    fields:
+      - {name: gap_id, type: identity}
+      - {name: requested_metric_or_relation, type: identity}
+      - {name: status, type: StatusV1}
+      - {name: reason_code, type: GapReasonV1}
+      - {name: required_producer_or_null, type: producer_issue, nullable: true, bound: max_required_producer_bytes}
+      - {name: provenance_refs, type: "list[identity]", bound: max_provenance_refs, sort_key: identity}
+  ProvenanceV1:
+    fields:
+      - {name: provenance_id, type: identity}
+      - {name: artifact_digest, type: digest_hex}
+      - {name: locator, type: string, bound: max_provenance_locator_bytes}
+      - {name: vintage, type: vintage, bound: max_vintage_bytes}
+      - {name: evidence_class, type: EvidenceClassV1}
+      - {name: transformation_digest_or_null, type: digest_hex, nullable: true}
+  DecisionSurfaceV1:
+    fields:
+      - {name: question_id, type: identity}
+      - {name: signal_refs, type: "list[identity]", bound: max_decision_surface_refs, sort_key: input_order}
+      - {name: action_refs, type: "list[identity]", bound: max_decision_surface_refs, sort_key: input_order}
+      - {name: receipt_refs, type: "list[identity]", bound: max_decision_surface_refs, sort_key: input_order}
+      - {name: archive_subject_refs, type: "list[identity]", bound: max_decision_surface_refs, sort_key: input_order}
+  RtdDossierDraftV1:
+    fields:
+      - {name: schema, type: string}
+      - {name: schema_version, type: u16}
+      - {name: projection_version, type: u16}
+      - {name: audience, type: AudienceV1}
+      - {name: durability, type: DurabilityV1}
+      - {name: verified_tick, type: u64}
+      - {name: graph_state_hash, type: digest_hex}
+      - {name: nominal_world_hash, type: digest_hex}
+      - {name: reference_digests, type: "list[ReferenceDigestV1]", bound: max_reference_digests, sort_key: reference_id}
+      - {name: definitions_digest, type: digest_hex}
+      - {name: template_digest, type: digest_hex}
+      - {name: fog_policy_digest, type: digest_hex, nullable: true}
+      - {name: knowledge_context_digest, type: digest_hex, nullable: true}
+      - {name: actor, type: identity, nullable: true}
+      - {name: focus, type: "list[identity]", bound: max_focus, sort_key: identity}
+      - {name: scale_memberships, type: "list[ScaleMembershipV1]", bound: max_scale_memberships, sort_key: membership_id}
+      - {name: facets, type: "list[FacetV1]", bound: max_facets, sort_key: facet_id}
+      - {name: dyads, type: "list[DyadV1]", bound: max_dyads, sort_key: relation_id}
+      - {name: hyperedges, type: "list[HyperedgeV1]", bound: max_hyperedges, sort_key: hyperedge_id}
+      - {name: flows, type: "list[ReferenceFlowV1]", bound: max_flows, sort_key: flow_id}
+      - {name: gaps, type: "list[GapV1]", bound: max_gaps, sort_key: gap_id}
+      - {name: provenance, type: "list[ProvenanceV1]", bound: max_provenance, sort_key: provenance_id}
+      - {name: decision_surface, type: DecisionSurfaceV1}
+  RelationalTerritoryDossierV1:
+    fields:
+      - {name: schema, type: string}
+      - {name: schema_version, type: u16}
+      - {name: projection_version, type: u16}
+      - {name: audience, type: AudienceV1}
+      - {name: durability, type: DurabilityV1}
+      - {name: verified_tick, type: u64}
+      - {name: graph_state_hash, type: digest_hex}
+      - {name: nominal_world_hash, type: digest_hex}
+      - {name: reference_digests, type: "list[ReferenceDigestV1]", bound: max_reference_digests, sort_key: reference_id}
+      - {name: definitions_digest, type: digest_hex}
+      - {name: template_digest, type: digest_hex}
+      - {name: fog_policy_digest, type: digest_hex, nullable: true}
+      - {name: knowledge_context_digest, type: digest_hex, nullable: true}
+      - {name: actor, type: identity, nullable: true}
+      - {name: focus, type: "list[identity]", bound: max_focus, sort_key: identity}
+      - {name: scale_memberships, type: "list[ScaleMembershipV1]", bound: max_scale_memberships, sort_key: membership_id}
+      - {name: facets, type: "list[FacetV1]", bound: max_facets, sort_key: facet_id}
+      - {name: dyads, type: "list[DyadV1]", bound: max_dyads, sort_key: relation_id}
+      - {name: hyperedges, type: "list[HyperedgeV1]", bound: max_hyperedges, sort_key: hyperedge_id}
+      - {name: flows, type: "list[ReferenceFlowV1]", bound: max_flows, sort_key: flow_id}
+      - {name: gaps, type: "list[GapV1]", bound: max_gaps, sort_key: gap_id}
+      - {name: provenance, type: "list[ProvenanceV1]", bound: max_provenance, sort_key: provenance_id}
+      - {name: decision_surface, type: DecisionSurfaceV1}
+      - {name: projection_hash, type: digest_hex}
+
+canonical_sets:
+  ScaleMembershipV1.provenance_refs: identity
+  FacetV1.coordinates: dimension_ref
+  FacetV1.provenance_refs: identity
+  DyadV1.payload_facets: identity
+  DyadV1.provenance_refs: identity
+  HyperedgeV1.member_refs: identity
+  HyperedgeV1.payload_facets: identity
+  HyperedgeV1.provenance_refs: identity
+  ReferenceFlowV1.payload_facets: identity
+  ReferenceFlowV1.provenance_refs: identity
+  GapV1.provenance_refs: identity
+  DecisionSurfaceV1.signal_refs: input_order
+  DecisionSurfaceV1.action_refs: input_order
+  DecisionSurfaceV1.receipt_refs: input_order
+  DecisionSurfaceV1.archive_subject_refs: input_order
+  RtdDossierDraftV1.reference_digests: reference_id
+  RtdDossierDraftV1.focus: identity
+  RtdDossierDraftV1.scale_memberships: membership_id
+  RtdDossierDraftV1.facets: facet_id
+  RtdDossierDraftV1.dyads: relation_id
+  RtdDossierDraftV1.hyperedges: hyperedge_id
+  RtdDossierDraftV1.flows: flow_id
+  RtdDossierDraftV1.gaps: gap_id
+  RtdDossierDraftV1.provenance: provenance_id
+  RelationalTerritoryDossierV1.reference_digests: reference_id
+  RelationalTerritoryDossierV1.focus: identity
+  RelationalTerritoryDossierV1.scale_memberships: membership_id
+  RelationalTerritoryDossierV1.facets: facet_id
+  RelationalTerritoryDossierV1.dyads: relation_id
+  RelationalTerritoryDossierV1.hyperedges: hyperedge_id
+  RelationalTerritoryDossierV1.flows: flow_id
+  RelationalTerritoryDossierV1.gaps: gap_id
+  RelationalTerritoryDossierV1.provenance: provenance_id
+
+identity_registry:
+  metrics:
+    production/qcew-leaf-employment: {domain: metric, authority: babylon.rtd.v1, local_id: production/qcew-leaf-employment}
+    production/qcew-leaf-establishments: {domain: metric, authority: babylon.rtd.v1, local_id: production/qcew-leaf-establishments}
+    production/qcew-leaf-total-wages-usd: {domain: metric, authority: babylon.rtd.v1, local_id: production/qcew-leaf-total-wages-usd}
+    production/qcew-leaf-average-annual-pay-usd: {domain: metric, authority: babylon.rtd.v1, local_id: production/qcew-leaf-average-annual-pay-usd}
+    production/qcew-county-employment: {domain: metric, authority: babylon.rtd.v1, local_id: production/qcew-county-employment}
+    production/qcew-county-establishments: {domain: metric, authority: babylon.rtd.v1, local_id: production/qcew-county-establishments}
+    production/qcew-county-total-wages-usd: {domain: metric, authority: babylon.rtd.v1, local_id: production/qcew-county-total-wages-usd}
+    circulation/lodes-county-commuter-total-jobs: {domain: metric, authority: babylon.rtd.v1, local_id: circulation/lodes-county-commuter-total-jobs}
+    reproduction/census-housing-households: {domain: metric, authority: babylon.rtd.v1, local_id: reproduction/census-housing-households}
+    reproduction/census-median-rent-usd: {domain: metric, authority: babylon.rtd.v1, local_id: reproduction/census-median-rent-usd}
+    reproduction/census-rent-burden-households: {domain: metric, authority: babylon.rtd.v1, local_id: reproduction/census-rent-burden-households}
+    reproduction/h3-population-persons: {domain: metric, authority: babylon.rtd.v1, local_id: reproduction/h3-population-persons}
+    production/h3-workplace-jobs: {domain: metric, authority: babylon.rtd.v1, local_id: production/h3-workplace-jobs}
+    carceral/facility-count: {domain: metric, authority: babylon.rtd.v1, local_id: carceral/facility-count}
+    ecology/h3-land-fraction: {domain: metric, authority: babylon.rtd.v1, local_id: ecology/h3-land-fraction}
+    rootedness/presence: {domain: metric, authority: babylon.rtd.v1, local_id: rootedness/presence}
+    rootedness/solidarity: {domain: metric, authority: babylon.rtd.v1, local_id: rootedness/solidarity}
+    rootedness/membership: {domain: metric, authority: babylon.rtd.v1, local_id: rootedness/membership}
+  units:
+    JOBS: {domain: unit, authority: babylon.rtd.v1, local_id: jobs}
+    ESTABLISHMENTS: {domain: unit, authority: babylon.rtd.v1, local_id: establishments}
+    USD_CURRENT: {domain: unit, authority: babylon.rtd.v1, local_id: usd-current}
+    HOUSEHOLDS: {domain: unit, authority: babylon.rtd.v1, local_id: households}
+    PERSONS: {domain: unit, authority: babylon.rtd.v1, local_id: persons}
+    FACILITIES: {domain: unit, authority: babylon.rtd.v1, local_id: facilities}
+    FRACTION: {domain: unit, authority: babylon.rtd.v1, local_id: fraction}
+    TYPED_RELATION: {domain: unit, authority: babylon.rtd.v1, local_id: typed-relation}
+  coordinates:
+    county: {domain: dimension, authority: babylon.rtd.v1, local_id: county}
+    naics6: {domain: dimension, authority: babylon.rtd.v1, local_id: naics6}
+    ownership: {domain: dimension, authority: babylon.rtd.v1, local_id: ownership}
+    home_county: {domain: dimension, authority: babylon.rtd.v1, local_id: home-county}
+    work_county: {domain: dimension, authority: babylon.rtd.v1, local_id: work-county}
+    source: {domain: dimension, authority: babylon.rtd.v1, local_id: source}
+    tenure: {domain: dimension, authority: babylon.rtd.v1, local_id: tenure}
+    race: {domain: dimension, authority: babylon.rtd.v1, local_id: race}
+    burden: {domain: dimension, authority: babylon.rtd.v1, local_id: burden}
+    h3_cell: {domain: dimension, authority: babylon.rtd.v1, local_id: h3-cell}
+    coercive_type: {domain: dimension, authority: babylon.rtd.v1, local_id: coercive-type}
+    actor: {domain: dimension, authority: babylon.rtd.v1, local_id: actor}
+    node: {domain: dimension, authority: babylon.rtd.v1, local_id: node}
+  native_scales:
+    COUNTY_NAICS6_OWNERSHIP_YEAR: {domain: native-scale, authority: babylon.rtd.v1, local_id: county-naics6-ownership-year}
+    COUNTY_OWNERSHIP_YEAR: {domain: native-scale, authority: babylon.rtd.v1, local_id: county-ownership-year}
+    HOME_COUNTY_WORK_COUNTY_YEAR: {domain: native-scale, authority: babylon.rtd.v1, local_id: home-county-work-county-year}
+    COUNTY_SOURCE_TENURE_TIME_RACE: {domain: native-scale, authority: babylon.rtd.v1, local_id: county-source-tenure-time-race}
+    COUNTY_SOURCE_TIME_RACE: {domain: native-scale, authority: babylon.rtd.v1, local_id: county-source-time-race}
+    COUNTY_SOURCE_BURDEN_TIME_RACE: {domain: native-scale, authority: babylon.rtd.v1, local_id: county-source-burden-time-race}
+    H3_R7_VINTAGE: {domain: native-scale, authority: babylon.rtd.v1, local_id: h3-r7-vintage}
+    COUNTY_COERCIVE_TYPE_SOURCE: {domain: native-scale, authority: babylon.rtd.v1, local_id: county-coercive-type-source}
+    ACTOR_NODE_VERIFIED_TICK: {domain: native-scale, authority: babylon.rtd.v1, local_id: actor-node-verified-tick}
+  producers:
+    fact_qcew_annual: {domain: producer, authority: babylon.data.v7, local_id: fact_qcew_annual}
+    fact_qcew_county_rollup: {domain: producer, authority: babylon.data.v7, local_id: fact_qcew_county_rollup}
+    fact_lodes_commuter_flow: {domain: producer, authority: babylon.data.v7, local_id: fact_lodes_commuter_flow}
+    fact_census_housing: {domain: producer, authority: babylon.data.v7, local_id: fact_census_housing}
+    fact_census_rent: {domain: producer, authority: babylon.data.v7, local_id: fact_census_rent}
+    fact_census_rent_burden: {domain: producer, authority: babylon.data.v7, local_id: fact_census_rent_burden}
+    h3_res7_population: {domain: producer, authority: babylon.data.v7, local_id: h3_res7_population}
+    h3_res7_workplace: {domain: producer, authority: babylon.data.v7, local_id: h3_res7_workplace}
+    fact_coercive_infrastructure: {domain: producer, authority: babylon.data.v7, local_id: fact_coercive_infrastructure}
+    h3_res7_land_mask: {domain: producer, authority: babylon.data.v7, local_id: h3_res7_land_mask}
+    committed typed graph: {domain: producer, authority: babylon.engine, local_id: typed-graph-relations-at-verified-tick}
+  references:
+    fact_qcew_annual: {domain: reference-artifact, authority: babylon.data.v7, local_id: fact_qcew_annual}
+    fact_qcew_county_rollup: {domain: reference-artifact, authority: babylon.data.v7, local_id: fact_qcew_county_rollup}
+    fact_lodes_commuter_flow: {domain: reference-artifact, authority: babylon.data.v7, local_id: fact_lodes_commuter_flow}
+    fact_census_housing: {domain: reference-artifact, authority: babylon.data.v7, local_id: fact_census_housing}
+    fact_census_rent: {domain: reference-artifact, authority: babylon.data.v7, local_id: fact_census_rent}
+    fact_census_rent_burden: {domain: reference-artifact, authority: babylon.data.v7, local_id: fact_census_rent_burden}
+    h3_res7_population: {domain: reference-artifact, authority: babylon.data.v7, local_id: h3_res7_population}
+    h3_res7_workplace: {domain: reference-artifact, authority: babylon.data.v7, local_id: h3_res7_workplace}
+    fact_coercive_infrastructure: {domain: reference-artifact, authority: babylon.data.v7, local_id: fact_coercive_infrastructure}
+    h3_res7_land_mask: {domain: reference-artifact, authority: babylon.data.v7, local_id: h3_res7_land_mask}
+
+metric_registry:
+  - {metric: production/qcew-leaf-employment, representation: FACET, unit: JOBS, value_kind: UINT64_BITS, native_scale: COUNTY_NAICS6_OWNERSHIP_YEAR, coordinates: [county, naics6, ownership], evidence_classes: [Observed, Derived], aggregation_rule: NONE, producer: fact_qcew_annual, reference: fact_qcew_annual, reference_digest: ca3825a3d60831479313632073b7fc9a941d57dcf9b8940181c4713b6d442248}
+  - {metric: production/qcew-leaf-establishments, representation: FACET, unit: ESTABLISHMENTS, value_kind: UINT64_BITS, native_scale: COUNTY_NAICS6_OWNERSHIP_YEAR, coordinates: [county, naics6, ownership], evidence_classes: [Observed, Derived], aggregation_rule: NONE, producer: fact_qcew_annual, reference: fact_qcew_annual, reference_digest: ca3825a3d60831479313632073b7fc9a941d57dcf9b8940181c4713b6d442248}
+  - {metric: production/qcew-leaf-total-wages-usd, representation: FACET, unit: USD_CURRENT, value_kind: FLOAT64_BITS, native_scale: COUNTY_NAICS6_OWNERSHIP_YEAR, coordinates: [county, naics6, ownership], evidence_classes: [Observed, Derived], aggregation_rule: NONE, producer: fact_qcew_annual, reference: fact_qcew_annual, reference_digest: ca3825a3d60831479313632073b7fc9a941d57dcf9b8940181c4713b6d442248}
+  - {metric: production/qcew-leaf-average-annual-pay-usd, representation: FACET, unit: USD_CURRENT, value_kind: FLOAT64_BITS, native_scale: COUNTY_NAICS6_OWNERSHIP_YEAR, coordinates: [county, naics6, ownership], evidence_classes: [Observed, Derived], aggregation_rule: NONE, producer: fact_qcew_annual, reference: fact_qcew_annual, reference_digest: ca3825a3d60831479313632073b7fc9a941d57dcf9b8940181c4713b6d442248}
+  - {metric: production/qcew-county-employment, representation: FACET, unit: JOBS, value_kind: UINT64_BITS, native_scale: COUNTY_OWNERSHIP_YEAR, coordinates: [county, ownership], evidence_classes: [Observed, Derived], aggregation_rule: PUBLISHED_ROLLUP, producer: fact_qcew_county_rollup, reference: fact_qcew_county_rollup, reference_digest: 34c2bbb935f79b3c8076a97092b004b14cca120e8272b93c35b3ac9dc2721d13}
+  - {metric: production/qcew-county-establishments, representation: FACET, unit: ESTABLISHMENTS, value_kind: UINT64_BITS, native_scale: COUNTY_OWNERSHIP_YEAR, coordinates: [county, ownership], evidence_classes: [Observed, Derived], aggregation_rule: PUBLISHED_ROLLUP, producer: fact_qcew_county_rollup, reference: fact_qcew_county_rollup, reference_digest: 34c2bbb935f79b3c8076a97092b004b14cca120e8272b93c35b3ac9dc2721d13}
+  - {metric: production/qcew-county-total-wages-usd, representation: FACET, unit: USD_CURRENT, value_kind: FLOAT64_BITS, native_scale: COUNTY_OWNERSHIP_YEAR, coordinates: [county, ownership], evidence_classes: [Observed, Derived], aggregation_rule: PUBLISHED_ROLLUP, producer: fact_qcew_county_rollup, reference: fact_qcew_county_rollup, reference_digest: 34c2bbb935f79b3c8076a97092b004b14cca120e8272b93c35b3ac9dc2721d13}
+  - {metric: circulation/lodes-county-commuter-total-jobs, representation: REFERENCE_FLOW, unit: JOBS, value_kind: UINT64_BITS, native_scale: HOME_COUNTY_WORK_COUNTY_YEAR, coordinates: [home_county, work_county], evidence_classes: [Derived], aggregation_rule: LOAD_TIME_SUM, producer: fact_lodes_commuter_flow, reference: fact_lodes_commuter_flow, reference_digest: d3745f8def09cd8c7a38e1870e6ec2c1853e210b777d8e8358cfce36665bd64d}
+  - {metric: reproduction/census-housing-households, representation: FACET, unit: HOUSEHOLDS, value_kind: UINT64_BITS, native_scale: COUNTY_SOURCE_TENURE_TIME_RACE, coordinates: [county, source, tenure, race], evidence_classes: [Observed], aggregation_rule: NONE, producer: fact_census_housing, reference: fact_census_housing, reference_digest: 09ff2d9666b3f5ef267b65cbc77c14e99384f0157b6a4c898ac37df2e67ca59f}
+  - {metric: reproduction/census-median-rent-usd, representation: FACET, unit: USD_CURRENT, value_kind: FLOAT64_BITS, native_scale: COUNTY_SOURCE_TIME_RACE, coordinates: [county, source, race], evidence_classes: [Observed], aggregation_rule: NONE, producer: fact_census_rent, reference: fact_census_rent, reference_digest: 4c8cc134ec490ca75961d83485fc97c6bf240b32128e9d0517e00e62d578a99e}
+  - {metric: reproduction/census-rent-burden-households, representation: FACET, unit: HOUSEHOLDS, value_kind: UINT64_BITS, native_scale: COUNTY_SOURCE_BURDEN_TIME_RACE, coordinates: [county, source, burden, race], evidence_classes: [Observed], aggregation_rule: NONE, producer: fact_census_rent_burden, reference: fact_census_rent_burden, reference_digest: 8a42a51c17bf3ebee09f0b0b5145d5c8253c7e3446eec8c75714f9951b20df12}
+  - {metric: reproduction/h3-population-persons, representation: FACET, unit: PERSONS, value_kind: UINT64_BITS, native_scale: H3_R7_VINTAGE, coordinates: [h3_cell], evidence_classes: [Derived], aggregation_rule: BLOCK_INTERNAL_POINT_ASSIGNMENT, producer: h3_res7_population, reference: h3_res7_population, reference_digest: b096a5891284f0ca55bedae9d1a9092eb8ea9e9e32d32b6ace430a9833b53afc}
+  - {metric: production/h3-workplace-jobs, representation: FACET, unit: JOBS, value_kind: UINT64_BITS, native_scale: H3_R7_VINTAGE, coordinates: [h3_cell], evidence_classes: [Derived], aggregation_rule: BLOCK_COORDINATE_ASSIGNMENT, producer: h3_res7_workplace, reference: h3_res7_workplace, reference_digest: ea2ce1508f4fe51f1e879b9f4a1daf579c4b00349388b12a85f884a8f49eabb6}
+  - {metric: carceral/facility-count, representation: FACET, unit: FACILITIES, value_kind: UINT64_BITS, native_scale: COUNTY_COERCIVE_TYPE_SOURCE, coordinates: [county, coercive_type, source], evidence_classes: [Observed], aggregation_rule: NONE, producer: fact_coercive_infrastructure, reference: fact_coercive_infrastructure, reference_digest: 33e6558d2b438e7aea672021f0e15f743f1ea331ab82407c0805a428b29cf808}
+  - {metric: ecology/h3-land-fraction, representation: FACET, unit: FRACTION, value_kind: FLOAT64_BITS, native_scale: H3_R7_VINTAGE, coordinates: [h3_cell], evidence_classes: [Derived], aggregation_rule: EQUAL_AREA_WATER_INTERSECTION, producer: h3_res7_land_mask, reference: h3_res7_land_mask, reference_digest: 4e6caba297f0111a9ec93d948a83543bb9f7179361fe5dd318bb8a98a5be5194}
+  - {metric: rootedness/presence, representation: DYAD, unit: TYPED_RELATION, value_kind: null, native_scale: ACTOR_NODE_VERIFIED_TICK, coordinates: [actor, node], evidence_classes: [Derived], aggregation_rule: TYPED_RELATION_PROJECTION, producer: committed typed graph, reference: null, reference_digest: null}
+  - {metric: rootedness/solidarity, representation: DYAD, unit: TYPED_RELATION, value_kind: null, native_scale: ACTOR_NODE_VERIFIED_TICK, coordinates: [actor, node], evidence_classes: [Derived], aggregation_rule: TYPED_RELATION_PROJECTION, producer: committed typed graph, reference: null, reference_digest: null}
+  - {metric: rootedness/membership, representation: DYAD, unit: TYPED_RELATION, value_kind: null, native_scale: ACTOR_NODE_VERIFIED_TICK, coordinates: [actor, node], evidence_classes: [Derived], aggregation_rule: TYPED_RELATION_PROJECTION, producer: committed typed graph, reference: null, reference_digest: null}
+
+relation_binding_registry:
+  - {record_family: REFERENCE_FLOW, kind: COMMUTER_JOBS, metric: circulation/lodes-county-commuter-total-jobs, payload_mode: SINGLE_METRIC_FACET}
+  - {record_family: REFERENCE_FLOW, kind: BORDER_SYNTHESIS, metric: null, payload_mode: EMPTY}
+  - {record_family: DYAD, kind: PRESENCE, metric: rootedness/presence, payload_mode: IMPLICIT_RELATION}
+  - {record_family: DYAD, kind: MEMBERSHIP, metric: rootedness/membership, payload_mode: IMPLICIT_RELATION}
+  - {record_family: DYAD, kind: SOLIDARITY, metric: rootedness/solidarity, payload_mode: IMPLICIT_RELATION}
+  - {record_family: DYAD, kind: COMMAND, metric: null, payload_mode: EMPTY}
+
+error_registry:
+  - RTD_JSON
+  - RTD_JSON_DEPTH
+  - RTD_SCHEMA_VERSION
+  - RTD_UNKNOWN_FIELD
+  - RTD_ENUM
+  - RTD_IDENTITY
+  - RTD_DIGEST
+  - RTD_NON_NFC
+  - RTD_LIMIT_EXCEEDED
+  - RTD_DUPLICATE_KEY
+  - RTD_DANGLING_REF
+  - RTD_STATUS_VALUE
+  - RTD_NATIVE_GRAIN
+  - RTD_UNSUPPORTED_DOWNSCALE
+  - RTD_H3_BEFORE_PER21
+  - RTD_MSA_EVIDENCE
+  - RTD_CANADA_CONTROL
+  - RTD_FORBIDDEN_REDUCTION
+  - RTD_VECTOR_LIMIT
+  - RTD_CANONICAL_SIZE

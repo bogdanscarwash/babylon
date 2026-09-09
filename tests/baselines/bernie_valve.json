@@ -1,0 +1,102 @@
+{
+  "scenario": "bernie_valve",
+  "description": "The hope valve, both routings: entryism, derecognition, and the topology-routed disillusion windows (U13 golden, ADR140)",
+  "generated_at": "2026-07-30T13:44:20+00:00",
+  "defines_hash": "714afc29dbe334442421457247807c46393f028bbf62751286acf07f2850ee6c",
+  "max_ticks": 52,
+  "checkpoints": [
+    {
+      "tick": 0,
+      "p_w_wealth": 0.0,
+      "p_c_wealth": 0.0,
+      "c_b_wealth": 0.25,
+      "c_w_wealth": 0.5,
+      "imperial_rent_pool": 100.0,
+      "exploitation_tension": 0.0,
+      "p_w_consciousness": 0.0,
+      "p_w_p_revolution": 0.0,
+      "p_w_active": false,
+      "content_hash": "aafbfa74e49e99e145b981fe0455c14c1b5498898826775033ccda3f1c4a79ac"
+    },
+    {
+      "tick": 10,
+      "p_w_wealth": 0.0,
+      "p_c_wealth": 0.0,
+      "c_b_wealth": 0.12927,
+      "c_w_wealth": 1.422455,
+      "imperial_rent_pool": 98.155138,
+      "exploitation_tension": 1.0,
+      "p_w_consciousness": 0.0,
+      "p_w_p_revolution": 0.0,
+      "p_w_active": false,
+      "content_hash": "d156df6fba4fd72d0449fdcb5f112e7b2e54c150a4737a8bf216de08b059309d"
+    },
+    {
+      "tick": 20,
+      "p_w_wealth": 0.0,
+      "p_c_wealth": 0.0,
+      "c_b_wealth": 0.049775,
+      "c_w_wealth": 1.803673,
+      "imperial_rent_pool": 96.328844,
+      "exploitation_tension": 1.0,
+      "p_w_consciousness": 0.0,
+      "p_w_p_revolution": 0.0,
+      "p_w_active": false,
+      "content_hash": "ba0c75f9099cd65d3dbe4f5570ca4d5efc5b122bd05c20553a28c37386e9d1ee"
+    },
+    {
+      "tick": 30,
+      "p_w_wealth": 0.0,
+      "p_c_wealth": 0.0,
+      "c_b_wealth": 0.23069,
+      "c_w_wealth": 1.989189,
+      "imperial_rent_pool": 94.503769,
+      "exploitation_tension": 1.0,
+      "p_w_consciousness": 0.0,
+      "p_w_p_revolution": 0.0,
+      "p_w_active": false,
+      "content_hash": "809ad054b0de270a87dd0616c076f6378e3f0d5acd4b672419daed587a3eb52e"
+    },
+    {
+      "tick": 40,
+      "p_w_wealth": 0.0,
+      "p_c_wealth": 0.0,
+      "c_b_wealth": 0.807415,
+      "c_w_wealth": 1.914189,
+      "imperial_rent_pool": 92.630614,
+      "exploitation_tension": 1.0,
+      "p_w_consciousness": 0.0,
+      "p_w_p_revolution": 0.0,
+      "p_w_active": false,
+      "content_hash": "351a44ae828e13db7a3963e642f4b5cef7ead11e74a168e05de1338255101cc9"
+    },
+    {
+      "tick": 50,
+      "p_w_wealth": 0.0,
+      "p_c_wealth": 0.0,
+      "c_b_wealth": 1.38414,
+      "c_w_wealth": 1.839189,
+      "imperial_rent_pool": 90.794586,
+      "exploitation_tension": 1.0,
+      "p_w_consciousness": 0.0,
+      "p_w_p_revolution": 0.0,
+      "p_w_active": false,
+      "content_hash": "f3dd569a2c5ebf1b200e0123d38f4c8f7b31b63978c33fd6d39682e2ab0297a7"
+    },
+    {
+      "tick": 52,
+      "p_w_wealth": 0.0,
+      "p_c_wealth": 0.0,
+      "c_b_wealth": 1.499485,
+      "c_w_wealth": 1.824189,
+      "imperial_rent_pool": 90.431771,
+      "exploitation_tension": 1.0,
+      "p_w_consciousness": 0.0,
+      "p_w_p_revolution": 0.0,
+      "p_w_active": false,
+      "content_hash": "ab53c1434cd28bf1e436ddfbc41b9b5664b1bd405ce512c1e37fd07eacc7906a"
+    }
+  ],
+  "final_outcome": "SURVIVED",
+  "ticks_survived": 52
+}

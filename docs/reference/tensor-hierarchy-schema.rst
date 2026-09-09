@@ -218,21 +218,27 @@ freight is attributable to each constituent county.
    * - ``allocation_weight``
      - NUMERIC(10,8)
      - NOT NULL
-     - Fraction of CFS area allocated to this county. For all counties in a
-       CFS area, weights sum to 1.0.
+     - Fraction of CFS area allocated to this county. Per CFS area, weights
+       sum to the covered-tonnage share (≤ 1.0; 0.89–1.00 across the 132 FAF5
+       zones in the PER-31 population). The residual is tonnage on modes the
+       county factors do not allocate (air, intermodal, other) and stays at
+       CFS-area grain.
 
 **Primary key:** Composite ``(cfs_area_id, county_id)``.
 
 **Allocation weight semantics:** To disaggregate a CFS-area-level value (e.g.,
-imperial rent φ[a]) to county level:
+imperial rent φ[a]) to county level, over the factor-covered modes:
 
 .. code-block:: python
 
    county_value = phi_cfs_area * allocation_weight
 
-Weights are typically derived from population shares, employment shares, or
-employment-weighted population proxies. The bridge table is not populated by
-FAFLoader; it requires a separate county-mapping ETL step.
+The populated weights (PER-31, 2026-09-04) are a Derived 2022-tonnage-weighted
+mean of the FAF5 mode × SCTG-G5 county factors, loaded by
+``babylon_data.faf_bridge`` — not population or employment proxies. They are
+deliberately not renormalized to 1.0: conservation holds only over the covered
+modes (truck, rail, water, pipeline), so county totals reconcile with their
+zone up to the reported covered share.
 
 
 dim_sctg_commodity

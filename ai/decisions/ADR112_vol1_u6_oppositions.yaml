@@ -1,0 +1,169 @@
+id: ADR112
+title: >-
+  Vol I U6 — Oppositions: lights the three ADR103-reserved production-layer
+  bindings (value_usevalue Ch.1, labor_laborpower Ch.6, absolute_relative_surplus
+  Chs.10/12/15), shadow-first, with two new GraphInputs ratio fields
+  (wealth_subsistence_ratio, surplus_strategy_ratio) and a third that reuses
+  the existing wage/imperial (w_paid, v_produced) defect verbatim; the three
+  reserved coupling slots survive the builder for the first time.
+status: accepted
+date: '2026-07-21'
+context: >-
+  ai/_inbox/vol1-value-production-program-prompt.md §7 U6 and the orientation
+  brief charter this unit: bind BoundOpposition + measures + GraphInputs
+  fields for the three keys ADR103 reserved (value_usevalue, labor_laborpower,
+  absolute_relative_surplus), light the three dead coupling slots
+  (catalog.py:690-692 at contract-commit HEAD) by registering both endpoints
+  of each, and update test_contract.py's reserved-set/skipped-count
+  assertions (5->2) per ADR103's own consequences section. Re-verified at
+  unit start: no live binding existed anywhere for the three reserved keys
+  (confirmed by ADR103's own text and a repo-wide grep); U1-U5 landed no
+  competing binding for them either.
+
+  Grounding survey (Aleksandrov Test, no new data ingestion — §3's "no
+  drive-only data blocks the core program" holds): every quantity below is
+  ALREADY live and QCEW/FRED-resident, reused rather than newly acquired.
+  ``subsistence_threshold`` (``SocialClass``, Currency field, Survival
+  Calculus's own P(S|A) input, ``engine/systems/survival.py``) and ``wealth``
+  are both already-declared model fields on every ``social_class`` node.
+  ``avg_weekly_hours``/``labor_intensity_index`` (``WorkingDayState``) are the
+  SAME FRED-backed (OPHNFB+HOANBS) fields U4 already wired via
+  ``services.productivity_data_source``. The ``(w_paid, v_produced)`` pair is
+  Phase D4's existing feed, already shared twice (``wage``/``imperial``,
+  "shared defect, different poles" design note).
+decision: >-
+  1. ``value_usevalue`` (Ch. 1 — the commodity's value/use-value dialectic):
+  bound with a NEW ``GraphInputs.wealth_subsistence_ratio`` field — the
+  engine's Σwealth / Σsubsistence_threshold over every active
+  ``social_class`` node (a ratio of sums, the same intensive-aggregation
+  discipline ``_county_money_ratios``/``_national_chauvinism_balance`` use;
+  new ``ContradictionSystem._wealth_subsistence_ratio`` static method, sorted
+  by node id for III.7 determinism) — fed through the EXISTING shared
+  ``_ratio_reading`` family (now its 5th consumer beyond the four Vol III
+  money axes): does the value a class holds (wealth) supply the use-values
+  it must consume to reproduce itself (subsistence_threshold)? Natural zero
+  point: exact parity. Poles: use-value (A, substance) / value (B, claim).
+  Unplaced (national aggregate). SHADOW.
+
+  2. ``labor_laborpower`` (Ch. 6 — the wage-form's labor/labor-power
+  mystification): bound as a THIRD reader of the IDENTICAL ``(w_paid,
+  v_produced)`` defect ``wage``/``imperial`` already read (Phase D4) — zero
+  new ``GraphInputs`` fields, zero new arithmetic, a new
+  ``_labor_laborpower_measure`` wrapper (mirrors ``_imperial_measure``'s
+  pattern) calling the existing ``_wage_value_reading`` verbatim. Poles:
+  labor (A, v_produced — what using labor-power actually yields) / labor-power
+  (B, w_paid — priced at its own reproduction cost, independent of the yield).
+  County level (matches ``wage``'s own granularity). SHADOW.
+
+  3. ``absolute_relative_surplus`` (Chs. 10, 12, 15 — the two surplus-value
+  strategies): bound with a NEW ``GraphInputs.surplus_strategy_ratio`` field
+  — ``labor_intensity_index * relative_hours_threshold / avg_weekly_hours``,
+  resolved by a new ``resolve_absolute_relative_surplus_ratio`` in
+  ``domain/economics/working_day/resolver.py``. Refactored the module to
+  extract the shared raw fetch (``resolve_working_day_state``) that BOTH this
+  new resolver and U4's ``resolve_working_day_visibility_modifier`` now call
+  — one FRED read per tick, not one per consumer; U4's own function and its
+  full test suite are behaviorally unchanged (pure extraction). Reuses the
+  EXISTING ``WorkingDayDefines.relative_hours_threshold`` as the hours
+  reference and ``labor_intensity_index``'s own "1.0 = baseline" convention
+  for the intensity reference — NO new GameDefines coefficient (the product
+  of two already-reference-scaled components, the same shape
+  ``credit_fragility``'s ``default_rate * spread`` already uses), fed through
+  ``_ratio_reading``. Poles: absolute-surplus-value (A, below parity — the
+  working day's own length dominates) / relative-surplus-value (B, above
+  parity — productivity/intensity gains dominate). Unplaced (the wired FRED
+  adapter is itself national-uniform, per U4's own honesty-gap note). SHADOW.
+
+  4. All three registered ``shadow=True`` (the ADR077 price_value/national
+  promotion-precedent discipline: measured every tick, excluded from
+  principal scoring/frames/rupture/rupture events until a later, separate
+  promotion decision) in ``build_default_registry`` — key count 11 -> 14,
+  shadow-key count 1 -> 4. ``ContradictionSystem._build_graph_inputs`` gained
+  a ``tick: int = 0`` parameter (default preserves the three existing direct
+  callers in ``tests/unit/engine/systems/test_contradiction_{system,
+  money_inputs}.py`` unchanged) to resolve the FRED-year the same way
+  ``resolve_working_day_visibility_modifier`` already does.
+
+  5. The three ``_DEFAULT_COUPLINGS`` slots reserved at the T1.0 contract
+  commit (``value_usevalue -> labor_laborpower``, ``labor_laborpower ->
+  absolute_relative_surplus``, ``absolute_relative_surplus -> wage``, all
+  ``feeds``) now survive ``build_default_coupling_graph`` unchanged — no
+  edit to ``_DEFAULT_COUPLINGS`` itself was needed, only its surrounding
+  comment (updated from "not yet registered... skipped" to reflect the lit
+  state); the builder's existing "keep edges whose both endpoints are
+  registered" logic did the rest, exactly as the two Vol III ``transforms``
+  edges lit when THEIR endpoints were bound.
+
+  6. Test updates: ``test_contract.py``'s single dormancy test split into
+  ``test_vol2_reserved_oppositions_remain_dormant`` (Vol II only, unchanged
+  disjointness) and ``test_vol1_reserved_oppositions_are_now_registered``
+  (positive confirmation); its coupling-skeleton test inverted from
+  "must stay dead" to ``test_vol1_coupling_skeleton_now_lit`` ("must now
+  survive"). ``test_coupling.py``'s ``test_reserved_slots_are_skipped``
+  moved 5 -> 2 skipped (only Vol II's ``realization``/``disproportionality``
+  remain), plus a new ``test_the_three_reserved_vol_one_feeds_now_survive``
+  and an updated ``test_only_the_bound_edges_survive`` exhaustive set.
+  ``test_catalog.py`` gained ``TestValueUseValue``/``TestLaborLaborPower``/
+  ``TestAbsoluteRelativeSurplus`` (absent->zero, unity-point, both-pole
+  readings, shadow+antagonistic-flag+level-placement, pole naming);
+  ``test_eleven_oppositions_bound``/``test_national_is_the_only_shadow_binding``
+  renamed and widened to fourteen/four; ``TestLevelPlacement``'s exact-dict
+  gained the three new entries; the module's own
+  ``TestCatalogDocstringAccuracy::test_docstring_names_every_registered_key``
+  sentinel (an EXISTING test, unmodified) independently confirms every new
+  key is documented. New ``TestVolumeOneProductionRatios`` in
+  ``test_contradiction_system.py`` proves the wiring end-to-end (ratio-of-
+  sums arithmetic, node-type/active-flag skip rules, unwired-source
+  absence). ``test_resolver.py`` gained a full ``TestResolveAbsoluteRelative
+  SurplusRatio`` class mirroring the existing U4 suite's structure.
+consequences: >-
+  Registry key count 11 -> 14; shadow-key count 1 -> 4 (``national`` plus the
+  three new). The CANONICAL (non-shadow) ``opposition_states`` set is
+  UNCHANGED (still the same 10 keys) — every new binding lands only in
+  ``shadow_opposition_states``, so no existing test reading canonical state
+  by specific key was affected; one end-to-end test
+  (``TestPriceValueEndToEnd::test_market_axis_feeds_the_canonical_opposition``)
+  asserting the FULL shadow-key set needed updating (found + fixed) since it
+  is no longer just ``{"national"}``. No baseline drift expected: shadow
+  bindings write only to ``shadow_opposition_states``, which — like
+  ``fundamental_theorem`` (ADR117) and the ``national`` axis before it — sits
+  outside ``tools/regression_test.py``'s fixed dense-trace/checkpoint column
+  contract; ``qa:regression`` itself was not run from this lane (outside the
+  permitted scoped-test tool surface; the controller/owner verifies at
+  consolidation) but the mechanism is the same one three prior units already
+  proved inert. No new ``GameDefines`` fields were needed (both new ratios
+  reuse existing coefficients — ``subsistence_threshold``/``wealth`` are
+  model fields, not defines; ``relative_hours_threshold`` already existed) —
+  ``defines.yaml`` untouched, no regeneration required. Full scoped battery
+  green: 197 tests across ``tests/unit/dialectics/{test_catalog,test_contract,
+  test_coupling,test_pole_readings}.py`` + ``tests/unit/formulas/
+  test_sustained_exploitation.py`` + ``tests/unit/economics/working_day/
+  test_resolver.py`` + ``tests/unit/engine/systems/test_contradiction_
+  system.py``; the full ``tests/unit/dialectics/`` + ``tests/unit/economics/
+  working_day/`` + ``tests/unit/engine/systems/`` directories (764 + others)
+  and ``tests/integration/test_volume_i_integration.py`` all green,
+  unchanged. ``ruff check``/``ruff format`` clean; ``mypy`` clean via the
+  pinned nix devshell (two genuine ``no-any-return`` findings from the new
+  resolver code, fixed in place: a local ``ProductivityDataSource | None``
+  annotation on ``source`` and explicit ``float(...)`` wraps on the
+  Any-tainted ``services.defines.working_day.relative_hours_threshold`` read,
+  matching the ``float(services.defines.market.scissors_balance_scale)``
+  convention already used elsewhere in this same file).
+
+  FOUND, NOT FIXED (pre-existing, confirmed via git-stash isolation to
+  predate this unit — dates to the Vol III money oppositions landing,
+  ADR089, which pushed the canonical count 5 -> 10):
+  ``tests/integration/test_lawverian_contradiction_bridge.py::
+  test_contradiction_field_rows_flow`` asserts ``field_names == 5``
+  ("Five oppositions bound in the default catalog") against a live
+  Postgres-backed 50-tick bridged run, but the canonical (non-shadow) count
+  has been 10 since U5.2/ADR089 — unrelated to Vol I U6 (shadow bindings do
+  not reach ``contradiction_field`` rows), reproduced identically with this
+  unit's changes stashed out. Flagged for whoever next touches that
+  integration suite; not this unit's blast radius to fix.
+
+  Vol I's three-key reserved namespace (ADR103) is now fully lit; the
+  contract's own coupling skeleton needs no further edits from Vol I. U7
+  (sentinels), U8 (defines sweep), and U9 (monitoring) remain open, along
+  with U5's still-missing ADR (a gap from the prior unit, not addressed
+  here).

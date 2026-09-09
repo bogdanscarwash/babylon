@@ -1,0 +1,289 @@
+ADR068_program17_wave1_sentinels:
+  status: "accepted"
+  date: "2026-07-14"
+  title: "Program 17 Wave 1 'Light the Seam' + the Sentinels family (babylon.sentinels, 5 declared-invariant gates) + seam close-out: per-county Φ lit end-to-end (31,688 IMPORT_USE rows), events 14→34, endgame wired, 5 inspectors real, live verb costs, 4 dynamic sentinels sharing one shared-tick fixture, 82-finding advisory punch-list as the honest UI-wiring backlog"
+  context: |
+    Program 17 "The Living Engine" is the ratified 3-wave plan (Light the
+    Seam → Topology/Hypergraph → Game-feel) to turn the web↔engine seam —
+    assessed in the 2026-07-12 consolidation report as "the neglected seam"
+    (engine + shell rich, adapter thin) — into a genuine 4X grand-strategy
+    UI on top of the sim engine. Owner rulings pre-authorized the wave:
+    D1 = both topology surfaces (map edge-lens + sigma canvas) for Wave 2,
+    D2 = full Leontief now (not deferred), D3 = AI narration deferred and
+    mocked. North star: `desired-end-state-for-ui.md` + the Program-16
+    research corpus (Paradox/Tufte/Debord: click-to-pin, 5-state
+    eligibility grammar, Φ-default, edges-as-lens not node-dump).
+
+    Entering Wave 1, four concrete symptoms of the neglected-seam thesis
+    were live on `feature/17-living-engine` (off `dev@28bef52f`): the
+    default Φ (imperial rent) lens read blank because the reference DB
+    carried zero IMPORT_USE input-output coefficients; the bus→pydantic
+    event converter forwarded only 14 of 79 `EventType`s; all 5
+    `get_inspector_*` bridge methods were stub `return {}`; and
+    `EndgameDetector` computed outcomes every tick but was never wired
+    into `resolve_tick`, so games could not end. A second, orthogonal need
+    surfaced mid-wave: the same class of bug (blank Φ, a `float +=
+    Decimal` crash, the narrow event whitelist, several other silent
+    no-ops) recurs structurally at this seam and is invisible to type
+    checkers and unit tests that mock the boundary — Constitution VIII.12
+    (no silent no-op) and III.11 (Loud Failure) call for a mechanically
+    enforced gate, not vigilance.
+  decision: |
+    (1) WAVE 1 "LIGHT THE SEAM" — delivered in full on
+    `feature/17-living-engine`, every step qa:regression 5/5
+    byte-identical:
+      - **1a** (`5e569fcf`) wired the genuinely-unwired
+        tensor/Leontief(L=(I−A)⁻¹)/MELT/γ pipeline into TickDynamics +
+        `engine_bridge`'s `_serialize_territory`/`_hex_state_row`. Found +
+        fixed `DBImportShareSource` INNER-JOINing and dropping 36/107
+        industries → LEFT JOIN from `dim_bea_industry`.
+      - **THE CROWN FIX**: Φ still computed 0 everywhere because the
+        reference DB had NO IMPORT_USE coefficients at all
+        (`dim_bea_io_table_type` = {USE, TOTAL_REQ} only). Owner
+        authorized the load. Two traps caught pre-ship: the xlsx parser
+        read title rows as headers (0 rows); and the USE table stores
+        NORMALIZED coefficients (÷gross_output), not dollars — a naive
+        dollar load would have produced garbage `m_j` in the thousands
+        while still passing the crown test. Correct load (`fb53debf`,
+        `tools/ingest_bea_imports.py`): `import_coeff = import_$ᵢⱼ /
+        gross_output_millionsⱼ`. Loaded 31,688 rows (2010–2024); 2015
+        `m_j` median 0.048 / mean 0.098 / max 0.382, zero >1 — textbook
+        import-penetration profile (petroleum 0.38, autos 0.23,
+        chemicals 0.19 vs housing 0.008, utilities 0.06). Also fixed a
+        stale CHECK constraint forbidding IMPORT_USE.
+      - **1b** (`a35c07cf`/`aa21a7fc`) widened the bus→pydantic converter
+        14→34 `EventType`s (+5 new payload files), fixed the 3rd
+        `event_type` typo (`runtime_db.py:205`).
+      - **1c** (`9d8a90b6`) wired `EndgameDetector` into web `resolve_tick`
+        (per-session cache, durable `tick_event` read) — games can now
+        END. Corrected: the live Chronicle wire is `get_endgame_state()`,
+        not the dead `snapshot['endgame']`. Rewrote 4 tests that had
+        faked `event.event_type == "RED_OGV"` (a false contract).
+      - **1d** (`784ae0a6`) implemented all 5 `get_inspector_*` methods
+        from raw-graph reads (were `return {}`); fixed
+        `_social_class_stats` reading a nonexistent top-level
+        `class_consciousness`.
+      - **1e** (`2abc18fc`/`13e5fc4b`) live verb cost (5/9 static labels
+        were WRONG) + grounded ▲/▼ predicted-delta arrows for 7/9 verbs;
+        investigate/negotiate left honest-null (zero scalar engine
+        effect), pinned as a test contract.
+      - **Seam-hardening** (`e7804cd7`): the live `hex_cell` table
+        predated 4 columns (`county_name`/`bea_ea_code`/`msa_code`/
+        `state_fips`); `CREATE TABLE IF NOT EXISTS` no-ops on a stale
+        table, so a subsequent `CREATE INDEX` threw `UndefinedColumn`,
+        which the bridge's catch-all swallowed as a non-fatal WARNING —
+        silently aborting every DDL statement after it. Fixed with an
+        idempotent `ALTER … ADD COLUMN IF NOT EXISTS` heal in
+        `postgres_schema.py` + narrowed the bridge's catch to
+        `(psycopg.Error, RuntimeError)` at ERROR (III.11). Red→green
+        regression: `test_bootstrap_heals_drifted_hex_cell`.
+      - **float+=Decimal fix** (`db9cda51`): `_aggregate_hex_features` did
+        `float += Decimal` (`hex_latest.imperial_rent` is Postgres
+        NUMERIC) — invisible while Φ was NULL (`None or 0`→int), it
+        500'd the county map the instant Φ went non-null. Cast the 5
+        NUMERIC metrics to float + round Φ to 6dp (was 2dp, collapsing
+        ~1e-5 values to 0.00 = a blank lens). Test:
+        `tests/unit/web/test_map_aggregation.py`.
+      - **Item 25** ("light the derived-rate lenses"): Fix A (`a8918338`)
+        — the web bridge's `_carry_tick_dynamics_flows` re-applied only a
+        subset of `tick_*` attrs after `step()`'s `WorldState` round-trip
+        strips them; now carries `tick_profit_rate`/`tick_occ`/
+        `tick_exploitation_rate` too, recomputed via
+        `DerivedRateCalculator`. Fix B (`875ae76c`) — wired the REAL
+        `CapitalStockCalculator(tensor_registry)`, hydrated 2010–2024
+        from the reference DB, cached per FIPS-set (`K` had been 0,
+        degenerately tying `profit_rate` to `exploitation_rate`). Fix C
+        (`a2ab6e9e`) — wired real QCEW per-county employment via a
+        symmetric `employment_source` on `ServiceContainer`/
+        `ServicesProtocol`, falling back to 100k when unwired so
+        headless/qa:regression stay byte-identical. Live (wayne_county):
+        employment 100k→671,985, occ 138.6→20.6, profit_rate
+        0.027→0.175, exploitation_rate 3.79 (employment-invariant),
+        K=346B labor-hours — the falling rate of profit made visible.
+
+    (2) THE SENTINELS FAMILY (`babylon.sentinels`, renamed from
+    `babylon.seams` at `48f0d104`) — 5 declared-invariant gates
+    formalizing "authentic game-engine-style abstraction… mutant
+    observability grows-with-your-codebase… fails loudly" (owner
+    directive), enforcing Constitution VIII.12/III.11:
+      1. **Seam** (`sentinels/seam/`, `78a1679c`→`651b9151`) — Sensor 1
+         static continuity: GATING `check_map_metrics`,
+         `check_tick_payloads_exist`, `check_severity_vocabulary`;
+         ADVISORY `check_tick_coverage`, `check_narrator_vocabulary`,
+         `check_event_coverage`. Sensor 2 liveness =
+         `tests/unit/sentinels/test_seam_liveness.py`.
+      2. **Determinism** — `shared_tick.hash_a == hash_b` (III.7
+         seed-identical replay).
+      3. **Round-Trip** (`sentinels/roundtrip/`) — `from_graph(to_graph())`
+         conserves a declared 16-field core set (incl. the tick-52-crash
+         `county_fips`).
+      4. **Economic-Conservation** (`sentinels/conservation/`) — 2
+         identities across all 53 `imperial_circuit` rows: finiteness (no
+         NaN/inf) + rent-pool reserve depletion (non-neg, bounded, non-
+         increasing) within a derived 1e-9 tolerance (Amendment Q).
+      5. **Data-Coverage** (`sentinels/coverage/`, `2b623a50`) — STATIC
+         slice only (each declared reference-data requirement names a
+         source-adapter class that exists); the 6GB actual-row probe is
+         deferred, on-demand, never CI.
+      Shared apparatus: `sentinels/base.py` (`run_sensor` two-tier
+      gating/advisory runner, exit 0/1/2), `sentinels/_ast.py` (static
+      helpers). Family CLI: `tools/sentinel_check.py <sensor> --check`.
+      Layer 0.5, import-linter-pinned (imports nothing above
+      models/config). THE OPTIMIZATION (`10250fe7`, `499b54a3`): the 4
+      dynamic sentinels share ONE session-scoped `shared_tick` fixture
+      (`tests/unit/sentinels/conftest.py`) → run twice total (2nd run is
+      Determinism's own seed-replay) instead of 5× — measured 1.5s for
+      the whole 50-test suite. `regression_test.py` stayed UNTOUCHED.
+      Layer-0.5 corollary the investigation spec missed: dynamic
+      check-logic lives in the TEST layer (tests import anything); only
+      declared registries live in the package.
+      SENSOR 3 PROVENANCE (`aa2a7cc7`, `a32b2f2a`, `0bb2e0c9`) — 5
+      pieces: rename-aware AST emission-diff
+      (`_aggregate_hex_features` vs `AdminFeatureProperties`) that
+      SELF-CORRECTED a prior "14 phantoms" plan claim to the true 4
+      (`biocapacity`, `consciousness`, `rent`, `wealth` — the other 9 are
+      group_key normalizations); a `StubBridge` production guard
+      (raises `ImproperlyConfigured` instead of warning when serving
+      fabricated values with `DEBUG` off); and 3 frontend guards
+      (render-tree import ban on observatory/fixtures, an MSW
+      bundle-honesty test, a golden field-value snapshot) — each
+      efficacy-proven (reds on an injected defect).
+      OWNER RULINGS: registry = frozen Pydantic; **NO nightly CI**
+      (solo project — mutmut stays a manual on-demand command, no
+      Parquet reference-DB CI plumbing, Sensor-2 reference-data checks
+      republish-to-CI-first with no carve-out); drift = "fix now then
+      gate"; "build all 5, optimize don't cut"; fast-gate ceiling = one
+      real synthetic tick, no reference DB.
+      CROWN HONEST FINDING (Seam Sensor-2): 0/6 MUST_BE_LIVE map
+      observables are value-live on the bare-engine synthetic tick,
+      because `/map/` is lit by the web `EngineBridge` against the
+      hex/Postgres projection — a higher altitude than a 2-territory
+      `to_graph()`. Refused to fake green; shipped a characterization
+      contract (pins the true live/dark partition + probe
+      discrimination) and deferred real value-liveness to the
+      web-bridge altitude.
+
+    (3) SEAM CLOSE-OUT — the punch-list (`reports/seam-wiring-
+    punchlist.md`), delivered via `3d80bb0c` (typed endpoint manifest as
+    the API-contract SoT), `285a477e` (autonomous bridge-serialization
+    sweep, Sensor 3), `2b623a50` (data-coverage sentinel routed through
+    the family CLI), `e096a6d5` (sweep fix: discover non-`get_*`
+    serializers + loud no-serializer blind spots), `19b760ab` (frontend
+    migrated its last 5 hardcoded API paths onto the manifest), and
+    `8dbad2d0`/`013da395` (punch-list authored, then regenerated after
+    the sweep fix — 82 advisory findings at time of writing). The
+    findings sort into 3 data-flow gaps + 2 adjacent vocabularies: **Gap
+    1** — 26 unregistered `tick_*` attrs computed every tick and never
+    emitted (crisis phase, financialization share, debt, unemployment
+    rate — real economic signal thrown away); **Gap 2** — emitted/
+    reachable but not consumed: 2a two possibly-dark endpoints
+    (`get_org_network`, `get_hypergraph_communities` — undefined
+    anywhere in `web/game`, investigate first) + `get_explain` stub-only
+    dead code, 2b serializers with a working backend but `Untyped` in
+    `endpoints.ts` (dashboards, inspectors, all 8 verb actions ×2 routes,
+    action lifecycle), 2c structurally opaque delegated returns
+    (`get_snapshot`, `get_wire_feed`, `get_map_snapshot`); **Gap 3** —
+    declared but never emitted: `EconomyDashboardPayload` 8 phantoms
+    (`current_super_wage_rate`, `imperial_rent_pool`, `occ`,
+    `profit_rate`, `tick`, `tribute_flow_total`, `wage_flow_total`,
+    `wealth_by_class_role` — the single highest-value fix, since data
+    and contract both already exist) and `AdminFeatureProperties` 4
+    phantoms (`biocapacity`, `consciousness`, `rent`, `wealth`).
+    **Adjacent**: 6 crafted-but-unreachable narrator templates and 45/79
+    `EventType`s still dropping to `None` at the bus→pydantic boundary
+    (both product-scoped, kept advisory). None of these gate the build;
+    the punch-list is a living, self-regenerating artifact (`mise run
+    check:seams` / `tools/sentinel_check.py seam --check`) — the honest
+    backlog the "proper UI" gets built on.
+  consequences: |
+    Program 17 Wave 1 is COMPLETE and every quantity the engine computes
+    now has a documented disposition (emitted+consumed, emitted-untyped,
+    declared-phantom, or unregistered-computed) — nothing falls on the
+    floor unaccounted for, even where the honest disposition is
+    "advisory backlog." Full suite held green throughout: 9588 passed at
+    Wave-1-complete → 9648 passed once all 5 sentinels landed; mypy/
+    ruff/hygiene clean; qa:regression 5/5 byte-identical at every
+    intermediate commit (Wave 1, seam-hardening, item-25 A/B/C,
+    sentinels). The Sentinels family already proved its own value: Sensor
+    3's adversarial AST diff caught and corrected a wrong "14 phantoms"
+    plan claim down to the real 4 before it shipped as fact.
+
+    DEFERRED, explicitly NOT closed by this work:
+      (a) The IMPORT_USE reference-DB load is LOCAL-ONLY —
+          `tools/ingest_bea_imports.py` mutated the local 5.7GB
+          `data/sqlite/marxist-data-3NF.sqlite` directly. CI's
+          `fetch-reference-db` action pulls a pre-built `ci-data-v1`
+          subset that has never been regenerated with the load, so the
+          crown integration test (`test_imperial_rent_real_wiring.py`)
+          and the "map lights up" claim reproduce NOWHERE but this
+          machine — not CI, not other devs, not the Hetzner deploy.
+          Flagged CRITICAL / priority #1 in
+          `ai/_inbox/deferred-repo-refactors.md` §1 (spec-086/097/098
+          reference-DB remediation territory) — must be fixed before
+          "lit Φ" can be called shipped rather than local.
+      (b) The 2-tier web↔engine contract mechanism (a declared
+          observable-field registry generalizing every seam bug fought
+          this session, gated by continuity/liveness/provenance sensors
+          beyond just the map lens) was DESIGNED by the owner
+          (`archive/observability-seam-coverage-gate.md`) but NOT
+          implemented — `deferred-repo-refactors.md` §2, "the
+          highest-leverage anti-regression infra on the list."
+      (c) Owner ruled NO nightly CI / no Parquet reference-DB CI
+          plumbing for the sentinels (solo-project reasoning — "the
+          owner IS the CI for deep checks"): mutmut stays manual
+          on-demand, Data-Coverage stays a static AST-only slice, the
+          6GB actual-row value-liveness probe is a local pre-deploy
+          check, never a cron.
+      (d) Narrator remediation (6 unreachable templates) and the 45/79
+          `EventType` vocabulary triage are PENDING owner product
+          decisions, kept advisory.
+      (e) The bridge-serialization sweep exists and runs, but closing
+          the 82 punch-list rows it produces (Gaps 1–3 above) is
+          unstarted — that IS the remaining Wave-1-adjacent work.
+      (f) Residual metric-design issues on the now-lit lenses, flagged
+          for owner: `g33_visibility` NULL; Hickel-ERDI import data ends
+          2017 so Φ freezes past that year; hex-level `imperial_rent`
+          aggregation is a SUM, not a population-weighted mean.
+    Two latent bugs were found and fixed purely as a side effect of
+    lighting a previously-dark seam — both invisible while the seam was
+    dark, both now covered by a regression test: the `float += Decimal`
+    map crash, and the `hex_cell` schema-drift silent-DDL-abort.
+  verification: |
+    Wave-1 commit inventory and the close-out commit list (`3d80bb0c`,
+    `285a477e`, `2b623a50`, `8dbad2d0`+`013da395`, `e096a6d5`,
+    `19b760ab`) confirmed against `git log dev..HEAD --oneline` (29
+    commits on `feature/17-living-engine`, all enumerated above). Sentinel
+    structure, layer-0.5 placement, and the shared_tick optimization
+    confirmed by direct read of the `seam-observatory` project memory
+    note plus the punch-list's own regeneration instructions
+    (`tools/sentinel_check.py seam --check`, `mise run check:seams`).
+    82-finding count and the 3-gap/2-adjacent-vocabulary structure
+    confirmed by direct read of `reports/seam-wiring-punchlist.md` in
+    full. The IMPORT_USE local-only reproducibility gap confirmed by
+    direct read of `ai/_inbox/deferred-repo-refactors.md` §1 — exact
+    claim "lit Φ reproduces nowhere but this machine — CI, other devs,
+    and the Hetzner deploy all still see blank Φ." 31,688-row load count
+    and the 2015 `m_j` distribution (median 0.048/mean 0.098/max 0.382,
+    zero >1) confirmed from the Program-17 project memory note's own
+    validation pass. Live-verify figures (wayne_county, real Postgres
+    bridge) confirmed from the same note: Φ non-null at tick 1
+    (`imperial_rent≈3.35e-5`, later `0.002717` post seam-hardening bump
+    fix), 246 events, inspectors returning real payloads, endgame
+    resolving; item-25 live figures — `imperial_rent=3.7e-5`,
+    `profit_rate` 0.027→0.175, `occ` 138.6→20.6, `exploitation_rate=3.79`,
+    `K=346B` labor-hours, employment 100k→671,985 (real Wayne County
+    2010 QCEW). Full-suite counts (9588 → 9648) and qa:regression 5/5
+    byte-identical-throughout confirmed from the same project memory
+    notes, cross-checked against the commit inventory's chronology.
+  references:
+    - "src/babylon/domain/economics/tick/graph_bridge.py (tick_* attrs, TickDynamics wiring)"
+    - "web/game/engine_bridge.py (_serialize_territory, _hex_state_row, _aggregate_hex_features, _carry_tick_dynamics_flows, resolve_tick, get_inspector_*, get_endgame_state, _get_bridge/StubBridge guard)"
+    - "tools/ingest_bea_imports.py (BEA IMPORT_USE loader — gross-output-normalized import_coeff)"
+    - "src/babylon/persistence/postgres_schema.py (hex_cell idempotent column heal, loud init_schema)"
+    - "src/babylon/sentinels/ (seam/, roundtrip/, conservation/, coverage/, base.py, _ast.py) + tools/sentinel_check.py + tests/unit/sentinels/ (conftest.py shared_tick, test_determinism.py, test_seam_liveness.py)"
+    - "reports/seam-wiring-punchlist.md (82 advisory findings, regenerated by tools/sentinel_check.py seam --check)"
+    - "ai/_inbox/deferred-repo-refactors.md §1-2 (IMPORT_USE reproducibility gap; 2-tier contract mechanism design)"
+    - "commits: 5e569fcf/fb53debf/db9cda51 (1a + crown Φ fix + float-Decimal fix), a35c07cf/aa21a7fc (1b events 14→34), 9d8a90b6 (1c endgame), 784ae0a6 (1d inspectors), 2abc18fc/13e5fc4b (1e verb cost), e7804cd7 (hex_cell heal), a8918338/875ae76c/a2ab6e9e (item-25 A/B/C), 78a1679c..651b9151 (Seam Sensor-1), 48f0d104 (seams→sentinels), 10250fe7/499b54a3 (shared_tick + 4 dynamic sentinels), aa2a7cc7/a32b2f2a/0bb2e0c9 (Sensor 3 provenance), 3d80bb0c/285a477e/2b623a50/e096a6d5/19b760ab/8dbad2d0/013da395 (seam close-out)"
+    - "ADR063 (Program 14 — layering + import-linter law that pins babylon.sentinels at layer 0.5)"
+    - "ADR065, ADR066 (Program 16 — the Living Map research corpus that is Program 17's north star)"
+    - "Constitution VIII.12 (no silent no-op), III.11 (Loud Failure), III.7 (determinism)"

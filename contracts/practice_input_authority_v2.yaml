@@ -1,0 +1,147 @@
+# Language-neutral V2 campaign habitation and practice-input authority contract.
+# Every substantive value in this file is a Designed game or engineering liberty.
+schema: babylon.practice-input-authority
+schema_version: 2
+evidence_class: Designed
+purpose: >-
+  Bind one player seat or deterministic policy to one materially situated
+  organization over an exact campaign tick interval without admitting or
+  resolving a practice.
+domain_terminator_hex: "00"
+
+compatibility:
+  preserves:
+    - babylon.practice-input-authority.v1
+    - babylon.practice-intent.v1
+    - babylon.organization-budget-delta.v1
+    - practice_contract_v1_vectors.jsonl
+  v1_decoder_accepts_v2: false
+  v2_decoder_accepts_v1: false
+  v1_bytes_changed: false
+
+wire_layouts:
+  PracticeInputAuthorityV2:
+    - ascii_domain
+    - zero_u8
+    - schema_version_u16_be
+    - campaign_id_uuid16
+    - authority_kind_u8
+    - input_authority_id_uuid16
+    - actor_org_id_u64_be
+    - effective_from_tick_u64_be
+    - effective_through_tick_exclusive_u64_be
+    - decision_content_digest_32
+  PracticeInputAuthorityLedgerV2:
+    - ascii_domain
+    - zero_u8
+    - schema_version_u16_be
+    - row_count_u32_be
+    - canonical_authority_rows
+
+scalar_types:
+  u8: {width_bits: 8, unsigned: true}
+  u16: {width_bits: 16, unsigned: true}
+  u32: {width_bits: 32, unsigned: true}
+  u64: {width_bits: 64, unsigned: true}
+  uuid16:
+    width_bytes: 16
+    encoding: rfc4122_network_order_raw_bytes
+    semantics: opaque_pre_minted_identity
+  digest32: {width_bytes: 32, encoding: raw_bytes}
+
+limits:
+  max_authority_ledger_rows:
+    value: 16384
+    evidence_class: Designed
+    play_purpose: >-
+      Bound canonical ledger decode, validation, and sorting fuel. This is a
+      historical-row ceiling, not an organization, party, or actor quota.
+  row_canonical_bytes:
+    value: 127
+    evidence_class: Derived
+    derivation: Sum the fixed domain, terminator, and declared field widths.
+
+enums:
+  PracticeAuthorityKindV2:
+    width: u8
+    evidence_class: Designed
+    play_purpose: Keep player and deterministic-policy authority distinct.
+    members:
+      PLAYER_SEAT: 1
+      DETERMINISTIC_POLICY: 2
+
+contract_errors:
+  width: u16
+  evidence_class: Designed
+  members:
+    AUTHORITY_DOMAIN: 1
+    AUTHORITY_SCHEMA_VERSION: 2
+    AUTHORITY_ENUM_CODE: 3
+    AUTHORITY_TRUNCATED: 4
+    AUTHORITY_TRAILING_BYTES: 5
+    AUTHORITY_EMPTY_INTERVAL: 6
+    AUTHORITY_LEDGER_LIMIT: 7
+    AUTHORITY_LEDGER_ORDER: 8
+    AUTHORITY_LEDGER_DUPLICATE: 9
+    AUTHORITY_INTERVAL_OVERLAP: 10
+    AUTHORITY_PLAYER_SEAT_OVERLAP: 11
+    AUTHORITY_NOT_FOUND: 12
+    AUTHORITY_INACTIVE: 13
+    AUTHORITY_ACTOR_MISMATCH: 14
+    AUTHORITY_PLAYER_SEAT_MISSING: 15
+    AUTHORITY_PLAYER_SEAT_REASSIGNMENT: 16
+
+records:
+  PracticeInputAuthorityV2:
+    wire_domain: babylon.practice-input-authority.v2
+    evidence_class: Designed
+    play_purpose: >-
+      Record authoritative campaign habitation or deterministic-policy input
+      authority without granting material eligibility or practice effects.
+    fields:
+      - {name: schema_version, type: u16, byte_order: big_endian}
+      - {name: campaign_id, type: uuid16, byte_order: network_order}
+      - {name: authority_kind, type: PracticeAuthorityKindV2, byte_order: single_byte}
+      - {name: input_authority_id, type: uuid16, byte_order: network_order}
+      - {name: actor_org_id, type: u64, byte_order: big_endian}
+      - {name: effective_from_tick, type: u64, byte_order: big_endian}
+      - {name: effective_through_tick_exclusive, type: u64, byte_order: big_endian}
+      - {name: decision_content_digest, type: digest32, byte_order: raw_bytes}
+  PracticeInputAuthorityLedgerV2:
+    wire_domain: babylon.practice-input-authority-ledger.v2
+    evidence_class: Designed
+    play_purpose: >-
+      Bind the sorted authoritative input-authority history for later world
+      identity and accepted-input validation.
+    fields:
+      - {name: schema_version, type: u16, byte_order: big_endian}
+      - {name: rows, type: "sequence[PracticeInputAuthorityV2]", byte_order: sorted_unique}
+
+validation_laws:
+  row_sort_order: [campaign_id, input_authority_id, effective_from_tick]
+  row_identity: [campaign_id, input_authority_id, effective_from_tick]
+  row_count_bound: max_authority_ledger_rows
+  effective_interval: effective_from_tick_lt_effective_through_tick_exclusive
+  authority_interval: nonoverlapping_for_campaign_and_input_authority
+  player_seat_interval: at_most_one_active_per_campaign_tick
+  player_seat_binding: one_input_authority_and_actor_organization_per_campaign
+  intent_match_fields: [campaign_id, input_authority_id, actor_org_id, resolve_tick]
+  unknown_kind: refuse
+  trailing_bytes: refuse
+  maximum_plus_one: refuse_before_sort_or_allocation
+
+authority_boundary:
+  authoritative_campaign_state: true
+  grants_material_eligibility: false
+  grants_knowledge: false
+  grants_legitimacy: false
+  grants_command_over_other_organizations: false
+  creates_organization: false
+  changes_membership: false
+  activates_practice: false
+  permits_midcampaign_player_seat_reassignment: false
+  future_consumers:
+    - PracticeIntentV2 admission
+    - ResolvedPracticeBatchV2
+    - NominalWorldHashV2
+    - CommittedTickEnvelope

@@ -1,0 +1,52 @@
+ADR247_dependabot_exact_head_only_automation:
+  status: accepted
+  date: '2026-08-31'
+  title: >-
+    Dependabot automation removes the unwritable actor-triggered label phase
+    and retains one exact-head workflow-run authority
+  issue: PER-264
+  context: |
+    ADR245 kept a pull_request_target classifier that wrote the
+    dependencies:automerge presentation label through the Issues REST API.
+    GitHub gives a workflow triggered by Dependabot a read-only GITHUB_TOKEN,
+    including pull_request_target when Dependabot authored the pull request.
+    The declared issues: write permission therefore cannot authorize the label
+    POST or DELETE. The first synchronized update after ADR245 proved the
+    boundary with HTTP 403, leaving an otherwise green exact-head update with
+    a failed classifier check.
+
+    The presentation label grants no merge authority. The trusted workflow_run
+    verifier already authenticates the exact Dependabot actor, pull request,
+    native CI run and suite, executing verifier job and check, immutable head,
+    and current commit update metadata before it classifies or merges anything.
+    Keeping a second actor-triggered classification phase adds a permanent
+    failure mode without adding evidence.
+  decision: |
+    1. READ-ONLY ACTOR BOUNDARY. The Dependabot-authored pull_request_target
+       phase is removed. Dependabot actor events remain read-only, receive no
+       write-capable job, and no longer add or remove a presentation label.
+
+    2. ONE AUTHORITY. The completed native CI workflow_run is the only trigger.
+       It checks out trusted dev and delegates exact-head provenance, update
+       classification, policy verification, and merging to tools/pr_merge.py.
+       The presentation label has no merge authority and is not an input to the
+       verifier.
+
+    3. EXISTING SAFETY LAW REMAINS. ADR245's five typed outcomes, hard-refusal
+       precedence, eight-attempt bound, thirty-second delay, outcome-4-only
+       retry, semver-major manual-review result, and no-retried-merge rule are
+       unchanged. No workflow dispatch, rerun, polling loop, trigger bypass, or
+       direct GitHub merge command is added.
+  consequences: |
+    - Dependabot synchronization cannot fail because a read-only actor token
+      attempted a presentation-only mutation.
+    - One authenticated exact-head verifier owns both semver classification and
+      merge authority, eliminating duplicated classification state.
+    - The repository may retain the managed label as inert presentation
+      metadata; automation does not read it, write it, or infer authority from
+      it.
+    - This decision supersedes only ADR245's label-transport and two-phase event
+      clauses. Its typed verifier and bounded retry contract remain governing.
+  related:
+    - ADR230_exact_head_pr_and_dependabot_policy
+    - ADR245_dependabot_bounded_retry_and_label_transport

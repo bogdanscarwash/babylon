@@ -4,11 +4,10 @@
 #     with a stale justification gets deleted, loudly breaking the scan.
 
 # DS-0002 (HIGH): "Specify at least 1 USER command" — docker/postgres/Dockerfile.
-# The official postgres entrypoint is DESIGNED to start as root and drop to
-# the postgres user via gosu (first-boot initdb/chown needs root). Adding
-# USER postgres changes first-boot init behavior for the babylon-pg image,
-# which feeds the byte-identical qa:e2e-regression bundle — that change
-# belongs to the postgis base-image bump batch (Program 15 Phase 3 protocol:
-# bump proven by local byte-identical qa:e2e-regression), not to a lint fix.
-# Added 2026-07-11; revisit with the postgis bump.
+# The pinned upstream entrypoint starts as root only to repair bind/named-volume
+# ownership and migrate numeric UIDs, then directly re-execs itself as postgres
+# through su-exec before initdb or the server runs. A global USER postgres would
+# break that first-boot contract. This is an IaC shape exception, not a package-
+# vulnerability exception. The pre-chown marker is a recoverability fence, not
+# a security attestation. Revalidated for the Alpine lineage on 2026-08-30.
 DS-0002

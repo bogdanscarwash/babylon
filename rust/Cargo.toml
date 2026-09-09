@@ -1,0 +1,81 @@
+[workspace]
+members = [
+    "crates/babylon-kernel",
+    "crates/babylon-material-circuit",
+    "crates/babylon-practice-contract",
+    "crates/babylon-graph",
+    "crates/babylon-bsl",
+    "crates/babylon-evidence",
+    "crates/babylon-tick",
+    "crates/babylon-persistence",
+    "crates/babylon-client",
+    "crates/babylon-rtd",
+    "crates/bsl-lint",
+    "crates/babylon-ls",
+]
+resolver = "2"
+
+# Release must fail as loudly as dev. Cargo's implicit release default is
+# `overflow-checks = false`, which turns every arithmetic overflow into a
+# silent wrap — the exact shape Constitution III.11 (Loud Failure) forbids,
+# and in a hash-producing engine a wrapped intermediate is a wrong tick that
+# still validates. A real instance shipped here: `round_half_even_div`'s
+# `denominator.abs()` returned -1 instead of 0 in release while panicking in
+# dev (fixed at the site with `unsigned_abs`; this table closes the class).
+#
+# `debug-assertions` stays at the release default (off): those are for
+# invariants we choose to check, whereas overflow is never intended.
+# Determinism is unaffected either way — an overflow panic is not a
+# divergent number, it is the absence of one.
+[profile.release]
+overflow-checks = true
+
+# Full Michigan replay and persistence proofs execute production-sized worlds.
+# Optimize their simulation/codec loops and the native development client while
+# retaining invariant checks and recoverable debug symbols. Tests inherit this
+# profile, so bootstrap and tests can also reuse the same compiled libraries.
+[profile.dev]
+opt-level = 1
+debug-assertions = true
+overflow-checks = true
+
+# R1.2 (BSL refactor program, Director-approved 2026-08-18): strip debug
+# symbols from every DEPENDENCY (not this workspace's own crates — cargo's
+# package-name matching for `dev.package."*"` covers only external deps;
+# workspace members keep full `debug` at the top-level `[profile.dev]`
+# default, so `RUST_BACKTRACE=1`/debugger sessions on OUR code stay intact).
+# Motivation: Bevy-class dev builds link several multi-GB rust-lld binaries
+# concurrently across the now-common multi-worktree setup (8 worktrees live
+# at drafting time) — most of that size is dependency debuginfo nobody
+# steps into. `split-debuginfo = "unpacked"` keeps whatever symbols remain
+# out of the object files themselves (faster incremental links; the .debug
+# files are regenerable, never a correctness artifact — Constitution III.7
+# unaffected by those symbol settings).
+[profile.dev.package."*"]
+# Keep Bevy's frame loop usable in the canonical development build. Workspace
+# code retains debug symbols and the normal dev assertions/overflow checks.
+opt-level = 3
+debug = false
+split-debuginfo = "unpacked"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+# 1.87 is bnum 0.14's MSRV, not a preference — declaring 1.85 while
+# depending on a crate that needs 1.87 would be a false claim about who
+# can build this workspace. The toolchain pin (rust-toolchain.toml) is
+# 1.91.1, so this is the floor we support, not the one we use.
+# Best-effort/advisory (issue #525 rider, Director ruling 2): this number
+# is copied from bnum's declared MSRV, not independently verified against
+# this workspace — no cargo-msrv (or equivalent) check runs here, so 1.87
+# has never been mechanically confirmed as the actual minimum this crate
+# graph builds under. Treat it as the floor bnum forces us to declare, not
+# a tested promise.
+rust-version = "1.87"
+license = "AGPL-3.0-or-later"   # in-tree = babylon's own license, not the sibling BSD
+
+# PER-306: these lints become active only in packages that declare
+# `[lints] workspace = true`. That preserves the six-package pedantic boundary
+# formerly implemented through repeated package-specific Clippy executions.
+[workspace.lints.clippy]
+pedantic = { level = "warn", priority = -1 }

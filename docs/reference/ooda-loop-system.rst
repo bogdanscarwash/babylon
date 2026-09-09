@@ -454,9 +454,21 @@ compute_community_embeddedness
 
    def compute_community_embeddedness(org_id: str, graph: nx.DiGraph[str]) -> float: ...
 
-Compute how embedded an organization is in its operating communities.
-Embeddedness = overlap of org member communities with territory communities.
-Returns value in [0, 1].
+Compute how embedded an organization is in its territories' communities.
+Walks the org's ``territory_ids`` -> the ``social_class`` nodes TENANCY-linked
+into each territory (the real Occupant -> Territory edge) -> each reachable
+member's ``community_memberships`` list. Embeddedness is the share of
+TENANCY-reachable members carrying at least one community membership;
+bounded to [0, 1] by construction, 0.0 if the org has no territories or no
+member is reachable.
+
+This value is structurally 0.0 in every real game today: no production
+writer populates ``SocialClass.community_memberships``
+(``CommunitySystem.step`` no-ops every tick — seam registry
+``src/babylon/sentinels/seam/registry.py:1969-1991``,
+``liveness_class=STRUCTURALLY_IMPOSSIBLE``). Seeding that field is a
+separate, owner-gated program; the function reads the real substrate shape
+so the score activates the moment a producer exists.
 
 **Source:** ``src/babylon/ooda/initiative.py:82``
 

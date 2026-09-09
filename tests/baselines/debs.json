@@ -1,0 +1,102 @@
+{
+  "scenario": "debs",
+  "description": "The independent line under FPTP: the spoiler tax and the accumulation the ballot cannot touch (U13 golden, ADR140)",
+  "generated_at": "2026-07-30T13:44:19+00:00",
+  "defines_hash": "956a5d9a03931c7d86b347c326456d5a654b9c5007b8267c3320e77118e13b4e",
+  "max_ticks": 52,
+  "checkpoints": [
+    {
+      "tick": 0,
+      "p_w_wealth": 0.35,
+      "p_c_wealth": 2.0,
+      "c_b_wealth": 0.0,
+      "c_w_wealth": 0.0,
+      "imperial_rent_pool": 100.0,
+      "exploitation_tension": 0.0,
+      "p_w_consciousness": 0.0,
+      "p_w_p_revolution": 0.0,
+      "p_w_active": true,
+      "content_hash": "29825383f01388edaa5352697d091f23ef8cc7d15b3710b8e52639eadae8a36a"
+    },
+    {
+      "tick": 10,
+      "p_w_wealth": 0.660971,
+      "p_c_wealth": 1.860986,
+      "c_b_wealth": 0.0,
+      "c_w_wealth": 0.0,
+      "imperial_rent_pool": 98.177357,
+      "exploitation_tension": 0.597245,
+      "p_w_consciousness": 0.0,
+      "p_w_p_revolution": 0.309634,
+      "p_w_active": true,
+      "content_hash": "2ad79c5a7a45e1bb6486d3269cfd377a85da98450ff69f2d593452b589c926a8"
+    },
+    {
+      "tick": 20,
+      "p_w_wealth": 0.947246,
+      "p_c_wealth": 1.856284,
+      "c_b_wealth": 0.0,
+      "c_w_wealth": 0.0,
+      "imperial_rent_pool": 96.52364,
+      "exploitation_tension": 0.573103,
+      "p_w_consciousness": 0.0,
+      "p_w_p_revolution": 0.3559,
+      "p_w_active": true,
+      "content_hash": "534733b911927c2e415168f32a7cc35422b16d73ffcaf60adb758cd4576772b7"
+    },
+    {
+      "tick": 30,
+      "p_w_wealth": 1.267692,
+      "p_c_wealth": 1.983361,
+      "c_b_wealth": 0.0,
+      "c_w_wealth": 0.0,
+      "imperial_rent_pool": 95.033082,
+      "exploitation_tension": 0.676735,
+      "p_w_consciousness": 0.0,
+      "p_w_p_revolution": 0.377538,
+      "p_w_active": true,
+      "content_hash": "8e5596ef9713a73f3c926901644c7daf51719a3ecc18785e578de3eb255732a8"
+    },
+    {
+      "tick": 40,
+      "p_w_wealth": 1.575054,
+      "p_c_wealth": 2.24442,
+      "c_b_wealth": 0.0,
+      "c_w_wealth": 0.0,
+      "imperial_rent_pool": 93.704568,
+      "exploitation_tension": 0.736203,
+      "p_w_consciousness": 0.0,
+      "p_w_p_revolution": 0.390312,
+      "p_w_active": true,
+      "content_hash": "c5025cbd3949b66f9500af9e4ad70e284435c8509cf3c23bf6529cad8a165ef2"
+    },
+    {
+      "tick": 50,
+      "p_w_wealth": 1.869984,
+      "p_c_wealth": 2.629315,
+      "c_b_wealth": 0.0,
+      "c_w_wealth": 0.0,
+      "imperial_rent_pool": 92.524853,
+      "exploitation_tension": 0.774723,
+      "p_w_consciousness": 0.0,
+      "p_w_p_revolution": 0.395808,
+      "p_w_active": true,
+      "content_hash": "57ec4c19cf1057fb30dda3c20ce4246849e978aedbbd278d40becbafb137ca5b"
+    },
+    {
+      "tick": 52,
+      "p_w_wealth": 1.927533,
+      "p_c_wealth": 2.72032,
+      "c_b_wealth": 0.0,
+      "c_w_wealth": 0.0,
+      "imperial_rent_pool": 92.305676,
+      "exploitation_tension": 0.78085,
+      "p_w_consciousness": 0.0,
+      "p_w_p_revolution": 0.396524,
+      "p_w_active": true,
+      "content_hash": "b4ce1d0b7ca045bd41c514edd4df35cf661889da5f05be248af05ca4808bb213"
+    }
+  ],
+  "final_outcome": "SURVIVED",
+  "ticks_survived": 52
+}

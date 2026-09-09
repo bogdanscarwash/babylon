@@ -1,0 +1,257 @@
+ADR186_bevy_cutover_amendment_af:
+  status: "accepted"
+  date: "2026-08-10"
+  title: >
+    Amendment AF — The Bevy Cutover: Bevy replaces the Rust/Ratatui client
+    outright (Textual-deletion precedent, no dual-client period); Amendment
+    AC is superseded in full and Amendment AE clause (xi) is superseded; the
+    ADR099 glyph floor retires; topology/hypergraph/Sankey visualization
+    obligations transfer to Bevy scenes; the Ratatui estate is deleted by
+    declared ceremony and the maturin wheel leaves the default dependency
+    set; sentinel-family dispositions for the deleted client are recorded
+    here per Amendment AF clause (vii); the hyperedge-lane pause lifts.
+
+  context: |
+    Director rulings of 2026-08-10 (in-session, recorded in the roadmap
+    design doc `docs/superpowers/specs/
+    2026-08-10-program-28-bevy-cutover-roadmap-design.md` §2, rulings
+    R1–R10) resolved that Bevy — not the Rust/Ratatui terminal client landed
+    by Amendment AC (2026-07-27, ADR150) and hardened by the M7 cutover
+    (Textual deletion) — is the v1.0 client. R1 contradicts two live
+    constitutional clauses outright: AC's "the Rust/Ratatui client IS
+    v1.0's terminal client" and AE clause (xi)'s requirement that ratty +
+    Ratatui be the in-game topology/hypergraph/Sankey-flow renderers. Those
+    clauses cannot stand alongside a Bevy client, so a constitutional
+    amendment is required before any deletion or scaffolding work proceeds.
+
+    Amendment AF is that amendment (CONSTITUTION.md, ratified v3.1.0,
+    2026-08-10). This ADR is its recording ADR, per the house pattern of
+    ADR150 (AC) and ADR172 (AE): it transcribes the ruling table verbatim,
+    summarizes the amendment's operative clauses, and — because AF clause
+    (vii) requires declared sentinel continuity under Constitution IX.5 —
+    records the disposition of every client-bound sentinel family so Phase
+    B (the deletion ceremony) executes against a decision already made,
+    not one it invents mid-deletion.
+
+    The Phase A PR carrying CONSTITUTION.md, this ADR, and the index entry
+    is a director-gate: it is opened for Director ratification and never
+    self-merged. Phases B (deletion ceremony) and C (`babylon-client` Bevy
+    scaffold, B0) wait on that merge.
+
+  decision:
+    rulings: |
+      Director rulings of 2026-08-10, verbatim from the roadmap design
+      doc's §2 table:
+
+      R1. Bevy replaces the Ratatui client outright — Textual-deletion
+          precedent: no deprecation window, no dual-client period.
+
+      R2. Parallel lanes — the engine lane continues P27 Phase 2 while a
+          new client lane scaffolds the Bevy app against the current
+          engine seam (scenario load → tick → state hash).
+
+      R3. Visual scope at v1.0 = 2D map game + 3D moments — county
+          choropleth map, panels, and charts as the primary surface;
+          selective 3D scenes (Patches the tutorial guide, the topology
+          view) where they earn it.
+
+      R4. The shipped game is a pure Rust binary — engine crates + Bevy
+          client in one cargo workspace, no PyO3 in the play path. Python
+          remains the offline data pipeline and the out-of-process AI
+          observer, exactly where Amendment AE put it.
+
+      R5. All four side threads ride in the near-term roadmap: the seven
+          ruling bundles, the hypergraph-rs storage swap (ADR179 T3), the
+          national incidence data program (#334), and the hyperedge lane
+          un-pauses (lifts the 2026-07-31 hold).
+
+      R6. Ruling sessions start immediately on this doc's approval,
+          conducted interactively, while agents start the amendment +
+          Bevy scaffold in parallel.
+
+      R7. First ruling bundle: #378 (strike & verb algebra) — the verb
+          algebra is the player's action surface and constrains doctrine
+          (#377), pacing (#380), and what the client UI must present.
+
+      R8. BSL-first porting doctrine, escape by proof. Every system's
+          default port target is a BSL rule pack. A system (or part of
+          one) escapes to Rust only with a written justification — linear
+          algebra, dispersion machinery (ADR176 r17), or measured
+          performance need. The Director rules OODA unique: it ports as a
+          kernel/engine module, never BSL. Heavy linear algebra (Leontief,
+          value tensor, σ-composition) stays in Rust domain crates that
+          BSL rules consume through bindings. The Phase-1 17/12/5 audit
+          re-baselines under this stronger default.
+          R8 REFINEMENT (Director, 2026-08-10, same-day follow-up):
+          "OODA is unique" rules the LOOP, and only the loop — cycle
+          order, budget conservation, arbitration, dispatch are
+          adjudication, the engine's job. The POLICY consulted inside it
+          — doctrine-conditioned scoring, target preferences, what counts
+          as a live option — is BSL/data content the kernel invokes. Same
+          pattern as the Lane A heat ruling: escalation is rank-order
+          under budget (mechanism, engine), fed by content-side inputs.
+          The Director names the risk in a maximal-kernel reading:
+          ideological differentiation collapses into coefficient tweaks,
+          which cuts against the no-imposed-forms line. KERNEL LOOP,
+          CONTENT BRAIN.
+
+      R9. BSL expansion precedes system ports — a Phase 2 track: (1) the
+          34-system gap analysis (walk every system against BSL's current
+          surface → needed query forms, graph abstractions, RNG/clock
+          host bindings, rule-pack structure), (2) spec chapters in
+          `bsl-language.rst` (the one normative home), (3)
+          implementation. Then system ports proceed in tick order,
+          Material Base first, each with its sentinel row, §5.4
+          do-not-transcribe check, and conformance vectors only from live
+          surfaces.
+
+      R10. The r21 intrinsic cap holds ({exp, log} at most). Widening the
+           intrinsic table needs an ADR176 rider presented to the
+           Director with the gap analysis — never a quiet addition. New
+           host bindings (RNG streams, SimClock) are seams to kernel
+           services, not new mathematics, and stay within Amendment AE's
+           charter.
+
+    amendment_af_clauses: |
+      Amendment AF — The Bevy Cutover (Bevy Client, v1.0), ratified
+      v3.1.0. Operative clauses, summarized from the ratified
+      CONSTITUTION.md text (Task 1):
+
+      (i) The client — the v1.0 client is a standalone Bevy (0.18 line)
+          executable crate `babylon-client` in the in-tree `rust/` cargo
+          workspace; engine crates link in-process; the shipped game is a
+          pure Rust binary with no PyO3 in the play path (Python remains
+          the data-build pipeline and out-of-process AI observer, per
+          Amendment AE); v1.0 visual scope is the 2D county-map game with
+          selective 3D moments (Patches the tutorial guide; the topology
+          view).
+
+      (ii) Supersessions — Amendment AC is superseded in full; Amendment
+           AE clause (xi) is superseded; the ADR099 glyph floor and
+           NORTH_STAR invariant 3's "fully playable glyph-only over ssh"
+           retire as binding requirements. The topology/hypergraph/
+           value-flow-Sankey visualization obligations transfer to Bevy
+           scenes — the obligations survive, the renderer changes. AC
+           clause (ii)'s substance carries forward verbatim: the client
+           is a presentation-only viewport over `observe()`-projection
+           shapes (II.8/Amendment V holds), clients remain disposable,
+           and this amendment designates an implementation, not a
+           primitive.
+
+      (iii) Deletion ceremony — this amendment deletes the Ratatui estate
+            outright: workspace crates `babylon-tui`, `babylon-tui-python`,
+            and `babylon-md`, the maturin wheel packaging
+            (`rust/pyproject.toml`), and the Python client periphery that
+            boots it; the wheel leaves the default dependency set, so
+            `uv sync` no longer requires cargo (which also removes the
+            #463 CI-timeout lane's trigger surface).
+
+      (iv) Packaging — `babylon play` retires from the play path; the
+           game launches as a normal binary; the Python CLI survives only
+           for the data-pipeline and observer periphery.
+
+      (v) Carried assets and contracts — the §9b crimson/gold/near-black
+          palette (source of truth `render/tiers.py::TRUECOLOR_PALETTE`,
+          with the cross-language parity guard re-pointed to
+          `babylon-client`), the Iosevka type direction, the SFX suite
+          (ADR152) and soundtrack (ADR153) porting to Bevy's audio/asset
+          system, and the ADR175 structured-JSONL engine log sink all
+          carry; the client log contract re-points from
+          `rust-client.log` to the Bevy client's log when its file sink
+          lands (milestone B2).
+
+      (vi) Gate transfer — AC (iii)'s tutorial-BDD parity condition
+           transfers to the Bevy client: the tutorial arc passing against
+           the Bevy client is the constitutional correctness/parity
+           condition before v1.0 (the `TutorialStep` script is the
+           preserved content source; the harness is rebuilt Bevy-side),
+           and a Director eyes-on session in the Bevy client replaces the
+           retired TUI campaign gate (#262).
+
+      (vii) Sentinel continuity (IX.5) — client-bound sentinel families
+            receive declared dispositions recorded in this ADR (see
+            `sentinel_dispositions` below): the theme-parity guard PORTS
+            to `babylon-client`; the raster-ban and tutorial-pilot
+            families RETIRE with the estate they guarded; tutorial
+            CONTENT checks are retained. No silent lapse.
+
+      (viii) Hyperedge formalism note — implementing `HyperedgeSet` /
+             `NodeRef` / `EdgeRef` / `HyperedgeRef` in `BslType` mints no
+             new mathematics: `bsl-language.rst` §2.6 already specifies
+             the element/result table, so it does not extend the
+             formalism surface under AE (ii); this recording closes the
+             open question on task #50, and the 2026-07-31 hyperedge-lane
+             pause lifts (R5).
+
+    sentinel_dispositions:
+      theme_parity_guard:            # tests/unit/render/test_rust_theme_parity.py
+        disposition: PORTED
+        target: rust/crates/babylon-client/src/palette.rs (re-pointed regex)
+      raster_ban_family:             # tests/unit/sentinels/test_raster_bans.py
+        disposition: RETIRED
+        reason: guards the ratatui/hypergraph-rs dependency wall of AC (vi);
+          the guarded estate is deleted by AF (iii)
+      tutorial_pilot_family:         # tests/unit/tui/test_tutorial_pilot_rs.py + FFI/map smoke
+        disposition: RETIRED
+        reason: harness of the deleted client; the parity CONDITION transfers
+          to the Bevy client per AF (vi), harness rebuilt at B2/B3
+      tutorial_coverage_family:      # src/babylon/sentinels/tutorial_coverage/
+        disposition: RETAINED_CONTENT_ONLY
+        reason: content checks over the TutorialStep script survive; legs that
+          import babylon_tui are stripped with the client
+
+  consequences: |
+    IMMEDIATE:
+    - CONSTITUTION.md version bumps 3.0.1 → 3.1.0 (MINOR — the 3.0.1
+      patch of 2026-07-30/ADR179-T2 sits between AE and AF in the chain);
+      the "Amendments A–AE" range phrase lives in CLAUDE.md's
+      Constitutional Compact (not in CONSTITUTION.md itself) and extends
+      to "A–AF" there.
+    - CLAUDE.md and NORTH_STAR.md require a constitutional sweep (Task 3
+      of the same plan): the Constitutional Compact amendment list, the
+      client-status paragraph, the client-logs paragraph, and NORTH_STAR
+      invariant 3 (glyph-only-over-ssh) all carry stale AC/AE-era claims
+      that must record the AF supersession rather than being silently
+      erased (immutability of history).
+    - This ADR's `sentinel_dispositions` table is the citation Phase B
+      (Task 7) uses in its commit body for every deleted sentinel family;
+      Phase B may not invent dispositions not recorded here.
+
+    UNBLOCKED BY THIS ADR (pending Director ratification of the Phase A
+    PR — this ADR alone does not authorize deletion):
+    - Phase B, the Ratatui deletion ceremony (Rust crates, the maturin
+      wheel, the Python client periphery, CI's build-wheel leg) — AF
+      clause (iii)/(iv).
+    - Phase C, the `babylon-client` Bevy scaffold (B0: window, palette,
+      Iosevka, in-process engine link to `babylon-tick::run_once`) — AF
+      clause (i).
+    - The hyperedge query lane (paused 2026-07-31) un-pauses per R5; AF
+      clause (viii) records that implementing `HyperedgeSet`/`NodeRef`/
+      `EdgeRef`/`HyperedgeRef` mints no new mathematics under AE (ii).
+    - Board hygiene: #284 and #262 close as superseded; #291/#292/#293
+      and #282 reshape/rescope per the roadmap doc §5 (executed post-
+      ratification, plan Task 4 Step 4).
+
+    STILL OPEN (other lanes, per the roadmap doc §4/§8, out of this ADR's
+    scope):
+    - The seven Game Design Standard §11 ruling bundles (#376–#382),
+      starting with #378 (strike & verb algebra), per R7.
+    - The hypergraph-rs storage swap (ADR179 T3) and the BSL expansion
+      track (gap analysis → spec chapters → bindings, R9) before any
+      system port.
+    - The national incidence data program (#334).
+    - The Bevy version pin was resolved to 0.18 at plan time (this plan's
+      Tech Stack line); the map-rendering approach (custom mesh vs
+      tilemap plugin) and the Bevy eyes-on gate's exact definition remain
+      open, deferred to the client-lane implementation plan (roadmap doc
+      §8).
+
+  supersedes:
+    - ADR150_raster_cutover           # Amendment AC — superseded IN FULL by AF (ii)
+    - ADR172_amendment_ae_refoundation_ratified  # clause (xi) ONLY; the rest of AE stands
+    - ADR099_archive_stack            # the glyph-floor discipline it seeded — retired by AF (ii)
+  related:
+    - ADR150_raster_cutover
+    - ADR172_amendment_ae_refoundation_ratified
+    - ADR179_topology_spine_director_rulings
+    - ADR183_get_it_right_in_rust

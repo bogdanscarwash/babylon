@@ -1,0 +1,249 @@
+; The DELAY-PATH companion for the Decomposition (@11.0) port train, Task 4
+; (`docs/superpowers/plans/2026-08-17-decomposition-controlratio-port.md`,
+; Task 4 Step 3). `decomposition-conformance.bscn` is the FALLBACK-trigger
+; world (`la-dying`'s wealth already below subsistence at tick 1); this
+; world is IDENTICAL in every declaration except the LA vector itself,
+; which is redesigned to reach `SUPERWAGE_CRISIS` (the early warning) at
+; tick 1 WITHOUT also satisfying the fallback (`la_about_to_die`), so
+; `CLASS_DECOMPOSITION` only fires once the shipped `carceral/
+; decomposition-delay` (52 ticks, UNCHANGED here — the brief's own
+; instruction) has elapsed: tick 53, not tick 1.
+;
+; This world also discharges two of the three Task 4 carried mutation
+; obligations (decomposition.bsl's header, "TASK 4 DISCHARGED MUTATION
+; OBLIGATIONS" 10-11; the third — the zero-population `p03-trigger` gate —
+; needs its OWN isolated world, since `p03`'s `la-population` fold sums
+; EVERY SOCIAL_CLASS node in a scenario and this one's `la-approaching`
+; always contributes non-zero population, so it lives inline in
+; `decomposition_conformance.rs`'s own
+; `p03_gate_blocks_zero_population_la_even_when_the_delay_has_elapsed`
+; instead):
+;   (11) `la-inactive` — a seeded-INACTIVE LABOR_ARISTOCRACY node, wealth
+;        below its own subsistence threshold. If p01's `(= active 1)`
+;        conjunct were ever dropped, this node would leak a non-zero
+;        census contribution (and a dying-flag) into the carrier's fold —
+;        `production-conformance.bscn:161-166`'s `worker-la-idle` vector,
+;        applied to the census pack.
+;
+; **The approaching-multiple boundary (obligation 10 in the plan's own
+; numbering, Task 2 Step 6's deferred assertion).** `la-approaching`'s
+; wealth (515) is chosen to sit STRICTLY BETWEEN
+; `subsistence-threshold + 1*consumption` (500 + 1*10 = 510) and
+; `subsistence-threshold + 2*consumption` (500 + 2*10 = 520):
+;   - at the shipped multiplier (2): 515 < 520 → `la-approaching-flag` = 1,
+;     `SUPERWAGE_CRISIS` fires at tick 1.
+;   - at the mutated multiplier (1): 515 is NOT < 510 → the flag stays 0
+;     FOREVER (nothing else changes `la-approaching`'s wealth), so
+;     `SUPERWAGE_CRISIS` never fires and `CLASS_DECOMPOSITION` never
+;     reaches tick 53 either — `decomposition.bsl`'s bare-`2` D-record 7
+;     is finally load-bearing against a real fixture, not merely asserted
+;     in prose.
+; `la-approaching`'s wealth (515) also stays ABOVE `subsistence-threshold`
+; (500) — `la_about_to_die` (the fallback) stays false for the entire
+; session, so ONLY the delay path can fire `CLASS_DECOMPOSITION` here.
+;
+; Same enum order, same carrier singleton discipline, same eight
+; `carceral/*` defconsts at shipped values (`decomposition-conformance.
+; bscn`'s own header applies verbatim) — `defenum`/`deffield`/`defconst`
+; are NOT shared across scenarios (one `(scenario …)` form per source), so
+; every declaration below is a self-contained re-statement, not a
+; reference.
+;
+; Seven nodes, one carrier (declaration order fixes NodeId):
+;   la-approaching   LABOR_ARISTOCRACY, active, wealth 515 — the DELAY-PATH
+;                     vector (above).
+;   la-inactive      LABOR_ARISTOCRACY, INACTIVE, wealth 1 (well below its
+;                     own subsistence 500) — obligation 11's active-gate
+;                     vector; every one of its own four census fields must
+;                     stay 0 through every tick.
+;   enforcer-seed    CARCERAL_ENFORCER, seeded INACTIVE, non-zero
+;                     population/wealth (20 / 100) — same BLOCKER-1 seeding
+;                     obligation as the primary world (`add-node` is
+;                     refused at content load).
+;   ip-seed          INTERNAL_PROLETARIAT, seeded INACTIVE, non-zero
+;                     population/wealth (77 / 33) — the OVERWRITE-provable
+;                     twin, same as the primary world.
+;   lumpen           LUMPENPROLETARIAT, active, organization 0.2 — inert
+;                     for Pack A, present for field-declaration parity with
+;                     the primary world.
+;   bourgeois        CORE_BOURGEOISIE, active — the non-participant vector.
+;   carceral-register INSTITUTION — the carrier; every latch seeded 0.
+(scenario decomposition/delay-conformance
+  (defvocabulary NodeType (SOCIAL_CLASS INSTITUTION))
+  (defenum SocialRole (CORE_BOURGEOISIE PERIPHERY_PROLETARIAT LABOR_ARISTOCRACY PETTY_BOURGEOISIE LUMPENPROLETARIAT COMPRADOR_BOURGEOISIE INTERNAL_PROLETARIAT CARCERAL_ENFORCER))
+
+  (deffield social-class/role enum SocialRole)
+  (deffield social-class/active int extensive)
+  (deffield social-class/population int extensive)
+  (deffield social-class/wealth real extensive)
+  (deffield social-class/subsistence-threshold real extensive)
+  (deffield social-class/s-bio real extensive)
+  (deffield social-class/s-class real extensive)
+  (deffield social-class/organization coefficient intensive)
+  (deffield social-class/la-census-population int extensive)
+  (deffield social-class/la-census-wealth real extensive)
+  (deffield social-class/la-approaching-flag int extensive)
+  (deffield social-class/la-dying-flag int extensive)
+  (deffield social-class/enforcer-census-population int extensive)
+  (deffield social-class/prisoner-census-population int extensive)
+  (deffield social-class/prisoner-census-org-weighted real extensive)
+
+  (deffield institution/superwage-crisis-known int extensive)
+  (deffield institution/superwage-crisis-tick int extensive)
+  (deffield institution/decomposition-complete int extensive)
+  (deffield institution/decomposition-fired-known int extensive)
+  (deffield institution/decomposition-fire-tick int extensive)
+  (deffield institution/control-crisis-emitted int extensive)
+  (deffield institution/control-crisis-tick int extensive)
+  (deffield institution/terminal-decision-emitted int extensive)
+  (deffield institution/la-population int extensive)
+  (deffield institution/la-wealth real extensive)
+  (deffield institution/la-approaching-count int extensive)
+  (deffield institution/la-dying-count int extensive)
+  (deffield institution/enforcer-pop-gain int extensive)
+  (deffield institution/enforcer-wealth-gain real extensive)
+  (deffield institution/ip-population int extensive)
+  (deffield institution/ip-wealth real extensive)
+  (deffield institution/enforcer-population int extensive)
+  (deffield institution/prisoner-population int extensive)
+  (deffield institution/prisoner-org-weighted real extensive)
+
+  ; CarceralDefines, src/babylon/data/defines.yaml:293-300. The shipped
+  ; decomposition-delay (52) governs — UNCHANGED here, the brief's own
+  ; instruction (Task 4 Step 3): the delay path must actually wait out the
+  ; real 52-tick window, not a shortened companion one.
+  (defconst carceral/control-capacity 4)
+  (defconst carceral/enforcer-fraction 0.15c)
+  (defconst carceral/proletariat-fraction 0.85c)
+  (defconst carceral/revolution-threshold 0.5c)
+  (defconst carceral/decomposition-delay 52)
+  (defconst carceral/control-ratio-delay 52)
+  (defconst carceral/terminal-decision-delay 1)
+  ; NO defines backing — a bare `2` literal at decomposition.py:155
+  ; (transcription note, not an escalation). THIS is the constant this
+  ; whole world's `la-approaching` wealth is calibrated to make
+  ; load-bearing (header above).
+  (defconst carceral/approaching-consumption-multiple 2)
+
+  (node la-approaching NodeType/SOCIAL_CLASS
+    (social-class/role SocialRole/LABOR_ARISTOCRACY)
+    (social-class/active 1)
+    (social-class/population 600)
+    (social-class/wealth 515)
+    (social-class/subsistence-threshold 500)
+    (social-class/s-bio 5)
+    (social-class/s-class 5)
+    (social-class/organization 0.0c)
+    (social-class/la-census-population 0)
+    (social-class/la-census-wealth 0)
+    (social-class/la-approaching-flag 0)
+    (social-class/la-dying-flag 0)
+    (social-class/enforcer-census-population 0)
+    (social-class/prisoner-census-population 0)
+    (social-class/prisoner-census-org-weighted 0))
+
+  (node la-inactive NodeType/SOCIAL_CLASS
+    (social-class/role SocialRole/LABOR_ARISTOCRACY)
+    (social-class/active 0)
+    (social-class/population 999)
+    (social-class/wealth 1)
+    (social-class/subsistence-threshold 500)
+    (social-class/s-bio 5)
+    (social-class/s-class 5)
+    (social-class/organization 0.0c)
+    (social-class/la-census-population 0)
+    (social-class/la-census-wealth 0)
+    (social-class/la-approaching-flag 0)
+    (social-class/la-dying-flag 0)
+    (social-class/enforcer-census-population 0)
+    (social-class/prisoner-census-population 0)
+    (social-class/prisoner-census-org-weighted 0))
+
+  (node enforcer-seed NodeType/SOCIAL_CLASS
+    (social-class/role SocialRole/CARCERAL_ENFORCER)
+    (social-class/active 0)
+    (social-class/population 20)
+    (social-class/wealth 100)
+    (social-class/subsistence-threshold 0)
+    (social-class/s-bio 0)
+    (social-class/s-class 0)
+    (social-class/organization 0.0c)
+    (social-class/la-census-population 0)
+    (social-class/la-census-wealth 0)
+    (social-class/la-approaching-flag 0)
+    (social-class/la-dying-flag 0)
+    (social-class/enforcer-census-population 0)
+    (social-class/prisoner-census-population 0)
+    (social-class/prisoner-census-org-weighted 0))
+
+  (node ip-seed NodeType/SOCIAL_CLASS
+    (social-class/role SocialRole/INTERNAL_PROLETARIAT)
+    (social-class/active 0)
+    (social-class/population 77)
+    (social-class/wealth 33)
+    (social-class/subsistence-threshold 0)
+    (social-class/s-bio 0)
+    (social-class/s-class 0)
+    (social-class/organization 0.0c)
+    (social-class/la-census-population 0)
+    (social-class/la-census-wealth 0)
+    (social-class/la-approaching-flag 0)
+    (social-class/la-dying-flag 0)
+    (social-class/enforcer-census-population 0)
+    (social-class/prisoner-census-population 0)
+    (social-class/prisoner-census-org-weighted 0))
+
+  (node lumpen NodeType/SOCIAL_CLASS
+    (social-class/role SocialRole/LUMPENPROLETARIAT)
+    (social-class/active 1)
+    (social-class/population 200)
+    (social-class/wealth 10)
+    (social-class/subsistence-threshold 0)
+    (social-class/s-bio 0)
+    (social-class/s-class 0)
+    (social-class/organization 0.2c)
+    (social-class/la-census-population 0)
+    (social-class/la-census-wealth 0)
+    (social-class/la-approaching-flag 0)
+    (social-class/la-dying-flag 0)
+    (social-class/enforcer-census-population 0)
+    (social-class/prisoner-census-population 0)
+    (social-class/prisoner-census-org-weighted 0))
+
+  (node bourgeois NodeType/SOCIAL_CLASS
+    (social-class/role SocialRole/CORE_BOURGEOISIE)
+    (social-class/active 1)
+    (social-class/population 10)
+    (social-class/wealth 9000)
+    (social-class/subsistence-threshold 0)
+    (social-class/s-bio 0)
+    (social-class/s-class 0)
+    (social-class/organization 0.0c)
+    (social-class/la-census-population 0)
+    (social-class/la-census-wealth 0)
+    (social-class/la-approaching-flag 0)
+    (social-class/la-dying-flag 0)
+    (social-class/enforcer-census-population 0)
+    (social-class/prisoner-census-population 0)
+    (social-class/prisoner-census-org-weighted 0))
+
+  (node carceral-register NodeType/INSTITUTION
+    (institution/superwage-crisis-known 0)
+    (institution/superwage-crisis-tick 0)
+    (institution/decomposition-complete 0)
+    (institution/decomposition-fired-known 0)
+    (institution/decomposition-fire-tick 0)
+    (institution/control-crisis-emitted 0)
+    (institution/control-crisis-tick 0)
+    (institution/terminal-decision-emitted 0)
+    (institution/la-population 0)
+    (institution/la-wealth 0)
+    (institution/la-approaching-count 0)
+    (institution/la-dying-count 0)
+    (institution/enforcer-pop-gain 0)
+    (institution/enforcer-wealth-gain 0)
+    (institution/ip-population 0)
+    (institution/ip-wealth 0)
+    (institution/enforcer-population 0)
+    (institution/prisoner-population 0)
+    (institution/prisoner-org-weighted 0)))

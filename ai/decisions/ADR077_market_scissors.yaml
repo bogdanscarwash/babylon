@@ -1,0 +1,116 @@
+ADR077_market_scissors:
+  status: "accepted"
+  date: "2026-07-17"
+  title: "Program 23 — Market Scissors: price⟷value registered as the sixth (first shadow) opposition, with a Phase-1 observe-only MarketScissorsSystem @17.8 evolving national price/fictitious-capital oscillators from the realized wage/value flow, tick_summary + cockpit exposure, and the generic BoundOpposition.shadow mechanism as the reusable slice of ADR072's blueprint"
+  context: |
+    Owner conversation 2026-07-17 (overnight execution mandate): model markets
+    not as order books or agents but as the DIVERGENCE between price and value
+    — the market is the phenomenal form, the c/v/s value substrate is what is
+    real, and the gap between them is the contradiction. The owner explicitly
+    directed: "Don't build a bespoke market system — register an opposition",
+    mapping price⟷value term-for-term onto the constitutional dialectic
+    D = (A, Ā, w, T, σ): A = price (form), Ā = value (substance), MELT the
+    unit of the adjunction, tension = the scissors, resolution = the
+    correction (crisis as the deterministic snap-back).
+
+    Recon findings that shaped the execution (vs. the conversation's sketch):
+    (1) ADR072's Divergence Channel is DESIGN-ONLY — no code exists; the
+    chauvinism⟷internationalism binding was never built and Amendment T
+    (sigma_authored observes-only charter) is still awaiting BD ratification.
+    What IS shipped is the P19/ADR070 opposition machinery: OppositionRegistry
+    over continuous Balance poles with five bound oppositions in
+    dialectics/instances/catalog.py.
+    (2) A plain sixth binding would perturb principal-contradiction selection,
+    contradiction_frames, RUPTURE, and the pre-position-18 consumers
+    (ImperialRent/Struggle/Consciousness read opposition_states) — NOT
+    observes-only, and a qa:regression break.
+    (3) The wealth-axis precedent (Program 21 / WealthDistributionSystem @21.5)
+    established the shadow-first pattern: optional WorldState field + metadata
+    key written only when set, nothing downstream reads the outputs, sampled
+    qa:regression checkpoints stay byte-identical.
+    (4) tick_summary already persisted total_c/v/s + profit_rate per tick but
+    the bridge dropped them before the timeseries payload.
+  decision: |
+    1. GENERIC SHADOW MECHANISM (the reusable ADR072 slice, without touching
+       sigma_authored or Amendment T): BoundOpposition gains shadow: bool =
+       False; OppositionRegistry gains shadow_keys and excludes shadow drafts
+       from principal scoring BEFORE the governed-fallback (an all-shadow
+       registry has NO principal); ContradictionSystem routes shadow states to
+       the new shadow_opposition_states graph attr (written only when shadow
+       bindings exist), keeps them out of frames/rupture/regime, and merges
+       both attrs in _read_previous for rate continuity. A future
+       chauvinism⟷internationalism binding registers on this same mechanism.
+    2. THE AXIS: MarketState (frozen: price_log, price_velocity,
+       fictitious_log, fictitious_velocity, surplus_ema, value_ema, tick)
+       rides G.graph["market"] + optional WorldState.market (absent-axis
+       byte-safety, the EH-ruling-6 / wealth_distribution pattern).
+    3. THE DYNAMICS: MarketScissorsSystem @17.8 (30th system, CONSEQUENCE
+       phase, immediately before ContradictionSystem so the registry measures
+       a fresh scissors). Two damped-driven oscillators in log-ratio space
+       (formulas/market.py: semi-implicit Euler, rail clamp zeroes momentum):
+       price_log driven by relative growth of Σ v_produced (demand pull),
+       fictitious_log driven by relative growth of realized surplus PLUS
+       momentum_coupling × price velocity (speculation chases the boom),
+       against defines-owned reversion stiffnesses — the reversion term IS
+       the law of value; fictitious gravity is deliberately weaker (bubbles
+       outlive price swings, Vol. III part 5). Honest absence: no
+       w_paid/v_produced accounting → no market key ever (III.11).
+       Deterministic: sorted-id summation, zero RNG (III.7). Eleven
+       coefficients in the new GameDefines.market category (MarketDefines).
+    4. THE OPPOSITION: price_value bound in build_default_registry with
+       shadow=True — pole_a "value", pole_b "price", non-antagonistic,
+       level_name unplaced (""). GraphInputs gains market_balance: the ENGINE
+       derives tanh(price_log / scissors_balance_scale) in
+       _build_graph_inputs (which now takes services) so the catalog stays
+       defines-free; the measure maps it to GapReading(|b|, b).
+    5. EXPOSURE: tick_summary gains nullable price_log/fictitious_log
+       (migration 0033, guarded idempotent, base DDL updated same commit per
+       the 0032 precedent); _build_tick_summary reads WorldState.market;
+       get_game_timeseries emits value_produced/surplus/profit_rate (the
+       already-persisted substance columns, previously dropped) and
+       price_index/fictitious_ratio (exp-mapped form, None-propagating).
+       Cockpit: "The Scissors" BottomDrawer tab (ScissorsChart) draws both
+       form series against a dashed ReferenceLine y=1 labeled "value" — the
+       dialectic rendered as such.
+    6. CONSTITUTIONAL BASIS: recording ADR, not an amendment (the ADR070/
+       ADR073 pattern) — price_value derives from the existing GapReading/
+       OppositionState shapes and the Amendment S apex-trigger does not fire;
+       Amendment T remains untouched and unratified (this opposition has two
+       MATERIAL poles; no sigma_authored channel is used).
+    7. PHASE 2 (OWNER-GATED, not built): the correction as feedback — the
+       snap-back firing rupture into the material base (wealth evaporation
+       into the P21 wealth axis, credit tightening, reserve-army coupling),
+       promotion via the recorded ceremony (regenerated byte-identical
+       baselines + an authorizing ADR). Until then NOTHING may read
+       shadow_opposition_states, G.graph["market"], WorldState.market, or the
+       new tick_summary columns to change tick outputs.
+  consequences: |
+    New: shadow-opposition channel (generic); GameDefines.market (11 defines);
+    formulas/market.py (4 pure laws, behavioral contracts pinned:
+    restoration/boundedness/determinism/antisymmetry); MarketState model;
+    MarketScissorsSystem (30 systems total; test_system_order updated);
+    price_value in the catalog (6 oppositions, keys sorted); migration 0033;
+    five new timeseries arrays; ScissorsChart + drawer tab.
+    Verified: mise run check green (10,505 unit tests); qa:regression
+    byte-identical at every stage (after T2 plumbing, after T6 system-live,
+    after T7 binding-live); web:check green (1,182 vitest);
+    defines.yaml round-trip gate green; migration applied + verified against
+    babylon_test.
+    Deliberately deferred (rule of three / owner gates): coupling-graph edge
+    (e.g. wage feeds price_value); per-territory/sectoral scissors and a map
+    lens (the axis is national in Phase 1 — no spatial field to lens);
+    pole_measure for price_value; FRED/NBER empirical anchors for the
+    coefficients (empirical-invariants pattern, calibration-only per ADR074
+    item 6); the diegetic narrator ticker (narration panel is owner-frozen
+    unwired); SQLite runtime_db.record_tick_summary (different explicit-args
+    API, not on the web timeseries path).
+    Data governance: no data-catalog.yaml / data-artifacts.yaml entries —
+    tick_summary is runtime-generated state, not a reference source; graph
+    attrs are governed by the computed-fields allowlists + qa baselines.
+    Known honest limitation: in the in-memory facade the shadow opposition's
+    rate resets each tick (opposition_states' documented facade limitation);
+    the WorldState.market field DOES carry the oscillator state itself, so
+    the dynamics are facade-correct — only the shadow state's rate channel
+    shares the pre-existing facade gap.
+  evidence: |
+    src/babylon/domain/dialectics/core/opposition.py, src/babylon/domain/dialectics/instances/catalog.py, src/babylon/engine/systems/contradiction.py, src/babylon/engine/systems/market_scissors.py, src/babylon/engine/simulation_engine.py, src/babylon/formulas/market.py, src/babylon/models/market.py, src/babylon/models/world_state.py, src/babylon/config/defines/market.py, src/babylon/persistence/migrations/0033_market_scissors_summary.sql, src/babylon/persistence/postgres_schema.py, src/babylon/persistence/postgres_runtime/_legacy.py, web/game/engine_bridge.py, src/frontend/src/components/timeseries/ScissorsChart.tsx, specs/115-market-scissors/spec.md, ADR070_emergent_class_partition.yaml, ADR072_divergence_channel.yaml, ADR073 (DoctrineSystem recording pattern), ADR075 (P21 shadow precedent), docs/superpowers/plans/2026-07-17-market-scissors.md

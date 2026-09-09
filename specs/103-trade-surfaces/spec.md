@@ -203,7 +203,7 @@ breakdown, and a `flow_types` summary. Matches `contracts/trade-panel.yaml`.
 - **SC-103-01**: `mise run web:check` green (tsc + eslint + prettier + Vitest).
   The 3 pre-existing tick-resolution-page failures are acceptable (documented
   pre-existing).
-- **SC-103-02**: `PYTHONPATH=src poetry run pytest tests/unit/web/ -q` green,
+- **SC-103-02**: `PYTHONPATH=src uv run pytest tests/unit/web/ -q` green,
   including the 3 new bridge method contract tests and 3 new API view tests.
 - **SC-103-03**: Trade-flows contract test passes (bridge returns real
   per-bloc series, not fixtures).

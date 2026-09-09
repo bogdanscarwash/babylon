@@ -1,0 +1,6 @@
+{
+  "id": "unrest_wave",
+  "event_types": ["CLASS_DECOMPOSITION", "DISPOSSESSION_CASCADE", "RED_BROWN_COUP"],
+  "slots": ["epicenter", "spread_mechanism", "classes_involved", "organizational_response", "trajectory"],
+  "guidance": "Narrate a spreading wave of fracture, not a single flashpoint — a Labor Aristocracy splitting, defecting, or losing share across a cascading milestone. Fill every slot from the observed engine state only — never invent casualties, counts, or outcomes the tick data does not contain. Name the material mechanism of spread (organizational contagion, cascading dispossession, defection) and where it is still moving. No moralizing, no editorializing the player."
+}

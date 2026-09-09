@@ -1,0 +1,37 @@
+; The DISCRIMINATING conformance world for `dispossession/territory-transfer`'s
+; `(when …)` gate — proves it is a genuine three-way OR, not an AND
+; masquerading as one.
+;
+; `dispossession-conformance.bscn`'s ACTIVE environment has all three primary
+; rates nonzero; `dispossession-zero-rate-conformance.bscn`'s has all three
+; zero. Neither pair discriminates `(or a b c)` from `(and a b c)` — both
+; forms agree on "all true" and "all false". This scenario isolates exactly
+; ONE nonzero primary rate (foreclosure only; eviction and displacement, AND
+; both structural factors, are zero) — under the frozen `if a<=0 and b<=0
+; and c<=0: continue` (De Morgan: `(a>0) or (b>0) or (c>0)`), one nonzero
+; disjunct is enough to pass the gate; under an `and`-shaped mistake it would
+; not be. It is also, incidentally, an independent cross-check on the
+; five-term weighted sum: every other term is zero, so `intensity` must
+; equal `weight_foreclosure * foreclosure_rate` exactly, with no other term
+; to mask an association-order mistake.
+(scenario dispossession/single-rate-conformance
+  (deffield territory/wealth int extensive)
+  (deffield territory/dispossession-intensity int intensive)
+
+  (defconst dispossession/foreclosure-rate 0.5c)
+  (defconst dispossession/eviction-rate 0c)
+  (defconst dispossession/displacement-rate 0c)
+  (defconst dispossession/concentrated-ownership 0c)
+  (defconst dispossession/absentee-landlord-share 0c)
+
+  (defconst dispossession/weight-foreclosure 0.4c)
+  (defconst dispossession/weight-eviction 0.3c)
+  (defconst dispossession/weight-displacement 0.15c)
+  (defconst dispossession/weight-tax-sale 0.05c)
+  (defconst dispossession/weight-eminent-domain 0.02c)
+  (defconst dispossession/deadweight-loss-fraction 0.05c)
+  (defconst dispossession/transfer-scale 0.01c)
+
+  (node foreclosure-only-county NodeType/TERRITORY
+    (territory/wealth 1000000)
+    (territory/dispossession-intensity 0)))

@@ -12,10 +12,10 @@ Generates the complete ~63 minute soundtrack for the National Revival Movement.
 
 Usage:
     cd babylon
-    poetry run python -m tools.fascist_soundtrack.generate_all
+    uv run python -m tools.fascist_soundtrack.generate_all
 
 Or:
-    poetry run python tools/fascist_soundtrack/generate_all.py
+    uv run python tools/fascist_soundtrack/generate_all.py
 """
 
 from collections.abc import Callable

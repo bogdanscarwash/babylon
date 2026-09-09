@@ -1,0 +1,65 @@
+version: 1
+name: Michigan Dynamic-Hex Foundation V1
+wire:
+  foundation_domain_utf8: "babylon.michigan-dynamic-hex-foundation.v1\0"
+  layout: 1
+  source_identity_domain_utf8: "babylon.h3.reference-source.v1\0"
+  r8_section_domain_utf8: "babylon.h3.reference-r8-child-parent.v1\0"
+  reference_bundle_domain_utf8: "babylon.h3.reference-bundle-composite.v1\0"
+dynamic_r7:
+  row_count: 45572
+  row_bytes: 80
+  order: numeric_h3_ascending
+  source_digest: 7f8d126ee81356a60605013b4b1c23942a77a4b2d6f890125d6c938dae70228b
+  value_lanes:
+    - c
+    - v
+    - s
+    - k
+    - biocapacity_stock
+    - energy_stock
+    - raw_material_stock
+    - internet_access_pct
+    - surveillance_coupling
+reference_bundle:
+  base_cohort_digest: 92b21ff325bde67f26565f52882d3664daacd6d51423f2a588344da012fd4161
+  r8_child_parent:
+    row_count: 319004
+    row_bytes: 16
+    order: numeric_child_h3_ascending
+    parent_law: exact_immediate_r7_parent_in_dynamic_r7
+    section_digest: b5ebf405140f6f79ddbc44fa1005b195bed0bc28e0eacf2d8e1697cd9c839491
+  composite_digest: 84bbffa9b2388aa168c065e710a61313fbd46522d2022b628f0919ecffec9831
+artifact:
+  byte_count: 8750055
+  sha256: 81ee8f8abbee6727655d52c6d56a6f2967af9dfdf01da53dd593da8339d650a4
+  max_part_bytes: 1000000
+  part_sizes: [1000000, 1000000, 1000000, 1000000, 1000000, 1000000, 1000000, 1000000, 750055]
+  fixture_parts:
+    - rust/crates/babylon-persistence/src/fixtures/michigan_dynamic_hex_foundation_v1.part-00.bin
+    - rust/crates/babylon-persistence/src/fixtures/michigan_dynamic_hex_foundation_v1.part-01.bin
+    - rust/crates/babylon-persistence/src/fixtures/michigan_dynamic_hex_foundation_v1.part-02.bin
+    - rust/crates/babylon-persistence/src/fixtures/michigan_dynamic_hex_foundation_v1.part-03.bin
+    - rust/crates/babylon-persistence/src/fixtures/michigan_dynamic_hex_foundation_v1.part-04.bin
+    - rust/crates/babylon-persistence/src/fixtures/michigan_dynamic_hex_foundation_v1.part-05.bin
+    - rust/crates/babylon-persistence/src/fixtures/michigan_dynamic_hex_foundation_v1.part-06.bin
+    - rust/crates/babylon-persistence/src/fixtures/michigan_dynamic_hex_foundation_v1.part-07.bin
+    - rust/crates/babylon-persistence/src/fixtures/michigan_dynamic_hex_foundation_v1.part-08.bin
+audited_identities:
+  r7_cells:
+    - "872664800ffffff"
+    - "872664801ffffff"
+    - "872664802ffffff"
+  r8_child: "8826648001fffff"
+  r8_parent: "872664800ffffff"
+rust_binding:
+  foundation_type: MichiganDynamicHexFoundationV1
+  r8_row_type: MichiganH3R8ChildParentV1
+  r8_rows_accessor: r8_child_parent_rows
+  child_accessor: child_cell_id
+  parent_accessor: parent_r7_cell_id
+  source_r7_digest_accessor: source_r7_digest
+  base_cohort_digest_accessor: base_reference_cohort_digest
+  r8_section_digest_accessor: r8_section_digest
+  composite_digest_accessor: reference_bundle_digest
+  artifact_digest_accessor: artifact_sha256

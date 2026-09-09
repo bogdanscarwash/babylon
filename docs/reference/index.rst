@@ -108,24 +108,67 @@ Persistence Layer (Feature 037)
 
    persistence
 
-Protocols (``RuntimePersistence``, ``VectorStoreProtocol``, ``TraceCollector``),
-concrete implementations (``PostgresRuntime``, ``RuntimeDatabase``,
-``PgVectorStore``, ``TraceRecorder``), database schema, and the
-``PersistenceObserver`` lifecycle hook.
+The Rust-owned Postgres boundary, schema activation, committed-tick envelope,
+H3 current-reader contract, restart behavior, and Archive dirty-receipt probe.
+The Python runtime databases are frozen or periphery and do not own
+game-managed persistence.
 
-Determinism Contract (Constitution III.12)
--------------------------------------------
+Projection Registry (Program 24)
+--------------------------------
+
+.. toctree::
+   :maxdepth: 1
+
+   projection-registry
+
+The declared-view registry behind the transport-neutral projection layer
+(``babylon.projection``): per-view ownership, frozen view-models, explicit
+``ORDER BY`` determinism, and FTS columns. ADR221 re-homes historical v3
+clause II.11 here and in the architecture record.
+
+Determinism Contract (Constitution Article V)
+----------------------------------------------
 
 .. toctree::
    :maxdepth: 1
 
    determinism-contract
 
-The language-agnostic, byte-level specification of every constitutional
-hash (``defines_hash``, ``tick_commit.determinism_hash``,
-``conservation_audit_log.determinism_hash``): canonical serialization,
-worked examples, the three float-tolerance regimes, and documented
-discrepancies between hash naming/docstrings and actual behavior.
+The identity taxonomy and selected byte layouts: the legacy Python replay
+marker and hex-frame hash, the roles of ``GraphStateHash`` and the current Rust
+``NominalWorldHash``, and the reserved ``TickContentHash`` name. The nominal
+section specifies its outer composition but records the graph and schedule
+inputs as a rewrite-contract gap. The page also records worked examples,
+float-tolerance regimes, and historical naming discrepancies.
+
+BSL Language Reference (Program 27)
+-------------------------------------
+
+.. toctree::
+   :maxdepth: 1
+
+   bsl-language
+
+The normative, language-agnostic specification of the Babylon Scripting
+Language: lexical and syntactic grammar, the type system (kernel scalars,
+the Currency fixed-point operator table, the intensivity kind rule), strict
+evaluation and fuel accounting, the canonical AST serialization behind
+``rules_hash``, and the conformance-vector contract. Phase-1 draft under
+the Program 27 refoundation design.
+
+Declared Synthetic Data (Constitution Article V)
+-------------------------------------------------
+
+.. toctree::
+   :maxdepth: 1
+
+   declared-synthetic-data
+
+The closed registry of every sanctioned synthetic/fallback data source on a
+production code path (``StubEngineBridge``, the economics graceful-degradation
+defaults and their fallback tally, and the deterministic seed scenarios):
+where each lives, what guards it, and the ``babylon.sentinels.synthetic``
+static coherence check that keeps the registry closed.
 
 Economic Data Sources
 ---------------------
@@ -179,10 +222,9 @@ Configuration
    :maxdepth: 1
 
    configuration
-   tuning
 
-Configuration system documentation, environment variables, GameDefines
-parameter tables, and the 20-Year Entropy Standard for parameter tuning.
+Configuration documentation, environment variables, and the authoritative
+four-week simulation interval.
 
 State Apparatus AI (Feature 039)
 ---------------------------------
@@ -276,3 +318,16 @@ CI/CD Workflow
 
 GitHub Actions workflows, branch protection rules, and the Benevolent
 Dictator governance model.
+
+Git Trailer Schema (Git Doctrine Item 1)
+------------------------------------------
+
+.. toctree::
+   :maxdepth: 1
+
+   trailer-schema
+
+The structured trailer grammar (``Task``/``Train``/``Lane``/``Safety``/
+``Pinned``/``Baselines``/``Session``/``Co-Authored-By``), the generated
+PR-body tool that consumes it, and the audit mapping every local
+pre-commit/pre-push hook to its authoritative CI leg (or its absence).

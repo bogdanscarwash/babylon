@@ -1,0 +1,10 @@
+meta:
+  note: >
+    Fixture ADR for bsl-lint's namespace-unique (a) integration test — NOT
+    a real decision. Deliberately absent from index.yaml (the
+    file-with-no-index-entry RED case).
+decisions:
+  ADR901_gamma:
+    title: 'fixture gamma'
+    status: accepted
+    date: '2026-08-18'

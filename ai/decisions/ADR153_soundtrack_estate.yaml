@@ -1,0 +1,82 @@
+id: ADR153
+title: >-
+  The soundtrack estate: 13 CC0 tracks in 5 suites (~29 minutes) composed as
+  pure Python against a deterministic composition kit at src/assets/music/ —
+  the game states that had no music (menu ambient, the electoral
+  superstructure, the periphery, the metabolic rift, the five endgames) now
+  scored, byte-identity pinned, leitmotif-continuous with the SFX suite.
+status: accepted
+date: '2026-07-27'
+context: >-
+  After the interface SFX suite shipped (ADR152), the Director granted full
+  creative license for actual soundtrack music. The existing music estate
+  (assets/music/: two themes + crisis/revolutionary/fascist bifurcation
+  suites) already covers the crisis-and-routing arc, and music-system.yaml's
+  planned-section named what was never built: menu ambient ("the world map —
+  history breathing"), the periphery lament, the bourgeois waltz. Program 25
+  (electoral superstructure), the metabolic rift, and the five canonical
+  endgame outcomes had no music at all. The dull-vs-05_the_purge autopsy
+  (ADR152) set the technique floor: expressive controller writing, velocity
+  architecture, form that encodes the mechanic — not note lists.
+decision: >-
+  (1) SHAPE: full music wants procedure (repetition with variation), not
+  flat data rows — so unlike the SFX manifest, the soundtrack is composed as
+  pure ``compose() -> Score`` Python modules against a shared deterministic
+  kit (src/assets/music/composer.py: notes/chords/CC ramps/bends with RPN
+  ±12, tempo maps, section markers, canonical event ordering identical to
+  the SFX renderer's; the ~40 writer lines are deliberately duplicated per
+  music-system.yaml's standalone-script doctrine rather than imported across
+  non-package script boundaries). generate_music.py renders 13 tracks into
+  five suite directories; byte-identity and suite census pinned by
+  tests/unit/assets/test_music_assets.py; mise midi:generate-soundtrack.
+  (2) THE TRACKS COMPOSE THE MECHANICS, not moods: history_breathing
+  (ambient) layers five voices at coprime periods (16/17/23/31/47 beats) so
+  the menu never repeats while staying fully deterministic, with the Phi
+  interval idling every 47 beats; the_ballot absorbs the planned bourgeois
+  waltz — campaign promises gavel-snapped back to A minor, a jackboot
+  crescendo the dance politely ignores; the_reform_ceiling renders the PASOK
+  constant-ratio bleed as form (theme transposed up each cycle at ×0.88
+  velocity, every pitch above C5 REFLECTED downward — climbing and
+  collapsing in one gesture); officeholder is capture as counterpoint (the
+  Machine takes the workers' theme one note per statement, front first,
+  ornament deleted at full capture); unequal_exchange transfers velocity
+  between a left-panned ornamented periphery melody and its right-panned
+  stripped core copy round by round, the copy finally taking the centre;
+  superwage floats an unchanging A-major surface over an E-Phrygian
+  substrate rising eight expression points per loop; overshoot phases a
+  7-beat consumption figure against a 9-beat regeneration cycle,
+  accelerates consumption to 6 then 5, and kills one biocapacity voice per
+  lap; the_silent_spring shrinks birdsong fragments 7-6-5-4-2-1 notes into
+  a detuning landscape ending on one triangle drop. The endgame suite gives
+  each canonical outcome a full theme, leitmotif-continuous with the SFX
+  stingers: red_dawn resolves the Phi theme's eternal dominant (D-A-D-F
+  becomes D-A-D-A — the surplus note deleted — then A finally falls to E)
+  after a solidarity call-and-response and an E-major hymn; the_long_winter
+  descends a whole-tone ladder with a cut-off memory of the silent spring;
+  iron_consolidation marches a three-octave Phrygian unison and lets a solo
+  violin's solidarity call go unanswered TWICE before the percussion
+  machine is cut mid-pattern; dual_power converges red E-major and
+  old-state F-major blocks from separated to simultaneous over a
+  never-resolving B pedal; shattered_map is a fugue in four mutually
+  unrelatable keys (E/Bb/C#/F, panned apart) subtracting to a lone
+  harpsichord. (3) SONIC LAW HONORED: minor-to-major reserved for red_dawn
+  alone; unison=conformity vs harmony=solidarity structural in
+  iron_consolidation/dual_power; CC93/CC94/CC71 semantics throughout;
+  audible devices always back CC94 (ADR152's lesson). (4) LICENSE &
+  VERIFICATION: CC0-1.0 under src/assets/LICENSE; 13/13 pass MIDI integrity
+  audit; strict mypy; suite duration bounds enforced loud at render;
+  loudness verified computationally at the documented FluidSynth gain 0.45
+  (endgame peaks trimmed to clear full scale — see the byte-pin test for
+  the final state); renders stay uncommitted (midi:to-ogg on demand).
+consequences: >-
+  Every game state the Archive client can reach now has music: menu,
+  electoral play, periphery view, ecological crisis, and all five terminal
+  outcomes — with the crisis/revolutionary/fascist arcs still served by the
+  legacy assets/music estate. The composition kit makes future tracks a
+  compose() module away, under the same byte-pin discipline. Leitmotifs now
+  span estates (the Phi motif: theme -> SFX stingers -> its resolution in
+  red_dawn), which is the beginning of an actual musical identity rather
+  than a pile of tracks. An adversarial three-lens critique (thematic
+  delivery / musical craft / game integration) ran against the composition
+  sources before merge; its adjudicated findings are folded into the
+  committed state. Engine untouched.

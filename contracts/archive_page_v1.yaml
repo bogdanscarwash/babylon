@@ -1,0 +1,139 @@
+meta:
+  contract: ArchivePageV1
+  version: 1
+  issue: PER-22
+  byte_order: big-endian
+  digest: SHA-256 diagnostic; exact bytes govern retry equality
+
+production_decoder: prohibited
+
+authority:
+  owner: Rust persistence boundary
+  purpose: fog-safe semantic Archive page rendering, identity, and dirty-batch hashing
+  classifications:
+    template_identity_and_hash_composition: Designed
+    front_matter_contract_id: Designed
+    redlink_and_known_link_forms: Designed
+    signal_grant_filtering_rule: Designed
+    search_text_and_citation_derivation: Designed
+    bounds_domains_and_kind_tags: Designed
+    fixture_values: Designed
+  invariants:
+    - The one embedded strict MiniJinja template compiles with strict undefined behavior.
+    - Unknown subject refusal precedes any template value exposure.
+    - A signal renders only when its grant_key has a knowledge grant for the page subject.
+    - A link renders the labeled form only when the link target subject is known; otherwise
+      the redlink form preserves the exact page key and never the known label.
+    - Identical inputs produce identical output bytes and identical digests.
+    - content_sha256 is SHA-256 of the exact rendered Markdown bytes.
+    - A dirty batch binds one resolve_tick, one tick_content_hash, and ordered unique pages.
+
+constants:
+  front_matter_contract_id: babylon.archive-page.v1
+  archive_schema_contract_id: babylon.semantic-archive-schema.v1
+  template_path: rust/crates/babylon-persistence/src/archive_page_v1.md.j2
+  template_sha256: d7904379cf09f41db6abea91465b5fe6e804867cf876bd44a09fe63ba9755108
+  worker_domain_ascii_nul: babylon.semantic-archive-worker.v1
+  atom_schema_path: rust/crates/babylon-persistence/migrations/archive_atom_v1.sql
+  dirty_batch_domain_ascii_nul: babylon.semantic-archive-dirty-batch.v1
+  knowledge_domain_ascii_nul: babylon.semantic-archive-knowledge.v1
+  county_kind_tag_u8: 1
+  place_kind_tag_u8: 2
+  max_id_bytes: 128
+  max_text_bytes: 4096
+  max_signals_per_page: 256
+  max_links_per_page: 256
+  max_pages_per_batch: 256
+  max_knowledge_grants: 65535
+  max_page_bytes: 1048576
+  max_search_hits: 100
+
+bounds:
+  contract_bytes: 131072
+  vector_rows: 32
+  vector_line_bytes: 16384
+  vector_object_fields: 64
+  markdown_bytes: 1048576
+  signals_per_page: 256
+  links_per_page: 256
+  pages_per_batch: 256
+  knowledge_grants_per_snapshot: 65535
+
+layouts:
+  hash_primitives_v1:
+    length_prefix: u64 big-endian exact byte count before every variable byte field
+  page_ref_v1:
+    fields: [kind_tag_u8, length_prefixed_exact_id_ascii]
+    county_tag_u8: 1
+    place_tag_u8: 2
+    county_id_bytes: 5
+    place_id_bytes: 7
+  page_input_v1:
+    fields:
+      - page_ref_v1
+      - length_prefixed_title
+      - verified_tick_u64
+      - tick_content_hash_exact_32_bytes
+      - length_prefixed_decision_question
+      - signal_count_u64
+      - per_signal_grant_key_label_value_citation
+      - link_count_u64
+      - per_link_page_ref_v1_and_length_prefixed_known_label
+    order: exact input order
+    duplicate_signal_keys: prohibited
+    duplicate_link_targets: prohibited
+  dirty_batch_v1:
+    fields:
+      - dirty_batch_domain_ascii_nul
+      - resolve_tick_u64
+      - tick_content_hash_exact_32_bytes
+      - page_count_u64
+      - exact_ordered_page_input_v1_fields
+    duplicate_subjects: prohibited
+    receipt_mismatch: prohibited
+  worker_contract_v1:
+    fields:
+      - worker_domain_ascii_nul
+      - exact_schema_sql_bytes
+      - exact_atom_schema_sql_bytes
+      - template_sha256_exact_32_bytes
+    digest: SHA-256 over the concatenation
+  page_markdown_v1:
+    front_matter:
+      - schema_front_matter_contract_id
+      - subject_page_key
+      - verified_tick_decimal
+      - tick_content_hash_hex
+    known_link_form: '[{known_label}](subject:{kind}/{id})'
+    redlink_form: '[](subject:{kind}/{id})'
+  search_text_v1:
+    join: single ASCII space
+    parts:
+      - subject_page_key
+      - subject_title
+      - decision_question
+      - per_known_signal_label_then_value
+      - per_known_link_page_key_then_known_label
+  citations_v1:
+    order:
+      - subject_grant_citation_first
+      - distinct_known_signal_citations_in_signal_order
+  babylon_markdown_v1:
+    profile: GFM 0.29 plus the subject URI scheme and nothing else
+    contract: contracts/babylon_markdown_v1.yaml
+    granted_link_form: '[{known_label}](subject:{kind}/{id})'
+    bare_link_form: '[](subject:{kind}/{id})'
+    pending_display_form: '~~[{known_label}](subject:{kind}/{id})~~'
+    pending_form_note: display-time synthesis only; never stored in page bytes
+    citation_line_regex: '^- \*\*(?P<label>[^*]+):\*\* (?P<value>.+) — (?P<source_id>[^;]+); (?P<locator>.+)$'
+    encoding: UTF-8 with LF endings; the CR byte and the '<' byte refuse
+
+vector_kinds:
+  required: [render, refusal, batch, identity]
+
+excluded_authority:
+  - PostgreSQL DDL, connection, transaction, or receipt consumption
+  - Knowledge-grant SQL derivation or provenance ingestion
+  - Marker-last execution or Archive dirty-receipt replay
+  - Player-facing search execution
+  - Any substitution for the pinned template bytes

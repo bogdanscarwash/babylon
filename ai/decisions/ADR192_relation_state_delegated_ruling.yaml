@@ -1,0 +1,152 @@
+ADR192_relation_state_delegated_ruling:
+  status: "accepted"
+  date: "2026-08-11"
+  title: >
+    RELATION STATE — the edge/hyperedge field-storage escalation (Constitution
+    III.7), DELEGATED by the Director to the workforce ("I'm going to delegate
+    this decision to you. I trust you. You know Babylon well.") on the stated
+    criterion "pick whatever is most ideologically rigorous and makes for an
+    entertaining game", and ruled the same session: dyadic edges and
+    hyperedges MAY carry declared, typed, hash-covered fields, widening the
+    canonical carrier set beyond {node, node-attr, edge-strength,
+    hyperedge-members} (1); the Aleksandrov Test moves TO CONTENT, PER FIELD —
+    every relation field declares its owning EdgeType/HyperedgeType and must
+    be a property OF THE RELATION, so a field that is a fact about one
+    endpoint alone is REFUSED and belongs on that node (2); ADDITIVITY IS LAW
+    — content declaring no relation fields encodes byte-identically to today,
+    and the III.7 ceremony fires when content FIRST DECLARES such a field, not
+    when the machinery lands (3); storage lands on the CanonicalState seam
+    with or after the hypergraph-rs swap, and the blocked BSL forms unblock
+    only once the spec chapter AND the storage both exist (4); and a relation
+    field EARNS its hash coverage by being PLAYER-LEGIBLE — relation fields
+    exist to make relations playable, and hash-covered state that never
+    reaches play or pedagogy is bookkeeping, not material reality (5). The
+    Levi transposition is the warrant: every proposed carrier transposes to an
+    ordinary node-or-edge attribute on the incidence graph, so the grant mints
+    NO new mathematics and NO new primitive. Veto-able by the Director at any
+    time.
+  context: |
+    BSL's `update-edge`, `update-hyperedge` and `add-edge <field-init>` all
+    fail loudly today, and the error text names the reason exactly
+    (`structural_verbs.rs:267-277`, `:430-436`): the substrate keys a dyadic
+    edge to one `f64` strength and gives a hyperedge no attributes at all, so
+    widening that state "widens the canonical state_hash field set, which is a
+    declared Phase-2/substrate decision (Constitution III.7), never a
+    silently-dropped write". The verbs exist in the language (D35/D65); the
+    storage does not. The hypergraph-rs storage-swap plan recorded the gap as
+    an open III.7 escalation and deliberately left room without deciding —
+    `hypergraph-rs` carries `N`, `E` and `M` type parameters natively, so the
+    storage sits one type instantiation away, while the canonical encoder
+    keeps exactly four sections and a fifth would be a declared ceremony
+    belonging to whichever train widens the field set.
+
+    The Director raised the hypergraph-to-graph TRANSPOSITION question, and
+    the workforce laid out the analysis:
+
+    - **Levi / incidence transposition is LOSSLESS.** Every carrier proposed
+      here transposes to an ordinary node-or-edge attribute on the incidence
+      graph: a hyperedge-as-a-whole field becomes an attribute on the Levi
+      node standing for the hyperedge; a (member, hyperedge) payload becomes
+      an attribute on the Levi EDGE — which is precisely the shape Amendment
+      AG (i) already ratified as attributed membership (ADR189); and a dyadic
+      edge field is a plain edge attribute. No new mathematics is required at
+      any of the three, and no new primitive is minted.
+    - **Clique expansion is LOSSY, and its loss is POLITICAL.** Replacing a
+      hyperedge by the clique of its members discards the fact that the
+      members stood in ONE relation together — which is atomization, exactly
+      the content Amendment AE's native-hyperedge ruling exists to refuse
+      (VIII.9's clique-expansion anti-pattern).
+
+    On that analysis the Director delegated the decision to the workforce
+    rather than ruling it, with the criterion stated verbatim-in-substance:
+    "pick whatever is most ideologically rigorous and makes for an
+    entertaining game."
+  decision: |
+    THE RULING (delegated authority, workforce, 2026-08-11; veto-able by the
+    Director at any time).
+
+    1. GRANTED AS MACHINERY. Dyadic edges and hyperedges MAY carry declared,
+       typed, hash-covered fields. The canonical carrier set widens beyond
+       {node, node-attr, edge-strength, hyperedge-members}.
+
+       Formal warrant: the Levi transposition above. Because every carrier
+       reduces to an ordinary attribute on the incidence graph, the grant
+       mints no new mathematics and no new primitive — it EXTENDS Amendment
+       AG's already-ratified pattern from the incidence pair to the two
+       remaining carriers, rather than opening a new formalism surface
+       (ADR172's one-additive-construct rule is untouched).
+
+       Ideological warrant: RELATIONS ARE REAL. Refusing relation-state would
+       flatten every relation to bare existence and force relational facts
+       onto the nodes at their ends — atomizing the model itself, in the same
+       move the clique expansion makes and for the same reason it is banned.
+       The wage-relation's rate is a property of the wage relation, not of the
+       worker and not of the boss; it lives on the relation.
+
+    2. THE ALEKSANDROV GATE MOVES TO CONTENT, PER FIELD. Every relation field
+       is declared with its owning `EdgeType`/`HyperedgeType` — Amendment AG's
+       owner-declaration pattern, reused unchanged — and must be a property OF
+       THE RELATION ITSELF (III.8).
+
+       The review test, stated so it can be applied: **a field whose value is
+       a fact about ONE ENDPOINT ALONE belongs on that node and is REFUSED on
+       the relation.** This is the anti-smuggling clause: no material fact
+       gets two homes to drift between. An exploitation rate declared on a
+       wage-relation passes; a worker count parked on an edge does not.
+
+    3. ADDITIVITY IS LAW. Content that declares no relation fields encodes
+       BYTE-IDENTICALLY to today; no existing golden moves. The III.7 hash
+       ceremony fires when content FIRST DECLARES such a field — not when the
+       machinery lands. The ceremony gates MEANING, not MECHANISM.
+
+    4. SEQUENCE. Storage lands on the `CanonicalState` seam, with or after the
+       hypergraph-rs swap, whose differential harness is the scaffold that
+       makes the widening checkable. The blocked BSL forms (`update-edge`,
+       `update-hyperedge`, `add-edge <field-init>`) unblock only after BOTH
+       the spec chapter (drafted under normal drafting license, carrying its
+       D-rows) AND the storage exist. Q2 (general edge iteration) stays
+       deferred, unchanged by this ruling (ADR191 R6).
+
+    5. PLAYER LEGIBILITY — the Director's criterion made a clause. A relation
+       field EARNS its hash coverage by being player-legible: surfaceable in
+       the client or in the narrator's account. Relation fields exist to make
+       relations PLAYABLE — an exploitation relation that visibly intensifies,
+       a solidarity tie carrying the history of the struggles it survived,
+       tribute terms renegotiated. Hash-covered state that never reaches play
+       or pedagogy is bookkeeping, not material reality, and does not pass
+       review.
+
+    EXPOSURE COROLLARY. The transposition is a WARRANT, not an exposure: it
+    stays INTERNAL-ONLY, exactly as Amendment AE (vi) rules for the Levi/
+    incidence encoding. Hyperedge fields expose as HYPEREDGE fields and never
+    as Levi-nodes — consonant with the standing disposition that a community
+    is never a graph node — and the clique expansion stays banned from the
+    semantics because its information loss is atomization: content, not
+    encoding.
+  consequences: |
+    - The storage-swap plan's non-decision (`docs/superpowers/plans/
+      2026-08-11-hypergraph-storage-swap-plan.md`, "Edge and hyperedge field
+      storage — the open III.7 escalation") gains its answer. The plan's own
+      terms carry it: the `CanonicalState` encoder's four-section shape widens
+      by DECLARED CEREMONY when the first relation field lands, never as a
+      side effect of the swap. The swap itself still decides nothing and its
+      loud errors stay loud with their text unchanged.
+    - A future SPEC CHAPTER is commissioned under normal drafting license:
+      the `deffield` forms taking an `EdgeType`/`HyperedgeType` owner, and the
+      effect-semantics unblock for the three refusing verbs, with the D-rows
+      the chapter earns.
+    - PR #484's edge/hyperedge STOPs REMAIN CORRECT until both the chapter and
+      the storage land. An adapter quietly starting to accept an edge field
+      because the library has a slot for it would settle the escalation by
+      implementation — which this ruling forbids as firmly as the open
+      question did.
+    - Review obligation: clauses 2 and 5 are checks a reviewer runs on every
+      proposed relation field, and neither is mechanizable today. They belong
+      in the spec chapter as written review gates.
+  supersedes: []
+  related:
+    - ADR191_director_rulings_batch_2026_08_11
+    - ADR189_amendment_ag_attributed_membership_lattice_instances
+    - ADR186_bevy_cutover_amendment_af
+    - ADR179_topology_spine_director_rulings
+    - ADR172_amendment_ae_refoundation_ratified

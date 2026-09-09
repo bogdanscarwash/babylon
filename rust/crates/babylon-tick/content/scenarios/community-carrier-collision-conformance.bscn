@@ -1,0 +1,286 @@
+; DERIVATIVE WORLD — Community port train world 5c (issue #667, Task 10
+; Step 4, plan docs/superpowers/plans/2026-08-18-community-port.md §3.7a):
+; the landed `control-ratio-conformance.bscn`'s FULL shape verbatim, with
+; its ONE INSTITUTION node (`carceral-register`) ADDITIONALLY carrying
+; `institution/community-carrier 1` — the two packs' anchors on ONE node,
+; never two carriers (a second INSTITUTION node double-fires every
+; carrier-subject rule in BOTH packs; §8c guard 4 is the bar). The
+; co-loaded packs are community.bsl + control-ratio.bsl; the assertion is
+; per-rule-id fired arithmetic (the carceral_arc_conformance style) plus
+; the decay-applied-once read. The original header follows verbatim.
+;
+; The PRIMARY conformance world for `control-ratio/*` (Pack B, Material
+; Base @12.0), Task 5 of the joint Decomposition (@11.0) + ControlRatio
+; (@12.0) port train (`docs/superpowers/plans/2026-08-17-decomposition-
+; controlratio-port.md`; frozen source: `src/babylon/engine/systems/
+; control_ratio.py`, 248 lines).
+;
+; **Task 5 scope.** This is Pack B's PR — branched off MERGED dev (never
+; stacked on PR A, #193), so it ships NO Rust source edits (Task 1 already
+; registered `"control-ratio"` in `lib.rs`'s system `HashSet`) and this
+; scenario carries only `control-ratio/*` fields, never `decomposition/*`'s
+; own LA-census fields — Pack A's own `decomposition.bsl` rule set is never
+; loaded against this world at all. This file, and its three siblings
+; (`-revolution-conformance.bscn`, `-within-capacity-conformance.bscn`,
+; `-zero-enforcer-conformance.bscn`), are the ONLY scenario edits this whole
+; Pack B lands: Tasks 6-7 (`c03-crisis`/`c04-terminal`, not this task's
+; scope) run against these SAME four files unmodified, so every field either
+; c01/c02 (this task) OR c03/c04 (later) reads must be declared and seeded
+; here now.
+;
+; **Seeds a POST-DECOMPOSITION carrier state directly** (the historical
+; plan §5 byte-order hazard is superseded by executable phase ordering) —
+; `decomposition-fire-tick 0`,
+; `decomposition-fired-known 1`, `decomposition-complete 1` — so Pack B is
+; exercised end to end WITHOUT Pack A ever running. This is also why a
+; ZERO `control-ratio-delay` is safe here: the frozen coupling key
+; (`_class_decomposition_tick`) is SEEDED, never written the same tick by a
+; co-loaded `decomposition/*` rule. The seed remains a Pack-B isolation
+; choice; the phase registry now orders Decomposition before ControlRatio.
+;
+; **Enum order is a hash-bearing transcription of the frozen Python
+; declaration order (ADR195)** — do not reorder (same roster as
+; `decomposition-conformance.bscn`'s own header cites):
+;   `src/babylon/models/enums/social.py:34-41` — SocialRole.
+;
+; **The carrier.** One `NodeType/INSTITUTION` node, `carceral-register` —
+; the only node of that type this scenario mints, giving it ceiling 1 (plan
+; §2), the same singleton-carrier idiom Pack A's own scenario established.
+;
+; **`social-class/organization` is `coefficient intensive`**
+; (`territory-conformance.bscn:104`'s precedent, NOT `query-lane-e2e.bscn`'s
+; `int extensive` — see `decomposition-conformance.bscn`'s own header for
+; the full deviation note; this file inherits that same ruling since it
+; needs the identical fractional-seed capability for `organization`).
+;
+; **THIS SCENARIO'S SINGLE MUTATION-PROVABLE CONSTANT (Task 5 scope):**
+; `social-class/active` on BOTH the enforcer and the prisoner side of the
+; census. `enforcer-inactive` (population 999, a value large enough that a
+; dropped active-gate would be impossible to miss) and `prisoner-inactive`
+; (population 888, organization 0.9) are seeded SPECIFICALLY so `c01`'s
+; `(= active 1)` conjunct — on both its enforcer branch and its two-role
+; prisoner branch — is mutation-provable in THIS commit, not deferred.
+; `bourgeois` is the ROLE-gate witness (belongs to neither branch of
+; either gate). Forward-looking (Tasks 6-7, not exercised here): with
+; `carceral/control-ratio-delay 0`/`carceral/terminal-decision-delay 0`,
+; active enforcer population 10 and active prisoner population 30+20=50
+; (`enforcer-population * carceral/control-capacity` = 10*4 = 40 <
+; 50 — `c03`'s crisis fires), organization 0.2 on both active prisoner
+; nodes (weighted average 0.2, below `carceral/revolution-threshold`
+; 0.5 — `c04`'s GENOCIDE branch) is this file's own differentiator from
+; `control-ratio-revolution-conformance.bscn`.
+;
+; **No defaults (scenario.rs's own contract): every field every rule in
+; THIS PACK (c01-c04, the whole train's Pack B) will read is seeded on
+; every node of its namespace** — a leaner roster than
+; `decomposition-conformance.bscn`'s, since `control-ratio.bsl` never reads
+; a class's `wealth`/`subsistence-threshold`/`s-bio`/`s-class`/LA-census
+; fields at all (`control_ratio.py`'s own two census helpers read only
+; `role`, `active`, `population`, `organization`) — declaring those unused
+; fields here would be dead content, the inverse of the discipline
+; `decomposition-conformance.bscn`'s roster exists to serve for ITS pack.
+;
+; Six social classes, one carrier (declaration order fixes NodeId,
+; `production-conformance.bscn:207-209`'s own precedent — never renumber
+; when extending):
+;
+;   enforcer-active   CARCERAL_ENFORCER, active, population 10 — the
+;                     enforcer census's sole active contributor.
+;   enforcer-inactive CARCERAL_ENFORCER, INACTIVE, population 999 — the
+;                     active-gate mutation witness: a dropped `(= active 1)`
+;                     conjunct on `c01`'s enforcer branch would inflate
+;                     `enforcer-census-population` by 999, impossible to
+;                     miss against the active branch's 10.
+;   prisoner-ip       INTERNAL_PROLETARIAT, active, population 30,
+;                     organization 0.2 — the frozen `_PRISONER_ROLES`
+;                     frozenset's FIRST role (`control_ratio.py:32-37`).
+;   prisoner-lumpen   LUMPENPROLETARIAT, active, population 20,
+;                     organization 0.2 — `_PRISONER_ROLES`'s SECOND role;
+;                     both active prisoner nodes present together is what
+;                     proves `c01`'s `(or …)` gate reads BOTH disjuncts,
+;                     not merely one.
+;   prisoner-inactive INTERNAL_PROLETARIAT, INACTIVE, population 888,
+;                     organization 0.9 — the prisoner-side active-gate
+;                     mutation witness, mirroring `enforcer-inactive`.
+;   bourgeois         CORE_BOURGEOISIE, active, population 50,
+;                     organization 0.0 — the ROLE-gate witness: neither
+;                     `CARCERAL_ENFORCER` nor either prisoner role, so
+;                     every published census-contribution field on this
+;                     node must stay 0.
+;   carceral-register INSTITUTION — the carrier; every latch/aggregate
+;                     seeded per the "post-decomposition" state above.
+;
+; **`carceral/*` defconsts this pack needs** (`src/babylon/data/
+; defines.yaml:293-300`) — a SUBSET of Pack A's eight: `control-ratio.bsl`
+; never reads `enforcer-fraction`/`proletariat-fraction`/
+; `decomposition-delay`/`approaching-consumption-multiple` (all Pack-A-only
+; coefficients), so this scenario declares neither — the same
+; declare-only-what-the-pack-reads discipline as the field roster above.
+(scenario community/carrier-collision-conformance
+  (defvocabulary NodeType (SOCIAL_CLASS INSTITUTION ORGANIZATION))
+  (defvocabulary EdgeType (MEMBERSHIP))
+  (defvocabulary HyperedgeType (COMMUNITY))
+  (defenum CommunityType
+    (SETTLER PATRIARCHAL NEW_AFRIKAN FIRST_NATIONS CHICANO WOMEN TRANS
+     DISABLED QUEER UNDOCUMENTED INCARCERATED YOUTH ADULT ELDER))
+  (defenum SocialRole (CORE_BOURGEOISIE PERIPHERY_PROLETARIAT LABOR_ARISTOCRACY PETTY_BOURGEOISIE LUMPENPROLETARIAT COMPRADOR_BOURGEOISIE INTERNAL_PROLETARIAT CARCERAL_ENFORCER))
+
+  (deffield social-class/role enum SocialRole)
+  (deffield social-class/active int extensive)
+  (deffield social-class/population int extensive)
+  (deffield social-class/organization coefficient intensive)
+  (deffield social-class/enforcer-census-population int extensive)
+  (deffield social-class/prisoner-census-population int extensive)
+  (deffield social-class/prisoner-census-org-weighted real extensive)
+
+  (deffield institution/decomposition-fire-tick int extensive)
+  (deffield institution/decomposition-fired-known int extensive)
+  (deffield institution/decomposition-complete int extensive)
+  (deffield institution/control-crisis-emitted int extensive)
+  (deffield institution/control-crisis-tick int extensive)
+  (deffield institution/terminal-decision-emitted int extensive)
+  (deffield institution/enforcer-population int extensive)
+  (deffield institution/prisoner-population int extensive)
+  (deffield institution/prisoner-org-weighted real extensive)
+
+  ; ---- the community pack's field surface (Task 10 world 5c) ----
+  (deffield institution/community-carrier int extensive)
+  (deffield social-class/community-cost-modifier real intensive)
+  (deffield community/kind enum CommunityType)
+  (deffield community/heat intensity intensive)
+  (deffield community/cohesion intensity intensive)
+  (deffield community/education-pressure intensity intensive)
+  (deffield community/reproduction-cost-modifier real intensive)
+  (deffield community/revolutionary probability intensive)
+  (deffield community/liberal probability intensive)
+  (deffield community/fascist probability intensive)
+  (deffield community/member-count int extensive)
+  (deffield community/r-raw real extensive)
+  (deffield community/l-raw real extensive)
+  (deffield community/f-raw real extensive)
+  (deffield community/density-sum real extensive)
+  (deffield community/substrate-floor probability intensive)
+  ; DG-2 (PUBLISH, the 2026-08-18 sitting): c07/c08's readout fields.
+  (deffield community/contestation probability intensive)
+  (deffield community/dominant-tendency enum ConsciousnessTendency)
+  (deffield social-class/org-r-weight real extensive)
+  (deffield social-class/org-l-weight real extensive)
+  (deffield social-class/org-f-weight real extensive)
+  (deffield social-class/org-count int extensive)
+
+  ; CarceralDefines, src/babylon/data/defines.yaml:293-300 (the four
+  ; control-ratio.bsl reads).
+  (defconst carceral/control-capacity 4)
+  (defconst carceral/revolution-threshold 0.5c)
+  ; Companion-varied to 0 (Global Constraints: "MAY vary a delay/fraction
+  ; to make a branch reachable at tick 1") — paired with the SEEDED
+  ; decomposition-fire-tick 0 below, this makes the c03 readiness gate
+  ; clear at tick 1 with no delay window to wait out (Task 6 scope).
+  (defconst carceral/control-ratio-delay 0)
+  (defconst carceral/terminal-decision-delay 0)
+
+  ; ---- the 14-row ADR214 floor table (§6.1 verbatim) + decay alphas ----
+  (defconst community/floor-new-afrikan 0.136p)
+  (defconst community/floor-first-nations 0.155p)
+  (defconst community/floor-chicano 0.113p)
+  (defconst community/floor-settler 0.0p)
+  (defconst community/floor-patriarchal 0.0p)
+  (defconst community/floor-youth 0.0p)
+  (defconst community/floor-adult 0.0p)
+  (defconst community/floor-incarcerated 0.18p)
+  (defconst community/floor-women 0.04p)
+  (defconst community/floor-trans 0.06p)
+  (defconst community/floor-disabled 0.03p)
+  (defconst community/floor-queer 0.04p)
+  (defconst community/floor-undocumented 0.10p)
+  (defconst community/floor-elder 0.02p)
+  (defconst community/heat-decay-alpha 0.05c)
+  (defconst community/cohesion-decay-alpha 0.03c)
+  (defconst community/education-pressure-decay 0.1c)
+
+  (node enforcer-active NodeType/SOCIAL_CLASS
+    (social-class/role SocialRole/CARCERAL_ENFORCER)
+    (social-class/active 1)
+    (social-class/population 10)
+    (social-class/organization 0.0c)
+    (social-class/enforcer-census-population 0)
+    (social-class/prisoner-census-population 0)
+    (social-class/prisoner-census-org-weighted 0))
+
+  (node enforcer-inactive NodeType/SOCIAL_CLASS
+    (social-class/role SocialRole/CARCERAL_ENFORCER)
+    (social-class/active 0)
+    (social-class/population 999)
+    (social-class/organization 0.0c)
+    (social-class/enforcer-census-population 0)
+    (social-class/prisoner-census-population 0)
+    (social-class/prisoner-census-org-weighted 0))
+
+  (node prisoner-ip NodeType/SOCIAL_CLASS
+    (social-class/role SocialRole/INTERNAL_PROLETARIAT)
+    (social-class/active 1)
+    (social-class/population 30)
+    (social-class/organization 0.2c)
+    (social-class/enforcer-census-population 0)
+    (social-class/prisoner-census-population 0)
+    (social-class/prisoner-census-org-weighted 0))
+
+  (node prisoner-lumpen NodeType/SOCIAL_CLASS
+    (social-class/role SocialRole/LUMPENPROLETARIAT)
+    (social-class/active 1)
+    (social-class/population 20)
+    (social-class/organization 0.2c)
+    (social-class/enforcer-census-population 0)
+    (social-class/prisoner-census-population 0)
+    (social-class/prisoner-census-org-weighted 0))
+
+  (node prisoner-inactive NodeType/SOCIAL_CLASS
+    (social-class/role SocialRole/INTERNAL_PROLETARIAT)
+    (social-class/active 0)
+    (social-class/population 888)
+    (social-class/organization 0.9c)
+    (social-class/enforcer-census-population 0)
+    (social-class/prisoner-census-population 0)
+    (social-class/prisoner-census-org-weighted 0))
+
+  (node bourgeois NodeType/SOCIAL_CLASS
+    (social-class/role SocialRole/CORE_BOURGEOISIE)
+    (social-class/active 1)
+    (social-class/population 50)
+    (social-class/organization 0.0c)
+    (social-class/enforcer-census-population 0)
+    (social-class/prisoner-census-population 0)
+    (social-class/prisoner-census-org-weighted 0))
+
+  (node carceral-register NodeType/INSTITUTION
+    (institution/decomposition-fire-tick 0)
+    (institution/decomposition-fired-known 1)
+    (institution/decomposition-complete 1)
+    (institution/control-crisis-emitted 0)
+    (institution/control-crisis-tick 0)
+    (institution/terminal-decision-emitted 0)
+    (institution/enforcer-population 0)
+    (institution/prisoner-population 0)
+    (institution/prisoner-org-weighted 0)
+    (institution/community-carrier 1))
+
+  ; ---- world 5c's additions (Task 10 Step 4): ONE org + one MEMBERSHIP
+  ; edge (the load law — c03's fold needs a MEMBERSHIP ceiling) + one
+  ; COMMUNITY hyperedge. The org's member is NOT in the community, so the
+  ; community's density-sum stays 0 (the seeded ternary preserved through
+  ; the no-org skip gate); the heat decay still moves it — the "decay
+  ; applied ONCE" assertion reads 0.475, never 0.45125 (the
+  ; double-application a second carrier would cause). ----
+  (node collision-org NodeType/ORGANIZATION
+    (organization/cadre-level 0.5p) (organization/cohesion 0.5p)
+    (organization/consciousness-tendency ConsciousnessTendency/LIBERAL))
+  (edge EdgeType/MEMBERSHIP collision-org bourgeois 1)
+  (hyperedge collision-comm HyperedgeType/COMMUNITY (members prisoner-ip))
+  (hyperedge-attr collision-comm community/kind CommunityType/QUEER)
+  (hyperedge-attr collision-comm community/heat 0.5i)
+  (hyperedge-attr collision-comm community/cohesion 0.75i)
+  (hyperedge-attr collision-comm community/education-pressure 0.25i)
+  (hyperedge-attr collision-comm community/reproduction-cost-modifier 1)
+  (hyperedge-attr collision-comm community/revolutionary 0.25p)
+  (hyperedge-attr collision-comm community/liberal 0.5p)
+  (hyperedge-attr collision-comm community/fascist 0.25p))

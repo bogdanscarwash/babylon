@@ -1,0 +1,260 @@
+ADR087_mass_work_solidarity_producer:
+  status: "accepted"
+  date: "2026-07-19"
+  title: "Wire the org->class SOLIDARITY producer for real (Unit 6, ADR073/ADR085 write side): EDUCATE/PROPAGANDIZE/PROVIDE_SERVICE create-or-strengthen a MASS_LINK-amplified edge (engine/actions/_mass_work.py), DoctrineSystem decays it per tick, ConsciousnessSystem's read side is rewritten to gate org sources on solidarity_strength (not class_consciousness — orgs have none); rebuilt doctrine-consciousness contract test against real graph shapes (PoliticalFaction/SocialClass -> WorldState.to_graph(), real resolve_campaign dispatch, never a hand-stamped edge); new vocabulary-sentinel rule (d) catches exactly the fixture-fabrication class that hid this gap; qa:regression 5/5 byte-identical (zero orgs in the 5 canonical scenarios), verified pre-registered by ADR085 and confirmed empirically, not assumed"
+  context: |
+    ADR085 (2026-07-18) retired an org-sourced SOLIDARITY amplification READ
+    in `ConsciousnessSystem` (DoctrineSystem Unit 6b, ADR073) because its only
+    reachable path was a fabricated test fixture (`graph.add_node("vanguard",
+    _node_type="organization")` feeding a hand-stamped
+    `graph.add_edge("vanguard", class_id, edge_type=EdgeType.SOLIDARITY, ...)`)
+    — no verb or system anywhere in `src/` ever created an
+    organization-sourced SOLIDARITY edge. ADR085 explicitly left four design
+    questions open for whoever built the write side: which class target(s),
+    what magnitude/decay policy, which verb triggers it, how the target is
+    selected.
+
+    Owner ruling 2026-07-19 (Path 1 — "wire it for real", locked): build a
+    REAL producer of org->class SOLIDARITY edges from mass-work verbs,
+    rebuild the doctrine contract test against real graph shapes, discharge
+    the ADR073 ceremony obligation under one declared ceremony with a drift
+    table. Scout-verified before implementing (trust citations, re-verify
+    before deviating): SOLIDARITY today has exactly two producers in all of
+    `src/` (`engine/scenarios/_legacy.py:441-450`,
+    `_legacy_wayne.py:429-440`), both class->class static scenario genesis via
+    `Relationship(...)`, never re-fired mid-game. The retired branch's gap was
+    real: an org-sourced edge is dead weight without a principled read side,
+    since `ConsciousnessSystem` keyed on source `class_consciousness` — orgs
+    have none.
+
+  decision: |
+    **1. Producer (write side)** — `engine/actions/_mass_work.py::
+    apply_mass_work_solidarity`, a new shared helper called from the three
+    mass-work verb resolvers (`aid.py::resolve_aid` / PROVIDE_SERVICE,
+    `educate.py::resolve_educate`'s classic non-study path / EDUCATE,
+    `campaign.py::resolve_campaign` / PROPAGANDIZE) — direct graph write,
+    the `aid.py`/`mobilize.py` house pattern (a resolver writing graph state
+    itself, not routed through the five-factor consciousness-delta
+    machinery). `PROTEST` (mobilize.py) stays a solidarity CONSUMER
+    (`_count_solidarity_edges` amplifies turnout from incoming SOLIDARITY/
+    SOLIDARISTIC edges) — never a producer, per the ratified verb list.
+
+    A no-op unless the target is a `social_class` node (mass work organizes
+    classes, not territories or other orgs) AND the `(org_id, target_id)`
+    pair doesn't already hold a DIFFERENT edge type (the graph stores ONE
+    edge per node pair — `BabylonGraph.add_edge`'s NetworkX-style merge
+    would silently clobber an existing MEMBERSHIP/PRESENCE/TRANSACTIONAL
+    edge's `_edge_type`; skipping is the honest failure mode). Confirmed
+    live: `tests/contract/verbs/test_effects.py::
+    TestMassWorkSolidarity::test_targeting_a_non_class_node_is_a_no_op`
+    exercises exactly this against the REAL PRESENCE edge
+    `WorldState.to_graph()` seeds from `territory_ids`.
+
+    Magnitude: `gain = mass_work_solidarity_gain * (1 + mass_link_weight *
+    mass_link)`, `solidarity_strength` capped at 1.0. Deliberately
+    CONTINUOUS, not a binary gate on MASS_LINK (the retired branch's
+    design): an org with `MASS_LINK == 0` still organizes at the base rate;
+    doctrine makes it organize BETTER. This is the design's central
+    resolution of ADR085's "magnitude" open question — the owner's Path-1
+    ruling frames doctrine as amplifying existing mass work, not switching
+    it on.
+
+    Target selection: the verb's own `target_id` (the mass-work verb ALREADY
+    names its target — no additional membership/proximity/community-overlap
+    heuristic needed; ADR085's fourth open question resolves to "whatever
+    the verb targets," the simplest sound answer, not the
+    `_compute_membership_overlap` machinery the brief's precedent citation
+    named as a candidate).
+
+    **2. Decay (growth-vs-decay policy)** — `DoctrineSystem.compute_doctrine`'s
+    existing per-org loop (@14.7) now also calls
+    `_decay_mass_work_solidarity_edges` after each org's doctrine state is
+    written: every org-sourced OUTGOING SOLIDARITY edge's `solidarity_strength`
+    shrinks by `mass_work_solidarity_decay_rate` per tick, floored at 0 — a
+    mass link not renewed by work withers. Implemented via
+    `graph.query_edges(edge_type=EdgeType.SOLIDARITY.value)` filtered on
+    `edge.source_id == org_id` (protocol-typed, not the concrete
+    `out_edges` — `GraphProtocol` declares no `out_edges`/`in_edges`
+    member; `mypy` caught this on the first attempt).
+
+    **3. Read side (rebuilt)** — `ConsciousnessSystem`'s `solidarity_pressure`
+    accumulation (`ideology.py`) now branches on the SOLIDARITY edge's
+    source `node_type`: an `organization` source contributes
+    `solidarity_strength` directly, gated on
+    `services.defines.solidarity.negligible_transmission` (the EXISTING
+    noise-floor define, reused rather than adding a redundant new
+    coefficient — an org-source pressure scale was considered and rejected
+    as unnecessary: the units already match the class-sourced case's
+    `strength` contribution). A `social_class` source keeps the ORIGINAL
+    gate (source `class_consciousness > activation_threshold`) completely
+    unchanged — regression-covered by the pre-existing
+    `test_wealth_extraction_routes_to_{fascism,revolution}_with[out]_
+    solidarity` tests, both still green. The ADR085 invariant comment
+    ("SOLIDARITY sources are always social_class") is replaced with the new
+    two-branch contract.
+
+    Theory grounding (cited in the module docstrings): the MIM(P) organizing
+    loop, owner-ratified 2026-07-18/19 — organized mass work materially
+    raises a class's effective solidarity, which routes agitation toward
+    revolution rather than fascism
+    (`formulas.consciousness_routing.route_agitation_to_ternary`'s
+    `effective_solidarity` term). Every construct traces to a material
+    relation (Aleksandrov Test): the edge IS the organizing relationship: an
+    org doing mass work among a class.
+
+    **4. Defines** — three new `DoctrineDefines` coefficients (not a new
+    category; this is Unit 6b's SIBLING mechanism to the already-live
+    `theory_bonus_per_class_analysis`, same category): `mass_work_
+    solidarity_gain` (0.05), `mass_link_weight` (0.1), `mass_work_
+    solidarity_decay_rate` (0.02). `defines.yaml` regenerated
+    (`tools/generate_defines_config.py`), round-trip verified,
+    `test_constants_sync.py` 18/18 green. Every new define is read by the
+    production code shipped here — confirmed NOT repeating the
+    `MobilizeDefines` cautionary specimen (a fully-declared, completely
+    unwired category the brief flagged).
+
+    **5. Contract test (rebuilt)** — `tests/unit/engine/systems/
+    test_doctrine_consciousness_signal.py` rebuilt from the salvage
+    worktree's structure (`.claude/worktrees/wf_d860336d-95b-3@50f2cd0c`)
+    with REAL shapes: the org is built via `PoliticalFaction(**...)` ->
+    `WorldState(organizations={...})` -> `.to_graph()` (the
+    `test_doctrine_system.py`/`tests/contract/verbs/conftest.py` pattern),
+    and the org->class SOLIDARITY edge comes from dispatching the REAL
+    `resolve_campaign` (PROPAGANDIZE) resolver — chosen over PROVIDE_SERVICE/
+    EDUCATE because it makes exactly ONE graph write (the new solidarity
+    producer; its returned `consciousness_delta` is never applied to the
+    graph unless routed through `ooda/layer3.py`, which this test never
+    invokes — confirmed via `tests/contract/verbs/test_effects.py`'s own
+    `TestConsciousnessVerbs`), isolating the MASS_LINK channel from every
+    other consciousness pathway. `graph.add_node`/`graph.add_edge` calls
+    that fabricated the shape are GONE.
+
+    Calibration correction from the salvage suite: `PoliticalFaction.
+    cadre_level` is a `Probability` field (`[0, 1]`) — the salvage suite's
+    `cadre_level=30.0` was only reachable by hand-stamping the graph node
+    directly, bypassing the model (the SAME fixture-fabricated-shape class
+    this whole rebuild exists to stop). At the model's real ceiling
+    (`cadre_level=1.0`), a fresh org acquires `trade_unionism` at **tick
+    126** (measured directly against the real `DoctrineSystem`, not the
+    naive `25 TL / 0.2 TL-per-tick = 125` estimate — off by one from the
+    real accrual/decay interaction).
+
+    Two ordering-sensitive claims now depend on DoctrineSystem (@14.7) <
+    ConsciousnessSystem (@17.0) — broadened from the salvage suite's single
+    claim: (a) a verb dispatched with the org's CURRENT `doctrine_tags` sees
+    whatever a PRIOR tick wrote (mirrors real OODA order, position 14,
+    before Doctrine's 14.7); (b) DoctrineSystem's per-tick DECAY of
+    org-sourced edges must apply before ConsciousnessSystem's same-tick
+    read, or that tick's decay is invisible until next tick.
+    `TestDecayOrderingMatters` isolates claim (b) with a test-only decay-rate
+    override (0.9 vs. the ratified 0.02) purely for observability — verified
+    empirically before writing the assertion (a naive attempt without a
+    2-tick wealth baseline first showed NO effect in either order; the real
+    effect only appears once a genuine wealth-shock baseline exists).
+
+    Routing-direction assertion added per the brief's suggestion: the SAME
+    amplified solidarity that raises `class_consciousness` more also raises
+    `national_identity` LESS (verified: wired 0.612944 < control 0.61412) —
+    a signed complementary check, not a magnitude pin.
+
+    **6. Sentinel** — vocabulary-sentinel rule (d), full detail in
+    `src/babylon/sentinels/vocabulary/registry.py`'s `EDGE_SOURCE_ALLOWLIST`
+    docstring and the companion commit. Summary: every (edge_type, SOURCE
+    node type) combination a fixture stamps via a literal `add_edge`/
+    `Relationship` call (source resolved against a same-file `add_node`/
+    entity-constructor binding) must match a combination production stamps
+    the same literal way, or a cited allowlist entry. VERIFIED EMPIRICALLY
+    (not assumed) that this narrower-than-rule-(b) static lens misses MOST
+    real edge producers in this codebase — 106 raw violations surfaced on
+    first run, all traced to one of three causes: (1) verb resolvers writing
+    with a runtime `org_id`/`target_id` (`negotiate.py`'s real TRANSACTIONAL
+    producer, this task's own new SOLIDARITY producer — both invisible by
+    construction, mirroring rule (c)'s own `update_node` scope-out); (2)
+    bulk/dynamic hydration (Postgres row hydration, TIGER-derived ADJACENCY,
+    LODES-derived MEMBERSHIP — never a literal call); (3) deliberate
+    negative-control tests or the already-retired `key_figure` type. Collapsed
+    to 16 unique combinations, each cited in `EDGE_SOURCE_ALLOWLIST`
+    (governance mirrors `UNSTAMPED_QUERY_ALLOWLIST`: dated, "must only ever
+    shrink"). Mutation-validated: `test_edge_founding_bug_would_be_caught`
+    reconstructs the exact ADR085 fixture shape and confirms the check
+    flags it; `test_edge_source_allowlist_clears_a_genuinely_allowlisted_
+    combination` demonstrates the red -> green round-trip directly (not via
+    `mutmut` — a targeted assertion round-trip, matching rule (c)'s own
+    `test_attribute_exemption_does_not_absorb_a_different_symbol` precedent).
+
+    **7. Ceremony (G3)** — `mise run qa:regression`: 5/5 byte-identical.
+    `git status --short tests/baselines/` empty. This was PRE-VERIFIED by
+    ADR085's own audit (none of the 5 canonical scenarios seed an
+    organization node) and RE-CONFIRMED here, not merely assumed —
+    `tools/regression_test.py:218-252` and both `_legacy` factories still
+    grep clean of `ORGANIZATION`/`Organization(` stamps.
+
+  drift_table: |
+    `mise run qa:regression` (`tools/regression_test.py compare`, byte-compare
+    of dense CSV/checkpoint traces against the committed baselines):
+
+    | Scenario            | Result | Drift |
+    |----------------------|--------|-------|
+    | imperial_circuit     | PASS   | 0     |
+    | two_node             | PASS   | 0     |
+    | starvation           | PASS   | 0     |
+    | glut                 | PASS   | 0     |
+    | fascist_bifurcation  | PASS   | 0     |
+
+    Raw CLI output: "Results: 5 passed, 0 failed / All regression tests
+    passed!". `git status --short tests/baselines/` empty (no baseline file
+    changed) — confirms PASS means byte-identical, not merely "within
+    tolerance."
+
+    All five drift ZERO because none of the 5 canonical qa:regression
+    scenarios ever instantiates an `Organization`/`PoliticalFaction`/etc.
+    node — `DoctrineSystem`'s per-org loop and this program's new
+    `apply_mass_work_solidarity`/decay code paths are BOTH gated on
+    iterating organization nodes that these scenarios never create, so
+    every new line of code this ADR ships is byte-provably inert there.
+    This is NOT true of the live web scenarios (`us_nationwide`,
+    `wayne_county`) — both carry real organizations (ADR086's Business
+    seeding among them) and DO feel this mechanism once a player dispatches
+    a mass-work verb; that is the intended, in-scope behavioral change,
+    just outside the qa:regression harness's five golden scenarios by
+    construction (confirmed separately: `tests/contract/verbs/
+    test_baseline_neutrality.py`'s existing contract pins that player-verb
+    dispatch NEVER fires in a headless/canonical run at all — only the web
+    bridge's `persistent_context["player_actions"]` seam can trigger it).
+
+  consequences: |
+    ADR073's Unit 6b claim ("MASS_LINK-gated org solidarity transmission
+    into the bifurcation router") is now HISTORICALLY ACCURATE again, in a
+    revised form ADR085 could not have anticipated (continuous amplification
+    of a verb-created edge, not a live tag read) — ADR073 stays unedited
+    (Immutability of History); this ADR and ADR085 together are the full
+    record of the mechanism's death and rebirth.
+
+    The vocabulary sentinel's rule (d) is now armed for the NEXT instance of
+    this failure class, at the (edge_type, source_type) granularity — but
+    its `EDGE_SOURCE_ALLOWLIST` is honestly scoped: it does NOT prove every
+    edge in the game has a real producer, only that no NEW literal fixture
+    fabrication has crept in undetected. A future session wanting to close
+    the 16 allowlisted gaps (or extend the scanner with real dataflow
+    analysis to see verb-resolver / hydration-sourced production) is
+    pre-warned this is a disproportionate undertaking for what most of them
+    individually are, per the allowlist's own docstring.
+
+    `MobilizeDefines`'s unwired-defines defect (cited as a cautionary
+    specimen, not touched) remains open for the owner, unchanged by this
+    ADR.
+
+  references:
+    - "ai/decisions/ADR085_retire_org_solidarity_mass_link.yaml (the retraction this ADR completes the write side for)"
+    - "ai/decisions/ADR073_doctrine_system.yaml (original Unit 6b record, left unedited per Immutability of History)"
+    - "src/babylon/engine/actions/_mass_work.py (the new producer), src/babylon/engine/actions/{aid,educate,campaign}.py (call sites)"
+    - "src/babylon/engine/systems/doctrine.py (decay), src/babylon/engine/systems/ideology.py (read side rewrite)"
+    - "src/babylon/config/defines/doctrine.py, src/babylon/data/defines.yaml (new coefficients)"
+    - "tests/unit/engine/systems/test_doctrine_consciousness_signal.py (rebuilt contract test)"
+    - "tests/contract/verbs/test_effects.py::TestMassWorkSolidarity (producer unit tests)"
+    - "tests/unit/engine/systems/test_ideology.py::TestOrganizationSourcedSolidarity (read-side unit tests)"
+    - "tests/unit/engine/systems/test_doctrine_system.py::TestMassWorkSolidarityDecay (decay unit tests)"
+    - "src/babylon/sentinels/_ast.py (edge_source_type_uses), src/babylon/sentinels/vocabulary/{checks,registry}.py (rule d)"
+    - "tests/unit/sentinels/test_node_type_vocabulary.py (rule d tests)"
+    - ".claude/worktrees/wf_d860336d-95b-3@50f2cd0c tests/unit/engine/systems/test_doctrine_consciousness_signal.py (salvage structure, READ-ONLY reference, never committed to)"
+    - "ADR087 verified as the next free number 2026-07-19: ai/decisions/ index at that time held ADR001-ADR020, ADR026-ADR086 (contiguous through 86, no gaps at the top); the separate Vol III program's ADR082/ADR083 were already created on this branch by the time this task started (the brief's note that they were 'reserved, not yet created' was stale against a since-advanced base) — ADR087 does not collide with them or any other file in ai/decisions/"

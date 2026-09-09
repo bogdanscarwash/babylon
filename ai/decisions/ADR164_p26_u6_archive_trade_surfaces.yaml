@@ -1,0 +1,50 @@
+ADR164_p26_u6_archive_trade_surfaces:
+  status: "accepted"
+  date: "2026-07-27"
+  title: >
+    P26 U6 phase 1 — Archive trade surfaces, backend seam only:
+    TradeBlocView joins the ProjectionRecord union and
+    GameSession.subject_view dispatches kind="trade" through pure
+    projectors; zero client (tui/rust) changes, honoring the M3
+    raster-lane non-overlap covenant.
+  context: |
+    spec-103's trade panels (BlocFlowLines/TradePanel) died with the
+    legacy web client (Amendment V). U2 made trade state real in the
+    playable game (TradeWiring, per-tick DRAIN_EDGE rows) but nothing
+    projected it — the Archive client had no trade surface and the
+    observe() union had no trade kind. The raster-cutover M3 lane owns
+    tui/rust files right now, so any client rendering would collide;
+    the durable seam (Amendment V: clients are disposable, observe()
+    is the contract) is the backend projection. Contract pinned before
+    code: specs/103-trade-surfaces/u6-archive-trade-surfaces-contracts.md.
+  decision: |
+    (1) View models (projection/view_models.py): CountyExposureShare
+    (5-digit FIPS + Probability weight), TradeBlocPhiShare, and
+    TradeBlocView (kind Literal["trade"], node_id, verified_tick,
+    optional phi_year_inflow / phi_week_slice / bilateral_trade_value /
+    bilateral_trade_tons / erdi_ratio / exposure_top / last_tick_flow /
+    breakdown) added to the ProjectionRecord discriminated union —
+    round-trip pinned through the TypeAdapter.
+    (2) Projectors (projection/trade.py): project_trade_bloc (per-bloc
+    dossier: phi year inflow + weekly slice, top-10 county exposure
+    rows weight-DESC/FIPS-ASC, last tick's flushed DRAIN_EDGE flow) and
+    project_trade_overview (national fold, breakdown phi-DESC/node-ASC)
+    — pure functions over plain session-held data, importing NOTHING
+    above the projection layer; unknown node and absent inputs project
+    honest None, never fabricated zeros (III.8/III.11).
+    (3) Session dispatch: GameSession.subject_view routes
+    kind == "trade" via _project_trade_subject (entity_id "overview" or
+    a bloc node id), sourcing exclusively from the session's TradeWiring
+    and its retained last-tick boundary rows; trade=None sessions return
+    None (honest absence, same as every other unknown subject).
+    Phase 2 (client rendering in Textual/Ratatui) is deferred until the
+    M3 lane closes — the seam is the deliverable, per Amendment V.
+  consequences:
+    positive:
+      - "The Archive client can render trade dossiers whenever its lane is free — the data contract is pinned and tested (13 session + 5 projection tests)"
+      - "Zero collision with the M3 raster lane: no tui/, no rust/, no tutorial files touched"
+      - "phi conservation is visible at the seam: overview total = sum of bloc rows (spec-101 D3)"
+    negative:
+      - "No player-visible surface yet — phase 2 client work is a follow-up unit gated on the M3 lane closing"
+      - "bilateral_trade_value/tons and erdi_ratio fields are declared but not yet fed by the session (U3's data lands them via the reference DB; wiring them into TradeWiring is booked with the U5 engine train)"
+  file: ADR164_p26_u6_archive_trade_surfaces.yaml

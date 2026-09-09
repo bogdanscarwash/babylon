@@ -1,0 +1,69 @@
+ADR134_p25_u8_allegiance_valve:
+  status: "accepted"
+  date: "2026-07-22"
+  title: >-
+    P25 U8 — AllegianceSystem @17.42 (THE VALVE): the 31st engine system.
+    Allegiance drift over the party terrain (align·fit + contact·reach; the
+    reactionary coupling gives @17.4's fascist_alignment its ballot
+    expression); the hope field H(c) as the believed arithmetic of the
+    acquiescence branch; the FIRST production Agitation→Organization
+    conversion pathway throttled by (1 − v·H) — TRAP 1 discharged without
+    touching the consciousness router; the political_form producer closing
+    U3's deferred input under the BD ruling that the dialectic analyzed is
+    SYSTEM-LOYAL vs SYSTEM-OPPOSITIONAL. qa:regression byte-identical with
+    the system live (TRAP 3 parties-exist guard, proved not asserted).
+  supersedes: []
+  relates_to: ["ADR127", "ADR129", "ADR131", "ADR133"]
+  programs: ["25-political-superstructure"]
+
+  decision: |
+    (1) BD RULING (2026-07-22, mid-unit interjection, recorded verbatim):
+        "the dialectic you want to analyze is system-loyal vs
+        system-oppositional." Landed as the political_form measure's
+        grounding: political_labor_share = (loyal − oppositional) /
+        (loyal + oppositional), where loyal = Σ allegiance mass delegated
+        INTO the system's channel (ballot/parties/ISA_POLITICAL — pole B,
+        representation) and oppositional = Σ organization, the autonomous
+        capacity built AGAINST it (pole A, self-organization; the P(S|R)
+        numerator). Hope is the loyal pole's feeling-form and acts through
+        the valve — NOT double-counted in the measure. The pole names stay
+        (committed U3 vocabulary); the U10 promotion ceremony carries this
+        grounding note forward.
+    (2) TRAP 1 DISCHARGED: SocialClass.organization was seed-static (sole
+        production write: territory.py PENAL_COLONY reset-to-zero). The
+        conversion pathway organization += organizing_conversion_rate ·
+        agitation · (1 − v·H) is NEW code; route_agitation_to_ternary
+        (consciousness router) untouched per the charter ruling.
+    (3) TRAP 3 DISCHARGED: every motion is gated on parties-exist; a
+        party-less graph is byte-unchanged (no writes, no events, no graph
+        attrs, no persistent state). Proof: qa:regression 6/6 byte-identical
+        + determinism leg with the system registered, plus a
+        graph-equality unit test.
+    (4) WRITE DISCIPLINE (the recon's two-registry law): allegiance is a
+        REAL SocialClass field (dict[str,float] party→mass, abstention =
+        implicit residual; wealth_share precedent — survives extra='forbid'
+        round-trip). hope is transient per-tick bookkeeping: registered in
+        BOTH SOCIAL_CLASS_COMPUTED_FIELDS (from_graph drop, crash gate) and
+        vocabulary EXTRA_STAMPABLE_ATTRIBUTES (check:vocabulary gate).
+    (5) U8 PROXIES (refined by later units, declared here): promised
+        transfer to class c = max(0,fit)·phi_social_share·subsistence(c)
+        (U9's funding identity replaces it); party viability =
+        (funding_share + membership_share)/2 (U10's real returns replace
+        it); media (ISA_COMM) and betrayal (delivery-gap) drift terms are
+        exact zeros until their producers exist.
+    (6) NEW DEFINES: organizing_conversion_rate, allegiance_align_rate,
+        allegiance_contact_rate (Θ_feel; metadata-only defines_hash
+        ceremony blessed(p25-u8-politics-defines-hash)). Kernel additions:
+        allegiance_drift + apply_allegiance_drift (pure, mass-disciplined).
+        FormulaRegistry membership NOT taken (direct import, the
+        route_agitation_to_ternary precedent); revisit if hot-swap demand
+        appears.
+    (7) ESTATE: _SYSTEM_CLASSES +1 (30→31); system-order pins moved;
+        CoverageGap row (OODA/Doctrine idiom, remediation = U13 electoral
+        goldens); gate-coverage + vocabulary sentinels green; L-VALVE bound
+        to the live quantity; full 31-system tick green on the electoral
+        terrain with the shadow political_form balance == the producer.
+    (8) WIRING ROWS (ADR109): W-C — political_labor_share producer →
+        GraphInputs (sentinel: TestFullEngineTick's shadow-balance
+        equality); W-P — hope/allegiance projections arrive with the U10+
+        player surface (row opened, not closed).

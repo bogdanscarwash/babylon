@@ -1,0 +1,102 @@
+{
+  "scenario": "org_probe",
+  "description": "Two-org world \u2014 the Organization estate's byte-gate anchor (spec \u00a711)",
+  "generated_at": "2026-08-11T20:28:24+00:00",
+  "defines_hash": "4af1178032a2b420376e35c7a98ac2b151ea8fb9ee68636d1560528d5fd927d4",
+  "max_ticks": 52,
+  "checkpoints": [
+    {
+      "tick": 0,
+      "p_w_wealth": 0.0,
+      "p_c_wealth": 0.0,
+      "c_b_wealth": 0.0,
+      "c_w_wealth": 0.0,
+      "imperial_rent_pool": 100.0,
+      "exploitation_tension": 0.0,
+      "p_w_consciousness": 0.0,
+      "p_w_p_revolution": 0.0,
+      "p_w_active": false,
+      "content_hash": "9f2a3316f76422ca1507f4c9aea96eb51c30139c133e2b301e58529d92217d73"
+    },
+    {
+      "tick": 10,
+      "p_w_wealth": 0.0,
+      "p_c_wealth": 0.0,
+      "c_b_wealth": 0.0,
+      "c_w_wealth": 0.0,
+      "imperial_rent_pool": 98.017904,
+      "exploitation_tension": 0.187095,
+      "p_w_consciousness": 0.0,
+      "p_w_p_revolution": 0.0,
+      "p_w_active": false,
+      "content_hash": "f415feceac7bcced72f41a2d2f0f18836f91380d22f229cef751e78175c43fac"
+    },
+    {
+      "tick": 20,
+      "p_w_wealth": 0.0,
+      "p_c_wealth": 0.0,
+      "c_b_wealth": 0.0,
+      "c_w_wealth": 0.0,
+      "imperial_rent_pool": 96.075096,
+      "exploitation_tension": 0.069765,
+      "p_w_consciousness": 0.0,
+      "p_w_p_revolution": 0.0,
+      "p_w_active": false,
+      "content_hash": "84b8111b752b0175a79cb0f9047bbb5e8f68710af5632b5742239826b2d1aec6"
+    },
+    {
+      "tick": 30,
+      "p_w_wealth": 0.0,
+      "p_c_wealth": 0.0,
+      "c_b_wealth": 0.0,
+      "c_w_wealth": 0.0,
+      "imperial_rent_pool": 94.170796,
+      "exploitation_tension": 0.026459,
+      "p_w_consciousness": 0.0,
+      "p_w_p_revolution": 0.0,
+      "p_w_active": false,
+      "content_hash": "cd3532017e8d5fc438f8bb31ea32473e18b0df2c19a4b09c11e167b8a13596a5"
+    },
+    {
+      "tick": 40,
+      "p_w_wealth": 0.0,
+      "p_c_wealth": 0.0,
+      "c_b_wealth": 0.0,
+      "c_w_wealth": 0.0,
+      "imperial_rent_pool": 92.30424,
+      "exploitation_tension": 0.1068,
+      "p_w_consciousness": 0.0,
+      "p_w_p_revolution": 0.0,
+      "p_w_active": false,
+      "content_hash": "d806767986d815ca97dfe4d4b42e28614415fbfcaf87dfcce6593b31dca5bfed"
+    },
+    {
+      "tick": 50,
+      "p_w_wealth": 0.0,
+      "p_c_wealth": 0.0,
+      "c_b_wealth": 0.0,
+      "c_w_wealth": 0.0,
+      "imperial_rent_pool": 90.474683,
+      "exploitation_tension": 0.174892,
+      "p_w_consciousness": 0.0,
+      "p_w_p_revolution": 0.0,
+      "p_w_active": false,
+      "content_hash": "cb8d15005f7783b60ad05283761f7645dd45929edf007c89205e347de4e0fb38"
+    },
+    {
+      "tick": 52,
+      "p_w_wealth": 0.0,
+      "p_c_wealth": 0.0,
+      "c_b_wealth": 0.0,
+      "c_w_wealth": 0.0,
+      "imperial_rent_pool": 90.113147,
+      "exploitation_tension": 0.187283,
+      "p_w_consciousness": 0.0,
+      "p_w_p_revolution": 0.0,
+      "p_w_active": false,
+      "content_hash": "581693bb249f3408482b97d242719e6c1c96ba0d40a328593e720ddef481c015"
+    }
+  ],
+  "final_outcome": "SURVIVED",
+  "ticks_survived": 52
+}

@@ -1,0 +1,92 @@
+ADR227_practice_contract_groundwork:
+  status: "accepted"
+  date: "2026-08-24"
+  title: >-
+    Practice Contract V1 is a pure, closed, language-neutral input and budget
+    groundwork boundary with no live admission, execution, or persistence
+  crate: babylon-practice-contract
+  production_dependencies:
+    - babylon-kernel
+  forbidden_dependencies:
+    - babylon-graph
+    - babylon-bsl
+    - babylon-tick
+    - babylon-persistence
+    - babylon-client
+  activation_blockers:
+    - PER-20
+    - PER-22
+    - PER-26
+    - PER-27
+  live_activation: false
+  context: |
+    T2 needs one stable practice vocabulary before Gate 3 durability and Gate 5
+    player input can consume it. Rust, Python, later BSL declarations, and
+    future durable rows must not invent separate numeric identities, byte
+    layouts, limits, or ActionBudget terms. A shared contract can freeze those
+    values now, but the current engine has no governed path that accepts a
+    practice input or resolves one during a weekly tick.
+
+    Placing the contract in graph, BSL, tick, persistence, or client code would
+    make a detached value appear to grant live authority. It could also bypass
+    the PER-20 to PER-22 to PER-26 to PER-27 activation sequence. ADR224 keeps
+    Intent effects default-deny with no allowance rows. This decision preserves
+    that prohibition.
+  decision: |
+    The checked-in Practice Contract V1 YAML file is the sole language-neutral
+    source of its closed practice ids, machine mappings, authority kinds,
+    target domain, rejection codes, contract errors, record fields, byte order,
+    domain framing, parser and runtime limits, topology ceilings, activation
+    blockers, and Designed ActionBudget terms. Later deterministic generation
+    may mirror those declarations into sealed Python and Rust values. Later BSL
+    content may mirror only the separately governed declaration prelude.
+
+    The `babylon-practice-contract` crate is pure. Its only production
+    dependency is `babylon-kernel` hashing. Dependency direction is one way
+    from later admission, persistence, BSL-loader, tick, and client owners into
+    this value contract. The practice crate cannot depend on graph, BSL, tick,
+    persistence, client, database, wall-clock, network, or filesystem state.
+
+    Constructing or encoding a contract value has no admission side effect.
+    This groundwork owns no pending input ledger, `advance_with_inputs`, player
+    gateway, deterministic policy producer, practice resolver, BSL practice
+    rule or effect allowance, graph or database access, receipt, Archive
+    subject, outbox, budget write, durable envelope, durable row, inventory,
+    aid accounting, repression path, membership production, line return, or
+    campaign initializer. It cannot access a graph to resolve a target or prove
+    locality. It cannot write an event or material state.
+
+    The sealed values are future inputs to the PER-20 and PER-22 Gate 3
+    committed-envelope path and the PER-26 and PER-27 Gate 5 pending-input and
+    next-week bridge. They are not a persistence substitute or an alternate
+    player-action rail. Organize and Agitate remain blocked on the Gate 3
+    committed envelope and Gate 5 pending input. Mutual Aid is also blocked on
+    PER-30 orders and inventory and PER-31 freight and realization. PER-44
+    separately blocks line-return membership production. PER-36 applies only
+    if a later aid route uses money. Repression still needs its own affected-
+    population, exposure, repression-faced, and Backfire resolver contract.
+  consequences: |
+    A later implementation can prove Python and Rust agree on one bounded
+    contract without treating either implementation as the other one's oracle.
+    Unknown, malformed, oversized, aliased, duplicated, or reordered schema
+    material fails before model construction or generated output publication.
+
+    The contract adds no mathematical primitive and no live mechanic. It does
+    not reinterpret current mobilize settings, Capacity, goods, labor, money,
+    treasury, or escrow as ActionBudget. All three V1 parameter allowlists stay
+    empty. Mutual Aid, repression, line return, and dynamic organization
+    creation remain unavailable until their named producers and consumers land.
+  verification: |
+    A focused Python behavioral contract parses the ADR, index, and bounded
+    YAML schema. It pins every code and mapping, the fixed record and byte
+    order, Designed terms and ceilings, exact activation blockers, and the
+    complete non-wire PracticeSchemaError registry. Mutation cases refuse the
+    first oversized source, event stream, alias, duplicate key, depth, unknown
+    field, missing code, duplicate code, invalid limit, collection overflow,
+    field-order fault, or machine-mapping mismatch.
+  supersedes: []
+  related:
+    - ADR220_rust_owned_postgresql_persistence_boundary
+    - ADR221_game_first_refoundation_v4
+    - ADR224_bsl_causal_composition_contract
+    - ADR228_relational_territory_dossier_contract

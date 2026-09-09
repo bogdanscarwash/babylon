@@ -1,0 +1,30 @@
+[package]
+name = "babylon-persistence"
+description = "Rust-owned PostgreSQL persistence contract keel"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+babylon-bsl = { path = "../babylon-bsl" }
+babylon-graph = { path = "../babylon-graph" }
+babylon-material-circuit = { path = "../babylon-material-circuit" }
+babylon-kernel = { path = "../babylon-kernel" }
+babylon-practice-contract = { path = "../babylon-practice-contract" }
+babylon-tick = { path = "../babylon-tick" }
+fallible-iterator = "0.2"
+flate2 = "1"
+minijinja = { version = "=2.24.0", default-features = false, features = ["builtins", "serde"] }
+postgres = { version = "=0.19.14", features = ["with-uuid-1"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "=1.1.4"
+sha2 = "0.11"
+uuid = { version = "1.24", default-features = false }
+
+[dev-dependencies]

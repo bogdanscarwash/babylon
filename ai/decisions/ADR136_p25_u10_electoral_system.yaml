@@ -1,0 +1,124 @@
+ADR136_p25_u10_electoral_system:
+  status: "accepted"
+  date: "2026-07-22"
+  title: >-
+    P25 U10 — ElectoralSystem @17.45 (the clocked ambient machine): the
+    33rd engine system completes §2 of the electoral program. Per-sovereign
+    election clock (cycle_ticks by ADMINISTERS-DAG depth); the turnout law
+    over the allegiance masses; FPTP with ξ_t only at recount grain;
+    government formation as a FactionBalance perturbation (the FIRST-EVER
+    faction_balance write-back, wiring the dormant faction_dynamics
+    renormalizer); legitimation refresh; the InternalBalanceOfForces shift
+    (activating the dead-until-wired update_internal_balance); L-SUSPEND
+    (bonapartist mode + legitimation floor ⟹ ELECTIONS_SUSPENDED); and the
+    T-7 disillusion routing (bridges → organization, no bridges →
+    fascist_alignment). The political_form promotion ceremony flips it
+    shadow → canonical, verified byte-identical. qa:regression byte-identical
+    with the system live (parties-guard, proved not asserted).
+  supersedes: []
+  relates_to: ["ADR127", "ADR128", "ADR129", "ADR134", "ADR135", "ADR078"]
+  programs: ["25-political-superstructure"]
+
+  decision: |
+    (1) THE CLOCK: per-sovereign, tick % cycle_ticks[level] == 0 (the
+        DoctrineSystem congress_interval_ticks idiom). A sovereign's
+        JurisdictionLevel is its depth on the ADMINISTERS DAG (apex =
+        federal, one hop = state); its electorate is the apex's whole
+        active class set (the national electorate) or a sub-sovereign's
+        TENANCY-occupants of claimed territories. A sovereign claiming
+        nothing holds no election. ξ_t (resolve_rng, the congress-purge
+        III.7 precedent — one seeded coin) fires ONLY when the top-two vote
+        margin sits inside recount_margin; every wider election resolves
+        deterministically by the count.
+    (2) THE TURNOUT LAW (from-scratch — U7 shipped no turnout kernel):
+        turnout(c) = max(0, base·loyal_mass·hope − w_sup·repression), the
+        two new pure kernels turnout_share + competitiveness. Collapsed
+        hope collapses turnout (the legitimation death spiral is a feature
+        of the law). votes(p) = Σ_c pop·turnout·allegiance(c,p)/loyal_mass;
+        FPTP winner by (−votes, id). hope is read SAME tick (17.42 < 17.45;
+        it never survives the WorldState round-trip).
+    (3) GOVERNMENT FORMATION (§2.3, "a perturbation on the state you
+        already have"): the winner's aligned ruling-class faction
+        (_FACTION_BY_IDEOLOGY: liberal/socdem → finance_capital,
+        restorationist/fascist → settler_populist; security_state is never
+        an electoral target) is nudged up in every StateApparatus org's
+        faction_balance via the dormant renormalize_faction_balance
+        (bounded by state_ai.max_faction_shift_per_tick). This is the
+        FIRST-EVER production faction_balance write-back — nothing wrote it
+        before (seed-static, _legacy_wayne.py); Weimar is now a parameter
+        flow, not a script. The winner is written to the electoral_governments
+        register (PolicySystem reads it same tick → the delivery incumbent
+        becomes the governing PARTY, lighting U9's θ.betrayal on a party id;
+        StruggleSystem reads it last tick for the backfire gate).
+    (4) INSTITUTION BALANCE SHIFT: activates update_internal_balance
+        (dead-until-wired, called only from tests before U10) per
+        institution — crisis_intensity from claimed-territory crisis phases
+        (tick_crisis_phase, fresh @4.0; the dialectical regime @18.0 is
+        one-tick-stale), legitimacy from the refresh, external_threat = 0.0
+        (unmodeled). The new balance is written back
+        (update_node(internal_balance=…model_dump())); the returned
+        INSTITUTION_FACTION_SHIFT / INSTITUTION_BONAPARTIST_MODE events are
+        published and CLASSIFIED at this first-ever wiring (SEVERITY_TAXONOMY
+        60→62: faction-shift CROSSING/INTRA_LEVEL/informational,
+        bonapartist-mode CROSSING/TERMINAL_ADJACENT/critical).
+    (5) LEGITIMATION REFRESH: legitimation_index (a TERRITORY graph attr,
+        LifecycleSystem was its sole writer — U10 is the 2nd) moves toward
+        turnout·competitiveness by legitimation_refresh_weight; a walkover
+        manufactures less consent than a contest. LEGITIMATION_REFRESH per
+        claimed territory.
+    (6) L-SUSPEND: at a clock tick, BEFORE the count, if any institution is
+        in bonapartist mode (institutionalist_bonapartist > threshold,
+        others excluded — the institution defines' thresholds) AND the mean
+        claimed-territory legitimation is below legitimacy_backfire_threshold
+        (the legitimation floor, reused — declared parsimony), the clock is
+        suspended: ELECTIONS_SUSPENDED, no vote counted, disillusion windows
+        for every loyal class. The regime's death is reachable, not
+        decorative.
+    (7) H-COLLAPSE / T-7 (§2.5): on loss (a class's plurality party ≠ the
+        winner) or suspension, the class enters a disillusion window
+        (electoral_disillusion register {opened_tick, window_ticks,
+        bridges_present}); bridges_present = any incident SOLIDARITY edge
+        (fascist_pull is never persisted — the reactionary machinery
+        computes it transiently). AllegianceSystem @17.42 reads the register
+        NEXT tick: an active window with bridges multiplies the valve
+        conversion by disillusion_conversion_boost (the Bernie→DSA surge);
+        without bridges, the excess (boost−1)·gain routes into
+        fascist_alignment (the Obama→Trump pipeline). The topology chooses
+        the direction; the game never does. The betrayal-integral →
+        disillusion trigger (b(c) = Σ gap crossing betrayal_threshold) is
+        U12's SYRIZA fork, NOT U10 — U10 opens windows on loss/suspension.
+    (8) STRUGGLE BACKFIRE COUPLING: below the legitimation floor with a
+        seated government (the electoral_governments register, read last
+        tick @16.0 — the I-ORD grain), repression backfires HARDER: the
+        struggle.py backfire coefficient is multiplied by the now-wired
+        compute_legitimation_amplifier (recon: zero prior callers). Gated
+        on the register so the party-less qa six are byte-identical.
+    (9) THE PROMOTION CEREMONY (TRAP 2 payoff): political_form drops
+        shadow=True → canonical (catalog.py). EMPIRICAL VERDICT (resolving
+        the ADR078-precedent-vs-current-format tension the recon flagged):
+        qa:regression 6/6 BYTE-IDENTICAL + determinism leg WITH the flip.
+        The ADR078-era drift mechanism (movement "through the key's presence
+        in opposition_states") is format-impossible under today's
+        CHANNEL_WRITERS baseline shape (no opposition_states-derived column);
+        the measure returns GapReading(0, 0) on the party-less six, never
+        outscoring a positive-gap opposition, and the contradiction_frames
+        secondary tie-break moves no tracked channel. NO baseline ceremony —
+        a pure code promotion, zero drift. The pole-grounding note
+        (self-organization vs representation, the BD system-loyal/oppositional
+        ruling) is carried in the registration. Couplings DEFERRED to U12
+        (typed OPEN W-𝔇 rows below).
+    (10) NEW DEFINES (one metadata defines_hash ceremony,
+        blessed(p25-u10-electoral-defines-hash)): recount_margin (Θ_theory),
+        disillusion_conversion_boost + legitimation_refresh_weight (Θ_feel).
+    (11) ESTATE: pins 32→33 (system order + tally + _EXPECTED_CONSEQUENCE +
+        AST gate-coverage); ElectoralSystem CoverageGap row (remediation =
+        the weimar/debs/bernie_valve goldens, U13); superstructure sentinel
+        +2 registers (electoral_governments, electoral_disillusion, owner
+        electoral.py + constant aliases); CLAUDE.md 32→33.
+    (12) WIRING ROWS (ADR109): W-C — turnout/government/legitimation
+        producers → the electoral registers + the two base-consumers
+        (Allegiance T-7, Struggle backfire), all CLOSED with the U10
+        contract-test sentinels; W-𝔇 — political_form promoted to canonical
+        (CLOSED); political_form couplings — OPEN, U12. W-P — hope/allegiance/
+        election player projections still OPEN (the interface train's
+        surface, not the engine's).

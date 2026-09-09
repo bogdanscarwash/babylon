@@ -1,0 +1,3 @@
+[workspace]
+members = ["crates/babylon-tick", "crates/local-helper", "crates/babylon-evidence"]
+resolver = "2"

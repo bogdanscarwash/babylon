@@ -5,7 +5,7 @@ formatters:
     format: '%(asctime)s [%(levelname)s] %(name)s: %(message)s'
   json:
     # Use custom JSONFormatter - no external dependencies
-    class: babylon.utils.log.JSONFormatter
+    class: babylon.config.log.JSONFormatter
 
 handlers:
   console:
@@ -33,8 +33,6 @@ loggers:
     level: DEBUG
     handlers: [console, file, error_file]
   # Suppress noisy third-party loggers
-  chromadb:
-    level: WARNING
   httpx:
     level: WARNING
   httpcore:

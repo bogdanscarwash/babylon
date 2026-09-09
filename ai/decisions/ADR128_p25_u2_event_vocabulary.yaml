@@ -1,0 +1,18 @@
+ADR128_p25_u2_event_vocabulary:
+  status: "accepted"
+  date: "2026-07-22"
+  title: >-
+    P25 U2 — the electoral event vocabulary: 13 EventTypes (84→97) with typed
+    payloads (models/events/politics_payloads.py), EVENT_BUILDERS entries
+    (64→77), and derived severity for every member (SEVERITY_TAXONOMY 47→60)
+    — ELECTIONS_SUSPENDED is a TERMINAL_ADJACENT crossing (critical: regime→
+    crisis entry), POPULAR_FRONT_CALLED a PATTERN inheriting
+    BIFURCATION_THRESHOLD, the rest ACT/FLOW floors and INTRA_LEVEL
+    crossings; the module's day-one-47 reconciliation guard WIDENED per its
+    own instruction with the declared _POST_DAY_ONE_ADDITIONS ledger (each
+    entry citing its ADR). No publisher exists until U8-U12; byte-safe by
+    construction. (File minted one commit after the code landed in a1ecaba4,
+    which cites this number.)
+  supersedes: []
+  relates_to: ["ADR127"]
+  programs: ["25-political-superstructure"]

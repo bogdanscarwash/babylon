@@ -1,72 +1,99 @@
 Babylon: The Fall of America
 ============================
 
-A geopolitical simulation engine modeling the collapse of American hegemony
-through Marxist-Leninist-Maoist Third Worldist (MLM-TW) theory.
+Babylon is an **entertainment-first emergent political-economy game**. Babylon
+is not a forecast and not a scientific reproduction. Theory constrains the
+causal model but does not predetermine results.
 
-**Graph + Math = History**
+Determinism proves computational identity, not scientific truth. Historical
+cases test causal signatures and counterfactual behavior. The Bevy client is an
+administrative viewer with no player action.
 
-.. note::
+The project's executable gate contracts cover:
 
-   This project is under active development. See the :doc:`/tutorials/first-simulation`
-   to get started.
+.. Vale: each protected item is a governed gate name.
+.. vale Vale.Terms = NO
+.. vale ste.UnapprovedWords = NO
+.. vale ste.NounClusters = NO
 
-What is Babylon?
-----------------
+#. **PostgreSQL/H3/Archive decision-loop slice**
 
-Babylon models class struggle not as random events, but as a **deterministic
-output of material conditions** within a compact topological phase space.
+#. **Productive & distributive circuit**
 
-The simulation implements:
+#. **Player agency**
 
-- **Imperial Rent** (Φ): Value extraction from periphery to core
-- **Survival Calculus**: Agents maximize P(S|A) vs P(S|R)
-- **George Jackson Model**: Consciousness bifurcation (revolution vs fascism)
-- **Percolation Theory**: Phase transitions in solidarity networks
-- **Carceral Geography**: Detention, displacement, elimination pipelines
+#. **COVID emergence benchmark**
 
-Architecture Overview
----------------------
+.. vale Vale.Terms = YES
+.. vale ste.UnapprovedWords = YES
+.. vale ste.NounClusters = YES
 
-The system runs locally without external servers, using the **Embedded Trinity**:
+Read the repository ``CONSTITUTION.md`` for the law. Read
+``NORTH_STAR.md`` for the game direction and gate contracts.
 
-.. list-table::
-   :widths: 20 40 40
-   :header-rows: 1
+System overview
+---------------
 
-   * - Layer
-     - Technology
-     - Purpose
-   * - **The Ledger**
-     - DuckDB (data warehouse) / SQLite or PostgreSQL (game state) / Pydantic (validation)
-     - Rigid material state (wealth, organization, empirical data)
-   * - **The Topology**
-     - NetworkX
-     - Fluid relational state (solidarity, exploitation)
-   * - **The Archive**
-     - ChromaDB / pgvector
-     - Semantic history for AI narrative
+Babylon uses one four-week simulation tick. Typed world data, BSL rules, and
+material relations produce a new world and a stable hash. Rust commits that
+world to Postgres and reconstructs saved campaigns from committed state.
 
-See :doc:`/concepts/architecture` for detailed architecture documentation.
+Rust owns game judgment and world hashes. BSL has live rules but no executable
+shocks. The live
+Rust path uses ``babylon-kernel``, ``babylon-graph``, ``babylon-bsl``,
+``babylon-tick``, ``babylon-persistence``, and ``babylon-client``.
 
-Quick Start
------------
+The Bevy client shows the Michigan county map, production and staffing, committed
+history, and saved-campaign comparisons. Enter advances one four-week period.
+Space plays or pauses. The client has no player actions. Python supplies data
+tools, model provisioning, operator commands, and the native process launcher.
+
+.. Vale: this paragraph preserves literal persistence and schema identifiers.
+.. vale ste.UnapprovedWords = NO
+.. vale ste.NounClusters = NO
+
+Rust owns the ``babylon_ref``, ``babylon_state``, and ``babylon_meta`` campaign
+boundary. The Archive and its restricted readers give cited observations to
+the viewer. Reference SQLite and Parquet remain data build artifacts. Python
+has no authoritative simulation or game-state writer.
+
+.. vale ste.NounClusters = YES
+.. vale ste.UnapprovedWords = YES
+
+.. Vale: the next role contains a literal Sphinx document path.
+.. vale ste.Ambiguity = NO
+
+See :doc:`/concepts/architecture` for the boundary between live and planned
+parts.
+
+.. vale ste.Ambiguity = YES
+
+First run
+---------
+
+Download the Linux preview from the `GitHub releases page
+<https://github.com/percy-raskova/babylon/releases>`_. Its included ``README.md``
+lists system requirements. Extract the archive and run ``./babylon``. The package
+includes the native executables, their embedded assets, and the launcher. Its
+local Docker database stores saves separately from a development checkout.
+
+For development from source:
 
 .. code-block:: bash
 
-   # Install dependencies
    git clone https://github.com/percy-raskova/babylon.git
    cd babylon
-   poetry install
+   mise trust
+   mise install --locked
+   mise run install
+   mise run play
 
-   # Run tests
-   poetry run pytest -m "not ai"
+``mise run play`` builds and opens the durable native observer, starting its
+local database when needed. See the root ``SETUP_GUIDE.md`` for system packages
+and development installation details.
 
-   # Run simulation
-   poetry run python -m babylon
-
-Contents
---------
+Manual contents
+---------------
 
 .. toctree::
    :maxdepth: 2
@@ -76,9 +103,10 @@ Contents
 
 .. toctree::
    :maxdepth: 2
-   :caption: How-To Guides
+   :caption: How-to guides
 
    how-to/index
+   agents/governance
 
 .. toctree::
    :maxdepth: 2
@@ -94,7 +122,7 @@ Contents
 
 .. toctree::
    :maxdepth: 2
-   :caption: API Reference
+   :caption: API reference
 
    api/index
 
@@ -104,52 +132,15 @@ Contents
 
    commentary/index
 
-Current Systems
----------------
-
-**Implemented:**
-
-- Imperial Rent extraction (EXPLOITATION edges)
-- Consciousness drift and bifurcation (George Jackson model)
-- Solidarity transmission (SOLIDARITY edges)
-- Survival calculus (P(S|A), P(S|R))
-- Territory dynamics (heat, eviction, displacement)
-- Agency layer (EXCESSIVE_FORCE → UPRISING)
-- Topology monitoring (percolation, resilience testing)
-
-**In Development:**
-
-- Narrative generation (AI observer)
-- Full game UI (NiceGUI)
-
-Mathematical Core
------------------
-
-**Fundamental Theorem of MLM-TW:**
-
-.. math::
-
-   \text{Revolution in Core impossible when } W_c > V_c
-
-Where :math:`W_c` is core wages and :math:`V_c` is value produced.
-The difference is Imperial Rent (Φ).
-
-**Survival Calculus:**
-
-.. math::
-
-   P(S|A) = \text{Sigmoid}(W - S_{min})
-
-   P(S|R) = \frac{O}{R}
-
-Rupture occurs when :math:`P(S|R) > P(S|A)`.
-
-See :doc:`/concepts/imperial-rent` and :doc:`/concepts/survival-calculus`
-for detailed explanations.
-
 Indices and tables
 ==================
 
 * :ref:`genindex`
 * :ref:`modindex`
+
+.. Vale: the next role contains a literal Sphinx reference name.
+.. vale ste.UnapprovedWords = NO
+
 * :ref:`search`
+
+.. vale ste.UnapprovedWords = YES

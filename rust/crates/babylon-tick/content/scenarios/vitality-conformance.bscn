@@ -1,0 +1,107 @@
+; The conformance world for vitality/subsistence-and-death.
+;
+; Six social classes, each one a case the rule has to tell apart: a fed core
+; class, an elite whose standard of living costs five times as much per head,
+; a block of one that survives, a block of one that starves, a block of one
+; the zombie failsafe removes, and a class already dissolved.
+;
+; THE FIXTURE IS CHOSEN SO THE UN-PORTED PHASE CONTRIBUTES NOTHING. Every
+; subject satisfies int(population × attrition_rate) == 0 under the frozen
+; engine's Grinding Attrition — either coverage clears the threshold and the
+; rate is exactly 0.0, or population × rate < 1. The frozen engine therefore
+; performs no population decrement and emits no POPULATION_ATTRITION here, so
+; the post-tick state below is expected to match the FULL Python system
+; exactly rather than approximately. Any divergence is a real defect.
+;
+; The mirror of this file is content/scenarios/vitality_conformance.py, which
+; builds the same six classes against the frozen VitalitySystem and prints
+; the post-tick values the Rust test pins.
+(scenario vitality/conformance
+  ; 0/1 rather than #t/#f: BSL has Bool (§3.1) but `deffield` has no bool
+  ; type and GraphSubstrate attributes are f64. Recorded, not hidden.
+  (deffield social-class/active int extensive)
+  (deffield social-class/population int extensive)
+  (deffield social-class/wealth real extensive)
+  ; Per-head quantities: an unweighted mean of one across classes is the
+  ; variance error §3.4 exists to reject, so they are declared intensive.
+  (deffield social-class/subsistence-multiplier int intensive)
+  (deffield social-class/s-bio int intensive)
+  (deffield social-class/s-class int intensive)
+  ; Declared and seeded, read by NO rule in this pack. It is here because
+  ; the frozen engine's Phase 2 requires it and this world mirrors that
+  ; fixture node for node; the rule that would read it does not exist, for
+  ; the two reasons the .bsl header records.
+  (deffield social-class/inequality int intensive)
+
+  ; The defines environment (§2.5's `:const`, §4.2's "the defines
+  ; environment (coefficients)"). Values transcribed from the canonical
+  ; single source of truth, src/babylon/data/defines.yaml:
+  ;   line 88  economy.base_subsistence: 0.0005
+  ;   line 89  economy.death_threshold:  0.001
+  ; The Phase-2 successor reads that file directly; until then a rule still
+  ; reads a coefficient rather than carrying a magnitude of its own.
+  (defconst economy/base-subsistence 0.0005c)
+  (defconst economy/death-threshold 0.001c)
+
+  ; Fed: cost 0.05 against wealth 1000, coverage far above threshold.
+  (node core NodeType/SOCIAL_CLASS
+    (social-class/active 1)
+    (social-class/population 100)
+    (social-class/wealth 1000)
+    (social-class/subsistence-multiplier 1)
+    (social-class/s-bio 1)
+    (social-class/s-class 1)
+    (social-class/inequality 0))
+
+  ; The Drain scaled by a standard of living: five times the per-head cost.
+  ; The elite burns faster per head than the core class it lives off.
+  (node bourgeoisie NodeType/SOCIAL_CLASS
+    (social-class/active 1)
+    (social-class/population 4)
+    (social-class/wealth 500)
+    (social-class/subsistence-multiplier 5)
+    (social-class/s-bio 2)
+    (social-class/s-class 8)
+    (social-class/inequality 0))
+
+  ; A block of one that SURVIVES. Without this subject, `population == 1`
+  ; and "dies this tick" would be indistinguishable in every vector.
+  (node hermit NodeType/SOCIAL_CLASS
+    (social-class/active 1)
+    (social-class/population 1)
+    (social-class/wealth 100)
+    (social-class/subsistence-multiplier 1)
+    (social-class/s-bio 1)
+    (social-class/s-class 1)
+    (social-class/inequality 0))
+
+  ; Starvation: one member, post-drain wealth 0.9995 against needs of 2.
+  (node last-worker NodeType/SOCIAL_CLASS
+    (social-class/active 1)
+    (social-class/population 1)
+    (social-class/wealth 1)
+    (social-class/subsistence-multiplier 1)
+    (social-class/s-bio 1)
+    (social-class/s-class 1)
+    (social-class/inequality 0))
+
+  ; The zombie failsafe: one member, no wealth at all, so the drain floors
+  ; at zero and post-drain wealth falls below death_threshold.
+  (node remnant NodeType/SOCIAL_CLASS
+    (social-class/active 1)
+    (social-class/population 1)
+    (social-class/wealth 0)
+    (social-class/subsistence-multiplier 1)
+    (social-class/s-bio 3)
+    (social-class/s-class 1)
+    (social-class/inequality 0))
+
+  ; Already dissolved: the guard must skip it entirely, wealth untouched.
+  (node dissolved NodeType/SOCIAL_CLASS
+    (social-class/active 0)
+    (social-class/population 5)
+    (social-class/wealth 10)
+    (social-class/subsistence-multiplier 1)
+    (social-class/s-bio 1)
+    (social-class/s-class 1)
+    (social-class/inequality 0)))

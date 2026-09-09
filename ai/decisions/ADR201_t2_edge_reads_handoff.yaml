@@ -1,0 +1,248 @@
+ADR201_t2_edge_reads_handoff:
+  status: "accepted"
+  date: "2026-08-12"
+  title: "The T2 slice-2 edge-reads handoff (Program 29, issue #559) — edges/edge-between/field-of-over-an-EdgeRef served through the real run_once_into seam, hash-free by construction; EdgeKey minted with the cross-kind Element Ord RULED (Node < Edge) and Copy dropped; the D32 implicit-strength seeding WIRED as a recorded narrowing; the Task 6a load_edge strength-literal widening (kind-blind p/i/c, runtime-mirroring, adjudicated in its own amendment fix round); three e2e vectors incl. the §3.8-item-8 Solidarity-anticipating idiom; and the `the` disposition — its own micro-train (T2.5), #572 stays open"
+  context: |
+    docs/superpowers/plans/2026-08-12-t2-slice2-edge-reads-plan.md (three
+    adversarial review rounds, then a 2026-08-12 two-entry amendment with
+    its own review) served BSL query-evaluation slice 2 — the dyadic edge
+    read lane: the `edges` query head, the `edge-between` accessor, and
+    `field-of` over an `EdgeRef` — strength-only until T3 (ADR198 R1-R3)
+    widens edge-attribute storage. This is the language train, not a port:
+    it anticipates Solidarity's read shape (bsl-language.rst §3.8 item 8's
+    worked example) but ships no Solidarity content. PR A (Tasks 1-2,
+    merged separately) landed the one new GraphSubstrate method and the
+    D32 TypeEnv wiring; PR B (Tasks 3-7, this record) landed the
+    Value/Element additions, the three evaluator functions, the Task 6a
+    hydration widening the amendment forced, the e2e proof, and these
+    records. Mid-train, the implementer STOPPED on an execution-proven
+    contradiction (Task 6's fixture could not load — bare decimals cannot
+    lex, E-LEX-021, and the c-suffixed repair was refused by load_edge's
+    deliberate int-only strength restriction, scenario.rs's own comment);
+    the plan was amended rather than improvised around: Task 6a was
+    inserted before Task 6, itself adversarially reviewed (one MAJOR: the
+    first draft's c-only scope was adjudicated KIND-BLIND p/i/c, option
+    (i)), and Task 6's fixture literals became c-suffixed.
+  decision: |
+    **1. The substrate method (Task 1, PR A) — full-qname, suffix-checked,
+    owner-unchecked, forward-shaped for T3.** GraphSubstrate::
+    edge_attribute(edge_type, from, to, attribute) reads the strength
+    CanonicalState section 0x03 already hashes, on both backends
+    (identical HashMap<(String, NodeId, NodeId), f64> storage). The
+    attribute parameter is the FULL QNAME, mirroring node_attribute's own
+    convention exactly; the method's body checks only that the qname ends
+    in "/strength" (any other edge-owned qname reads as "never written" —
+    the E-EVAL-033 unification field_of_edge relies on), and deliberately
+    does NOT verify the owner segment — ownership is the CALLER's
+    obligation, the same division of labor node_attribute/
+    check_node_referent_type already have, pinned by the conformance row
+    edge_attribute_does_not_check_the_owner_segment on both backends. At
+    T3 only the body widens; the signature does not change. III.7
+    hash-invariance proven by the same fixture-hash test node_type_of used
+    (its doc and failure message now name both widenings). Register row
+    D141.
+
+    **2. The D32 implicit-strength wiring (Task 2, PR A) — a RULING, not a
+    convenience, and a recorded NARROWING.** prepare_rules's TypeEnv
+    construction seeds one <edge-type>/strength row per defvocabulary
+    EdgeType member, via FieldRegistry::with_implicit_edge_strength's
+    first production call — keyed off scenario.vocabulary, correcting the
+    scout dossier's own scenario.edge_types (census) pointer — with an
+    explicit deffield re-declaration refused as E-LOAD-001. A scenario
+    declaring no defvocabulary gets no seeding: a deliberate narrowing of
+    D32's literal "needs no deffield", chosen for reuse of already-tested
+    machinery and the Phase-2 registry direction; the bare accessor still
+    degrades gracefully (tick::bind_field_value's fallback), only
+    unweighted aggregation needs the declaration — edge-lane-e2e.bscn's
+    Shape-1 fold is the positive executed proof. Register row D139.
+
+    **3. EdgeKey, Value::EdgeRef, Element::Edge (Task 3) — and the
+    cross-kind Ord RULED.** EdgeKey { source, target, edge_type: String }
+    — field order matches §2.6's own (source-id, target-id, edge-type)
+    total order so the derive agrees with the spec (mutation-proven by
+    swapping field order: the direct Ord test flips, the
+    materialize-delegation test correctly does not — materialize_edges
+    never invokes the derive, its order comes entirely from
+    GraphSubstrate::edges' own sorted contract). Element's cross-kind Ord
+    RULED Node-before-Edge by declaration order — unreachable in
+    production (no materialize() mixes kinds), pinned per the enum's own
+    standing instruction (CT4P A5/#525). Element drops Copy (EdgeKey owns
+    a String): all nine enumerated call sites fixed mechanically, plus one
+    test-module exhaustiveness arm the compile-time trip-wire
+    (element_kind_name) forced — the trip-wire firing exactly as designed.
+    Register row D140.
+
+    **4. The edges-refusal sweep (Task 3 Step 7) — FIVE landed assertions
+    flipped, one more than the plan enumerated.** The plan's four:
+    query.rs's dispatch-table test (shrunk to three heads), evaluator.rs's
+    refusal_messages_name_their_slice edges leg (deleted),
+    r9_chapters.rs's four-heads selection test (shrunk to three), and
+    conformance_corpus.rs's event_edge_count.bsl pin — PROMOTED to two
+    positive evaluated vectors (empty graph counts 0 -> Bool(false); one
+    edge crosses the >= 1 threshold -> Bool(true)), discharging that
+    module's own standing doc promise. The fifth, which the plan missed:
+    evaluator.rs::every_seam_head_is_classified, the reserved-head
+    partition test — serving edge-between (Task 4) moved it from the
+    unserved bucket to EVALUATOR_SERVED (10 -> 11); edges itself moved
+    bucket-to-bucket (UNSERVED_EXPRESSION_HEADS -> SERVED_QUERY_HEADS) so
+    Task 3 kept the partition satisfied without a test edit.
+
+    **5. eval_edge_between (Task 4).** The §2.10 keyed lookup: evaluates
+    both node operands (refusing non-NodeRef values), constructs the
+    strength qname via vocabulary::render_member (it holds only the raw
+    enum member — the one caller that cannot pass a content-authored qname
+    through), maps substrate absence to E-EVAL-034, returns
+    Value::EdgeRef. Static bound and runtime meter agree at 3 for the
+    worked shape (ACCESSOR_BASE + two variable refs), asserted against
+    r9_chapters' own pinned static figure. Mutation: swapping from/to in
+    the substrate call flips the happy path red (a directional edge looked
+    up backwards is E-EVAL-034). query::enum_member widened pub(crate) —
+    reused, not re-implemented.
+
+    **6. field_of_edge (Task 5).** Generic over any edge-owned qname —
+    never hard-coded to strength: check_edge_referent_type compares the
+    qname's owner segment against the EdgeKey's inline type (cheaper than
+    the NodeRef case — no substrate round-trip), then the full qname
+    passes to edge_attribute UNMODIFIED, exactly as field_of_node passes
+    node_attribute; renders through the SAME tick::bind_field_value path
+    (dossier PLAN-MUST-VERIFY item 5 confirmed by the executed vectors: no
+    divergence). E-EVAL-034 is unreachable from inside this function
+    (every EdgeRef was validated live at construction); the error mapping
+    is therefore always E-EVAL-033 — declared-but-unstored (a deffield'd
+    solidarity/tension, storage arriving with T3) and never-written
+    degrade identically, zero special-casing, proven by its own executed
+    vector. Mutation: passing the edge type instead of the qname as the
+    attribute argument flips the happy path red.
+
+    **7. The Task 6a load_edge widening (amendment 2026-08-12, fix-round
+    adjudicated) — hydration mirrors the runtime writer.** load_edge's
+    strength position now accepts int (byte-identical arm) plus
+    KIND-BLIND p/i/c-suffixed unit-interval literals (reviewer MAJOR-1,
+    option (i): kinds do not survive evaluation, and the runtime writer of
+    this exact position — structural_verbs::add_edge's :strength — accepts
+    any Value::Real; a c-only loader would have minted a bidirectional
+    load/runtime divergence). r (Ratio) and $ (Currency) stay refused,
+    exactly as the runtime refuses their evaluated forms. Conversion is
+    the crate's one scaled-literal contract (unscaled / 10^scale), copied
+    verbatim as the ninth inline site — the DRY tradeoff owned explicitly,
+    extraction deferred to the post-port refactor ledger. NO range check
+    on either arm, mirroring the landed law: the lexer already bounds
+    p/i/c to [0,1] (E-LEX-024), while the int arm's unchecked domain
+    (an out-of-[0,1] int strength loads today; the runtime :strength
+    refuses Value::Int outright) is recorded as an OPEN question for a
+    future ruling, deliberately not resolved here. Red pin was
+    byte-exact to the plan's predicted refusal; mutations proved the
+    guard in BOTH directions (admit Ratio -> the 0.5r refusal row flips
+    while 1$ holds, a different Atom variant; narrow to c-only — the
+    adjudication's rejected option — -> both p/i seeding rows flip).
+    Per D93 the .bscn dialect is spec-unpinned, so NO register row was
+    minted: this ADR and the plan's own Amendment log are the record
+    homes.
+
+    **8. The three e2e vectors (Task 6) — through the real run_once_into
+    seam.** edge-lane-e2e.bscn (twelve nodes, seven c-suffixed SOLIDARITY
+    strengths, all exact dyadic rationals) + edge_lane_e2e.rs: Shape 1 —
+    the edges-fold sums every strength in the graph to exactly 0.796875
+    (proving both the query head and D139's aggregation-side seeding);
+    Shape 2a — edge-between resolves and its field-of read returns the
+    seeded 0.03125 exactly; Shape 2b — the REVERSED lookup of a
+    directional edge aborts the tick through run_once_into's own Result
+    ("tick failed in rule …: E-EVAL-034: … no edge from NodeId(3) to
+    NodeId(5) …" — the flagged judgment call confirmed by execution: a
+    genuine mid-tick E-EVAL abort propagates as Err, the first e2e vector
+    to exercise one); Shape 3 — the §3.8-item-8 self-anchored
+    neighbors+edge-between idiom sums hub's three incoming strengths to
+    exactly 0.375, the vector that unblocks Solidarity's port without
+    source-of/target-of. Determinism split per the plan (Blocker 3): the
+    three succeeding shapes through the TickReport-comparison loop, Shape
+    2b through its own two-run Err-string leg. One plan defect repaired on
+    in-code precedent: the social-class/* namespace joined the driver's
+    registered-systems scaffolding (E-LOAD-002 — a rule cannot land
+    nowhere), exactly as "territory" itself was added by the
+    query-evaluation train for query_lane_e2e.rs's vectors; NOT a system
+    port, documented as such at the entry. Full-PR verification found (and
+    this record's own scratch probe re-proved by execution: a rule id'd
+    unregistered-namespace/anchor-probe carrying (anchor :after vitality)
+    loaded and FIRED through run_once_into) an alternative neither the
+    plan nor this record had weighed: an explicit (anchor :after vitality)
+    on the e2e rules would have anchored them with ZERO production-surface
+    widening — mod_anchors.rs's explicit-anchor branch checks the NAMED
+    system, not the rule-id's first segment. The registered-system path is
+    KEPT for consistency with the territory precedent (c28c1f34 — same
+    shape, same comment convention); both are load-inert for shipped
+    content.
+
+    **9. The hash-free proof — three chained facts, then the gate.**
+    (a) state_hash.rs never touches Value/Element BY CONSTRUCTION —
+    babylon-graph cannot import babylon-bsl (crate boundary), so Task 1's
+    method is hash-inert by the same argument every substrate read is.
+    (b) Task 2's wiring DOES touch three shipped scenarios' in-memory
+    TypeEnv.fields (territory/production/organization declare
+    defvocabulary EdgeType) — inert for the reason that matters, verified
+    by executed grep at this record's landing: zero content in
+    content/rules/*.bsl reads an edge-owned qname or uses
+    edges/edge-between (only "strengthening"/"strengthens" comment
+    substrings hit), so the seeded entries are never consulted by any
+    path the seven pinned goldens exercise; the one fixture that DOES
+    change (event_edge_count.bsl) is test-only, swept in item 4, and
+    backs no golden. (c) Task 6a is golden-inert by construction: the int
+    arm is byte-identical and no shipped scenario CAN contain a scaled
+    strength literal — one could not have loaded before 6a (the landed
+    Task 2 probe's own int-1 fallback is the in-tree trace). All six
+    tick_goldens pins plus engine_link's pin ran byte-identical at every
+    gate run during implementation — each Rust-touching commit's own
+    six-leg gate (the docs-only commits ran no gate of their own) — and
+    re-confirmed at HEAD.
+
+    **10. The `the` disposition (Task 7 Step 3) — its own micro-train
+    (T2.5), for a stronger reason than #572's framing.** the's
+    spec-normative legality gate (E-LOAD-043/E-LOAD-045) lives only in
+    manifest.rs, exercised only by r9_chapters' test harness; the
+    production driver builds CardinalityCeilings from hydrated counts and
+    references Manifest nowhere (re-executed grep: three comment hits in
+    rule_pipeline.rs, zero in the driver) — so the gate is unreachable
+    through run_once_into in either direction, and serving `the` needs a
+    real design choice (wire the manifest form, or redefine legality
+    against the census — two numbers that coincide today by accident).
+    Register row D142; issue #572 stays OPEN with this ADR as evidence.
+
+    **11. Four new register rows (D139-D142)** filed in
+    docs/reference/bsl-language.rst's Draft-Ruling Register (next-free
+    re-checked at landing: D138 was the tail); the 41-test Python
+    grammar-sync guard passed unrepaired — no probe anchor slid.
+
+    **12. A known pre-existing divergence T2 does NOT fix, named so no
+    future reader mistakes it for T2's own D32 reading:**
+    conformance_corpus.rs:101-104's hand-built TypeEnv fixture declares
+    solidarity/strength as BslType::Intensity/FieldKind::Intensive — the
+    OPPOSITE of D32's Coefficient/Extensive and of
+    FieldRegistry::with_implicit_edge_strength's own kinds. No breakage
+    (that harness is isolated, vocabulary_registry: None, untouched by
+    Task 2's wiring), but it is a real spec/fixture disagreement, outside
+    this train's scope to repair.
+  consequences: |
+    Slice 2's dyadic edge read lane is SERVED through the production seam:
+    (edges <enum-ref>) materializes (the <edge-pred> operand stays a loud
+    named gap, mirroring nodes' own), edge-between resolves or aborts
+    E-EVAL-034, field-of reads any edge-owned qname with strength the only
+    storable one until T3. Solidarity's port train (Wave C) has its read
+    idiom proven end-to-end (Shape 3). T3 (ADR198 R1-R3) inherits a
+    stable contract: edge_attribute's signature frozen, suffix check ->
+    real lookup, ownership stays caller-side.
+
+    OPEN, NAMED, NOT THIS TRAIN'S: `the` (T2.5 micro-train, #572, design
+    choice recorded in D142); the Task 6a int-arm domain questions (no
+    range check at hydration; int loads at hydration while the runtime
+    :strength refuses Value::Int — one future ruling owns both halves);
+    source-of/target-of edge-endpoint accessors (§3.8 item 8 — unscoped
+    by any Program 29 train; the self-anchored idiom is the workaround
+    this train proved); the conformance_corpus.rs Intensity/Intensive
+    fixture divergence (item 12); hyperedge/metric lanes (slice 3) and
+    membership-field-of (slice 4), untouched. GitHub closure of #559 and
+    the #572 comment ride the PR merge, not this record.
+  supersedes: []
+  related:
+    - ADR197_bsl_query_evaluation_slice1_handoff
+    - ADR198_program29_substrate_widening_charter
+    - ADR199_territory_port_handoff
+    - ADR200_production_port_handoff

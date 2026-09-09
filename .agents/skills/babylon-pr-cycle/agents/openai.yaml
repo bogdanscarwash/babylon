@@ -1,0 +1,6 @@
+interface:
+  display_name: "Babylon PR Cycle"
+  short_description: "Qualify and finish an existing PR at its exact head"
+  default_prompt: "Qualify this PR against exact-head CI, review threads, and Linear before acting."
+policy:
+  allow_implicit_invocation: true

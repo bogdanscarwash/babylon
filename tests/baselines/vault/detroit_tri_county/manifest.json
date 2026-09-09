@@ -1,0 +1,21 @@
+{
+  "files": {
+    "county/26099.md": "940f91cb7e170f51f24f81e7a215f4d1353dbad71676ebadf35767602fb065fc",
+    "county/26125.md": "6826fb0e9c1e001f254263318ca05c34c71b405aeea11f840d9519700d1196b9",
+    "county/26163.md": "a3f8d7ea8cc31d213b82add40de0d660aad4ffb6a592d48ae20a20ff7e546ca9",
+    "economy/USA.md": "d47d4fb45ee0f76448d147278feb20511b95aa863b34c15cdb1acdd12ecb54c2",
+    "field_state/USA.md": "5d23f41dc15debf593805506aaf7f95038901d371dff8cc55888cb6cd2456af6",
+    "national/USA.md": "5038d4628ab3ab4515ddbcb098cd76800ac65b29b4b8ce71605fa79a9e186893",
+    "social_class/C001.md": "a646fd6e7529f768500cd1463eabb1930c1f747ad8e8e22fa2f72f27dc466acf",
+    "social_class/C002.md": "3fe47ad2aa1ba06e1cdd9b88e97424bca16a4568a26a0deb834810baa8296483",
+    "social_class/C003.md": "499c4f09ff5f1559d6de41562982fb7548b573d772db3f3425d146fea1f2fb9c",
+    "social_class/C501.md": "476d4605b7bac65b66ff8b2ee4c90c4b524d76c4c76ea1fadabf9cfaf985b43d",
+    "social_class/C502.md": "d922ba80c4f2259bc0687a70e591897c9afb7cd831e99ef302805baf0b3dea84",
+    "social_class/C503.md": "f4900a44b391b4c59b88fa7ff94f71c0bee83e87a3695e08a061478a8365f3e5",
+    "state/26.md": "8a0d5fabaa8ce242e8fdc83d6e4b6616eb595d1e9c46ff18905f8fc4a629c0ad"
+  },
+  "head_sha": "a58230d3df37153572fce6abb3e2b0d9076b68a4",
+  "page_count": 13,
+  "scenario": "detroit_tri_county",
+  "ticks": 3
+}

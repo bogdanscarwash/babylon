@@ -1,0 +1,25 @@
+[package]
+name = "babylon-bsl"
+description = "Babylon Scripting Language: reader, typechecker, load-time bound checker, fuel evaluator"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+babylon-graph = { path = "../babylon-graph" }
+babylon-kernel = { path = "../babylon-kernel" }
+babylon-practice-contract = { path = "../babylon-practice-contract" }
+
+[dev-dependencies]
+pretty_assertions = "1"
+
+[dependencies.unicode-normalization]
+version = "0.1"
+
+[dependencies.sha2]
+version = "0.11"

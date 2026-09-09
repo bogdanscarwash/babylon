@@ -1,0 +1,15 @@
+{
+  "files": {
+    "county/26163.md": "67798bedf2c759ebc271f70a7030940536648ccac928cad145bb14bd370a33ee",
+    "economy/USA.md": "933fedee8dfa7cb69585d606cbc7db7f09c9851049c67bfedbb76e0664f107f7",
+    "field_state/USA.md": "7e956bda57f5b7356fff984986af571f399386c180412cfb90eb366167439d19",
+    "national/USA.md": "0f8b82b66090b09d100b82ebe4138acb69b9b32568734562c5d89547335f89b6",
+    "social_class/C003.md": "e624872b95ad3b5bb6e95b4b1e798a87818a00625f491bcc86fb6951ff19d52d",
+    "social_class/C004.md": "d01adc9f27150109c79b4a217cc4c43faafad51a46274cf1390dfc79260c24e4",
+    "state/26.md": "4dd8aeff285a12bcd0cd9fe8b6ccb314cef5ec467560d138711ebf3675776697"
+  },
+  "head_sha": "3938737d8c72290f79ec9c90195465ebaf6c7860",
+  "page_count": 7,
+  "scenario": "single_county",
+  "ticks": 5
+}

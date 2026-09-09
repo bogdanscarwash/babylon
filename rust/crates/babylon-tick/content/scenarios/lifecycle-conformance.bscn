@@ -1,0 +1,124 @@
+; The conformance world for the lifecycle/* rule pack (dpd-population-flow,
+; legitimation-index, ideology-transmission).
+;
+; Four counties, each a case the pack has to tell apart:
+;   - core-county:      the DPDState docstring's own example numbers
+;                        (types.py:48-53) — the "nothing unusual" case,
+;                        PRE-crisis STABLE, stays STABLE (no event).
+;   - growing-county:    a younger population mix, PRE-crisis UNSTABLE —
+;                         proves "was troubled, still not CRISIS" emits
+;                         neither LEGITIMATION_CRISIS nor _RECOVERY.
+;   - recovering-county: PRE-crisis CRISIS, so the tick's classification
+;                        (always STABLE under the current defconsts — see
+;                        the .bsl header's D-1) fires LEGITIMATION_RECOVERY.
+;   - young-county:      pop-d-prime AND wealth-d-prime both zero — no D'
+;                        cohort exists yet, so `deaths == 0` and the
+;                        surviving-fraction guard's ELSE branch is what
+;                        this subject is for.
+;
+; LEGITIMATION_CRISIS itself has no fixture here: with the current
+; defines.yaml legitimation weights (0.35/0.30/0.20/0.10/0.05) and
+; component values (0.656/0.60/0.50/0.73/0.426), the weighted index is
+; 0.6039 — comfortably above legitimation_unstable_threshold (0.5) — and
+; since the .bsl header's D-1 makes those five components GLOBAL consts
+; (matching what the frozen engine's own per-territory-with-defines-
+; fallback pattern always resolves to in production, grep-verified), EVERY
+; territory computes the SAME classification every tick: STABLE. The
+; frozen Python is in exactly the same position under its own SHIPPED
+; defines.yaml values — LEGITIMATION_CRISIS is not reachable under those
+; particular numbers. That is a fact about one tuning, not about the
+; mechanism: the classification ladder and its CRISIS branch ARE
+; exercised, and the D-5 guard's positive half proven, under a
+; deliberately different (still in-domain) `:const` environment —
+; content/scenarios/lifecycle-crisis-conformance.bscn and
+; tests/lifecycle_crisis_conformance.rs. recovering-county here exercises
+; the guard's RECOVERY half from the other direction, which is the
+; reachable half of the same code path under THIS scenario's tuning.
+(scenario lifecycle/conformance
+  (deffield territory/pop-d real extensive)
+  (deffield territory/pop-p real extensive)
+  (deffield territory/pop-d-prime real extensive)
+  (deffield territory/wealth-d-prime real extensive)
+  ; Per-county ratios/indices: an unweighted mean across counties is the
+  ; variance error §3.4 exists to reject, so these are intensive.
+  (deffield territory/dependency-ratio real intensive)
+  (deffield territory/legitimation-index real intensive)
+  ; 0 = STABLE, 1 = UNSTABLE, 2 = CRISIS — this pack's own encoding; see
+  ; the .bsl header (LegitimationClassification has no BSL representation).
+  (deffield territory/legitimation-crisis int intensive)
+  (deffield territory/transmitted-ideology real intensive)
+
+  ; The defines environment. Values transcribed from the canonical single
+  ; source of truth, src/babylon/data/defines.yaml:507-543 (`lifecycle:`).
+  ; `lifecycle/caregiver-ideology-default` and
+  ; `lifecycle/institutional-hegemony-default` are NOT in that file — see
+  ; the .bsl header's D-2 (a modding-contract gap in the frozen engine).
+  (defconst lifecycle/birth-rate 0.0107c)                         ; :508
+  (defconst lifecycle/rate-d-to-p 0.0556c)                        ; :509
+  (defconst lifecycle/rate-p-to-d-prime 0.0213c)                  ; :510
+  (defconst lifecycle/rate-d-prime-to-death 0.039c)               ; :511
+  (defconst lifecycle/pension-coverage-rate 0.73c)                ; :515
+  (defconst lifecycle/home-ownership-rate 0.656c)                 ; :516
+  (defconst lifecycle/ss-replacement-rate 0.426c)                 ; :517
+  (defconst lifecycle/healthcare-security 0.6c)                   ; :518
+  (defconst lifecycle/retirement-confidence 0.5c)                 ; :519
+  (defconst lifecycle/legit-w-home-ownership 0.35c)               ; :520
+  (defconst lifecycle/legit-w-healthcare-security 0.3c)           ; :521
+  (defconst lifecycle/legit-w-retirement-confidence 0.2c)         ; :522
+  (defconst lifecycle/legit-w-pension-coverage 0.1c)              ; :523
+  (defconst lifecycle/legit-w-ss-replacement 0.05c)               ; :524
+  (defconst lifecycle/legitimation-crisis-threshold 0.3c)         ; :526
+  (defconst lifecycle/legitimation-unstable-threshold 0.5c)       ; :527
+  (defconst lifecycle/ideology-caregiver-weight 0.7c)             ; :540
+  (defconst lifecycle/ideology-institutional-weight 0.3c)         ; :541
+  (defconst lifecycle/ideology-regression-coefficient 0.4c)       ; :542
+  (defconst lifecycle/caregiver-ideology-default 0.5c)            ; D-2, not in defines.yaml
+  (defconst lifecycle/institutional-hegemony-default 0.5c)        ; D-2, not in defines.yaml
+
+  ; DPDState docstring's own numbers (domain/economics/lifecycle/types.py:
+  ; 48-53), total population 10,000. PRE-crisis STABLE.
+  (node core-county NodeType/TERRITORY
+    (territory/pop-d 2150)
+    (territory/pop-p 6050)
+    (territory/pop-d-prime 1800)
+    (territory/wealth-d-prime 10000000)
+    (territory/dependency-ratio 0)
+    (territory/legitimation-index 0)
+    (territory/legitimation-crisis 0)
+    (territory/transmitted-ideology 0))
+
+  ; A younger mix, more D-phase relative to P. PRE-crisis UNSTABLE.
+  (node growing-county NodeType/TERRITORY
+    (territory/pop-d 3000)
+    (territory/pop-p 5000)
+    (territory/pop-d-prime 1500)
+    (territory/wealth-d-prime 5000000)
+    (territory/dependency-ratio 0)
+    (territory/legitimation-index 0)
+    (territory/legitimation-crisis 1)
+    (territory/transmitted-ideology 0))
+
+  ; An older, wealthier D' cohort. PRE-crisis CRISIS — this tick's
+  ; classification (STABLE, see header) must fire LEGITIMATION_RECOVERY.
+  (node recovering-county NodeType/TERRITORY
+    (territory/pop-d 2000)
+    (territory/pop-p 7000)
+    (territory/pop-d-prime 2000)
+    (territory/wealth-d-prime 20000000)
+    (territory/dependency-ratio 0)
+    (territory/legitimation-index 0)
+    (territory/legitimation-crisis 2)
+    (territory/transmitted-ideology 0))
+
+  ; No D' cohort at all: pop-d-prime and wealth-d-prime both zero, so
+  ; deaths == 0 and the surviving-fraction guard takes its ELSE branch
+  ; (wealth stays exactly 0, unchanged rather than "decayed from zero").
+  (node young-county NodeType/TERRITORY
+    (territory/pop-d 4000)
+    (territory/pop-p 5500)
+    (territory/pop-d-prime 0)
+    (territory/wealth-d-prime 0)
+    (territory/dependency-ratio 0)
+    (territory/legitimation-index 0)
+    (territory/legitimation-crisis 0)
+    (territory/transmitted-ideology 0)))

@@ -1,0 +1,49 @@
+; The SATURATION conformance world for `dispossession/territory-transfer`
+; — the adversarial-review follow-up scenario (F1/F3, PR #498).
+;
+; ONE subject at the ceiling of every clamp this pack transcribes at once:
+;
+;   - Every weight at 1.0 (individually legal, `c`-suffixed): raw intensity
+;     sum = 5 * 1.0 = 5.0, D-3's ceiling clamp must saturate it to exactly
+;     1.0.
+;   - `transfer-scale` at `12` — DELIBERATELY UNSUFFIXED (a bare `Int`
+;     literal, not a `c` literal): `E-LEX-024` only bounds SCALED/suffixed
+;     literals to `[0, 1]`, so this loads clean. With intensity saturated
+;     to 1.0, `transfer_amount_raw = wealth * 1.0 * 12 = wealth * 12` — D-2's
+;     restored ceiling clamp (`min(transfer-amount-raw, wealth)`) must cap
+;     it at exactly `wealth`, spending the territory down to `0.0` rather
+;     than driving it negative.
+;   - `deadweight-loss-fraction` at `3` — also DELIBERATELY UNSUFFIXED:
+;     without D-2's restored fraction clamp, `net-received` would be
+;     negative (`transfer_amount - transfer_amount * 3`). With it,
+;     the fraction clamps to `1.0`, so `deadweight-loss` equals the full
+;     `transfer-amount` and `net-received` is exactly `0.0`.
+;
+; See `dispossession_saturation_conformance.py` for the frozen-engine
+; provenance (via `DispossessionDefines.model_construct`, since the real
+; engine's own `GameDefines`/`ServiceContainer` path Pydantic-validates
+; `DispossessionDefines` at construction and would refuse `transfer_scale=12`
+; / `deadweight_loss_fraction=3` outright — exactly the gap `:const`'s
+; unsuffixed-literal escape hatch reopens for BSL).
+(scenario dispossession/saturation-conformance
+  (deffield territory/wealth int extensive)
+  (deffield territory/dispossession-intensity int intensive)
+
+  (defconst dispossession/foreclosure-rate 1c)
+  (defconst dispossession/eviction-rate 1c)
+  (defconst dispossession/displacement-rate 1c)
+  (defconst dispossession/concentrated-ownership 1c)
+  (defconst dispossession/absentee-landlord-share 1c)
+
+  (defconst dispossession/weight-foreclosure 1c)
+  (defconst dispossession/weight-eviction 1c)
+  (defconst dispossession/weight-displacement 1c)
+  (defconst dispossession/weight-tax-sale 1c)
+  (defconst dispossession/weight-eminent-domain 1c)
+  ; Deliberately UNSUFFIXED (bare Int) — see the header.
+  (defconst dispossession/deadweight-loss-fraction 3)
+  (defconst dispossession/transfer-scale 12)
+
+  (node maxed-county NodeType/TERRITORY
+    (territory/wealth 1000000)
+    (territory/dispossession-intensity 0)))

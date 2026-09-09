@@ -1,8 +1,8 @@
 {
   "scenario": "imperial_circuit",
   "description": "4-node default scenario",
-  "generated_at": "2026-07-09T12:35:28+00:00",
-  "defines_hash": "fe1ada8c54bec6c0",
+  "generated_at": "2026-07-30T13:44:16+00:00",
+  "defines_hash": "c83b2fc44c56a4b1208355ac82de23cf5de34b74158f4f41dfdd3ffa54072abd",
   "max_ticks": 52,
   "checkpoints": [
     {
@@ -15,79 +15,86 @@
       "exploitation_tension": 0.0,
       "p_w_consciousness": 0.0,
       "p_w_p_revolution": 0.0,
-      "p_w_active": true
+      "p_w_active": true,
+      "content_hash": "394fef99caa0f7aff4c68cb263dd3974985594808524cec869adc6141112b894"
     },
     {
       "tick": 10,
       "p_w_wealth": 0.747949,
       "p_c_wealth": 0.411087,
       "c_b_wealth": 1.548421,
-      "c_w_wealth": 58.520208,
+      "c_w_wealth": 58.568349,
       "imperial_rent_pool": 98.756996,
-      "exploitation_tension": 0.966398,
+      "exploitation_tension": 0.966425,
       "p_w_consciousness": 0.0,
       "p_w_p_revolution": 0.2,
-      "p_w_active": true
+      "p_w_active": true,
+      "content_hash": "39a2f75c2e1b1cd9e77259d288686f70a935a830d3e8e98b13a0ee0e7e637be8"
     },
     {
       "tick": 20,
       "p_w_wealth": 0.888357,
       "p_c_wealth": 0.140406,
       "c_b_wealth": 1.711695,
-      "c_w_wealth": 94.293411,
+      "c_w_wealth": 94.353096,
       "imperial_rent_pool": 97.05948,
-      "exploitation_tension": 0.979012,
+      "exploitation_tension": 0.979025,
       "p_w_consciousness": 0.0,
       "p_w_p_revolution": 0.2,
-      "p_w_active": true
+      "p_w_active": true,
+      "content_hash": "0fa4aeffc3bc48f8bf4cddcecb7f1df4710d6587e5e9cf4e4b216512b5078d19"
     },
     {
       "tick": 30,
       "p_w_wealth": 1.021694,
       "p_c_wealth": 0.050149,
       "c_b_wealth": 1.702786,
-      "c_w_wealth": 124.604254,
+      "c_w_wealth": 124.639054,
       "imperial_rent_pool": 95.225612,
-      "exploitation_tension": 0.984077,
+      "exploitation_tension": 0.984081,
       "p_w_consciousness": 0.0,
       "p_w_p_revolution": 0.2,
-      "p_w_active": true
+      "p_w_active": true,
+      "content_hash": "7c6efdb0640fe6e518f357cff425b5fe71cc6bd8f4b0f394588cbaf56bc42c37"
     },
     {
       "tick": 40,
       "p_w_wealth": 1.148395,
-      "p_c_wealth": 0.022547,
-      "c_b_wealth": 1.638232,
-      "c_w_wealth": 153.122059,
-      "imperial_rent_pool": 93.373164,
-      "exploitation_tension": 0.987023,
+      "p_c_wealth": 0.02248,
+      "c_b_wealth": 1.632852,
+      "c_w_wealth": 153.10779,
+      "imperial_rent_pool": 93.373148,
+      "exploitation_tension": 0.987022,
       "p_w_consciousness": 0.0,
       "p_w_p_revolution": 0.2,
-      "p_w_active": true
+      "p_w_active": true,
+      "content_hash": "350f713f231dfff28b0714fd9b1da5887ff8128b48c433458e87fb409d05897d"
     },
     {
       "tick": 50,
       "p_w_wealth": 1.268868,
-      "p_c_wealth": 0.016553,
-      "c_b_wealth": 1.5584,
-      "c_w_wealth": 181.009799,
-      "imperial_rent_pool": 91.542359,
-      "exploitation_tension": 0.989012,
+      "p_c_wealth": 0.016417,
+      "c_b_wealth": 1.538795,
+      "c_w_wealth": 180.927136,
+      "imperial_rent_pool": 91.542259,
+      "exploitation_tension": 0.989007,
       "p_w_consciousness": 0.0,
       "p_w_p_revolution": 0.2,
-      "p_w_active": true
+      "p_w_active": true,
+      "content_hash": "8e2a997976071c77d6223c71d7dc84f5dc3925f63b82733a6548fc60ce677e7b"
     },
     {
       "tick": 52,
       "p_w_wealth": 1.29225,
-      "p_c_wealth": 0.016467,
-      "c_b_wealth": 1.542036,
-      "c_w_wealth": 186.553383,
-      "imperial_rent_pool": 91.180181,
-      "exploitation_tension": 0.989336,
+      "p_c_wealth": 0.016357,
+      "c_b_wealth": 1.522405,
+      "c_w_wealth": 186.454907,
+      "imperial_rent_pool": 91.180056,
+      "exploitation_tension": 0.989331,
       "p_w_consciousness": 0.0,
       "p_w_p_revolution": 0.2,
-      "p_w_active": true
+      "p_w_active": true,
+      "content_hash": "ada56defdbb0a283befe452d10593501c2736c8ed35e4232ac4e49d5b486a472"
     }
   ],
   "final_outcome": "SURVIVED",

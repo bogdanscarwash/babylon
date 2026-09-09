@@ -1,0 +1,50 @@
+[package]
+name = "babylon-ls"
+description = "Language Server Protocol front end for .bsl/.bscn (issue #652, wave 1) — non-normative, observes-only; the load path stays the only door"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+# 0.10 is the crate's own crates.io-published version (rust-analyzer's
+# lib/lsp-server); `Connection::initialize_start` is what gives us the
+# `-32002`-before-`initialize` handshake for free (plan §3).
+lsp-server = "0.10"
+# 0.97 replaced the `url::Url` re-export with a `fluent-uri`-backed `Uri`
+# newtype — no `Display`, no `from_file_path`/`to_file_path`. This crate's
+# two `file:` URI conversions live in `src/uri.rs`.
+lsp-types = "0.97"
+serde_json = "1"
+serde = { version = "1", features = ["derive"] }
+# Task 6 (#652, plan §4): the content-set manifest (`content-sets.toml`) —
+# schema-versioned TOML, Rust-native via this crate's `serde::Deserialize`
+# support (default features already cover `parse`+`serde`+`display`).
+toml = "1"
+# The semantic truth the diagnostics mapping layer maps FROM (`ErrorIdentity`,
+# `LoadError`/`ScenarioError`/`DeclError`, the reader's `SpanTable`) — plan
+# §5.1.
+babylon-bsl = { path = "../babylon-bsl" }
+# `diagnose_content_set`/`PrepareError`, the registry-assembly seam Task 3
+# built for exactly this caller (plan §5.1).
+babylon-tick = { path = "../babylon-tick" }
+# The throwaway `HypergraphStore` a diagnostic pass hydrates a scenario into
+# — pure, deterministic, discarded, never persisted (plan §5.1).
+babylon-graph = { path = "../babylon-graph" }
+# `resultId` (§6.1): sha256 over the ordered (uri, bytes) tuples of the set
+# plus the manifest bytes — deterministic across restarts, so an
+# `unchanged` pull report stays correct after a server restart. Already in
+# the workspace lock via babylon-bsl's own canonical-digest use.
+sha2 = "0.11"
+
+[lib]
+name = "babylon_ls"
+path = "src/lib.rs"
+
+[[bin]]
+name = "bsl-ls"
+path = "src/main.rs"

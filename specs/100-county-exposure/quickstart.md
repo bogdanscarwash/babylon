@@ -51,11 +51,11 @@ sqlite3 data/sqlite/marxist-data-3NF.sqlite \
 ```bash
 # babylon-data unit tests (fast, in-memory ORM fixtures)
 cd /home/user/projects/game/babylon/worktrees/d100
-PYTHONPATH=src poetry run pytest src/babylon_data/../../  # see below
+PYTHONPATH=src uv run pytest src/babylon_data/../../  # see below
 # or, targeted:
-PYTHONPATH=src poetry run pytest \
+PYTHONPATH=src uv run pytest \
   ../../../babylon-data/tests/unit/data/exposure -q
 # integration (Michigan tri-county against the real DB — IV gate)
-PYTHONPATH=src poetry run pytest \
+PYTHONPATH=src uv run pytest \
   ../../../babylon-data/tests/integration/data/exposure -q
 ```

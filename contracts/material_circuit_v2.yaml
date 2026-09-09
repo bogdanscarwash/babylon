@@ -1,0 +1,354 @@
+meta:
+  contract: MaterialCircuitV2
+  schema_version: 2
+  status: accepted
+  evidence_class: Designed
+  live_activation: false
+  rust_owner: babylon-material-circuit
+
+preserves:
+  - every Material Circuit V1 type, byte, digest, transition, and refusal code
+  - every existing graph, BSL, nominal-world-hash, and Practice Contract byte
+  - the frozen Python engine as reference-only evidence
+  - the PER-36 ownership of money, claims, escrow, default, and settlement
+
+domains:
+  state: babylon.material-circuit-state.v2
+  freight_lot_identity: babylon.freight-lot.v2
+  terminator_hex: "00"
+
+encoding:
+  byte_order: big-endian
+  integer_encoding: unsigned-fixed-width
+  quantity_encoding: u64
+  loss_rate_encoding: u32-parts-per-million
+  identity_encoding: raw-32-bytes
+  row_count_encoding: u32
+  trailing_bytes: forbidden
+  noncanonical_row_order: forbidden
+
+state_field_order:
+  - schema_version
+  - opening_week
+  - site_logistics_nodes
+  - process_outputs
+  - input_output_coefficients
+  - labor_coefficients
+  - supplier_routes
+  - route_legs
+  - inventory
+  - orders
+  - backlog
+  - routed_freight_lots
+  - corridor_capacity
+  - process_capacity
+  - labor_capacity
+  - production_commitments
+
+site_logistics_node_field_order:
+  - site_id
+  - logistics_node_id
+
+process_output_field_order:
+  - process_id
+  - site_id
+  - output_good_id
+  - unit_id
+  - quantity_per_batch
+
+input_output_coefficient_field_order:
+  - process_id
+  - input_good_id
+  - unit_id
+  - quantity_per_batch
+
+labor_coefficient_field_order:
+  - process_id
+  - labor_unit_id
+  - quantity_per_batch
+
+supplier_route_field_order:
+  - buyer_site_id
+  - supplier_site_id
+  - good_id
+  - unit_id
+  - route_id
+
+route_leg_field_order:
+  - route_id
+  - leg_index
+  - corridor_id
+  - from_node_id
+  - to_node_id
+  - travel_weeks
+  - loss_ppm
+
+inventory_field_order:
+  - site_id
+  - good_id
+  - unit_id
+  - on_hand_quantity
+
+order_field_order:
+  - order_id
+  - access_mode
+  - buyer_site_id
+  - supplier_site_id
+  - good_id
+  - unit_id
+  - ordered_quantity
+  - shipped_quantity
+  - lost_quantity
+  - delivered_quantity
+  - realized_quantity
+
+backlog_field_order:
+  - order_id
+  - unshipped_quantity
+
+routed_freight_lot_field_order:
+  - lot_id
+  - order_id
+  - route_id
+  - dispatch_week
+  - current_leg_index
+  - leg_arrival_week
+  - source_site_id
+  - destination_site_id
+  - good_id
+  - unit_id
+  - quantity
+
+corridor_capacity_field_order:
+  - corridor_id
+  - unit_id
+  - departure_week
+  - available_quantity
+
+process_capacity_field_order:
+  - process_id
+  - site_id
+  - week
+  - available_batches
+
+labor_capacity_field_order:
+  - site_id
+  - labor_unit_id
+  - week
+  - available_quantity
+
+production_commitment_field_order:
+  - process_id
+  - site_id
+  - week
+  - planned_batches
+
+access_modes:
+  commodity_sale: 1
+
+canonical_order:
+  site_logistics_nodes:
+    - site_id
+  process_outputs:
+    - process_id
+  input_output_coefficients:
+    - process_id
+    - good_id
+    - unit_id
+  labor_coefficients:
+    - process_id
+  supplier_routes:
+    - buyer_site_id
+    - supplier_site_id
+    - good_id
+    - unit_id
+  route_legs:
+    - route_id
+    - leg_index
+  inventory:
+    - site_id
+    - good_id
+    - unit_id
+  orders:
+    - order_id
+  backlog:
+    - order_id
+  routed_freight_lots:
+    - leg_arrival_week
+    - lot_id
+  corridor_capacity:
+    - departure_week
+    - corridor_id
+    - unit_id
+  process_capacity:
+    - week
+    - site_id
+    - process_id
+  labor_capacity:
+    - week
+    - site_id
+    - unit_id
+  production_commitments:
+    - week
+    - site_id
+    - process_id
+  priority: canonical order grants no material priority and selects no route
+
+route_laws:
+  - each site binds to one unique logistics node and each node binds to one site
+  - a supplier relation selects one route for one buyer, supplier, good, and unit
+  - each referenced route contains one to 16 contiguous positive-duration legs
+  - a supplier route begins at the supplier node and ends at the buyer node
+  - each corridor capacity row references a corridor that exists in route topology
+  - unused route topology can persist after a supplier relation disappears
+  - a missing supplier relation leaves a new order in backlog and moves no goods
+
+weekly_transition_order:
+  - validate and canonicalize the complete opening state
+  - complete each due route leg and attribute its exact loss
+  - advance retained goods to the next leg or credit final destination inventory
+  - record accepted delivery and commodity quantity realization only after final arrival
+  - execute prior-week production commitments through current Leontief limits
+  - allocate remaining supplier inventory and every route-leg capacity proportionally
+  - reserve exact capacity for every future leg before dispatch
+  - debit supplier inventory and create one routed freight lot per order and dispatch week
+  - rebuild exact unshipped backlog
+  - derive following-week production from closing inputs, labor, and capacity
+  - discard consumed capacity rows and validate the canonical successor
+
+freight_allocation_law:
+  request: each open routed order requests its full unshipped quantity
+  resources: >-
+    the supplier inventory principal and every corridor, departure-week, and
+    unit principal on the selected route
+  group_grant: floor(available * requested_i / total_requested)
+  order_dispatch: the minimum grant across all required resource principals
+  intermediate: exact wide integer product and sum over u64 quantities
+  residual: division remainder stays in its inventory or capacity principal
+  reservation: the dispatched opening quantity debits every future route leg
+  missing_capacity: the affected order remains backlog and no goods move
+
+freight_lot_law:
+  identity_preimage:
+    - freight_lot_identity domain bytes
+    - terminator byte
+    - order_id
+    - dispatch_week
+  identity_algorithm: SHA-256
+  uniqueness: one live lot for each order and dispatch week
+  transit_state: the lot current-leg fields are the sole routed transit state
+  leg_arrival: dispatch week plus the cumulative positive route-leg durations
+  leg_loss: floor(quantity * loss_ppm / 1000000)
+  loss_attribution: cumulative order loss and a corridor-bearing loss receipt
+  final_arrival: only retained final-leg quantity credits destination inventory
+  conservative_capacity: later freight loss does not release reserved capacity
+
+production_law:
+  authority: unchanged Material Circuit V1 exact production transition
+  actual_batches: >-
+    min(planned batches, available process batches, each order-neutral shared
+    labor grant divided by labor per batch, and each order-neutral shared input
+    grant divided by its input per batch)
+  temporal_priority: >-
+    final arrivals credit inventory before current commitments execute; closing
+    inventory can form a following-week commitment
+  input_debit: each material input and labor quantity is debited before output is credited
+  zero_supply: zero production is a committed material outcome, not an engine error
+
+conservation_laws:
+  - realized quantity is at most delivered quantity
+  - lost plus delivered quantity is at most shipped quantity
+  - shipped quantity is at most ordered quantity
+  - backlog equals ordered quantity minus shipped quantity
+  - shipped equals delivered plus lost plus the exact live freight quantity for the order
+  - dispatch debits supplier inventory by the exact routed-lot quantity
+  - dispatch debits every route-leg capacity by the exact routed-lot opening quantity
+  - leg loss reduces the lot by the exact attributed loss quantity
+  - final arrival consumes the lot and credits exact retained destination inventory
+  - checked overflow refuses without publishing a successor state
+
+limits:
+  rows_per_family:
+    value: 65536
+    classification: Designed
+    purpose: serialization, memory, and transition fuel ceiling, not material abundance
+  route_legs_per_route:
+    value: 16
+    classification: Designed
+    purpose: whole-route reservation fuel ceiling, not geographic or political rank
+  freight_resource_groups:
+    value: 1114112
+    derivation: rows_per_family * (route_legs_per_route + one inventory principal)
+  loss_parts_per_million_denominator:
+    value: 1000000
+    classification: Designed
+
+canonical_lengths:
+  fixed_state_header_bytes: 100
+  site_logistics_node_row_bytes: 64
+  process_output_row_bytes: 136
+  input_output_coefficient_row_bytes: 104
+  labor_coefficient_row_bytes: 72
+  supplier_route_row_bytes: 160
+  route_leg_row_bytes: 136
+  inventory_row_bytes: 104
+  order_row_bytes: 201
+  backlog_row_bytes: 40
+  routed_freight_lot_row_bytes: 250
+  corridor_capacity_row_bytes: 80
+  process_capacity_row_bytes: 80
+  labor_capacity_row_bytes: 80
+  production_commitment_row_bytes: 80
+
+digest_contract:
+  algorithm: SHA-256
+  preimage: validated canonical complete-state bytes
+
+base_vector:
+  family_row_counts:
+    site_logistics_nodes: 2
+    process_outputs: 0
+    input_output_coefficients: 0
+    labor_coefficients: 0
+    supplier_routes: 1
+    route_legs: 1
+    inventory: 2
+    orders: 1
+    backlog: 1
+    routed_freight_lots: 0
+    corridor_capacity: 1
+    process_capacity: 0
+    labor_capacity: 0
+    production_commitments: 0
+  canonical_bytes: 1053
+  digest_hex: a0ca4c774cf74110ffc3611aa1bd7609cbee07e360477e99363f268b93d7cf31
+
+error_codes:
+  row_limit: 1
+  zero_quantity: 2
+  duplicate_row: 3
+  order_invariant: 4
+  backlog_invariant: 5
+  freight_invariant: 6
+  process_invariant: 7
+  week_invariant: 8
+  arithmetic: 9
+  route_invariant: 10
+  capacity_invariant: 11
+  wire_limit: 12
+  wire_domain: 13
+  wire_version: 14
+  wire_truncated: 15
+  wire_trailing: 16
+  wire_enum: 17
+  wire_noncanonical: 18
+
+excluded_surfaces:
+  - money, price, claims, escrow, default, double-entry settlement, or monetary realization
+  - sovereign, jurisdiction, country, residual trade-bloc, tariff, or customs identities
+  - participant-selected route choice, rerouting, waiting lots, or capacity release after loss
+  - access modes other than commodity sale
+  - service or care production
+  - strike, blockade, occupation, damage, or capital-strike effects
+  - graph, BSL, TickSession, nominal-world-hash, envelope, or persistence integration
+  - receipt bytes, Archive output, Bevy action, or gameplay activation

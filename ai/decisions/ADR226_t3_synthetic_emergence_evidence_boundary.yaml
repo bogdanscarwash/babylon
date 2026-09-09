@@ -1,0 +1,98 @@
+ADR226_t3_synthetic_emergence_evidence_boundary:
+  status: "accepted"
+  date: "2026-08-23"
+  title: >-
+    T3 emergence evidence is a downstream post-commit evaluator with exact
+    language-neutral records, discrete output classification, scoped
+    non-authorability audits, and synthetic groundwork that cannot claim a
+    live membership observable before Gate 3, Gate 5, and PER-44 activation
+  context: |
+    Constitution v4 requires aggregate patterns to emerge from local material
+    relations rather than an authored response curve. The committed Neel
+    relational-territory and situated-practice design therefore permits a
+    post-commit classifier but prohibits the aggregate, wave stage, shape
+    class, or political subjectivity from authoritative state or BSL-readable
+    payloads.
+
+    The live Rust tick currently publishes an in-memory TickReport with graph
+    and nominal-world hashes plus identity-free audit receipts. It does not
+    publish Gate 3's CommittedTickEnvelope, authoritative exogenous or action
+    ledgers, an Archive outbox, or a complete run identity. PER-44 has not yet
+    frozen attributed-membership identity or the territorial join, and no
+    encounter-to-membership producer exists.
+
+    Exact wire encoders, discrete classifier goldens, a bounded scoped BSL
+    footprint auditor, and synthetic proof-profile/cone vectors do not require
+    those live producers. Landing those contracts first gives later activation
+    a language-neutral behavioral oracle without overstating executable game
+    behavior.
+  decision: |
+    1. DOWNSTREAM EVALUATOR. A new babylon-evidence crate owns T3 record bytes,
+       output classifiers, and post-commit validation. Its only engine-crate
+       dependencies are babylon-kernel, babylon-bsl, and the PER-55-owned
+       babylon-practice-contract; the existing workspace-resolved
+       unicode-normalization crate is its declared text utility.
+       Kernel, graph, BSL, practice-contract, tick, persistence, and
+       client crates do not depend on babylon-evidence. Classification has no
+       path into a later tick, action preview, AI objective, eligibility rule,
+       or BSL binding.
+
+    2. NO NEW PRIMITIVE. The evaluator uses finite IEEE-754 binary64 addition,
+       subtraction, comparison, and bit equality only. It does not fit or
+       smooth a curve, optimize a breakpoint, predict a result, or add an
+       engine or BSL primitive. Its six SFS classes and four persistence
+       classes recognize completed output under the exact committed predicate
+       order.
+
+    3. EXACT RECORD IDENTITY. Every T3 record uses schema version 1 and the
+       uniform domain-NUL-version-u32-payload envelope. SHA-256 covers the
+       complete envelope. Rust and Python independently reproduce checked-in
+       literal bytes, digests, rejection vectors, and classifier vectors.
+
+    4. SYNTHETIC SCOPE. Groundwork may encode only the records whose complete
+       field order is frozen by the committed design. RelationalScopeV1,
+       MembershipContributionV1, and MembershipContributionSetV1 remain
+       absent until PER-44 freezes their identities and territorial join.
+       Synthetic records may carry opaque digests for those deferred records
+       but cannot claim a live observable.
+
+    5. SCOPED BSL AUDIT. babylon-bsl owns bounded semantic AST inspection for
+       exact read, query, operator, intrinsic, comparison/clamp-context, and
+       effect footprints. The audit is opt-in and exact-allowlist. It rejects
+       time, calendar, RNG, forbidden intrinsic, direct-observable, authored
+       schedule, dead-permission, and unauthorized-effect fixtures. It claims
+       only its bounded corpus, never universal semantic detection.
+
+    6. CROSS-CRATE SENTINEL. bsl-lint owns the repository relationship check
+       that rejects an engine-to-evidence dependency or a disallowed evidence
+       dependency. Semantic BSL checks stay in babylon-bsl.
+
+    7. SYNTHETIC CONE ONLY. Synthetic components exercise proof-profile bytes,
+       source-digest binding, producer-consumer reachability, exact cone
+       equality, candidate projection, run-identity mutation, and driver
+       controls. No production causal-cone or host-component completeness
+       claim lands in this train.
+
+    8. ACTIVATION GATE. A live T3 producer remains blocked on Gate 3's complete
+       committed-envelope and ledger identities, Gate 5's canonical attempts
+       and accepted rows, PER-44's attributed membership and territorial join,
+       and the separately owned encounter-to-membership producer. Topology,
+       distribution, restart, backend, persistence, and player-facing Archive
+       evidence remain in the later live-proof train.
+  consequences: |
+    - A Rust or Python rewrite can be checked against exact bytes and
+      classifications without consulting an implementation-specific oracle.
+    - Engine code cannot read classifications because the dependency points
+      only from evidence toward existing pure contracts.
+    - Synthetic green tests do not satisfy the live T3 milestone and cannot be
+      presented as game emergence.
+    - PER-44 retains ownership of membership identity and the territorial join;
+      Gate 3 and Gate 5 retain their envelope and action-ledger ownership.
+    - The footprint auditor adds no global BSL restriction and does not reopen
+      ADR224's completed restricted-role contract.
+  related:
+    - ADR220_rust_owned_postgresql_persistence_boundary
+    - ADR221_game_first_refoundation_v4
+    - ADR223_whole_tick_atomicity_world_hash
+    - ADR224_bsl_causal_composition_contract
+    - ADR227_practice_contract_groundwork

@@ -1,0 +1,209 @@
+ADR248_finite_material_transition_kernels:
+  status: accepted
+  date: '2026-09-01'
+  title: >-
+    Amendment AJ adds exact finite material transition kernels, deterministic
+    event pushforwards, and transactional choice evidence as a closed BSL law
+  issue: PER-312
+  evidence_class:
+    kernel_language_and_pilot: Designed
+    finite_projection: Derived
+    mathematical_basis: Derived
+  sources:
+    - /media/user/data/babylon-data/lawvere-master/pdfs/1962-the-category-of-probabilistic-mappings.pdf
+    - /media/user/data/babylon-data/lawvere-master/pdfs/1996-grassmans-dialectics-and-category-theory.pdf
+    - /media/user/data/babylon-data/lawvere-master/pdfs/1996-unity-and-identity-of-opposites-in-calculus-and-physics.pdf
+  context: |
+    BSL already carried a bounded binary64 Probability scalar and one keyed
+    kernel RNG seam. It could neither declare an exact finite distribution over
+    material alternatives nor retain exact realization evidence. An author
+    could call rng-draw directly, while an event consumer had no principled
+    route from a mechanic's alternatives to an exact event likelihood.
+
+    Consequences and events are different categories. Consequences are one
+    partition of the weekly causal schedule. Events are observational records
+    that a mechanic or recognizer can emit from a governed position. A
+    probability therefore belongs to the transition that changes material
+    state, not to the event that later describes the state.
+
+    Lawvere's probabilistic mappings supply the compositional model: a
+    deterministic mapping embeds as a concentrated distribution, and a
+    probabilistic mapping composes through its intermediate alternatives. The
+    Director ratified the bounded Babylon form on 2026-09-01 by instructing the
+    team to implement the complete Amendment AJ plan. That instruction fixes
+    the terms below; this record does not enlarge them.
+  decision: |
+    1. CONSTITUTIONAL KIND. Amendment AJ advances the Constitution to v4.1.0
+       and adds the finite material transition kernel K : C -> D_f(Delta) as
+       one closed mathematical kind subordinate to the dialectic. Delta is a
+       finite enum-indexed family of bounded, typed material effect bundles.
+       Deterministic mechanics are its Dirac cases. Kernels never range over
+       event names, terminal routes, historical outcomes, or undeclared
+       downstream results.
+
+    2. EXACT MASS. BSL adds non-storable Mass with canonical m literals at
+       nine-decimal precision and checked unsigned nanounit representation.
+       Mass is legal only in literals, constants, bindings, checked addition
+       and subtraction, branch masses, and the result of quantize-mass. It has
+       no field, metric, write, event-payload, comparison, multiplication,
+       division, fold, or implicit scalar conversion. quantize-mass is the
+       only dynamic conversion from a numeric expression. It refuses negative,
+       nonfinite, and overflowing input and rounds to nearest nanounit with
+       ties to even.
+
+    3. FINITE KERNEL FORM. One Mechanic rule may contain one direct, nonnested
+       choose effect. Its sample QName is unique in the loaded content set and
+       its literal u32 slot is append-only. Its branches exhaust one declared
+       enum exactly once and in declaration order. Every branch independently
+       passes type, authority, footprint, and fuel checks. Branch bodies may
+       contain existing bounded deterministic Mechanic effects but no emit or
+       choose. For a finite projection, the kernel Mechanic's branch and
+       sibling material writes are carrier-local: only update-node against
+       literal self is legal. Cross-node, edge, hyperedge, and graph-shape
+       writes require a joint carrier kernel and refuse V1 enumeration. All
+       branch masses evaluate before selection; only the selected branch body
+       evaluates. Static fuel is draw cost plus all mass costs plus the maximum
+       branch-body cost.
+
+    4. TICKET MEASURE. Exact masses become one 2^64-ticket measure. For each
+       branch, the allocator takes the exact floor of mass times 2^64 divided
+       by total mass, then gives remaining tickets to the largest exact
+       remainders, breaking ties by enum order. A zero total, arithmetic
+       overflow, or positive mass assigned zero tickets refuses. Half-open
+       intervals cover [0, 2^64) exactly. Realization consumes exactly one
+       KernelRng::next_u64 draw.
+
+    5. REALIZATION IDENTITY. The choice instance binds replay session, signed
+       replay seed, tick, rule ID, sample QName, slot, stable subject, and
+       ordered active elements. The RNG remains a private kernel seam.
+       Author-visible rng-draw is removed, including its production
+       declaration and language fixtures. An unrelated rule or carrier cannot
+       perturb another instance's result.
+
+    6. ONE TYPED ANALYSIS PATH. The loader compiles the forms once into
+       FiniteKernelV1, KernelBranchV1, and FiniteProjectionV1, retaining source
+       paths and spans. Parsers, diagnostics, evaluator, forecast, and LSP
+       consume that typed analysis. No second raw-S-expression walker or
+       compatibility grammar is authorized.
+
+    7. DETERMINISTIC PROJECTION. An ordinary Recognizer can declare
+       :projects-kernel for the immediately preceding resolved kernel. The
+       projection must be emit-only, subject-local, deterministic, and adjacent
+       in schedule order. Its kernel Mechanic must satisfy the carrier-local
+       material-write proof in decision 3. Forecasting clones the pre-choice
+       state, applies each branch, runs that recognizer, and sums the favorable
+       ticket counts.
+       Event probability is the kernel measure of the recognizer's preimage;
+       it is never authored on an event.
+
+    8. BOUNDED PUBLIC ANALYSIS. analyze_content_set and
+       forecast_event_likelihoods are read-only. EventLikelihoodV1 returns the
+       event type, favorable outcomes, exact numerator, and denominator 2^64.
+       V1 refuses arbitrary recognizers, cross-sample joins, sequences,
+       conjunctions, payload distributions, and whole-tick enumeration. It
+       never substitutes sampling or an independence assumption.
+
+    9. CHOICE EVIDENCE. ChoiceReceiptV1 remains distinct from identity-free
+       AuditReceipt. It records encounter ordinal; rule, sample, and slot;
+       stable carrier and ordered active elements; enum-ordered exact masses
+       and ticket intervals; draw ticket; selected outcome; and allocation and
+       instance digests. Both materially changing and no-change outcomes
+       produce a receipt. Receipt observation cannot affect mechanics.
+
+    10. V2 DURABILITY. TickPayloadV2 adds ordered choice receipts.
+        CommittedTickEnvelopeV2 adds ChoiceReceipt as the sixth ordered family
+        between Event and Checkpoint. The outer TickContentHashV1 codec remains
+        unchanged because it already binds a self-versioned payload digest.
+        GraphStateHash and NominalWorldHash retain their existing scopes.
+        Committed event metadata records emitting rule and an optional derived
+        choice-receipt reference. Probability never enters an authored event
+        payload.
+
+    11. ONE-WAY ACTIVATION. The post-activation PostgreSQL schema stores
+        receipt parents, enum-ordered branches, and ordered carrier elements;
+        ticket counts and endpoints use checked NUMERIC(20,0). The transaction
+        inserts choice receipts and projected events before checkpoint and
+        Archive work and writes the commit marker last. Retry and restart
+        reconstruct and compare exact Envelope V2 bytes. The live reader and
+        writer are V2-only; no historical V1 decoder, alias, adapter, or
+        fallback exists. Incompatible development data may be deleted only
+        after an exact inventory and separate Director approval. The Lawvere
+        archive is never a deletion target.
+
+    12. OBSERVABILITY AND LSP. The post-commit JSONL summary adds choice count
+        and digest. Detailed choice records are opt-in, create-new,
+        post-commit, non-authoritative admin output. bsl-ls owns exact loader
+        diagnostics plus completion, hover, signature help, and semantic
+        tokens for Mass, choose, and projections. A hover gives exact
+        canonical mass and allocation facts where known; otherwise it states
+        that likelihood depends on state. Navigation, rename, formatting,
+        actions, and the remainder of PER-240 remain open.
+
+    13. PILOT. The initial Struggle spark pilot uses ordered outcomes
+        EXCESSIVE_FORCE and NO_INCIDENT. A Designed Mechanic derives exact
+        spark mass from repression faced and a designed scale. Excessive force
+        adds bounded agitation backfire and records meaningful incident-known
+        and incident-tick state. No incident changes no material field but
+        still produces a receipt. The adjacent Derived Recognizer emits the
+        existing EXCESSIVE_FORCE event from post-state with observed subject,
+        repression, backfire, and incident tick only. Full Struggle parity,
+        uprising, solidarity, wealth damage, consciousness, peripheral revolt,
+        and electoral amplification remain separate work.
+
+    14. NO IMPLIED INDEPENDENCE OR NEW STOCHASTIC ROLE. One shared cause uses
+        one joint kernel over its complete carrier. V1 has no tensor or
+        parallel-independence declaration. Recognizer, ExternalEvent, and
+        Intent remain deterministic. No universal sigmoid, empirical sampler,
+        alternate RNG, stochastic recognizer, stochastic shock, stochastic
+        intent, or authored terminal route is authorized.
+  alternatives_rejected: |
+    - Probability on event declarations: events observe results and do not
+      cause them; an authored likelihood would be causally backward.
+    - Binary64 branch weights: equal-looking authored decimals could enter
+      allocation through platform-sensitive approximation and obscure the
+      exact receipt.
+    - Independent Bernoulli draws: they silently assert independence and make
+      one shared material cause depend on evaluation order.
+    - Arbitrary recognizer enumeration or Monte Carlo forecast: neither yields
+      the exact finite preimage measure promised by this boundary.
+    - Widening AuditReceipt: its identity-free, value-free contract is useful
+      and must not become an accidental durable provenance envelope.
+    - Keeping rng-draw for compatibility: no production content depends on it,
+      and a second author-visible stochastic path would defeat the closed law.
+    - A V1 persistence decoder: this is a clean development activation epoch;
+      one live path is safer than a compatibility midpoint.
+  consequences: |
+    - BSL can represent bounded material contingency without attaching
+      probabilities to narratives or outcomes.
+    - Exact likelihood is available only where the loaded kernel and its real
+      deterministic recognizer form a finite projection. Refusal elsewhere is
+      a feature, not missing best-effort output.
+    - The choice receipt and Envelope V2 move replay and persistence bytes.
+      Programs with no choose retain their adjudication behavior and graph
+      bytes, but activated durability is V2-only.
+    - The initial pilot is deliberately narrower than the frozen Python
+      Struggle system. It proves the language, realization, event, persistence,
+      and tooling loop without claiming full behavioral parity.
+  verification: |
+    Fixed vectors cover Mass parsing and canonicalization, explicit
+    quantization, checked arithmetic, allocation and tie order, all rejection
+    cases, and exact likelihood numerators. Process, restart, unrelated-rule,
+    and unrelated-carrier tests prove keyed realization stability. Static and
+    runtime tests prove role, branch, lazy-evaluation, fuel, event, and nested
+    choice prohibitions. Persistence tests cover clean activation, marker-last
+    atomicity, ambiguous commit, retry, corruption refusal, and exact V2
+    restart reconstruction. Event-sink mutation tests prove observation does
+    not change material trajectories. LSP tests pin capabilities, spans,
+    ordering, completion, hover, signatures, and tokens.
+  supersedes:
+    - ADR188_intrinsic_rider_slate_dispositions  # decision Row 11 only
+    - ADR213_intrinsic_host_train  # author-visible rng-draw surface only
+    - ADR243_committed_tick_envelope_v1  # live envelope version only
+    - ADR244_committed_tick_postgresql_storage_v1  # live family map only
+  related:
+    - ADR051_lawverian_dialectics_refactor
+    - ADR221_game_first_refoundation_v4
+    - ADR224_bsl_causal_composition_contract
+    - ADR240_replay_action_tick_content_identity
+    - PER-240
+    - PER-309

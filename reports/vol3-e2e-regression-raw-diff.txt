@@ -1,0 +1,64 @@
+[qa:e2e-regression] $ ARTIFACT_DIR=$(uv run python -m babylon.engine.headle…
+INFO:babylon.persistence.partitioning:Created 9 session partitions for ec8b9c61-a9dd-43fa-8e9a-8c3846f8822c
+INFO:babylon.persistence.sqlite_hydrator:Hydrated reference series for session ec8b9c61-a9dd-43fa-8e9a-8c3846f8822c: {'bea_io': 6, 'melt_tau': 2, 'basket_gamma': 2, 'erdi': 2, 'hickel_drain': 2, 'ricci_unequal': 499, 'faf_freight': 0, 'qcew_employment': 5053, 'bea_reis_rent': 6, 'fred_rates': 6} rows
+INFO:babylon.persistence.hex_hydrator:hydrate_hex_state: persisted 1045 hex rows across 3 counties for session ec8b9c61-a9dd-43fa-8e9a-8c3846f8822c
+INFO:babylon.engine.headless_runner.bridge:WorldStateBridge.hydrate_initial: session=ec8b9c61-a9dd-43fa-8e9a-8c3846f8822c scope_size=3 hex_template=1045 external_template=9
+INFO:babylon.domain.economics.tensor_registry:Aggregate cache invalidated
+INFO:babylon.domain.economics.tensor_registry:Aggregate cache invalidated
+INFO:babylon.domain.economics.tensor_registry:Aggregate cache invalidated
+INFO:babylon.domain.economics.tensor_registry:Aggregate cache invalidated
+INFO:babylon.domain.economics.tensor_registry:Aggregate cache invalidated
+INFO:babylon.domain.economics.tensor_registry:Aggregate cache invalidated
+INFO:babylon.domain.economics.tensor_registry:Aggregate cache invalidated
+INFO:babylon.domain.economics.tensor_registry:Aggregate cache invalidated
+INFO:babylon.domain.economics.tensor_registry:Aggregate cache invalidated
+INFO:babylon.domain.economics.tensor_registry:Aggregate cache invalidated
+INFO:babylon.domain.economics.tensor_registry:Aggregate cache invalidated
+INFO:babylon.domain.economics.tensor_registry:Aggregate cache invalidated
+INFO:babylon.domain.economics.tensor_registry:Aggregate cache invalidated
+INFO:babylon.domain.economics.tensor_registry:Aggregate cache invalidated
+INFO:babylon.domain.economics.tensor_registry:Aggregate cache invalidated
+INFO:babylon.domain.economics.tensor_registry:Aggregate cache invalidated
+INFO:babylon.domain.economics.tensor_registry:Aggregate cache invalidated
+INFO:babylon.domain.economics.tensor_registry:Aggregate cache invalidated
+INFO:babylon.domain.economics.tensor_registry:Aggregate cache invalidated
+INFO:babylon.domain.economics.tensor_registry:Aggregate cache invalidated
+INFO:babylon.domain.economics.tensor_registry:Aggregate cache invalidated
+INFO:babylon.domain.economics.tensor_registry:Aggregate cache invalidated
+INFO:babylon.domain.economics.tensor_registry:Aggregate cache invalidated
+INFO:babylon.domain.economics.tensor_registry:Aggregate cache invalidated
+INFO:babylon.domain.economics.tensor_registry:Aggregate cache invalidated
+INFO:babylon.domain.economics.tensor_registry:Aggregate cache invalidated
+INFO:babylon.domain.economics.tensor_registry:Aggregate cache invalidated
+INFO:babylon.domain.economics.tensor_registry:Aggregate cache invalidated
+INFO:babylon.domain.economics.tensor_registry:Aggregate cache invalidated
+INFO:babylon.domain.economics.tensor_registry:Aggregate cache invalidated
+INFO:babylon.domain.economics.tensor_registry:Aggregate cache invalidated
+INFO:babylon.domain.economics.tensor_registry:Aggregate cache invalidated
+INFO:babylon.domain.economics.tensor_registry:Aggregate cache invalidated
+INFO:babylon.domain.economics.tensor_registry:Aggregate cache invalidated
+INFO:babylon.domain.economics.tensor_registry:Aggregate cache invalidated
+INFO:babylon.domain.economics.tensor_registry:Aggregate cache invalidated
+INFO:babylon.domain.economics.tensor_registry:Aggregate cache invalidated
+INFO:babylon.domain.economics.tensor_registry:Aggregate cache invalidated
+INFO:babylon.domain.economics.tensor_registry:Aggregate cache invalidated
+INFO:babylon.domain.economics.tensor_registry:Aggregate cache invalidated
+INFO:babylon.domain.economics.tensor_registry:Aggregate cache invalidated
+INFO:babylon.domain.economics.tensor_registry:Aggregate cache invalidated
+INFO:babylon.domain.economics.tensor_registry:Aggregate cache invalidated
+INFO:babylon.domain.economics.tensor_registry:Aggregate cache invalidated
+INFO:babylon.domain.economics.tensor_registry:Aggregate cache invalidated
+INFO:babylon.domain.economics.tensor_registry:hydrate_counties: Loaded 45 tensors, 0 failures
+INFO:babylon.domain.dialectics.instances.catalog:Skipping coupling circulation -> realization (transforms): endpoint(s) not yet registered
+INFO:babylon.domain.dialectics.instances.catalog:Skipping coupling reproduction -> disproportionality (transforms): endpoint(s) not yet registered
+Spec-064 e2e regression compare
+  bundle:   /home/user/projects/game/babylon-vol3/reports/sim-runs/2026-07-20T00-03-39Z/summary.json
+  baseline: tests/baselines/detroit-tri-county-5t.json
+
+  ✓ counties_alive == 3
+  ✓ population liveness: 3/3 counties alive
+  ✓ total_v: actual=1.497e+09, expected=1.497e+09, Δ=0.000%% (tolerance ±1.0%%)
+  ✓ no critical conservation violations
+
+All regression checks passed.
+exit=0

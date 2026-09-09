@@ -1,18 +1,24 @@
-# Babylon - Project Overview
+# About Babylon
 
-**Purpose**: Geopolitical simulation engine modeling the collapse of American hegemony through Marxist-Leninist-Maoist Third Worldist theory. Models class struggle as deterministic output of material conditions within a compact topological phase space.
+Authority: `CONSTITUTION.md` v4.0.0 and `NORTH_STAR.md`.
 
-**Tech Stack**:
+Babylon is an `entertainment-first emergent political-economy game`. It uses a
+deterministic simulation engine. Theory sets limits on cause and
+effect. Theory does not set an outcome. Historical cases test behavior. The
+game is not a forecast.
 
-- Python 3.12 (managed via `mise` / `poetry`)
-- SQLite / Pydantic (The Ledger)
-- NetworkX (The Topology)
-- ChromaDB (The Archive)
-- Node.js / Vite / React (Front-end interface)
+Today:
 
-**Architecture ("The Embedded Trinity")**:
+- Rust engine crates and BSL content are in `rust/`.
+- `babylon-client` is a `Bevy admin/viewer; no player action`.
+- Python remains the frozen behavioral reference, data pipeline, tests,
+  and selected periphery.
+- `Postgres` and `pgvector` are available, and Gate 3 will add the v4 schema
+  set, durable game data, and semantic Archive.
+- `rustworkx` backs the frozen Python topology. `babylon-graph` gives Rust its
+  native `graph` and `hypergraph` contracts.
+- The browser client is legacy and does not gate v1.
 
-- `src/babylon/data/game/` - JSON entity collections (state)
-- `src/babylon/models/world_state.py` - NetworkX topology graph
-- `src/babylon/rag/` - Semantic history
-- **Engine**: Simulation runs via dependency injection, observer pattern, event bus (`src/babylon/engine/`). 17 primary formulas (`src/babylon/formulas/formulas.py`).
+Read `CLAUDE.md` for instructions and `docs/concepts/architecture.rst` for the
+implemented-versus-planned architecture boundary. Linear alone controls status
+and tasks.

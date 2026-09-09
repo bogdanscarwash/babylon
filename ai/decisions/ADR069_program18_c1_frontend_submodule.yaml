@@ -1,0 +1,112 @@
+ADR069_program18_c1_frontend_submodule:
+  status: "accepted"
+  date: "2026-07-14"
+  title: "Program 18 (C1 — Frontend Submodule): src/frontend extracted to a public babylon-cockpit repo, consumed as a git submodule at src/frontend; web/ and src/babylon stay together; two-tier web-engine contract mechanism required as the seam safety net; DESIGN accepted, execution PENDING owner green-light"
+  context: |
+    ADR063 (Program 14, 2026-07-11) rejected subrepositories outright: "one
+    determinism contract spans the sim... boundaries are enforced in-monorepo
+    by import-linter instead." The owner overruled that rejection 2026-07-12
+    — not by reversing the determinism argument, but by narrowing the claim:
+    subrepos are still wrong for anything that shares the tick-hash contract
+    (engine/economics/formulas), but `src/frontend` is a browser SPA that
+    never enters that contract and is "complex enough to justify it" on its
+    own terms (its own build tooling, npm dependency churn, a release
+    cadence distinct from the simulation). Program 18 ran a 3-critic design
+    workflow to decide WHAT to extract given that opening: candidate C1
+    (extract only `src/frontend`), candidate C2 (also split `web/`, the
+    Django layer bridging frontend and engine), and candidate C3 (full
+    polyrepo — babylon-cockpit, babylon-web, and the engine itself as
+    separately published packages). Groundwork for whichever candidate won
+    landed ahead of the ruling in commit `5e739724` (`.gitmodules` added to
+    the repo-hygiene allowlist in `tools/check_repo_hygiene.py`,
+    `babylon_books` gitignored, and `ai/_inbox/deferred-repo-refactors.md`
+    authored as the canonical record of what's in-scope now vs. deferred).
+  decision: |
+    C1 wins. `src/frontend` is extracted to a new `babylon-cockpit` repo and
+    re-attached to `babylon` as a git submodule at `src/frontend`; `web/`
+    and `src/babylon` stay in this repo, together, unsplit.
+
+    C2 (also split `web/`) is REJECTED. Program 18's contract-seam critic
+    traced the recent live bugs — blank Φ, a `float += Decimal` crash, the
+    convert-event whitelist silently dropping events, `None` consciousness
+    values reaching the UI — and found all four are web<->ENGINE
+    value-population bugs, not web<->frontend shape bugs. Splitting `web/`
+    would remove the exact safety net (same-repo, same-PR, same-CI,
+    whole-stack `git bisect`) that lets that seam be fixed and caught in one
+    sweep, without addressing any of the four bugs it would be invoked to
+    justify.
+
+    C3 (polyrepo + published packages) is REJECTED as over-engineering.
+    Beyond the coordination tax ADR063 already priced out for the
+    engine-side packages, `poetry build` is independently broken today:
+    `[tool.poetry] packages` declares `babylon_data` `from = "src"`, but
+    `src/babylon_data` is a symlink whose realpath escapes the project root
+    (`/media/user/data/babylon-data/`) — poetry-core >=2.2 refuses to
+    package it. A polyrepo built on published wheels needs an engine that
+    can be built as a wheel; that precondition does not hold yet, so C3 is
+    not just undesirable but not currently executable.
+
+    The required safety net for C1, before or alongside execution: the
+    two-tier web<->engine contract mechanism (`deferred-repo-refactors.md`
+    item 2, generalizing to the observable-field registry + 3-sensor
+    seam-coverage gate the owner separately dropped a design for in
+    `ai/_inbox/archive/observability-seam-coverage-gate.md`). Tier 1
+    (shape) — Pydantic wire models in `web/game/contracts.py`, OpenAPI
+    generated from `model_json_schema()`, `openapi-typescript` into a
+    versioned `@babylon/api-types` npm package published from babylon CI and
+    pinned+bumped by `babylon-cockpit`, an `oasdiff` CI gate on breaking
+    changes. Tier 2 (value/behavior) — golden-value snapshots of a real
+    deterministic tick, replacing `test_contract_parity.py`'s current
+    docstring-only claim to read the frontend's fixtures, so
+    "honestly-typed-but-always-None" bugs (blank Φ) stay catchable once the
+    frontend is no longer in the same directory tree as the engine it
+    describes. The typed `endpoints.ts` manifest (commit `3d80bb0c`) is the
+    seed of that contract layer, not the whole of it.
+  consequences: |
+    This ADR accepts the DESIGN only. Execution of the C1 extraction
+    (standing up `babylon-cockpit`, cutting `src/frontend`'s history into
+    it, wiring the submodule, publishing the first `@babylon/api-types`) is
+    PENDING owner green-light — nothing here authorizes running it yet.
+    `ai/_inbox/deferred-repo-refactors.md` sets the priority order the
+    future executor should follow, and it does NOT start with this
+    extraction: (1) reference-DB reproducibility first — the lit-Φ crown
+    test only passes against this machine's local 5.7 GB SQLite mutation,
+    not the CI `ci-data-v1` artifact, which is a real blocker to the
+    "map lights up" claim and is unrelated to repo topology; (2) the
+    two-tier contract mechanism above; (3) the `poetry build` defect; (4)
+    evaluating `babylon_data` as a second submodule, only after (3); (5) a
+    `web/` split — likely never, and requiring its own constitutional
+    amendment if reconsidered. Until the two-tier contract mechanism is in
+    place, extracting `src/frontend` widens the exact seam that produced 3
+    of the last 4 live bugs without yet having the sensor that would catch a
+    recurrence across the new repo boundary — this ADR's design is accepted
+    with that dependency stated, not with the ordering relaxed.
+  verification: |
+    ADR063's rejection text ("Subrepositories per package: rejected —
+    coordination tax without benefit... import-linter gives the same
+    boundary guarantee loudly") read directly from
+    `ai/decisions/ADR063_program14_correspondence.yaml`. Owner overrule +
+    C1/C2/C3 framing + the four value-population bugs (blank Φ, `float +=
+    Decimal`, event whitelist, `None` consciousness) + the `poetry build`
+    symlink defect + the priority ordering read directly from
+    `ai/_inbox/deferred-repo-refactors.md` (the file this task named as the
+    canonical record). Groundwork commit `5e739724` confirmed via `git show
+    --stat` and a direct read of `tools/check_repo_hygiene.py`:
+    `.gitmodules` added to `ALLOWED_TOP_LEVEL_FILES` with the inline comment
+    "submodule pointer — program 18: src/frontend -> babylon-cockpit
+    subrepo"; `.gitignore` gained a `babylon_books` entry;
+    `ai/_inbox/deferred-repo-refactors.md` and
+    `ai/_inbox/archive/{protocolization,datesette-developer-view}.md` added,
+    172 insertions across 5 files, no deletions. No ADR068 file exists in
+    `ai/decisions/` as of this writing despite `deferred-repo-refactors.md`
+    citing it as the companion record for repository topology — it is being
+    authored alongside this one.
+  references:
+    - "ai/_inbox/deferred-repo-refactors.md (canonical record: C1/C2/C3 framing, the two-tier contract spec, priority order 1-5)"
+    - "ai/decisions/ADR063_program14_correspondence.yaml (the rejection this ADR's owner overrule narrows, not reverses)"
+    - "commit 5e739724 (.gitmodules hygiene-allowlist, babylon_books gitignore, deferred-refactor notes onboarded)"
+    - "tools/check_repo_hygiene.py (ALLOWED_TOP_LEVEL_FILES entry for .gitmodules)"
+    - "ai/_inbox/archive/observability-seam-coverage-gate.md (the 3-sensor design the two-tier mechanism generalizes to)"
+    - "commit 3d80bb0c (typed endpoints.ts manifest — seed of the Tier-1 contract layer)"
+    - "ADR068 (Program 18 repository-topology charter — companion record, authored alongside this ADR)"
+    - "Constitution II.6 (layering), III.11 (Loud Failure), III.12 (rewrite test / behavioral contracts — golden Tier-2 snapshots)"

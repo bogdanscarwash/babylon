@@ -1,0 +1,448 @@
+#!/bin/sh
+# PATH-first Cargo dispatcher for the two private game repositories. Unknown
+# repositories reach rustup's real Cargo proxy unchanged.
+set -eu
+
+dispatcher_path="$(readlink -f -- "$0")"
+dispatcher_dir="$(dirname -- "$dispatcher_path")"
+. "$dispatcher_dir/policy.sh"
+real_cargo="$dispatcher_dir/real/cargo"
+config_guard="$dispatcher_dir/cargo-config.py"
+cgroup_membership_file=/proc/self/cgroup
+
+if [ "$#" -gt "$CODEX_RUST_MAX_ARGS" ]; then
+  echo "cargo: argument count exceeds the host-policy bound" >&2
+  exit 64
+fi
+
+original_working_directory="$PWD"
+effective_directory_argument=""
+manifest_path_argument=""
+expect_directory=0
+expect_manifest=0
+before_child_arguments=1
+first_argument=1
+for cargo_argument in "$@"; do
+  if [ "$first_argument" -eq 1 ]; then
+    first_argument=0
+    case "$cargo_argument" in
+      +*) continue ;;
+    esac
+  fi
+  if [ "$before_child_arguments" -eq 0 ]; then
+    continue
+  fi
+  if [ "$expect_directory" -eq 1 ]; then
+    effective_directory_argument="$cargo_argument"
+    expect_directory=0
+    continue
+  fi
+  if [ "$expect_manifest" -eq 1 ]; then
+    manifest_path_argument="$cargo_argument"
+    expect_manifest=0
+    continue
+  fi
+  case "$cargo_argument" in
+    --)
+      before_child_arguments=0
+      ;;
+    -C|--directory)
+      expect_directory=1
+      ;;
+    -C?*)
+      effective_directory_argument="${cargo_argument#-C}"
+      effective_directory_argument="${effective_directory_argument#=}"
+      ;;
+    --directory=*)
+      effective_directory_argument="${cargo_argument#--directory=}"
+      ;;
+    --manifest-path)
+      expect_manifest=1
+      ;;
+    --manifest-path=*)
+      manifest_path_argument="${cargo_argument#--manifest-path=}"
+      ;;
+  esac
+done
+
+argument_error=""
+if [ "$expect_directory" -eq 1 ]; then
+  argument_error="Cargo -C/--directory is missing its value"
+fi
+if [ "$expect_manifest" -eq 1 ]; then
+  argument_error="Cargo --manifest-path is missing its value"
+fi
+
+effective_directory="$original_working_directory"
+if [ -n "$effective_directory_argument" ]; then
+  case "$effective_directory_argument" in
+    /*) effective_directory_candidate="$effective_directory_argument" ;;
+    *) effective_directory_candidate="$original_working_directory/$effective_directory_argument" ;;
+  esac
+  if [ -d "$effective_directory_candidate" ]; then
+    effective_directory="$(cd -- "$effective_directory_candidate" && pwd -P)"
+  else
+    argument_error="Cargo directory does not exist: $effective_directory_candidate"
+  fi
+fi
+
+repository_root=""
+repository=""
+repository_git() {
+  /usr/bin/env \
+    -u GIT_DIR \
+    -u GIT_WORK_TREE \
+    -u GIT_COMMON_DIR \
+    -u GIT_INDEX_FILE \
+    -u GIT_OBJECT_DIRECTORY \
+    -u GIT_ALTERNATE_OBJECT_DIRECTORIES \
+    -u GIT_NAMESPACE \
+    -u GIT_CEILING_DIRECTORIES \
+    -u GIT_DISCOVERY_ACROSS_FILESYSTEM \
+    -u GIT_CONFIG \
+    -u GIT_CONFIG_COUNT \
+    -u GIT_CONFIG_PARAMETERS \
+    /usr/bin/git "$@"
+}
+select_managed_repository_at() {
+  repository_candidate_path="$1"
+  repository_candidate_root="$(repository_git -C "$repository_candidate_path" rev-parse --show-toplevel 2>/dev/null || true)"
+  [ -n "$repository_candidate_root" ] || return 1
+  repository_candidate_root="$(cd -- "$repository_candidate_root" && pwd -P)"
+  repository_candidate_remote="$(repository_git -C "$repository_candidate_root" config --local --get remote.origin.url 2>/dev/null || true)"
+  repository_candidate="$(codex_rust_repository_for_remote "$repository_candidate_remote" || true)"
+  [ -n "$repository_candidate" ] || return 1
+  repository_root="$repository_candidate_root"
+  repository="$repository_candidate"
+}
+
+if [ -z "$argument_error" ]; then
+  select_managed_repository_at "$effective_directory" || true
+else
+  select_managed_repository_at "$original_working_directory" || true
+fi
+
+if [ -n "$manifest_path_argument" ]; then
+  case "$manifest_path_argument" in
+    /*) manifest_path="$manifest_path_argument" ;;
+    *) manifest_path="$effective_directory/$manifest_path_argument" ;;
+  esac
+  if [ -e "$manifest_path" ]; then
+    manifest_path="$(readlink -f -- "$manifest_path")"
+  elif [ -L "$manifest_path" ]; then
+    argument_error="Cargo manifest path does not resolve: $manifest_path"
+  fi
+  manifest_directory="$(dirname -- "$manifest_path")"
+  if [ -d "$manifest_directory" ]; then
+    repository_root=""
+    repository=""
+    select_managed_repository_at "$manifest_directory" || true
+  elif [ -n "$repository" ]; then
+    argument_error="Cargo manifest directory does not exist: $manifest_directory"
+  fi
+fi
+
+if [ -z "$repository" ]; then
+  if [ "${CODEX_RUST_SCOPE_ACTIVE:-0}" = 1 ]; then
+    echo "cargo: managed Cargo cannot transition to an unmanaged repository" >&2
+    echo "cargo: launch unrelated Cargo outside the managed build process" >&2
+    exit 64
+  fi
+  if [ "${CODEX_RUST_HOST_DRY_RUN:-0}" = 1 ]; then
+    printf '%s\n' unmanaged
+    exit 88
+  fi
+  if [ ! -x "$real_cargo" ]; then
+    echo "cargo: managed real-Cargo proxy is missing: $real_cargo" >&2
+    exit 69
+  fi
+  exec "$real_cargo" "$@"
+fi
+
+if [ -n "$argument_error" ]; then
+  echo "cargo: $argument_error" >&2
+  exit 64
+fi
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "cargo: Python 3.11 or newer is required to inspect Cargo configuration" >&2
+  exit 69
+fi
+if [ ! -f "$config_guard" ]; then
+  echo "cargo: managed Cargo configuration guard is missing: $config_guard" >&2
+  exit 69
+fi
+config_status=0
+python3 "$config_guard" "$effective_directory" || config_status="$?"
+if [ "$config_status" -ne 0 ]; then
+  exit "$config_status"
+fi
+
+managed_target_dir="$(codex_rust_target_dir_for_repository "$repository" "$repository_root")"
+managed_build_dir="$managed_target_dir"
+managed_target_parent="$(dirname -- "$managed_target_dir")"
+if [ ! -d "$managed_target_parent" ]; then
+  echo "cargo: managed target parent does not exist: $managed_target_parent" >&2
+  exit 69
+fi
+managed_target_parent_resolved="$(cd -- "$managed_target_parent" && pwd -P)"
+if [ "$managed_target_parent_resolved" != "$managed_target_parent" ]; then
+  echo "cargo: managed target parent must not resolve outside its worktree: $managed_target_parent" >&2
+  exit 64
+fi
+if [ -L "$managed_target_dir" ]; then
+  echo "cargo: managed target must not be a symlink: $managed_target_dir" >&2
+  exit 64
+fi
+if [ -e "$managed_target_dir" ]; then
+  if [ ! -d "$managed_target_dir" ]; then
+    echo "cargo: managed target exists but is not a directory: $managed_target_dir" >&2
+    exit 64
+  fi
+  managed_target_resolved="$(cd -- "$managed_target_dir" && pwd -P)"
+  if [ "$managed_target_resolved" != "$managed_target_dir" ]; then
+    echo "cargo: managed target must resolve inside its worktree: $managed_target_dir" >&2
+    exit 64
+  fi
+fi
+if [ "${CARGO_TARGET_DIR+x}" = x ] && [ "$CARGO_TARGET_DIR" != "$managed_target_dir" ]; then
+  echo "cargo: CARGO_TARGET_DIR must be $managed_target_dir in this worktree" >&2
+  exit 64
+fi
+if [ "${CARGO_BUILD_BUILD_DIR+x}" = x ] && [ "$CARGO_BUILD_BUILD_DIR" != "$managed_build_dir" ]; then
+  echo "cargo: CARGO_BUILD_BUILD_DIR must be $managed_build_dir in this worktree" >&2
+  exit 64
+fi
+for prohibited_target_environment in CARGO_BUILD_TARGET_DIR; do
+  eval "prohibited_target_is_set=\${$prohibited_target_environment+x}"
+  if [ "$prohibited_target_is_set" = x ]; then
+    echo "cargo: $prohibited_target_environment is prohibited; each worktree owns its Cargo state" >&2
+    exit 64
+  fi
+done
+
+slice="$(codex_rust_slice_for_repository "$repository")"
+cache_root="$(codex_rust_cache_root)"
+case "$cache_root" in
+  *[!A-Za-z0-9_./-]*)
+    echo "cargo: cache root contains unsupported characters: $cache_root" >&2
+    exit 65
+    ;;
+esac
+cache_dir="$(codex_rust_cache_dir "$repository" "$cache_root")"
+server_socket="$(codex_rust_server_socket "$repository" "$cache_root")"
+tools_root="$(codex_rust_tools_root)"
+sccache_bin="$(codex_rust_sccache_bin "$tools_root")"
+socket_length="$(LC_ALL=C printf '%s' "$server_socket" | wc -c | tr -d ' ')"
+if [ "$socket_length" -gt 107 ]; then
+  echo "cargo: sccache Unix socket path exceeds 107 bytes: $server_socket" >&2
+  exit 65
+fi
+
+requested_jobs="${CARGO_BUILD_JOBS:-$CODEX_RUST_MAX_JOBS}"
+case "$requested_jobs" in
+  ''|*[!0-9]*)
+    echo "cargo: CARGO_BUILD_JOBS must be a whole number" >&2
+    exit 64
+    ;;
+  0)
+    echo "cargo: CARGO_BUILD_JOBS must be positive" >&2
+    exit 64
+    ;;
+  1|2|3|4)
+    ;;
+  *)
+    echo "cargo: CARGO_BUILD_JOBS exceeds the $CODEX_RUST_MAX_JOBS-job host limit" >&2
+    exit 64
+    ;;
+esac
+
+toolchain_selector=""
+case "${1:-}" in
+  +*)
+    toolchain_selector="$1"
+    shift
+    ;;
+esac
+
+expect_jobs=0
+for cargo_argument in "$@"; do
+  if [ "$expect_jobs" -eq 1 ]; then
+    case "$cargo_argument" in
+      1|2|3|4)
+        ;;
+      *)
+        echo "cargo: --jobs exceeds or evades the $CODEX_RUST_MAX_JOBS-job host limit" >&2
+        exit 64
+        ;;
+    esac
+    expect_jobs=0
+    continue
+  fi
+  case "$cargo_argument" in
+    --)
+      break
+      ;;
+    -j|--jobs)
+      expect_jobs=1
+      ;;
+    -j1|-j2|-j3|-j4|--jobs=1|--jobs=2|--jobs=3|--jobs=4)
+      ;;
+    -j*|--jobs=*)
+      echo "cargo: --jobs exceeds or evades the $CODEX_RUST_MAX_JOBS-job host limit" >&2
+      exit 64
+      ;;
+    --config|--config=*)
+      echo "cargo: caller-supplied --config is prohibited in a managed repository" >&2
+      echo "cargo: it could override the target, job, or compiler-cache boundary" >&2
+      exit 64
+      ;;
+    --target-dir|--target-dir=*)
+      echo "cargo: caller-supplied --target-dir is prohibited in a managed repository" >&2
+      echo "cargo: each worktree owns its Cargo target and build directory" >&2
+      exit 64
+      ;;
+  esac
+done
+if [ "$expect_jobs" -eq 1 ]; then
+  echo "cargo: --jobs is missing its value" >&2
+  exit 64
+fi
+
+if [ "${CODEX_RUST_HOST_DRY_RUN:-0}" = 1 ]; then
+  printf 'repository=%s\n' "$repository"
+  printf 'slice=%s\n' "$slice"
+  printf 'cache=%s\n' "$cache_dir"
+  printf 'socket=%s\n' "$server_socket"
+  printf 'wrapper=%s\n' "$sccache_bin"
+  printf 'target=%s\n' "$managed_target_dir"
+  printf 'jobs=%s\n' "$requested_jobs"
+  exit 88
+fi
+
+if [ ! -x "$real_cargo" ]; then
+  echo "cargo: managed real-Cargo proxy is missing: $real_cargo" >&2
+  exit 69
+fi
+
+bootstrap_requested=0
+if [ "${CODEX_RUST_SCCACHE_BOOTSTRAP+x}" = x ]; then
+  expected_bootstrap_root="$tools_root/sccache/$CODEX_RUST_SCCACHE_VERSION"
+  expected_bootstrap_toolchain="$(
+    codex_rust_bootstrap_toolchain_for_repository "$repository"
+  )"
+  if [ "$CODEX_RUST_SCCACHE_BOOTSTRAP" != 1 ] ||
+    [ "$toolchain_selector" != "$expected_bootstrap_toolchain" ] ||
+    [ "$#" -ne 8 ] ||
+    [ "${1:-}" != install ] ||
+    [ "${2:-}" != --locked ] ||
+    [ "${3:-}" != --force ] ||
+    [ "${4:-}" != --version ] ||
+    [ "${5:-}" != "=$CODEX_RUST_SCCACHE_VERSION" ] ||
+    [ "${6:-}" != --root ] ||
+    [ "${7:-}" != "$expected_bootstrap_root" ] ||
+    [ "${8:-}" != sccache ]; then
+    echo "cargo: CODEX_RUST_SCCACHE_BOOTSTRAP is reserved for the exact pinned sccache install" >&2
+    exit 64
+  fi
+  bootstrap_requested=1
+fi
+if [ "$bootstrap_requested" -eq 1 ]; then
+  cargo_config_wrapper='build.rustc-wrapper=""'
+elif [ ! -x "$sccache_bin" ] || [ "$("$sccache_bin" --version)" != "sccache $CODEX_RUST_SCCACHE_VERSION" ]; then
+  echo "cargo: pinned sccache $CODEX_RUST_SCCACHE_VERSION is unavailable at $sccache_bin" >&2
+  echo "cargo: rerun the Codex environment setup; refusing an uncached build" >&2
+  exit 69
+else
+  cargo_config_wrapper="build.rustc-wrapper=\"$sccache_bin\""
+fi
+socket_parent="$(dirname -- "$server_socket")"
+if ! codex_rust_create_physical_directory "$cache_dir"; then
+  echo "cargo: repository cache must not resolve through a symlink: $cache_dir" >&2
+  exit 64
+fi
+if ! codex_rust_create_physical_directory "$socket_parent"; then
+  echo "cargo: repository socket directory must not resolve through a symlink: $socket_parent" >&2
+  exit 64
+fi
+cargo_config_cache_dir="env.SCCACHE_DIR=\"$cache_dir\""
+cargo_config_cache_socket="env.SCCACHE_SERVER_UDS=\"$server_socket\""
+cargo_config_cache_size='env.SCCACHE_CACHE_SIZE="10G"'
+cargo_config_client_mode='env.SCCACHE_CLIENT_SIDE="0"'
+
+if [ -n "$toolchain_selector" ]; then
+  set -- "$toolchain_selector" \
+    --config "$cargo_config_wrapper" \
+    --config "$cargo_config_cache_dir" \
+    --config "$cargo_config_cache_socket" \
+    --config "$cargo_config_cache_size" \
+    --config "$cargo_config_client_mode" \
+    "$@"
+else
+  set -- \
+    --config "$cargo_config_wrapper" \
+    --config "$cargo_config_cache_dir" \
+    --config "$cargo_config_cache_socket" \
+    --config "$cargo_config_cache_size" \
+    --config "$cargo_config_client_mode" \
+    "$@"
+fi
+
+if [ "${CODEX_RUST_SCOPE_ACTIVE:-0}" = 1 ]; then
+  if ! codex_rust_process_is_in_slice "$slice" "$cgroup_membership_file"; then
+    echo "cargo: process is not in repository slice $slice despite CODEX_RUST_SCOPE_ACTIVE=1" >&2
+    echo "cargo: refusing a stale or forged scoped-reentry signal" >&2
+    exit 69
+  fi
+  CARGO_BUILD_JOBS="$requested_jobs" \
+    CARGO_TARGET_DIR="$managed_target_dir" \
+    CARGO_BUILD_BUILD_DIR="$managed_build_dir" \
+    CODEX_RUST_CARGO_DISPATCHER="$dispatcher_path" \
+    exec /usr/bin/env \
+      -u RUSTC_WRAPPER \
+      -u RUSTC_WORKSPACE_WRAPPER \
+      -u CARGO_BUILD_RUSTC_WRAPPER \
+      -u CARGO_BUILD_RUSTC_WORKSPACE_WRAPPER \
+      -u SCCACHE_DIR \
+      -u SCCACHE_SERVER_UDS \
+      -u SCCACHE_CACHE_SIZE \
+      -u SCCACHE_CLIENT_SIDE \
+      -u CODEX_RUST_HOST_DRY_RUN \
+      -u CODEX_RUST_SCCACHE_BOOTSTRAP \
+      "$real_cargo" "$@"
+fi
+
+if ! codex_rust_slice_matches_policy "$CODEX_RUST_PARENT_SLICE" "$dispatcher_dir"; then
+  echo "cargo: the loaded $CODEX_RUST_PARENT_SLICE does not match the installed bounded policy" >&2
+  echo "cargo: run .codex/host/install.sh outside the sandbox; refusing an unbounded build" >&2
+  exit 69
+fi
+if ! codex_rust_slice_matches_policy "$slice" "$dispatcher_dir"; then
+  echo "cargo: the loaded repository slice $slice does not match the installed bounded policy" >&2
+  echo "cargo: rerun .codex/host/install.sh; refusing an unbounded build" >&2
+  exit 69
+fi
+
+exec systemd-run \
+  --user \
+  --scope \
+  --quiet \
+  --collect \
+  --same-dir \
+  --slice="$slice" \
+  --setenv=CODEX_RUST_SCOPE_ACTIVE=1 \
+  --setenv=CODEX_RUST_CARGO_DISPATCHER="$dispatcher_path" \
+  --setenv=CARGO_BUILD_JOBS="$requested_jobs" \
+  --setenv=CARGO_TARGET_DIR="$managed_target_dir" \
+  --setenv=CARGO_BUILD_BUILD_DIR="$managed_build_dir" \
+  /usr/bin/env \
+    -u RUSTC_WRAPPER \
+    -u RUSTC_WORKSPACE_WRAPPER \
+    -u CARGO_BUILD_RUSTC_WRAPPER \
+    -u CARGO_BUILD_RUSTC_WORKSPACE_WRAPPER \
+    -u SCCACHE_DIR \
+    -u SCCACHE_SERVER_UDS \
+    -u SCCACHE_CACHE_SIZE \
+    -u SCCACHE_CLIENT_SIDE \
+    -u CODEX_RUST_HOST_DRY_RUN \
+    -u CODEX_RUST_SCCACHE_BOOTSTRAP \
+    "$real_cargo" "$@"

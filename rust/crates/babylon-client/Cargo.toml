@@ -1,0 +1,63 @@
+[package]
+name = "babylon-client"
+description = "Program 28 B0 — the Bevy client scaffold: window, palette, in-process engine link"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+# Bevy 0.18's MSRV may exceed the 1.87 workspace floor — the toolchain pin
+# is 1.91.1, so 1.87 is what we support elsewhere, not what this crate needs.
+rust-version = "1.87"
+
+[lints]
+workspace = true
+
+[lib]
+name = "babylon_client"
+path = "src/lib.rs"
+
+[[bin]]
+name = "babylon-client"
+path = "src/main.rs"
+
+[features]
+# R1.4 (Director ruling 2026-08-18, "bevy/dynamic_linking — RULED: APPROVED
+# WITH FENCE"): opt-in, LOCAL ITERATION ONLY — faster incremental rebuilds
+# via libbevy_dylib.so. Enable it with `mise run rust:client-dev-dylib`,
+# never a bare `cargo build --features dynamic_linking` in CI/release/pin-ceremony
+# context. Must NEVER be a member of `default` (see tools/
+# check_dynamic_linking_fence.sh, invariant 3). The fence's compiled half is
+# tests/dynamic_linking_fence.rs.
+dynamic_linking = ["bevy/dynamic_linking"]
+
+[dependencies]
+bevy = { version = "0.18", features = ["pan_camera", "webp"] }
+babylon-kernel = { path = "../babylon-kernel" }
+babylon-tick = { path = "../babylon-tick" }
+babylon-graph = { path = "../babylon-graph" }
+babylon-bsl = { path = "../babylon-bsl" }
+# PER-23 Slice 3 (ADR249 R9-R11): the headless dossier CLI reads the
+# fog-safe reader surface — the confined read-only Archive projection, never
+# game state, and never a writer path.
+babylon-persistence = { path = "../babylon-persistence" }
+earcut = "0.4.11"
+serde_json = "1"
+uuid = "1.24"
+# Client logging estate (Director directive 2026-07-28 for location +
+# rotation; Director-approved switch 2026-08-11, #503 item 7): the file
+# sink rides Bevy's own tracing stack via LogPlugin::custom_layer —
+# tracing-subscriber comes through bevy_log's re-export, no direct dep.
+# `log` stays: LogPlugin installs LogTracer, bridging this crate's
+# log:: call sites into tracing.
+log = "0.4"
+
+[dev-dependencies]
+# PER-23 Slice 3 live proof: the dossier CLI test clones the disposable
+# runtime template, commits real ticks, installs the Archive + reader-role
+# schemas, and drives the built binary against a confined login — the same
+# harness shape as babylon-persistence's reader_role_live, self-contained
+# per crate.
+babylon-persistence = { path = "../babylon-persistence" }
+babylon-practice-contract = { path = "../babylon-practice-contract" }
+postgres = { version = "=0.19.14", features = ["with-uuid-1"] }
+serde_json = "1"

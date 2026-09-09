@@ -1,0 +1,38 @@
+ADR131_p25_u5_electoral_fixture:
+  status: "accepted"
+  date: "2026-07-22"
+  title: >-
+    P25 U5 — the electoral fixture scenario: four NPC PoliticalFactions (the
+    LIBERAL_IMPERIAL and RESTORATIONIST duopoly machines + latent socdem and
+    fascist currents), a finance-donor Business, MEMBERSHIP edges into the
+    class base (the L-PRZ terrain in miniature: duopoly cross-class, currents
+    class-concentrated), and TRANSACTIONAL donor-dependence flows (duopoly
+    funded, socdem unfunded, fascist trickle) — built on the two_node
+    substrate; graph round-trip pinned. First production instantiation of
+    PoliticalFaction anywhere in engine scenarios.
+  supersedes: []
+  relates_to: ["ADR127", "ADR129", "ADR133"]
+  programs: ["25-political-superstructure"]
+
+  decision: |
+    (1) engine/scenarios/electoral_fixture.py: create_electoral_fixture_scenario()
+        composes the two_node material substrate (worker/owner/territory with
+        the exploitation-wages-tenancy triangle) with the §2.1 minimum
+        American terrain. All parties NPC (is_player=False) — the ambient
+        machine runs with zero player participation by design (T-B).
+        MEMBERSHIP and TRANSACTIONAL reuse existing edge kinds verbatim
+        (§5.2's no-new-edge rule); donor amounts ride Relationship.value_flow
+        (its declared semantic: value transfer amount).
+    (2) NOT registered in tools/regression_scenarios.py: byte-safety by
+        disjointness from the six qa scenarios, per the charter. U13 promotes
+        electoral scenarios into the gate via the declared ceremony.
+    (3) Deliberately NOT built here: the engine derivation of political-labor
+        flows feeding GraphInputs.political_labor_share (U8's W-C motion) and
+        weighted membership differentials (Relationship carries no weight
+        field; composition.py defaults weight=1.0 — differentiation comes
+        from WHICH classes each party reaches; a weight attribute is U8's
+        call if the platform math needs it).
+    (4) GATES: 4 fixture tests incl. from_graph round-trip of all four
+        parties; check:vocabulary clean (MEMBERSHIP party→class now has a
+        production producer); scenarios+dialectics suites 188/188;
+        qa:regression byte-identical.

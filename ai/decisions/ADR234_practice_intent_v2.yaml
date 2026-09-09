@@ -1,0 +1,110 @@
+ADR234_practice_intent_v2:
+  status: "accepted"
+  date: "2026-08-26"
+  title: >-
+    PracticeIntentV2 binds stable proposals to authoritative habitation while
+    preserving V1 and granting no material eligibility
+  crate: babylon-practice-contract
+  production_dependencies:
+    - babylon-kernel
+  forbidden_dependencies:
+    - babylon-graph
+    - babylon-bsl
+    - babylon-tick
+    - babylon-persistence
+    - babylon-client
+  live_activation: false
+  context: |
+    ADR233 makes campaign habitation and deterministic-policy authority
+    replayable, but it intentionally leaves the proposal identity to a later
+    versioned contract. PracticeIntentV1 cannot fill that role: its frozen bytes
+    have no stable input-authority identity, proposal nonce, resource-contract
+    quote, labor-process target, or distinct disruptive-practice identities.
+
+    Widening V1 would break its exact bytes and vectors. Using a runtime NodeId
+    or HyperedgeId as the proposal target would make a durable input depend on
+    allocator order. Letting an intent name worker participation or a generic
+    disruption magnitude would bypass the separately owned material resolvers.
+  decision: |
+    PracticeIntentV2 is a pure, database-free proposal contract owned by
+    `babylon-practice-contract`. The exact schema and vectors live in
+    `contracts/practice_intent_v2.yaml` and
+    `contracts/practice_intent_v2_vectors.jsonl`.
+
+    The intent uses domain `babylon.practice-intent.v2`, a zero-byte terminator,
+    and fixed big-endian fields. It binds schema version, submit and resolve
+    ticks, a canonical 16-byte input-authority identity, actor organization,
+    closed practice identity, tagged stable 32-byte target identity, canonical
+    16-byte proposal nonce, quoted content digest, quoted resource-contract
+    digest, parameters, and sorted unique evidence digests.
+
+    The next-week law requires `resolve_tick = checked_add(submit_after_tick,
+    1)`. The unique proposal key binds resolve tick, input authority, actor
+    organization, practice, tagged target, and nonce. The nonce distinguishes
+    genuinely different proposals and grants no priority. Canonical order is a
+    serialization law and grants no material priority.
+
+    V2 retains the three ratified identities and adds the five approved distinct
+    disruption proposals: ORGANIZE, AGITATE, MUTUAL_AID, STRIKE, BLOCKADE,
+    OCCUPATION, DAMAGE, and CAPITAL_STRIKE. Their closed target-tag table keeps
+    the immediate carriers distinct. STRIKE accepts only LABOR_PROCESS.
+    Blockade, occupation, damage, and capital strike retain their own target
+    families.
+
+    The V2 parameter representation has a Designed ceiling of 16 rows and 256
+    bytes per value, but every V2 semantic allowlist is empty. Material
+    magnitude, reservation, allocation, and worker decisions belong to their
+    versioned resolvers. Any parameter refuses; therefore a strike cannot name
+    participation or withholding. One intent admits at most 64 sorted unique
+    evidence digests and 16,384 canonical bytes. These Designed limits bound
+    serialization, allocation, and decode fuel. They are not actor capacity or
+    organization quotas.
+
+    `validate_practice_intent_authority_v2` first validates the intent, then
+    consumes the authoritative V2 ledger and resolves one active row matching
+    campaign, input authority, actor organization, and resolution tick. It
+    preserves the exact intent or authority error rather than flattening the
+    two closed registries.
+
+    The stable target identity is a domain-owned digest, not a runtime graph
+    allocator identity. A later resolver must map it through its own sealed
+    content or register contract. This slice cannot inspect the graph or infer
+    material connection.
+
+    V1 authority, intent, budget, refusal, bytes, digests, and vectors remain
+    unchanged. V1 and V2 intent decoders refuse the other domain. The accepted
+    input ledger, ResolvedPracticeBatchV2, resource reservation, capacity
+    allocation, persistence, BSL effects, worker participation, receipts,
+    Archive, and Bevy remain separate later owners.
+  consequences: |
+    Player and deterministic-policy proposals now have one stable identity that
+    a later shared input rail can seal without trusting a client-side actor or
+    submission order. The authoritative habitation ledger has its first pure
+    consumer, while material eligibility and execution remain unavailable.
+
+    This slice creates no accepted input, graph or register read, graph write,
+    budget debit, reservation, labor withholding, receipt, outbox row, database
+    row, player verb, or gameplay effect. Future construction practices require
+    a new version after their concrete consumers and target laws exist.
+  verification: |
+    Rust tests pin independent literal bytes and SHA-256, round trips, the
+    complete practice and target tables, target mismatches, exact error codes,
+    next-week overflow, empty parameter semantics, evidence order and
+    uniqueness, maximum and maximum-plus-one limits, stable proposal keys, and
+    authority-ledger consumption. Language-neutral vectors exercise domain,
+    schema, enums, target law, timing, truncation, trailing bytes, parameters,
+    and evidence refusals. Cross-version tests prove V1 and V2 refuse one
+    another while the complete V1 suite stays unchanged.
+  preserves:
+    - ADR227 Practice Contract V1 byte and activation boundary
+    - ADR229 Rust executable contract ownership
+    - ADR232 source, causal, and successor-versioning law
+    - ADR233 authoritative campaign habitation and input-authority ledger
+  supersedes: []
+  related:
+    - ADR220_rust_owned_postgresql_persistence_boundary
+    - ADR223_whole_tick_atomicity_world_hash
+    - ADR227_practice_contract_groundwork
+    - ADR229_rust_gameplay_contract_authority
+    - ADR232_neel_integration_program_architecture
+    - ADR233_practice_input_authority_v2

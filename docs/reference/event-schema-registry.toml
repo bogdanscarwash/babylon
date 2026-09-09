@@ -1,0 +1,903 @@
+### Event-schema registry — BSL `emit` payloads, tiered by evidence class.
+###
+### Theme 7 of the BSL refactor program (C-1 rescope, 2026-08-18). Loaded by
+### `babylon.sentinels.event_schema_registry.registry.load_registry`; synced
+### against `EVENT_BUILDERS` by `babylon.sentinels.event_schema_registry.sync`
+### (the one-way `EVENT_BUILDERS ⊆ registry` check, R4.4.1); proved against a
+### FRESH re-scan of `content/rules/*.bsl` and `EVENT_BUILDERS` on every test
+### run by `tests/unit/sentinels/test_event_schema_registry.py` — this file
+### is a snapshot, not a trusted-forever transcription, and a future emit
+### site or builder this snapshot does not yet know about reds that test
+### until the snapshot is updated (the same ratchet
+### `sentinels/fallback_coverage` already runs for the bus-boundary surface).
+###
+### Full design rationale (why three tiers, what each key's `source`/
+### `required` mean, why unminted names are not tier rows) lives in
+### `src/babylon/sentinels/event_schema_registry/registry.py`'s module
+### docstring — read that before editing this file by hand.
+###
+### BSL content payload keys are NEVER renamed here (port-AS-IS, ADR183):
+### Tier 1 keys are transcribed in BSL's own kebab-case exactly as content
+### spells them; Tier 2 keys are transcribed in EVENT_BUILDERS' own
+### snake_case exactly as the builder spells them. The sync check normalizes
+### (`_` <-> `-`) when COMPARING the two; this file never does.
+
+# Version 2 adds the required fresh-parse site and distinct-name totals.
+schema_version = 2
+measured_at = "2026-09-01"
+# The fresh AST count of `babylon.models.enums.events.EventType` members —
+# tier1 + tier2 + tier3 must sum to exactly this (CLAUDE.md's "100",
+# AST-verified, corrects the BSL-refactor-program survey's stale "98").
+python_event_type_total = 100
+# Fresh parse totals across every `(emit …)` form and distinct event name.
+# The registry test re-measures both values on every run.
+bsl_emit_site_total = 18
+bsl_emit_name_total = 16
+bsl_content_glob = "rust/crates/babylon-tick/content/rules/*.bsl"
+
+# =============================================================================
+# TIER 1 — verified-bsl (15 members; 15 real `(emit …)` distinct EventTypes
+# out of the 18 total `(emit …)` sites and 16 distinct event names a fresh scan
+# of content/rules/*.bsl finds; the one remaining BSL-only name is in
+# `unminted_bsl_only` below).
+# =============================================================================
+
+[[tier1]]
+event_type = "ENTITY_DEATH"
+citations = ["rust/crates/babylon-tick/content/rules/vitality.bsl:96"]
+keys = [
+  { name = "entity-id", required = true, source = "bsl" },
+  { name = "wealth", required = true, source = "bsl" },
+  { name = "consumption-needs", required = true, source = "bsl" },
+  { name = "s-bio", required = true, source = "bsl" },
+  { name = "s-class", required = true, source = "bsl" },
+  { name = "cause", required = false, source = "builder-only", note = "EVENT_BUILDERS' EntityDeathEvent builder reads payload.get('cause', 'unknown') defensively; vitality.bsl:90-95's own comment states why no BSL site provides it — §2.8 admits no string in a payload, so the frozen `cause` discriminant does not travel and is recoverable from the other fields instead (drained < death_threshold -> wealth_threshold, else starvation)." },
+]
+
+[[tier1]]
+event_type = "CONSCIOUSNESS_TRANSMISSION"
+citations = ["rust/crates/babylon-tick/content/rules/solidarity.bsl:312"]
+keys = [
+  { name = "source-id", required = true, source = "bsl" },
+  { name = "target-id", required = true, source = "bsl" },
+  { name = "delta", required = true, source = "bsl" },
+  { name = "solidarity-strength", required = true, source = "bsl" },
+  { name = "source-consciousness", required = true, source = "bsl" },
+  { name = "old-target-consciousness", required = true, source = "bsl" },
+  { name = "new-target-consciousness", required = true, source = "bsl" },
+]
+
+[[tier1]]
+event_type = "MASS_AWAKENING"
+citations = ["rust/crates/babylon-tick/content/rules/solidarity.bsl:469"]
+keys = [
+  { name = "target-id", required = true, source = "bsl" },
+  { name = "old-consciousness", required = true, source = "bsl" },
+  { name = "new-consciousness", required = true, source = "bsl" },
+  { name = "triggering-source", required = true, source = "bsl" },
+]
+
+[[tier1]]
+event_type = "EXCESSIVE_FORCE"
+citations = ["rust/crates/babylon-tick/content/rules/struggle-spark.bsl:50"]
+keys = [
+  { name = "subject", required = true, source = "bsl" },
+  { name = "repression", required = true, source = "bsl" },
+  { name = "backfire", required = true, source = "bsl" },
+  { name = "incident-tick", required = true, source = "bsl" },
+  { name = "node-id", required = false, source = "builder-only", note = "The frozen Python EVENT_BUILDERS entry reads node_id, while Amendment AJ's BSL projection emits the observed carrier under subject. This spelling and identity-shape divergence is recorded rather than hidden." },
+  { name = "spark-probability", required = false, source = "builder-only", note = "The frozen Python builder still reads spark_probability defensively. Amendment AJ forbids authored event probability: BSL derives likelihood from the kernel recognizer preimage and never emits this key." },
+]
+
+[[tier1]]
+event_type = "LIFECYCLE_TRANSITION"
+citations = ["rust/crates/babylon-tick/content/rules/lifecycle.bsl:407"]
+keys = [
+  { name = "territory-id", required = true, source = "bsl" },
+  { name = "pop-d", required = true, source = "bsl" },
+  { name = "pop-p", required = true, source = "bsl" },
+  { name = "pop-d-prime", required = true, source = "bsl" },
+  { name = "dependency-ratio", required = true, source = "bsl" },
+]
+
+[[tier1]]
+event_type = "LEGITIMATION_CRISIS"
+citations = ["rust/crates/babylon-tick/content/rules/lifecycle.bsl:420"]
+keys = [
+  { name = "territory-id", required = true, source = "bsl" },
+  { name = "legitimation-index", required = true, source = "bsl" },
+]
+
+[[tier1]]
+event_type = "LEGITIMATION_RECOVERY"
+citations = ["rust/crates/babylon-tick/content/rules/lifecycle.bsl:424"]
+keys = [
+  { name = "territory-id", required = true, source = "bsl" },
+  { name = "legitimation-index", required = true, source = "bsl" },
+]
+
+[[tier1]]
+event_type = "VALUE_TRANSFER"
+citations = ["rust/crates/babylon-tick/content/rules/dispossession.bsl:403"]
+keys = [
+  { name = "territory", required = true, source = "bsl" },
+  { name = "total-transferred", required = true, source = "bsl" },
+  { name = "net-received", required = true, source = "bsl" },
+  { name = "deadweight-loss", required = true, source = "bsl" },
+]
+
+[[tier1]]
+event_type = "DISPOSSESSION_EVENT"
+citations = ["rust/crates/babylon-tick/content/rules/dispossession.bsl:414"]
+keys = [
+  { name = "territory", required = true, source = "bsl" },
+  { name = "intensity", required = true, source = "bsl" },
+  { name = "foreclosure-rate", required = true, source = "bsl" },
+  { name = "eviction-rate", required = true, source = "bsl" },
+  { name = "displacement-rate", required = true, source = "bsl" },
+]
+
+[[tier1]]
+event_type = "CONTROL_RATIO_CRISIS"
+citations = [
+  "rust/crates/babylon-tick/content/rules/control-ratio.bsl:327",
+  "rust/crates/babylon-tick/content/rules/control-ratio.bsl:337",
+]
+# Two-shape payload, D-recorded (control_ratio.py:210-247's frozen origin;
+# ADR183 port-AS-IS): the enforcer-population > 0 branch (:321) emits all 8
+# keys; the = 0 branch (:331) omits actual-ratio and control-ratio. The
+# registry lists the UNION with the two branch-specific keys flagged
+# optional, never a forced single shape.
+keys = [
+  { name = "enforcer-population", required = true, source = "bsl" },
+  { name = "prisoner-population", required = true, source = "bsl" },
+  { name = "control-capacity", required = true, source = "bsl" },
+  { name = "max-controllable", required = true, source = "bsl" },
+  { name = "over-capacity-by", required = true, source = "bsl" },
+  { name = "capacity-threshold", required = true, source = "bsl" },
+  { name = "actual-ratio", required = false, source = "bsl", note = "present only in the enforcer-population > 0 branch (control-ratio.bsl:332); the = 0 branch omits it (deliberate, D-recorded — both are the frozen engine's real shapes, not a defect)." },
+  { name = "control-ratio", required = false, source = "bsl", note = "present only in the enforcer-population > 0 branch (control-ratio.bsl:334); the = 0 branch omits it (same D-record as actual-ratio)." },
+]
+
+[[tier1]]
+event_type = "TERMINAL_DECISION"
+citations = [
+  "rust/crates/babylon-tick/content/rules/control-ratio.bsl:375",
+  "rust/crates/babylon-tick/content/rules/control-ratio.bsl:382",
+]
+# Same 5 keys in both branches (outcome 1=revolution / 0=genocide is the only
+# difference) — no optional flag needed, unlike CONTROL_RATIO_CRISIS above.
+keys = [
+  { name = "outcome", required = true, source = "bsl" },
+  { name = "avg-organization", required = true, source = "bsl" },
+  { name = "revolution-threshold", required = true, source = "bsl" },
+  { name = "prisoner-population", required = true, source = "bsl" },
+  { name = "enforcer-population", required = true, source = "bsl" },
+]
+
+[[tier1]]
+event_type = "SUPERWAGE_CRISIS"
+citations = ["rust/crates/babylon-tick/content/rules/decomposition.bsl:266"]
+keys = [
+  { name = "receiver", required = true, source = "bsl" },
+  { name = "desired-wages", required = true, source = "bsl" },
+  { name = "available-pool", required = true, source = "bsl" },
+  { name = "receiver-id", required = false, source = "builder-only", note = "EVENT_BUILDERS' SuperwageCrisisEvent builder reads payload.get('receiver_id', ...); decomposition.bsl:266-269 emits a bare 'receiver' key instead — a real spelling divergence between the frozen Python event's field name and the BSL port's payload, not yet reconciled (repair is R4.4.2, gated)." },
+  { name = "payer-id", required = false, source = "builder-only", note = "EVENT_BUILDERS' SuperwageCrisisEvent builder also reads payload.get('payer_id', ...); no observed BSL emit site provides any payer-side key at all — decomposition.bsl:266-269's payload is receiver-only." },
+]
+
+[[tier1]]
+event_type = "CLASS_DECOMPOSITION"
+citations = ["rust/crates/babylon-tick/content/rules/decomposition.bsl:389"]
+keys = [
+  { name = "source-class", required = true, source = "bsl" },
+  { name = "source-population", required = true, source = "bsl" },
+  { name = "source-wealth", required = true, source = "bsl" },
+  { name = "enforcer-fraction", required = true, source = "bsl" },
+  { name = "proletariat-fraction", required = true, source = "bsl" },
+  { name = "population-transferred-to-enforcer", required = true, source = "bsl" },
+  { name = "population-transferred-to-proletariat", required = true, source = "bsl" },
+  { name = "wealth-transferred-to-enforcer", required = true, source = "bsl" },
+  { name = "wealth-transferred-to-proletariat", required = true, source = "bsl" },
+]
+
+[[tier1]]
+event_type = "SURPLUS_EXTRACTION"
+citations = ["rust/crates/babylon-tick/content/rules/imperial-rent.bsl:782"]
+keys = [
+  { name = "source", required = true, source = "bsl" },
+  { name = "target", required = true, source = "bsl" },
+  { name = "amount", required = true, source = "bsl" },
+  { name = "source-id", required = false, source = "builder-only", note = "the frozen Python ExtractionEvent builder (event_builders.py:129) reads source_id/target_id/mechanism from the payload; the BSL site provides the endpoints as `source`/`target` and no mechanism string (§2.8 admits no string in a payload) — the builder keys stay declared as the frozen reference surface, recoverable from the bsl keys at any future bridge" },
+  { name = "target-id", required = false, source = "builder-only", note = "see source-id's note — one rename pair, one frozen builder" },
+  { name = "mechanism", required = false, source = "builder-only", note = "see source-id's note — no BSL site provides a string payload field" },
+]
+
+[[tier1]]
+event_type = "POPULATION_ATTRITION"
+citations = ["rust/crates/babylon-tick/content/rules/vitality-attrition.bsl:583"]
+keys = [
+  { name = "entity-id", required = true, source = "bsl" },
+  { name = "deaths", required = true, source = "bsl" },
+  { name = "remaining-population", required = true, source = "bsl" },
+  { name = "failing-certain", required = true, source = "bsl" },
+  { name = "attrition-rate", required = true, source = "bsl" },
+]
+
+# =============================================================================
+# BSL-only emit names absent from Python's EventType enum entirely — NOT part
+# of the three tiers above (which exhaustively partition the 100-member
+# Python universe; folding this in would break that partition and falsely
+# imply it is a real, disposed member).
+# =============================================================================
+
+[[unminted_bsl_only]]
+name = "SUBSISTENCE_CLEARANCE_MEASURED"
+citation = "rust/crates/babylon-tick/content/rules/vitality-attrition.bsl:371"
+note = "vitality-attrition.bsl's own 'THE EVENT TYPE' comment (#491 T5): a knowingly-unminted measure event from the subsistence-clearing rule — disclosed in content rather than silently minted; no Python EventType member exists and minting is a forward-declared, deliberately out-of-scope follow-up (Python frozen/reference-only, ADR172/Amendment AE). Loads clean: nothing declares a defvocabulary naming EventType for its scenario, so check_enum_ref_membership stays inert on the undeclared kind."
+keys = [
+  { name = "entity-id", required = true, source = "bsl" },
+  { name = "w-bar", required = true, source = "bsl" },
+  { name = "s-stock", required = true, source = "bsl" },
+  { name = "mass-sum", required = true, source = "bsl" },
+  { name = "clearing", required = true, source = "bsl" },
+  { name = "failing-certain", required = true, source = "bsl" },
+  { name = "straddle-band", required = true, source = "bsl" },
+]
+
+# =============================================================================
+# TIER 2 — verified-python-builder (65 members: every EVENT_BUILDERS entry
+# minus the 15 Tier 1 EventTypes above — 80 total builder entries, AST-
+# counted). Keys are transcribed VERBATIM in EVENT_BUILDERS' own snake_case
+# (never converted to kebab — that would misrepresent an un-cited spelling as
+# BSL-native). No completeness claim: this is what the builder currently
+# reads, nothing more.
+# =============================================================================
+
+[[tier2]]
+event_type = "ASPECT_REVERSAL"
+keys = [
+  { name = "source_id", required = true, source = "builder" },
+  { name = "target_id", required = true, source = "builder" },
+  { name = "previous_dominant", required = true, source = "builder" },
+  { name = "new_dominant", required = true, source = "builder" },
+]
+
+[[tier2]]
+event_type = "BETRAYAL_INTEGRAL_CROSSED"
+keys = [
+  { name = "class_id", required = true, source = "builder" },
+  { name = "incumbent_id", required = true, source = "builder" },
+  { name = "integral", required = true, source = "builder" },
+  { name = "threshold", required = true, source = "builder" },
+]
+
+[[tier2]]
+event_type = "BIFURCATION_THRESHOLD"
+keys = [
+  { name = "fips", required = true, source = "builder" },
+  { name = "score", required = true, source = "builder" },
+  { name = "direction", required = true, source = "builder" },
+  { name = "solidarity_density", required = true, source = "builder" },
+  { name = "legitimation", required = true, source = "builder" },
+  { name = "class_burden_ratio", required = true, source = "builder" },
+  { name = "threshold", required = true, source = "builder" },
+]
+
+[[tier2]]
+event_type = "CALIBRATION_AXIOM_VIOLATION"
+keys = [
+  { name = "industry", required = true, source = "builder" },
+  { name = "year", required = true, source = "builder" },
+  { name = "ratio", required = true, source = "builder" },
+  { name = "threshold", required = true, source = "builder" },
+]
+
+[[tier2]]
+event_type = "CALIBRATION_PHI_HOUR_OUTLIER"
+keys = [
+  { name = "county_fips", required = true, source = "builder" },
+  { name = "phi_hour", required = true, source = "builder" },
+  { name = "threshold_low", required = true, source = "builder" },
+  { name = "threshold_high", required = true, source = "builder" },
+]
+
+[[tier2]]
+event_type = "CALIBRATION_QCEW_CARRY_FORWARD"
+keys = [
+  { name = "county_fips", required = true, source = "builder" },
+  { name = "year", required = true, source = "builder" },
+  { name = "look_back_year", required = true, source = "builder" },
+  { name = "look_back_distance", required = true, source = "builder" },
+]
+
+[[tier2]]
+event_type = "CAPITAL_STRIKE"
+keys = [
+  { name = "sovereign_id", required = true, source = "builder" },
+  { name = "incidence", required = true, source = "builder" },
+  { name = "tolerance", required = true, source = "builder" },
+  { name = "outflow", required = true, source = "builder" },
+]
+
+[[tier2]]
+event_type = "CIVIL_WAR_DECLARED"
+keys = [
+  { name = "parent_sovereign_id", required = true, source = "builder" },
+  { name = "secessionist_faction_id", required = true, source = "builder" },
+  { name = "contested_territory_count", required = true, source = "builder" },
+]
+
+[[tier2]]
+event_type = "CO_OPTIVE_BREAKDOWN"
+keys = [
+  { name = "source_id", required = true, source = "builder" },
+  { name = "target_id", required = true, source = "builder" },
+  { name = "multiplier", required = true, source = "builder" },
+  { name = "latent_released", required = true, source = "builder" },
+]
+
+[[tier2]]
+event_type = "CRISIS_PHASE_TRANSITION"
+keys = [
+  { name = "fips", required = true, source = "builder" },
+  { name = "previous_phase", required = true, source = "builder" },
+  { name = "new_phase", required = true, source = "builder" },
+  { name = "profit_rate", required = true, source = "builder" },
+  { name = "crisis_duration", required = true, source = "builder" },
+]
+
+[[tier2]]
+event_type = "DELIVERY_GAP_CROSSED"
+keys = [
+  { name = "class_id", required = true, source = "builder" },
+  { name = "incumbent_id", required = true, source = "builder" },
+  { name = "gap", required = true, source = "builder" },
+  { name = "betrayal_integral", required = true, source = "builder" },
+]
+
+[[tier2]]
+event_type = "DISILLUSION_WINDOW_OPEN"
+keys = [
+  { name = "class_id", required = true, source = "builder" },
+  { name = "window_ticks", required = true, source = "builder" },
+  { name = "bridges_present", required = true, source = "builder" },
+]
+
+[[tier2]]
+event_type = "DISPOSSESSION_CASCADE"
+keys = [
+  { name = "fips", required = true, source = "builder" },
+  { name = "cumulative_la_decline", required = true, source = "builder" },
+  { name = "milestone_crossed", required = true, source = "builder" },
+  { name = "current_la_share", required = true, source = "builder" },
+  { name = "baseline_la_share", required = true, source = "builder" },
+]
+
+[[tier2]]
+event_type = "DOCTRINE_PURGE_FAILED"
+keys = [
+  { name = "org_id", required = true, source = "builder" },
+  { name = "node_id", required = true, source = "builder" },
+]
+
+[[tier2]]
+event_type = "DOCTRINE_TRAP_ESCAPED"
+keys = [
+  { name = "org_id", required = true, source = "builder" },
+  { name = "node_id", required = true, source = "builder" },
+]
+
+[[tier2]]
+event_type = "DOCTRINE_TRAP_SPRUNG"
+keys = [
+  { name = "org_id", required = true, source = "builder" },
+  { name = "node_id", required = true, source = "builder" },
+]
+
+[[tier2]]
+event_type = "DUAL_POWER_ACTIVE"
+keys = [
+  { name = "territory_id", required = true, source = "builder" },
+  { name = "control_level_sum", required = true, source = "builder" },
+  { name = "competing_sovereign_ids", required = true, source = "builder" },
+]
+
+[[tier2]]
+event_type = "ECOLOGICAL_OVERSHOOT"
+keys = [
+  { name = "overshoot_ratio", required = true, source = "builder" },
+  { name = "total_consumption", required = true, source = "builder" },
+  { name = "total_biocapacity", required = true, source = "builder" },
+]
+
+[[tier2]]
+event_type = "ECONOMIC_CRISIS"
+keys = [
+  { name = "pool_ratio", required = true, source = "builder" },
+  { name = "aggregate_tension", required = true, source = "builder" },
+  { name = "decision", required = true, source = "builder" },
+  { name = "wage_delta", required = true, source = "builder" },
+]
+
+[[tier2]]
+event_type = "EDGE_MODE_TRANSITION"
+keys = [
+  { name = "source_id", required = true, source = "builder" },
+  { name = "target_id", required = true, source = "builder" },
+  { name = "predicate", required = true, source = "builder" },
+  { name = "description", required = true, source = "builder" },
+  { name = "from_mode", required = true, source = "builder" },
+  { name = "to_mode", required = true, source = "builder" },
+]
+
+[[tier2]]
+event_type = "ELECTIONS_SUSPENDED"
+keys = [
+  { name = "sovereign_id", required = true, source = "builder" },
+  { name = "legitimation_index", required = true, source = "builder" },
+]
+
+[[tier2]]
+event_type = "ELECTION_HELD"
+keys = [
+  { name = "sovereign_id", required = true, source = "builder" },
+  { name = "jurisdiction_level", required = true, source = "builder" },
+  { name = "turnout", required = true, source = "builder" },
+  { name = "competitiveness", required = true, source = "builder" },
+  { name = "winning_coalition", required = true, source = "builder" },
+  { name = "spoiler_target", required = true, source = "builder" },
+  { name = "spoiler_shift", required = true, source = "builder" },
+]
+
+[[tier2]]
+event_type = "FACTION_VICTORY"
+keys = [
+  { name = "faction_id", required = true, source = "builder" },
+  { name = "aggregate_influence_share", required = true, source = "builder" },
+]
+
+[[tier2]]
+event_type = "FASCIST_DRIFT"
+keys = [
+  { name = "node_id", required = true, source = "builder" },
+  { name = "fascist_pull", required = true, source = "builder" },
+  { name = "fascist_alignment", required = true, source = "builder" },
+  { name = "entitlement", required = true, source = "builder" },
+  { name = "solidarity", required = true, source = "builder" },
+  { name = "regime", required = true, source = "builder" },
+]
+
+[[tier2]]
+event_type = "FASCIST_RECRUITMENT"
+keys = [
+  { name = "node_id", required = true, source = "builder" },
+  { name = "faction_id", required = true, source = "builder" },
+  { name = "fascist_alignment", required = true, source = "builder" },
+]
+
+[[tier2]]
+event_type = "FASCIST_REVANCHISM"
+keys = [
+  { name = "core_worker_id", required = true, source = "builder" },
+  { name = "revolutionary_capacity", required = true, source = "builder" },
+  { name = "identity_boost", required = true, source = "builder" },
+  { name = "acquiescence_boost", required = true, source = "builder" },
+  { name = "narrative_hint", required = true, source = "builder" },
+]
+
+[[tier2]]
+event_type = "GOVERNANCE_FORK_RESOLVED"
+keys = [
+  { name = "org_id", required = true, source = "builder" },
+  { name = "sovereign_id", required = true, source = "builder" },
+  { name = "arm", required = true, source = "builder" },
+  { name = "geometry", required = true, source = "builder" },
+  { name = "contact", required = true, source = "builder" },
+]
+
+[[tier2]]
+event_type = "GOVERNMENT_FORMED"
+keys = [
+  { name = "sovereign_id", required = true, source = "builder" },
+  { name = "governing_coalition", required = true, source = "builder" },
+  { name = "faction_balance_shift", required = true, source = "builder" },
+]
+
+[[tier2]]
+event_type = "HOPE_SPIKE"
+keys = [
+  { name = "class_id", required = true, source = "builder" },
+  { name = "hope", required = true, source = "builder" },
+  { name = "platform_id", required = true, source = "builder" },
+]
+
+[[tier2]]
+event_type = "HOST_DERECOGNIZED"
+keys = [
+  { name = "org_id", required = true, source = "builder" },
+  { name = "host_id", required = true, source = "builder" },
+  { name = "influence", required = true, source = "builder" },
+  { name = "threshold", required = true, source = "builder" },
+]
+
+[[tier2]]
+event_type = "IMPERIAL_SUBSIDY"
+keys = [
+  { name = "source_id", required = true, source = "builder" },
+  { name = "target_id", required = true, source = "builder" },
+  { name = "amount", required = true, source = "builder" },
+  { name = "repression_boost", required = true, source = "builder" },
+]
+
+[[tier2]]
+event_type = "INHERITANCE_TRANSFER"
+keys = [
+  { name = "territory_id", required = true, source = "builder" },
+  { name = "total_transferred", required = true, source = "builder" },
+  { name = "care_consumed", required = true, source = "builder" },
+  { name = "net_inheritance", required = true, source = "builder" },
+  { name = "inheritance_gini", required = true, source = "builder" },
+]
+
+[[tier2]]
+event_type = "INSTITUTION_BONAPARTIST_MODE"
+keys = [
+  { name = "institution_id", required = true, source = "builder" },
+  { name = "bonapartist_weight", required = true, source = "builder" },
+]
+
+[[tier2]]
+event_type = "INSTITUTION_FACTION_SHIFT"
+keys = [
+  { name = "institution_id", required = true, source = "builder" },
+  { name = "old_fraction", required = true, source = "builder" },
+  { name = "new_fraction", required = true, source = "builder" },
+  { name = "weights", required = true, source = "builder" },
+]
+
+[[tier2]]
+event_type = "LATENT_CONTRADICTION_RELEASE"
+keys = [
+  { name = "node_id", required = true, source = "builder" },
+  { name = "released_fields", required = true, source = "builder" },
+]
+
+[[tier2]]
+event_type = "LEGITIMATION_REFRESH"
+keys = [
+  { name = "territory_id", required = true, source = "builder" },
+  { name = "refresh", required = true, source = "builder" },
+  { name = "legitimation_index", required = true, source = "builder" },
+]
+
+[[tier2]]
+event_type = "LEVEL_TRANSITION"
+keys = [
+  { name = "opposition", required = true, source = "builder" },
+  { name = "from_level", required = true, source = "builder" },
+  { name = "to_level", required = true, source = "builder" },
+  { name = "gap", required = true, source = "builder" },
+  { name = "rate", required = true, source = "builder" },
+]
+
+[[tier2]]
+event_type = "LINE_STRUGGLE_SPLIT"
+keys = [
+  { name = "org_id", required = true, source = "builder" },
+  { name = "old_stance", required = true, source = "builder" },
+  { name = "new_stance", required = true, source = "builder" },
+  { name = "assets_retained", required = true, source = "builder" },
+]
+
+[[tier2]]
+event_type = "LOCKOUT"
+keys = [
+  { name = "org_id", required = true, source = "builder" },
+  { name = "target_id", required = true, source = "builder" },
+  { name = "wage_attenuation", required = true, source = "builder" },
+]
+
+[[tier2]]
+event_type = "MARKET_CORRECTION"
+keys = [
+  { name = "overhang", required = true, source = "builder" },
+  { name = "serviceable", required = true, source = "builder" },
+  { name = "profit_rate", required = true, source = "builder" },
+  { name = "fictitious_log_before", required = true, source = "builder" },
+  { name = "fictitious_log_after", required = true, source = "builder" },
+  { name = "price_log_before", required = true, source = "builder" },
+  { name = "price_log_after", required = true, source = "builder" },
+]
+
+[[tier2]]
+event_type = "ORGANIZATIONAL_ACTION"
+keys = [
+  { name = "layer0_count", required = true, source = "builder" },
+  { name = "action_count", required = true, source = "builder" },
+  { name = "org_count", required = true, source = "builder" },
+]
+
+[[tier2]]
+event_type = "ORGANIZATIONAL_FRACTURE"
+keys = [
+  { name = "org_id", required = true, source = "builder" },
+  { name = "member_id", required = true, source = "builder" },
+  { name = "chauvinism", required = true, source = "builder" },
+  { name = "defection_probability", required = true, source = "builder" },
+]
+
+[[tier2]]
+event_type = "PERIPHERAL_REVOLT"
+keys = [
+  { name = "node_id", required = true, source = "builder" },
+  { name = "edges_severed", required = true, source = "builder" },
+  { name = "p_acquiescence", required = true, source = "builder" },
+  { name = "p_revolution", required = true, source = "builder" },
+  { name = "capital_labor_gap", required = true, source = "builder" },
+  { name = "narrative_hint", required = true, source = "builder" },
+]
+
+[[tier2]]
+event_type = "PHASE_TRANSITION"
+keys = [
+  { name = "previous_state", required = true, source = "builder" },
+  { name = "new_state", required = true, source = "builder" },
+  { name = "percolation_ratio", required = true, source = "builder" },
+  { name = "num_components", required = true, source = "builder" },
+  { name = "largest_component_size", required = true, source = "builder" },
+  { name = "cadre_density", required = true, source = "builder" },
+  { name = "is_resilient", required = true, source = "builder" },
+]
+
+[[tier2]]
+event_type = "POGROM"
+keys = [
+  { name = "org_id", required = true, source = "builder" },
+  { name = "target_id", required = true, source = "builder" },
+  { name = "repression_increment", required = true, source = "builder" },
+  { name = "wealth_destroyed", required = true, source = "builder" },
+]
+
+[[tier2]]
+event_type = "POLICY_ENACTED"
+keys = [
+  { name = "sovereign_id", required = true, source = "builder" },
+  { name = "policy_axis", required = true, source = "builder" },
+  { name = "magnitude", required = true, source = "builder" },
+  { name = "delivery_ratio", required = true, source = "builder" },
+]
+
+[[tier2]]
+event_type = "POLICY_PREEMPTED"
+keys = [
+  { name = "sovereign_id", required = true, source = "builder" },
+  { name = "policy_axis", required = true, source = "builder" },
+  { name = "preempting_sovereign", required = true, source = "builder" },
+]
+
+[[tier2]]
+event_type = "POLICY_STRUCK"
+keys = [
+  { name = "sovereign_id", required = true, source = "builder" },
+  { name = "policy_axis", required = true, source = "builder" },
+  { name = "striking_institution", required = true, source = "builder" },
+]
+
+[[tier2]]
+event_type = "POPULAR_FRONT_CALLED"
+keys = [
+  { name = "axis_progress", required = true, source = "builder" },
+  { name = "trigger", required = true, source = "builder" },
+]
+
+[[tier2]]
+event_type = "POWER_VACUUM"
+keys = [
+  { name = "comprador_id", required = true, source = "builder" },
+  { name = "comprador_wealth", required = true, source = "builder" },
+  { name = "subsistence_threshold", required = true, source = "builder" },
+  { name = "revolutionary_capacity", required = true, source = "builder" },
+  { name = "jackson_threshold", required = true, source = "builder" },
+]
+
+[[tier2]]
+event_type = "PRINCIPAL_CONTRADICTION_SHIFT"
+keys = [
+  { name = "previous_field", required = true, source = "builder" },
+  { name = "new_field", required = true, source = "builder" },
+  { name = "max_abs_df_dt", required = true, source = "builder" },
+]
+
+[[tier2]]
+event_type = "RED_BROWN_COUP"
+keys = [
+  { name = "org_id", required = true, source = "builder" },
+  { name = "defections", required = true, source = "builder" },
+  { name = "member_count", required = true, source = "builder" },
+]
+
+[[tier2]]
+event_type = "RED_SETTLER_TRAP_DETECTED"
+keys = [
+  { name = "faction_id", required = true, source = "builder" },
+  { name = "class_reduction", required = true, source = "builder" },
+  { name = "colonial_stance", required = true, source = "builder" },
+]
+
+[[tier2]]
+event_type = "RESERVE_ARMY_PRESSURE"
+keys = [
+  { name = "territory", required = true, source = "builder" },
+  { name = "reserve_ratio", required = true, source = "builder" },
+  { name = "wage_pressure", required = true, source = "builder" },
+  { name = "median_wage", required = true, source = "builder" },
+]
+
+[[tier2]]
+event_type = "REVOLUTIONARY_OFFENSIVE"
+keys = [
+  { name = "periphery_id", required = true, source = "builder" },
+  { name = "revolutionary_capacity", required = true, source = "builder" },
+  { name = "agitation_boost", required = true, source = "builder" },
+  { name = "narrative_hint", required = true, source = "builder" },
+]
+
+[[tier2]]
+event_type = "RUPTURE"
+keys = [
+  { name = "edge", required = true, source = "builder" },
+  { name = "opposition", required = true, source = "builder" },
+  { name = "gap", required = true, source = "builder" },
+  { name = "rate", required = true, source = "builder" },
+]
+
+[[tier2]]
+event_type = "SECESSION_DECLARED"
+keys = [
+  { name = "secessionist_faction_id", required = true, source = "builder" },
+  { name = "parent_sovereign_id", required = true, source = "builder" },
+  { name = "observer_triggered", required = true, source = "builder" },
+  { name = "contiguous_territory_ids", required = true, source = "builder" },
+]
+
+[[tier2]]
+event_type = "SOLIDARITY_SPIKE"
+keys = [
+  { name = "node_id", required = true, source = "builder" },
+  { name = "solidarity_gained", required = true, source = "builder" },
+  { name = "edges_affected", required = true, source = "builder" },
+  { name = "triggered_by", required = true, source = "builder" },
+]
+
+[[tier2]]
+event_type = "SOVEREIGN_COLLAPSE"
+keys = [
+  { name = "sovereign_id", required = true, source = "builder" },
+  { name = "trigger", required = true, source = "builder" },
+  { name = "claimed_territories_count", required = true, source = "builder" },
+]
+
+[[tier2]]
+event_type = "SPONTANEOUS_RIOT"
+keys = [
+  { name = "node_id", required = true, source = "builder" },
+  { name = "volatility", required = true, source = "builder" },
+  { name = "organizational_discipline", required = true, source = "builder" },
+  { name = "riot_risk", required = true, source = "builder" },
+  { name = "wealth_before", required = true, source = "builder" },
+  { name = "wealth_after", required = true, source = "builder" },
+  { name = "narrative_hint", required = true, source = "builder" },
+]
+
+[[tier2]]
+event_type = "STATE_REPRESSION"
+keys = [
+  { name = "org_id", required = true, source = "builder" },
+  { name = "target_id", required = true, source = "builder" },
+  { name = "backfire_delta", required = true, source = "builder" },
+]
+
+[[tier2]]
+event_type = "STATE_SURVEILLANCE"
+keys = [
+  { name = "org_id", required = true, source = "builder" },
+  { name = "target_id", required = true, source = "builder" },
+  { name = "backfire_delta", required = true, source = "builder" },
+]
+
+[[tier2]]
+event_type = "TERRITORY_TRANSITION"
+keys = [
+  { name = "territory_id", required = true, source = "builder" },
+  { name = "from_sovereign_id", required = true, source = "builder" },
+  { name = "to_sovereign_id", required = true, source = "builder" },
+  { name = "from_winning_faction_id", required = true, source = "builder" },
+  { name = "to_winning_faction_id", required = true, source = "builder" },
+  { name = "reason", required = true, source = "builder" },
+]
+
+[[tier2]]
+event_type = "UPRISING"
+keys = [
+  { name = "node_id", required = true, source = "builder" },
+  { name = "trigger", required = true, source = "builder" },
+  { name = "agitation", required = true, source = "builder" },
+  { name = "repression", required = true, source = "builder" },
+]
+
+[[tier2]]
+event_type = "VIGILANTISM"
+keys = [
+  { name = "org_id", required = true, source = "builder" },
+  { name = "target_id", required = true, source = "builder" },
+  { name = "repression_increment", required = true, source = "builder" },
+]
+
+# =============================================================================
+# TIER 3 — no-known-emitter (20 members: no EVENT_BUILDERS entry, no observed
+# BSL emit site — the exact same 20 members `sentinels/fallback_coverage`'s
+# BUS_BOUNDARY_LEDGER already ledgers as absent from EVENT_BUILDERS, an
+# independent cross-check this registry's own test asserts against). No key
+# list: nothing observed, nothing claimed.
+# =============================================================================
+
+[[tier3]]
+event_type = "BIFURCATION_TENDENCY_CHANGE"
+
+[[tier3]]
+event_type = "CALIBRATION_DISAGREEMENT"
+
+[[tier3]]
+event_type = "CONSCIOUSNESS_SHIFT"
+
+[[tier3]]
+event_type = "DUAL_CIRCUIT_INTERFERENCE"
+
+[[tier3]]
+event_type = "ENDGAME_REACHED"
+
+[[tier3]]
+event_type = "EXPLOITATION_MODE_SHIFT"
+
+[[tier3]]
+event_type = "FACTION_SHIFT"
+
+[[tier3]]
+event_type = "FASCIST_CONVERGENCE"
+
+[[tier3]]
+event_type = "FRAGMENTED_COLLAPSE_ENDGAME"
+
+[[tier3]]
+event_type = "INFRASTRUCTURE_CHANGE"
+
+[[tier3]]
+event_type = "INITIATIVE_CONTESTED"
+
+[[tier3]]
+event_type = "INSTITUTION_REPRODUCTION"
+
+[[tier3]]
+event_type = "LEGAL_FRAMEWORK_ENACTED"
+
+[[tier3]]
+event_type = "LEGAL_FRAMEWORK_REVOKED"
+
+[[tier3]]
+event_type = "PATTERN_SHIFT"
+
+[[tier3]]
+event_type = "POPULATION_DEATH"
+
+[[tier3]]
+event_type = "RED_OGV_ENDGAME"
+
+[[tier3]]
+event_type = "SOLIDARITY_AWAKENING"
+
+[[tier3]]
+event_type = "STATE_ACTION_EXECUTED"
+
+[[tier3]]
+event_type = "THREAD_ESCALATION"

@@ -1,0 +1,1482 @@
+# data-artifacts.yaml — successor registry for artifact-ized reference tables
+# (ADR076). One entry per artifact: the lineage that used to live in the
+# dropped table's data-catalog.yaml row. Generated entries are refreshed by
+# tools/make_data_artifacts.py; register-mode entries keep their own
+# generator: and are preserved verbatim. Do not edit entries by hand.
+---
+version: "2.0.0"
+schema:
+  file: dist/data-artifacts/schema.sql
+  sha256: 3a2883445df2a259cefb50e50ae3ac07da3ab197fdf38618bf1453ea3b7a6be0
+  tables: 82
+  views: 8
+  indexes: 111
+product:
+  name: marxist-data-3NF.sqlite
+  sha256: ff5293d041cb0ebbdac066333ba3682f8ba6645894022b311bf88aa6c4e22a9a
+  page_size: 4096
+  application_id: 1111573068
+  user_version: 1
+  sqlite_version: "3.53.1"
+artifacts:
+  - name: bridge_county_bea_ea
+    format: csv
+    source_table: bridge_county_bea_ea
+    generator: tools/make_data_artifacts.py
+    mode: register
+    rows: 83
+    sha256: cfd7d2b42a7edd0bad87eda05e83faa2a80a277b68502a39676feb23ad792c4d
+    home: src/babylon/data/reference/bridge_county_bea_ea.csv
+    material_relation: >-
+      county -> BEA Economic Area membership map — the regional-market aggregation geography
+      for cross-border metropolitan gravity. R1 one-shot export (36f4cb98) then DB-table
+      demotion; the CSV has been canonical since (register, like babylon_ricci_final).
+  - name: dim_bea_economic_area
+    format: csv
+    source_table: dim_bea_economic_area
+    generator: tools/make_data_artifacts.py
+    mode: register
+    rows: 8
+    sha256: f1fab81b74eca9ff5de50402048ff1d4bca3a8c2d00f9e3273f9309e55d86db7
+    home: src/babylon/data/reference/dim_bea_economic_area.csv
+    material_relation: >-
+      the 8 BEA Economic Areas (cross-border metro market regions) the bridge maps counties
+      onto. R1 one-shot export (36f4cb98) then DB-table demotion; the CSV has been canonical
+      since (register, like babylon_ricci_final).
+  - name: babylon_ricci_final
+    format: csv
+    source_table: fact_ricci_unequal_exchange
+    generator: tools/make_data_artifacts.py
+    mode: register
+    rows: 51
+    sha256: c1468ce082002a0b00772e9b01004472742971e7fd7c058f184a252efe91ca87
+    home: src/babylon/data/reference/babylon_ricci_final.csv
+    material_relation: >-
+      Ricci unequal-exchange transfer series (1995-2007, region x flow-direction x
+      transfer-type) — periphery->core value-drain calibration. The CSV was ALWAYS canonical;
+      the DB mirror it replaces was re-derived from it (R2 demote-only).
+  - name: bridge_county_cz
+    format: csv
+    source_table: bridge_county_cz
+    generator: tools/make_data_artifacts.py
+    mode: register
+    rows: 3141
+    sha256: a04cc4fc2bf0b6e96bc0d2a47c1fc91d29d41174e3e339e15f81481f862808df
+    home: src/babylon/data/reference/bridge_county_cz.csv
+    material_relation: >-
+      county -> 1990 ERS commuting zone membership (Tolbert-Sizer journey-to-work delineation,
+      3141 counties -> 741 CZs) — the daily reproduction-of-labor-power aggregation geography,
+      the CZ rung of the Amendment U spatial lattice; matches the on-drive Chetty
+      mobility-atlas CZ outcome tables (cz=11600 Detroit spot-verified). Derived from the
+      archived ERS source XLS (babylon-data/external/usda-ers-cz90-crosswalk.xls); no DB table
+      ever existed (register-only, like babylon_ricci_final).
+  - name: fact_energy_annual
+    format: parquet
+    source_table: fact_energy_annual
+    generator: tools/make_data_artifacts.py
+    mode: register
+    rows: 525
+    sha256: 9adb800fc734547196937f5206cd5fa0dcefbede18fb7bea8724e11d1c175327
+    home: dist/data-artifacts/fact_energy_annual.parquet
+    material_relation: >-
+      EIA MER annual energy series values 1949-2023 (series x year) — national
+      energy-metabolism history. R3 one-shot export then DB-table demotion; the parquet has
+      been canonical since.
+  - name: dim_energy_series
+    format: parquet
+    source_table: dim_energy_series
+    generator: tools/make_data_artifacts.py
+    mode: register
+    rows: 20
+    sha256: a666b507893bfbf3e3f565826a33df1c47968251a777eabd0fa9ecfe462fab2c
+    home: dist/data-artifacts/dim_energy_series.parquet
+    material_relation: >-
+      EIA MER series definitions for fact_energy_annual. R3 one-shot export then DB-table
+      demotion; the parquet has been canonical since.
+  - name: dim_energy_table
+    format: parquet
+    source_table: dim_energy_table
+    generator: tools/make_data_artifacts.py
+    mode: register
+    rows: 14
+    sha256: 2a91aa2934d650bc8d0728b1c52e0477a5e2e74dae906ed74954e972dca9eca1
+    home: dist/data-artifacts/dim_energy_table.parquet
+    material_relation: >-
+      EIA MER table taxonomy (with marxian_interpretation labels) for the energy series. R3
+      one-shot export then DB-table demotion; the parquet has been canonical since.
+  - name: bridge_lodes_block
+    format: parquet
+    source_table: bridge_lodes_block
+    generator: tools/make_data_artifacts.py
+    mode: register
+    rows: 1150562
+    sha256: 92eb4c9e1c3f03f7a25b85a758f758a50a20ea8ada2cd15e7cf105a6c30dce98
+    home: dist/data-artifacts/bridge_lodes_block.parquet
+    material_relation: >-
+      census-block -> county/tract/CBSA/ZCTA crosswalk with block centroids (1,150,562 blocks)
+      — the future hex-level commuter disaggregation geography. R4 spike export then DB-table
+      demotion; the parquet has been canonical since.
+  - name: staging_arcgis_feature
+    format: parquet
+    source_table: staging_arcgis_feature
+    generator: tools/make_data_artifacts.py
+    mode: register
+    rows: 5974
+    sha256: 968a5d2b822c64d5b6093078ba0ebb0c45f99310aaf8651dd94aed97d649527c
+    home: dist/data-artifacts/staging_arcgis_feature.parquet
+    material_relation: >-
+      facility-grain ArcGIS provenance rows (5,974 features: source, object id, county, type,
+      capacity) behind fact_coercive_infrastructure — kept as raw-provenance artifact. R5
+      one-shot export then DB-table demotion; the parquet has been canonical since.
+  - name: bridge_cfs_county
+    format: parquet
+    source_table: bridge_cfs_county
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 3148
+    sha256: 9953996e1729884267c6d81ef1b056d8df0c195f2717a356ab659307433d9e06
+    home: dist/data-artifacts/bridge_cfs_county.parquet
+    material_relation: >-
+      county-to-CFS-area allocation crosswalk — the geographic key needed to scope FAF/CFS
+      freight flows to counties. 3,148 rows across all 132 zones, built from the held FAF5
+      county-disaggregation factor files.
+  - name: bridge_county_h3
+    format: parquet
+    source_table: bridge_county_h3
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 48764
+    sha256: e60d93a43d6c66e84f1e53ecaf633af5911bd5b48b0ef0ad6a012f6d9f5b13a9
+    home: dist/data-artifacts/bridge_county_h3.parquet
+    material_relation: >-
+      county-to-H3-hex spatial index — the hex-grid substrate join enabling territory/hex
+      hydration (Constitution spatial substrate).
+  - name: bridge_county_metro
+    format: parquet
+    source_table: bridge_county_metro
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 3256
+    sha256: d520318a0b7ae11a44c289a5338bdb032b69bdca08eb028debc6cc7e8c3ce612
+    home: dist/data-artifacts/bridge_county_metro.parquet
+    material_relation: >-
+      county-to-Metropolitan-Statistical-Area membership — the urban-agglomeration key for the
+      MSA-tier zoom hierarchy (Detroit MSA tests).
+  - name: bridge_naics_bea
+    format: parquet
+    source_table: bridge_naics_bea
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 462
+    sha256: d630fa3fc90b1e407306aa8513c7109b8d3bc5c9873ed7897a9c2bc4b9e1c563
+    home: dist/data-artifacts/bridge_naics_bea.parquet
+    material_relation: >-
+      NAICS-to-BEA-industry concordance — the crosswalk letting county QCEW industry employment
+      be allocated against BEA's ~70-industry Leontief input-output structure (imperial-rent
+      tensor base).
+  - name: dim_asset_category
+    format: parquet
+    source_table: dim_asset_category
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 3
+    sha256: 697633289d17e09bac93adfaabffe82e346cbb9bf12f1bf414cc79287b7a01b7
+    home: dist/data-artifacts/dim_asset_category.parquet
+    material_relation: >-
+      asset-class taxonomy (real estate, equities, deposits...) for wealth-concentration
+      decomposition — anchors which asset form embodies extracted surplus.
+  - name: dim_bea_industry
+    format: parquet
+    source_table: dim_bea_industry
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 107
+    sha256: 21be93068ec272b415780a077a4c9ad25c82915d4eafc00a208b55c2deb79b49
+    home: dist/data-artifacts/dim_bea_industry.parquet
+    material_relation: >-
+      BEA Summary industry classification (~70 sectors) — the fixed industry taxonomy every
+      Leontief IO/tensor-hierarchy table joins against.
+  - name: dim_bea_io_table_type
+    format: parquet
+    source_table: dim_bea_io_table_type
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 3
+    sha256: f57c620e822f87fce8a5a5dfe272d4eee1694ec4adb8d4d602621b0c1125293f
+    home: dist/data-artifacts/dim_bea_io_table_type.parquet
+    material_relation: >-
+      IO-ingest pipeline's table-type enum (USE/TOTAL_REQ/IMPORT_USE) distinguishing which
+      Leontief coefficient matrix a row belongs to.
+  - name: dim_cfs_area
+    format: parquet
+    source_table: dim_cfs_area
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 132
+    sha256: 9a733b95c6c3cdc8534aa773030bcbdfc91f30bca4ba0ac5c06faeb3dd7a7bfa
+    home: dist/data-artifacts/dim_cfs_area.parquet
+    material_relation: >-
+      Commodity Flow Survey area geography — the freight origin/destination zone key for
+      scoping FAF/CFS commodity flows.
+  - name: dim_coercive_type
+    format: parquet
+    source_table: dim_coercive_type
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 15
+    sha256: bc3301f4037e23459a43629e8b8e3c1bd7ffad05e0abd277b19214555da29ecd
+    home: dist/data-artifacts/dim_coercive_type.parquet
+    material_relation: >-
+      carceral/coercive-facility type taxonomy (prison, jail, detention...) — classifies the
+      repressive-apparatus nodes fact_coercive_infrastructure counts.
+  - name: dim_commodity
+    format: parquet
+    source_table: dim_commodity
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 85
+    sha256: de3443afa3f63b2b2b93db01519957a85bc365a450a55db0f51634662667aea7
+    home: dist/data-artifacts/dim_commodity.parquet
+    material_relation: >-
+      USGS Mineral Commodity Summaries commodity list (85 strategic materials) — anchors the
+      critical-minerals/extraction-dependency subsystem (owner-ratified Prog-09 stretch).
+  - name: dim_commodity_metric
+    format: parquet
+    source_table: dim_commodity_metric
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 593
+    sha256: efbcc0dbe8dcd0717b53c186a17094f29cecf085ed1be83ec3676c9a150613ad
+    home: dist/data-artifacts/dim_commodity_metric.parquet
+    material_relation: >-
+      USGS MCS per-commodity metric taxonomy (imports/exports/price/production) — the
+      measurement-type dimension for fact_commodity_observation.
+  - name: dim_country
+    format: parquet
+    source_table: dim_country
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 273
+    sha256: 0d9f8d56ea44a04e0957b12cbd1a4d3121ed197e326a15695c2192e5c646bb82
+    home: dist/data-artifacts/dim_country.parquet
+    material_relation: >-
+      country/bloc registry with world-system-tier classification (core, semi-periphery,
+      periphery) — the geographic key for Phi imperial-rent bloc attribution and bilateral
+      trade.
+  - name: dim_county
+    format: parquet
+    source_table: dim_county
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 3285
+    sha256: 130b7679d0441d5c3c2183a2bef858073d3011039550bfbf015b380566c72032
+    home: dist/data-artifacts/dim_county.parquet
+    material_relation: >-
+      the county dimension — the universal geographic join key underlying nearly every
+      Michigan-scoped fact table and the hex/territory substrate.
+  - name: dim_county_geometry
+    format: parquet
+    source_table: dim_county_geometry
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 3222
+    sha256: b838852e16175628e397a8f23fa178fd769f1aaf565f144cda63fbd6fe0d16ee
+    home: dist/data-artifacts/dim_county_geometry.parquet
+    material_relation: >-
+      county polygon geometry (WKT + area) from TIGER/Line — the spatial substrate hex_hydrator
+      apportions into H3 territory cells.
+  - name: dim_data_source
+    format: parquet
+    source_table: dim_data_source
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 26
+    sha256: 43e5758a26640b9353c4048c9ac22ec92b149857680a6e09e3a25b880efb792c
+    home: dist/data-artifacts/dim_data_source.parquet
+    material_relation: >-
+      provenance registry (agency/dataset per fact table) — the traceability backbone every
+      fact_* row's source_id FK resolves against (Constitution III.4).
+  - name: dim_education_level
+    format: parquet
+    source_table: dim_education_level
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 26
+    sha256: b26b33e9193914c39904fb8cb54ed95721670bb9521513aa88443361d94cd7e5
+    home: dist/data-artifacts/dim_education_level.parquet
+    material_relation: >-
+      ACS educational-attainment taxonomy — classifies fact_census_education's degree-level
+      rows.
+  - name: dim_employment_area
+    format: parquet
+    source_table: dim_employment_area
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 1607
+    sha256: 1913be20e9db76f815023f4506bff20717ff035b14bd032e6191425076fbfdf4
+    home: dist/data-artifacts/dim_employment_area.parquet
+    material_relation: >-
+      BLS QCEW employment-area geographic definitions — the area-code dimension underlying
+      fact_employment_industry_annual's industry-by-area employment breakdown.
+  - name: dim_employment_status
+    format: parquet
+    source_table: dim_employment_status
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 8
+    sha256: f1091e804b776d100ccef4d3568ea654b34249db88f92aa296bdfcb28d76f37e
+    home: dist/data-artifacts/dim_employment_status.parquet
+    material_relation: >-
+      ACS employment-status taxonomy (employed/unemployed/not-in-labor-force) — the
+      classification the Phase-5.1 gamma_III brief plans to join against
+      fact_census_employment.
+  - name: dim_fred_series
+    format: parquet
+    source_table: dim_fred_series
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 41
+    sha256: 3904812a086ebefb966cb8feb8fa417874ba6407820c8dde633f40710e4433ad
+    home: dist/data-artifacts/dim_fred_series.parquet
+    material_relation: >-
+      FRED series registry (CPI, macro indicators) — the series-code dimension every
+      fact_fred_national/MELT deflator read joins against.
+  - name: dim_gender
+    format: parquet
+    source_table: dim_gender
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 6
+    sha256: 3eb9462b9cae5afdbe0f2108690c889fab972c8de0420b76033f7373e9bd76a5
+    home: dist/data-artifacts/dim_gender.parquet
+    material_relation: >-
+      gender classification dimension shared by Census worker-class and ATUS time-use
+      breakdowns.
+  - name: dim_geographic_hierarchy
+    format: parquet
+    source_table: dim_geographic_hierarchy
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 6468
+    sha256: 60509c3d7662821baf2dc560967e8951ef85cbeda7d1649d188b36c777d1d7d3
+    home: dist/data-artifacts/dim_geographic_hierarchy.parquet
+    material_relation: >-
+      county population-weight hierarchy derived from Census/QCEW totals — a geographic
+      weighting scheme for allocating national/regional aggregates to counties.
+  - name: dim_housing_tenure
+    format: parquet
+    source_table: dim_housing_tenure
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 3
+    sha256: f8afedd901c152680f405984c778f97d5c926c6ceeacd152d825ecc06bf28085
+    home: dist/data-artifacts/dim_housing_tenure.parquet
+    material_relation: >-
+      owner/renter housing-tenure taxonomy — the classification behind fact_census_housing's
+      renter_share feeding the tick pipeline's housing-precarity signal.
+  - name: dim_hs2_commodity
+    format: parquet
+    source_table: dim_hs2_commodity
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 99
+    sha256: 4959bd9baf0dee7b4f1922d7f8da909392ad71e92fa8980d4e82b59b91190020
+    home: dist/data-artifacts/dim_hs2_commodity.parquet
+    material_relation: >-
+      Harmonized System 2-digit commodity chapters — the classification axis of
+      fact_transborder_port_commodity (TransBorder COMMODITY2 is HS2, not SCTG; see the pinned
+      codes PDF).
+  - name: dim_import_source
+    format: parquet
+    source_table: dim_import_source
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 43
+    sha256: 03e2e357c2bbd7d5c027009dbf42bf45de0b2b8fc6d432b3b86f6082b222cc28
+    home: dist/data-artifacts/dim_import_source.parquet
+    material_relation: >-
+      import-source-country dimension for critical-materials analysis — names which countries
+      supply strategic minerals (import-dependency/unequal-exchange linkage).
+  - name: dim_income_bracket
+    format: parquet
+    source_table: dim_income_bracket
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 17
+    sha256: 5cb3e0949da883cda632180ceaf3ba4513da18477d8169a8da4832afa47c01d5
+    home: dist/data-artifacts/dim_income_bracket.parquet
+    material_relation: >-
+      household-income-bracket taxonomy (17 brackets) — the classification behind the
+      top/bottom bracket ratio used as a class-proxy signal (labor-aristocracy banding).
+  - name: dim_industry
+    format: parquet
+    source_table: dim_industry
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 2660
+    sha256: 35d44434de50c30596c8fb4d6579d9b3f15988e9a523c98d75b6b5b65d82cd78
+    home: dist/data-artifacts/dim_industry.parquet
+    material_relation: >-
+      NAICS industry hierarchy annotated with Marxian class_composition — the industry
+      dimension anchoring QCEW/BEA/Leontief reads across the whole economics subsystem.
+  - name: dim_metro_area
+    format: parquet
+    source_table: dim_metro_area
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 1119
+    sha256: 1568b8f9f5ef1b56fd2625dd04106e48725cb124701be91a41a983dfedbb9ac1
+    home: dist/data-artifacts/dim_metro_area.parquet
+    material_relation: >-
+      Metropolitan Statistical Area definitions — the MSA-tier geographic zoom level (Detroit
+      MSA) in the living-map zoom hierarchy.
+  - name: dim_occupation
+    format: parquet
+    source_table: dim_occupation
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 74
+    sha256: e3b9321a1fd29beecc5c7ca68cb9d317fb2fa387132be4b2529ea7cfe0c803e7
+    home: dist/data-artifacts/dim_occupation.parquet
+    material_relation: >-
+      occupation taxonomy (74 codes) with an unfinished Marxian productive, unproductive,
+      reproductive, managerial labor_type classification.
+  - name: dim_ownership
+    format: parquet
+    source_table: dim_ownership
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 7
+    sha256: d8a50b0d2f293b7daab6771b1fd718faaf2a4fc137da1976b9cac587bc97c54e
+    home: dist/data-artifacts/dim_ownership.parquet
+    material_relation: >-
+      QCEW ownership-sector codes (private/federal/state/local, own_code) — resolves the
+      own_code='0' Total-covered rows every QCEW read filters on.
+  - name: dim_poverty_category
+    format: parquet
+    source_table: dim_poverty_category
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 60
+    sha256: 9849ea803928b2cb3ac8e8b51aab2eab0e93ce0e2d4dd169ede26bb604812506
+    home: dist/data-artifacts/dim_poverty_category.parquet
+    material_relation: >-
+      ACS poverty-status taxonomy (B17001) — the classification the owner-ratified
+      National-Oppression program's poverty analysis is set to consume.
+  - name: dim_race
+    format: parquet
+    source_table: dim_race
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 10
+    sha256: e7fe6e44956d3e3fbdab9aa1099cdd1d402e2ea4d3c1a9e448620ca1d227a02d
+    home: dist/data-artifacts/dim_race.parquet
+    material_relation: >-
+      race/ethnicity classification — resolves the race_code='T' (Total) rows the throughput
+      adapter filters on.
+  - name: dim_rent_burden
+    format: parquet
+    source_table: dim_rent_burden
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 11
+    sha256: 9f9c850c4c66cbe45faac638a77d65e13ddac693a34ea8990393743b37a558bc
+    home: dist/data-artifacts/dim_rent_burden.parquet
+    material_relation: >-
+      rent-burden severity taxonomy (cost-burdened/severely-burdened) — the classification
+      behind view_rent_crisis's housing-precarity metric.
+  - name: dim_sctg_commodity
+    format: parquet
+    source_table: dim_sctg_commodity
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 42
+    sha256: 54b2f15d5be3fa11263257406cbd0486a6522e83e22aa3cdb9777a238ba01554
+    home: dist/data-artifacts/dim_sctg_commodity.parquet
+    material_relation: >-
+      Standard Classification of Transported Goods commodity codes — the freight-commodity
+      dimension FK'd by fact_faf_commodity_flow (KEEP).
+  - name: dim_state
+    format: parquet
+    source_table: dim_state
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 52
+    sha256: 22245af6240648b4f3c50b748ad142204c2c985017db80b2451c5140b8898398
+    home: dist/data-artifacts/dim_state.parquet
+    material_relation: >-
+      state gazetteer/FIPS dimension — resolves michigan_state_id and every state-level
+      rollup/filter.
+  - name: dim_time
+    format: parquet
+    source_table: dim_time
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 710
+    sha256: 3bb6f2311761302049ce683590c3a7ed3ac6d8874ae7212e10b9bf740bf03c56
+    home: dist/data-artifacts/dim_time.parquet
+    material_relation: >-
+      the universal year/granularity time dimension every ingest pipeline
+      (Census/QCEW/BEA/FRED/Hickel/Ricci/ATUS) writes into and every fact table joins against.
+  - name: dim_wealth_class
+    format: parquet
+    source_table: dim_wealth_class
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 4
+    sha256: 6fbcd36d709dbec4260d2037bc2b5f014c2923c9bd2e2910fa544f096a029d53
+    home: dist/data-artifacts/dim_wealth_class.parquet
+    material_relation: >-
+      wealth-percentile-to-MLM-TW-class mapping (proletariat/labor-aristocracy/bourgeoisie
+      bands) — the classification anchoring wealth-concentration analysis to Babylon's class
+      model.
+  - name: dim_worker_class
+    format: parquet
+    source_table: dim_worker_class
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 22
+    sha256: 5b2387324a0aa63ab1b294a26e8a975876ab3e1134edce6fa3368f069978d0f7
+    home: dist/data-artifacts/dim_worker_class.parquet
+    material_relation: >-
+      ACS class-of-worker taxonomy annotated with marxian_class — the classification behind
+      fact_census_worker_class's Marxian class-composition breakdown.
+  - name: fact_asm_manufacturing_annual
+    format: parquet
+    source_table: fact_asm_manufacturing_annual
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 2592
+    sha256: 4126d61d03c83065c72d49bad36940035e3368c749b870670f98725199c3a659
+    home: dist/data-artifacts/fact_asm_manufacturing_annual.parquet
+    material_relation: >-
+      ASM manufacturing general statistics — inventory STOCKS by stage of fabrication
+      (materials/WIP/finished/total, begin+end of year), shipments, total cost of materials,
+      value added, employment and production-worker hours; the productive circuit's
+      inventory/turnover substrate (PER-30).
+  - name: fact_bea_county_gdp
+    format: parquet
+    source_table: fact_bea_county_gdp
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 1995283
+    sha256: 5706ee36478f3bd1d324511b1c2901f70148ca92e1bec6835964c3608a9a7422
+    home: dist/data-artifacts/fact_bea_county_gdp.parquet
+    material_relation: >-
+      per-county GDP by industry — the primary county-level Value Produced (V) term feeding hex
+      GDP hydration and the Fundamental Theorem's national GDP total.
+  - name: fact_bea_final_demand_annual
+    format: parquet
+    source_table: fact_bea_final_demand_annual
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 2044
+    sha256: 2bd5e4c850bd259a4d2aca303dd3bfc29e8ecae7d47d3975d299ca0516624c98
+    home: dist/data-artifacts/fact_bea_final_demand_annual.parquet
+    material_relation: >-
+      national final-demand totals by industry — the denominator ImperialRentSystem's
+      Leontief-rent final-demand allocation divides against.
+  - name: fact_bea_io_coefficient
+    format: parquet
+    source_table: fact_bea_io_coefficient
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 162927
+    sha256: 750166543a34ca3cb1b8693b20f54927dd66a34610b0181d29037a445bfe2e2f
+    home: dist/data-artifacts/fact_bea_io_coefficient.parquet
+    material_relation: >-
+      national Leontief input-output coefficients (direct + total requirements) — the
+      inter-industry technical-coefficient matrix underlying imperial-rent tensor propagation.
+  - name: fact_bea_national_industry
+    format: parquet
+    source_table: fact_bea_national_industry
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 1065
+    sha256: 7e32a0bd2f61eb3ca2f222851c2111f0a51ecf5f9f24c52791bc1b37c3fd0b54
+    home: dist/data-artifacts/fact_bea_national_industry.parquet
+    material_relation: >-
+      national industry gross-output/value-added — the fallback national GDP source and
+      BEA-share lookup base for county GDP disaggregation.
+  - name: fact_bilateral_trade_annual
+    format: parquet
+    source_table: fact_bilateral_trade_annual
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 540
+    sha256: 3c018a5dea31013af31e5da46e3094609d740620b6e522f86082c9281ae2c5ed
+    home: dist/data-artifacts/fact_bilateral_trade_annual.parquet
+    material_relation: >-
+      bloc-to-bloc annual bilateral trade totals — the trade-flow input to D3 Phi-attribution
+      (imperial rent via unequal exchange).
+  - name: fact_bls_unemployment_decomposition
+    format: parquet
+    source_table: fact_bls_unemployment_decomposition
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 51404
+    sha256: b09eed8fcb4b38f687cffd243514337ef9c79404fff24c8db1e1e6a221f4d442
+    home: dist/data-artifacts/fact_bls_unemployment_decomposition.parquet
+    material_relation: >-
+      county-level BLS LAUS U-3 unemployment decomposition — wired into the tick pipeline's
+      per-county unemployment_rate.
+  - name: fact_border_crossing_throughput
+    format: parquet
+    source_table: fact_border_crossing_throughput
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 275901
+    sha256: 822e3d41865754b57407bbc18f42d39a3874d587962df4c3a16521664faa623e
+    home: dist/data-artifacts/fact_border_crossing_throughput.parquet
+    material_relation: >-
+      BTS Border Crossing Entry Data — conveyance/person counts by port x measure x month (both
+      U.S. land borders, through 2026-07); crossing THROUGHPUT, a different quantity than
+      TransBorder's dollar/tonnage flows.
+  - name: fact_broadband_coverage
+    format: parquet
+    source_table: fact_broadband_coverage
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 3221
+    sha256: 5cdf214c24d9f2eb307dbe678199d833fd45d5f31d5772e656289305a4b69e2c
+    home: dist/data-artifacts/fact_broadband_coverage.parquet
+    material_relation: >-
+      per-county FCC broadband-coverage percentages — the material basis for hex-level
+      internet/infrastructure-access attributes.
+  - name: fact_census_education
+    format: parquet
+    source_table: fact_census_education
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 80525
+    sha256: 2184120615a21f23aaf0ab0004a785a6d42585df39565b3680b53ef882dd59a3
+    home: dist/data-artifacts/fact_census_education.parquet
+    material_relation: >-
+      ACS educational-attainment-by-county rows (single-year 2021 run) — a stalled
+      family-scoped repair-vs-drop decision.
+  - name: fact_census_employment
+    format: parquet
+    source_table: fact_census_employment
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 22547
+    sha256: 8ed86ce38067f5a6ed70964051d0af547059ed410f215962b605f51e39ce358b
+    home: dist/data-artifacts/fact_census_employment.parquet
+    material_relation: >-
+      ACS employment/labor-force-status-by-county rows (single-year 2021) — the planned join
+      target for the Phase-5.1 gamma_III employment-status brief.
+  - name: fact_census_hours
+    format: parquet
+    source_table: fact_census_hours
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 16062
+    sha256: fd1c562b4c389f32346954c4bd6e0182b6769c7775fce5a2bc1b6ca3d19bc4c2
+    home: dist/data-artifacts/fact_census_hours.parquet
+    material_relation: >-
+      ACS mean-hours-worked-by-gender rows — aggregate_hours column 100% NULL from a silent
+      label-match bug in the deleted loader.
+  - name: fact_census_housing
+    format: parquet
+    source_table: fact_census_housing
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 1351380
+    sha256: 09ff2d9666b3f5ef267b65cbc77c14e99384f0157b6a4c898ac37df2e67ca59f
+    home: dist/data-artifacts/fact_census_housing.parquet
+    material_relation: >-
+      ACS housing-tenure-by-county rows — the renter_share source wired into the tick
+      pipeline's housing-precarity signal.
+  - name: fact_census_income
+    format: parquet
+    source_table: fact_census_income
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 7207200
+    sha256: aa5155864166c309594f983cb52a44218f5f9ada3c020d1698a97bbe1065faad
+    home: dist/data-artifacts/fact_census_income.parquet
+    material_relation: >-
+      ACS household-income-bracket-by-county rows — the nationwide bracket-ratio source for the
+      labor-aristocracy/class-proxy signal (Constitution Amendment R canonical scale).
+  - name: fact_census_income_sources
+    format: parquet
+    source_table: fact_census_income_sources
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 45046
+    sha256: 6b2a7c8dbd9ff8c7576c1055f733ba2ee3cc3c04f53a7a75a7c0921f60e7216d
+    home: dist/data-artifacts/fact_census_income_sources.parquet
+    material_relation: >-
+      ACS income-source-type-by-county rows (wages/self-employment/transfer) — Wave-6/Prog-098
+      census-wiring target, partially wired.
+  - name: fact_census_institutional_ownership
+    format: parquet
+    source_table: fact_census_institutional_ownership
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 6570
+    sha256: 8564ef4357e33c6691befe0cc5d4e181f03d136146171321c00dce5d5d78de8c
+    home: dist/data-artifacts/fact_census_institutional_ownership.parquet
+    material_relation: >-
+      county institutional (absentee) housing-ownership rows — all-zero Feature-021 scaffold
+      pending real ownership data.
+  - name: fact_census_median_income
+    format: parquet
+    source_table: fact_census_median_income
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 314704
+    sha256: 2b0365c4d53319f50b6731d461e169cdbb36bf5d33c792f1f80319dbbf773055
+    home: dist/data-artifacts/fact_census_median_income.parquet
+    material_relation: >-
+      ACS median-household-income-by-county rows — the rent-to-income denominator in the
+      repaired view_rent_crisis, and a Phase-2 wealth-axis local observable (specs/114
+      per-county derived sections).
+  - name: fact_census_poverty
+    format: parquet
+    source_table: fact_census_poverty
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 26576550
+    sha256: 6ec12391668d2f59533819db7b73a4efc02c6c62a2613ad22d6f228dbb31ab4e
+    home: dist/data-artifacts/fact_census_poverty.parquet
+    material_relation: >-
+      ACS poverty-status-by-county rows (26.5M, largest poverty table) — the owner-ratified
+      National-Oppression program's poverty-rate data source.
+  - name: fact_census_rent
+    format: parquet
+    source_table: fact_census_rent
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 44997
+    sha256: 4c8cc134ec490ca75961d83485fc97c6bf240b32128e9d0517e00e62d578a99e
+    home: dist/data-artifacts/fact_census_rent.parquet
+    material_relation: >-
+      ACS median-gross-rent-by-county rows (BEA REIS proxy) — the rent input to the repaired
+      analytical rent-crisis view.
+  - name: fact_census_rent_burden
+    format: parquet
+    source_table: fact_census_rent_burden
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 450450
+    sha256: 8a42a51c17bf3ebee09f0b0b5145d5c8253c7e3446eec8c75714f9951b20df12
+    home: dist/data-artifacts/fact_census_rent_burden.parquet
+    material_relation: >-
+      ACS rent-burden-severity-by-county rows — the cost-burdened household counts in the
+      repaired view_rent_crisis, and a Phase-2 wealth-axis local observable (specs/114
+      per-county derived sections).
+  - name: fact_census_worker_class
+    format: parquet
+    source_table: fact_census_worker_class
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 900900
+    sha256: 6e2a80a2fa2fba1d927b10c503253f83a9bf05d3ed862bbed148d72f2ff31e7f
+    home: dist/data-artifacts/fact_census_worker_class.parquet
+    material_relation: >-
+      ACS class-of-worker-by-county rows (900K, marxian_class populated) — the fact volume
+      behind view_class_composition's proletariat/petty-bourgeois/state-worker breakdown.
+  - name: fact_coercive_infrastructure
+    format: parquet
+    source_table: fact_coercive_infrastructure
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 3867
+    sha256: 33e6558d2b438e7aea672021f0e15f743f1ea331ab82407c0805a428b29cf808
+    home: dist/data-artifacts/fact_coercive_infrastructure.parquet
+    material_relation: >-
+      per-county carceral/repressive-facility counts — the material basis of the state's
+      coercive apparatus (the Repression term in P(S|R)).
+  - name: fact_commodity_flow
+    format: parquet
+    source_table: fact_commodity_flow
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 0
+    sha256: d1f3f3a9f9793745f74d7424dd3e8012205fca79cbdda970e4c849dfa95727f2
+    home: dist/data-artifacts/fact_commodity_flow.parquet
+    material_relation: >-
+      county-level Commodity Flow Survey tonnage/value rows — never populated at county
+      disaggregation grain.
+  - name: fact_commodity_observation
+    format: parquet
+    source_table: fact_commodity_observation
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 4735
+    sha256: ced32578d048d304f19aa0b8b53edf4707d5c4b045f175abed08e574735a3b14
+    home: dist/data-artifacts/fact_commodity_observation.parquet
+    material_relation: >-
+      per-commodity USGS MCS observations (imports/exports/price/production) — the
+      strategic-materials extraction data view_critical_materials surfaces.
+  - name: fact_county_exposure_by_external
+    format: parquet
+    source_table: fact_county_exposure_by_external
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 384200
+    sha256: 6aedae2e7f920b261370178c87100b39d94a9f9ab4c26f58f247de8ec23c6139
+    home: dist/data-artifacts/fact_county_exposure_by_external.parquet
+    material_relation: >-
+      per-county exposure-weight to external trade blocs — the derived product routing
+      bloc-level Phi imperial rent down to individual counties.
+  - name: fact_eviction_lab_filing
+    format: parquet
+    source_table: fact_eviction_lab_filing
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 6570
+    sha256: cea271e9b5ca13d660ea95a66e7895dfc7c0c3897730500197f34b2745969a9e
+    home: dist/data-artifacts/fact_eviction_lab_filing.parquet
+    material_relation: >-
+      county-level eviction-filing/execution rates — an all-zero hardcoded stub;
+      data-shortages.md wants this for the Dispossession/TENANCY edge.
+  - name: fact_faf_commodity_flow
+    format: parquet
+    source_table: fact_faf_commodity_flow
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 2494901
+    sha256: 6c49666e28cef02ad6bc9afb2ed5d6a969626beefa712d2a2d9e65d04b09fc7a
+    home: dist/data-artifacts/fact_faf_commodity_flow.parquet
+    material_relation: >-
+      Freight Analysis Framework county-to-county commodity tonnage/value flows — the
+      freight-substrate data required by the headless-runner's Determinism Bundle hydration.
+  - name: fact_foreclosure_rate
+    format: parquet
+    source_table: fact_foreclosure_rate
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 6570
+    sha256: 08970242e2d07208ceee4f3553139850645d41cbae4248f598e90553ba8c225e
+    home: dist/data-artifacts/fact_foreclosure_rate.parquet
+    material_relation: >-
+      county-level foreclosure filing/completion rates — an all-zero hardcoded stub against a
+      weak dispossession-finance want.
+  - name: fact_fred_national
+    format: parquet
+    source_table: fact_fred_national
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 1395
+    sha256: 5251b51fb8c185bb7783b60a137a87ef131fbc9f3d4310ea8314a88d139937d2
+    home: dist/data-artifacts/fact_fred_national.parquet
+    material_relation: >-
+      national FRED macro series (CPI, etc.) — the CPI deflator read every tick for
+      real-wage/MELT calculations.
+  - name: fact_fred_wealth_levels
+    format: parquet
+    source_table: fact_fred_wealth_levels
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 720
+    sha256: 77035a8d8cc981295ed36a9a1bc62508509d9d889dd0ca51199290e9dfa11f95
+    home: dist/data-artifacts/fact_fred_wealth_levels.parquet
+    material_relation: >-
+      Federal Reserve Distributional Financial Accounts net-worth-by-class-and-quarter levels —
+      the wealth-concentration time series backing the wealth-distribution invariant tests.
+  - name: fact_fred_wealth_shares
+    format: parquet
+    source_table: fact_fred_wealth_shares
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 480
+    sha256: 87123cf968c216afa60148f3bff20b1bee6d8d1a1d9387ea99ba8436593a988e
+    home: dist/data-artifacts/fact_fred_wealth_shares.parquet
+    material_relation: >-
+      Federal Reserve DFA net-worth percentage shares — the SCF-benchmarked corroboration
+      series for the WID wealth-distribution invariants.
+  - name: fact_hickel_erdi_annual
+    format: parquet
+    source_table: fact_hickel_erdi_annual
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 58
+    sha256: c7311e13c6cbddbcfaefde3b7803da866117fd795862161855b7b33b1e141125
+    home: dist/data-artifacts/fact_hickel_erdi_annual.parquet
+    material_relation: >-
+      Ecologically-adjusted Raw-material Drain Index (ERDI) by bloc/year — the Phi
+      imperial-rent bootstrap and gamma_import periphery-labor-coefficient source.
+  - name: fact_hpms_road_segment
+    format: parquet
+    source_table: fact_hpms_road_segment
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 352814
+    sha256: fafd085a9f1729705ead42ea5c9f229296edc02d6759cba3296965017384085e
+    home: dist/data-artifacts/fact_hpms_road_segment.parquet
+    material_relation: >-
+      FHWA Highway Performance Monitoring System road-segment rows — the Transport Substrate
+      (Program 11, Constitution II.13) corridor-mesh raw material.
+  - name: fact_lodes_commuter_flow
+    format: parquet
+    source_table: fact_lodes_commuter_flow
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 2645347
+    sha256: d3745f8def09cd8c7a38e1870e6ec2c1853e210b777d8e8358cfce36665bd64d
+    home: dist/data-artifacts/fact_lodes_commuter_flow.parquet
+    material_relation: >-
+      county-to-county commuter origin-destination flows (LEHD LODES) — the labor-mobility
+      substrate behind inbound/outbound commuter-balance reads (Wayne job-importer / Oakland
+      job-exporter tests).
+  - name: fact_mineral_employment
+    format: parquet
+    source_table: fact_mineral_employment
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 25
+    sha256: cf7909beb884af8641804179a4f67102682c8fc4d0700c429f0be6980e3f59de
+    home: dist/data-artifacts/fact_mineral_employment.parquet
+    material_relation: >-
+      mining-sector employment and weekly earnings by sector (annual, T1 trends) — the
+      variable-capital base of the extraction industries.
+  - name: fact_mineral_production
+    format: parquet
+    source_table: fact_mineral_production
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 15
+    sha256: e9790033130fc1ca75300b309751c41f86dd704eca384af4cc02795c4cba89a7
+    home: dist/data-artifacts/fact_mineral_production.parquet
+    material_relation: >-
+      national mineral-production-by-type volumes (metals/industrial/coal, annual, USD
+      millions) — the Altitude-1 national extraction aggregate.
+  - name: fact_productivity_annual
+    format: parquet
+    source_table: fact_productivity_annual
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 17336
+    sha256: 8983644c0aba732d6e4494096c9040c023d6b56bfb342a2f6d1de892a506f99f
+    home: dist/data-artifacts/fact_productivity_annual.parquet
+    material_relation: >-
+      labor-productivity-by-detailed-industry rows (labor compensation vs. sectoral output) —
+      the direct W_c/V_c Fundamental-Theorem inputs view_imperial_rent and view_surplus_value
+      need.
+  - name: fact_qcew_annual
+    format: parquet
+    source_table: fact_qcew_annual
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 14670249
+    sha256: ca3825a3d60831479313632073b7fc9a941d57dcf9b8940181c4713b6d442248
+    home: dist/data-artifacts/fact_qcew_annual.parquet
+    material_relation: >-
+      per-county-industry QCEW employment and wages — the variable-capital (V) base for county
+      value product and the Fundamental Theorem's core-wage term.
+  - name: fact_qcew_county_rollup
+    format: parquet
+    source_table: fact_qcew_county_rollup
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 240488
+    sha256: 34c2bbb935f79b3c8076a97092b004b14cca120e8272b93c35b3ac9dc2721d13
+    home: dist/data-artifacts/fact_qcew_county_rollup.parquet
+    material_relation: >-
+      own_code='0' Total-Covered per-county employment rollup — the national employment total
+      MELT's [100M,200M] sanity bound depends on.
+  - name: fact_qwi_county_flow
+    format: parquet
+    source_table: fact_qwi_county_flow
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 1615751
+    sha256: e23ae015dddf9f9f928020ba800a1a121592c9fe2a6006bf8d8bc957017ed80e
+    home: dist/data-artifacts/fact_qwi_county_flow.parquet
+    material_relation: >-
+      LEHD Quarterly Workforce Indicators labor-flow rows — hires, separations, employment
+      stocks, turnover, firm job flows and payroll by county x NAICS x quarter; the observed
+      labor-demand/reserve-army movement substrate for the Gate 4 circuit and the 2020-2021
+      COVID emergence benchmark.
+  - name: fact_ricci_unequal_exchange_gvc
+    format: parquet
+    source_table: fact_ricci_unequal_exchange_gvc
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 51
+    sha256: 79f8105a84111a0aa91ec094286675e764464edf6d4e43c464236eb82ec35f4d
+    home: dist/data-artifacts/fact_ricci_unequal_exchange_gvc.parquet
+    material_relation: >-
+      Ricci (2019) global-value-chain unequal-exchange transfer series by world-system tier
+      (core/semi-periphery/periphery) and flow direction — grounds the sigma-gradient
+      pipeline's world_stats per Director ruling (a DECLARED partial undo of the 2026-07-17
+      ADR076 R2 amputation).
+  - name: fact_state_minerals
+    format: parquet
+    source_table: fact_state_minerals
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 50
+    sha256: ab4b4554047d8fc0125ed6fd7056ce22501788296808805923022b8a16639b42
+    home: dist/data-artifacts/fact_state_minerals.parquet
+    material_relation: >-
+      state-by-state mineral production values — the county-territory artifact builder
+      allocates them by county area within each state.
+  - name: fact_trade_monthly
+    format: parquet
+    source_table: fact_trade_monthly
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 44808
+    sha256: 00e3b4b6464575b00cd250f54bc176dcf0807e781b57937171c22085a39a0ea9
+    home: dist/data-artifacts/fact_trade_monthly.parquet
+    material_relation: >-
+      monthly bilateral country import/export values — the trade-balance data behind the
+      core/periphery unequal-exchange ratio (view_unequal_exchange).
+  - name: fact_transborder_port_commodity
+    format: parquet
+    source_table: fact_transborder_port_commodity
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 1242684
+    sha256: a60fa749b2b151cca18cba08d74ca18f0162942d006ec761eac96666b5781093
+    home: dist/data-artifacts/fact_transborder_port_commodity.parquet
+    material_relation: >-
+      BTS TransBorder port x HS2 commodity chapter x mode x month freight
+      value/weight/freight-charges — the observed commodity-by-crossing layer for the
+      Detroit-Windsor productive and freight circuit (PER-31).
+  - name: fact_transborder_state_port
+    format: parquet
+    source_table: fact_transborder_state_port
+    generator: tools/make_data_artifacts.py
+    mode: generate
+    rows: 1977346
+    sha256: 25ed337f72962947409b5efa55dfb2befecb2679c7063c7dc9f9025f66d0e40d
+    home: dist/data-artifacts/fact_transborder_state_port.parquet
+    material_relation: >-
+      BTS TransBorder state x port x mode x month freight value/weight/freight-charges —
+      crossing-level dollar throughput without commodity detail (dot1 part).
+  - name: lodes_xwalk_tri_county_hex
+    format: csv.gz
+    source_table: N/A — no sqlite table; hex-res LODES crosswalk (see fact_lodes_commuter_flow, bridge_lodes_block)
+    generator: tools/make_lodes_tri_county_artifact.py
+    mode: generate
+    rows: 813
+    sha256: 24ec618e740e5dcc1ccf82ce572a4cd0240e2d256551bc84c290d24ab2b52487
+    home: src/babylon/data/reference/lodes/tri_county_hex_xwalk.csv.gz
+    material_relation: >-
+      Detroit tri-county H3 res-7 cell -> synthetic LODES block-geocode + centroid lat/lng
+      (cell id used as its own tabblk2020; round-trips losslessly through
+      LODESCommuteMatrixLoader._build_block_to_hex_map, verified at generation time) — the
+      checked-in crosswalk that lets the unmodified spec-063 loader hydrate the Vol II
+      circulation step without any /media/user/data read (program-prompt §3 data-path gap).
+  - name: lodes_od_tri_county_hex_2010
+    format: csv.gz
+    source_table: N/A — no sqlite table; see lodes_xwalk_tri_county_hex above
+    generator: tools/make_lodes_tri_county_artifact.py
+    mode: generate
+    rows: 191332
+    sha256: f968a42454a2984116b1d41d248ad36b1b67e96c13210ea91ee9ba1617ce924f
+    home: src/babylon/data/reference/lodes/od/mi_od_main_JT00_2010.csv.gz
+    material_relation: >-
+      2010 Detroit tri-county hex-pair commute matrix (origin_hex, dest_hex_or_rest_of_usa,
+      summed S000 workers) — the aggregate a full block-level LODES run would compute for the
+      study area, reproduced via the unmodified LODESCommuteMatrixLoader._read_one_state_file.
+  - name: lodes_od_tri_county_hex_2011
+    format: csv.gz
+    source_table: N/A — no sqlite table; see lodes_xwalk_tri_county_hex above
+    generator: tools/make_lodes_tri_county_artifact.py
+    mode: generate
+    rows: 189957
+    sha256: 5587486b3a2020cbbfef3d6ed3ed2b36926242ccb81c0ecff7a87622592fb33b
+    home: src/babylon/data/reference/lodes/od/mi_od_main_JT00_2011.csv.gz
+    material_relation: >-
+      2011 Detroit tri-county hex-pair commute matrix — see lodes_od_tri_county_hex_2010.
+  - name: lodes_od_tri_county_hex_2012
+    format: csv.gz
+    source_table: N/A — no sqlite table; see lodes_xwalk_tri_county_hex above
+    generator: tools/make_lodes_tri_county_artifact.py
+    mode: generate
+    rows: 194577
+    sha256: 7a10250188102d54423035844c4c6317492f2ef3cf6e9816aad8d24748a7d784
+    home: src/babylon/data/reference/lodes/od/mi_od_main_JT00_2012.csv.gz
+    material_relation: >-
+      2012 Detroit tri-county hex-pair commute matrix — see lodes_od_tri_county_hex_2010.
+  - name: lodes_od_tri_county_hex_2013
+    format: csv.gz
+    source_table: N/A — no sqlite table; see lodes_xwalk_tri_county_hex above
+    generator: tools/make_lodes_tri_county_artifact.py
+    mode: generate
+    rows: 195680
+    sha256: 84ff892a9c39d21ffa68dd1337972c4531cec88edf905792edfa6e784cb4f6be
+    home: src/babylon/data/reference/lodes/od/mi_od_main_JT00_2013.csv.gz
+    material_relation: >-
+      2013 Detroit tri-county hex-pair commute matrix — see lodes_od_tri_county_hex_2010.
+  - name: lodes_od_tri_county_hex_2014
+    format: csv.gz
+    source_table: N/A — no sqlite table; see lodes_xwalk_tri_county_hex above
+    generator: tools/make_lodes_tri_county_artifact.py
+    mode: generate
+    rows: 195892
+    sha256: 3c909aea866875e7dd42c1b561fee9acd5265d902590350f1ac4560c3c2395f6
+    home: src/babylon/data/reference/lodes/od/mi_od_main_JT00_2014.csv.gz
+    material_relation: >-
+      2014 Detroit tri-county hex-pair commute matrix — see lodes_od_tri_county_hex_2010.
+  - name: lodes_od_tri_county_hex_2015
+    format: csv.gz
+    source_table: N/A — no sqlite table; see lodes_xwalk_tri_county_hex above
+    generator: tools/make_lodes_tri_county_artifact.py
+    mode: generate
+    rows: 203144
+    sha256: 97f8476cb9549786433c36ed345793c1e66e8a06bd4f1c4db6975b20aec3b5d9
+    home: src/babylon/data/reference/lodes/od/mi_od_main_JT00_2015.csv.gz
+    material_relation: >-
+      2015 Detroit tri-county hex-pair commute matrix — see lodes_od_tri_county_hex_2010.
+  - name: lodes_od_tri_county_hex_2016
+    format: csv.gz
+    source_table: N/A — no sqlite table; see lodes_xwalk_tri_county_hex above
+    generator: tools/make_lodes_tri_county_artifact.py
+    mode: generate
+    rows: 205839
+    sha256: 304617ad6e5e36bfa0dbecebdd4d89679fe537b3a0f91ed418bf88b27152705d
+    home: src/babylon/data/reference/lodes/od/mi_od_main_JT00_2016.csv.gz
+    material_relation: >-
+      2016 Detroit tri-county hex-pair commute matrix — see lodes_od_tri_county_hex_2010.
+  - name: lodes_od_tri_county_hex_2017
+    format: csv.gz
+    source_table: N/A — no sqlite table; see lodes_xwalk_tri_county_hex above
+    generator: tools/make_lodes_tri_county_artifact.py
+    mode: generate
+    rows: 205778
+    sha256: ac18d0f5cb9ec6b8275c2330357cb347220394e192de7f1351123c30911fb12a
+    home: src/babylon/data/reference/lodes/od/mi_od_main_JT00_2017.csv.gz
+    material_relation: >-
+      2017 Detroit tri-county hex-pair commute matrix — see lodes_od_tri_county_hex_2010.
+  - name: lodes_od_tri_county_hex_2018
+    format: csv.gz
+    source_table: N/A — no sqlite table; see lodes_xwalk_tri_county_hex above
+    generator: tools/make_lodes_tri_county_artifact.py
+    mode: generate
+    rows: 207309
+    sha256: 6e200c1d6056a1f26d56240bd1a43ca56f653d3508e922235b8720b30b65f389
+    home: src/babylon/data/reference/lodes/od/mi_od_main_JT00_2018.csv.gz
+    material_relation: >-
+      2018 Detroit tri-county hex-pair commute matrix — see lodes_od_tri_county_hex_2010.
+  - name: lodes_od_tri_county_hex_2019
+    format: csv.gz
+    source_table: N/A — no sqlite table; see lodes_xwalk_tri_county_hex above
+    generator: tools/make_lodes_tri_county_artifact.py
+    mode: generate
+    rows: 205325
+    sha256: 4462f307ae74167ac8ec8364ea0042d96d92d0f2e68bbfeeb8a5c9592d90b83c
+    home: src/babylon/data/reference/lodes/od/mi_od_main_JT00_2019.csv.gz
+    material_relation: >-
+      2019 Detroit tri-county hex-pair commute matrix — see lodes_od_tri_county_hex_2010.
+  - name: lodes_od_tri_county_hex_2020
+    format: csv.gz
+    source_table: N/A — no sqlite table; see lodes_xwalk_tri_county_hex above
+    generator: tools/make_lodes_tri_county_artifact.py
+    mode: generate
+    rows: 195984
+    sha256: badca82307ef53647c24ed13dc8053157b474d0c80be435c738818221ee96a3c
+    home: src/babylon/data/reference/lodes/od/mi_od_main_JT00_2020.csv.gz
+    material_relation: >-
+      2020 Detroit tri-county hex-pair commute matrix — see lodes_od_tri_county_hex_2010.
+  - name: lodes_od_tri_county_hex_2021
+    format: csv.gz
+    source_table: N/A — no sqlite table; see lodes_xwalk_tri_county_hex above
+    generator: tools/make_lodes_tri_county_artifact.py
+    mode: generate
+    rows: 200596
+    sha256: cad5c11af69f79cc6ad02c0bf44abdbc2344325e216c40fee085044b28359280
+    home: src/babylon/data/reference/lodes/od/mi_od_main_JT00_2021.csv.gz
+    material_relation: >-
+      2021 Detroit tri-county hex-pair commute matrix — see lodes_od_tri_county_hex_2010.
+  - name: mit_countypres_rep_share
+    format: csv
+    source_table: N/A — no sqlite table; MIT Election Lab county-presidential returns (ADR049, ratified P25 U6/ADR132)
+    generator: tools/make_election_lab_artifact.py
+    mode: generate
+    rows: 3107
+    sha256: 72c9ba04c3d9bc8001867a794338f77940b38b47dbd352084101126d380f7a90
+    home: src/babylon/data/reference/election/mit_countypres_rep_share.csv
+    material_relation: >-
+      County FIPS -> 2024 presidential Republican vote share (rep_votes / total_votes summed
+      over every candidate row) — the real electoral base distribution FR-039 seeds
+      FAC_RESTORATIONIST INFLUENCES from (compute_seed_influences), replacing the
+      CENSUS_BUREAU_FIXTURE radius bands. FIPS keys are census-atom-validated: the acquired
+      file's FIPS column is row-level corrupt in several state blocks, so (state, county name)
+      joins against us_county_territories.json decide the key; 54 groups repaired, 81
+      non-county/unmatched groups excluded (AK districts, RI municipalities, the 36000 Kansas
+      City sentinel).
+  - name: faf_bloc_trade_tons
+    format: csv.gz
+    source_table: N/A — no sqlite table; FAF5 State-level freight O-D tons aggregated per bloc (Program 26 U3, ADR16x)
+    generator: tools/make_faf_bloc_tons_artifact.py
+    mode: generate
+    rows: 42
+    sha256: 47b553a0f04234abd61d5d5a2290786e2fe5dce64664c3f1473304a94a039141
+    home: src/babylon/data/reference/faf_bloc_trade_tons.csv.gz
+    material_relation: >-
+      Annual (2018-2024) FAF5 freight tons (thousand tons) per international engine node — the
+      material grounding for ExternalNode.bilateral_trade_tons, which was a permanent 0.0 stub
+      since spec-101 (ADR055). 6 of the 8 INTERNATIONAL_NODES are covered (canada, eu,
+      sub_saharan_africa, china, southeast_asia, latin_america) via an explicit, disclosed,
+      injective FAF-zone-to-node mapping; india and russia_csi are deliberately UNCOVERED — FAF
+      zone 806 "SW & Central Asia" mixes India with the Middle East and Central Asia/Caucasus
+      with no clean per-country breakdown in this state-level extract, so it is excluded rather
+      than fabricated (III.8). Full mapping table + disclosure:
+      tools/make_faf_bloc_tons_artifact.py module docstring.
+  - name: county_fips_vintage_crosswalk
+    format: csv
+    source_table: N/A — no sqlite table; second-order product (ADR098/ADR171 Phase 0 disposition)
+    generator: tools/make_fips_vintage_crosswalk.py
+    mode: generate
+    rows: 17
+    sha256: bb53dad2eb1b5dba6690dd0fde995743d47bfea5898bae4a6e9afb5502ba8efe
+    home: src/babylon/data/reference/national/county_fips_vintage_crosswalk.csv
+    material_relation: >-
+      #334 Phase 0 (ADR171 OQ0/OQ1) A1 — reconciles the engine territory universe
+      (us_county_territories.json, 3,153 counties) against the resolver universe
+      (scopes._load_national_fips against dim_county, 3,156 counties) and against
+      fact_census_poverty's time_id=23 (2019, OQ11 pinned vintage — never re-cut;
+      the extractor that could re-cut a different vintage is deleted,
+      data-catalog.yaml:1096) data-availability gaps. 17 rows: 13 recoverable
+      absences (3 AK reorganizations, 9 CT planning regions, Bedford city VA
+      51515->51019), 3 resolver-only retired FIPS (02261, 02270, 46113,
+      documentation rows only), and 1 DECLARED_HOLE — 46102 Oglala Lakota SD
+      (Pine Ridge): zero fact_census_poverty rows under any FIPS it has ever
+      held, at any time_id; its retired predecessor 46113 (Shannon County)
+      carries rows only 2010-2014, stale before the pinned vintage. Pine Ridge is
+      NEVER imputed from that stale predecessor (G7/G5). Consumed downstream by
+      national_incidence_county_pole/national_reproduction_floor (this file, same
+      EXCEPTION tail) via resolve_query_fips — only a recoverable=true row
+      substitutes a query target; every DECLARED_HOLE/unresolved row queries its
+      own native FIPS and returns no data. The B+C+I pole map, the Chicano/OQ2/OQ7
+      proxy disclosures, and F1/F2's measured figures are carried on the two
+      artifacts this crosswalk feeds, not duplicated here.
+  - name: national_incidence_county_pole
+    format: csv.gz
+    source_table: N/A — no sqlite table; second-order product (ADR098/ADR171 Phase 0 disposition)
+    generator: tools/make_national_incidence_artifact.py
+    mode: generate
+    rows: 12612
+    sha256: 8995ba396c691f86e9f92b879eca26f826311c1aa2b7fa0d4a9d6a14789531b4
+    home: src/babylon/data/reference/national/national_incidence_county_pole.csv.gz
+    material_relation: >-
+      #334 Phase 0 (ADR171 OQ0/OQ1/OQ10) A2 — one row per (fips, pole) over the
+      3,153-county engine universe x 4 poles (12,612 rows): the RULED B+C+I
+      named-nations partition plus the H settler reference (OQ1's "B + Chicano +
+      Indigenous... matching MIM's and ERoL's named nations"). Pole-letter trap,
+      stated so it is never re-derived wrong: pole B (Black) is census race_id 3;
+      pole C (Indigenous) is census race_id 4 (AIAN, "C" in the census's own
+      lettering — do not confuse with pole letter); pole I (Chicano) is census
+      race_id 10 (Hispanic, any race); the settler-reference pole H is census
+      race_id 9 (White alone, non-Hispanic). Two ADR167-class proxy disclosures
+      travel with this pole map: (1) F7 — CHICANO <- census "Hispanic or Latino"
+      folds in Puerto Rican, Cuban, Dominican, and Central/South American
+      populations the census's pan-ethnic iteration does not separate from the
+      named Chicano nation; (2) OQ2 — the H (White-non-Hispanic) pole stands in
+      for "the settler nation" as a Director-ruled conservative default, not a
+      census-native nation category. The universe u = B17001_001 ("population for
+      whom poverty status is determined") STRUCTURALLY EXCLUDES institutionalized
+      group-quarters population (prisons, jails, barracks) on an axis whose own
+      grounding cites prison labor as constitutive, and is a POINT-IN-TIME count
+      MIM's own source material discounts (mt10.txt:5544-5550) — OQ7's ruling
+      accepts both biases because their net direction is CONSERVATIVE: settler
+      poverty is disproportionately transient, so a point-in-time p-bar
+      OVERSTATES the settler pole's durable reproduction failure, which makes the
+      measured oppressed-pole deficit UNDER-stated, never inflated. Pinned vintage
+      time_id=23 (2019, OQ11) — never re-cut. Every measure cell is EMPTY (never a
+      fabricated 0.0) when absence_class != PRESENT (G2); absence_class in
+      {ZERO_DENOMINATOR, ROW_ABSENT, DECLARED_HOLE, SUPPRESSED} classifies WHY.
+      46102 (Pine Ridge) carries DECLARED_HOLE on all 4 poles — see
+      county_fips_vintage_crosswalk (this file) for the crosswalk that classifies
+      it, never imputed. See national_reproduction_floor (this file) for the
+      pooled B+C+I:H ratio (F1) and the disclosed overlap bound (F2).
+  - name: national_reproduction_floor
+    format: csv
+    source_table: N/A — no sqlite table; second-order product (ADR098/ADR171 Phase 0 disposition)
+    generator: tools/make_national_incidence_artifact.py
+    mode: generate
+    rows: 15
+    sha256: cb2c5602008b02a53871153963aa931a81fa02e6a9b69b478b3f787ad4775016
+    home: src/babylon/data/reference/national/national_reproduction_floor.csv
+    material_relation: >-
+      #334 Phase 0 (ADR171 OQ0/OQ1) A3 — 5 aggregate rows (4 individual poles +
+      1 B+C+I POOLED row) per universe_variant, 3 variants (artifact_3153,
+      scopes_3156, unrestricted_3218; the pinned time_id=23/2019 measured county
+      count differs by universe definition, disclosed rather than hidden), 15
+      rows total. Same pole map, proxy disclosures (F7 Chicano compression, OQ2
+      H-settler proxy), point-in-time/carceral-exclusion conservative bias (OQ7),
+      and pinned vintage (OQ11) as national_incidence_county_pole (this file) —
+      see that entry for the full text, not duplicated here. This is the file
+      carrying F1 and F2 as columns: F1 — the POOLED row's
+      ratio_bribe_to_deprivation (ΣΩ settler-bribe-mass / ΣE oppressed-deprivation-
+      mass) on this real run's unrestricted_3218 variant is 1.868990896, matching
+      the plan's measured ~1.868/1.87 ratio for the ADR171-ruled B+C+I partition —
+      this is NOT ADR171's own context-block figure of 1.55, which was computed
+      under the DIFFERENT T-H residual partition that same ADR demotes to
+      instrument-validation only; the two numbers differ by construction (a
+      different partition), never by defect, and this artifact never tunes toward
+      1.55. F2 — the POOLED row's overlap_upper_bound = I-(A-H), the computable
+      upper bound on the Hispanic/non-White-pole double-count B17001 has no direct
+      cross-tab for; on unrestricted_3218 this real run measures 20,877,584
+      persons (20.26% of the B+C+I universe, overlap_bound_share), DISCLOSED only
+      and never subtracted from any pole sum (G8) — this discharges OQ1's overlap-
+      policy obligation without netting anything. Pine Ridge (46102) is a
+      DECLARED_HOLE contributing to every variant's counties_absent on every pole
+      it touches (FIRST_NATIONS/C) — see county_fips_vintage_crosswalk (this file).
+  - name: h3_res7_land_mask
+    format: parquet
+    source_table: null
+    generator: tools/phase0d/build_mask.py
+    mode: register
+    rows: 45572
+    sha256: 4e6caba297f0111a9ec93d948a83543bb9f7179361fe5dd318bb8a98a5be5194
+    home: dist/data-artifacts/h3_res7_land_mask.parquet
+    material_relation: >-
+      Phase 0-D build product 1 (ruling 18): per-res-7-cell land fraction from
+      TIGER 2023 AREAWATER unions intersected in EPSG:5070 (inputs pinned in
+      tools/phase0d/fetch_manifest.json). RETIRES the fabricated
+      bridge_county_h3.coverage_pct (uniformly 100): measured truth is 40.0%
+      of the 45,572 bridge-county cells water-dominated (33.7% pure open
+      water — the Great Lakes), mean land fraction 0.597. The multi-res
+      substrate, extent-weighted intensive means, and the refine budget all
+      read THIS, never the county polygon (which includes lake area).
+  - name: h3_res7_population
+    format: parquet
+    source_table: null
+    generator: tools/phase0d/build_apportionment.py
+    mode: register
+    rows: 22509
+    sha256: b096a5891284f0ca55bedae9d1a9092eb8ea9e9e32d32b6ace430a9833b53afc
+    home: dist/data-artifacts/h3_res7_population.parquet
+    material_relation: >-
+      Phase 0-D build product 2 (ruling 18): Census 2020 P.L. 94-171 POP100 per
+      block assigned to the res-7 cell containing each block's Census-declared
+      internal point (block grain — a method upgrade on the charter's bg areal
+      plan; the DHC API's bg route is key-gated). Parse self-verifies against
+      Michigan's published 10,077,331; 10,066,869 lands in-tiling (99.90%),
+      border slivers counted loudly. RETIRES the hydrator's "uniform within
+      county" population smear (S-12).
+  - name: h3_res7_workplace
+    format: parquet
+    source_table: null
+    generator: tools/phase0d/build_apportionment.py
+    mode: register
+    rows: 11833
+    sha256: ea2ce1508f4fe51f1e879b9f4a1daf579c4b00349388b12a85f884a8f49eabb6
+    home: dist/data-artifacts/h3_res7_workplace.parquet
+    material_relation: >-
+      Phase 0-D build product 3 (ruling 18): LODES8 WAC C000 total jobs per
+      block assigned via the LODES crosswalk's block coordinates — the per-cell
+      workplace-density share key the dossier found missing (the existing
+      fact_lodes_commuter_flow is county-to-county only). 3,931,809 jobs across
+      11,833 cells; max cell 58,208 (downtown Detroit).
+  - name: census_place_identity_mi_2023
+    format: csv.gz
+    source_table: null
+    generator: tools/make_census_place_artifacts.py
+    mode: register
+    rows: 745
+    sha256: cb864b4f6f43902bb821e84fe9a4055a9039e0a74d8b8399f209ae6ed26a8be7
+    home: src/babylon/data/reference/spatial/census_place_identity_mi_2023.csv.gz
+    material_relation: >-
+      PER-276 Census place identity authority for the bounded Michigan proving cohort:
+      one sorted 2023 TIGER/Line place GEOID per incorporated place or census-designated
+      place, with the official state/place codes, names, class, function, and MTFCC. The
+      exact official archive is SHA-256-pinned before decode. This is an identity source,
+      not county membership, H3 overlap, allocation weight, PostgreSQL schema, or runtime
+      cutover authority.
+  - name: census_place_geometry_mi_2023
+    format: parquet
+    source_table: null
+    generator: tools/make_census_place_artifacts.py
+    mode: register
+    rows: 745
+    sha256: cea5b0ada40b75ae2f6996bef7aa4aeb8d13b36ce5bc41d4334da1e8bf17b737
+    home: src/babylon/data/reference/spatial/census_place_geometry_mi_2023.parquet
+    material_relation: >-
+      PER-276 Census place polygon authority for the same 745 Michigan 2023 TIGER/Line
+      place GEOIDs: valid EPSG:4269 Polygon/MultiPolygon source geometry encoded as
+      deterministic OGC ISO little-endian two-dimensional binary WKB in a single
+      Zstandard-compressed Parquet row group, with Census ALAND,
+      AWATER, and internal points. It deliberately carries no county/place/H3 overlap or
+      place land-area share; that true many-to-many measurement remains a separate blocker.
+  - name: census_county_h3_land_overlap_mi_2023
+    format: parquet
+    source_table: null
+    generator: tools/make_county_place_h3_overlap_artifacts.py
+    mode: register
+    rows: 31881
+    sha256: 7054fe2efa378e4db055a6647b9a3834cc382d822a032652b33894732b55b3c3
+    home: src/babylon/data/reference/spatial/census_county_h3_land_overlap_mi_2023.parquet
+    material_relation: >-
+      PER-277 measured Michigan 2023 county-land membership for the PER-275 H3
+      resolution-7 identity cohort: one sorted positive whole-square-metre row per
+      cell and county after subtracting all SHA-256-pinned TIGER/Line AREAWATER
+      geometry in EPSG:5070. Cross-county cells remain many-to-many; there is no
+      dominant owner or fabricated coverage, and the artifact grants no PostgreSQL
+      schema, runtime reader/writer, or cutover authority.
+  - name: census_county_place_h3_land_overlap_mi_2023
+    format: parquet
+    source_table: null
+    generator: tools/make_county_place_h3_overlap_artifacts.py
+    mode: register
+    rows: 4813
+    sha256: fcb7baaf63a5422accce8709997de8e409936f7131fa0ef6b0a28762fdfee42f
+    home: src/babylon/data/reference/spatial/census_county_place_h3_land_overlap_mi_2023.parquet
+    material_relation: >-
+      PER-277 measured Michigan 2023 place land overlap for the same bounded H3
+      cohort: one sorted positive cell, county, and PER-276 place row with a
+      conservative whole-square-metre numerator, the statewide Michigan cell-land
+      denominator, and a floor-derived parts-per-billion share. Cross-county places
+      remain many-to-many; shares are not normalized to 100%, and the artifact grants
+      no PostgreSQL schema, runtime reader/writer, or cutover authority.
+  - name: qcew_county_economics_mi_2024
+    format: csv.gz
+    source_table: null
+    generator: tools/make_qcew_county_economics_artifacts.py
+    mode: register
+    rows: 83
+    sha256: 116affb2998c6c0259d5bf14840f99f835d7e0733aa0b4f4c60a257b2723cd16
+    home: src/babylon/data/reference/economy/qcew_county_economics_mi_2024.csv.gz
+    material_relation: >-
+      PER-319 (ADR250 R3/R5/R6/R7) QCEW county-economics reference for the bounded
+      Michigan proving cohort: one sorted 2024 BLS QCEW annual county-total row
+      (agglvl 70, total ownership) per Michigan county GEOID with establishments,
+      employment, total annual wages, and average weekly wage exactly as the
+      public record prints them. Every staged source CSV is SHA-256-pinned in
+      tools/qcew_county_economics_v1_source_manifest.json before parsing, and no
+      county-total row carries a disclosure code. This artifact grants no
+      industry or ownership detail, no derived or rounded values, no PostgreSQL
+      schema, no runtime importer, and no cutover authority.
+  - name: qcew_county_sectors_mi_2024
+    format: csv.gz
+    source_table: null
+    generator: tools/make_qcew_county_sector_artifacts.py
+    mode: register
+    rows: 1603
+    sha256: 1cac80bee20c086be2e1f268643b0caab5d8d63030251817a9f149123755d71a
+    home: src/babylon/data/reference/economy/qcew_county_sectors_mi_2024.csv.gz
+    material_relation: >-
+      Part of PER-29: observed 2024 BLS QCEW private county-sector cells across
+      all 83 Michigan counties, selected at aggregation 74 and ownership 5.
+      All 1603 rows have positive public establishment counts. The 416 N rows
+      retain those counts and withhold employment, payroll, and mean weekly wage
+      as empty optional fields. Code 99 remains explicitly unclassified in 81
+      rows; 57 absent county-sector combinations receive no invented zero row.
+      Composite NAICS sector codes and exact 64-bit values remain intact, with
+      each row bound to the existing county-source filename and SHA-256 manifest.
+      This foundation reference grants no runtime hydration, production recipes,
+      worker allocation, ReserveArmy transitions, or completion of PER-29.
+  - name: ntad_detroit_windsor_rail_v1
+    format: json
+    source_table: null
+    generator: tools/make_ntad_border_rail_artifact.py
+    mode: register
+    rows: 2
+    sha256: ee00b4971fa70e4a2ca56810d45a4f5b107a68a611d328fb9b2eb32e8d723f24
+    home: src/babylon/data/reference/transport/ntad_detroit_windsor_rail_v1.json
+    material_relation: 'Part of PER-28/PER-31: two Observed NTAD North American Rail Network polylines
+      from the official July 21, 2026 service revision, preserving FRAARCID 489609/737940, original
+      FR/TO identities and vertex order, 29 EPSG:4326 vertices, shared node 441352, recorded lengths,
+      tracks, and ownership labels. Captured response and layer metadata have exact HTTP-body and
+      stored-file SHA-256 pins in contracts/ntad_border_rail_v1.yaml; the generator rebuilds offline.
+      Shared topology and semantic identity are Derived; selection and canonical representation are
+      Designed. This is source evidence only, with no HPMS replacement, freight capacity, border delay,
+      loss rate, H3 allocation, factory placement, Canadian actor, runtime hydration, campaign mutation,
+      or gate completion authority.'

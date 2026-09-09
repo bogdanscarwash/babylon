@@ -9,7 +9,8 @@
   "buildCmd": "cd src/frontend && npx -y @tailwindcss/cli@4.3.2 -i ../../.design-sync/ds-tailwind-entry.css -o .ds-css/compiled.css --minify",
   "readmeHeader": ".design-sync/conventions.md",
   "extraFonts": [
-    "../../.design-sync/fonts.css"
+    "../../.design-sync/fonts.css",
+    "../../.design-sync/nerd-fonts.css"
   ],
   "overrides": {
     "EventsFeed": {
@@ -24,26 +25,9 @@
       "viewport": "1280x800",
       "cardMode": "column"
     },
-    "StatusBar": {
-      "cardMode": "single",
-      "primaryStory": "Populated",
-      "viewport": "1220x200"
-    },
-    "BottomStrip": {
-      "cardMode": "single",
-      "primaryStory": "TimeseriesActive"
-    },
-    "MapPanel": {
-      "cardMode": "single",
-      "primaryStory": "Populated"
-    },
     "Outliner": {
       "cardMode": "single",
       "primaryStory": "Populated"
-    },
-    "RightDock": {
-      "cardMode": "single",
-      "primaryStory": "ActionsPopulated"
     },
     "ActionComposer": {
       "cardMode": "single",
@@ -107,10 +91,6 @@
       "cardMode": "single",
       "primaryStory": "Populated"
     },
-    "InspectorPanel": {
-      "cardMode": "single",
-      "primaryStory": "OrgWithConsciousness"
-    },
     "ObjectivesTracker": {
       "cardMode": "single",
       "primaryStory": "Populated"
@@ -127,16 +107,10 @@
     "VerbGrid": {
       "cardMode": "column"
     },
-    "DeckGLMap": {
-      "cardMode": "column"
-    },
     "HexTooltip": {
       "cardMode": "column"
     },
     "MapLegend": {
-      "cardMode": "column"
-    },
-    "MapModeSelector": {
       "cardMode": "column"
     },
     "DeepPanes": {
@@ -165,6 +139,53 @@
     },
     "LiberatedColumn": {
       "cardMode": "column"
+    },
+    "TopBar": {
+      "cardMode": "single",
+      "primaryStory": "Populated",
+      "viewport": "1220x200"
+    },
+    "SpeedControls": {
+      "cardMode": "single",
+      "primaryStory": "Speed1Active"
+    },
+    "ActionDock": {
+      "cardMode": "single",
+      "primaryStory": "ComposerOpen"
+    },
+    "BottomDrawer": {
+      "cardMode": "single",
+      "primaryStory": "TrendsOpen"
+    },
+    "CriticalEventModal": {
+      "cardMode": "single",
+      "primaryStory": "Autopaused"
+    },
+    "EventToasts": {
+      "cardMode": "single",
+      "primaryStory": "Populated"
+    },
+    "EventTray": {
+      "cardMode": "single",
+      "primaryStory": "Populated"
+    },
+    "ObjectivesTray": {
+      "cardMode": "single",
+      "primaryStory": "Populated"
+    },
+    "OutlinerOverlay": {
+      "cardMode": "single",
+      "primaryStory": "Populated"
+    },
+    "InspectionStack": {
+      "cardMode": "single",
+      "primaryStory": "MultiFrameBreadcrumb"
+    },
+    "FramingSelector": {
+      "cardMode": "column"
+    },
+    "MapLensBar": {
+      "cardMode": "column"
     }
   },
   "componentSrcMap": {
@@ -176,24 +197,35 @@
     "BblData": "src/components/bbl/BblData.tsx",
     "BblLabel": "src/components/bbl/BblLabel.tsx",
     "Sparkline": "src/components/bbl/Sparkline.tsx",
+    "ActionDock": "src/components/chrome/ActionDock.tsx",
+    "BottomDrawer": "src/components/chrome/BottomDrawer.tsx",
+    "CriticalEventModal": "src/components/chrome/CriticalEventModal.tsx",
+    "EventToasts": "src/components/chrome/EventToasts.tsx",
+    "EventTray": "src/components/chrome/EventTray.tsx",
+    "FloatingPanel": "src/components/chrome/FloatingPanel.tsx",
+    "KeyHints": "src/components/chrome/KeyHints.tsx",
+    "ObjectivesTray": "src/components/chrome/ObjectivesTray.tsx",
+    "OutlinerOverlay": "src/components/chrome/OutlinerOverlay.tsx",
+    "SpeedControls": "src/components/chrome/SpeedControls.tsx",
+    "TopBar": "src/components/chrome/TopBar.tsx",
     "EventsFeed": "src/components/events/EventsFeed.tsx",
-    "ConsciousnessBreakdown": "src/components/inspector/ConsciousnessBreakdown.tsx",
-    "InspectorPanel": "src/components/inspector/InspectorPanel.tsx",
-    "Stat": "src/components/inspector/Stat.tsx",
-    "DeckGLMap": "src/components/map/DeckGLMap.tsx",
+    "FormulaCard": "src/components/inspect/FormulaCard.tsx",
+    "InspectionCard": "src/components/inspect/InspectionCard.tsx",
+    "InspectionStack": "src/components/inspect/InspectionStack.tsx",
+    "ValueRow": "src/components/inspect/ValueRow.tsx",
+    "DeckGLMap": null,
+    "FramingSelector": "src/components/map/FramingSelector.tsx",
     "HexTooltip": "src/components/map/HexTooltip.tsx",
+    "MapControls": "src/components/map/MapControls.tsx",
     "MapLegend": "src/components/map/MapLegend.tsx",
-    "MapModeSelector": "src/components/map/MapModeSelector.tsx",
+    "MapLensBar": "src/components/map/MapLensBar.tsx",
+    "NarrationBlock": "src/components/narration/NarrationBlock.tsx",
     "ObjectivesTracker": "src/components/objectives/ObjectivesTracker.tsx",
     "AppShell": "src/components/shell/AppShell.tsx",
-    "BottomStrip": "src/components/shell/BottomStrip.tsx",
-    "MapPanel": "src/components/shell/MapPanel.tsx",
     "Outliner": "src/components/shell/Outliner.tsx",
     "OutlinerRow": "src/components/shell/OutlinerRow.tsx",
     "OutlinerSection": "src/components/shell/OutlinerSection.tsx",
-    "RightDock": "src/components/shell/RightDock.tsx",
     "StatChip": "src/components/shell/StatChip.tsx",
-    "StatusBar": "src/components/shell/StatusBar.tsx",
     "TimeControls": "src/components/shell/TimeControls.tsx",
     "TakeoverOverlay": "src/components/takeovers/TakeoverOverlay.tsx",
     "ChronicleTakeover": "src/components/takeovers/chronicle/ChronicleTakeover.tsx",

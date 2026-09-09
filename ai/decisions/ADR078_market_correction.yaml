@@ -1,0 +1,136 @@
+ADR078_market_correction:
+  status: "accepted"
+  date: "2026-07-17"
+  title: "Program 23 Phase 2 — THE CORRECTION: price_value promoted from shadow to canonical, the snap wired as deterministic feedback into the material base (claim-holder wealth evaporation, reserve-army influx, wealth-axis velocity shock), per-county scissors + price_divergence map lens, correction ledger + diegetic ticker exposure, and the promotion ceremony executed (all qa baselines regenerated)"
+  context: |
+    Owner authorization 2026-07-17 morning, closing the gate ADR077 §7
+    recorded: a /goal directive ("finish the entirety of the thing we've
+    been building about price-value divergence") followed by an explicit
+    mid-run message: "I approve of Phase 2 and any other phases you must
+    do. Make this feature complete." Together these constitute the
+    promotion ceremony's owner gate (regenerated baselines + authorizing
+    ADR — this document).
+
+    Phase 1 (ADR077, PR #205) had landed the observe-only stack: the
+    generic shadow-opposition mechanism, MarketScissorsSystem @17.8
+    evolving national price_log/fictitious_log oscillators, the
+    price_value shadow binding, tick_summary/cockpit exposure — with
+    qa:regression byte-identical at three stages. Phase 2's design was
+    recorded in spec-115: the correction as the crisis mechanism — when
+    the fictitious/real divergence exceeds what the falling rate of
+    profit can service, the snap fires into the material base.
+
+    Relevant precedents applied: the EH/Doctrine two-stage gate (land
+    inert behind a flag, flip + regenerate in one declared commit);
+    spec-114 FR-114-4's conservation-preserving velocity-impulse form for
+    wealth-axis shocks; the D5 shared-defect pole-measure precedent
+    (_imperial_poles = _wage_poles); the wage_pressure map-metric pattern
+    (native territory attr, honest null, population-weighted county mean).
+  decision: |
+    1. EVENT: EventType.MARKET_CORRECTION (83rd member).
+    2. COEFFICIENTS: nine Phase-2 defines in GameDefines.market —
+       feedback_enabled (the gate), correction_threshold_base (0.55),
+       correction_profit_slope (4.0), correction_severity (0.6),
+       correction_price_severity (0.3), correction_cooldown_ticks (8),
+       evaporation_gain (0.15), unemployment_gain (0.08),
+       wealth_axis_kick_gain (0.02). MarketState gains the correction
+       ledger: corrections (cumulative, a REAL field per the event-sourced
+       accumulator law) + last_correction_tick.
+    3. LAWS (formulas/market.py, pure): calculate_serviceable_divergence
+       (base + slope·max(profit_rate, 0); None → base — honest absence),
+       calculate_overhang (max(fictitious_log − serviceable, 0)),
+       calculate_correction_snap (log·(1−severity), min(velocity, 0) —
+       upward momentum dies, panic overshoot survives; antisymmetric).
+    4. THE SNAP (MarketScissorsSystem, behind feedback_enabled): profit
+       rate = mean territory tick_profit_rate (sorted, None when absent);
+       fire iff overhang > 0 AND cooldown elapsed. Effects, all
+       deterministic sorted-id iteration: (a) snap both oscillators
+       (price under correction_price_severity — credit tightening);
+       (b) wealth evaporation on bracket-0/1 roles only (the ADR075 fold:
+       bourgeoisies + petty bourgeoisie hold the claims; labor's wealth is
+       untouched here — the crisis reaches labor through the reserve
+       army); (c) reserve_ratio influx on active territories carrying
+       median_wage (the wage relation's marker; ReserveArmySystem @5
+       converts to wage pressure next tick); (d) the
+       market_correction_shock graph stamp, consumed SAME tick by
+       WealthDistributionSystem @21.5 (17.8 < 21.5) as a
+       conservation-preserving velocity impulse (w1 −kick, w2..w4 +kick/3
+       — Σ = 0, spec-114 FR-114-4 form, crisis direction); (e) the
+       MARKET_CORRECTION event with full before/after payload. The stamp
+       constant lives in wealth_distribution.py (the consumer's inbox)
+       because @17.8 already imports the bracket fold from it.
+    5. PROMOTION: the price_value binding drops shadow=True — it now
+       competes for principal contradiction, enters frames/rupture/regime
+       (crisis-as-principal falls out of the field machinery, as spec-115
+       specified). The generic shadow mechanism REMAINS (Amendment T's
+       chauvinism⟷internationalism registers on it later); with no shadow
+       bindings the shadow_opposition_states attr is simply never written.
+       price_value also gains pole_measure=_price_value_poles (=
+       _wage_poles: labor-power is the one commodity with per-node price
+       AND value accounting — the D5 precedent; a claims/portfolio sigma
+       replaces it when per-node financial data lands) and the coupling
+       edge wage feeds price_value (the realized flow IS the drive).
+    6. COUNTY AXES: market_county graph attr / WorldState.market_county —
+       per-county oscillators over each county's own (w_paid, v_produced)
+       flow (placeless nodes feed the national axis only). Observe-only:
+       the correction never snaps county oscillators (credit is one
+       national system; a county's exposure is its own flow history).
+       Counties whose substrate vanishes are dropped; their territories'
+       price_divergence goes to honest None (the sigma de-positioning
+       rule). Territory nodes get price_divergence (= county price_log),
+       registered transient in TERRITORY_EXCLUDED_FIELDS (the
+       wage_pressure landmine), emitted through the full map contract
+       (MAP_METRIC_PROPERTIES + lens.ts) as a signed diverging-ramp lens.
+    7. EXPOSURE: tick_summary.market_corrections (migration 0034, guarded
+       idempotent, base DDL same commit); timeseries market_corrections
+       array (cumulative; the cockpit derives snap ticks from increments);
+       ScissorsChart gains per-snap "correction" ReferenceLines and the
+       MELT-drift readout (price_index − 1 — no fabricated τ); the
+       diegetic MarketTicker (DOW-styled index = 10000·fictitious_ratio,
+       FIXED headline table selected mechanically by state — euphoria/
+       rally/crash/slump/steady) lives INSIDE the Scissors tab; the
+       narration panel stays frozen-unwired per the standing owner ruling.
+    8. CALIBRATION CONTRACTS (test_market_calibration.py, III.12):
+       restoration envelope half-life in [4, 100] ticks (measured 8);
+       bubbles-outlive-price-swings (fictitious envelope > price envelope
+       — the load-bearing gravity asymmetry); zero drive → settles to par,
+       no limit cycle; sustained 5%/tick euphoria fires within 520 ticks
+       with cooldown-spaced snaps; balanced growth NEVER fires (a large
+       economy is not a bubble); no defines-reachable parameterization
+       escapes the max_abs_log rail. Model-derived bands only — NO
+       unverifiable empirical literals.
+    9. CEREMONY: one promotion commit flips shadow=False +
+       feedback_enabled=True, regenerates defines.yaml and ALL qa
+       baselines (sampled JSONs + dense CSVs + e2e), and declares the
+       per-scenario drift (recorded in consequences below and the PR
+       body). Determinism gate re-verified post-flip.
+  consequences: |
+    The engine's first closed crisis loop: boom → divergence → snap →
+    evaporation/unemployment/redistribution → (next boom), fully
+    deterministic, zero RNG. price_value is the sixth CANONICAL
+    opposition; the shadow channel is empty but retained as the ADR072
+    landing surface.
+
+    Baseline movement: declared per-scenario in the promotion commit and
+    PR #205 body (the five scenarios' drift directions were eyeballed and
+    recorded there; scenarios without a w_paid/v_produced substrate or
+    with sub-threshold divergence move only through the price_value key's
+    presence in opposition_states).
+
+    Deferred with reason: FRED/NBER numeric anchors (calibration-only,
+    blocked on deterministic data artifacts per ADR074 item 6 /
+    feedback-ci-no-drive ruling); per-node claims/portfolio pole sigma
+    (needs per-node financial data); county-level corrections (credit
+    modeled as one national system this phase); hex-level scissors
+    refinement (no hex observables); the narration-panel ticker (panel
+    owner-frozen; the diegetic ticker lives in the Scissors tab instead);
+    SQLite runtime_db.record_tick_summary (not on the web path).
+
+    Known honest limitations: the shadow-state rate-reset facade gap from
+    ADR077 now applies to the canonical price_value state exactly as to
+    the other five (documented opposition_states facade limitation);
+    correction wealth evaporation applies a uniform fraction within
+    claim-holder brackets (no per-node exposure heterogeneity until the
+    claims data lands).
+  evidence: |
+    src/babylon/models/enums/events.py, src/babylon/config/defines/market.py, src/babylon/models/market.py, src/babylon/formulas/market.py, src/babylon/engine/systems/market_scissors.py, src/babylon/engine/systems/wealth_distribution.py, src/babylon/domain/dialectics/instances/catalog.py, src/babylon/models/world_state.py, src/babylon/persistence/migrations/0034_market_corrections.sql, src/babylon/persistence/postgres_schema.py, src/babylon/persistence/postgres_runtime/_legacy.py, web/game/map_contract.py, web/game/engine_bridge.py, src/frontend/src/lib/scissors.ts, src/frontend/src/components/timeseries/MarketTicker.tsx, src/frontend/src/components/timeseries/ScissorsChart.tsx, src/frontend/src/lib/lens.ts, tests/unit/formulas/test_market_calibration.py, tests/unit/config/test_market_defines.py, specs/115-market-scissors/spec.md, docs/superpowers/plans/2026-07-17-market-scissors-phase-2.md, ADR077_market_scissors.yaml, ADR075 (bracket fold ruling), spec-114 (FR-114-4 impulse form)

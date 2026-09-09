@@ -1,0 +1,200 @@
+ADR195_enum_deffield_row:
+  status: "accepted"
+  date: "2026-08-11"
+  title: "The enum deffield row — Director ruling (Organization-as-game-object spec §1 Q12, 2026-08-11, approved twice): a seventh <type-name> row, `enum`, joins the six D94 sealed — a content-declared closed enum's member, stored as the declared-order ordinal in the existing binary64 attribute lane, surfaced ONLY as an EnumRef (never a bare number, in either direction); explicitly SUPERSEDES D94's six-row closure rather than silently reopening it"
+  context: |
+    ADR176 (34) had already retired five dead `EdgeType` members with the
+    intent to re-mint a graph vocabulary under BSL "in Phase 2 with their
+    own vocabulary ceremony". The Organization-as-game-object design work
+    (`docs/superpowers/specs/2026-08-11-organization-game-object-design.md`,
+    Director-approved 2026-08-11) needed exactly that ceremony for its Q1
+    ruling — "Content-declared kinds. One kernel `NodeType/ORGANIZATION`;
+    the four kinds (state / capital / party / civil-society) are a
+    content-declared enum field" — and for its Q15 founding-edge
+    vocabulary. Both needed a way to WRITE a closed enum's member into a
+    field at all, and the language had none: `bsl-language.rst` §3.1's
+    `<type-name>` table was sealed at six rows exactly one review earlier,
+    the same session, by D94 (`ADR191 R4`) — "no `<type-name>` position can
+    name" a seventh kind, ruled after the Phase-1 review's own two-repair
+    disposition. `Enum<T>` existed as a *typechecker* classification (the
+    static type of an `<enum-ref>` expression, `NodeType/SOCIAL_CLASS`
+    e.g.) but explicitly "Not storable" — nothing a `deffield` could
+    declare turned an enum reference into field STATE.
+
+    The Director ruled Q12 knowingly against that closure, in the same
+    session: "Mint the `enum` deffield row — a seventh type: declared
+    value set, validated symbol, canonical hashing. Language change,
+    chartered; first consumer is Q1's kind field." The question put to
+    her named the collision directly ("sealed twice this month"), and she
+    approved minting the seventh row twice — once live in the
+    brainstorming session, once again reviewing the written spec — rather
+    than treating D94 as an oversight to route around silently. This ADR
+    and its sibling D101/D102 register rows are the record that the
+    supersession was explicit, per the Organization foundation
+    implementation plan's Global Constraint 6
+    (`docs/superpowers/plans/2026-08-11-organization-foundation-plan.md`).
+
+    This ADR covers Task 1 of that plan only — the LANGUAGE CHANGE (spec
+    text: the type-table row, the widened `deffield` production, the
+    `defenum`/`defvocabulary` declaration forms, the error-code taxonomy,
+    the ebnf mirror). No Rust source is touched by this ADR; the reference
+    implementation (`EnumRegistry`, the `.bscn` loader, the runtime write/
+    read paths, vocabulary enforcement) is Tasks 3-10 of the same plan, a
+    separate cargo-gated lane not yet landed (the plan's Constraint 7:
+    Rust tasks wait on the query-evaluation slice-1 train having merged,
+    which it has, per PR #514, but the Rust work itself is future PRs).
+  decision: |
+    THE SEVENTH ROW (`bsl-language.rst` §3.1): `enum` — "one member of a
+    content-declared closed `defenum` type" — joins `int`/`bool`/
+    `currency`/`probability`/`intensity`/`coefficient` as a type a
+    `deffield` or `metric` may write after `:type`. The sealing paragraph
+    is REWRITTEN, not silently contradicted: it now reads "the seven rows
+    above", names all seven, and states explicitly that the seventh was
+    "minted afterward by the Director's own ruling... a knowing
+    supersession of D94's closure, not a silent reopening." D94 itself is
+    left unedited (Immutability of History — it captured what was true
+    through that review) and stands beside the new paragraph as the
+    historical record of the prior state.
+
+    ORDINAL STORAGE, ENUMREF SURFACE (the load-bearing law, spec §1 Q12's
+    "Architecture" framing, "Half-1 argument"): the enum's value is stored
+    as the member's DECLARED-ORDER ordinal in the SAME binary64 attribute
+    lane every other scalar field already uses — zero bytes of any
+    existing golden move, because an enum field's stored value is an
+    ordinary `§0x02` f64 row exactly like a `Probability` or `Coefficient`
+    field's. The ordinal is NEVER a surface value in either direction: a
+    `.bscn` body seeds the field with `<EnumType>/<MEMBER>` only (a bare
+    number is a load error), a structural-verb write accepts only a
+    matching `EnumRef` (a bare `Real` is an eval error), and a read
+    renders the stored ordinal back to its member as `Value::Enum` (never
+    a bare number a rule author could mistake for magnitude). Declaration
+    order is normative — it IS the ordinal — which is why the new
+    `EnumRegistry` construct (Task 3, not built by this ADR) must never
+    reuse the existing `ClosedVocabulary` machinery: that registry sorts
+    and deduplicates its members by design (no ordinal to preserve),
+    exactly wrong for a type whose member order the storage layer depends
+    on.
+
+    TWO REGISTRIES, NEVER ONE. The existing closed-vocabulary machinery
+    (`bsl-language.rst` §3.6, `vocabulary.rs`'s `ClosedVocabulary`) governs
+    the four STRUCTURAL kinds (`NodeType`/`EdgeType`/`HyperedgeType`/
+    `EventType`) and already carries its own error codes (`E-LOAD-030`/
+    `E-LOAD-031`/`E-LOAD-032`/`E-LOAD-033`/`E-LOAD-023`). Q12's `enum` row
+    is a SEPARATE, content-declared registry (`defenum`, new §2.13) for
+    field VALUES, not graph-element kinds. Which registry an `<enum-ref>`
+    checks against is a property of WHERE it sits (a §2.6 class-rule
+    operand vs. an `:enum-type`-declared field's value position), never a
+    guessed fallback between the two.
+
+    NEW DECLARATION FORMS (new §2.13, "Declaring enums and the graph
+    vocabulary"): `defenum` (mints a content-declared enum type and its
+    member ordinals) and `defvocabulary` (populates the EXISTING closed
+    graph vocabulary registry — §3.6's, unchanged in kind, just no longer
+    permanently empty). Both are `<top-form>`s, both hashed exactly as
+    `deffield`/`manifest`/`metric` already are (no new sibling digest, no
+    change to any existing form's encoding — proved in the appendix by the
+    same "§5.6's 421 bytes and both digests remain correct as written"
+    argument every prior additive §5.2 extension carries).
+
+    NO AGGREGATION KIND: `deffield`'s `:kind` slot widens to an
+    exclusive-or with a new `:enum-type` keyword — every `:type` but
+    `enum` still requires `:kind` and forbids `:enum-type`; `:type enum`
+    requires `:enum-type` (naming a `defenum`-declared type) and forbids
+    `:kind`. This is not a special case bolted onto the aggregation-law
+    table (§3.4): `Enum<T>` supports no arithmetic operation beyond `=`/
+    `!=` (§3.1), so an enum-typed value structurally never reaches a fold
+    with a kind to check.
+
+    ERROR CODES, contiguous with the existing sequences (§4.6, grep-
+    verified next-free at execution time: `E-LOAD` max was `052`, `E-EVAL`
+    max was `041` — no collision, no in-flight PR minting adjacent
+    numbers): `E-LOAD-053` (the `:kind`/`:enum-type` shape exclusivity
+    violation), `E-LOAD-054` (an `:enum-type` naming an unregistered
+    `defenum` type), `E-LOAD-055` (an `<enum-ref>` naming a member its
+    resolved type does not declare), `E-LOAD-056` (a non-`<enum-ref>`
+    value seeding an `:enum-type`-declared field at content-load time),
+    `E-EVAL-042` (the same law's runtime re-check on a structural-verb
+    write). `defvocabulary` membership violations deliberately do NOT get
+    parallel codes — they reuse `E-LOAD-030`/`E-LOAD-031`, the codes §3.6
+    already carries, now reachable from a real declaration rather than a
+    permanently-`None` registry; minting synonyms for an identical check
+    against a different populated instance of the same registry kind would
+    be exactly the hygiene defect D75 already rules against.
+
+    FIELD-OF DEFERRAL: §2.10's `field-of` accessor is NOT extended to
+    `:enum-type`-declared fields by this ruling — such a field is read
+    only through a `:field` binding (§2.5). The gap is named, not silently
+    left: D102 records it as deferred (an enum-declared EDGE or HYPEREDGE
+    field is not ruled out and would need exactly this accessor), owed to
+    whichever later revision first needs one.
+  consequences: |
+    `bsl-language.rst` gains its seventh normative `<type-name>` row and a
+    new §2.13. `bsl.ebnf` mirrors it: `top-form` widens with `defenum`/
+    `defvocabulary`, `deffield` widens with the `:enum-type` alternative,
+    and the two new productions reuse the EXISTING `enum-type`/`enum-
+    member` productions (§1.4) rather than inventing parallel ones. The
+    Draft-Ruling Register gains D101 (the row + explicit D94 supersession)
+    and D102 (the field-of deferral), both next-free against the register
+    at execution time (highest prior row was D100).
+
+    Discovered while writing the ebnf mirror: the CURRENT tree-sitter
+    tooling (`tools/tree-sitter-bsl`, a derived, non-normative editor-
+    tooling artifact) tokenizes an enum type name and its member as ONE
+    fused `enum_ref` atom (`Type/MEMBER`), with no way to lex either half
+    standalone — which `defenum`'s bare `<enum-type-name>` operand needs.
+    A scratch `tree-sitter parse` against `(defenum OrgKind (...))`
+    confirmed this produces a parse ERROR under the unmodified grammar.
+    Minimal, precedent-following additions (two new bare tokens, two new
+    rules shaped exactly like `manifest`/`ceiling`) were added rather than
+    leave a known-broken corpus case; `tree-sitter generate && tree-sitter
+    test` is 31/31 green with the new case included. This is JS tooling
+    work, not the babylon-bsl/babylon-tick cargo workspace, so it did not
+    touch the cargo lane the query-evaluation train (PR #514, merged) and
+    Tasks 3-10 of this plan share.
+
+    NOT YET DONE (Tasks 3-10 of the Organization foundation plan, cargo-
+    gated, a separate future PR lane): `EnumRegistry`/`EnumTypeId` in
+    `babylon-bsl`'s `types.rs`; the `.bscn` `defenum`/enum-`deffield`/
+    `defvocabulary` loader in `scenario.rs`; the runtime write path in
+    `structural_verbs.rs`; the read path in `tick.rs`; vocabulary
+    enforcement at the three producers `rule_pipeline.rs`/`scenario.rs`/
+    `structural_verbs.rs`; and `organization/kind`'s actual seeding in the
+    `organization-foundation.bscn` golden. `organization/kind` is this
+    row's DESIGNATED first consumer per Q12's own text, not yet a working
+    one — no Rust code reads this ADR's spec text yet.
+  verification: |
+    `mise run test:q -- tests/unit/reference/test_bsl_grammar_sync.py`:
+    32/32 green, including the new `TestTheEnumRowStaysInSync` class (4
+    tests). Red phase confirmed first: all 4 failed for the stated reasons
+    (no seventh type-table row; "seven rows"/"no <type-name> position can
+    name" absent from the sealing paragraph; "defenum"/"defvocabulary"
+    absent from bsl.ebnf; no "supersed... D94" citation in the register).
+    One of the plan's own given test bodies was corrected during the red
+    phase: an unscoped `re.search(r"^\s+\* - ``enum``", rst_text)` passes
+    vacuously against §5.2's PRE-EXISTING, unrelated CAS atom-kind row
+    (`enum` / `ASCII <EnumType>/<MEMBER_IDENTIFIER>`) — scoped to §3.1's
+    own list-table before the assertion was trustworthy.
+
+    `uv run pre-commit run rstcheck --files docs/reference/bsl-language.rst`
+    and `... run doc8 --files docs/reference/bsl-language.rst`: both
+    Passed. `mise run bsl:grammar-test`
+    (`tree-sitter generate && tree-sitter test` over
+    `tools/tree-sitter-bsl`): 31/31 parses green, including the new
+    corpus case.
+
+    Rust `tick_goldens` byte-identity is preserved TRIVIALLY, not by an
+    active cargo run: this ADR's diff touches zero Rust source (`rst`/
+    `ebnf`/one Python test file/JS tree-sitter tooling only), so there is
+    no encoder, no `state_hash.rs`, and no existing golden in scope to
+    move. The plan's Constraint 3 byte-identity proof is owed by Tasks
+    3-10, which implement the encoder-adjacent Rust paths this ADR only
+    specifies.
+  references:
+    - "docs/superpowers/specs/2026-08-11-organization-game-object-design.md (§1 Q12, Q1, Q15 — the ruling this ADR records)"
+    - "docs/superpowers/plans/2026-08-11-organization-foundation-plan.md (Task 1; Global Constraints 5/6 this ADR discharges)"
+    - "ADR191_director_rulings_batch_2026_08_11.yaml (R4, D94 — the six-row closure this ADR explicitly supersedes)"
+    - "ADR194_director_rulings_batch2_2026_08_11.yaml (R2, D99 — the prior precedent for a Phase-1-review addendum to §3.1 that does not reopen D94)"
+    - "docs/reference/bsl-language.rst (§3.1, §2.9, §2.13, §4.6, §5.2, Draft-Ruling Register D101/D102 — the edited text)"
+    - "docs/reference/bsl.ebnf (top-form, deffield, defenum, defvocabulary, the type-name D101 addendum)"
+    - "tests/unit/reference/test_bsl_grammar_sync.py::TestTheEnumRowStaysInSync"
+    - "tools/tree-sitter-bsl/grammar.js, tools/tree-sitter-bsl/test/corpus/declarations.txt (the derived-tooling repair this ADR's discovery required)"

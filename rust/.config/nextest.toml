@@ -1,0 +1,20 @@
+# Stable runner/report contract for PER-310. The exact CI installer pin lives
+# beside the workflow action; this minimum rejects older local runners that do
+# not understand the report fields below.
+nextest-version = { required = "0.9.143" }
+
+[profile.ci]
+fail-fast = false
+retries = 0
+slow-timeout = "60s"
+status-level = "fail"
+final-status-level = "slow"
+failure-output = "final"
+success-output = "never"
+
+[profile.ci.junit]
+path = "junit.xml"
+report-name = "babylon-rust"
+store-success-output = false
+store-failure-output = true
+report-skipped = "ignored"

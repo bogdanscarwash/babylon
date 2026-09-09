@@ -1,0 +1,146 @@
+id: ADR120
+title: >-
+  Vol II Circulation program, Unit 1 (Activation audit + §2b/§2d disposition):
+  re-verified dormancy map on dev tip 84d8405a; §2b resolved per BD ruling 7
+  (county-keyed TERRITORY + ScaleAdjunction binds hex LODES data, mirroring
+  SubstrateSystem #39 T6 near-mechanically — NOT implemented yet, this is the
+  design disposition U4 executes against); §2d (web/headless parity) recorded
+  OUT of Vol II scope, assigned to Vol I per §10.3, with the concrete U4
+  entanglement documented (only two context keys are actually missing).
+status: accepted
+date: '2026-07-21'
+context: >-
+  Unit 1 of ai/_inbox/vol2-circulation-engine-program-prompt.md, executed in
+  worktree .claude/worktrees/vol2 (branch lane/vol2-circulation) on top of the
+  ADR103 T1.0 contract commit (84d8405a). Re-verified every §2 anchor from the
+  2026-07-19 recon against this tree; facts hold with only ordinary line-drift
+  except where noted:
+
+  §2a/2b (vol2_circulation.py, 305L): the HEX query is unchanged
+  (vol2_circulation.py:164, `protocol.query_nodes(node_type=NodeType.HEX)`).
+  `sentinels/vocabulary/registry.py:82-91`'s `UNSTAMPED_QUERY_ALLOWLIST["hex"]`
+  comment is the authoritative, ALREADY-CURRENT statement of the dormancy: it
+  names three live-but-empty NodeType.HEX/`_node_type=="hex"` consumers today
+  -- `Vol2CirculationStep`, `territory_diagnostics.py:71`, and
+  `simulation_engine.py:235`'s determinism-hash hex-row collector (confirmed
+  by grep; the collector is `_node_type=="hex"` string-keyed, same dead set,
+  and is documented as "robust to empty iterables" -- harmless, not a bug) --
+  and records that `SubstrateSystem` (engine/systems/substrate.py) was ALREADY
+  rewritten off this list by #39 T6 (2026-07-20) to query
+  `NodeType.TERRITORY` filtered on `resolve_county_identity(node) is not None`
+  (`domain/economics/tick/graph_bridge.py:43` -- the real county identity
+  lives in the `county_fips` attribute, never the node id, since production
+  territory ids are either bridge-minted `T###` or bare H3 cells per
+  `Territory`'s id pattern). Vol2CirculationStep is the ONE of those three
+  consumers inside Vol II's room partition; the other two are out of scope
+  here (owned by whichever program touches territory_diagnostics /
+  simulation_engine).
+
+  economic.py's gate is unchanged: `_invoke_vol2_circulation_if_wired`
+  (def at :157, called at :85) reads `vol2_step`/`boundary_flow_register`/
+  `session_id`/`simulated_year` from context and no-ops if any is `None`
+  (:174-178). postgres_initialization.py's four LODES kwargs
+  (`lodes_root`/`lodes_crosswalk`/`lodes_study_area_hexes`/
+  `lodes_study_area_states`, params :666-669, gate :874-877,
+  `LODESCommuteMatrixLoader` construction :879-885) are STILL never supplied
+  by the one production caller, `headless_runner/runner.py`'s
+  `initialize_session(...)` call (now :1155, drifted from the recon's :1094;
+  it does pass `hex_hydration_counties=config.scope_fips`, a fifth,
+  UNRELATED kwarg gating the R7/R8 economic-substrate hex hydrator, not the
+  LODES loader). Re-verified test count: 9 files construct
+  `Vol2CirculationStep(` directly today (recon said 11 -- drift in the count,
+  not in the claim; the direct-invocation suite is real and green --
+  `tests/unit/economics/circulation/test_vol2_circulation_step.py`,
+  `tests/property/circulation/test_v_conservation.py`,
+  `tests/unit/engine/systems/test_vol2_classifier_routing.py` scoped-run
+  10/10 pass on this tree).
+
+  Refinement over the recon: `ConservationAuditor`'s
+  `PairedCrossBorderEmissionEvaluator` (FR-030c pairing, docstring names
+  `Vol2CirculationStep.step` as its emitter) is NOT merely "would audit" --
+  it has been registered in `headless_runner/runner.py` since commit
+  e3599cec (2026-07-08, predating the recon). It runs LIVE every tick today,
+  vacuously green, because its only producer never emits a row -- "register
+  the invariant for real when the step lights up" is already done; what
+  remains is for the step to actually feed it.
+
+decision: >-
+  §2b disposition (BD ruling 7, PROGRAM_v1_0_0_playable_archive.md decision
+  record #7): "County-keyed territories + ScaleAdjunction (allocate⊣aggregate)
+  binds hex data; no hex stamping. Settled pre-lane; U1 verifies, doesn't
+  relitigate." Verified, not relitigated. The concrete reconciliation U4 will
+  execute (this unit specs it, does not implement it -- no source under Vol
+  II's room partition changed in this commit): mirror
+  `SubstrateSystem.step()` NEAR-MECHANICALLY --
+  `protocol.query_nodes(node_type=NodeType.TERRITORY)` filtered on
+  `resolve_county_identity(node) is not None`, exactly as substrate.py:209-217
+  does -- for the READ/WRITE ENDPOINTS of the per-hex `v` vector only. Unlike
+  SubstrateSystem (which has no hex-grain data source at all --
+  raw_material_stock is seeded once, directly, at county grain), Vol II
+  Circulation's actual computation is genuinely hex-resolution (the LODES OD
+  matrix models commute flows between H3 cells, tested and correct in 9 real
+  test files) -- so the reconciliation is a BINDING at the boundary, not a
+  rewrite of the math: a hex->county `ScaleAdjunction`
+  (`domain/dialectics/instances/scale.py`; mapping=`{h3_index: county_fips}`,
+  built from the already-persisted `hex_spatial_map` table --
+  `persistence/hex_hydrator.py:281-283`'s
+  `(session_id, h3_index, county_fips, state_fips, region_id)` rows, the same
+  shape `cz_adjunction()`/`msa_adjunction()` build their county-grain
+  adjunctions from a committed crosswalk / DB query, `levels.py:367-475`)
+  ALLOCATEs each eligible county TERRITORY node's aggregate `v` down to its
+  hex children by share (feeding the existing, unit-tested hex-grain
+  matrix-vector algorithm UNCHANGED), then AGGREGATEs the resulting hex-grain
+  `v_post` back up to county parents for the `update_node` write. The
+  boundary-register rows (`BoundaryFlowRegister.record(...)`,
+  `source_node_id=origin_hex`) are UNAFFECTED by this reconciliation -- they
+  key on `NodeKind.HEX` (a register-row label), not a graph node id, so hex
+  ids in boundary rows are not "hex stamping" and need no change. Per §6 item
+  3 (sentinels), the `UNSTAMPED_QUERY_ALLOWLIST["hex"]` entry is narrowed only
+  AFTER U4's code lands (matching the #39 T6 precedent's own citation
+  discipline: the entry documents live defects, edited when a defect closes,
+  not before).
+
+  §2d disposition (§10.3 room-partition table, ai/_inbox/vol1-value-production-
+  program-prompt.md; ADR103 consequences, "runner-parity stays assigned to
+  Vol I as §10.2 wrote it"): the web/headless asymmetry
+  (`web/game/engine_bridge.py:8002-8047` wires `create_circulation_services` +
+  `create_financial_services` + `create_vol1_services`; `headless_runner/
+  runner.py:_build_economics_overrides` wires neither -- both re-verified
+  unchanged on this tree) is Vol I's to close, NOT Vol II's. Recorded here,
+  not built here. Entanglement with U4, precisely scoped by re-reading
+  `_advance_tick` (runner.py:388, called from runner.py:1672): TWO of
+  Vol2CirculationStep's four gate keys are ALREADY wired into that shared
+  context-building path (set at runner.py:436-437, inside the phi-
+  distribution `if` guard at runner.py:431-435) --
+  `context["session_id"]` and `context["boundary_flow_register"]` (=
+  `services.boundary_register`) are set whenever the (unrelated) phi-
+  distribution keys are present -- so the runner-parity fix does NOT need to
+  add those two. Only `vol2_step` (a constructed step instance -- Vol II's own
+  U2/U4 job, needs the LODES loader wired at session init) and
+  `simulated_year` (a trivial `start_year + tick/52` int, the SAME
+  computation the file already does elsewhere, e.g. :621) remain missing.
+  Because `headless_runner/runner.py` is a room Vol II's ADR103/§10.3
+  partition does not own, threading those two additions requires either the
+  Vol I lane to add them as part of its own runner.py parity edit, or a small
+  coordinated addendum PR after that edit lands -- U4 cannot silently self-
+  serve this file.
+consequences: >-
+  No source file under Vol II's room partition changed in this commit (no
+  code, no tests move, no baseline drift -- confirmed by the scoped pytest
+  run: 10/10 green, same tests, same result as before this audit). U4 ("Light
+  the step") may proceed directly against this disposition without
+  re-deriving the SubstrateSystem mirror or re-litigating BD ruling 7; the
+  exact hex->county `ScaleAdjunction` CONSTRUCTION (reuse `hex_spatial_map`
+  verbatim vs. a fresh session-scoped query wrapper) is left as U4's
+  implementation decision, not a further open design question. The runner.py
+  entanglement is now a concrete, small, two-key addition (`vol2_step`,
+  `simulated_year`) rather than an open-ended "parity" dependency -- U4's plan
+  should name this explicitly as a cross-lane coordination point with Vol I,
+  not silently touch runner.py itself. The `UNSTAMPED_QUERY_ALLOWLIST["hex"]`
+  entry, `catalog.py`'s stale "ten bound contradictions" docstring, and the
+  other two dead NodeType.HEX consumers (territory_diagnostics.py,
+  simulation_engine.py) are explicitly NOT this unit's or this lane's to fix
+  -- noted for the record, left alone. §2c (the reproduction/turnover/
+  fixed_circulating stub region) and §4 (the circulation/realization/
+  reproduction/disproportionality opposition bindings, already reserved by
+  ADR103) are unaffected by this unit and remain U3/U6's work.

@@ -46,6 +46,18 @@ chromadb/
 .continue*
 .continuerules
 .continuerc.json
+# PER-286 makes the Codex setup and shared Rust host policy repository law.
+# These negations also outrank older clone-local excludes from the era when
+# `.codex/` was deliberately local-only. Keep any other Codex-local state
+# ignored so a future UI feature cannot become source merely by appearing.
+!/.codex/
+/.codex/*
+!/.codex/environments/
+/.codex/environments/*
+!/.codex/environments/environment.toml
+!/.codex/host/
+!/.codex/host/**
+/.kimi-code/
 
 *.pyc
 
@@ -53,6 +65,7 @@ chromadb/
 *__pycache__*
 .pytest_cache/
 .ruff_cache/
+.mypy_cache/
 .venv/
 .coverage
 
@@ -60,11 +73,19 @@ chromadb/
 .hypothesis/
 
 # Compiled Audio (generated from MIDI via FluidSynth)
-# Commit MIDI source files, not compiled audio
+# Keep local audio exports out of git; the eight pinned observer renders ship.
 assets/audio/
 *.wav
 *.mp3
 *.ogg
+!assets/music/babylon_theme_phi.ogg
+!assets/music/babylon_theme_panopticon.ogg
+!assets/sfx/ui/ui_select.ogg
+!assets/sfx/ui/ui_tab.ogg
+!assets/sfx/ui/ui_open.ogg
+!assets/sfx/ui/ui_back.ogg
+!assets/sfx/state/tick_advance.ogg
+!assets/sfx/state/state_fault.ogg
 
 # Large image assets (use Git LFS for these)
 assets/images/*.png
@@ -77,6 +98,12 @@ reports/test-results/
 # Ingest audit reports + per-run sim artifacts (regenerable byproducts)
 reports/ingest/
 reports/sim-runs/
+reports/frozen-reference-analysis/
+# qa:regression first-divergence attribution (E4; transient — rewritten/removed
+# every compare run, only present while a dense-gate FAIL is being diagnosed)
+reports/qa-first-divergence.json
+# Local-only human/agent reports; durable reports remain tracked.
+/reports/*.LOCAL-*.md
 # Daemonized sim pidfiles/logs (sim:e2e-bg)
 .sim-pids/
 
@@ -87,9 +114,6 @@ htmlcov/
 mutants/
 .mutmut-cache/
 html/
-
-# Web app dev server PIDs and logs (mise run web:dev)
-.web-pids/
 
 # Claude Code local settings
 .claude/settings.local.json
@@ -129,18 +153,21 @@ node_modules
 # One-off tool dumps (regenerable; were briefly tracked pre-Program-14)
 pytest_out.txt
 ast_usages.txt
+/kimi-debug-session_*.zip
 
 # Claude's scratch space (ai/ tree is Claude-owned; scratch contents are ephemeral)
 ai/scratch/*
 !ai/scratch/README.md
+# Local knowledge-tool state and Percy's private research inbox.
+/ai/.obsidian/
+/ai/_inbox/phil-neel/
 
-# Frontend (src/frontend — the cockpit, spec-110/112)
+# ai/_inbox is the owner's drop-zone (parsed items → ai/_inbox/archive/). Keep the
+# text notes tracked, but babylon_books/ is 555 MB of reference PDFs — never commit it.
+ai/_inbox/babylon_books/
+
 dev_harness.png
 test_hang.py
-src/frontend/dist/
-src/frontend/coverage/
-src/frontend/playwright-report/
-src/frontend/test-results/
 
 # design-sync (claude.ai/design converter) — staged scripts, build output,
 # machine state. The durable set (.design-sync/{config.json,NOTES.md,
@@ -152,9 +179,39 @@ ds-bundle/
 .design-sync/node_modules
 
 # Deployment secrets (NEVER commit)
+# deploy/ was extracted to the infra/ subrepo (program-20, ADR071). These
+# patterns are KEPT deliberately: existing checkouts still hold untracked
+# secret files under deploy/ (tfvars, tfstate, vault pass) that survive the
+# merge on disk — without these lines a careless `git add -A` could stage
+# live credentials. Remove after every checkout has migrated its local
+# deploy/ remnants into infra/ (see infra/docs/secrets.md).
 deploy/terraform/terraform.tfvars
 deploy/terraform/.terraform/
 deploy/terraform/*.tfstate
 deploy/terraform/*.tfstate.backup
 deploy/ansible/.vault_pass
 deploy/ansible/production_inventory.yml
+deploy/ansible/inventory.yml
+deploy/ansible/.ansible/
+
+# program-20: infra/ is now a proper git submodule (github.com/percy-raskova/babylon-infra),
+# so it is tracked as a gitlink — no ignore entry needed.
+
+# ADR076 release-tier data artifacts (parquet; shipped via ci-data releases)
+/dist/
+
+# Generated environment snapshot — embeds plaintext env-var values (secrets); never commit
+snapshot_report.html
+
+# tree-sitter-bsl: the parser is a BUILD PRODUCT of grammar.js (itself derived
+# from docs/reference/bsl.ebnf). Regenerate with `mise run bsl:grammar-test`;
+# committing generated C would make the grammar's real source ambiguous.
+/tools/tree-sitter-bsl/src/
+/tools/tree-sitter-bsl/bindings/
+/tools/tree-sitter-bsl/build/
+/tools/tree-sitter-bsl/*.wasm
+
+# Preserved pre-native build output; canonical Cargo output remains rust/target.
+/rust/target.nix-retired-20260904/
+# Dedicated reference-data interpreter and venv (ADR252).
+/.cache/babylon/

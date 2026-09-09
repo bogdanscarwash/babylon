@@ -1,0 +1,52 @@
+id: ADR118
+title: >-
+  Vol I U5 — Headless-runner parity: _build_economics_overrides now wires
+  create_vol1_services AND create_circulation_services inside the existing
+  scope_fips branch (same condition already gating tensor_registry/financial
+  services), reusing the fred_cache just loaded for create_financial_services —
+  reserve_army_data_source / productivity_data_source /
+  dispossession_data_source / transition_engine (Vol I family) plus
+  turnover_profile_source / inventory_data_source / depreciation_data_source
+  (Vol II circulation family). Genuinely activates _compute_vol1_layer
+  (reserve-army wage pressure on median_wage) and _compute_circulation_layer
+  (circuit/inventory/depreciation state) for every headless run, and satisfies
+  _simulate_transitions's transition_engine gate — all three previously gated
+  dormant in the canonical path only. SHARED unit with Vol II by charter but
+  assigned to the Vol I lane alone (ADR103 §10.2; confirmed ADR116/U1).
+status: accepted
+date: '2026-07-21'
+context: >-
+  Before this unit the canonical headless run computed LESS Vol I/Vol II
+  economics than a web session: web/game/engine_bridge.py (Spec-116 Tasks
+  20b/21b) wires both service families unconditionally, while
+  engine/headless_runner/runner.py's _build_economics_overrides wired only
+  gamma/melt/Leontief/Vol III financial services — the §2d parity gap the Vol
+  I program prompt named as its U5 charter, and the reason U3/U4's activations
+  stayed dormant on the canonical path (dispossession/transition half of U3,
+  the working-day visibility modifier of U4). This ADR is written mechanically
+  at cascade-merge time by the controller from lane commit 4627fc23 — the
+  lane shipped the unit without its ADR (a recorded gap carried through
+  U7/U8/U9's own notes); number 118 is the next free slot in the Vol I block
+  (110–119) after the merge-time renumber of the lane's colliding 108/109 to
+  116/117.
+decision: >-
+  Wire both factories at the runner's existing scope_fips seam rather than a
+  new gate: the FRED cache load already present for financial services is
+  reused (no second data path), and every wired source is real reference-data
+  plumbing — no stubs, honoring the no-compromise/real-data rule. Tests
+  (tests/unit/engine/headless_runner/test_vol1_vol2_parity_wiring.py, mirroring
+  test_gamma_wiring.py's pattern) prove _build_economics_overrides wires both
+  families under scope_fips and run() passes them through to
+  ServiceContainer.create — RED confirmed before the fix (3/3), GREEN after;
+  full tests/unit/engine/headless_runner/ unaffected.
+consequences: >-
+  EXPECTED qa:regression baseline drift, deliberately deferred to the
+  controller's merge-time ceremony per fast-dev discipline: median_wage,
+  circulation_state, and downstream phi_hour/wealth channels move in every
+  scenario reaching a year boundary with FRED coverage (the U5 activation
+  channel of the Vol I ceremony's three-channel drift attribution). The
+  web/headless parity gap for the Vol I/II service families is closed; the
+  remaining known non-parity is the WO-52b finding that the headless runner
+  never threads SimulationRunConfig.random_seed into SimulationConfig.rng_seed
+  (T1.2 keel ledger, separate defect, not addressed by this unit).
+file: ADR118_vol1_u5_headless_parity.yaml

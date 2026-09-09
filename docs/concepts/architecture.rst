@@ -1,392 +1,294 @@
-Architecture: The Embedded Trinity
-===================================
+Architecture Boundary
+=====================
 
-Babylon's architecture is built on three interconnected data layers that work
-together to simulate class struggle as a deterministic output of material
-conditions.
+``CONSTITUTION.md`` v4.2.0 governs the architecture. ``NORTH_STAR.md`` gives
+the game direction and gate order. This page describes the live boundary after
+the one-way PostgreSQL authority cutover.
 
-Overview
---------
+System Boundary
+---------------
 
-The simulation runs locally without external servers, using what we call
-the **Embedded Trinity**:
+Babylon has these primary boundaries:
 
-.. note::
-   Architecture diagram (The Embedded Trinity) planned for future addition.
+#. A pure Rust engine judges one four-week tick.
+#. Live Rust BSL rules control causal changes and finite material kernels.
+#. Recognizers and events remain deterministic.
+#. Executable shocks and player actions do not exist yet.
+#. ``babylon-persistence`` owns authoritative game-managed PostgreSQL schema,
+   writes, restart, and durability.
+#. Python builds reference data and supplies current repository and operator
+   tools. The frozen simulation and its mutable SQLite runtime are retired.
+#. Bevy remains an administrative viewer with no player action.
 
-1. **The Ledger** - Rigid material state (DuckDB data warehouse /
-   SQLite or PostgreSQL game state / Pydantic validation)
-2. **The Topology** - Fluid relational state (NetworkX)
-3. **The Archive** - Semantic history (ChromaDB / pgvector)
+One tick judges one fixed 28-day interval and produces one durable commit.
+There are 13 periods in a modeled year; this is a 364-day simulation calendar,
+not variable-length Gregorian months. V5 Michigan campaigns bind the interval
+in their canonical content. Their authored TOML defines the work schedule,
+recipes, workforce, stocks, orders, throughput, route durations, and a stop
+horizon of 1 through 16 periods. The supplied values yield 160 Designed labor
+hours per person per period and 16 periods (64 weeks). New reads the selected
+file and stores its canonical values in the foundation. Open uses those saved
+values. Older weekly campaigns are refused; their stored data is retained.
+The interval contract is ``contracts/simulation_interval_v1.yaml``.
 
-This architecture separates concerns:
+The current Michigan material campaign admits an empty BSL rule set. Its
+production, freight, and staffing run through the typed material transition.
+The built-in ``production.bsl`` annual labor calibration remains a conformance
+reference; it does not parameterize this campaign. Observed annual QCEW facts
+and source weekly wages retain their original units.
 
-- **State is pure data** - Pydantic models with strict validation
-- **Engine is pure transformation** - Stateless functions on graphs
-- **They never mix** - Clean separation enables testing and reasoning
+Ordinary BSL rules derive and write world data through governed causal
+operations. External shocks must not write downstream results directly.
+AI can parse, retrieve, and narrate. AI does not judge a game rule.
 
-The Ledger: Material State
---------------------------
+Live Rust Path
+--------------
 
-The Ledger stores **rigid, quantitative state** that changes discretely:
+The shipping engine path is:
 
-- Economic values (wealth, wages, tribute)
-- Political attributes (repression, organization)
-- Class positions (proletariat, bourgeoisie, lumpen)
-- Territorial properties (heat, operational profile)
+``babylon-kernel``
+   Deterministic types and contracts.
 
-Data Storage
-^^^^^^^^^^^^
+``babylon-graph``
+   Native relations, hyperedges, and canonical hashes.
 
-The Ledger uses three complementary systems:
+``babylon-bsl``
+   The BSL lexer, parser, checker, typed finite-kernel analysis, exact
+   forecasting, loader, and evaluator.
 
-**Pydantic Models**
-   In-memory state with strict validation. All game entities derive from
-   Pydantic ``BaseModel`` with constrained types:
+``babylon-tick``
+   The four-week tick, replay identity, material state, and atomic publication.
 
-   .. code-block:: python
+``babylon-material-circuit``
+   Physical production, routed freight, and conserved staffing transitions.
 
-      from babylon.models import SocialClass, Probability, Currency
+``babylon-persistence``
+   Rust-owned PostgreSQL activation, campaign foundation, checkpoint restart,
+   typed semantic rows, commit markers, and Archive dirty receipts.
 
-      class SocialClass(BaseModel):
-          id: str = Field(pattern=r"^C[0-9]{3}$")
-          role: SocialRole
-          wealth: Currency = Field(ge=0.0)
-          organization: Probability  # Constrained to [0, 1]
+``babylon-client``
+   The Bevy administrative viewer.
 
-**DuckDB Data Warehouse**
-   3NF (Third Normal Form) relational database for empirical research data.
-   Stores economic indicators, demographic data, infrastructure, and geographic
-   information. Located at ``data/duckdb/marxist-data-3NF.duckdb``.
+Each four-week tick runs on detached state and buffers its events. The tick becomes
+observable only after all rule, hash, and persistence boundaries succeed.
+``GraphStateHash`` identifies graph bytes only. ``NominalWorldHash`` also binds
+completed time, allocator cursors, and the governed phase-schedule digest.
+``TickContentHashV1`` binds the identified replay result.
+``ReplayTickSession`` publishes ``TickContentHashV1`` atomically. Replay
+identity and campaign durability identity are separate typed inputs.
 
-**SQLite / PostgreSQL Game State**
-   Per-simulation runtime state storage. SQLite (``RuntimeDatabase``)
-   for development and testing; PostgreSQL (``PostgresRuntime``) for
-   production with concurrent session support, spatial queries, and
-   vector search. Both implement the ``RuntimePersistence`` protocol.
-   See :doc:`/concepts/persistence-architecture` for design rationale.
+A finite kernel distributes exact ``Mass`` over one enum-ordered family of
+bounded material effect bundles. It consumes one replay-keyed integer ticket
+draw and applies only the selected bundle. The choice produces a separate
+``ChoiceReceiptV1`` even when the selected bundle changes no material state.
+Deterministic mechanics are the one-outcome case. Events own no authored
+probability. The language assumes no independence between choices.
 
-Entity Collections
-^^^^^^^^^^^^^^^^^^
+Authoritative Persistence
+-------------------------
 
-The Ledger contains 18 JSON entity collections in ``src/babylon/data/game/``:
+``babylon-runtime`` is the sole production composition root. It activates the
+Rust schema and serves the live observer session through
+``DurableMaterialRuntimeV3``. That runtime admits a V5 Michigan foundation,
+judges one period, and commits ``CommittedMaterialTickEnvelopeV3`` containing
+both graph and material evidence. Callers cannot submit a pre-judged report or
+construct a second writer authority.
 
-.. list-table:: Entity Collections
+Material campaigns retain the V2 graph replay and schema-authority contracts
+inside their V3 material envelope. Graph-only diagnostic campaigns exercise
+``DurableReplayRuntimeV2`` separately. The observer session refuses those
+campaigns and older weekly material content. Refusal leaves stored data intact.
+
+The epoch 8/9 predecessor ledger is append-only historical cutover evidence:
+
+.. list-table::
    :header-rows: 1
-   :widths: 30 70
+   :widths: 20 25 55
 
-   * - Collection
-     - Purpose
-   * - ``classes.json``
-     - Class definitions (proletariat, bourgeoisie, etc.)
-   * - ``locations.json``
-     - Spatial locations with operational profiles
-   * - ``relationships.json``
-     - Initial edge definitions (solidarity, exploitation)
-   * - ``contradictions.json``
-     - Tension templates and resolution types
-   * - ``crises.json``
-     - Economic and political crisis definitions
-   * - ``factions.json``
-     - Political groupings with agendas
-   * - ``ideologies.json``
-     - Ideological positions with drift modifiers
-   * - ``institutions.json``
-     - State and civil society institutions
-   * - ``cultures.json``, ``laws.json``, ``movements.json``
-     - Cultural, legal, and social movement data
-   * - ``policies.json``, ``resources.json``, ``technologies.json``
-     - Economic policy, resource, and technology definitions
-   * - ``revolts.json``, ``sentiments.json``
-     - Uprising conditions and public sentiment data
-
-.. note::
-
-   These JSON collections define game entities and rules. The DuckDB data warehouse
-   stores empirical research data (Census, FRED, HIFLD, etc.) in normalized form,
-   isolated from game state. SQLite stores simulation history and checkpoints.
-
-The Topology: Relational State
-------------------------------
-
-The Topology stores **fluid, relational state** that changes continuously:
-
-- Class solidarity networks
-- Economic extraction flows
-- Territorial adjacency
-- Imperial tribute chains
-
-Graph Structure
-^^^^^^^^^^^^^^^
-
-Babylon uses a NetworkX ``DiGraph`` (directed graph) with two node types
-and multiple edge types:
-
-**Node Types:**
-
-.. mermaid::
-
-   classDiagram
-       class social_class {
-           +id: C001, C002, ...
-           +wealth: Currency
-           +organization: Intensity
-           +ideology: Ideology
-           +consciousness: float
-       }
-
-       class territory {
-           +id: T001, T002, ...
-           +heat: float
-           +profile: OperationalProfile
-           +sector_type: SectorType
-           +territory_type: TerritoryType
-       }
-
-       social_class --|> Node : is-a
-       territory --|> Node : is-a
-
-**Edge Types:**
-
-.. list-table:: Edge Types
-   :header-rows: 1
-   :widths: 20 20 60
-
-   * - Edge Type
-     - Direction
+   * - Ordinal
+     - State
      - Meaning
-   * - EXPLOITATION
-     - bourgeoisie → proletariat
-     - Economic extraction relationship
-   * - SOLIDARITY
-     - bidirectional
-     - Class consciousness connection
-   * - WAGES
-     - employer → worker
-     - Labor-wage payment flow
-   * - TRIBUTE
-     - periphery → core
-     - Imperial value transfer
-   * - TENANCY
-     - class → territory
-     - Spatial occupation
-   * - ADJACENCY
-     - territory → territory
-     - Spatial proximity (spillover routes)
+   * - 1
+     - ``prepared`` at epoch 8
+     - Additive Rust schema and reference preparation completed.
+   * - 2
+     - ``rust_active`` at epoch 9
+     - Legacy Python-managed relations were migrated or proved empty and
+       retired. This row is the predecessor for the V2 authority transition.
 
-State Transformation
-^^^^^^^^^^^^^^^^^^^^
+The active authority ledger is
+``babylon_meta.committed_tick_v2_authority_ledger``. Its only legal history is
+``Prepared`` at epoch 10 followed by ``Active`` at epoch 11. Both rows bind the
+active V2 cutover contract and epoch 11 reader migration. The active row also
+binds the prepared-row digest, and the prepared row binds the epoch 9
+predecessor-row digest.
 
-The simulation transforms between Pydantic and graph representations:
+The epoch 11 ``Active`` row is the final activation statement before
+``COMMIT``. Activation is forward-only and idempotent. Runtime authority
+reacquisition requires the exact two-row V2 ledger and its bound contract,
+reader migration, and predecessor digests. The epoch 9 ``rust_active`` row
+alone cannot reopen the writer.
 
-.. code-block:: python
+.. Vale: these paragraphs preserve literal persistence and schema identifiers.
+.. vale ste.UnapprovedWords = NO
+.. vale ste.NounClusters = NO
 
-   # Pydantic → Graph (for computation)
-   graph: nx.DiGraph = world_state.to_graph()
+The runtime owns three schemas:
 
-   # Graph operations (mutation allowed)
-   engine.run_tick(graph, services, context)
+``babylon_ref``
+   Immutable geography, H3 cohorts, and exact reference artifacts.
 
-   # Graph → Pydantic (for validation)
-   new_state = WorldState.from_graph(graph, old_state.tick + 1)
+``babylon_state``
+   Campaign foundation, typed graph and material rows, events, checkpoints,
+   ``tick_event_v2`` and ``tick_event_field_v2``,
+   ``tick_choice_receipt_v1`` with ``tick_choice_receipt_branch_v1`` and
+   ``tick_choice_receipt_carrier_element_v1`` children, the commit marker
+   ``tick_commit``, and
+   ``archive_dirty_receipt_v1``.
 
-This pattern allows:
+``babylon_meta``
+   The authority ledger plus typed campaign and navigation metadata.
 
-- Flexible graph algorithms during simulation
-- Strict validation on state boundaries
-- Clear separation of concerns
+One marker-last transaction writes the complete typed tick estate. It writes
+choice receipts and choice-linked event metadata before a required full
+checkpoint and one Archive dirty receipt. It then writes the commit marker.
 
-The Archive: Semantic History
------------------------------
+The runtime acknowledges the tick only after ``COMMIT`` or exact
+ambiguous-commit reconciliation. Retry and restart must reproduce the same
+material envelope bytes. Material campaign markers record
+``envelope_layout_version = 3``; material readers require that layout.
+Graph-only diagnostic markers retain layout 2.
 
-The Archive stores **semantic, narrative state** for AI integration:
+.. vale ste.NounClusters = YES
+.. vale ste.UnapprovedWords = YES
 
-- Event narratives as embeddings
-- Historical patterns for retrieval
-- Theory corpus for RAG queries
+Restart loads the campaign foundation or latest complete full checkpoint, then
+replays a contiguous marker tail. A delta checkpoint is never a restore root.
+Missing, duplicate, out-of-order, or digest-mismatched sections refuse before
+the runtime resumes.
 
-ChromaDB Integration
-^^^^^^^^^^^^^^^^^^^^
+H3 Reader Boundary
+------------------
 
-Babylon uses ChromaDB as a vector database:
+Epoch 7 captured and proved the legacy H3 reader parity corpus. Epoch 9 has no
+Python game-state reader edge and no compatibility projection. Rust installs
+the exact reference cohort and Michigan dynamic foundation, then reads typed
+relations directly.
 
-.. code-block:: python
+Reference Data and Operator Tools
+---------------------------------
 
-   from babylon.intelligence.rag.retrieval import VectorStore, Retriever
-   from babylon.intelligence.rag.chunker import DocumentChunk
+PER-48 is decided. The one-way cutover is complete. Rust owns authoritative
+game-managed Postgres. Python continues only in the roles declared below.
 
-   # Initialize store
-   store = VectorStore(collection_name="events")
+The retired Python simulation is available at ``p27-python-freeze``. BSL
+citations read that tag; Rust owns the executable schedule, mechanics, replay
+and persistence contracts. Python builds reference artifacts and supports
+current repository and operator commands. Those tools do not adjudicate ticks
+or read authoritative transition rows.
 
-   # Store document chunks
-   chunks = [
-       DocumentChunk(
-           content="The workers seized the factory...",
-           metadata={"tick": 42, "class_id": "C001"}
-       )
-   ]
-   store.add_chunks(chunks)
+Client and Archive Boundary
+---------------------------
 
-   # Query similar content
-   retriever = Retriever(store)
-   results = retriever.query(query="factory occupation", k=5)
+The Bevy client still reads an administrative world view and displays the
+nominal world hash. It does not submit a player intent.
 
-.. note::
+Each committed tick emits an Archive dirty receipt. The Rust Archive worker
+binds each receipt to an exact dirty batch, worker contract, and pinned
+knowledge-grant snapshot. It publishes immutable county and place dossiers
+with validated content and known citations. The scoped reader admits the
+requested committed period, retained publication, and disclosed links together.
+Global Archive progress cannot certify a selected page.
 
-   Feature 037 adds ``PgVectorStore`` as an alternative to ChromaDB,
-   using PostgreSQL's pgvector extension. Both implement
-   ``VectorStoreProtocol``. See :doc:`/reference/persistence`.
+The runtime owns one Archive listener and worker. Empty Postgres notifications
+signal committed tick markers and campaign enrollment. The listener registers
+before reading durable work at startup and after reconnect. It drains retained
+work through the existing worker. An idle notification timeout performs no
+maintenance query. Notifications carry no world state or player intent.
 
-The Archive enables:
+One coordinator owns the V3 session control pipe and tick acknowledgements.
+It flushes ``Committed`` before handling the resulting Archive progress. Bevy accepts
+progress only for its acknowledged campaign and durable period, then refreshes
+its scoped read. It does not poll for Archive maintenance.
 
-- AI narrative generation from simulation state
-- Pattern matching for event prediction
-- Theory-grounded responses via RAG
+Shutdown requests cooperative cancellation and observes actual worker
+completion. A database connection that stays open beyond the existing process
+deadline cannot claim successful shutdown.
+ADR254 records this scheduling boundary. G5 adds player actions separately.
 
-Engine Architecture
--------------------
+Event payloads contain observed or derived material facts, never probability.
+Committed event metadata records the emitting rule and can carry an
+automatically derived reference to the ``ChoiceReceiptV1`` that a finite
+projection observed. Removing an event sink cannot change a material
+trajectory.
 
-The simulation engine orchestrates the three layers:
+Flow
+----
 
-.. mermaid::
+This flow shows the current Michigan material campaign. Solid arrows are live.
+Dashed arrows are later gate work.
 
-   flowchart TB
-       subgraph Input
-           WS[WorldState]
-           SC[SimulationConfig]
-       end
-       WS --> step["step()"]
-       SC --> step
-       step -->|"to_graph()"| G[NetworkX DiGraph]
-       subgraph Engine["SimulationEngine.run_tick() - ADR032 Materialist Causality"]
-           subgraph Base["Base Layer (Material Reality)"]
-               G --> S1[1. VitalitySystem]
-               S1 --> S2[2. TerritorySystem]
-               S2 --> S3[3. ProductionSystem]
-               S3 --> S4[4. SolidaritySystem]
-               S4 --> S5[5. ImperialRentSystem]
-           end
-           subgraph Crisis["Crisis Layer (Terminal Dynamics)"]
-               S5 --> S6[6. DecompositionSystem]
-               S6 --> S7[7. ControlRatioSystem]
-               S7 --> S8[8. MetabolismSystem]
-           end
-           subgraph Super["Superstructure Layer (Agency)"]
-               S8 --> S9[9. SurvivalSystem]
-               S9 --> S10[10. StruggleSystem]
-               S10 --> S11[11. ConsciousnessSystem]
-               S11 --> S12[12. ContradictionSystem]
-           end
-       end
-       S12 --> OBS[Observers]
-       OBS -->|"from_graph()"| WS2[New WorldState]
-
-Dependency Injection
-^^^^^^^^^^^^^^^^^^^^
-
-The engine uses dependency injection via ``ServiceContainer``:
-
-.. code-block:: python
-
-   from babylon.engine import ServiceContainer, EventBus
-   from babylon.engine.formula_registry import FormulaRegistry
-   from babylon.persistence.database import DatabaseConnection
-   from babylon.config.defines import GameDefines
-   from babylon.models import SimulationConfig
-
-   services = ServiceContainer(
-       config=SimulationConfig(),
-       database=DatabaseConnection(":memory:"),
-       event_bus=EventBus(),
-       formulas=FormulaRegistry(),
-       defines=GameDefines(),
-   )
-
-This enables:
-
-- Easy testing with mock services
-- Formula hot-swapping for experimentation
-- Clean separation of infrastructure concerns
-
-Observer Pattern
-^^^^^^^^^^^^^^^^
-
-Observers implement the ``SimulationObserver`` protocol to receive state
-change notifications without modifying state:
-
-.. code-block:: python
-
-   from babylon.engine.observer import SimulationObserver
-
-   class MyObserver(SimulationObserver):
-       @property
-       def name(self) -> str:
-           return "MyObserver"
-
-       def on_simulation_start(self, initial_state, config): ...
-       def on_tick(self, previous_state, new_state): ...
-       def on_simulation_end(self, final_state): ...
-
-Current observers:
-
-- **TopologyMonitor** - Tracks solidarity network condensation via percolation theory
-- **EconomyMonitor** - Detects economic crises (>20% imperial rent pool drops)
-- **CausalChainObserver** - Detects Shock Doctrine pattern (crash → austerity → radicalization)
-- **PersistenceObserver** - Persists simulation state to
-  ``RuntimePersistence`` backend after each tick
-
-Validation utilities (in ``babylon.engine.observers``):
-
-- ``validate_narrative_frame()`` - Validate NarrativeFrame against JSON Schema
-- ``is_valid_narrative_frame()`` - Boolean validation check
-
-Data Flow Summary
------------------
+.. Vale: the Mermaid block contains literal crate and schema identifiers.
+.. vale off
 
 .. mermaid::
 
-   flowchart TB
-       subgraph TICK["SIMULATION TICK"]
-           subgraph LEDGER["LEDGER (Pydantic)"]
-               WS[WorldState<br/>- classes<br/>- territories<br/>- relationships]
-           end
-           subgraph TOPOLOGY["TOPOLOGY (NetworkX)"]
-               G[nx.DiGraph<br/>- nodes<br/>- edges]
-           end
-           subgraph OUTPUT["OUTPUT"]
-               NS[New State<br/>validated]
-               ARCHIVE[ARCHIVE<br/>ChromaDB]
-           end
-           WS -->|"to_graph()"| G
-           G -->|"Systems mutate graph"| G
-           G -->|"from_graph()"| NS
-           G -->|"Store event narratives"| ARCHIVE
-       end
+   flowchart LR
+       REF["babylon_ref"] --> TICK["Rust material tick"]
+       DEFINES["Saved authored parameters"] --> TICK
+       MATERIAL["Production, freight, staffing"] --> TICK
+       EMPTY["Exact empty action batch"] --> TICK
+       TICK --> IDENTIFIED["IdentifiedMaterialTickV3"]
+       IDENTIFIED --> RUNTIME["DurableMaterialRuntimeV3"]
+       RUNTIME --> STATE["babylon_state typed rows"]
+       STATE --> RECEIPT["ChoiceReceiptV1 rows"]
+       STATE --> MARKER["tick_commit"]
+       STATE --> DIRTY["archive_dirty_receipt_v1"]
+       MARKER --> VIEW["Bevy administrative viewer"]
+       PY["Reference builders"] --> DATA["SQLite and Parquet artifacts"]
+       DATA --> REF
+       DIRTY --> ARCHIVE["Semantic Archive worker"]
+       ARCHIVE -.-> CHOICE["Player decision"]
 
-Key Design Principles
----------------------
+.. vale on
 
-1. **Determinism**
-   Given the same initial state and configuration, the simulation
-   produces identical results. Random seeds are explicit.
+Invariants
+----------
 
-2. **Immutability at Boundaries**
-   Pydantic models are frozen. Only graphs are mutable during computation.
+Tick identity
+   Equal inputs produce equal graph, nominal-world, replay-tick, envelope, and
+   typed semantic row bytes. Equal kernel instances produce equal allocation,
+   draw, selection, and receipt bytes. Only the marker establishes durability.
 
-3. **Validation on Entry/Exit**
-   All data is validated when entering or leaving the Ledger.
+Pure judgment
+   Relation, BSL, and tick crates have no database dependency. Storage begins
+   only after detached judgment succeeds.
 
-4. **Graph + Math = History**
-   Complex emergent behavior arises from simple topological operations
-   and mathematical formulas.
+Single authority
+   No compatibility view, adapter, fallback, dual writer, dual storage, or
+   runnable midpoint exists.
 
-See Also
---------
+Native topology
+   Hyperedges remain first-class public elements. Incidence data is an internal
+   storage method.
 
-- :doc:`/concepts/persistence-architecture` - Persistence layer design rationale
-- :doc:`/reference/persistence` - Persistence API reference
-- :doc:`/concepts/topology` - Graph structure details
-- :doc:`/concepts/simulation-systems` - System architecture explanation
-- :doc:`/reference/data-models` - Complete entity and type specifications
-- :doc:`/reference/systems` - Systems API reference
-- :doc:`/api/engine` - Engine API reference
+Source honesty
+   Each substantive value is ``Observed``, ``Derived``, ``Calibrated``, or
+   ``Designed``.
+
+Finite contingency
+   Kernels select bounded material effects. Recognizers deterministically
+   observe post-state. Exact event likelihood sums the branches that make the
+   recognizer emit that event. Events never own probability.
+
+Player relevance
+   An administrative display cannot pass a game milestone. The persistence
+   cutover is necessary infrastructure, not the playable decision loop.
+
+Related Pages
+-------------
+
+- :doc:`/reference/persistence`
+- :doc:`/concepts/persistence-architecture`
+- :doc:`/concepts/topology`
+- :doc:`/reference/bsl-language`

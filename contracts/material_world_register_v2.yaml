@@ -1,0 +1,34 @@
+version: 2
+name: material_world_register_v2
+authority: ADR251
+purpose: Complete routed material state owned by an explicit successor replay session.
+clock:
+  completed_tick: unsigned_64_big_endian
+  circuit_week: completed_tick_plus_one_checked
+encoding:
+  domain: "babylon.material-world-register.v2\0"
+  fields:
+    - u32_big_endian_version_2
+    - u64_big_endian_completed_tick
+    - u64_big_endian_state_byte_length
+    - exact_material_circuit_state_v2_bytes
+  digest: sha256_exact_bytes
+  maximum_complete_bytes: 67108864
+  decoder: reject_unknown_version_truncated_trailing_or_noncanonical_bytes
+transition:
+  authority: routed_material_circuit_v2
+  order:
+    - process_due_freight_and_quantity_delivery
+    - execute_prior_week_production_commitments
+    - dispatch_orders_against_inventory_and_whole_route_capacity
+    - derive_following_week_production_commitments
+  causal_barrier: Arrivals cannot enlarge current production commitments; they feed next week's plan.
+  quantity_realization: Delivered commodity quantity; no payment, claim, escrow or default.
+publication:
+  owner: MaterialReplaySessionV3
+  prepare: Detached graph and circuit candidates with exact material receipt bytes.
+  commit: Preflight all publication allocations before the one durable operation.
+  success: Infallible moves publish graph, material register, completed tick and graph event sink.
+  failure: Graph, material register, identity, completed tick and event sink remain unchanged.
+  horizon: Refuse before adjudication when the pinned finite content horizon is complete.
+historical_contracts: GraphStateHash and graph-only replay codecs remain byte-identical.

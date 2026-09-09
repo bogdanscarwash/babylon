@@ -24,7 +24,6 @@ graph queries, enums, graph integration, and configuration.
        structural_selectivity,
        update_internal_balance,
        hegemonic_fraction_effect,
-       community_embeddedness,
    )
 
 .. contents:: On this page
@@ -374,7 +373,7 @@ threshold. Maps to ``EventType.INSTITUTION_BONAPARTIST_MODE``.
 Pure Functions
 --------------
 
-All four functions are stateless. They take data in and return data out.
+All three functions are stateless. They take data in and return data out.
 No EventBus dependency.
 
 **Import:**
@@ -385,7 +384,6 @@ No EventBus dependency.
        structural_selectivity,
        update_internal_balance,
        hegemonic_fraction_effect,
-       community_embeddedness,
    )
 
 structural_selectivity
@@ -480,23 +478,6 @@ Returns OODA modifier hints based on the hegemonic fraction:
      - Self-preservation
 
 Raises ``ValueError`` if ``fraction`` is not a valid ``RulingClassFraction``.
-
-community_embeddedness
-~~~~~~~~~~~~~~~~~~~~~~
-
-.. code-block:: python
-
-   def community_embeddedness(
-       institution: Institution,
-       graph: GraphProtocol,
-   ) -> dict[str, float]: ...
-
-Computes institution's embeddedness in community hyperedges. For each
-territory the institution occupies, finds community nodes with matching
-``territory_id`` and computes overlap ratio per ``CommunityType``.
-
-Returns dict mapping ``CommunityType`` string to embeddedness score [0, 1].
-Returns empty dict if institution has no territory presence.
 
 
 Enums

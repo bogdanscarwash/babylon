@@ -237,16 +237,31 @@ tag_system:
         - Limiting public presence
         - Paranoid operational security
 
-    nationalism:
-      id: "NATIONALISM"
-      description: "The dangerous variable - appeal to national identity"
+    national_chauvinism:
+      id: "NATIONAL_CHAUVINISM"
+      # Renamed from NATIONALISM 2026-07-15 (owner): the tag is a stand-in for
+      # oppressor-nation chauvinism / white supremacy, NOT the national
+      # question in general. National LIBERATION of oppressed nations is a
+      # DISTINCT, progressive phenomenon this tag does not model — its
+      # dialectical negation is INTERNATIONALISM (proletarian
+      # internationalism, already live as the SolidaritySystem). Lenin's
+      # "great-nation chauvinism" / "social-chauvinism"; the CPUSA's own
+      # 1930s "white chauvinism" campaigns are the direct referent. Do not
+      # conflate with Black nationalism or anti-imperialist self-determination.
+      description: "The dangerous variable - great-nation chauvinism (oppressor-nation supremacy)"
       range: "0 - 10"
-      warning: "HIGH NATIONALISM + LOW CLASS_ANALYSIS = FASCISM PATH"
+      warning: "HIGH NATIONAL_CHAUVINISM + LOW CLASS_ANALYSIS = FASCISM PATH"
+      # Dialectical opposition (Amendment S / domain/dialectics): the
+      # progressive pole is INTERNATIONALISM, not a low value of this tag.
+      # Chauvinism is reactionary across its WHOLE range — even "moderate"
+      # chauvinism is the substitution of nation for class, distinct from
+      # the genuine anti-imperialism that internationalism carries.
+      dialectical_negation: "INTERNATIONALISM"
       effects:
         moderate: |
-          - Can appeal to national liberation movements
-          - Useful in anti-imperial struggle
-          - Connects to popular sentiment
+          - Substitutes national identity for class analysis
+          - Reads as "common-sense patriotism"; still class-blind
+          - Erodes solidarity with the oppressed nations abroad
         high: |
           - Opens "Patriotic Socialism" path
           - Alienates internationalist allies
@@ -273,9 +288,9 @@ tag_system:
           - Attracts opportunists
           - Opens "PatSoc" path
       relationship: |
-        CLASS_ANALYSIS is the ANTIDOTE to NATIONALISM.
-        As long as CLASS_ANALYSIS > NATIONALISM, you are safe.
-        When NATIONALISM > CLASS_ANALYSIS, the wormhole opens.
+        CLASS_ANALYSIS is the ANTIDOTE to NATIONAL_CHAUVINISM.
+        As long as CLASS_ANALYSIS > NATIONAL_CHAUVINISM, you are safe.
+        When NATIONAL_CHAUVINISM > CLASS_ANALYSIS, the wormhole opens.
 
     resilience:
       id: "RESILIENCE"
@@ -693,7 +708,7 @@ doctrine_nodes:
     parent: ["class_consciousness"]
     description: "The nation oppressed must be liberated."
     provides_tags:
-      NATIONALISM: 2
+      NATIONAL_CHAUVINISM: 2
       MASS_LINK: 2
       MILITANCY: 1
     resource_cost: 100
@@ -701,8 +716,8 @@ doctrine_nodes:
     requires: ["class_consciousness"]
 
     warning: |
-      NATIONALISM tag begins accumulating.
-      Safe as long as CLASS_ANALYSIS >= NATIONALISM.
+      NATIONAL_CHAUVINISM tag begins accumulating.
+      Safe as long as CLASS_ANALYSIS >= NATIONAL_CHAUVINISM.
       Used correctly: Anti-imperial liberation.
       Used incorrectly: Path to fascism.
 
@@ -718,7 +733,7 @@ doctrine_nodes:
     parent: ["national_liberation"]
     description: "Socialism in one country. Our nation first."
     provides_tags:
-      NATIONALISM: 3
+      NATIONAL_CHAUVINISM: 3
       MASS_LINK: 2
     provides_tags_negative:
       CLASS_ANALYSIS: -2
@@ -727,7 +742,7 @@ doctrine_nodes:
 
     danger: |
       CLASS_ANALYSIS begins DECREASING.
-      If NATIONALISM > CLASS_ANALYSIS:
+      If NATIONAL_CHAUVINISM > CLASS_ANALYSIS:
       The degeneration wormhole OPENS.
 
     warning_signs:
@@ -744,14 +759,14 @@ doctrine_nodes:
     parent: ["patriotic_socialism"]
     description: "The workers and the nation are one."
     provides_tags:
-      NATIONALISM: 4
+      NATIONAL_CHAUVINISM: 4
       MASS_LINK: 3
       MILITANCY: 2
     provides_tags_negative:
       CLASS_ANALYSIS: -3
     resource_cost: 200
     requires: ["patriotic_socialism"]
-    requires_condition: "NATIONALISM > CLASS_ANALYSIS"
+    requires_condition: "NATIONAL_CHAUVINISM > CLASS_ANALYSIS"
 
     point_of_no_return_warning: |
       THIS IS THE LAST EXIT.
@@ -766,7 +781,7 @@ doctrine_nodes:
     parent: ["national_syndicalism"]
     description: "National revolution against both capital and Marxism."
     provides_tags:
-      NATIONALISM: 5
+      NATIONAL_CHAUVINISM: 5
       MILITANCY: 4
     provides_tags_negative:
       CLASS_ANALYSIS: -5
@@ -910,7 +925,7 @@ party_congress:
         - Remove one negative doctrine
         - Increase CLASS_ANALYSIS by 1
         - Lose Cadre associated with purged line
-        - Reduce NATIONALISM if elevated
+        - Reduce NATIONAL_CHAUVINISM if elevated
 
     theoretical_offensive:
       description: "Major push for ideological development"
@@ -950,7 +965,7 @@ patsoc_pipeline_example:
       tags:
         CLASS_ANALYSIS: 3
         MASS_LINK: 3
-        NATIONALISM: 0
+        NATIONAL_CHAUVINISM: 0
 
     situation: |
       Player is building a solid Leninist organization.
@@ -968,10 +983,10 @@ patsoc_pipeline_example:
       new_doctrines: ["national_liberation"]
       tags:
         CLASS_ANALYSIS: 3
-        NATIONALISM: 2
+        NATIONAL_CHAUVINISM: 2
         MASS_LINK: 5
 
-    assessment: "SAFE. CLASS_ANALYSIS > NATIONALISM. This is correct usage."
+    assessment: "SAFE. CLASS_ANALYSIS > NATIONAL_CHAUVINISM. This is correct usage."
 
   phase_2_drift_begins:
     tick: 21-40
@@ -991,14 +1006,14 @@ patsoc_pipeline_example:
       new_doctrines: ["patriotic_socialism"]
       tags:
         CLASS_ANALYSIS: 1  # -2 from PatSoc
-        NATIONALISM: 5
+        NATIONAL_CHAUVINISM: 5
         MASS_LINK: 7
 
     warning_triggered: |
-      ⚠️ NATIONALISM > CLASS_ANALYSIS
+      ⚠️ NATIONAL_CHAUVINISM > CLASS_ANALYSIS
       ⚠️ Degeneration wormhole is now OPEN
 
-    assessment: "DANGEROUS. CLASS_ANALYSIS has fallen below NATIONALISM."
+    assessment: "DANGEROUS. CLASS_ANALYSIS has fallen below NATIONAL_CHAUVINISM."
 
   phase_3_allies_change:
     tick: 41-60
@@ -1011,10 +1026,10 @@ patsoc_pipeline_example:
       option_a:
         name: "Party Congress: Rectification"
         cost: "500 TL + lose 30% nationalist Cadre"
-        effect: "Reduce NATIONALISM, restore CLASS_ANALYSIS, close wormhole"
+        effect: "Reduce NATIONAL_CHAUVINISM, restore CLASS_ANALYSIS, close wormhole"
 
       option_b:
-        name: "Lean into nationalism"
+        name: "Lean into national chauvinism"
         cost: "0 TL"
         effect: "Purge internationalists, embrace nationalist base"
 
@@ -1024,14 +1039,14 @@ patsoc_pipeline_example:
       The nationalist base is larger now.
       "We can keep class analysis internally..."
 
-    player_choice: "Option B (embrace nationalism)"
+    player_choice: "Option B (embrace national chauvinism)"
 
     result:
       lost_cadre: "Internationalist faction leaves (40%)"
       gained_cadre: "Nationalist faction grows (60%)"
       tags:
         CLASS_ANALYSIS: 0  # Internationalists were carrying this
-        NATIONALISM: 7
+        NATIONAL_CHAUVINISM: 7
 
     assessment: "CRITICAL. CLASS_ANALYSIS at zero. Next node is fascism."
 
@@ -1053,14 +1068,14 @@ patsoc_pipeline_example:
       new_doctrines: ["national_syndicalism"]
       tags:
         CLASS_ANALYSIS: -3
-        NATIONALISM: 9
+        NATIONAL_CHAUVINISM: 9
 
     assessment: "TERMINAL. One step from fascism."
 
   phase_5_transformation:
     tick: 81+
     trigger: |
-      CLASS_ANALYSIS <= 0 AND NATIONALISM >= 5
+      CLASS_ANALYSIS <= 0 AND NATIONAL_CHAUVINISM >= 5
       Automatic acquisition of "Strasserism"
 
     transformation: |

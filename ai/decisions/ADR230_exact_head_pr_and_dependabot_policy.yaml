@@ -1,0 +1,119 @@
+ADR230_exact_head_pr_and_dependabot_policy:
+  status: "accepted"
+  date: "2026-08-25"
+  title: >-
+    Pull requests merge through one exact-head verifier, Dependabot separates
+    trusted classification from verified merging, and GitHub PR settings are
+    applied as a rollback-safe checked-in policy
+  context: |
+    ADR181 established the Copilot harvest and the sanctioned merge wrapper.
+    The 2026-08-24 and 2026-08-25 CI audit found that the implementation no
+    longer matched that intent. The wrapper pinned only the head during its
+    first read, did not require a completed head-anchored Copilot review or
+    resolved review threads, and delegated the final merge without GitHub's
+    atomic expected-head guard. Dependabot polled for up to forty minutes and
+    then invoked a direct merge path outside the wrapper.
+
+    The repository settings also disagreed with the written process. The dev
+    ruleset required checks but no pull request, did not require an up-to-date
+    branch or resolved conversations, and the repository enabled three merge
+    strategies plus auto-merge. These mutable settings had no checked-in
+    desired state, pre-mutation snapshot, readback, or tested rollback path.
+
+    Babylon has one Director and no standing second human reviewer. A required
+    approval count would block legitimate delivery without adding independent
+    review. The durable controls are exact source identity, deterministic CI,
+    completed Copilot review, explicit comment disposition, resolved threads,
+    and the CodeQL zero floor.
+  decision: |
+    1. SANCTIONED MERGE PATH. tools/pr_merge.py remains the sole merge command.
+       It accepts ordinary pull requests only when the base is dev. A main
+       target requires the explicit Director-only mode and a head of dev or
+       fix/*. The tool refuses deletion of dev and preserves source branches by
+       default.
+
+    2. EXACT VERDICT. The verifier records the exact head and base object IDs,
+       rejects a moved ref on its final read, and passes the verified exact head
+       to GitHub's atomic match-head merge guard. Callers can also provide an
+       expected head. Read-only verification runs the complete policy without
+       requesting a merge. tools/pr_policy.py owns separate complete manifest
+       values for dev and main. Every blocking check must exist and report
+       SUCCESS. Each advisory check has its own allowed conclusions. An unknown
+       failure blocks; an unknown success is information only after the selected
+       complete manifest is present.
+
+    3. REVIEW EVIDENCE. The exact head needs a completed Copilot review. The
+       verifier matches the exact endpoint-specific GraphQL review, REST review,
+       and REST inline-comment logins. It also checks the immutable bot ID, node
+       ID, and type wherever REST provides them. Every top-level Copilot comment
+       needs a reply, and every review thread must be resolved. Verification
+       refuses rather than silently paging beyond its fixed one-hundred-thread
+       bound. The repository CodeQL alert floor must remain zero.
+
+    4. DEPENDABOT TRUST SPLIT. pull_request_target manages an eligibility label
+       from trusted code without checking out pull-request code.
+       Its label is presentation only and never merge authorization. That
+       phase never creates
+       or updates repository label metadata. A completed native exact-head CI
+       pull_request run starts the trusted default-branch workflow_run consumer.
+       Its native job is named Dependabot Eligibility, but it does not publish a
+       custom check on the pull-request head.
+
+       Immediately before the final ref snapshot, the merge verifier requires
+       the immutable CI workflow ID, path, pull_request event, successful exact
+       head, exact pull-request association, canonical Dependabot event actor and
+       triggering actor, canonical GitHub Actions app, and matching check suite.
+       It also binds its current trusted workflow ID, path, run title, native job,
+       check-run ID, and suite to that source CI run and head. It then revalidates
+       the canonical Dependabot pull-request owner and exactly one current commit
+       before it reads update metadata. Commit author, committer, or signature
+       fields alone do not authorize eligibility.
+
+       The unattended mode accepts only patch and minor metadata. A major or
+       malformed update refuses unattended mode without creating a failing
+       pull-request check, so the normal reviewed path remains available. The
+       workflow does not execute pull-request code or artifacts and does not call
+       a direct GitHub merge command.
+
+    5. CHECKED-IN SETTINGS. .github/settings/pr-policy.json is the desired
+       repository merge policy, dev ruleset, and Dependabot eligibility label.
+       The repository permits merge commits only, disables auto-merge, and does
+       not delete source branches automatically. The dev ruleset requires a
+       pull request, merge commits, strict required checks, and resolved review
+       threads. Its required contexts must exactly equal the typed dev blocking
+       manifest. Its approval count remains zero because this is a single-
+       Director repository and the executable review evidence supplies the
+       acceptance boundary.
+
+    6. SETTINGS TRANSACTION. A settings apply requires an exact green dev SHA.
+       The applicator writes a snapshot before its first mutation, rejects
+       concurrent settings or dev movement, reads back the desired state, and
+       reconciles attempted writes after a failure, restores every component
+       that differs from the snapshot, and verifies automatic and manual
+       rollback readback. A retained snapshot can be restored only while its
+       exact dev SHA remains current.
+
+    7. PR RECORD. Each pull-request description selects exactly one Linear
+       delivery disposition, records the base and exact reviewed head, records
+       CI and Copilot evidence, states its behavioral-contract and baseline
+       dispositions, and preserves the source branch unless its owner makes an
+       explicit deletion decision.
+  consequences: |
+    - A stale review, moved head, moved base, unresolved thread, disallowed
+      conclusion, incomplete selected manifest, or open CodeQL alert blocks the
+      wrapper.
+    - Dependabot patch and minor updates can merge without a polling runner, but
+      only after the native CI and trusted classifier provenance checks plus the
+      same exact-head acceptance path as every other pull request.
+    - A major Dependabot update cannot use unattended mode, but its normal
+      reviewed merge remains available after the standard checks pass.
+    - Strict dev checks can require a branch refresh after dev moves. This cost
+      is accepted because it binds green evidence to the base that will receive
+      the merge.
+    - GitHub UI changes become detectable drift. Remote policy mutations retain
+      a local rollback artifact and are never inferred from documentation.
+    - This decision refines ADR181 R1, R2a, R2b, and R10. It does not change
+      Linear's ownership of current work or the Director-only main boundary.
+  related:
+    - ADR181_ci_synergy_rulings
+    - ADR221_game_first_refoundation_v4

@@ -37,7 +37,7 @@
 - [ ] T025 Implement `game_endgame` view in `api.py`
 - [ ] T026 Implement `game_objectives` view in `api.py`
 - [ ] T027 Add 3 routes in `urls.py`
-- [ ] T028 Verify backend tests green: `PYTHONPATH=src poetry run pytest tests/unit/web/ -q`
+- [ ] T028 Verify backend tests green: `PYTHONPATH=src uv run pytest tests/unit/web/ -q`
 
 ## Phase 3 — Frontend GREEN
 
@@ -55,7 +55,7 @@
 ## Phase 4 — Gates
 
 - [ ] T040 `mise run web:check` green
-- [ ] T041 `PYTHONPATH=src poetry run pytest tests/unit/web/ -q` green
+- [ ] T041 `PYTHONPATH=src uv run pytest tests/unit/web/ -q` green
 - [ ] T042 Playwright e2e (owner-run, gated on `SPEC061_TEST_SESSION_ID`)
 - [ ] T043 Contradiction-snapshot contract test passes
 - [ ] T044 EndgameDetector priority test passes (FR-033 order pinned)

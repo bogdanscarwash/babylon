@@ -1,258 +1,271 @@
-MLM-TW Theoretical Foundation
-==============================
+Relational Theory Constraints
+=============================
 
-Babylon's mechanics are grounded in Marxist-Leninist-Maoist Third Worldist
-(MLM-TW) theory. This document explains *why* the simulation works the way
-it does, grounding game mechanics in materialist analysis.
+Babylon records theory as constraints on represented relations and causal
+questions. The machine record in ``ai/theory.yaml`` is canonical. This page is
+its human rendering.
 
-Core Thesis
------------
+Authority and Scope
+-------------------
 
-   **Revolution in the imperial core is structurally impossible while
-   imperial rent extraction continues.**
+.. The authority paragraph is an exact governed contract.
+.. vale Vale.Spelling = NO
+.. vale ste.UnapprovedWords = NO
+.. vale ste.Semicolon = NO
 
-This is a mechanical constraint emerging from material conditions, not a
-moral claim or prediction. The simulation models this mathematically through
-the :doc:`imperial-rent` and :doc:`survival-calculus`.
+`CONSTITUTION.md v4.2.0 <../../CONSTITUTION.md>`__ governs this page and
+reserves Babylon's Marxist-Leninist-Maoist Third Worldist theoretical line.
+:doc:`architecture` describes the live Rust engine and retained data tooling.
+This page corrects deterministic interpretations within the
+reserved line; it does not rename or amend that line. It constrains represented
+relations and causal questions. It does not create an executable rule,
+coefficient, threshold, response curve, geographic essence, class essence, or
+promised outcome.
 
-The Fundamental Theorem
------------------------
+.. vale ste.Semicolon = YES
+.. vale ste.UnapprovedWords = YES
+.. vale Vale.Spelling = YES
 
-.. math::
+.. vale ste.Gerunds = NO
 
-   \text{If } W_c > V_c, \text{ then } P(\text{Revolution in Core}) \to 0
+Governing Constraints
+---------------------
 
-Where:
+.. vale ste.Gerunds = YES
 
-- :math:`W_c` = Wages paid to core (First World) workers
-- :math:`V_c` = Value produced by core workers
-- :math:`\Phi = W_c - V_c` = Imperial Rent
+.. vale ste.UnapprovedWords = NO
 
-When :math:`\Phi > 0`, core workers receive more value than they produce.
-The difference comes from exploitation of peripheral (Third World) workers
-through unequal exchange.
+Accumulation and contingency
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-**Implications:**
+.. vale ste.UnapprovedWords = YES
 
-1. Core workers have *material interest* in maintaining imperialism
-2. This creates the **labor aristocracy**---workers whose class interest
-   aligns with capital against the global proletariat
-3. Revolutionary potential is concentrated in the periphery, not the core
+.. vale off
 
-See :doc:`imperial-rent` for implementation details.
+``accumulation_outcomes_are_contingent``
+Evidence class: Derived
+Executable status: theoretical_constraint
+Statement: Accumulation produces pressures and limits; paths and outcomes remain contingent.
 
-Class Categories
-----------------
+.. vale on
 
-.. list-table::
-   :header-rows: 1
+The causal question is how material pressures and limits shape a contingent
+history.
 
-   * - Class
-     - Relation to Production
-     - Revolutionary Potential
-   * - Bourgeoisie
-     - Owns means of production
-     - Counter-revolutionary
-   * - Proletariat
-     - Sells labor power
-     - High (in periphery)
-   * - Petty Bourgeoisie
-     - Small owners, professionals
-     - Vacillating
-   * - Peasantry
-     - Agricultural producers
-     - Variable by context
-   * - Labor Aristocracy
-     - Core workers with Φ benefit
-     - Low
-   * - Lumpenproletariat
-     - Outside formal economy
-     - Unreliable
+Imperial rent and relations
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The Fascist Bifurcation
------------------------
+.. vale off
 
-Economic crisis does **not** automatically produce revolutionary consciousness.
-This is the fundamental error of accelerationism.
+``imperial_rent_changes_relations_not_destiny``
+Evidence class: Derived
+Executable status: theoretical_constraint
+Statement: Imperial rent changes incentives and causal pathways; organization,
+crisis, coercion, solidarity, and countervailing relations remain live variables.
 
-When material conditions deteriorate, workers experience **agitation energy**:
+.. vale on
 
-.. math::
+The causal question is how changes in incentives shape organization, crisis,
+coercion, solidarity, and other relations.
 
-   \text{Agitation Energy} = |\Delta W| \times \lambda_{\text{loss aversion}}
+Survival and heterogeneous relations
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-This energy has no inherent direction. The direction---whether toward class
-consciousness or national chauvinism---depends entirely on **pre-existing
-solidarity infrastructure**:
+.. vale off
 
-.. code-block:: python
+``survival_is_a_heterogeneous_aggregate``
+Evidence class: Derived
+Executable status: theoretical_constraint
+Statement: Survival is an aggregate over heterogeneous material distributions
+and relations. No fixed response curve is lawful.
 
-   if solidarity_strength > 0:
-       direction = class_consciousness  # "The boss is exploiting us"
-   else:
-       direction = national_identity    # "Foreigners took our jobs"
+.. vale on
 
-**The Mantra:**
+The causal question is how different material distributions and relations shape
+survival without a fixed response.
 
-   *Agitation without solidarity produces fascism, not revolution.*
+Class subjectivity and history
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Historical Examples
-^^^^^^^^^^^^^^^^^^^
+.. vale off
 
-.. list-table::
-   :header-rows: 1
+``class_subjectivity_is_historical``
+Evidence class: Derived
+Executable status: theoretical_constraint
+Statement: Classes are positions and relations. Political practice and
+subjectivity are historical results.
 
-   * - Case
-     - Material Conditions
-     - Solidarity Infrastructure
-     - Outcome
-   * - Weimar Germany 1929-1933
-     - Economic collapse
-     - Weak (divided left)
-     - Fascism
-   * - Russia 1917
-     - War exhaustion, shortages
-     - Strong (Zimmerwald movement)
-     - Revolution
+.. vale on
 
-See ADR016 for implementation details.
+The causal question is how positions, relations, and action produce historical
+subjectivity.
 
-Proletarian Internationalism
+Consciousness and relational direction
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. vale off
+
+``consciousness_is_relational_and_multidirectional``
+Evidence class: Derived
+Executable status: theoretical_constraint
+Statement: Consciousness and line travel through attributed organization and
+solidarity relations in multiple directions.
+
+.. vale on
+
+The causal question is how attributed organization and solidarity relations
+move consciousness and line in many directions.
+
+Outcomes as historical recognizers
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. vale off
+
+``outcomes_are_history_recognizers``
+Evidence class: Derived
+Executable status: theoretical_constraint
+Statement: Outcomes are recognizers over histories, not downstream writes or promised verdicts.
+
+.. vale on
+
+The causal question is which historical relations a recognizer can identify
+without a downstream write or verdict.
+
+Ecology without predetermination
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. vale off
+
+``ecology_constrains_without_predetermining``
+Evidence class: Derived
+Executable status: theoretical_constraint
+Statement: Ecological degradation and care capacity constrain choices;
+construction, repair, and redistribution can change consequences without
+promising equilibrium.
+
+.. vale on
+
+The causal question is how ecological degradation and capacity constrain
+choices while construction, repair, and redistribution change consequences.
+
+Theory and Executable Status
 ----------------------------
 
-If imperial rent is the mechanism that pacifies core workers, proletarian
-internationalism is the counterforce that can overcome this pacification.
+.. The status paragraph is an exact governed contract.
+.. vale ste.UnapprovedWords = NO
+.. vale ste.Dictionary = NO
 
-Two competing forces act on core worker consciousness:
+Historical formulas that remain in Python belong to the frozen Python reference.
+They preserve reference or surrogate behavior and are not the live Rust law.
+Live Rust behavior exists only where the architecture and executable source
+establish it. This page claims no new implementation binding.
 
-.. math::
+.. vale ste.Dictionary = YES
+.. vale ste.UnapprovedWords = YES
 
-   \frac{d\Psi}{dt} = \underbrace{k(1 - \frac{W_c}{V_c}) - \lambda\Psi}_{\text{Material (sedative)}}
-   + \underbrace{\sigma_{\text{edge}} \times (\Psi_{\text{periphery}} - \Psi_{\text{core}})}_{\text{Solidarity (awakening)}}
+.. The ledger heading uses the governed evidence-class vocabulary.
+.. vale ste.UnapprovedWords = NO
 
-**Material force:** When :math:`W_c > V_c`, the material term is negative.
-Core workers have no material incentive for revolution.
+Evidence and Source Ledger
+--------------------------
 
-**Solidarity force:** Consciousness can transmit FROM revolutionary periphery
-TO sedated core through SOLIDARITY edges. This requires built infrastructure
-(:math:`\sigma_{\text{edge}} > 0`).
+.. vale ste.UnapprovedWords = YES
 
-**Victory condition for core revolution:**
+This ledger lists two supplied external PDF artifacts. The repository contains
+the clipping. A local mirror can supply the 1935 chapter. None grants executable
+authority.
 
-.. math::
+.. vale off
 
-   \sigma_{\text{edge}} \times (\Psi_{\text{periphery}} - \Psi_{\text{core}})
-   > |k(1 - \frac{W_c}{V_c}) - \lambda\Psi|
+``neel_hinterland_2018``
+~~~~~~~~~~~~~~~~~~~~~~~~
 
-The Tendency of the Rate of Profit to Fall
-------------------------------------------
+Title: Hinterland: America's New Landscape of Class and Conflict
+Edition: Reaktion, 2018, supplied PDF
+sha256: 2799eb76f267551afa04a6bb76ffed4a89c5e1fc387c3744fcca3be3b00b4525
+Evidence class: Observed
+Executable authority: false
+Availability: supplied_external_artifact
+Scope: Constrains relational territorial ontology. Supplies no coefficient,
+threshold, curve, or guaranteed outcome.
+Anchor: PDF p. 18 (printed p. 17)
 
-From Marx's *Capital* Volume 3, Chapters 13-15, capitalism contains an
-internal economic contradiction: the tendency of the rate of profit to fall.
+.. vale on
 
-.. math::
+.. vale off
 
-   p' = \frac{s}{c + v}
+``neel_hellworld_2025``
+~~~~~~~~~~~~~~~~~~~~~~~
 
-Where:
+Title: Hellworld: The Human Species and the Planetary Factory
+Edition: Brill, 2025, supplied PDF
+sha256: 43127a54390f9fb798cb644f0e5af0f8228b79cc5c392b1b472b5dc96be8fe1e
+Evidence class: Observed
+Executable authority: false
+Availability: supplied_external_artifact
+Scope: Constrains relations among production, circulation, reproduction,
+ecology, finance, and state power. Supplies no executable value.
+Anchors: PDF pp. 170-171 (printed pp. 143-144); PDF p. 239 (printed p. 212)
 
-- :math:`s` = Surplus Value (extracted from labor beyond wages)
-- :math:`c` = Constant Capital (machinery, materials---"dead labor")
-- :math:`v` = Variable Capital (wages---"living labor")
+.. vale on
 
-The **Organic Composition of Capital** (OCC):
+.. vale off
 
-.. math::
+``party_practice_clipping``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-   OCC = \frac{c}{v}
+Title: theory-of-the-party-ill-will.md supplied clipping
+Edition: supplied clipping; mixed-admissibility source
+sha256: 373c2b594f932cbc7fcf590a784e6b48b9031a9bf7363e9b33a58fdc074454b1
+Evidence class: Observed
+Executable authority: false
+Availability: repository_file
+Repository path: ai/_inbox/archive/theory-of-the-party-ill-will.md
+Scope: Retains only bounded observations about situated practice when
+independently corroborated by permitted book findings. Cannot authorize
+organization kinds, party relations, or mechanics.
+Anchor: repository lines 30-42
+Admissibility: bounded_with_independent_corroboration
+Quarantined ranges: repository lines 44-46; repository lines 74-130
+Corroborating findings: H8; W10; W20; W36; W37; W39; W40; W45; W62-W65
 
-As capitalism develops, capitalists invest in machinery to increase
-productivity. This raises :math:`c` relative to :math:`v`. Since surplus
-value can only be extracted from living labor, the profit *rate* falls
-even as absolute profit *mass* may increase.
+.. vale on
 
-**Connection to MLM-TW:** Imperial rent (Marx's Factor #5---Foreign Trade)
-temporarily offsets TRPF for core capitalists while accelerating it for
-peripheral capital. This explains both the stability of core capitalism
-AND its ultimate unsustainability.
+.. vale off
 
-Epoch 1 models TRPF as time-dependent decay (Surrogate):
+``cpusa_organizers_manual_ch3_1935``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-.. code-block:: python
+Title: Organizers' Manual, chapter 3
+Edition: Communist Party USA, 1935, local HTML
+sha256: 6d27b580c657f68f35e8d4b5b2ac6ea6b076050b1de7a82cb0b615cce12f44fb
+Evidence class: Observed
+Executable authority: false
+Availability: optional_local_mirror
+Relative locator: history/usa/parties/cpusa/1935/07/organisers-manual/ch03.htm
+Scope: Supports rooted work and iterative evaluation. Hierarchy, fractions,
+secrecy rules, membership thresholds, and numeric guidance remain historical
+particulars rather than Babylon universals.
+Anchors: HTML lines 45-61; HTML lines 265-271; HTML lines 464-505; HTML lines 1175-1190
 
-   # Epoch 1 Implementation
-   trpf_multiplier = max(0.1, 1.0 - (trpf_coefficient * tick))
-   effective_extraction = base_extraction * trpf_multiplier
+.. vale on
 
-**Planned for Epoch 2:** Full organic composition tracking where entities
-maintain distinct `constant_capital` and `variable_capital` ledgers,
-allowing the rate of profit to emerge dynamically from investment decisions rather
-than a fixed decay curve.
+Source Policy
+-------------
 
-The Metabolic Rift
-------------------
+.. The policy sentence preserves the machine record's bounded-evidence term.
+.. vale ste.UnapprovedWords = NO
 
-The Metabolic Rift, theorized by Marx and developed by John Bellamy Foster,
-describes the fundamental incompatibility between capitalist accumulation
-and ecological sustainability.
+Only ``src/babylon/data/corpus/manifest.yaml`` governs Director exclusions.
+Narrator ingestion stays unchanged. Use the approved 1935 chapter only as
+bounded research evidence, not standalone narrator doctrine.
 
-.. math::
-
-   \Delta B = R - (E \times \eta)
-
-Where:
-
-- :math:`B` = Biocapacity
-- :math:`R` = Regeneration rate
-- :math:`E` = Extraction rate
-- :math:`\eta` = Entropy factor (thermodynamic inefficiency, default 1.2)
-
-Capital externalizes regeneration costs, extracting more than can be renewed.
-This gap---the rift---widens with each cycle of accumulation.
-
-The Tragedy of Inevitability
-----------------------------
-
-   *"The question is not whether the empire falls. The question is how."*
-
-Babylon operates under a fundamental constraint: **entropy is irreversible**.
-The player cannot "win" in the traditional sense. They cannot reverse the
-Metabolic Rift or create perpetual imperial accumulation.
-
-Player agency is limited to:
-
-1. **Accelerating collapse** through revolutionary action
-2. **Decelerating collapse** through system maintenance (delays inevitable)
-3. **Shaping the character of collapse** (revolutionary vs fascist resolution)
-
-The tragedy is not that collapse occurs. The tragedy is that the player
-must choose who dies. When biocapacity falls below aggregate consumption,
-someone's consumption must be eliminated:
-
-- **Socialist resolution:** Reduce :math:`S_{\text{class}}` (luxury consumption)
-- **Fascist resolution:** Eliminate :math:`S_{\text{bio}}` (survival) of
-  "surplus populations"
-
-Without solidarity infrastructure, the default is fascism.
-
-Sources
--------
-
-The theoretical framework draws from:
-
-- Marx, *Capital* Volume 1 (value theory, exploitation)
-- Marx, *Capital* Volume 3, Chapters 13-15 (TRPF, organic composition)
-- Lenin, *Imperialism* (monopoly capital, labor aristocracy)
-- Mao, *On Contradiction* (dialectical analysis)
-- Gramsci, *Prison Notebooks* (hegemony, civil society)
-- Zak Cope, *Divided World Divided Class* (modern labor aristocracy thesis)
-- Samir Amin, *Unequal Development* (unequal exchange)
+.. vale ste.UnapprovedWords = YES
 
 See Also
 --------
 
-- :doc:`imperial-rent` - Imperial rent extraction mechanics
-- :doc:`survival-calculus` - P(S|A) and P(S|R) formulas
-- :doc:`george-jackson-model` - Consciousness bifurcation dynamics
-- :doc:`percolation-theory` - Phase transitions in solidarity networks
-- :doc:`/reference/formulas` - Complete formula reference
+- :doc:`architecture`
+- ``CONSTITUTION.md`` v4.2.0
+- Frozen-reference formula pages are context only. They do not give live
+  executable authority.

@@ -1,0 +1,58 @@
+ADR163_p26_u3_faf_freight_and_bloc_grounding:
+  status: "accepted"
+  date: "2026-07-27"
+  title: >
+    P26 U3 — freight + bloc grounding: FAF5.7.1 bloc-tons hand-maintained
+    artifact (ADR121 pattern) and india/latin_america bilateral-trade rows
+    grounded from real Census data through the ADR098 parquet-source
+    pipeline, closing the ADR055 external-node coverage hole.
+  context: |
+    Two disclosed data gaps blocked honest trade surfaces: (1)
+    bilateral_trade_tons had NO source at all — the FAF freight CSV
+    (1.3GB, state-level, fr_orig/fr_dest zones) was never folded to the
+    8 INTERNATIONAL_NODES; (2) fact_bilateral_trade_annual carried zero
+    rows for india and latin_america (the _NODE_TO_BLOC map covered 6/8
+    nodes, ADR055 disclosure), so those blocs sat at phi = 0 in every
+    session. Both fixes had to travel the declared data ceremonies:
+    hand-maintained artifact (ADR121) for FAF, parquet-source loader +
+    pinned sha-identical DB rebuild (ADR098) for Census.
+  decision: |
+    (1) FAF artifact: tools/make_faf_bloc_tons_artifact.py folds
+    FAF5.7.1_State_2018-2024.csv to per-node annual tons via an
+    auditable FAF_ZONE_TO_NODE map (801 canada, 802+803 latin_america,
+    804 eu, 805 sub_saharan_africa, 807 china, 808 southeast_asia).
+    FAF zone 806 (SW & Central Asia) is EXCLUDED, not attributed — it
+    conflates India + Middle East + Central Asia/Caucasus + Turkey, so
+    india/russia_csi carry NO tons rather than fabricated ones.
+    Artifact src/babylon/data/reference/faf_bloc_trade_tons.csv.gz
+    (42 rows, 2018-2024, deterministic double-run verified) is manifest-
+    registered (19th src/-homed entry, count pin bumped) and read by
+    _bootstrap_external_nodes via _read_faf_bloc_tons(); campaign years
+    outside the window warn LOUDLY once and stay 0.0 (III.8/III.11).
+    (2) Census grounding: tools/ingest_census_bilateral_trade_blocs.py
+    (loader_to_sources-compatible) ingests india (dim_country 149) and
+    South and Central America (dim_country 6) 2010-2024 from the trove
+    country.xlsx into fact_bilateral_trade_annual (30 rows; EU/2015
+    cross-checked exact against the pre-existing DB before trusting the
+    workbook). Caught real bug: dim_country CTY_CODE is zero-padded
+    ("0009" not "9") — first run silently dropped all latin_america
+    rows and the fixture masked it; both fixed. _NODE_TO_BLOC now maps
+    all 8 INTERNATIONAL_NODES; the ADR055 disclosure is retired while
+    the attribution-METHODOLOGY question stays open for the U4 ruling.
+    (3) Pinned rebuild: nix dataBuild devshell (sqlite 3.53.1) ran
+    build_reference_db.py --update-manifest -> 75 tables, 59,827,825
+    rows, product sha256 94b8637a...; old DB retained at
+    babylon-data/backups/p26-u3/. NOTE: `mise run nix -- uv run python
+    tools/build_reference_db.py` does NOT satisfy the pin (uv resolves
+    its own venv sqlite) — the dataBuild devshell must run python3
+    directly; how-to doc example is wrong (follow-up).
+  consequences:
+    positive:
+      - "All 8 external blocs now carry real phi inflow in every session that bootstraps from the reference DB — india/latin_america were silently 0 since ADR055"
+      - "bilateral_trade_tons has an honest, disclosed-coverage source for 6/8 nodes (2018-2024) instead of no source"
+      - "qa:regression + golden vault verified byte-identical after the DB content change — headless estate untouched"
+    negative:
+      - "CI ci-data release is keyed to the OLD product sha f760bab5... — owner-gated re-cut required before CI legs that fetch the reference DB see the new rows"
+      - "Default campaign start 2010 predates the FAF window (2018-2024): bilateral_trade_tons stays 0.0 there until a backcast or start-year bump"
+      - "tools/make_data_artifacts.py::_write_manifest clobbers hand-maintained generator fields on every run (discovered, NOT fixed — owner-ruling-gated file; ticket owed)"
+  file: ADR163_p26_u3_faf_freight_and_bloc_grounding.yaml

@@ -1,235 +1,87 @@
 Debug Simulation Outcomes
 =========================
 
-This guide helps you diagnose unexpected simulation results systematically.
-Use these techniques when outcomes don't match theoretical predictions or
-when values fall outside expected ranges.
+Use the Rust runtime's committed reports to investigate a changed result,
+a missing delivery, a staffing movement, or a slow advance. Retain the exact
+campaign, content identity, source revision, and selected completed period.
 
-Prerequisites
--------------
+Generate a bounded diagnostic report
+------------------------------------
 
-- Completed :doc:`/tutorials/first-simulation`
-- Basic understanding of :doc:`/concepts/survival-calculus`
-- Access to ``mise`` task runner
-
-Symptom Identification
-----------------------
-
-Before debugging, identify which symptom you're experiencing:
-
-**Values Out of Range**
-   - Probability values outside [0, 1]
-   - Negative wealth
-   - Consciousness exceeding bounds
-
-**Unexpected Bifurcation**
-   - Fascism when solidarity edges exist
-   - Revolution without sufficient P(S|R)
-   - Stalled consciousness drift
-
-**Timing Issues**
-   - Death occurring too early/late
-   - Crossover threshold never reached
-   - Rent extraction not accumulating
-
-Step 1: Verify Formula Correctness
-----------------------------------
-
-Run the formula doctests to ensure mathematical operations work correctly:
+Start with the existing PostgreSQL service and schema. The reporter builds the
+runtime, creates a fresh campaign, and records post-commit evidence:
 
 .. code-block:: bash
 
-   mise run test:doctest
+   mise run sim:report
+   mise run sim:report 130 3000 shared
 
-This validates all formulas in ``src/babylon/systems/formulas/`` against
-their documented examples. If tests fail, the bug is in formula implementation.
+The default run covers 15 four-week periods (60 weeks), crossing the annual
+boundary at period 13. The second command covers ten modeled years: 130
+periods, with a 3,000-second runtime timeout. A modeled year is 13 periods,
+or 364 days. Use ``exclusive`` as the final argument only for a database whose
+resource use belongs to this run; a campaign UUID alone does not isolate a
+shared PostgreSQL service.
 
-.. seealso::
+The report lives in a unique directory under ``reports/sim-runs``. It includes
+``ticks.jsonl``, ``ticks.csv``, ``summary.json``, ``summary.txt``,
+``diagnostics.json``, runtime stdout and stderr, and ``resources.json``.
+The JSON rows disclose ``scope.tick_duration_days`` and the summary carries
+that value from validated runtime evidence. The wrapper requires contiguous
+commits, exact source and foundation identities, a restart every 13 periods,
+and durable readback of the final successful period.
 
-   :doc:`/reference/formulas` for the complete formula specification.
+The embedded Michigan report is a bounded persistence diagnostic. Its fixed
+parameters and exposed rule inventory define what it can demonstrate. It does
+not establish completion of the Bevy material campaign or player agency.
 
-Step 2: Run a Trace Analysis
+Inspect an existing campaign
 ----------------------------
 
-Capture full simulation state over time:
+For a background Michigan run, inspect its recorded process and campaign tail:
 
 .. code-block:: bash
 
-   mise run sim:trace
+   mise run sim:status
+   mise run sim:probe
+   tail -f .sim-pids/e2e.log
 
-This outputs a CSV to ``results/trace.csv`` with per-tick data:
+``sim:probe`` honors an explicit ``BABYLON_CAMPAIGN_ID`` or the worktree's
+recorded default. ``sim:report`` always creates a fresh campaign. Preserve
+existing campaign data when comparing source revisions; V5 content refuses
+weekly campaign presets rather than interpreting their ordinals as four-week
+periods.
 
-- Entity wealth, consciousness, organization
-- Survival probabilities (P(S|A), P(S|R))
-- Edge tension and value flows
-
-Open the CSV in a spreadsheet to identify:
-
-- **Inflection points**: Where do values change direction?
-- **Correlations**: Do related values move together?
-- **Anomalies**: Any sudden jumps or flat periods?
-
-Step 3: Use Structured Logging
-------------------------------
-
-For detailed event-by-event debugging, use the vertical slice tool:
-
-.. code-block:: bash
-
-   poetry run python tools/vertical_slice.py
-
-This tool provides:
-
-1. **Tick-by-tick state display**: All entity values per tick
-2. **Event logging**: What events triggered each state change
-3. **JSON structured logs**: Machine-readable logs in ``logs/``
-
-Interpreting JSON Logs
-~~~~~~~~~~~~~~~~~~~~~~
-
-The ``logs/vertical_slice_<timestamp>.json`` file contains:
-
-.. code-block:: json
-
-   {
-     "event_type": "simulation_tick",
-     "data": {
-       "tick": 5,
-       "entities": {
-         "C001_periphery_worker": 0.0823,
-         "C004_labor_aristocracy": 0.2156
-       },
-       "economy": {
-         "imperial_rent_pool": 0.15,
-         "super_wage_rate": 0.08
-       },
-       "tension": 0.42,
-       "events": ["SURPLUS_EXTRACTION: 0.018 from C001"]
-     }
-   }
-
-Search the JSON for:
-
-- ``"event_type": "error"`` to find logged errors
-- ``"success": false`` to find failed operations
-- Specific entity IDs to trace their state changes
-
-Step 4: Compare Against Theory
-------------------------------
-
-Use the survival calculus formulas to verify expected behavior:
-
-**P(S|A) Should**:
-   - Increase when wealth increases
-   - Approach 0 as wealth approaches subsistence threshold
-   - Follow sigmoid curve centered at subsistence level
-
-**P(S|R) Should**:
-   - Increase with organization
-   - Decrease with repression
-   - Cross P(S|A) when revolution becomes rational choice
-
-**Bifurcation Should**:
-   - Route to fascism when solidarity edges absent
-   - Route to revolution when solidarity edges present
-   - Trigger when wages fall and agitation increases
-
-.. seealso::
-
-   :doc:`/concepts/george-jackson-model` for bifurcation theory.
-
-Step 5: Isolate the Problem
+Explain the material change
 ---------------------------
 
-Once you've identified which system is misbehaving:
+Open the Bevy session with ``mise run play``. Hold the same completed period
+and perspective when comparing campaigns. Trace an output through its opening
+inputs, committed deliveries, production recipe, labor account, and closing
+inventory. Distinguish foundation stocks, unavailable evidence, and a present
+completed-period receipt with a real zero.
 
-**For formula bugs**:
-   Create a minimal test case in ``tests/unit/formulas/``.
+The Designed Michigan presets differ in the sheet-transfer travel time:
+one period (four weeks) or three periods (twelve weeks). Their per-period
+flow and hour budgets use the four-week interval. Initial stocks, people,
+order totals, and physical recipes keep their original units. QCEW wages
+remain observed weekly rates and do not become modeled payroll.
 
-**For system bugs**:
-   Check the relevant system in ``src/babylon/systems/``:
+Inspect performance
+-------------------
 
-   - ``economic.py`` - Imperial rent extraction
-   - ``solidarity.py`` - Consciousness transmission
-   - ``ideology.py`` - Bifurcation and drift
-   - ``survival.py`` - P(S|A) and P(S|R)
+Set ``BABYLON_TIMINGS=1`` when launching a material session. Its bounded stderr
+record includes ``campaign``, ``period``, ``simulation_us``, ``preparation_us``,
+``durable_write_publish_us``, and ``total_us``. Bevy separately records the
+authenticated observer and Archive-card reads. Match timings by campaign and
+completed period; a fast simulation stage cannot establish a fast visible
+advance on its own.
 
-**For graph bugs**:
-   Use ``state.to_graph()`` to inspect the NetworkX graph directly:
+Compare cold compilation, warm execution, database bootstrap, and UI response
+separately. ``resources.json`` measures the runtime invocation and excludes
+compilation and reporter overhead. Shared database deltas include concurrent
+activity. Use the same source inputs and starting state for before/after
+measurements, and report failures or unavailable measurements explicitly.
 
-   .. code-block:: python
-
-      from babylon.engine.scenarios import create_imperial_circuit_scenario
-
-      state, config, defines = create_imperial_circuit_scenario()
-      G = state.to_graph()
-
-      # Inspect edges
-      print(list(G.edges(data=True)))
-
-      # Check for missing solidarity edges
-      solidarity_edges = [
-          (u, v) for u, v, d in G.edges(data=True)
-          if d.get("type") == "SOLIDARITY"
-      ]
-
-Common Failure Patterns
------------------------
-
-Death at Tick 1
-~~~~~~~~~~~~~~~
-
-**Symptom**: Periphery worker dies immediately.
-
-**Cause**: Initial wealth below subsistence threshold combined with high
-extraction efficiency.
-
-**Fix**: Check ``extraction_efficiency`` in GameDefines or increase initial
-periphery wealth in scenario.
-
-P(S|R) Always Zero
-~~~~~~~~~~~~~~~~~~
-
-**Symptom**: Revolution probability never increases.
-
-**Cause**: Organization value not increasing, or repression too high.
-
-**Fix**: Verify solidarity edges exist and ``organization`` field updates.
-
-Consciousness Never Drifts
-~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-**Symptom**: ``class_consciousness`` stays constant.
-
-**Cause**: Missing solidarity edges (required for transmission) or
-``drift_sensitivity_k`` set too low.
-
-**Fix**: Check graph structure for SOLIDARITY edges between entities.
-
-Fascism Without Trigger
-~~~~~~~~~~~~~~~~~~~~~~~
-
-**Symptom**: Ideology shifts to +1 without visible cause.
-
-**Cause**: Agitation accumulated while solidarity edges were absent.
-
-**Fix**: Review edge creation in scenario setup; ensure solidarity edges
-added before agitation triggers.
-
-Getting Help
-------------
-
-If you've followed these steps and still can't identify the issue:
-
-1. Create a minimal reproduction script
-2. Include the trace CSV output
-3. Note which tick the unexpected behavior occurs
-4. Check existing tests for similar scenarios
-
-See Also
---------
-
-- :doc:`analyze-parameter-sensitivity` - Systematic parameter exploration
-- :doc:`parameter-tuning` - Adjusting GameDefines values
-- :doc:`/reference/formulas` - Complete formula specifications
-- :doc:`/reference/error-codes` - Error code reference
+See :doc:`/concepts/architecture` for authority boundaries and
+:doc:`/reference/ci-workflow` for development and release validation.

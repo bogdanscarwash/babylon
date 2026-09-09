@@ -1,0 +1,55 @@
+flowchart LR
+    subgraph periphery["PLAYER MACHINE — Debian 13 · the Periphery"]
+        direction TB
+        subgraph proc["babylon process — single process, in-process client (S2)"]
+            TUI["TUI shell (Textual)<br/>pages · plates · verb menus"]
+            ENG["SimulationEngine<br/>30 systems · tick hash chain"]
+            HOIST["Projection layer — the Hoist<br/>observe() · declared SQL views"]
+            MAT["Vault materializer<br/>bake at tick commit"]
+            INTEL["Intelligence layer<br/>narrator + embeddings — observe only"]
+            UP["Telemetry uploader<br/>async · batched · offline-tolerant"]
+        end
+        subgraph cluster["embedded Postgres 17 cluster — game-managed, unix socket, no TCP"]
+            META[("babylon_meta<br/>campaign catalog · telemetry outbox")]
+            SAVE[("babylon_save_*<br/>Ledger + pgvector Archive + narrator cache<br/>one database per campaign")]
+            TMPL[("babylon_template<br/>schema + reference data preloaded")]
+        end
+        VAULT["markdown vault on disk<br/>derived · regenerable · never authoritative"]
+        SQL[("SQLite reference DB<br/>read-only · shipped")]
+        DEF["defines.yaml<br/>GameDefines"]
+        OLL["Ollama — localhost<br/>default provider (D2)"]
+    end
+
+    subgraph edge["CLOUDFLARE — optional"]
+        CF["Workers AI<br/>fallback narrator + embeddings"]
+    end
+
+    subgraph metropole["CENTRAL SERVER — the Metropole · observes, never adjudicates"]
+        ING["ingest API — Django web/ repurposed<br/>beta keys · consent registry · rate limits · TLS"]
+        CPG[("central Postgres<br/>telemetry · fleet state · save-vault index")]
+        BLOB["save vault — blob store on disk<br/>pg_dump archives, content-addressed"]
+        VER["replay verifier<br/>headless engine per release · hash compare"]
+        GRAF["Grafana (D3)<br/>fleet dashboards over SQL"]
+    end
+
+    TUI --- ENG
+    TUI -.load/new menu.-> META
+    ENG --> SAVE
+    ENG -.reads.-> SQL
+    DEF --> ENG
+    SAVE --> HOIST
+    HOIST --> MAT
+    MAT --> VAULT
+    VAULT --> TUI
+    INTEL -.observes.-> HOIST
+    INTEL --> OLL
+    INTEL -.fallback.-> CF
+    ENG -->|"tick hashes + events, at commit"| META
+    META --> UP
+    SAVE -->|"pg_dump -Fc at milestones"| UP
+    UP ==>|"TRIBUTE — HTTPS, batched, queued offline"| ING
+    ING --> CPG
+    ING --> BLOB
+    BLOB --> VER
+    VER --> CPG
+    CPG --> GRAF

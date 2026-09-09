@@ -1,0 +1,20 @@
+[package]
+name = "babylon-graph"
+description = "Graph substrate trait boundary (Program 27, native-hyperedge — see src/substrate.rs)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+babylon-kernel = { path = "../babylon-kernel" }
+# ADR179 T3: babylon-graph's storage consumes hypergraph-rs for the native-
+# hyperedge half (the Levi/incidence encoding — internal only, D-1).
+hypergraph-rs = { git = "https://github.com/percy-raskova/hypergraph-rs.git", rev = "dc1c06abbbc7a3f8633d1561451e61e101ad2090", default-features = false }
+
+[dev-dependencies]
+pretty_assertions = "1"

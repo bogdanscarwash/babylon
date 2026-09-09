@@ -134,10 +134,17 @@ The wage is then modified:
    * - ``min_employed_fraction``
      - 0.01
      - [0, 1]
-     - Minimum fraction that must remain employed
+     - Reserve-ratio saturation floor — NOT a wage-pressure parameter (see
+       note below)
 
 **Implementation:**
 :py:class:`babylon.domain.economics.reserve_army.calculator.DefaultWagePressureCalculator`
+consumes ``sigmoid_k``/``sigmoid_r0``/``wage_pressure_ceiling``.
+``min_employed_fraction`` is instead consumed by
+:py:meth:`babylon.domain.economics.reserve_army.accumulation.DefaultAccumulationLoopCalculator.compute_reserve_ratio`,
+which clamps the derived ``reserve_ratio`` to ``[0, 1 - min_employed_fraction]``
+rather than a bare ``[0, 1]`` (U8 defines sweep, vol1-value-production
+program — the field had zero consumers before this).
 
 **System:**
 :py:class:`babylon.engine.systems.reserve_army.ReserveArmySystem`
@@ -236,22 +243,27 @@ Result is clamped to [0, 1].
      - Gentrification displacement
    * - ``weight_tax_sale``
      - 0.05
-     - Tax sale events
+     - Tax sale events (read against the ``concentrated_ownership`` proxy)
    * - ``weight_eminent_domain``
      - 0.02
-     - Eminent domain
-   * - ``weight_wage_theft``
-     - 0.03
-     - Wage theft
-   * - ``weight_incarceration_seizure``
-     - 0.03
-     - Incarceration-related seizure
-   * - ``weight_pension_default``
-     - 0.02
-     - Pension default
+     - Eminent domain (read against the ``absentee_landlord_share`` proxy)
    * - ``deadweight_loss_fraction``
      - 0.05
      - Fraction of transferred value lost (not received)
+   * - ``transfer_scale``
+     - 0.01
+     - Scale factor for wealth transfer: ``territory_wealth * intensity * scale``
+
+.. note::
+   The ``DispossessionType`` enum above lists 8 categories (FR-004's
+   per-event-type record taxonomy), but only 5 have a territory-level rate
+   or structural-proxy field feeding the composite intensity formula above:
+   ``weight_wage_theft``/``weight_incarceration_seizure``/
+   ``weight_pension_default`` were removed from ``DispossessionDefines``
+   (U8 defines sweep, vol1-value-production program) — they had zero
+   consumers and no data source exists to feed them honestly (would require
+   new ingestion, out of this program's scope). See
+   ``babylon.config.defines.economy_labor``'s module docstring.
 
 Value Transfer Accounting
 ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -399,9 +411,6 @@ Data Sources (3NF Schema)
    * - ``fact_census_institutional_ownership``
      - (county_id, time_id)
      - Housing tenure, institutional/absentee ownership, renter migration
-   * - ``fact_bls_productivity``
-     - (industry_id, time_id)
-     - Avg weekly hours, hourly earnings, output/hour, unit labor costs
 
 Event Types
 -----------

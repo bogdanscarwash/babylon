@@ -1,0 +1,220 @@
+id: ADR117
+title: >-
+  Vol I U2 — The Fundamental Theorem, computed: Phi = Wc - Vc per class/county
+  wired to the wage opposition's existing (w_paid, v_produced) feed;
+  wire-not-retire ruling for the three formerly-dead fundamental_theorem.py
+  formulas + phi_class; graph-attr-only observability surface (no WorldState
+  field this unit).
+status: accepted
+date: '2026-07-21'
+context: >-
+  ai/_inbox/vol1-value-production-program-prompt.md §7 U2 calls for "one
+  named, cited computation of Phi = W_c - V_c per class/county reusing the
+  wage opposition's (w_paid, v_produced) feed... retire or wire the dead
+  fundamental_theorem.py formulas — no parallel Phi... Calibration check
+  against view_imperial_rent as a redundant-verification test. Narrator/
+  observability surface so the theorem is visible."
+
+  Re-verified at unit start: ``economic.py``'s wages phase
+  (``_process_wages_phase``, ~lines 484-503) stamps ``w_paid``/``v_produced``
+  as NODE attributes on the paid worker-class node (not WAGES-edge
+  attributes as the program prompt's orientation brief loosely said — a
+  minor drift, same underlying data). ``ContradictionSystem._build_graph_inputs``
+  already lifts these into ``GraphInputs.wage_value_id_pairs`` (Phase D4) to
+  feed the ``wage``/``imperial`` opposition measures — this is the "existing
+  Fundamental-Theorem infrastructure" the prompt's §2f names.
+
+  Four confirmed-dead constructs (zero production callers found in ``src/``,
+  only ``tests/property`` + formula-registry/concept-card registration):
+  ``formulas.fundamental_theorem.calculate_labor_aristocracy_ratio``,
+  ``.is_labor_aristocracy``, ``.calculate_consciousness_drift``, and
+  ``domain.dialectics.instances.value_form.phi_class``.
+
+  CORRECTION empirically confirmed (task's own standing caveat):
+  ``web/game/provenance.py`` genuinely calls
+  ``FormulaRegistry.default().get('labor_aristocracy_ratio')`` (computes a
+  displayed value, from an approximate ``_incoming_wages_flow``/
+  ``entity.wealth`` proxy, NOT the real per-node ``w_paid``/``v_produced``)
+  and ``.get('consciousness_drift')`` (reads only ``.__doc__`` for the
+  explain-panel expression string — ``_consciousness_drift_value`` always
+  returns ``None``, the panel's own documented honest gap; GameDefines
+  constants are out of that module's import surface). A pinned test
+  (``tests/unit/web/test_provenance.py::TestLaborAristocracyRatioOrgScope
+  ::test_real_entity_yields_a_computed_value``) locks in the CURRENT proxy
+  behavior at tick-0 (``core_wages=0.0``, ``value_produced=entity.wealth``) —
+  switching that extractor to the real ``w_paid``/``v_produced`` node attrs
+  would return ``None`` at genesis (those attrs exist only after a tick's
+  wages phase pays a class), breaking a deliberate, currently-green contract
+  for a metric that would then be *less* available, not more correct in
+  every case. Retiring the FormulaRegistry entries outright would raise
+  ``KeyError`` at that same call site — the exact regression the program
+  prompt's caveat warned against.
+decision: >-
+  WIRE, not retire, and give all four formerly-dead constructs a genuine
+  production caller WITHOUT touching ``provenance.py``'s existing (differently
+  -scoped, differently-timed) extractor:
+
+  1. New formula ``babylon.formulas.fundamental_theorem.calculate_imperial_rent_gap
+  (core_wages, value_produced) -> Wc - Vc`` — the absolute, dollar-denominated
+  form matching ``view_imperial_rent.imperial_rent_millions`` exactly
+  (``data-catalog.yaml`` / the reference sqlite view SQL:
+  ``wages_core_millions - value_produced_millions``). Registered in
+  ``FormulaRegistry.default()`` as ``"imperial_rent_gap"`` (count 23 -> 24,
+  both ``tests/unit/engine/test_formula_registry.py`` and
+  ``tests/unit/engine/test_services.py`` bumped).
+
+  2. New ``domain.dialectics.instances.value_form.ClassPhiReading`` (frozen
+  BaseModel) + ``compute_fundamental_theorem(wage_value_id_pairs)`` — accepts
+  the EXACT ``GraphInputs.wage_value_id_pairs`` tuple shape
+  (``(node_id, w_paid, v_produced)``) verbatim, zero new graph traversal.
+  Per triple it calls ``calculate_imperial_rent_gap`` (phi_absolute, always
+  defined), and — guarded by ``v_produced > 0`` — ``phi_class`` (phi_relative),
+  ``calculate_labor_aristocracy_ratio`` (labor_aristocracy_ratio), and
+  ``is_labor_aristocracy`` (is_labor_aristocracy); the three guarded fields
+  are honest ``None`` rather than fabricated when a class produced nothing
+  (Constitution III.11 — matches phi_class's own raise-on-nonpositive
+  contract). This is "the Fundamental Theorem, computed": one named, cited
+  function bundling all four formulas that name the theorem.
+
+  3. ``ContradictionSystem._step_registry`` calls
+  ``compute_fundamental_theorem(inputs.wage_value_id_pairs)`` right after
+  building ``GraphInputs`` (before the opposition registry steps — the
+  theorem needs only the raw feed, not any opposition binding) and stashes
+  ``{entity_id: ClassPhiReading.model_dump()}`` on the NEW
+  ``fundamental_theorem`` graph attribute every tick. This is the narrator/
+  observability surface: any code holding the live graph
+  (``graph.get_graph_attr("fundamental_theorem")``) can read the theorem,
+  computed, per class/county, this tick.
+
+  4. Calibration test (Constitution III.12 redundant verification):
+  ``tests/unit/reference/test_marxian_views.py::TestFundamentalTheoremCalibration``
+  reads the mining/2023 row's real ``wages_core_millions``/
+  ``value_produced_millions`` from the live reference sqlite and asserts
+  BOTH ``calculate_imperial_rent_gap``/``calculate_labor_aristocracy_ratio``/
+  ``is_labor_aristocracy`` directly AND ``compute_fundamental_theorem``
+  reproduce ``view_imperial_rent``'s SQL-computed ``imperial_rent_millions``/
+  ``labor_aristocracy_ratio`` exactly (verified executed, not skipped — the
+  reference DB is present in this worktree; both new tests pass against real
+  BLS data).
+
+  5. SCOPE BOUNDARY (deliberate, not an oversight): ``calculate_consciousness_drift``
+  is left completely untouched — it is a rate/drift formula (dPsi/dt), not
+  part of the ``Wc - Vc`` comparison itself, and its one call site
+  (``provenance.py``) only ever reads its ``.__doc__`` (the value_fn is
+  permanently ``None`` there, by that module's own documented design — its
+  first line is pinned byte-for-byte by
+  ``test_consciousness_drift_expression_matches_architecture_example``, which
+  this unit does not touch). Forcing a live caller onto it would be
+  out-of-scope invention against a formula the theorem's own "Wc vs Vc"
+  framing does not name.
+
+  6. SCOPE BOUNDARY: the report is graph-attribute-only this unit (mirrors
+  the existing ``pole_readings``/``sigma_wage``/``sigma_capital_labor``
+  Phase-1-shadow precedent in the SAME system) — no new ``WorldState`` field,
+  no Postgres persistence. ``WorldState.from_graph()`` already silently drops
+  every graph-only attribute not explicitly named in its round-trip logic
+  (only ``opposition_states``/``contradiction_frames`` are); the Fundamental
+  Theorem report behaves identically. Surfacing it through ``WorldState``/
+  persistence, if wanted, is separate follow-on scope (a natural fit for
+  U9's "seam-registry rows for every new emission"), not invented here.
+
+  7. ``provenance.py`` itself is UNCHANGED. Its ``labor_aristocracy_ratio``
+  metric keeps its current approximate-but-always-available proxy
+  (``_incoming_wages_flow`` + ``entity.wealth``); its ``FormulaRegistry``
+  call (``"labor_aristocracy_ratio"``) already points at the correct,
+  now-doubly-wired formula, so no repoint was needed — only the INPUT
+  extraction differs from the new, more precise
+  ``compute_fundamental_theorem`` path, and changing it would break a
+  pinned, deliberate test for a net loss of panel availability (point 7
+  above). The formula itself is genuinely wired (point 2/3); the panel's
+  own extractor choice is out of this unit's blast radius.
+consequences: >-
+  FormulaRegistry count is now 24 (was 23 post-Spec-057); any future PR that
+  hardcodes "23" formulas elsewhere will need the same bump (searched:
+  ``test_formula_registry.py`` and ``test_services.py`` were the only two
+  pinned-count sites, both updated here). The ``fundamental_theorem`` graph
+  attribute is new per-tick engine state — verified NOT part of any
+  qa:regression baseline surface (the dense-trace/checkpoint column
+  contracts in ``tools/regression_test.py`` are a fixed, hand-named field
+  list — ``wealth``/``effective_wealth``/``p_acquiescence``/``p_revolution``/
+  ``active``/``class_consciousness``/``national_identity``/``agitation``/
+  ``organization``/``repression_faced`` per entity, ``value_flow``/``tension``
+  per edge, plus the three ``GlobalEconomy`` fields — none of which this unit
+  touches), and ``check_dead_columns`` only scans that same fixed header. No
+  baseline drift is expected from this unit; the full ``tests/unit/engine/``
+  suite (2169 tests, including ``test_determinism_ab.py`` and a 100-tick
+  ``test_simulation_facade.py`` run) passed unchanged after this wiring, as
+  scoped-tested from this worktree (qa:regression itself was not run — out
+  of this lane's permitted tool surface; the controller/owner may run it at
+  consolidation). ``phi_class``, ``calculate_labor_aristocracy_ratio``,
+  ``is_labor_aristocracy``, and the new ``calculate_imperial_rent_gap`` now
+  each have a genuine, tested production caller
+  (``compute_fundamental_theorem``) — closing the "dead-formula-registration"
+  sentinel class (program prompt §6.2) for these four specifically.
+  ``calculate_consciousness_drift`` remains registered-but-uncalled-for-value
+  (an open item for whichever later unit wires working-day/consciousness
+  data into it, if ever — U4 is the natural candidate given it already
+  touches ``ideology.py``). A WorldState-level/persisted surface for the
+  Fundamental Theorem report remains open scope (noted for U9). No defines
+  were added (the new formula and report take no new coefficients — pure
+  arithmetic over already-live per-tick data), so no ``capital_vol1.py``
+  work was needed for this specific unit.
+addendum_2026-07-21_adversarial_re_review: >-
+  Three findings against this decision, fixed in place (context/decision/
+  consequences above left UNCHANGED -- this addendum records what was wrong
+  and what changed, per the doc philosophy of not rewriting history):
+
+  1. NAME COLLISION (the decision's own point 2 framing implied nothing a
+  player or narrator could point to as the Fundamental Theorem, computed --
+  that was factually wrong): ``web/game/engine_bridge.py`` already exposes a
+  LIVE, player-facing ``imperial_rent_gap`` (per-class ``core_wages - wealth``
+  at :2114, economy-dashboard ``wage_flow_total - value_produced`` at :3369),
+  gated via ``projection/veil.py``'s Tier-1 registry -- a DIFFERENT feed than
+  this unit's ``(w_paid, v_produced)``. Registering the SAME string in
+  ``FormulaRegistry`` was a parallel-Phi-under-one-label collision, exactly
+  what the program prompt's "no parallel Phi" directive forbids. FIX: the
+  registry key is renamed ``"phi_absolute"`` (matches the
+  ``ClassPhiReading.phi_absolute`` field it fills); the web bridge's
+  ``imperial_rent_gap`` is untouched. See ``value_form.py``'s "Second
+  name-collision fence" docstring.
+
+  2. DEAD REGISTRY REGISTRATION: the registered ``FormulaRegistry`` entry had
+  zero ``.get(...)`` consumers -- ``compute_fundamental_theorem`` called
+  ``calculate_imperial_rent_gap`` via direct import, bypassing the registry
+  entirely, the exact "registered but never looked up" pattern program
+  prompt section 6.2 exists to catch (a genuine CALLER via direct import is
+  not the same thing as the REGISTRY ENTRY being consumed). FIX:
+  ``compute_fundamental_theorem`` gained an injectable ``phi_absolute_fn``
+  parameter (default: the direct-import formula, for non-engine callers);
+  ``ContradictionSystem._stash_fundamental_theorem`` now resolves
+  ``services.formulas.get("phi_absolute")`` and injects it -- the same DI
+  pattern ``survival.py``/``economic.py``/``community.py``/``solidarity.py``
+  already use. Proven by two hot-swap tests (an obviously-different
+  injected callable changes the stashed reading):
+  ``tests/unit/dialectics/test_value_form.py::TestComputeFundamentalTheorem
+  ::test_phi_absolute_fn_is_injectable`` and
+  ``tests/unit/engine/systems/test_contradiction_system.py::
+  TestFundamentalTheoremStash::test_phi_absolute_resolved_from_the_formula_registry``.
+
+  3. WEAK CALIBRATION TEST: ``TestFundamentalTheoremCalibration`` fed
+  ``view_imperial_rent``'s own operand columns back through the identical
+  subtraction the view's SQL already performs -- near-tautological (Python
+  vs SQLite on one float pair), and gated entirely behind the live
+  reference DB (skips on the ci-data subset), so III.12's redundant
+  verification never executed in CI. FIX: two literal, pinned golden rows
+  (mining/2023 negative-Phi, warehousing-493/2023 positive-Phi -- BOTH
+  signs, intentionally rather than by accident) captured from the same
+  view now live, unconditionally (no DB connection, no skip), in
+  ``tests/unit/formulas/test_fundamental_theorem.py::TestGoldenReferenceRows``
+  (raw formulas) and
+  ``tests/unit/dialectics/test_value_form.py::TestComputeFundamentalTheorem
+  ::test_reproduces_pinned_reference_rows`` (``compute_fundamental_theorem``).
+  The live-DB class's docstring now honestly scopes itself as a
+  *data-freshness* check, not the CI-executed redundant verification.
+
+  FormulaRegistry count is unchanged at 24 (rename only, no add/remove); no
+  baseline drift (the ``fundamental_theorem`` graph attribute remains
+  outside the fixed dense-trace/checkpoint column contract, unchanged from
+  the original decision). Full scoped suites green: test_value_form.py,
+  test_fundamental_theorem.py, test_formula_registry.py, test_services.py,
+  test_contradiction_system.py, test_marxian_views.py (157 tests).

@@ -5,9 +5,9 @@ Validates all JSON data files in src/babylon/data/ against their
 corresponding schemas in src/babylon/schemas/.
 
 Usage:
-    poetry run python tools/validate_schemas.py
-    poetry run python tools/validate_schemas.py --verbose
-    poetry run python tools/validate_schemas.py --file characters.json
+    uv run python tools/validate_schemas.py
+    uv run python tools/validate_schemas.py --verbose
+    uv run python tools/validate_schemas.py --file characters.json
 """
 
 from __future__ import annotations

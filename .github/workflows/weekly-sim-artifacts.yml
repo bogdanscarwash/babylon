@@ -1,0 +1,66 @@
+name: Weekly — Rust Simulation Diagnostics
+
+# ADR181 R3(ii): per-leg split of the monolithic nightly (the Sunday leg).
+
+on:
+  schedule:
+    - cron: "0 4 * * 0"  # Sunday 04:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rust-simulation-diagnostics
+  cancel-in-progress: false
+
+jobs:
+  sim-artifacts:
+    name: Rust Michigan 130-Period Diagnostics
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      BABYLON_RUNTIME_DSN: "dbname=babylon_test host=127.0.0.1 port=5433 user=test password=test"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: dev
+      - uses: ./.github/actions/bootstrap-persistence
+        id: persistence-cache
+        with:
+          cache-key: sim_report
+      - uses: ./.github/actions/postgres-up
+      - name: Bootstrap Rust-owned schema
+        run: mise run db:bootstrap
+      - name: Generate Rust Michigan diagnostic report
+        run: mise run sim:report 130 3000 exclusive
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: rust-michigan-simulation-diagnostics-${{ github.run_id }}
+          path: reports/sim-runs/
+          retention-days: 90
+      - name: Stop Postgres
+        if: always()
+        run: tools/ci_postgres_compose.sh down
+
+      - name: Save successful persistence cache
+        if: >-
+          success() && github.event_name != 'pull_request' &&
+          (github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/main') &&
+          steps.persistence-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          key: ${{ steps.persistence-cache.outputs.cache-key }}
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            rust/target/.rustc_info.json
+            rust/target/debug/.cargo-lock
+            rust/target/debug/.fingerprint
+            rust/target/debug/build
+            rust/target/debug/deps
+            rust/target/debug/babylon-runtime
+            rust/target/debug/babylon-runtime.d

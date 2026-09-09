@@ -7,7 +7,10 @@ direct commands and ``gh act`` for full workflow simulation.
 Prerequisites
 -------------
 
-- Poetry installed with dependencies: ``poetry install``
+- mise installed with pinned Python and uv tools: ``mise install``
+- Locked dependencies installed: ``mise run install``
+- rustup installed; Cargo commands run from ``rust/`` to use its toolchain pin
+- All configured Git hooks installed: ``mise run hooks``
 - For ``gh act``: GitHub CLI with act extension (``gh extension install nektos/gh-act``)
 - For ``gh act``: Docker running
 
@@ -20,23 +23,23 @@ Run individual CI checks directly:
 
 .. code-block:: bash
 
-   poetry run ruff check .
+   uv run ruff check .
 
    # Auto-fix issues
-   poetry run ruff check . --fix
+   uv run ruff check . --fix
 
 **Type check:**
 
 .. code-block:: bash
 
-   poetry run mypy src
+   uv run mypy src
 
 **Run tests:**
 
 .. code-block:: bash
 
    # All non-AI tests
-   poetry run pytest -m "not ai" --tb=short
+   uv run pytest -m "not ai" --tb=short
 
    # Fast unit tests only
    mise run test:unit
@@ -46,7 +49,7 @@ Run individual CI checks directly:
 .. code-block:: bash
 
    # Build docs
-   cd docs && poetry run sphinx-build -b html . _build/html
+   cd docs && uv run sphinx-build -b html . _build/html
 
    # Strict mode (warnings as errors)
    mise run docs:strict
@@ -56,10 +59,10 @@ Run individual CI checks directly:
 .. code-block:: bash
 
    # Check only (no changes)
-   poetry run ruff format --check .
+   uv run ruff format --check .
 
    # Auto-format
-   poetry run ruff format .
+   uv run ruff format .
 
 Using Mise Tasks
 ----------------
@@ -160,49 +163,91 @@ For most development purposes, dry-run validation is sufficient:
 Pre-Commit Hooks
 ----------------
 
-Pre-commit hooks run automatically on ``git commit``. To run manually:
+``mise run hooks`` installs all three governed stages: ``pre-commit``,
+``commit-msg``, and ``pre-push``. The ordinary commit stage operates on the
+staged paths. Pre-commit supplies the exact remote-to-local refs to the push
+stage. The range classifier retains deletion-only changes while skipping an
+unrelated push without fetching ``dev`` or guessing a merge base.
+
+Run the hooks manually with:
 
 .. code-block:: bash
 
-   # Run all hooks on staged files
-   poetry run pre-commit run
+   # Commit-stage hooks on staged files
+   uv run pre-commit run
 
-   # Run all hooks on all files
-   poetry run pre-commit run --all-files
+   # Commit-stage hooks on every tracked file
+   uv run pre-commit run --all-files
 
-   # Run specific hook
-   poetry run pre-commit run ruff
+   # One commit-stage hook
+   uv run pre-commit run ruff
 
-Hooks configured (from ``.pre-commit-config.yaml``):
+   # Push-stage hooks for the current branch range
+   uv run pre-commit run --hook-stage pre-push \
+     --from-ref origin/dev --to-ref HEAD
 
-1. **ruff (lint)** - Catches bugs, style issues
-2. **ruff (format)** - Enforces formatting
-3. **mypy (typecheck)** - Type errors
-4. **pytest (fast tests)** - Quick sanity check
-5. **yamllint** - YAML syntax validation
-6. **commitizen** - Commit message format
+The configuration groups checks by feedback cost:
+
+- Commit time: worktree contract, Ruff, MyPy, lock consistency, text and
+  structured-file hygiene, documentation lint, actionlint, ShellCheck,
+  Hadolint, Gitleaks, and Rust formatting.
+- Commit-message time: Commitizen and the baseline-ceremony declaration.
+- Push time: the Python smoke and full-tree sentinel checks, Semgrep,
+  import boundaries, maintainability, LFS pointers, the baseline range check,
+  and the non-documentation Rust gate when its exact inputs changed.
+- Meta checks: hook selectors and exclusions must still apply to tracked
+  paths. This prevents a deleted estate from leaving inert hooks behind.
+
+Local Rust validation stops before Rustdoc, as repository policy requires:
+
+.. code-block:: bash
+
+   mise run rust:check-no-docs
+
+.. vale off
+
+Rust test reports
+-----------------
+
+Install the exact reporting tools once, then use the scoped runner for the
+ordinary edit-test loop:
+
+.. code-block:: bash
+
+   mise run rust:test:install-tools
+   mise run rust:test:q -- -p babylon-kernel
+   mise run rust:test:summary
+   mise run rust:test:failed
+
+Each run writes a SHA- and run-qualified directory below
+``reports/test-results/rust/`` and updates the explicit ``latest.json``
+pointer. ``summary.json`` and ``summary.md`` are the bounded agent interface:
+they identify the exact command, source head, toolchain, exit class, outcome
+counts, the first 20 exceptional tests, bounded diagnostics, slowest tests,
+and rerun commands. ``failures.jsonl`` retains every exceptional test.
+``junit.xml`` and ``run.log`` retain complete drill-down evidence. The reporter
+still writes a classified summary when compilation or discovery fails before
+JUnit exists.
+
+The blocking Rust gate runs one nextest non-doctest pass and then a separate
+``cargo test --workspace --doc --locked`` proof. The second leg is required
+because nextest does not execute doctests, including compile-fail contracts.
+Ignored PostgreSQL tests remain outside the ordinary runner and retain their
+existing serial shell-owned execution.
+
+``mise run rust:coverage`` performs a separately instrumented advisory run and
+writes compact and full coverage receipts below
+``reports/test-results/rust-coverage/``. It is not part of the pull-request
+gate and defines no percentage floor until a measured baseline supports one.
+
+.. vale on
 
 CI Job Reference
 ----------------
 
-The CI workflow (``.github/workflows/ci.yml``) runs three jobs:
-
-.. list-table::
-   :widths: 20 30 50
-   :header-rows: 1
-
-   * - Job
-     - Blocks Merge
-     - Purpose
-   * - ``ci``
-     - Yes
-     - Lint (Ruff), types (MyPy), tests (Pytest)
-   * - ``docs``
-     - Yes
-     - Doctest examples, Sphinx build
-   * - ``style``
-     - No (advisory)
-     - Formatting check (informational only)
+The authoritative workflow and required-check inventory changes more often
+than this how-to guide. See :doc:`/reference/ci-workflow` for the current
+ordinary CI, CodeQL, release-qualification, and branch-enforcement contracts.
 
 Troubleshooting
 ---------------
@@ -229,7 +274,7 @@ Troubleshooting
 
    .. code-block:: bash
 
-      poetry add --group dev types-requests  # example
+      uv add --group dev types-requests  # example
 
 **Pre-commit hooks slow**
    Skip hooks for WIP commits:

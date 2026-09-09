@@ -1,0 +1,52 @@
+ADR088_sentinel_error_classes:
+  status: "accepted"
+  date: "2026-07-18"
+  title: "Six named sentinel error classes ship (five advisory local sensors, one CI gate)"
+  context: >
+    The Volume III money work surfaced six distinct failure classes that no
+    existing test detected: an entire estate computing correctly and changing
+    nothing (correct-but-inert); individual outputs with no reader
+    (computed-but-never-consumed); the Definition-of-Done gate running green while
+    executing none of the estate it claimed to guard (gate-blindness); an
+    unweighted mean of an intensive across space (intensive-aggregation); a
+    coupling graph whose declared edges had drifted from the dependencies they
+    described, in both directions (undeclared-coupling); and a scoped test run
+    that cannot see a repo-wide public-surface baseline drift
+    (public-surface baseline blindness — live specimen CapitalVolumeIIIDefines,
+    U2.3). Four were already on the owed-sentinel list; the fifth and sixth are
+    new. The sixth generalises the governing principle one step further: unlike
+    the first five (advisory, local-only), it is wired as a real CI gate
+    (owner ruling 2026-07-19), because a public-surface drift is exactly the
+    kind of defect a scoped run structurally cannot see.
+  decision: >
+    Ship one sensor per class in the babylon.sentinels family — new packages
+    liveness/, aggregation/, coupling/, surface/ (U7.11), plus a gate-blindness
+    check extending the existing coverage/ package. Five are ADVISORY and
+    local/on-demand per the standing owner ruling: no nightly CI plumbing, no
+    gating. The sixth, public-surface baseline blindness (check:surface), is
+    the one exception (owner ruling 2026-07-19): it is folded into
+    ``mise run check``'s depends and into CI, exactly the way check:seams and
+    check:coverage are wired, because its whole point is catching what a
+    scoped run cannot see. Each finding is agent-legible through a shared
+    formatter (error class, symbol, file:line, problem, remedy) and each
+    sensor ships a mutation test that injects the defect it exists to catch
+    and proves the sensor reds.
+  consequences: >
+    The four owed classes are struck from the owed list. New mise tasks
+    check:liveness, check:aggregation-intensive, check:coupling, check:surface;
+    check:coverage gains an advisory tier. check:surface alone is folded into
+    [tasks.check]'s depends and into ci.yml/main.yml as a real gate. The
+    registries are hand-written dev-time contracts and must be grown as
+    producers, couplings and public surfaces are added — an undeclared output,
+    edge or surface drift is exactly what the sensors exist to surface, so
+    growth is the point, not overhead.
+  supersedes: []
+  related:
+    - ADR077
+    - ADR078
+    - ADR081
+  evidence: |
+    src/babylon/sentinels/report.py, src/babylon/sentinels/_ast.py,
+    src/babylon/sentinels/liveness/, src/babylon/sentinels/aggregation/,
+    src/babylon/sentinels/coupling/, src/babylon/sentinels/coverage/,
+    docs/reference/sentinel-error-classes.rst

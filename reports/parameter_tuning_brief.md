@@ -134,9 +134,9 @@ Entities have `s_bio` (biological) and `s_class` (class consumption):
 | Tool | Purpose | Usage |
 |------|---------|-------|
 | `audit_simulation.py` | Health check (3 scenarios) | `mise run audit` |
-| `tune_parameters.py` | 1D parameter sweep | `poetry run python tools/tune_parameters.py` |
-| `landscape_analysis.py` | 2D parameter grid | `poetry run python tools/landscape_analysis.py` |
-| `tune_agent.py` | Bayesian optimization (Optuna) | `poetry run python tools/tune_agent.py` |
+| `tune_parameters.py` | 1D parameter sweep | `uv run python tools/tune_parameters.py` |
+| `landscape_analysis.py` | 2D parameter grid | `uv run python tools/landscape_analysis.py` |
+| `tune_agent.py` | Bayesian optimization (Optuna) | `uv run python tools/tune_agent.py` |
 
 ### 4.2 Optuna Configuration
 
@@ -283,12 +283,12 @@ Key test files:
 
 2. **Run expanded Optuna study**:
    ```bash
-   poetry run python tools/tune_agent.py --trials 200 --study-name material_v1
+   uv run python tools/tune_agent.py --trials 200 --study-name material_v1
    ```
 
 3. **Generate new landscape** with base_labor_power vs extraction_efficiency:
    ```bash
-   poetry run python tools/landscape_analysis.py \
+   uv run python tools/landscape_analysis.py \
      --param1 economy.extraction_efficiency --range1 0.1:0.9:0.1 \
      --param2 economy.base_labor_power --range2 0.5:2.0:0.25
    ```

@@ -1,0 +1,28 @@
+schema_version = 1
+license = "SIL Open Font License 1.1"
+import = "Unmodified font binaries from the local Google Fonts fonts-main source cache. Repository whitespace hooks normalize the bundled license text. Upstream repositories are identified by that cache's metadata or description; an upstream commit has not been independently verified."
+
+[[font]]
+id = "body"
+family = "Source Sans 3"
+file = "SourceSans3[wght].ttf"
+bytes = 646340
+sha256 = "042fe2cc0b933e328410d7acbd0aa6a1873dca5aef81875f4bc214b08825c7b9"
+weight_min = 200
+weight_max = 900
+source_directory = "ofl/sourcesans3"
+source_repository = "https://github.com/adobe-fonts/source-sans"
+license_file = "SourceSans3-OFL.txt"
+license_sha256 = "37f1d07d235509973aeaff5d6f22378d8d812eb998a14d321d6562e5a4cb6a89"
+
+[[font]]
+id = "display"
+family = "Barlow Condensed"
+file = "BarlowCondensed-SemiBold.ttf"
+bytes = 109428
+sha256 = "7b619d14bc2327509a9ef32b0890f709626f7ecc9ff61191c2a4314c5499d2d9"
+weight = 600
+source_directory = "ofl/barlowcondensed"
+source_repository = "https://github.com/jpt/barlow"
+license_file = "BarlowCondensed-OFL.txt"
+license_sha256 = "10b0e6bb43166a50fbe7cde2895bd7f703738a5da843acb5c97c95dc9ea26817"

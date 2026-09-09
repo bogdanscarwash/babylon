@@ -1,0 +1,68 @@
+ADR242_tick_commit_claim_v1:
+  status: accepted
+  date: '2026-08-27'
+  title: >-
+    TickCommitClaimV1 binds a durable campaign and tick directly to the
+    kernel-owned content identity before PostgreSQL activation
+  issue: PER-20
+  canonical_contract:
+    schema: contracts/tick_commit_claim_v1.yaml
+    vectors: contracts/tick_commit_claim_v1_vectors.jsonl
+    independent_verifier: tools/verify_tick_commit_claim_v1.py
+  owners:
+    campaign_identity: babylon-persistence
+    tick_content_identity: babylon-kernel
+    commit_claim_and_retry_semantics: babylon-persistence
+  context: |
+    PER-20 must make `tick_commit` the durable visibility marker for an atomic
+    three-schema transaction. PER-60 now supplies one canonical
+    `TickContentHashV1`, while `CampaignId` remains a separate durability
+    identity. The current H3 installer requires schema epoch 3, and the Rust
+    writer gate correctly refuses authority while Python remains the sole
+    writer. A migration-first or writer-first slice would cross those live
+    boundaries before the marker semantics are fixed.
+  decision: |
+    `TickCommitClaimV1` is the database-free content-identity claim for one
+    future marker. Its key is the typed pair `(CampaignId, resolve_tick)`, and
+    its value is the direct kernel-owned `TickContentHashV1`. Its canonical
+    form is a fixed 93-byte, tagged, big-endian V1 layout. Persistence does not
+    alias, re-export, decode, or independently recompute the tick-content hash.
+
+    A requested claim compared with an existing claim has three closed
+    outcomes. A different campaign or tick is `KeyMismatch`. The same key and
+    content identity is `Idempotent`. The same key and different content
+    identity is `ContentIdentityMismatch` and must refuse loudly.
+
+    This claim is not `CommittedTickEnvelope` and does not prove whole-payload
+    equality. It grants no PostgreSQL I/O or writer authority. A later PER-20
+    slice must define and validate the complete bounded envelope, state and
+    event rows, checkpoint, and Archive outbox before it creates the marker-last
+    transaction. Whole-payload idempotency, crash injection, hydration, and
+    lost-tail replay remain acceptance work for that boundary.
+  consequences: |
+    The future marker cannot conflate campaign identity with replay identity or
+    silently replace a different tick-content identity at one campaign tick.
+    A zero-changed-row tick can still have a claim because the claim does not
+    depend on sparse state rows. The schema epoch, current H3 installation
+    sequence, Python writer, and structurally closed Rust writer gate do not
+    move in this slice.
+  verification: |
+    A shared YAML schema and JSONL corpus pin the exact fields, tags, layout,
+    field mutations, retry outcomes, and exclusions. Rust tests call the
+    production persistence type. An independent bounded Python verifier
+    reconstructs the bytes from semantic inputs and refuses contract or vector
+    drift. Focused decision tests bind this ADR to the canonical artifacts and
+    the unchanged writer exclusion.
+  preserves:
+    - ADR220 one-way writer cutover and complete atomic envelope
+    - ADR223 whole-tick atomic publication
+    - ADR225 schema-epoch and cutover interlock
+    - ADR229 Rust gameplay-contract authority and Python freeze boundary
+    - ADR240 TickContentHashV1 ownership and campaign-replay separation
+    - Python sole-writer authority until the accepted one-way cutover
+  related:
+    - ADR220_rust_owned_postgresql_persistence_boundary
+    - ADR223_whole_tick_atomicity_world_hash
+    - ADR225_rust_schema_epoch_and_cutover_interlock
+    - ADR229_rust_gameplay_contract_authority
+    - ADR240_replay_action_tick_content_identity

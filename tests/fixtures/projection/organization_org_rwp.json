@@ -1,0 +1,17 @@
+{
+  "budget": null,
+  "cadre_level": null,
+  "class_character": null,
+  "cohesion": null,
+  "consciousness_tendency": null,
+  "headquarters_id": null,
+  "heat": null,
+  "is_institution": null,
+  "kind": "organization",
+  "legal_standing": null,
+  "name": null,
+  "org_id": "org_rwp",
+  "org_type": null,
+  "territory_ids": null,
+  "verified_tick": 5
+}

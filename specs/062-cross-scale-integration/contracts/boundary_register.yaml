@@ -43,18 +43,20 @@ components:
               - state:    2-digit FIPS state code
               - national: "USA"
               - external: external_node.node_id (e.g., "canada", "china")
+              - sovereign:    sovereign graph node id (P25 U12 L-RECEIPTS)
+              - social_class: social_class graph node id (P25 U12 L-RECEIPTS)
           minLength: 1
           maxLength: 64
         source_kind:
           type: string
-          enum: [hex, county, state, national, external]
+          enum: [hex, county, state, national, external, sovereign, social_class]
         dest_node_id:
           type: string
           minLength: 1
           maxLength: 64
         dest_kind:
           type: string
-          enum: [hex, county, state, national, external]
+          enum: [hex, county, state, national, external, sovereign, social_class]
         flow_type:
           type: string
           enum:
@@ -63,12 +65,18 @@ components:
             - commute_out
             - commute_in
             - physical_exchange
+            - exploitation_flow
+            - fiscal_funding
+            - social_wage
           description: |
             trade_edge:       bidirectional, physical FAF tons + Ricci $-value
             drain_edge:       directional periphery → core, Hickel Φ
             commute_out:      Vol II worker exit (study-area boundary)
             commute_in:       Vol II worker entry (study-area boundary)
             physical_exchange: FAF freight or USGS minerals
+            exploitation_flow: class → class extracted rent (P25 U12 L-RECEIPTS, ADR139)
+            fiscal_funding:    Φ pool → sovereign slice consumed by an enactment (ADR139)
+            social_wage:       sovereign → class delivered social-wage unit (ADR139)
         magnitude:
           type: number
           description: |

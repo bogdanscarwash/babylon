@@ -1,0 +1,85 @@
+ADR243_committed_tick_envelope_v1:
+  status: accepted
+  date: '2026-08-27'
+  title: >-
+    CommittedTickEnvelopeV1 binds every mandatory tick output to exact
+    whole-payload retry equality before PostgreSQL activation
+  issue: PER-20
+  canonical_contract:
+    schema: contracts/committed_tick_envelope_v1.yaml
+    vectors: contracts/committed_tick_envelope_v1_vectors.jsonl
+    independent_verifier: tools/verify_committed_tick_envelope_v1.py
+  owners:
+    tick_content_identity: babylon-kernel
+    marker_claim: babylon-persistence TickCommitClaimV1
+    envelope_framing_bounds_and_retry: babylon-persistence
+    row_semantics_and_canonical_codecs: future typed family producers
+  context: |
+    ADR242 bound a durable campaign and tick to `TickContentHashV1`, but it
+    explicitly could not prove that the state, event, checkpoint, and outbox
+    payloads matched on retry. ADR220 requires one atomic envelope to cover
+    every logical tick output before a marker-last transaction can exist.
+    PostgreSQL DDL and writer activation remain premature while the additive
+    schema sequence and one-way cutover are still closed.
+  decision: |
+    `CommittedTickEnvelopeV1` is the complete database-free container for one
+    future marker-last transaction. It frames the exact 93-byte
+    `TickCommitClaimV1` and eight mandatory sections in this closed order:
+    graph, state, event, subsystem, conservation, boundary flow, checkpoint,
+    and Archive dirty receipt. Every section exists even when it has zero rows.
+
+    A row contains one nonempty exact canonical primary key and one exact
+    canonical payload. The envelope never interprets those bytes. Each typed
+    row-family producer remains responsible for the semantics and canonical
+    codec of its rows before a database writer can exist. Within one family,
+    keys must be strictly ascending. Empty, duplicate, or descending keys
+    refuse before an envelope is exposed.
+
+    The V1 layout is tagged and big-endian. Its cumulative ceiling is 1,048,576
+    rows across all families. Each family body is at most 67,108,864 bytes. The
+    exact derived complete-envelope maximum is 536,871,121 bytes, including all
+    fixed headers and eight mandatory section headers. A preflight family body
+    must contain at least nine bytes for every declared row. Allocation-free
+    preflight validates exact maximum, impossible, and maximum-plus-one shapes.
+
+    `CommittedTickEnvelopeDigestV1` is SHA-256 of the exact envelope bytes and
+    is diagnostic only. It cannot substitute for the kernel-owned
+    `TickContentHashV1`. Retry classification first applies the existing claim
+    key and content-identity rules. When the claim matches, idempotency requires
+    exact equality of every canonical envelope byte. Different bytes return a
+    loud `WholePayloadMismatch`, even if diagnostic digests were ever equal.
+
+    This decision creates no semantic row codec, PostgreSQL DDL, database I/O,
+    transaction, marker, acknowledgment, hydration path, crash injection,
+    lost-tail replay, Archive processor, Python writer change, or Rust writer
+    authority. It changes no material mechanic, BSL primitive, or player-facing
+    behavior. The structurally closed writer gate remains closed.
+  consequences: |
+    A zero-changed-row tick can carry a complete claim and all eight empty
+    sections. A same-claim retry can no longer call itself idempotent while any
+    durable output differs. The next PER-20 slice can define typed row codecs
+    and schema mappings against one fixed container without redefining content
+    identity or weakening single-writer authority.
+  verification: |
+    Rust tests call the production composer and reconstruct every shared golden
+    vector. An independent bounded Python verifier reconstructs the claim,
+    family framing, row order, cumulative bounds, exact bytes, diagnostics, and
+    retry outcomes from semantic inputs. Both consumers execute zero-row and
+    all-family payloads, every family mutation, all four retry outcomes, row
+    refusals, and exact maximum and maximum-plus-one bound operations. Focused
+    decision tests bind this ruling to its contract and unchanged writer gate.
+  preserves:
+    - ADR220 one-way writer cutover and complete atomic tick requirements
+    - ADR223 whole-tick atomic publication
+    - ADR225 schema-epoch and cutover interlock
+    - ADR229 Rust gameplay-contract authority and Python freeze boundary
+    - ADR240 TickContentHashV1 ownership and campaign-replay separation
+    - ADR242 direct TickCommitClaimV1 ownership and conflict semantics
+    - Python sole-writer authority until the accepted one-way cutover
+  related:
+    - ADR220_rust_owned_postgresql_persistence_boundary
+    - ADR223_whole_tick_atomicity_world_hash
+    - ADR225_rust_schema_epoch_and_cutover_interlock
+    - ADR229_rust_gameplay_contract_authority
+    - ADR240_replay_action_tick_content_identity
+    - ADR242_tick_commit_claim_v1

@@ -1,0 +1,77 @@
+id: ADR152
+title: >-
+  The interface SFX suite: 39 CC0-licensed General MIDI interface sounds
+  (ui/state/alert/stinger/endgame families) generated deterministically from a
+  single data manifest at src/assets/sfx/, byte-identity pinned by a unit
+  contract — the game's first shipped audio asset estate beyond the soundtrack.
+status: accepted
+date: '2026-07-27'
+context: >-
+  The Director asked for game-feel interface audio — "menu sound effects,
+  clicks, boops, beeps, alerts" — as ready-to-roll generated assets under
+  src/assets/, with four binding requirements: MIDI format, generated (not
+  sampled), open-source, reusable. Mid-task direction sharpened the bar: full
+  creative weight, "Tremendous and Powerful and Thematic and Aesthetic"; the
+  existing soundtrack estate (assets/music/, ~20 tracks) was judged dull and
+  flat EXCEPT 05_the_purge. A technique autopsy explained the exception
+  quantitatively: the purge generator carries 34 expressive-technique sites
+  (CC automation, pitch-bend sweeps, semantic controller use like CC93
+  chorus=0 for zero solidarity) where the flat tracks carry 4 — the juice
+  lives in controller data, layered transients and velocity architecture, not
+  in note choice alone. The repo also had no license file anywhere, and
+  assets/audio/** sits under git-LFS (a twice-bitten CI hazard), which the
+  src/assets/ location conveniently avoids.
+decision: >-
+  (1) HOME: src/assets/ as the Director specified — sfx/manifest.toml (the
+  moddable source of truth: notes + pitch bends + CCs as data, Paradox
+  pattern), sfx/generate_sfx.py (strict-typed Pydantic+mido renderer), and 39
+  rendered .mid files in five family directories: ui(10) state(8) alert(6)
+  stinger(10) endgame(5 — one per canonical outcome). (2) DETERMINISM: the
+  renderer is a pure function of the manifest with a canonical total event
+  order (tick, event-class, insertion sequence); regeneration is
+  byte-identical, pinned by tests/unit/assets/test_sfx_assets.py (the suite's
+  rewrite test). Family duration budgets, GM ranges, per-channel program
+  consistency and a sanctioned-CC set are validated loud before any file is
+  written. (3) IDENTITY: the suite obeys music-system.yaml's sonic law — root
+  E, Phrygian flat-2 = denial (ui_deny), tritone E-Bb = THE crisis signal
+  (alert_critical), minor-to-major reserved for revolutionary resolution
+  (stinger_rupture, endgame_revolutionary_victory only), harmony-vs-unison =
+  solidarity-vs-conformity, CC93 chorus = solidarity, CC94 detune =
+  atomization, CC71 resonance = repression; game_start and
+  stinger_imperial_rent quote the Phi theme's D-A-D-F motif; every sound's
+  manifest entry records concept + trigger_hint naming real EventType values.
+  (4) LOUDNESS DOCTRINE: channel volume/expression render at maximum
+  (DEFAULT_CCS CC7=127/CC11=127); dynamics live entirely in velocity with a
+  hot floor; verified computationally — at the documented FluidSynth gain 0.45
+  the suite renders with ZERO clipped samples across all 39 files (the
+  revolutionary-victory orchestra hit, the suite's absolute peak, clears full
+  scale up to gain 0.47), onsets 2-8 ms, 39/39 files pass MIDI integrity
+  audit (no stuck notes, bends reset). (5) LICENSE: the
+  directory carries its own CC0-1.0 dedication (canonical legal text) per the
+  Director's open-source requirement; repo-wide licensing remains an open
+  Director decision, explicitly NOT resolved by this ADR. (6) TOOLING:
+  mise task midi:generate-sfx joins the existing midi:* namespace; playback
+  and OGG conversion reuse the existing midi:play / midi:to-ogg scripts
+  unchanged. (7) ADVERSARIAL CRITIQUE CLOSED THE LOOP: a three-lens panel
+  (Opus thematic-power, Opus coverage, Sonnet usability) reviewed the initial
+  32-sound suite against the note data; its findings were adjudicated and
+  applied — the structural catch was that NO RPN 0/0 bend-range declaration
+  meant every bend gesture rendered at the synth-default ±2 semitones
+  (sub-audible), fixed in the renderer with a declared ±12 range; rupture
+  gained real minor-to-major material (naked C-minor third), game_start a
+  genuine accelerating roll on D2; and seven sounds were added to close
+  coverage holes, the headline being stinger_false_solidarity — the fascist
+  arm of the bifurcation, previously unsounded (bare-octave 'unity', unison,
+  chorus zero) — plus state_fault (III.11 loud failure), alert_favorable,
+  order_committed, stinger_market_correction (P23), and the ui toggle pair.
+consequences: >-
+  Ready-to-roll interface audio exists for the Ratatui client (Amendment AC)
+  with the integration contract carried in the manifest itself; the byte-pin
+  test makes asset drift loud (edit manifest -> regenerate -> commit both, or
+  the unit gate fails); the CC0 grant makes the suite freely reusable outside
+  the repo; rendered previews stay uncommitted (LFS hazard avoided, renders
+  are derived artifacts via midi:to-ogg); the dull-vs-purge autopsy is now
+  encoded as a floor — every sound carries layered transients and controller
+  automation, so a future flat-sounding asset is a regression against this
+  ADR's technique baseline, not a taste dispute. Engine untouched: no
+  qa:regression / golden-vault exposure.

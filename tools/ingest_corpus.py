@@ -1,20 +1,27 @@
 #!/usr/bin/env python3
 """Corpus ingestion tool for Babylon's RAG pipeline.
 
-This tool imports texts from external libraries (like marxists.org) and
-prepares them as chunked Markdown files for RAG ingestion.
+This tool prepares texts from the durable OCR/extraction tree
+(``~/Documents/ocr/`` by default) as chunked Markdown files for RAG
+ingestion. Which works are eligible, and where their extracted text lives,
+is declared entirely in the corpus manifest
+(``src/babylon/data/corpus/manifest.yaml`` +
+:mod:`babylon.intelligence.corpus_manifest`, ADR107) — this tool no longer
+hardcodes a corpus list or fuzzy-matches filenames against an arbitrary
+external mirror (the retired ``MVP_CORPUS`` tuple / ``fuzzy_match_score``).
 
 NOTE: ChromaDB has been removed. Vector storage is now handled by
 pgvector via PgVectorStore (Feature 037). This tool can still import
 and prepare corpus files; ingestion into the vector store requires
-a running PostgreSQL instance with pgvector.
+a running PostgreSQL instance with pgvector and is NOT performed here
+(no embedding calls, no DB writes — file preparation only).
 
 Usage:
-    # Import texts from external library
-    poetry run python tools/ingest_corpus.py --import-from /media/user/marxists.org/
+    # Prepare corpus files from the OCR extraction tree
+    uv run python tools/ingest_corpus.py --prepare
 
     # List corpus status
-    poetry run python tools/ingest_corpus.py --list
+    uv run python tools/ingest_corpus.py --list
 """
 
 from __future__ import annotations
@@ -23,124 +30,29 @@ import argparse
 import logging
 import re
 import sys
-from dataclasses import dataclass
-from difflib import SequenceMatcher
 from pathlib import Path
-from typing import Final
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(levelname)s: %(message)s",
+from babylon.config.logging_config import setup_logging
+from babylon.intelligence.corpus_manifest import (
+    CorpusFormat,
+    CorpusManifest,
+    CorpusRow,
+    ManifestTarget,
+    load_bundled_manifest,
 )
+
+setup_logging(default_level="INFO")
 logger = logging.getLogger(__name__)
 
-
-# =============================================================================
-# MVP VERTICAL SLICE CORPUS
-# =============================================================================
-# These 7 texts form the minimal viable corpus for testing the RAG pipeline.
-# They cover the key theoretical foundations: exploitation, imperialism, and
-# revolutionary consciousness.
-
-
-@dataclass(frozen=True)
-class CorpusText:
-    """A text in the MVP corpus with metadata for fuzzy matching."""
-
-    title: str
-    author: str
-    keywords: tuple[str, ...]  # For fuzzy filename matching
-    year: int | None = None
-    # Subdirectories to search in (relative to source root) for targeted scanning
-    search_paths: tuple[str, ...] = ()
-
-
-MVP_CORPUS: Final[tuple[CorpusText, ...]] = (
-    CorpusText(
-        title="Wage Labour and Capital",
-        author="Marx",
-        keywords=("wage", "labour", "capital", "wage-labour"),
-        year=1849,
-        search_paths=("archive/marx/works/1847/wage-labour",),
-    ),
-    CorpusText(
-        title="Value, Price and Profit",
-        author="Marx",
-        keywords=("value", "price", "profit", "value-price-profit"),
-        year=1865,
-        search_paths=("archive/marx/works/1865/value-price-profit",),
-    ),
-    CorpusText(
-        title="Principles of Communism",
-        author="Engels",
-        keywords=("principles", "communism", "prin-com"),
-        year=1847,
-        search_paths=("archive/marx/works/1847/11",),
-    ),
-    CorpusText(
-        title="Imperialism, the Highest Stage of Capitalism",
-        author="Lenin",
-        keywords=("imperialism", "highest", "stage", "capitalism", "imp-hsc"),
-        year=1916,
-        search_paths=("archive/lenin/works/1916/imp-hsc",),
-    ),
-    CorpusText(
-        title="On National Culture",
-        author="Fanon",
-        keywords=("national", "culture", "national-culture"),
-        year=1961,
-        search_paths=("subject/africa/fanon",),
-    ),
-    CorpusText(
-        title="On Contradiction",
-        author="Mao",
-        keywords=("contradiction", "mswv1_17"),
-        year=1937,
-        search_paths=("reference/archive/mao/selected-works/volume-1",),
-    ),
-    CorpusText(
-        title="Analysis of the Classes in Chinese Society",
-        author="Mao",
-        keywords=("analysis", "classes", "chinese", "society", "mswv1_1"),
-        year=1926,
-        search_paths=("reference/archive/mao/selected-works/volume-1",),
-    ),
-)
+#: Default durable extraction tree root (ADR107 "step zero"). Manifest
+#: path_globs resolve against this; overridable via --corpus-root for
+#: alternate boxes (and always overridden in tests, which never touch it).
+DEFAULT_CORPUS_ROOT: Path = Path.home() / "Documents" / "ocr"
 
 
 # =============================================================================
 # FILE DISCOVERY AND IMPORT
 # =============================================================================
-
-
-def fuzzy_match_score(filename: str, text: CorpusText) -> float:
-    """Calculate fuzzy match score between filename and corpus text.
-
-    Args:
-        filename: The filename to check (lowercase, without extension)
-        text: The corpus text to match against
-
-    Returns:
-        A score between 0.0 and 1.0, higher is better match
-    """
-    filename_lower = filename.lower()
-
-    # Direct keyword match gets highest priority
-    for keyword in text.keywords:
-        if keyword.lower() in filename_lower:
-            return 0.9 + (0.1 * len(keyword) / len(filename_lower))
-
-    # Title similarity as fallback
-    title_lower = text.title.lower().replace(",", "").replace("'", "")
-    title_words = title_lower.split()
-
-    # Check how many title words appear in filename
-    word_matches = sum(1 for word in title_words if word in filename_lower)
-    if word_matches > 0:
-        return 0.5 * (word_matches / len(title_words))
-
-    # Sequence matcher for partial matches
-    return SequenceMatcher(None, filename_lower, title_lower).ratio() * 0.3
 
 
 def convert_html_to_markdown(html_content: str) -> str:
@@ -168,125 +80,99 @@ def convert_html_to_markdown(html_content: str) -> str:
     return markdown.strip()
 
 
-def import_multi_chapter_work(
-    search_dir: Path,
-    text: CorpusText,
-    dest_path: Path,
-) -> bool:
-    """Import a multi-chapter work by concatenating all chapter files.
+def import_manifest_work(files: tuple[Path, ...], row: CorpusRow, dest_path: Path) -> bool:
+    """Concatenate one manifest row's matched files into a single Markdown file.
+
+    HTML-format rows are converted via :func:`convert_html_to_markdown`
+    (REUSED unchanged); every other format (the ~/Documents/ocr/ convention:
+    plain ``.txt`` extraction output) is read as-is. Multiple matched files
+    (chapter splits) are joined in the deterministic order the manifest
+    already sorted them in.
 
     Args:
-        search_dir: Directory containing chapter files (ch01.htm, ch02.htm, etc.)
-        text: The corpus text metadata
-        dest_path: Destination path for the combined Markdown file
+        files: This row's existing, deny-subtracted matched files (already
+            sorted deterministically by :meth:`CorpusManifest.ingest_targets`).
+        row: The manifest row these files belong to.
+        dest_path: Destination path for the combined Markdown file.
 
     Returns:
-        True if successful, False otherwise
+        True if at least one file yielded non-empty content, False otherwise.
     """
-    chapter_files = sorted(search_dir.glob("ch*.htm"))
-    if not chapter_files:
-        chapter_files = sorted(search_dir.glob("ch*.html"))
-
-    if not chapter_files:
+    if not files:
         return False
 
-    logger.info(f"Found {len(chapter_files)} chapters for '{text.title}'")
-
-    # Also look for intro/preface files
-    intro_files: list[Path] = []
-    for name in ["intro.htm", "introduction.htm", "pref01.htm", "pref02.htm", "preface.htm"]:
-        intro_path = search_dir / name
-        if intro_path.exists():
-            intro_files.append(intro_path)
-
-    all_files = sorted(intro_files) + chapter_files
-    combined_content: list[str] = []
-
-    for file_path in all_files:
+    chunks: list[str] = []
+    for file_path in files:
         try:
             with open(file_path, encoding="utf-8", errors="replace") as f:
-                raw_html = f.read()
-            chapter_md = convert_html_to_markdown(raw_html)
-            if chapter_md.strip():
-                combined_content.append(chapter_md)
-        except Exception as e:
-            logger.warning(f"Failed to read chapter {file_path.name}: {e}")
+                raw = f.read()
+        except OSError as e:
+            logger.warning(f"Failed to read {file_path.name}: {e}")
+            continue
 
-    if not combined_content:
+        text = convert_html_to_markdown(raw) if row.format is CorpusFormat.HTML else raw.strip()
+        if text:
+            chunks.append(text)
+
+    if not chunks:
         return False
 
-    full_content = f"# {text.title}\n\n**Author:** {text.author}\n\n---\n\n"
-    full_content += "\n\n---\n\n".join(combined_content)
+    full_content = f"# {row.work}\n\n**Author:** {row.author}\n\n---\n\n"
+    full_content += "\n\n---\n\n".join(chunks)
 
     with open(dest_path, "w", encoding="utf-8") as f:
         f.write(full_content)
 
-    logger.info(f"Combined {len(all_files)} files -> {dest_path.name}")
+    logger.info(f"Imported {len(files)} file(s) for '{row.work}' -> {dest_path.name}")
     return True
 
 
-def import_corpus_files(source_dir: Path, corpus_dir: Path) -> tuple[int, list[str]]:
-    """Import matching files from external library to corpus directory.
+def _dest_filename(row: CorpusRow) -> str:
+    """Deterministic ``<author>_<work>.md`` destination filename for a row."""
+    safe_title = re.sub(r"[^\w\s-]", "", row.work).replace(" ", "_").lower()
+    safe_author = re.sub(r"[^\w\s-]", "", row.author).replace(" ", "_").lower()
+    return f"{safe_author}_{safe_title}.md"
+
+
+def import_corpus_files(
+    corpus_root: Path,
+    corpus_dir: Path,
+    manifest: CorpusManifest,
+) -> tuple[int, list[str]]:
+    """Prepare every allow-listed, existing manifest work as a Markdown file.
+
+    Enumeration is entirely manifest-driven: allow minus deny, existing-files
+    -only, in the manifest's declared (deterministic) row order — see
+    :meth:`CorpusManifest.ingest_targets`. A row whose work has not been
+    extracted onto this box yet is a MANIFEST fact, reported as missing,
+    never raised as an error.
 
     Args:
-        source_dir: External library path to import from
-        corpus_dir: Local corpus directory to copy files to
+        corpus_root: Durable extraction tree root manifest globs resolve
+            against (e.g. ``~/Documents/ocr``).
+        corpus_dir: Local corpus directory to write prepared Markdown into.
+        manifest: The loaded, validated corpus manifest.
 
     Returns:
-        Tuple of (number imported, list of missing text titles)
+        Tuple of (number imported, list of missing "work (author)" strings).
     """
     corpus_dir.mkdir(parents=True, exist_ok=True)
 
     imported = 0
     missing: list[str] = []
 
-    for text in MVP_CORPUS:
-        safe_title = re.sub(r"[^\w\s-]", "", text.title).replace(" ", "_").lower()
-        safe_author = text.author.lower()
-        dest_filename = f"{safe_author}_{safe_title}.md"
-        dest_path = corpus_dir / dest_filename
+    target: ManifestTarget
+    for target in manifest.ingest_targets(corpus_root):
+        row = target.row
+        if not target.present:
+            missing.append(f"{row.work} ({row.author})")
+            continue
 
-        success = False
-
-        for subpath in text.search_paths:
-            search_dir = source_dir / subpath
-            if not search_dir.exists():
-                continue
-
-            chapter_files = list(search_dir.glob("ch*.htm")) + list(search_dir.glob("ch*.html"))
-            if chapter_files:
-                success = import_multi_chapter_work(search_dir, text, dest_path)
-                if success:
-                    logger.info(f"Imported multi-chapter: {text.title}")
-                    break
-            else:
-                for ext in (".htm", ".html", ".txt", ".md"):
-                    for file_path in search_dir.glob(f"*{ext}"):
-                        filename = file_path.stem
-                        score = fuzzy_match_score(filename, text)
-                        if score > 0.5:
-                            try:
-                                with open(file_path, encoding="utf-8", errors="replace") as f:
-                                    raw_html = f.read()
-                                content = convert_html_to_markdown(raw_html)
-
-                                with open(dest_path, "w", encoding="utf-8") as f:
-                                    f.write(content)
-
-                                logger.info(f"Imported: {text.title} -> {dest_filename}")
-                                success = True
-                                break
-                            except Exception as e:
-                                logger.error(f"Failed to import {file_path}: {e}")
-                    if success:
-                        break
-            if success:
-                break
-
-        if success:
+        dest_path = corpus_dir / _dest_filename(row)
+        if import_manifest_work(target.files, row, dest_path):
             imported += 1
         else:
-            missing.append(f"{text.title} ({text.author})")
+            missing.append(f"{row.work} ({row.author})")
 
     return imported, missing
 
@@ -323,25 +209,27 @@ def list_corpus(corpus_dir: Path) -> None:
 def main() -> int:
     """Main entry point."""
     parser = argparse.ArgumentParser(
-        description="Import corpus texts for Babylon's RAG pipeline",
+        description="Prepare manifest-declared corpus texts for Babylon's RAG pipeline",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-    # Import from external library
-    %(prog)s --import-from /media/user/marxists.org/www.marxists.org/
+    # Prepare from the default OCR extraction tree (~/Documents/ocr)
+    %(prog)s --prepare
+
+    # Prepare from an alternate extraction tree
+    %(prog)s --prepare --corpus-root /path/to/ocr
 
     # List corpus status
     %(prog)s --list
 
-Note: Vector ingestion requires pgvector (Feature 037).
+Note: Vector ingestion requires pgvector (Feature 037) and is a separate step.
         """,
     )
 
     parser.add_argument(
-        "--import-from",
-        type=Path,
-        metavar="PATH",
-        help="External library path to import texts from",
+        "--prepare",
+        action="store_true",
+        help="Prepare manifest-declared, allow-listed works as Markdown from --corpus-root",
     )
 
     parser.add_argument(
@@ -351,11 +239,19 @@ Note: Vector ingestion requires pgvector (Feature 037).
     )
 
     parser.add_argument(
+        "--corpus-root",
+        type=Path,
+        default=DEFAULT_CORPUS_ROOT,
+        metavar="PATH",
+        help=f"Durable OCR extraction tree manifest globs resolve against (default: {DEFAULT_CORPUS_ROOT})",
+    )
+
+    parser.add_argument(
         "--corpus-dir",
         type=Path,
         default=Path(__file__).parent.parent / "data" / "corpus",
         metavar="PATH",
-        help="Local corpus directory (default: data/corpus/)",
+        help="Local corpus directory prepared Markdown is written to (default: data/corpus/)",
     )
 
     parser.add_argument(
@@ -370,31 +266,31 @@ Note: Vector ingestion requires pgvector (Feature 037).
     if args.verbose:
         logging.getLogger().setLevel(logging.DEBUG)
 
-    # Print MVP corpus info
+    manifest = load_bundled_manifest()
+
     logger.info("=" * 60)
     logger.info("Babylon Corpus Tool")
     logger.info("=" * 60)
-    logger.info("\nMVP Vertical Slice Corpus (7 texts):")
-    for i, text in enumerate(MVP_CORPUS, 1):
-        logger.info(f"  {i}. {text.title} ({text.author}, {text.year})")
+    logger.info(f"\nManifest allow-listed works ({len(manifest.allow_rows())}):")
+    for i, row in enumerate(manifest.allow_rows(), 1):
+        logger.info(f"  {i}. {row.work} ({row.author})")
     logger.info("")
 
     if args.list:
         list_corpus(args.corpus_dir)
         return 0
 
-    # Import from external library if specified
-    if args.import_from:
-        logger.info(f"\nImporting from: {args.import_from}")
-        imported, missing = import_corpus_files(args.import_from, args.corpus_dir)
+    if args.prepare:
+        logger.info(f"\nPreparing from corpus root: {args.corpus_root}")
+        imported, missing = import_corpus_files(args.corpus_root, args.corpus_dir, manifest)
 
-        logger.info(f"\nImport Summary: Found {imported}/{len(MVP_CORPUS)} texts")
+        logger.info(f"\nPrepare summary: {imported}/{len(manifest.allow_rows())} works found")
         if missing:
-            logger.warning(f"Missing texts: {', '.join(missing)}")
+            logger.warning(f"Missing works (not yet extracted): {', '.join(missing)}")
         return 0
 
     # No action specified
-    logger.info("No action specified. Use --import-from to import, or --list to view status.")
+    logger.info("No action specified. Use --prepare to prepare files, or --list to view status.")
     logger.info("Vector ingestion requires pgvector backend (Feature 037).")
     return 0
 

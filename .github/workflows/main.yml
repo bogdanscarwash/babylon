@@ -1,21 +1,10 @@
-name: Main (Full Pipeline)
+name: Main Qualification
 
-# Program 15 (The Gauntlet): the FULL PIPELINE — "push to main does the whole
-# thing". Runs everything the dev fast lane runs, plus the heavy legs: the
-# non-unit test shard, Postgres integration, Playwright E2E against the real
-# stack, the Postgres-backed determinism bundle, docs, and infra validation.
-#
-# Reference-DB legs are gated on the repo variable CI_REFDB_READY until the
-# CI subset artifact exists (owner item 40, Phase 6 of program 15): the full
-# reference DB is 5.7GB and lives only on the operator's machine. A gated
-# job is an EXPLICIT red, not a hidden one — the gate names its item.
-#
-# Concurrency: no cancel-in-progress — a running full-pipeline verdict on a
-# main push should complete even if another promotion lands behind it.
+# Main PRs run full ci.yml validation plus these release contracts.
+# Manual dev qualification is optional diagnostics; a release PR is the
+# authoritative pre-merge proof, so no duplicate preliminary run is required.
 
 on:
-  push:
-    branches: [main]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -24,412 +13,204 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
+  group: main-qualification-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # ── The dev fast lane, verbatim (same mise tasks, same composite) ────────
-  fast-gate:
-    name: Fast Gate (hygiene, lint, format, imports, types, lock)
+  event-contract:
+    name: Main Qualification / Event Contract
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v7
-      - uses: ./.github/actions/bootstrap-python
-        with:
-          gdal: "true"
-      # Incremental mypy state. Key ends in the commit SHA so every run saves
-      # a fresh snapshot; restore-keys fall back to the newest same-lock cache.
-      # Speed only — mypy's verdict is identical warm or cold.
-      - name: Cache mypy incremental state
-        uses: actions/cache@v6
-        with:
-          path: .mypy_cache
-          key: mypy-${{ runner.os }}-py3.12-${{ hashFiles('poetry.lock') }}-${{ github.sha }}
-          restore-keys: |
-            mypy-${{ runner.os }}-py3.12-${{ hashFiles('poetry.lock') }}-
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Accept only a main PR or exact dev proof
+        run: >-
+          python3 tools/check_main_qualification_event.py
+          --event "${{ github.event_name }}"
+          --ref "${{ github.ref }}"
+          --base-ref "${{ github.base_ref }}"
 
-      - name: Repo hygiene gate
-        run: mise run check:hygiene
-      - name: Lint (ruff check)
-        run: mise run lint:check
-      - name: Format (ruff format --check — blocking)
-        run: mise run format:check
-      - name: Import-boundary contracts
-        run: mise run lint:imports
-      - name: Type check (mypy strict)
-        run: mise run typecheck
-      - name: Poetry lock consistency
-        run: poetry check --lock
-
-  test-unit:
-    name: Unit Tests (xdist, coverage gate)
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v7
-      - uses: ./.github/actions/bootstrap-python
-        with:
-          gdal: "true"
-      - name: Unit shard (excludes ai/slow/reference-DB; engine/systems cov >= 80%)
-        run: mise run test:unit-ci
-      - name: Upload test results + coverage
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: unit-ci-results
-          path: reports/test-results/unit-ci/
-
-  qa-regression:
-    name: Determinism Gate (byte-identical dense goldens)
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v7
-      - uses: ./.github/actions/bootstrap-python
-      - name: qa:regression (5 scenarios vs committed baselines)
-        run: mise run qa:regression
-
-  frontend:
-    name: Frontend (tsc, eslint, prettier, vitest, build)
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v7
-      - uses: ./.github/actions/bootstrap-node
-      - name: Check (tsc + eslint + prettier + vitest)
-        working-directory: src/frontend
-        run: npm run check
-      - name: Build
-        working-directory: src/frontend
-        run: npm run build
-
-      - name: npm audit (prod deps, high+)
-        working-directory: src/frontend
-        run: npm audit --omit=dev --audit-level=high
-
-  security:
-    name: Security Audit (pip-audit policy — blocking since item-41)
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v7
-      - uses: ./.github/actions/bootstrap-python
-      - name: pip-audit (policy wrapper — ignores carry reason + expiry)
-        run: mise run security:pip-audit
-
-  # ── The heavy legs ────────────────────────────────────────────────────────
   test-rest:
-    name: Non-Unit Tests (integration, scenarios, property, contract)
+    name: Main Qualification / Non-Unit Behavioral Contracts
+    needs: [event-contract]
     runs-on: ubuntu-latest
-    # Maiden run was cancelled at 35 while still serial; the shard now runs
-    # xdist (test:rest-ci -n 4 loadscope) — 45 is the bounded first-measure.
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/bootstrap-python
-        with:
-          gdal: "true"
-      - name: Heavy shard (includes slow; web-Postgres suites run in their own job)
+      - name: Heavy shard (integration, scenarios, property, contract)
+        env:
+          BABYLON_REST_SHARD_TIMEOUT: 32m
+          BABYLON_SLOWUNIT_TIMEOUT: 9m
         run: mise run test:rest-ci
-      - name: Upload test results + coverage
+      - name: Upload test results and coverage
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: rest-ci-results
+          name: main-qualification-rest-results
           path: reports/test-results/rest-ci/
+          retention-days: 14
 
-  # The web integration suites expect the Django schema AND reference-derived
-  # seed data — item 40 territory until the subset artifact lands (Phase 6).
-  # Uses the repo-canonical compose service: docker/postgres/Dockerfile is
-  # postgis/postgis:16-3.4 + pgvector. A GitHub services: block cannot build
-  # that Dockerfile, and a stock postgis image lacks pgvector, which aborts
-  # PostgresRuntime.init_schema at `CREATE EXTENSION vector`.
-  postgres-integration:
-    name: Postgres Integration (web bridge)
-    if: ${{ vars.CI_REFDB_READY == 'true' }}
+  postgres-determinism:
+    name: Main Qualification / PostgreSQL Determinism Bundle
+    needs: [event-contract]
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/bootstrap-python
+      - uses: ./.github/actions/bootstrap-persistence
+        id: persistence-cache
         with:
-          gdal: "true"
+          cache-key: rollover
       - uses: ./.github/actions/postgres-up
-      - uses: ./.github/actions/fetch-reference-db
-      # Maiden-run finding (2026-07-11): the engine runtime schema
-      # (node_state et al.) is NOT created by Django migrate — every local
-      # dev DB already has it, so the gap only shows on a fresh CI Postgres
-      # (UndefinedTable: node_state). Idempotent canonical DDL apply.
-      - name: Apply engine schema (canonical DDL)
+      - name: Activate the Rust-owned canonical schema
         run: mise run db:bootstrap
-      - name: Django migrate (fresh compose DB)
-        working-directory: web
-        env:
-          POSTGRES_HOST: localhost
-          POSTGRES_PORT: "5433"
-          POSTGRES_DB: babylon_test
-          POSTGRES_USER: test
-          POSTGRES_PASSWORD: test
-        run: poetry run python manage.py migrate
-      # Max verbosity by owner ruling (2026-07-11): CI logs are agent-read.
-      - name: Run web integration suites (direct-host + testcontainers)
-        env:
-          POSTGRES_HOST: localhost
-          POSTGRES_PORT: "5433"
-          POSTGRES_DB: babylon_test
-          POSTGRES_USER: test
-          POSTGRES_PASSWORD: test
-        run: poetry run pytest tests/integration/web/ -o addopts="" -vv -ra -l --tb=long --durations=0
+      - name: Rust Michigan rollover and restart determinism proof
+        run: mise run qa:michigan-rollover-smoke
       - name: Stop Postgres
         if: always()
-        run: docker compose down -v
+        run: tools/ci_postgres_compose.sh down
 
-  # Boots the REAL stack (compose Postgres → migrate → seed wayne_county →
-  # Django dev server) and runs the browser suite against it. Vite is started
-  # by Playwright's own webServer block. Seed data needs the reference DB —
-  # item 40 territory until Phase 6.
-  playwright-e2e:
-    name: Playwright E2E (real loop)
-    if: ${{ vars.CI_REFDB_READY == 'true' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v7
-      - uses: ./.github/actions/bootstrap-python
+      - name: Save successful persistence cache
+        if: >-
+          success() && github.event_name != 'pull_request' &&
+          (github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/main') &&
+          steps.persistence-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
-          gdal: "true"
-      - uses: ./.github/actions/bootstrap-node
-      # Browser binaries keyed on the lockfile (carries @playwright/test's
-      # resolved version). install --with-deps still runs for OS packages;
-      # on a warm cache it skips the browser download.
-      - name: Cache Playwright browsers
-        uses: actions/cache@v6
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('src/frontend/package-lock.json') }}
-      - name: Install Playwright Chromium
-        working-directory: src/frontend
-        run: npx playwright install --with-deps chromium
-      - uses: ./.github/actions/postgres-up
-      - uses: ./.github/actions/fetch-reference-db
-      - name: Django migrate
-        working-directory: web
-        env:
-          POSTGRES_HOST: localhost
-          POSTGRES_PORT: "5433"
-          POSTGRES_DB: babylon_test
-          POSTGRES_USER: test
-          POSTGRES_PASSWORD: test
-        run: poetry run python manage.py migrate
-      # RUN_MAIN=true is required: game/apps.py skips EngineBridge init for
-      # DEBUG-mode management commands otherwise and the seed refuses the stub.
-      - name: Seed wayne_county session
-        working-directory: web
-        env:
-          POSTGRES_HOST: localhost
-          POSTGRES_PORT: "5433"
-          POSTGRES_DB: babylon_test
-          POSTGRES_USER: test
-          POSTGRES_PASSWORD: test
-          RUN_MAIN: "true"
-        run: |
-          SEED_OUT=$(poetry run python manage.py seed_initial_game --scenario wayne_county --player admin)
-          echo "$SEED_OUT"
-          SESSION_ID=$(echo "$SEED_OUT" | grep -oE 'Game session created: [0-9a-f-]{36}' | awk '{print $4}')
-          test -n "$SESSION_ID"
-          echo "SPEC061_TEST_SESSION_ID=$SESSION_ID" >> "$GITHUB_ENV"
-      # --noreload never sets RUN_MAIN itself; without it /api/* silently
-      # serves the StubEngineBridge fallback (game/apps.py + game/api.py).
-      - name: Start Django backend
-        working-directory: web
-        env:
-          POSTGRES_HOST: localhost
-          POSTGRES_PORT: "5433"
-          POSTGRES_DB: babylon_test
-          POSTGRES_USER: test
-          POSTGRES_PASSWORD: test
-          RUN_MAIN: "true"
-        run: |
-          nohup poetry run python manage.py runserver 8000 --noreload > ../django-ci.log 2>&1 &
-          for i in $(seq 1 30); do
-            curl -sf http://localhost:8000/health/ && break
-            sleep 1
-          done
-          curl -sf http://localhost:8000/health/
-      # --reporter=list,html: per-test lines in the log (agent-read) + the
-      # html report artifact. --trace=retain-on-failure: full traces for
-      # every failing test ride the artifact.
-      - name: Run Playwright suite (Vite auto-started by webServer)
-        working-directory: src/frontend
-        env:
-          CI: "true"
-        run: >-
-          npx playwright test
-          --reporter=list,html --trace=retain-on-failure
-          e2e/real-loop.spec.ts
-          e2e/end-turn-flow.spec.ts
-          e2e/verb-submit.spec.ts
-          e2e/auth.spec.ts
-          e2e/briefing-map-smoke.spec.ts
-          e2e/map-lens-cycling.spec.ts
-      - name: Upload Playwright report + Django log
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: playwright-report
+          key: ${{ steps.persistence-cache.outputs.cache-key }}
           path: |
-            src/frontend/playwright-report/
-            django-ci.log
-      - name: Stop Postgres
-        if: always()
-        run: docker compose down -v
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            rust/target/.rustc_info.json
+            rust/target/debug/.cargo-lock
+            rust/target/debug/.fingerprint
+            rust/target/debug/build
+            rust/target/debug/deps
+            rust/target/debug/babylon-runtime
+            rust/target/debug/babylon-runtime.d
 
-  # The Postgres-backed strict determinism bundle (spec-064): headless 5-tick
-  # tri-county run compared like-for-like against the committed baseline.
-  # Hydrates from the reference DB — item 40 territory until Phase 6, where
-  # the fetch-reference-db composite lands as the first step here.
-  qa-e2e-regression:
-    name: Determinism Bundle (Postgres-backed, strict)
-    if: ${{ vars.CI_REFDB_READY == 'true' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-    # Maiden-run finding (2026-07-11): the headless runner reads its DSN from
-    # BABYLON_TEST_PG_DSN — without it the job dies POSTGRES_UNREACHABLE
-    # before ever touching the container postgres-up just started. Same DSN
-    # the db:bootstrap task targets (compose babylon-pg on :5433).
-    env:
-      BABYLON_TEST_PG_DSN: "dbname=babylon_test host=localhost port=5433 user=test password=test"
-    steps:
-      - uses: actions/checkout@v7
-      - uses: ./.github/actions/bootstrap-python
-        with:
-          gdal: "true"
-      - uses: ./.github/actions/postgres-up
-      - uses: ./.github/actions/fetch-reference-db
-      - name: Apply engine schema (canonical DDL)
-        run: mise run db:bootstrap
-      - name: qa:e2e-regression (strict 5-tick bundle vs baseline)
-        run: mise run qa:e2e-regression
-      - name: qa:storage-budget (rows/tick vs committed baseline)
-        run: mise run qa:storage-budget
-      - name: Stop Postgres
-        if: always()
-        run: docker compose down -v
-
-  # The requires_reference_db suites run here against the ci-data-v1 subset
-  # artifact (item 40) — tests/unit's marked files are excluded from the
-  # dev unit shard and tests outside unit are excluded from test-rest by
-  # the marker, so this job is their ONE home on the main tier.
   refdata-tests:
-    name: Reference-Data Tests (ci-data-v1 subset)
+    name: Main Qualification / Reference-Data Contracts
+    needs: [event-contract]
     if: ${{ vars.CI_REFDB_READY == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/bootstrap-python
-        with:
-          gdal: "true"
       - uses: ./.github/actions/fetch-reference-db
-      - name: Run requires_reference_db suites
+      - name: Run reference-data contracts
         run: >-
-          poetry run pytest tests -m requires_reference_db
-          --ignore=tests/integration/web
+          uv run pytest tests -m requires_reference_db
           -o addopts="" -vv -ra -l --tb=long --durations=0
 
-  ai-tests:
-    name: AI Tests (advisory — non-deterministic)
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    continue-on-error: true
-    steps:
-      - uses: actions/checkout@v7
-      - uses: ./.github/actions/bootstrap-python
-        with:
-          gdal: "true"
-      - name: Run AI unit tests
-        run: poetry run pytest tests/unit/ai -o addopts="" -vv -ra -l --tb=long --durations=0
-
   docs:
-    name: Documentation Build (doctest blocks; manual advisory)
+    name: Main Qualification / Release Documentation
+    needs: [event-contract]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/bootstrap-python
         with:
           docs: "true"
-          # Maiden-run finding (2026-07-11): pytest loads the root conftest,
-          # which initializes Django -> contrib.gis -> libgdal, so even the
-          # formulas-scoped doctest run needs the system GDAL package.
-          gdal: "true"
-      # The doctest run STAYS blocking: it verifies the formula docstring
-      # examples (III.12 float-honesty contract). It is cheap and deterministic.
-      - name: Run doctest examples
-        run: poetry run pytest --doctest-modules src/babylon/formulas -o addopts="" -vv -ra --tb=long
-      # Bundling the manual is a RELEASE-TIME concern, not a per-push gate
-      # (owner ruling 2026-07-11: "we don't really need to bundle the docs as a
-      # manual until we're ready to release — lower priority"). Kept running so
-      # bit-rot stays visible as a red step, but continue-on-error so it never
-      # blocks a dev landing or the promotion. Flip back to blocking (or move to
-      # release.yml) when the manual becomes a release deliverable. item-44's
-      # 2.4k-warning wall still blocks the -W strict build regardless.
-      - name: Build documentation (advisory — manual bundled at release time)
-        continue-on-error: true
+      - name: Build the release manual
         working-directory: docs
-        # Cap the advisory build at 8 min. Without this the huge doc tree
-        # (item-44's 2.4k-warning wall) can run past the job's 15-min
-        # timeout-minutes, which CANCELS the whole job — and a job-level
-        # cancellation is NOT swallowed by continue-on-error, so the docs job
-        # showed "cancelled" instead of green (proving run #4, 2026-07-11).
-        # coreutils `timeout` turns "too slow" into a swallowed step failure
-        # (exit 124) well under the job cap; real sphinx errors still show red.
-        run: timeout 480 poetry run sphinx-build -b html . _build/html
+        run: timeout 480 uv run sphinx-build -b html . _build/html
 
-  gitleaks:
-    name: Secret Scan (gitleaks, full history)
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
+  native-package:
+    name: Main Qualification / Native Download / Linux x86_64
+    needs: [event-contract]
+    if: >-
+      (github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.base.ref == 'main') ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/dev')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v7
+      - name: Check out the exact release PR head
+        if: github.event_name == 'pull_request'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check out the dispatched dev revision
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
-      - uses: gitleaks/gitleaks-action@v3
+          persist-credentials: false
+      - uses: ./.github/actions/bootstrap-python
+      - name: Resolve exact package identity
+        id: identity
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  trivy-config:
-    name: IaC Config Scan (trivy, HIGH+CRITICAL blocking)
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v7
-      - uses: aquasecurity/trivy-action@v0.36.0
+          SOURCE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+        run: |
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          echo "sha=$SOURCE_SHA" >> "$GITHUB_OUTPUT"
+          echo "version=$(python3 tools/release_version.py --release-version)" >> "$GITHUB_OUTPUT"
+          echo "artifact-name=native-linux-x86_64" >> "$GITHUB_OUTPUT"
+      - name: Install native build and clean-unpack runtime dependencies
+        run: >-
+          tools/install_ci_apt_packages.sh
+          libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev libpq5
+          xvfb
+      - name: Install the pinned Rust toolchain
+        run: |
+          CHANNEL="$(sed -n 's/^channel = "\(.*\)"$/\1/p' rust/rust-toolchain.toml)"
+          rustup toolchain install "$CHANNEL" --profile minimal --no-self-update
+      - name: Build both native executables with locked dependencies
+        working-directory: rust
+        run: |
+          cargo fetch --locked --target x86_64-unknown-linux-gnu
+          cargo build --locked --release \
+            -p babylon-client --bin babylon-client \
+            -p babylon-persistence --bin babylon-runtime
+      - name: Assemble the versioned download
+        env:
+          RELEASE_VERSION: ${{ steps.identity.outputs.version }}
+          SOURCE_SHA: ${{ steps.identity.outputs.sha }}
+        run: >-
+          python3 tools/release/package_linux.py
+          --version "$RELEASE_VERSION" --source-sha "$SOURCE_SHA"
+          --binaries-dir rust/target/release --output-dir dist/release
+      - name: Verify and exercise the unpacked download
+        env:
+          RELEASE_VERSION: ${{ steps.identity.outputs.version }}
+        run: |
+          cd dist/release
+          sha256sum --check "babylon-${RELEASE_VERSION}-linux-x86_64.tar.gz.sha256"
+          mkdir unpacked
+          tar --extract --gzip --file="babylon-${RELEASE_VERSION}-linux-x86_64.tar.gz" --directory=unpacked
+          cd "unpacked/babylon-${RELEASE_VERSION}-linux-x86_64"
+          ./babylon --smoke
+      - name: Upload verified download and checksum
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          scan-type: config
-          scan-ref: .
-          severity: HIGH,CRITICAL
-          exit-code: "1"
-          skip-dirs: .pre-commit-cache
-          trivyignores: .trivyignore
-          cache: "true"
+          name: ${{ steps.identity.outputs.artifact-name }}
+          path: |
+            dist/release/*.tar.gz
+            dist/release/*.sha256
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
 
   trivy-image:
-    # Advisory until the postgis base-image bump lands (Phase-3 protocol:
-    # bump proven by local byte-identical qa:e2e-regression + dated
-    # .trivyignore residue). Upstream postgis:16-3.4 (bullseye) carries
-    # ~141 fixable HIGH/CRITICAL today — a red nobody can act on until
-    # the bump, hence explicitly labeled advisory, never silently hidden.
-    name: Image Scan (trivy — advisory until postgis bump)
+    name: Main Qualification / Container Image Scan
+    needs: [event-contract]
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    continue-on-error: true
     steps:
-      - uses: actions/checkout@v7
-      - uses: docker/setup-buildx-action@v4
-      - name: Build babylon-pg (shared GHA layer cache)
-        uses: docker/bake-action@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4
+      - name: Build babylon-pg with the shared GHA layer cache
+        uses: docker/bake-action@d3418bd7d0e9324001bca92fa8ba175ea7e6dc9b # v7
         with:
           source: .
           files: docker-compose.yml
@@ -438,61 +219,11 @@ jobs:
           set: |
             babylon-pg.tags=babylon-pg:ci
             babylon-pg.cache-from=type=gha,scope=babylon-pg
-      - name: Scan built image
-        uses: aquasecurity/trivy-action@v0.36.0
+      - name: Scan the built image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: image
           image-ref: babylon-pg:ci
           severity: HIGH,CRITICAL
           exit-code: "1"
           cache: "true"
-
-  infra-validate:
-    name: Infra Validate (terraform, tflint, ansible, compose, hadolint)
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v7
-      - uses: ./.github/actions/bootstrap-python
-      - uses: hashicorp/setup-terraform@v4
-        with:
-          terraform_version: "1.15.2"
-      - name: Terraform fmt
-        run: terraform -chdir=deploy/terraform fmt -check -diff
-      - name: Terraform init (backendless — tracked lockfile is the pin)
-        run: terraform -chdir=deploy/terraform init -backend=false -input=false
-      - name: Terraform validate
-        run: terraform -chdir=deploy/terraform validate
-      - uses: terraform-linters/setup-tflint@v6
-      - name: tflint (core ruleset; no hcloud plugin exists)
-        working-directory: deploy/terraform
-        run: |
-          tflint --init --config ../../.tflint.hcl
-          tflint --config ../../.tflint.hcl
-      - name: Install ansible collections
-        run: poetry run ansible-galaxy collection install -r deploy/requirements.yml
-      - name: Ansible syntax check (the 6 live playbooks)
-        working-directory: deploy/ansible
-        run: |
-          for pb in site.yml dbservers.yml webservers.yml \
-                    playbooks/bootstrap.yml playbooks/hetzner.yml \
-                    playbooks/backup-smoke.yml; do
-            poetry run ansible-playbook --syntax-check -i inventory.yml "$pb"
-          done
-      # Blocking floor: profile min passes today. The full-profile report
-      # (79 pre-existing idiom findings; skip_list burn-down is an explicit
-      # program-15 non-goal) stays visible but advisory.
-      - name: ansible-lint (min profile — blocking)
-        working-directory: deploy/ansible
-        run: poetry run ansible-lint --profile min site.yml dbservers.yml webservers.yml playbooks/ roles/
-      - name: ansible-lint full report (advisory — pre-existing idiom findings)
-        working-directory: deploy/ansible
-        continue-on-error: true
-        run: poetry run ansible-lint site.yml dbservers.yml webservers.yml playbooks/ roles/
-      - name: Compose config validation
-        run: docker compose config -q
-      - name: hadolint (pg Dockerfile; warnings visible, errors block)
-        uses: hadolint/hadolint-action@v3.3.0
-        with:
-          dockerfile: docker/postgres/Dockerfile
-          failure-threshold: error

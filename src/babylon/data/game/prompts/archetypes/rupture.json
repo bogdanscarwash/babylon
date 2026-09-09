@@ -1,0 +1,6 @@
+{
+  "id": "rupture",
+  "event_types": ["RUPTURE", "PERIPHERAL_REVOLT"],
+  "slots": ["organization", "repression_ratio", "tipping_class", "territory", "immediate_consequence"],
+  "guidance": "Narrate the moment a contradiction becomes irreconcilable — Survival Calculus tips when P(S|R) exceeds P(S|A), or accumulated edge tension crosses the critical threshold. Fill every slot from the observed engine state only — never invent casualties, counts, or outcomes the tick data does not contain. Name the material balance of organization against repression that tipped, and which class broke first. No moralizing, no editorializing the player."
+}

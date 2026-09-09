@@ -1,0 +1,111 @@
+id: ADR125
+title: >-
+  T3 Gap Projections (Program 24 spine-C, v1.0.0 Playable Archive): five new
+  Archive projection modules — economy, field-state, balkanization faction,
+  chronicle event-territory anchoring, and hex habitability — close the four
+  remaining WO-52b/test-port-ledger LOUD gap rows
+  (TestEconomyDashboardFundamentalTheorem, TestEconomyDashboardChipContract,
+  TestGetFieldState, TestBalkanizationMapFields) and light two wiring motions
+  the Vol I/Vol II cascade left declared-dormant (the fundamental_theorem
+  graph stash, W-P; the value_form Phi tri-decomposition builders, W-C/W-P),
+  plus a small U1 completion publishing the last two SurplusValueDistribution
+  terms (W-C). One gap is found, not closed, and explicitly handed off: no
+  engine scenario stamps NodeType.FACTION, so the balkanization dossier is
+  honest-empty on every real campaign until the RED_OGV repair program seeds
+  it.
+status: accepted
+date: '2026-07-22'
+context: >-
+  specs/24-archive/test-port-ledger.md's WO-52 cutover-gate pass (§"LOUD —
+  coverage gaps") left four classes from the disabled legacy
+  tests/unit/web/test_engine_bridge.py suite with no landed successor and no
+  owning work order: TestEconomyDashboardFundamentalTheorem/
+  TestEconomyDashboardChipContract (the graph-wide Wc-Vc verdict and the
+  Volume III surplus-split/matter-book chips), TestGetFieldState (the
+  dialectical field-stack "Weather Layer"), and TestBalkanizationMapFields
+  (faction enumeration + INFLUENCES-derived contested territory). Separately,
+  two Vol I/Vol II cascade ADRs had left real state on the graph with no
+  consumer: ADR117 (Vol I U2) stashed a per-class fundamental_theorem report
+  on a graph attribute each tick with only a liveness-registry dormant row to
+  show for it, and the value_form module's Phi tri-decomposition builders
+  (unequal-exchange/reproduction/domestic components) had zero callers tree-
+  wide. domain/economics/tick/graph_bridge.py also published 5 of 6
+  SurplusValueDistribution terms as tick_-prefixed territory attrs, silently
+  omitting taxes_on_surplus and total_surplus_produced — the two terms needed
+  to reconstruct the Marxian identity s = p + i + r + t from the graph at
+  all. T3 U1-U6 closed all of the above except the FACTION-node seeding gap,
+  which U4's own commit note explicitly deferred and named as "owed to U7" —
+  this ADR.
+decision: >-
+  U1 (surplus-publisher, W-C): graph_bridge.py's write_tick_state_to_graph
+  gains tick_taxes_on_surplus and tick_total_surplus, same 0.0-when-None
+  defaulting idiom as the other four SurplusValueDistribution terms — no new
+  read path, a genuine dataflow-wire completion. U2 (economy dossier, W-P +
+  W-C/W-P): new babylon.projection.economy.project_economy /
+  render_economy.py / economy.md.j2 read the Fundamental Theorem verdict
+  verbatim off opposition_states["wage"].balance (never a parallel Phi), the
+  per-class Phi readings off the fundamental_theorem graph stash (closing
+  ADR117's declared-dormant liveness row — a genuine W-P motion, confirmed in
+  the row's own updated material_relation text), the Volume III surplus split
+  s = p+i+r+t as an extensive ratio-of-sums off U1's new tick_ attrs, and the
+  matter-book overshoot O = C/B honestly (None on a zero denominator, never
+  WorldState.overshoot_ratio's fabricated 999.0 sentinel). A reviewer finding
+  on the same unit caught the Phi tri-decomposition components hardcoded to
+  five None literals with no actual graph read behind them (a false
+  "wired to light up" claim) — fixed by giving each component (unequal
+  exchange, reproduction, domestic, the report-only Phi_III term, and the
+  total) its own named graph.get_graph_attr reads and a call into the
+  matching value_form builder only when every required input resolves; every
+  input is still genuinely absent tree-wide today, so behavior is unchanged,
+  but the read sites are now real (W-C dataflow declaration) feeding a real
+  projection consumer (W-P) — a future producer lights the component with no
+  further change to this module. U3 (field-state dossier, W-P): new
+  project_field_state ports web/game/engine_bridge.py's get_field_state read
+  logic verbatim (contradiction_fields, field_derivatives laplacian/df_dt
+  only, fascist_alignment, TENANCY-anchored field_gradients, graph-level
+  principal_field/dialectical_regime) into a pure projection, reading the
+  live post-tick graph directly, never a from_graph() round-trip. U4
+  (balkanization dossier, W-P found / W-C deferred): new project_faction
+  mirrors project_sovereign's recipe exactly, deriving territory_influence
+  from outgoing INFLUENCES edges; verified honest-empty on every real
+  headless campaign because no engine scenario seeds NodeType.FACTION today
+  (only the legacy web bridge's _seed_balkanization_layer does) — porting
+  that seed is a physics change out of this program's scope, EXPLICITLY
+  DEFERRED to the RED_OGV sovereignty-inert repair program (see
+  ai/wiring-doctrine.md's gap ledger, new OPEN row). U5 (event-anchoring,
+  W-C): the TENANCY-inversion primitive duplicated in web/game/
+  engine_bridge.py and projection/verbs/plate.py is hoisted into one shared
+  babylon.projection.territory_anchor home; chronicle_events_from_bus gains
+  an optional graph= parameter so class-scoped chronicle events (UPRISING
+  and the reactionary-verb family) resolve a real territory anchor when the
+  session's live graph is threaded through, never a from_graph() round-trip
+  (which drops TENANCY edges). U6 (habitability, W-G-shaped broadcast):
+  CountyView gains an Optional habitability field read straight off the live
+  graph (MetabolismSystem's transient territory attr, excluded from
+  WorldState.from_graph() by TERRITORY_EXCLUDED_FIELDS); a new
+  hex_habitability_by_county_inheritance helper gives every hex its parent
+  county's live reading — documented explicitly as county-grain broadcast
+  (one number inherited, not a sum partitioned), NOT hex-native, because no
+  dynamic_hex_state column stores hex-resolution habitability; a real
+  substrate column remains the pending prerequisite for a hex-native
+  reading.
+consequences: >-
+  specs/24-archive/test-port-ledger.md's four LOUD gap rows (192-195) and
+  their numbered closure items (1-4) are now all CLOSED — WO-52's cutover
+  gate has zero open rows from the original disabled test_engine_bridge.py
+  sweep. The liveness registry's fundamental_theorem row moves from
+  zero-consumer dormant to a real consumer_files entry
+  (src/babylon/projection/economy.py); its wire fields still need the same
+  projection/veil.py TIER1_VALUE_RELATION_FIELDS forward-pin as any other
+  value-relation field before they'd reach a web-facing endpoint — unchanged
+  by this unit. No qa:regression baseline drift: every change is either a
+  projection-layer (read-only, vault-materialized) addition, or in U1's
+  case a new tick_-prefixed graph attribute confirmed unread by any
+  dense-trace/gate-coverage registry column. The balkanization FACTION-node
+  seeding gap is recorded, not fixed, as a new OPEN row in
+  ai/wiring-doctrine.md's §4 gap ledger citing the RED_OGV repair program
+  (red-ogv-sovereignty-inert-repair) as its owner; per-hex habitability
+  stays an honest county-grain inheritance until a dynamic_hex_state column
+  exists to store a real hex-native reading. This ADR is a governance
+  close-out: no production code changes ship with it.
+file: ADR125_t3_gap_projections.yaml

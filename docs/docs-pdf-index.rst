@@ -1,21 +1,20 @@
 Babylon: The Fall of America
 ============================
 
-A geopolitical simulation engine modeling the collapse of American hegemony
-through Marxist-Leninist-Maoist Third Worldist (MLM-TW) theory.
-
-**Graph + Math = History**
-
-   *"Collapse is certain. Revolution is possible.*
-   :hope:`Organization is the difference.`\ *"*
+Babylon is an entertainment-first political-economy game powered by a
+deterministic simulation engine.
 
 .. note::
 
    This PDF contains the complete Babylon documentation: tutorials, how-to
    guides, concepts, and reference material.
 
-   The Necropolis Codex aesthetic reflects the grim machinery of imperial
-   collapse---institutional, archival, stained with historical violence.
+   ``CONSTITUTION.md`` v4.1.0 is the authority. ``NORTH_STAR.md`` gives the
+   ``product promise``, honest ``Bevy admin/viewer`` status, behavioral
+   validation standard, and ordered executable gates.
+
+   The look of the ``Necropolis Codex`` shows institutions, archives, and
+   historical violence.
    Green text illuminates only content about revolutionary organization.
 
 .. toctree::

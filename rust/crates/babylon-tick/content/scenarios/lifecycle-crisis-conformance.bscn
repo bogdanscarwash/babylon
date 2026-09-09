@@ -1,0 +1,113 @@
+; The DISCRIMINATING conformance world for `lifecycle/dpd-circuit` — a
+; second, deliberately-different-from-shipped-defaults `:const` environment
+; that exercises the two regions `lifecycle-conformance.bscn` cannot reach.
+;
+; Verifier finding (adversarial review of PR #493): under the SHIPPED
+; defines.yaml values, all four subjects in `lifecycle-conformance.bscn`
+; compute the identical legitimation index (0.6039), the identical STABLE
+; classification, and — since `caregiver-ideology-default` and
+; `institutional-hegemony-default` are both `0.5c` — the identical
+; `transmitted_ideology` (0.5) regardless of `caregiver-weight`/
+; `institutional-weight`. Two mutations that should be caught by the
+; conformance suite were NOT: swapping the two ideology weights, and
+; collapsing the whole crisis-classification ladder to a constant. Both are
+; real coverage gaps, not artifacts of a wrong test — D-1 (the `.bsl`
+; header) correctly models these nine values as global `:const` because the
+; SHIPPED engine never diverges them per territory, but "never diverges
+; under shipped defaults" is not "cannot be tested": every one of these
+; values is a genuinely runtime-moddable `defines.yaml` coefficient, and
+; the classification ladder and the ideology weights are both real,
+; player-reachable mechanics under a different tuning.
+;
+; This scenario is that different tuning, not a hypothetical: it feeds the
+; SAME rule pack a `:const` environment in which
+;   (a) the legitimation index falls to 0.1 (all five components lowered to
+;       0.1, weights unchanged and still summing to 1.0) — below
+;       legitimation-crisis-threshold (0.3c) — so CRISIS entry and the
+;       repaired D-5 guard's positive half (LEGITIMATION_CRISIS firing on
+;       the STABLE/UNSTABLE -> CRISIS edge, and NOT re-firing on an
+;       already-CRISIS subject) both actually execute; and
+;   (b) `caregiver-ideology-default`/`institutional-hegemony-default` are
+;       `0.3c`/`0.8c` — the frozen `compute_ideology_transmission` doctest's
+;       own worked example (`formulas/lifecycle.py:189-194`) — so
+;       `caregiver-weight`/`institutional-weight` are no longer
+;       interchangeable inputs.
+;
+; Two subjects: one crossing INTO crisis this tick (proves the guard fires
+; on the edge), one already CRISIS and staying CRISIS (proves the guard
+; does NOT re-fire — edge-triggered, not level-triggered, which is the
+; whole point of D-5's repair). Population/wealth seeds are reused verbatim
+; from `lifecycle-conformance.bscn`'s core-county/growing-county so the DPD
+; block's post-tick numbers are already-verified values, not new arithmetic
+; to re-derive.
+(scenario lifecycle/crisis-conformance
+  (deffield territory/pop-d int extensive)
+  (deffield territory/pop-p int extensive)
+  (deffield territory/pop-d-prime int extensive)
+  (deffield territory/wealth-d-prime int extensive)
+  (deffield territory/dependency-ratio int intensive)
+  (deffield territory/legitimation-index int intensive)
+  (deffield territory/legitimation-crisis int intensive)
+  (deffield territory/transmitted-ideology int intensive)
+
+  ; Rates: unchanged from defines.yaml (same as lifecycle-conformance.bscn).
+  (defconst lifecycle/birth-rate 0.0107c)
+  (defconst lifecycle/rate-d-to-p 0.0556c)
+  (defconst lifecycle/rate-p-to-d-prime 0.0213c)
+  (defconst lifecycle/rate-d-prime-to-death 0.039c)
+  ; Legitimation weights: unchanged (sum to 1.0, per D-4's own argument).
+  (defconst lifecycle/legit-w-home-ownership 0.35c)
+  (defconst lifecycle/legit-w-healthcare-security 0.3c)
+  (defconst lifecycle/legit-w-retirement-confidence 0.2c)
+  (defconst lifecycle/legit-w-pension-coverage 0.1c)
+  (defconst lifecycle/legit-w-ss-replacement 0.05c)
+  ; Legitimation COMPONENTS: lowered uniformly to 0.1c (NOT the defines.yaml
+  ; values) so the weighted index is 0.1*(0.35+0.3+0.2+0.1+0.05) = 0.1 —
+  ; below the crisis threshold below. A deliberately different, but still
+  ; in-domain [0,1], modded tuning; see the header.
+  (defconst lifecycle/pension-coverage-rate 0.1c)
+  (defconst lifecycle/home-ownership-rate 0.1c)
+  (defconst lifecycle/ss-replacement-rate 0.1c)
+  (defconst lifecycle/healthcare-security 0.1c)
+  (defconst lifecycle/retirement-confidence 0.1c)
+  ; Thresholds: unchanged.
+  (defconst lifecycle/legitimation-crisis-threshold 0.3c)
+  (defconst lifecycle/legitimation-unstable-threshold 0.5c)
+  ; Ideology weights: unchanged.
+  (defconst lifecycle/ideology-caregiver-weight 0.7c)
+  (defconst lifecycle/ideology-institutional-weight 0.3c)
+  (defconst lifecycle/ideology-regression-coefficient 0.4c)
+  ; The frozen doctest's own worked example
+  ; (formulas/lifecycle.py:189-194): 0.3 / 0.8, NOT 0.5 / 0.5, so the two
+  ; weights above are discriminated inputs rather than interchangeable
+  ; ones.
+  (defconst lifecycle/caregiver-ideology-default 0.3c)
+  (defconst lifecycle/institutional-hegemony-default 0.8c)
+
+  ; Same pop-d/pop-p/pop-d-prime/wealth-d-prime seed as core-county
+  ; (lifecycle-conformance.bscn) — post-tick DPD numbers are therefore
+  ; already-verified values. PRE-crisis STABLE; this tick's index (0.1)
+  ; is CRISIS, so this subject crosses the edge.
+  (node entering-crisis NodeType/TERRITORY
+    (territory/pop-d 2150)
+    (territory/pop-p 6050)
+    (territory/pop-d-prime 1800)
+    (territory/wealth-d-prime 10000000)
+    (territory/dependency-ratio 0)
+    (territory/legitimation-index 0)
+    (territory/legitimation-crisis 0)
+    (territory/transmitted-ideology 0))
+
+  ; Same seed as growing-county. PRE-crisis CRISIS already; this tick's
+  ; index (0.1) is ALSO CRISIS, so this subject must NOT re-fire
+  ; LEGITIMATION_CRISIS (D-5's edge-triggered repair, proven from the
+  ; other direction).
+  (node already-crisis NodeType/TERRITORY
+    (territory/pop-d 3000)
+    (territory/pop-p 5000)
+    (territory/pop-d-prime 1500)
+    (territory/wealth-d-prime 5000000)
+    (territory/dependency-ratio 0)
+    (territory/legitimation-index 0)
+    (territory/legitimation-crisis 2)
+    (territory/transmitted-ideology 0)))

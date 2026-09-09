@@ -1,0 +1,238 @@
+; The Program 28 B2 demo world (Phase B, Task 7): twelve real-FIPS counties
+; carrying the lifecycle/dpd-circuit rule pack, plus the six
+; vitality/subsistence-and-death fixture nodes verbatim — one scenario,
+; two node types, both rule packs running together in governed phase order:
+; Vitality @1 before Lifecycle @7.
+;
+; The FIPS codes are the twelve LOWEST-FIPS counties in the committed atlas
+; (`assets/map/county_atlas.bin`, sorted ascending by B1 Task 1 Step 5) —
+; fixed by running `tests/print_demo_counties.rs` against the committed
+; artifact, not by recall. Printed output (2026-08-11), verbatim:
+;
+;   0: fips=01001 name=Autauga County, AL
+;   1: fips=01003 name=Baldwin County, AL
+;   2: fips=01005 name=Barbour County, AL
+;   3: fips=01007 name=Bibb County, AL
+;   4: fips=01009 name=Blount County, AL
+;   5: fips=01011 name=Bullock County, AL
+;   6: fips=01013 name=Butler County, AL
+;   7: fips=01015 name=Calhoun County, AL
+;   8: fips=01017 name=Chambers County, AL
+;   9: fips=01019 name=Cherokee County, AL
+;  10: fips=01021 name=Chilton County, AL
+;  11: fips=01023 name=Choctaw County, AL
+;
+; Each of the twelve re-stamps one of lifecycle-conformance.bscn's four
+; archetypes (core/growing/recovering/young — same source, same D-P-D'
+; docstring numbers), SCALED by a disclosed, deterministic factor —
+; {0.95, 1.00, 1.05} across the three repeats of each archetype, each
+; result rounded to the nearest integer via ROUND-HALF-TO-EVEN (banker's
+; rounding — Python 3's default `round()`; four values land on an exact
+; `.5` tie before rounding: core's pop-d/pop-p at both the 0.95 and 1.05
+; scale) — so every county starts from a DISTINCT real number while
+; staying visibly the same family as its archetype. `wealth-d-prime`,
+; `dependency-ratio` (always seeded 0, computed) and the legitimation
+; fields stay at their archetype's exact original values — the initial
+; `legitimation-crisis` seed only matters for the tick-1 crisis/recovery
+; EDGE detection (`lifecycle.bsl`'s `prev-crisis` mechanism), which a
+; population perturbation has no bearing on.
+;
+; idx  archetype           pop-d  pop-p  pop-d-prime  wealth-d-prime
+;  0   core       (x0.95)   2042   5748   1710         10000000
+;  1   core       (x1.00)   2150   6050   1800         10000000
+;  2   core       (x1.05)   2258   6352   1890         10000000
+;  3   growing    (x0.95)   2850   4750   1425          5000000
+;  4   growing    (x1.00)   3000   5000   1500          5000000
+;  5   growing    (x1.05)   3150   5250   1575          5000000
+;  6   recovering (x0.95)   1900   6650   1900         20000000
+;  7   recovering (x1.00)   2000   7000   2000         20000000
+;  8   recovering (x1.05)   2100   7350   2100         20000000
+;  9   young      (x0.95)   3800   5225      0                0
+; 10   young      (x1.00)   4000   5500      0                0
+; 11   young      (x1.05)   4200   5775      0                0
+;
+; The six vitality/subsistence-and-death fixture nodes (core, bourgeoisie,
+; hermit, last-worker, remnant, dissolved) are minted verbatim from
+; vitality-conformance.bscn — by construction (the Multi-Rule Decision
+; section's collision check), vitality's contribution to this demo is
+; INVISIBLE on the map surface itself (social-class nodes carry no
+; territorial binding); it shows up only in the event feed
+; (ENTITY_DEATH-family events).
+(scenario lifecycle/us-counties-demo
+  ; --- territory half (lifecycle) ---
+  (deffield territory/pop-d int extensive)
+  (deffield territory/pop-p int extensive)
+  (deffield territory/pop-d-prime int extensive)
+  (deffield territory/wealth-d-prime int extensive)
+  (deffield territory/dependency-ratio int intensive)
+  (deffield territory/legitimation-index int intensive)
+  (deffield territory/legitimation-crisis int intensive)
+  (deffield territory/transmitted-ideology int intensive)
+
+  ; --- social-class half (vitality) ---
+  (deffield social-class/active int extensive)
+  (deffield social-class/population int extensive)
+  (deffield social-class/wealth int extensive)
+  (deffield social-class/subsistence-multiplier int intensive)
+  (deffield social-class/s-bio int intensive)
+  (deffield social-class/s-class int intensive)
+  (deffield social-class/inequality int intensive)
+
+  ; The defines environment, transcribed verbatim from
+  ; lifecycle-conformance.bscn:56-76 and vitality-conformance.bscn:43-44.
+  (defconst lifecycle/birth-rate 0.0107c)                         ; :508
+  (defconst lifecycle/rate-d-to-p 0.0556c)                        ; :509
+  (defconst lifecycle/rate-p-to-d-prime 0.0213c)                  ; :510
+  (defconst lifecycle/rate-d-prime-to-death 0.039c)               ; :511
+  (defconst lifecycle/pension-coverage-rate 0.73c)                ; :515
+  (defconst lifecycle/home-ownership-rate 0.656c)                 ; :516
+  (defconst lifecycle/ss-replacement-rate 0.426c)                 ; :517
+  (defconst lifecycle/healthcare-security 0.6c)                   ; :518
+  (defconst lifecycle/retirement-confidence 0.5c)                 ; :519
+  (defconst lifecycle/legit-w-home-ownership 0.35c)               ; :520
+  (defconst lifecycle/legit-w-healthcare-security 0.3c)           ; :521
+  (defconst lifecycle/legit-w-retirement-confidence 0.2c)         ; :522
+  (defconst lifecycle/legit-w-pension-coverage 0.1c)              ; :523
+  (defconst lifecycle/legit-w-ss-replacement 0.05c)               ; :524
+  (defconst lifecycle/legitimation-crisis-threshold 0.3c)         ; :526
+  (defconst lifecycle/legitimation-unstable-threshold 0.5c)       ; :527
+  (defconst lifecycle/ideology-caregiver-weight 0.7c)             ; :540
+  (defconst lifecycle/ideology-institutional-weight 0.3c)         ; :541
+  (defconst lifecycle/ideology-regression-coefficient 0.4c)       ; :542
+  (defconst lifecycle/caregiver-ideology-default 0.5c)            ; D-2, not in defines.yaml
+  (defconst lifecycle/institutional-hegemony-default 0.5c)        ; D-2, not in defines.yaml
+  (defconst economy/base-subsistence 0.0005c)
+  (defconst economy/death-threshold 0.001c)
+
+  ; --- twelve territories ---
+  ; core-county archetype (PRE-crisis STABLE), scaled 0.95/1.00/1.05.
+  (node county-01001 NodeType/TERRITORY
+    (territory/pop-d 2042) (territory/pop-p 5748) (territory/pop-d-prime 1710)
+    (territory/wealth-d-prime 10000000) (territory/dependency-ratio 0)
+    (territory/legitimation-index 0) (territory/legitimation-crisis 0)
+    (territory/transmitted-ideology 0))
+  (node county-01003 NodeType/TERRITORY
+    (territory/pop-d 2150) (territory/pop-p 6050) (territory/pop-d-prime 1800)
+    (territory/wealth-d-prime 10000000) (territory/dependency-ratio 0)
+    (territory/legitimation-index 0) (territory/legitimation-crisis 0)
+    (territory/transmitted-ideology 0))
+  (node county-01005 NodeType/TERRITORY
+    (territory/pop-d 2258) (territory/pop-p 6352) (territory/pop-d-prime 1890)
+    (territory/wealth-d-prime 10000000) (territory/dependency-ratio 0)
+    (territory/legitimation-index 0) (territory/legitimation-crisis 0)
+    (territory/transmitted-ideology 0))
+
+  ; growing-county archetype (PRE-crisis UNSTABLE), scaled 0.95/1.00/1.05.
+  (node county-01007 NodeType/TERRITORY
+    (territory/pop-d 2850) (territory/pop-p 4750) (territory/pop-d-prime 1425)
+    (territory/wealth-d-prime 5000000) (territory/dependency-ratio 0)
+    (territory/legitimation-index 0) (territory/legitimation-crisis 1)
+    (territory/transmitted-ideology 0))
+  (node county-01009 NodeType/TERRITORY
+    (territory/pop-d 3000) (territory/pop-p 5000) (territory/pop-d-prime 1500)
+    (territory/wealth-d-prime 5000000) (territory/dependency-ratio 0)
+    (territory/legitimation-index 0) (territory/legitimation-crisis 1)
+    (territory/transmitted-ideology 0))
+  (node county-01011 NodeType/TERRITORY
+    (territory/pop-d 3150) (territory/pop-p 5250) (territory/pop-d-prime 1575)
+    (territory/wealth-d-prime 5000000) (territory/dependency-ratio 0)
+    (territory/legitimation-index 0) (territory/legitimation-crisis 1)
+    (territory/transmitted-ideology 0))
+
+  ; recovering-county archetype (PRE-crisis CRISIS — fires
+  ; LEGITIMATION_RECOVERY on tick 1 under these defconsts, same as the
+  ; conformance scenario, unaffected by the population scale), scaled
+  ; 0.95/1.00/1.05.
+  (node county-01013 NodeType/TERRITORY
+    (territory/pop-d 1900) (territory/pop-p 6650) (territory/pop-d-prime 1900)
+    (territory/wealth-d-prime 20000000) (territory/dependency-ratio 0)
+    (territory/legitimation-index 0) (territory/legitimation-crisis 2)
+    (territory/transmitted-ideology 0))
+  (node county-01015 NodeType/TERRITORY
+    (territory/pop-d 2000) (territory/pop-p 7000) (territory/pop-d-prime 2000)
+    (territory/wealth-d-prime 20000000) (territory/dependency-ratio 0)
+    (territory/legitimation-index 0) (territory/legitimation-crisis 2)
+    (territory/transmitted-ideology 0))
+  (node county-01017 NodeType/TERRITORY
+    (territory/pop-d 2100) (territory/pop-p 7350) (territory/pop-d-prime 2100)
+    (territory/wealth-d-prime 20000000) (territory/dependency-ratio 0)
+    (territory/legitimation-index 0) (territory/legitimation-crisis 2)
+    (territory/transmitted-ideology 0))
+
+  ; young-county archetype (no D' cohort), scaled 0.95/1.00/1.05.
+  (node county-01019 NodeType/TERRITORY
+    (territory/pop-d 3800) (territory/pop-p 5225) (territory/pop-d-prime 0)
+    (territory/wealth-d-prime 0) (territory/dependency-ratio 0)
+    (territory/legitimation-index 0) (territory/legitimation-crisis 0)
+    (territory/transmitted-ideology 0))
+  (node county-01021 NodeType/TERRITORY
+    (territory/pop-d 4000) (territory/pop-p 5500) (territory/pop-d-prime 0)
+    (territory/wealth-d-prime 0) (territory/dependency-ratio 0)
+    (territory/legitimation-index 0) (territory/legitimation-crisis 0)
+    (territory/transmitted-ideology 0))
+  (node county-01023 NodeType/TERRITORY
+    (territory/pop-d 4200) (territory/pop-p 5775) (territory/pop-d-prime 0)
+    (territory/wealth-d-prime 0) (territory/dependency-ratio 0)
+    (territory/legitimation-index 0) (territory/legitimation-crisis 0)
+    (territory/transmitted-ideology 0))
+
+  ; --- six social classes (vitality-conformance.bscn, verbatim) ---
+  ; Fed: cost 0.05 against wealth 1000, coverage far above threshold.
+  (node core NodeType/SOCIAL_CLASS
+    (social-class/active 1)
+    (social-class/population 100)
+    (social-class/wealth 1000)
+    (social-class/subsistence-multiplier 1)
+    (social-class/s-bio 1)
+    (social-class/s-class 1)
+    (social-class/inequality 0))
+
+  ; The Drain scaled by a standard of living: five times the per-head cost.
+  (node bourgeoisie NodeType/SOCIAL_CLASS
+    (social-class/active 1)
+    (social-class/population 4)
+    (social-class/wealth 500)
+    (social-class/subsistence-multiplier 5)
+    (social-class/s-bio 2)
+    (social-class/s-class 8)
+    (social-class/inequality 0))
+
+  ; A block of one that SURVIVES.
+  (node hermit NodeType/SOCIAL_CLASS
+    (social-class/active 1)
+    (social-class/population 1)
+    (social-class/wealth 100)
+    (social-class/subsistence-multiplier 1)
+    (social-class/s-bio 1)
+    (social-class/s-class 1)
+    (social-class/inequality 0))
+
+  ; Starvation: one member, post-drain wealth 0.9995 against needs of 2.
+  (node last-worker NodeType/SOCIAL_CLASS
+    (social-class/active 1)
+    (social-class/population 1)
+    (social-class/wealth 1)
+    (social-class/subsistence-multiplier 1)
+    (social-class/s-bio 1)
+    (social-class/s-class 1)
+    (social-class/inequality 0))
+
+  ; The zombie failsafe: one member, no wealth at all.
+  (node remnant NodeType/SOCIAL_CLASS
+    (social-class/active 1)
+    (social-class/population 1)
+    (social-class/wealth 0)
+    (social-class/subsistence-multiplier 1)
+    (social-class/s-bio 3)
+    (social-class/s-class 1)
+    (social-class/inequality 0))
+
+  ; Already dissolved: the guard must skip it entirely, wealth untouched.
+  (node dissolved NodeType/SOCIAL_CLASS
+    (social-class/active 0)
+    (social-class/population 5)
+    (social-class/wealth 10)
+    (social-class/subsistence-multiplier 1)
+    (social-class/s-bio 1)
+    (social-class/s-class 1)
+    (social-class/inequality 0)))

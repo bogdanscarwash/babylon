@@ -1,0 +1,57 @@
+; The T2 (Program 29, issue #559) edge-lane e2e fixture — dyadic edge reads (edges/edge-between/
+; field-of over an EdgeRef). Anticipatory of Solidarity's own read shape (bsl-language.rst §3.8
+; item 8's worked example) but ships NO Solidarity content — Solidarity's own PORT is a separate
+; Wave C train (ADR198 consequences).
+;
+; Node groups, in declaration order (fixes id assignment, scenario.rs's own contract):
+;   0-1   fold-a/fold-b        the edges-fold graph, first pair (0.125)
+;   2     fold-reporter        Shape 1 subject — sums EVERY SOLIDARITY edge in the whole graph
+;   3-4   pair-x/pair-y        Shape 2a — edge-between resolves (0.03125, pair-x -> pair-y)
+;   5     pair-z                Shape 2b — edge-between fails on the REVERSED direction
+;   6-9   hub/spoke-1/spoke-2/spoke-3   Shape 3 — self-anchored neighbors+edge-between
+;   10-11 fold-c/fold-d        the edges-fold graph, second pair (0.25)
+;
+; social-class/fold-total is COEFFICIENT-typed (D32's own kind for strength) — every strength
+; below, and every fold SUM over them, is chosen to stay inside [0,1] (E-EVAL-020's own domain);
+; see this step's own note for the arithmetic that was corrected.
+;
+; Every strength literal is c-suffixed (Task 6a, T2 plan amendment 2026-08-12): a bare decimal
+; cannot LEX (E-LEX-021), and post-6a load_edge accepts int + p/i/c-suffixed unit-interval
+; strength literals (kind-blind, mirroring the runtime :strength writer; c stays this fixture's
+; idiomatic spelling, since D32 kinds the field Coefficient). The suffix changes NO value — each
+; literal converts bit-exactly (Task 6a design decision 2).
+;
+; `social-class/shape` discriminates which rule fires on which node (the territory/shape
+; convention, query_lane_e2e.rs). Only the SUBJECT of each shape carries a nonzero shape value;
+; every other node is shape 0 (inert — exists only as an edge endpoint).
+(scenario social-class/edge-lane-e2e
+  (defvocabulary NodeType (SOCIAL_CLASS))
+  (defvocabulary EdgeType (SOLIDARITY))
+  (deffield social-class/shape int extensive)
+  (deffield social-class/fold-total coefficient extensive)
+  ; solidarity/strength is IMPLICIT (D32) — deliberately NOT deffield'd here; this fixture is the
+  ; proof that Task 2's wiring seeds it without one.
+
+  (node fold-a NodeType/SOCIAL_CLASS (social-class/shape 0) (social-class/fold-total 0))
+  (node fold-b NodeType/SOCIAL_CLASS (social-class/shape 0) (social-class/fold-total 0))
+  (node fold-reporter NodeType/SOCIAL_CLASS (social-class/shape 1) (social-class/fold-total 0))
+
+  (node pair-x NodeType/SOCIAL_CLASS (social-class/shape 2) (social-class/fold-total 0))
+  (node pair-y NodeType/SOCIAL_CLASS (social-class/shape 0) (social-class/fold-total 0))
+  (node pair-z NodeType/SOCIAL_CLASS (social-class/shape 4) (social-class/fold-total 0))
+
+  (node hub NodeType/SOCIAL_CLASS (social-class/shape 3) (social-class/fold-total 0))
+  (node spoke-1 NodeType/SOCIAL_CLASS (social-class/shape 0) (social-class/fold-total 0))
+  (node spoke-2 NodeType/SOCIAL_CLASS (social-class/shape 0) (social-class/fold-total 0))
+  (node spoke-3 NodeType/SOCIAL_CLASS (social-class/shape 0) (social-class/fold-total 0))
+
+  (node fold-c NodeType/SOCIAL_CLASS (social-class/shape 0) (social-class/fold-total 0))
+  (node fold-d NodeType/SOCIAL_CLASS (social-class/shape 0) (social-class/fold-total 0))
+
+  (edge EdgeType/SOLIDARITY fold-a fold-b 0.125c)
+  (edge EdgeType/SOLIDARITY pair-x pair-y 0.03125c)
+  (edge EdgeType/SOLIDARITY pair-z pair-x 0.015625c)
+  (edge EdgeType/SOLIDARITY spoke-1 hub 0.0625c)
+  (edge EdgeType/SOLIDARITY spoke-2 hub 0.125c)
+  (edge EdgeType/SOLIDARITY spoke-3 hub 0.1875c)
+  (edge EdgeType/SOLIDARITY fold-c fold-d 0.25c))

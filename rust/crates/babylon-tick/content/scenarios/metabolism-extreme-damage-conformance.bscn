@@ -1,0 +1,40 @@
+; The EXTREME-DAMAGE conformance world for `metabolism/biocapacity-update`
+; — proves the `new-max` floor clamp (`max(0.0, max_cap - damage)`) is
+; reachable and mutation-catchable (F4 fix round, adversarial review of PR
+; #501: this clamp was never exercised by any prior fixture — deleting it
+; left all prior tests green).
+;
+; `damage > max-biocapacity` IS reachable inside every field's declared
+; domain: `Territory.biocapacity`/`max_biocapacity` are `Currency` fields
+; with only `ge=0.0` (NO upper bound) in the Pydantic model, and
+; `MetabolismSystem`'s own formulas never clamp `extraction_intensity`
+; either (only `ProductionSystem`'s WRITE side does, at `min(1.0, ...)` —
+; irrelevant to a synthetic conformance fixture that seeds the field
+; directly, bypassing Production entirely). A territory with
+; `biocapacity=100000` (an unusually large but legal stock — e.g. the
+; result of prior gameplay dynamics this fixture does not model) and
+; `extraction_intensity=1` at the PRODUCTION-DEFAULT `hysteresis_rate`
+; (`0.005`) already gives `damage = 100000 * 0.005 = 500`, far exceeding
+; `max_biocapacity = 100` — `max_cap - damage = -400`, and the frozen
+; formula's `max(0.0, ...)` must floor `new_max` to exactly `0.0`, not
+; leave it negative.
+;
+; `biocapacity` itself floors to `0.0` regardless of whether this clamp
+; fires (the ecological cost alone drives `current + delta` far more
+; negative than `-400`), so this clamp's mutation signal lives entirely in
+; `max-biocapacity`, not `biocapacity` — see
+; `metabolism_extreme_damage_conformance.py` for the exact numbers.
+(scenario metabolism/extreme-damage-conformance
+  (deffield territory/biocapacity int extensive)
+  (deffield territory/max-biocapacity int extensive)
+  (deffield territory/extraction-intensity int intensive)
+
+  ; Production defaults — no boost needed, the SEED does the work here.
+  (defconst metabolism/regeneration-rate 0.02c)
+  (defconst metabolism/entropy-factor-x1e6 1200000)
+  (defconst metabolism/hysteresis-rate 0.005c)
+
+  (node extreme-county NodeType/TERRITORY
+    (territory/biocapacity 100000)
+    (territory/max-biocapacity 100)
+    (territory/extraction-intensity 1)))

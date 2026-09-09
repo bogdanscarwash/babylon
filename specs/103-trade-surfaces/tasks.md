@@ -41,7 +41,7 @@
 - [x] T028 Implement `game_county_exposure` view in `api.py`
 - [x] T029 Implement `game_trade_panel` view in `api.py`
 - [x] T030 Add 3 routes in `urls.py`
-- [x] T031 Verify backend tests green: `PYTHONPATH=src poetry run pytest tests/unit/web/ -q`
+- [x] T031 Verify backend tests green: `PYTHONPATH=src uv run pytest tests/unit/web/ -q`
 
 ## Phase 3 — Frontend GREEN
 
@@ -59,7 +59,7 @@
 ## Phase 4 — Gates
 
 - [x] T050 `mise run web:check` green (3 pre-existing tick-resolution failures acceptable)
-- [x] T051 `PYTHONPATH=src poetry run pytest tests/unit/web/ -q` green
+- [x] T051 `PYTHONPATH=src uv run pytest tests/unit/web/ -q` green
 - [ ] T052 Playwright e2e (owner-run, gated on `SPEC061_TEST_SESSION_ID`)
 - [x] T053 County-exposure contract test passes — drill-down chain ends at citations
 - [x] T054 3 MSW contract tests pass

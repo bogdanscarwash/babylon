@@ -1,0 +1,4 @@
+fips,universe_u,below_b,expected_class
+99201,5,0,PRESENT
+99202,100,0,SUPPRESSED
+99203,500,20,PRESENT

@@ -1,9 +1,430 @@
 meta:
-  version: 1.21.0
-  updated: '2026-07-09'
+  version: 1.87.0
+  updated: '2026-08-26'
   description: Architecture Decision Records Index
   format: See individual ADR files in this directory
+  # ADR NUMBER ALLOCATION (controller ruling 2026-07-21, v1.0.0 parallel lanes —
+  # after a three-way 108/109 collision between mainline Amendment AA and both
+  # volume lanes). Blocks: mainline/controller = 109 + anything unallocated;
+  # Vol I lane = ADR110-119; Vol II lane = ADR120-129; T1.1 = ADR130-134;
+  # T1.2 = ADR135-139; T4 = ADR140-144; T7-beta = ADR145-149. Lanes never mint
+  # outside their block; blocks dissolve when the lane merges. ADR125 = T3
+  # gap-projections (post-cascade, next free slot >= 125 per controller
+  # ruling 2026-07-22 — does not fill the reserved Vol I 119 hole).
+  # ADR127-140 = Program 25 (Political Superstructure) lane block, claimed
+  # 2026-07-22 at charter (ADR127) as 127-139 — Vol II's 120-129 and T1.1/T1.2's
+  # 130-139 blocks dissolved at their merges. RENUMBER 2026-07-23 (BD-approved):
+  # mainline minted ADR138 (ledger DOMAIN contracts, pg-domain) while this lane
+  # was in flight; P25 cedes 138, U12 -> ADR139, U13 -> ADR140.
+  # Next mainline free >= 141.
+  # ADR150 = raster-cutover charter, ADR151 = agentic-engineering model
+  # (mainline, next free slot >= 150 above the allocated blocks; merge
+  # reconciliation 2026-07-27: next mainline free >= 152).
+  # ADR152 = interface SFX suite, ADR153 = soundtrack estate (mainline).
+  # Next mainline free >= 154;
+  # ADR160-169 = P26 international-trade lane block (101-trade-activation),
+  # allocated by Director ruling 2026-07-27; ADR160 minted at its charter.
 decisions:
+  ADR254_archive_notification_wakeups:
+    title: PostgreSQL wakeups for the owned Archive worker
+    status: accepted
+    date: '2026-09-05'
+    file: ADR254_archive_notification_wakeups.yaml
+  ADR253_immutable_archive_revisions_and_adoption:
+    title: Immutable Archive revisions and exact historical observations
+    status: proposed
+    date: '2026-09-05'
+    file: ADR253_immutable_archive_revisions_and_adoption.yaml
+  ADR252_native_development_toolchain:
+    title: Native development and release tooling without Nix
+    status: accepted
+    date: '2026-09-04'
+    file: ADR252_native_development_toolchain.yaml
+  ADR169_p26_train_closure:
+    title: 'P26 U5g + U6 phase 2 + train closure: Vol2 composer closes ADR162''s inert half (interactive hex hydration + honest TIGER-absent degradation); trade surfaces render in BOTH Archive clients through the generic subject seam (no new Host method — 59 Python + 5 Rust proofs); all gates green with ONE declared ceremony blessed(p26-defines-categories) (defines_hash-only, zero cell drift); sentinel pins updated in lockstep; follow-ups enumerated (sigma_index generator, 10th-verb registration, routing solver, per-node tariff targeting, ci-data re-cut, _write_manifest ticket, LatAm proxy review)'
+    status: accepted
+    date: '2026-07-28'
+  ADR167_p26_u5_sigma_attribution_estate:
+    title: 'P26 U5a-d — the sigma-composition Phi-attribution estate LIVE: Amin/Wallerstein/MIM + zero-CORE-OUTFLOW Ricci evidence ground the three-tier rule (CORE=0, SEMI damped by data-derived w_semi=0.7395, PERIPHERY undamped); fact_ricci_unequal_exchange_gvc (declared partial amputation undo) anchors sigma gaps; 540-row disjoint partner estate kills the 138.6% denominator; _NODE_TO_PARTNERS crosswalk + russia_csi SEMI re-map + U5f tariff seam + real national ERDI (7.6, not 1.0) in session bootstrap; 2010 shares: china .1008/latin_america .6718 (Non-OECD proxy DISCLOSED for Director review)/eu+canada 0; sigma_index artifact generable-but-deferred (own data unit, 2 documented gotchas)'
+    status: accepted
+    date: '2026-07-28'
+  ADR168_p26_u5f_tariff_levers:
+    title: 'P26 U5f — tariff/duty/tax trade levers through the P25 Policy gauntlet: PolicyAxis.TRADE_TARIFF joins the regulatory-redistributive set (LEGISLATE motions run the same preemption/judicial/capital-strike gauntlet, reform ceiling included — zero new machinery); TradePolicyDefines carries per-node start rates (default-inert, pinned) + a disclosed synthetic dampening placeholder; pure effective_trade seam for the U5d attribution consumer; documented limit: per-node LEGISLATE targeting needs a PolicyAgendaItem schema change (P25 contract — Director-visible follow-up). First concrete P25<->P26 coupling'
+    status: accepted
+    date: '2026-07-27'
+  ADR166_p26_u5e_transport_substrate_slice1:
+    title: 'P26 U5e — transport substrate slice 1 (spec-108 under ADR165): TransportSystem @9.5 DEFAULT-OFF (33->34 systems, byte-identical baseline verified), CorridorMesh pure view over the existing infrastructure DTOs (+conductivity/+adjust_link_condition), flux overlay = demand signal into the sovereign budget OODA (no auto-minting), resolve_build implemented but NOT registered (10th-verb registration = flagged cross-lane step), uniform territory splash via the existing layer3 seam, damped overhang coupling in CapitalVolumeIIDefines, aggregate_connectivity_by_county_pair = the session-reachable read for the Archive supply-lines indicator; res-8 ingested mesh + routing solver remain chartered follow-ups'
+    status: accepted
+    date: '2026-07-27'
+  ADR165_p26_director_rulings_trade_slate:
+    title: 'P26 Director rulings (IX.5, 2026-07-27): Phi-attribution = Option C sigma-gradient composition; core-bloc drain grounded via Amin/Wallerstein/MIM internal-colonies research pass (48.5% core share NOT re-affirmed); india grounded + latin_america constructed with Mexico in it; disjoint partner taxonomy; sub-national Phi accepted-disclosed pending Amendment R; _fetch_node_erdi fixed in-train; sigma D1 delegated (z-score + equal 1/3 weights in defines), D3 = re-ingest Ricci CSV as reference table (declared partial amputation undo); spec-108: static slice-1 blocs, flux overlay = demand signal into the state budget OODA loop via BUILD_INFRASTRUCTURE (no autonomous INFORMAL minting), damped overhang coupling in CapitalVolumeIIDefines, uniform territory splash, aggregated connectivity indicator in the Archive client; NEW directive: tariff/duty/tax instruments join the trade system adjusted via P25 Policy/Electoral (first P25<->P26 coupling). U5 engine train UNBLOCKED'
+    status: accepted
+    date: '2026-07-27'
+  ADR164_p26_u6_archive_trade_surfaces:
+    title: 'P26 U6 phase 1 — Archive trade surfaces, backend seam only: TradeBlocView (kind="trade") joins the ProjectionRecord union with CountyExposureShare/TradeBlocPhiShare rows; pure projectors project_trade_bloc/project_trade_overview fold TradeWiring + last-tick flushed DRAIN_EDGE flows into per-bloc dossiers and the national overview (honest-None degradation, phi conservation visible at the seam); GameSession.subject_view dispatches kind="trade"; ZERO tui/rust changes per the M3 raster-lane non-overlap covenant — phase 2 client rendering deferred until that lane closes (Amendment V: observe() is the durable contract, clients are disposable)'
+    status: accepted
+    date: '2026-07-27'
+  ADR163_p26_u3_faf_freight_and_bloc_grounding:
+    title: 'P26 U3 — freight + bloc grounding: FAF5.7.1 state-level freight folded to per-node annual tons as the hand-maintained faf_bloc_trade_tons artifact (ADR121 pattern; zone 806 EXCLUDED rather than conflating India+Middle East — india/russia_csi carry no tons, disclosed 2018-2024 window warns loudly outside it); india (149) + latin_america (6) grounded in fact_bilateral_trade_annual 2010-2024 from real Census trove data via a loader_to_sources loader (zero-padded CTY_CODE "0009" bug caught and fixed), _NODE_TO_BLOC now maps all 8 INTERNATIONAL_NODES retiring the ADR055 coverage hole; pinned nix dataBuild rebuild -> 59,827,825 rows, product sha 94b8637a..., manifest updated, old DB backed up; follow-ups: ci-data release re-cut (owner-gated), _write_manifest generator-clobber bug, FAF pre-2018 backcast'
+    status: accepted
+    date: '2026-07-27'
+  ADR162_p26_u2_interactive_trade_parity:
+    title: 'P26 U2 — interactive trade parity: TradeWiring seam in game/trade.py carrying the four spec-101 phi-distribution gate inputs + simulated_year + optional vol2_step into every GameSession.advance_tick (runner-twin stamping, DRAIN_EDGE rows folded into the per-tick envelope); WayneCountyTradeScenario seeds the canonical imperial circuit so TRIBUTE finally walks interactively (default wayne_county build byte-identical — SC-007/M3-safe); cli/play.py composition root wires real gamma/melt/Leontief/Vol I-III overrides + trade with LOUD reference-DB degradation; seam row vol2_circulation_vol2_step CLOSED (supplier = game/session.py, F-2 exemption retired, witness ledger 12->11 GRADUATED) with the unconstructed-Vol2CirculationStep half disclosed as a U5 blocking dependency; qa:regression + golden vault verified byte-identical'
+    status: accepted
+    date: '2026-07-27'
+    file: ADR162_p26_u2_interactive_trade_parity.yaml
+  ADR161_p26_u1_sigma_gradient_spec:
+    title: 'P26 U1 — spec-107 sigma-gradient authored (Program 10 ratified 2026-07-08, spec finally written): pure-math domain/economics/sigma/ package (OCC K/v, capital intensity K/L, Pasinetti vertically-integrated labor content, z-score + explicit-weights composition, Hickel-ERDI world anchoring, wage-alignment OLS kept out of sigma inputs per Owner Ruling 2), 38 tests + red-phase pins, NO system insertion (U5 seams declared); theory-line items packaged for DIRECTOR RULING instead of improvised — composite weighting method + canonical weights, world-anchor sample, Ricci UE re-ingestion; SpectrumDefines additions deferred to the wiring unit'
+    status: accepted
+    date: '2026-07-27'
+    file: ADR161_p26_u1_sigma_gradient_spec.yaml
+  ADR160_p26_international_trade_charter:
+    title: 'Program 26 — International Trade charter (Director reopening 2026-07-27, supersedes the 2026-07-20 deferral whose Vol-I/II preconditions were already met by the 2026-07-21 cascade): the spec-101 trade surface is live ONLY on the headless batch path — game/session.py campaigns have no external nodes, silent-no-op phi distribution, a zero-stub Leontief pipeline, and zero TRIBUTE edges — so the program''s spine is U2 interactive parity via ADR109 typed W-C motions (phi context keys, external-node bootstrap, the pre-declared vol2_circulation_vol2_step seam row, ruling-or-wiring for the Leontief overrides). U0 truth reconciliation; U1 author spec-107 sigma-gradient; U3 FAF freight tons + india/latin_america bloc grounding; U4 Phi-attribution v2 = DIRECTOR RULING (theory-line per IX.5, formalizing ADR055''s #1 owner-review item); U5 blocs + flows over the transport substrate priced by Vol III money = POST-P25 engine train (interleaving rule); U6 Archive TUI trade surfaces with the raster lane. Non-overlap covenant vs P25''s 142-file surface verified + binding; lane rebuilt at dev 56d34bd3 (pre-rewrite lineage = local DO-NOT-PUSH tag; 100% patch-equivalent + token-free verified); ADR block 160-169.'
+    status: accepted
+    date: '2026-07-27'
+    file: ADR160_p26_international_trade_charter.yaml
+  ADR153_soundtrack_estate:
+    title: 'The soundtrack estate: 13 CC0 tracks in 5 suites (~29 min) at src/assets/music/ — pure compose() modules against a deterministic composition kit (canonical ordering identical to the SFX renderer, RPN ±12 bends, tempo maps, markers); the unmusicked states scored: menu ambient (five coprime cycles, never realigns), superstructure (bourgeois-waltz ballot, PASOK-bleed reform ceiling with pitch folding, note-by-note officeholder capture), periphery (velocity-transfer unequal exchange, superwage surface/substrate), rift (7-vs-9 overshoot laps, shrinking-birdsong silent spring), and five endgame themes leitmotif-linked to the SFX stingers — red_dawn deletes the Phi motif''s surplus note (D-A-D-A) and resolves the theme''s eternal dominant; byte-pin + suite-census tests; midi:generate-soundtrack; three-lens adversarial critique folded in before merge'
+    status: accepted
+    date: '2026-07-27'
+    file: ADR153_soundtrack_estate.yaml
+  ADR152_interface_sfx_suite:
+    title: 'The interface SFX suite: 39 CC0-licensed General MIDI interface sounds (ui 10 / state 8 / alert 6 / stinger 10 / endgame 5 — one per canonical outcome) generated deterministically from src/assets/sfx/manifest.toml by a strict-typed Pydantic+mido renderer; byte-identity pinned by tests/unit/assets/test_sfx_assets.py; sonic law inherited from music-system.yaml (root E, Phrygian flat-2 denial, tritone E-Bb crisis klaxon, minor-to-major reserved for revolutionary resolution, CC93=solidarity / CC94=atomization / CC71=repression, Phi motif D-A-D-F quoted in game_start + stinger_imperial_rent); loudness doctrine CC7/CC11 maxed with hot velocity floor, zero clipped samples across all 39 files at the documented FluidSynth gain 0.45; three-lens adversarial critique closed (headline catches: missing RPN bend-range declaration fixed renderer-side with ±12 semitones; stinger_false_solidarity added — the fascist bifurcation arm was unsounded); directory-scoped CC0-1.0 (repo-wide license remains an open Director decision); mise midi:generate-sfx; renders stay uncommitted (assets/audio LFS hazard avoided)'
+    status: accepted
+    date: '2026-07-27'
+    file: ADR152_interface_sfx_suite.yaml
+  ADR140_p25_u13_electoral_goldens:
+    title: 'P25 U13 — The five electoral goldens + the step()-parity carriers + the golden ceremony (§5.5): WorldState.superstructure_registers (11 registers, models/superstructure.py canonical tuple; electoral_derecognized joins the sentinel owner map), TickDynamics non-boundary county-attr restamp (fiscal terrain live through the harness), legitimation_index a declared Territory field; factories mitterrand/syriza/bernie_valve on the Wayne substrate (measured phi=0 engages the periphery mirror) + weimar/debs on two_node, register seeding via the carrier, round-trip-fixed-point warming, include_michigan gating (claim-less sovereigns collapse in-run); ElectionHeldEvent + builder carry spoiler_target/shift; SCENARIOS=11 + WAYNE_CALCULATOR_SCENARIOS + five coverage entries with live-verified evidence + the three U8-U10 gap rows DELETED + regex-family at_rest rows (dead-columns only); ceremony blessed(electoral-goldens) minted 5 json + 5 dense csv with the six byte-identical throughout; defines-reader sweep 46/46 as a standing gate; 20 behavioral pins (austerity turn at item 3, capture-dominates-organs, PASOK constant-ratio bleed, spoiler tax + accumulation-anyway, both window routings by topology, a REAL fascist ballot victory). Materialist fixture law recorded: populous classes cannot stay desperate; no wage relation = starvation; worker majorities elect their own line; zero repression = tick-1 revolt.'
+    status: accepted
+    date: '2026-07-27'
+    file: ADR140_p25_u13_electoral_goldens.yaml
+  ADR139_p25_u12_conjunctures_governance_endgame:
+    title: 'P25 U12 — Conjunctures + governance endgame + the Third-Worldist ledger (§3.4/§3.5/§4): popular-front conjuncture (one consolidation-pressure measure, two adapters; forced arm on EVERY line, commit arm accrues CO_OPTIVE dependence); the ADR137 deferrals landed (spoiler arithmetic, HOST_DERECOGNIZED absorbing expulsion, host-discipline clamp); the SYRIZA fork (pure laws in domain/politics/governance_endgame.py — rupture needs live dual-power organs AND an uncaptured party, SYRIZA''s organ-less capitulation is the standing math; synthesis window needs bridges + a Phi-starved state, else Allende; DUAL_POWER read LIVE over claim rows; betrayal_threshold gets its FIRST consumer with a once-per-class crossing edge trigger); PolicySystem stamps the absorbing governance_endgame register at first ceiling contact in office, ElectoralSystem consumes punctually one tick later (Allende = government falls through L-SUSPEND, a coup IS a suspension; synthesis = hope spikes through the bridges; capitulate = the delivery-gap machinery IS the PASOK trajectory) + durable betrayal windows; the periphery mirror (MEASURED low-Phi share contracts every gauntlet bar by periphery_ceiling_factor — Allende/Arbenz as the DEFAULT geometry; FiscalTerrain.phi_measured = attribute presence, III.11); L-RECEIPTS (NodeKind/BoundaryEdgeKind extended, migration 0040 minted PAST dev''s 0039, session-bound BoundaryFlowRegister, ImperialRent/Policy provenance rows, end-to-end chain test — no flow without a row). Events 98->100, taxonomy 63->65 (+ the C1 stale-pin reconciliation, staged-files-only hook class); 3 defines, two metadata ceremonies; qa 6/6 byte-identical per commit; dev merged at closeout (AC/AD, ADR150/151).'
+    status: accepted
+    date: '2026-07-27'
+    file: ADR139_p25_u12_conjunctures_governance_endgame.yaml
+  ADR151_agentic_engineering_model:
+    title: 'The Agentic Engineering model (BD directive 2026-07-27, in-session): names + ratifies the project development model — a human DIRECTOR who steers direction and holds SOLE, reserved authority over the ideological/theoretical line (Article-I MLM-TW commitments, doctrine trees, political framing, the five canonical outcomes), with autonomous AI agents as the engineering workforce across parallel isolated worktree lanes (interleaving rule: one engine train on the tick pipeline at a time). Autonomy LICENSED BY THE GATES not by trust: determinism III.7 / sentinel family / behavioral contracts III.12 / TDD red phase / Loud Failure III.11 / baseline ceremonies §6.5 — green self-merges, red STOPs, an ideological-line question escalates to the Director not IX.3. Benevolent-Dictator model SUBSUMED (not replaced) as the Director role: final merge authority to main + reserved ideological authority. Amendment AD adds IX.5, v2.17.0->v2.18.0 (MINOR — a development-model designation, no primitive/tick/architecture change). Docs swept: CONTRIBUTORS.md, README.md, docs/agents/governance.md, CLAUDE.md.'
+    status: accepted
+    date: '2026-07-27'
+    file: ADR151_agentic_engineering_model.yaml
+  ADR150_raster_cutover:
+    title: 'The Raster Cutover charter (BD interview rulings BD-1..BD-10, 2026-07-27): Rust/Ratatui client IS v1.0''s terminal Archive client, in-tree at rust/ (supersedes the extraction ruling for client crates only); 3D lane chartered v1.0-BLOCKING (topology hypergraph + contradiction-field surface block release; extrusion + ridgelines best-effort) rendered via hypergraph-rs raster/cells3d as a rev-pinned cargo git-dep (un-pauses that lane; deploy-key CI); tutorial-BDD parity + BD Gate 3 at M3; M7 Textual deletion INSIDE v1.0 with the maturin wheel entering the default install/T7 closure; P25 lands first; ecosystem adoptions (babylon-md fork of tui-markdown, native pulldown-cmark wikilinks, ratatui-image, tui-widgets, insta) + confirmed build-custom gaps (choropleth raster, n-ary hypergraph layout, ridgelines); Amendment AC = the constitutional half (v2.17.0); rev-1 doc errors corrected (7,866 LOC / 221 Pilot sites / real parity harness / ADR-number collisions / packaging contradiction)'
+    status: implemented
+    date: '2026-07-27'
+    file: ADR150_raster_cutover.yaml
+    # status flipped accepted -> implemented at M7 program close (2026-07-28,
+    # ceremony commit 4371af4b) -- in lockstep with the ADR file per Task 47
+  ADR138_domain_contracts:
+    title: 'Ledger DOMAIN contracts: lift the models/types.py range contracts (+ the FIPS/H3 format regexes duplicated across 7 migrations) into single PostgreSQL CREATE DOMAIN objects — 4 numeric (probability/currency/ratio/labor_hours, bounds CODEGEN''d from types.py annotated_types) + 3 format (fips5/fips2/h3index, patterns single-sourced in the domain_sync registry). ENFORCE, NEVER COMPUTE: CHECK + NULL policy only, no GENERATED/trigger/float-arithmetic; a DOMAIN is a RANGE gate, not a precision gate — the 1e-5/1e-6 SnapToGrid quantization stays app-side (Pydantic''s job). Guarded by a new mutation-validated domain_sync sentinel (babylon/sentinels/domain_sync/, wired into tools/sentinel_check.py) that re-derives each expected CHECK from types.py/registry and reds on drift from either side. NO INVENTED DOMAINS: only types with a real inline-CHECK backing column are emitted; Intensity/Coefficient/Gini/Ideology/SignedLaborHours deferred with cited reasons in registry.DEFERRED_DOMAINS. Retrofit of the inline duplicates DEFERRED as byte-safety-unproven (loud follow-up). SQLite reference-DB keeps app-side enforcement (no DOMAINs). qa:regression byte-identical (validate, don''t compute); migration idempotent (pg_type-guarded DO block). Tests: 21 unit + 5 PG integration.'
+    status: accepted
+    date: '2026-07-23'
+    file: ADR138_domain_contracts.yaml
+  ADR137_p25_u11_doctrine_fork:
+    title: 'P25 U11 — The Doctrine Fork: reformist trunk REPLACED by five electoral stances under trade_unionism (abstention_boycott / class_struggle_elections / entryism / independent_ballot_line / governance_road), ALL with ZERO acquisition tag_deltas — reformist tag movement flows through the practice drift term, never punitive statics. PracticeVariable = a SEPARATE enum (never pseudo-tags; the 3-tag DoctrineTag pins survive untouched, disjointness-tested); trap DSL grows an @coeff RHS (thresholds → defines, unknown coeff fails LOUD); liquidationism = an ABSORBING STATE sprung by measured practice (solidarity floor × co-optive share × petty-bourgeois drift); officeholder capture = Michels as a RATE resisted by cadre×cohesion (office_tenure/institutional_pull fields, pull→theory rot, CLASS_ANALYSIS decay keyed to the delivery GAP); line changes = congress SPLITS via the existing DT-5 machinery (LINE_STRUGGLE_SPLIT + split_asset_retention); DoctrineCapability gates PARAMETER growth on the fixed 9 verbs — Campaign(Election, run|boycott), Negotiate(coalition), Mobilize(canvass) — refusing unacquired modes LOUDLY (gate MUTATION-VALIDATED: neutering fails 7), cadre_valve_decouple = abstention takes tenure but no pull; the legacy liberal-trap detector ABSORBED into a new ORGANIZATIONAL scale of political_form (org positions register → sorted tuple through the sole GraphInputs site → ratio-of-sums blended at political_form_org_weight; weight 0 reproduces U8 exactly), its own thresholds DECLARED not-migrated (legacy-web-only consumers). GOLDEN_CHAIN moved 4× all documented, the G move ATTRIBUTED by forcing the guard False. 10 new defines, ONE metadata ceremony; qa 6/6 byte-identical (all six carry org_count=0 — and the module docstring saying "five" was corrected); 4 wiring rows CLOSED, ActionSpec player surface CITED as blocking; U12 deferral ledger declares host discipline / entryism derecognition / spoiler arithmetic.'
+    status: accepted
+    date: '2026-07-22'
+    file: ADR137_p25_u11_doctrine_fork.yaml
+  ADR136_p25_u10_electoral_system:
+    title: 'P25 U10 — ElectoralSystem @17.45 (the clocked ambient machine, 33rd system): per-sovereign election clock (cycle_ticks by ADMINISTERS-DAG depth); turnout law over allegiance masses (turnout_share/competitiveness kernels) w/ ξ_t only at recount grain; government formation = FactionBalance perturbation (FIRST-EVER faction_balance write-back, wires dormant faction_dynamics renormalizer) + governments register (PolicySystem incumbent = governing party, lights U9 θ.betrayal); InternalBalanceOfForces shift (activates dead-until-wired update_internal_balance; 2 institution events classified, SEVERITY 60→62); legitimation refresh; L-SUSPEND (bonapartist + floor ⟹ ELECTIONS_SUSPENDED); T-7 disillusion routing (bridges→organization / no-bridges→fascist_alignment, AllegianceSystem consumer) + struggle backfire coupling (wires dormant compute_legitimation_amplifier). political_form PROMOTED shadow→canonical — EMPIRICAL VERDICT qa 6/6 byte-identical (no ceremony; ADR078 drift format-impossible now); couplings deferred U12. 3 new defines, metadata ceremony; pins 32→33; superstructure sentinel +2 registers; full gate 14,3xx green ON-TREE.'
+    status: accepted
+    date: '2026-07-22'
+    file: ADR136_p25_u10_electoral_system.yaml
+  ADR135_p25_u9_policy_system:
+    title: 'P25 U9 — PolicySystem @17.47 (LEGISLATE resolver + reform ceiling, 32nd system): agenda register drains through the §2.4 gauntlet — preemption on the first-ever ADMINISTERS edge, judicial strike-down off the first-ever Institution node, funding identity w/ deficit financing under bond discipline (debt_service BUILT: SovereignFiscalState register × the live endogenous rate), overlays effective next tick by position, per-class delivery ledger (θ.betrayal goes live, ADR134 §5 discharged); capital strike = the extracted grain-agnostic equalization law over county tick_capital_stock (ΣΔc=0, hex computer delegates); npc_stub REPRESS-misstamp on LEGISLATE fixed at source; I-ORD = 19th sentinel (declared write ownership, sentinels/superstructure/); 8 new defines, two metadata ceremonies; qa byte-identical w/ the system live; caught+fixed the stale-at-30 gate-coverage count pin (U8 closeout gate ran off-tree).'
+    status: accepted
+    date: '2026-07-22'
+    file: ADR135_p25_u9_policy_system.yaml
+  ADR134_p25_u8_allegiance_valve:
+    title: 'P25 U8 — AllegianceSystem @17.42 (THE VALVE, 31st system): allegiance drift + hope field H(c) + the FIRST Agitation→Organization conversion pathway throttled by (1−v·H) (TRAP 1 discharged, router untouched); parties-exist guard proves qa byte-identity (TRAP 3); political_form producer closes U3''s deferred input under the BD ruling SYSTEM-LOYAL vs SYSTEM-OPPOSITIONAL; allegiance = real SocialClass field, hope = dual-registered transient; 3 new Θ_feel defines w/ metadata ceremony; L-VALVE bound to the live quantity.'
+    status: accepted
+    date: '2026-07-22'
+    file: ADR134_p25_u8_allegiance_valve.yaml
+  ADR132_p25_u6_electoral_faction_seeding:
+    title: 'P25 U6 — spec-070 ELECTORAL faction seeding / FACTION honest-empty repair: seed re-keyed res-7 H3 → county FIPS; FR-039 electoral component REAL (MIT Election Lab 2024, ADR049 ratified, committed artifact mit_countypres_rep_share); SOV_USA_FED gains literal tri-county FIPS claims (LODES-vs-H3 namespace fix); apply_balkanization_seed lands in engine.scenarios (web bridge delegates, wayne stamp-then-seed, session build DB-free); electoral fixture grounds T001 in Wayne + carries the full layer; wiring-doctrine W-C row CLOSED (sentinel: TestElectoralScenarioHarvest); qa:regression byte-identical.'
+    status: accepted
+    date: '2026-07-22'
+    file: ADR132_p25_u6_electoral_faction_seeding.yaml
+  ADR133_p25_u7_pure_politics_kernel:
+    title: 'P25 U7 — pure politics kernel: formulas/politics.py (valve law, hope field with counterfactual sigmoid gain, funding identity/reform ceiling, delivery ratio+gap, derived platform vector, interest fit); four property laws pinned in pure form (L-VALVE, L-CEILING, L-HOPE-MATERIAL, L-PRZ; 20 tests); zero system wiring — consumers arrive U8-U10; FormulaRegistry membership deferred to U8; qa:regression byte-identical.'
+    status: accepted
+    date: '2026-07-22'
+    file: ADR133_p25_u7_pure_politics_kernel.yaml
+  ADR130_p25_u4_organization_component_port:
+    title: 'P25 U4 — OrganizationComponent carried task discharged: shim + lazy PEP-562 loader + 274-line suite DELETED; capacity contract re-pinned on the Organization entity (defaults/bounds/immutability/JSON + graph round-trip incl. the from_graph gotcha); probability-bounds discovery-walk test simplified to an unconditional warnings-as-errors pin. Gates: 1253 tests green, mypy, vocabulary, qa:regression byte-identical.'
+    status: accepted
+    date: '2026-07-22'
+    file: ADR130_p25_u4_organization_component_port.yaml
+  ADR131_p25_u5_electoral_fixture:
+    title: 'P25 U5 — electoral fixture scenario: four NPC PoliticalFactions (duopoly machines + latent socdem/fascist currents), finance-donor Business, MEMBERSHIP class-base edges (L-PRZ terrain in miniature), TRANSACTIONAL donor-dependence flows; built on two_node; first production PoliticalFaction instantiation; graph round-trip pinned; NOT in the qa six (byte-safety by disjointness); political-labor flow derivation deferred to U8.'
+    status: accepted
+    date: '2026-07-22'
+    file: ADR131_p25_u5_electoral_fixture.yaml
+  ADR128_p25_u2_event_vocabulary:
+    title: 'P25 U2 — electoral event vocabulary: 13 EventTypes (84→97), typed payloads, builders 64→77, derived severity for every member (taxonomy 47→60; ELECTIONS_SUSPENDED terminal-adjacent critical; POPULAR_FRONT_CALLED pattern over BIFURCATION_THRESHOLD); reconciliation guard widened with the declared _POST_DAY_ONE_ADDITIONS ledger. No publishers until U8-U12.'
+    status: accepted
+    date: '2026-07-22'
+    file: ADR128_p25_u2_event_vocabulary.yaml
+  ADR129_p25_u3_political_form_opposition:
+    title: 'P25 U3 — political_form joins the opposition catalog (19th binding): self-organization ⇄ representation, shadow-first (ADR127 launch ruling; declared promotion ceremony at U10); measure reads new GraphInputs.political_labor_share (None → honest (0,0) absence in every org-less scenario; producer arrives U5); couplings deferred to their lighting units (U8/U9) — the coupling graph is a claim about the code and their operational sides do not exist yet; qa:regression byte-identical 6/6 proved as the unit gate, registry pins 18→19.'
+    status: accepted
+    date: '2026-07-22'
+    file: ADR129_p25_u3_political_form_opposition.yaml
+  ADR127_p25_political_superstructure_charter:
+    title: 'Program 25 — The Political Superstructure (electoralism) chartered as the one engine train on feature/political-superstructure off dev e0ece454; ADR block 127-139 claimed; 13-unit train ratified from the 5-agent launch recon (U1 defines / U2 events / U3 political_form shadow / U4 OrganizationComponent port / U5 party+MEMBERSHIP+donor producers / U6 spec-070 ELECTORAL faction seeding / U7 pure politics kernel / U8 AllegianceSystem + the REAL Agitation->Organization valve / U9 PolicySystem + LEGISLATE resolver + reform ceiling / U10 ElectoralSystem + political_form promotion ceremony / U11 doctrine fork five stances / U12 conjunctures + governance endgame / U13 five goldens + declared baseline ceremony). Two delegated launch rulings recorded: TRAP 1 -> build the real conversion pathway, never throttle the consciousness router; TRAP 2 -> shadow-first with a declared ADR078-style promotion ceremony at U10. TRAP 3 discipline: parties-exist guards on every class-node write; per-unit qa:regression byte-identity gates; baselines move only at U13. Recon corrections: s=p+i+r+t in domain/economics/distribution/, catalog 18->19, debt_service/equalization-wire/InternalBalanceOfForces are BUILDS.'
+    status: accepted
+    date: '2026-07-22'
+    file: ADR127_p25_political_superstructure_charter.yaml
+  ADR126_bd_ruling_batch_2026_07_22:
+    title: 'BD ruling batch 2026-07-22 (in-session directives, executed under delegated autonomy): (1) adversary-train merge to dev AUTHORIZED — landing executed by the train-owner session, W1-W5 each opus-reviewed; (2) the Electoral Question §7 rulings 1-8 ALL APPROVED as recommended (node-attribute allegiance / political_form joins the opposition catalog with its index assigned at implementation / fascism captures the RESTORATIONIST vehicle / org-level officeholder capture / primaries deferred to a Phase-2 fiber / this program owns spec-070''s election decision-moment / reformist trunk replaced in place with liquidationism demoted to a detected absorbing state / trap_detection.py absorbed and its hardcoded thresholds retired) — program is spec-ready and QUEUED as an engine train, not forked, while the adversary-train surfaces are freshly merged and the action surface is still landing; (3) Amendment T RATIFIED as drafted (BD-delegated call), observes-only, with the off-critical-path rider — CONSTITUTION.md v2.16.0, ADR072 proposed->accepted; (4) the Player Interface Shell plan (11 tasks, project/research/24-the-archive/PLAYER_INTERFACE_SHELL_plan.md) APPROVED for execution on feature/interface-shell off dev — its ADR109 sentinel-row duty is discharged via blocking-dependency citation (the wiring registry does not exist until the ADR109 enforcement train, FIRST in the standing post-cascade queue, builds it) and its one deliberate engine hunk (promoting player verbs in ooda.py _FIRST_CLASS_ACTION_EVENTS) lands coordinated post-train-merge. Basis: 9-agent read-only ultracode recon (7 sonnet recon + opus synthesis + opus adversarial critique, field-verified). Governance batch: no production code changes in this ADR.'
+    status: accepted
+    date: '2026-07-22'
+    file: ADR126_bd_ruling_batch_2026_07_22.yaml
+  ADR125_t3_gap_projections:
+    title: 'T3 Gap Projections (Program 24 spine-C): five new Archive projection modules (economy, field-state, balkanization faction, chronicle event-anchoring, hex habitability) close the four remaining WO-52b/test-port-ledger LOUD gap rows; two Vol I/Vol II cascade dormancy gaps lit (fundamental_theorem graph stash consumed by the economy dossier — W-P; the value_form Phi tri-decomposition builders wired to real graph-input reads — W-C/W-P); U1 completes the SurplusValueDistribution graph publication (taxes_on_surplus + total_surplus — W-C). One gap found, not closed, and explicitly deferred: no engine scenario stamps NodeType.FACTION, so the balkanization dossier is honest-empty on every real campaign until the RED_OGV repair program seeds it (new OPEN row in ai/wiring-doctrine.md). Per-hex habitability ships as a county-grain inheritance (broadcast, not aggregation), pending a real dynamic_hex_state substrate column for a hex-native reading. Governance close-out ADR: no production code changes.'
+    status: accepted
+    date: '2026-07-22'
+    file: ADR125_t3_gap_projections.yaml
+  ADR124_vol2_u8_monitoring:
+    title: 'Vol II Circulation program U8 (Monitoring, lane/vol2-circulation): audited what the program''s new opposition bindings/GraphInputs fields/catalog artifact/gate satisfiers actually have on a wire today — the four shadow GraphInputs ratios and the gate-satisfiers have no persisted graph-attr home or wire path at all (recomputed fresh each tick purely to feed the opposition step; the LODES artifact is already cataloged in data-artifacts.yaml, not the seam registry''s remit) and building bespoke exposure for them was judged disproportionate to one unit, deferred to the T1.1 seam_algebra cascade this lane''s own merge-runbook already names for that. What DID have a concrete gap: U3''s compute_disproportionality output was computed but never reached a graph attr (a computed-but-unserialized silent no-op, Constitution VIII.12/III.11) — fixed: write_tick_state_to_graph now stamps tick_disproportionality (signed imbalance, honest None absent tensor data), _serialize_territory reads it through, and it is gated Tier >= 1 in babylon.projection.veil (same family as profit_rate/occ) — the other 13 pre-existing Group C/D fields deliberately stay out of that registry, a separate already-flagged gap not retroactively closed here. Also corrected the shared _CIRCULATION_LIVE seam-registry note (feeding all 7 pre-existing Group C rows) to record U3''s full fix (real reproduction calculators + genuine cross-tick accumulation), not just the turnover_profile_source wiring it previously described alone. New TestWriteDisproportionality (2 tests) red->green; full seam sentinel suite (63 tests) + veil suites (45 tests) re-run green; real-registry CLI gate exit 0, 124 observables, zero new advisories. No baseline drift (additive-only graph attr, no golden scenario reads it).'
+    status: accepted
+    date: '2026-07-21'
+    file: ADR124_vol2_u8_monitoring.yaml
+  ADR123_vol2_u4_light_the_step:
+    title: 'Vol II Circulation program U4 (Light the step, lane/vol2-circulation): Vol2CirculationStep.step() reconciled per U1''s disposition (ADR120) — reads/writes county-grain v on eligible NodeType.TERRITORY nodes instead of never-stamped NodeType.HEX, binding to the unchanged hex-resolution LODES matrix-vector algorithm via a constructor-injected hex<->county ScaleAdjunction (allocate at the read endpoint, aggregate at the write endpoint; both fail loud on mismatch, Constitution III.11). New read_hex_county_adjunction (persistence/hex_hydrator.py, real session-scoped hex_spatial_map query). New CirculationVConservationEvaluator registers circulation_preserves_sum_v (declared since spec-062, never wired) with a real evaluator; economic.py''s _invoke_vol2_circulation_if_wired stashes the tick''s CirculationStepResult into context for it to read. All 9 direct-invocation test suites updated for the new contract; 2 new fast unit-test files pin the evaluator + wiring directly. runner.py wiring (vol2_step/simulated_year gate keys, the evaluator registration, a production adjunction-builder call site) stays the coordinated cross-lane follow-up per ADR120''s own room-partition finding, not this unit''s. Verification: 13 fast DB-free tests + 9 new evaluator/wiring tests green, plus test_atomicity_inheritance.py''s 3/3 passed LIVE against real Postgres. FLAGGED FINDING: a live run against real national LODES data (test_paired_cross_border_emission.py) raised CirculationConservationViolation (~0.14% residual) — diagnosed root cause: the LODES loader''s bounding-envelope study_area_hexes is a strict superset of hex_spatial_map''s TIGER-precise county coverage (this unit''s adjunction source), so envelope-but-uncounty hexes (water/boundary slivers) silently drop their v contribution; the old test suite papered over the identical gap via synthetic v=0 hex-node padding, a trick unavailable once reads/writes move to county grain. Proper fix needs a postgres_initialization.py two-phase-hydration restructure or an owner ruling — genuinely beyond this unit''s scope, not attempted; the other 4 live-Postgres files share the same root cause by construction and were not independently re-confirmed (each costs 5+ min of real drive-backed national LODES parsing).'
+    status: accepted
+    date: '2026-07-21'
+    file: ADR123_vol2_u4_light_the_step.yaml
+  ADR122_vol2_u3_truth_in_the_tick:
+    title: 'Vol II Circulation program U3 (Truth in the tick, lane/vol2-circulation): replaced the three confirmed stubs in _compute_county_circulation_state (always-balanced ReproductionBalance/ReproductionAnalysis hardcode, DepreciationFundState rebuilt from scratch every tick, advance_circuit never called) with the real Feature-023 calculators (check_simple_reproduction, check_extended_reproduction, compute_disproportionality, update_depreciation_fund, advance_circuit) fed real per-county department data from the TensorRegistry (ValueTensor4x3, the quickstart-designated source) and genuine cross-tick state carried on the TickDynamicsSystem instance (self._circulation_prev_state, mirroring the existing self._vol3_sentinel_logged convention — CountyEconomicState.circulation_state itself is NOT carried forward by the shared _compute_county_states reconstruction, an upstream gap outside this room partition, recorded not fixed). New CirculationCrisisState.disproportionality field (Optional, honest-absence None). New CapitalVolumeIIDefines (capital_vol2.py): reproduction_tolerance, dept_i_share_required (Marx Capital Vol. II Ch. 20 illustration, 0.6667). Fixed a latent determinism bug found while wiring compute_disproportionality live: unconditional datetime.now() wall-clock year replaced with an explicit year parameter. Honest fallback when tensor department data is absent for a county-year (hydration covers 2010-2025 only): reproduction balance/analysis degrade to a documented, cited always-balanced default and disproportionality stays None (Constitution III.11) — not a silent lie.'
+    status: accepted
+    date: '2026-07-21'
+    file: ADR122_vol2_u3_truth_in_the_tick.yaml
+  ADR121_vol2_u2_lodes_data_path:
+    title: 'Vol II Circulation program U2 (Data path, lane/vol2-circulation): raw hex-resolution LODES OD .csv.gz (lodes_commute_matrix.py''s actual read source — distinct from the already-registered county-grain fact_lodes_commuter_flow / block-grain bridge_lodes_block) is now a hash-stamped checked-in artifact — data-artifacts.yaml''s lodes_xwalk_tri_county_hex + lodes_od_tri_county_hex_2010..2021 (generated by new tools/make_lodes_tri_county_artifact.py, drive-read ONCE at authoring time via the unmodified LODESCommuteMatrixLoader), cataloged as data-catalog.yaml''s LODES_OD_HEX source. New lodes_study_area.py + engine/headless_runner/lodes_hydration.resolve_lodes_hydration_kwargs wires initialize_session''s four previously-never-supplied LODES kwargs into runner.py''s run() (honest None outside Detroit tri-county coverage, CI-no-drive honored). Closed a self-declared gap found in review (added the manifest-regeneration tripwire test data-artifacts.yaml''s KNOWN-RISK note promised but didn''t yet have) and fixed a real regression the new entries caused in the pre-existing test_data_artifacts.py. No baseline drift — vol2_step (U4''s gate) still never set. (Renumbered from ADR109 — controller notice 2026-07-21, ADR reallocation.)'
+    status: accepted
+    date: '2026-07-21'
+    file: ADR121_vol2_u2_lodes_data_path.yaml
+  ADR120_vol2_u1_activation_audit:
+    title: 'Vol II Circulation program U1 (Activation audit + §2b/§2d disposition, lane/vol2-circulation): re-verified the 2026-07-19 dormancy map on dev tip 84d8405a (vol2_circulation.py:164 HEX query, economic.py:157/174-178/85 four-key gate, postgres_initialization.py four LODES kwargs still never supplied by the one runner.py caller); §2b resolved per BD ruling 7 (verified not relitigated) — county-keyed NodeType.TERRITORY + hex→county ScaleAdjunction (built from the already-persisted hex_spatial_map table) binds the hex-resolution LODES math at its read/write boundary, mirroring SubstrateSystem (#39 T6) near-mechanically; no code changed, this specs U4''s target. §2d (web/headless parity) recorded OUT of Vol II scope per §10.3, assigned to Vol I; U4 entanglement narrowed to two missing runner.py context keys (vol2_step, simulated_year) since session_id/boundary_flow_register are already wired there. No baseline drift (10/10 scoped tests green, unchanged). (Renumbered from ADR108 — controller notice 2026-07-21, ADR reallocation.)'
+    status: accepted
+    date: '2026-07-21'
+    file: ADR120_vol2_u1_activation_audit.yaml
+  ADR118_vol1_u5_headless_parity:
+    title: 'Vol I U5 — Headless-runner parity (ADR written mechanically at cascade merge from lane commit 4627fc23; the lane shipped the unit without its ADR): _build_economics_overrides wires create_vol1_services AND create_circulation_services inside the existing scope_fips branch, reusing the already-loaded fred_cache — reserve_army/productivity/dispossession data sources + transition_engine (Vol I) and turnover/inventory/depreciation sources (Vol II circulation); genuinely activates _compute_vol1_layer and _compute_circulation_layer for every headless run and satisfies _simulate_transitions''s transition_engine gate (all three previously canonical-path-dormant); closes the §2d web/headless parity gap (engine_bridge.py Spec-116 Tasks 20b/21b already wired both). EXPECTED qa:regression drift channel: median_wage, circulation_state, downstream phi_hour/wealth — the U5 channel of the Vol I merge ceremony. Shared-by-charter with Vol II but assigned to Vol I alone (ADR103 §10.2, confirmed ADR116/U1).'
+    status: accepted
+    date: '2026-07-21'
+    file: ADR118_vol1_u5_headless_parity.yaml
+  ADR117_vol1_u2_fundamental_theorem:
+    title: 'Vol I U2 — The Fundamental Theorem, computed: Phi = Wc - Vc per class/county via new compute_fundamental_theorem(wage_value_id_pairs) (domain/dialectics/instances/value_form.py), reusing the wage opposition''s existing (w_paid, v_produced) node-attr feed verbatim (zero new graph traversal); new formula calculate_imperial_rent_gap registered in FormulaRegistry (count 23->24), matching view_imperial_rent.imperial_rent_millions exactly (calibration test added against the live reference DB, mining/2023 row); WIRE-not-retire ruling for the three formerly-dead fundamental_theorem.py formulas + phi_class (all four now have a genuine caller); ContradictionSystem stashes the report on a new fundamental_theorem graph attribute each tick (Phase-1-shadow precedent, no WorldState field this unit); provenance.py left untouched (its labor_aristocracy_ratio call already points at the right formula; its approximate proxy extractor is a deliberate, pinned, out-of-blast-radius design choice, not a regression). calculate_consciousness_drift scope boundary recorded (out of Wc-vs-Vc scope). Full tests/unit/engine/ suite (2169 tests) green, no baseline-column surface touched.'
+    status: accepted
+    date: '2026-07-21'
+    file: ADR117_vol1_u2_fundamental_theorem.yaml
+  ADR116_vol1_u1_activation_audit:
+    title: 'Vol I U1 Activation audit re-verified on lane HEAD (84d8405a, post-ADR103 contract commit): every §2 dormancy claim confirmed with line-number drift only (ReserveArmySystem :72, DispossessionEventSystem :75, territory.py :212 comment unchanged, MarketScissors._swell_reserve_army :439-461 the sole activation path). Three owner design questions settled: (a) DERIVE reserve_ratio/dispossession rates from real producers (U3 accumulation loop + county-tick FRED adapters), never seed as bare scalars (Aleksandrov Test); (b) BOTH extend ReserveArmyDefines/DispossessionDefines/WorkingDayDefines in place AND author new capital_vol1.py->CapitalVolumeIDefines mirroring capital_vol3.py (ADR089) for genuinely new mechanics; (c) parity unit (U5, headless-runner wiring of create_vol1_services) is NOT shared with or closable by Vol II — ADR103 explicitly assigns it to Vol I alone. No code changed, no baseline drift, no ceremony due.'
+    status: accepted
+    date: '2026-07-21'
+    file: ADR116_vol1_u1_activation_audit.yaml
+  ADR115_vol1_u9_monitoring:
+    title: 'Vol I U9 — Monitoring (program-closing unit): four Feature 021 Territory fields (reserve_ratio/foreclosure_rate/eviction_rate/displacement_rate) that U3 finally activates get their first-ever seam-registry rows; three new liveness-registry rows (fundamental_theorem dormant per its own ADR117 scope boundary, wealth_subsistence_ratio/surplus_strategy_ratio consumed by catalog.py); a doubly-stale engine_bridge.py comment (still claiming productivity_data_source/transition_engine are inert after U3/U4 made both false, in the SAME factory call) corrected; U7''s dispossession_intensity retirement re-verified intact (already complete, nothing to do); the veil-gating question resolved as a documented forward-pin, not new code -- nothing this program produced reaches a web-facing endpoint yet, so projection/veil.py''s TIER1_VALUE_RELATION_FIELDS has nothing real to gate today.'
+    status: accepted
+    date: '2026-07-21'
+    file: ADR115_vol1_u9_monitoring.yaml
+  ADR114_vol1_u8_defines_sweep:
+    title: 'Vol I U8 — Defines sweep: every field in ReserveArmyDefines/DispossessionDefines/WorkingDayDefines now names its exact file:function consumer (mirroring the capital_vol3.py citation convention). Full grep audit of every U1-U7 commit for hardcoded coefficients found none -- U2''s theorem formulas and U6''s new oppositions both ended up parameter-free by reusing existing zero-parameter measures/defines, so capital_vol1.py -> CapitalVolumeIDefines (anticipated by ADR116 ruling (b)) was NOT created: there is nothing to put in it, and an empty model would itself violate this unit''s own "no unread field"/no-placeholders rules. Two pre-existing (spec-021-era) dead fields found and fixed: min_employed_fraction (zero consumers) wired as the reserve_ratio saturation floor in DefaultAccumulationLoopCalculator.compute_reserve_ratio, mirroring wage_pressure_ceiling''s precedent; weight_wage_theft/weight_incarceration_seizure/weight_pension_default (zero consumers, no data source exists to feed them honestly) removed from DispossessionDefines -- pure dead-code elimination, zero runtime-behavior change, zero baseline drift possible. defines.yaml regenerated (descriptions + 3 removed keys only, every retained default byte-identical); docs/reference/volume-i-production.rst corrected to match.'
+    status: accepted
+    date: '2026-07-21'
+    file: ADR114_vol1_u8_defines_sweep.yaml
+  ADR113_vol1_u7_sentinels:
+    title: 'Vol I U7 — Sentinels (scoped): new babylon.sentinels.formula_registration family closes the "inert family sees the registration as a satisfied reference" gap for FormulaRegistry entries (labor_aristocracy_ratio / is_labor_aristocracy genuinely live via U2''s compute_fundamental_theorem, the latter callable only found via import-alias resolution added for this sentinel; calculate_consciousness_drift a real, open gap held GREEN via one cited SentinelExemption naming provenance.py''s non-invoking reference). sentinels/seam/registry.py''s two dispossession_intensity DECLARED_CONDITIONAL rows updated to retire their pre-U3 dead-observability characterization now that TickDynamicsSystem._compute_accumulation_loop (U3/ADR110) feeds a real foreclosure_rate/eviction_rate producer. Item 1 (gated-dormancy registry) explicitly out of scope (ADR103 §10.2 hoists it to the T1.1 keel lane); item 4 (defines-passthrough + vocabulary sentinels) pure reuse -- the vocabulary sentinel''s own run during verification caught a real, pre-existing U6 violation (subsistence_threshold fabricated on a territory node), found and flagged, not fixed (out of scope).'
+    status: accepted
+    date: '2026-07-21'
+    file: ADR113_vol1_u7_sentinels.yaml
+  ADR112_vol1_u6_oppositions:
+    title: 'Vol I U6 — Oppositions: lights the three ADR103-reserved production-layer bindings (value_usevalue Ch.1, labor_laborpower Ch.6, absolute_relative_surplus Chs.10/12/15), shadow-first, with two new GraphInputs ratio fields (wealth_subsistence_ratio, surplus_strategy_ratio) and a third that reuses the existing wage/imperial (w_paid, v_produced) defect verbatim -- the three reserved coupling slots survive the builder for the first time. Registry 11->14 keys, shadow 1->4; canonical opposition_states unchanged (10 keys), so no baseline drift expected. Found, not fixed: a pre-existing (ADR089-era) stale assertion in test_lawverian_contradiction_bridge.py expecting 5 oppositions where 10 have flowed for a while, confirmed unrelated via git-stash isolation.'
+    status: accepted
+    date: '2026-07-21'
+    file: ADR112_vol1_u6_oppositions.yaml
+  ADR111_vol1_u4_working_day:
+    title: 'Vol I U4 — The working day wired into consciousness: new domain.economics.working_day.resolve_working_day_visibility_modifier bridges services.productivity_data_source (the FRED OPHNFB+HOANBS adapter, its FIRST production reader) through DefaultWorkingDayClassifier to a new working_day_modifier keyword on compute_exploitation_visibility, computed ONCE per tick in ConsciousnessSystem and multiplicatively dampening imperial-rent-based visibility -- ABSOLUTE_DOMINANT (long hours) stays fully visible, RELATIVE_DOMINANT (productivity/intensity gains) is naturalized toward invisibility (Ch. 10/12). ZERO qa:regression drift expected (headless_runner never calls create_vol1_services; already live for the web bridge). Found+fixed a MagicMock auto-vivification hazard in test_consciousness_integration.py as a direct consequence.'
+    status: accepted
+    date: '2026-07-21'
+    file: ADR111_vol1_u4_working_day.yaml
+  ADR110_vol1_u3_accumulation_loop:
+    title: 'Vol I U3 — The accumulation loop: organic composition (ValueTensor4x3, QCEW-populated) wired through a new DefaultAccumulationLoopCalculator into ReserveArmyDynamics flows into a real, derived reserve_ratio/reserve_army_stock producer on territory nodes (TickDynamicsSystem._compute_accumulation_loop, Step 3.6); DispossessionEventSystem fed real foreclosure_rate/eviction_rate from the same FRED adapter (displacement_rate honestly left unfed — no data source); create_vol1_services now also wires transition_engine against that SAME adapter (no parallel dispossession-data path), satisfying _simulate_transitions''s transition_engine gate with real data for the first time; MarketScissors._swell_reserve_army confirmed already-additive, needed no code change to become one input among several. Staged activation: mechanization half lights up in the canonical headless run immediately (tensor_registry already wired via scope_fips); dispossession/transition_engine half stays dormant there until U5 (headless-runner parity) lands — already live for the web bridge and _legacy.py. Real reference-DB integration suite (7/7) + 243 unit tests green; expected qa:regression drift flagged, not regenerated (controller/merge-time ceremony).'
+    status: accepted
+    date: '2026-07-21'
+    file: ADR110_vol1_u3_accumulation_loop.yaml
+  ADR109_wiring_doctrine:
+    title: 'The Wiring Doctrine RATIFIED (owner 2026-07-21): wiring = a typed motion in one of the three moduli (W-C dataflow / W-hex-D opposition / W-G scale adjunction / W-P projection / W-A4 conservation closure), entered through declared data, closed by its motion class sentinel row -- never a bare import-and-call; review rule effective immediately (a wiring PR without its sentinel row or blocking-dependency citation is incomplete); 8-unit enforcement build (wiring registry seeded from the 11-gap ledger, W-G empty-iteration check NEW, W-A4 residual-severity F-3 detector, event rule, verb rule blocked on ActionSpec registry) forks POST-CASCADE extending the T1.1/T1.2 sentinel estates; Kaggle = discovery index never source-of-record; doctrine text ai/wiring-doctrine.md'
+    status: accepted
+    date: '2026-07-21'
+    file: ADR109_wiring_doctrine.yaml
+  ADR108_windows_portability_horizon:
+    title: 'Amendment AA / Constitution v2.15.0 — Portability Horizon (BD-directed 2026-07-21): Windows = BINDING post-1.0.0 requirement, activated on concept-proven BD ruling; lane 1 WSL2 (existing flake channel promoted workaround→supported + doctor preflight), lane 2 native Windows (2.0.0 release, separate non-Nix channel ADR at activation); THE SHIELD: pre-1.0.0 dev constitutionally protected — no Windows CI/conditional paths/speculative abstractions, no v1.0 DoD item may reference Windows, pre-1.0 Windows work requires amending AA first; sole pre-1.0 duty = one-line Windows-impact disclosure in load-bearing platform ADRs + prefer-non-foreclosing on ties; named optionality seams: DSN TCP-loopback fallback point (keel K2) + ADR099 glyph floor (kitty graphics absent from Windows Terminal — the floor is what ports); X.8 letter revised in place (P pattern); Material-Triad slides to AB+'
+    status: accepted
+    date: '2026-07-21'
+    file: ADR108_windows_portability_horizon.yaml
+  ADR107_corpus_canon_apocrypha:
+    title: 'Corpus canon + apocrypha class (BD-ruled 2026-07-21): allow-list Mao/Fanon/Stalin/Lenin/Che/African-natlib/BPP/Sakai/Hickel/MIM(+P) + ruling-8 extensions Cope/Marini/J.Smith/MIM-Theory-#1(pending re-OCR)/MIWS-csdraft/Federici+Mies (canon formally extends to the social-reproduction line); DENY CPUSA/Trotsky/Kautsky/Hoxha, honored INSIDE allowed globs (quote-to-rebut case); Nitzan-Bichler = Divergence-Channel steelman only; NEW disposition apocryphal (distinct from quarantine): kept on disk, structurally unreachable by every ingestion path_glob, hand-curated easter-eggs only — first member content.jsonl (Jan-2026 Moltbook AI pastiche, BD personal artifact, sha 4b380f…15af, ~/Documents/ocr/_apocrypha/); extraction tree ~/Documents/ocr/ + MANIFEST.yaml live per step zero; MVP_CORPUS tuple still unmigrated — in-repo corpus manifest + Pydantic loader = T5 scope'
+    status: accepted
+    date: '2026-07-21'
+    file: ADR107_corpus_canon_apocrypha.yaml
+  ADR106_determinism_boundary:
+    title: 'Determinism boundary (v1.0.0 program): econophysics citation rule — Farjoun-Machover/Classical-Econophysics cited for distribution SHAPE (invariants/calibration) only, never a stochastic runtime sampler, all randomness through SimulationConfig.rng_seed (III.7); shipped-entry-point pin owed to T1.2/T7 — the babylon launcher must os.execv re-exec with PYTHONHASHSEED=0 + OMP/OPENBLAS/MKL/NUMEXPR_NUM_THREADS=1 (verified absent from src/, present only in tests/conftest, .mise.toml, flake devshells); HONESTY RECORD verified at HEAD: tick_commit.determinism_hash = unchained session/tick/seed identity key (runner.py:1600-1647) while the real-but-narrow content hash lives in conservation_audit_log (conservation_audit.py:70-111); three wall-clock leaks into persisted artifacts named (metrics.py:209, jsonl_recorder.py:90/156/181, runner manifest wallclock fields); chained content hash DEFERRED post-1.0; narrator-ON non-reproducible BY DESIGN, OFF byte-reproducible, verify stories exclude narrative/**'
+    status: accepted
+    date: '2026-07-21'
+    file: ADR106_determinism_boundary.yaml
+  ADR105_inference_lane_v1_amendments:
+    title: 'Inference-lane v1.0 amendments (amends ADR096 D5; corpus ships): embeddings = embeddinggemma-300m/768-dim BOTH lanes (Ollama default + @cf/google/embeddinggemma-300m), retiring bge-m3(1024)/bge-base as never-implemented against the baked vector(768) schema — no migration; chat pin = Llama 3.1 8B end-to-end: bundled Meta-Llama-3.1-8B-Instruct Q4_K_M GGUF first (ADR096 D3 as ratified, BD uploads signed weights pre-release), detected Ollama llama3.1:8b second, CF llama-3.1-8b-instruct-fast/-fp8 third, mute always legal (CF 2026-05-08 deprecation notice verified: every other ≤12B instruct model dead 5/30/2026); corpus redistribution = SHIP EVERYTHING (owner-accepted copyright exposure): curated canon corpus embedded+ready-grounded in the installer payload — NOT the raw ~26GB mirrors (BYO via manifest) — gated on a per-work PROVENANCE/LICENSES file + "Built with Llama" attribution (Llama Community License makes it non-optional)'
+    status: accepted
+    date: '2026-07-21'
+    file: ADR105_inference_lane_v1_amendments.yaml
+  ADR104_nix_bootstrap_installer:
+    title: 'Installer = nix bootstrap (amends ADR094; BD cluster-A rulings 1-2, 2026-07-21): install.sh now INSTALLS Nix for the player (Determinate installer, consent-gated) — reverses ADR094''s refusal clause; Nix is the MEANS of one-script Ubuntu/Debian install, not a power-user channel; game-managed Postgres cluster (initdb → ~/.local/share/babylon/pg, unix socket, child process, superuser-in-own-cluster) built from the flake closure carrying postgresql+postgis+pgvector, apt fallback documented only; 4.49GB reference DB delivered as sha-pinned fixed-output derivation through the same signed cache; four BD-owed critical-path ceremonies (ed25519 keygen→CACHE_KEY, R2 cache+worker deploy, GGUF upload+signed manifest, nix-release signing secret — runbook ai/_inbox/PROGRAM_v1_0_0_ceremony_runbook.md); FLAKE_REF drift (stale pre-rename slug vs origin percy-raskova/babylon) recorded and FIXED 2026-07-21 (T7-alpha + repo-wide purge); WSL post-1.0'
+    status: accepted
+    date: '2026-07-21'
+    file: ADR104_nix_bootstrap_installer.yaml
+  ADR103_vol1_vol2_contract_commit:
+    title: 'Capital Vol I ∥ Vol II contract commit (T1.0 fork gate, v1.0.0 Playable Archive program): VOL_I/VOL_II_RESERVED_OPPOSITIONS exported from dialectics catalog (value_usevalue/labor_laborpower/absolute_relative_surplus + circulation/realization/reproduction/disproportionality), 3 dead Vol I coupling slots declared (skip-count 2→5; absolute_relative_surplus→wage bridges into the LIVE Fundamental-Theorem axis), room-partition banners over the three _compute_*_layer regions (Vol III = owned by neither), GraphInputs field-partition convention, physics-neutral BY CONSTRUCTION (registry∩reserved=∅ test-pinned; tick hash untouched, no ceremony due); §10.2 deviation recorded: dormancy sentinel hoisted to T1.1 keel, runner-parity stays Vol I; batch claims ADR103–107'
+    status: accepted
+    date: '2026-07-21'
+    file: ADR103_vol1_vol2_contract_commit.yaml
+  ADR102_environment_sovereignty:
+    title: 'Environment sovereignty (BD-directed, Amendment Z / v2.14.0): devshells vendored into babylon''s own flake.nix (default + dataBuild; same locked nixpkgs rev — store paths unchanged; rev-pinned nixpkgs-data carries the sqlite-3.53.1 interpreter, lockstep now SAME-REPO with PINNED_SQLITE_VERSION); infra/ submodule UNMOUNTED (babylon-infra = private sibling ops repo); nightly deploy-key fetch deleted; check_release_pins.sh rewritten gitlink-tag -> in-repo lockstep check; PYTHONPATH root cause = nixpkgs python setup-hook leakage (NOT submodule mechanics), fixed by shellHook unset + check:env-contract guard in both repos; `env -u PYTHONPATH git` litany retired for post-2026-07-21 shells'
+    status: accepted
+    date: '2026-07-21'
+    file: ADR102_environment_sovereignty.yaml
+  ADR101_narrator_seam_consolidation:
+    title: 'Narrator seam consolidation (BD-directed, executes past the ADR096-inference-lane plan''s quarantine): legacy LLMProvider/MockLLM/DeepSeek/WorkersAI stack + LLMConfig chat lane DELETED (git history = archive); babylon.intelligence.providers is the ONE transport seam — director takes narrator: NarratorProvider, judge defaults to chat_model_for(resolve_provider().endpoint) lazily, web narrative_service resolves via resolve_provider with the III.6 pin read from the RESOLVED endpoint inside the try (loud degradation, "unresolved" fallback), tools degrade mute->MockNarrator (demo) or fail loud (interview); MockNarrator + ProviderKind.MOCK + ModelFactory/chat_model_for added to providers.py; LLMConfig = embedding lane only, OpenAIConfig alias gone, DeepSeek lane gone (§A7.6 alignment); GOTCHA: cf-aig-gateway-id header did not survive — resurrect at the babylon-api Worker if wanted'
+    status: accepted
+    date: '2026-07-20'
+    file: ADR101_narrator_seam_consolidation.yaml
+  ADR100_pydantic_ai_adoption:
+    title: 'Pydantic AI as canonical LLM SDK (Amendment Y, v2.13.0): pydantic-ai-slim[openai] 2.14 replaces the hand-rolled DeepSeek/WorkersAI chat clients (one PydanticAIChatClient, ModelFactory test seam, fresh model per generate() — event-loop-staleness class retired) and the judge''s fence-stripping JSON extraction (Agent output_type=JudgmentResult, validation-retry then loud LLM_001); providers.py narrate lane migrated via ChatModelFactory while embed/health stay on the stock openai client (no embedding API in pydantic-ai); LLMProvider protocol, error taxonomy LLM_001/002/003, build_llm_provider semantics, and MockLLM estate unchanged; ALLOW_MODEL_REQUESTS=False global test-tier guard; GOTCHA: uv add on the pre-ADR095 poetry-hybrid base wrote a static [project].dependencies that gutted poetry.lock to one package — poetry tables are the only dependency authority on this base; agentic tool use against engine state remains amendment-gated (V/Y)'
+    status: accepted
+    date: '2026-07-20'
+    file: ADR100_pydantic_ai_adoption.yaml
+  ADR099_archive_stack:
+    title: 'Program 24 (The Archive) stack ADR: spike-evidenced TUI pins — Textual >=8.2,<8.3 direct (hover/palette/theme verified, 10k fuzzy 56.9ms), fenced-directives-ONLY markdown pipeline on markdown-it-py 4.2 (paired container tokens break the 8.2.8 walker; one MarkdownFence subclass dispatches on token.info; unknown directives fail loud), ~30-line wikilink inline rule emitting standard link tokens with babylon:// hrefs (redlink register for unknowns), Jinja2 3.1.6 ImmutableSandbox+StrictUndefined (dunder/mutation SecurityError tested), Postgres FTS epistemic search (fog = WHERE clause), dulwich 1.2 sim-time vault commits (identical shas across independent builds; stage/commit moved to WorkTree), half-block floor (200x50 full-repaint 58.2ms/frame headless) + kitty-graphics raster lane via textual-image 0.13 (detect-before-boot; sixel is not a target), snapshot lane REAL FINDING: pytest-textual-snapshot 1.1.0''s syrupy==4.8.0 pin IMPOSSIBLE beside pytest 9.1.1 — resolved with syrupy>=5.5 + dep-override install, SVG double-bake sha256-identical (III.13 render-lane evidence); deployment guardrails bound into the keel (DSN-from-config unix-socket, PG17 pin, Ollama->WorkersAI->mute, per-campaign embedding pin, telemetry cadence never in GameDefines). Three Kitty eyes-on items remain owner-verifiable (TGP/ssh, map feel, real-mouse hover)'
+    status: accepted
+    date: '2026-07-20'
+    file: ADR099_archive_stack.yaml
+  ADR098_parquet_canonical_reference:
+    title: 'Parquet-canonical reference pipeline EXECUTED (Phase 6 cutover, #46): per-table parquet sources + schema.sql canonical, the SQLite reference DB a deterministic sha-pinned BUILD PRODUCT (double-build byte-identical on sqlite 3.53.1, product f760bab5...); working DB flipped with byte-verified pre-parquet backup; ci-data-v7 (subset DERIVED from the product, 80 parquet + schema.sql manifest-pinned); loaders produce sources only (tools/loader_to_sources.py) — the shared DB is never opened for write; D1-D4 as ruled, GOVERNED_PREFIXES single SoT, demotion-handoff law, index-order fidelity, ingest_checkpoint out of the estate; IMPORT_USE discovered ALREADY LANDED out-of-band so the dark-Φ consumers lit up with zero code changes; declared follow-ups: CI-devshell sqlite pinning for the nightly rebuild-verify leg (loud off-pin warning until then), auto-create-masks-absence sentinel still owed. NOTE: numbered 098 because 094-097 are claimed by the nix-player-channel packet on the concurrently-active dev line'
+    status: accepted
+    date: '2026-07-20'
+    file: ADR098_parquet_canonical_reference.yaml
+  ADR097_render_seam:
+    title: 'The render seam under Amendment W: glyph canon (Tier 0) as the design target rather than the fallback (the entire fleet including GNOME Terminal/VTE and Windows Terminal has no pixel protocol -- everything the game communicates is communicated in character cells), the information-parity rule (Tier 1 pixel plates via textual-image+pillow re-render Tier-0 information and never carry unique content), Tier 2 SVG export through Textual''s native mechanism under the ratified III.13 determinism law, babylon doctor probe-once capability semantics (render_tier written to config, no mid-session re-probe, --render override, declared degradation), and the 256-color degraded palette as a DESIGN_BIBLE 9b row -- queue items 15 and 10'
+    status: accepted
+    date: '2026-07-20'
+    file: ADR097_render_seam.yaml
+  ADR096_inference_lane_mechanics:
+    title: 'Inference lane mechanics under Amendment V: bundled CPU llama-server over Ollama as the local default (loopback-only, lifecycle owned by the babylon process, one binary serving /v1/chat/completions and /v1/embeddings from sha256-pinned local gguf weights), provider precedence bundled -> detected-external -> Cloudflare-if-keyed -> mute, the signed model manifest (weights outside the Nix store in ~/.local/share/babylon/models/, hosted in the babylon-data R2 bucket, per-campaign embedding pins), the babylon_intel least-privilege Postgres role (SELECT on Hoist projections + INSERT on narrator-prose/embedding tables only, one migration), and the embedding-dimension schema seam (bge-m3 vector(1024), bge-base-en-v1.5 vector(768)) -- queue items 11/12/13; item 6 resolved by A7.5 (sentence-transformers and torch leave the tree); item 9 premium metering deliberately deferred'
+    status: accepted
+    date: '2026-07-20'
+    file: ADR096_inference_lane_mechanics.yaml
+  ADR095_packaging_train:
+    title: 'The Packaging Train opening moves: the babylon CLI entry-point contract ([project.scripts] babylon = babylon.cli:app with subcommands play/doctor/login/telemetry/self-update/uninstall), the dependency extras split (server extra absorbs ansible-dev-tools, rstcheck, doc8, boto3, Django, DRF, django-cors-headers, gunicorn) plus deletion of the stdlib-shadowing uuid ^1.30 relic, and the single-lock fork ruled U -- uv adopted at the packaging train with uv2nix consuming the same lock, Poetry-two-locks (K) recorded as the fallback -- queue items 4, 5, 8; untouched by Amendments V/W/X'
+    status: accepted
+    date: '2026-07-20'
+    file: ADR095_packaging_train.yaml
+  ADR094_nix_channel_deployment:
+    title: 'Nix Player Channel deployment mechanics under X.8: ed25519 narinfo-signing keypair (secret to CI only, public key baked into install.sh CACHE_KEY), cache.babylon.percypedia.biz custom-domain target served through the cache-worker front door (workers.dev interim, r2.dev never), Terraform-import obligation for the hand-provisioned live Cloudflare state assigned to babylon-infra with a Terraform-owns-resources / wrangler-owns-Workers boundary, deploy-workers.yml wrangler pin as a deploy precondition (action default 3.90.0 predates wrangler.jsonc support), monthly regression-gated nixpkgs pin cadence under Amendment-L discipline, and hypergraph-rs as a pinned flake input gated on port parity -- queue items 1-2 recorded as executed by X.8/X.1, this ADR proposes only the mechanics'
+    status: accepted
+    date: '2026-07-20'
+    file: ADR094_nix_channel_deployment.yaml
+  ADR093_amendments_v_w_x:
+    title: 'Amendments V/W/X (CONSTITUTION v2.12.0, owner-ratified 2026-07-20): V = narrator-only AI (no LLM in the input path, Amendment I superseded-in-part; local-first provider stack) + transport-generalized client contract (in-process/HTTP/file materialization; browser client legacy, Archive TUI successor) + III.6 pinning generalized to all persisted AI artifacts; W = III.13 Deterministic Materialization [PENDING CODE] (ORDER BY projections, sandboxed sim-time templates, byte-identical artifacts, golden vault, Loud Failure extends to pixels); X = infra domain delegated to the babylon-infra constitution v1.0.0 (infra/ submodule), X.1 scoped to the production estate (no-Nix letter corrected), the infra flake = sole toolchain pinning authority in sqlite-3.53.1 lockstep [IMPLEMENTED], X.8 local-first Periphery/Metropole distribution [PENDING CODE] (embedded player PG17+pgvector, Nix flake beta channel, Metropole observes-never-adjudicates), X.6 Grafana+SQL carve-out (D3). Sources committed under ai/_inbox/tui/; roadmap 6.5 provenance-ceremony amendment HELD on the open BD home ruling'
+    status: accepted
+    date: '2026-07-20'
+    file: ADR093_amendments_v_w_x.yaml
+  ADR092_us_county_seed_artifact:
+    title: 'USScenario reads the committed, hash-stamped county-seed artifact (src/babylon/data/game/us_county_territories.json, schema_version 2, 3153 FIPS-sorted counties, content_hash 3cd1d1d9...) instead of the reference DB at build time -- deterministic-data-artifacts doctrine applied to the #39 T4 blocker (a live population query measured ~6.6s, unaffordable at 130+ scenario-building call sites); records provenance (Census/QCEW population, TIGER centroids, USGS mineral-value area-share allocation, 50/50 state totals conservation-verified), the declared retired-FIPS dedup (46113/02270/02261, Bedford 51515/51019 correctly NOT deduped), the CT double-carry disposition (259.0 exact, field-vintage-disjoint), 31 explicit-absence gap rows, and three named-but-not-fixed defects (headless scopes.py dedup gap, endgame_detector.py stale territory-count comment, msa/bea/bea_ea map-zoom no-write-site); serves as the #39 (hex/scale county-keying) program close-out record alongside ADR091'
+    status: accepted
+    date: '2026-07-20'
+    file: ADR092_us_county_seed_artifact.yaml
+  ADR091_scale_lattice_amendment_u:
+    title: 'Amendment U — spatial scale ladder codified as a LATTICE (county atom; CZ/MSA/state parallel county-aggregations, only state nests into nation); CZ rung grounded in the new bridge_county_cz ERS-1990 artifact; MSA rung on the existing dim_metro_area estate; supersedes Amendment K spatial clause after the #39 investigation proved the recorded chain geographically unrealizable (CZs and MSAs cross state lines)'
+    status: accepted
+    date: '2026-07-19'
+    file: ADR091_scale_lattice_amendment_u.yaml
+  ADR090_qa_regression_modernization:
+    title: 'qa:regression modernized from a silent-blind byte-identical gate into a declared-and-proved one: E1 ScenarioCoverage/CoverageGap declarations (sentinel-enforced, static + dynamic-truth), E2 two new county-bearing canonical scenarios (single_county Wayne + detroit_tri_county bundle promoted to the byte-identical tier, 5->6 baselines), E3 financial dense-trace channels plus a no-dead-columns rule (the concrete U9-class-inertness detector), E4 first-divergence attribution replacing hand-derivation, E5 a real defines_hash gate (E5a) and an in-gate two-process determinism leg (E5b) -- headline finding: the five original scenarios exercise only 12 of the engine''s 30 Systems, the org layer is exercised NOWHERE (org_count=0 even in the detroit_tri_county e2e bundle), and 17 CoverageGap rows remain honestly declared as debt; gate runtime 9.632s, far under the 5-minute budget'
+    status: accepted
+    date: '2026-07-20'
+    file: ADR090_qa_regression_modernization.yaml
+  ADR089_vol3_money_scissors:
+    title: 'Volume III Money wired live through the Value-Price Scissors: the dormant Vol III estate connected via calculator_overrides + a new NationalFinancialParameters graph publication + a monetary anchor, four new bound oppositions (catalog 6->10) with CouplingGraph activated as ContradictionSystem''s first production consumer, a 13-item honesty sweep, six new sentinel classes, and an endogenous national interest rate (Capital Vol. III Part V, U9 -- the rate total, never absent; post-review repair re-sourced r/s_r in-scope after the final review caught structural inertness); gate byte-identical vs the frozen baselines, regeneration declined as unnecessary under the recorded owner approval (Option B, 2026-07-19)'
+    status: accepted
+    date: '2026-07-19'
+    file: ADR089_vol3_money_scissors.yaml
+  ADR088_sentinel_error_classes:
+    title: 'Six named sentinel error classes ship: liveness (correct-but-inert, computed-but-never-consumed), aggregation (intensive-aggregation), coupling (undeclared-coupling, both directions), gate-blindness extending the coverage sentinel, and surface (public-surface baseline blindness) -- five advisory, the sixth (surface) a real CI gate per owner ruling 2026-07-19'
+    status: accepted
+    date: '2026-07-18'
+    file: ADR088_sentinel_error_classes.yaml
+  ADR087_mass_work_solidarity_producer:
+    title: 'Wire the org->class SOLIDARITY producer for real (Unit 6, ADR073/ADR085 write side): EDUCATE/PROPAGANDIZE/PROVIDE_SERVICE create-or-strengthen a MASS_LINK-amplified edge (engine/actions/_mass_work.py), DoctrineSystem decays it per tick, ConsciousnessSystem''s read side is rewritten to gate org sources on solidarity_strength (not class_consciousness -- orgs have none); rebuilt doctrine-consciousness contract test against real graph shapes (PoliticalFaction/SocialClass -> WorldState.to_graph(), real resolve_campaign dispatch, never a hand-stamped edge); new vocabulary-sentinel rule (d) catches exactly the fixture-fabrication class that hid this gap; qa:regression 5/5 byte-identical (zero orgs in the 5 canonical scenarios)'
+    status: accepted
+    date: '2026-07-19'
+    file: ADR087_mass_work_solidarity_producer.yaml
+  ADR086_business_seeding:
+    title: 'Seed real-QCEW Business organizations into the canonical playable scenarios (us_nationwide + wayne_county): a committed, hash-stamped deterministic seed artifact (business_seeds.json) generated from fact_qcew_annual PRIVATE-sector employment (6-digit leaves folded to 2-digit NAICS via sector_code, imputed leaves included per house policy, REUSING get_county_employment_by_naics), a single shared builder both scenario builders call (DRY), capped at K=5 top-sectors per scope so org count stays far under the engine max_orgs=1000 cap; honest names (real geography + real sector), only real-data fields set (employment/naics/sector), all others keep model defaults; event-flood a NON-ISSUE — the survey premise was wrong, OODA already aggregates per-business layer0 into ONE ORGANIZATIONAL_ACTION summary/tick (MEASURED: 6 orgs, 1 event/tick, 4058-byte payload; naive per-hex would be 5590 > cap); economic behaviour (EMPLOY) explicitly future work; surfaced+fixed a latent 4dp rounding drift in _centrality_by_territory; qa:regression 5/5 byte-identical (zero-org regression scenarios prove scope)'
+    status: accepted
+    date: '2026-07-19'
+    file: ADR086_business_seeding.yaml
+  ADR084_retire_dead_models:
+    title: 'Constitution III.10 formal retirement of dead speculative constructs: KeyFigure (model + WorldState field + to_graph/from_graph plumbing + identify_key_figures + bound-invariant + vocabulary model-fields row) and community_composition() removed as tests-only dead code; NodeType.KEY_FIGURE reclassified production-stamped -> declared-not-stamped (still types classify_topology''s out-of-scope COMMAND-edge fixtures); Business INVESTIGATED and KEPT — found LIVE (OrgType.BUSINESS processed every tick by process_layer0 via OODASystem, action_effects, eligibility, npc_stub, postgres CHECK; Business is the live from_graph reconstruction target), so the ruling''s third target is deferred back to the owner with evidence rather than deleted; qa:regression byte-identical (retired paths never execute in the 5 canonical scenarios)'
+    status: accepted
+    date: '2026-07-18'
+    file: ADR084_retire_dead_models.yaml
+  ADR085_retire_org_solidarity_mass_link:
+    title: 'Retire the org-sourced MASS_LINK solidarity-transmission branch (DoctrineSystem Unit 6b, ADR073): the only reachable path was a fabricated test fixture — no verb or system ever creates an organization-sourced SOLIDARITY edge — so the read-side code, its defines coefficient, and its fixture are deleted; the sibling CLASS_ANALYSIS theory bonus (same commit, same Unit 6b) stays, because it IS wired to real production verb dispatch'
+    status: accepted
+    date: '2026-07-18'
+    file: ADR085_retire_org_solidarity_mass_link.yaml
+  ADR083_bifurcation_county_fips_fix:
+    title: 'Blocker I-2: BifurcationRiskCalculator read a flat "territory" key no producer writes (real field is "county_fips") — solidarity density was silently 0.0 and the agitation-fallback legitimation path silently unreachable for every county in every real game; fixed with RED/GREEN tests using real production node shape, two fabricated-shape test fixtures repaired, two now-stale vocabulary-sentinel exemption rows deleted; verified TWO independent ways (instrumented call-count + mise run qa:regression re-run) that the fix moves ZERO regression baselines, because none of the 5 canonical scenarios ever wire melt_calculator — correcting the registry comment''s prior unverified prediction that fixing it "would move baselines"'
+    status: accepted
+    date: '2026-07-18'
+    file: ADR083_bifurcation_county_fips_fix.yaml
+  ADR082_consciousness_bifurcation_recoupling:
+    title: 'Consciousness recoupling: a positive wage-value balance redirects agitation to the CHAUVINIST pole instead of gating it to zero — balance SIGN drives bifurcation direction, |balance| drives intensity, with a deliberately non-monotonic Gaussian peaking at the precarious margin (MIM: the marginal labour aristocracy is the most reactionary); grounded in Emmanuel UE p.180 / MIM mim-lumpen.txt:206-217 / Amin LWV p.127, per-class reading licensed by Cope DWDC p.204; FIRST ceremony to genuinely move all 5 regression baselines — every drift lands in national_identity, none in class_consciousness'
+    status: accepted
+    date: '2026-07-18'
+    file: ADR082_consciousness_bifurcation_recoupling.yaml
+  ADR081_declarative_system_ordering:
+    title: 'spec-116 systems-dedup Phase 4 — Declarative tick ordering: each System declares partition/position ClassVars; simulation_engine DERIVES _DEFAULT_SYSTEMS + the three spec-056 partition frozensets from them (was a hand-ordered list + three hand-maintained sets held in sync by import-time assertions)'
+    status: accepted
+    date: '2026-07-18'
+    file: ADR081_declarative_system_ordering.yaml
+  ADR080_redogv_domestic_sovereign_fallback:
+    title: 'Task R — RED_OGV seed repair: FR-040b domestic-sovereign fallback narrows SOV_EXTERIOR_NULL to genuine exterior nodes, unblocking the inert web-session sovereignty layer (RED_OGV / REVOLUTIONARY_VICTORY / UPHOLD reachability)'
+    status: accepted
+    date: '2026-07-17'
+    file: ADR080_redogv_domestic_sovereign_fallback.yaml
+  ADR079_playability_spine:
+    title: 'Program 24 sub-project 1 — The Playability Spine: fixed 100-year (5200-tick) campaign horizon replaces adjudicated endgame termination; the five terminal outcomes (REVOLUTIONARY_VICTORY, ECOLOGICAL_COLLAPSE, FASCIST_CONSOLIDATION, RED_OGV, FRAGMENTED_COLLAPSE) become recognized patterns the world can be in along the way, never terminators; event salience, lobby/briefing, and nine evidence-backed UI wirings connect existing engine riches to existing surfaces, plus a real-data ACQUIRE wave (FRED circulation/financial/Vol-I services) completing the economy cluster (spec-116, seeded with Task 1''s defines; EXECUTED at Task 25 — first-session trunk e2e, 6/6 acceptance gates met)'
+    status: accepted
+    date: '2026-07-17'
+    file: ADR079_playability_spine.yaml
+  ADR078_market_correction:
+    title: 'Program 23 Phase 2 — THE CORRECTION: price_value PROMOTED to canonical (crisis competes for principal contradiction); the snap fires on unserviceable fictitious overhang (serviceability = base + slope×profit_rate, honest-None fallback) into the material base — claim-holder wealth evaporation (ADR075 brackets 0/1), reserve-army influx where median_wage exists, conservation-preserving w1 velocity shock on the P21 wealth axis (spec-114 FR-114-4 form, same-tick stamp), MARKET_CORRECTION event (83rd); per-county scissors (market_county, observe-only) + price_divergence signed map lens; tick_summary.market_corrections (migration 0034) + correction chart markers + MELT-drift readout + diegetic MarketTicker in the Scissors tab; calibration behavioral contracts (envelope half-life, bubbles-outlive-price-swings, balanced-growth-never-fires); promotion ceremony executed — ALL qa baselines regenerated with per-scenario drift declared'
+    status: accepted
+    date: '2026-07-17'
+    file: ADR078_market_correction.yaml
+  ADR077_market_scissors:
+    title: 'Program 23 — Market Scissors: price⟷value as the sixth (first SHADOW) opposition on the generic BoundOpposition.shadow mechanism (the reusable ADR072 slice, Amendment T untouched); MarketScissorsSystem @17.8 (30th system) evolves national price/fictitious log-ratio oscillators from the realized w_paid/v_produced flow (reversion = law of value, honest-absent without a substrate); tick_summary price_log/fictitious_log (migration 0033) + timeseries value/surplus/profit_rate/price_index/fictitious_ratio + cockpit "The Scissors" chart vs the y=1 value baseline; qa:regression byte-identical throughout; Phase-2 correction feedback owner-gated'
+    status: accepted
+    date: '2026-07-17'
+    file: ADR077_market_scissors.yaml
+  ADR076_parquet_artifacts:
+    title: 'Parquet/CSV reference-data artifact program (rulings R1-R5 executed): per-table hashed artifacts with the repo-root data-artifacts.yaml successor registry (catalog->manifest atomic demotion handoff), tools/make_data_artifacts.py generator (natural-key sort, explicit arrow schema, single row group, pinned zstd; double-generation byte-identity PROVEN), R4 bridge_lodes_block spike (1,150,562 rows), manifest-driven parquet fetch in fetch-reference-db, coverage-sensor hash check in the fast gate; ci-data-v6 carries subset + 4 parquet assets'
+    status: accepted
+    date: '2026-07-17'
+    file: ADR076_parquet_artifacts.yaml
   ADR001_embedded_trinity:
     title: Three-layer local architecture (Ledger/Topology/Archive)
     status: accepted
@@ -220,8 +641,8 @@ decisions:
     date: '2026-05-18'
     file: ADR048_spec_070_balkanization.yaml
   ADR049_election_lab_catalog_addition:
-    title: 'Data-catalog v2.6.4 PATCH proposal — add MIT Election Lab county-presidential dataset'
-    status: proposed
+    title: 'Data-catalog PATCH — add MIT Election Lab county-presidential dataset (ratified 2026-07-22 as v2.7.2 MIT_Election_Lab, P25 U6/ADR132)'
+    status: accepted
     date: '2026-05-18'
     file: ADR049_election_lab_catalog_addition.yaml
   ADR050_qcew_suppression_imputation:
@@ -299,3 +720,488 @@ decisions:
     status: accepted
     date: '2026-07-11'
     file: ADR064_program15_gauntlet.yaml
+  ADR065_program16_living_map:
+    title: 'Program 16 (The Living Map): map-first game UI — TIGER county cartography with redrawable political claims, imperial-rent default lens, recursive InspectionStack over /explain formula provenance, MIM-voiced copy, narration scaffolding; research-derived Design Bible (21-agent fan-out)'
+    status: accepted
+    date: '2026-07-11'
+    file: ADR065_program16_living_map.yaml
+  ADR066_program16_phase_v:
+    title: 'Program 16 Phase V: waves 1-4 executed + live-verified; chrome layout single-source-of-truth (chrome/layout.ts) resolves recurring z-strata interception; branch pre-aligned to dev dependency wave (vite 8 / eslint 10 / prettier 3.9.5); open owner items (hex-card data source, 2 engine reds, narrator, ds-sync upload)'
+    status: accepted
+    date: '2026-07-11'
+    file: ADR066_program16_phase_v.yaml
+  ADR067_optimization_package:
+    title: 'src/babylon/engine/optimization/ package: migrated the legacy tools sweep stack onto headless_runner, fixed the inert-defines crown bug, sanctioned a fast in-memory backend for tool-space'
+    status: accepted
+    date: '2026-07-11'
+    file: ADR067_optimization_package.yaml
+  ADR068_program17_wave1_sentinels:
+    title: 'Program 17 Wave 1 (Light the Seam) + the Sentinels family (babylon.sentinels, 5 declared-invariant gates) + seam close-out: per-county Φ lit end-to-end (31,688 IMPORT_USE rows), events 14→34, endgame wired, 5 inspectors real, live verb costs, 4 dynamic sentinels sharing one shared-tick fixture, 82-finding advisory punch-list as the honest UI-wiring backlog'
+    status: accepted
+    date: '2026-07-14'
+    file: ADR068_program17_wave1_sentinels.yaml
+  ADR069_program18_c1_frontend_submodule:
+    title: 'Program 18 (C1 — Frontend Submodule): src/frontend extracted to a public babylon-cockpit repo, consumed as a git submodule at src/frontend; web/ and src/babylon stay together; two-tier web-engine contract mechanism required as the seam safety net; DESIGN accepted, execution PENDING owner green-light'
+    status: accepted
+    date: '2026-07-14'
+    file: ADR069_program18_c1_frontend_submodule.yaml
+  ADR072_divergence_channel:
+    title: 'The Divergence Channel (Option-C generalized): a shadow reading pairing an AUTHORED/subjective pole (off-graph, II.9/VIII.9) with a MATERIALLY-measured pole, surfacing their DIVERGENCE as the first-class signal. Owner ruling "design general, build concrete" — ADR documents the full abstraction as the north star; Phase-1 code = three additive fields (PoleSample.sigma_authored, PoleReading.divergence=DivergenceReading, BoundOpposition.shadow) + the concrete DT chauvinism<->internationalism shadow instance + honest-null; gating-ledger/generalized-sentinel/lifecycle-FSM DEFERRED until a 2nd real instance (rule of three). Extends P19 read_poles (ADR070, unmerged). Proposes Amendment T (Article VIII, observes-only) for BD ratification. Critique fixes: observational-static (not Amendment-S motion), purpose-named DivergenceReading (not GapReading punning), SOLIDARITY=internationalism-unproven proxy, net-new ORGANIZATION_COMPUTED_FIELDS gate + conditional byte-identity.'
+    status: proposed
+    date: '2026-07-15'
+    file: ADR072_divergence_channel.yaml
+  ADR070_emergent_class_partition:
+    title: 'Program 19 (Emergent Class Partition): per-node class position derived from the dialectic (PoleSample/PoleReading, OppositionRegistry.read_poles), SocialRole demoted to slots-as-positions seed vocabulary + display names; recording ADR under I.19; shadow-first phased cutover, ControlRatio last'
+    status: accepted
+    date: '2026-07-14'
+    file: ADR070_emergent_class_partition.yaml
+  ADR071_program20_means_of_production:
+    title: 'Program 20 (Means of Production): infra-as-code subrepo + AI modernization — deploy/ extracted via subtree split into a local-only babylon-infra mount, Nix flake devshell as system layer only (Article X.1 scoped to the production host), Cloudflare Terraform grows an AI Gateway + Workers AI surface, VPS Ansible stays a validated mockup while a workstation playbook becomes the real apply target, parent CI infra jobs retire into the infra repo''s pre-commit battery'
+    status: accepted
+    date: '2026-07-15'
+    file: ADR071_program20_means_of_production.yaml
+  ADR075_data_constitution:
+    title: 'Program 21 — the Data Constitution: per-table lineage registry in data-catalog.yaml enforced by a two-tier catalog sentinel (static path/parity checks in the fast-gate; catalog<->DB bijection + KEEP-emptiness law in the refdata lane), the 99-table census triage (KEEP 47 / FILL 8 / ARTIFACT_IZE 6 / INVESTIGATE 15 / AMPUTATE 23 — amputations are proposals pending owner ruling), and the wealth-share axis Phase-1 shadow (WealthDistributionSystem @21.5 wiring the orphaned class_dynamics ODE; qa:regression untouched)'
+    status: accepted
+    date: '2026-07-16'
+    file: ADR075_data_constitution.yaml
+  ADR074_test_estate_sharpening:
+    title: 'Test-estate sharpening: tier discipline (dev fast/loud, main heavy), digest-stamped concurrent DDL, first-party deprecation-as-error, emergent-endgames testing corollary (outcomes = fixture vehicles, never asserted subjects), declared-synthetic-data sentinel, and the empirical-invariants program (WID/DFA/BEA laws as behavioral contracts, capitalist-mode conditionality — contrapositive at runtime)'
+    status: accepted
+    date: '2026-07-16'
+    file: ADR074_test_estate_sharpening.yaml
+  ADR073_doctrine_system:
+    title: 'The DoctrineSystem (Doctrine Tree, Wave 6 headline): per-org ideological development as the 28th engine system, owner-ratified 6-ruling slate executed shadow-first (Units 1-4 + 7a live canvas); recording ADR — org doctrine attrs are domain state fields, not new primitives (contrast Amendment T); Unit 6 wiring is BASELINE-MOVING with regenerate-and-document obligation; org-bearing determinism + Postgres-hydrate tests are pre-merge obligations from the 2026-07-15 adversarial review'
+    status: accepted
+    date: '2026-07-15'
+    file: ADR073_doctrine_system.yaml
+  ADR170_tension_lens_ruling:
+    title: 'The map tension lens is county_extraction (Fundamental Theorem localized): Director-ruled slate — Candidate 1 principal (w=(b-a)/(a+b) vs US-internal ratio-of-sums theta), candidates 2/3 shadow-chartered (C3 blocked on county adjacency, C2 on population/biocapacity columns), diverging crimson<->gold w rendering with the (1-w)/2 damping dropped, nat-op overlay a Director-gated seed; producer computes at projection time, BoundOpposition registration = chartered engine-train W-D motion'
+    status: accepted
+    date: '2026-07-28'
+    file: ADR170_tension_lens_ruling.yaml
+  ADR171_national_question_rulings:
+    title: 'The National Question ruled (over reports/national-oppression-proposal.md, the 13-agent adversarially-reviewed program): MIM+MLP non-contiguous line, B+C+I named-nations partition with declared overlap policy, E-primary/Lambda-secondary/bribe-channel rendering, Phase 0 incidence artifact + Phase 1 M5 static reference overlay AUTHORIZED; Phase 2 blocked on the community_memberships seam (the artifact is its designated seeder); N0 multiplier rejected as liquidationist; 8 remaining OQ defaults recorded Director-overridable'
+    status: accepted
+    date: '2026-07-28'
+    file: ADR171_national_question_rulings.yaml
+  ADR172_amendment_ae_refoundation_ratified:
+    title: 'Amendment AE ratified (v3.0.0) — The Refoundation: Rust engine language + BSL formalism re-opening; Amendment D ruled NATIVE HYPEREDGE same-session (D-1..D-7, PR #353); phi_hour clamp fix authorized (2nd Phase-0 fix, Director-gate PR); RNG envelopes Rust-side at cutover (Python N=32 ensemble dropped over the seed-threading gap); theory ruling: no imposed sigmoids — curves emerge from P(rev)/P(acq) + Lawverian algebra (proscription audit chartered); clause (xi): ratty+Ratatui REQUIRED for in-game topology/hypergraph/Sankey rendering'
+    status: accepted
+    date: '2026-07-29'
+    file: ADR172_amendment_ae_refoundation_ratified.yaml
+  ADR173_audit_and_stops_dispositions:
+    title: 'Ratification-day follow-on dispositions: survival-curve emergence Rust/BSL-only (Python freezes with the imposed logistic as honest reference; steepness becomes actual within-class wealth dispersion); endgame outcome-equality assertions repaired to the wiring contract + outcome-assertions excluded from the Phase-1 conformance corpus as a class; stops-disposition table approved in full — 7 R2 closures (#266 #268 #269 #270 #271 #288 #337), 4 absorptions (#264 #267 #293 #282), 12 carried'
+    status: accepted
+    date: '2026-07-29'
+    file: ADR173_audit_and_stops_dispositions.yaml
+  ADR174_python_glue_boundary_criterion:
+    title: 'Refoundation boundary criterion clarified (Director 2026-07-29): Rust owns the calculation-heavy core (tick loop, math, BSL host); Python continues as the glue language (DB connections, external API clients, own API serving, AI/ollama bridges); the AE periphery list is illustrative not exhaustive; p27-python-freeze pins the engine, not the glue'
+    status: accepted
+    date: '2026-07-29'
+    file: ADR174_python_glue_boundary_criterion.yaml
+  ADR175_emergence_extension_logging_phi_sign:
+    title: 'Second disposition batch (Director 2026-07-29 PM): ADR173 emergence treatment EXTENDED to all confirmed imposed-form sites (derive-at-port, per-family Director review); logging delegated with agent-observability as the acceptance criterion (one structured JSONL engine sink at cutover); Haskell rigor draft canonical at ai/BabylonCoreDraft_2.hs (duplicates chartered for deletion); NEGATIVE PHI RULED REAL for internal colonies (Native-reservation extraction, pollution dumping) — signed-with-attribution in the Rust engine, PR #370 clamp = frozen-reference noise floor'
+    status: accepted
+    date: '2026-07-29'
+    file: ADR175_emergence_extension_logging_phi_sign.yaml
+  ADR176_director_rulings_batch_gds_dispositions:
+    title: 'The Game Design Standard rulings batch (Director live session 2026-07-29 evening): 38 rulings closing the Standard S11 Decision Queue — Long Containment named sixth ending; George Jackson routes to RED_OGV named plainly; three crisis-sovereign triggers; AUTONOMIST fourth trunk; union+cost/efficacy pair mechanics; choose-Major-earn-Minor; transposition-default; MILITANCY both faces; is_goal demoted to projection label; tag namespace by rider; THE BRIBE SETS THE CORE WAGE (economism simply does not work); strike = mobilize sub-mode w/ organization + narrow solidarity exemption; doctrine-pair funding surface; BUILD live via stem sub-mode; clandestinity AND metabolic surfaces chartered; kinded dispersion fields for coarse cells; Phase 0-D blocks LOD (mask in scope); RNG + grain + MIN riders authorized; soft-float libm; standing orders in scope; all three restoration channels; coefficient-free pacing; earned-epistemic-position narrator (the wire flatters, the underground is blunt); all three persistence defects fixed now; ref_digest re-key; BIGINT h3; checkpoint-only hydration BINDING; enforced retention; PG17+CI fork+digest-pin; five dead edges retire; SPEC RATIFIED IN FULL (S8+S9 approved, #383 closes); trunk names KEPT; EXPROPRIATE = BUILD sub-mode; reformist funding = institutional-money-as-capture-vector'
+    status: accepted
+    date: '2026-07-29'
+    file: ADR176_director_rulings_batch_gds_dispositions.yaml
+  ADR177_verb_matrix_ratified_main_ruleset:
+    title: 'Director rulings live session 2026-07-30: Article V verb 3x3 RATIFIED AS DRAFTED (Iskra double cell stands, funding cell declared-empty until rulings 14/38) — G3 unblocked; branch-protection split (dev manual discipline, main = the whole ordeal 9-check ruleset); ruling 23 restoration channels SPEC-FIRST with Director review; PG16 datadir deletion approved (root-gated, surfaced for hand execution)'
+    status: accepted
+    date: '2026-07-30'
+    file: ADR177_verb_matrix_ratified_main_ruleset.yaml
+  ADR178_calibration_class_and_cooptation_ownership:
+    title: 'Director rulings live session 2026-07-30 (research-driven batch): historical figures CALIBRATE BUT NEVER STIPULATE (the class-of-question answer under ADR172 ruling 5 — envelopes/priors/validation targets yes, in-mechanic thresholds never); co-optation modelled ONCE in the Electoral lane and READ by heat, Electoral owns the coefficient (no P25 baseline move); PR #370 phi_hour clamp RESOLVED by ADR175 and cleared to merge (frozen-reference noise floor, signed Phi goes to Rust); and the multi-lane program runs ALL lanes — narration ladder + heat + G3 + P27 Phase 1 are a sequence to complete, not a menu'
+    status: accepted
+    date: '2026-07-30'
+    file: ADR178_calibration_class_and_cooptation_ownership.yaml
+  ADR179_topology_spine_director_rulings:
+    title: 'Director rulings live session 2026-07-30 (topology spine batch, dossier §8): ADJACENCY derived NOW and FULLY LIVE from the pinned TIGER estate (physics change, declared baseline ceremony — Lane D unblocked); the two hashes KEEP BOTH with honest names (determinism_hash -> replay_identity_hash, new content_hash, Constitution III.7 repointed) under a delegated no-technical-debt constraint; babylon-graph storage CONSUMES hypergraph-rs with the Director''s explicit caveat that it may not be one-for-one swappable for xgi and that repository may still need development (GraphSubstrate trait becomes an insulation layer; Phase 2 opens with a written capability delta); and the social topology is persisted as a DEDICATED POSTGRES OBJECT, ideally queryable via Apache AGE — superseding all three cadence options offered, closing R2 by construction (AGE 1.6.0/PG17 verified compatible; PostGIS coexistence unverified)'
+    status: accepted
+    date: '2026-07-30'
+    file: ADR179_topology_spine_director_rulings.yaml
+  ADR180_gate_clearing_rulings_batch:
+    title: 'Director rulings live session 2026-07-30 (third batch — the gate clearing, all 24 remaining reserved calls): Constitution v3.0.1 APPROVED+merged (#420); COMPETITION gets a CHARTERED PRODUCER (Rust-side, readers go live); community tier WAITS FOR RUST; co-optation refined to catalogue-membership-with-trigger-authority (heat prices AND triggers, electoral executes, one owner); Omega-hat AUTHORIZED live (OQ6 ceremony at landing); bad-jacketing REPRESENTABLE AS GROUNDED (internal-cohesion, scales with strength); internal-colony modes PLAYER-VISIBLE (slot now, modes with ADR171 data); THE PHI STAMP IS MECHANICAL (core-raised mass money = redistributed imperial rent, sigma-composition — the line ruling); THE MIM(P) MODIFIER SHIPS (imprisoned/lumpen = revolutionary subject in the core, no Insurrectionist penalty there); external transfer = FIFTH CHANNEL; all seizure stays under BUILD (standing illegal economies only); mass_appeal = REAL LEVY; tenancy premise REJECTED FOR US ("there is no peasantry in the united states" — ground in FLPMIMP); reformist ratchet ESCAPABLE AT RUINOUS COST; W-H clandestinity = DOCTRINE-IDENTITY PROPERTY (no per-campaign dial); player MAY LOSE by over-secrecy; leader anonymity GEOGRAPHY-CONDITIONAL; aid carries the MIM targeting constraint (undifferentiated charity = legitimacy-only); labor-substitution owned by funding cell; armed/underground transition CHARTERED NOW as identity transition (verb-algebra seed reservation discharged); corpus repair authorized. Lane A UNBLOCKED; #407/#408/#411/#414 close.'
+    status: accepted
+    date: '2026-07-30'
+    file: ADR180_gate_clearing_rulings_batch.yaml
+  ADR181_ci_synergy_rulings:
+    title: 'Director rulings live session 2026-07-30 (fourth batch — the CI synergy train): ALL audit recommendations APPROVED via the interactive question flow — Copilot harvest protocol becomes merge-precondition law in CLAUDE.md + copilot-instructions rewritten around repo invariants (R1/R1b); dev ruleset gains Rust Gate + Baseline Ceremony Gate + PG Integration Tier as required contexts, --auto deleted from dependabot-automerge, post-merge dev runs never cancelled (R2); nightly FULL SPLIT + triage with the michigan-rollover gate extracted to its own visible lane (R3); CodeQL gains the rust leg, loses the PR trigger, the legacy web/ alert floor zeroed per Amendment V, cargo supply chain via dependabot block + cargo-deny with hypergraph-rs sources allowlist (R5/R6); pre-push full-tree sentinels, main.yml PR-trigger dedup, wheel artifact + cargo restore-keys, three process sentinels, and the mise pr:merge wrapper as the only sanctioned merge path (R4/R7-R10); the agent LANDS the Director''s untracked OpenWiki estate; XDG honored for logs+archives together; THE CI TRAIN EXECUTES BEFORE LANE A'
+    status: accepted
+    date: '2026-07-30'
+    file: ADR181_ci_synergy_rulings.yaml
+  ADR182_derivation_inspector_rulings:
+    title: 'Director rulings 2026-07-30 (fifth batch — the derivation inspector + two gate-topology calls): the BSL write log SHIPS on a closing Phase-2 window while its diff UI stays schedule-flexible (R1); the exploitation chain''s STRUCTURE is public from tick 0 with magnitudes REDACTED-and-remedied, making fog-on-Lane-P a hard v1.0 prerequisite (R2); stipulation marks stay REVIEW-TIER, never player-facing (R3); a player-facing :gloss is minted alongside the engineering :material-basis (R4); inspection DEPTH is gated by DoctrineCapability, putting the inspector in the doctrine estate and making analysis a practice the movement develops (R5); the integration shard stays NIGHTLY-ONLY with the PR-#395 class accepted as 24h-latency risk (R6); G1 pacing is RETIRED until its Rust successor — the frozen engine cannot regress (R7)'
+    status: accepted
+    date: '2026-07-30'
+    file: ADR182_derivation_inspector_rulings.yaml
+  ADR183_get_it_right_in_rust:
+    title: 'Director ruling 2026-07-30: GET IT RIGHT IN RUST. The frozen Python engine is a contract source for STRUCTURE and ORDERING, not a correctness oracle for adapters that were never fed or gates that were never called (R1); census defects are repaired at the PORT, never in the frozen lane, because a Python repair buys an 11-scenario qa:regression ceremony plus the golden-vault estate to fix numbers Rust reads straight from the DB (R2); gating becomes a PROPERTY OF THE PROJECTION BOUNDARY — the projector takes the vision ledger as a required argument so an ungated read is a compile error, discharging ADR182 R2''s fog obligation in the Rust lane (R3); the architecture standard gains §5.4 "Defects not to transcribe" and seam 11 is amended to "port the contract, NOT the call graph" (R4). Verified findings behind it: the gate layer has ZERO callers on the shipping path while render_organization.py documents its own gating and does not gate; _DEFAULT_EMPLOYMENT = 100_000.0 is not a fallback but the value in every canonical tick'
+    status: accepted
+    date: '2026-07-30'
+    file: ADR183_get_it_right_in_rust.yaml
+  ADR184_capacity_belongs_to_organizations:
+    title: 'Director ruling 2026-07-30: CAPACITY BELONGS TO ORGANIZATIONS. K shipped in #454 with no owner — a bare budget map whose module doc said "the state" eleven times while Candidate carried a target and NO ACTOR, an action aimed at someone and proposed by nobody; "the state" is not a NodeType (ORGANIZATION acts, INSTITUTION houses, SOVEREIGN claims). Capacity gains owner + loses Default (R1); Candidate gains actor and allocate() loudly rejects a foreign actor (R2); REPRESSION AND REVOLUTIONARY ACTION ARE THE SAME ALLOCATION — a union local and a political police force rank by yield per unit spent and fund down the list, neither gets a privileged mechanic (R3); THE CLASS DIFFERENCE LIVES IN REPLENISHMENT, not allocation — tax/tribute vs dues/expropriation, the asymmetry is budget SIZE (R4); Φ MAY FUND CAPACITY because tribute_income is imperial rent and currency→currency needs no conversion — this reopens the colonial/racial gradient the emergence audit had just declared mechanism-less, while the Φ→expected_yield prohibition STANDS (R5); do not transcribe RevolutionaryFinance.heat, the indicted scalar sitting on the movement''s own finance model (R6); StateFinance and RevolutionaryFinance are one construct under two names and collapse at the port per ADR183 (R7). OPEN: u64 capacity units vs Currency micro-units; a DECLINE is still unobservable (babylon-graph cannot emit into the babylon-bsl write log without a dependency cycle, and a decline is not a mutation); does the MOVEMENT get a Dossier too'
+    status: accepted
+    date: '2026-07-30'
+    file: ADR184_capacity_belongs_to_organizations.yaml
+  ADR185_director_rulings_2026_07_31:
+    title: 'Director rulings 2026-07-31, seven reserved decisions cleared in one sitting: the national partition is STRUCTURAL — distinct class nodes per (county, pole), because a weighted membership puts every class node in a mixed county into BOTH poles and reads everyone as consenting, the exact class↔nation identity the B+C+I partition exists to deny (R1); node removal CASCADES, and the cascade MUST be observable through the ADR182 write log — cascade is the semantics, silence is not, so a cascade that emits nothing has implemented half the ruling, and PlaceholderGraph::remove_node is thereby a defect with a defined target (R2); measured constants may set SCALE but NEVER SHAPE — a magnitude from data is allowed, a curve/exponent/threshold/weighting is not, and the review test is "does this change how big something is, or how it responds" (R3, the boundary of ADR172 r5 ruled as a class, settling legitimacy stock + replenishment rate + mode 11 recovery + deniability together); ids order NUMERICALLY and BSL surface symbols LEXICOGRAPHICALLY, resolving the §2.6/D25 draft divergence with no code change (R4); small universes are reported RAW BESIDE THEIR DENOMINATOR, never clamped — ruled by rejecting the whole class of options offered, since damping reshapes, a threshold is a shape by R3, and suppression hides; Loving County TX reads σ=+1.0000 WITH u_o=15 and the pairing is what flags it (R5); the Chicano pole seeds from dim_race code I with the over-inclusion declared in the artifact (R6); and Ω̂ IS NOT AN ACCOUNT — ruled by correcting the model: the settler bribe is not handed over in a white envelope, it is a structural dynamic benefiting settlers as a class, so Ω̂ belongs with X not K, DERIVED and never stored, and consent fails when Φ can no longer sustain the differential rather than when a balance hits zero (R7); plus the weekly-workflow rename (R8)'
+    status: accepted
+    date: '2026-07-31'
+    file: ADR185_director_rulings_2026_07_31.yaml
+  ADR186_bevy_cutover_amendment_af:
+    title: 'Amendment AF — The Bevy Cutover, Director rulings 2026-08-10 (R1–R10): Bevy replaces the Rust/Ratatui client outright — Textual-deletion precedent, no deprecation window, no dual-client period (R1); the engine lane (P27 Phase 2) and the client lane run in parallel (R2); v1.0 visual scope is the 2D county-map game with selective 3D moments — Patches the tutorial guide, the topology view (R3); the shipped game is a pure Rust binary, engine crates + Bevy client in one cargo workspace, no PyO3 in the play path (R4); the seven ruling bundles, the hypergraph-rs storage swap, the national incidence data program, and the hyperedge lane (paused 2026-07-31) all ride the near-term roadmap, with the hyperedge pause LIFTED (R5); ruling sessions start immediately, interactively, alongside the amendment + Bevy scaffold (R6); the first ruling bundle is #378 strike & verb algebra (R7); porting is BSL-FIRST with escape only by written justification, OODA ruled the sole Rust-kernel exception (R8); the BSL expansion track (gap analysis, spec chapters, bindings) precedes any system port (R9); the r21 intrinsic cap holds, {exp, log} at most, widened only by an ADR176 rider (R10). Amendment AF (ratified v3.1.0) supersedes Amendment AC in full and Amendment AE clause (xi), retires the ADR099 glyph floor, transfers topology/hypergraph/Sankey visualization obligations to Bevy scenes, and deletes the Ratatui estate by declared ceremony; this ADR records the sentinel-family dispositions (theme-parity guard PORTED, raster-ban and tutorial-pilot families RETIRED, tutorial-content checks RETAINED) required by clause (vii).'
+    status: accepted
+    date: '2026-08-10'
+    file: ADR186_bevy_cutover_amendment_af.yaml
+  ADR187_article_v_3x3_ratified:
+    title: 'The Article V 3x3 RATIFIED — Director approved the workforce draft 2026-08-10: aid hosts BUILD (with expropriate + restore), column reading confirmed (whose state the motion writes), funding cell EMPTY BY DESIGN (replenishment = system consequence, never a verb), clandestinity lands on both faces (reproduce:security + investigate:counter_intel) as per-tick re-measured sub-modes, ratified labels stay, STRIKE enum retirement folds into the Phase 2 vocabulary ceremony; OQ-5 (what restore writes against the metabolic rift) stays RESERVED for a dedicated theory ruling'
+    status: accepted
+    date: '2026-08-10'
+    file: ADR187_article_v_3x3_ratified.yaml
+  ADR188_intrinsic_rider_slate_dispositions:
+    title: 'The intrinsic-cap rider slate DISPOSED 2026-08-10: transcendental cap stays {exp, log} (Director-affirmed as the operative membership; r21 pins the crossing mechanism); two non-transcendental housekeeping riders enter (floor/trunc demotion, round-half-even affirmation); sqrt + tanh ELIMINATED by re-derivation as measures; the three stipulated-sigmoid exp sites re-derive as measures per the standing no-imposed-forms line; sigmoid NEVER declared; no bespoke renormalize; RNG stays a kernel seam; mod/abs/min-max need no intrinsic'
+    status: accepted
+    date: '2026-08-10'
+    file: ADR188_intrinsic_rider_slate_dispositions.yaml
+  ADR189_amendment_ag_attributed_membership_lattice_instances:
+    title: 'Amendment AG (v3.2.0) — Attributed Membership + Lattice Instances: the (member, hyperedge) incidence pair becomes a first-class attributed membership with typed, hash-covered payload fields (dyadic-edge landing REJECTED for re-exposing the D-1-confined incidence encoding; VIII.9 survives; effect-only mutation; :max-members stays the ceiling axis), discharging the D66 port blocker on CommunitySystem threat score; and content may mint scale-lattice rungs + allocate/aggregate adjunction INSTANCES of the existing schema, load-time validated, with the spatial-adjacency static-lookup ruling and the intensive-aggregation weighting rule binding every declared rung — adjunction KINDS, conservation-obligation changes, and all other formalism stay closed'
+    status: accepted
+    date: '2026-08-10'
+    file: ADR189_amendment_ag_attributed_membership_lattice_instances.yaml
+  ADR190_oq5_restore_mutual_aid_ruling:
+    title: 'OQ-5 RULED 2026-08-10 by correcting the question: the aid stem is MUTUAL AID first — invariant write = meeting immediate needs; gameplay function = the mass-line recruitment channel among the MOST OPPRESSED strata (the pool Proper Activism and the Activist Subculture structurally cannot reach — aid''s permanent product in the ADR176 (13) sense); aid:restore stipulates NO metabolic term — each restoration practice as CONTENT declares what it moves (B, R, or neither) per the kernel-loop/content-brain doctrine; budget on aid''s conservation footing (B-writing practices = W-A4 wiring motions); metabolic write-scale IS LABOR POWER — a practice''s ecological magnitude derives structurally from deployable membership labor via ADR184''s capacity machinery, never budget alone, no threshold constants; the cannot-garden-out-of-the-rift pedagogy EMERGES from the identity, never authored as a debuff'
+    status: accepted
+    date: '2026-08-10'
+    file: ADR190_oq5_restore_mutual_aid_ruling.yaml
+  ADR191_director_rulings_batch_2026_08_11:
+    title: 'Director rulings batch 2026-08-11, eleven items across the storage-swap, BSL Phase-1-review and B1-client lanes: the hypergraph-rs sibling push APPROVED and ALREADY EXECUTED (983d959..ab558f0), discharging the storage-swap plan''s first blocking gate (R1); tick-hash ORDER DEPENDENCE ACCEPTED — a scenario is a canonical committed artifact and its declaration order is part of its identity, so §2.6''s reorder-invariance promise weakens to what a mint counter delivers rather than identity becoming content-derived, and the delta''s "shuffle the declarations, assert the hash is unchanged" test becomes the WRONG assertion (R2, D96); the MORTALITY family RE-DERIVED AS A MEASURE — attrition deaths = the mass of the within-class wealth distribution failing to clear subsistence, the same emergent quantity as ADR173''s P(S|A), magnitudes from defines and the frozen piecewise-linear form with its tuned attrition_base_factor knob NOT transcribed, doctrinally unblocking Grinding Attrition (R3); TYPE NAMES ARE LOWERCASE SYMBOLS, blessing the implementation''s and appendix''s reading and correcting §2.11''s worked example and §3.1''s table (R4, D94); §6.1''s vector keywords flip from optional-VALUED to optional GROUPS, reconciling grammar with the section''s own prose (R5, D95); general edge iteration DEFERRED until a port needs it (R6); edge/hyperedge field storage DELEGATED to the workforce on a rigor-plus-entertainment criterion and ruled same-session in ADR192 (R7); NO constitutional text required for hypergraph-rs engine-storage adoption (R8); the client FONT ships Iosevka Term NERD FONT from the upstream release archive with its bundled OFL 1.1 license after the Director-directed check verified OFL 1.1 no-RFN + license-audit.md (R9); AK/HI/PR INSETS ruled on TOPOLOGICAL grounds — "we don''t care how things are inter-related directionally, we just care THAT they are connected" — so standard insets proceed as cartographic convenience (R10); and TENSION RENDERING IS FOUR BANDS, overruling the B1 plan''s continuous ramp and restoring the deleted client''s TENSION_BANDS semantics (R11)'
+    status: accepted
+    date: '2026-08-11'
+    file: ADR191_director_rulings_batch_2026_08_11.yaml
+  ADR192_relation_state_delegated_ruling:
+    title: 'RELATION STATE — the edge/hyperedge field-storage escalation (III.7) DELEGATED by the Director ("I''m going to delegate this decision to you. I trust you. You know Babylon well.") on the criterion "pick whatever is most ideologically rigorous and makes for an entertaining game", and ruled the same session: dyadic edges and hyperedges MAY carry declared, typed, hash-covered fields, widening the canonical carrier set (1); the Aleksandrov gate moves TO CONTENT PER FIELD — a field whose value is a fact about one endpoint alone belongs on that node and is REFUSED, so no material fact gets two homes to drift between (2); ADDITIVITY IS LAW — content declaring no relation fields encodes byte-identically and the III.7 ceremony fires when content FIRST DECLARES a field, gating meaning not mechanism (3); storage lands on the CanonicalState seam with/after the hypergraph-rs swap and the blocked BSL verbs unblock only once spec chapter AND storage exist (4); PLAYER LEGIBILITY earns hash coverage — relation fields exist to make relations playable, and state that never reaches play or pedagogy is bookkeeping, not material reality (5). Warrant: the Levi/incidence transposition is LOSSLESS, so the grant mints no new mathematics and no new primitive — it extends Amendment AG''s ratified pattern to the two remaining carriers; the clique expansion stays banned because its information loss IS atomization. Exposure stays internal-only: hyperedge fields expose as hyperedge fields, never as Levi-nodes. Veto-able by the Director at any time'
+    status: accepted
+    date: '2026-08-11'
+    file: ADR192_relation_state_delegated_ruling.yaml
+  ADR193_hypergraph_storage_swap:
+    title: 'THE HYPERGRAPH-RS STORAGE SWAP — ADR179 T3 executed. babylon-graph''s concrete storage now consumes hypergraph-rs for the native-hyperedge half behind a new CanonicalState sibling trait (four listing methods + one shared provided encoder — GraphSubstrate stays a ratified 14 methods, unwidened), never the dyadic half, which stays native maps so Anti-Pattern VIII.9 (no pairwise expansion) is structural rather than policed; identity stays a monotonic mint counter (ADR191 R2) keyed into the library as 16-hex big-endian; every delta-document §8 covenant closed (sole writer, feature declaration, loud preamble, coinciding node universes, no silent defaults, frozen pre-check, type index, the ADR185 R2 cascade verified by the full conformance suite, deterministic bimap, the ruled sort key); the membership-payload accessor gap enumerated not closed (percy-raskova/hypergraph-rs#2 filed) and a genuine upstream EdgeError::EmptyMembers documentation defect fixed and pushed as PR #1 (open, unmergeable from this sandbox, pinned by commit rev directly); BYTE-IDENTITY PROVED — a differential harness asserts canonical-byte equality after every operation in a mixed script, mutation-verified to flip red on a scratch perturbation, and every existing pin (four tick_goldens hashes, babylon-client''s production engine-link hash, the frozen-engine vitality assertion, all 121 babylon-bsl tests including the 421-byte canonical-AST pin) stays unmoved with HypergraphStore live in production; the canonical state_hash field set is UNCHANGED, four sections, no section 0x05; measured (Task 11): hyperedges_of gets ~7x FASTER at n=2000 as predicted, members_of/encode_state get worse and super-linearly so (~57x/~6.2x slower at n=2000), root-caused to the library''s own members()/memberships() resolving each petgraph index by a LINEAR SCAN of the id bimap per neighbor — reported beside the win, not omitted'
+    status: accepted
+    date: '2026-08-11'
+    file: ADR193_hypergraph_storage_swap.yaml
+  ADR194_director_rulings_batch2_2026_08_11:
+    title: 'Director rulings batch 2026-08-11 (second batch today) — four items cleared, each presented with options plus a workforce recommendation and RULED by selecting the recommendation: audit Q3 (within-class wealth distribution, issue #491) ruled an EMPIRICAL QUANTILE SKETCH — data-driven ACS-derived brackets as a first-class field, no imposed functional form, consistent with the no-imposed-sigmoids and empirical-invariants lines (R1); the Currency-times-unbounded-runtime-coefficient gap (issue #492) closed with ONE new legal operation — Currency scaled by a defconst-declared positive coefficient whose domain is stated at declaration and enforced loudly at load/eval, read as machinery not a mint, unblocking Territory''s eviction pipeline, Metabolism''s entropy_factor and Lifecycle''s two verified-inert rules (R2); the #382 P-B ref_digest re-key ruled FORWARD-ONLY — new reference data keys by the ADR098 build sha256, existing rows keep their keys until they naturally regenerate, no migration and no data-loss mode (R3); and scheduling holds the current focus — B2 tick loop + port lane first, the restoration-channels design train (#380) charters after B2 lands, and #381 (narrator) CLOSES NOW by cross-reference to #27, the four-tier ladder''s own tracking issue (R4)'
+    status: accepted
+    date: '2026-08-11'
+    file: ADR194_director_rulings_batch2_2026_08_11.yaml
+  ADR195_enum_deffield_row:
+    title: 'The enum deffield row — Director ruling (Organization-as-game-object spec §1 Q12, 2026-08-11, approved twice): a seventh <type-name> row, `enum`, joins the six D94 sealed — a content-declared closed enum''s member, stored as the declared-order ordinal in the existing binary64 attribute lane, surfaced ONLY as an EnumRef (never a bare number, in either direction); explicitly SUPERSEDES D94''s six-row closure rather than silently reopening it'
+    status: accepted
+    date: '2026-08-11'
+    file: ADR195_enum_deffield_row.yaml
+  ADR196_org_vocabulary_ceremony:
+    title: 'The Phase-2 BSL vocabulary ceremony (Organization-as-game-object spec §1 Q1/Q15) — ONE mint-and-retire record per ADR176 (34) + ADR187 OQ-7: mints NodeType/ORGANIZATION, EdgeType/{MEMBERSHIP, PRESENCE, COMMAND, TRANSACTIONAL, SOLIDARISTIC, SOLIDARITY}, and enum type OrgKind {STATE_APPARATUS, BUSINESS, POLITICAL_FACTION, CIVIL_SOCIETY} into the Rust closed BSL vocabulary (ADR195''s registries); records TARGETS/OWNED_BY/JURISDICTION/RECRUITMENT/EMPLOYMENT and ActionType.STRIKE''s dead member + eligibility row + base_cost_strike RETIRED — never to enter that vocabulary — leaving the frozen Python enums unedited'
+    status: accepted
+    date: '2026-08-11'
+    file: ADR196_org_vocabulary_ceremony.yaml
+  ADR197_bsl_query_evaluation_slice1_handoff:
+    title: 'The BSL query-evaluation Slice-1 handoff (P27 Phase 2) — ⟨PR 5⟩''s Task 16 closes the loop on the four-slice cut (slice 1 complete: node-set query lane; slices 2-4 scoped not built, slice 4 Director-escalation-gated under III.7); the III.7 read-only-widening rule (GraphSubstrate::node_type_of, 14→15 methods, zero CanonicalState bytes moved, hash-invariance proven by fixture test); PR #464''s SUPERSEDED verdict (three ideas harvested — members_of''s mandatory-type operand, edge_strength''s two-error-case argument, the stale neighbors doc note — verified ALREADY posted and closed by the Director, citing this plan, before this record was written); and the §4.2 chapter-C4 pre-state repair (D-row Q1/register D103) LANDED and now witnessed end-to-end by Task 15''s query_lane_e2e.rs spillover vector, with its still-open cross-RULE sibling (D-row Q14/D116) recorded not fixed. Records a fifth, unscoped finding: two additive scenario.rs/lib.rs edge-type-census fixes were prerequisite to any (neighbors …) rule loading through run_once_into at all, and rule_pipeline::resolve_expr_bindings''s graph: None gap (never wired up after Task 12 landed, despite its own doc naming that dependency) is left recorded for the next :expr-bound-query consumer to close. Files fourteen D-row register rows D103-D116 in docs/reference/bsl-language.rst, transcribing the plan''s Q1-Q14 table; D105 (Q3) documents a real E-EVAL numbering collision (042 taken by D101 in the interim; next free is 043) as a worked instance of the plan''s own "resolve the number when the PR opens" discipline'
+    status: accepted
+    date: '2026-08-11'
+    file: ADR197_bsl_query_evaluation_slice1_handoff.yaml
+  ADR198_program29_substrate_widening_charter:
+    title: 'Program 29 — The Substrate Widening: eight Director rulings chartering the lane-building program the adjudicated port-estate survey demands — D35/D65 edge-attribute storage ruled FULL SYMMETRIC (declared typed fields per edge type, same closed vocabulary, Currency storage still refused) with an EMPTY-ELIDED fifth canonical section (existing goldens/saves byte-identical at landing) and FULL update-node write parity (collect-then-apply, D104); AG(i) membership payloads a SEPARATE later ceremony chartered by #536; the ADR188 Row-7 curve estate ruled DOSSIER-THEN-SESSION (one curves dossier, one Director ruling pass, ADR173 P(S|A)-as-measure pattern); the carrier-node idiom BLESSED as the standard graph-scope pattern (:ceiling 1 carrier naming a real aggregate); identity keys ruled INT-ENCODED FIPS (no string type minted — that would be an AE(ii) amendment); Program 29 chartered with full GitHub markup (umbrella + trains T1-T6 + the 24-row director-gate register on project 8). Checkpoint A''s gates are now NAMED: T2 (Slice 2 reads), T3 (storage), T4 (curves), T6 (TickDynamics charter)'
+    status: accepted
+    date: '2026-08-12'
+    file: ADR198_program29_substrate_widening_charter.yaml
+  ADR199_territory_port_handoff:
+    title: 'The Territory port handoff (P27 PR B) — territory.bsl''s five phase rules (p1-heat-dynamics, p2-eviction-pipeline, p3-spillover, p4-camp-decay, p4-penal-suppression) land against territory-conformance.bscn''s twelve-territory/three-class world, byte-ordered at one anchor position and deliberately relying on D116''s cross-rule divergence; D102/#551/Q9-D111 discharged by the prerequisite babylon-bsl slice (PR A) and the Organization foundation train''s enum machinery before this port needed either proposed workaround; P6 (resolve_expr_bindings'' graph: None gap, recorded not fixed by ADR197) CLOSED by threading a graph parameter alongside the already-threaded types/enums registries; two literal-plan deviations forced by confirmed grammar/evaluator facts (the fold-body compound-expression rejection, Int / Int''s refusal) rather than judgment calls; ten new Draft-Ruling Register rows (D120-D129) plus a P6-closure row (D130) file the port''s own transcription deviations with file:line evidence; a fifth tick_goldens.rs pin (fired == 30) added, the four pre-existing goldens unmoved; the phase-1 inventory report''s second UPDATE block records all four §6 BLOCKED rows DISCHARGED'
+    status: accepted
+    date: '2026-08-12'
+    file: ADR199_territory_port_handoff.yaml
+  ADR200_production_port_handoff:
+    title: 'The Production port handoff (issue #565), fix round included — production.bsl''s FIVE rules (p0-production-total-reset, p1-direct-production, p2-employed-routing, p3-employed-fallback, p4-extraction-intensity) land against production-conformance.bscn''s nine-social-class/five-territory world, byte-ordered at one anchor position and relying on D116''s cross-rule divergence; the RESERVED-LINE Amin/Wallerstein producer-role routing (production.py:46-52,179-198) transcribed exactly; "production" registered as a genuinely NEW system (unlike Territory''s pre-existing placeholder); the la_production graph-scope channel reformulated as an ordinary per-node field (social-class/production-value); adversarial verification found the ORIGINAL pull-fold extraction-intensity design''s own register row (D136) had a FABRICATED "no fix available" claim — corrected by a producer-side PUSH redesign that matches the frozen engine''s single-territory attribution bit for bit, verified via a scratch probe against already-landed grammar; seven new Draft-Ruling Register rows (D132-D138, D136 and D138 corrected in the fix round) file the port''s reformulations; a sixth tick_goldens.rs pin (fired == 17, re-pinned in the fix round) added, the five pre-existing goldens unmoved; the phase-1 inventory report''s UPDATE block (also corrected) records D136 CLOSED, not open'
+    status: accepted
+    date: '2026-08-12'
+    file: ADR200_production_port_handoff.yaml
+  ADR201_t2_edge_reads_handoff:
+    title: 'The T2 slice-2 edge-reads handoff (Program 29, issue #559) — the dyadic edge read lane (edges, edge-between, field-of over an EdgeRef) served through the real run_once_into seam, hash-free by construction (all seven golden pins byte-identical through every commit); EdgeKey minted with Element''s cross-kind Ord RULED Node-before-Edge and Copy dropped (nine call sites fixed by enumeration, one partition-test flip the plan missed swept alongside the plan''s own four); the D32 implicit-strength seeding WIRED as a recorded NARROWING (defvocabulary-gated, scenario.vocabulary not the census); a mid-train execution-proven STOP (Task 6''s fixture could not load — E-LEX-021 plus load_edge''s int-only strength restriction) resolved by plan amendment rather than improvisation: Task 6a widens load_edge to KIND-BLIND p/i/c unit-interval strength literals mirroring the runtime :strength writer (c-only rejected in the amendment''s own fix round; r/$ stay refused; int-arm domain questions recorded OPEN; no register row per D93 — this ADR and the Amendment log are the record homes); three e2e vectors incl. the §3.8-item-8 self-anchored idiom that unblocks Solidarity''s port and the first genuine mid-tick E-EVAL abort exercised through run_once_into''s Result; four new register rows D139-D142; the `the` disposition ruled its own micro-train (T2.5, #572 stays open — its legality gate is unreachable through the production driver, a design gap not a small task)'
+    status: accepted
+    date: '2026-08-12'
+    file: ADR201_t2_edge_reads_handoff.yaml
+  ADR202_t4_curves_ruling_session:
+    title: 'The T4 curves ruling session (Program 29, issue #561) — twelve rulings on the curves dossier (reports/p29-t4-curves-dossier-2026-08-12.md): the ADR188 Rows 7-8 estate UPHELD subject to one site reversal (Curve 5 ruled B — a magnitude-only E/P/S partition behind #491 replacing the frozen Gaussian, both PROVISIONAL coefficients retired, ADR016 untouched); C1 Survival ruled carrier α (the K=16 ACS rung ladder via #491 behind three prerequisites, unifying Vitality attrition) with audit Q5 ASSERTED (more intra-class inequality ⟹ less switch-like rupture); C3 ImperialRent INHERITED by ADR173 behind a client-state seeding D-record (steepness_k removed from canonical_defines.json at landing); C2 Allegiance ruled the band measure as the fourth #491 consumer with a valve_multiplier≡1 D-stub fallback; C8 ReserveArmy and C4 FascistFaction both ruled A (full ladder/measure at port), each OVERRIDING the workforce recommendation in favor of full theoretical rigor; C6 scissors ruled Option 3 (per-county Carrier-B ensemble on territory/price_divergence, wealth-weighted, scissors_balance_scale retired, goldens moving by declared §6.5 ceremony); C7 financialization ruled D with the ±0.7616 balance cap RETIRED; rider #572 confirmed its own micro-train; register rows 9-24 ruled memos-first async'
+    status: accepted
+    date: '2026-08-14'
+    file: ADR202_t4_curves_ruling_session.yaml
+  ADR203_t3_edge_attribute_storage_handoff:
+    title: 'The T3 PR A handoff (Program 29, issue #560) — full symmetric edge-attribute STORAGE on both GraphSubstrate backends (deffield rows per edge type, f64 binary64 lane, Currency storage still refused), the empty-elided fifth CanonicalState section 0x05 with the canonical-layout versioning convention minted (CANONICAL_LAYOUT_VERSION = 2) and the 0x04/0x05 elision asymmetry recorded per ADR198 R2''s own text; the double-storage ruling (D143): a /strength write lands in the existing 0x03 slot, never a fifth-section shadow row; the T2 conformance row superseded in place exactly as its own doc predicted; mutation-verified law tests (four perturbations, each flipped red, each reverted byte-identical); every pre-existing pin byte-identical and untouched (the golden byte vector + digest + provided-method twin, the III.7 hypergraph pin, all 6+1 tick goldens). PR B (the babylon-bsl/tick apply-path widening: PendingWrite edge-keyed, update-edge execution parity, the two refusal arms and the add-edge field-init refusal retired) follows as separate commits'
+    status: accepted
+    date: '2026-08-14'
+    file: ADR203_t3_edge_attribute_storage_handoff.yaml
+  ADR204_worldview_ternary_unification:
+    title: 'The World-View Ternary unification — twelve Director rulings (W1-W12) from the 2026-08-14 live brainstorm on representing fascist/liberal/revolutionary in an ideologically principled way: unify onto spec 034''s ruled (r, l, f) ternary (W1); ideology is a WORLD VIEW, not a meter (W2); poles asymmetric by nature — revolutionary = doctrine tree, liberal = hegemonic common sense computed from the ruling bloc, fascist = capture/degeneration terminus (W3); Approach A World-View Registry — declared content + measured alignment + computed gap readout (W4); the practice rule — organized mass work moves minds, comms-only moves nothing (W5); orgs carry LINES, not points (W6); per-county seeding data spec chartered as ADR043''s named replacement (W7); war of position stands as a forward constraint (W8); one declared faction-classification enum kills the four token lists (W9); deliverable = design + MINT + PORT, superseding ADR198''s no-Wave-ports boundary for this workstream only (W10); the legacy Ideology [-1,1] scalar struck from THE_FORMALISM''s LAW table, executed in this train (W11); ideology is a gravitational pull that commands labor vis-à-vis hegemony — the ternary couples to the value-flow estate, never an inert label (W12)'
+    status: accepted
+    date: '2026-08-14'
+    file: ADR204_worldview_ternary_unification.yaml
+  ADR205_t3_update_edge_parity_handoff:
+    title: 'The T3 PR B handoff (Program 29, issue #560) — ADR198 R3''s execution half: update-edge served through the SAME PendingWrite collect-then-apply machinery (the WriteTarget sum-type widening, D145 — a parallel batch declined because the batch''s own application law forbids reordering), full set/add/sub/scale parity with apply-time accumulation (D104, mutation-verified), enum set included (E-EVAL-042 at collect AND apply), the two refusal arms SPLIT (update-hyperedge keeps refusing with a corrected hyperedge-only message) and the add-edge field-init refusal retired (inits execute through the same funnel, with E-PARSE-041''s runtime echo kept as defense in depth); Write::EdgeAttribute minted in the write log; the one landed refusal-assertion flip (evaluator.rs''s refusal_messages_name_their_slice) executed per the enumerate-and-flip discipline; two run_once_into e2e vectors (for-each over edges writing per element with the emit reading PRE-tick strength — the pre-state law on the edge lane; and the D36 edge-between targeted write with the honest-null dual); the §6.2 chapter-C2 family served MINUS its I.15/E-EVAL-030 leg — a declared Phase-2 gap recorded here, not improvised'
+    status: accepted
+    date: '2026-08-14'
+    file: ADR205_t3_update_edge_parity_handoff.yaml
+  ADR206_worldview_vocabulary_ceremony:
+    title: 'The WorldView vocabulary ceremony (ADR204 W10''s first train) — the WorldView defenum MINTED into the Rust closed BSL vocabulary as the second content-enum consumer of ADR195''s enum deffield row, in the ruled member order REVOLUTIONARY / LIBERAL / FASCIST (declaration order IS the storage ordinal); NOTHING retired — the ADR176 (34)/ADR187 OQ-7 citation is to the record FORMAT, and W11''s Ideology-scalar strike already landed in ADR204''s own train; the faction-classification enum (W9) does NOT join (member list not ruled content-complete) and charters separately'
+    status: accepted
+    date: '2026-08-15'
+    file: ADR206_worldview_vocabulary_ceremony.yaml
+  ADR207_class_surface_ternary_port_handoff:
+    title: 'The W10 class-surface ternary port handoff (ADR204 W10''s second half, issue #588) — the measured (r, l, f) ternary landed on the Rust class surface as the nine-rule consciousness.bsl pack (p0-position … p8-dominant-worldview) over the consciousness-ternary-conformance world: the FIRST probability-lane deffields in committed content, the UNPOSITIONED absence idiom (:optional :default 0.0p + the sum-guard — L-ABS, the row-19 0.5-default disease''s death certificate), A-001 re-homed to ONE pack, the ADR016 routing law RE-POINTED at the stored ternary with Δl APPLIED and closure by a verbatim normalize_to_simplex, the dual-implementation Python oracle pinned bit-exactly (ADR183); PR A #592 + PR B; nine register rows D146-D154; the Director''s two plan-gate rulings and the controller ruling set recorded; three corrections to #588''s ''preserved verbatim'' framing (the f→r ε-gate is greenfield — no frozen production caller; ''r→f capacity transfer'' names a cluster, not a construct; the hegemonic-community semantic inversion is doc-law — discharged as docs); chartered follow-ons rostered (#593 W5 mass-work verbs, #594 the ε-gate micro-train, #595 the community-carrier port; the gap readout + Curve-5 partition ride #491; the W7 seeding spec; the W12 pull couplings)'
+    status: accepted
+    date: '2026-08-15'
+    file: ADR207_class_surface_ternary_port_handoff.yaml
+  ADR208_docket_sitting_2026_08_17:
+    title: 'The 2026-08-17 batched docket sitting — thirty rulings clearing the Director-gate pileup (docket: reports/director-ruling-docket-2026-08-17.md, eight-agent sweep + same-day verification pass closing all six flagged evidence gaps): the faction-classification enum ruled the 5-member PARAMETERIZED list (RESTORATIONIST/SOCIAL_DEMOCRATIC/DECOLONIAL/LIBERAL_IMPERIAL/FASCIST_VEHICLE) under the Director''s generalized-factions doctrine — fascism as parameter values, never special-cased code; ADR171 scope ruled NARROW (Community floors + ReserveArmy valve each owe a dedicated ruling; register row 13''s #536 citation corrected to consciousness.py:356); colonial_stance (D-04) and the George Jackson taxonomy (D-06) confirmed port-as-is, the chauvinism restraint levels (D-05) REOPENED; Doctrine-tree transcription AUTHORIZED by explicit act with inline-annotation rulings rejected as precedent; Sovereignty stance→policy re-derived under ESCALATION ORDERING (§6.5 ceremony owed); row 19 closed (the W10 port suffices); rentier ruled a bourgeois SUB-FRACTION; veteran wiring ruled NATION-CONDITIONED on MIM-corpus evidence with the Sakai/MIM fascist-base dossier chartered same day (Dimitrov EXCLUDED by directive); a FOOD-SECURITY SUBSYSTEM chartered overruling #546''s pre-rejection; the (r,l,f) seeding spec approved as specified; TickDynamics split (engineering now, reserved trio next sitting); CHECKPOINT A DEFINED as all 13 Material Base systems ported — WS3 HELD, state.yaml:3660 corrected; all fourteen engineering leans accepted (no-sliver binds, dead outputs retire on WS4, BiocapacityType extends for cropland unblocking the whole T7 train, EXIOBASE firewalled, `the` folds into T2, the .bscn chapter charters, the ε-gate micro-train approved, P-A/P-G investigations chartered, radon ratchet + both lock-bump fixes approved); confirmation batch executed with #334 FLIPPED OPEN (chartered artifact exists nowhere — an Aleksandrov failure) and #335 re-chartered against Bevy'
+    status: accepted
+    date: '2026-08-17'
+    file: ADR208_docket_sitting_2026_08_17.yaml
+  ADR209_bsl_ergonomics_b:
+    title: 'BSL surface-ergonomics Train B (issue #591 items 6/3/4) — the train record. Item 6: additive BslType::Real (byte-neutral, type tags are never hashed) plus a roster-scoped digest-inventory migration off verbatim-f64-in-int (six packs'' primary conformance scenarios; sibling scenarios of those same packs still declare the migrated qnames int — corrected by the 2026-08-17 final whole-branch review, item 5). Item 3: the (edge-attr …) scenario form (D156) discharging D151''s narrowing 3 — WAGES edges + wages/value-flow return, wages-received retired, both tick_goldens.rs hashes re-pinned (attribute-set change, zero value drift) with fired 50->63/49->62 SPEC-COMPLIANT (the review''s mirror-and-measure adjudication, refuting the charter''s 51/50 employer-only prediction). Item 4: load_scenario_with_prelude + EnumRegistry::declare''s identical-recognition arm — the WorldView defenum moves to a shared declaration prelude that DUPLICATES (not factors out of) worldview-foundation.bscn''s own declaration, consciousness-ternary-conformance.bscn''s own re-declaration is deleted, its parity test is a declared test death now enforced by an executable prelude ordinal pin, every hash stays byte-identical; a plan gap surfaced at execution (consciousness_ternary_conformance.rs''s own FOUR call sites — three run_once_into_with_prelude + one TickSession::new_with_prelude, not five — not only the golden) forced run_once_into_with_prelude + TickSession::new_with_prelude alongside run_once_with_prelude — the session-path follow-up the charter deferred turned out to have a real same-train consumer.'
+    status: accepted
+    date: '2026-08-17'
+    file: ADR209_bsl_ergonomics_b.yaml
+  ADR210_checkpoint_a_campaign_rulings:
+    title: 'The Checkpoint A campaign rulings — four same-day sittings (2026-08-17, following ADR208) clearing every Director gate on the seven unported Material Base systems: Community floors RE-DERIVE from #334 (promoted to campaign critical path; the five "estimated"-provenance rows never transcribe); the ReserveArmy border valve HELD OUT of the first landing under a D-record; the TickDynamics trio ruled Option C with the dossier session held SAME DAY — the bifurcation scalar RETIRED for the ported ternary readout (D1-B, mooting D2/D3), the five class shares ruled MEASURED MEMBERSHIPS with percentile-band descriptions dying and bootstraps surviving as seeds (D4-B), ~66 transition-engine coefficients as named BSL defconsts (D5-C), the Φ→savings→LA-mobility coupling RATIFIED into fundamental-theorem.bsl (D6-A), the cascade baseline CUMULATIVE on p7-persist-baselines (D7-A), the 14-row defect ledger disposed as a class per ADR183; the STANDING THEORY RULING that revolutionary crisis direction is EARNED BY ORGANIZING (the revolutionary term''s structural zeroing is a FEATURE; fascism is the default drift of unorganized crisis); 0.40 LA bootstrap + 5/10/15pp milestones + highest-only semantics CONFIRMED; #491''s three rulings — top-bracket midratio = cited Pareto-consistent conditional mean, level sets = mortality s_bio / acquiescence s_bio+s_class (divergence D-row), κ = .bscn defconst with derived default'
+    status: accepted
+    date: '2026-08-17'
+    file: ADR210_checkpoint_a_campaign_rulings.yaml
+  ADR211_solidarity_port_train_handoff:
+    title: 'The Solidarity @8.0 port train handoff (Wave C, issue #605, umbrella #557, ADR208 R14 Checkpoint A) — SolidaritySystem ported as the single-rule solidarity.bsl pack (solidarity/p0-transmit) over a fresh 22-node/12-edge conformance world: the ideology.class_consciousness scalar re-pointed to the already-declared social-class/revolutionary field (no new scalar minted), the D136 push idiom (edge-write-lane-e2e''s iterate-all-edges shape would have multiplied every write by the class count), set-not-add forced by the frozen clamp composed with E-EVAL-020''s never-a-clamp store law, the two frozen event emits (CONSCIOUSNESS_TRANSMISSION, MASS_AWAKENING) pinned with full ordered payloads, and the dual-implementation Python oracle pinned bit-exactly per ADR183; PR A #606 (namespace + conformance world + the transmission rule, MERGED) + PR B (events, oracle, and this train''s permanent records); seven register rows D158-D164; the train''s own headline finding — this is the FIRST rule pack to read another node''s field, making the collect-then-apply pre-state semantics tick.rs itself predicted would eventually become observable, in fact observable, with the frozen-vs-port multi-inbound divergence (0.478 vs 0.31000000000000005) executed against the frozen oracle fixture, not merely asserted; Material Base tally advances to 7/13, Checkpoint A (ADR208 R14) remains held; one non-blocking Director-gate question filed (issue #607, inflate-vs-displace across the open r/l/f simplex window) and one WS4 D-record adjudication note filed on issue #502'
+    status: accepted
+    date: '2026-08-17'
+    file: ADR211_solidarity_port_train_handoff.yaml
+  ADR212_decomposition_controlratio_port_handoff:
+    title: 'The Decomposition (@11.0) + ControlRatio (@12.0) joint port train handoff (Wave A, issue #591 family, umbrella #557, ADR208 R29/C-03, Checkpoint A campaign) — the two frozen Class-D systems land as TWO packs / TEN rules (decomposition.bsl: p01-la-census, p02-superwage-warning, p03-trigger, p04-enforcer-intake, p05-ip-intake, p06-la-deactivate; control-ratio.bsl: c01-prisoner-census, c02-publish-census, c03-crisis, c04-terminal) over two fresh conformance worlds plus a joint five-phase carceral-arc composition scenario; the frozen TickContext.persistent_data state machine re-models onto a single carceral-register singleton INSTITUTION carrier (select-max-over-nodes, not the unserved `the`); the frozen on-demand add-node/_create_target_entity branch is OMITTED (DEFERRED_SHAPE_VERBS refusal), every conformance world pre-seeding its targets instead, follow-on #562; the census reformulates from a frozen find-first graph scan to a per-node fold-sum (D165) with the int-ordinal role workaround both phase-1 inventories recommended REJECTED now that D102 is discharged (D169); control-ratio/c04-terminal transcribes the ADR070/Program-19-RESERVED revolution-vs-genocide branch verbatim, describing not pre-empting the still-open emergent-class-partition cutover (D174); the cross-pack rule-id byte order inverts the frozen @11.0-then-@12.0 tick order (control-ratio/* sorts before decomposition/*, D172), proven benign by a dedicated race fixture; nine new register rows D166-D174 plus the D165 companion; PR A #614 (Tasks 0-4, decomposition pack, MERGED) + PR B (Tasks 5-9, control-ratio pack + the joint arc + this handoff''s own permanent records).'
+    status: accepted
+    date: '2026-08-17'
+    file: ADR212_decomposition_controlratio_port_handoff.yaml
+  ADR213_intrinsic_host_train:
+    title: 'The intrinsic-host train (#576) — RNG binding + exp/log dispatch closed, sqrt permanently OUT of scope (ADR188 Row 6, not deferred): the libm 0.2.16 (default-features=false) crossing for exp/log with per-intrinsic golden vectors (ADR176 r21) and a rust/clippy.toml disallowed-methods wall; rng-draw lands as a KEYED (never streamed) kernel-seeded draw on [0,1) whose carrier key is (session, tick, domain=firing-rule-id, stable_key=framed(subject, elements..., slot)) — a context-keyed signature that supersedes D69''s undeclarable enum-operand domain while preserving D69''s purity clause verbatim; content-stable node identity threads via a retained hydration-map inversion (LoadedScenario.node_content_ids) rather than a substrate widening, leaving the graph''s canonical state hash untouched; six new register rows D175-D180 plus D69''s own supersession annotation; corrected exp/log consumer count (log has 2 ready consumers — Community entropy, MarketScissors monetary anchor; exp has 1, itself blocked on D35/D65 edge storage) against the survey''s stale claim of 5 systems / 8 unblocked; PR A #640 (Tasks 0-2) MERGED, Tasks 3-6 (the DrawContext seam, rng-draw, and this handoff''s own permanent records) landed on branch feature/576-intrinsic-host, PR not yet opened.'
+    status: accepted
+    date: '2026-08-17'
+    file: ADR213_intrinsic_host_train.yaml
+  ADR214_national_incidence_artifact_train:
+    title: 'The #334 national-incidence artifact train (ADR171 Phase 0, ADR208 R29/C-12 flip) — three second-order, hand-maintained artifacts (ADR098/ADR121 disposition) land the per-county x pole poverty-incidence table the 2026-08-12 data-gap audit called ''the Aleksandrov failure the Constitution forbids'': county_fips_vintage_crosswalk (A1, 17 rows), national_incidence_county_pole (A2, 12,612 rows), national_reproduction_floor (A3, 15 rows), all sha-pinned and reproduced byte-identical on the pinned SQLite 3.53.1 devshell with data:build-db non-interference proven; eight arithmetic/absence guards (G1-G8) green with mutation legs; the T7 floor-re-derivation popup sitting RULED all four Director questions (shape F-B, the LOW-five confidence demotion, the FIRST_NATIONS>NEW_AFRIKAN ordering accepted, defconst+deferred-ceremony entry); nine errata recorded against the plan/ledger record versus what the real generation run measured (the ninth: the T7-posted NEW_AFRIKAN floor 0.137 corrected to 0.136, a double-rounding artifact caught by T8 review)'
+    status: accepted
+    date: '2026-08-17'
+    file: ADR214_national_incidence_artifact_train.yaml
+  ADR215_entity_voice_suite:
+    title: 'The Entity''s voice (#641): 19 new CC0 General MIDI SFX in two families (entity — the beast-engine''s tick heartbeat + extraction bleed + dispossession + capital strike; resistance — the verb ladder + three intercept stingers) and 4 new entity-suite soundtrack tracks (beast_engine, tribute_bleed, dissection, the_mask), bringing the estate to 58 SFX / 17 tracks; every asset''s engine binding lives in the new src/assets/CUE_MAP.md, machine-checked by tests/unit/assets/test_cue_map.py — the render/pin execution of the composition ADR152/153 started, plus the legacy 39 SFX + 13 tracks'' own cue-map transcription (previously undone); the gain-0.45 loudness/integrity audit extended to the full 58/17-asset estate (zero clips, worst case -5.79 dBFS); records the five overnight gate adjudications (Phi governor, UNRESOLVED = deliberate silence, mask Arm A CANON — Director-direct — and the Bevy-audio-wiring park as a fresh, honestly-cited ruling, since the "2026-08-11" citation could not be pinned to a general park, only a narrower B2-scoped deferral)'
+    status: accepted
+    date: '2026-08-18'
+    file: ADR215_entity_voice_suite.yaml
+  ADR216_kind_straddle_repair_ceremony:
+    title: 'The 2026-08-18 kind-straddle repair ceremony (#491 T1, E-TYPE-040) — a night of escalating rulings resolving four real, pre-existing kind straddles the new arm found in committed content: repair-now+ceremony (Director popup) on previous-wealth''s authoring defect; C1 (p5-agitation, proportional rent) and S1 (p0-transmit, convex combination) shapes (Director popup, both #491 T1''s own recommendations); intensive×intensive->intensive (D182) and intensive÷intensive->intensive (D183) licensed in the arm, plus the if-kind-neutral-absorption reading made explicit (D181), all under the Director''s overnight compass delegation, delegated provenance, morning-reviewable; the class-bribed ternary story change (LIBERAL->FASCIST no longer fires within the two-tick ceremony horizon under C1); and F2''s disclosure that S1 relocates rather than resolves its own straddle (D184). Collision note: ADR215 is claimed by the not-yet-merged feature/641-entity-voice branch, ADR214 landed on origin/dev during this same session (#334 national-incidence artifact train, unrelated) — confirmed next-free against origin/dev at filing time.'
+    status: accepted
+    date: '2026-08-18'
+    file: ADR216_kind_straddle_repair_ceremony.yaml
+  ADR217_b3_wave1_null_hypothesis_viewer_handoff:
+    title: 'The B3 wave-1 null-hypothesis viewer train handoff (issue #663, milestone Bevy B3 — Client Completion, plan docs/superpowers/plans/2026-08-17-b3-null-hypothesis-viewer.md rev 2) — ''watch the null hypothesis run'': one bounded auto-run clock (autoplay-until-critical default, byte-identical hash whether N ticks arrive as N steps or one batch), a four-provenance projection seam (Material/Absent/NotComputed/Redacted-declared-dead) replacing eleven raw graph.node_attribute call sites, a drained tick-stamped severity-ranked beat feed with the transcribed causal because: chain and a Python parity guard, a two-story compile-time catalog (counties default, carceral discoverable) with per-story SessionId closing ADR213 follow-on (iii), the countdown/pressure instrument and its executable no-20-tick-frozen-window cadence gate, the carceral arc landed as the first shipped story with a byte-identical text golden plus a three-layer G1/G2/G3 engine-unchanged proof, the lens registry replacing a five-file match cascade, and this train''s own 40-row FieldCoverage ledger (the M22 artifact) — nine tasks, one continuous branch feature/b3-null-hypothesis-viewer (HEAD f2377df5 before this ADR''s own commits), not yet split into the plan''s three PRs and not yet merged to dev.'
+    status: accepted
+    date: '2026-08-18'
+    file: ADR217_b3_wave1_null_hypothesis_viewer_handoff.yaml
+  ADR218_community_port_handoff:
+    title: 'The Community @6.0 port train handoff (#667 Checkpoint A) — the BSL hyperedge lane live (#536 rider 3 taken): CanonicalState section 0x07 (the seventh listing) for hyperedge own-fields, the type-scoped enumerators, the query heads and own-field BSL surface, the Element cross-kind Ord ruling discharging rider 4''s A5 precondition, community.bsl c00-c11 with the ADR214 floor table (all 14 rows, DG-3) and the DG-2 PUBLISH readout (c07/c08, the first content log declaration, D210''s 1-ulp divisor note), nine conformance worlds. Eight DG questions adjudicated at the 2026-08-18 sitting (delegated provenance, morning-reviewable, not overridden), recorded verbatim-in-substance; DG-1 counts @6.0 as PORTED for Checkpoint A with the asterisk (the post-#653 half is #692); the deferred §6.5 ceremony recorded NOT FIRED with qa:regression/vault evidence (tests/baselines/** unmoved across the whole train) — that recording discharges ADR214 Ruling 4''s deferral. PRs #680-#691 + #693, each CI-green, Copilot harvested. Number note: filed AFTER ADR219 (the intrinsic rider train) landed same-day; ADR218 was this train''s earmarked number since Task 0, verified free at filing.'
+    status: accepted
+    date: '2026-08-22'
+    file: ADR218_community_port_handoff.yaml
+  ADR219_exact_arithmetic_intrinsic_rider_train:
+    title: 'The exact-arithmetic intrinsic rider train — sqrt/round-half-even/min/max/abs/clamp join the declarable set (Director ruling 2026-08-22): ADR188 Row 6''s sqrt fallback rider taken, Row 3 landed (D70 resolved), Rows 4/5 superseded on #591 item 2''s accumulated evidence; all six cross via IEEE-754 exactly-specified operations with the golden-vector clause declined per name (the D97 disposition shape); E-EVAL-044 (IntrinsicOutOfDomain) minted; DECLARABLE_INTRINSICS 4 -> 10 with kernel_signature rows and dispatch arms in lockstep (the lockstep invariant now a test, not a hope); spec §3.10/§2.7/§4.6/§6.2-family-22 + D226-D228. ADR218 earmark (the Community port Task-12 handoff) left undisturbed; verified next-free against origin/dev (tops at 217) and every open PR at filing time.'
+    status: accepted
+    date: '2026-08-22'
+    file: ADR219_exact_arithmetic_intrinsic_rider_train.yaml
+  ADR220_rust_owned_postgresql_persistence_boundary:
+    title: 'Rust owns the authoritative engine-to-PostgreSQL boundary: connections, migration authority, typed committed-tick transactions, hydration, H3 codecs, and compatibility views. Python retains data-build, AI, document/wiki, external-API, and CLI work, with read-only transition observers; ADR174''s PostgreSQL clause is superseded only.'
+    status: accepted
+    date: '2026-08-22'
+    file: ADR220_rust_owned_postgresql_persistence_boundary.yaml
+  ADR221_game_first_refoundation_v4:
+    title: 'Amendment AH — Game-First Refoundation: Constitution v4.0.0 makes emergent entertainment, expressive player agency, declared design liberties, decision-useful presentation, and behavioral historical benchmarks the governing product law while preserving the complete v3.1/v3.2 transition record'
+    status: accepted
+    date: '2026-08-22'
+    file: ADR221_game_first_refoundation_v4.yaml
+  ADR222_executable_bsl_phase_order:
+    title: 'BSL rules execute on the governed 34-system causal spine: namespace homes and explicit boundary anchors compile before caller-state mutation, D16 orders only same-position ties, and the former global rule-ID sort retires'
+    status: accepted
+    date: '2026-08-23'
+    file: ADR222_executable_bsl_phase_order.yaml
+  ADR223_whole_tick_atomicity_world_hash:
+    title: 'Rust adjudicates each weekly tick on a detached world, publishes graph, events, allocator state, and completed time only after total success, and names current in-memory identity with a versioned nominal world hash'
+    status: accepted
+    date: '2026-08-23'
+    file: ADR223_whole_tick_atomicity_world_hash.yaml
+  ADR224_bsl_causal_composition_contract:
+    title: 'BSL rules declare causal role and evidence, production attribution is independently governed, restricted effects and rank-aware composition refusals are live, and successful ticks publish identity-free event-then-write audit receipts'
+    status: accepted
+    date: '2026-08-23'
+    file: ADR224_bsl_causal_composition_contract.yaml
+  ADR225_rust_schema_epoch_and_cutover_interlock:
+    title: 'Rust schema migrations use babylon_state.schema_migration as one exact append-only version/checksum ledger, and Rust writer authority remains structurally unavailable until the separate cutover contract is complete'
+    status: accepted
+    date: '2026-08-24'
+    file: ADR225_rust_schema_epoch_and_cutover_interlock.yaml
+  ADR226_t3_synthetic_emergence_evidence_boundary:
+    title: 'T3 emergence evidence is a downstream post-commit evaluator with exact language-neutral records, discrete output classification, scoped non-authorability audits, and synthetic groundwork that cannot claim a live membership observable before Gate 3, Gate 5, and PER-44 activation'
+    status: accepted
+    date: '2026-08-23'
+    file: ADR226_t3_synthetic_emergence_evidence_boundary.yaml
+  ADR227_practice_contract_groundwork:
+    title: 'Practice Contract V1 is a pure, closed, language-neutral input and budget groundwork boundary with no live admission, execution, or persistence'
+    status: accepted
+    date: '2026-08-24'
+    file: ADR227_practice_contract_groundwork.yaml
+  ADR228_relational_territory_dossier_contract:
+    title: 'Relational Territory Dossier V1 is a language-neutral administrative projection contract, not a live game or persistence boundary'
+    status: accepted
+    date: '2026-08-23'
+    file: ADR228_relational_territory_dossier_contract.yaml
+  ADR229_rust_gameplay_contract_authority:
+    title: 'Rust owns the executable Neel gameplay contracts while versioned fixtures remain language-neutral behavioral authority'
+    status: accepted
+    date: '2026-08-25'
+    file: ADR229_rust_gameplay_contract_authority.yaml
+  ADR230_exact_head_pr_and_dependabot_policy:
+    title: 'Pull requests merge through one exact-head verifier, Dependabot separates trusted classification from verified merging, and GitHub PR settings are applied as a rollback-safe checked-in policy'
+    status: accepted
+    date: '2026-08-25'
+    file: ADR230_exact_head_pr_and_dependabot_policy.yaml
+  ADR231_main_release_qualification:
+    title: 'Main advances only through a Director-controlled release or critical-hotfix PR after an exact combined CI and uniquely named release qualification manifest'
+    status: accepted
+    date: '2026-08-26'
+    file: ADR231_main_release_qualification.yaml
+  ADR232_neel_integration_program_architecture:
+    title: 'Neel integration freezes predecessor contracts, governs source quarantine, and requires an emergent material causal architecture'
+    status: accepted
+    date: '2026-08-26'
+    file: ADR232_neel_integration_program_architecture.yaml
+  ADR233_practice_input_authority_v2:
+    title: 'PracticeInputAuthorityV2 makes campaign habitation authoritative while preserving V1 bytes and granting no material eligibility'
+    status: accepted
+    date: '2026-08-26'
+    file: ADR233_practice_input_authority_v2.yaml
+  ADR234_practice_intent_v2:
+    title: 'PracticeIntentV2 binds stable proposals to authoritative habitation while preserving V1 and granting no material eligibility'
+    status: accepted
+    date: '2026-08-26'
+    file: ADR234_practice_intent_v2.yaml
+  ADR235_resolved_practice_batch_v2:
+    title: 'ResolvedPracticeBatchV2 binds exact accepted proposals to committed authority without allocation priority or a self-referential digest'
+    status: accepted
+    date: '2026-08-26'
+    file: ADR235_resolved_practice_batch_v2.yaml
+  ADR236_practice_resource_allocation_v2:
+    title: 'Practice Resource Allocation V2 derives exact material requests from sealed content and conserves scarcity without order priority'
+    status: accepted
+    date: '2026-08-26'
+    file: ADR236_practice_resource_allocation_v2.yaml
+  ADR237_strike_proposal_v2:
+    title: 'Strike Proposal V2 requires authoritative habitation and material worker connection while leaving every affected cohort independent'
+    status: accepted
+    date: '2026-08-26'
+    file: ADR237_strike_proposal_v2.yaml
+  ADR238_material_circuit_v1:
+    title: 'Material Circuit V1 makes orders, exact stocks, delayed delivery, realization, and Leontief production one conserved Rust transition'
+    status: accepted
+    date: '2026-08-26'
+    file: ADR238_material_circuit_v1.yaml
+  ADR239_routed_material_circuit_v2:
+    title: 'Routed Material Circuit V2 reserves exact corridor capacity and advances one authoritative freight-lot state before delivery and realization'
+    status: accepted
+    date: '2026-08-26'
+    file: ADR239_routed_material_circuit_v2.yaml
+  ADR240_replay_action_tick_content_identity:
+    title: 'TickContentHashV1 owns canonical replay-tick identity while campaign durability and P27 evidence stay separate'
+    status: accepted
+    date: '2026-08-26'
+    file: ADR240_replay_action_tick_content_identity.yaml
+  ADR241_copilot_advisory_merge_policy:
+    title: 'Copilot evidence is advisory while exact-head CI and unresolved review threads remain hard merge boundaries'
+    status: accepted
+    date: '2026-08-26'
+    file: ADR241_copilot_advisory_merge_policy.yaml
+  ADR242_tick_commit_claim_v1:
+    title: 'TickCommitClaimV1 binds a durable campaign and tick directly to the kernel-owned content identity before PostgreSQL activation'
+    status: accepted
+    date: '2026-08-27'
+    file: ADR242_tick_commit_claim_v1.yaml
+  ADR243_committed_tick_envelope_v1:
+    title: 'CommittedTickEnvelopeV1 binds every mandatory tick output to exact whole-payload retry equality before PostgreSQL activation'
+    status: accepted
+    date: '2026-08-27'
+    file: ADR243_committed_tick_envelope_v1.yaml
+  ADR244_committed_tick_postgresql_storage_v1:
+    title: 'Migration 0004 stores every CommittedTickEnvelopeV1 family in one exact schema-qualified PostgreSQL relation without activating Rust writes'
+    status: accepted
+    date: '2026-08-27'
+    file: ADR244_committed_tick_postgresql_storage_v1.yaml
+  ADR245_dependabot_bounded_retry_and_label_transport:
+    title: 'Dependabot automation uses typed merge outcomes, bounded exact-head evidence retries, and Issues REST label transport'
+    status: accepted
+    date: '2026-08-30'
+    file: ADR245_dependabot_bounded_retry_and_label_transport.yaml
+  ADR246_codex_rust_host_boundary:
+    title: 'Babylon adopts NNS-104 policy v11 as one byte-identical Codex Rust host boundary with repository-local build state and repository-specific budgets'
+    status: accepted
+    date: '2026-08-28'
+    file: ADR246_codex_rust_host_boundary.yaml
+  ADR247_dependabot_exact_head_only_automation:
+    title: 'Dependabot automation removes the unwritable actor-triggered label phase and retains one exact-head workflow-run authority'
+    status: accepted
+    date: '2026-08-31'
+    file: ADR247_dependabot_exact_head_only_automation.yaml
+  ADR248_finite_material_transition_kernels:
+    title: 'Amendment AJ adds exact finite material transition kernels, deterministic event pushforwards, and transactional choice evidence as a closed BSL law'
+    status: accepted
+    date: '2026-09-01'
+    file: ADR248_finite_material_transition_kernels.yaml
+  ADR249_semantic_atom_content_architecture:
+    title: 'PER-23 Director design rulings 2026-09-03: semantic atoms (content-addressed, append-only, grant-keyed) as the atomic content unit with tables-for-invariants/views-for-compositions; Babylon Markdown = GFM 0.29 + subject: scheme links (bare empty-text fog redlinks, strikethrough known-but-pending); presentation-layer redlink placeholders, never stored; narrated wiki = append-only version chain bound to atom-set digests, Git as export only; read-only reader role + BABYLON_READER_DSN; Gameplay-role dossier with changelog strip and dual-tick honesty; agent-first headless CLI; foundation grant seeding (structure public, magnitudes earned)'
+    status: accepted
+    date: '2026-09-03'
+    file: ADR249_semantic_atom_content_architecture.yaml
+  ADR250_economy_first_gate_order:
+    title: 'Director gate-sequence ruling 2026-09-04: economy circuit built and UI-validated before any pandemic benchmark; COVID E0 deleted, COVID merged after player agency (G3, G4 circuit, G5 agency, G6 COVID, G7 2008, G8 representative world); thin-slice rulings: observed public-record baselines cursory-tier public (refining ADR249 R3), D2 amended for 83-county QCEW commits, one Michigan world in the Bevy window (PER-319)'
+    status: accepted
+    date: '2026-09-04'
+    file: ADR250_economy_first_gate_order.yaml
+  ADR251_durable_g4_observer_and_material_activation:
+    title: 'One durable Michigan observer game, explicit material-circuit activation, and a native three-dimensional presentation'
+    status: accepted
+    date: '2026-09-04'
+    file: ADR251_durable_g4_observer_and_material_activation.yaml
+  ADR255_graph_owned_staffing_composition:
+    title: Graph-owned staffing in the detached material close
+    status: accepted
+    date: '2026-09-06'
+    file: ADR255_graph_owned_staffing_composition.yaml
+  ADR256_same_window_campaign_lifecycle:
+    title: One window and runtime-owned campaign switching
+    status: proposed
+    date: '2026-09-06'
+    file: ADR256_same_window_campaign_lifecycle.yaml
+  ADR257_four_week_simulation_interval:
+    title: Amendment AK makes one four-week period the simulation tick
+    status: accepted
+    date: '2026-09-06'
+    file: ADR257_four_week_simulation_interval.yaml
+  ADR258_authored_campaign_parameters:
+    title: Typed authored parameters belong to each committed campaign
+    status: accepted
+    date: '2026-09-06'
+    file: ADR258_authored_campaign_parameters.yaml

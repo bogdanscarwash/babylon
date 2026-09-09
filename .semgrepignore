@@ -1,0 +1,11 @@
+# Repo semgrep ignore (ADR181 R9a). Its presence REPLACES semgrep's default
+# ignore list — which silently excludes tests/, defeating the test-estate
+# process rules in .semgrep-tests.yml. Keep the useful defaults explicit:
+.git/
+.venv/
+node_modules/
+dist/
+.pre-commit-cache/
+.mypy_cache/
+.ruff_cache/
+rust/target/

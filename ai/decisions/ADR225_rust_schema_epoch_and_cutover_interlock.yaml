@@ -1,0 +1,112 @@
+ADR225_rust_schema_epoch_and_cutover_interlock:
+  status: "accepted"
+  date: "2026-08-24"
+  title: >-
+    Rust schema migrations use babylon_state.schema_migration as one exact
+    append-only version/checksum ledger, and Rust writer authority remains
+    structurally unavailable until the separate cutover contract is complete
+  context: |
+    ADR220 assigns post-cutover PostgreSQL migration and writer authority to
+    Rust, requires one append-only per-version checksum ledger, and prohibits a
+    dual-writer or dual-migrator interval. It did not name the ledger relation
+    or freeze its row contract. The approved implementation design also keeps
+    the three-schema migration slice separate from the atomic writer and
+    hydration slice.
+
+    The legacy public._babylon_schema_stamp relation records whole-set digests.
+    Its Python path updates an applied_at value and executes schema chunks under
+    autocommit. It remains adoption evidence for the frozen Python estate, but
+    it cannot satisfy the new per-version transactional contract.
+
+    A complete CommittedTickEnvelope also cannot land honestly yet. The Rust
+    tick does not expose an ordered applied-action record or an explicit replay
+    seed, and TickContentHash has no accepted complete byte layout. ADR220 makes
+    that complete hash a hard writer-cutover gate. A schema bootstrap must not
+    make runtime writer activation appear possible before those contracts land.
+  decision: |
+    1. LEDGER IDENTITY. The sole Rust migration ledger is
+       babylon_state.schema_migration. It has exactly two columns: version is a
+       positive BIGINT primary key, and checksum is a non-null BYTEA value of
+       exactly 32 bytes. The table carries no timestamp, description, mutable
+       status, or success flag. Transaction commit is the success record.
+
+    2. NOMINAL RUST TYPES. MigrationVersion is a checked positive i64 value.
+       MigrationChecksum is a distinct 32-byte SHA-256 value. It cannot be
+       substituted for MigrationSetDigest, which names a frozen ordered
+       whole-set legacy manifest. One compiled SchemaMigration binds a version,
+       checksum, and exact static SQL byte sequence.
+
+    3. EXACT BYTES AND ORDER. A migration checksum covers the exact checked-in
+       SQL file bytes, including its final newline. Compiled versions start at
+       one and are contiguous. The database ledger must be an exact prefix of
+       that compiled sequence. A gap, duplicate, checksum mismatch, unknown
+       future version, partial Rust epoch, or bounded-row overflow refuses
+       before new DDL executes. Each compiled step also binds the exact
+       post-commit shape and fresh-origin and legacy-origin owned-census
+       contracts for that prefix. Existing objects validate against the
+       contract selected by the durable row count; pending DDL validates
+       against its resulting prefix contract before the marker insert.
+
+    4. ONE LOCK TENURE. Migration acquires the existing session advisory-lock
+       key 0xBAB10537 before it classifies a fresh, exact legacy, or exact Rust
+       prefix database. Legacy adoption verification and pending Rust
+       migrations occur during the same lock tenure. Releasing the adopter lock
+       and reacquiring it before migration is prohibited because that creates a
+       schema time-of-check/time-of-use window.
+
+    5. ONE TRANSACTION PER VERSION. Each pending version runs in its own
+       explicit SERIALIZABLE READ WRITE transaction with search_path pinned to
+       pg_catalog and synchronous_commit set to on. The migration SQL executes
+       first. Inserting the matching ledger row is the final statement before
+       COMMIT. A failed statement or commit leaves neither partial objects nor a
+       success row; earlier committed versions remain an exact prefix.
+
+    6. AMBIGUOUS COMMIT. A server-reported COMMIT error is a definite failure
+       and is not retried. Only a transport or protocol failure without a
+       server error has an unknown durable outcome. After that ambiguous
+       result, the migrator reconnects, reacquires the shared advisory lock,
+       and validates the exact resulting prefix. A matching checksum means the
+       version committed, absence permits a retry, and a different checksum is
+       a loud refusal. The primary failure remains visible if advisory-lock
+       cleanup also fails.
+
+    7. OWNERSHIP AND AUTHORITY. New schemas and the ledger belong to the
+       verified current database-owner/migrator principal. No install-specific
+       role name is hardcoded. PUBLIC receives no authority, and babylon_intel
+       receives no schema or ledger privilege. Existing babylon_meta is adopted
+       only when its identity and ownership match the declared epoch contract.
+       The census freezes catalog identity and authority for this bootstrap; it
+       does not claim to freeze comments or extension-owned configuration-table
+       contents. A mechanic or data importer that consumes those values must
+       define its own validation contract.
+
+    8. CUTOVER INTERLOCK. The schema epoch does not grant runtime writer
+       authority. Production construction can report only
+       PythonAuthorityActive and must refuse before a PostgreSQL connection is
+       attempted. No environment variable, ordinary Cargo feature, ledger row,
+       or schema presence can activate the Rust writer. A later accepted
+       cutover change must disable Python migration and write entry points
+       before it makes a non-forgeable Rust writer capability constructible.
+
+    9. BOUNDED SCOPE. This decision creates no campaign, tick_commit,
+       checkpoint, event, outbox, Archive, or H3 relation. It does not define
+       CommittedTickEnvelope, TickContentHash bytes, action identity, hydration,
+       or a durable acknowledgment. PER-20 and Gate 3 remain In Progress after
+       the schema-epoch bootstrap lands.
+  consequences: |
+    - Rust gains one auditable migration history without sharing live authority
+      with the Python writer.
+    - Exact-prefix validation and a marker-last per-version transaction make a
+      migration retry distinguishable from a conflicting history.
+    - The three schema namespaces can land additively while the legacy public
+      estate remains the transition oracle.
+    - Atomic tick persistence remains closed until replay seed, applied actions,
+      complete tick identity, envelope row families, and cutover ordering are
+      separately implemented and verified.
+  related:
+    - ADR098_parquet_canonical_reference
+    - ADR176_director_rulings_batch_gds_dispositions
+    - ADR220_rust_owned_postgresql_persistence_boundary
+    - ADR221_game_first_refoundation_v4
+    - ADR223_whole_tick_atomicity_world_hash
+    - ADR224_bsl_causal_composition_contract

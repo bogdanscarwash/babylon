@@ -1,6 +1,7 @@
 ADR049_election_lab_catalog_addition:
-  status: "proposed"
+  status: "accepted"
   date: "2026-05-18"
+  ratified: "2026-07-22"
   title: "Data-catalog v2.6.4 PATCH proposal — add MIT Election Lab county-presidential dataset"
   spec: "070-balkanization"
   related: "spec-070 T118 / data-catalog.yaml v2.6.3 → v2.6.4 PATCH"
@@ -72,3 +73,44 @@ ADR049_election_lab_catalog_addition:
        fallback when MIT data is unavailable."
     - "Update spec-070's quickstart.md §3 to reference the new source
        once ratified."
+
+  ratification_record: |
+    Ratified 2026-07-22 under Program 25 Unit 6 (ADR132), BD-delegated.
+    The original proposal text above is preserved verbatim (Immutability
+    of History); four facts changed between drafting and ratification:
+
+    (1) CATALOG VERSION/SHAPE. data-catalog.yaml reached v2.7.1 before
+        this landed, and the real catalog convention is the flat
+        source-entry form (id/agency/dataset/vintage/granularity/
+        cadence/class/provenance_url/local_path/added_by), not the
+        nested block drafted above. Landed as `MIT_Election_Lab` under
+        Federal Demographic in v2.7.2, not v2.6.4.
+    (2) STALE CLAIM CORRECTED. The context's option (b) claims a
+        "Census Bureau presidential-election fixture (the existing
+        catalog entry)" — no such catalog entry ever existed. The
+        CENSUS_BUREAU_FIXTURE was always a code-level provenance
+        constant in compute_seed_influences.py, never a cataloged
+        source. Nothing to supersede in the catalog.
+    (3) DATASET VINTAGE. The dataset is now v20, "County Presidential
+        Election Returns 2000-2024" (released 2026-02-25). FR-039 wants
+        the MOST-RECENT presidential election, so the pipeline consumes
+        the 2024 returns, not 2020.
+    (4) ACQUISITION + INTEGRITY. The canonical Dataverse file is
+        guestbook-gated against anonymous API download; the raw CSV was
+        acquired from a public CC0 mirror and verified (exact MIT
+        schema; 11 county-year spot-checks against known official
+        results; full census-atom FIPS validation). The acquired file's
+        FIPS column is row-level corrupt in several 2024 state blocks
+        (e.g. the AZ block shifts one county slot from La Paz/04012 on;
+        Sutter CA's candidate rows straddle two FIPS), while the
+        (state, county-name, votes) triple verifies correct — so the
+        committed derivative (data-artifacts.yaml
+        `mit_countypres_rep_share`, sha256 72c9ba04...) re-keys every
+        row by census-atom name join: 3053 correct + 54 repaired kept,
+        81 non-county/unmatched excluded (AK house districts, RI
+        municipality rows, the 36000 Kansas City sentinel; known gaps:
+        AK boroughs, RI counties, HI Kalawao, VA Bedford city (stale
+        atom row), CT planning regions (alternate atom layer)).
+        Generator: tools/make_election_lab_artifact.py (never run in
+        CI; the CI-no-drive rule holds — only the committed derivative
+        participates in builds).

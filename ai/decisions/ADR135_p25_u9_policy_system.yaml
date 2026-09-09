@@ -1,0 +1,129 @@
+ADR135_p25_u9_policy_system:
+  status: "accepted"
+  date: "2026-07-22"
+  title: >-
+    P25 U9 — PolicySystem @17.47 (LEGISLATE's resolver + the reform
+    ceiling): the 32nd engine system. The agenda register drains through
+    the §2.4 gauntlet — federal preemption on the first-ever-produced
+    ADMINISTERS DAG, judicial strike-down off the first-ever-produced
+    Institution node, the funding identity with deficit financing under
+    bond discipline (debt_service BUILT: the endogenous rate was live,
+    the sovereign debt stock existed nowhere), overlay writes effective
+    next tick by pipeline position, the per-class delivery ledger, and
+    the capital-strike application of the equalization operator at
+    county grain. The npc_stub REPRESS-misstamp on state-AI LEGISLATE
+    selections is fixed at its source. I-ORD ships as the 19th sentinel.
+    qa:regression byte-identical with the system live (empty-register
+    guard, proved not asserted).
+  supersedes: []
+  relates_to: ["ADR127", "ADR128", "ADR133", "ADR134", "ADR089"]
+  programs: ["25-political-superstructure"]
+
+  decision: |
+    (1) THE RESOLVER (Recon 2f discharged): resolve_legislate never
+        existed; worse, npc_stub.py stamped ActionType.REPRESS on EVERY
+        StateAction, so a state-AI-selected ADMINISTER/LEGISLATE
+        materially resolved as repression (a live misclassification, not
+        an absence). Fixed at the conversion boundary: LEGISLATE keeps
+        its identity as a params marker; the OODA dispatch routes it to
+        the agenda enqueue (engine/systems/policy.enqueue_agenda_item)
+        under the acting org's territory's TOP claims-holder. The pure
+        pipeline lives in domain/politics/policy.py (resolve_legislate:
+        preemption → judicial → funding identity → strike flag);
+        PolicySystem @17.47 (CONSEQUENCE, creates_value=False) does the
+        graph I/O at politics.policy_agenda_rate per tick (FIFO, static
+        loop bound).
+    (2) FISCAL FACTS, declared proxies: t_claim = Σ tick_taxes_on_surplus
+        and total_surplus = Σ tick_total_surplus over the enacting
+        sovereign's claimed territories (top-claims-holder scope; per-
+        territory attrs fresh @4.0, NO national aggregate existed).
+        Φ_inflow = Σ tick_phi_hour·HOURS_PER_YEAR/WEEKS_PER_YEAR — the
+        Leontief county-grain extraction FLOW, because the tribute-pool
+        inflow flow is never published to the graph (only the post-decay
+        pool stock survives ImperialRentSystem @9); revisit if the pool
+        flow is ever published. Interest rate read defensively from
+        NATIONAL_FINANCIAL_ATTR (absent ⟹ 0.0, honest absence).
+    (3) debt_service BUILT (charter: "BUILDS the brief mislabeled
+        already built"): SovereignFiscalState (frozen, graph-attr
+        register SOVEREIGN_FISCAL_ATTR — the opposition_states
+        durability class) + pure laws in domain/economics/distribution/
+        sovereign_fiscal.py. Deficit financing borrows debt_finance_share
+        of the unfunded promise; bond discipline refuses borrowing past
+        bond_discipline_threshold on debt_service/t_claim (no tax base ⟹
+        total discipline); next tick's service shrinks the funded
+        ceiling — O'Connor's fiscal crisis as arithmetic. DebtAccumulation
+        (county-ENTERPRISE, dead in production) deliberately NOT
+        repurposed. The incidence→loan_market_tightness coupling (§2.4's
+        second bond mechanism) is a typed OPEN row — a credit-domain
+        signature change, not U9's.
+    (4) THE VETO TERRAIN, both firsts: INST_FED_JUDICIARY in the
+        electoral fixture is the FIRST production Institution node
+        anywhere (entity existed since Feature 040, zero producers);
+        SOV_USA_FED→SOV_MI_STATE is the FIRST ADMINISTERS edge ever
+        built (declared spec-070, zero producers). U9 READS
+        InternalBalanceOfForces.liberal_technocratic (strike tolerance =
+        judicial_tolerance_scale × weight); the per-tick
+        update_internal_balance shift is U10's item by charter.
+        Preemption fires on magnitude > preemption_envelope for any
+        sovereign with an ADMINISTERS parent (the apex is never
+        preempted) — the municipal-socialism ceiling; the scalar envelope
+        is the declared proxy U10's governing platform replaces.
+    (5) CAPITAL STRIKE = the equalization operator, one implementation,
+        two grains: the pure law Δc=α(r−r̄)c EXTRACTED from
+        DefaultHexEqualizationComputer (which now delegates; behavior
+        pinned by the pre-existing suites) because services.hex_grid is
+        None in every production path — the hex lane could never carry
+        the wire. Applied over territory-node tick_capital_stock with
+        incidence as a claimed-county profit-rate penalty (α =
+        strike_equalization_rate, distinct from Spec-062's ambient
+        alpha_annual); ΣΔc = 0 pinned; MarketScissors @17.8 reads the
+        moved stock the SAME tick. All-claimed terrain ⟹ uniform penalty
+        ⟹ zero migration (a national policy cannot be fled domestically —
+        no external sector on the graph yet); the annual boundary
+        re-anchors capital levels from data, so the strike is a
+        within-year shock by construction. Incidence law: social_wage =
+        promised/total_surplus (clamped 1.0 over zero surplus);
+        wage_floor/labor_law = magnitude; state-apparatus axes = 0
+        (capital does not strike against its own protection).
+    (6) OVERLAYS + CONSUMERS (no dead writes): POLICY_OVERLAYS_ATTR
+        {sovereign: {axis: {magnitude, enacted_tick, promised,
+        delivered}}}; effective-next-tick is EMERGENT from pipeline
+        position (base 1–13 < 17.47), not a mechanism. Three read-sides
+        land WITH the producer: social_wage → SurvivalSystem P(S|A)
+        subsistence relief at READ time (never a wealth write — A4);
+        border_regime → ReserveArmySystem effective-ratio valve;
+        delivery ledger → AllegianceSystem θ.betrayal drift
+        (allegiance_betrayal_rate, discharging ADR134 §5's declared
+        zero — repels from the ledger's incumbent; pre-U10 the incumbent
+        is the enacting sovereign, which no party id matches, so the
+        term lights fully when U10 seats a governing party). The other
+        four axes' read-sides are typed OPEN wiring rows with named
+        owners. Every consumer gates on register absence — the qa six
+        never carry any register (byte-identity mechanism, proved:
+        6/6 + determinism leg with the system live).
+    (7) I-ORD (the new deliverable), grounded: call order is already
+        proven dynamically (INV-013) and base reads are prior-tick by
+        position, so the static content is WRITE OWNERSHIP —
+        sentinels/superstructure/ (19th sentinel; partition/ name taken
+        by Program 19): declared owners for the five political
+        registers, no MATERIAL_BASE file may write any, registry
+        integrity, constant-alias resolution; citing test pins the
+        hand-declared base-file list to simulation_engine.
+        MATERIAL_BASE_SYSTEMS; mutation-validated per the standing rule.
+    (8) ESTATE + a caught miss: pins 31→32; PolicySystem CoverageGap row
+        (remediation = the mitterrand golden, U13);
+        EXPECTED_ENUMS_PUBLIC +PolicyAxis. The AST gate-coverage count
+        test was silently stale at 30 since U8's 31st system — U8's
+        closeout `mise run check` ran off-tree (the background-shell cwd
+        reset to the sibling checkout), so the miss never surfaced;
+        fixed and renamed (test_real_engine_system_count) with both new
+        systems asserted present. Lesson recorded: closeout gates must
+        pin their working directory.
+    (9) NEW DEFINES (two metadata-only defines_hash ceremonies:
+        blessed(p25-u9-politics-defines-hash),
+        blessed(p25-u9-betrayal-rate-defines-hash)): policy_agenda_rate,
+        debt_finance_share, bond_discipline_threshold,
+        judicial_tolerance_scale, preemption_envelope (Θ_theory);
+        strike_equalization_rate, policy_default_magnitude,
+        allegiance_betrayal_rate (Θ_feel — betrayal outpaces alignment
+        by default: kept promises are forgiven, broken ones compound).

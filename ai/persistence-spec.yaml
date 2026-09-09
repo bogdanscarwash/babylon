@@ -10,8 +10,12 @@ meta:
   created: "2025-12-26"
   purpose: "Specify game state persistence and restoration"
   issue_id: "PERSIST-001"
-  status: "SPEC_COMPLETE"
+  status: "HISTORICAL_REFERENCE"
   priority: "LOW"
+  authority_note: |
+    This file records the retired Python save and H3-cache design. The live
+    persistence authority is Rust. Use contracts/rust_persistence_cutover_v2.yaml,
+    contracts/h3_estate_contract_v1.yaml, and docs/reference/persistence.rst.
 
 # =============================================================================
 # DESIGN PHILOSOPHY
@@ -415,9 +419,13 @@ implementation:
 
 multi_resolution_hex_journal:
   feature_id: "037"
-  status: "IMPLEMENTED"
+  status: "RETIRED_AT_SCHEMA_EPOCH_9"
   date: "2026-04-10"
   spec: "docs/reference/persistence.rst"
+  authority_note: |
+    The names and Python paths below are historical. Schema epochs 8 and 9
+    migrated the accepted material rows to Rust-owned relations and removed
+    the Python-era projections.
 
   architecture:
     principle: |

@@ -7,9 +7,9 @@ Idempotent — drops + recreates table on each run.
 
 Usage::
 
-    poetry run python -m tools.ingest.hickel_erdi
+    mise exec -- uv run --frozen python -m tools.ingest.hickel_erdi
     # or with custom paths:
-    poetry run python -m tools.ingest.hickel_erdi \\
+    mise exec -- uv run --frozen python -m tools.ingest.hickel_erdi \\
         --csv /path/to/babylon_hickel_final.csv \\
         --db sqlite:////absolute/path/to/marxist-data-3NF.sqlite
 """
@@ -26,7 +26,16 @@ from sqlalchemy.orm import Session
 
 from babylon.reference.schema import DimTime, FactHickelERDIAnnual, NormalizedBase
 
-DEFAULT_CSV = Path("/media/user/data/babylon-data/babylon_hickel_final.csv")
+# Shipped in-repo since 2026-07-16 (owner ruling: reference CSVs this small
+# travel with the code); the babylon-data trove copy remains the upstream.
+DEFAULT_CSV = (
+    Path(__file__).resolve().parents[2]
+    / "src"
+    / "babylon"
+    / "data"
+    / "reference"
+    / "babylon_hickel_final.csv"
+)
 DEFAULT_DB_URL = "sqlite:///data/sqlite/marxist-data-3NF.sqlite"
 
 

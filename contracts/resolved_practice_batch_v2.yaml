@@ -1,0 +1,142 @@
+meta:
+  contract: ResolvedPracticeBatchV2
+  schema_version: 2
+  status: accepted
+  evidence_class: Designed
+  live_activation: false
+  rust_owner: babylon-practice-contract
+
+preserves:
+  - every Practice Contract V1 byte, digest, refusal, and vector
+  - PracticeInputAuthorityV2 bytes and authoritative ledger law
+  - PracticeIntentV2 bytes and proposal-key law
+
+domains:
+  batch: babylon.resolved-practice-batch.v2
+  terminator_hex: "00"
+
+encoding:
+  byte_order: big-endian
+  integer_encoding: unsigned-fixed-width
+  digest_encoding: raw-32-bytes
+  campaign_id_encoding: raw-16-byte-rfc4122-network-order
+  item_count_encoding: u16
+  nested_length_encoding: u16
+  trailing_bytes: forbidden
+
+batch_field_order:
+  - schema_version
+  - campaign_id
+  - resolve_tick
+  - authority_ledger_digest
+  - resource_allocation_contract_digest
+  - content_digest
+  - items
+
+item_field_order:
+  - authority_row_canonical_bytes
+  - intent_canonical_bytes
+
+wire_layout:
+  batch:
+    - domain_ascii
+    - terminator_u8
+    - schema_version_u16
+    - campaign_id_16
+    - resolve_tick_u64
+    - authority_ledger_digest_32
+    - resource_allocation_contract_digest_32
+    - content_digest_32
+    - item_count_u16
+    - length_framed_items
+  item:
+    - authority_row_length_u16
+    - authority_row_canonical_bytes
+    - intent_length_u16
+    - intent_canonical_bytes
+
+proposal_order_key:
+  - resolve_tick
+  - input_authority_id
+  - actor_org_id
+  - practice_id
+  - tagged_target_identity
+  - proposal_nonce
+
+limits:
+  items:
+    value: 4096
+    classification: Designed
+    purpose: serialization and validation-fuel ceiling, not an actor or organization quota
+  nested_authority_bytes:
+    value: 127
+    classification: Derived
+    purpose: equal the frozen PracticeInputAuthorityV2 canonical byte length
+  nested_intent_bytes:
+    value: 16384
+    classification: Designed
+    purpose: equal the frozen PracticeIntentV2 canonical-byte ceiling
+  batch_canonical_bytes:
+    value: 67645599
+    formula: 159 + items * (2 + nested_authority_bytes + 2 + nested_intent_bytes)
+    classification: Designed
+    purpose: serialization and decode-fuel ceiling
+
+validation_order:
+  - batch schema and item count
+  - committed authority-ledger validity and digest
+  - each nested authority row and intent
+  - batch resolve tick and quoted content and resource-contract identities
+  - batch campaign and exact active authority row
+  - ascending unique complete proposal key
+
+laws:
+  - the committed authority ledger digest equals the digest of the supplied authoritative ledger
+  - every item carries the exact active authority row selected from that ledger
+  - every authority row and intent matches the batch campaign, actor, authority identity, and resolve tick
+  - every intent quotes the batch content digest and resource-allocation-contract digest
+  - items sort by complete PracticeProposalKeyV2 and remain unique
+  - maximum-plus-one refuses before nested allocation or sorting
+  - canonical order grants no material priority
+  - the batch digest is SHA-256 of validated canonical batch bytes
+  - the batch digest is never embedded in its own canonical preimage
+  - an empty batch still binds campaign, tick, ledger, content, and resource-contract identities
+  - validation grants no material eligibility and changes no game state
+
+error_codes:
+  batch_domain: 1
+  batch_schema_version: 2
+  batch_truncated: 3
+  batch_trailing_bytes: 4
+  batch_length: 5
+  batch_item_limit: 6
+  batch_item_length: 7
+  batch_item_order: 8
+  batch_item_duplicate: 9
+  batch_resolve_tick: 10
+  batch_ledger_digest: 11
+  batch_campaign: 12
+  batch_authority_mismatch: 13
+  batch_content_digest: 14
+  batch_resource_contract_digest: 15
+
+error_composition:
+  batch_errors: PracticeBatchV2Error
+  nested_authority_errors: PracticeAuthorityV2Error
+  nested_intent_errors: PracticeIntentV2Error
+  lossless_wrapper: ResolvedPracticeBatchV2Error
+
+digest_contract:
+  algorithm: SHA-256
+  preimage: validated canonical batch bytes
+  embedded_digest_field: forbidden
+
+excluded_surfaces:
+  - accepted-input persistence or admission transaction
+  - resource reservation, clearing, or capacity allocation
+  - authority-resource-conflict adjudication
+  - graph or auxiliary-register lookup
+  - material connection, worker participation, or practice eligibility
+  - BSL effect or graph mutation
+  - receipt, Archive, or Bevy action
+  - gameplay activation

@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="384" height="128" viewBox="0 0 384 128">
+  <g id="concrete"><rect x="0" y="0" width="128" height="128" fill="#202020"/><path d="M16 24H64M76 44H112M12 88H48M62 104H104M28 16V64M88 60V112" stroke="#404040" stroke-width="8"/><path d="M16 112L112 16" stroke="#1a0000" stroke-width="3"/></g>
+  <g id="hatch"><rect x="128" y="0" width="128" height="128" fill="#1a0000"/><path d="M128 32L160 0M128 64L192 0M128 96L224 0M128 128L256 0M160 128L256 32M192 128L256 64M224 128L256 96" stroke="#404040" stroke-width="8"/></g>
+  <g id="paper"><rect x="256" y="0" width="128" height="128" fill="#e8e8e8"/><path d="M272 24H368M272 48H352M272 72H368M272 96H344" stroke="#404040" stroke-width="4"/><path d="M272 112H368" stroke="#ffd700" stroke-width="6"/></g>
+</svg>

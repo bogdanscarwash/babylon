@@ -1,0 +1,212 @@
+ADR211_solidarity_port_train_handoff:
+  status: "accepted"
+  date: "2026-08-17"
+  title: "The Solidarity @8.0 port train handoff (Wave C, issue #605, umbrella #557, ADR208 R14 Checkpoint A) — SolidaritySystem ported as the single-rule solidarity.bsl pack (solidarity/p0-transmit) over a fresh 22-node/12-edge conformance world: the ideology.class_consciousness scalar re-pointed to the already-declared social-class/revolutionary field (no new scalar minted), the D136 push idiom (edge-write-lane-e2e's iterate-all-edges shape would have multiplied every write by the class count), set-not-add forced by the frozen clamp composed with E-EVAL-020's never-a-clamp store law, the two frozen event emits (CONSCIOUSNESS_TRANSMISSION, MASS_AWAKENING) pinned with full ordered payloads, and the dual-implementation Python oracle pinned bit-exactly per ADR183; PR A #606 (namespace + conformance world + the transmission rule, MERGED) + PR B (events, oracle, and this train's permanent records); seven register rows D158-D164; the train's own headline finding — this is the FIRST rule pack to read another node's field, making the collect-then-apply pre-state semantics tick.rs itself predicted would eventually become observable, in fact observable, with the frozen-vs-port multi-inbound divergence (0.478 vs 0.31000000000000005) executed against the frozen oracle fixture, not merely asserted; Material Base tally advances to 7/13, Checkpoint A (ADR208 R14) remains held; one non-blocking Director-gate question filed (issue #607, inflate-vs-displace across the open r/l/f simplex window) and one WS4 D-record adjudication note filed on issue #502"
+  context: |
+    ADR208 R14 (the 2026-08-17 docket sitting) defined "MATERIAL BASE
+    COMPLETE" as all 13 Material Base systems ported to Rust as `.bsl`
+    content — 6/13 landed at that sitting (vitality @1.0, territory @2.0,
+    production @3.0, lifecycle @7.0, dispossession @10.0, metabolism
+    @13.0) — and named Solidarity @8.0 as one of the seven remaining,
+    already unblocked at the language level. Issue #605 ("Wave C:
+    Solidarity @8.0 port train") chartered the port itself, citing
+    umbrella #557 and ADR208 R14. The design of record is
+    `docs/superpowers/plans/2026-08-17-solidarity-port.md` (authored
+    against `dev@17971664`, re-verifying and correcting the prior
+    archaeology digest `scratchpad/checkpoint-a/archaeology-solidarity.md`
+    in its own §3, five corrections) — its content-model ruling (§1),
+    design (§2), corrections (§3), Global Constraints (§5), and the D-row
+    roster (§7) are binding over any looser summary of the same ground.
+
+    The train executed in five tasks on the `feature/solidarity-port`
+    worktree, split ADR207-style across two PRs: Task 1 (namespace
+    registration + the fresh conformance world, `ab9817d9`), Task 2 (the
+    transmission rule — gates, delta, clamp, write, `314de828`), together
+    PR A #606 (MERGED); Task 3 (the two event emits with full pinned
+    payloads, `b16e136d`), Task 4 (the dual-implementation Python oracle +
+    additive `tick_goldens.rs` pins, `8efc2635`, fix round `db141988`),
+    and Task 5 (this ADR, the D-row roster, `ai/state.yaml`'s closing
+    entry, and the two follow-on filings), together PR B.
+  decision: |
+    **1. Scope landed.** `rust/crates/babylon-tick/content/rules/
+    solidarity.bsl` — ONE rule, `solidarity/p0-transmit`, subject
+    `SOCIAL_CLASS`, `:fuel 3502` (measured twice from the load-time bound
+    checker's own `E-LOAD-040` refusal, never guessed: `1126` after
+    Task 2's write alone, `3502` after Task 3's two emits). The rule
+    transcribes `SolidaritySystem.step` (`solidarity.py:97-203`) and
+    `calculate_solidarity_transmission` (`formulas/solidarity.py:10-36`)
+    port-as-is: the inactive-source/inactive-target skips, the
+    `strength <= 0` skip, the source-at/below-`activation_threshold`
+    skip, `delta = strength * (source_r - target_r)`, the
+    `|delta| < negligible_transmission` skip, the write
+    `max(0.0, min(1.0, target + delta))` (D-record 2), the
+    `CONSCIOUSNESS_TRANSMISSION` emit on every applied transmission
+    (`solidarity.py:171-187`), and the `MASS_AWAKENING` emit on the
+    frozen chained comparison `old_consciousness < mass_awakening_
+    threshold <= new_consciousness` (`solidarity.py:190`), transcribed
+    as two ANDed inequalities with the asymmetric `<`/`>=` arms
+    preserved exactly (`solidarity.bsl:315-359`). `rust/crates/
+    babylon-tick/content/scenarios/solidarity-conformance.bscn` — built
+    fresh (neither `edge-write-lane-e2e.bscn` nor
+    `consciousness-ternary-conformance.bscn` reusable, plan §8), 22
+    `SOCIAL_CLASS` nodes / 12 `SOLIDARITY` edges, one subject type only,
+    covering all four plan §8 witness groups plus an inactive-source
+    pair, an inactive-target pair, and a clamp witness. `rust/crates/
+    babylon-tick/content/scenarios/solidarity_conformance.py` — the
+    standalone, dependency-free dual-implementation oracle (Task 4),
+    transcribing `tick.rs`'s own collect-then-apply/last-write-wins
+    semantics term-for-term (not frozen's sequential apply, per ADR183:
+    the frozen engine is a structure/ordering contract, not a byte
+    oracle) — reconciled against every one of 16 pinned Rust literals
+    plus the full 9-event payload set with zero mismatch (Task 4 report
+    §3). `tick_goldens.rs::solidarity_conformance_hashes_are_pinned`:
+    `before = 20124f5ca91da3cb30fba41bc373175fdf3b06dc82f3c3b162da172951
+    bb29de`, `after = 978dbe30363c3b306bd7fa668e25d48de18c36b93930e9c4d19
+    5b5997ed67312`, `fired = 14`, measured not derived, additive against
+    every pre-existing pin (byte-identical, re-verified at this Task 5's
+    own dev merge-in). `rust/crates/babylon-tick/src/lib.rs` gained one
+    line: `"solidarity"` added to the `systems` HashSet (Task 1, spike
+    §4.2 — verified by loading a throwaway rule, no `E-LOAD-*`, no
+    fallback needed).
+
+    **2. Director-gate rulings.** None were required during execution —
+    the content-model re-point (plan §1, D158) resolves against the
+    frozen tree's own stated equivalence (`ideology.py:382-386,410`), not
+    against a Director ruling. The one genuine ideological question this
+    train surfaces — whether the open `r`/`l`/`f` simplex window (D161)
+    should be healed by INFLATING the revolutionary share (the port-as-is
+    path taken here) or by DISPLACING liberal/fascist share instead — is
+    explicitly NOT resolved here: it is filed non-blocking as `issue #607
+    <https://github.com/percy-raskova/babylon/issues/607>`_
+    ("director-gate: solidarity transmission — inflate vs displace the
+    r-write across the open simplex window"), per plan §4.1's instruction
+    to raise it rather than block or silently pick a side. Port-as-is
+    (inflate) proceeds because the alternative requires inventing
+    redistribution mathematics the frozen engine has nowhere, forbidden
+    by ADR172 ruling 5.
+
+    **3. The controller ruling set.** (a) The formula's own dead-in-
+    practice guard (`calculate_solidarity_transmission`'s
+    `if source_consciousness <= activation_threshold or
+    solidarity_strength <= 0: return 0.0`, unreachable at its one call
+    site because the caller already checks both) is NOT literally
+    duplicated a third time in the rule body — ACCEPTED: the guard is
+    provably unreachable behind gates the rule already expresses at the
+    same two points the frozen caller does, and ADR183 binds
+    structure/behavior, not the transcription of unreachable text
+    (documented in place, `solidarity.bsl:113-124`). (b) Task 3's minor:
+    `solidarity.bsl:318` transcribes the awakening boundary as
+    `(>= new awakening)`, operand-swapped from the frozen
+    `mass_awakening_threshold <= new_consciousness` reading — the two
+    are mathematically identical (`a <= b` iff `b >= a`); documented in
+    the rule's own header and recorded here for anyone diffing against
+    frozen line-by-line. (c) Fuel-growth architectural note (Task 3,
+    informational): declared `:fuel` climbed 1126 -> 3502 (+211%) for two
+    emits, purely from the no-per-iteration-binding-form constraint
+    (plan §4.3) compounding the clamp/`abs` `if`-chain's re-evaluation
+    across the guard, the write, and now both emits — not a defect, a
+    trend worth revisiting architecturally only if a future rule needs
+    three or more emits per edge; out of this train's scope
+    ("do not restructure"). (d) Task 4's minor, now a demonstrated risk:
+    the `//!` module doc's pasted mirror-stdout block drifted from the
+    actual script output by one leading space on six lines, caught only
+    by a dispatched review's independent diff, not by any automated
+    check — the doc-block-vs-script sync is unchecked by construction
+    across the whole `*_conformance.rs` family convention (fixed here,
+    `db141988`, verified byte-identical by `diff -u`; noted as a family-
+    wide risk, not fixed family-wide, out of this train's scope).
+
+    **4. The D-row roster.** Seven register rows landed in
+    `docs/reference/bsl-language.rst` (D157 verified the tail at
+    allocation, post-#604/ADR209 merge-in): D158 (the scalar-to-ternary
+    re-point — the headliner, `N/A` middle column per plan §7 item 1's
+    own wording), D159 (multi-inbound last-write-wins, the genuine
+    behavioural divergence, quantified 0.478 frozen vs
+    0.31000000000000005 port against the frozen oracle fixture), D160
+    (the first-rule-reads-a-neighbours-field finding that makes
+    collect-then-apply observable), D161 (the open simplex window @8.0
+    to @17.0, three verified mitigations, the issue #607 Director-gate
+    reference), D162 (org-sourced SOLIDARITY edges provably inert — one
+    rule, not two), D163 (target liveness must be seeded — an honest-
+    null narrowing, not a divergence), D164 (`scaling_factor`/
+    `superwage_impact` not declared — zero frozen call sites).
+
+    **5. Corrections to the archaeology digest's framing** (plan §3,
+    five corrections; evidence: the plan document itself, verified
+    against the tree before, not after, implementation). (a) The
+    digest's claim that a direct `(for-each (edges EdgeType/SOLIDARITY)
+    ...)` transcription "can stay" is WRONG — that shape runs once PER
+    subject and multiplies every write by the class count; the D136 push
+    idiom is mandatory, not a style preference. (b) The digest
+    understated the conformance-world task and left the rule count
+    unsettled; it is settled at exactly ONE (§2.1's verified narrowing —
+    D162). (c) The digest's event caveat was half-stale: the golden-hash
+    half was true (`tick_goldens.rs` never covers the event log) but the
+    conformance half was false — `CollectingSink` captures full ordered
+    payloads, and both this train's events ARE pinned (Task 3), not
+    deferred. (d) The digest attributed multi-inbound last-write-wins to
+    collect-then-apply ALONE — wrong reasoning with a right conclusion:
+    an `add` update-op would still accumulate correctly at apply time; it
+    is the frozen clamp composed with the `probability` field's
+    `E-EVAL-020` store law that forces `set`, and D159's own text carries
+    this correction so a future reader does not "fix" the divergence into
+    a tick-fatal overshoot. (e) The digest's "only the port work itself
+    remains undone" missed a required Rust change: `"solidarity"` was
+    absent from `lib.rs`'s `systems` HashSet, needing the one-line
+    registration Task 1 made (§4.2's own spike).
+
+    **6. The chartered follow-ons.** `Issue #607
+    <https://github.com/percy-raskova/babylon/issues/607>`_ — the §4.1
+    Director-gate question (decision 2, D161). A note on `issue #502
+    <https://github.com/percy-raskova/babylon/issues/502#issuecomment-5316607919>`_
+    (the WS4 post-port refactor program's D-record adjudication
+    ceremony) naming this train's D159/D160 pair as a concrete,
+    dual-pinned first test case for that future ceremony — both the
+    frozen and the port readings are executed and comparable, not merely
+    asserted in prose, which is the shape WS4's adjudication needs.
+  consequences: |
+    - The pins: `tick_goldens.rs`'s new
+      `solidarity_conformance_hashes_are_pinned` (pre-tick
+      `20124f5c...bb29de`, post-tick `978dbe30...ed67312`, `fired == 14`)
+      plus `solidarity_conformance.rs`'s own 17-test suite (full ordered
+      9-event payload pin, all 16 per-witness node values, the isolated
+      exact-`0.6` boundary and negative-case tests). Every pre-existing
+      golden stays byte-identical, re-verified at this train's own dev
+      merge-in (`cargo test -p babylon-tick --locked`, 10/10
+      `tick_goldens.rs` green, full crate green).
+    - The records: register rows D158-D164; this ADR; `ai/state.yaml`'s
+      closing entry (Material Base tally 6/13 -> 7/13, Checkpoint A
+      ADR208 R14 still held — the six remaining Material Base systems
+      are TickDynamics, ReserveArmy, Community, ImperialRent,
+      Decomposition, and ControlRatio (final whole-branch review
+      correction: an earlier draft wrongly named Struggle and
+      Sovereignty, which are CONSEQUENCE-partition systems, not
+      Material Base); the Checkpoint A campaign tracks the remainder).
+    - Issue #605 stays OPEN until PR B merges (this train's own closing
+      PR); #607 is a new, separate open issue, non-blocking; #502 gains
+      one comment naming a concrete adjudication candidate, its own scope
+      unchanged.
+    - The conformance-oracle pattern ADR207 established (a dual-
+      implementation Python generator mirroring the pack's own binding
+      order term-for-term, pinned bit-exactly — NOT frozen floats) is
+      reused here without modification, now with a second load-bearing
+      instance of WHY it must diverge from frozen: `tick.rs`'s
+      collect-then-apply pre-state semantics make the frozen engine's
+      sequential-apply reading actively WRONG as an oracle for a rule
+      that reads another node's field, not merely a stylistic
+      simplification.
+    - Future port trains inherit two disciplines this train sharpens:
+      verify a claimed "it can stay a direct transcription" shape against
+      the actual per-subject/per-edge iteration semantics before trusting
+      it (correction a), and when a divergence has two possible causes
+      (an execution-order fact vs. a type/range law), cite the one that
+      actually forces the observed behaviour, not the one that merely
+      correlates with it (correction d, D159).
+  supersedes: []
+  related:
+    - ADR207_class_surface_ternary_port_handoff
+    - ADR183_get_it_right_in_rust
+    - ADR172_amendment_ae_refoundation_ratified
+    - ADR204_worldview_ternary_unification
+    - ADR208_docket_sitting_2026_08_17
+    - ADR210_checkpoint_a_campaign_rulings

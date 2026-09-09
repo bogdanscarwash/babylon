@@ -14,7 +14,7 @@ Dimensions (33 tables):
                   dim_rent_burden, dim_commute_mode, dim_poverty_category
     Energy: dim_energy_table, dim_energy_series
     FRED: dim_wealth_class, dim_asset_category, dim_fred_series
-    Commodities: dim_commodity, dim_commodity_metric, dim_sctg_commodity
+    Commodities: dim_commodity, dim_commodity_metric, dim_sctg_commodity, dim_hs2_commodity
     Metadata: dim_time, dim_gender, dim_data_source, dim_race
     Coercive: dim_coercive_type
     Employment: dim_employment_area
@@ -26,6 +26,19 @@ Facts (34 tables):
 Note:
     Census fact tables include time_id and race_id FKs for multi-year and
     race-disaggregated analysis (15 years x 10 race groups).
+
+    The census above is the pre-ADR076 schema. The 2026-07-17 execution
+    slate (ADR075/076) amputated 16 tables (incl. the Energy dims/fact
+    listed here) and demoted 8 — ``data-catalog.yaml`` is the authoritative
+    per-table registry; amputated tables live on as committed CSV artifacts
+    registered in ``data-artifacts.yaml``.
+
+    Since the parquet-canonical cutover (ADR098, 2026-07-20),
+    ``data-artifacts.yaml`` is the LINEAGE AUTHORITY for the whole estate:
+    per-table parquet sources + ``schema.sql`` are canonical (sha-pinned in
+    the manifest), and the SQLite reference DB is a deterministic build
+    product of ``tools/build_reference_db.py``. These ORM classes describe
+    that product for readers; the DDL of record is ``schema.sql``.
 """
 
 from datetime import date, datetime
@@ -146,60 +159,6 @@ class BridgeCountyMetro(NormalizedBase):
         ForeignKey("dim_metro_area.metro_area_id"), primary_key=True
     )
     is_principal_city: Mapped[bool] = mapped_column(default=False)
-
-
-class DimBEAEconomicArea(NormalizedBase):
-    """BEA Economic Areas (2004 redefinition).
-
-    Bureau of Economic Analysis Economic Areas are functional economic
-    regions defined by commuting patterns and newspaper circulation.
-    Unlike MSAs (which cover ~85% of the population), BEA EAs provide
-    wall-to-wall coverage of the entire US, including rural areas.
-
-    The 2004 redefinition partitions CONUS into ~179 EAs, each anchored
-    by a node metropolitan area. Cross-state EAs are common (e.g.,
-    Chicago EA includes Berrien County MI, Toledo EA includes Monroe
-    County MI).
-
-    Data Source:
-        BEA Regional Economic Areas (REA) 2004 definitions
-        https://www.bea.gov/regional/
-
-    Use Cases:
-        - Mid-tier zoom aggregation in the map API (between state and county)
-        - Labor market boundary analysis
-        - Regional economic divergence tracking (Spec 040 Sub-Test B)
-    """
-
-    __tablename__ = "dim_bea_economic_area"
-
-    bea_ea_id: Mapped[int] = mapped_column(primary_key=True)
-    ea_code: Mapped[str] = mapped_column(String(10), unique=True, nullable=False)
-    ea_name: Mapped[str] = mapped_column(String(200), nullable=False)
-    node_metro_area: Mapped[str | None] = mapped_column(String(200))
-
-    __table_args__ = (Index("idx_bea_ea_code", "ea_code"),)
-
-
-class BridgeCountyBEAEA(NormalizedBase):
-    """County to BEA Economic Area mapping.
-
-    National-scope bridge table mapping all ~3,143 US counties to their
-    BEA Economic Area. Loaded nationally (not just Michigan) to correctly
-    handle cross-border EAs.
-
-    Cross-border examples relevant to Michigan:
-        - Berrien County (26021) → Chicago-Naperville EA
-        - Monroe County (26115) → Toledo OH EA
-        - Menominee County (26109) → Marinette WI-MI EA
-    """
-
-    __tablename__ = "bridge_county_bea_ea"
-
-    county_id: Mapped[int] = mapped_column(ForeignKey("dim_county.county_id"), primary_key=True)
-    bea_ea_id: Mapped[int] = mapped_column(
-        ForeignKey("dim_bea_economic_area.bea_ea_id"), primary_key=True
-    )
 
 
 class BridgeCountyH3(NormalizedBase):
@@ -409,17 +368,6 @@ class DimIndustry(NormalizedBase):
     )
 
 
-class DimSector(NormalizedBase):
-    """High-level 2-digit NAICS sector aggregation."""
-
-    __tablename__ = "dim_sector"
-
-    sector_id: Mapped[int] = mapped_column(primary_key=True)
-    sector_code: Mapped[str] = mapped_column(String(2), unique=True, nullable=False)
-    sector_name: Mapped[str] = mapped_column(String(100), nullable=False)
-    class_composition: Mapped[str] = mapped_column(String(20), nullable=False)
-
-
 class DimOwnership(NormalizedBase):
     """QCEW ownership types with government/private flags."""
 
@@ -621,19 +569,6 @@ class DimRentBurden(NormalizedBase):
     bracket_order: Mapped[int] = mapped_column(nullable=False)
 
 
-class DimCommuteMode(NormalizedBase):
-    """Commute mode from census_commute."""
-
-    __tablename__ = "dim_commute_mode"
-
-    mode_id: Mapped[int] = mapped_column(primary_key=True)
-    mode_code: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
-    mode_label: Mapped[str] = mapped_column(String(200), nullable=False)
-    is_public_transit: Mapped[bool | None] = mapped_column()
-    is_active_transport: Mapped[bool | None] = mapped_column()  # Walk, bike
-    mode_order: Mapped[int] = mapped_column(nullable=False)
-
-
 class DimPovertyCategory(NormalizedBase):
     """Poverty categories from census_poverty."""
 
@@ -649,31 +584,6 @@ class DimPovertyCategory(NormalizedBase):
 # =============================================================================
 # ENERGY DIMENSION TABLES
 # =============================================================================
-
-
-class DimEnergyTable(NormalizedBase):
-    """Energy table metadata with Marxian interpretation."""
-
-    __tablename__ = "dim_energy_table"
-
-    table_id: Mapped[int] = mapped_column(primary_key=True)
-    table_code: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
-    title: Mapped[str] = mapped_column(String(300), nullable=False)
-    category: Mapped[str | None] = mapped_column(String(100))
-    marxian_interpretation: Mapped[str | None] = mapped_column(Text)
-
-
-class DimEnergySeries(NormalizedBase):
-    """Energy series dimension."""
-
-    __tablename__ = "dim_energy_series"
-
-    series_id: Mapped[int] = mapped_column(primary_key=True)
-    table_id: Mapped[int] = mapped_column(ForeignKey("dim_energy_table.table_id"), nullable=False)
-    series_code: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
-    series_name: Mapped[str] = mapped_column(String(200), nullable=False)
-    units: Mapped[str | None] = mapped_column(String(50))
-    column_index: Mapped[int | None] = mapped_column()
 
 
 # =============================================================================
@@ -877,45 +787,6 @@ class IngestCheckpoint(NormalizedBase):
     )
 
 
-class StagingArcGISFeature(NormalizedBase):
-    """Staging table for ArcGIS features pending county-level aggregation.
-
-    Enables resume capability for HIFLD/MIRTA loaders by streaming features
-    to database instead of holding all in memory. Features are deduplicated
-    by (source_code, object_id) and aggregated to FactCoerciveInfrastructure
-    after fetch phase completes.
-
-    Workflow:
-        1. Fetch phase: Stream features page-by-page with checkpoints
-        2. Aggregate phase: GROUP BY county_fips, type_code -> insert facts
-        3. Cleanup: Clear staging after successful aggregation
-
-    Note:
-        This is a temporary staging table, not a permanent dimension/fact.
-        Data is cleared after each successful load cycle.
-    """
-
-    __tablename__ = "staging_arcgis_feature"
-
-    feature_id: Mapped[int] = mapped_column(primary_key=True)
-    source_code: Mapped[str] = mapped_column(
-        String(50), nullable=False
-    )  # e.g., "hifld_police", "mirta"
-    object_id: Mapped[int] = mapped_column(nullable=False)  # ArcGIS OBJECTID
-    county_fips: Mapped[str | None] = mapped_column(String(5))  # 5-digit FIPS or NULL
-    type_code: Mapped[str] = mapped_column(
-        String(30), nullable=False
-    )  # e.g., "police_local", "prison_federal"
-    capacity: Mapped[int | None] = mapped_column()  # For prisons (bed count)
-
-    __table_args__ = (
-        # Unique on (source, object_id) for upsert/dedup on resume (UniqueConstraint required for ON CONFLICT)
-        UniqueConstraint("source_code", "object_id", name="uq_staging_source_objectid"),
-        # For aggregation queries
-        Index("idx_staging_county_type", "source_code", "county_fips", "type_code"),
-    )
-
-
 # =============================================================================
 # COERCIVE INFRASTRUCTURE DIMENSION TABLES
 # =============================================================================
@@ -1046,30 +917,6 @@ class FactCensusWorkerClass(NormalizedBase):
     )
 
 
-class FactCensusOccupation(NormalizedBase):
-    """Occupation by county, gender, time, and race."""
-
-    __tablename__ = "fact_census_occupation"
-
-    county_id: Mapped[int] = mapped_column(ForeignKey("dim_county.county_id"), primary_key=True)
-    source_id: Mapped[int] = mapped_column(
-        ForeignKey("dim_data_source.source_id"), primary_key=True
-    )
-    gender_id: Mapped[int] = mapped_column(ForeignKey("dim_gender.gender_id"), primary_key=True)
-    occupation_id: Mapped[int] = mapped_column(
-        ForeignKey("dim_occupation.occupation_id"), primary_key=True
-    )
-    time_id: Mapped[int] = mapped_column(ForeignKey("dim_time.time_id"), primary_key=True)
-    race_id: Mapped[int] = mapped_column(ForeignKey("dim_race.race_id"), primary_key=True)
-    worker_count: Mapped[int] = mapped_column(nullable=False)
-
-    __table_args__ = (
-        Index("idx_occupation_county", "county_id"),
-        Index("idx_occupation_time", "time_id"),
-        Index("idx_occupation_race", "race_id"),
-    )
-
-
 class FactCensusHours(NormalizedBase):
     """Hours worked by county, gender, time, and race."""
 
@@ -1173,49 +1020,6 @@ class FactCensusEducation(NormalizedBase):
     __table_args__ = (
         Index("idx_education_time", "time_id"),
         Index("idx_education_race", "race_id"),
-    )
-
-
-class FactCensusGini(NormalizedBase):
-    """Gini inequality coefficient by county, time, and race."""
-
-    __tablename__ = "fact_census_gini"
-
-    county_id: Mapped[int] = mapped_column(ForeignKey("dim_county.county_id"), primary_key=True)
-    source_id: Mapped[int] = mapped_column(
-        ForeignKey("dim_data_source.source_id"), primary_key=True
-    )
-    time_id: Mapped[int] = mapped_column(ForeignKey("dim_time.time_id"), primary_key=True)
-    race_id: Mapped[int] = mapped_column(ForeignKey("dim_race.race_id"), primary_key=True)
-    gini_coefficient: Mapped[Decimal] = mapped_column(Numeric(5, 4), nullable=False)
-
-    __table_args__ = (
-        CheckConstraint(
-            "gini_coefficient >= 0 AND gini_coefficient <= 1",
-            name="ck_gini_range",
-        ),
-        Index("idx_gini_time", "time_id"),
-        Index("idx_gini_race", "race_id"),
-    )
-
-
-class FactCensusCommute(NormalizedBase):
-    """Commute mode by county, time, and race."""
-
-    __tablename__ = "fact_census_commute"
-
-    county_id: Mapped[int] = mapped_column(ForeignKey("dim_county.county_id"), primary_key=True)
-    source_id: Mapped[int] = mapped_column(
-        ForeignKey("dim_data_source.source_id"), primary_key=True
-    )
-    mode_id: Mapped[int] = mapped_column(ForeignKey("dim_commute_mode.mode_id"), primary_key=True)
-    time_id: Mapped[int] = mapped_column(ForeignKey("dim_time.time_id"), primary_key=True)
-    race_id: Mapped[int] = mapped_column(ForeignKey("dim_race.race_id"), primary_key=True)
-    worker_count: Mapped[int] = mapped_column(nullable=False)
-
-    __table_args__ = (
-        Index("idx_commute_time", "time_id"),
-        Index("idx_commute_race", "race_id"),
     )
 
 
@@ -1332,83 +1136,280 @@ class FactQcewCountyRollup(NormalizedBase):
     is_imputed: Mapped[bool] = mapped_column(nullable=False, server_default=text("0"))
 
 
-class FactQcewStateAnnual(NormalizedBase):
-    """State-level QCEW employment/wage aggregates.
+class FactQwiCountyFlow(NormalizedBase):
+    """LEHD QWI county labor flows (PER-32).
 
-    Stores annual aggregates at the state level (agglvl_code 20-28).
-    Complements county-level data with higher-level geographic patterns.
+    One row per county x NAICS (3/4-digit) x ownership x quarter, filtered to
+    the all-worker total (sex/age/race/ethnicity/education/firm-age/firm-size
+    total categories) from the R2026Q3 Michigan county files. Michigan's LEHD
+    coverage spans 2000Q3-2021Q4, so this table serves the 2019/2020 benchmark
+    baselines directly and carries no rows for the 2024 thin slice.
+
+    QWI cells are noise-infused and subject to suppression: an empty source
+    measure is stored NULL with its QWI status flag preserved in the companion
+    ``status_*`` column. Nothing is imputed.
+
+    Columns (QWI mnemonic in parentheses):
+        employment_begin / employment_end / employment_stable: employment
+            stocks (Emp / EmpEnd / EmpS)
+        hires_all / hires_new / separations: worker flows (HirA / HirN / Sep)
+        turnover_stable: stable-job turnover rate (TurnOvrS)
+        firm_job_gains / firm_job_losses / firm_job_change: firm job flows
+            (FrmJbGn / FrmJbLs / FrmJbC; FrmJbC is signed)
+        avg_monthly_earnings_stable_usd: mean monthly earnings of stable jobs
+            (EarnS) — an observed mean, not a median
+        payroll_usd: total quarterly payroll (Payroll); heavily suppressed at
+            this grain
     """
 
-    __tablename__ = "fact_qcew_state_annual"
+    __tablename__ = "fact_qwi_county_flow"
 
-    fact_id: Mapped[int] = mapped_column(primary_key=True)
-    state_id: Mapped[int] = mapped_column(ForeignKey("dim_state.state_id"), nullable=False)
-    industry_id: Mapped[int] = mapped_column(ForeignKey("dim_industry.industry_id"), nullable=False)
-    ownership_id: Mapped[int] = mapped_column(
-        ForeignKey("dim_ownership.ownership_id"), nullable=False
+    county_id: Mapped[int] = mapped_column(ForeignKey("dim_county.county_id"), primary_key=True)
+    industry_id: Mapped[int] = mapped_column(
+        ForeignKey("dim_industry.industry_id"), primary_key=True
     )
-    time_id: Mapped[int] = mapped_column(ForeignKey("dim_time.time_id"), nullable=False)
+    ownership_id: Mapped[int] = mapped_column(
+        ForeignKey("dim_ownership.ownership_id"), primary_key=True
+    )
+    time_id: Mapped[int] = mapped_column(ForeignKey("dim_time.time_id"), primary_key=True)
+    source_id: Mapped[int] = mapped_column(ForeignKey("dim_data_source.source_id"), nullable=False)
 
-    # Core metrics
-    establishments: Mapped[int | None] = mapped_column()
-    employment: Mapped[int | None] = mapped_column()
-    total_wages_usd: Mapped[Decimal | None] = mapped_column(Numeric(18, 2))
-    avg_weekly_wage_usd: Mapped[int | None] = mapped_column()
-    avg_annual_pay_usd: Mapped[int | None] = mapped_column()
+    employment_begin: Mapped[int | None] = mapped_column()
+    employment_end: Mapped[int | None] = mapped_column()
+    employment_stable: Mapped[int | None] = mapped_column()
+    hires_all: Mapped[int | None] = mapped_column()
+    hires_new: Mapped[int | None] = mapped_column()
+    separations: Mapped[int | None] = mapped_column()
+    turnover_stable: Mapped[Decimal | None] = mapped_column(Numeric(10, 4))
+    firm_job_gains: Mapped[int | None] = mapped_column()
+    firm_job_losses: Mapped[int | None] = mapped_column()
+    firm_job_change: Mapped[int | None] = mapped_column()
+    avg_monthly_earnings_stable_usd: Mapped[int | None] = mapped_column()
+    payroll_usd: Mapped[int | None] = mapped_column()
 
-    # Location quotients
-    lq_employment: Mapped[Decimal | None] = mapped_column(Numeric(10, 4))
-    lq_annual_pay: Mapped[Decimal | None] = mapped_column(Numeric(10, 4))
-
-    # Metadata
-    disclosure_code: Mapped[str | None] = mapped_column(String(5))
-    agglvl_code: Mapped[int | None] = mapped_column()  # Specific aggregation level
+    status_employment_begin: Mapped[int | None] = mapped_column()
+    status_employment_end: Mapped[int | None] = mapped_column()
+    status_employment_stable: Mapped[int | None] = mapped_column()
+    status_hires_all: Mapped[int | None] = mapped_column()
+    status_hires_new: Mapped[int | None] = mapped_column()
+    status_separations: Mapped[int | None] = mapped_column()
+    status_turnover_stable: Mapped[int | None] = mapped_column()
+    status_firm_job_gains: Mapped[int | None] = mapped_column()
+    status_firm_job_losses: Mapped[int | None] = mapped_column()
+    status_firm_job_change: Mapped[int | None] = mapped_column()
+    status_avg_monthly_earnings_stable: Mapped[int | None] = mapped_column()
+    status_payroll: Mapped[int | None] = mapped_column()
 
     __table_args__ = (
-        Index("idx_qcew_state_time", "state_id", "time_id"),
-        Index("idx_qcew_state_industry", "industry_id"),
+        Index("idx_qwi_county_time", "county_id", "time_id"),
+        Index("idx_qwi_industry_time", "industry_id", "time_id"),
     )
 
 
-class FactQcewMetroAnnual(NormalizedBase):
-    """Metro-area-level QCEW employment/wage aggregates.
+class FactAsmManufacturingAnnual(NormalizedBase):
+    """ASM manufacturing general statistics, national x NAICS x year (PER-30).
 
-    Stores annual aggregates at MSA/Micropolitan/CSA levels (agglvl_code 30-58).
-    Links to DimMetroArea for geographic identification.
+    One row per NAICS 2017 industry (sector '31-33' plus 3-6 digit
+    manufacturing leaves — nested aggregates are distinct published
+    observations, each kept) per year, from the 2022 Economic Census
+    benchmark vintage (AM2231GS1: 2018-2021 revised). NATIONAL grain: ASM
+    publishes no county/state inventory-by-stage product, so county-level
+    inventory in Babylon is an explicitly derived quantity (national ratios
+    x county QCEW shares), never an observation.
+
+    Carries the inventory STOCKS the estate previously lacked (BEA holds
+    value added; NIPA changes-in-private-inventories are flows): materials
+    & supplies, work-in-process, finished goods and total, each beginning
+    and end of year, in thousands of current USD. Plus shipments, total
+    cost of materials, value added, employment, production-worker
+    headcount/hours (thousands)/wages and annual payroll — the
+    production-worker series are the observed variable-capital split.
+
+    Empty measures are stored NULL with the ASM annotation flag preserved
+    in the companion ``flag_*`` column; relative standard errors remain in
+    the raw file. Nothing is imputed.
     """
 
-    __tablename__ = "fact_qcew_metro_annual"
+    __tablename__ = "fact_asm_manufacturing_annual"
 
-    fact_id: Mapped[int] = mapped_column(primary_key=True)
-    metro_area_id: Mapped[int] = mapped_column(
-        ForeignKey("dim_metro_area.metro_area_id"), nullable=False
+    industry_id: Mapped[int] = mapped_column(
+        ForeignKey("dim_industry.industry_id"), primary_key=True
     )
-    industry_id: Mapped[int] = mapped_column(ForeignKey("dim_industry.industry_id"), nullable=False)
-    ownership_id: Mapped[int] = mapped_column(
-        ForeignKey("dim_ownership.ownership_id"), nullable=False
-    )
-    time_id: Mapped[int] = mapped_column(ForeignKey("dim_time.time_id"), nullable=False)
+    time_id: Mapped[int] = mapped_column(ForeignKey("dim_time.time_id"), primary_key=True)
+    source_id: Mapped[int] = mapped_column(ForeignKey("dim_data_source.source_id"), nullable=False)
 
-    # Core metrics
-    establishments: Mapped[int | None] = mapped_column()
+    inventories_total_begin_kusd: Mapped[int | None] = mapped_column()
+    inventories_total_end_kusd: Mapped[int | None] = mapped_column()
+    inventories_materials_begin_kusd: Mapped[int | None] = mapped_column()
+    inventories_materials_end_kusd: Mapped[int | None] = mapped_column()
+    inventories_wip_begin_kusd: Mapped[int | None] = mapped_column()
+    inventories_wip_end_kusd: Mapped[int | None] = mapped_column()
+    inventories_finished_begin_kusd: Mapped[int | None] = mapped_column()
+    inventories_finished_end_kusd: Mapped[int | None] = mapped_column()
+    shipments_kusd: Mapped[int | None] = mapped_column()
+    cost_materials_kusd: Mapped[int | None] = mapped_column()
+    value_added_kusd: Mapped[int | None] = mapped_column()
     employment: Mapped[int | None] = mapped_column()
-    total_wages_usd: Mapped[Decimal | None] = mapped_column(Numeric(18, 2))
-    avg_weekly_wage_usd: Mapped[int | None] = mapped_column()
-    avg_annual_pay_usd: Mapped[int | None] = mapped_column()
+    production_workers: Mapped[int | None] = mapped_column()
+    production_hours_thousands: Mapped[int | None] = mapped_column()
+    payroll_kusd: Mapped[int | None] = mapped_column()
+    production_wages_kusd: Mapped[int | None] = mapped_column()
 
-    # Location quotients
-    lq_employment: Mapped[Decimal | None] = mapped_column(Numeric(10, 4))
-    lq_annual_pay: Mapped[Decimal | None] = mapped_column(Numeric(10, 4))
+    flag_inventories_total_begin: Mapped[str | None] = mapped_column(String(2))
+    flag_inventories_total_end: Mapped[str | None] = mapped_column(String(2))
+    flag_inventories_materials_begin: Mapped[str | None] = mapped_column(String(2))
+    flag_inventories_materials_end: Mapped[str | None] = mapped_column(String(2))
+    flag_inventories_wip_begin: Mapped[str | None] = mapped_column(String(2))
+    flag_inventories_wip_end: Mapped[str | None] = mapped_column(String(2))
+    flag_inventories_finished_begin: Mapped[str | None] = mapped_column(String(2))
+    flag_inventories_finished_end: Mapped[str | None] = mapped_column(String(2))
+    flag_shipments: Mapped[str | None] = mapped_column(String(2))
+    flag_cost_materials: Mapped[str | None] = mapped_column(String(2))
+    flag_value_added: Mapped[str | None] = mapped_column(String(2))
+    flag_employment: Mapped[str | None] = mapped_column(String(2))
+    flag_production_workers: Mapped[str | None] = mapped_column(String(2))
+    flag_production_hours: Mapped[str | None] = mapped_column(String(2))
+    flag_payroll: Mapped[str | None] = mapped_column(String(2))
+    flag_production_wages: Mapped[str | None] = mapped_column(String(2))
 
-    # Metadata
-    disclosure_code: Mapped[str | None] = mapped_column(String(5))
-    agglvl_code: Mapped[int | None] = mapped_column()  # 30-38=MSA, 40-48=Micro, 50-58=CSA
-    area_type: Mapped[str | None] = mapped_column(String(15))  # msa/micropolitan/csa
+    __table_args__ = (Index("idx_asm_mfg_time", "time_id"),)
+
+
+class DimHS2Commodity(NormalizedBase):
+    """Harmonized System 2-digit commodity chapters (BTS TransBorder COMMODITY2).
+
+    The TransBorder raw files classify commodities at HS2 (chapters 01-98,
+    plus 99 observed in data), per the pinned codes PDF — NOT SCTG (that
+    dimension, ``dim_sctg_commodity``, serves FAF/CFS). The two
+    classifications are related by public concordance but are not the same
+    axis; do not join one to the other without a governed bridge.
+    """
+
+    __tablename__ = "dim_hs2_commodity"
+
+    hs2_id: Mapped[int] = mapped_column(primary_key=True)
+    hs2_code: Mapped[str] = mapped_column(String(2), unique=True, nullable=False)
+    chapter_title: Mapped[str] = mapped_column(String(300), nullable=False)
+
+
+class FactTransborderPortCommodity(NormalizedBase):
+    """BTS TransBorder freight, port x commodity x mode x month (PER-31).
+
+    One row per port/district (DEPE) x HS2 commodity chapter x mode x trade
+    type x domestic/foreign x container code x month, from the monthly raw
+    files (dot3 part) 2019-01 through 2024-12. The observed
+    commodity-by-crossing layer for the Detroit-Windsor circuit: FAF gives
+    zone-grain flows, this gives per-crossing operations.
+
+    Codes follow the BTS TransBorder raw-data dictionary (codes PDF pinned in
+    the trove): trade_type 1=export/2=import; mode 1=vessel, 3=air, 4=mail,
+    5=truck, 6=rail, 7=pipeline, 8=other, 9=FTZ; domestic_foreign '1'=US-
+    produced/'2'=foreign-produced; container_code X/0/1 as published. Blank
+    domestic_foreign/container_code cells are stored as '' (empty string) so
+    the primary key stays total — the file's full classifying axis (port x
+    commodity x mode x trade type x df x container x country x month) is
+    unique, and NULLs in a composite PK would silently allow duplicates on
+    reload. Values in current USD; shipwt_kg in kilograms. Empty measures are
+    stored NULL; nothing is imputed. ``port_code`` is the Census/BTS
+    district-port code as a string (no port dimension yet — the Detroit
+    district is 38XX: 3801 Detroit, 3802 Port Huron, 3803 Sault Ste. Marie,
+    3807 Detroit Metro Airport).
+    """
+
+    __tablename__ = "fact_transborder_port_commodity"
+
+    port_code: Mapped[str] = mapped_column(String(4), primary_key=True)
+    hs2_id: Mapped[int] = mapped_column(ForeignKey("dim_hs2_commodity.hs2_id"), primary_key=True)
+    mode_code: Mapped[int] = mapped_column(primary_key=True)
+    trade_type: Mapped[int] = mapped_column(primary_key=True)
+    domestic_foreign: Mapped[str] = mapped_column(String(1), primary_key=True)
+    container_code: Mapped[str] = mapped_column(String(1), primary_key=True)
+    country: Mapped[str] = mapped_column(String(4), primary_key=True)
+    time_id: Mapped[int] = mapped_column(ForeignKey("dim_time.time_id"), primary_key=True)
+    source_id: Mapped[int] = mapped_column(ForeignKey("dim_data_source.source_id"), nullable=False)
+
+    value_usd: Mapped[int | None] = mapped_column()
+    shipwt_kg: Mapped[int | None] = mapped_column()
+    freight_charges_usd: Mapped[int | None] = mapped_column()
 
     __table_args__ = (
-        Index("idx_qcew_metro_time", "metro_area_id", "time_id"),
-        Index("idx_qcew_metro_industry", "industry_id"),
-        Index("idx_qcew_metro_type", "area_type"),
+        Index("idx_tbpc_port_time", "port_code", "time_id"),
+        Index("idx_tbpc_hs2_time", "hs2_id", "time_id"),
+    )
+
+
+class FactTransborderStatePort(NormalizedBase):
+    """BTS TransBorder freight, state x port x mode x month (PER-31).
+
+    One row per U.S. state x port/district (DEPE) x mode x trade type x
+    domestic/foreign x container code x border province/state x month, from
+    the monthly raw files (dot1 part) 2019-01 through 2024-12. The
+    crossing-throughput-in-dollars layer without commodity detail (dot2,
+    state x commodity without port, remains in the raw trove files for a
+    later governed consumer). ``border_region_code`` carries CANPROV (XO =
+    Ontario, ...) or MEXSTATE — required for row uniqueness — with ''
+    when blank.
+
+    Codes and units match :class:`FactTransborderPortCommodity`.
+    """
+
+    __tablename__ = "fact_transborder_state_port"
+
+    state_id: Mapped[int] = mapped_column(ForeignKey("dim_state.state_id"), primary_key=True)
+    port_code: Mapped[str] = mapped_column(String(4), primary_key=True)
+    mode_code: Mapped[int] = mapped_column(primary_key=True)
+    trade_type: Mapped[int] = mapped_column(primary_key=True)
+    domestic_foreign: Mapped[str] = mapped_column(String(1), primary_key=True)
+    container_code: Mapped[str] = mapped_column(String(1), primary_key=True)
+    country: Mapped[str] = mapped_column(String(4), primary_key=True)
+    #: Canadian province (XO=Ontario, ...) or Mexican state code, '' when blank
+    border_region_code: Mapped[str] = mapped_column(String(2), primary_key=True)
+    time_id: Mapped[int] = mapped_column(ForeignKey("dim_time.time_id"), primary_key=True)
+    source_id: Mapped[int] = mapped_column(ForeignKey("dim_data_source.source_id"), nullable=False)
+
+    value_usd: Mapped[int | None] = mapped_column()
+    shipwt_kg: Mapped[int | None] = mapped_column()
+    freight_charges_usd: Mapped[int | None] = mapped_column()
+
+    __table_args__ = (
+        Index("idx_tbsp_state_time", "state_id", "time_id"),
+        Index("idx_tbsp_port_time", "port_code", "time_id"),
+    )
+
+
+class FactBorderCrossingThroughput(NormalizedBase):
+    """BTS Border Crossing Entry Data: vehicles/persons by port x measure x month.
+
+    One row per land port x measure (Personal Vehicles, Trucks, Rail
+    Containers, Buses, Pedestrians, ...) x month, both U.S. borders, from the
+    keg4-3bc2 Socrata snapshot (through 2026-07). This is crossing
+    THROUGHPUT (counts of conveyances/persons), distinct from TransBorder's
+    dollar/tonnage flows — the two measure different quantities and are kept
+    as separate tables. ``port_code`` matches the TransBorder DEPE codes
+    where the ports overlap.
+
+    Eleven port x measure x month keys carry multiple source rows (identical
+    coordinates, different values — source-internal revision artifacts, e.g.
+    Sasabe Feb 2021 Bus Passengers: 0 and 2,175). They are kept losslessly
+    with ``revision_seq`` numbering in snapshot file order; consumers should
+    treat revision_seq > 1 as a same-key sibling, not a series break.
+    """
+
+    __tablename__ = "fact_border_crossing_throughput"
+
+    port_code: Mapped[str] = mapped_column(String(4), primary_key=True)
+    measure: Mapped[str] = mapped_column(String(60), primary_key=True)
+    time_id: Mapped[int] = mapped_column(ForeignKey("dim_time.time_id"), primary_key=True)
+    revision_seq: Mapped[int] = mapped_column(primary_key=True)
+    source_id: Mapped[int] = mapped_column(ForeignKey("dim_data_source.source_id"), nullable=False)
+
+    port_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    border: Mapped[str] = mapped_column(String(30), nullable=False)
+    value: Mapped[int | None] = mapped_column()
+
+    __table_args__ = (
+        Index("idx_bct_port_time", "port_code", "time_id"),
+        Index("idx_bct_measure", "measure"),
     )
 
 
@@ -1598,21 +1599,74 @@ class FactBilateralTradeAnnual(NormalizedBase):
     __table_args__ = (Index("idx_bilateral_trade_time", "time_id"),)
 
 
+class FactRicciUnequalExchangeGvc(NormalizedBase):
+    """Ricci global-value-chain unequal-exchange transfer series (P26 U5b).
+
+    Re-ingestion of the checked-in ``babylon_ricci_final.csv`` artifact
+    (region x flow-direction x transfer-type, years 1995/2000/2007/2009) as
+    a genuine reference-DB table, grounding the sigma-gradient pipeline's
+    ``world_stats`` per Director ruling (``ai/decisions/
+    ADR165_p26_director_rulings_trade_slate.yaml`` D2/D3) — a DECLARED
+    partial undo of the 2026-07-17 ADR076 R2 amputation. The CSV was, and
+    remains, the canonical artifact (``data-artifacts.yaml``'s
+    ``babylon_ricci_final`` register-mode entry); this table is a
+    build-product mirror populated FROM it by ``tools/ingest_ricci_gvc.py``.
+
+    Deliberately NOT named ``fact_ricci_unequal_exchange`` (the amputated
+    table's retired name) — that string is reserved history, and reusing it
+    risks confusion with the Postgres RUNTIME table
+    ``immutable_reference_ricci_unequal`` (``persistence/sqlite_hydrator.py``
+    / ``persistence/postgres_initialization.py``), which despite the
+    similarly-shaped name actually hydrates UNRELATED Census
+    country/dim data under a legacy label. The two estates are disjoint:
+    this is a sqlite reference-DB build-product table; that is a Postgres
+    runtime hydration target.
+
+    ``ricci_gvc_id`` is a surrogate PK assigned in the checked-in CSV's own
+    row order (deterministic; no combination of the CSV's own columns is a
+    natural key for every row — ``edge_id`` repeats across distinct regions
+    within the same ``year``/``source_table``, e.g. 1995's EMU and Western
+    Europe INFLOW/GVC rows both carry ``edge_id="CORE_INFLOW_GVC"``).
+    """
+
+    __tablename__ = "fact_ricci_unequal_exchange_gvc"
+
+    ricci_gvc_id: Mapped[int] = mapped_column(primary_key=True)
+    year: Mapped[int] = mapped_column(Integer, nullable=False)
+    region_name: Mapped[str] = mapped_column(String(64), nullable=False)
+    region_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    flow_direction: Mapped[str] = mapped_column(String(10), nullable=False)
+    transfer_type: Mapped[str] = mapped_column(String(10), nullable=False)
+    value_usd_billions: Mapped[float] = mapped_column(Float, nullable=False)
+    value_pct_gdp: Mapped[float | None] = mapped_column(Float)
+    signed_value: Mapped[float] = mapped_column(Float, nullable=False)
+    gvc_share_of_total: Mapped[float | None] = mapped_column(Float)
+    source_table: Mapped[str] = mapped_column(String(32), nullable=False)
+    source_priority: Mapped[int] = mapped_column(Integer, nullable=False)
+    region_granularity: Mapped[int] = mapped_column(Integer, nullable=False)
+    edge_id: Mapped[str] = mapped_column(String(32), nullable=False)
+
+    __table_args__ = (
+        Index("idx_ricci_gvc_year", "year"),
+        Index("idx_ricci_gvc_region", "region_name"),
+        CheckConstraint(
+            "region_type IN ('CORE', 'SEMI_PERIPHERY', 'PERIPHERY')",
+            name="ck_ricci_gvc_region_type",
+        ),
+        CheckConstraint(
+            "flow_direction IN ('INFLOW', 'OUTFLOW')",
+            name="ck_ricci_gvc_flow_direction",
+        ),
+        CheckConstraint(
+            "transfer_type IN ('GVC', 'TOTAL')",
+            name="ck_ricci_gvc_transfer_type",
+        ),
+    )
+
+
 # =============================================================================
 # ENERGY FACT TABLES
 # =============================================================================
-
-
-class FactEnergyAnnual(NormalizedBase):
-    """Annual energy consumption/production by series."""
-
-    __tablename__ = "fact_energy_annual"
-
-    series_id: Mapped[int] = mapped_column(
-        ForeignKey("dim_energy_series.series_id"), primary_key=True
-    )
-    time_id: Mapped[int] = mapped_column(ForeignKey("dim_time.time_id"), primary_key=True)
-    value: Mapped[Decimal | None] = mapped_column(Numeric(20, 6))
 
 
 # =============================================================================
@@ -1666,28 +1720,6 @@ class FactFredWealthShares(NormalizedBase):
     )
     time_id: Mapped[int] = mapped_column(ForeignKey("dim_time.time_id"), primary_key=True)
     share_percent: Mapped[Decimal | None] = mapped_column(Numeric(8, 4))
-
-
-class FactFredIndustryUnemployment(NormalizedBase):
-    """FRED unemployment by industry."""
-
-    __tablename__ = "fact_fred_industry_unemployment"
-
-    industry_id: Mapped[int] = mapped_column(
-        ForeignKey("dim_industry.industry_id"), primary_key=True
-    )
-    time_id: Mapped[int] = mapped_column(ForeignKey("dim_time.time_id"), primary_key=True)
-    unemployment_rate: Mapped[Decimal | None] = mapped_column(Numeric(6, 2))
-
-
-class FactFredStateUnemployment(NormalizedBase):
-    """FRED unemployment by state."""
-
-    __tablename__ = "fact_fred_state_unemployment"
-
-    state_id: Mapped[int] = mapped_column(ForeignKey("dim_state.state_id"), primary_key=True)
-    time_id: Mapped[int] = mapped_column(ForeignKey("dim_time.time_id"), primary_key=True)
-    unemployment_rate: Mapped[Decimal | None] = mapped_column(Numeric(6, 2))
 
 
 # =============================================================================
@@ -1842,27 +1874,6 @@ class FactCommodityFlow(NormalizedBase):
 # =============================================================================
 
 
-class BridgeLodesBlock(NormalizedBase):
-    """Census block to county crosswalk from LEHD LODES.
-
-    Maps census block GEOIDs to counties, tracts, CBSAs, and ZIP codes.
-    Used for disaggregating employment data to sub-county levels.
-    """
-
-    __tablename__ = "bridge_lodes_block"
-
-    block_geoid: Mapped[str] = mapped_column(String(20), primary_key=True)
-    county_id: Mapped[int | None] = mapped_column(ForeignKey("dim_county.county_id"))
-    state_fips: Mapped[str | None] = mapped_column(String(2))
-    county_fips: Mapped[str | None] = mapped_column(String(3))
-    tract_geoid: Mapped[str | None] = mapped_column(String(11))
-    block_group: Mapped[str | None] = mapped_column(String(1))
-    cbsa_code: Mapped[str | None] = mapped_column(String(5))
-    zcta: Mapped[str | None] = mapped_column(String(5))
-    latitude: Mapped[Decimal | None] = mapped_column(Numeric(9, 6))
-    longitude: Mapped[Decimal | None] = mapped_column(Numeric(9, 6))
-
-
 class FactLodesCommuterFlow(NormalizedBase):
     """County-to-county commuter flow data from LEHD LODES Origin-Destination.
 
@@ -1954,71 +1965,6 @@ class DimEmploymentArea(NormalizedBase):
     )
 
 
-class FactEmploymentIndustryAnnual(NormalizedBase):
-    """Annual employment and wages by area, industry, and ownership.
-
-    Comprehensive QCEW data with location quotients and over-the-year changes.
-    Supports county, state, MSA, and national level analysis.
-    """
-
-    __tablename__ = "fact_employment_industry_annual"
-
-    fact_id: Mapped[int] = mapped_column(primary_key=True)
-    area_id: Mapped[int] = mapped_column(ForeignKey("dim_employment_area.area_id"), nullable=False)
-    industry_id: Mapped[int] = mapped_column(ForeignKey("dim_industry.industry_id"), nullable=False)
-    ownership_id: Mapped[int] = mapped_column(
-        ForeignKey("dim_ownership.ownership_id"), nullable=False
-    )
-    time_id: Mapped[int] = mapped_column(ForeignKey("dim_time.time_id"), nullable=False)
-
-    agglvl_code: Mapped[int | None] = mapped_column()
-    size_code: Mapped[str | None] = mapped_column(String(5))
-    qtr: Mapped[str | None] = mapped_column(String(1))
-    disclosure_code: Mapped[str | None] = mapped_column(String(1))
-
-    # Core employment metrics
-    annual_avg_estabs_count: Mapped[int | None] = mapped_column()
-    annual_avg_emplvl: Mapped[int | None] = mapped_column()
-    total_annual_wages: Mapped[Decimal | None] = mapped_column(Numeric(18, 2))
-    taxable_annual_wages: Mapped[Decimal | None] = mapped_column(Numeric(18, 2))
-    annual_contributions: Mapped[Decimal | None] = mapped_column(Numeric(18, 2))
-    annual_avg_wkly_wage: Mapped[int | None] = mapped_column()
-    avg_annual_pay: Mapped[int | None] = mapped_column()
-
-    # Location quotients (use Float - can exceed 1M in extreme cases)
-    lq_disclosure_code: Mapped[str | None] = mapped_column(String(1))
-    lq_annual_avg_estabs_count: Mapped[float | None] = mapped_column(Float)
-    lq_annual_avg_emplvl: Mapped[float | None] = mapped_column(Float)
-    lq_total_annual_wages: Mapped[float | None] = mapped_column(Float)
-    lq_taxable_annual_wages: Mapped[float | None] = mapped_column(Float)
-    lq_annual_contributions: Mapped[float | None] = mapped_column(Float)
-    lq_annual_avg_wkly_wage: Mapped[float | None] = mapped_column(Float)
-    lq_avg_annual_pay: Mapped[float | None] = mapped_column(Float)
-
-    # Over-the-year changes (pct_chg uses Float - can exceed 1M% for tiny industries)
-    oty_disclosure_code: Mapped[str | None] = mapped_column(String(1))
-    oty_annual_avg_estabs_count_chg: Mapped[Decimal | None] = mapped_column(Numeric(18, 2))
-    oty_annual_avg_estabs_count_pct_chg: Mapped[float | None] = mapped_column(Float)
-    oty_annual_avg_emplvl_chg: Mapped[Decimal | None] = mapped_column(Numeric(18, 2))
-    oty_annual_avg_emplvl_pct_chg: Mapped[float | None] = mapped_column(Float)
-    oty_total_annual_wages_chg: Mapped[Decimal | None] = mapped_column(Numeric(18, 2))
-    oty_total_annual_wages_pct_chg: Mapped[float | None] = mapped_column(Float)
-    oty_taxable_annual_wages_chg: Mapped[Decimal | None] = mapped_column(Numeric(18, 2))
-    oty_taxable_annual_wages_pct_chg: Mapped[float | None] = mapped_column(Float)
-    oty_annual_contributions_chg: Mapped[Decimal | None] = mapped_column(Numeric(18, 2))
-    oty_annual_contributions_pct_chg: Mapped[float | None] = mapped_column(Float)
-    oty_annual_avg_wkly_wage_chg: Mapped[Decimal | None] = mapped_column(Numeric(18, 2))
-    oty_annual_avg_wkly_wage_pct_chg: Mapped[float | None] = mapped_column(Float)
-    oty_avg_annual_pay_chg: Mapped[Decimal | None] = mapped_column(Numeric(18, 2))
-    oty_avg_annual_pay_pct_chg: Mapped[float | None] = mapped_column(Float)
-
-    __table_args__ = (
-        Index("idx_emp_ind_area", "area_id"),
-        Index("idx_emp_ind_industry", "industry_id"),
-        Index("idx_emp_ind_time", "time_id"),
-    )
-
-
 # =============================================================================
 # DOT HPMS ROAD SEGMENTS
 # =============================================================================
@@ -2072,126 +2018,6 @@ class FactHpmsRoadSegment(NormalizedBase):
 # =============================================================================
 # ATUS REPRODUCTIVE LABOR TABLES
 # =============================================================================
-
-
-class DimATUSActivityCategory(NormalizedBase):
-    """ATUS activity category dimension for reproductive labor mapping.
-
-    Maps ATUS 6-digit activity codes to Babylon reproductive labor categories.
-    Enables aggregation of time diary entries into Department III categories.
-
-    ATUS Code Structure (first 2 digits = major category):
-        02: Household activities (cooking, cleaning, maintenance)
-        03: Caring for household members
-        04: Caring for non-household members
-
-    Babylon Categories:
-        housework: Cleaning, laundry, household management
-        cooking: Food and drink preparation
-        childcare: Physical care and activities with children
-        eldercare: Physical care and activities with adults
-        emotional_support: Listening, comforting (future)
-
-    Note:
-        Activity codes are prefixes (e.g., "0201" matches 020101-020199).
-        Use atus_code_prefix for pattern matching when loading microdata.
-    """
-
-    __tablename__ = "dim_atus_activity_category"
-
-    category_id: Mapped[int] = mapped_column(primary_key=True)
-    atus_code_prefix: Mapped[str] = mapped_column(String(6), unique=True, nullable=False)
-    atus_description: Mapped[str] = mapped_column(String(200), nullable=False)
-    babylon_category: Mapped[str] = mapped_column(String(30), nullable=False)
-    major_category: Mapped[str] = mapped_column(String(50), nullable=False)
-    is_reproductive: Mapped[bool] = mapped_column(default=True)
-
-    __table_args__ = (
-        Index("idx_atus_category_babylon", "babylon_category"),
-        Index("idx_atus_category_major", "major_category"),
-        CheckConstraint(
-            "babylon_category IN ('housework', 'cooking', 'childcare', 'eldercare', "
-            "'emotional_support')",
-            name="ck_atus_babylon_category",
-        ),
-    )
-
-
-class FactATUSReproductiveLabor(NormalizedBase):
-    """National average reproductive labor hours from ATUS.
-
-    Stores pre-aggregated time use averages from BLS Table A-1 for shadow labor
-    calculations in Department III. Values are weekly hours per category.
-
-    Data Flow:
-        BLS Table A-1 (daily averages) -> seed_data.yaml -> this table
-        Conversion: daily_hours × 7 = weekly_hours
-
-    Disaggregation:
-        - By gender (gender_id): For gendered division of labor analysis
-        - By occupation (occupation_group): Class proxy via SOC major groups
-        - By employment (employment_status): Working vs non-working
-
-    Occupation Groups (class proxies):
-        - professional_managerial: SOC 11-13 (bourgeois/petit_bourgeois)
-        - professional_technical: SOC 15-29 (labor aristocracy)
-        - sales_clerical: SOC 41-43 (proletariat/petit_bourgeois)
-        - service: SOC 31-39 (proletariat)
-        - trades: SOC 45-49 (proletariat)
-        - production_transport: SOC 51-53 (proletariat)
-
-    Primary Use:
-        ATUSDBLoader reads this table to satisfy ReproductionLoaderProtocol
-        for ShadowLaborService calculations.
-
-    Note:
-        Occupation-level data uses synthetic estimates based on research.
-        Source: IWPR, Pew Research, ATUS education/income differentials.
-    """
-
-    __tablename__ = "fact_atus_reproductive_labor"
-
-    fact_id: Mapped[int] = mapped_column(primary_key=True)
-    category_id: Mapped[int] = mapped_column(
-        ForeignKey("dim_atus_activity_category.category_id"), nullable=False
-    )
-    time_id: Mapped[int] = mapped_column(ForeignKey("dim_time.time_id"), nullable=False)
-    gender_id: Mapped[int] = mapped_column(ForeignKey("dim_gender.gender_id"), nullable=False)
-    source_id: Mapped[int] = mapped_column(ForeignKey("dim_data_source.source_id"), nullable=False)
-
-    # Core metric: weekly hours per person
-    hours_per_week: Mapped[Decimal] = mapped_column(Numeric(6, 2), nullable=False)
-
-    # Optional metadata
-    participation_rate: Mapped[Decimal | None] = mapped_column(Numeric(5, 4))  # 0.0000-1.0000
-    sample_size: Mapped[int | None] = mapped_column()
-
-    # Optional disaggregation (NULL = population average)
-    occupation_group: Mapped[str | None] = mapped_column(String(50))
-    employment_status: Mapped[str | None] = mapped_column(String(50))
-
-    __table_args__ = (
-        Index("idx_atus_labor_category", "category_id"),
-        Index("idx_atus_labor_time", "time_id"),
-        Index("idx_atus_labor_gender", "gender_id"),
-        Index("idx_atus_labor_occupation", "occupation_group"),
-        # Unique constraint for upsert operations
-        UniqueConstraint(
-            "category_id",
-            "time_id",
-            "gender_id",
-            "occupation_group",
-            "employment_status",
-            name="uq_atus_labor_composite",
-        ),
-        # Valid occupation groups (class proxies) or NULL for population average
-        CheckConstraint(
-            "occupation_group IS NULL OR occupation_group IN ("
-            "'professional_managerial', 'professional_technical', 'sales_clerical', "
-            "'service', 'trades', 'production_transport')",
-            name="ck_atus_occupation_group",
-        ),
-    )
 
 
 # =============================================================================
@@ -2319,34 +2145,6 @@ class FactCensusInstitutionalOwnership(NormalizedBase):
     )
 
 
-class FactBLSProductivity(NormalizedBase):
-    """Sector-level hours and productivity from BLS CES / Productivity program.
-
-    Provides average weekly hours and productivity indices for working day
-    characterization and exploitation mode classification.
-
-    Feature 021: Capital Volume I Production Dynamics (FR-007, FR-018).
-    """
-
-    __tablename__ = "fact_bls_productivity"
-
-    fact_id: Mapped[int] = mapped_column(primary_key=True)
-    industry_id: Mapped[int] = mapped_column(ForeignKey("dim_industry.industry_id"), nullable=False)
-    time_id: Mapped[int] = mapped_column(ForeignKey("dim_time.time_id"), nullable=False)
-    source_id: Mapped[int] = mapped_column(ForeignKey("dim_data_source.source_id"), nullable=False)
-
-    avg_weekly_hours: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False)
-    avg_hourly_earnings: Mapped[Decimal] = mapped_column(Numeric(8, 2), nullable=False)
-    output_per_hour: Mapped[Decimal] = mapped_column(Numeric(10, 4), nullable=False)
-    unit_labor_costs: Mapped[Decimal] = mapped_column(Numeric(10, 4), nullable=False)
-
-    __table_args__ = (
-        Index("idx_bls_prod_industry", "industry_id"),
-        Index("idx_bls_prod_time", "time_id"),
-        UniqueConstraint("industry_id", "time_id", name="uq_bls_prod_industry_time"),
-    )
-
-
 # =============================================================================
 # BEA I-O COEFFICIENT TABLES (Feature 025: Tensor Hierarchy)
 # =============================================================================
@@ -2455,41 +2253,6 @@ class FactFAFCommodityFlow(NormalizedBase):
     )
 
 
-class FactHickelDrain(NormalizedBase):
-    """Hickel et al. (2022) Unequal Exchange via appropriate and unequal flows.
-
-    Captures net appropriation of resources and embodied labor between Core
-    and Periphery, with derived value transfers in USD. Data source parses
-    the final calibration CSVs.
-    """
-
-    __tablename__ = "fact_hickel_drain"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    time_id: Mapped[int] = mapped_column(ForeignKey("dim_time.time_id"), nullable=False)
-    # The source region mapping to dim_country.world_system_tier
-    drain_direction: Mapped[str] = mapped_column(
-        String(50), nullable=False
-    )  # e.g. 'South to North'
-
-    # Types of drain tracking
-    resource_type: Mapped[str] = mapped_column(
-        String(50), nullable=False
-    )  # e.g. 'Embodied Labor', 'Embodied Land', 'Raw Materials', 'Energy'
-
-    # Value metrics
-    net_appropriation: Mapped[float] = mapped_column(Float, nullable=False)
-    units: Mapped[str] = mapped_column(String(50), nullable=False)
-    monetary_value_billions: Mapped[float | None] = mapped_column(
-        Float
-    )  # Calculated value in constant USD
-
-    __table_args__ = (
-        Index("idx_hickel_time", "time_id"),
-        Index("idx_hickel_resource", "resource_type"),
-    )
-
-
 class FactHickelERDIAnnual(NormalizedBase):
     """Hickel/Sullivan/Zoomkawala (2021) ERDI annual time series 1960–2017.
 
@@ -2499,9 +2262,9 @@ class FactHickelERDIAnnual(NormalizedBase):
     AND the calibration target (``annual_drain_usd_billions``) consumed by
     ``test_imperial_rent_calibration.py`` for SC-004.
 
-    Distinct from :class:`FactHickelDrain`, which stores Hickel resource-flow
-    decomposition (embodied labor / land / energy / raw materials). This table
-    stores the annual ERDI / drain time series at the national-aggregate level.
+    Distinct from the retired ``fact_hickel_drain`` resource-flow decomposition
+    table (amputated 2026-07-17 per ADR075 ruling 1, A14). This table stores
+    the annual ERDI / drain time series at the national-aggregate level.
 
     Constitutional III.4 status: ``Hickel_HSZ_Drain`` data source listed in
     ``data-catalog.yaml`` v2.6.2 under ``International Trade``, class ``Fixture``
@@ -2583,29 +2346,6 @@ class FactBEAFinalDemandAnnual(NormalizedBase):
     )
 
 
-class FactRicciUnequalExchange(NormalizedBase):
-    """Ricci (2021) Unequal Exchange tracking metrics.
-
-    Tracks value transfers through unequal exchange related to labor value
-    and trade. Corresponds to final Ricci calibration CSVs.
-    """
-
-    __tablename__ = "fact_ricci_unequal_exchange"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    time_id: Mapped[int] = mapped_column(ForeignKey("dim_time.time_id"), nullable=False)
-
-    country_id: Mapped[int] = mapped_column(ForeignKey("dim_country.country_id"), nullable=False)
-
-    trade_volume_billions: Mapped[float | None] = mapped_column(Float)
-    ue_transfer_billions: Mapped[float] = mapped_column(Float, nullable=False)
-
-    __table_args__ = (
-        Index("idx_ricci_time", "time_id"),
-        Index("idx_ricci_country", "country_id"),
-    )
-
-
 # =============================================================================
 # EXPORTS
 # =============================================================================
@@ -2616,8 +2356,6 @@ __all__ = [
     "DimCounty",
     "DimMetroArea",
     "BridgeCountyMetro",
-    "DimBEAEconomicArea",
-    "BridgeCountyBEAEA",
     "DimGeographicHierarchy",
     "DimCFSArea",
     "BridgeCFSCounty",
@@ -2626,7 +2364,6 @@ __all__ = [
     "DimImportSource",
     # Dimensions - Industry
     "DimIndustry",
-    "DimSector",
     "DimOwnership",
     # Dimensions - BEA Industry
     "DimBEAIndustry",
@@ -2639,11 +2376,8 @@ __all__ = [
     "DimEducationLevel",
     "DimHousingTenure",
     "DimRentBurden",
-    "DimCommuteMode",
     "DimPovertyCategory",
     # Dimensions - Energy
-    "DimEnergyTable",
-    "DimEnergySeries",
     # Dimensions - FRED
     "DimWealthClass",
     "DimAssetCategory",
@@ -2658,7 +2392,6 @@ __all__ = [
     "DimRace",
     # Ingest Tracking
     "IngestCheckpoint",
-    "StagingArcGISFeature",
     # Dimensions - Coercive Infrastructure
     "DimCoerciveType",
     # Facts - Census
@@ -2666,20 +2399,15 @@ __all__ = [
     "FactCensusMedianIncome",
     "FactCensusEmployment",
     "FactCensusWorkerClass",
-    "FactCensusOccupation",
     "FactCensusHours",
     "FactCensusHousing",
     "FactCensusRent",
     "FactCensusRentBurden",
     "FactCensusEducation",
-    "FactCensusGini",
-    "FactCensusCommute",
     "FactCensusPoverty",
     "FactCensusIncomeSources",
     # Facts - QCEW/Productivity
     "FactQcewAnnual",
-    "FactQcewStateAnnual",
-    "FactQcewMetroAnnual",
     "FactProductivityAnnual",
     # Facts - BEA
     "FactBEANationalIndustry",
@@ -2687,13 +2415,10 @@ __all__ = [
     # Facts - Trade
     "FactTradeMonthly",
     # Facts - Energy
-    "FactEnergyAnnual",
     # Facts - FRED
     "FactFredNational",
     "FactFredWealthLevels",
     "FactFredWealthShares",
-    "FactFredIndustryUnemployment",
-    "FactFredStateUnemployment",
     # Facts - Commodities
     "FactCommodityObservation",
     # Facts - Materials
@@ -2705,27 +2430,20 @@ __all__ = [
     "FactBroadbandCoverage",
     "FactCommodityFlow",
     # LODES Crosswalk
-    "BridgeLodesBlock",
     # Employment Industry
     "DimEmploymentArea",
-    "FactEmploymentIndustryAnnual",
     # DOT HPMS
     "FactHpmsRoadSegment",
     # ATUS Reproductive Labor
-    "DimATUSActivityCategory",
-    "FactATUSReproductiveLabor",
     # Capital Volume I (Feature 021)
     "FactBLSUnemploymentDecomposition",
     "FactEvictionLabFiling",
     "FactForeclosureRate",
     "FactCensusInstitutionalOwnership",
-    "FactBLSProductivity",
     # Tensor Hierarchy (Feature 025)
     "DimBEAIOTableType",
     "FactBEAIOCoefficient",
     "FactFAFCommodityFlow",
     "FactBEAFinalDemandAnnual",
-    "FactHickelDrain",
     "FactHickelERDIAnnual",
-    "FactRicciUnequalExchange",
 ]

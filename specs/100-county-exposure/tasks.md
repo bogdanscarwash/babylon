@@ -30,7 +30,7 @@ then GREEN. Run tests with `PYTHONPATH=src` (never bare `poetry run`).
 - [ ] T010 [BD] [US1] Implement `src/babylon_data/exposure/writer.py` mirroring spec-086 `qcew/writer.py` (build_dim_maps, staging tables, per-year transactional load, atomic swap w/ backup, rollback, drop_backup, logical_table_hash). Handle first-ever build (no canonical to back up). GREEN T009.
 - [ ] T011 [BD] [US1] Write `tests/unit/data/exposure/test_validation.py` RED: `sum_to_one_gate` fails a tampered weight vector; `reconcile_year` computes Σraw vs Σcovered coeff and the residual %, `within_2pct` boolean. Observe RED.
 - [ ] T012 [BD] [US1] Implement `src/babylon_data/exposure/validation.py` (sum-to-one gate + reconciliation, named constants for ±2% band and 1e-9 tolerance with provenance comments). GREEN T011.
-- [ ] T013 [BD] [US1] Run `PYTHONPATH=src poetry run pytest tests/unit/data/exposure -q` (compute+writer+validation green); commit BD unit: `feat(exposure): US1 compute + staged writer + validation (spec-100)`.
+- [ ] T013 [BD] [US1] Run `PYTHONPATH=src uv run pytest tests/unit/data/exposure -q` (compute+writer+validation green); commit BD unit: `feat(exposure): US1 compute + staged writer + validation (spec-100)`.
 
 ## Phase 3: US2 — bloc-year bilateral trade (Priority P2)
 
@@ -52,7 +52,7 @@ then GREEN. Run tests with `PYTHONPATH=src` (never bare `poetry run`).
 ## Phase 5: CLI + mise task
 
 - [ ] T021 [BD] Implement `src/babylon_data/exposure/__main__.py`: argparse CLI (`--dry-run/--apply/--rollback-from-backup/--drop-backup/--years/--db/--report-dir`), preflight (source tables non-empty), per-year process → validate → (apply) staged load → gate → swap → emit audit. Exit codes 0/1/2/130. Mirror `qcew/__main__.py`.
-- [ ] T022 [WT] Add `[tasks."data:exposure"]` to `.mise.toml` (usage flags mirroring data:qcew; `poetry run python -m babylon_data.exposure ...`). `mise trust` if needed.
+- [ ] T022 [WT] Add `[tasks."data:exposure"]` to `.mise.toml` (usage flags mirroring data:qcew; `uv run python -m babylon_data.exposure ...`). `mise trust` if needed.
 - [ ] T023 [BD] Write `tests/unit/data/exposure/test_cli.py`: `main(["--dry-run","--years","<fixtureyear>","--db",<tmp>])` returns 0 and writes an audit artifact; a tampered fixture returns exit 1 with canonical untouched. (Uses a temp seeded DB.) Green.
 - [ ] T024 [BD] commit BD unit: `feat(exposure): US? CLI entry point (spec-100)`; T024b [WT] commit `feat(spec-100): data:exposure mise task`.
 

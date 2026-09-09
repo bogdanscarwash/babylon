@@ -1,0 +1,111 @@
+ADR222_executable_bsl_phase_order:
+  status: "accepted"
+  date: "2026-08-23"
+  title: >
+    BSL rules execute on the governed 34-system causal spine: namespace homes
+    and explicit boundary anchors compile before caller-state mutation, D16
+    orders only same-position ties, and the former global rule-ID sort retires
+  context: |
+    The Rust tick driver admitted multiple rules but sorted the complete content
+    set globally by rule-ID bytes. That inverted real causal dependencies. In
+    particular, control-ratio/* ran before decomposition/* even though the
+    frozen engine places Decomposition before ControlRatio. The landed estate
+    documented those inversions as tolerable, but the safety depended on
+    disjoint fields, seeded carrier state, or delays. It was not a causal
+    scheduler.
+
+    BSL already parsed and validated `(anchor :before|:after <system>)`, while
+    the language reserved E-LOAD-003 for an anchor that cuts through Material
+    Base. No execution path consumed that declaration. PER-17 requires the
+    phase anchors and the frozen weekly causal spine to become executable before
+    Gate 2 adds whole-tick rollback and combined state hashing.
+
+    The first implementation preflighted anchors before scenario and rule
+    validation. Adversarial review found that this inverted the existing load
+    error-class contract: an illegal anchor could hide an earlier malformed
+    scenario, invalid fuel value, or type error. The accepted implementation
+    validates on a disposable graph in the established order and compiles
+    placement only after every rule has independently loaded.
+  decision: |
+    1. REGISTRY. `babylon-tick` owns one ordered registry transcribed from the
+       frozen 34-system engine: 15 Material Base slots, one Action slot, and 18
+       Consequence slots. The exact order is pinned by a full-list test, not
+       sampled endpoints. The compatibility namespaces `class-dynamics`,
+       `economics`, `organization`, and `social-class` resolve to
+       `tick-dynamics`, `contradiction`, `ooda`, and `solidarity` respectively.
+
+    2. PLACEMENT. For canonical slot ordinal i, `:before` resolves to rank 2i,
+       the namespace default to 2i+1, and `:after` to 2i+2. Therefore `:after`
+       one slot and `:before` the next name the same boundary. Rules at one
+       resolved rank use ascending rule-ID bytes as D16 requires. Source, file,
+       directory, and map iteration order remain unobservable. Phase
+       validation also visits rule IDs in byte order, so invalid source
+       permutations name the same offending rule.
+
+    3. MATERIAL BASE. Explicit pre-base and post-base boundaries are legal:
+       `:before vitality` and `:after metabolism`. Every explicit rank strictly
+       inside that partition is E-LOAD-003. Namespace-default rules continue to
+       occupy their governed Material Base homes; the restriction prevents mods
+       from splicing incidental work between the fixed causal stages.
+
+    4. LOAD ORDER AND MUTATION. `prepare_rules` first loads the scenario into a
+       disposable `HypergraphStore`, builds the real declarations, and loads
+       every rule through the existing parser, type, fuel, vocabulary, and
+       anchor gates. It then compiles and applies the phase plan. Only after all
+       non-mutating checks pass does it hydrate the caller graph. This preserves
+       scenario -> rule -> composition failure precedence while proving an
+       invalid phase composition cannot mutate caller state. The final hydration
+       supplies content-to-node identities, because a non-empty caller graph may
+       allocate different node IDs than the disposable graph. The diagnostics
+       seam applies the same aggregate rule-id uniqueness check after joining
+       independently parsed sources. Duplicate rule IDs therefore remain typed
+       E-LOAD-001 data even when a file boundary separates them.
+
+    5. DECLARATIVE MEANING. An explicit anchor names the immediate boundary,
+       not an inequality. The old Lifecycle declaration `(anchor :after
+       vitality)` is removed: Lifecycle's namespace already places it at slot 7,
+       while the literal boundary after Vitality would illegally cut Material
+       Base.
+
+    6. DEFERRED, NAMED GAPS. Rules at the same resolved position still execute
+       sequentially and may observe earlier same-position writes. This ADR does
+       not claim the language target's shared-prestate composition. PER-18 owns
+       whole-tick working-copy rollback, including graph, session counters, and
+       buffered events, plus the combined state hash. That hash must cover a
+       schedule/layout version or equivalent registry digest so an engine-order
+       change cannot masquerade behind an unchanged content digest. PER-19 owns
+       BSL causal composition, the provenance/direct-write whitelist, and
+       negative outcome-write contracts. The gated E-LOAD-058/059 analyzer
+       still compares raw IDs globally; it MUST remain disabled until it
+       consumes resolved phase ranks, uses D16 only within one rank, and runs
+       over the post-concatenation aggregate content set so a file boundary
+       cannot hide a cross-rule hazard.
+
+    7. HASH COMPATIBILITY. `rules_hash_of` remains the canonical content hash
+       and retains its rule-ID byte sort. Execution order is a separate derived
+       contract. Existing graph-state hashes and byte goldens do not move merely
+       because schedule metadata became executable; behavior changes only where
+       cross-rule writes make causal order observable.
+  consequences: |
+    - Decomposition now writes before ControlRatio reads in the same tick. The
+      zero-delay conformance vector emits its crisis at tick 1 and proves the
+      latch prevents a duplicate at tick 2.
+    - Vitality runs before Lifecycle even though their rule IDs sort in the
+      opposite order. File-order permutation tests produce identical reports.
+    - Missing, duplicate, unknown, and illegal anchors refuse before caller
+      hydration without stealing precedence from scenario or rule failures.
+      Invalid source permutations select the same byte-least rule identity.
+      Duplicate rule IDs split across source files cannot produce a false-clean
+      diagnostics result.
+    - Successful preparation performs one disposable validation hydration and
+      one caller hydration. A future declaration-only scenario compiler may
+      remove that cost only if it preserves identical validation and identity
+      behavior.
+    - Historical D100, D172, and D190 records remain readable and are marked as
+      superseded for execution rather than rewritten as though the old hazard
+      never existed.
+  supersedes: []
+  related:
+    - ADR172_amendment_ae_refoundation_ratified
+    - ADR212_decomposition_controlratio_port_handoff
+    - ADR221_game_first_refoundation_v4

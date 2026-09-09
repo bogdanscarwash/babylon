@@ -1,0 +1,175 @@
+# Exact governed inventory rows intentionally stay in compact flow form.
+# yamllint disable rule:line-length
+meta:
+  contract: H3ReaderCutoverV1
+  version: 1
+  issue: PER-280
+  parent: PER-21
+
+authority:
+  purpose: Transitional epoch-7 canonical H3 reader proof followed by terminal epoch-9 retirement without a compatibility surface
+  parent_contract: contracts/h3_estate_contract_v1.yaml
+  parent_contract_sha256: b7fcde99da1d68d1f389f3e1f905d8434f97d2a9d620979001ce4d0f793e4db7
+  canonical_identity: babylon_ref.h3_cell(cell_id)
+  canonical_sql_type: positive BIGINT
+  reader_epoch: 7
+  foundation_binding:
+    contract: contracts/michigan_dynamic_hex_foundation_v1.yaml
+    contract_sha256: 83f4ced209fb361c48ce7500e6cf9d60d39a688f92b34d2ef48414ea396c996c
+    artifact_sha256: 81ee8f8abbee6727655d52c6d56a6f2967af9dfdf01da53dd593da8339d650a4
+    source_r7_digest: 7f8d126ee81356a60605013b4b1c23942a77a4b2d6f890125d6c938dae70228b
+    base_reference_cohort_digest: 92b21ff325bde67f26565f52882d3664daacd6d51423f2a588344da012fd4161
+    reference_bundle_digest: 84bbffa9b2388aa168c065e710a61313fbd46522d2022b628f0919ecffec9831
+    r8_child_parent:
+      type: MichiganH3R8ChildParentV1
+      rows: 319004
+      child_field: child_cell_id
+      parent_field: parent_r7_cell_id
+      domain_utf8: "babylon.h3.reference-r8-child-parent.v1\0"
+      digest: b5ebf405140f6f79ddbc44fa1005b195bed0bc28e0eacf2d8e1697cd9c839491
+  excluded_authority:
+    - Rust writer activation
+    - Python migrator or writer retirement
+    - Legacy column, table, or domain deletion
+    - Compatibility or observer views
+    - Aliases, adapters, fallbacks, or parallel reads
+
+bounds:
+  contract_bytes: 65536
+  read_edges: 0
+  source_files: 0
+  runtime_consumer_edges: 0
+  bootstrap_definition_authorities: 0
+  dynamic_authorities: 0
+  epoch7_read_edges: 13
+  epoch7_source_files: 5
+  epoch7_dynamic_authorities: 1
+  current_views: 10
+  persistent_tables: 15
+  identity_fields: 21
+  vector_bytes: 131072
+  vector_rows: 9
+  vector_line_bytes: 32768
+
+scan:
+  production_roots:
+    - src/babylon
+    - tools
+    - rust/crates
+  historical_migration_roots:
+    - src/babylon/persistence/migrations
+    - rust/crates/babylon-persistence/migrations
+  test_roots:
+    - tests
+    - rust/crates/babylon-persistence/tests
+  closed_migration_sources:
+    - rust/crates/babylon-persistence/src/h3_shadow_backfill.rs
+    - rust/crates/babylon-persistence/tests/support/h3_shadow_backfill_postgres.rs
+  prohibited_surface_fragments:
+    - v_compat_
+    - v_observer_
+    - try_legacy
+    - fallback_to_legacy
+
+read_edges: []
+
+epoch7_read_edges:
+  - {path: src/babylon/domain/economics/lodes_commute_matrix.py, relation: immutable_reference_lodes_od_matrix, canonical_relation: public.immutable_reference_lodes_od_matrix}
+  - {path: src/babylon/persistence/archival.py, relation: dynamic_hex_state, canonical_relation: public.dynamic_hex_state}
+  - {path: src/babylon/persistence/archival.py, relation: hex_spatial_map, canonical_relation: public.hex_spatial_map}
+  - {path: src/babylon/persistence/archival.py, relation: hex_state, canonical_relation: public.hex_state}
+  - {path: src/babylon/persistence/archival.py, relation: hex_terrain_state, canonical_relation: public.hex_terrain_state}
+  - {path: src/babylon/persistence/archival.py, relation: immutable_reference_lodes_od_matrix, canonical_relation: public.immutable_reference_lodes_od_matrix}
+  - {path: src/babylon/persistence/archival.py, relation: infrastructure_link_state, canonical_relation: public.infrastructure_link_state}
+  - {path: src/babylon/persistence/hex_hydrator.py, relation: hex_spatial_map, canonical_relation: public.hex_spatial_map}
+  - {path: src/babylon/persistence/postgres_aggregation.py, relation: v_county_value_aggregate, canonical_relation: public.v_county_value_aggregate}
+  - {path: src/babylon/persistence/postgres_aggregation.py, relation: v_national_value_aggregate, canonical_relation: public.v_national_value_aggregate}
+  - {path: src/babylon/persistence/postgres_aggregation.py, relation: v_state_value_aggregate, canonical_relation: public.v_state_value_aggregate}
+  - {path: tools/archive_sessions.py, relation: dynamic_hex_state, canonical_relation: public.dynamic_hex_state}
+  - {path: tools/archive_sessions.py, relation: dynamic_hex_state_default, canonical_relation: public.dynamic_hex_state_default}
+
+dynamic_read_authorities: []
+
+epoch7_dynamic_read_authorities:
+  - path: src/babylon/persistence/archival.py
+    kind: public_session_catalog
+    selectors: [_session_keyed_tables, _session_reference_tables]
+    governed_relations:
+      - dynamic_hex_state
+      - hex_spatial_map
+      - hex_state
+      - hex_terrain_state
+      - immutable_reference_lodes_od_matrix
+      - infrastructure_link_state
+
+bootstrap_definition_authorities: []
+
+terminal_disposition:
+  authority_state: rust_active
+  schema_epoch: 9
+  python_game_state_reader_edges: 0
+  law: The exact epoch-7 parity corpus remains transition evidence; no Python runtime reader survives destructive activation.
+  proof: Every present Python-owned relation is empty, dispositioned by exact name and SHA-256 of the empty semantic stream, then removed in the same marker-last transaction.
+
+current_views:
+  - {name: v_county_value_aggregate, canonical_relation: public.v_county_value_aggregate, identity_fields: []}
+  - {name: v_hex_aid, canonical_relation: public.v_hex_aid, identity_fields: [cell_id]}
+  - {name: v_hex_economic, canonical_relation: public.v_hex_economic, identity_fields: [cell_id]}
+  - {name: v_hex_heat, canonical_relation: public.v_hex_heat, identity_fields: [cell_id]}
+  - {name: v_hex_intel, canonical_relation: public.v_hex_intel, identity_fields: [cell_id]}
+  - {name: v_hex_mobilize, canonical_relation: public.v_hex_mobilize, identity_fields: [cell_id]}
+  - {name: v_hex_state_asof, canonical_relation: public.v_hex_state_asof, identity_fields: [cell_id]}
+  - {name: v_national_value_aggregate, canonical_relation: public.v_national_value_aggregate, identity_fields: []}
+  - {name: v_state_value_aggregate, canonical_relation: public.v_state_value_aggregate, identity_fields: []}
+  - {name: view_runtime_trace_emission, canonical_relation: public.view_runtime_trace_emission, identity_fields: []}
+
+parity_cases:
+  - sparse_current_and_asof_fill_forward
+  - county_state_national_aggregates
+  - runtime_trace_queries
+  - session_and_partition_isolation
+  - resolution_8_parent_reference_identity
+  - nullable_org_and_event_locations
+  - tagged_hex_and_external_lodes_destinations
+  - stable_ordering_and_pagination
+  - archive_export_and_query
+
+parity_vectors:
+  path: contracts/h3_reader_cutover_v1_vectors.jsonl
+  bytes: 9192
+  sha256: a3f4c00c69ab2b0e0a088ada32f7e6832ad948ec7119adc2042ac46df0a3320e
+  semantic_sha256: 96e9d07f4a3882dea306758621d183211efd5470435a9768e695320b179002b6
+  result_domain_ascii_nul: babylon.h3-reader-parity-result.v1
+  corpus_domain_ascii_nul: babylon.h3-reader-parity-vectors.v1
+  operations:
+    - {case: sparse_current_and_asof_fill_forward, operation: sparse_fill_forward}
+    - {case: county_state_national_aggregates, operation: value_aggregates}
+    - {case: runtime_trace_queries, operation: runtime_trace}
+    - {case: session_and_partition_isolation, operation: session_partition_isolation}
+    - {case: resolution_8_parent_reference_identity, operation: r8_parent_reference_identity}
+    - {case: nullable_org_and_event_locations, operation: nullable_locations}
+    - {case: tagged_hex_and_external_lodes_destinations, operation: tagged_destinations}
+    - {case: stable_ordering_and_pagination, operation: stable_pagination}
+    - {case: archive_export_and_query, operation: archive_round_trip}
+  atom_types:
+    - bool
+    - f64_bits
+    - h3_cell_id
+    - i64
+    - nullable_h3_cell_id
+    - nullable_text
+    - text
+    - uuid
+  coverage:
+    current_views: exact 10-name union
+    persistent_relations: exact 15-name parent-estate union
+    runtime_reader_edges: exact 13-edge union
+  execution:
+    backend_call: execute_reader_case(operation, decoded_inputs)
+    result_shape: named ordered row sets with closed typed atoms
+    authority: read-only production readers or projection-only SQL
+    prohibited:
+      - Formula reconstruction
+      - Join reconstruction
+      - Game-state writes
+      - Compatibility or fallback reads

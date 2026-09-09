@@ -1,0 +1,214 @@
+==================================================
+Every atom class (§1.4, §1.5)
+==================================================
+
+; a comment is whitespace, and never reaches the canonical bytes (§5.4)
+(rule demo/atoms
+  :material-basis "every atom class of §1.4, in one derivation"
+  :fuel 1_000
+  (bindings
+    (binding wealth :field social-class/wealth)
+    (binding flag :field social-class/active :optional :default #f))
+  (when (and (< wealth 1000.5$)
+             (> wealth 0$)
+             (>= wealth 007)
+             (<= wealth -5)
+             (= flag #t)
+             (!= NodeType/SOCIAL_CLASS NodeType/POLITY)
+             (>= wealth 0.123456789p)
+             (>= wealth 0.50c)
+             (>= wealth 1.0i)
+             (>= wealth 2.0r)))
+  (effects
+    (update-node self social-class/agitation (add 0.05i))))
+
+---
+
+(source_file
+  (comment)
+  (rule
+    (qname)
+    (material_basis
+      (string))
+    (fuel
+      (int_lit))
+    (bindings
+      (binding
+        (symbol)
+        (bind_src
+          (qname)))
+      (binding
+        (symbol)
+        (bind_src
+          (qname))
+        (bind_opt)
+        (bind_opt
+          (literal
+            (bool_lit)))))
+    (when
+      (and_cond
+        (comparison
+          (cmp)
+          (symbol)
+          (literal
+            (scaled_lit)))
+        (comparison
+          (cmp)
+          (symbol)
+          (literal
+            (scaled_lit)))
+        (comparison
+          (cmp)
+          (symbol)
+          (literal
+            (int_lit)))
+        (comparison
+          (cmp)
+          (symbol)
+          (literal
+            (int_lit)))
+        (comparison
+          (cmp)
+          (symbol)
+          (literal
+            (bool_lit)))
+        (comparison
+          (cmp)
+          (enum_ref)
+          (enum_ref))
+        (comparison
+          (cmp)
+          (symbol)
+          (literal
+            (scaled_lit)))
+        (comparison
+          (cmp)
+          (symbol)
+          (literal
+            (scaled_lit)))
+        (comparison
+          (cmp)
+          (symbol)
+          (literal
+            (scaled_lit)))
+        (comparison
+          (cmp)
+          (symbol)
+          (literal
+            (scaled_lit)))))
+    (effects
+      (update_node
+        (symbol)
+        (qname)
+        (update_op
+          (literal
+            (scaled_lit)))))))
+
+==================================================
+The §5.6 worked example, verbatim (bsl-language.rst §5.6)
+==================================================
+
+; a rule is data; this comment is not part of the hash
+(rule demo/hunger
+  :material-basis "subsistence deficit at the point of reproduction"
+  :fuel 64
+  (bindings
+    (binding wealth :field social-class/wealth))
+  (when (< wealth 1000.5$))
+  (effects
+    (update-node self social-class/agitation (add 0.05i))))
+
+---
+
+(source_file
+  (comment)
+  (rule
+    (qname)
+    (material_basis
+      (string))
+    (fuel
+      (int_lit))
+    (bindings
+      (binding
+        (symbol)
+        (bind_src
+          (qname))))
+    (when
+      (comparison
+        (cmp)
+        (symbol)
+        (literal
+          (scaled_lit))))
+    (effects
+      (update_node
+        (symbol)
+        (qname)
+        (update_op
+          (literal
+            (scaled_lit)))))))
+
+==================================================
+Option order is a formatting concern (§5.3, D21)
+==================================================
+
+(rule demo/hunger
+  :fuel 64
+  :material-basis "subsistence deficit at the point of reproduction"
+  (bindings
+    (binding wealth :field social-class/wealth))
+  (when (< wealth 1000.5$))
+  (effects
+    (update-node self social-class/agitation (add 0.05i))))
+
+---
+
+(source_file
+  (rule
+    (qname)
+    (fuel
+      (int_lit))
+    (material_basis
+      (string))
+    (bindings
+      (binding
+        (symbol)
+        (bind_src
+          (qname))))
+    (when
+      (comparison
+        (cmp)
+        (symbol)
+        (literal
+          (scaled_lit))))
+    (effects
+      (update_node
+        (symbol)
+        (qname)
+        (update_op
+          (literal
+            (scaled_lit)))))))
+
+==================================================
+String escapes — the only four (§1.5)
+==================================================
+
+(rule demo/escapes
+  :material-basis "a quote \" a backslash \\ a newline \n and a tab \t"
+  :fuel 8
+  (bindings)
+  (effects
+    (emit EventType/CONSCIOUSNESS_SHIFT)))
+
+---
+
+(source_file
+  (rule
+    (qname)
+    (material_basis
+      (string))
+    (fuel
+      (int_lit))
+    (bindings)
+    (effects
+      (emit
+        (enum_ref)))))

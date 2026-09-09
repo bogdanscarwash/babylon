@@ -4,11 +4,12 @@
 meta:
   version: "1.0.0"
   updated: "2025-12-12"
-  purpose: "Document CI workflow for Benevolent Dictator governance model"
+  purpose: "Document CI workflow for the Agentic Engineering governance model (Constitution IX.5 / Amendment AD; ADR151) — a Director + gate-licensed autonomous agents. Subsumes the prior Benevolent-Dictator framing; full model in CONTRIBUTORS.md."
   related_files:
     - ".github/workflows/ci.yml"
     - ".github/workflows/docs.yml"
-    - ".github/workflows/extended-analysis.yml"
+    - ".github/workflows/weekly-py313.yml"
+    - ".github/workflows/weekly-sim-artifacts.yml"
     - ".github/workflows/release.yml"
     - ".github/workflows/dependabot-automerge.yml"
     - ".github/PULL_REQUEST_TEMPLATE.md"
@@ -22,22 +23,25 @@ meta:
 # =============================================================================
 
 governance:
-  model: "Benevolent Dictator (BD)"
-  dictator: "Persephone Raskova (@percy-raskova)"
+  model: "Agentic Engineering (Constitution IX.5 / Amendment AD; ADR151) — subsumes Benevolent Dictator"
+  director: "Persephone Raskova (@percy-raskova)"
 
   description: |
-    Single maintainer has final authority on all merges to main.
-    Contributors submit PRs to dev. BD curates and releases.
+    Agentic Engineering: a human Director steers direction and holds sole
+    authority over the ideological/theoretical line, plus final merge authority
+    to main. Autonomous AI agents are the engineering workforce across parallel
+    worktree lanes; their autonomy is licensed by the gates (green self-merges,
+    red STOPs). Full model: CONTRIBUTORS.md.
 
   trust_model:
-    contributors: "Can branch from dev, PR to dev"
-    bd: "Can merge to dev, exclusively merges to main"
-    ci: "Applies equally to all code (BD included)"
+    agents: "Branch from dev, PR to dev; self-merge on green under the gates"
+    director: "Steers direction + owns the ideological line; exclusively merges to main"
+    ci: "Applies equally to all code (the Director included) — the gate, not a reviewer, certifies"
 
   rationale: |
-    - Small project with clear vision
-    - BD catches BD mistakes via CI (self-discipline)
-    - Contributors aren't blocked waiting for reviews on dev
+    - Small project with a clear vision, owned by the Director
+    - The gates catch agent mistakes (determinism/sentinels/contracts), so autonomy needs no per-line review
+    - Agents aren't blocked waiting for reviews on dev — green is the license
     - main remains pristine release branch
 
 # =============================================================================
@@ -46,7 +50,7 @@ governance:
 
 branches:
   structure: |
-    main ────► stable releases (BD merges only)
+    main ────► stable releases (Director merges only)
       │              ▲
       ▼              │
     dev ─────► integration (PRs welcome here)
@@ -56,23 +60,23 @@ branches:
 
   main:
     purpose: "Stable releases only"
-    who_merges: "BD only"
+    who_merges: "Director only"
     protection:
       require_pr: true
       require_ci_pass: ["ci", "docs"]
       require_up_to_date: true
-      require_review: true  # BD self-review as deliberate pause
+      require_review: true  # Director self-review as deliberate pause
       allow_force_push: false
       allow_deletions: false
 
   dev:
     purpose: "Integration branch for PRs"
-    who_merges: "BD (from feature branches)"
+    who_merges: "Director (from feature branches)"
     protection:
       require_pr: true
       require_ci_pass: ["ci"]
       require_up_to_date: false  # Avoid rebase churn
-      require_review: false  # BD can self-merge
+      require_review: false  # Director can self-merge
       allow_force_push: false
       allow_deletions: false
 
@@ -107,11 +111,15 @@ triggers:
     paths: ["docs/**", "src/**", ".github/workflows/docs.yml"]
     purpose: "GitHub Pages deployment (releases only)"
 
-  extended_analysis_yml:
-    on_release: "published"
-    on_schedule: "weekly (Sunday midnight)"
+  weekly_py313_yml:
+    on_schedule: "weekly (Sunday 04:00 UTC)"
     on_workflow_dispatch: true
-    purpose: "Expensive tests that don't run on every PR"
+    purpose: "Python 3.13 forward-compatibility suite"
+
+  weekly_sim_artifacts_yml:
+    on_schedule: "weekly (Sunday 04:00 UTC)"
+    on_workflow_dispatch: true
+    purpose: "Intentional in-memory parameter sweep artifact"
 
 # =============================================================================
 # WORKFLOW FILES
@@ -166,19 +174,17 @@ workflows:
         purpose: "Publish to github.io"
     note: "Only runs on main - don't deploy dev docs"
 
-  extended_analysis_yml:
-    file: ".github/workflows/extended-analysis.yml"
-    triggers: ["release", "weekly schedule", "manual dispatch"]
-    jobs:
-      extended_tests:
-        matrix: ["3.12", "3.13"]
-        purpose: "Python version compatibility"
-      parameter_analysis:
-        commands: ["mise run analyze-trace", "mise run analyze-sweep"]
-        artifacts: "results/"
-      ai_evaluation:
-        condition: "release only"
-        command: "poetry run pytest -m 'ai' --tb=short -q"
+  weekly_py313_yml:
+    file: ".github/workflows/weekly-py313.yml"
+    triggers: ["weekly schedule", "manual dispatch"]
+    job: "Python 3.13 Suite (forward compat)"
+
+  weekly_sim_artifacts_yml:
+    file: ".github/workflows/weekly-sim-artifacts.yml"
+    triggers: ["weekly schedule", "manual dispatch"]
+    scope: "Embedded two-rule Michigan Rust persistence slice; not full content-pack coverage"
+    command: "mise run sim:report 520"
+    artifact: "reports/sim-runs/"
 
   release_yml:
     file: ".github/workflows/release.yml"
@@ -210,7 +216,7 @@ check_policy:
       - ci: "All correctness checks"
       - docs: "Documentation is part of the release"
     advisory:
-      - style: "BD can fix formatting in merge"
+      - style: "Director can fix formatting in merge"
     rationale: "Release quality - everything must work"
 
   enforcement: |
@@ -278,13 +284,13 @@ beginner_friendly:
       Or just ignore this - the maintainer can clean it up when merging.
 
   maintainer_safety_net: |
-    For a hobby project with beginners, the BD often fixes small issues
+    For a hobby project with beginners, the Director often fixes small issues
     rather than sending PRs back. This keeps momentum while teaching by example.
 
     Acceptable workflow:
     1. Contributor submits PR with minor style issues
     2. CI shows yellow warning (advisory)
-    3. BD merges and fixes style in the merge commit
+    3. Director merges and fixes style in the merge commit
     4. Contributor learns from the diff
 
   what_not_to_require:
@@ -375,9 +381,9 @@ hotfix_workflow:
       │
       └─► fix/critical-bug (branch from main)
             │
-            └─► PR to main (BD only)
+            └─► PR to main (Director only)
                   │
-                  ├─► CI runs, BD merges
+                  ├─► CI runs, Director merges
                   │
                   └─► Create backport PR to dev
 
@@ -387,14 +393,14 @@ hotfix_workflow:
     - Re-introduce the bug
     - Create merge conflicts
 
-  automation: "Manual - BD creates backport PR"
+  automation: "Manual - Director creates backport PR"
 
 # =============================================================================
 # RELEASE WORKFLOW
 # =============================================================================
 
 release_workflow:
-  trigger: "BD merges dev → main"
+  trigger: "Director merges dev → main"
 
   automated_steps:
     - "Full CI suite passes"
@@ -404,10 +410,10 @@ release_workflow:
     - "Create GitHub Release with notes and artifacts"
 
   manual_steps:
-    - "BD reviews dev branch stability"
-    - "BD creates PR from dev to main"
-    - "BD self-approves (deliberate pause)"
-    - "BD merges"
+    - "Director reviews dev branch stability"
+    - "Director creates PR from dev to main"
+    - "Director self-approves (deliberate pause)"
+    - "Director merges"
 
 # =============================================================================
 # CONFIGURATION CHECKLIST
@@ -433,7 +439,7 @@ configuration_checklist:
   codeowners_file:
     location: ".github/CODEOWNERS"
     content: "* @percy-raskova"
-    purpose: "Makes BD required reviewer for main PRs"
+    purpose: "Makes Director required reviewer for main PRs"
 
   workflow_permissions:
     docs_yml:

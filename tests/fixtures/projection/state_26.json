@@ -1,0 +1,25 @@
+{
+  "bifurcation_score": 0.0,
+  "class_composition": {
+    "bourgeoisie": 0.01,
+    "labor_aristocracy": 0.4,
+    "lumpenproletariat": 0.15,
+    "petit_bourgeoisie": 0.09,
+    "proletariat": 0.35
+  },
+  "consciousness": {
+    "fascist": 0.413715,
+    "liberal": 0.4375,
+    "revolutionary": 0.148785
+  },
+  "imperial_rent_phi": 0.0,
+  "kind": "state",
+  "legitimacy": 0.6039,
+  "median_wage": 21.0,
+  "p_acquiescence": 0.924005,
+  "p_revolution": 1.0,
+  "population": 2,
+  "sovereign_id": null,
+  "state_fips": "26",
+  "verified_tick": 5
+}

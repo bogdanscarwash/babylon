@@ -19,25 +19,25 @@ repos:
     hooks:
       - id: ruff-check
         name: ruff-check
-        entry: poetry run ruff check --fix
+        entry: uv run ruff check --fix
         language: system
         types: [python]
 
       - id: ruff-format
         name: ruff-format
-        entry: poetry run ruff format
+        entry: uv run ruff format
         language: system
         types: [python]
 
       - id: mypy
         name: mypy
-        entry: poetry run mypy
+        entry: uv run mypy
         language: system
         types: [python]
 
       - id: pytest
         name: pytest
-        entry: poetry run pytest -x -q
+        entry: uv run pytest -x -q
         language: system
         types: [python]
 

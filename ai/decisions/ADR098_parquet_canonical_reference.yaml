@@ -1,0 +1,109 @@
+ADR098_parquet_canonical_reference:
+  status: "accepted"
+  date: "2026-07-20"
+  title: "Parquet-canonical reference pipeline EXECUTED (Phase 6 cutover, #46): the authority inversion — per-table parquet sources + schema.sql are canonical, the SQLite reference DB is a deterministic BUILD PRODUCT (sha-pinned, double-build byte-identical on sqlite 3.53.1); the working DB flipped with a byte-verified pre-parquet backup; ci-data-v7 released (subset DERIVED from the product); loaders produce sources via tools/loader_to_sources.py, only the builder produces the DB — and the plan's IMPORT_USE ingest was discovered ALREADY LANDED out-of-band, so the dark-Φ consumers lit up with zero code changes"
+  context: |
+    Owner intent (2026-07-18, verbatim in the spec): "Can you make a Parquet
+    representation of that sqlite database, then in CI for the load process you
+    can make a byte-identical version of the same sqlite database, and have the
+    added benefit of adding whatever else you want to it?" Spec:
+    docs/superpowers/specs/2026-07-18-parquet-reference-pipeline-design.md;
+    plan: docs/superpowers/plans/2026-07-19-parquet-reference-pipeline.md
+    (Phases 0-5 merged with queue PR #221; Phase 6 = this cutover, run ALONE
+    per owner sequencing). Before this ADR the 4.5 GB marxist-data-3NF.sqlite
+    on the data drive WAS the source of truth — unrebuildable (loaders deleted
+    spec-037-era), unpinned, and mutated in place by any ingest.
+  decision: |
+    THE INVERSION. Canonical sources = 80 full-coverage per-table parquet files
+    + 4 in-repo register CSVs (data-artifacts.yaml, 84 entries) + schema.sql
+    (canonical DDL, tools/extract_reference_schema.py). The SQLite DB is a
+    deterministic build product of tools/build_reference_db.py under the pinned
+    toolchain (infra devshell python 3.12.13 / sqlite EXACTLY 3.53.1;
+    PINNED_SQLITE_VERSION hard-gate). Manifest product block pins sha256
+    f760bab5c63ce879decd72cfe3bf51c569a5a4ba2a4a57e0ccbb5d90f5e6fa42
+    (75 tables, 59,827,795 rows, page_size 4096, sqlite 3.53.1).
+
+    LAYERED CONTRACT (D2 refined): container file hash = drift alarm on the
+    BUILD PRODUCT (rebuild-vs-rebuild identity; the working copy flips to WAL
+    on first open BY DESIGN and its bytes are not the contract); tick hash =
+    the invariant (qa:regression 6/6 byte-identical + two-process determinism
+    leg, proven pre- AND post-flip); per-table content-hash round trip =
+    working-copy guard (verify_reference_roundtrip, 83/83 objects ok).
+
+    D1-D4 AS RULED: D1 IMPORT_USE lands as ROWS in fact_bea_io_coefficient
+    (table_type='IMPORT_USE'), faithful to the written loader, not the spec's
+    phantom new table. D2 above. D3 sharding = guarded contingency only
+    (exporter hard-fails at 1.8 GB/table; largest real table 112 MB). D4
+    ceremony pre-authorization was requested and NOT NEEDED (zero baseline
+    drift end-to-end).
+
+    GOVERNANCE DISCOVERED DURING EXECUTION (each with a gate): (a)
+    GOVERNED_PREFIXES single SoT in sentinels/coverage/catalog.py — three
+    surfaces had divergent governed-scope definitions; all six now scope
+    through one constant (tests/unit/reference/test_governed_scope.py). (b)
+    Demotion-handoff law: every generate-mode curated ArtifactSpec must name a
+    catalogued table — 7 stale ADR076 specs flipped to register mode. (c)
+    Builder replays indexes POST-LOAD in schema.sql statement order with a
+    loud interleave precondition (index rowid order is part of byte identity).
+    (d) VACUUM temp pinned next to the output via PRAGMA temp_store_directory
+    (tmpfs /tmp boxes). (e) ingest_checkpoint (47,339 rows) is OUTSIDE the
+    governed estate: dropped from the build product; preserved in the pre-flip
+    backup; loaders recreate via metadata.create_all on demand.
+
+    THE FLIP (2026-07-20): old DB (sha a0cad5d1...) byte-verified into
+    backups/marxist-data-3NF.pre-parquet-20260720.sqlite, then the drive
+    canonical replaced by the product (sha verified == manifest,
+    programmatically extracted — no hand-typed hashes). Post-flip qa 6/6 +
+    catalog sentinel clean (83 rows bijective, no dark KEEP objects).
+
+    RELEASE ci-data-v7: subset now DERIVED from the product (14,191,827 rows;
+    tools/make_reference_subset.py --source dist/build/...); release carries
+    the 80 parquet + schema.sql (all manifest-pinned — the fetch action's
+    manifest-driven step needs no input bump ever again) + TIGER (v3 lineage);
+    .github/actions/fetch-reference-db defaults bumped (tag/asset/sha256, sha
+    verified against the computed sidecar).
+
+    LOADER DOCTRINE: tools/loader_to_sources.py (Task 11; synthetic TDD +
+    adversarial review) is the standing mechanism — a legacy DB-writing loader
+    runs against a SCRATCH COPY of the product, affected tables re-export as
+    parquet sources, manifest regenerates; the shared DB is never opened for
+    write. PLAN-VS-REALITY: the scheduled IMPORT_USE ingest was discovered
+    ALREADY DONE out-of-band (31,688 rows, 2010-2024, landed between the
+    2026-07-12 known-red audit and the cutover; present in the pre-flip backup
+    => carried faithfully by export->build->flip). The wrapper's live abort on
+    the UNIQUE collision was its invariant machinery working (scratch cleaned,
+    product untouched). The known-red Φ test passed UNTOUCHED (per-county
+    phi_hour varies) — acceptance gate 5 green with zero code changes; its
+    docstring now records the history. Companion repair: detroit_wiring's
+    ==24 count-floor was stale since CreditState (2f6bd849) added the 25th
+    override — the dev nightly refdata red since 2026-07-19; fixed to 25 with
+    credit_aggregate_source pinned by name (both reds reproduced against the
+    pre-parquet backup: pre-existing, not cutover-caused).
+  consequences: |
+    POSITIVE: reference data is regenerable, diffable per-table, pinned, and
+    CI-fetchable at full coverage; the subset cannot drift from the product by
+    construction; any future ingest is a reviewed source-only operation.
+    DEBT/FOLLOW-UPS (declared): (1) CI-devshell pinning — the nightly
+    rebuild-verify leg runs on stock-runner sqlite (~3.45), off the 3.53.1
+    pin; the step now WARNS LOUDLY and exits clean when off-pin instead of
+    hard-failing every nightly; the real fix (run the builder inside the infra
+    devshell on CI, cachix/install-nix-action prior art in the ADR096
+    nix-release workflow) is the recorded next work item, after which the
+    warning path is deleted and the leg becomes the true remote byte-identity
+    proof. (2) ingest_bea_imports is one-shot, not idempotent — acceptable for
+    a loader that now only ever runs against scratch copies; noted in its
+    docstring. (3) The owed auto-create-masks-absence sentinel (sqlalchemy
+    create-on-connect masking a missing DB) remains owed — the G1 nightly red
+    of 2026-07-20 is that exact class, in the pacing job that claims no
+    reference-DB dependency (owner triage flagged).
+  verification: |
+    Double-build identity: ref-a == ref-b == manifest sha (two independent
+    full builds). Schema fixed point: extract(build(sources)) == schema.sql
+    byte-identical (75 tables / 8 views / 99 indexes, contiguous). Roundtrip:
+    83/83 objects ok vs the live DB. Simulation: qa:regression 6/6
+    byte-identical + E5b two-process determinism, pre-flip (override path)
+    AND post-flip (symlink path). Catalog sentinel clean post-flip. mise run
+    check on the branch: 11,768 passed / 303 skipped (pin-gated skips
+    by design, proven by direct pinned invocation) / 1 deliberate xfail.
+    Economics integration delta: 165 passed, 1 pre-existing failure (fixed),
+    27 skipped, 3 xfailed.

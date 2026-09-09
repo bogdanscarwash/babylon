@@ -1,0 +1,58 @@
+ADR160_p26_international_trade_charter:
+  status: "accepted"
+  date: "2026-07-27"
+  title: >
+    Program 26 — International Trade: charter (Director reopening 2026-07-27).
+    Supersedes the 2026-07-20 deferral whose preconditions were already satisfied
+    (Vol I + Vol II merged 2026-07-21 via the five-lane cascade; Vol III 2026-07-19;
+    ADR090/ADR098 landed) — only the "kickoff proposal to the owner" step remained,
+    and the Director's directive IS that kickoff.
+  context: |
+    Audit of record (three read-only agents, 2026-07-27, tree 56d34bd3):
+    spec-101's trade activation is live ONLY on the headless-runner batch path —
+    game/session.py (the playable Archive campaign) seeds no external nodes, never
+    populates the four phi-distribution TickContext keys (silent no-op), runs the
+    spec-057 Leontief pipeline as a zero stub (no ServiceContainer overrides), and
+    seeds zero TRIBUTE edges. Vol2CirculationStep is dormant (zero writers of
+    context['vol2_step']; the seam-algebra registry row vol2_circulation_vol2_step
+    already prescribes the W-C wiring motion). All four unequal_exchange formulas
+    are registered with zero registry callers. specs 107 (sigma-gradient) and 108
+    (transport substrate) were ratified as programs but never authored. Disclosed
+    ADR055 gaps stand: bilateral_trade_tons=0.0 (FAF), india/latin_america Phi=0,
+    the lossy trade-share Phi-attribution crosswalk (#1 owner-review item, unruled),
+    ~84-141x sub-national Phi inflation at scoped runs. The old 101-trade-activation
+    branch was a pre-filter-repo snapshot, 100% patch-equivalent to dev and token-free
+    (verified); it was rebuilt at dev tip 56d34bd3 the same day (old lineage kept as
+    a local DO-NOT-PUSH tag only).
+  decision: |
+    Charter Program 26 on the rebuilt 101-trade-activation lane
+    (project/programs/26-international-trade.md is the program doc). Units:
+    U0 truth reconciliation (spec-101 tasks.md/plan.md/ADR057-key hygiene, issue
+    #274 repurposed); U1 author spec-107 sigma-gradient (off-pipeline); U2
+    interactive parity — ADR109 typed W-C motions wiring phi-distribution context,
+    external-node bootstrap, vol2_step, and an explicit ruling-or-wiring for the
+    Leontief overrides into game/session.py, each closing its sentinel row, plus
+    TRIBUTE seeding for the default campaign scenario; U3 FAF freight tons +
+    india/latin_america bloc grounding (hash-stamped artifact, ADR121 pattern);
+    U4 Phi-attribution model v2 — packaged options, DIRECTOR RULING required
+    (theory-line content under IX.5) before code; U5 blocs-as-alignments + flows
+    over the transport substrate priced by Vol III money (POST-P25 — the engine
+    train; new EventTypes/defines/system positions wait for the P25 lane to merge
+    per the IX.5 interleaving rule); U6 Archive TUI trade surfaces (coordinates
+    with the raster-cutover lane). Non-overlap covenant vs P25's measured 142-file
+    surface is binding: no tick-pipeline mutation, no P25-shared files
+    (models/enums/events.py, formulas/__init__.py, models/world_state.py,
+    tests/baselines/*.json, tools/regression_scenarios.py, engine/systems/*,
+    catalog.py, defines.yaml regeneration) until P25 merges. ADR block 160-169 is
+    the P26 lane allocation.
+  consequences:
+    positive:
+      - "International trade reaches the PLAYABLE game, not just the batch path"
+      - "Every dormant construct in the audit gets wired (sentinel row closed) or retired by ADR — no silent stubs"
+      - "sigma-gradient/transport substrate finally move from ratified prose to specs"
+      - "Phi attribution becomes a Director-ruled theory decision instead of an inherited proxy (IX.5 discipline)"
+    negative:
+      - "U5 (the real international layer) is serialized behind P25's engine train — the interleaving rule is honored at the cost of latency"
+      - "Interactive wiring (U2) may re-bake Archive TUI goldens — a declared section-6.5 ceremony if drift appears"
+      - "index.yaml zipper conflicts with the P25 lane are expected at merge (append-only, trivially resolvable)"
+  file: ADR160_p26_international_trade_charter.yaml

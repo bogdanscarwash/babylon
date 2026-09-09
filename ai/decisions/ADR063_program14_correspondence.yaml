@@ -1,5 +1,5 @@
 ADR063_program14_correspondence:
-  status: "accepted"
+  status: "superseded-in-part"  # Amendment AE clause (v), 2026-07-29: Rust deferral superseded by R2; monorepo + re-baselining conclusions RETAINED
   date: "2026-07-11"
   title: "Program 14 (Correspondence): repo structure aligned to the constitution — kernel/topology/domain/intelligence re-layering, import-linter law, repo-hygiene gate, six fork deletions; subrepos rejected, Rust deferred"
   context: |

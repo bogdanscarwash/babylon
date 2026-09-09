@@ -1,0 +1,59 @@
+id: ADR108
+title: >-
+  Amendment AA (v2.15.0) — Portability Horizon: Windows compatibility becomes
+  a BINDING post-1.0.0 requirement with two ordered lanes (WSL2 then native),
+  while pre-1.0.0 development is constitutionally SHIELDED from every Windows
+  obligation except a one-line disclosure duty in load-bearing ADRs.
+status: accepted
+date: '2026-07-21'
+context: >-
+  BD directives 2026-07-21, mid-session during the v1.0.0 program:
+  "windows-compatibility is going to be a big factor in my choice of solution
+  eventually, not for v1.0.0 release but upgrading it to be compatible with
+  windows is a must once the game concept is proven to work," followed by
+  "we should update the constitution to make windows compatibility a
+  requirement post v1.0.0 so that way it doesn't hinder pre-1.0.0
+  development." Prior constitutional state: X.8 (Amendment X) already named
+  Windows in roadmap prose — "Windows via WSL2 as documented workaround;
+  native Windows/macOS is the 2.0.0 portability release" — but as
+  description, not requirement, and with no protection for pre-1.0 velocity.
+  Known platform facts at ratification (to be verified in depth by
+  reports/user-interface-debate.md, in flight): Nix has no native Windows
+  (WSL2 is the bridge); kitty graphics protocol is absent from Windows
+  Terminal (the ADR099 glyph floor is the rendering layer that ports);
+  PG/PostGIS run on Windows but X.8/D1's unix-socket-only cluster needs a
+  TCP-loopback seam for a native lane; Ollama/llama.cpp ship native Windows;
+  Rust is Tier-1 on Windows while OCaml's native story matured only with
+  opam 2.2 — a recorded swing factor for future language choices.
+decision: >-
+  Constitution v2.14.0 -> v2.15.0, Amendment AA registered (MINOR, no
+  primitive touched): (1) COMMITMENT — Windows compatibility is a required
+  post-1.0.0 portability milestone, activated by BD ruling once the game
+  concept is proven; lane 1 = WSL2 (the existing flake channel unchanged,
+  promoted from workaround to supported path + doctor preflight), lane 2 =
+  native Windows (the 2.0.0 release; separate non-Nix packaging story,
+  channel ADR deferred to activation). (2) SHIELD — pre-1.0.0 development
+  MUST NOT be gated, taxed, or complicated by Windows: no Windows CI legs,
+  no Windows-conditional code paths, no speculative cross-platform
+  abstractions, no v1.0.0 DoD item referencing Windows; pre-1.0 Windows work
+  requires amending AA first. (3) CHEAP-OPTIONALITY DUTY (the only pre-1.0
+  obligation; disclosure, never a gate): load-bearing platform/language/
+  dependency ADRs carry a one-line Windows-impact note; otherwise-equal
+  designs prefer the non-foreclosing option; two seams NAMED as carrying the
+  optionality already — the unified DSN resolver's documented TCP-loopback
+  fallback point (T1.2 keel K2; Linux letter unchanged) and the glyph-floor
+  playability discipline (ADR099 + the graph-render-lane ruling). X.8's
+  letter revised in place per the Amendment P factual-drift pattern.
+  Lettering: the drafted Material-Triad amendment slides from its planned AA
+  to AB+; T remains reserved for ADR072.
+consequences: >-
+  v1.0.0 trains are untouched by construction — T7 stays the Linux
+  nix-bootstrap installer, and no lane gains Windows work. The T1.2 keel's
+  DSN unit and every future platform ADR inherit the one-line disclosure
+  duty (ADR104-107 predate AA and are exempt; their Windows posture is
+  already recorded in this ADR's context). The in-flight UI-debate report
+  gains a Windows-constraint section weighting Textual/Neovim/Emacs and
+  Rust-vs-OCaml under AA. When the BD declares the concept proven, lane-1
+  activation is an owner ruling + a WSL2 doctor-preflight work order, not a
+  new amendment; lane 2 opens its own packaging ADR. CLAUDE.md constitution
+  pointer bumped to v2.15.0 / Amendments A-AA.

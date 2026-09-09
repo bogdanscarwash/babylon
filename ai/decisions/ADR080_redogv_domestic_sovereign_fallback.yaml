@@ -1,0 +1,165 @@
+ADR080_redogv_domestic_sovereign_fallback:
+  status: "accepted"
+  date: "2026-07-17"
+  title: "Task R — RED_OGV seed repair: FR-040b domestic-sovereign fallback narrows SOV_EXTERIOR_NULL to genuine exterior nodes, unblocking the inert web-session sovereignty layer (RED_OGV / REVOLUTIONARY_VICTORY / UPHOLD reachability)"
+  context: |
+    Origin: owner no-compromise ruling 2026-07-17 ("connected, wired,
+    repaired, seeded, deterministic") + investigation wf_97499fb7-171. NOT
+    in the original spec-116 "Playability Spine" plan — added because the
+    finding is a real, verified bug, not a stub or placeholder gap: the
+    entire spec-070 balkanization/sovereignty layer is inert in every web
+    session, and three endgame routes are structurally unreachable as a
+    result.
+
+    Root cause (verified by reading `_seed_balkanization_layer` and
+    `EndgameDetector._axis_red_ogv`/`_has_stance_majority` directly):
+    `seed_sovereigns.json`'s `initial_claims[].territory_id` values
+    (`"canada"`, `"rest_of_usa"`) are `persistence.external_node` registry
+    IDs, never scenario Territory keys (H3 cell-index strings). The
+    literal-match pass at `engine_bridge.py` (`if territory_id not in
+    state.territories: continue`) is therefore a permanent no-op in every
+    scenario. Before this fix, the FR-040b (spec-070) fallback then routed
+    **100% of every scenario's Territories** to `SOV_EXTERIOR_NULL` — the
+    documented provisional "unclaimed" sovereign, whose
+    `ruling_faction_id` is `null` by design (migration
+    `0025_balkanization.sql:68`'s NULL-ruling-faction = exterior
+    invariant).
+
+    Consequence chain: `SOV_EXTERIOR_NULL.ruling_faction_id is None` =>
+    `EndgameDetector._lookup_sovereign_stance` returns `None` for every
+    Sovereign in every web session => `_has_stance_majority` counts 0
+    CLAIMS edges for ANY `ColonialStance` (UPHOLD/IGNORE/ABOLISH) => the
+    `stance_gate` in `_axis_red_ogv` (RED_OGV, the settler-socialist trap)
+    and in the political-violence route of `_axis_fascist_consolidation`
+    and in `_axis_revolutionary_victory`'s ABOLISH gate is **permanently
+    0.0**. Since `_progress_and_match` requires every gate ratio to reach
+    1.0, RED_OGV, REVOLUTIONARY_VICTORY, and the UPHOLD political-violence
+    route were all structurally unreachable in every web session,
+    regardless of how the simulation played out. This is a dead-branch
+    bug in the recognizer machinery landed by spec-116/ADR074, not a
+    theoretical gap — three of the five canonical endgame patterns could
+    never be recognized through the only path a player experiences.
+  decision: |
+    Narrow FR-040b's (spec-070) reading of the "unclaimed fallback"
+    sovereign. `_seed_balkanization_layer`'s FR-040b fallback loop
+    (`engine_bridge.py`, `_seed_balkanization_layer`) now claims every
+    Territory the literal pass leaves unclaimed with `source_id =
+    "SOV_USA_FED"` (the domestic federal sovereign, ruling Faction
+    `FAC_RESTORATIONIST`, `colonial_stance = "uphold"`) instead of
+    `"SOV_EXTERIOR_NULL"`.
+
+    Rationale: every Territory that ever reaches `state.territories` in a
+    web session is a domestic interior H3 cell (scenario-build never
+    produces a Territory node for a genuinely external location — those
+    are represented via `persistence.external_node`, a disjoint registry,
+    never a graph Territory). A domestic interior cell's *correct*
+    default sovereign is the domestic federal government, not a
+    provisional placeholder reserved for territory the engine doesn't yet
+    model. `SOV_EXTERIOR_NULL` remains exactly as documented — the
+    catch-all for genuinely external nodes — it is simply never reached
+    by this fallback loop today because no external node is ever a
+    Territory key. The NULL-ruling-faction = exterior invariant
+    (migration `0025_balkanization.sql:68`) is preserved: domestic
+    Territories now get a sovereign WITH a ruling Faction (SOV_USA_FED),
+    they never get `SOV_EXTERIOR_NULL`'s null one.
+
+    This is a deliberate semantic narrowing of FR-040b, not a bug fix
+    within the original spec-070 contract — spec-070 originally framed
+    `SOV_EXTERIOR_NULL` as the general "unclaimed" catch-all; Task R
+    reinterprets it as "unclaimed AND exterior", with domestic-interior
+    Territories now defaulting to the domestic federal sovereign. Total
+    CLAIMS coverage (SC-017: every Territory claimed by exactly one
+    Sovereign) is unchanged — only which Sovereign changes.
+
+    Effect on endgame reachability: a web session now starts UPHOLD-
+    majority at tick 0 (SOV_USA_FED / FAC_RESTORATIONIST), and RED_OGV
+    becomes an EMERGENT outcome once an IGNORE-aligned Faction
+    (FAC_WORKERS_CONGRESS or FAC_LIBERAL_IMPERIAL) wins a Territory
+    majority via the CollapseTransition/secession dynamics over the
+    course of play — never a tick-0 artifact of the seed. The same
+    stance-attribution fix also restores reachability for
+    REVOLUTIONARY_VICTORY's ABOLISH gate and FASCIST_CONSOLIDATION's
+    UPHOLD political-violence route.
+  consequences: |
+    Determinism: VERIFIED byte-identical, not merely asserted.
+    `_seed_balkanization_layer` is called only from the web bridge
+    (`engine_bridge.py`); `seed_sovereigns.json` is read only via the
+    `babylon.data.game.balkanization` loaders the web bridge calls; no
+    engine scenario or headless regression path references balkanization
+    seeding at all. `mise run qa:regression` confirmed 5/5 scenarios
+    byte-identical after this change (imperial_circuit, two_node,
+    starvation, glut, fascist_bifurcation) — no baseline moved, as
+    expected for a web-bridge-only change.
+
+    Tests updated (TDD, red before fix, green after):
+    - `tests/unit/engine/test_endgame_detector.py`: new
+      `TestRedOgvAxisReachability` — a recognizer-predicate pin
+      (emergent-endgames outcome-as-fixture-vehicle pattern, ADR074) that
+      builds a `BabylonGraph` directly (bypassing the web seed entirely)
+      to prove RED_OGV's four gates CAN saturate given a real IGNORE-
+      stance CLAIMS majority, plus a companion proving the exact
+      pre-repair topology (SOV_EXTERIOR_NULL holding every CLAIMS edge)
+      permanently fails the stance gate. Both pass independent of the
+      production fix (they exercise the axis predicate directly, not the
+      seed pipeline) — they pin the recognizer logic itself, not the bug.
+    - `tests/unit/web/test_seed_balkanization_layer.py`: replaced the
+      count-floor assertion that pinned "every Territory -> claims
+      edges. Switched the fixture scenario from
+      `create_imperial_circuit_scenario` (~1100 territories) to
+      `create_wayne_county_scenario` (~81 territories, explicitly
+      documented as entirely domestic-interior) for a faster, more
+      legible fixture with the exact property the fallback depends on.
+    - `tests/integration/balkanization/test_seed_coverage_invariant.py`:
+      verified, NOT modified — it hand-fabricates its own
+      `SOV_EXTERIOR_NULL`-claims-everything `BabylonGraph` and never
+      calls `_seed_balkanization_layer`, so it is a generic invariant
+      test (does adding SOV_EXTERIOR_NULL coverage satisfy SC-017?)
+      independent of which sovereign the real seeding pipeline picks. It
+      passed unchanged before and after.
+
+    Known honest limitation (Task R): `EndgameDetector._aggregate_habitability`
+    reads `getattr(territory, "habitability", 1.0)` off
+    `state.territories` values, but `habitability` is a graph-only
+    transient attribute (`TERRITORY_EXCLUDED_FIELDS`, written onto graph
+    nodes by `MetabolismSystem`, never round-tripped onto the frozen
+    `Territory` model, which forbids extra fields). This means a REAL
+    `WorldState` with real `Territory` instances can never drive the
+    RED_OGV habitability gate below its floor — `_aggregate_habitability`
+    always falls through to 1.0. The new recognizer test works around
+    this with a duck-typed state stand-in (only `.entities`/`.territories`
+    are read by the axis) rather than papering over it; the underlying
+    gap (aggregate_habitability's data source) is out of scope for Task R
+    and is flagged here for a future task, not silently fixed in passing.
+
+    RESOLVED (Task R2, same day): `_aggregate_habitability` now takes the
+    serialized `BabylonGraph`, not `WorldState`, and averages
+    `habitability` off the graph's `territory`-typed nodes (mirroring the
+    `balkanization_projections.py::observe_sovereign` idiom). `on_tick`'s
+    `graph = new_state.to_graph()` was hoisted above the habitability-
+    history update so the same single per-tick graph feeds it (no extra
+    serialization). RED_OGV's habitability gate is now genuinely reachable
+    against real `WorldState`/`Territory` data, not only the recognizer's
+    hand-built `BabylonGraph` fixtures. The reachability test's duck-typed
+    `state` stand-in for habitability was removed (its `state` now carries
+    only `.entities`, for `_class_tension`); the companion "blocked" test's
+    stand-in was kept (it isn't testing the habitability source) with a
+    matching low `habitability` added to its own hand-built graph so it
+    stays green under both the pre-fix and post-fix code paths.
+    `mise run qa:regression` reconfirmed 5/5 byte-identical.
+  evidence: |
+    web/game/engine_bridge.py (`_seed_balkanization_layer` FR-040b
+    fallback + docstring), tests/unit/web/test_seed_balkanization_layer.py,
+    tests/unit/engine/test_endgame_detector.py
+    (`TestRedOgvAxisReachability`), tests/integration/balkanization/
+    test_seed_coverage_invariant.py (verified unchanged),
+    src/babylon/data/game/balkanization/seed_sovereigns.json (SOV_USA_FED /
+    SOV_CAN_FED / SOV_EXTERIOR_NULL canonical records, unchanged),
+    src/babylon/data/game/balkanization/seed_factions.json (FAC_RESTORATIONIST
+    uphold / FAC_WORKERS_CONGRESS+FAC_LIBERAL_IMPERIAL ignore, unchanged),
+    src/babylon/engine/observers/endgame_detector.py
+    (`_axis_red_ogv`/`_has_stance_majority`/`_lookup_sovereign_stance`,
+    unchanged — the bug was entirely in the seed, not the recognizer),
+    src/babylon/persistence/migrations/0025_balkanization.sql (NULL-ruling-
+    faction = exterior invariant, preserved), `mise run qa:regression`
+    (5/5 byte-identical: imperial_circuit, two_node, starvation, glut,
+    fascist_bifurcation).

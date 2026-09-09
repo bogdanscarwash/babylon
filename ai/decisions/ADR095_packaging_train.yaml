@@ -1,0 +1,51 @@
+ADR095_packaging_train:
+  status: "accepted"
+  date: "2026-07-20"
+  title: "The Packaging Train opening moves: the babylon CLI entry-point contract ([project.scripts] babylon = babylon.cli:app with subcommands play/doctor/login/telemetry/self-update/uninstall), the dependency extras split (server extra absorbs ansible-dev-tools, rstcheck, doc8, boto3, Django, DRF, django-cors-headers, gunicorn) plus deletion of the stdlib-shadowing uuid ^1.30 relic, and the single-lock fork ruled U -- uv adopted at the packaging train with uv2nix consuming the same lock, Poetry-two-locks (K) recorded as the fallback -- queue items 4, 5, 8; untouched by Amendments V/W/X"
+  context: |
+    nix-plan section 8 (babylon-infra ai/.inbox/nix-plan.md, untracked owner
+    drop) enumerates the repo prerequisites the Nix Player Channel (X.8)
+    needs from the Python packaging side; section A1 rules the principle
+    (Poetry proposes in dev; CI bakes; Nix delivers) and section A2 frames
+    the single-lock fork. None of this was touched by Amendments V/W/X --
+    the channel is ratified, its packaging contract is not. Current state
+    verified against the dev tree during the 2026-07-20 sessions: no
+    [project.scripts] babylon entry point exists; the dev-tool and server
+    dependencies ride the default install; uuid = "^1.30" (a stdlib-shadowing
+    relic) is still declared.
+  decision: |
+    D1 (entry point, queue item 4): pyproject gains
+    [project.scripts] babylon = "babylon.cli:app" (typer is already a
+    dependency). Contract subcommands: play (default), doctor (provision +
+    diagnose, render-capability probe), login (credentials file, 0600),
+    telemetry, self-update (wraps nix profile upgrade babylon), uninstall
+    (prints the honest teardown). This is the packaging train's first task;
+    install.sh and the flake wrapper both depend on the binary name.
+    D2 (extras split + relic, queue item 5): move ansible-dev-tools,
+    rstcheck, doc8, boto3, Django, djangorestframework, django-cors-headers,
+    gunicorn out of the default dependency set into a [server] extra (the
+    legacy web stack; X.8 marks it legacy). DELETE uuid = "^1.30" -- it
+    shadows the stdlib module and pins a 2006-era package.
+    D3 (single-lock fork, queue item 8): ruled U -- adopt uv at the
+    packaging train: move dep tables to PEP-621, regenerate the lock, swap
+    poetry run -> uv run across mise tasks and CI (mise has first-class uv
+    support); uv2nix consumes the same lock so ONE lock rules dev and
+    release. K (keep Poetry, two locks, skew caught by the closure
+    regression gate) is the recorded fallback if the uv migration stalls;
+    mise stays the developer front door either way, and no developer needs
+    Nix.
+  consequences: |
+    Execution (not performed by this ADR) touches pyproject, the lockfile,
+    and roughly 120 mise task definitions plus CI invocations at the uv
+    swap; the closure regression gate is the safety net for the lock
+    transition (Amendment Q discipline). The default install slims toward
+    the player closure (the geo/AI stack stays; the server stack becomes
+    opt-in). Rejecting D3 while accepting D1/D2 is coherent (K fallback
+    stands); rejecting D1 blocks install.sh and the flake wrapper contract.
+  evidence: |
+    babylon-infra ai/.inbox/nix-plan.md sections 8, A1, A2, section 10 items
+    4/5/8 (untracked owner drop, babylon-infra working copy); CONSTITUTION.md
+    v2.12.0 Amendment X (X.8 names the channel this train feeds); pyproject
+    state on the dev tree as of 2026-07-20 (no scripts entry, uuid relic
+    present; an untracked uv.lock already present, signalling owner
+    experimentation toward D3).

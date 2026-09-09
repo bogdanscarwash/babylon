@@ -1,0 +1,73 @@
+id: ADR109
+title: >-
+  The Wiring Doctrine ratified (owner ruling 2026-07-21): connecting any
+  built-but-dormant construct is a TYPED MOTION in one of the three moduli —
+  W-C dataflow (declared W(producer)∩R(consumer) manifest field, conflict-DAG
+  edge), W-𝔇 opposition registration (fresh-per-tick measure, UNPOSITIONED
+  absence, shadow-first per the ADR077 ladder), W-G scale wire (ScaleAdjunction
+  allocate⊣aggregate, never stamping the finer sort), W-P projection wire
+  (one-way DeclaredView, recognizer-not-control, Amendment-S tripwire), W-A4
+  conservation closure (Src/Snk budget row, residual = ALARM) — entered through
+  declared data and closed by its class's sentinel row, never a bare
+  import-and-call. Doctrine text: ai/wiring-doctrine.md (promoted from _inbox
+  at ratification). Review rule effective immediately: a wiring PR without its
+  motion class's sentinel row (or a citation of the blocking dependency) is
+  incomplete and review-rejectable. Enforcement build (doctrine §7) forks
+  POST-CASCADE as its own train because it extends estates still unmerged on
+  lane branches (T1.1 sentinels/seam_algebra ∂L + gate-satisfaction +
+  stub-vs-calculator, T1.2 observability spine, the vocabulary family) — eight
+  units: wiring registry (closed-hand-curated rows OPEN/BLOCKED/CLOSED seeded
+  from the 11-gap ledger), W-C conflict-DAG extension, W-𝔇 property suite,
+  W-G empty-iteration check (NEW — the hex-aggregation bug class), W-P
+  Amendment-S grep-gate widened to formulas/, W-A4 residual-severity check
+  (the F-3 warn-not-alarm anti-pattern detector), the event rule (no logging
+  call site emits catalog event kinds), the verb rule (BLOCKED on the
+  ActionSpec registry from the interface-shell plan). Each check ships
+  red-phase-first against a synthetic witness; mutation validation local-only.
+status: accepted
+date: '2026-07-21'
+context: >-
+  Every disconnection found across the 2026-07 audits shares one anatomy — a
+  nonempty boundary ∂L between the declared construct graph and the live
+  subgraph: producers whose write-sets nothing reads (doctrine accumulator
+  @14.7), consumers whose read-sets nothing writes (legitimation_state read
+  at lifecycle.py:266, never written back, excluded from round-trip at
+  world_state.py:96), gates no production supplier satisfies (vol2_step,
+  LODES kwargs), stubs feeding live consumers
+  (ReproductionBalance(condition_met=True)), seeded-static magnitudes with no
+  dynamics (s_bio/s_class → the never-firing ECOLOGICAL_OVERSHOOT), and
+  finer-grain stores with no adjoint to the engine's grain (hex biocapacity;
+  aggregate_hexes_by_county folding an empty set). The verified 2026-07-21
+  sweep classified 11 such gaps (ledger in ai/wiring-doctrine.md §4, with
+  data-feed status per row). T1.1 built the DETECTION side (seam-algebra ∂L
+  family); the repo had no ratified doctrine for the CLOSURE side — each past
+  wiring fix was ad-hoc, and ad-hoc wires rot into the next generation of
+  gaps. The doctrine derives the closure grammar from the formalism's three
+  moduli (𝕊/𝔇 amendment territory vs C/G/P normal development vs Θ
+  coefficient rehoming) so that "is this wire legal, and what does it owe?"
+  is decidable from the diff. BD ratified 2026-07-21 with an explicit
+  directive to make it official "including with Tests and Sentinels".
+decision: >-
+  Ratify ai/wiring-doctrine.md verbatim as repo doctrine (promoted out of
+  ai/_inbox/). Bind the review rule immediately. Charter the eight-unit
+  enforcement build (§7) to fork after the v1.0.0 five-lane merge cascade,
+  extending — not forking — the T1.1/T1.2 sentinel estates. Kaggle posture
+  adopted as proposed: discovery index only, never source-of-record; every
+  ingest terminates at the primary agency per III.4. The [U]-flagged data
+  estates (FBI CDE/BJS, BLS Work Stoppages/FMCS/Cornell ILR, SSA/DOL-5500/HUD,
+  MIT Election Lab, USAspending) require a fresh-session verification sweep
+  under the §VI.11 four-column discipline before any ingest task cites them.
+consequences: >-
+  Positive: the seam space stays finite and machine-checkable (NORTH_STAR
+  holism property) — every wire is a registry row with a gate, so the
+  built-but-disconnected disease class stops reproducing; lane reviews gain a
+  mechanical completeness criterion; the 11-gap ledger becomes tracked work
+  with per-row data-feed status instead of tribal knowledge. Costs: wiring
+  PRs carry one extra row + gate each (small, bounded); the enforcement train
+  is net-new post-cascade work (eight small units); until it ships, the
+  review rule is enforced by reviewers rather than CI — an accepted interim
+  gap, recorded here. Constitutional posture: the doctrine adds NO primitives
+  (pure C/G/P discipline over the shipped algebra); anything 𝕊/𝔇-modulus it
+  routes to amendments stays amendment-gated (Matter sort → AB, Divergence
+  Channel → T), so no amendment accompanies this ADR.
+file: ADR109_wiring_doctrine.yaml

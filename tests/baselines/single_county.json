@@ -1,0 +1,102 @@
+{
+  "scenario": "single_county",
+  "description": "Wayne-seeded minimal county: Vol III financial layer, MELT path, and distribution identity all fire",
+  "generated_at": "2026-07-30T13:44:17+00:00",
+  "defines_hash": "4af1178032a2b420376e35c7a98ac2b151ea8fb9ee68636d1560528d5fd927d4",
+  "max_ticks": 52,
+  "checkpoints": [
+    {
+      "tick": 0,
+      "p_w_wealth": 0.0,
+      "p_c_wealth": 0.0,
+      "c_b_wealth": 0.5,
+      "c_w_wealth": 0.5,
+      "imperial_rent_pool": 100.0,
+      "exploitation_tension": 0.0,
+      "p_w_consciousness": 0.0,
+      "p_w_p_revolution": 0.0,
+      "p_w_active": false,
+      "content_hash": "c9efeb48b2071297fd4fa2c4693364232ccc21a11390e01921028a0da9d3ea22"
+    },
+    {
+      "tick": 10,
+      "p_w_wealth": 0.0,
+      "p_c_wealth": 0.0,
+      "c_b_wealth": 0.442291,
+      "c_w_wealth": 0.624994,
+      "imperial_rent_pool": 98.05975,
+      "exploitation_tension": 0.230773,
+      "p_w_consciousness": 0.0,
+      "p_w_p_revolution": 0.0,
+      "p_w_active": false,
+      "content_hash": "87c9c37cc4ffc0c6f0186f69935311d85c42ab308959f0255084805710094b3f"
+    },
+    {
+      "tick": 20,
+      "p_w_wealth": 0.0,
+      "p_c_wealth": 0.0,
+      "c_b_wealth": 0.393519,
+      "c_w_wealth": 0.741051,
+      "imperial_rent_pool": 96.166794,
+      "exploitation_tension": 0.306311,
+      "p_w_consciousness": 0.0,
+      "p_w_p_revolution": 0.0,
+      "p_w_active": false,
+      "content_hash": "095ab03c01f3409d30d8db07d714f9b05bdc140822eca9489542f3c997399430"
+    },
+    {
+      "tick": 30,
+      "p_w_wealth": 0.0,
+      "p_c_wealth": 0.0,
+      "c_b_wealth": 0.352952,
+      "c_w_wealth": 0.84889,
+      "imperial_rent_pool": 94.319486,
+      "exploitation_tension": 0.412649,
+      "p_w_consciousness": 0.0,
+      "p_w_p_revolution": 0.0,
+      "p_w_active": false,
+      "content_hash": "653ed3e4610633426c09264cf1c74979d3e63097ca4867a238038fb026032c3e"
+    },
+    {
+      "tick": 40,
+      "p_w_wealth": 0.0,
+      "p_c_wealth": 0.0,
+      "c_b_wealth": 0.319936,
+      "c_w_wealth": 0.949191,
+      "imperial_rent_pool": 92.516246,
+      "exploitation_tension": 0.495817,
+      "p_w_consciousness": 0.0,
+      "p_w_p_revolution": 0.0,
+      "p_w_active": false,
+      "content_hash": "b1f93ace19cc17d8d15f0f81a5399ed04c0c924c1588cbde35ec179ed9110059"
+    },
+    {
+      "tick": 50,
+      "p_w_wealth": 0.0,
+      "p_c_wealth": 0.0,
+      "c_b_wealth": 0.293835,
+      "c_w_wealth": 1.042577,
+      "imperial_rent_pool": 90.755589,
+      "exploitation_tension": 0.560263,
+      "p_w_consciousness": 0.0,
+      "p_w_p_revolution": 0.0,
+      "p_w_active": false,
+      "content_hash": "30c0280713c7a466c487f4273cda6a60387b3768a3a3c16ef9ac517d3ebfcb4b"
+    },
+    {
+      "tick": 52,
+      "p_w_wealth": 0.0,
+      "p_c_wealth": 0.0,
+      "c_b_wealth": 0.289384,
+      "c_w_wealth": 1.060475,
+      "imperial_rent_pool": 90.408442,
+      "exploitation_tension": 0.571239,
+      "p_w_consciousness": 0.0,
+      "p_w_p_revolution": 0.0,
+      "p_w_active": false,
+      "content_hash": "90bfc08e4149669bef65c05329b7a856a7c2b20c0a8282f17b50fa3607d6fd71"
+    }
+  ],
+  "final_outcome": "SURVIVED",
+  "ticks_survived": 52
+}

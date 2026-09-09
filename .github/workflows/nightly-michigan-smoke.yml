@@ -1,0 +1,63 @@
+name: Michigan Rollover Smoke
+
+# ADR181 R3(i) keeps the annual-rollover crash canary in its own daily lane.
+# The Rust diagnostic commits 15 four-week periods and restarts around period 13.
+# Exact reference inputs are embedded in the runtime; external SQLite readiness
+# does not control this check.
+
+on:
+  schedule:
+    - cron: "0 5 * * *"  # daily 05:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly-michigan-smoke
+  cancel-in-progress: false
+
+jobs:
+  michigan-smoke:
+    name: qa:michigan-rollover-smoke (period 13 annual rollover)
+    runs-on: ubuntu-latest
+    timeout-minutes: 69
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: dev
+      - uses: ./.github/actions/bootstrap-python
+      - uses: ./.github/actions/bootstrap-persistence
+        id: persistence-cache
+        with:
+          cache-key: rollover
+      - uses: ./.github/actions/postgres-up
+      - name: Babylon runtime schema bootstrap (node_state et al.)
+        run: mise run db:bootstrap
+      - name: qa:michigan-rollover-smoke (15 four-week periods across the rollover)
+        env:
+          BABYLON_RUNTIME_DSN: "dbname=babylon_test host=127.0.0.1 port=5433 user=test password=test"
+        run: mise run qa:michigan-rollover-smoke
+      - name: Stop Postgres
+        if: always()
+        run: tools/ci_postgres_compose.sh down
+
+      - name: Save successful persistence cache
+        if: >-
+          success() && github.event_name != 'pull_request' &&
+          (github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/main') &&
+          steps.persistence-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          key: ${{ steps.persistence-cache.outputs.cache-key }}
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            rust/target/.rustc_info.json
+            rust/target/debug/.cargo-lock
+            rust/target/debug/.fingerprint
+            rust/target/debug/build
+            rust/target/debug/deps
+            rust/target/debug/babylon-runtime
+            rust/target/debug/babylon-runtime.d

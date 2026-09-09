@@ -1,0 +1,98 @@
+; The four Territory-SHAPED query-lane fixtures (P27 Phase 2, BSL
+; query-evaluation plan, PR 5 / Task 15).
+;
+; **This is not Territory content.** `reports/territory-port-phase1-inventory
+; -2026-08-11.md` §6's blocker table names four shapes the query evaluator
+; had to serve before the real Territory port could start; this scenario
+; proves each one expressible and correct against a hand-built topology, the
+; way Metabolism's own fixtures were hand-built before Metabolism had a
+; canonical scenario. `rust/crates/babylon-tick/tests/query_lane_e2e.rs`
+; loads this ONE file four times (once per shape, a fresh graph each load)
+; and runs a DIFFERENT single-rule content set each time — so every rule
+; below needs to read safely across the WHOLE node population this file
+; declares, not just the nodes it is "about": `run_tick`'s subject loop
+; walks every node of the rule's derived TERRITORY type regardless of which
+; shape a given node belongs to (`territory/shape` exists for exactly this
+; reason — see below).
+;
+; Four node groups, in declaration order (fixes id assignment, scenario.rs's
+; own contract):
+;   0-3  t0..t3          Shape A — the heat-spillover chain (ADJACENCY)
+;   4-6  source-b/sink-a/sink-b  Shape B — tie-break sink selection + transfer
+;   7    isolated-c       Shape C — the exists-guarded fallback (no ADJACENCY)
+;   8    penal-colony-d    Shape D — TENANCY suppression source
+;   9-11 tenant-1/tenant-2/non-tenant  Shape D — the suppressed/untouched classes
+;
+; `territory/shape` is a discriminator this fixture invents (0..4, one per
+; group above) — NOT a Territory-port field. Each shape's rule guards on it
+; so that ONLY the nodes it means to touch actually fire; every rule still
+; declares `territory/shape` as its one `:field` binding (subject-type
+; derivation needs at least one, `tick.rs::subject_type_of`), which is why
+; EVERY territory node below carries it, even nodes another shape's rule
+; will never reach.
+;
+; `territory/heat`, `territory/priority` and `territory/population` are each
+; seeded ONLY on the nodes the relevant shape's QUERY or WRITE path actually
+; touches — never universally — because every rule's own query/accessor
+; forms are reached only from inside a GUARD-passed effect (§2.8), so a node
+; outside a shape's own guarded subgraph never needs that shape's fields at
+; all. `sink-b` deliberately carries NO `territory/population` — Shape B's
+; assertion that it stays untouched is that reading it after the tick still
+; errors "never written" (III.11), which is a stronger proof than a numeric
+; "unchanged" comparison would be.
+;
+; `territory/heat` is declared EXTENSIVE here so Shape A's
+; `(fold sum (neighbors …) (field-of it territory/heat))` typechecks
+; against §3.4's aggregation law (`E-TYPE-041`, "sum of intensive field").
+; Physically heat reads more like an intensive per-node level than a summed
+; extensive quantity; the REAL Territory port's eventual field-kind ruling
+; is a separate, later decision (D-row Q9 territory adjacent) this synthetic
+; fixture does not make — it only needs `sum` to typecheck the way the
+; frozen `_process_spillover`'s own inflow accumulation does.
+(scenario territory/query-lane-e2e
+  (deffield territory/shape int extensive)
+  (deffield territory/heat coefficient extensive)
+  (deffield territory/priority int extensive)
+  (deffield territory/population int extensive)
+  (deffield social-class/organization int extensive)
+
+  ; src/babylon/data/defines.yaml:240 — heat_spillover_rate: 0.05.
+  (defconst territory/heat-spillover-rate 0.05c)
+  ; src/babylon/data/defines.yaml:239 — displacement_rate: 0.1.
+  (defconst territory/displacement-rate 0.1c)
+
+  ; ---- Shape A: the heat-spillover chain (ids 0-3) ----
+  ; t0 - t1 - t2 - t3, heats chosen as exact binary fractions (1/4, 1/2,
+  ; 1/8, 3/8) so every INTERMEDIATE sum stays exact in binary64 and only the
+  ; single multiply-by-rate at the end carries real IEEE-754 rounding —
+  ; see query_lane_e2e.rs's derivation comment for the exact arithmetic.
+  (node t0 NodeType/TERRITORY (territory/shape 0) (territory/heat 0.25c))
+  (node t1 NodeType/TERRITORY (territory/shape 0) (territory/heat 0.5c))
+  (node t2 NodeType/TERRITORY (territory/shape 0) (territory/heat 0.125c))
+  (node t3 NodeType/TERRITORY (territory/shape 0) (territory/heat 0.375c))
+
+  ; ---- Shape B: tie-break sink selection + population transfer (ids 4-6) ----
+  ; source-b has two ADJACENCY :out neighbours scoring EQUAL priority (5) —
+  ; the §2.7 tiebreak must pick sink-a (the lower id), never sink-b.
+  (node source-b NodeType/TERRITORY (territory/shape 1) (territory/population 100))
+  (node sink-a NodeType/TERRITORY (territory/shape 2) (territory/priority 5) (territory/population 0))
+  (node sink-b NodeType/TERRITORY (territory/shape 2) (territory/priority 5))
+
+  ; ---- Shape C: the exists-guarded fallback (id 7) ----
+  ; No ADJACENCY edge at all — the empty-neighbourhood case Task 6 exists to
+  ; guard against raising E-EVAL-021.
+  (node isolated-c NodeType/TERRITORY (territory/shape 3))
+
+  ; ---- Shape D: PENAL_COLONY organization suppression (ids 8-11) ----
+  (node penal-colony-d NodeType/TERRITORY (territory/shape 4))
+  (node tenant-1 NodeType/SOCIAL_CLASS (social-class/organization 1))
+  (node tenant-2 NodeType/SOCIAL_CLASS (social-class/organization 1))
+  (node non-tenant NodeType/SOCIAL_CLASS (social-class/organization 1))
+
+  (edge EdgeType/ADJACENCY t0 t1 1)
+  (edge EdgeType/ADJACENCY t1 t2 1)
+  (edge EdgeType/ADJACENCY t2 t3 1)
+  (edge EdgeType/ADJACENCY source-b sink-a 1)
+  (edge EdgeType/ADJACENCY source-b sink-b 1)
+  (edge EdgeType/TENANCY tenant-1 penal-colony-d 1)
+  (edge EdgeType/TENANCY tenant-2 penal-colony-d 1))

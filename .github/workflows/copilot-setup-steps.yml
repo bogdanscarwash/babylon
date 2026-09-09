@@ -23,51 +23,23 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
-
-      - name: Install Poetry
-        uses: snok/install-poetry@v1
-        with:
-          version: "2.2.1"
-          virtualenvs-create: true
-          virtualenvs-in-project: true
-
-      - name: Load cached venv
-        id: cached-poetry-dependencies
-        uses: actions/cache@v6
-        with:
-          path: .venv
-          key: copilot-venv-${{ runner.os }}-${{ hashFiles('**/poetry.lock') }}
-
-      - name: Install dependencies
-        if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
-        run: poetry install --no-interaction --no-root
-
-      - name: Install project
-        run: poetry install --no-interaction
-
-      - name: Install mise (task runner)
-        uses: jdx/mise-action@v4
-        with:
-          install: true
+      - name: Bootstrap pinned tools and dependencies
+        uses: ./.github/actions/bootstrap-python
 
       - name: Install pre-commit hooks
-        run: poetry run pre-commit install --install-hooks
+        run: uv run --frozen pre-commit install --install-hooks
 
       - name: Verify environment
         run: |
           echo "=== Python version ==="
           python --version
-          echo "=== Poetry version ==="
-          poetry --version
+          echo "=== uv version ==="
+          uv --version
           echo "=== Installed packages ==="
-          poetry show --tree | head -50
+          uv tree | head -50
           echo "=== Available mise tasks ==="
           mise tasks 2>/dev/null || echo "mise tasks not available"
           echo "=== Quick sanity check ==="
-          poetry run python -c "import babylon; print(f'babylon version: {babylon.__version__}')"
+          uv run python -c "import babylon; print(f'babylon version: {babylon.__version__}')"

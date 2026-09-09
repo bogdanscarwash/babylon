@@ -1,0 +1,30 @@
+name: Weekly — Security Audit
+
+# ADR181 R3(ii): per-leg split of the monolithic nightly. Weekly tempo.
+
+on:
+  schedule:
+    - cron: "0 6 * * 3"  # Wednesday 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly-security
+  cancel-in-progress: false
+
+jobs:
+  security:
+    name: Security Audit (pip-audit policy — blocking since item-41, dev HEAD)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: dev
+      - uses: ./.github/actions/bootstrap-python
+        with:
+          ops: "true"
+      - name: pip-audit (policy wrapper — ignores carry reason + expiry)
+        run: mise run security:pip-audit

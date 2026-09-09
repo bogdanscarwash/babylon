@@ -1,0 +1,87 @@
+; Community port train world 5 (issue #667, Task 10 Step 4 — plan
+; docs/superpowers/plans/2026-08-18-community-port.md): the DECAY-ARC
+; world. One carrier, one active class, one org (the load law — c03's
+; neighbors fold needs a MEMBERSHIP ceiling), one community with
+; DISTINCT heat/cohesion/education-pressure seeds so the three decay arms
+; read independently across a three-tick arc (the TickSession idiom,
+; control_ratio_conformance.rs:1172-1181). The arc's mirror is
+; community_decay_arc_conformance.py; the arc's golden pin is its tick-3
+; `after` hash (Task 10 Step 6).
+;
+; Declaration order is id order — never renumber when extending. The
+; 14-row floor table and the decay alphas are re-declared per scenario
+; (§6.2); the cross-world parity test pins every world's table equal.
+(scenario community/decay-arc-conformance
+  (defvocabulary NodeType (INSTITUTION SOCIAL_CLASS ORGANIZATION))
+  (defvocabulary EdgeType (MEMBERSHIP))
+  (defvocabulary HyperedgeType (COMMUNITY))
+  (defenum CommunityType
+    (SETTLER PATRIARCHAL NEW_AFRIKAN FIRST_NATIONS CHICANO WOMEN TRANS
+     DISABLED QUEER UNDOCUMENTED INCARCERATED YOUTH ADULT ELDER))
+  (deffield institution/community-carrier int extensive)
+  (deffield social-class/active int extensive)
+  (deffield social-class/community-cost-modifier real intensive)
+  (deffield community/kind enum CommunityType)
+  (deffield community/heat intensity intensive)
+  (deffield community/cohesion intensity intensive)
+  (deffield community/education-pressure intensity intensive)
+  (deffield community/reproduction-cost-modifier real intensive)
+  (deffield community/revolutionary probability intensive)
+  (deffield community/liberal probability intensive)
+  (deffield community/fascist probability intensive)
+  (deffield community/member-count int extensive)
+  (deffield community/r-raw real extensive)
+  (deffield community/l-raw real extensive)
+  (deffield community/f-raw real extensive)
+  (deffield community/density-sum real extensive)
+  (deffield community/substrate-floor probability intensive)
+  ; DG-2 (PUBLISH, the 2026-08-18 sitting): c07/c08's readout fields.
+  (deffield community/contestation probability intensive)
+  (deffield community/dominant-tendency enum ConsciousnessTendency)
+  (deffield social-class/org-r-weight real extensive)
+  (deffield social-class/org-l-weight real extensive)
+  (deffield social-class/org-f-weight real extensive)
+  (deffield social-class/org-count int extensive)
+
+  ; ---- the 14-row ADR214 floor table (§6.1 verbatim) + the decay alphas
+  ; (the ARC's alphas are the load-bearing rows this world reads) ----
+  (defconst community/floor-new-afrikan 0.136p)
+  (defconst community/floor-first-nations 0.155p)
+  (defconst community/floor-chicano 0.113p)
+  (defconst community/floor-settler 0.0p)
+  (defconst community/floor-patriarchal 0.0p)
+  (defconst community/floor-youth 0.0p)
+  (defconst community/floor-adult 0.0p)
+  (defconst community/floor-incarcerated 0.18p)
+  (defconst community/floor-women 0.04p)
+  (defconst community/floor-trans 0.06p)
+  (defconst community/floor-disabled 0.03p)
+  (defconst community/floor-queer 0.04p)
+  (defconst community/floor-undocumented 0.10p)
+  (defconst community/floor-elder 0.02p)
+  (defconst community/heat-decay-alpha 0.05c)
+  (defconst community/cohesion-decay-alpha 0.03c)
+  (defconst community/education-pressure-decay 0.1c)
+
+  ; ---- nodes (id order) ----
+  (node arc-register NodeType/INSTITUTION (institution/community-carrier 1))
+  (node arc-worker NodeType/SOCIAL_CLASS (social-class/active 1))
+  ; The load-law org (world 4's header names why): one edge, into
+  ; arc-worker. cadre 0.5 x cohesion 0.5 = 0.25 r-weight — the ternary
+  ; recomputes to (1.0, 0.0, 0.0) every tick (r clears the 0.136 floor).
+  (node arc-org NodeType/ORGANIZATION
+    (organization/cadre-level 0.5p) (organization/cohesion 0.5p)
+    (organization/consciousness-tendency ConsciousnessTendency/REVOLUTIONARY))
+
+  (edge EdgeType/MEMBERSHIP arc-org arc-worker 1)
+
+  ; h0: NEW_AFRIKAN over (arc-worker) — the arc's community.
+  (hyperedge arc-comm HyperedgeType/COMMUNITY (members arc-worker))
+  (hyperedge-attr arc-comm community/kind CommunityType/NEW_AFRIKAN)
+  (hyperedge-attr arc-comm community/heat 0.5i)
+  (hyperedge-attr arc-comm community/cohesion 0.75i)
+  (hyperedge-attr arc-comm community/education-pressure 0.25i)
+  (hyperedge-attr arc-comm community/reproduction-cost-modifier 0.875r)
+  (hyperedge-attr arc-comm community/revolutionary 0.5p)
+  (hyperedge-attr arc-comm community/liberal 0.25p)
+  (hyperedge-attr arc-comm community/fascist 0.25p))

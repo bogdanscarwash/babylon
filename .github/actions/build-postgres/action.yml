@@ -1,0 +1,63 @@
+# Cache speeds up the pinned source build; runtime version and ownership checks
+# remain in the caller. PRs can restore layers but cannot publish cache entries.
+name: Build PostgreSQL
+description: Build and load the pinned PostgreSQL image with shared GHA layers
+
+outputs:
+  image-id:
+    description: Inspected immutable image ID for the disposable PostgreSQL runner
+    value: ${{ steps.image.outputs.image-id }}
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4
+
+    - name: Resolve the Compose image tag
+      id: compose
+      shell: bash
+      env:
+        BABYLON_PG_DATA: babylon-pg-ci
+      run: |
+        image="$(docker compose -f docker-compose.yml -f docker-compose.ci.yml config --images babylon-pg)"
+        [[ "$image" =~ ^[a-z0-9][a-z0-9._:/-]*$ ]] || {
+          printf 'PostgreSQL Compose image tag was not resolved uniquely\n' >&2
+          exit 1
+        }
+        printf 'image=%s\n' "$image" >> "$GITHUB_OUTPUT"
+
+    - name: Build and load PostgreSQL
+      uses: docker/bake-action@d3418bd7d0e9324001bca92fa8ba175ea7e6dc9b # v7
+      env:
+        BABYLON_PG_DATA: babylon-pg-ci
+      with:
+        source: .
+        files: |
+          docker-compose.yml
+          docker-compose.ci.yml
+        targets: babylon-pg
+        load: true
+        set: "babylon-pg.tags=${{ steps.compose.outputs.image }}\n\
+             babylon-pg.tags+=babylon-postgres-runtime:local\n\
+             babylon-pg.cache-from=type=gha,scope=babylon-pg\n\
+             ${{ github.event_name != 'pull_request' && github.event_name != 'pull_request_target' && \
+             (github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/main') && \
+             'babylon-pg.cache-to=type=gha,scope=babylon-pg,mode=max' || '' }}\n\
+             "
+    - name: Verify the loaded image identity
+      id: image
+      shell: bash
+      env:
+        COMPOSE_IMAGE: ${{ steps.compose.outputs.image }}
+      run: |
+        image_id="$(docker image inspect --format '{{.Id}}' babylon-postgres-runtime:local)"
+        [[ "$image_id" =~ ^sha256:[0-9a-f]{64}$ ]] || {
+          printf 'PostgreSQL build did not produce a complete image ID\n' >&2
+          exit 1
+        }
+        [[ "$(docker image inspect --format '{{.Id}}' "$COMPOSE_IMAGE")" == "$image_id" ]] || {
+          printf 'PostgreSQL Compose and disposable runner image identities differ\n' >&2
+          exit 1
+        }
+        printf 'image-id=%s\n' "$image_id" >> "$GITHUB_OUTPUT"

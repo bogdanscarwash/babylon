@@ -1,0 +1,86 @@
+id: ADR101
+title: >-
+  Narrator seam consolidation (BD-directed): delete the legacy
+  LLMProvider/MockLLM/DeepSeekClient/WorkersAIClient stack and the
+  LLMConfig chat lane; babylon.intelligence.providers (NarratorProvider,
+  resolve_provider, MockNarrator) becomes the ONE LLM transport seam for
+  director, judge, web narrative service, and tools
+status: accepted
+date: '2026-07-20'
+context: >-
+  BD directive 2026-07-20 (following the Amendment Y / ADR100 approval):
+  "we should also get rid of our old custom hand-rolled AI. we have it in
+  git history if we truly need it but it'd clear a lot of confusion and
+  would make things more uniform." After ADR100 the repo carried TWO
+  transport seams sharing one SDK: the legacy
+  intelligence/ai/llm_provider.py (LLMProvider protocol, MockLLM,
+  DeepSeek/WorkersAI lanes, build_llm_provider — consumed by director,
+  judge, web narrative_service, vertical_slice, interview_persona, and a
+  large MockLLM test estate) and the Amendment-V-designed
+  intelligence/providers.py (NarratorProvider, §A7.6 resolve_provider —
+  ZERO production consumers). The unexecuted plan
+  docs/superpowers/plans/2026-07-20-adr096-inference-lane.md had already
+  scoped llm_provider.py as "LEGACY web lane" with full director/judge
+  migration recorded as a follow-up; this ADR executes past that plan's
+  quarantine straight to deletion, per the directive.
+decision: >-
+  EXECUTED: (1) providers.py grows the consolidation surface —
+  ProviderKind.MOCK, MockNarrator (scripted NarratorProvider successor to
+  MockLLM: FIFO responses + default + call_count/call_history; embed
+  raises, never produced by resolve_provider), public
+  chat_model_for(endpoint) and the ModelFactory type (moved from the
+  deleted module). (2) Director: constructor llm: LLMProvider ->
+  narrator: NarratorProvider; generate() call sites -> narrate(system,
+  prompt).text; fail-safe ADR003 behavior unchanged. (3) Judge: default
+  model factory now lazily chat_model_for(resolve_provider().endpoint) —
+  construction never probes the network; tests keep injecting
+  model_factory. (4) web narrative_service: _ErrorTrackingLLM ->
+  _ErrorTrackingNarrator (full NarratorProvider delegate);
+  _resolve_llm/build_llm_provider -> _resolve_narrator/resolve_provider;
+  the III.6 model_id pin now reads the RESOLVED endpoint.chat_model
+  (upgrade from the static LLMConfig.CHAT_MODEL read) and is stamped
+  inside the try block with an "unresolved" fallback so a provider whose
+  resolution/endpoint access fails degrades loudly instead of crashing
+  the pool thread. BABYLON_LLM_NARRATOR flag-off path byte-identical.
+  (5) Tools: vertical_slice/interview_persona resolve via
+  resolve_provider(); vertical_slice degrades mute -> visible
+  MockNarrator (demo shows text, never silent emptiness);
+  interview_persona fails loud on mute. (6) LLMConfig reduced to the
+  EMBEDDING lane only (RAG pipeline: EMBEDDING_*, batching/retry/timeout,
+  OpenAI-cloud embedding option); chat surface
+  (API_KEY/API_BASE/CHAT_MODEL/PROVIDER/WORKERS_AI_*/is_configured/
+  get_headers/validate/RETRY_DELAY) and the OpenAIConfig alias DELETED.
+  The DeepSeek lane is gone entirely — constitutionally aligned: §A7.6's
+  ratified precedence is bundled -> external -> cloudflare -> mute, and
+  DeepSeek was always documented as transitional. (7) Deleted files:
+  src/babylon/intelligence/ai/llm_provider.py,
+  tests/unit/ai/test_llm_provider.py, test_workers_ai_client.py,
+  tests/unit/config/test_llm_config_workers_ai.py, and the unused
+  mock_llm_provider conftest fixture. Preserved contracts moved:
+  MockNarrator behavior + ALLOW_MODEL_REQUESTS guard ->
+  tests/unit/intelligence/test_providers.py; LLMGenerationError taxonomy
+  -> tests/unit/ai/test_judge.py (the judge is the remaining raiser).
+  (8) Test estate migrated mechanically (MockLLM -> MockNarrator, llm= ->
+  narrator=, call_history "system_prompt" -> "system") across
+  narrative_pipeline/dual_narrative/persona/narrative_director/
+  narration_record/narrative_service/interview_persona/frame_entailment;
+  frame_entailment's _LiveOllamaProvider retyped to NarratorProvider.
+  (9) .env.example: chat block replaced with BABYLON_INTEL_* §A7.6
+  documentation; OPENAI_API_KEY re-scoped to cloud embeddings.
+consequences: >-
+  One seam, one SDK: every LLM byte in the codebase now flows through
+  babylon.intelligence.providers on pydantic-ai (generation) or the stock
+  openai client (embed/health), resolved by §A7.6 precedence. Deleted
+  ~600 lines of legacy transport + its 3 dedicated test suites; git
+  history is the archive. Follow-ups owed: the ADR096-inference-lane
+  plan's import-linter contract (providers must never import
+  babylon.intelligence.ai) is now trivially true but still unenforced;
+  the planned babylon CLI (login/doctor) remains unbuilt and is the next
+  consumer of load_settings/resolve_provider. GOTCHA for readers: the
+  Workers-AI AI-Gateway routing header (cf-aig-gateway-id) did not
+  survive — the cloudflare lane now fronts through the babylon-api Worker
+  per the §A8 design; resurrect the header at the Worker, not the client,
+  if gateway logging is wanted. Verification: mise run check green
+  (11,806 unit tests), qa:regression 6/6 byte-identical + two-process
+  determinism leg PASS.
+file: ADR101_narrator_seam_consolidation.yaml

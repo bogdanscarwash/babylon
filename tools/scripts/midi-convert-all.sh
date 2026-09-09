@@ -10,7 +10,7 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 SOUNDFONT="${SOUNDFONT:-/usr/share/sounds/sf2/FluidR3_GM.sf2}"
 MUSIC_DIR="$PROJECT_ROOT/assets/music"
-AUDIO_OUTPUT_DIR="$PROJECT_ROOT/assets/audio"
+AUDIO_OUTPUT_DIR="$MUSIC_DIR"
 
 FORMAT="${1:-wav}"
 
@@ -38,7 +38,7 @@ echo "Output dir: $AUDIO_OUTPUT_DIR"
 echo ""
 
 TEMP_WAV=$(mktemp --suffix=.wav)
-trap "rm -f $TEMP_WAV" EXIT
+trap 'rm -f "$TEMP_WAV"' EXIT
 
 # Store file list in array to avoid subshell issues
 mapfile -t MIDI_FILES < <(find "$MUSIC_DIR" -name "*.mid" -type f | sort)

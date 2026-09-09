@@ -1,0 +1,38 @@
+; The WorldView mint — the worldview-ternary unification's (ADR204, W10)
+; first Rust content: the political simplex's three vertices as a
+; content-declared closed enum, the SECOND consumer of ADR195's `enum`
+; deffield row (after ADR196's OrgKind).
+;
+; Member order is RULED content (design doc §4.1, Director-approved
+; 2026-08-14): REVOLUTIONARY / LIBERAL / FASCIST. Declaration order IS
+; the storage ordinal (ADR195), so the ruled order makes REVOLUTIONARY=0,
+; LIBERAL=1, FASCIST=2. The frozen Python enum's order (LIBERAL, FASCIST,
+; REVOLUTIONARY — models/enums/consciousness.py:83-85) is a different,
+; frozen fact and does NOT govern here.
+;
+; Asymmetric payloads (W3), declared here as the members' natures:
+; REVOLUTIONARY is the articulated pole (its content home is the doctrine
+; tree — the line IS the world view); LIBERAL is hegemonic common sense
+; (no tree; content computed per conjuncture from the ruling bloc);
+; FASCIST is the capture/degeneration terminus (no tree; parasitism-
+; defense affect keyed to the rent gradient, plus a demagogy flag).
+;
+; This mint declares NO enum deffield and seeds NO enum value: the
+; measured ternary's carriers land with the class-surface migration port
+; (W10's second half), and R-MEASURED (ADR070) forbids assigning
+; alignments. The one class node carries only `social-class/population`
+; so the pack's never-firing load-probe rule has a legal binding (the
+; rule pipeline refuses a zero-rule content set — rule_pipeline.rs's
+; §2.2 check; the never-firing-probe idiom is production_conformance.rs's
+; own precedent).
+;
+; Vocabulary ceremony: ADR206 (worldview_vocabulary_ceremony) mints the
+; WorldView enum into the Rust closed BSL vocabulary; ADR195 minted the
+; `enum` deffield row; ADR204 (W10) chartered this ceremony.
+(scenario worldview/foundation
+  (defvocabulary NodeType (SOCIAL_CLASS))
+  (defenum WorldView (REVOLUTIONARY LIBERAL FASCIST))
+  (deffield social-class/population int extensive)
+
+  ; The minimal world the tick runs over.
+  (node workers NodeType/SOCIAL_CLASS (social-class/population 1000)))

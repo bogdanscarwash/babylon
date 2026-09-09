@@ -1,0 +1,6 @@
+[workspace]
+members = ["crates/babylon-tick", "crates/babylon-evidence"]
+resolver = "2"
+
+[workspace.dependencies]
+evidence-alias = { package = "babylon-evidence", path = "crates/babylon-evidence" }

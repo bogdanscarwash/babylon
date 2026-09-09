@@ -1,0 +1,109 @@
+ADR250_economy_first_gate_order:
+  status: accepted
+  date: '2026-09-04'
+  title: >-
+    Director gate-sequence ruling 2026-09-04: the productive and distributive
+    circuit is built and UI-validated before any pandemic benchmark, the
+    minimal-substrate COVID E0 gate is deleted, and COVID becomes one merged
+    full-circuit benchmark after player agency; thin-slice rulings make
+    observed public-record baselines cursory-tier public (refining ADR249
+    R3), amend D2 so all 83 counties commit QCEW economic fields, and put
+    one Michigan world in the Bevy window (PER-319)
+  issue: PER-10
+  supersedes_scope:
+    - project/roadmap.md gates G4-G9 ordering and numbering
+    - NORTH_STAR.md emergence-proof two-stage structure and road-after-gates order
+    - AGENTS.md and CLAUDE.md next-gates list and Gate 4/Gate 5 forward prose
+    - README.md next-gates list
+    - ai/mantras.yaml next_gates
+    - CONTRIBUTORS.md next-gates list
+    - docs/agents/governance.md next-gates list
+    - docs/index.rst next-gates list
+    - ai/architecture.yaml roadmap milestones G4-G9
+    - tests/unit/governance gate-order pins
+  context: |
+    The standing order ran the COVID E0 emergence proof (old G4) before the
+    productive and distributive circuit (old G6), with a second full-circuit
+    COVID run (old G7) after the circuit. A 2026-09-04 surface audit found the
+    live Rust runtime commits almost no economy: the lifecycle demo computes a
+    population age circuit with global-constant rates, the production runtime
+    seeds median-wage and phi-hour on one county, and the production,
+    imperial-rent, metabolism, dispossession, and material-circuit machinery
+    exists only in conformance tests or as a crate with no consumer.
+
+    A pandemic benchmark over that substrate cannot exhibit the economic
+    propagation the benchmark exists to prove; its divergence would be
+    demographic and constant-driven. The Director ruled the order reversed:
+    the economy is developed first and tested in the UI before any pandemic
+    benchmark is attempted.
+  decision: |
+    R1. GATE ORDER. The executable sequence is now: G3 PostgreSQL/H3/Archive
+    decision loop (in flight); G4 productive and distributive circuit; G5
+    player agency; G6 COVID emergence benchmark; G7 systemic credit and 2008;
+    G8 representative-world v1. Gate names and numbers follow sequence.
+    Milestone target dates move with their sequence slots pending any
+    Director re-baseline.
+
+    R2. E0 DELETED, COVID MERGED. The minimal-substrate COVID E0 gate no
+    longer exists. Its discipline folds into the single G6 benchmark: a 2019
+    control, a historical shock envelope, and strong/weak-capacity
+    counterfactuals over 104 weekly ticks, shocks entering only as governed
+    external-event rows adding allowed pressure, burden, or capacity effects,
+    judged on causal divergence, heterogeneity, hysteresis, and
+    counterfactual response with no direct outcome writes. G6 also absorbs
+    the old full-circuit scope (organization money, working-capital claims,
+    freight disruption, firm failure, class movement) and, because agency now
+    precedes it, player counterfactuals.
+
+    R3. THIN SLICE FIRST. The circuit gate delivers one real per-county
+    economic circuit end-to-end before expanding: committed per-county
+    economic state derived from the governed data estate, visible and
+    testable in the Bevy UI (map lens and dossier card), then growth toward
+    the full county-by-NAICS production, inventory, realization, freight,
+    ReserveArmy, and class-migration scope. NORTH_STAR holism applies: no
+    slice is complete without a producer, a consumer, and an observable
+    effect.
+
+    R4. UNCHANGED LAW. The constitutional compact is untouched: external
+    events still cannot write downstream results, no authored response
+    curves, evidence classes unchanged. PER-8 keeps benchmark-program
+    ownership (now G6/G7); PER-10 keeps circuit ownership (now G4).
+
+    R5. OBSERVED BASELINE IS PUBLIC. Tick-0 observed public-record values
+    (QCEW county employment, wages, establishments) publish at the cursory
+    grant tier like identity and containment; engine-derived magnitudes
+    (production totals, savings adjustments) remain earned. This refines
+    ADR249 R3's application to observed reference baselines without opening
+    derived magnitudes.
+
+    R6. D2 AMENDED. The county producer's committed-field set (median-wage
+    and phi-hour only, all else absence-maximal) expands for the Michigan
+    slice: all 83 counties commit the QCEW-seeded economic fields named by
+    the slice contract. R3 is the authority.
+
+    R7. ONE WORLD IN THE WINDOW. The Bevy story hydrates the same Michigan
+    county scenario the runtime commits, so the map lens and the dossier
+    card present one world. The Alabama lifecycle demo retires from the
+    windowed path (its conformance coverage stays); lifecycle lenses return
+    when Michigan lifecycle fields are seeded.
+  alternatives_rejected:
+    - >-
+      Keep the two-stage E0-then-circuit order. Rejected: with no live
+      economy, E0 could only prove emergence discipline over demographics and
+      constants, not the economic propagation that makes the benchmark worth
+      running.
+    - >-
+      Land the full circuit as one gate before any UI validation. Rejected:
+      a long dark period with no consumer-visible effect violates the holism
+      test and hides wiring defects the UI would expose.
+    - >-
+      Player agency before the circuit. Rejected: economy, agency, COVID lets
+      the merged benchmark exercise player counterfactuals instead of adding
+      a third COVID pass.
+  consequences: |
+    Linear milestone names remain as historical labels per the Director's
+    minimal-admin instruction; this ADR plus the roadmap carry the live
+    order. The first circuit slice is PER-319 under PER-10, governed by
+    R5-R7. Gate references in superseded docs follow this ordering from its
+    date.
+  evidence_class: Designed

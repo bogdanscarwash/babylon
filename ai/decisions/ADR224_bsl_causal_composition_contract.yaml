@@ -1,0 +1,182 @@
+ADR224_bsl_causal_composition_contract:
+  status: "accepted"
+  date: "2026-08-23"
+  title: >-
+    BSL rules declare causal role and evidence, production attribution is
+    independently governed, restricted effects and rank-aware composition
+    refusals are live, and successful ticks publish identity-free
+    event-then-write audit receipts
+  context: |
+    ADR222 made the 34-system phase order executable, and ADR223 made one Rust
+    tick an atomic in-memory working-copy transaction. Both decisions named a
+    future shared-prestate model for rules at the same resolved rank. The live
+    content estate does not satisfy that model. Several packs intentionally
+    compose sequential transformations at one rank: a later rule observes the
+    state produced by an earlier rule, durable stocks accumulate through more
+    than one producer, and recognizers set latches after they announce a
+    pattern. Replacing those semantics as a generic safety repair would change
+    causality rather than merely make it explicit.
+
+    The loader also treated every BSL rule as having the same causal authority.
+    A rule that derives an endogenous result, a recognizer that announces a
+    state pattern, a future exogenous shock, and a future player intent all had
+    the same effect surface. That makes the planned historical benchmarks
+    unsafe: shock content could author unemployment, deaths, shortages,
+    shipments, defaults, or a winner directly and still look like an ordinary
+    mechanic. Material-basis prose alone cannot enforce the distinction. A
+    self-declared role is also insufficient for governed production content: a
+    rule could otherwise relabel itself `Mechanic` and regain the ordinary
+    effect algebra.
+
+    The earlier same-tick analyzer knew about stale optional defaults and
+    unreset fan-in, but it compared rule IDs globally and remained disabled. It
+    could neither consume ADR222's resolved ranks nor distinguish a governed
+    intentional composition from an accidental near-match. The unratified
+    Amendment AI draft proposed new `:prior-tick` and writer-group vocabulary,
+    but the exact landed patterns can be governed without adding that content
+    vocabulary.
+
+    Finally, the tick returned state, events, firing counts, and hashes without
+    one compact statement of which causal role and evidence class produced each
+    actual effect. Gate 2 needs that in-memory audit contract, while Gate 3
+    separately owns durable subject identities, campaign envelopes, and the
+    Archive outbox.
+  decision: |
+    1. SEQUENTIAL SAME-RANK COMPOSITION. Rules execute by resolved phase rank,
+       then ascending rule-ID bytes at one rank. Every rule sees the committed
+       working-copy writes of earlier rules, including earlier rules at the same
+       rank. Within one rule, subject collection still uses that rule's shared
+       prestate and applies the collected writes in the existing deterministic
+       order. This scoped ruling supersedes only ADR222 decision 6 and ADR223
+       decision 7's named future shared-prestate target. It does not rewrite
+       their historical diagnosis or their phase-order and rollback law.
+
+    2. MANDATORY ATTRIBUTION. Every rule declares exactly one `:role` and one
+       `:evidence`. RuleRole is the closed set Mechanic, Recognizer,
+       ExternalEvent, and Intent. EvidenceClass is the constitutional set
+       Observed, Derived, Calibrated, and Designed. Missing or malformed
+       metadata is a loud uncoded rule-surface error. An unknown closed-set
+       value is E-PARSE-015. Both values enter the canonical AST and therefore
+       the content digest; their adoption is a declared content-hash migration.
+       This declaration supplies runtime attribution but does not, by itself,
+       establish a governed production rule's authority.
+
+    3. ROLE-SENSITIVE AUTHORITY. Mechanic retains the ordinary typed BSL effect
+       algebra because an endogenous mechanic must be able to derive outcomes.
+       Recognizer, ExternalEvent, and Intent are exact-allowlist and
+       default-deny. The loader walks the complete nested effect tree, including
+       untaken guards and loop bodies. Every possible node, edge, hyperedge, or
+       event effect must match the rule ID, role, and qualified effect in a
+       governed row. String fragments and plausible names grant no authority.
+       All six graph-shape verbs are forbidden for restricted roles. Any
+       unauthorized effect is E-LOAD-060.
+
+    4. INITIAL EFFECT ALLOWANCES. The only restricted-role rows are the five
+       existing ControlRatio recognizer effects. `control-ratio/c03-crisis` may
+       emit EventType/CONTROL_RATIO_CRISIS and write
+       institution/control-crisis-emitted plus
+       institution/control-crisis-tick. `control-ratio/c04-terminal` may emit
+       EventType/TERMINAL_DECISION and write
+       institution/terminal-decision-emitted. Each field write is a recognition
+       latch, not the recognized outcome itself. ExternalEvent and Intent have
+       no allowance rows. The production CI sentinel requires exact set
+       equality between each non-Mechanic production rule's complete effect
+       footprint and its `GOVERNED_EFFECT_ALLOWANCES` rows, and it requires
+       unique allowance keys. CI therefore refuses a missing permission, extra
+       dead permission, or duplicate key. Executable shocks
+       and action intents remain impossible until a later governed decision
+       adds exact pressure, capacity, burden, or next-week-intent rows.
+
+    5. DUAL ATTRIBUTION LEDGER. The current 60 production rules carry declared
+       attribution and must also match
+       `causal_contract::GOVERNED_RULE_ATTRIBUTIONS`, an independent manifest
+       of `GovernedRuleAttribution` rows keyed by exact production rule ID. A
+       known ID whose declared role or evidence differs refuses load as typed
+       `ContractError::GovernedAttributionMismatch`, with no numbered
+       specification code. A production-corpus CI sentinel
+       requires exact set equality: every built-in production rule has one
+       manifest row and no row names an absent built-in rule. Fifty-eight
+       manifest rows are Mechanic/Derived. The two ControlRatio announcement
+       rules named above are Recognizer/Derived. No production rule claims
+       Observed merely because it reads observed data; the rule's causal
+       transformation is derived. Unknown fixture and mod rule IDs are outside
+       this production manifest and remain self-declared; the manifest is a
+       governed first-party-content boundary, not a claim that untrusted
+       content cannot call itself a mechanic.
+
+    6. LIVE RANK-AWARE REFUSALS. The aggregate content set is analyzed only
+       after phase compilation. E-LOAD-058 detects an optional/default field
+       read with a different writer that does not execute strictly earlier.
+       Its disposition key is the exact reader rule, binding, field, and
+       complete allowed non-earlier writer set. E-LOAD-059 detects a multi-rule
+       field with no mechanically identifiable unconditional reset or D127
+       recompute. A qualifying set is a direct effect, not nested beneath a
+       guard, for-each, or another construct that can execute zero times. Its
+       disposition key is the exact field, complete allowed
+       writer superset, each allowed execution-earliest writer, and that
+       writer's reset-relevant shape. The current tables record 13 E-LOAD-058
+       rows and 11 E-LOAD-059 field rows, with reason, Director owner,
+       2026-08-23 date, and this ADR. A new writer, reader, binding, field,
+       execution-earliest writer, or changed reset shape refuses. Source and
+       file boundaries cannot hide a finding. Before analysis, the public
+       ranked-rule boundary verifies that every supplied ID equals the qname
+       inside its rule form and that IDs are unique. An invalid collection
+       returns a deterministic typed refusal and no causal findings.
+
+    7. NO NEW SAME-TICK VOCABULARY. Exact governed disposition tables carry the
+       review claim. `:prior-tick`, `:complementary-writers`, and
+       `:sequential-accumulator` are not active BSL vocabulary. The Amendment AI
+       draft remains preserved as historical design evidence and is marked
+       superseded by this decision's implemented mechanism.
+
+    8. ACTUAL-EFFECT AUDIT RECEIPTS. A successful rule produces one
+       identity-free AuditReceipt per actual emitted event followed by one per
+       actual applied write. Each receipt carries rule ID, RuleRole,
+       EvidenceClass, a continuous u32 ordinal, and a canonical event, field, or
+       shape effect signature. It contains no graph-element ID and no written
+       value; the authoritative working world and write ledger retain those.
+       A malformed event namespace, mismatched write attribution, ordinal
+       overflow, or dynamically unauthorized restricted-role effect aborts
+       the tick.
+
+    9. ATOMIC PUBLICATION. Receipts belong to the same detached working tick as
+       graph changes, events, allocator cursors, completed time, and the nominal
+       world hash. They become visible in TickReport only after the whole tick
+       succeeds. A later rule, receipt reduction, or hash failure publishes no
+       receipt and leaves the prior world unchanged. Receipt observation does
+       not change state or hashes.
+
+    10. BOUNDED SCOPE. This decision adds no database dependency to graph, BSL,
+        or tick crates. It does not implement Gate 3's CommittedTickEnvelope,
+        PostgreSQL outbox, durable action receipts, dirty subject or H3 IDs, or
+        Archive materialization. It does not add Gate 4 shocks or Gate 5 player
+        actions. Those gates must extend the empty restricted-role allowance
+        tables through their own named mechanics and verification.
+  consequences: |
+    - Same-rank causality is now explicit and regression-testable instead of a
+      temporary divergence from a shared-prestate promise.
+    - A governed production shock or action cannot regain mechanic authority by
+      relabeling itself: its declaration must match the independent production
+      manifest, and restricted authority remains absent until a qualified
+      effect receives a governed row. Arbitrary fixture and mod IDs remain
+      self-declared by design.
+    - The E-LOAD-058 and E-LOAD-059 checks are active at the only boundary where
+      their ordering facts are true: the complete, post-phase-compile content
+      set. Exact dispositions preserve intentional composition without making
+      a broad exception reusable by near-matches.
+    - Rule attribution and AuditReceipts provide the Gate 2 basis for causal
+      explanation and direct-write audits. They are not a claim of durability,
+      fog safety, subject-level provenance, or player agency.
+    - Canonical rule bytes and rules hashes move because role and evidence are
+      mandatory hash-covered content. The migration uses the established
+      content-pin ceremony; it does not change graph-state serialization.
+    - The Windows portability horizon is unchanged. This content and pure-Rust
+      tick contract creates no pre-v1 Windows obligation.
+  supersedes:
+    - ADR222_executable_bsl_phase_order  # decision 6 shared-prestate target only
+    - ADR223_whole_tick_atomicity_world_hash  # decision 7 shared-prestate target only
+  related:
+    - ADR172_amendment_ae_refoundation_ratified
+    - ADR182_derivation_inspector_rulings
+    - ADR221_game_first_refoundation_v4
+    - ADR220_rust_owned_postgresql_persistence_boundary

@@ -221,7 +221,22 @@ def get_reference_session() -> Iterator[Session]:
 
     Yields:
         Session: SQLAlchemy database session (read-only by convention).
+
+    Raises:
+        FileNotFoundError: If ``NORMALIZED_DB_PATH`` does not exist. Unlike
+            ``get_normalized_engine``, this entry point never auto-creates the
+            reference database (Constitution III.11 / task #64) -- an absent
+            file here means the DB was never built or the environment is
+            misconfigured, not that a fresh one should be silently opened.
     """
+    if not NORMALIZED_DB_PATH.is_file():
+        raise FileNotFoundError(
+            f"Reference database not found at {NORMALIZED_DB_PATH}. "
+            "get_reference_session() is read-only and will not create it. "
+            "Remedies: `mise run data:build-db` (rebuild from parquet sources, "
+            "ADR098), the CI `fetch-reference-db` action, or set "
+            "BABYLON_NORMALIZED_DB_PATH to an existing database."
+        )
     session_factory = get_normalized_session_factory()
     session = session_factory()
     try:

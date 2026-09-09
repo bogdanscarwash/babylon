@@ -1,0 +1,50 @@
+ADR174_python_glue_boundary_criterion:
+  status: "accepted"
+  date: "2026-07-29"
+  title: >
+    Refoundation boundary criterion clarified: Rust owns the
+    calculation-heavy core (tick loop, math, BSL host); Python continues
+    as the glue language (database connections, external API clients,
+    serving our own APIs, AI/ollama bridges). The AE periphery list is
+    illustrative, not exhaustive; the freeze tag pins the engine, not the
+    glue.
+  context: |
+    Amendment AE (v3.0.0, ADR172) names Python's surviving roles as
+    "data-build pipeline + out-of-process AI observer + CLI periphery",
+    which read in isolation could imply the glue estates are frozen or
+    slated for porting. Same-day (2026-07-29, post-ratification), while
+    the BSL architecture standard's boundary-seam diagram was being
+    drafted, the Director clarified the intended division of labor
+    (verbatim, lightly normalized): "Python is okay to have as a glue
+    language for database connections, interacting with external APIs,
+    creating our own APIs through something like FastAPI or Django,
+    handling AI/ollama connections, etc. For the calculation-heavy
+    stuff, the math stuff, the stuff that is slow and could benefit from
+    Rust optimizations combined with Rust's screaming compiler and
+    Rust's strict typing — instead of having to glue a solution together
+    with Pydantic and sentinels, we just pick the language that allows
+    us to construct our lisp-like scripting domain language."
+  decision: |
+    The Rust/Python boundary criterion is HOT-PATH CALCULATION vs. I/O
+    GLUE, not a fixed module list:
+    - RUST: the engine core — tick loop, numeric/math systems, the BSL
+      language host (reader/typechecker/bound-checker/evaluator), the
+      graph substrate, kernel scalars — anywhere the strict compiler and
+      type system replace the Pydantic-constraint + hand-rolled-sentinel
+      estate.
+    - PYTHON (glue, continues evolving): database connections and
+      persistence glue, external API clients, serving our own APIs
+      (FastAPI/Django-class), AI/ollama bridges, the data-build
+      pipeline, CLI periphery.
+    Amendment AE's periphery list is ILLUSTRATIVE of the glue category,
+    not exhaustive of it. The p27-python-freeze tag pins the ENGINE
+    (reference estate for the port); glue estates are not frozen by it.
+  consequences: |
+    The BSL architecture standard's seam diagram (Diagram IV,
+    ai/bsl-architecture-standard.md) marks the surviving-Python subgraph
+    per this criterion, and its invariant list gains a boundary-criterion
+    row: new Rust code that is I/O glue, or new Python code that is
+    hot-path math, is a review flag. Phase 2+ porting decisions cite this
+    criterion when scoping what crosses the PyO3/process boundary; no
+    FastAPI/Django estate exists today — this records the sanctioned
+    home for one if chartered.

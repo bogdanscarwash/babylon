@@ -1,0 +1,50 @@
+; The ACTIVE conformance world for `dispossession/territory-transfer`.
+;
+; Two counties, sharing one `:const` dispossession-activity environment
+; (D-1 in the `.bsl` header explains why the five rate/structural inputs are
+; consts rather than per-node fields), discriminated by the ONE thing that
+; genuinely is per-node: wealth.
+;
+;   - foreclosed-county: nonzero wealth. Exercises the full positive path —
+;     intensity write, DISPOSSESSION_EVENT, wealth write, VALUE_TRANSFER.
+;   - insolvent-county:  SAME rates (dispossession activity exists — the
+;     `when` gate passes), but ZERO wealth, so `transfer_amount` computes to
+;     exactly `0.0` and the `(guard (> transfer-amount 0) …)` block does NOT
+;     fire: no wealth write, no VALUE_TRANSFER — but the intensity write and
+;     DISPOSSESSION_EVENT (outside that guard in the frozen source) still
+;     happen.
+;
+; See `dispossession-zero-rate-conformance.bscn` for the companion
+; environment that proves this system's actual canonical (dormant)
+; behavior, and `dispossession_conformance.py` for the provenance script
+; both files' numbers come from.
+(scenario dispossession/conformance
+  (deffield territory/wealth real extensive)
+  (deffield territory/dispossession-intensity real intensive)
+
+  ; Illustrative fixture values (Class C: nothing hydrates real per-county
+  ; dispossession data on the canonical run today,
+  ; `reports/bsl-gap-analysis-2026-08-10.md` row 10.0). Not read off any
+  ; real county.
+  (defconst dispossession/foreclosure-rate 0.5c)
+  (defconst dispossession/eviction-rate 0.3c)
+  (defconst dispossession/displacement-rate 0.2c)
+  (defconst dispossession/concentrated-ownership 0.6c)
+  (defconst dispossession/absentee-landlord-share 0.4c)
+
+  ; `DispossessionDefines`, `src/babylon/data/defines.yaml:424-431`.
+  (defconst dispossession/weight-foreclosure 0.4c)         ; :425
+  (defconst dispossession/weight-eviction 0.3c)             ; :426
+  (defconst dispossession/weight-displacement 0.15c)        ; :427
+  (defconst dispossession/weight-tax-sale 0.05c)            ; :428
+  (defconst dispossession/weight-eminent-domain 0.02c)      ; :429
+  (defconst dispossession/deadweight-loss-fraction 0.05c)   ; :430
+  (defconst dispossession/transfer-scale 0.01c)             ; :431
+
+  (node foreclosed-county NodeType/TERRITORY
+    (territory/wealth 1000000)
+    (territory/dispossession-intensity 0))
+
+  (node insolvent-county NodeType/TERRITORY
+    (territory/wealth 0)
+    (territory/dispossession-intensity 0)))

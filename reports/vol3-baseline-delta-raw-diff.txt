@@ -1,0 +1,24 @@
+# qa:regression compare -- captured 2026-07-19T23:57:41+00:00
+# exit code: 0
+
+Regression comparison...
+Baseline directory: /home/user/projects/game/babylon-vol3/tests/baselines
+
+  Comparing imperial_circuit... PASS
+  Comparing two_node... PASS
+  Comparing starvation... PASS
+  Comparing glut... PASS
+  Comparing fascist_bifurcation... PASS
+
+Results: 5 passed, 0 failed
+All regression tests passed!
+TickDynamics Step 2: using GameDefines modelled default gamma_basket=0.68 for year 2010 (basket_calculator unwired for this run)
+TickDynamics Step 2: using GameDefines modelled default gamma_III=0.33 for year 2010 (gamma_calculator unwired for this run)
+TickDynamics Step 2: using GameDefines modelled default gamma_basket=0.68 for year 2010 (basket_calculator unwired for this run)
+TickDynamics Step 2: using GameDefines modelled default gamma_III=0.33 for year 2010 (gamma_calculator unwired for this run)
+TickDynamics Step 2: using GameDefines modelled default gamma_basket=0.68 for year 2010 (basket_calculator unwired for this run)
+TickDynamics Step 2: using GameDefines modelled default gamma_III=0.33 for year 2010 (gamma_calculator unwired for this run)
+TickDynamics Step 2: using GameDefines modelled default gamma_basket=0.68 for year 2010 (basket_calculator unwired for this run)
+TickDynamics Step 2: using GameDefines modelled default gamma_III=0.33 for year 2010 (gamma_calculator unwired for this run)
+TickDynamics Step 2: using GameDefines modelled default gamma_basket=0.68 for year 2010 (basket_calculator unwired for this run)
+TickDynamics Step 2: using GameDefines modelled default gamma_III=0.33 for year 2010 (gamma_calculator unwired for this run)

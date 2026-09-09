@@ -1,0 +1,25 @@
+---
+schema: babylon.archive-page.v1
+subject: {{ subject_key }}
+verified_tick: {{ verified_tick }}
+tick_content_hash: {{ tick_content_hash }}
+---
+# {{ title }}
+
+{{ decision_question }}
+{% if signals %}
+## Signals
+{% for signal in signals %}
+- **{{ signal.label }}:** {{ signal.value }} — {{ signal.citation.source_id }}; {{ signal.citation.locator }}
+{% endfor %}
+{% endif %}
+{% if links %}
+## Related
+{% for link in links %}
+{% if link.known_label %}
+- [{{ link.known_label }}](subject:{{ link.page_key }})
+{% else %}
+- [](subject:{{ link.page_key }})
+{% endif %}
+{% endfor %}
+{% endif %}

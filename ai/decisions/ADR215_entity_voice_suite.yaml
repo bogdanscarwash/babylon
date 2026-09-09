@@ -1,0 +1,152 @@
+id: ADR215
+title: >-
+  The Entity's voice (#641): 19 new CC0 General MIDI SFX in two families
+  (entity — the beast-engine's tick heartbeat + extraction bleed +
+  dispossession + capital strike; resistance — the verb ladder + three
+  intercept stingers) and 4 new entity-suite soundtrack tracks (beast_engine,
+  tribute_bleed, dissection, the_mask), bringing the estate to 58 SFX / 17
+  tracks; every asset's engine binding lives in the new
+  src/assets/CUE_MAP.md, machine-checked by tests/unit/assets/test_cue_map.py
+  — the render/pin execution of the composition ADR152/153 started, plus the
+  legacy 39 SFX + 13 tracks' own cue-map transcription (previously undone).
+status: accepted
+date: '2026-08-18'
+context: >-
+  NUMBERING COLLISION NOTE: numbered ADR215 by scanning ai/decisions/ for the
+  highest existing file (ADR214, confirmed both locally and on origin/dev at
+  render time, 2026-08-18) — no lane block reserves this range. Concurrent
+  trains on other branches may independently mint ADR215 for unrelated work;
+  if so, this file renumbers at merge time per the standing
+  collision-resolution convention (index.yaml's own meta comment documents
+  prior renumbers, e.g. P25's ADR138 cession to a mainline collision).
+  ADR152 (interface SFX, 39 sounds) and ADR153 (soundtrack, 13 tracks) shipped
+  the estate's first two audio suites but left two things unscored: the
+  Entity itself — the beast-engine of Imperial Rent extraction that the
+  simulation's tick loop and OODA dispatch embody — and the resistance verb
+  ladder players actually press. The composition pass (prior session, not
+  this task) designed 19 SFX across two new families (entity: the three-beat
+  tick heartbeat bound to TickPartition.MATERIAL_BASE/ACTION/CONSEQUENCE,
+  extraction bleed, dispossession severance, the missed-beat capital strike;
+  resistance: organize/educate/agitate/protest/alliance/strike/expropriate/
+  sabotage/dual_power/clandestine plus three intercept stingers for verb
+  refusal) and 4 tracks in a new entity music suite (beast_engine — the idle
+  bed governed by the Φ pool; tribute_bleed — extraction heard vertically;
+  dissection — the seven #639 organs soloed then reassembled wronger;
+  the_mask — the Vol III ticker's one clean harmony, because the mask lies),
+  and passed a two-round Opus adversarial critique before being handed to
+  this render/pin task (RENDER-READY). Composition also authored
+  src/assets/CUE_MAP.md, a binding contract from every asset to the exact
+  engine vocabulary (EventType/GameOutcome/TickPartition/ActionType member)
+  it fires on — new material fully transcribed, the legacy 39 SFX + 13 tracks
+  left under a marked IMPLEMENTER STEP for this task to complete red-first.
+decision: >-
+  (1) RENDER: `mise run midi:generate-sfx` produced all 58 .mid files (39
+  unchanged legacy + 19 new: entity/{entity_pulse_material,
+  entity_pulse_action, entity_pulse_consequence, entity_bleed,
+  entity_dispossession, entity_capital_strike}, resistance/{...13 files});
+  `mise run midi:generate-soundtrack` produced all 17 .mid files (13
+  unchanged legacy + 4 new music/entity/{01_beast_engine, 02_tribute_bleed,
+  03_dissection, 04_the_mask}); both byte-identity pinned by
+  tests/unit/assets/test_sfx_assets.py / test_music_assets.py, family/suite
+  census updated (EXPECTED_FAMILIES entity=6/resistance=13,
+  EXPECTED_SUITES entity=4). (2) THE CUE MAP'S CONTRACT TEST: red-first
+  tests/unit/assets/test_cue_map.py implements the five checks CUE_MAP.md's
+  own Row-schema section specifies — event/outcome/phase/verb rows resolve to
+  a real EventType/GameOutcome/TickPartition/ActionType member; every asset
+  in manifest.toml + generate_music.TRACKS has exactly one row-set and every
+  row names a real rendered file — parsing CUE_MAP.md's own markdown tables
+  directly (no duplicated schema). It failed red on the legacy gap (no
+  outcome-kind rows existed yet; the IMPLEMENTER STEP marker was still
+  present) before the legacy transcription, green after. THE ENGINE VOCABULARY
+  THIS DOCUMENT POINTS AT, NEVER RE-EMBEDS: src/assets/CUE_MAP.md is the
+  single binding-contract source of truth; this ADR records the suite's
+  existence and the session's rulings, not the row data. (3) THE LEGACY
+  TRANSCRIPTION (56 new CUE_MAP.md rows covering the original 39 SFX + 13
+  tracks, none previously bound): every trigger_hint's own words carried
+  forward as the gloss (not paraphrased), enum members normalized into
+  bind_target where the hint names one (order_committed ->
+  EventType.ORGANIZATIONAL_ACTION; the ten stinger rows split multi-event
+  hints into one row per member, e.g. stinger_repression ->
+  EventType.STATE_REPRESSION + EventType.EXCESSIVE_FORCE); the five endgame_*
+  SFX and five endgame-suite tracks bind by OUTCOME (GameOutcome.*), not by
+  EventType.ENDGAME_REACHED, per CUE_MAP.md's own pre-existing Disposition
+  note that the payload's GameOutcome is the real discriminant; the eight
+  legacy music tracks outside the endgame suite (ambient/superstructure/
+  periphery/rift) bind as `state`-kind rows using each module's own
+  docstring title line verbatim, since no formal trigger_hint field exists
+  for compose() modules. TWO FINDINGS surfaced and recorded, not silently
+  fixed: stinger_policy_fail's trigger_hint names neither POLICY_STRUCK nor
+  POLICY_PREEMPTED (a pre-existing Disposition item) — both rows land status
+  `gated`, citing the open disambiguation rather than guessing one; and a
+  NEW finding, `music/ambient/history_breathing` (legacy, "the menu/idle
+  music the estate never had") and `music/entity/beast_engine` (#641, "menu
+  / idle / any lens without modal focus") both claim the identical idle bed
+  — not reconciled here, recorded as a fresh Disposition item for wiring to
+  resolve. (4) THE LOUDNESS/INTEGRITY AUDIT (Sec 2.8 discipline, extending
+  ADR152/153's original 39-SFX/13-track computational audit to full
+  coverage): all 19 new SFX + 4 new tracks rendered to WAV via
+  `fluidsynth -g 0.45` (FluidR3_GM) into gitignored assets/audio/, peak dBFS
+  and clipped-sample count computed per file by a throwaway scratch script
+  (not committed, per the suite's existing convention) — ZERO clipped
+  samples across all 23 files, worst-case peak -5.79 dBFS
+  (resistance_strike.wav), every other file well below full scale (range
+  -28.17 to -5.79 dBFS). Combined with the unchanged legacy 39 SFX/13 tracks
+  (byte-identical, so ADR152/153's own audit still holds for them), the full
+  58/17-asset estate now carries a complete gain-0.45 zero-clip record;
+  README.md's interim "await their own audit" hedge is removed and the
+  audit sentence restated to cover all 58/17 assets with today's date.
+  (5) FIVE OVERNIGHT GATE ADJUDICATIONS, carried into CUE_MAP.md's Standing
+  mix contracts / Dispositions sections by the composition session (prior to
+  this task) and recorded here with provenance, since this ADR is the
+  session's own designated record (CUE_MAP.md's header: "recorded as a fresh
+  ruling in the train's ADR"): (a) THE SESSION STRUCTURE — the composition
+  work was adjudicated to run as three sub-pulses rather than one monolithic
+  pass; this ADR's evidence base is the committed CUE_MAP.md/manifest state
+  the pulses produced, not a session transcript, so the pulse-by-pulse
+  detail is not re-asserted here. (b) THE PHI GOVERNOR — beast_engine's
+  intensity ladder is governed by the imperial-rent pool Phi, state-governed
+  and never random (CUE_MAP.md Standing mix contract 1). (c) UNRESOLVED
+  SCORED BY DELIBERATE SILENCE — GameOutcome.UNRESOLVED (the campaign-horizon
+  non-ending, spec-116) gets no chord; the silence is the design, not a gap
+  (CUE_MAP.md Dispositions). (d) MASK ARM A CANON — entering the Vol III
+  ticker/dashboard lens crossfades to the_mask, the suite's one clean
+  harmony, because the mask lies (CUE_MAP.md Standing mix contract 5).
+  (e) THE ADR-PATH / FRESH PARK — Bevy-audio wiring itself stays PARKED
+  (Amendment AF clause (v)'s standing carriage obligation, schedule unset);
+  this task searched for the "2026-08-11 ruling" CUE_MAP.md's header
+  implicitly invokes and could NOT pin a general Bevy-audio-wiring-park
+  ruling dated 2026-08-11 — the only 2026-08-11 citation found is narrower:
+  docs/superpowers/plans/2026-08-11-b2-tick-loop-plan.md:3255-3258 rules
+  audio "DEFERRED out of B2" specifically (a single PR's scope), not a
+  general park with an unset schedule. This ADR therefore records the
+  general park as a FRESH ruling, dated at this landing, citing the B2
+  deferral as precedent-but-narrower rather than as its own basis.
+  PROVENANCE: (b), (c), and (e) are controller adjudications under the
+  Director's standing compass delegation (2026-08-18, morning-reviewable);
+  (d) is the Director's own direct pre-sleep ruling, not a delegated one;
+  (a) is a controller scheduling decision under the same delegation. (6)
+  GATES: `mise run test:q -- tests/unit/assets/test_sfx_assets.py
+  tests/unit/assets/test_music_assets.py tests/unit/assets/test_cue_map.py`
+  green (14 tests); `mise run check` green (13995 passed, 51 skipped, 1
+  pre-existing xfail, zero failures); `git diff --stat -- rust/` empty — this
+  train touches zero Rust.
+consequences: >-
+  The Entity now has a full audible register: its own heartbeat bound to the
+  tick's materialist-causality phases, its extraction heard as bleeding, and
+  the player's own verbs — organizing, educating, agitating, protesting,
+  striking, building dual power — each carry a distinct timbre against the
+  machine's drone. src/assets/CUE_MAP.md is now COMPLETE for the whole
+  estate (75 assets: 58 SFX + 17 tracks, every one bound with a status of
+  live/reserved/gated, no silent gaps) and machine-checked going forward —
+  any future asset addition that skips a CUE_MAP.md row now fails
+  tests/unit/assets/test_cue_map.py's check 5 loud, closing the gap ADR152/153
+  left open (their own manifests carried trigger_hint text but nothing
+  verified it named a real engine member). Two carried-forward open items:
+  stinger_policy_fail's POLICY_STRUCK/POLICY_PREEMPTED ambiguity and the
+  history_breathing/beast_engine idle-bed collision both need a wiring-time
+  ruling, named explicitly rather than silently defaulted. Bevy-audio wiring
+  remains entirely unscheduled — this ADR only sharpens the citation (a
+  fresh, honestly-dated park, not a stale borrowed one) — so the SFX/
+  soundtrack estates still play through no in-game system; `babylon-client`
+  carries zero audio code. Engine untouched: no qa:regression / golden-vault
+  exposure, zero Rust touched.

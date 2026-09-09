@@ -1,0 +1,27 @@
+; DECLARATION PRELUDE — consumed via `babylon_bsl::scenario::
+; load_scenario_with_prelude` (Train B item 4, issue #591, D157 —
+; docs/reference/bsl-language.rst §2.13). NOT a scenario: no
+; `(scenario <qname> ...)` wrapper, and only the four declaration top-forms
+; are legal here (`defenum` / `defvocabulary` / `defconst` / `deffield`) —
+; a prelude declares, it never seeds a graph.
+;
+; The WorldView mint (ADR206), DUPLICATING the mint scenario's own
+; declaration (worldview-foundation.bscn:34's `(defenum WorldView ...)`
+; still stands — nothing was factored out of it) so a consuming scenario
+; can resolve `WorldView`-typed fields WITHOUT re-declaring the type
+; itself. A scenario MAY still re-declare it verbatim (`EnumRegistry::
+; declare`'s identical-recognition arm resolves to the SAME id, this
+; train); a scenario that declares it differently still refuses, exactly
+; as any other conflicting `defenum` does.
+;
+; Member order is RULED content (design doc §4.1, Director-approved
+; 2026-08-14): REVOLUTIONARY / LIBERAL / FASCIST. Declaration order IS the
+; storage ordinal (ADR195), so the ruled order makes REVOLUTIONARY=0,
+; LIBERAL=1, FASCIST=2 — the same declared TEXT as worldview-foundation
+; .bscn's own declaration (this file's form sits at column 0; the mint's
+; sits indented two spaces inside its `(scenario ...)` form, so the LINE
+; bytes differ even though the declaration itself does not). The ordinal
+; claim is enforced executably by `tick_goldens.rs`'s
+; `worldview_prelude_member_order_is_the_ruled_ordinal`, not by this
+; comment (final whole-branch review, 2026-08-17, item 2).
+(defenum WorldView (REVOLUTIONARY LIBERAL FASCIST))

@@ -1,0 +1,100 @@
+meta:
+  contract: CensusPlaceAuthorityV1
+  version: 1
+  issue: PER-276
+  parent: PER-21
+
+classifications:
+  source_url_bytes_vintage_schema_crs_and_members: Observed
+  artifact_bytes_rows_columns_and_extent: Observed
+  semantic_digests: Derived
+  canonical_formats_ordering_and_geometry_encoding: Designed
+  bounds_refusals_absences_and_lineage: Designed
+
+bounds:
+  contract_bytes: 65536
+  artifact_bytes: 1048576
+  artifact_uncompressed_bytes: 33554432
+  artifact_rows: 2048
+  csv_field_bytes: 4194304
+
+source:
+  manifest: tools/census_place_authority_v1_fetch_manifest.json
+  manifest_sha256: 223c1419dd9e7bd855efd8fb07b87199ce4ec88bd549e369890edbb1dea71456
+  url: https://www2.census.gov/geo/tiger/TIGER2023/PLACE/tl_2023_26_place.zip
+  dest: tiger/place/tl_2023_26_place.zip
+  sha256: d37f3b4d9d9a3f43a9cd3417fa1500c37a604e10030ecf566e261d7a05b3b57f
+  vintage: 2023
+  state_fips: "26"
+  input_crs: EPSG:4269
+  zip_members:
+    - tl_2023_26_place.cpg
+    - tl_2023_26_place.dbf
+    - tl_2023_26_place.prj
+    - tl_2023_26_place.shp
+    - tl_2023_26_place.shp.ea.iso.xml
+    - tl_2023_26_place.shp.iso.xml
+    - tl_2023_26_place.shx
+
+identity_artifact:
+  name: census_place_identity_mi_2023
+  path: src/babylon/data/reference/spatial/census_place_identity_mi_2023.csv.gz
+  format: csv.gz
+  compression: gzip-mtime-0
+  rows: 745
+  columns:
+    - place_geoid
+    - state_fips
+    - place_fips
+    - place_ns
+    - name
+    - name_lsad
+    - lsad
+    - class_fp
+    - principal_city_indicator
+    - mtfcc
+    - functional_status
+  ordering: place_geoid-ascending
+  sha256: cb864b4f6f43902bb821e84fe9a4055a9039e0a74d8b8399f209ae6ed26a8be7
+  semantic_sha256: cd354f40f798ea2a4bb94d7c4d638ebeb84c152250d5b97da8213c8b5115d47e
+
+geometry_artifact:
+  name: census_place_geometry_mi_2023
+  path: src/babylon/data/reference/spatial/census_place_geometry_mi_2023.parquet
+  format: parquet
+  compression: parquet-zstd-level-22
+  rows: 745
+  columns:
+    - place_geoid
+    - geometry_wkb
+    - aland_m2
+    - awater_m2
+    - internal_point_lat
+    - internal_point_lon
+  ordering: place_geoid-ascending
+  geometry_encoding: ogc-iso-wkb-little-endian-2d-binary
+  sha256: cea5b0ada40b75ae2f6996bef7aa4aeb8d13b36ce5bc41d4334da1e8bf17b737
+  semantic_sha256: b7ffcf6d8dacb90eb6f1977a2ee953fb040a18accbbb33387eff79c4bed14436
+
+extent:
+  min_lon: -90.193614
+  min_lat: 41.710585
+  max_lon: -82.398706
+  max_lat: 47.478314
+
+declared_absences:
+  - allocation_weights
+  - county_membership
+  - county_place_h3_overlap
+  - place_land_area_share
+  - postgresql_schema
+  - runtime_importer
+  - cutover_authority
+
+lineage:
+  historical_contract: contracts/h3_estate_contract_v1.yaml
+  resolves_historical_gaps:
+    - census_place_identity
+    - census_place_geometry
+  remaining_blocker: county_place_h3_overlap
+  database_dependency_owner: PER-20

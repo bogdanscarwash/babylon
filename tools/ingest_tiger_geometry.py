@@ -13,7 +13,7 @@ Data Source:
 
 Usage::
 
-    poetry run python tools/ingest_tiger_geometry.py [--h3-state 26]
+    uv run python tools/ingest_tiger_geometry.py [--h3-state 26]
     # or, via mise:
     mise run data:tiger-sqlite [-- --h3-state 26]
 
@@ -37,6 +37,7 @@ sys.path.insert(0, str(_REPO_ROOT / "src"))
 
 from sqlalchemy import func, update  # noqa: E402
 
+from babylon.config.logging_config import setup_logging  # noqa: E402
 from babylon.reference.database import get_normalized_session, init_normalized_db  # noqa: E402
 from babylon.reference.schema import (  # noqa: E402
     BridgeCountyH3,
@@ -45,7 +46,7 @@ from babylon.reference.schema import (  # noqa: E402
     DimState,
 )
 
-logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+setup_logging(default_level="INFO")
 logger = logging.getLogger(__name__)
 
 TIGER_SHP = Path("/media/user/data/babylon-data/tiger/county/tl_2024_us_county.shp")
@@ -110,8 +111,8 @@ def load_wkt_from_tiger() -> None:
 
 def generate_h3_cells(state_fips: str | None = "26") -> None:
     """Phase 2: Generate H3 res-7 cells for counties in the given state."""
-    from babylon.domain.economics.substrate.h3_utils import generate_h3_cells as h3_gen
-    from babylon.domain.economics.substrate.h3_utils import wkt_to_geometry
+    from babylon.data.h3_utils import generate_h3_cells as h3_gen
+    from babylon.data.h3_utils import wkt_to_geometry
 
     with get_normalized_session() as session:
         # Build query for counties with geometry

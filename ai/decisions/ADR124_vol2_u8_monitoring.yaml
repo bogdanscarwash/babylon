@@ -1,0 +1,167 @@
+id: ADR124
+title: >-
+  Vol II Circulation program, Unit 8 (Monitoring; lane/vol2-circulation):
+  seam-registry rows for the program's new emissions + a genuine
+  observability gap closed (``tick_disproportionality``), scoped narrowly
+  after auditing what actually has a wire path today.
+status: accepted
+date: '2026-07-21'
+context: >-
+  Unit 8 of ai/_inbox/vol2-circulation-engine-program-prompt.md §7 (labeled
+  U9 "Monitoring" in the prompt's suggested skeleton; this lane's actual
+  unit numbering runs one lower after U6 split into U6a/U6b and U7 landed
+  as the defines sweep — confirmed against this lane's own commit history
+  and the coordinating v1-lane-merge-runbook.md on the sibling
+  chore/vol1-vol2-contract branch). Orientation: add seam-registry rows
+  (``sentinels/seam/registry.py``) for every new emission this program
+  creates (new opposition bindings, new GraphInputs fields, a new catalog
+  artifact, new gate satisfiers); extend the observability surface
+  (timeseries/inspector) for circulation-layer value axes, veil-gated per
+  the Veil policy where value-axis data is involved.
+
+  Audited what each named category actually has, today, on a wire a
+  registry row could check:
+
+  - New opposition bindings (circulation/realization,
+    reproduction/disproportionality, U5) and the four new GraphInputs
+    fields (``commodity_overhang_share``/``realization_crisis_share``/
+    ``reproduction_crisis_share``/``disproportionality_imbalance``,
+    ``ContradictionSystem._circulation_layer_ratios``) are shadow=True
+    (ADR077 discipline) and are recomputed FRESH each tick purely to feed
+    the opposition step — they have NO persisted graph-attr home of their
+    own and are never serialized on any web-bridge endpoint (confirmed:
+    zero hits for ``shadow_opposition_states`` in ``web/game/*.py``). The
+    seam registry (``sentinels/seam/registry.py``) is scoped, by its own
+    docstring, to "every player-observable quantity that crosses the
+    engine -> web-bridge -> frontend seam" — there is no such quantity
+    here to register a row for. This lane's own coordinating
+    v1-lane-merge-runbook.md already deferred the general shadow-
+    opposition observability question to the T1.1 ``seam_algebra``
+    cascade ("Vol II U6b... contribute its circulation seam rows... AT
+    REBASE"); building a bespoke one-off exposure here (a dedicated
+    persisted graph attr + endpoint + timeseries column, mirroring how
+    Market Scissors got its own ``WorldState.market`` field pre-ADR077)
+    would duplicate that forthcoming, more general facility and was
+    judged disproportionate to one monitoring unit. Recorded, not built.
+  - A new catalog artifact: the LODES OD-matrix hash-stamped artifact (U2,
+    ADR121) is already registered in ``data-artifacts.yaml``/
+    ``data-catalog.yaml`` — a data-pipeline registry, not the seam
+    registry's remit (which is player-observable wire quantities, not
+    build artifacts). No action needed; verified present.
+  - New gate satisfiers: the ``vol2_step``/``boundary_flow_register``/
+    ``session_id``/``simulated_year`` context-key gate (U4, ADR123) and
+    the four LODES hydration kwargs (U2, ADR121) are now genuinely
+    satisfied in the paths this lane owns. The "registry-of-runtime-gates"
+    sentinel the original recon (§6 item 1) proposed for this class does
+    not exist in this tree (confirmed: no hits for gate-satisfier/
+    gated_dormancy machinery) — it is the same T1.1 ``seam_algebra``
+    cascade dependency U6b already deferred. Not buildable here without
+    inventing a whole sentinel family mid-unit; left to that cascade.
+  - What DOES have a concrete, auditable gap: U3 (ADR122) computed
+    ``CirculationCrisisState.disproportionality`` (Dept I/II output-share
+    imbalance) via ``compute_disproportionality`` but
+    ``write_tick_state_to_graph`` never stamped it onto a graph attr — a
+    genuine computed-but-unserialized silent no-op (Constitution
+    VIII.12/III.11), the exact failure class the Seam Observatory exists
+    to catch, sitting one line away from every one of its six Group-C
+    siblings that already made the trip. This is the one item in scope
+    with a clean, proportionate, testable fix.
+
+  Separately: the seven pre-existing Group C rows (``tick_liquidity_
+  ratio``/``tick_commodity_overhang``/``tick_replacement_cycle``/
+  ``tick_inventory_diagnosis``/``tick_realization_crisis``/
+  ``tick_turnover_crisis``/``tick_reproduction_crisis``) share one
+  ``notes=_CIRCULATION_LIVE`` constant whose text, accurate as far as it
+  went, covered only Task 20b's ``turnover_profile_source`` wiring — it
+  did not record that U3 ALSO fixed a second, independent stub-fed-
+  liveness bug in the same family (the always-balanced
+  ``ReproductionBalance``/``ReproductionAnalysis`` hardcode feeding
+  ``CirculationAssessment``, and ``CircuitState``/``DepreciationFundState``
+  being reinitialized from ``capital_stock`` every tick instead of
+  genuinely accumulating via ``advance_circuit``/
+  ``update_depreciation_fund``). Left uncorrected, the registry would
+  understate how live these seven rows now are.
+decision: >-
+  ``src/babylon/domain/economics/tick/graph_bridge.py`` —
+  ``write_tick_state_to_graph`` gains one new kwarg,
+  ``tick_disproportionality=county.circulation_state.disproportionality.
+  imbalance if ... is not None else None`` (honest None, never a
+  fabricated 0.0), inserted immediately after ``tick_reproduction_crisis``
+  in the existing Group-C block, same ``# pragma: no mutate`` convention.
+
+  ``web/game/engine_bridge.py`` — ``_serialize_territory`` reads the new
+  attr through under wire key ``tick_disproportionality`` (same
+  ``_territory_graph_attr`` pattern as every Group C/D sibling); docstring
+  updated with a new dated paragraph. NOTE: this specific line is
+  unexercisable by pytest today — ``tests/unit/web/test_engine_bridge.py``
+  carries a module-level ``pytestmark`` skip (Amendment V/II.8, web
+  client legacy) — an honest, acknowledged gap, not a silent one; the
+  write side (``graph_bridge.py``) has full, passing coverage in a
+  non-web, non-skipped test file.
+
+  ``src/babylon/projection/veil.py`` (the canonical Veil-of-Money
+  implementation; ``web/game/veil.py`` is now a re-export shim over it) —
+  ``tick_disproportionality`` added to ``TIER1_VALUE_RELATION_FIELDS``:
+  a Dept I/II value-output ratio built from the same Marxian value
+  decomposition as ``profit_rate``/``occ``, gated identically. Docstring
+  gains a dated bullet explicitly noting the other thirteen Group C/D
+  ``tick_``-prefixed circulation/financial fields remain OUT of this
+  registry — a pre-existing, already-flagged (``EngineBridge.
+  _serialize_territory``'s own docstring) open gap this pass does not
+  retroactively close; ``tick_disproportionality`` is gated because it is
+  new, not because that gap was resolved.
+
+  ``src/babylon/sentinels/seam/registry.py`` — one new ``SeamEntry`` for
+  ``tick_disproportionality`` (``SeamScope.TERRITORY``,
+  ``DECLARED_CONDITIONAL``), gated on a new
+  ``_DISPROPORTIONALITY_LIVENESS_CONDITION`` (the existing Group-C base
+  gate PLUS a narrower TensorRegistry-coverage clause 2010-2025 has that
+  the other six rows do not carry), inserted after ``tick_reproduction_
+  crisis`` and before the Group-D comment. The shared ``_CIRCULATION_LIVE``
+  constant (feeding all seven pre-existing Group-C rows) gets one
+  additional paragraph recording U3's cross-tick-accumulation +
+  real-reproduction-calculator fix, so the correction propagates to every
+  row that cites it without touching each entry individually.
+
+  Tests: ``tests/unit/economics/tick/test_graph_bridge.py`` gains
+  ``TestWriteDisproportionality`` (2 tests, red->green: absent ->
+  ``None``; present -> the real signed ``imbalance``, cross-checked
+  against ``DisproportionalityCrisis.imbalance`` itself). Full seam
+  sentinel suite (5 files, 63 tests) re-run green, including the real-
+  registry CLI gate (``tools/sentinel_check.py seam --check``, exit 0,
+  124 registered observables, zero new advisories). Veil suites (3 files,
+  45 tests) re-run green — no hardcoded field-count assertion broke,
+  since both existing suites iterate ``TIER1_VALUE_RELATION_FIELDS``
+  generically rather than pinning its exact membership.
+consequences: >-
+  ``tick_disproportionality`` is now a real, honestly-gated, veil-aware
+  observable end to end from the calculator through the graph write —
+  closing the one concrete "computed but silently dropped" defect this
+  unit's audit actually found. The seven pre-existing Group-C rows'
+  documentation is now accurate about the full scope of what U3 fixed,
+  not just the wiring half of it.
+
+  Deliberately NOT built, with reasons recorded above rather than
+  silently skipped: (1) a persisted graph attr + endpoint + timeseries
+  column for the four national circulation GraphInputs ratios — deferred
+  to the T1.1 ``seam_algebra`` cascade this lane's own runbook already
+  names as the rebase-time home for general shadow-opposition
+  observability; (2) a "registry-of-runtime-gates" sentinel for gate
+  satisfiers (§6 item 1 of the original recon) — same cascade dependency,
+  not inventable mid-unit; (3) retroactive veil-gating of the other
+  thirteen pre-existing Group C/D fields — a materially larger, already-
+  flagged, separately-owned policy decision, not this unit's charter; (4)
+  a new ``/timeseries/`` DB column for any circulation aggregate — would
+  require a schema migration, a materially bigger and riskier unit of
+  work than "seam registry + observability bookkeeping," and a live hazard
+  for migration-number collision across the several lanes running in
+  parallel this program cycle.
+
+  No baseline drift: this unit adds a new, previously-nonexistent graph
+  attr and a doc/veil-registry-only change elsewhere — no golden scenario
+  reads ``tick_disproportionality`` today, and no existing field's VALUE
+  changed, only its recorded liveness truth. ``mise run qa:regression``
+  not run per this lane's scoped-test-only constraint; expected drift is
+  none (confirmed by inspection: the new kwarg is additive-only, and the
+  doc/veil-registry edits touch no runtime code path any golden scenario
+  exercises).

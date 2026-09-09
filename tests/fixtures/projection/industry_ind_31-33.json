@@ -1,0 +1,15 @@
+{
+  "county_fips": null,
+  "department_weights": null,
+  "industry_id": "ind_31-33",
+  "kind": "industry",
+  "member_business_count": null,
+  "member_worker_block_count": null,
+  "naics_2digit": null,
+  "naics_label": null,
+  "occ": null,
+  "profit_rate": null,
+  "total_employment": null,
+  "total_wages": null,
+  "verified_tick": 5
+}

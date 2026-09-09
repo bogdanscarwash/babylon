@@ -1,0 +1,15 @@
+# Managed by nnsims .codex/host/install.sh (policy v11).
+[Unit]
+Description=Aggregate budget for Codex Rust repositories
+
+[Slice]
+CPUAccounting=yes
+MemoryAccounting=yes
+IOAccounting=yes
+TasksAccounting=yes
+CPUQuota=800%
+MemoryHigh=20G
+MemoryMax=24G
+MemorySwapMax=4G
+IOWeight=500
+TasksMax=1024

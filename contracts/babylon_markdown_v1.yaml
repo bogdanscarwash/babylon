@@ -1,0 +1,105 @@
+meta:
+  contract: BabylonMarkdownV1
+  version: 1
+  issue: PER-23
+  profile: GFM 0.29 plus the subject URI scheme and nothing else
+  digest: SHA-256 diagnostic; exact bytes govern retry equality
+
+production_decoder: prohibited
+
+authority:
+  owner: Rust persistence boundary
+  purpose: byte-level Babylon Markdown profile (ADR249 R4/R5) shared by Archive
+    pages, the future client chip renderer, and the Git export rewrite
+  classifications:
+    profile_extent_ruling: Designed
+    no_raw_html_ruling: Designed
+    utf8_lf_ruling: Designed
+    citation_line_format: Designed
+    granted_bare_pending_link_forms: Designed
+    git_export_rewrite_rule: Designed
+    fog_chip_rule: Designed
+    fixture_values: Designed
+  invariants:
+    - Game-content Markdown is GitHub-Flavored Markdown 0.29 extended with the
+      'subject:' URI scheme for internal references and nothing else.
+    - The '<' byte is refused everywhere; raw HTML and autolinks have no
+      profile presence.
+    - Markdown bytes are exact UTF-8 with LF endings; any CR byte refuses.
+    - Every '[' byte opens a subject link token; any other destination scheme
+      or malformed subject link refuses. Link label bytes never contain '['
+      or ']'.
+    - The granted form is [{known_label}](subject:{kind}/{id}); the bare fog
+      form is [](subject:{kind}/{id}) with zero label bytes; the pending
+      display form is ~~[{known_label}](subject:{kind}/{id})~~ and is
+      synthesized at display time, never stored.
+    - A '~~' marker pair must wrap one granted or bare subject link token;
+      strikethrough over any other text refuses.
+    - The Git export rewrite maps [label](subject:{kind}/{id}) to
+      [label](./{kind}/{id}.md) and renders a bare link as the fog chip
+      "unknown {kind} · {id}" with zero label bytes.
+    - Identical input bytes produce identical export bytes.
+    - "The citation corpus rows pin that the byte-level detector accepts
+      exactly the language of the pinned regex: a label containing '*', a
+      source_id containing ';' without the following space, and a value that
+      cannot satisfy the shape all refuse, while a locator containing the
+      pinned separators stays accepted."
+
+generation:
+  tool: rust/crates/babylon-persistence/tests/babylon_markdown_v1_vectors.rs
+  provenance: Valid fixtures render from the pinned Archive page renderer or
+    assemble from pinned profile forms; refusal fixtures mutate one profile
+    rule each; export fixtures derive from the pinned Rust rewrite.
+  conformance: rust/crates/babylon-persistence/tests/babylon_markdown_v1_vectors.rs
+
+constants:
+  profile_id: babylon-markdown.v1
+  citation_line_regex: '^- \*\*(?P<label>[^*]+):\*\* (?P<value>.+) — (?P<source_id>[^;]+); (?P<locator>.+)$'
+  chip_separator: ' · '
+  granted_link_form: '[{known_label}](subject:{kind}/{id})'
+  bare_link_form: '[](subject:{kind}/{id})'
+  pending_link_form: '~~[{known_label}](subject:{kind}/{id})~~'
+  export_link_form: '[{known_label}](./{kind}/{id}.md)'
+  county_kind: county
+  place_kind: place
+  county_id_bytes: 5
+  place_id_bytes: 7
+  gfm_version: "0.29"
+
+bounds:
+  contract_bytes: 32768
+  vector_rows: 24
+  vector_line_bytes: 16384
+  vector_object_fields: 64
+  markdown_bytes: 1048576
+
+layouts:
+  link_token_v1:
+    granted: '[{known_label}](subject:{kind}/{id})'
+    bare: '[](subject:{kind}/{id})'
+    pending_display_only: '~~[{known_label}](subject:{kind}/{id})~~'
+    kind_allowlist: [county, place]
+    id_width_bytes: {county: 5, place: 7}
+    id_charset: ASCII digits
+  citation_line_v1:
+    regex: '^- \*\*(?P<label>[^*]+):\*\* (?P<value>.+) — (?P<source_id>[^;]+); (?P<locator>.+)$'
+    example: '- **Median wage:** 25.000000 — committed-tick-v1; campaign/2/oakland'
+  git_export_v1:
+    granted_rewrite: '[{known_label}](subject:{kind}/{id}) -> [{known_label}](./{kind}/{id}.md)'
+    bare_rewrite: '[](subject:{kind}/{id}) -> unknown {kind} · {id}'
+    pending_rewrite: '~~[{known_label}](subject:{kind}/{id})~~ -> ~~[{known_label}](./{kind}/{id}.md)~~'
+  fog_chip_v1:
+    form: 'unknown {kind} · {id}'
+    label_bytes: 0
+    separator: ' · '
+  citation_vector_v1:
+    fields: [line, recognized]
+    recognized: the Rust byte-level detector and the pinned regex agree
+
+vector_kinds:
+  required: [valid, refusal, identity, citation]
+
+excluded_authority:
+  - pulldown-cmark or any full parser dependency in the Rust validator
+  - The future babylon-client chip renderer and Git exporter implementations
+  - Any weakening of the byte rules to admit a malformed fixture

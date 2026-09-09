@@ -1,82 +1,130 @@
-# Dependabot Auto-Merge Workflow
-#
-# Automatically merges Dependabot PRs to `dev` branch after CI passes.
-# - Minor/patch version updates: auto-merge (low risk)
-# - Major updates: require manual review (breaking changes)
-# - Security updates: auto-merge (urgent fixes)
-#
-# The BD will later squash-merge `dev` to `main` for releases.
+# Dependabot automation has one trusted, event-driven phase. `workflow_run`
+# validates the native exact-head CI run, checks out trusted `dev`, and
+# delegates eligibility and merging to the repository verifier. Dependabot-
+# authored events have read-only tokens and therefore own no write phase.
 
 name: Dependabot Auto-Merge
 
-on:
-  pull_request:
-    branches:
-      - dev  # Only trigger for PRs targeting dev
+run-name: >-
+  ${{ format('Dependabot eligibility for CI run {0} at {1}',
+      github.event.workflow_run.id, github.event.workflow_run.head_sha) }}
 
-permissions:
-  contents: write
-  pull-requests: write
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+
+permissions: {}
+
+concurrency:
+  group: >-
+    dependabot-${{ github.event.workflow_run.pull_requests[0].number ||
+      github.event.workflow_run.head_branch }}
+  cancel-in-progress: false
 
 jobs:
-  dependabot-automerge:
-    name: Auto-merge Dependabot PRs
+  merge:
+    name: Dependabot Eligibility
+    if: >-
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.name == 'CI'
     runs-on: ubuntu-latest
-    if: github.actor == 'dependabot[bot]'
-
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      checks: read
+      contents: write
+      pull-requests: write
+      security-events: read
     steps:
-      - name: Fetch Dependabot metadata
-        id: metadata
-        uses: dependabot/fetch-metadata@v3
+      - name: Checkout trusted merge verifier
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
+          ref: dev
+          persist-credentials: false
 
-      - name: Log update details
-        run: |
-          echo "Dependency: ${{ steps.metadata.outputs.dependency-names }}"
-          echo "Update type: ${{ steps.metadata.outputs.update-type }}"
-          echo "Ecosystem: ${{ steps.metadata.outputs.package-ecosystem }}"
-          echo "Previous version: ${{ steps.metadata.outputs.previous-version }}"
-          echo "New version: ${{ steps.metadata.outputs.new-version }}"
-
-      # Auto-merge PATCH updates (bug fixes, no breaking changes)
-      - name: Auto-merge patch updates
-        if: steps.metadata.outputs.update-type == 'version-update:semver-patch'
-        run: |
-          echo "Auto-merging patch update..."
-          gh pr merge --auto --squash "$PR_URL"
+      - name: Resolve exact eligible PR
+        id: candidate
+        shell: bash
         env:
-          PR_URL: ${{ github.event.pull_request.html_url }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      # Auto-merge MINOR updates (new features, backward compatible)
-      - name: Auto-merge minor updates
-        if: steps.metadata.outputs.update-type == 'version-update:semver-minor'
+          EXPECTED_HEAD: ${{ github.event.workflow_run.head_sha }}
+          GH_TOKEN: ${{ github.token }}
         run: |
-          echo "Auto-merging minor update..."
-          gh pr merge --auto --squash "$PR_URL"
-        env:
-          PR_URL: ${{ github.event.pull_request.html_url }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          set -euo pipefail
+          pulls="$(
+            gh api "repos/$GITHUB_REPOSITORY/pulls?state=open&base=dev&per_page=100"
+          )"
+          pull_count="$(jq 'length' <<< "$pulls")"
+          if [ "$pull_count" -ge 100 ]; then
+            printf 'eligible=false\n' >> "$GITHUB_OUTPUT"
+            echo "Refusing a potentially truncated 100-PR candidate page."
+            exit 0
+          fi
+          candidates="$(
+            jq --arg head "$EXPECTED_HEAD" '
+              [
+                .[:100][]
+                | select(.user.login == "dependabot[bot]")
+                | select(.user.id == 49699333)
+                | select(.user.type == "Bot")
+                | select(.head.sha == $head)
+                | .number
+              ]
+            ' <<< "$pulls"
+          )"
+          candidate_count="$(jq 'length' <<< "$candidates")"
+          if [ "$candidate_count" -ne 1 ]; then
+            printf 'eligible=false\n' >> "$GITHUB_OUTPUT"
+            echo "Expected one eligible Dependabot PR at $EXPECTED_HEAD; found $candidate_count."
+            exit 0
+          fi
+          printf 'eligible=true\n' >> "$GITHUB_OUTPUT"
+          printf 'pr_number=%s\n' "$(jq -r '.[0]' <<< "$candidates")" >> "$GITHUB_OUTPUT"
 
-      # Auto-merge ALL GitHub Actions updates (typically safe)
-      - name: Auto-merge GitHub Actions updates
-        if: |
-          steps.metadata.outputs.package-ecosystem == 'github_actions' &&
-          steps.metadata.outputs.update-type != 'version-update:semver-major'
-        run: |
-          echo "Auto-merging GitHub Actions update..."
-          gh pr merge --auto --squash "$PR_URL"
+      - name: Merge
+        if: steps.candidate.outputs.eligible == 'true'
         env:
-          PR_URL: ${{ github.event.pull_request.html_url }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      # MAJOR updates require manual review - just add a comment
-      - name: Comment on major updates
-        if: steps.metadata.outputs.update-type == 'version-update:semver-major'
+          EXPECTED_HEAD: ${{ github.event.workflow_run.head_sha }}
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
+          CLASSIFIER_RUN_ID: ${{ github.run_id }}
+          PR_NUMBER: ${{ steps.candidate.outputs.pr_number }}
         run: |
-          gh pr comment "$PR_URL" --body \
-            "**Major version update** - may contain breaking changes. Manual review required."
-        env:
-          PR_URL: ${{ github.event.pull_request.html_url }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          set -euo pipefail
+          max_attempts=8
+          retry_delay_seconds=30
+          attempt=1
+          while [ "$attempt" -le "$max_attempts" ]; do
+            set +e
+            python3 tools/pr_merge.py "$PR_NUMBER" --expected-head "$EXPECTED_HEAD" \
+              --dependabot --dependabot-source-run "$SOURCE_RUN_ID" \
+              --dependabot-classifier-run "$CLASSIFIER_RUN_ID"
+            outcome=$?
+            set -e
+            case "$outcome" in
+              0)
+                exit 0
+                ;;
+              1|2)
+                exit "$outcome"
+                ;;
+              3)
+                echo "Authenticated semver-major update requires manual review."
+                exit 0
+                ;;
+              4)
+                if [ "$attempt" -eq "$max_attempts" ]; then
+                  echo "Exact-head evidence remained pending after $max_attempts attempts."
+                  exit 4
+                fi
+                sleep "$retry_delay_seconds"
+                attempt=$((attempt + 1))
+                ;;
+              *)
+                echo "Verifier returned unexpected outcome $outcome." >&2
+                exit 1
+                ;;
+            esac
+          done

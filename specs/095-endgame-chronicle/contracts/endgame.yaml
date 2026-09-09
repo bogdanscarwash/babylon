@@ -4,9 +4,10 @@ info:
   version: 1.0.0
   description: |
     `GET /api/games/{id}/endgame/` — the chronicle end-screen's terminal outcome.
-    Reads the latest snapshot's endgame block. Recognizes all 5 GameOutcome terminal
-    types (REVOLUTIONARY_VICTORY, ECOLOGICAL_COLLAPSE, FASCIST_CONSOLIDATION, RED_OGV,
-    FRAGMENTED_COLLAPSE). Returns `outcome: null` when the game is still in progress.
+    Reads the latest snapshot's endgame block. Recognizes all six GameOutcome values
+    (REVOLUTIONARY_VICTORY, ECOLOGICAL_COLLAPSE, FASCIST_CONSOLIDATION, RED_OGV,
+    FRAGMENTED_COLLAPSE, UNRESOLVED — spec-116 fixed horizon). Returns `outcome: null`
+    when the game is still in progress.
 
 paths:
   /api/games/{game_id}/endgame/:
@@ -49,10 +50,40 @@ components:
         tick: { type: integer, minimum: 0, description: "Final tick." }
         outcome:
           type: string
-          enum: [revolutionary_victory, ecological_collapse, fascist_consolidation, red_ogv, fragmented_collapse]
-          description: "Terminal outcome, or null if game still in progress."
-        headline: { type: string, description: "Canonical headline (BABYLON FALLS / THE BUNKER FAILS)." }
-        summary: { type: string, description: "Chronicle paragraph (spec-081 enriches)." }
+          enum:
+            - revolutionary_victory
+            - ecological_collapse
+            - fascist_consolidation
+            - red_ogv
+            - fragmented_collapse
+            - unresolved
+          description: >-
+            Recognized outcome pattern at game over (spec-116 fixed horizon),
+            or null while in progress.
+        headline:
+          type: string
+          description: >-
+            Per-outcome epilogue headline (web/game/epilogues.py, spec-116
+            FR-116-4.2 — six distinct texts); empty while in progress.
+        summary:
+          type: string
+          description: >-
+            Degraded tick_event machine summary; superseded visually by
+            `epilogue`, kept for contract compat.
+        epilogue:
+          type: string
+          description: >-
+            Deterministic 2-4 sentence epilogue body, pairwise distinct per
+            outcome; empty while in progress.
+        palette:
+          type: string
+          enum: ["rupture", "defeat", "unresolved", ""]
+          description: "End-screen palette family; empty while in progress."
+        accepted_at_tick:
+          type: [integer, "null"]
+          description: >-
+            Tick at which the player accepted the locked pattern (FR-116-5
+            fast-forward); null for horizon termination or in progress.
         stats:
           type: object
           required: [final_tick, consciousness, solidarity_edges, heat]

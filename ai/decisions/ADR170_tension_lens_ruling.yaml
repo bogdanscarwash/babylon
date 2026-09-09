@@ -1,0 +1,71 @@
+ADR170_tension_lens_ruling:
+  status: "accepted"
+  date: "2026-07-28"
+  title: >
+    The map tension lens is county_extraction (the Fundamental Theorem
+    localized): Director-ruled four-question slate — Candidate 1
+    principal with candidates 2/3 shadow-chartered, US-internal
+    reference frame, diverging w rendering (crimson Phi-source <-> gold
+    Phi-recipient), national-oppression overlay chartered as a
+    Director-gated seed. The choropleth producer computes w at
+    PROJECTION time; BoundOpposition/shadow registration is a separate
+    engine-train W-D motion.
+  context: |
+    The Director's 2026-07-28 directive on the M5 map tension lens:
+    nationwide scope (not tri-county), Lawverian dialectics over the
+    D = (A, Abar, w, T, sigma) primitive, everything justifiable in
+    actual Marxism. Deliverable: reports/spatial-tension-proposal.md
+    (PR #326) — six readers over the local marxists.org mirror (Marx
+    Capital I ch25 / III ch14, Engels, Lenin Imperialism + Development
+    of Capitalism in Russia, Stalin 1938, Mao On Contradiction) + MIM
+    Theory #10 OCR + the project formalism, Opus synthesis
+    (wf_7f6f62d8-b47). Three candidates were derived, all plain
+    BoundOpposition rows over the existing generator — no new sorts, no
+    new primitives, NORTH_STAR "closed for v1.0" untouched.
+  decision: |
+    The Director ruled the four-question slate (answers = the four
+    recommended options, confirmed after a mis-clicked dialog):
+    - LENS: Candidate 1 (county_extraction) is the principal aspect.
+      Per county: a = theta*(v+s) (wage entitlement at the national
+      norm), b = v (wage commanded); w = (b-a)/(a+b) in [-1,1]. The
+      witness sign IS the political content — which side of the
+      wage-form counit defect the county sits on. Candidates 2
+      (county_closure — reserve army vs absorptive margin; Stalin
+      geography-never-determines encoded as bounded multiplier nu<1)
+      and 3 (county_seam — Mao town/country over ADJACENCY) register
+      shadow=True on the ADR077 ladder. C3 is BLOCKED on a
+      county-adjacency producer (wiring-doctrine blocking-dependency
+      citation); C2 needs per-county population+biocapacity columns —
+      III.11: honest absence, never a k_sum proxy.
+    - THETA FRAME: US-internal ratio-of-sums (Sum v / Sum(v+s) over US
+      counties) — the map renders the intra-core distribution of
+      imperial rent (the labor-aristocracy geography), not the world
+      frame.
+    - RENDERING: diverging channel — the lens value is w itself on a
+      crimson (Phi-source, bled) <-> gold (Phi-recipient, bribed) ramp;
+      the (1-w)/2 Lenin damping factor DROPS as redundant (direction is
+      on screen, magnitude is not conflated with a poverty map).
+    - NAT-OP OVERLAY: chartered as a Director-gated research seed (MIM:
+      real, non-contiguous, NOT derivable from c/v/s — deriving it from
+      economic magnitudes alone is theoretically false). The map ships
+      with the absence declared.
+    Defaults taken (conservative, Director-overridable): continuous gap
+    rather than nodal-point proximity; hex_count never a weight (the
+    intensive-aggregation variance error); the promotion target is
+    sigma_phi (+) sigma_seam with kappa as a bounded multiplier inside
+    the measure — never (x), which would let geography veto extraction.
+    IMPLEMENTATION SPLIT: the choropleth tension producer computes
+    theta and per-county w at PROJECTION time from county ledger sums
+    (a read — the engine tick hash is untouched, qa:regression cannot
+    drift). The constitutional W-D motion (BoundOpposition rows,
+    coupling rows county_extraction --feeds--> imperial and county_seam
+    --constrains--> county_extraction, shadow_opposition_states
+    routing, promotion ceremony) is chartered engine-train work with
+    its own sentinel rows, NOT smuggled into the lens producer.
+  consequences:
+    positive:
+      - "The M5 tension lens renders the quantity the engine's rupture condition actually tests (phi_class is the wage-form counit defect) — the map cannot lie to the player at the moment of decision"
+      - "Deliberately not a poverty map: Appalachia/Delta/Rio Grande Valley/reservation counties run crimson (Phi-source), DC/Manhattan/Santa Clara run gold (Phi-recipient) — Lenin's bribery asymmetry rendered honestly"
+    negative:
+      - "Chartered, not built: the engine-train shadow registration for all three candidates; the county-adjacency producer C3 needs; the national-oppression overlay seed (Director-gated, needs a real reference dataset); the theta world-frame variant is closed for v1.0"
+  file: ADR170_tension_lens_ruling.yaml

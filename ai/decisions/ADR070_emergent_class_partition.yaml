@@ -1,0 +1,150 @@
+ADR070_emergent_class_partition:
+  status: "accepted"
+  date: "2026-07-14"
+  title: "Program 19 (Emergent Class Partition): class position derived per-node from the dialectic (PoleSample/PoleReading via OppositionRegistry.read_poles), the seeded SocialRole typology demoted to slots-as-positions seed vocabulary + display names; RECORDING ADR under Constitution I.19, not a new amendment; phased shadow-first cutover with ControlRatio last"
+  context: |
+    Owner interrupt 2026-07-14 (precedence over Wave 2 Round 2): the
+    {bourgeoisie/proletariat} x {core/periphery} role typology (SocialRole +
+    the C001-C006 entity registry) is load-bearing across all three trinity
+    layers and was extended twice the same day (W1.6 _CIRCUIT_ROLES, W1.7
+    _CLASS_ID_NAMES). The accepted analysis: this is NOT an Amendment S
+    violation — a partition WITHIN the dialectic is not an abstraction OVER
+    it, and Constitution I.19 already ratifies the target state verbatim
+    ("All class partitions — including the {Core, Periphery} x {Bourgeoisie,
+    Proletariat} schema — emerge from dialectic resolution patterns at
+    specific scales"). The real defect is that TODAY the partition is
+    seeded, not emergent: scenario builders assign role= by fiat, the
+    transition engine (Feature 016) is unwired on every live path, and the
+    engine adjudicates on the labels. The nouns dictate to the verbs.
+
+    Three-explorer census (this session): only 7 of 30 systems read
+    SocialRole (Struggle, Reactionary, Decomposition, ControlRatio,
+    ImperialRent/economic, Production, Community + SocialClass role-seeded
+    defaults); each adjudication site has a derivable predicate (e.g.
+    _STRUGGLING_ROLES == is_net_exploited AND coverage_ratio < 1;
+    ImperialRent's target_role == CORE_BOURGEOISIE == is_extraction_sink).
+    Two sites are provably redundant with existing role-free checks
+    (Reactionary LA-defection vs _is_superwaged; Production routing vs
+    _find_employer). Role is NEVER mutated at runtime — transition is
+    population/wealth flow between pre-seeded slots (decomposition's 30/70
+    split). The per-node signed ingredient already exists but is never
+    evaluated per graph node: phi_class/phi_hour sign structure
+    (value_form.py) and the registry's own _build_graph_inputs pairs, whose
+    aggregation mean is precisely where per-node pole information dies.
+    Program 10 (Amendment N, RATIFIED PENDING CODE) already rules per-node
+    sigma is "computed from data only, never assigned" with the binaries as
+    sigma-band quantizations — this program is that ruling generalized to
+    both principal axes.
+  decision: |
+    Program 19 registered. Class position becomes an objective, per-tick,
+    per-node derivation from the same opposition inputs the dialectics
+    registry already measures; the current typology is demoted to (a) seed
+    vocabulary and (b) display names. This is a RECORDING ADR: I.19 already
+    ratifies the doctrine; PoleSample/PoleReading are coarse-grainings of
+    the approved GapReading/OppositionState shape, so Amendment S's
+    escalation trigger (new primitive beside/above the dialectic) does not
+    fire; the Aleksandrov Test (III.8) is inherited.
+
+    Architecture rulings (owner, 2026-07-14, binding):
+    1. SLOTS-AS-POSITIONS, not relabeling. Roles remain pre-seeded
+       persistent graph positions — structural addresses in the circuit
+       (Wallerstein: core-ness is a property of production processes, not
+       bodies); population/wealth flows between them; the role attr is
+       never mutated by the derived partition. The derived partition
+       reports which slots currently instantiate each cell (occupancy),
+       separated from structural addressing. Constitution I.7-aligned:
+       quantity accumulates, membership flows, thresholds flip quality.
+    2. Wave 2 Rounds 2-3 pause now, resume after Phase 1 lands, then run
+       in parallel with Phases 2-3+ (confirmed non-interfering: they touch
+       presentation/history, none of the 7 adjudication sites).
+
+    Mechanism (Phase 1): PoleSample (entity_id, sigma: Balance) +
+    PoleMeasure[I] protocol + PoleReading (opposition_key, entity_id,
+    side a|b, sigma) in domain/dialectics/core/opposition.py;
+    BoundOpposition gains optional pole_measure (inert default None);
+    OppositionRegistry.read_poles() as a NEW sibling of step() — same
+    inputs, same tick, step() signature untouched; side derived centrally
+    from sigma sign with _lead's exact tie rule (sigma==0 holds previous
+    side, defaults "a"); output defensively sorted. GraphInputs gains
+    additive id-carrying pair fields built inside the SAME loops in
+    _build_graph_inputs (zero extra traversal). Two catalog pole_measures:
+    _capital_labor_poles (net signed balance over all EXPLOITATION
+    participations) and _wage_poles (own wage-value defect sign);
+    _imperial_poles = _wage_poles verbatim (D5 precedent) as a NAMED PROXY
+    that Program 10's data-grounded sigma swaps out without touching any
+    consumer. UNPOSITIONED nodes (no contributing edge/attr on an axis)
+    get NO reading — absence over fabrication (III.11), never sigma=0.0.
+
+    Shadow write (Phase 1): ContradictionSystem._step_registry extended
+    (no new pipeline system, no new tick-order decision) to write
+    sigma_capital_labor / sigma_wage / derived_class_cell node attrs
+    (social_class only; cell only when BOTH axes positioned; cell values
+    are pole-name pairs, not pre-committed role names) + a pole_readings
+    graph attr as the cross-tick previous channel. All three node attrs
+    registered in SOCIAL_CLASS_COMPUTED_FIELDS in the same commit.
+    Byte-identical safe BY CONSTRUCTION: dense goldens pin a fixed getter
+    allowlist; new attributes are invisible to it.
+
+    Partition sentinel (Phase 1): babylon/sentinels/partition/ (sixth
+    sentinel, advisory tier only) reporting agreement_rate against an
+    explicit derived-cell-to-seeded-role crosswalk, divergent_nodes,
+    unpositioned_count, multi_occupancy, side_flip_count. The DATA, not a
+    threshold, is Phase 1's deliverable; two decision rules gate later
+    phases (low wayne_county agreement => escalate pulling Program 10
+    forward; high flip counts => hysteresis before ANY adjudication
+    cutover).
+
+    Cutover roadmap: Phase 2 = the two provably-redundant sites, proven by
+    side-by-side decision diffs (empty diff => baselines untouched).
+    Phase 3+ = deep cutover in risk order (ImperialRent sink, Struggle
+    gates, Reactionary entitlement, Community distance), each with
+    regenerated baselines + an R-PROOF divergence doc; ControlRatio
+    (revolution-vs-genocide branch) LAST, no exception, only after low
+    flip-count evidence, with a dedicated high-effort review. Multiplicity
+    policy (Phase 3+ only): reads = population-weighted aggregate over
+    cell occupants; writes = broadcast to all; must-name-one = existing
+    min(candidates) idiom. Seed-default derivation (subsistence/
+    entitlement/volatility from derived position) is explicitly a
+    FOLLOW-ON program — construction-time defaults are the intended
+    permanent seed vocabulary.
+  consequences: |
+    Phase 1 ships zero behavior change (qa:regression byte-identical with
+    unmodified baselines is a hard gate) while making the seeded-vs-derived
+    disagreement measurable for the first time. The roundtrip sentinel's
+    role pin stays true permanently under slots-as-positions. Phases 2/3+
+    are scheduled as their own sessions (~18-22 total); each Phase-3
+    cutover legitimately moves baselines and must ship its divergence doc —
+    regeneration is never silent. _CIRCUIT_ROLES and _CLASS_ID_NAMES
+    (engine_bridge/narrator) are flagged as the first presentation
+    re-keying targets post-Phase-3 so no parallel derived-cell lens gets
+    built from scratch and orphans them. Program 10 gains a ready-made
+    landing seam (the imperial pole_measure) and loses nothing — no
+    ordering dependency is created in either direction. The George-Jackson
+    walk and decomposition's duplicated _find_entity_by_role get one
+    shared multiplicity-aware helper in Phase 3.
+  verification: |
+    Constitution I.19 text and Amendment S clauses read directly from
+    CONSTITUTION.md. Census, redundancy claims, and role-never-mutated
+    verified by three read-only explorer agents against
+    feature/epochs-wave1-spine (struggle.py, reactionary.py,
+    decomposition.py, control_ratio.py, economic.py, production.py,
+    community.py, social_class.py, value_form.py, catalog.py,
+    contradiction.py, regression_test.py, roundtrip registry).
+    digraph_maximum_bisimulation confirmed UNTYPED (edge-existence only)
+    and RelationalCoarsestPartition unsorted by direct rustworkx 0.18.0
+    probe — hence per-edge-type filtered views + partition meet if
+    bisimulation refinement is later used, and W1.8-style defensive sorts
+    everywhere. Dense goldens confirmed to pin a fixed getter allowlist
+    (tools/regression_test.py _DENSE_ENTITY_FIELDS), making shadow attrs
+    invisible by construction. GapMeasure's PEP 695 generic idiom and the
+    existing PoleBinding type (no name collision) confirmed by direct read
+    of opposition.py. ADR numbering (070 next free) and program numbering
+    (18 taken by ADR069) confirmed by directory listing.
+  references:
+    - "project/programs/19-emergent-class-partition.md (program master record: census table, phase DoDs, decision rules, sizing)"
+    - "CONSTITUTION.md I.19 (partitions emerge from dialectic resolution patterns), I.7 (quantity->quality thresholds), III.8 (Aleksandrov), III.11 (loud failure / absence over fabrication), Amendment S (dialectical apex)"
+    - "src/babylon/domain/dialectics/core/opposition.py (GapReading/GapMeasure/OppositionRegistry._lead — the shapes and tie rule PoleReading inherits)"
+    - "src/babylon/engine/systems/contradiction.py:184-223 (_build_graph_inputs — where per-node pole information currently dies in the aggregation mean)"
+    - "project/programs/10-spectrum-of-unequal-exchange.md (Amendment N: per-node sigma computed-never-assigned; binaries as sigma-band quantizations — the imperial pole_measure landing seam)"
+    - "ai/decisions/ADR059_fork_reconciliation.yaml item context: Feature 016 transition_engine + Feature 043 evaluate_class_shares (the two tested, unwired derive-don't-seed prototypes)"
+    - "memory: direction-emergent-endgames.md + constitution-v2-10-0-amendments-r-s.md (the sibling statics-are-derived rulings this program unifies with)"

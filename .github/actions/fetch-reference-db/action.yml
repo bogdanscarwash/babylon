@@ -15,15 +15,90 @@ inputs:
     # v2 (2026-07-11): + fact_faf_commodity_flow FULL — the headless runner's
     # hydration path reads it (Determinism Bundle died without it on the v1
     # proving run).
-    default: ci-data-v2
+    # v3 (2026-07-15, Wave 6 data wires): + fact_bls_unemployment_decomposition
+    # FULL (BLS LAUS U-3, read by SQLiteBLSUnemploymentSource) + hickel/ricci
+    # schema-only tables (hydrator SELECTs them unconditionally).
+    # v4 (2026-07-16, Wave 6 census wires): + fact_census_housing FULL
+    # (skip -> full; SQLiteCensusHousingSource renter share) +
+    # fact_census_income FULL (michigan -> full; SQLiteCensusIncomeSource
+    # bracket ratio). tiger tarball unchanged from v3.
+    # v5 (2026-07-16, empirical-invariants program): + fact_fred_wealth_shares
+    # FULL (skip -> full; un-orphaned by test_fred_wealth_shares.py, the Fed
+    # DFA redundant-source leg) + fact_ricci_unequal_exchange now POPULATED
+    # (29 Ricci TOTAL transfer rows via tools/ingest/ricci_unequal.py + RICnn
+    # dim_country region rows). tiger tarball unchanged from v3.
+    # v6 (2026-07-17, ADR075 ruling-1 + ADR076 execution): -24 objects (16
+    # ruling-1 amputations incl. the 522MB __pre_086 backup + 8 demotions to
+    # data-artifacts.yaml, ricci mirror among them); + fact_productivity_annual
+    # FULL (17,336 BLS rows — view_surplus_value/view_imperial_rent alive) +
+    # housing pair michigan-scoped (repaired view_rent_crisis) + the five
+    # Program 22 minerals surfaces FULL. Release also carries the four ADR076
+    # parquet artifacts (manifest-pinned in data-artifacts.yaml). tiger
+    # tarball unchanged from v3.
+    # v7 (2026-07-20, parquet-canonical cutover): subset now DERIVED from the
+    # rebuilt build product (product sha f760bab5..., sqlite 3.53.1,
+    # double-build byte-identical; qa:regression 6/6 pre- and post-flip);
+    # release adds full per-table parquet (80 files) + canonical schema.sql,
+    # all manifest-pinned — the manifest-driven step below fetches them
+    # without any action-input bump. ingest_checkpoint left the governed
+    # estate (loaders recreate on demand). tiger tarball unchanged from v3.
+    # v8 (2026-07-30, ADR169 follow-up executed): + fact_ricci_unequal_
+    # exchange_gvc FULL (51 rows) — created by P26 U5b (ADR165 D2/D3, commit
+    # 84e29ed8, 2026-07-28) EIGHT DAYS after the v7 cut, while
+    # _bootstrap_external_nodes reads it unconditionally at session init, so
+    # every CI job that hydrates a session died at TICK 0 with `no such
+    # table` — including qa:michigan-rollover-smoke, the tick-52 gate, which
+    # had therefore never once executed on its merits. Source DB rebuilt in
+    # the pinned dataBuild devshell (sqlite 3.53.1) and reproduced the
+    # registry product sha 5e1e60fc... exactly (76 tables, 59,828,266 rows);
+    # all 85 manifest-pinned dist artifacts sha-verified before upload.
+    # tiger tarball unchanged from v3.
+    # v8 in-place refresh (2026-09-04, PER-31, PR #900): bridge_cfs_county
+    # populated — 3,148 FAF5 county-factor allocation rows. Its parquet was
+    # clobbered in place; the subset was rebuilt from the restamped product
+    # (sha 7e67f8cd..., 76 tables, 59,831,414 rows) as
+    # reference-subset-20260904-v8.sqlite (double-build byte-identical).
+    # tiger tarball unchanged from v3.
+    # v8 in-place refresh (2026-09-05, PER-31, PR #904): fact_hpms_road_segment
+    # populated (352,814 Michigan 2024 rows) — subset policy skip, so the only
+    # subset-visible delta is the full-scoped dim_data_source gaining its
+    # DOT_HPMS row (21 -> 22). Rebuilt from the restamped product (sha
+    # 180ba428..., 76 tables, 60,184,229 rows) as
+    # reference-subset-20260905-v8.sqlite (double-build byte-identical,
+    # 14,195,447 rows kept). tiger tarball unchanged from v3.
+    # v8 in-place refresh (2026-09-05, PER-32): fact_qwi_county_flow populated
+    # (1,615,751 Michigan LEHD QWI rows, 2000Q3-2021Q4) — subset policy skip;
+    # subset-visible deltas are dim_data_source 22 -> 23 (LEHD_QWI row) and
+    # dim_time 485 -> 523 (quarterly rows extended back to 2000Q3). Rebuilt
+    # from the restamped product (sha f4310cce..., 77 tables, 61,800,019 rows)
+    # as reference-subset-20260905b-v8.sqlite (double-build byte-identical,
+    # 14,195,486 rows kept). tiger tarball unchanged from v3.
+    # v8 in-place refresh (2026-09-05, PER-30): fact_asm_manufacturing_annual
+    # populated (2,592 ASM 2022-benchmark national x NAICS x year rows,
+    # 2018-2021) — subset policy skip; the only subset-visible delta is
+    # dim_data_source 23 -> 24 (CENSUS_ASM row). Rebuilt from the restamped
+    # product (sha 442f8dde..., 78 tables, 61,802,612 rows) as
+    # reference-subset-20260905c-v8.sqlite (double-build byte-identical,
+    # 14,195,487 rows kept). tiger tarball unchanged from v3.
+    # v8 in-place refresh (2026-09-05, PER-31): fact_transborder_port_commodity
+    # (1,242,684 rows), fact_transborder_state_port (1,977,346),
+    # fact_border_crossing_throughput (275,901) and dim_hs2_commodity (99)
+    # populated — fact tables subset policy skip; subset-visible deltas are
+    # dim_data_source 24 -> 26 (BTS_TRANSBORDER + BTS_BORDER_CROSSING),
+    # dim_time 523 -> 710 (monthly rows extended back to 1996 and forward
+    # to 2026-07) and full-scoped dim_hs2_commodity (99 rows). Rebuilt from
+    # the restamped product (sha ff5293d0..., 82 tables, 65,298,831 rows) as
+    # reference-subset-20260905d-v8.sqlite (double-build byte-identical,
+    # 14,195,775 rows kept). tiger tarball unchanged from v3.
+    default: ci-data-v8
   asset:
     description: Asset filename within the release
     required: false
-    default: reference-subset-20260711b.sqlite
+    default: reference-subset-20260905d-v8.sqlite
   sha256:
     description: Expected sha256 of the asset (pin — bump with the tag)
     required: false
-    default: 922b5a660306006d04ec1d322795d975c33638c59cb1278fbefb555db363b339
+    default: 525a55fdffaf5ef2f3b7e448e6b33f41dfcf6884e36f7a656cd4789de2ec493a
   tiger-asset:
     description: TIGER county-shapefile tarball within the release (the
       headless runner reads data/tiger/county/tl_2024_us_county.shp — proving
@@ -40,7 +115,7 @@ runs:
   steps:
     - name: Restore cached subset
       id: refdb-cache
-      uses: actions/cache@v6
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: ~/refdb/${{ inputs.asset }}
         key: refdb-${{ inputs.tag }}-${{ inputs.sha256 }}
@@ -73,7 +148,7 @@ runs:
 
     - name: Restore cached TIGER tarball
       id: tiger-cache
-      uses: actions/cache@v6
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: ~/refdb/${{ inputs.tiger-asset }}
         key: refdb-${{ inputs.tag }}-${{ inputs.tiger-sha256 }}
@@ -96,3 +171,62 @@ runs:
         mkdir -p data/tiger/county
         tar xzf ~/refdb/'${{ inputs.tiger-asset }}' -C data/tiger/county
         ls -la data/tiger/county/
+
+    # ADR076: the release also carries the dist-tier parquet artifacts. The
+    # pins live in data-artifacts.yaml (single source of truth) — this step
+    # is manifest-driven, so a regenerated artifact never needs an action-
+    # input bump; the manifest commit IS the pin bump. stdlib-only parsing:
+    # the manifest is machine-generated by tools/make_data_artifacts.py.
+    #
+    # Parquet-canonical pipeline (2026-07-19 plan, Task 9): the manifest's
+    # top-level `schema:` block (schema.sql — the canonical DDL, written by
+    # tools/extract_reference_schema.py) is fetched + sha-verified the same
+    # way as an `artifacts:` entry, once it exists. Section-scoped parsing
+    # (not one flat regex pass) so the `product:` block's own `sha256:` key
+    # (the built-DB pin, not a fetchable dist file) is never mistaken for a
+    # fetch target. Pre-cutover, the manifest has no `schema:` block, so this
+    # addition is a no-op (empty list) — inert until the cutover commit lands.
+    - name: Fetch + verify dist-tier data artifacts (manifest-driven)
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        python3 - <<'PY' > /tmp/artifact-list
+        import re
+        section = None
+        sha = None
+        schema_sha = schema_file = None
+        for line in open("data-artifacts.yaml", encoding="utf-8"):
+            stripped = line.rstrip("\n")
+            m = re.match(r"^(schema|product|artifacts):", stripped)
+            if m:
+                section = m.group(1)
+                continue
+            if section == "schema":
+                m = re.match(r"^  file: (dist/\S+)$", stripped)
+                if m:
+                    schema_file = m.group(1)
+                m = re.match(r"^  sha256: ([0-9a-f]{64})$", stripped)
+                if m:
+                    schema_sha = m.group(1)
+            elif section == "artifacts":
+                m = re.match(r"    sha256: ([0-9a-f]{64})$", stripped)
+                if m:
+                    sha = m.group(1)
+                m = re.match(r"    home: (dist/\S+)$", stripped)
+                if m and sha:
+                    print(sha, m.group(1))
+                    sha = None
+        if schema_file and schema_sha:
+            print(schema_sha, schema_file)
+        PY
+        mkdir -p dist/data-artifacts
+        while read -r sha home; do
+          name="$(basename "$home")"
+          gh release download '${{ inputs.tag }}' \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern "$name" \
+            --output "$home"
+          echo "$sha  $home" | sha256sum -c -
+        done < /tmp/artifact-list
+        ls -la dist/data-artifacts/

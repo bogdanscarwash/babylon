@@ -233,7 +233,7 @@ lessons_learned:
       Any code using __file__ for path resolution will fail.
     solution: |
       Don't use exec() for testing. Run the file directly:
-      poetry run python tools/generate_fascist_soundtrack.py
+      poetry run python -m tools.fascist_soundtrack.generate_all
 
   # ---------------------------------------------------------------------------
   # NOTE DEFINITION GOTCHAS
@@ -495,7 +495,7 @@ themes:
 
   fascist_soundtrack:
     location: "assets/music/fascist/"
-    generator: "tools/generate_fascist_soundtrack.py"
+    generator: "tools/fascist_soundtrack/ (package; run via `mise run midi:generate-fascist`)"
     concept: "~63 minutes exploring two faces of fascism"
     total_duration: "~63:00"
     track_count: 12
@@ -919,7 +919,7 @@ composition_rules:
 commands:
   generate_phi: "poetry run python tools/generate_theme.py"
   generate_panopticon: "poetry run python tools/generate_fascist_theme.py"
-  generate_fascist_soundtrack: "poetry run python tools/generate_fascist_soundtrack.py"
+  generate_fascist_soundtrack: "mise run midi:generate-fascist"
   play_with_fluidsynth: "fluidsynth -a alsa /usr/share/sounds/sf2/FluidR3_GM.sf2 assets/music/*.mid"
   play_fascist_tracks: "fluidsynth -a alsa /usr/share/sounds/sf2/FluidR3_GM.sf2 assets/music/fascist/*.mid"
   convert_to_wav: "fluidsynth -F output.wav /path/to/soundfont.sf2 input.mid"

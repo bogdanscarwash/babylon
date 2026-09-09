@@ -1,0 +1,134 @@
+ADR246_codex_rust_host_boundary:
+  status: accepted
+  date: '2026-08-28'
+  title: >-
+    Babylon adopts NNS-104 policy v11 as one byte-identical Codex Rust host
+    boundary with repository-local build state and repository-specific budgets
+  issue: PER-286
+  canonical_contract:
+    shared_policy: .codex/host/policy.sh
+    dispatcher: .codex/host/cargo
+    installer: .codex/host/install.sh
+    environment: .codex/environments/environment.toml
+    repository_law: tests/unit/tools/test_rust_host_policy_contract.py
+  context: |
+    Babylon and NNSims previously shared one unversioned sccache directory and
+    could overlap memory-heavy Cargo work on the same host. Babylon also kept
+    its Codex setup under an ignored `.codex/` directory, so a fresh worktree
+    could neither reproduce nor review the host behavior. NNS-104 established
+    policy v11 and its aggregate and child resource budgets. PER-286 supplies
+    Babylon's complementary repository adoption without changing the Rust
+    workspace, the 1.91.1 toolchain pin, or any game or persistence behavior.
+  decision: |
+    The nine files under `.codex/host` that define policy, dispatch,
+    installation, user-systemd units, and hermetic shell contracts are
+    byte-identical to NNS-104 at its coordinated v11 head. A Babylon test pins each
+    file's SHA-256 identity. Any semantic change must advance the policy version
+    and update both private repositories; a same-version divergence refuses at
+    installation.
+
+    The PATH-first dispatcher recognizes the exact Babylon origin, assigns the
+    active worktree its own `rust/target` for both Cargo target and build state,
+    clears inherited compiler-cache settings, selects the Babylon-only p2
+    sccache directory and Unix socket, and enters `codex-rust-babylon.slice`.
+    The child allows at most four CPUs, 12 GiB memory, and 2 GiB swap. The
+    shared parent allows both private repositories at most eight CPUs, 24 GiB
+    memory, and 4 GiB swap. The explicit cross-repository serialized host slot
+    remains mandatory; the slices limit consequences and do not authorize
+    concurrent heavy gates.
+
+    Babylon's Codex environment is tracked repository law. Setup refuses
+    inherited Cargo target, build, wrapper, and cache configuration; checks
+    bounded free space; retains the existing LFS cache, reference-data copy,
+    `.env.example`, mise, and worktree-contract steps; installs Rust 1.91.1;
+    installs or verifies the shared dispatcher; bootstraps exact sccache 0.17.0;
+    and proves Cargo metadata resolves to the active worktree's `rust/target`.
+    The former `.mise.toml` and Nix shared-cache exports are retired. Their
+    eight-job setting becomes an exact four-job defense-in-depth ceiling so an
+    ordinary clone remains bounded before the account-wide dispatcher exists.
+    A Nix shell restores the exact policy-v11 Cargo-only shim ahead of its own
+    Cargo without moving unrelated user binaries ahead of rustup. Without that
+    shim it retains its pinned Nix toolchain and the same four-job ceiling.
+
+    Policy v11 also preserves a leading rustup `+toolchain` selector, recognizes
+    managed repositories named through Cargo's `--manifest-path` and `-C`,
+    validates Cargo config and environment aliases on every invocation, and
+    falls through from an invalid flat sccache candidate to the valid installed
+    layout. It refuses alias-expanded repository switches, reclassifies an
+    explicit manifest atomically so unrelated source cannot retain the caller's
+    managed target or slice, and accepts a nested scope signal only when
+    `/proc/self/cgroup` proves membership in the selected repository slice.
+    Existing explicit manifests are resolved before repository classification,
+    and repository discovery ignores inherited Git repository and config
+    selectors. A worktree target, repository cache, and socket directory may
+    not be a symlink or resolve outside its canonical physical path. Dispatcher
+    inspection returns reserved nonzero status 88,
+    so an inherited inspection flag cannot make a gate green without Cargo.
+    The wrapper-free bootstrap capability admits only the exact pinned sccache
+    installation command; ordinary and malformed commands refuse, and neither
+    private capability reaches real Cargo. Babylon's bootstrap admission
+    requires the repository's exact pinned `+1.91.1` selector, while NNSims's
+    exact admission carries no selector. A managed nested process cannot switch
+    to an unmanaged repository while retaining its target, cache, or slice.
+    Loaded parent and child slices must name the installed versioned unit
+    fragment and report the exact governed CPU, memory, swap, I/O, and task
+    properties; an automatically created implicit slice is not policy.
+    Installation stages a complete immutable versioned bundle and renames it
+    into place before the persistent high-water mark advances. A partial or
+    divergent same-version root refuses instead of mixing files from separate
+    attempts.
+    Setup enables Git's common `extensions.worktreeConfig` before it writes the
+    linked worktree's LFS cache setting.
+
+    Unmanaged repositories continue through rustup's real Cargo unchanged.
+    The machine-global Cargo configuration remains free of target, build,
+    wrapper, and sccache policy. `CARGO_HOME` and `RUSTUP_HOME` remain shared;
+    compiler outputs do not. The systemd units are resource controls, not a VM
+    or security boundary.
+  rejected:
+    - >-
+      One shared Cargo target or build directory: fingerprints and executable
+      identity become causally ambiguous across worktrees.
+    - >-
+      One shared sccache socket and directory: either repository can consume or
+      mutate the other's daemon state and budget.
+    - >-
+      Repository-only job variables as the sole boundary: nested Cargo and
+      inherited user configuration can bypass them. The retained four-job
+      value is defense in depth beneath the PATH dispatcher, not a substitute.
+    - >-
+      Keeping `.codex` ignored: new worktrees silently lose the reviewed setup
+      and allow unreviewed local drift.
+  consequences: |
+    Babylon and NNSims can reuse compiler results only through separately keyed
+    sccache namespaces while every worktree retains disposable local Cargo
+    state. Worktree deletion cannot remove another worktree's artifacts. A
+    missing user-systemd manager, pinned cache binary, policy installation, or
+    exact target identity fails closed for the two recognized repositories.
+    Existing dirty and active checkouts are unchanged because adoption occurs
+    in the dedicated PER-286 worktree.
+
+    Windows impact: this Codex development-host policy is Linux-only and does
+    not change the native Windows shipping target or its release artifacts.
+  verification: |
+    The Python repository law pins all nine shared v11 files, proves its digest
+    inventory and bytes, proves its digest checker catches changed bytes,
+    proves `.codex` is not ignored, checks the Babylon setup contract, isolates
+    v11's inherited NNS-only assertions as test fixtures, and refuses cache
+    overrides. Babylon's general shellcheck hook excludes only that immutable
+    bundle because source annotations would fork its bytes; the pinned POSIX
+    syntax and executable contract checks remain mandatory. An executable Nix
+    proof requires an installed managed shim to resolve back through the
+    Babylon dispatcher with four jobs. The byte-level comparison, POSIX syntax
+    checks, policy contract, installer contract, live installer check, Cargo
+    metadata, cache/socket identity, and repository and Rust gates complete the
+    executable evidence.
+  preserves:
+    - Rust 1.91.1 in rust/rust-toolchain.toml
+    - per-worktree rust/target ownership
+    - existing data, LFS, mise, Nix, and worktree contracts
+    - gameplay, persistence authority, dependencies, and governed baselines
+    - explicit serialized host-slot coordination
+  related:
+    - ADR102_environment_sovereignty
+    - NNS-104

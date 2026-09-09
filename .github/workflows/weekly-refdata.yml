@@ -1,0 +1,34 @@
+name: Weekly — Reference-Data Tests
+
+# ADR181 R3(ii): per-leg split of the monolithic nightly. Weekly tempo.
+# The requires_reference_db suites' ONE home: excluded from the dev unit
+# shard and from test-rest by the marker.
+
+on:
+  schedule:
+    - cron: "0 6 * * 3"  # Wednesday 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly-refdata
+  cancel-in-progress: false
+
+jobs:
+  refdata-tests:
+    name: Reference-Data Tests (dev HEAD, pinned ci-data subset)
+    if: vars.CI_REFDB_READY == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: dev
+      - uses: ./.github/actions/bootstrap-python
+      - uses: ./.github/actions/fetch-reference-db
+      - name: Run requires_reference_db suites
+        run: >-
+          uv run pytest tests -m requires_reference_db
+          -o addopts="" -vv -ra -l --tb=long --durations=0

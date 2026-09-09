@@ -1,0 +1,614 @@
+meta:
+  contract: H3EstateContractV1
+  version: 1
+  issue: PER-275
+  parent: PER-21
+
+authority:
+  purpose: Migration-ready H3 estate and governed artifact handoff without database mutation
+  evidence_law: CONSTITUTION.md Article IV
+  architecture_record: docs/superpowers/specs/2026-08-22-rust-postgresql-persistence-boundary-design.md
+  canonical_identity: babylon_ref.h3_cell(cell_id)
+  canonical_rust_type: H3CellId(u64)
+  canonical_sql_type: positive BIGINT
+  compatibility_text: lowercase hexadecimal without prefix or padding
+  classifications:
+    legacy_estate_inventory: Observed
+    artifact_bytes_and_extents: Observed
+    measure_rows: Derived
+    framing_and_conversion_contracts: Designed
+  excluded_authority:
+    - PostgreSQL DDL or schema epoch changes
+    - Runtime database reads or writes
+    - Compatibility view creation
+    - Reader or writer cutover
+    - Legacy-write prohibition or retirement
+    - Place or nationwide overlap completion
+    - Any authority from /media/user/data/babylon-data or runtime rows
+
+bounds:
+  contract_bytes: 262144
+  vector_bytes: 65536
+  vector_lines: 256
+  persistent_tables: 15
+  current_views: 10
+  temporary_shapes: 2
+  runtime_consumers: 31
+  artifacts: 6
+  artifact_rows: 65536
+  artifact_bytes: 67108864
+
+conversion_policies:
+  required_h3:
+    source: canonical lowercase legacy text
+    target: checked positive BIGINT referencing babylon_ref.h3_cell(cell_id)
+    conflict: refuse invalid, unknown, noncanonical, negative, duplicate, or mismatched identity
+    compatibility: reproduce the exact lowercase legacy text
+  nullable_h3:
+    source: null or canonical lowercase legacy text
+    target: null or checked positive BIGINT referencing babylon_ref.h3_cell(cell_id)
+    conflict: preserve null; otherwise apply required_h3 refusal law
+    compatibility: preserve null or reproduce exact lowercase legacy text
+  tagged_h3_or_external:
+    source: H3 text when kind=hex; canada or rest_of_usa when kind=external
+    target: nullable checked cell_id plus a closed destination kind and preserved external literal
+    conflict: refuse kind/value disagreement and never coerce an external literal
+    compatibility: reproduce the exact legacy workplace_dest text
+
+vectors:
+  path: rust/crates/babylon-kernel/tests/fixtures/h3_cell_id_vectors_v1.txt
+  bytes: 51740
+  sha256: 079fd93db1cfb9b2aef79b7b32476f737689a91c194de912864bb3849e578487
+  oracle: h3-py 4.5.0 backed by the Uber H3 C core
+  consumers: [Rust, Python, SQL, h3-pg-test-oracle]
+  counts:
+    valid: 208
+    pentagons: 192
+    invalid_raw: 6
+    invalid_sql: 1
+    invalid_text: 6
+    invalid_ancestor: 2
+
+estate:
+  source_files:
+    table_definitions:
+      - src/babylon/persistence/postgres_schema.py
+      - src/babylon/persistence/migrations/0011_dynamic_hex_state.sql
+      - src/babylon/persistence/migrations/0016_lodes_od_matrix.sql
+      - src/babylon/persistence/migrations/0027_hex_spatial_map.sql
+    current_views:
+      - src/babylon/persistence/postgres_schema.py
+      - src/babylon/persistence/migrations/0030_views_current.sql
+    temporary_shapes: src/babylon/persistence/hex_hydrator.py
+    partition_registry: src/babylon/persistence/partitioning.py
+    unused_domain: src/babylon/persistence/migrations/0039_domain_contracts.sql
+  runtime_consumer_census:
+    - path: src/babylon/domain/economics/border_commute_synthesis.py
+      relation: immutable_reference_lodes_od_matrix
+      access: write
+    - path: src/babylon/domain/economics/lodes_commute_matrix.py
+      relation: immutable_reference_lodes_od_matrix
+      access: read
+    - path: src/babylon/domain/economics/lodes_commute_matrix.py
+      relation: immutable_reference_lodes_od_matrix
+      access: write
+    - {path: src/babylon/engine/headless_runner/bridge.py, relation: dynamic_hex_state, access: read}
+    - {path: src/babylon/engine/headless_runner/bridge.py, relation: hex_spatial_map, access: read}
+    - {path: src/babylon/engine/headless_runner/runner.py, relation: v_hex_state_asof, access: read}
+    - {path: src/babylon/engine/headless_runner/runner.py, relation: view_runtime_trace_emission, access: read}
+    - {path: src/babylon/engine/headless_runner/trace_emitter.py, relation: view_runtime_trace_emission, access: read}
+    - {path: src/babylon/persistence/archival.py, relation: dynamic_hex_state, access: read}
+    - {path: src/babylon/persistence/hex_hydrator.py, relation: dynamic_hex_state, access: write}
+    - {path: src/babylon/persistence/hex_hydrator.py, relation: hex_spatial_map, access: read}
+    - {path: src/babylon/persistence/hex_hydrator.py, relation: hex_spatial_map, access: write}
+    - {path: src/babylon/persistence/hex_init.py, relation: hex_latest, access: write}
+    - {path: src/babylon/persistence/hex_init.py, relation: hex_map, access: read}
+    - {path: src/babylon/persistence/hex_init.py, relation: hex_substrate, access: read}
+    - {path: src/babylon/persistence/postgres_aggregation.py, relation: v_county_value_aggregate, access: read}
+    - {path: src/babylon/persistence/postgres_aggregation.py, relation: v_national_value_aggregate, access: read}
+    - {path: src/babylon/persistence/postgres_aggregation.py, relation: v_state_value_aggregate, access: read}
+    - path: src/babylon/persistence/postgres_initialization.py
+      relation: immutable_reference_lodes_od_matrix
+      access: read
+    - path: src/babylon/persistence/postgres_initialization.py
+      relation: immutable_reference_lodes_od_matrix
+      access: write
+    - {path: src/babylon/persistence/postgres_runtime/_legacy.py, relation: hex_cell, access: write}
+    - {path: src/babylon/persistence/postgres_runtime/_legacy.py, relation: hex_map, access: write}
+    - {path: src/babylon/persistence/postgres_runtime/_legacy.py, relation: org_snapshot, access: read}
+    - {path: src/babylon/persistence/postgres_runtime/_legacy.py, relation: org_snapshot, access: write}
+    - {path: src/babylon/persistence/postgres_runtime/_legacy.py, relation: tick_event, access: read}
+    - {path: src/babylon/persistence/postgres_runtime/_legacy.py, relation: tick_event, access: write}
+    - {path: src/babylon/persistence/postgres_runtime/_legacy.py, relation: view_runtime_trace_emission, access: read}
+    - {path: src/babylon/persistence/postgres_runtime/_spec_062.py, relation: dynamic_hex_state, access: read}
+    - {path: src/babylon/persistence/postgres_runtime/_spec_062.py, relation: dynamic_hex_state, access: write}
+    - {path: tools/archive_sessions.py, relation: dynamic_hex_state, access: read}
+    - {path: tools/archive_sessions.py, relation: dynamic_hex_state_default, access: read}
+  partition:
+    parent: dynamic_hex_state
+    default_child: dynamic_hex_state_default
+    child_pattern: dynamic_hex_state_p_<session_uuid_hex>
+    field: h3_index
+    rule: every child inherits the parent conversion and reconciliation law
+  persistent_tables:
+    - name: dynamic_hex_state
+      source: src/babylon/persistence/migrations/0011_dynamic_hex_state.sql
+      scope: session_tick
+      fields:
+        - legacy_name: h3_index
+          legacy_type: TEXT
+          kind: required_h3
+          canonical_name: cell_id
+          compatibility_name: h3_index
+      compatibility_view: public.v_compat_dynamic_hex_state_v1
+      reader_owners:
+        - src/babylon/engine/headless_runner/bridge.py
+        - src/babylon/persistence/hex_hydrator.py
+        - src/babylon/persistence/postgres_runtime/_spec_062.py
+        - tools/archive_sessions.py
+      retirement_condition: all marker-aware readers use the canonical key and the compatibility consumer scan is empty
+    - name: hex_activity
+      source: src/babylon/persistence/postgres_schema.py
+      scope: game_tick
+      fields:
+        - legacy_name: h3_index
+          legacy_type: VARCHAR(16)
+          kind: required_h3
+          canonical_name: cell_id
+          compatibility_name: h3_index
+      compatibility_view: public.v_compat_hex_activity_v1
+      reader_owners: []
+      retirement_condition: hex_latest refresh and every observer read canonical cell_id
+    - name: hex_cell
+      source: src/babylon/persistence/postgres_schema.py
+      scope: global_legacy
+      fields:
+        - legacy_name: h3_index
+          legacy_type: VARCHAR(15)
+          kind: required_h3
+          canonical_name: cell_id
+          compatibility_name: h3_index
+        - legacy_name: res5_parent
+          legacy_type: VARCHAR(15)
+          kind: required_h3
+          canonical_name: ancestor_r5
+          compatibility_name: res5_parent
+        - legacy_name: res6_parent
+          legacy_type: VARCHAR(15)
+          kind: required_h3
+          canonical_name: ancestor_r6
+          compatibility_name: res6_parent
+      compatibility_view: public.v_compat_hex_cell_v1
+      reader_owners: []
+      retirement_condition: county duplication is retired and every cell resolves through babylon_ref.h3_cell
+    - name: hex_latest
+      source: src/babylon/persistence/postgres_schema.py
+      scope: game_current_cache
+      fields:
+        - legacy_name: h3_index
+          legacy_type: VARCHAR(16)
+          kind: required_h3
+          canonical_name: cell_id
+          compatibility_name: h3_index
+      compatibility_view: public.v_compat_hex_latest_v1
+      reader_owners: []
+      retirement_condition: all five composition views and frontend readers use the canonical projection
+    - name: hex_map
+      source: src/babylon/persistence/postgres_schema.py
+      scope: game
+      fields:
+        - legacy_name: h3_index
+          legacy_type: VARCHAR(16)
+          kind: required_h3
+          canonical_name: cell_id
+          compatibility_name: h3_index
+      compatibility_view: public.v_compat_hex_map_v1
+      reader_owners: [src/babylon/persistence/hex_init.py]
+      retirement_condition: repeated cell-to-county identity is replaced by the governed geography relation
+    - name: hex_r8_linear_features_reference
+      source: src/babylon/persistence/postgres_schema.py
+      scope: global_reference
+      fields:
+        - legacy_name: h3_index
+          legacy_type: VARCHAR(17)
+          kind: required_h3
+          canonical_name: cell_id
+          compatibility_name: h3_index
+      compatibility_view: public.v_compat_hex_r8_linear_features_reference_v1
+      reader_owners: []
+      retirement_condition: linear_feature_length_m exists and no supported consumer reads the legacy table
+    - name: hex_r8_reference
+      source: src/babylon/persistence/postgres_schema.py
+      scope: global_reference
+      fields:
+        - legacy_name: h3_index
+          legacy_type: VARCHAR(17)
+          kind: required_h3
+          canonical_name: cell_id
+          compatibility_name: h3_index
+        - legacy_name: parent_h3
+          legacy_type: VARCHAR(15)
+          kind: required_h3
+          canonical_name: parent_cell_id
+          compatibility_name: parent_h3
+      compatibility_view: public.v_compat_hex_r8_reference_v1
+      reader_owners: []
+      retirement_condition: R8 readers use canonical identity and the governed linear-feature relation
+    - name: hex_spatial_map
+      source: src/babylon/persistence/migrations/0027_hex_spatial_map.sql
+      scope: session
+      fields:
+        - legacy_name: h3_index
+          legacy_type: TEXT
+          kind: required_h3
+          canonical_name: cell_id
+          compatibility_name: h3_index
+      compatibility_view: public.v_compat_hex_spatial_map_v1
+      reader_owners: [src/babylon/engine/headless_runner/bridge.py, src/babylon/persistence/hex_hydrator.py]
+      retirement_condition: >-
+        session duplication is replaced by governed geography membership and all readers compare equal
+    - name: hex_state
+      source: src/babylon/persistence/postgres_schema.py
+      scope: session_tick
+      fields:
+        - legacy_name: h3_index
+          legacy_type: VARCHAR(15)
+          kind: required_h3
+          canonical_name: cell_id
+          compatibility_name: h3_index
+      compatibility_view: public.v_compat_hex_state_v1
+      reader_owners: []
+      retirement_condition: >-
+        dense legacy state has a declared Port Adapt Replace or Retire disposition and no reader remains
+    - name: hex_substrate
+      source: src/babylon/persistence/postgres_schema.py
+      scope: game_reference
+      fields:
+        - legacy_name: h3_index
+          legacy_type: VARCHAR(16)
+          kind: required_h3
+          canonical_name: cell_id
+          compatibility_name: h3_index
+        - legacy_name: r7_parent
+          legacy_type: VARCHAR(16)
+          kind: required_h3
+          canonical_name: ancestor_r7
+          compatibility_name: r7_parent
+      compatibility_view: public.v_compat_hex_substrate_v1
+      reader_owners: [src/babylon/persistence/hex_init.py]
+      retirement_condition: the R8 substrate uses canonical cells and semantic parent equality
+    - name: hex_terrain_state
+      source: src/babylon/persistence/postgres_schema.py
+      scope: session_tick
+      fields:
+        - legacy_name: h3_index
+          legacy_type: VARCHAR(15)
+          kind: required_h3
+          canonical_name: cell_id
+          compatibility_name: h3_index
+      compatibility_view: public.v_compat_hex_terrain_state_v1
+      reader_owners: []
+      retirement_condition: terrain ownership has a declared disposition and no reader remains
+    - name: immutable_reference_lodes_od_matrix
+      source: src/babylon/persistence/migrations/0016_lodes_od_matrix.sql
+      scope: session_year_reference
+      fields:
+        - legacy_name: home_hex
+          legacy_type: TEXT
+          kind: required_h3
+          canonical_name: home_cell_id
+          compatibility_name: home_hex
+        - legacy_name: workplace_dest
+          legacy_type: TEXT
+          kind: tagged_h3_or_external
+          canonical_name: workplace_cell_id
+          compatibility_name: workplace_dest
+      tag_field: workplace_dest_kind
+      tag_legacy_type: TEXT
+      tag_allowed_values: [external, hex]
+      external_literals: [canada, rest_of_usa]
+      compatibility_view: public.v_compat_immutable_reference_lodes_od_matrix_v1
+      reader_owners:
+        - src/babylon/domain/economics/border_commute_synthesis.py
+        - src/babylon/domain/economics/lodes_commute_matrix.py
+        - src/babylon/persistence/postgres_initialization.py
+      retirement_condition: every hex destination is canonical and both external literals round-trip byte-identically
+    - name: infrastructure_link_state
+      source: src/babylon/persistence/postgres_schema.py
+      scope: session_tick
+      fields:
+        - legacy_name: source_h3
+          legacy_type: VARCHAR(15)
+          kind: required_h3
+          canonical_name: source_cell_id
+          compatibility_name: source_h3
+        - legacy_name: target_h3
+          legacy_type: VARCHAR(15)
+          kind: required_h3
+          canonical_name: target_cell_id
+          compatibility_name: target_h3
+      compatibility_view: public.v_compat_infrastructure_link_state_v1
+      reader_owners: []
+      retirement_condition: both endpoints have canonical foreign keys and old/new link queries compare equal
+    - name: org_snapshot
+      source: src/babylon/persistence/postgres_schema.py
+      scope: game_tick
+      fields:
+        - legacy_name: home_hex
+          legacy_type: VARCHAR(16)
+          kind: nullable_h3
+          canonical_name: home_cell_id
+          compatibility_name: home_hex
+      compatibility_view: public.v_compat_org_snapshot_v1
+      reader_owners: [src/babylon/persistence/postgres_runtime/_legacy.py]
+      retirement_condition: null homes and canonical homes compare equal for every organization snapshot reader
+    - name: tick_event
+      source: src/babylon/persistence/postgres_schema.py
+      scope: game_tick
+      fields:
+        - legacy_name: h3_index
+          legacy_type: VARCHAR(16)
+          kind: nullable_h3
+          canonical_name: cell_id
+          compatibility_name: h3_index
+      compatibility_view: public.v_compat_tick_event_v1
+      reader_owners: [src/babylon/persistence/postgres_runtime/_legacy.py]
+      retirement_condition: null locations and canonical locations compare equal for event and Chronicle readers
+  temporary_shapes:
+    - name: _hex_spatial_map_tmp
+      source: src/babylon/persistence/hex_hydrator.py
+      fields:
+        - {legacy_name: h3_index, legacy_type: TEXT, kind: required_h3, canonical_name: cell_id}
+      disposition: change in the same migration train as hex_spatial_map; never a catalog authority
+    - name: _hex_state_tmp
+      source: src/babylon/persistence/hex_hydrator.py
+      fields:
+        - {legacy_name: h3_index, legacy_type: TEXT, kind: required_h3, canonical_name: cell_id}
+      disposition: change in the same migration train as dynamic_hex_state; never a catalog authority
+  unused_domain:
+    name: h3index
+    source: src/babylon/persistence/migrations/0039_domain_contracts.sql
+    legacy_type: TEXT length 15
+    columns_using: 0
+    disposition: retire only after consumer scan and extension-name collision proof
+  current_views:
+    - name: v_county_value_aggregate
+      source: src/babylon/persistence/migrations/0030_views_current.sql
+      successor: public.v_compat_v_county_value_aggregate_v1
+      reader_owners: [src/babylon/persistence/postgres_aggregation.py]
+    - name: v_hex_aid
+      source: src/babylon/persistence/postgres_schema.py
+      successor: public.v_compat_v_hex_aid_v1
+      reader_owners: []
+    - name: v_hex_economic
+      source: src/babylon/persistence/postgres_schema.py
+      successor: public.v_compat_v_hex_economic_v1
+      reader_owners: []
+    - name: v_hex_heat
+      source: src/babylon/persistence/postgres_schema.py
+      successor: public.v_compat_v_hex_heat_v1
+      reader_owners: []
+    - name: v_hex_intel
+      source: src/babylon/persistence/postgres_schema.py
+      successor: public.v_compat_v_hex_intel_v1
+      reader_owners: []
+    - name: v_hex_mobilize
+      source: src/babylon/persistence/postgres_schema.py
+      successor: public.v_compat_v_hex_mobilize_v1
+      reader_owners: []
+    - name: v_hex_state_asof
+      source: src/babylon/persistence/migrations/0030_views_current.sql
+      successor: public.v_compat_v_hex_state_asof_v1
+      reader_owners:
+        - src/babylon/engine/headless_runner/runner.py
+        - src/babylon/projection/registry.py
+    - name: v_national_value_aggregate
+      source: src/babylon/persistence/migrations/0030_views_current.sql
+      successor: public.v_compat_v_national_value_aggregate_v1
+      reader_owners: [src/babylon/persistence/postgres_aggregation.py]
+    - name: v_state_value_aggregate
+      source: src/babylon/persistence/migrations/0030_views_current.sql
+      successor: public.v_compat_v_state_value_aggregate_v1
+      reader_owners: [src/babylon/persistence/postgres_aggregation.py]
+    - name: view_runtime_trace_emission
+      source: src/babylon/persistence/migrations/0030_views_current.sql
+      successor: public.v_compat_view_runtime_trace_emission_v1
+      reader_owners:
+        - src/babylon/engine/headless_runner/runner.py
+        - src/babylon/persistence/postgres_runtime/_legacy.py
+
+artifacts:
+  - name: bridge_county_h3
+    file: bridge_county_h3.parquet
+    release: ci-data-v8
+    manifest_version: 2.0.0
+    rows: 48764
+    bytes: 158431
+    sha256: e60d93a43d6c66e84f1e53ecaf633af5911bd5b48b0ef0ad6a012f6d9f5b13a9
+    schema:
+      - {name: h3_index, type: string, nullable: true}
+      - {name: county_id, type: int64, nullable: true}
+      - {name: resolution, type: int64, nullable: true}
+      - {name: coverage_pct, type: double, nullable: true}
+    evidence_class: Observed
+    vintage: babylon.data.v7 reference-subset source
+    unit: identity
+    denominator: none
+    coverage: representative r5 cohort plus Michigan r7 identity tiling
+    absence_zero: r5 coverage_pct is null; r7 coverage_pct=100 is fabricated compatibility data only
+    canonical_order: resolution then unsigned H3 identity
+    digest_framing: existing babylon.h3.reference-source.v1 NUL domain + row_count_u64_be + sorted h3_u64_be rows
+    semantic_digest: a4685e6ad882930e7064cb225ee649155fb74e52ef8b7d7550691a70a6087f5a
+    authority: identity_cohort_only
+  - name: dim_county
+    file: dim_county.parquet
+    release: ci-data-v8
+    manifest_version: 2.0.0
+    rows: 3285
+    bytes: 36199
+    sha256: 130b7679d0441d5c3c2183a2bef858073d3011039550bfbf015b380566c72032
+    schema:
+      - {name: county_id, type: int64, nullable: true}
+      - {name: fips, type: string, nullable: true}
+      - {name: state_id, type: int64, nullable: true}
+      - {name: county_fips, type: string, nullable: true}
+      - {name: county_name, type: string, nullable: true}
+      - {name: h3_res4, type: string, nullable: true}
+    evidence_class: Observed
+    vintage: babylon.data.v7 reference-subset source
+    unit: county_identity
+    denominator: none
+    coverage: 3285 county identities
+    absence_zero: h3_res4 is null for all 3285 rows and carries no H3 authority
+    canonical_order: source manifest order with unique county_id and fips
+    digest_framing: artifact SHA-256; no H3 measure rows
+    semantic_digest: null
+    authority: county_identity
+  - name: dim_county_geometry
+    file: dim_county_geometry.parquet
+    release: ci-data-v8
+    manifest_version: 2.0.0
+    rows: 3222
+    bytes: 45806955
+    sha256: b838852e16175628e397a8f23fa178fd769f1aaf565f144cda63fbd6fe0d16ee
+    schema:
+      - {name: county_id, type: int64, nullable: true}
+      - {name: centroid_lat, type: double, nullable: true}
+      - {name: centroid_lon, type: double, nullable: true}
+      - {name: area_sq_km, type: double, nullable: true}
+      - {name: geometry_wkt, type: string, nullable: true}
+    evidence_class: Observed
+    vintage: TIGER county geometry registered in babylon.data.v7
+    unit: county_geometry
+    denominator: dim_county county identities
+    coverage: strict 3222-row subset of 3285 county identities; 63 typed absences
+    absence_zero: missing geometry is absence and never a zero-area county
+    canonical_order: source manifest order with unique county_id
+    digest_framing: artifact SHA-256; no H3 measure rows
+    semantic_digest: null
+    authority: county_geometry_extent
+  - name: h3_res7_land_mask
+    file: h3_res7_land_mask.parquet
+    release: ci-data-v8
+    manifest_version: 2.0.0
+    rows: 45572
+    bytes: 295194
+    sha256: 4e6caba297f0111a9ec93d948a83543bb9f7179361fe5dd318bb8a98a5be5194
+    schema:
+      - {name: h3_index, type: string, nullable: false}
+      - {name: county_fips, type: string, nullable: false}
+      - {name: land_fraction, type: double, nullable: false}
+    evidence_class: Derived
+    vintage: TIGER 2023 AREAWATER
+    source_manifest: tools/phase0d/fetch_manifest.json
+    source_manifest_sha256: 49261772713642f7848d8ce98a0240f6aef5c2c8bd7340367585b2976b6bdb22
+    unit: dimensionless_fraction
+    denominator: equal-area res7 cell area in EPSG:5070
+    coverage: complete for all 45572 Michigan bridge r7 identities across 83 counties
+    absence_zero: every governed cell has a row; zero means measured no land, not absence
+    canonical_order: unsigned H3 identity ascending
+    digest_framing: >-
+      babylon.h3-estate.land-fraction.v1 NUL + row_count_u64_be then h3_u64_be + county_fips_ascii5 +
+      land_fraction_u32_be_scaled_1e6
+    semantic_digest: a896f04a878fa54d67e1d6b0609c93a246ae9f92732c0fd6f158bf36e613eb7c
+    measure:
+      name: land_fraction
+      scale: 6
+      tolerance: 1.0e-12
+      minimum: 0
+      maximum: 1
+      storage_target: county_land_area_share
+  - name: h3_res7_population
+    file: h3_res7_population.parquet
+    release: ci-data-v8
+    manifest_version: 2.0.0
+    rows: 22509
+    bytes: 106095
+    sha256: b096a5891284f0ca55bedae9d1a9092eb8ea9e9e32d32b6ace430a9833b53afc
+    schema:
+      - {name: h3_index, type: string, nullable: false}
+      - {name: population, type: double, nullable: false}
+    evidence_class: Derived
+    vintage: Census 2020 P.L. 94-171 POP100
+    source_manifest: tools/phase0d/fetch_manifest.json
+    source_manifest_sha256: 49261772713642f7848d8ce98a0240f6aef5c2c8bd7340367585b2976b6bdb22
+    unit: persons
+    denominator: block internal-point assignment into the Michigan r7 land-mask cohort
+    coverage: 10066869 in-tiling persons; border slivers are counted outside and never smeared
+    absence_zero: omitted cell means zero persons; stored rows must be strictly positive integral counts
+    canonical_order: unsigned H3 identity ascending
+    digest_framing: babylon.h3-estate.population-count.v1 NUL + row_count_u64_be then h3_u64_be + count_u64_be
+    semantic_digest: 64cfcb563f2d22c7511b96da3e4c8bd834d837035af32879c1adea1980a1e0c3
+    measure: {name: population, total: 10066869, minimum: 1, maximum: 25767, storage_target: county_population_count}
+  - name: h3_res7_workplace
+    file: h3_res7_workplace.parquet
+    release: ci-data-v8
+    manifest_version: 2.0.0
+    rows: 11833
+    bytes: 65162
+    sha256: ea2ce1508f4fe51f1e879b9f4a1daf579c4b00349388b12a85f884a8f49eabb6
+    schema:
+      - {name: h3_index, type: string, nullable: false}
+      - {name: jobs, type: double, nullable: false}
+    evidence_class: Derived
+    vintage: LODES8 WAC 2020 C000
+    source_manifest: tools/phase0d/fetch_manifest.json
+    source_manifest_sha256: 49261772713642f7848d8ce98a0240f6aef5c2c8bd7340367585b2976b6bdb22
+    unit: jobs
+    denominator: LODES block-coordinate assignment into the Michigan r7 land-mask cohort
+    coverage: 3931809 in-tiling jobs across 11833 cells
+    absence_zero: omitted cell means zero jobs; stored rows must be strictly positive integral counts
+    canonical_order: unsigned H3 identity ascending
+    digest_framing: babylon.h3-estate.workplace-count.v1 NUL + row_count_u64_be then h3_u64_be + count_u64_be
+    semantic_digest: ab326a99673e03bfc5597d5e417a71f98ef2a5346a58df7b05a905b5ba7a03e7
+    measure: {name: jobs, total: 3931809, minimum: 1, maximum: 58208, storage_target: county_workplace_count}
+
+hard_gaps:
+  - kind: census_place_identity
+    status: blocking
+    required_authority: versioned Census place identity with vintage and digest
+  - kind: census_place_geometry
+    status: blocking
+    required_authority: versioned Census place geometry with declared extent and absences
+  - kind: county_place_h3_overlap
+    status: blocking
+    required_authority: true many-to-many county/place/H3 overlap products with measure-specific provenance
+
+migration_handoff:
+  dependency: PER-20 migration 0004 and schema epoch v4 must merge first
+  post_per20_epoch:
+    rule: actual maximum schema epoch plus one
+    expected: 5
+    migration_ordinal_rule: actual maximum migration ordinal plus one
+  order:
+    - add measure-specific babylon_ref relations and positive BIGINT shadow keys
+    - import only hash-proved governed artifact bytes
+    - bounded backfill with invalid unknown duplicate and conflict refusals
+    - prove counts semantic digests ancestry query and compatibility equivalence
+    - validate constraints and indexes
+    - publish schema-qualified versioned compatibility and observer views
+    - move read-only readers and compare old and new ordered queries
+    - join the one-way PER-20 writer cutover only after full parity
+    - retire legacy tables and the unused domain in a later reviewed ceremony
+  required_measure_relations:
+    - county_land_area_share
+    - county_population_count
+    - county_workplace_count
+    - place_land_area_share
+    - linear_feature_length_m
+  prohibited_names: [weight]
+  tagged_destinations:
+    kind_field: workplace_dest_kind
+    h3_kind: hex
+    external_kind: external
+    literals: [canada, rest_of_usa]
+  reserved_per20_surfaces:
+    - rust/crates/babylon-persistence/src/schema_epoch.rs
+    - rust/crates/babylon-persistence/migrations/0004_committed_tick_storage.sql
+    - rust/crates/babylon-persistence/src/fixtures/schema_epoch_owned_census_v4.txt
+    - rust/crates/babylon-persistence/src/fixtures/schema_epoch_owned_fresh_census_v4.txt
+    - rust/crates/babylon-persistence/src/schema_epoch_v4_shape.sql
+    - rust/crates/babylon-persistence/tests/support/schema_epoch_postgres.rs
+    - rust/crates/babylon-persistence/src/lib.rs
+    - .github/workflows
+    - ai/decisions/index.yaml

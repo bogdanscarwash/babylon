@@ -1,0 +1,1 @@
+(scenario fixture/classification (node NodeType/ORGANIZATION org (sfs/classification 0.5c)))

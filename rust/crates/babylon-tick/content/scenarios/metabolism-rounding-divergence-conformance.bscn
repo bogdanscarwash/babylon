@@ -1,0 +1,29 @@
+; The ROUNDING-DIVERGENCE conformance world for `metabolism/biocapacity-update`
+; — pins the D-1 scaled-Int workaround's DEVIATION from the frozen engine
+; rather than denying it exists (F1 fix round, adversarial review of PR
+; #501). See `metabolism.bsl`'s own D-1 for the derivation: the frozen
+; engine computes `raw_extraction * entropy_factor` as ONE binary64
+; multiply; this pack computes `(raw_extraction * entropy_factor_x1e6) /
+; 1000000` — an exact integer multiply followed by a correctly-rounded
+; division. These are the SAME real-valued function but DIFFERENT
+; floating-point programs, and can round to adjacent doubles. This
+; territory (`biocapacity=3`, `extraction_intensity=1`, entropy_factor at
+; its production default 1.2) is the smallest int-seedable case that
+; demonstrates the divergence.
+;
+; See `metabolism_rounding_divergence_conformance.py` for the provenance
+; script that prints BOTH the frozen engine's value and confirms the BSL
+; value below, with hex float dumps of both.
+(scenario metabolism/rounding-divergence-conformance
+  (deffield territory/biocapacity int extensive)
+  (deffield territory/max-biocapacity int extensive)
+  (deffield territory/extraction-intensity int intensive)
+
+  (defconst metabolism/regeneration-rate 0.02c)
+  (defconst metabolism/entropy-factor-x1e6 1200000)
+  (defconst metabolism/hysteresis-rate 0.005c)
+
+  (node divergent-county NodeType/TERRITORY
+    (territory/biocapacity 3)
+    (territory/max-biocapacity 100)
+    (territory/extraction-intensity 1)))

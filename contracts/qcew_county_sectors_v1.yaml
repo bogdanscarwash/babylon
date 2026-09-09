@@ -1,0 +1,115 @@
+meta:
+  contract: QcewCountySectorsV1
+  version: 1
+  issue: PER-29
+  parent: PER-10
+  delivery: observed-foundation-artifact-only
+
+classifications:
+  source_cells_values_titles_disclosure_and_vintage: Observed
+  coverage_counts_and_semantic_digest: Derived
+  canonical_format_ordering_and_dispositions: Designed
+
+bounds:
+  contract_bytes: 65536
+  artifact_bytes: 1048576
+  artifact_uncompressed_bytes: 1048576
+  artifact_rows: 1660
+  integer_maximum: 9223372036854775807
+
+source:
+  manifest: tools/qcew_county_economics_v1_source_manifest.json
+  manifest_sha256: 048c02b5890115e655e0a61553472adf2cbf8ef5c016731c0ffc0bfd0f2f667e
+  files: 83
+  year: "2024"
+  qtr: A
+  size_code: "0"
+  own_code: "5"
+  agglvl_code: "74"
+  admission: annual_avg_estabs_count-positive
+  sector_codes:
+    - "11"
+    - "21"
+    - "22"
+    - "23"
+    - "31-33"
+    - "42"
+    - "44-45"
+    - "48-49"
+    - "51"
+    - "52"
+    - "53"
+    - "54"
+    - "55"
+    - "56"
+    - "61"
+    - "62"
+    - "71"
+    - "72"
+    - "81"
+    - "99"
+  archive_url: https://data.bls.gov/cew/data/files/2024/csv/2024_annual_by_area.zip
+  aggregation_reference: https://www.bls.gov/cew/classifications/aggregation/agg-level-titles.htm
+  disclosure_reference: https://www.bls.gov/cew/questions-and-answers.htm
+
+artifact:
+  name: qcew_county_sectors_mi_2024
+  path: src/babylon/data/reference/economy/qcew_county_sectors_mi_2024.csv.gz
+  format: csv.gz
+  compression: gzip-mtime-0
+  ordering: county_geoid-then-sector_code-ascending
+  columns:
+    - county_geoid
+    - sector_code
+    - sector_title
+    - sector_disposition
+    - disclosure_code
+    - annual_avg_estabs_count
+    - annual_avg_emplvl
+    - total_annual_wages
+    - annual_avg_wkly_wage
+    - source_file
+    - source_sha256
+  semantic_domain: babylon.qcew-county-sectors.v1
+  semantic_encoding: domain-NUL-then-compact-JSON-columns-LF-then-typed-JSON-row-LF
+  sha256: 1cac80bee20c086be2e1f268643b0caab5d8d63030251817a9f149123755d71a
+  semantic_sha256: e117a5cbbe22e6a133c212cb254aaeeb543732344ca049de8a404eb4fd90e6d9
+  rows: 1603
+  counties: 83
+  disclosed_rows: 1187
+  suppressed_rows: 416
+  classified_rows: 1522
+  unclassified_rows: 81
+  absent_cells: 57
+
+semantics:
+  numeric_conversion: exact-nonnegative-i64-no-rounding
+  annual_avg_estabs_count: annual-average-establishments
+  annual_avg_emplvl: annual-average-jobs-not-distinct-people
+  total_annual_wages: calendar-year-total-USD
+  annual_avg_wkly_wage: annual-average-USD-per-employee-per-week-not-median
+  suppression: N-retains-establishments-other-three-metrics-CSV-empty-JSON-null
+  disclosed_zero: exact-observed-zero
+  absent_cell: no-row-not-zero
+  unclassified: code-99-preserved-with-unclassified-disposition
+  combined_codes: preserved-no-prefix-truncation-or-detail-rollup
+  provenance: every-row-binds-exact-county-source-filename-and-sha256
+  time_policy: fixed-observed-2024-baseline
+
+authority:
+  reference_only: true
+  planned_graph_node: ORGANIZATION-with-OrgKind-BUSINESS
+  planned_membership: native-ECONOMIC_SECTOR-hyperedge
+  unclassified_membership: unspecified-no-invented-classified-sector
+  mechanics_consumers: []
+  excluded:
+    - runtime-hydration
+    - worker-allocation
+    - labor-hours
+    - recipes
+    - physical-output
+    - reserve-army
+    - class-movement
+    - money-flows
+    - PER-29-completion
+  rulings: [ADR196, ADR250-R3]

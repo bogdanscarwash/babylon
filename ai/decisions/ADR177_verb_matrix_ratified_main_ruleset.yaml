@@ -1,0 +1,64 @@
+ADR177_verb_matrix_ratified_main_ruleset:
+  status: "accepted"
+  date: "2026-07-30"
+  title: >
+    Director rulings, live session 2026-07-30: the Article V verb 3×3
+    RATIFIED AS DRAFTED (the Iskra double cell stands; the funding cell
+    stays declared-empty until rulings 14/38's train) — G3 unblocked;
+    branch-protection split ruled (dev = fast iteration under manual
+    merge discipline, main = "the whole ordeal" ruleset); restoration
+    channels (ruling 23) are SPEC-FIRST with Director review before
+    code; the superseded PG16 datadir approved for deletion.
+  context: |
+    Four decisions escalated to the Director in a live session
+    (2026-07-30, AskUserQuestion; recorded verbatim-in-substance the
+    same hour on #398 and #382). The verb 3×3 draft had waited on #398
+    since 2026-07-29 night, blocking the whole verb lane and the G3
+    cost/efficacy lever (the fifth constitutional doctrine lever,
+    missing today — "the highest-leverage wiring item in the verb
+    estate", Standard §3). The #392 incident (auto-merge landed while
+    pg-integration was red; root cause: dev's ruleset requires 6 checks
+    but NOT the Postgres Integration Tier) had left the protection
+    question open on #382.
+  decision: |
+    (V1) THE ARTICLE V 3×3 IS RATIFIED AS DRAFTED (#398 option a):
+        rows Build-org / Project-power / Manage-resources, columns
+        Organization / Population / Other-actors; the nine registered
+        resolvers in their drafted cells. Build-org × Population keeps
+        BOTH educate and campaign (the Iskra argument accepted:
+        agitation and propaganda are distinct practices).
+        Manage-resources × Organization stays HONESTLY EMPTY until the
+        funding-verb train (rulings 14/38) lands it. Canonical data:
+        src/babylon/game/actions/matrix.py; sentinel:
+        tests/unit/game/actions/test_verb_matrix.py — moving a verb is
+        a Director ruling, never a refactor. G3 proceeds against the
+        ratified cells.
+    (V2) BRANCH PROTECTION SPLIT (verbatim: "Manual discipline is fine
+        to verify locally for dev but for main there should be a
+        ruleset. dev is fast iteration, main is the whole ordeal."):
+        dev keeps its light ruleset + the agent's manual-merge law
+        (all checks green + headSha verification, never --auto); main's
+        ruleset upgraded to PR-required (merge commits only, 0
+        approvals — the solo credential cannot self-approve; the
+        Director's merge authority stays the human gate) + the 9-check
+        battery including the Postgres Integration Tier.
+    (V3) RULING 23 (restoration channels) IS SPEC-FIRST: the full
+        channel design (fascist devaluation arc, war devaluation,
+        re-division of the periphery; K-wave coupling; coefficient-free
+        per ruling 24) is written as a director-gate spec and REVIEWED
+        BY THE DIRECTOR before any code.
+    (V4) The superseded PG16 datadir (/media/user/data/babylon-pg) is
+        approved for deletion. Execution note: both data-drive datadirs
+        are container-UID-owned and root-gated; the workforce cannot
+        verify the ~6 GB claim nor delete without sudo — surfaced back
+        to the Director for hand execution rather than forced.
+  consequences: |
+    - The verb lane unblocks: G3 cost/efficacy coefficients hang off
+      the ratified (doctrine-pair, cell) coordinates; the strike lane's
+      typed motions proceed under mobilize's ratified cell; the 3×3
+      becomes tutorial/interface copy.
+    - A red main merge is now mechanically impossible; dev stays fast.
+    - The restoration-channel train gains a mandatory Director review
+      gate before implementation.
+  supersedes: []
+  amends: []

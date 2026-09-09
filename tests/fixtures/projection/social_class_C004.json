@@ -1,0 +1,25 @@
+{
+  "class_id": "C004",
+  "consciousness": {
+    "fascist": 0.264929,
+    "liberal": 0.5,
+    "revolutionary": 0.235071
+  },
+  "county_class_composition": {
+    "bourgeoisie": 0.01,
+    "labor_aristocracy": 0.4,
+    "lumpenproletariat": 0.15,
+    "petit_bourgeoisie": 0.09,
+    "proletariat": 0.35
+  },
+  "county_fips": "26163",
+  "kind": "social_class",
+  "organization": 0.4,
+  "p_acquiescence": 0.933179,
+  "p_revolution": 1.0,
+  "population": 1,
+  "repression_faced": 0.2,
+  "role": "labor_aristocracy",
+  "verified_tick": 5,
+  "wealth": 0.563657
+}

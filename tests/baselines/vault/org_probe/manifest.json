@@ -1,0 +1,14 @@
+{
+  "files": {
+    "economy/USA.md": "f2deb52e396ab151786ed27216135f35001f20d7bfd2e3beff573362c57583e2",
+    "field_state/USA.md": "76e9f5fc6a66d277cbef63454ce1c6d171258ddc336c85531d4a390d9e50943d",
+    "national/USA.md": "6758f5a4edb47622e54337507c6ccfb397875b7eb615111ec67a93043d408037",
+    "organization/org/probe-civil.md": "4f1a55f77e63694ff6f2fb76b62e4959df154cb1d1292a08d76db6870b716e04",
+    "organization/org/probe-state.md": "385050e1b5defc8d804092f8f99494b6d869f05aa85a30b8be36ce2c31f93ea8",
+    "social_class/C900.md": "74add6dbdaf5540eaf6011b23f323db9aeb0e9114aca37ad2b01b6d031d4d358"
+  },
+  "head_sha": "1cf9382fa0cdf8177fbc68254f678fb37ad28939",
+  "page_count": 6,
+  "scenario": "org_probe",
+  "ticks": 5
+}

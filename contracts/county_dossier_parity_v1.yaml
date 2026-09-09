@@ -1,0 +1,134 @@
+meta:
+  contract: CountyDossierParityV1
+  version: 1
+  issue: PER-22
+  byte_order: big-endian
+  oracle: "Historical babylon.projection.county.project_county; its captured values remain in the vector corpus \
+          after the Python projection retirement"
+  digest: value identity is exact binary64 bits; display parity is the canonical %.6f statblock text
+
+production_decoder: prohibited
+
+authority:
+  owner: Rust county dossier producer
+  purpose: "Rust conformance to the preserved PER-22 county dossier values captured from the retired Python \
+           projection oracle"
+  classifications:
+    oracle_field_producer_rulings: Designed
+    d2_absence_maximal_ruling: Designed
+    statblock_formatting_rule: Designed
+    negative_zero_canonicalization: Designed
+    signal_identity_and_grant_filtering: Designed
+    fixture_values: Derived
+    link_sets_and_titles: Derived
+  invariants:
+    - The oracle projects median_wage from tick_median_wage and imperial_rent_phi
+      from tick_phi_hour; every other CountyView field is null under the D2
+      absence-maximal ruling (no spec-065 attribution, no claims edges, no other
+      tick attributes are fed).
+    - Both committed fields are SnapToGrid model types (1e-6 grid, ROUND_HALF_UP),
+      so the oracle projects the quantized value. Parity is scoped to committed
+      values that are fixed points of that quantization (quantize(value) == value,
+      with -0.0 and 0.0 identified); the historical independent verifier
+      refused off-grid vectors when this corpus was captured.
+    - The oracle's SnapToGrid boundary and the Rust producer both canonicalize
+      -0.0 to +0.0 before display, matching committed-state hashing where
+      -0.0 == 0.0; negative-zero parity is exact on both sides.
+    - A committed field absent at the tick emits no signal and projects null;
+      absence is never defaulted.
+    - Display parity is the canonical statblock text. Both sides format the
+      exact same binary64 value to six fractional digits (%.6f).
+    - A signal renders only while its grant key is granted on the county subject
+      at the receipt tick; a place link shows its governed name only while the
+      place subject is granted.
+    - Identical committed bits produce identical signal bytes on both sides.
+
+generation:
+  historical_source: Retired tests/unit/projection/test_county_dossier_parity_v1.py
+  provenance: Expected county_view bits and nulls were captured from the
+    retired Python oracle against a fixture-built graph/world fed only
+    grid-exact committed values; expected signal values apply the contract's canonical
+    %.6f rule to the committed bits; link sets and titles are Derived from
+    the pinned Michigan spatial reference products and cross-checked by the
+    Rust parity test against the embedded fixture.
+  rust_verifier: rust/crates/babylon-persistence/tests/county_dossier_parity_vectors.rs
+
+constants:
+  oracle_graph_attributes: [tick_median_wage, tick_phi_hour]
+  committed_field_names: [median-wage, phi-hour]
+  county_subject_grant_key: subject
+  median_wage_grant_key: median-wage
+  median_wage_label: Median wage
+  phi_hour_grant_key: phi-hour
+  phi_hour_label: Imperial rent Φ
+  citation_source_id: committed-tick-v1
+  citation_locator_form: campaign/{resolve_tick}/{territory_local_name}
+  decision_question: Which neighboring place should organizers investigate next?
+  statblock_format: "%.6f"
+  oracle_snap_grid: 1e-6 ROUND_HALF_UP (babylon.kernel.math.quantize)
+  negative_zero_bits: "8000000000000000"
+  canonical_zero_display: "0.000000"
+
+bounds:
+  contract_bytes: 32768
+  vector_rows: 16
+  vector_line_bytes: 16384
+  vector_object_fields: 64
+  max_links_per_county: 64
+  county_geoid_bytes: 5
+  place_geoid_bytes: 7
+  max_tick: 9223372036854775807
+
+layouts:
+  committed_field_v1:
+    fields: [median_wage_bits_hex16_or_null, phi_hour_bits_hex16_or_null]
+    encoding: big-endian u64 binary64 bits, lowercase hex
+  vector_row_v1:
+    fields: [id, kind=parity, data]
+    order: exact scenario order
+  county_view_expectation_v1:
+    present_fields: [verified_tick, median_wage_bits, phi_hour_bits]
+    absent_fields:
+      - population
+      - class_composition
+      - consciousness
+      - legitimacy
+      - p_acquiescence
+      - p_revolution
+      - bifurcation_score
+      - habitability
+      - sovereign_id
+    reason: "Director ruling D2 (absence-maximal): only median-wage and phi-hour have committed sources"
+  signal_v1:
+    fields: [grant_key, label, value]
+    value: canonical %.6f statblock of the committed bits; -0.0 -> 0.0
+    order: sorted by grant key
+  plan_signal_v1:
+    fields: [grant_key, label, value]
+    detail: every committed field present at the tick, before grant filtering;
+      the plan carries these even when a grant redacts them from the page
+  place_v1:
+    fields: [place_geoid, known_name_or_null]
+    order: sorted by place GEOID
+    known_name: present only while the place subject grant covers the GEOID
+
+vector_kinds:
+  required: [parity]
+
+known_divergences:
+  - id: oracle-snap-to-grid
+    detail: The oracle's CountyView fields are SnapToGrid model types that
+      quantize every projected value to a 1e-6 grid (ROUND_HALF_UP), while the
+      Rust producer formats the raw committed bits. For a committed value that
+      is not a fixed point of that quantization the oracle's projected bits
+      differ from the committed bits, so bit parity does not hold off-grid.
+      This contract scopes the parity claim to grid-exact committed values and
+      the historical verifier refused off-grid vectors at capture; off-grid parity is
+      a finding for the Director, not something either side may be weakened to
+      force a match.
+
+excluded_authority:
+  - PostgreSQL DDL, connection, or the producer SQL readers (live tests cover those)
+  - Knowledge-grant SQL derivation or provenance ingestion
+  - Archive page rendering, dirty-diff hashing, and stored-page parsing (archive_page_v1 governs)
+  - Any weakening of the Python oracle or the Rust producer to force a match

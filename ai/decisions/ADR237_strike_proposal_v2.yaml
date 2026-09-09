@@ -1,0 +1,117 @@
+ADR237_strike_proposal_v2:
+  status: "accepted"
+  date: "2026-08-26"
+  title: >-
+    Strike Proposal V2 requires authoritative habitation and material worker
+    connection while leaving every affected cohort independent
+  crate: babylon-practice-contract
+  production_dependencies:
+    - babylon-kernel
+  forbidden_dependencies:
+    - babylon-graph
+    - babylon-bsl
+    - babylon-tick
+    - babylon-persistence
+    - babylon-client
+  live_activation: false
+  context: |
+    ADR234 lets a V2 intent name one stable labor-process target and forbids a
+    parameter from naming worker participation or withholding. ADR235 proves
+    authoritative campaign habitation and exact accepted-input identity.
+    ADR236 derives and allocates material resource requests. None of those
+    contracts decides whether the inhabited organization has a real worker
+    relation to the target process or identifies the affected workers whose
+    participation remains their own decision.
+
+    The live production conformance path currently represents paid labor with
+    `WAGES` edges and production attribution with `TENANCY`. ADR196 retired the
+    frozen Python `EMPLOYMENT` edge from the Rust vocabulary. No authoritative
+    `LABOR_PROCESS` hyperedge or worker-participation resolver exists. Treating
+    presence, solidarity, geography, organization kind, or a client claim as
+    material connection would bypass that missing producer and restore remote
+    command under a new name.
+  decision: |
+    `StrikeProposalV2` is a pure, database-free admission contract owned by
+    `babylon-practice-contract`. Its exact language-neutral schema and vectors
+    live in `contracts/strike_proposal_v2.yaml` and
+    `contracts/strike_proposal_v2_vectors.jsonl`.
+
+    The public resolver consumes the complete `ResolvedPracticeBatchV2`, its
+    authoritative input ledger, one complete proposal key, and one sealed
+    validated labor-process register. It hashes and validates the batch against the
+    ledger before selecting the proposal. A structurally valid loose intent
+    cannot bypass campaign habitation or accepted-input identity.
+
+    The validated register contains two distinct row families. An affected-cohort
+    row binds a stable labor-process identity, a stable worker-cohort identity,
+    and the digest of the governed labor relation that made the cohort
+    affected. An organization-relation row binds that exact process and cohort
+    to one organization and cites attributed membership. Every organization
+    row must reference an affected row. This is the intersection of material
+    work and attributed organization membership; it does not re-mint the
+    retired `EMPLOYMENT` edge.
+
+    A strike proposal admits only when its actor organization matches at least
+    one organization relation for the exact target labor process. Organization
+    kind, presence, territory, solidarity, support, and centrality grant no
+    strike authority. An outside organization may use its separately governed
+    support practices, but this resolver cannot let it command workers.
+
+    Admission emits exactly one
+    `PENDING_INDEPENDENT_RESOLUTION` row for every affected worker cohort in the
+    target process. The proposer cannot select, omit, rank, vote for, or command
+    a cohort. The admitted bytes bind the strike-contract digest, exact resolved
+    batch digest, validated register digest, complete proposal key, and every
+    pending cohort row. Decoding replays the resolver and refuses a forged
+    omission or substitution.
+
+    The 65,536-row ceilings on affected cohorts and organization relations are
+    Designed serialization and validation-fuel bounds. They are not worker,
+    organization, workplace, unit-size, rank, or participation quotas.
+
+    This slice creates no worker decision, turnout, labor withholding, wage
+    gain, production loss, inventory change, strike success, organization gain,
+    solidarity write, BSL effect, graph mutation, persistence row, receipt,
+    Archive row, Bevy action, or gameplay activation. A governed labor-process
+    producer and a separate cohort-participation resolver must consume this
+    boundary before withholding can enter the conserved production circuit.
+  consequences: |
+    The approved boundary now has an executable refusal: only an inhabited
+    organization with attributed workers materially affected by the target
+    labor process can propose its strike. Every affected cohort stays pending
+    for its own later resolution, including cohorts outside the proposing
+    organization.
+
+    This contract does not claim the unavailable labor-process register as live
+    state. Its future producer must derive labor relations from the governed
+    production and labor owners and organization relations from attributed
+    `MEMBERSHIP`. The later participation resolver is the first legitimate
+    consumer of the pending rows and must remain separate from the proposer.
+
+    V1 and earlier V2 authority, intent, batch, and allocation bytes remain
+    unchanged. ADR176's later strike products remain governed requirements, not
+    direct effects authorized by this admission contract.
+  verification: |
+    Rust tests prove authoritative-batch selection, habitation, material
+    connection, exact-process scoping, outside-supporter refusal, complete
+    affected-cohort enumeration, pending-only participation, parameter refusal,
+    row order and uniqueness, reference integrity, maximum-plus-one bounds,
+    exact bytes and digests, complete error-code round trips, schema vectors,
+    and replay refusal of a forged cohort omission. Full V1 and prior V2 suites
+    remain unchanged.
+  preserves:
+    - ADR227 Practice Contract V1 byte and activation boundary
+    - ADR232 source, causal, participation, and successor-versioning law
+    - ADR233 authoritative campaign habitation and input-authority ledger
+    - ADR234 stable proposal identity and strike parameter prohibition
+    - ADR235 exact accepted-input and resolved-batch identity
+    - ADR236 resource derivation and conservation law
+  supersedes: []
+  related:
+    - ADR176_director_rulings_batch_gds_dispositions
+    - ADR187_article_v_3x3_ratified
+    - ADR189_amendment_ag_attributed_membership_lattice_instances
+    - ADR196_org_vocabulary_ceremony
+    - ADR220_rust_owned_postgresql_persistence_boundary
+    - ADR223_whole_tick_atomicity_world_hash
+    - ADR229_rust_gameplay_contract_authority

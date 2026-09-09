@@ -1,0 +1,85 @@
+ADR094_nix_channel_deployment:
+  status: "accepted"
+  date: "2026-07-20"
+  title: "Nix Player Channel deployment mechanics under X.8: ed25519 narinfo-signing keypair (secret to CI only, public key baked into install.sh CACHE_KEY), cache.babylon.percypedia.biz custom-domain target served through the cache-worker front door (workers.dev interim, r2.dev never), Terraform-import obligation for the hand-provisioned live Cloudflare state assigned to babylon-infra with a Terraform-owns-resources / wrangler-owns-Workers boundary, deploy-workers.yml wrangler pin as a deploy precondition (action default 3.90.0 predates wrangler.jsonc support), monthly regression-gated nixpkgs pin cadence under Amendment-L discipline, and hypergraph-rs as a pinned flake input gated on port parity -- queue items 1-2 recorded as executed by X.8/X.1, this ADR proposes only the mechanics"
+  context: |
+    Amendment X (CONSTITUTION v2.12.0, owner-ratified 2026-07-20, recorded in
+    ADR093) ratified the destination: X.8 local-first distribution names the
+    Nix flake beta channel with R2 binary cache, embedded player PG17+pgvector
+    (D1), Debian 13 baseline, and the Metropole repurpose -- all [PENDING
+    CODE]. X.1 was scoped to the production estate and X.7 delegated the infra
+    domain to the babylon-infra constitution. What X.8 did NOT rule is the
+    deployment mechanics this ADR carries: nix-plan (babylon-infra
+    ai/.inbox/nix-plan.md, untracked owner drop) queue items 3 (provision the
+    cache), 7 (nixpkgs pin cadence), 14 (hypergraph-rs input timing).
+    Live state verified 2026-07-20 via the Cloudflare connector session: R2
+    buckets babylon-cache + babylon-data and KV namespace babylon-beta-keys
+    (id bd06037925e74c68b42607a031a36608) exist, were created by hand outside
+    Terraform (IaC drift), and NEITHER drop Worker (cache-worker, api-worker)
+    is deployed. The drop tarball (babylon-infra
+    ai/.inbox/babyloncloudflaredrop.tar.gz) supplies both Workers, the keygen/
+    seed/smoke scripts, and a deploy-workers.yml CI workflow with a verified
+    merge blocker: cloudflare/wrangler-action@v3 resolves to v3.15.0 whose
+    bundle hardcodes DEFAULT_WRANGLER_VERSION = "3.90.0", below the >= 3.91.0
+    wrangler.jsonc floor both Workers require (verified 2026-07-20 against the
+    tagged dist/index.mjs; babylon-infra ai/reference/github-actions.md).
+  decision: |
+    D1 (cache crypto, queue item 3): mint one ed25519 cache-signing keypair
+    (nix key generate-secret --key-name babylon-cache-1, or the drop's
+    generate-cache-key.sh equivalent). The SECRET key lives only in the CI
+    secret store (nix copy --sign-key at release); the PUBLIC key is baked
+    into install.sh as CACHE_KEY and documented for manual
+    extra-trusted-public-keys registration. The narinfo signature is the
+    integrity boundary (nix-plan section A10); TLS is transport, not trust.
+    D2 (serving lane): the cache-worker front door over the babylon-cache R2
+    bucket is the serving path. Custom domain cache.babylon.percypedia.biz
+    activates when the percypedia.biz zone is live on the account (uncomment
+    the routes block in wrangler.jsonc, redeploy); *.workers.dev is the
+    interim. r2.dev is never a serving lane (rate-limited, per the drop
+    README).
+    D3 (IaC boundary, queue item 3): babylon-infra MUST terraform-import the
+    live hand-provisioned state (both R2 buckets, the KV namespace) before
+    any further Cloudflare provisioning there. Standing boundary: Terraform
+    owns zone/DNS/buckets/KV/AI-Gateway resources; wrangler owns Worker
+    scripts and their bindings. Import mechanics and provider-version
+    constraints per babylon-infra ai/reference/terraform.md.
+    D4 (deploy precondition): before deploy-workers.yml runs for the first
+    time, pin wranglerVersion (>= 3.91.0 line) or move the action to
+    wrangler-action@v4. Recorded here because the workflow ships in the drop
+    and the default silently cannot parse either Worker's config.
+    D5 (pin cadence, queue item 7): nixpkgs input bumps ride a monthly nix
+    flake update PR, gated by the closure regression suite (qa:regression on
+    the built closure), under Amendment-L baseline discipline. Targeted
+    extra nixpkgs inputs for single-package version needs (the babylon-infra
+    nixpkgs-sec trivy pattern; the nixpkgs-data sqlite lockstep of X.7) are
+    the sanctioned narrow escape hatch, each with a stated reason.
+    D6 (hypergraph-rs, queue item 14): hypergraph-rs enters the game flake as
+    a pinned INPUT with nixpkgs.follows -- never a subtree of self (the
+    gitignored local subrepo is invisible to flake builds). A bump is an
+    input-hash change riding the same closure regression gate. Adoption is
+    gated on the PR #210 port parity tests passing.
+    Queue items 1 (channel inversion) and 2 (jurisdiction) are RECORDED as
+    executed by X.8 and X.1/X.7 respectively -- this ADR proposes nothing on
+    them.
+  consequences: |
+    Obligations created, none executed here: babylon-infra gains the
+    terraform-import task (its backlog item 2 already tracks it and points
+    back at this ADR); the drop merge inherits the D4 wrangler pin as a
+    blocker; the owner runs keygen and first deploys (babylon-infra backlog
+    owner-run list). X.8 remains [PENDING CODE] until the channel exists;
+    this ADR turns its deployment section from prose into rulable mechanics.
+    Rejecting any single D-clause invalidates only that clause; the others
+    stand independently.
+  evidence: |
+    babylon-infra ai/.inbox/nix-plan.md sections 5-7, A6, A10, section 10
+    items 3/7/14 (untracked owner drop, babylon-infra working copy);
+    babylon-infra ai/.inbox/babyloncloudflaredrop.tar.gz ->
+    infra-repo/cloudflare/README.md (runbook, free-tier ledger, r2.dev
+    prohibition); CONSTITUTION.md v2.12.0 Amendment X + ADR093; ADR071
+    (Program 20, infra subrepo + AI surface); babylon-infra
+    ai/reference/nix.md (R2-as-substituter mechanics, signing),
+    ai/reference/terraform.md (cloudflare provider import specifics),
+    ai/reference/github-actions.md + ai/reference/cloudflare-platform.md
+    (wrangler-action v3.15.0 DEFAULT_WRANGLER_VERSION=3.90.0, verified
+    2026-07-20); live Cloudflare account verification 2026-07-20 (buckets/KV
+    live via connector, no drop Workers deployed, absent from Terraform).

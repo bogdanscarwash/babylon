@@ -1,0 +1,105 @@
+id: ADR138
+title: >-
+  Ledger DOMAIN contracts: lift the models/types.py range contracts (+ the
+  duplicated FIPS/H3 format regexes) into single PostgreSQL CREATE DOMAIN
+  objects, codegen'd from types.py and guarded by a mutation-validated
+  domain_sync sentinel — enforce, never compute (range gate, not precision
+  gate); retrofit of the inline duplicates DEFERRED as byte-safety-unproven.
+status: accepted
+date: '2026-07-23'
+context: >-
+  The constrained value types in src/babylon/models/types.py (Probability
+  [0,1], Intensity [0,1], Coefficient [0,1], Ideology [-1,1], Currency
+  [0,inf), Ratio (0,inf), Gini [0,1], LaborHours [0,inf)) are enforced ONLY at
+  the Pydantic layer. The Postgres ledger re-states the SAME range contract as
+  ~128 inline CHECK clauses hand-copied across
+  src/babylon/persistence/migrations/*.sql, with the 5-digit county/geoid FIPS
+  regex ~ '^\d{5}$' duplicated across seven files (0010 x2, 0011, 0018, 0020,
+  0021, 0022, 0027), the 2-digit state regex across three (0011, 0018, 0027),
+  and the 15-char H3 length across two (0011, 0027). Two copies of one
+  contract drift: widen Probability to le=2 in types.py and the ledger still
+  rejects 1.5; write ^[0-9]{5}$ in a new migration and the "single" FIPS
+  format silently forks. This is the un-DRY, drift-prone disease the "rewrite
+  test" names (User CLAUDE.md, Fable-5 behavioral contracts): a DOMAIN proves
+  the invariant regardless of which language writes the row, so it is the
+  language-agnostic, byte-checkable artifact a rewrite could be verified
+  against — the inline CHECK is not.
+decision: >-
+  Migration 0039_domain_contracts.sql declares seven CREATE DOMAINs in one
+  idempotent DO block: four numeric range domains — probability / currency /
+  ratio / labor_hours — and three string-format domains — fips5 / fips2 /
+  h3index. (1) ENFORCE, NEVER COMPUTE (HARD boundary, Constitution "AI
+  parses/narrates only; the engine adjudicates the math" generalized to the
+  ledger): each DOMAIN carries a CHECK and a NULL policy ONLY — no GENERATED
+  column, no trigger, no PostgreSQL float arithmetic anywhere in the unit. The
+  engine computes; the ledger validates. (2) RANGE, NOT QUANTIZATION: the
+  types also apply SnapToGrid (an AfterValidator quantizing to 1e-5/1e-6). A
+  DOMAIN enforces the RANGE (ge/le/gt -> CHECK (VALUE >= .. AND VALUE <= ..));
+  the quantization stays APP-SIDE because it is compute, and it is Pydantic's
+  job. The DOMAIN is a range gate, not a precision gate — stated in the
+  migration header, the ddl.py module docstring, and here. (3) SINGLE SOURCE +
+  CODEGEN: the numeric bounds are GENERATED from the annotated_types metadata
+  on the types.py types (tools/generate_domain_ddl.py, mirroring
+  generate_defines_config.py -> defines.yaml), never hand-copied; the FIPS/H3
+  patterns have no types.py source, so babylon.sentinels.domain_sync.registry
+  is THEIR single source of truth (the very thing the seven duplicated inline
+  copies lacked). (4) SYNC SENTINEL (mutation-validated): a new sentinel family
+  babylon/sentinels/domain_sync/ (wired into tools/sentinel_check.py) re-derives
+  each expected CHECK live from types.py (numeric) / the registry (format) and
+  reds the gate if the committed migration has drifted from EITHER side —
+  proven by tests that tamper a numeric bound, a format pattern, and delete a
+  domain in a copy of the migration, plus a types.py-side widen that flows into
+  the expected CHECK. (5) NO INVENTED DOMAINS: a numeric domain is emitted ONLY
+  where a real ledger column already backs that type with an inline CHECK of the
+  matching range (evidence cited per registry row) — probability
+  (p_acquiescence/p_revolution/tension/solidarity/legitimacy/..., BETWEEN 0 AND
+  1; SocialClass.p_acquiescence is typed Probability), currency
+  (rent/phi_year/phi_year_inflow/bilateral_value, >= 0; imperial rent Phi is
+  Currency), ratio (tau/erdi_ratio, > 0), labor_hours (c/v/s tensor cells, >= 0,
+  SNLT distinct from Currency). Four types.py types are DELIBERATELY NOT given a
+  domain, each recorded in registry.DEFERRED_DOMAINS with its reason: Intensity
+  ([0,1] shares Probability's range, no distinct CHECK column — tension is
+  model-typed Probability), Coefficient ([0,1]; the basket gamma column is
+  BETWEEN 0 AND 1 but is reference data with no confirmed Coefficient-typed
+  field), Gini ([0,1]; social_class.inequality IS typed Gini but its persisted
+  column is an UNCONSTRAINED float — a gini domain would ADD a new contract,
+  retrofit territory), Ideology ([-1,1]; no column persists an ideology-semantic
+  value in [-1,1] — the ternary ideology_r/l/f are each [0,1], and the only
+  [-1,1] column, metabolic_reduction, is a metabolic modifier, not ideology),
+  and SignedLaborHours (unbounded, no CHECK expressible). (6) RETROFIT DEFERRED
+  ({absence} follow-up): converting the duplicated inline FIPS/H3 CHECKs to the
+  domain type via ALTER COLUMN TYPE was NOT done — although TEXT->TEXT-domain
+  moves no stored bytes, proving byte-neutrality cheaply across seven files
+  (some partitioned by 0026, some REVOKE-guarded reference tables) plus the
+  idempotent DROP of each redundant inline CHECK is not cheap, and the standing
+  rule is "never guess". The domains EXIST for going-forward use and the fips5
+  pattern is now single-sourced in the registry; the retrofit is a named OPEN
+  follow-up, not a silent omission. (7) SQLITE-REFERENCE ASYMMETRY: the
+  read-only reference DB (SQLite, data/sqlite/marxist-data-3NF.sqlite) has no
+  DOMAINs; that lane keeps its app-side / inline enforcement. Out of scope for
+  this unit — documented here and in the migration header, never silently
+  implied.
+consequences: >-
+  WIN: the range/format contract is now a single, language-agnostic,
+  byte-checkable object per type, codegen-synced to types.py and guarded so the
+  Pydantic layer and the ledger cannot drift; new columns use the domains going
+  forward (a column declared `probability`/`fips5` documents its own contract).
+  DETERMINISM: domains validate, they do not compute, and no column is retyped
+  in this unit, so no stored byte moves — qa:regression stays byte-identical;
+  CREATE DOMAIN only takes effect when a column adopts it. IDEMPOTENT: each
+  domain is guarded on pg_type (typtype='d', current schema) inside one DO
+  block, verified by the pre-existing migration-idempotency gate (0039 now
+  applies twice on a fresh DB) and a PG-level double-exec test. COST / OPEN
+  FOLLOW-UPS (loud, in registry.DEFERRED_DOMAINS + this ADR): (a) retrofit the
+  ~128 inline CHECKs / the FIPS+H3 duplicates to the domains once a cheap
+  byte-neutrality proof exists (start with the 8 fips5 sites); (b) promote a
+  gini domain by first giving social_class.inequality's column a CHECK, then
+  ALTER TYPE; (c) a coefficient domain once a Coefficient-typed persisted
+  column is confirmed. NON-GOAL: the DOMAIN is a range gate, not a precision
+  gate — it never replaces SnapToGrid, which stays app-side. TESTS: 21 unit
+  (tests/unit/sentinels/test_domain_sync.py — codegen sync, live derivation
+  from types.py, mutation-validated red on numeric/format/missing-domain
+  tampers, infra teeth, registry shape) + 5 PG integration
+  (tests/integration/persistence/test_domain_contracts.py — each domain rejects
+  out-of-range / malformed and accepts in-range, nullable, DB-level idempotent).
+file: ADR138_domain_contracts.yaml

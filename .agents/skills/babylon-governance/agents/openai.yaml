@@ -1,0 +1,6 @@
+interface:
+  display_name: "Babylon Governance"
+  short_description: "Query ADRs and route genuine game-law changes"
+  default_prompt: "Use Babylon's derived ADR catalog first, then load only the governing source."
+policy:
+  allow_implicit_invocation: true

@@ -1,0 +1,100 @@
+ADR233_practice_input_authority_v2:
+  status: "accepted"
+  date: "2026-08-26"
+  title: >-
+    PracticeInputAuthorityV2 makes campaign habitation authoritative while
+    preserving V1 bytes and granting no material eligibility
+  crate: babylon-practice-contract
+  production_dependencies:
+    - babylon-kernel
+  forbidden_dependencies:
+    - babylon-graph
+    - babylon-bsl
+    - babylon-tick
+    - babylon-persistence
+    - babylon-client
+  live_activation: false
+  context: |
+    ADR232 requires the player's inhabited organization and every deterministic
+    policy source to enter later practice admission through one authoritative,
+    replayable campaign-state boundary. Practice Contract V1 binds a detached
+    actor and source digest, but it has no campaign identity, stable authority
+    identity, effective interval, authoritative ledger, or habitation law.
+
+    Widening the V1 row would break its frozen bytes and refusal vectors.
+    Treating a client-side player organization setting as authority would let a
+    client reassign habitation without a committed organizational process.
+    Activating practice admission in this slice would also bypass the separate
+    accepted-input, resource-allocation, persistence, and gameplay owners.
+  decision: |
+    PracticeInputAuthorityV2 is authoritative campaign state. Its exact
+    language-neutral schema and vectors live in
+    `contracts/practice_input_authority_v2.yaml` and
+    `contracts/practice_input_authority_v2_vectors.jsonl`; the Rust-owned
+    `babylon-practice-contract` crate is the sole executable implementation.
+
+    The V2 row uses domain `babylon.practice-input-authority.v2`, a zero-byte
+    terminator, and fixed big-endian order. It binds schema version, canonical
+    16-byte campaign identity, closed authority kind, canonical 16-byte input
+    authority identity, actor organization, inclusive effective-from tick,
+    exclusive effective-through tick, and decision content or policy digest.
+    The only authority kinds are PLAYER_SEAT and DETERMINISTIC_POLICY.
+
+    The ledger uses domain `babylon.practice-input-authority-ledger.v2` and
+    sorts rows by campaign, input authority, and effective-from tick. Duplicate
+    keys, empty intervals, overlapping intervals for one authority, two active
+    PLAYER_SEAT rows in one campaign tick, unknown kinds, truncation, trailing
+    bytes, maximum-plus-one, and a distinct PLAYER_SEAT authority or actor in
+    one campaign refuse with closed error identities. An intent lookup must
+    match campaign, authority, actor organization, and active resolve tick. The
+    first gameplay campaign must resolve exactly one active PLAYER_SEAT row,
+    which names only the inhabited organization. V2 does not permit a
+    mid-campaign player-seat reassignment.
+
+    The 16,384-row ledger ceiling bounds canonical decode, validation, and sort
+    memory and fuel. Each row is 127 canonical bytes, so the maximum row payload
+    is 2,080,768 bytes before the small ledger header. This is not an
+    organization or political quota: rows are historical authority intervals,
+    several rows may concern one organization, and this contract fixes no
+    organization count.
+
+    The V1 domains, bytes, digests, refusal vectors, authority context, intent,
+    ActionBudget, and activation blockers remain unchanged. V1 and V2 decoders
+    reject the other version's domain. V2 authority grants no material
+    eligibility, knowledge, legitimacy, command, membership, organization
+    creation, practice effect, or exception from fog and cost.
+
+    The accepted-input identity, PracticeIntentV2, resolved batch, world hash,
+    persistence, and resource-reservation and capacity-allocation contract
+    remains separate. That later contract must land before live practice
+    activation and cannot reinterpret this ledger as material capacity.
+  consequences: |
+    Campaign setup and deterministic policy producers have one typed authority
+    value to persist and later bind into NominalWorldHashV2. A later intent
+    gateway can validate organization habitation without consulting mutable
+    client settings or inferring authority from organization kind, solidarity,
+    centrality, or political line.
+
+    This slice adds no accepted-input ledger, graph mutation, BSL effect,
+    database row, player verb, strike, repression, membership transition,
+    Archive page, or Bevy decision surface. Its output remains inert until the
+    separately governed consumers land.
+  verification: |
+    Rust tests pin independent literal row and ledger bytes and SHA-256 digests,
+    round trips, closed error codes, order, duplicate, interval, player-seat,
+    actor, activity, reassignment, truncation, trailing-byte, and 16,384/16,385
+    boundaries. The language-neutral schema hash and eight vector cases bind
+    the committed artifacts to the Rust implementation. Cross-version tests
+    prove V1 and V2 decoders refuse one another while the complete V1 practice
+    suite remains unchanged.
+  preserves:
+    - ADR227 Practice Contract V1 byte and activation boundary
+    - ADR229 Rust executable contract ownership
+    - ADR232 source, habitation, causal, and successor-versioning law
+  supersedes: []
+  related:
+    - ADR220_rust_owned_postgresql_persistence_boundary
+    - ADR223_whole_tick_atomicity_world_hash
+    - ADR227_practice_contract_groundwork
+    - ADR229_rust_gameplay_contract_authority
+    - ADR232_neel_integration_program_architecture

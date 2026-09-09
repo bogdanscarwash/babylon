@@ -1,0 +1,6 @@
+{
+  "id": "riot",
+  "event_types": ["UPRISING", "SPONTANEOUS_RIOT"],
+  "slots": ["location", "trigger_condition", "class_composition", "state_response", "aftermath"],
+  "guidance": "Narrate an unplanned eruption. Fill every slot from the observed engine state only — never invent casualties, counts, or outcomes the tick data does not contain. The eruption has material causes; name them. No moralizing, no editorializing the player."
+}

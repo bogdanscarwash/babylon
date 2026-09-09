@@ -22,7 +22,7 @@ meta:
 scope_reduction:
   original:
     trunks: 8  # Scientific, Reformist, Insurrectionist, Autonomist + 4 synthesis
-    tags: 6    # LEGALITY, MILITANCY, MASS_LINK, SECRECY, NATIONALISM, CLASS_ANALYSIS
+    tags: 6    # LEGALITY, MILITANCY, MASS_LINK, SECRECY, NATIONAL_CHAUVINISM, CLASS_ANALYSIS
     nodes: "50+"
     degeneration_paths: "Multiple bidirectional"
     maintenance_system: "Full decay mechanics"
@@ -41,13 +41,13 @@ scope_reduction:
     - Insurrectionism is the "too militant" trap
 
     This triangle covers the main strategic dilemma without
-    requiring the full complexity of autonomism, nationalism,
+    requiring the full complexity of autonomism, national chauvinism,
     synthesis trunks, or degeneration paths.
 
   deferred_to_later:
     - "Autonomist trunk (Sub-Epoch 2B+)"
     - "Synthesis trunks (Sub-Epoch 2C)"
-    - "NATIONALISM/SECRECY/LEGALITY/RESILIENCE tags"
+    - "NATIONAL_CHAUVINISM/SECRECY/LEGALITY/RESILIENCE tags"
     - "Degeneration paths (PatSoc Pipeline)"
     - "Maintenance decay mechanics"
     - "Party Congress actions (except basic unlock)"
@@ -458,9 +458,9 @@ upgrade_path:
       - "10 more nodes"
     total: "4 trunks, 5 tags, 25 nodes"
 
-  phase_3_nationalism:
+  phase_3_national_chauvinism:
     adds:
-      - "NATIONALISM tag"
+      - "NATIONAL_CHAUVINISM tag"
       - "National Liberation branch"
       - "PatSoc Pipeline degeneration"
       - "Party Congress rectification"

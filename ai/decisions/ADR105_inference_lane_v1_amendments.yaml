@@ -1,0 +1,155 @@
+id: ADR105
+title: >-
+  Inference-lane v1.0 amendments (amends ADR096 D5; corpus ships): the
+  Archive's embedding pin moves to embeddinggemma-300m / 768-dim on BOTH the
+  local (bundled llama-server / detected Ollama) and Cloudflare lanes,
+  retiring the bge-m3 (vector(1024)) and bge-base-en-v1.5 allowlist entries
+  as never-implemented against the already-baked vector(768) schema (no
+  migration); the chat pin stays Llama 3.1 8B end-to-end -- bundled
+  Meta-Llama-3.1-8B-Instruct Q4_K_M gguf first (ADR096 D3 as ratified),
+  detected Ollama llama3.1:8b second, Cloudflare
+  llama-3.1-8b-instruct-fast/-fp8 third, mute always legal -- confirmed
+  against Cloudflare's 2026-05-08 Workers AI deprecation notice; and the
+  curated canon corpus (not the raw ~26GB mirrors) ships embedded and
+  ready-grounded inside the installer payload, an owner-accepted
+  copyright-exposure ruling gated on a per-work PROVENANCE/LICENSES file and
+  the Llama Community License's "Built with Llama" attribution.
+status: accepted
+date: '2026-07-21'
+context: >-
+  ADR096 (2026-07-20, D5) allowlisted two embedding pins for the Archive's
+  pgvector schema -- bge-m3 -> vector(1024) (dense dim verified 2026-07-20
+  from BAAI's model card / config.json hidden_size) and bge-base-en-v1.5 ->
+  vector(768) -- both drawn from the unmerged api-worker drop's EMBED_MODELS
+  allowlist (babylon-infra ai/.inbox/nix-plan.md section A7, cited in
+  ADR096's own evidence trail). Runtime code had already drifted past that
+  ruling before this amendment: src/babylon/config/llm_config.py:38-40
+  defaults the RAG pipeline's embedding lane to Ollama with
+  EMBEDDING_MODEL="embeddinggemma:latest" (768-dim per the model_dimensions
+  map at line 113), and src/babylon/persistence/postgres_schema.py:524
+  bakes `document_chunk.embedding vector(768) NOT NULL` as ONE hardcoded
+  column -- neither the bge-m3/vector(1024) path nor a per-campaign
+  configurable column dimension was ever wired into the shipped schema.
+  Only src/babylon/intelligence/embedding_dims.py:22-24's
+  EMBEDDING_DIMENSIONS allowlist (bge-m3=1024, bge-base-en-v1.5=768,
+  embeddinggemma:latest=768) and
+  tests/unit/intelligence/test_embedding_dims.py:19-22 (labelled "ADR096")
+  still name bge at all; src/babylon/intelligence/providers.py's Cloudflare
+  lane is the one remaining LIVE bge dependency --
+  DEFAULT_CLOUDFLARE_CHAT_MODEL="@cf/meta/llama-3.1-8b-instruct-fast" (line
+  108) already matches the narrator chain ADR096 ratified (D2/D3), but
+  DEFAULT_CLOUDFLARE_EMBED_MODEL="@cf/baai/bge-m3" (line 109) still pins the
+  model this amendment retires. Separately,
+  ai/_inbox/PROGRAM_v1_0_0_playable_archive.md (RATIFIED 2026-07-21;
+  decision-record rulings 4-6; spine section E / train T5 "Narrator lane";
+  the "Corpus + step zero" section) rules the v1.0 narrator/embedder
+  concretely: bundled-weights-first chat (ruling 4, ADR096 D3 as ratified),
+  embeddinggemma-300m/768-dim on both lanes (ruling 6, explicitly "amend
+  ADR096 D5 away from bge"), and ship-everything corpus redistribution
+  (ruling 5). The ceremony runbook
+  (ai/_inbox/PROGRAM_v1_0_0_ceremony_runbook.md, Runbook C3 lines 145-199 +
+  the Licensing Obligations table lines 253-266) names the concrete weight
+  artifacts BD is uploading pre-release: bartowski/Meta-Llama-3.1-8B-
+  Instruct-GGUF's Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf (lines 154-155) for
+  chat and ggml-org/embeddinggemma-300M-GGUF's
+  embeddinggemma-300M-Q8_0.gguf (lines 156-157) for embed -- both already
+  Q4-class and embeddinggemma, matching this ruling before it was written
+  down. Live Cloudflare Workers AI docs (fetched 2026-07-21 via the
+  Cloudflare documentation search tool) corroborate the catalog verdict
+  this ADR records: changelog/post/2026-05-08-planned-model-deprecations
+  ("Planned model deprecations on Workers AI") lists 18 models retiring
+  2026-05-30, including the bare @cf/meta/llama-3.1-8b-instruct,
+  llama-3.1-8b-instruct-awq, llama-3.1-70b-instruct, and
+  @cf/google/gemma-3-12b-it, while naming the "-fast"/"-lora" variants --
+  @cf/meta/llama-3.3-70b-instruct-fp8-fast and
+  @cf/meta/llama-3.1-8b-instruct-fast explicitly -- as remaining active;
+  @cf/meta/llama-3.1-8b-instruct-fp8 (a distinct model id, no -fast suffix)
+  is untouched by that same list. bge-m3/bge-base-en-v1.5 are likewise
+  untouched by the deprecation list, but @cf/google/embeddinggemma-300m
+  (launched 2025-09-05 per changelog/post/2025-09-05-embeddinggemma;
+  768-dim, 512 input tokens, cosine metric per
+  changelog/post/2026-04-09-new-workers-ai-models' embedding table) is BD's
+  chosen replacement on its own merits, not because bge is deprecated --
+  the "<=12B instruct models deprecated" framing in the ruling concerns the
+  CHAT catalog, not the embed catalog. Note also: the "Corpus manifest"
+  this program plans (src/babylon/data/corpus/manifest.yaml,
+  PROGRAM_v1_0_0_playable_archive.md lines 279-285) does not exist in the
+  tree yet -- today's ingestion still runs the hardcoded MVP_CORPUS tuple
+  in tools/ingest_corpus.py:58, which the plan intends to replace.
+decision: >-
+  D5 of ADR096 is amended: the allowlisted embedding pin for BOTH the
+  bundled/detected-external lane and the Cloudflare lane becomes
+  embeddinggemma-300m at 768 dimensions -- Ollama-served
+  "embeddinggemma:latest" locally (already the llm_config.py default) and
+  @cf/google/embeddinggemma-300m on Cloudflare (a code change still owed:
+  providers.py's DEFAULT_CLOUDFLARE_EMBED_MODEL must move off
+  "@cf/baai/bge-m3", and embedding_dims.py's EMBEDDING_DIMENSIONS allowlist
+  must add an "@cf/google/embeddinggemma-300m": 768 pin and retire the two
+  bge entries as never-implemented, not as a runtime migration). No schema
+  migration is commissioned: document_chunk.embedding is already
+  vector(768) (postgres_schema.py:524), and the bundled
+  model_manifest.toml babylon-embed entry already declares dims=768 (line
+  21) -- the amendment costs nothing in the database because the 1024-dim
+  path bge-m3 would have required was never built. The chat-model pin is
+  RATIFIED unchanged in precedence and made concrete in artifact: bundled
+  Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf first (ADR096 D3's "one small chat
+  gguf", now named; BD uploads sha256-pinned signed weights to the
+  babylon-data R2 bucket pre-release per the ceremony runbook's Runbook
+  C3), detected external Ollama `llama3.1:8b` second (ADR096 D1/D2's
+  existing precedence, unchanged in providers.py's resolve_provider()),
+  Cloudflare `@cf/meta/llama-3.1-8b-instruct-fast` (already the code
+  default, line 108) or `-fp8` third, and mute always legal (Amendment V,
+  R4) -- never the bare `@cf/meta/llama-3.1-8b-instruct`,
+  `-8b-instruct-awq`, or `-70b-instruct` ids, all three retiring
+  2026-05-30 per the live Workers AI catalog. Corpus redistribution
+  (ruling 5): the v1.0 installer SHIPS the curated canon corpus -- the "V1
+  set" of 9 works / ~413k words / ~2,900 chunks at 768-dim
+  (PROGRAM_v1_0_0_playable_archive.md lines 286-288) plus the ruling-8
+  canon additions -- embedded and ready-grounded, not the raw ~26GB source
+  mirrors (those stay bring-your-own via the planned corpus manifest).
+  This is an OWNER-ACCEPTED copyright-exposure ruling, not a legal
+  clearance: BD weighed the exposure and chose to ship anyway. Two
+  obligations are REQUIRED, not optional, as the cost of that ruling: (1) a
+  per-work PROVENANCE/LICENSES artifact for every shipped corpus text,
+  populated from the step-zero MANIFEST.yaml fields already specified (id,
+  author, work, slugs, source_path, source_sha256, method, quality,
+  canon_status, outputs[], extracted_at --
+  PROGRAM_v1_0_0_playable_archive.md lines 271-273); (2) the Meta Llama
+  Community License's verbatim "Built with Llama" attribution plus the
+  full notice/use-policy text on the shipped chat GGUF, per the ceremony
+  runbook's Licensing Obligations table (lines 253-266): the license-text
+  file, the verbatim copyright notice, the prominent "Built with Llama"
+  credits-screen/README display, and the Acceptable Use Policy
+  pass-through -- Gemma's embed weights carry the lighter Gemma Terms of
+  Use plus prohibited-use pass-through, no "Built with" requirement.
+consequences: >-
+  No database migration and no vault-regression ceremony are triggered --
+  the embedding-dimension amendment is pure allowlist bookkeeping against a
+  schema that was already 768-dim throughout. Two owed code changes fall
+  out of this ADR for whichever unit lands the corpus/narrator wiring: (a)
+  providers.py's DEFAULT_CLOUDFLARE_EMBED_MODEL and embedding_dims.py's
+  EMBEDDING_DIMENSIONS allowlist swap bge-m3/bge-base-en-v1.5 for
+  @cf/google/embeddinggemma-300m (768), which also means
+  test_embedding_dims.py's test_allowlisted_dims_match_adr096 loses its
+  bge-m3/bge-base assertions and gains an embeddinggemma-300m one -- the
+  test's docstring/name should be re-pointed at this ADR; (b)
+  IntelligenceSettings.external_chat_model/external_embed_model currently
+  default to the generic placeholders "local-chat"/"local-embed"
+  (DEFAULT_LOCAL_CHAT_MODEL/DEFAULT_LOCAL_EMBED_MODEL, providers.py lines
+  110-111, consumed at lines 210-211), not the literal
+  "llama3.1:8b"/"embeddinggemma:latest" strings this ruling names for the
+  detected-Ollama lane -- flagged here as a drift for the T5
+  narrator-wiring unit to close, not fixed by this ADR. The chat-model
+  precedence chain and the Cloudflare chat default needed NO code change:
+  providers.py already resolves bundled -> external -> cloudflare -> mute
+  and already defaults the Cloudflare chat pin to `-instruct-fast`. The
+  corpus-shipping ruling is a packaging/T7 obligation, not an engine
+  change: it adds the PROVENANCE/LICENSES-per-work and
+  THIRD_PARTY_LICENSES/ deliverables to the installer payload and an
+  in-game credits-screen requirement, gates on nothing the engine
+  computes, and never enters the tick hash (corpus text and embeddings are
+  Archive/RAG material, not Ledger or Topology state). Rejecting this
+  amendment would leave the Cloudflare embed lane pinned to a model with no
+  other live consumer and no schema path (bge-m3/vector(1024) was already
+  dead code), while the chat pin and precedence chain stand regardless of
+  this ADR's disposition.

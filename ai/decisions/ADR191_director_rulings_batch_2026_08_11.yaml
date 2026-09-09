@@ -1,0 +1,271 @@
+ADR191_director_rulings_batch_2026_08_11:
+  status: "accepted"
+  date: "2026-08-11"
+  title: >
+    Director rulings batch 2026-08-11 — eleven items cleared across the
+    storage-swap, BSL Phase-1-review and B1-client lanes: the hypergraph-rs
+    sibling push APPROVED and already EXECUTED (983d959..ab558f0), discharging
+    the storage-swap plan's first blocking gate (R1); tick-hash ORDER
+    DEPENDENCE ACCEPTED — a scenario is a canonical committed artifact and its
+    declaration order is part of its identity, so bsl-language.rst's
+    reorder-invariance promise is weakened to what a mint counter delivers, not
+    identity made content-derived (R2); the MORTALITY family is re-derived AS A
+    MEASURE — attrition deaths are the mass of the within-class wealth
+    distribution failing to clear subsistence, the same emergent quantity as
+    ADR173's P(S|A), and the frozen piecewise-linear form with its tuned
+    attrition_base_factor knob is NOT transcribed (R3); TYPE NAMES ARE
+    LOWERCASE SYMBOLS, blessing the Rust implementation's and the grammar
+    appendix's reading and re-spelling §2.11's worked example and §3.1's table
+    (R4); §6.1's vector keywords flip from optional-VALUED to optional GROUPS,
+    reconciling the grammar with §6.1's own prose (R5); general edge iteration
+    (Q2) DEFERRED until a port needs it (R6); edge/hyperedge field storage
+    (III.7) DELEGATED to the workforce on a rigor-plus-entertainment criterion
+    and RULED the same session in ADR192 (R7); NO constitutional text is required for hypergraph-rs
+    engine-storage adoption, ADR179 T3 plus the swap's own Phase D ADR suffice
+    (R8); the client FONT ships Iosevka Term NERD FONT from the upstream
+    release archive with its bundled OFL 1.1 license, after the Director-
+    directed license check verified the patched build is OFL 1.1 no-RFN (R9);
+    AK/HI/PR INSET placement is ruled on TOPOLOGICAL grounds — the game
+    preserves THAT things are connected, not the direction they are placed in,
+    so standard insets proceed as cartographic convenience (R10); and TENSION
+    RENDERING IS FOUR BANDS, overruling the B1 plan's continuous-ramp default
+    and restoring the deleted client's TENSION_BANDS semantics (R11).
+  context: |
+    Three lanes reached the Director in one 2026-08-11 sitting, each carrying
+    questions its plan had correctly refused to answer for itself:
+
+    - **The hypergraph-rs storage swap** (docs/superpowers/plans/
+      2026-08-11-hypergraph-storage-swap-plan.md) opened with a repository-
+      permission question (its open question 1) and two spec-level ones its
+      capability delta had raised (docs/reference/graph-storage-capability-
+      delta.md, §5): whether NodeId is a mint counter or a content-derived
+      function of the stable domain id — i.e. whether the tick hash must be
+      invariant to scenario declaration order — and whether edge/hyperedge
+      FIELD storage belongs where III.7 currently implies. CD5 had already
+      established by execution that under a monotone-mint bimap
+      "ascending-NodeId order IS insertion order", so the sort satisfies the
+      letter of the substrate contract while delivering none of the rst
+      sentence's stated purpose.
+    - **BSL Phase-1 review** owed two repairs the §7 consolidation had
+      explicitly deferred to it (D92): <type-name> has no §1.4 atom class and
+      no capitalized spelling is lexable, and §6.1's vector keywords are
+      written with `?` binding to the value against §6.1's own prose. Both
+      were "collected with the reference implementation's reading and flagged"
+      rather than resolved, because an appendix may not legislate over the
+      sections it collects.
+    - **The B1 county map plan** (docs/superpowers/plans/
+      2026-08-10-b1-county-map-plan.md) closed with three Director-level open
+      questions, all three explicitly non-blocking: which Iosevka build ships,
+      whether the AK/HI/PR insets need sign-off, and whether the tension lens
+      draws ADR170's continuous ramp or the deleted client's four bands.
+
+    Two further items were disposed in the same sitting: the ADR175 per-family
+    review reached the mortality family, and the workforce asked whether
+    adopting hypergraph-rs as engine storage needed constitutional text.
+  decision: |
+    THE RULINGS (Director, 2026-08-11; the Director's words quoted where
+    load-bearing).
+
+    R1 — HYPERGRAPH-RS SIBLING PUSH: APPROVED, AND ALREADY EXECUTED.
+      Status: executed. The workforce pushed the sibling repository's unpushed
+      tip immediately after the ruling: `983d959..ab558f0` to
+      `percy-raskova/hypergraph-rs` `origin/main` (48 commits). The storage-
+      swap plan's first blocking gate — a cargo git dependency may pin only a
+      rev the remote serves — is DISCHARGED, and Phase B may pin `ab558f0`.
+
+    R2 — TICK-HASH REORDER INVARIANCE: OPTION (a), ORDER-DEPENDENCE ACCEPTED.
+      Status: ruled. The capability delta offered two repairs: weaken the
+      sentence to what a mint counter delivers, or make identity
+      content-derived (a far larger ruling touching III.7/III.12). The
+      Director took the first. The reasoning is that scenarios are CANONICAL
+      COMMITTED ARTIFACTS: a scenario file's declaration order is part of its
+      identity, not a cosmetic property of its text, so a reordered scenario
+      is a different scenario and a different tick hash is the honest answer
+      rather than a defect. This ratifies what `babylon-bsl`'s scenario loader
+      already documents ("Declaration order is the id order… Reordering two
+      `node` forms is a real change to the scenario, not a cosmetic one").
+      NodeId stays a mint counter; no content-derived identity scheme is
+      opened. The rst sentence that promised more (§2.6's "it makes fold
+      results independent of insertion history and of the underlying graph
+      library", the line the delta cites as bsl-language.rst:589-590) is
+      weakened by D96 to the guarantee the language actually gives: iteration
+      order is a total order over ids and is independent of the underlying
+      graph library's storage order — the property that defeats the
+      cross-language iteration-order trap — while the id assignment those ids
+      come from is the scenario's own declaration order.
+
+    R3 — THE MORTALITY FAMILY (ADR175 per-family review): OPTION (b),
+      RE-DERIVED AS A MEASURE.
+      Status: ruled; the mortality family is discharged from the ADR175
+      review. The attrition rate is not a curve the engine stipulates: the
+      ATTRITION DEATHS ARE THE MASS OF THE WITHIN-CLASS WEALTH DISTRIBUTION
+      THAT FAILS TO CLEAR SUBSISTENCE — the same emergent quantity ADR173
+      already ruled P(S|A) to be, read from the other side. Magnitudes come
+      from defines; NO functional form is stipulated anywhere (ADR172 ruling
+      5; ADR185 R3's scale-not-shape boundary). The frozen Python engine's
+      piecewise-linear attrition with its tuned `attrition_base_factor` knob
+      is therefore NOT TRANSCRIBED — it is exactly the imposed form the
+      standing line forbids, and per ADR183 the frozen engine is a contract
+      source for structure and ordering, never a correctness oracle for a
+      shape.
+
+    R4 — <type-name>: OPTION (a), THE LOWERCASE READING IS BLESSED.
+      Status: ruled. Type names are LOWERCASE SYMBOLS — the reading the Rust
+      reference implementation takes (`declarations.rs::parse_type_name`
+      accepts `int` / `bool` / `currency` / `probability` / `intensity` /
+      `coefficient`) and the reading `bsl.ebnf` collected and flagged. The
+      alternative repair D92 named — giving §1.4 an atom class for
+      capitalized type names — is REJECTED: it would mint a lexical class for
+      one construct. §2.11's worked example (`:type Coefficient`) and §3.1's
+      capitalized spellings are the defect and are corrected to lowercase.
+      Recorded as D94; `bsl.ebnf`'s `type-name` production comment turns from
+      a recorded gap into a citation of the ruling.
+
+    R5 — §6.1 VECTOR KEYWORD ARITY: THE KEYWORDS FLIP TO OPTIONAL GROUPS.
+      Status: ruled. `":graph" <graph-lit>?` becomes `(":graph"
+      <graph-lit>)?`, and likewise for `:fuel-used` and `:cas` — the keyword
+      is optional, and its value is mandatory whenever the keyword appears.
+      This is what §6.1's own prose already says (`:fuel-used` mandatory on
+      non-error vectors, `:cas` optional outright), so the ruling makes the
+      grammar say what the section means rather than changing either. The
+      appendix's vector productions are updated in the same commit, as both
+      the §7 precedence rule and the sync guard require appendix and section
+      to agree. Recorded as D95.
+
+    R6 — Q2, GENERAL EDGE ITERATION: DEFERRED.
+      Status: deferred. "I agree, defer until needed." No spec change; the
+      question re-opens when a port actually needs to iterate edges in
+      general, and this row is the record that its absence is deliberate.
+
+    R7 — EDGE/HYPEREDGE FIELD STORAGE (III.7): DELEGATED, THEN RULED THE SAME
+      SESSION — SEE ADR192.
+      Status: delegated and ruled. The item opened as a Director question
+      (graph-theory questions about the construct, discussion wanted before a
+      ruling). After the workforce laid out the Levi/incidence-versus-clique
+      analysis, the Director delegated the decision outright — "I'm going to
+      delegate this decision to you. I trust you. You know Babylon well." —
+      with the deciding criterion stated verbatim-in-substance: "pick whatever
+      is most ideologically rigorous and makes for an entertaining game." The
+      delegate's ruling was made in-session and is transcribed in full as
+      ADR192 (relation state granted as machinery, the Aleksandrov gate moved
+      to content per-field, additivity as law, the CanonicalState sequencing,
+      and player legibility as a review clause). It remains veto-able by the
+      Director at any time.
+
+    R8 — CONSTITUTIONAL TEXT FOR HYPERGRAPH-RS ENGINE-STORAGE ADOPTION: NOT
+      REQUIRED.
+      Status: ruled. ADR179 T3 already rules that babylon-graph's storage
+      CONSUMES hypergraph-rs, and the swap's own Phase D ADR records the
+      adoption's terms. No amendment is minted, and the swap does not wait on
+      one.
+
+    R9 — THE CLIENT FONT: IOSEVKA TERM NERD FONT, UPSTREAM ARCHIVE, WITH ITS
+      OFL 1.1 LICENSE FILE.
+      Status: ruled (judgment delegated, then exercised on a verified
+      finding). The Director directed the workforce to check the Nerd Fonts
+      project's own license position and delegated the call: "iosevka is a
+      reasonable substitution, i'll trust your judgment."
+
+      The check was run against the Nerd Fonts site, and it OVERTURNED the
+      working assumption. Findings: the Nerd Fonts patched Iosevka build is
+      SIL OFL 1.1 with the NO-RFN designation; the project publishes a
+      per-font `license-audit.md`; and its release archives BUNDLE the
+      license files. The earlier local-folder finding — that this box's
+      `~/.fonts/Iosevka Terminal/` holds 81 `IosevkaTermNerdFont*` files with
+      NO license file beside them — is a property of THIS MACHINE'S COPY, not
+      of the upstream distribution.
+
+      Decision: ship **Iosevka Term Nerd Font from the upstream Nerd Fonts
+      release archive, together with its bundled OFL 1.1 license file** —
+      matching the Director's terminal font ladder and keeping the icon
+      glyphs the UI chrome wants. NOT the box's license-less local folder,
+      and NOT the plain-Iosevka substitution (that was the fallback for an
+      unverified license situation, and the situation is now verified). The
+      Director further noted that Babylon is a free educational project with
+      no sale, so OFL 1.1's no-standalone-selling condition is comfortably
+      met. The repository's standing rule is unchanged and was never at
+      issue: it does not ship a font whose license text it lacks.
+
+    R10 — AK/HI/PR INSET PLACEMENT: RULED ON TOPOLOGICAL GROUNDS; STANDARD
+      INSETS PROCEED.
+      Status: ruled. The Director (verbatim-in-substance): "this game is
+      topological — as per topology, we don't care how things are
+      inter-related directionally, we just care THAT they are connected."
+      Inset placement is cartographic convenience, NOT a political statement:
+      what the game preserves is the adjacency/connection structure, which an
+      inset does not touch. The composite proceeds with the conventional
+      insets, and the plan's honesty note stays — the affine triples carry
+      cartographic PLACEMENT, not measurement, and the code says so out loud.
+
+    R11 — TENSION RENDERING: FOUR BANDS.
+      Status: ruled. The Director OVERRULES the B1 plan's continuous-ramp
+      default. The deleted client's four `TENSION_BANDS` rows return as the
+      sanctioned rendering of the ADR170 lens — the crimson-to-gold diverging
+      channel is banded, not ramped. The transcribed table (from
+      `src/babylon/projection/topology/map_lenses.py::TENSION_BANDS`, whose
+      resolution semantics the deleted client's `band_color_for` pins:
+      ascending thresholds matched with `<=`, a null threshold on the absence
+      row, and a null threshold on the open-ended top band):
+
+        [null,  "panel"  ]  w absent          -> PANEL   #200404
+        [-0.15, "crimson"]  w <= -0.15        -> CRIMSON #dc143c  (Φ-source, bled)
+        [ 0.15, "dim"    ]  -0.15 < w <= 0.15 -> DIM     #404040
+        [null,  "gold"   ]  w  >   0.15       -> GOLD    #ffd700  (Φ-recipient, bribed)
+
+      The absence row stays a distinct fill: nothing may confuse "no honest
+      data this tick" with the neutral middle band (III.11).
+  consequences: |
+    - R1: the storage-swap plan's open question 1 is RESOLVED and its Phase B
+      may pin `ab558f0`. Routine pushes to the sibling repository are
+      workforce-routine from here.
+    - R2: bsl-language.rst D96 lands (the §2.6 sentence weakened; declaration
+      order stated as part of a scenario's identity). The capability delta's
+      §5 sub-question "is NodeId a mint counter or content-derived" is
+      answered: mint counter. The delta's CD5 adversarial test changes shape
+      — "hydrate the same scenario with its node declarations shuffled and
+      assert the tick hash is UNCHANGED" is now the WRONG assertion and must
+      not be written; what the conformance vector must still discriminate is
+      sorted-vs-storage-order (a decade-boundary id case and a
+      declared-order-differs-from-id-order membership case both remain owed).
+    - R3: Grinding Attrition (PR #484's blocked phase) is DOCTRINALLY
+      UNBLOCKED. The mechanical half — the Real -> Int demotion — rides the
+      ADR188 Row 2 rider, already ratified, whose spec landing is still owed;
+      that landing is a consequence of this ruling, not a task it performs.
+    - R4/R5: D94 and D95 land in bsl-language.rst's register; §2.11's example
+      and §3.1's spellings are corrected; `bsl.ebnf`'s `type-name` and
+      `vector` productions are updated in the same commit as the sections
+      they collect, and the §7 prose that flagged both points now cites the
+      rulings. `tools/tree-sitter-bsl/grammar.js` already reads `type_name`
+      as a lowercase symbol and needs only its comment's citation updated; it
+      parses `vector` forms through `generic_form` and therefore needs no
+      arity change.
+    - R6: no artifact changes. The deferral is recorded here so nobody
+      re-escalates it before a port needs it.
+    - R7: DISCHARGED by delegation. ADR192 carries the ruling and its own
+      consequence queue (the CanonicalState encoder's declared widening
+      ceremony, the commissioned spec chapter, and PR #484's edge/hyperedge
+      STOPs staying correct until both land).
+    - R8: no amendment; no Constitution edit; the swap's Phase D ADR remains
+      the adoption record.
+    - R9: B1 Task 14 is amended — download the Iosevka Term Nerd Font release
+      archive (pinning the release version and a sha), extract the needed
+      weights plus the license file, commit both, load in Bevy. The task's
+      fallback branch (built-in font if upstream is unreachable) stays.
+    - R10: B1 Task 1 Step 2 proceeds unchanged, honesty note intact.
+    - R11: B1 Task 9 is rewritten from a continuous ramp to the four-band
+      mapping above; the plan's open-question 3 and any other continuous-ramp
+      reference update with it. The band table is presentation data, not
+      GameDefines (the `map_room._band_color` precedent the M5 contract
+      records), so no defines_hash ceremony is implicated.
+  supersedes: []
+  related:
+    - ADR192_relation_state_delegated_ruling
+    - ADR170_tension_lens_ruling
+    - ADR172_amendment_ae_refoundation_ratified
+    - ADR173_audit_and_stops_dispositions
+    - ADR175_emergence_extension_logging_phi_sign
+    - ADR179_topology_spine_director_rulings
+    - ADR183_get_it_right_in_rust
+    - ADR185_director_rulings_2026_07_31
+    - ADR186_bevy_cutover_amendment_af
+    - ADR188_intrinsic_rider_slate_dispositions

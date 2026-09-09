@@ -1,0 +1,234 @@
+; The ACTIVE conformance world for `production/p0-production-total-reset` +
+; `production/p1-direct-production` + `production/p2-employed-routing` +
+; `production/p3-employed-fallback` + `production/p4-extraction-intensity`
+; — the Production port (P27, issue #565; frozen source:
+; `src/babylon/engine/systems/production.py`, 268 lines, tick @3.0).
+;
+; **Enum order is a hash-bearing transcription of the frozen Python
+; declaration order (ADR195)** — do not reorder:
+;   `src/babylon/models/enums/social.py:34-41` — SocialRole (CORE_BOURGEOISIE
+;   PERIPHERY_PROLETARIAT LABOR_ARISTOCRACY PETTY_BOURGEOISIE
+;   LUMPENPROLETARIAT COMPRADOR_BOURGEOISIE INTERNAL_PROLETARIAT
+;   CARCERAL_ENFORCER).
+;
+; **`social-class/active` is an int 0/1 latch, not a bool field** — same
+; `social-class/active`/`organization/active` precedent Territory's
+; `under-eviction` follows (no `bool` type name on the live `.bscn`
+; deffield dialect, `scenario.rs::load_deffield`).
+;
+; **`social-class/production-value` is a NEW field this port mints** — the
+; per-node reformulation of the frozen `la_production` dict (keyed by
+; worker node id, graph-scope scratch state; production-bsl-surface-facts
+; §5/§6). Every producer rule (p1/p2/p3) `(set ...)`s it every tick it
+; fires; a class whose role never matches any producer rule's `when` guard
+; (bourgeoisie, comprador) never has it touched, so it stays at its seeded
+; 0 forever.
+;
+; **`territory/production-total` is a SECOND new field (fix round,
+; discharging D136) — the producer-side PUSH accumulator
+; `production/p4-extraction-intensity` reads.** `production/
+; p0-production-total-reset` zeroes it every tick; `p1`/`p2`/`p3` each push
+; their own `output` onto the SAME tiebreak-selected territory ref their
+; `bio`/`max-bio` bindings already compute — so a multi-tenancy producer
+; (`worker-pp-two-lands`) contributes to EXACTLY ONE territory's total,
+; matching the frozen engine's single-territory `_find_tenancy_target`
+; attribution exactly (an earlier draft of this pack used a territory-side
+; PULL fold instead, which double-counted `worker-pp-two-lands` into both
+; `t-alpha`'s and `t-beta`'s totals — a real divergence from the frozen
+; engine, corrected by this redesign, not merely described).
+;
+; **No defaults (scenario.rs's own contract): every field every rule reads is
+; seeded on every node of that rule's subject type.** Every SOCIAL_CLASS node
+; below seeds all five of role, active, population, wealth,
+; production-value; every TERRITORY node seeds all four of biocapacity,
+; max-biocapacity, extraction-intensity, production-total.
+;
+; Nine social classes, five territories:
+;
+;   worker-pp            PERIPHERY_PROLETARIAT, direct producer, one TENANCY
+;                         (t-alpha) — p1's own vector.
+;   worker-pp-two-lands   PERIPHERY_PROLETARIAT, TWO TENANCY edges
+;                         (t-alpha, t-beta) — the D45 select-max tiebreak
+;                         vector (ascending-id first-wins picks t-alpha,
+;                         the lower NodeId): its product pushes onto
+;                         t-alpha's production-total ONLY, matching the
+;                         frozen engine's single-territory attribution
+;                         (fix round; the pull-fold draft's double-count
+;                         is corrected, not merely documented).
+;   worker-la-one         LABOR_ARISTOCRACY, employed (WAGES from `employer`),
+;                         TENANCY to t-beta — the accumulate-into-shared-
+;                         target vector (D103/D104), paired with
+;                         worker-la-two.
+;   worker-la-two          LABOR_ARISTOCRACY, employed (WAGES from
+;                         `employer`, SAME employer as worker-la-one),
+;                         TENANCY to t-beta — proves BOTH contributions land
+;                         on `employer`'s wealth, none lost.
+;   worker-la-orphan      LABOR_ARISTOCRACY, TENANCY to t-alpha, NO WAGES
+;                         edge — the p3 fallback vector (self-accumulates).
+;   worker-la-idle        LABOR_ARISTOCRACY, active=0, TENANCY to t-beta,
+;                         WAGES from `employer` — the hash-neutral vector:
+;                         p2's `when` guard fires (role+employer+tenancy all
+;                         match), but the active-gated `output` computes to
+;                         0, so `employer`'s wealth, this worker's own
+;                         production-value, and t-beta's production-total
+;                         are all untouched by IT specifically (hash-neutral
+;                         `(add 0)`/`(set 0)`, the D127 idiom).
+;   comprador             COMPRADOR_BOURGEOISIE, TENANCY to t-alpha — the
+;                         p4 filter vector: a non-producer-role tenant whose
+;                         production-value stays 0 because no producer rule's
+;                         `when` guard ever matches its role, so it never
+;                         pushes anything onto t-alpha's production-total.
+;   employer               CORE_BOURGEOISIE, no TENANCY (produces nothing of
+;                         its own) — the accumulation target for both LA
+;                         workers' product.
+;   worker-tight           PERIPHERY_PROLETARIAT, TENANCY to t-tight only —
+;                         MINOR-2 (fix round): the upper-clamp LIVE vector.
+;                         Sized so t-tight's ratio exceeds 1.0, making
+;                         `production/p4-extraction-intensity`'s clamp
+;                         constant `(- 1 0c)` mutation-provable (a
+;                         mutation to `(- 2 0c)` must flip a test — the
+;                         four ORIGINAL territories' own ratios never
+;                         exceed 1.0, so none of them exercised this
+;                         branch).
+;
+;   t-alpha    biocapacity 80, max-biocapacity 100 — bio_ratio 0.8.
+;   t-beta     biocapacity 50, max-biocapacity 100 — bio_ratio 0.5.
+;   t-dead     biocapacity 0, max-biocapacity 0 — the zero-guard vector (both
+;              p1's bio-ratio guard and p4's ratio guard fire on it; no
+;              TENANCY edges at all).
+;   t-empty    biocapacity 100, max-biocapacity 100, NO TENANTS — the
+;              no-production vector (p4's `total` stays at p0's reset value,
+;              0, since no producer's push ever targets it).
+;   t-tight    biocapacity 1, max-biocapacity 1 — MINOR-2 (fix round):
+;              `worker-tight`'s own push alone drives `total` above
+;              `max-biocapacity`, so `ratio > 1` and p4's clamp constant
+;              branch is LIVE, not merely structural.
+(scenario production/conformance
+  (defvocabulary NodeType (SOCIAL_CLASS TERRITORY))
+  (defvocabulary EdgeType (TENANCY WAGES))
+  (defenum SocialRole (CORE_BOURGEOISIE PERIPHERY_PROLETARIAT LABOR_ARISTOCRACY PETTY_BOURGEOISIE LUMPENPROLETARIAT COMPRADOR_BOURGEOISIE INTERNAL_PROLETARIAT CARCERAL_ENFORCER))
+  (deffield social-class/role enum SocialRole)
+  (deffield social-class/active int extensive)
+  (deffield social-class/population int extensive)
+  (deffield social-class/wealth real extensive)
+  (deffield social-class/production-value real extensive)
+  (deffield territory/biocapacity int extensive)
+  (deffield territory/max-biocapacity int extensive)
+  (deffield territory/extraction-intensity coefficient intensive)
+  (deffield territory/production-total real extensive)
+
+  ; EconomyDefines/TimescaleDefines, src/babylon/data/defines.yaml:73,374.
+  ; `1.0c` sits exactly at the coefficient boundary [0,1] — legal today,
+  ; fragile under modding (base_labor_power's own domain is [0,∞), unbounded
+  ; above; a modded value > 1.0 refuses at load — D-recorded).
+  (defconst economy/base-labor-power-annual 1.0c)
+  (defconst timescale/weeks-per-year 52)
+
+  (node worker-pp NodeType/SOCIAL_CLASS
+    (social-class/role SocialRole/PERIPHERY_PROLETARIAT)
+    (social-class/active 1)
+    (social-class/population 100)
+    (social-class/wealth 10)
+    (social-class/production-value 0))
+
+  (node worker-pp-two-lands NodeType/SOCIAL_CLASS
+    (social-class/role SocialRole/PERIPHERY_PROLETARIAT)
+    (social-class/active 1)
+    (social-class/population 50)
+    (social-class/wealth 10)
+    (social-class/production-value 0))
+
+  (node worker-la-one NodeType/SOCIAL_CLASS
+    (social-class/role SocialRole/LABOR_ARISTOCRACY)
+    (social-class/active 1)
+    (social-class/population 40)
+    (social-class/wealth 10)
+    (social-class/production-value 0))
+
+  (node worker-la-two NodeType/SOCIAL_CLASS
+    (social-class/role SocialRole/LABOR_ARISTOCRACY)
+    (social-class/active 1)
+    (social-class/population 60)
+    (social-class/wealth 10)
+    (social-class/production-value 0))
+
+  (node worker-la-orphan NodeType/SOCIAL_CLASS
+    (social-class/role SocialRole/LABOR_ARISTOCRACY)
+    (social-class/active 1)
+    (social-class/population 30)
+    (social-class/wealth 10)
+    (social-class/production-value 0))
+
+  (node worker-la-idle NodeType/SOCIAL_CLASS
+    (social-class/role SocialRole/LABOR_ARISTOCRACY)
+    (social-class/active 0)
+    (social-class/population 80)
+    (social-class/wealth 10)
+    (social-class/production-value 0))
+
+  (node comprador NodeType/SOCIAL_CLASS
+    (social-class/role SocialRole/COMPRADOR_BOURGEOISIE)
+    (social-class/active 1)
+    (social-class/population 500)
+    (social-class/wealth 10)
+    (social-class/production-value 0))
+
+  (node employer NodeType/SOCIAL_CLASS
+    (social-class/role SocialRole/CORE_BOURGEOISIE)
+    (social-class/active 1)
+    (social-class/population 10)
+    (social-class/wealth 10)
+    (social-class/production-value 0))
+
+  (node t-alpha NodeType/TERRITORY
+    (territory/biocapacity 80)
+    (territory/max-biocapacity 100)
+    (territory/extraction-intensity 0.0c)
+    (territory/production-total 0))
+
+  (node t-beta NodeType/TERRITORY
+    (territory/biocapacity 50)
+    (territory/max-biocapacity 100)
+    (territory/extraction-intensity 0.0c)
+    (territory/production-total 0))
+
+  (node t-dead NodeType/TERRITORY
+    (territory/biocapacity 0)
+    (territory/max-biocapacity 0)
+    (territory/extraction-intensity 0.0c)
+    (territory/production-total 0))
+
+  (node t-empty NodeType/TERRITORY
+    (territory/biocapacity 100)
+    (territory/max-biocapacity 100)
+    (territory/extraction-intensity 0.0c)
+    (territory/production-total 0))
+
+  ; MINOR-2 (fix round): appended at the END, not interleaved with the
+  ; original twelve nodes above — every pre-fix-round NodeId (0-11) stays
+  ; unchanged, so nothing above this point was renumbered.
+  (node worker-tight NodeType/SOCIAL_CLASS
+    (social-class/role SocialRole/PERIPHERY_PROLETARIAT)
+    (social-class/active 1)
+    (social-class/population 100)
+    (social-class/wealth 10)
+    (social-class/production-value 0))
+
+  (node t-tight NodeType/TERRITORY
+    (territory/biocapacity 1)
+    (territory/max-biocapacity 1)
+    (territory/extraction-intensity 0.0c)
+    (territory/production-total 0))
+
+  (edge EdgeType/TENANCY worker-pp t-alpha 1)
+  (edge EdgeType/TENANCY worker-pp-two-lands t-alpha 1)
+  (edge EdgeType/TENANCY worker-pp-two-lands t-beta 1)
+  (edge EdgeType/TENANCY worker-la-one t-beta 1)
+  (edge EdgeType/TENANCY worker-la-two t-beta 1)
+  (edge EdgeType/TENANCY worker-la-orphan t-alpha 1)
+  (edge EdgeType/TENANCY worker-la-idle t-beta 1)
+  (edge EdgeType/TENANCY comprador t-alpha 1)
+  (edge EdgeType/WAGES employer worker-la-one 1)
+  (edge EdgeType/WAGES employer worker-la-two 1)
+  (edge EdgeType/WAGES employer worker-la-idle 1)
+  (edge EdgeType/TENANCY worker-tight t-tight 1))

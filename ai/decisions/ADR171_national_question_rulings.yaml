@@ -1,0 +1,93 @@
+ADR171_national_question_rulings:
+  status: "accepted"
+  date: "2026-07-28"
+  title: >
+    The National Question ruled: MIM+MLP non-contiguous line (OQ0),
+    B+C+I named-nations partition with a declared overlap policy (OQ1),
+    E-primary/Lambda-secondary rendering (OQ10), and Phase 0 + Phase 1
+    execution authorized — the incidence artifact + data program and the
+    M5 static reference overlay; Phase 2 stays BLOCKED on the
+    community_memberships seam; the N0 multiplier is rejected as the
+    liquidation form.
+  context: |
+    The Director's 2026-07-28 directive: get to the root of national
+    oppression, elegant and principled, grounded in the whole project.
+    Deliverable: reports/national-oppression-proposal.md (PR #329) —
+    a 13-agent program (8 readers over Stalin 1913 via its ERoL quoters,
+    Lenin 1914/1916, the MIM Theory OCR trio, the ERoL NCM corpus, the
+    code/docs/data estates, the P26 sigma-tier precedent; Opus
+    synthesis; three adversarial critics with 37 findings; Revision 2
+    disposing every finding). The root: national oppression is an
+    asymmetric, historically-instituted relation whose incidence is
+    DECLARED from history (never derived from c/v/s), whose content is
+    an extensive mass read in MIM's own direction — the oppressor's
+    non-exploitation against the oppressed's demonstrated reproduction
+    floor. Instrument validation on real reference data: bribe mass
+    18,691,613 persons = 1.55x the deprivation mass (12,041,561),
+    MIM's wage-term ordering recovered from independent census
+    headcounts; Appalachian settler counties read NEGATIVE bribe.
+  decision: |
+    The Director ruled the four governing questions (2026-07-28):
+    - OQ0 TERRITORY: the MIM + MLP side IS the line — the oppressed
+      nations are real and NON-CONTIGUOUS; incidence is people-attached;
+      the map's center of gravity is the urban mass. CAP/Haywood/
+      Comintern territorial nationhood is carried as historical record,
+      not as the operative partition.
+    - OQ1 PARTITION (was blocking): B + C + I named nations — Black +
+      Chicano + Indigenous, matching MIM's and ERoL's named nations and
+      the live COLONIAL_AXIS CommunityTypes — with a DECLARED overlap
+      policy: per-pole counts sum as published by the census race
+      iterations; the intersection double-count is measured where
+      computable and DISCLOSED in the artifact metadata, never silently
+      netted. The T-H racial residual is demoted to instrument
+      validation only (MIM's own "not a 'race'" sentence).
+    - OQ10 RENDERING: E (extensive deprivation mass, persons) is the
+      PRIMARY channel — the nation where it lives now; Lambda
+      (per-capita intensity) is the toggled secondary; the bribe
+      channel Omega-hat ships alongside (without it the lens is a
+      poverty map any liberal could read); the legend states which
+      question each channel answers.
+    - EXECUTION: Phase 0 + Phase 1 authorized. Phase 0 = the per-county
+      x pole incidence artifact + data program (FIPS vintage crosswalk
+      for the 13 recoverable absences — Pine Ridge's total absence
+      stays declared; small-count damping law; ACS-suppression policy;
+      zero-denominator ABSENCE law — 0.0 on a diverging ramp is a
+      fabricated data point; ratio-of-sums law; the artifact declared a
+      SECOND-ORDER product with its own disposition, resolving the
+      ADR098 circularity explicitly). Phase 1 = the M5 map surface
+      carries the axis as a DECLARED STATIC REFERENCE OVERLAY entered
+      by contract amendment (never a fourth lens — the lens enum is
+      closed; the overlay is labelled a reference layer per Amendment
+      V/II.8 because it is identical at tick 1 and tick 520 until the
+      engine transport exists).
+    Defaults taken on the remaining open questions (conservative,
+    Director-overridable, full text in the proposal SS5): OQ2 the H
+    settler reference stands with an ADR167-class proxy disclosure;
+    OQ3 flat 0/1 nation weights (no domestic outflow series exists —
+    w_dom is a data-acquisition question); OQ4 Puerto Rico as a
+    separate declared surface outside the county lattice, NOTHING
+    rendered until the small-count damping and a deflator exist; OQ5
+    chauvinist_pressure untouched (ratified mechanism — any national
+    input is a future Director escalation, baseline-moving); OQ6
+    national_oppression stays shadow=True (un-shadowing is a SS6.5
+    ceremony reserved to the Director); OQ7 the conservative
+    point-in-time/carceral bias is accepted AND printed on the lens;
+    OQ8 SETTLER as an on-screen name awaits the Director; OQ9 the
+    oppressed-nation-bourgeois-nationalism guard ships BEFORE any
+    consciousness wiring; OQ11 pinned vintage (determinism first).
+    BLOCKED/REJECTED: Phase 2 shadow registration is blocked on THREE
+    named prerequisites (a production writer for
+    SocialClass.community_memberships — the Phase 0 artifact is its
+    designated seeder; county_extraction's own BoundOpposition
+    registration, chartered by ADR170; the coupling row raises KeyError
+    today). Phase 3 consciousness wiring is withdrawn as engineering
+    and re-filed as OQ5+OQ9. The N0 bounded-multiplier form is REJECTED
+    as the liquidation move the corpus names.
+  consequences:
+    positive:
+      - "The domestic national question enters the system the same principled way the international one did (P26 sigma-tiers): declared historical incidence + measured asymmetry, one estate across both scales"
+      - "The Phase 0 artifact is the designated seeder for the STRUCTURALLY_IMPOSSIBLE community_memberships seam — the data program unblocks the community hypergraph, which is the only honest engine transport for the opposition"
+      - "The map carries the bribe channel: the settler premium with its internal differentiation (Appalachian negatives) — the claim no liberal disparity map can make"
+    negative:
+      - "Chartered, unbudgeted-until-scheduled: the FIPS vintage crosswalk; the ci-data subset flip for fact_census_poverty (owner-gated per ADR169); the deleted census extractor reconstruction for any vintage re-cut; the AIANNH county bridge (N3); the domestic outflow series (N2's w_dom); Pine Ridge's data absence is permanent until a source exists"
+  file: ADR171_national_question_rulings.yaml

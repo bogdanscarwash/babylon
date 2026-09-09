@@ -1,0 +1,315 @@
+; The PRIMARY conformance world for the ImperialRent BSL port train (Material
+; Base @9.0, Checkpoint A campaign; plan
+; `docs/superpowers/plans/2026-08-18-imperialrent-port.md`; frozen source:
+; `src/babylon/engine/systems/economic.py::ImperialRentSystem`, `step()` at
+; `:46-86`). World 1 of 12 — all four IMPLEMENTED phases (Extraction, Tribute,
+; Wages, Decision; Phase 4/Subsidy is Director-RESERVED, Constitution IX.5,
+; plan §6, and does not land), the NO_CHANGE non-binding control (plan §9's
+; per-world seed matrix, row "1 primary").
+;
+; **Task 1 scope.** This file is the scenario ceremony ONLY — no
+; `imperial-rent/*` rule pack content yet (that is Task 2 onward). It exists
+; to (a) prove the scenario loads clean against the newly-registered
+; "imperial-rent" system via a load-smoke probe, (b) carry the frozen-mirror
+; provenance for `imperial_rent_conformance.py`, and (c) host THE SPIKE
+; (Step 5) that proves the seven content-unprecedented query/write shapes
+; §3/§8 of the plan need — the throwaway spike rules ran in temporary Rust
+; tests, verified green, then deleted; verdict recorded at the bottom of this
+; header. Later tasks in this train grow `content/rules/imperial-rent.bsl`
+; against this SAME scenario, chosen as the world where every phase produces
+; a non-trivial (but non-crisis) result — declaration order is NodeId order;
+; do not renumber when extending.
+;
+; **Enum order is a hash-bearing transcription of the frozen Python
+; declaration order (ADR195)** — do not reorder:
+;   `src/babylon/models/enums/social.py:34-41` — SocialRole (CORE_BOURGEOISIE
+;   PERIPHERY_PROLETARIAT LABOR_ARISTOCRACY PETTY_BOURGEOISIE
+;   LUMPENPROLETARIAT COMPRADOR_BOURGEOISIE INTERNAL_PROLETARIAT
+;   CARCERAL_ENFORCER).
+;
+; **`social-class/active` is `int intensive`, not `extensive`** — corrected
+; against `consciousness-ternary-conformance.bscn:227` (a 0/1 latch is a
+; per-node state, never a summed quantity; the plan's own §8 field table
+; names this as a deliberate correction against the earlier draft, which had
+; claimed `extensive` while asserting verbatim reuse). No `bool` type token
+; exists on the live `.bscn` deffield dialect (`scenario.rs::load_deffield`).
+;
+; **B7 STRUCK (Task 0 dossier CORRECTIONS item 1, Step 3): no
+; `social-class/class-consciousness` field is minted.** The frozen
+; `class_consciousness_from_node` accessor (`kernel/node_access.py:15-37`)
+; already ports to the ALREADY-DECLARED `social-class/revolutionary` field —
+; `solidarity.bsl:18-24` performs the identical re-point for the same
+; accessor, and ADR211 records it independently. `periphery-worker`'s
+; `revolutionary 0.2p` below is what the plan's own table called
+; "class-consciousness 0.2" — same value, corrected field name.
+;
+; **`social-class/wages-paid`/`value-produced` are redeclared `real
+; extensive` here** (B5, D191) — `consciousness-ternary-conformance.bscn`
+; declares them `int extensive`; Task 0 Step 4(f) settled that a `real
+; extensive` redeclaration is legal and the `:default -1` sentinel idiom
+; (unused in THIS file — no rule reads them yet) continues to typecheck
+; regardless, since no load/typecheck path compares a binding default's
+; literal kind against its field's declared type. Neither field is SEEDED on
+; any node below — no rule in this task's scope reads or writes them (the
+; "no defaults" contract requires seeding only what a NON-OPTIONAL binding
+; reads; both are write-only targets of `r06`, landing Task 5), matching the
+; dossier's Step 3 clarification: absence is legal, only a required binding
+; over an absent field is fatal.
+;
+; **`social-class/effective-wealth`/`unearned-increment`/`ppp-multiplier`
+; are declared but not seeded** for the same reason — all three are
+; write-only targets of `r06` (Task 5); no binding in this train's Task 1-4
+; scope reads them.
+;
+; **The carrier — field-guarded, not constant-scored (D198, plan §3.1).** One
+; `NodeType/INSTITUTION` node, `imperial-rent-register`, carrying the
+; `rent-`-prefixed roster PLUS B8's two unprefixed latch fields
+; (`institution/superwage-crisis-known`/`-tick`, declared under
+; `decomposition.bsl`'s own names — the cross-pack seam, plan §2.1/D194).
+; `institution/rent-carrier` is seeded `1` here — the D198 discriminator that
+; lets `(select-max (nodes NodeType/INSTITUTION) (field-of it
+; institution/rent-carrier))` resolve THIS node even in a world that also
+; loads `decomposition.bsl`'s `carceral-register` (a lower-id INSTITUTION
+; node under a naive constant-score tiebreak). This world mints only ONE
+; INSTITUTION node, so the discriminator and a constant-score `select-max`
+; agree by construction here; THE SPIKE Step 5(f) proves the discriminator
+; resolves correctly even when a SECOND, lower-id, zero-carrier INSTITUTION
+; node is present — a permanent test, own inline fixture (not this file).
+;
+; **`institution/rent-wages-outflow` is NOT declared (D199)** — the frozen
+; `tick_context["wages_outflow"]` is a per-tick local `_save_economy` never
+; persists; declaring it would fabricate hash-bearing state the frozen
+; engine does not have. See plan §3.1's own reasoning.
+;
+; **Three seeding facts, corrected against the earlier plan draft (Task 0
+; dossier, discharging the plan's own self-correction in §9):**
+;   1. `institution/rent-repression-level` is seeded `0.5`, not `0.3` — it
+;      matches `defines.survival.default_repression` (`defines.yaml:167`),
+;      the frozen `_load_economy` fallback's own default, so the explicit
+;      seed and the fallback can never describe two different worlds.
+;   2. `institution/rent-wages-outflow` is not declared at all (above).
+;   3. The seeding law is NOT "every declared field on every node" — see
+;      the wages-paid/value-produced/effective-wealth paragraphs above.
+;
+; Five social classes, one carrier (declaration order fixes NodeId — never
+; renumber when extending):
+;
+;   core-bourgeoisie    CORE_BOURGEOISIE, active, wealth 10000 — the
+;                       EXPLOITATION target, the TRIBUTE recipient, the
+;                       WAGES payer. Three roles, one node, matching the
+;                       frozen circuit's own topology (Amin/Wallerstein).
+;   periphery-worker    PERIPHERY_PROLETARIAT, active, wealth 500,
+;                       revolutionary 0.2p (B7's re-point target) — the
+;                       EXPLOITATION source; non-zero consciousness makes
+;                       the frozen `rent = eff * wealth * (1 - consciousness)`
+;                       factor provable (a zero consciousness would make the
+;                       `(1 - c)` term structurally invisible, 1.0 always).
+;   comprador           COMPRADOR_BOURGEOISIE, active, wealth 800 — the
+;                       TRIBUTE source; non-zero wealth makes the frozen
+;                       `source.wealth = cut_amount` OVERWRITE (not `sub`)
+;                       provable — a zero-wealth comprador can't distinguish
+;                       `set` from `sub` (both would leave 0).
+;   labor-aristocracy   LABOR_ARISTOCRACY, active, wealth 300,
+;                       production-value 40 (SEEDED — the frozen
+;                       `la_production` dict's per-node reformulation,
+;                       `production.py:194`) — the WAGES target.
+;   petty-b             PETTY_BOURGEOISIE, active, wealth 250 — the
+;                       non-participant witness: no edge touches it, and
+;                       EVERY field of it must stay unchanged post-tick.
+;   imperial-rent-register  INSTITUTION — the carrier (above).
+;
+; Edges: EXPLOITATION (periphery-worker -> core-bourgeoisie), TRIBUTE
+; (comprador -> core-bourgeoisie), WAGES (core-bourgeoisie ->
+; labor-aristocracy) — matching the frozen engine's own edge topology
+; exactly (`economic.py`'s three `query_edges` loops). Each edge's
+; `<namespace>/value-flow` is seeded `0` via `(edge-attr ...)` (D156) — the
+; per-tick recorded flow, written fresh every tick a later rule runs
+; (`graph.update_edge(..., value_flow=...)` in every one of the three
+; frozen phases). Structural `strength` is a bare `1` — a presence marker
+; only, matching `production-conformance.bscn`'s own convention; nothing in
+; this pack reads edge strength.
+;
+; **§8's 23 `defconst`s, all at shipped values** (`src/babylon/data/
+; defines.yaml:71-99,374`). Mint no new coefficient. Two are POSITIVE
+; transcriptions of a frozen NEGATIVE value (`austerity-wage-delta`,
+; `crisis-wage-delta`) — Task 0 Step 4(a) settled that no BSL literal syntax
+; spells a negative fractional number in ANY position (every suffixed kind's
+; lexer arm refuses negativity unconditionally); the sign is applied at the
+; r08 use site (Task 7) via `sub`/the landed `(- 0 x)` idiom, not here.
+; `economy/initial-rent-pool` is a bare `Int` literal (`100`, not `100.0$`
+; or `100.0r`) deliberately: `institution/rent-pool` is declared `real`
+; (Task 0 Step 4(d)), and `Int / Real` (or `Real / Int`) both fall through
+; `apply_arith`'s `_ => real_lane` promotion cleanly — a `Currency`-typed
+; denominator would instead hit `apply_arith`'s unconditional
+; `(Value::Currency(_), other) => Err(E-TYPE-030)` arm for a `Real`
+; numerator, and a `Ratio`-typed one is a THIRD runtime variant `real_lane`
+; never promotes either; bare `Int` is the only spelling that avoids both
+; traps for r08's pool-ratio division (Task 6/7 scope, verified here so
+; Task 1 does not leave a landmine for it).
+;
+; **THE SPIKE VERDICT (Step 5, recorded here per the plan's own
+; instruction).** Two throwaway spike rules were run through the real
+; `run_once_into` driver — one against this exact scenario (proving (a)
+; through (e) and (g)), one against a small inline two-INSTITUTION-node
+; fixture built only inside the test file (proving (f), since this
+; scenario mints exactly one INSTITUTION node by design) — then deleted
+; (their bodies never landed in this file or in `content/rules/`):
+;   (a) `(for-each (neighbors self EdgeType/EXPLOITATION :out
+;       NodeType/SOCIAL_CLASS) ...)` fires for `periphery-worker` (the sole
+;       EXPLOITATION source) and is empty (D127 hash-neutral) for every
+;       other class — LOADED AND EVALUATED CLEAN.
+;   (b) `(update-edge (edge-between EdgeType/EXPLOITATION self it)
+;       exploitation/value-flow (set 1))` writes the `.bscn`-seeded
+;       `exploitation/value-flow` edge attribute — LOADED AND EVALUATED
+;       CLEAN, the write observed on the post-tick edge.
+;   (c) the same `for-each` body issued BOTH `(update-node self ...)` and
+;       `(update-node it ...)` — both writes observed.
+;   (d) a nested `(guard <pred> <effect> <effect> <effect>)` with THREE
+;       effects (one `emit`, two `update-node`) LOADED AND RAN, all three
+;       firing together when the guard's predicate held.
+;   (e) `(field-of it social-class/role)` compared by `=` against
+;       `SocialRole/CORE_BOURGEOISIE` inside that same guard — typechecked
+;       and evaluated correctly (true for `core-bourgeoisie`, the sole
+;       EXPLOITATION target in this world).
+;   (f) `(select-max (nodes NodeType/INSTITUTION) (field-of it
+;       institution/rent-carrier))` resolved the REAL carrier
+;       (`rent-carrier 1`) over a lower-id decoy INSTITUTION node
+;       (`rent-carrier 0`) — proving the discriminator, not ascending-id
+;       tiebreak, decides the winner. LOADED AND EVALUATED CLEAN; kept as a
+;       PERMANENT test (not deleted with the rest of the spike).
+;   (g) a `for-each` over `(nodes NodeType/SOCIAL_CLASS)` (5 elements)
+;       issuing a repeated, `it`-independent `(update-node self ... (set
+;       42))` alongside a repeated `(add 1)` on a different field — the
+;       `set` writes landed as "last write wins" (the value observed after
+;       the tick is exactly 42, not accumulated or refused), and the `add`
+;       writes DID accumulate (5x, not 1x) — confirming Task 0 Step 4(e)'s
+;       static reading of `structural_verbs.rs` against the real driver,
+;       exactly as predicted, no refusal, no surprise.
+; No shape refused. Full command/output evidence:
+; `imperial_rent_conformance.rs`'s own module doc comment and the Task 1
+; report.
+(scenario imperial-rent/conformance
+  (defvocabulary NodeType (SOCIAL_CLASS INSTITUTION))
+  (defvocabulary EdgeType (EXPLOITATION TRIBUTE WAGES))
+  (defenum SocialRole (CORE_BOURGEOISIE PERIPHERY_PROLETARIAT LABOR_ARISTOCRACY PETTY_BOURGEOISIE LUMPENPROLETARIAT COMPRADOR_BOURGEOISIE INTERNAL_PROLETARIAT CARCERAL_ENFORCER))
+
+  (deffield social-class/role enum SocialRole)
+  (deffield social-class/active int intensive)
+  (deffield social-class/wealth real extensive)
+  (deffield social-class/production-value real extensive)
+  (deffield social-class/revolutionary probability intensive)
+  (deffield social-class/wages-paid real extensive)
+  (deffield social-class/value-produced real extensive)
+  (deffield social-class/effective-wealth real extensive)
+  (deffield social-class/unearned-increment real extensive)
+  ; `ppp-multiplier` is `real`, not `coefficient` — Task 1 fix round 1
+  ; (reviewer Minor 5): the frozen formula `1 + extraction_efficiency *
+  ; superwage_multiplier * superwage_ppp_impact` (`economic.py:432`) is
+  ; unbounded above and world 1's own r06-measured value is `1.4` — outside
+  ; `coefficient`'s `[0,1]` domain both at a literal seed AND at
+  ; `structural_verbs.rs`'s runtime `store_range_check` for an
+  ; arithmetic-computed write, so `coefficient` would refuse Task 5's own
+  ; correct output. `real` matches `effective-wealth`/`unearned-increment`
+  ; immediately above and `lifecycle-conformance.bscn:44`'s
+  ; `territory/dependency-ratio real intensive` precedent for an
+  ; unbounded-above ratio-shaped field. Corrects plan §8's own field table.
+  (deffield social-class/ppp-multiplier real intensive)
+
+  (deffield institution/rent-carrier int extensive)
+  (deffield institution/rent-pool real extensive)
+  (deffield institution/rent-tribute-inflow real extensive)
+  (deffield institution/rent-wage-rate coefficient intensive)
+  (deffield institution/rent-repression-level intensity intensive)
+  (deffield institution/rent-aggregate-tension coefficient intensive)
+  (deffield institution/superwage-crisis-known int extensive)
+  (deffield institution/superwage-crisis-tick int extensive)
+
+  (deffield exploitation/value-flow real intensive)
+  (deffield tribute/value-flow real intensive)
+  (deffield wages/value-flow real intensive)
+
+  ; EconomyDefines/TimescaleDefines, src/babylon/data/defines.yaml:71-99,374.
+  ; `austerity-wage-delta`/`crisis-wage-delta` are POSITIVE transcriptions of
+  ; a frozen NEGATIVE value (Task 0 Step 4(a) — no fractional literal spells
+  ; negative in any position); the sign applies at r08's use site (Task 7).
+  (defconst economy/extraction-efficiency 0.8c)
+  (defconst economy/comprador-cut 0.9c)
+  (defconst economy/super-wage-rate 0.2c)
+  ; `superwage-multiplier`'s declared domain is >= 0.0 (unbounded above);
+  ; 1.0 sits exactly at the coefficient boundary [0,1] — legal today,
+  ; fragile under modding (production-conformance.bscn's own
+  ; `base-labor-power-annual 1.0c` precedent, same caveat).
+  (defconst economy/superwage-multiplier 1.0c)
+  (defconst economy/superwage-ppp-impact 0.5c)
+  ; Bare Int, not a `$`/`r`-suffixed literal — see the header note above
+  ; (Task 0 Step 4(d), the r08 pool-ratio division).
+  (defconst economy/initial-rent-pool 100)
+  (defconst economy/pool-high-threshold 0.7c)
+  (defconst economy/pool-low-threshold 0.3c)
+  (defconst economy/pool-critical-threshold 0.1c)
+  (defconst economy/min-wage-rate 0.05c)
+  (defconst economy/max-wage-rate 0.35c)
+  (defconst economy/negligible-rent 0.01c)
+  (defconst economy/trpf-coefficient 0.0005c)
+  (defconst economy/rent-pool-decay 0.002c)
+  (defconst economy/bribery-wage-delta 0.05c)
+  (defconst economy/austerity-wage-delta 0.05c)
+  (defconst economy/iron-fist-repression-delta 0.1c)
+  (defconst economy/crisis-wage-delta 0.15c)
+  (defconst economy/crisis-repression-delta 0.2c)
+  (defconst economy/bribery-tension-threshold 0.7c)
+  (defconst economy/iron-fist-tension-threshold 0.5c)
+  (defconst economy/trpf-efficiency-floor 0.1c)
+  (defconst timescale/weeks-per-year 52)
+
+  (node core-bourgeoisie NodeType/SOCIAL_CLASS
+    (social-class/role SocialRole/CORE_BOURGEOISIE)
+    (social-class/active 1)
+    (social-class/wealth 10000)
+    (social-class/production-value 0)
+    (social-class/revolutionary 0.0p))
+
+  (node periphery-worker NodeType/SOCIAL_CLASS
+    (social-class/role SocialRole/PERIPHERY_PROLETARIAT)
+    (social-class/active 1)
+    (social-class/wealth 500)
+    (social-class/production-value 0)
+    (social-class/revolutionary 0.2p))
+
+  (node comprador NodeType/SOCIAL_CLASS
+    (social-class/role SocialRole/COMPRADOR_BOURGEOISIE)
+    (social-class/active 1)
+    (social-class/wealth 800)
+    (social-class/production-value 0)
+    (social-class/revolutionary 0.0p))
+
+  (node labor-aristocracy NodeType/SOCIAL_CLASS
+    (social-class/role SocialRole/LABOR_ARISTOCRACY)
+    (social-class/active 1)
+    (social-class/wealth 300)
+    (social-class/production-value 40)
+    (social-class/revolutionary 0.0p))
+
+  (node petty-b NodeType/SOCIAL_CLASS
+    (social-class/role SocialRole/PETTY_BOURGEOISIE)
+    (social-class/active 1)
+    (social-class/wealth 250)
+    (social-class/production-value 0)
+    (social-class/revolutionary 0.0p))
+
+  (node imperial-rent-register NodeType/INSTITUTION
+    (institution/rent-carrier 1)
+    (institution/rent-pool 100)
+    (institution/rent-tribute-inflow 0)
+    (institution/rent-wage-rate 0.2c)
+    (institution/rent-repression-level 0.5i)
+    (institution/rent-aggregate-tension 0.0c)
+    (institution/superwage-crisis-known 0)
+    (institution/superwage-crisis-tick 0))
+
+  (edge EdgeType/EXPLOITATION periphery-worker core-bourgeoisie 1)
+  (edge-attr EdgeType/EXPLOITATION periphery-worker core-bourgeoisie exploitation/value-flow 0)
+  (edge EdgeType/TRIBUTE comprador core-bourgeoisie 1)
+  (edge-attr EdgeType/TRIBUTE comprador core-bourgeoisie tribute/value-flow 0)
+  (edge EdgeType/WAGES core-bourgeoisie labor-aristocracy 1)
+  (edge-attr EdgeType/WAGES core-bourgeoisie labor-aristocracy wages/value-flow 0))

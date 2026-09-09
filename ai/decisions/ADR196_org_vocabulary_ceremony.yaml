@@ -1,0 +1,132 @@
+ADR196_org_vocabulary_ceremony:
+  status: "accepted"
+  date: "2026-08-11"
+  title: "The Phase-2 BSL vocabulary ceremony (Organization-as-game-object spec §1 Q1/Q15) — ONE mint-and-retire record per ADR176 (34) + ADR187 OQ-7: mints NodeType/ORGANIZATION, EdgeType/{MEMBERSHIP, PRESENCE, COMMAND, TRANSACTIONAL, SOLIDARISTIC, SOLIDARITY}, and enum type OrgKind {STATE_APPARATUS, BUSINESS, POLITICAL_FACTION, CIVIL_SOCIETY} into the Rust closed BSL vocabulary (ADR195's registries); records TARGETS/OWNED_BY/JURISDICTION/RECRUITMENT/EMPLOYMENT and ActionType.STRIKE's dead member + eligibility row + base_cost_strike RETIRED — never to enter that vocabulary — leaving the frozen Python enums unedited"
+  context: |
+    Two prior rulings had already named a Phase 2 vocabulary ceremony
+    without holding it. ADR176 (34) (2026-07-29, the Game Design Standard
+    disposition batch): "The five dead edge types RETIRE (TARGETS,
+    OWNED_BY, JURISDICTION, RECRUITMENT, EMPLOYMENT); re-mint under BSL in
+    Phase 2 with their own vocabulary ceremony." ADR187 OQ-7 (2026-08-10,
+    the Article V 3x3 ratification): "RATIFIED (fold): ActionType.STRIKE's
+    dead enum member, its eligibility row and base_cost_strike retire
+    inside the Phase 2 BSL vocabulary ceremony alongside the five dead
+    edge types ADR176 (34) already retires — one ceremony, one record."
+    Both explicitly deferred to a single future ceremony rather than
+    disposing their items piecemeal.
+
+    The Organization-as-game-object design (Director-approved 2026-08-11)
+    supplied that ceremony's positive content. Q1 ("Content-declared
+    kinds"): one kernel `NodeType/ORGANIZATION`; the four kinds are a
+    content-declared `OrgKind` enum field, consuming ADR195's `enum`
+    deffield row. Q15 ("Founding edge vocabulary, sharpened"): MEMBERSHIP,
+    PRESENCE, COMMAND, TRANSACTIONAL, SOLIDARISTIC, and an org↔org usage
+    of the existing SOLIDARITY edge type — with RECRUITMENT/EMPLOYMENT
+    named explicitly as staying retired by ADR176 (34), "still present in
+    the frozen Python `EdgeType` enum, never re-minted in the Rust
+    vocabulary; every further edge earns its ceremony."
+
+    VERIFIED (not assumed) before writing this record: every mint-side
+    name already exists, by string value, in the frozen Python
+    `src/babylon/models/enums/topology.py` — `NodeType.ORGANIZATION =
+    "organization"` (line 63), `EdgeType.SOLIDARITY = "solidarity"` (line
+    100), `EdgeType.MEMBERSHIP`/`COMMAND`/`PRESENCE`/`TRANSACTIONAL`/
+    `SOLIDARISTIC` (lines 109-116). This ceremony does not invent new
+    English words; it mints them into the SEPARATE, currently-empty Rust
+    `ClosedVocabulary` registry (`babylon-bsl`'s `vocabulary.rs`, wired by
+    `defvocabulary`, ADR195/§2.13) that governs the BSL content the Rust
+    engine actually runs — a distinct namespace from the frozen Python
+    estate, which this ceremony does not touch. Likewise verified: the
+    retirement targets exist exactly where the two source rulings said —
+    `EdgeType.TARGETS`/`OWNED_BY`/`JURISDICTION` (topology.py lines
+    119-121) and `EdgeType.RECRUITMENT`/`EMPLOYMENT` (lines 110-111);
+    `ActionType.STRIKE = "strike"` (`models/enums/actions.py:75`);
+    `base_cost_strike: int = Field(default=3, ...)`
+    (`config/defines/ooda.py:302`, read at line 443); the eligibility row
+    ("STRIKE: PoliticalFaction and CivilSociety only",
+    `ooda/action_eligibility.py:56`).
+  decision: |
+    ONE CEREMONY, ONE RECORD, per both source rulings' own instruction.
+
+    MINTED — into the Rust closed BSL vocabulary (populated via
+    `defvocabulary`, ADR195/§2.13; NOT a Python code change):
+
+    - `NodeType/ORGANIZATION` (spec §1 Q1: "One kind of body... Churches,
+      parties, unions, newspapers, firms, police departments: all one
+      node type, distinguished by fields and edges, never by kernel
+      kind").
+    - `EdgeType/MEMBERSHIP`, `EdgeType/PRESENCE`, `EdgeType/COMMAND`,
+      `EdgeType/TRANSACTIONAL`, `EdgeType/SOLIDARISTIC` (spec §1 Q15's
+      founding five).
+    - `EdgeType/SOLIDARITY`, WITH AN EXPLICIT USAGE NOTE: this member
+      already exists in the vocabulary for `social_class`-to-`social_class`
+      solidarity (its long-standing use); Q15 extends its LEGAL ENDPOINT
+      pair to org↔org as well ("the Q15/Q18 edge", spec §1 Q15/Q18,
+      §2's "org↔org SOLIDARITY edge is deliberate: it is the Q15/Q18
+      edge, present from the first golden so the win-gate repair train
+      has a seeded instance to count"). This is not a new edge TYPE — the
+      `defvocabulary` declaration mints the type name once, as it already
+      would for the class-to-class usage; the ceremony's contribution is
+      recording, constitutionally, that an org↔org instance of it is
+      licensed, not a kernel-level restriction to one endpoint-type pair.
+    - Enum type `OrgKind {STATE_APPARATUS, BUSINESS, POLITICAL_FACTION,
+      CIVIL_SOCIETY}` (spec §1 Q1), declared via ADR195's `defenum` — the
+      Rust `EnumRegistry`'s first content-declared type, member order as
+      given (the declaration order IS the storage ordinal, ADR195). This
+      is `organization/kind`'s declared enum type — the field itself is
+      seeded and read by Task 10's `organization-foundation.bscn` golden
+      and `organization.bsl` probe rule (Rust lane, not this ADR).
+
+    RETIRED — recorded here as NEVER to enter the Rust closed BSL
+    vocabulary, discharging ADR176 (34) and ADR187 OQ-7 in full:
+
+    - `EdgeType`: `TARGETS`, `OWNED_BY`, `JURISDICTION`, `RECRUITMENT`,
+      `EMPLOYMENT` (ADR176 (34)). `RECRUITMENT`/`EMPLOYMENT` were the two
+      candidates the Organization spec itself considered and rejected for
+      the org↔class membership relation, which `MEMBERSHIP` (weighted by
+      population, spec §4's "social base" stratum) now covers instead.
+    - `ActionType.STRIKE`'s dead enum member, its
+      `ooda/action_eligibility.py` eligibility row ("STRIKE: PoliticalFaction
+      and CivilSociety only"), and `OODADefines.base_cost_strike`
+      (ADR187 OQ-7) — the STRIKE verb's frozen-estate remnants, superseded
+      by the Article V ratified grid's `mobilize:strike` sub-mode
+      (ADR176 (11)-(13), ADR177).
+
+    THE PYTHON ENUMS ARE FROZEN-ESTATE AND UNEDITED. This decision is
+    entirely a fact about the Rust `ClosedVocabulary`/`EnumRegistry`
+    registries this ADR authorizes `defvocabulary`/`defenum` content to
+    populate (ADR195). `src/babylon/models/enums/topology.py`,
+    `actions.py`, and `config/defines/ooda.py` are NOT touched by this
+    ADR — per the Constitution AE Python-engine-freeze ruling, the frozen
+    Python engine is reference-only, and "retiring" a member from a Rust
+    vocabulary that has never contained it is not a Python code change at
+    all. A reader of the frozen Python source will still find
+    `EdgeType.TARGETS` etc. defined there; what this ADR fixes is that
+    the RUST content-authoring surface will never be able to name them.
+  consequences: |
+    `ai/decisions/index.yaml` gains this ADR and ADR195. `defvocabulary
+    NodeType (... ORGANIZATION ...)` and `defvocabulary EdgeType (MEMBERSHIP
+    PRESENCE COMMAND TRANSACTIONAL SOLIDARISTIC SOLIDARITY)` and `defenum
+    OrgKind (STATE_APPARATUS BUSINESS POLITICAL_FACTION CIVIL_SOCIETY)` are
+    now the CONSTITUTIONALLY AUTHORIZED forms Task 10's
+    `organization-foundation.bscn` golden is licensed to declare — this
+    ADR is that scenario's ceremony citation, not its implementation.
+    ADR176 (34) and ADR187 OQ-7 both CLOSE with this ADR cited as their
+    disposition; neither issue needed further Director attention on the
+    vocabulary question.
+
+    NOT YET DONE: the actual Rust `defvocabulary`/`defenum` content
+    (Task 10, cargo-gated, not yet landed) and vocabulary ENFORCEMENT
+    (Task 8 — until it lands, a typo'd `EdgeType/TARGETS` in real content
+    still silently mints today, exactly the Scout-3-verified defect this
+    plan's Task 8 exists to close; this ADR authorizes the vocabulary's
+    CONTENT, not its enforcement, which is a separate typed motion). The
+    I.16 amendment motion the Organization spec's §3/§9 gestures toward
+    (institutionality, the apparatus hyperedge) is explicitly OUT of this
+    ceremony's scope, per the spec's own "NOT this plan" list.
+  supersedes: []
+  related:
+    - ADR195_enum_deffield_row
+    - ADR176_director_rulings_batch_gds_dispositions
+    - ADR187_article_v_3x3_ratified
+    - ADR189_amendment_ag_attributed_membership_lattice_instances

@@ -1,0 +1,128 @@
+version: 2
+name: archive_revision_v2
+purpose: Exact retained Archive dossiers and search at a committed observation scope.
+predecessor:
+  contracts: [archive_atom_v1.yaml, archive_page_v1.yaml, archive_worker_v1.yaml]
+  unchanged: Original campaign, committed tick, semantic atom and rendered Markdown identities.
+  retired: Mutable current-page composition and unscoped current-head reader methods.
+classification: Designed
+scope:
+  foundation: [campaign_uuid, tick_zero, absent_tick_content_hash]
+  committed: [campaign_uuid, positive_tick_u64_bounded_by_i64_max, exact_tick_content_hash_32_bytes]
+  authority: One confined reader, one read-only repeatable-read transaction per result.
+  methods: [dossier_as_of, search_as_of]
+  exactness: The requested marker must match; future or mismatched responses refuse.
+revision:
+  key: [campaign_uuid, subject_kind, subject_id, effective_tick, publication_origin]
+  publication_origin: {adopted_head: 0, materialized: 1}
+  selection: Latest effective tick at or before requested tick, then greatest origin.
+  source: Original exact committed source K remains distinct from publication and verification time.
+  digest: sha256_exact_encoding
+  domain: "babylon.archive-page-revision.v2\0"
+  encoding:
+    - domain_utf8_including_one_trailing_nul
+    - campaign_uuid_16_network_order_bytes
+    - lp_subject_kind_utf8
+    - lp_subject_id_utf8
+    - effective_tick_u64_big_endian
+    - publication_origin_i16_big_endian
+    - source_tick_u64_big_endian
+    - source_tick_content_hash_32_bytes
+    - original_template_sha256_32_bytes
+    - original_markdown_sha256_32_bytes
+    - lp_title_utf8
+    - lp_original_markdown_utf8
+    - lp_original_search_text_utf8
+    - lp_original_canonical_provenance_json_utf8
+    - ordered_atom_count_u64_big_endian
+    - ordered_exact_atom_id_32_bytes_repeated
+    - captured_grant_count_u64_big_endian
+    - ordered_captured_grants_repeated
+    - emission_presence_u8_0_or_1
+    - lp_canonical_emission_json_utf8_if_present
+  length_prefix: u64_big_endian_exact_utf8_byte_length
+  captured_grant_order: subject_kind_then_subject_id_then_grant_key
+  captured_grant_fields:
+    - lp_subject_kind_utf8
+    - lp_subject_id_utf8
+    - lp_grant_key_utf8
+    - granted_tick_u64_big_endian
+    - lp_provenance_source_id_utf8
+    - lp_provenance_locator_utf8
+  emission:
+    codec: Canonical compact UTF-8 JSON; closed fields; decode must re-encode byte-identically.
+    ordered_fields: [layout_version, subject_citation, question, signals, links]
+    layout_version: 2
+    signal_fields: [grant_key, label, value, citation]
+    link_fields: [target_kind, target_id, known_label]
+    unknown_label: null; never retain an undisclosed label in a typed emission.
+    proof: Exact forward rendering and original atom minting must reproduce all retained bytes and membership.
+  bounds: {rendered_bytes: 1048576, emission_bytes: 8388608, signals: 256, links: 256, atoms: 513, dependencies: 513}
+  retry: Equal exact publication is idempotent; unequal same-key content refuses transactionally.
+adoption:
+  floor: Capture the durable tail D under writer-excluding table locks before the snapshot query.
+  retained_head: Preserve original source K, Markdown, title, search text, provenance and ordered atoms at effective D.
+  opaque: Retain ambiguous lawful V1 bytes privately; no restricted Markdown, title search or label reconstruction
+    without a sufficient exact witness.
+  validation: Every existing campaign requires its existing producers to validate the complete desired set at D,
+    even when processed P equals D.
+  quiet: Unchanged witnessed content keeps K and exact original bytes.
+  earlier_history: Explicit HistoryNotRetained before D; never backfill overwritten narrative or memberships.
+  enrollment: Actual first foundation insertion enrolls floor zero atomically; retry cannot invent missing enrollment.
+  reinstall: Verify the original floor and complete adopted head identity; never move the floor to today's tail.
+  digest_domain: "babylon.archive-retention-adoption.v2\0"
+  digest_fields:
+    - campaign_uuid_16
+    - floor_u64_be
+    - floor_hash_presence_u8
+    - optional_floor_hash_32
+    - captured_processed_u64_be
+    - adopted_count_u64_be
+    - ordered_heads_sha256_32
+publication:
+  order: Earliest unsettled committed receipt first; Stage stops later evaluation; no receipt beyond D before
+    cutover validation.
+  atomic_unit: Knowledge pin, pages, ordered memberships and Stage or Consume in one transaction.
+  knowledge_pin: Exact first publication membership at T; later Stage, Consume and cutover at T reuse it.
+  pin_identity: Exact committed hash, sole revision-worker contract hash and canonical V1 knowledge hash.
+  late_grant: Current-tail KnowledgeRefresh until the next eligible existing receipt admits it; historical T keeps
+    its pin and is not invalidated by later grants.
+  cutover: Maintenance creates no game tick or consumption receipt and does not rewrite original claims.
+  seal: Exact adoption identity, compiled worker, floor-pinned knowledge and ordered latest witnessed revision set
+    at D; present corrupt seals refuse.
+  obsolete_writer: Retired table names refuse old page writes; new consumption rows require revision_generation 2.
+reader:
+  ready: Complete retained emission and exact requested-scope knowledge; verified through requested T only.
+  pending: [CutoverValidation, ReceiptProcessing, EmissionWitnessRequired, KnowledgeRefresh]
+  unavailable: [FoundationHasNoPage, HistoryNotRetained, SubjectNotDisclosed, PageNotMaterialized]
+  before_pin: Only earlier witnessed bytes with exact captured grant dependencies may appear as Pending; no fresh
+    live labels are added.
+  linked_subjects: Retained target and label remain original; target readiness is resolved at the same scope
+    without borrowing future titles.
+  changelog: Actual ordered composition additions, changes and removals; no rows inferred from overwritten atom history.
+  cursor: Opaque, scope-and-subject-bound immutable-history identity; bounded continuation, no raw offsets
+    accepted externally.
+  search: Latest eligible revision chosen before text matching; maximum 100 plus one truncation probe; explicit
+    completeness.
+  change_bounds: {default: 32, minimum: 1, maximum: 100, publication_probe: 17}
+evidence:
+  adoption_vector_input:
+    campaign_uuid_hex: '01010101010101010101010101010101'
+    floor: 5
+    floor_hash_hex: '0202020202020202020202020202020202020202020202020202020202020202'
+    processed: 3
+    count: 1
+    heads_sha256: 495e0118dacfa83bf02bc778f822bfe58f5b3ba0c08db8510da8934ddf4c4dc1
+  foundation_vector_input:
+    campaign_uuid_hex: '01010101010101010101010101010101'
+    floor: 0
+    processed: 0
+    count: 0
+    heads_sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  independent_adoption_vector: 946063b9385014a8c64077bb965656298a1440b29d4a79f6f14cbb5c3a015faa
+  independent_foundation_vector: f66bddf484d0e18069a1d99fe898ac6187af799c726c590f0fa74daa7301e51f
+  pure_tests: rust/crates/babylon-persistence/src/archive_revision
+  live_tests:
+    - rust/crates/babylon-persistence/tests/reader_role_live.rs
+    - rust/crates/babylon-persistence/tests/archive_worker_live/revisions.rs
+    - rust/crates/babylon-persistence/tests/county_producer_live.rs

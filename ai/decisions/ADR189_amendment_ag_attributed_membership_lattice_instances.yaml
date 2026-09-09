@@ -1,0 +1,85 @@
+ADR189_amendment_ag_attributed_membership_lattice_instances:
+  status: "accepted"
+  date: "2026-08-10"
+  title: >
+    Amendment AG — Attributed Membership and Lattice Instances (v3.2.0):
+    the exposed hypergraph model gains a third element kind — the
+    (member, hyperedge) incidence pair as a first-class ATTRIBUTED
+    MEMBERSHIP with typed, hash-covered payload fields (the dyadic-edge
+    landing REJECTED for re-exposing the incidence encoding D-1 confines
+    to internal storage); and the formalism surface re-opens for minting
+    INSTANCES of the existing scale-lattice adjunction schema from
+    content, load-time validated, kinds staying closed. Discharges the
+    D66 port blocker (CommunitySystem threat score); completes C11.
+  context: |
+    The R9 step-2 spec chapters (PR #474) escalated exactly two items as
+    amendment territory rather than speccing them: per-membership
+    hyperedge payload (bsl-language.rst §2.8 note, register row D66 — a
+    missing KIND of object, since Amendment D as ratified exposes a
+    hyperedge as identity + declared fields + a member LIST, and
+    attributes of the (member, hyperedge) pair add a third element kind
+    with its own iteration order, ceiling axis, hashing rules and verbs)
+    and the minting of new scale-lattice rungs or adjunction instances
+    (§3.9 note, D62 — outside language reach under Amendment AE (ii)).
+    The first is a recorded PORT BLOCKER: CommunitySystem's threat score
+    depends entirely on per-membership payload (the role/strength/
+    visibility family the frozen CommunityMembership carries). The
+    Director approved both items in the 2026-08-10 session; Amendment AG
+    is the constitutional act, this ADR its record.
+  decision: |
+    CLAUSE (i) — ATTRIBUTED MEMBERSHIP. The (member, hyperedge)
+    incidence pair becomes a first-class attributed membership in
+    babylon-graph's exposed model, carrying declared, typed payload
+    fields. THE LANDING CHOICE, with reasoning: the alternative — a
+    per-(member, hyperedge) dyadic edge carrying the payload — is
+    REJECTED because it re-exposes precisely the incidence encoding
+    Amendment D sub-ruling D-1 confined to internal storage; choosing it
+    would unwind the native-hyperedge ruling by the back door.
+    Obligations bound into the clause: payload fields type exactly like
+    node/edge fields (§3.1/§3.4 disciplines); they PARTICIPATE IN THE
+    CANONICAL STATE HASH; iteration follows the member list's ruled
+    order (ascending member id); mutation is effect-only; the ceiling
+    axis stays :max-members; Anti-Pattern VIII.9 survives verbatim — a
+    member list crosses WHOLE, never C(n,2); attributed membership
+    changes what a membership CARRIES, never how many objects cross.
+
+    CLAUSE (ii) — LATTICE-INSTANCE MINTING. Content/scenario forms may
+    declare new scale-lattice rungs and allocate/aggregate adjunction
+    INSTANCES of the existing adjunction schema, load-time validated.
+    What stays closed: new adjunction KINDS, alterations to the
+    conservation obligation between rungs, new level-lattice algebra.
+    Two standing rulings bind every declared rung: the spatial-adjacency
+    estate ruling (2026-07-30 — rungs over the invariant substrate
+    resolve through the static per-resolution lookup estate, never
+    per-tick state) and the intensive-aggregation rule (an aggregate of
+    an intensive field is weighted or it is a load error — never an
+    unweighted mean).
+
+    CLAUSE (iii) — THE CLOSURE RE-SEALS. No verb, no intrinsic, no
+    severity rule, no constructor family; everything else under
+    NORTH_STAR §0 stays closed.
+
+    CLAUSE (iv) — CONSEQUENCES. bsl-language.rst converts the D66/D62
+    notes from escalations to normative specifications in a follow-up
+    spec PR (new element kind: iteration order, ceiling interaction,
+    hashing, accessor/verb surface; lattice: the declaration forms and
+    their load-time validation); babylon-graph's exposed model gains the
+    attributed-membership object with its hashing/iteration contract;
+    the CommunitySystem BSL port unblocks; C11's lattice expression
+    completes. Windows-impact note (AA duty): none — data-model and
+    content-form changes only.
+  consequences: |
+    - The follow-up spec PR is the next R9 step-2 increment; its
+      chapters carry the same discipline (fuel rows, error codes, D-rows,
+      vector families) as PR #474's.
+    - babylon-graph implementation work (the third element kind) lands
+      with conformance vectors and the byte-identical gate; the storage
+      swap (ADR179 T3) consumes the same exposed model.
+    - CommunitySystem's rule pack becomes authorable; its port stops
+      being blocked-by-amendment and becomes blocked only on the spec
+      follow-up.
+  supersedes: []
+  related:
+    - ADR186_bevy_cutover_amendment_af
+    - ADR172_amendment_ae_refoundation_ratified
+    - ADR179_topology_spine_director_rulings

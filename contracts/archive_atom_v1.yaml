@@ -1,0 +1,102 @@
+meta:
+  contract: ArchiveAtomV1
+  version: 1
+  issue: PER-23
+  digest: SHA-256 diagnostic; exact bytes govern retry equality
+
+production_decoder: prohibited
+
+authority:
+  owner: Rust persistence semantic Archive worker (ADR249 R1)
+  purpose: >-
+    Content-addressed, immutable semantic atoms minted beside known Archive
+    pages; the canonical encoding binds campaign, subject, keys, evidence
+    class, typed value, citation, and valid tick into one atom_id so
+    identical bytes re-mint to the identical identity and writer retries
+    stay idempotent.
+  classifications:
+    canonical_encoding: Designed
+    atom_id_content_address: Designed
+    evidence_class_taxonomy: Designed
+    value_kind_taxonomy: Designed
+    finite_value_refusal: Designed
+    fog_visibility_predicate: Designed
+  invariants:
+    - atom_id is SHA-256 over the exact canonical encoding in
+      layouts.canonical_encoding_v1; any field drift mints a new identity.
+    - Numeric values must be finite; NaN and both infinities refuse at mint
+      with code non_finite_value, and the schema CHECK refuses them in
+      storage (value_f64 = value_f64 AND abs(value_f64) <> Infinity).
+    - The canonical encoding normalizes -0.0 to +0.0, so a sign-only bit
+      difference never mints a second identity.
+    - campaign_id folds into the encoding; atoms are unique per campaign.
+    - An atom is visible exactly while a grant row covers
+      (campaign, subject, grant_key) with granted_tick <= atom.valid_tick
+      and atom.valid_tick sits inside the acknowledged-commit horizon.
+    - The visibility horizon is marker-backed over the durable committed-tick
+      relation (published to readers as public.v_committed_tick_status_v1),
+      never MAX(tick) over a raw event ledger.
+    - Atoms never mutate; new ticks mint new atoms and pages re-assert
+      their atom set through archive_page_atom_v1.
+
+constants:
+  source_path: rust/crates/babylon-persistence/src/archive.rs
+  schema_path: rust/crates/babylon-persistence/migrations/archive_atom_v1.sql
+  atom_domain_ascii_nul: babylon.semantic-archive-atom.v1
+  atom_schema_contract_id: babylon.archive-atom-schema.v1
+  county_kind_tag_u8: 1
+  place_kind_tag_u8: 2
+  concept_kind_tag_u8: 3
+  observed_tag_u8: 1
+  derived_tag_u8: 2
+  calibrated_tag_u8: 3
+  designed_tag_u8: 4
+  text_tag_u8: 1
+  f64_tag_u8: 2
+  u64_tag_u8: 3
+  bool_tag_u8: 4
+  max_id_bytes: 128
+  max_text_bytes: 4096
+  evidence_classes: [Observed, Derived, Calibrated, Designed]
+  value_kinds: [text, f64, u64, bool]
+
+bounds:
+  contract_bytes: 131072
+  vector_rows: 32
+  vector_line_bytes: 16384
+  vector_object_fields: 64
+  atom_subject_id_bytes: 128
+  signal_key_bytes: 128
+  grant_key_bytes: 128
+  citation_source_id_bytes: 4096
+  citation_locator_bytes: 4096
+
+layouts:
+  canonical_encoding_v1:
+    digest: SHA-256 over the concatenation, in this exact order
+    fields:
+      - domain_ascii_nul_plus_one_trailing_nul_byte
+      - campaign_id_exact_16_uuid_bytes_network_order
+      - subject_kind_tag_u8
+      - length_prefixed_subject_id_utf8_u64_big_endian
+      - length_prefixed_signal_key_utf8_u64_big_endian
+      - length_prefixed_grant_key_utf8_u64_big_endian
+      - evidence_class_tag_u8
+      - value_kind_tag_u8
+      - value_payload_v1
+      - length_prefixed_citation_source_id_utf8_u64_big_endian
+      - length_prefixed_citation_locator_utf8_u64_big_endian
+      - valid_tick_u64_big_endian
+  value_payload_v1:
+    text: length_prefixed_utf8_u64_big_endian
+    f64: canonical_binary64_bits_u64_big_endian_neg_zero_normalizes_to_pos_zero
+    u64: u64_big_endian
+    bool: one_byte_zero_or_one
+  length_prefix: u64 big-endian exact byte count before every variable byte field
+
+vector_kinds:
+  required:
+    - identity
+    - encoding
+    - refusal
+    - visibility

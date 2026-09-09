@@ -1,0 +1,2 @@
+{"case_id":"base-opening-state","kind":"state","data":{"canonical_bytes":1053,"digest_hex":"a0ca4c774cf74110ffc3611aa1bd7609cbee07e360477e99363f268b93d7cf31"}}
+{"case_id":"manifest","kind":"manifest","data":{"schema_version":2,"schema_sha256":"4249c6c2d238b7c5db1c552ec1a720a5830c27e2429b3c4a8a3d29277dd31c72","quantity_width_bits":64,"rows_per_family":65536,"route_legs_per_route":16,"freight_resource_groups":1114112,"error_code_count":18,"access_mode_count":1,"loss_ppm_denominator":1000000}}

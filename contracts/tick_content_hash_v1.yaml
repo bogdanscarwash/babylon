@@ -1,0 +1,402 @@
+meta:
+  contract: TickContentHashV1
+  version: 1
+  issue: PER-60
+  byte_order: big-endian unless a layout says otherwise
+  digest: SHA-256
+  text: category-specific exact bytes, preserved without normalization
+
+semantic_text:
+  symbol: {encoding: ASCII, minimum_bytes: 1, maximum_bytes: 64}
+  qname: {encoding: ASCII, minimum_bytes: 1, maximum_bytes: 128, maximum_segments: 4}
+  structural_type: {encoding: graphic ASCII, minimum_bytes: 1, maximum_bytes: 128}
+  intrinsic_identity: {encoding: ASCII, minimum_bytes: 1, maximum_bytes: 96}
+  enum_type: {encoding: ASCII, minimum_bytes: 1, maximum_bytes: 64}
+  enum_member: {encoding: ASCII, minimum_bytes: 1, maximum_bytes: 64}
+  governance: {encoding: UTF-8, maximum_bytes: 4194304}
+
+production_decoder: prohibited
+
+authority:
+  owner: Rust adjudication boundary
+  purpose: language-neutral replay identity and tick-content verification
+  classifications:
+    layout_versions: Designed
+    domains_and_tags: Designed
+    bounds: Designed
+    fixture_values: Designed
+  invariants:
+    - Equal canonical input bytes produce equal canonical output bytes and hashes.
+    - Each identity has one canonical encoding and one owning type.
+    - No compatibility shim, alias, fallback, or duplicate identity resolver exists.
+    - Runtime graph handles never enter replay identity bytes.
+    - Finite nonzero floating-point payloads use raw IEEE-754 binary64 bits.
+    - Finite floating-point zero canonicalizes to positive zero before encoding.
+    - NaN and infinity are refused before canonical encoding.
+
+primitives:
+  u8: {bytes: 1, signed: false}
+  u16: {bytes: 2, signed: false}
+  u32: {bytes: 4, signed: false}
+  u64: {bytes: 8, signed: false}
+  i64: {bytes: 8, signed: true}
+  f64_bits: {bytes: 8, signed: false}
+  digest32: {bytes: 32}
+  str16: {length: u16, encoding: ASCII}
+  str32: {length: u32, encoding: exact semantic-category bytes}
+
+bounds:
+  vector_rows: 256
+  vector_line_bytes: 262144
+  replay_session_bytes: {minimum: 1, maximum: 256}
+  rng_domain_bytes: {minimum: 1, maximum: 128}
+  rng_domain_segments: {minimum: 2, maximum: 4}
+  symbol_bytes: 64
+  qname_bytes: 128
+  qname_segments: 4
+  structural_type_bytes: 128
+  intrinsic_identity_bytes: 96
+  enum_type_bytes: 64
+  enum_member_bytes: 64
+  governance_utf8_bytes: 4194304
+  stable_carrier_active_elements: 256
+  stable_carrier_bytes: 105962
+  resolver_rows: 65536
+  resolver_edges: 65536
+  resolver_hyperedge_members: 65534
+  resolver_fact_units: 1048576
+  resolver_manifest_bytes: 8388608
+  stable_graph_elements: 65536
+  stable_graph_attribute_rows: 524288
+  stable_graph_hyperedge_members: 65534
+  stable_graph_fact_units: 1048576
+  stable_graph_bytes: 67108864
+  ordered_action_items: 4096
+  ordered_action_batch_bytes: 9302326
+  prepared_rows: 65536
+  prepared_small_rows: 64
+  prepared_enum_members: 4096
+  prepared_vocabulary_members: 524288
+  prepared_aggregate_rows: 1048576
+  prepared_combined_bytes: 67108864
+  tick_rule_outcomes: 65536
+  tick_rows: 1048576
+  tick_aggregate_rows: 1048576
+  tick_combined_bytes: 67108864
+
+bound_refusals:
+  vector_rows: {operation: load_vector_file, expected_code: too_many_rows}
+  vector_line_bytes: {operation: load_vector_line, expected_code: invalid_line_length}
+  replay_session_bytes: {operation: encode_replay_session, expected_code: string_too_long}
+  rng_domain_bytes: {operation: parse_rng_domain, expected_code: rng_domain_length}
+  rng_domain_segments: {operation: parse_rng_domain, expected_code: rng_domain_segments}
+  symbol_bytes: {operation: parse_symbol, expected_code: invalid_symbol}
+  qname_bytes: {operation: parse_qname, expected_code: invalid_qname}
+  qname_segments: {operation: parse_qname, expected_code: invalid_qname}
+  structural_type_bytes: {operation: parse_structural_type, expected_code: invalid_structural_type}
+  intrinsic_identity_bytes: {operation: encode_intrinsic_identity, expected_code: invalid_intrinsic_identity}
+  enum_type_bytes: {operation: encode_enum_type, expected_code: invalid_enum_type}
+  enum_member_bytes: {operation: encode_enum_member, expected_code: invalid_enum_member}
+  governance_utf8_bytes: {operation: encode_governance_text, expected_code: governance_string_too_long}
+  stable_carrier_active_elements: {operation: compose_stable_carrier, expected_code: active_element_limit}
+  stable_carrier_bytes: {operation: compose_stable_carrier, expected_code: byte_limit}
+  resolver_rows: {operation: seal_stable_resolver, expected_code: row_limit}
+  resolver_edges: {operation: seal_stable_resolver, expected_code: edge_limit}
+  resolver_hyperedge_members: {operation: seal_stable_resolver, expected_code: hyperedge_members}
+  resolver_fact_units: {operation: seal_stable_resolver, expected_code: aggregate_row_limit}
+  resolver_manifest_bytes: {operation: seal_stable_resolver, expected_code: byte_limit}
+  stable_graph_elements: {operation: encode_stable_graph, expected_code: row_limit}
+  stable_graph_attribute_rows: {operation: encode_stable_graph, expected_code: row_limit}
+  stable_graph_hyperedge_members: {operation: encode_stable_graph, expected_code: hyperedge_members}
+  stable_graph_fact_units: {operation: encode_stable_graph, expected_code: aggregate_row_limit}
+  stable_graph_bytes: {operation: encode_stable_graph, expected_code: byte_limit}
+  ordered_action_items: {operation: project_ordered_action_batch, expected_code: row_limit}
+  ordered_action_batch_bytes: {operation: project_ordered_action_batch, expected_code: byte_limit}
+  prepared_rows: {operation: encode_prepared_bsl, expected_code: row_limit}
+  prepared_small_rows: {operation: encode_prepared_bsl, expected_code: row_limit}
+  prepared_enum_members: {operation: encode_prepared_bsl, expected_code: row_limit}
+  prepared_vocabulary_members: {operation: encode_prepared_bsl, expected_code: row_limit}
+  prepared_aggregate_rows: {operation: encode_prepared_bsl, expected_code: aggregate_row_limit}
+  prepared_combined_bytes: {operation: encode_prepared_bsl, expected_code: byte_limit}
+  tick_rule_outcomes: {operation: encode_tick_payload, expected_code: row_limit}
+  tick_rows: {operation: encode_tick_payload, expected_code: row_limit}
+  tick_aggregate_rows: {operation: encode_tick_payload, expected_code: aggregate_row_limit}
+  tick_combined_bytes: {operation: encode_tick_payload, expected_code: byte_limit}
+
+layouts:
+  replay_session_v1:
+    fields: [session_length_u16, strict_graphic_ascii_session_bytes]
+    length: replay_session_bytes
+  replay_seed:
+    fields: [signed_i64]
+  rng_v1:
+    byte_order: little-endian
+    key_preimage:
+      - session_bytes
+      - tick_u64
+      - salt_u64
+      - domain_length_u64
+      - domain_bytes
+      - carrier_length_u64
+      - carrier_bytes
+    salt_u64: 195144730
+  rng_v2:
+    domain_hex: 626162796c6f6e2e726e672d73747265616d00
+    layout_u32: 2
+    tags: [1, 2, 3, 4, 5]
+    fields:
+      - {tag: 1, value: seed_i64}
+      - {tag: 2, value: replay_session_v1}
+      - {tag: 3, value: tick_u64}
+      - {tag: 4, value: domain_str32}
+      - {tag: 5, value: stable_carrier_key_v2_bytes32}
+    stream: ChaCha8 with a 64-bit block counter and zero stream id
+    next_u64: two consecutive little-endian u32 output words
+    next_f64: top 53 bits of next_u64 multiplied by 2^-53
+  stable_element_v1:
+    domain_ascii_nul: babylon.stable-element
+    layout_u32: 1
+    kinds:
+      node: {tag: 1, fields: [scenario_str32, local_name_str32]}
+      edge: {tag: 2, fields: [scenario_str32, edge_type_str32, source_str32, target_str32]}
+      hyperedge: {tag: 3, fields: [scenario_str32, local_name_str32]}
+  carrier_segment_v1:
+    grammar: decimal_byte_length, colon, exact graphic ASCII bytes
+    composition: segments joined by a vertical bar
+  stable_carrier_key_v2:
+    grammar: carrier_segment_v1 framing over opaque stable-element carrier segments and canonical signed decimal slot
+    provenance: sealed graph resolver only
+    witnesses: [resolver_manifest_v1, stable_graph_v1]
+    membership: >-
+      node and hyperedge segments must exist in both sealed witnesses; each directed edge must exist
+      exactly in the stable graph and both endpoints must exist in both witnesses
+    fields: [subject_segment, active_segments_in_outermost_to_innermost_order, canonical_i64_draw_slot]
+    bounds: [stable_carrier_active_elements, stable_carrier_bytes]
+  resolver_manifest_v1:
+    domain_ascii_nul: babylon.stable-element-resolver
+    layout_u32: 1
+    tags: [1, 2, 3]
+    authored_name_uniqueness:
+      nodes: unique within node local names
+      hyperedges: unique within hyperedge local names
+    sections:
+      - {tag: 1, body: scenario_str32}
+      - tag: 2
+        body: node_count_u32 then node_count rows of local_name_str32, node_type_str32
+        order: local_name_unsigned_ascii
+      - tag: 3
+        body: hyperedge_count_u32 then hyperedge_count rows of local_name_str32, hyperedge_type_str32
+        order: local_name_unsigned_ascii
+    bounds: [resolver_rows, resolver_edges, resolver_hyperedge_members, resolver_fact_units, resolver_manifest_bytes]
+  stable_graph_v1:
+    domain_ascii_nul: babylon.stable-graph
+    layout_u32: 1
+    tags: [1, 2, 3, 4, 5, 6, 7, 8]
+    sections:
+      - {tag: 1, body: scenario_str32}
+      - {tag: 2, body: "node_count_u32 then local_name_str32, node_type_str32 rows", order: local_name}
+      - tag: 3
+        body: node_f64_count_u32 then local_name_str32, qname_str32, canonical_f64_bits_u64 rows
+        order: [local_name, qname]
+      - tag: 4
+        body: edge_count_u32 then edge_type_str32, source_str32, target_str32, canonical_strength_bits_u64 rows
+        order: [edge_type, source, target]
+      - tag: 5
+        body: >-
+          hyperedge_count_u32 then local_name_str32, hyperedge_type_str32,
+          member_count_u32, sorted member_str32 rows
+        order: local_name
+      - tag: 6
+        body: >-
+          edge_f64_count_u32 then edge_type_str32, source_str32, target_str32,
+          qname_str32, canonical_f64_bits_u64 rows
+        order: [edge_type, source, target, qname]
+      - tag: 7
+        body: node_currency_count_u32 then local_name_str32, qname_str32, signed_i128_micro_units rows
+        order: [local_name, qname]
+      - tag: 8
+        body: hyperedge_f64_count_u32 then local_name_str32, qname_str32, canonical_f64_bits_u64 rows
+        order: [local_name, qname]
+    float_rule: finite nonzero raw binary64 bits; either signed zero becomes all-zero bits
+    bounds:
+      - stable_graph_elements
+      - stable_graph_attribute_rows
+      - stable_graph_hyperedge_members
+      - stable_graph_fact_units
+      - stable_graph_bytes
+  action_id_v1:
+    domain_ascii_nul: babylon.practice-action-id.v1
+    schema_u16: 1
+    fields: [replay_session_v1, practice_intent_schema_u16_2, sha256_of_exact_practice_intent_v2_bytes]
+  ordered_action_batch_v1:
+    domain_ascii_nul: babylon.ordered-practice-action-batch.v1
+    schema_u16: 1
+    fields: [replay_session_v1, resolve_tick_u64, item_count_u16, ordered_items]
+    item_fields: [canonical_input_ordinal_u16, action_id_digest32, intent_length_u16, intent_bytes]
+    order: contiguous ordinal equal to array position after complete Practice V2 source validation
+    runtime_rule: >-
+      item_count must be zero and session and resolve tick must equal the outer
+      tick before detached adjudication
+  prepared_environment_v1:
+    domain_ascii_nul: babylon.prepared-environment
+    layout_u32: 1
+    tags: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    sections:
+      - {tag: 1, body: verified_rules_digest32}
+      - {tag: 2, body: "phase_schedule_layout_u32 then phase_schedule_digest32"}
+      - {tag: 3, body: "rule_count_u32 then rule_qname_str32 rows", order: resolved_execution_order}
+      - tag: 4
+        body: sorted field rows of qname_str32, BslTypeV1, FieldKindV1; then sorted exemption rows of four str32 fields
+      - {tag: 5, body: "sorted intrinsic rows of name_str32, cost_u64"}
+      - {tag: 6, body: "sorted constant rows of qname_str32, ConstValueV1"}
+      - {tag: 7, body: "sorted enum type rows of name_str32, member_count_u32, declaration-order member_str32 rows"}
+      - {tag: 8, body: "outer vocabulary option then four EnumKindV1 rows with per-kind option and sorted members"}
+      - {tag: 9, body: "resolver_manifest_layout_u32 then resolver_manifest_digest32"}
+      - {tag: 10, body: "register_manifest_layout_u32 then register_manifest_digest32"}
+  world_register_manifest_v1:
+    domain_ascii_nul: babylon.world-register-manifest
+    layout_u32: 1
+    sections:
+      - body: entry_count_u32 then name_str32, register_layout_u32 rows
+        exact_entries: [{name: world/completed-tick, layout: 1}]
+  world_register_set_v1:
+    domain_ascii_nul: babylon.world-register-set
+    layout_u32: 1
+    tags: [1, 2]
+    sections:
+      - {tag: 1, body: "register_manifest_layout_u32 then register_manifest_digest32"}
+      - tag: 2
+        body: >-
+          entry_count_u32 then name_str32, register_layout_u32,
+          payload_length_u32, nonnegative_completed_tick_i64 rows
+        exact_entry_count: 1
+  stable_world_v1:
+    domain_ascii_nul: babylon.stable-world
+    layout_u32: 1
+    tags: [1, 2]
+    sections:
+      - {tag: 1, value: stable_graph_digest32}
+      - {tag: 2, value: world_register_set_digest32}
+  tick_payload_v1:
+    domain_ascii_nul: babylon.tick-payload
+    layout_u32: 1
+    tags: [1, 2, 3, 4]
+    sections:
+      - {tag: 1, body: "rule_outcome_count_u32 then rule_qname_str32, fired_u64 rows", order: prepared_rule_order}
+      - tag: 2
+        body: event_count_u32 then event_name_str32, payload_count_u32, label_str32, ValueV1 rows
+        order: executable_arrival_and_source_pair_order
+      - tag: 3
+        body: receipt_count_u32 then rule_qname_str32, RuleRoleV1, EvidenceClassV1, ordinal_u32, EffectSignatureV1 rows
+        order: published_receipt_order
+      - {tag: 4, body: accepted_action_outcome_count_u16, exact_value: 0}
+  tick_content_hash_v1:
+    domain_ascii_nul: babylon.tick-content
+    layout_u32: 1
+    tags: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    linked_constraints:
+      actions: exact empty ordered_action_batch_v1 with matching session and resolve tick
+    sections:
+      - {tag: 1, value: layout_u32_1_then_replay_session_v1}
+      - {tag: 2, value: resolve_tick_u64}
+      - {tag: 3, value: rng_layout_u32_2_then_seed_i64}
+      - {tag: 4, value: content_layout_u32_1_then_defines_and_rules_digest32}
+      - {tag: 5, value: reference_layout_u32_1_then_digest32}
+      - {tag: 6, value: prepared_layout_u32_1_then_digest32}
+      - {tag: 7, value: prior_world_layout_u32_1_then_digest32}
+      - {tag: 8, value: actions_layout_u32_1_then_digest32}
+      - {tag: 9, value: result_world_layout_u32_1_then_digest32}
+      - {tag: 10, value: payload_layout_u32_1_then_digest32}
+
+bsl_discriminants:
+  value_kinds:
+    int: 1
+    currency: 2
+    real: 3
+    ratio: 4
+    bool: 5
+    enum: 6
+    node_ref: 7
+    hyperedge_ref: 8
+    edge_ref: 9
+  bsl_types:
+    probability: 1
+    intensity: 2
+    coefficient: 3
+    currency: 4
+    real: 5
+    int: 6
+    bool: 7
+    enum: 8
+    node_set: 9
+    edge_set: 10
+  field_kinds:
+    intensive: 1
+    extensive: 2
+    not_applicable: 3
+  rule_roles:
+    mechanic: 1
+    recognizer: 2
+    external_event: 3
+    intent: 4
+  effect_kinds:
+    node_field: 1
+    edge_field: 2
+    hyperedge_field: 3
+    event: 4
+    shape: 5
+  evidence_classes:
+    observed: 1
+    derived: 2
+    calibrated: 3
+    designed: 4
+  shape_verbs:
+    add_node: 1
+    remove_node: 2
+    add_edge: 3
+    remove_edge: 4
+    add_hyperedge: 5
+    remove_hyperedge: 6
+  enum_kinds:
+    node_type: 1
+    edge_type: 2
+    hyperedge_type: 3
+    event_type: 4
+  option_presence: {absent: 0, present: 1}
+  boolean: {"false": 0, "true": 1}
+
+vector_families:
+  required:
+    - replay_session
+    - replay_seed
+    - rng_v1
+    - rng_v2
+    - stable_element
+    - carrier_segment
+    - stable_carrier_key
+    - resolver_manifest
+    - stable_graph
+    - action_id
+    - ordered_action_batch
+    - bsl_discriminant
+    - prepared_environment
+    - register_manifest
+    - register_set
+    - stable_world
+    - tick_payload
+    - tick_content_hash
+    - mutation
+    - refusal
+
+preserved_contracts:
+  - RNG V1 byte derivation and stream vectors
+  - Practice V2 contract vector corpora
+  - P27 frozen Python bytes and behavior
+
+excluded_authority:
+  - PostgreSQL I/O
+  - CommittedTickEnvelope
+  - Archive or outbox
+  - Bevy
+  - player-action execution
+  - BSL intents

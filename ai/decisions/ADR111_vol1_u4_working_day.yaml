@@ -1,0 +1,142 @@
+id: ADR111
+title: >-
+  Vol I U4 — The working day wired into consciousness: new
+  domain.economics.working_day.resolve_working_day_visibility_modifier bridges
+  services.productivity_data_source (the FRED OPHNFB+HOANBS adapter, its FIRST
+  production reader) through DefaultWorkingDayClassifier to a new
+  working_day_modifier keyword on compute_exploitation_visibility, computed
+  ONCE per tick in ConsciousnessSystem and multiplicatively dampening
+  imperial-rent-based visibility -- ABSOLUTE_DOMINANT (long hours) stays fully
+  visible, RELATIVE_DOMINANT (productivity/intensity gains) is naturalized
+  toward invisibility (Ch. 10/12).
+status: accepted
+date: '2026-07-21'
+context: >-
+  ai/_inbox/vol1-value-production-program-prompt.md §7 U4 and the orientation
+  brief charter this unit: feed DefaultWorkingDayClassifier
+  (domain/economics/working_day/classifier.py:14,
+  compute_visibility_modifier at :53) from real hours/productivity data
+  (OPHNFB/HOANBS via productivity_data_source, its first reader) and consume
+  visibility_modifier inside ConsciousnessSystem's exploitation-visibility
+  path. Re-verified at unit start: ``DefaultWorkingDayClassifier`` had zero
+  callers outside its own package plus the one integration test
+  (``tests/integration/test_volume_i_integration.py``'s
+  ``TestExploitationModeVisibility``, which only exercises the classifier
+  directly, never through ``ConsciousnessSystem``) -- confirmed exactly as
+  the orientation brief stated. ``ConsciousnessSystem``'s
+  ``exploitation_visibility`` (``engine/systems/ideology.py``) was computed
+  purely from ``wage_change``/``wealth_change`` via
+  ``compute_exploitation_visibility``, at lines 386-390 on this lane's HEAD
+  (the orientation brief cited :357; a ~30-line drift from #42's already-landed
+  ideology.py rewiring, semantics unchanged -- confirmed exactly as flagged).
+  One orientation-brief claim did NOT re-verify clean:
+  ``config/defines/economy_labor.py:120`` was cited as the exact
+  ``WorkingDayDefines`` class start; on this lane's HEAD the class starts at
+  line 152 (U3's two new ``ReserveArmyDefines`` accumulation-loop fields,
+  landed the same day, shifted it ~32 lines) -- recorded here as a correction,
+  not acted on further (the orientation brief's own "re-verify again, this
+  region moves fast" caveat anticipated exactly this). Separately verified:
+  ``services.productivity_data_source`` (``kernel/services.py:48``,
+  ``engine/services.py:214``) defaults to ``None`` in
+  ``ServiceContainer.create()`` and is populated only by
+  ``create_vol1_services``'s ``_FredProductivityAdapter``
+  (``domain/economics/factory.py:738-764``) -- itself national-level and
+  uniform regardless of the ``fips_code``/``naics_sector`` arguments passed
+  to it (program prompt §2c's documented honesty gap); no per-class
+  county/sector identity exists on ``social_class`` graph nodes to honestly
+  vary a per-node call by. ``headless_runner/runner.py`` still never calls
+  ``create_vol1_services`` (U5 parity remains open) -- ``engine_bridge.py``
+  (web) already does, unconditionally, so this unit activates there
+  immediately with zero bridge-side changes needed, per the ADR103 room
+  partition.
+decision: >-
+  1. New ``domain.economics.working_day.resolver
+  .resolve_working_day_visibility_modifier(graph, services, tick) -> float |
+  None``: computed ONCE per tick (not per ``social_class`` node) -- the wired
+  FRED adapter is national-uniform and no per-node geography exists to
+  honestly vary the call by, so a per-node loop would either repeat an
+  identical lookup or fabricate geography that isn't there. Reads
+  ``services.productivity_data_source`` (returns ``None`` immediately if
+  unwired), derives ``year = base_year (graph attr, default 2022 --
+  matching ``engine/systems/production.py``'s convention exactly) + tick //
+  services.defines.timescale.weeks_per_year``, queries
+  ``get_working_day_state("00000", "00", year)`` (the placeholder
+  fips/naics match the ``_FredProductivityAdapter``'s OWN fallback branch for
+  "no specific geography given" -- not a fabricated identity), and -- if data
+  is returned -- runs it through ``DefaultWorkingDayClassifier`` built with
+  the run-scoped ``services.defines.working_day`` (never the hardcoded
+  schema default). Returns ``None`` (honest "no data") when the source is
+  unwired or returns no data for that year.
+
+  2. ``compute_exploitation_visibility`` (``formulas/consciousness_routing
+  .py``) gains a new optional ``working_day_modifier: float | None = None``
+  keyword: multiplies the existing imperial-rent-based visibility (clamped
+  defensively to [0, 1] even though ``WorkingDayDefines`` already bounds it
+  there). ``None`` is the multiplicative IDENTITY -- every existing caller
+  (only ``ideology.py`` in production) is unaffected by omission, matching
+  the task #42-A/B "default leaves existing callers unaffected" convention.
+
+  3. ``ConsciousnessSystem.step()`` (``engine/systems/ideology.py``) calls
+  the resolver once at the top of ``step()`` (alongside the other tick-level,
+  not per-node, computations already there) and threads
+  ``working_day_modifier=`` into the existing
+  ``compute_exploitation_visibility`` call site (lines 386-390 pre-edit).
+  No new ``GameDefines`` fields: the existing
+  ``WorkingDayDefines.absolute_visibility``/``relative_visibility`` (Feature
+  021 US3) ARE the modifier scale, reused per ADR116 ruling (b)'s
+  "extend existing categories in place" precedent -- no parallel coefficient
+  authored.
+
+  4. Found + fixed as a direct consequence of wiring the new services read
+  (not scope creep -- required for existing-test survival):
+  ``tests/unit/engine/systems/test_consciousness_integration.py``'s shared
+  fixture builds ``services = MagicMock()`` with only ``.defines`` pinned to
+  a real ``GameDefines()``. A bare ``MagicMock`` auto-vivifies ANY OTHER
+  accessed attribute as a truthy ``MagicMock``, not ``None`` -- so the new
+  direct ``services.productivity_data_source`` read would silently receive a
+  MagicMock "source", call its (also-MagicMock) ``get_working_day_state``,
+  get a MagicMock "state" back (not ``None``), and crash inside
+  ``DefaultWorkingDayClassifier.classify``'s numeric comparisons
+  (``TypeError: '>' not supported between instances of 'MagicMock' and
+  'float'``). Fixed with one explicit line
+  (``services.productivity_data_source = None``), pinning the same "unwired"
+  default every ``ServiceContainer.create()``-backed test already gets for
+  free. Confirmed via a full-repo grep that no OTHER bare-``MagicMock()``
+  services fixture reaches ``ConsciousnessSystem.step`` (the two other
+  ``MagicMock()``-services test files found, ``test_ooda_system.py`` and
+  ``test_pilot_first_action.py``, never route their MagicMock through
+  ``ConsciousnessSystem``).
+consequences: >-
+  ZERO qa:regression/canonical-run drift expected: ``headless_runner/runner
+  .py`` never calls ``create_vol1_services`` (re-confirmed by grep --
+  U5 parity remains open), so ``services.productivity_data_source`` stays
+  ``None`` on the canonical headless path and the resolver's ``None`` branch
+  is the caller's own multiplicative identity -- a genuine all-zero-drift
+  landing, unlike U2/U3's real baseline movement. This unit IS live
+  immediately for the web bridge (``engine_bridge.py`` already calls
+  ``create_vol1_services`` unconditionally, zero bridge-side change needed
+  per the ADR103 room partition): RELATIVE_DOMINANT NAICS sectors there will
+  see ``exploitation_visibility`` dampened toward the (default 0.3)
+  ``relative_visibility`` floor for the first time, rather than the
+  undampened imperial-rent-only reading. Orientation-brief line-anchor
+  correction recorded above (``economy_labor.py`` WorkingDayDefines class
+  start :152, not the brief's cited :120) -- content unchanged, drift only.
+  Full scoped battery green: 46 (consciousness_routing, incl. 6 new
+  working-day-modifier cases) + 9 (new resolver unit tests) + 8 (new
+  ideology working-day system tests) + 9 (consciousness_integration, incl.
+  the MagicMock fixture fix) + 13 (test_ideology.py) + existing
+  chauvinist/defines-passthrough/repression/sustained-term ideology suites +
+  10 (test_volume_i_integration.py) + 5+6 (vol1/legacy factory tests) all
+  green (153 tests across the directly-touched + adjacent suites, plus a
+  further 117 across doctrine-consciousness-signal, modular-engine,
+  proletarian-internationalism, system-order, and both static-sentinel
+  pytest suites). ``ruff check``/``ruff format`` clean; ``mypy`` clean via
+  the pinned nix devshell (the host venv's ``mypy`` is broken by an
+  unrelated ``pathspec``/``mypy`` version mismatch -- confirmed pre-existing
+  by reproducing it on an untouched file, not caused by this change);
+  ``mise run lint:imports`` 9/9 contracts kept (the new ``engine ->
+  domain.economics.working_day`` import is a downward, permitted edge);
+  ``mise run check:vocabulary`` and the full ``check:sentinels-static``
+  battery (14 static sentinels) both clean, no new findings. U5 (headless-runner
+  parity), U6 (oppositions), U7 (sentinels), U8 (defines sweep), and U9
+  (monitoring) remain open.

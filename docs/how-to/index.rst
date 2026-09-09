@@ -16,8 +16,7 @@ Extending the Simulation
    :maxdepth: 1
 
    add-custom-system
-   modding-defines
-   parameter-tuning
+   /reference/configuration
 
 Guides for extending and customizing the simulation mechanics.
 
@@ -25,14 +24,24 @@ Guides for extending and customizing the simulation mechanics.
    Create, register, and test custom simulation systems to model new
    mechanics like propaganda, sanctions, or environmental effects.
 
-**Mod Game Parameters (defines.yaml)**
-   Change the game's balance code-free by editing the canonical, documented,
-   player-editable ``defines.yaml``. Explains the file, the load path, and how
-   to revert or regenerate it.
+**Tune Authored Campaign Parameters**
+   Edit the current Michigan TOML parameters before creating a campaign.
+   The configuration reference defines the units, validation, and saved-value
+   boundary. Existing campaigns retain their own parameters.
 
-**Tune Simulation Parameters**
-   Load, modify, and analyze ``GameDefines`` parameters. Includes parameter
-   sweeps and sensitivity analysis workflows.
+Reference Data
+--------------
+
+.. toctree::
+   :maxdepth: 1
+
+   reference-data-pipeline
+
+**Add or Change Reference Data (parquet-canonical pipeline)**
+   Add tables or ingest rows through the source-only pipeline: parquet +
+   ``schema.sql`` are canonical, the SQLite reference DB is a deterministic
+   build product, and loaders run against scratch copies via
+   ``tools/loader_to_sources.py`` (ADR098).
 
 State Apparatus AI (Feature 039)
 ---------------------------------
@@ -55,15 +64,10 @@ Debugging & Analysis
    :maxdepth: 1
 
    debug-simulation-outcomes
-   analyze-parameter-sensitivity
 
 **Debug Simulation Outcomes**
-   Diagnose unexpected results systematically. Use structured logging,
-   trace analysis, and formula verification to identify issues.
-
-**Analyze Parameter Sensitivity**
-   Explore how parameter changes affect simulation outcomes. Run sweeps,
-   identify thresholds, and validate theoretical predictions.
+   Inspect committed Rust reports, explain material accounts, and measure
+   four-week simulation and database work with the existing diagnostic tasks.
 
 GUI Development
 ---------------

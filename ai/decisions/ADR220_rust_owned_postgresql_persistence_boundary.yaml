@@ -1,0 +1,131 @@
+ADR220_rust_owned_postgresql_persistence_boundary:
+  status: "accepted"
+  date: "2026-08-22"
+  title: >
+    Rust owns the authoritative engine-to-PostgreSQL boundary: connections,
+    migration authority, typed committed-tick transactions, hydration, H3
+    codecs, and compatibility views. Python retains data-build, AI,
+    document/wiki, external-API, and CLI work, with read-only transition
+    observers; ADR174's PostgreSQL clause is superseded only.
+  context: |
+    Amendment AE makes Rust the engine language while preserving Python for
+    data builds, the out-of-process AI observer, and CLI periphery. ADR174's
+    same-day clarification expanded Python's glue role to database connections
+    and persistence. That accepted statement conflicts with the approved
+    Program 27 design, which specifies a Rust babylon-persistence crate, a
+    synchronous postgres client, one transaction per tick, and Python observers
+    behind read-only views.
+
+    The conflict became blocking when PER-20 chartered babylon_ref,
+    babylon_state, babylon_meta, and the atomic CommittedTickEnvelope without
+    naming the authoritative writer language. PER-21 also requires one checked
+    H3CellId(u64) to positive PostgreSQL BIGINT contract across Rust, SQL, and
+    the frozen Python oracle. Leaving ownership split would create two migration
+    ledgers, two retry semantics, and two places able to publish a tick.
+
+    On 2026-08-22 the Director stated that PostgreSQL interfacing within Rust
+    is preferable while Python remains the better home for AI, document and
+    wiki manipulation, then directed work to begin in an isolated worktree.
+    PER-48 and GitHub #697 record the gate and evidence.
+  decision: |
+    1. AUTHORITATIVE POSTGRESQL OWNERSHIP. After the one-way cutover, Rust owns
+       every authoritative game-managed PostgreSQL connection, migration, transaction,
+       checkpoint hydration, runtime write, compatibility-view definition, and
+       checked H3 conversion. The crate is babylon-persistence, downstream of
+       babylon-kernel, babylon-graph, and babylon-tick. No database dependency
+       or I/O enters tick calculation.
+
+    2. PYTHON'S SURVIVING ROLE. Python continues to own deterministic data
+       acquisition/builds, external API clients, AI/Ollama, document/wiki/vault
+       transforms, and CLI periphery. Transition observers may read versioned
+       views with a database role that cannot write. Python transforms return
+       typed artifacts to the Rust adapter; they do not create a second
+       game-managed SQL writer. Least-privilege observer connections are
+       explicitly allowed and hold no DDL or write authority.
+
+    3. ONE AUTHORITY AT A TIME. Python remains the sole live writer before
+       cutover. Rust shadow work may compare serialized envelopes or disposable
+       databases but never dual-write a campaign. The cutover release disables
+       Python migration and runtime-write entry points before enabling Rust.
+       The advisory lock serializes DDL but does not license two authorities.
+
+    4. MIGRATION ADOPTION. Two ordered DDL sets form the legacy baseline: the
+       POSTGRES_SCHEMA_DDL chunks used for fresh databases and SQL migrations
+       0010-0044 used to heal deployed databases. Rust freezes both exact
+       sequences and reproduces their UTF-8-plus-NUL SHA-256 framing and shared
+       advisory-lock key 0xBAB10537. An existing database with exact stamps and
+       a matching schema census is adopted without DDL. A fresh post-cutover
+       database starts at the canonical Rust schema epoch and does not replay
+       the retired Django 0001-0015 graph. New migrations use one Rust-owned append-only
+       version/checksum ledger. Python may validate the frozen baseline in
+       tests, but refuses a Rust-authority database outside an explicitly
+       read-only path.
+
+    5. THREE SCHEMAS. babylon_ref owns immutable reference identity and spatial
+       bridges; babylon_state owns material runtime state, history, checkpoints,
+       outbox, and tick_commit; babylon_meta owns epistemic/client knowledge.
+       Existing public-schema tables migrate additively through backfill,
+       equivalence proof, versioned compatibility views, reader cutover, writer
+       cutover, and only then a separately reviewed retirement.
+
+    6. IDENTITY. CampaignId(UUID) is the durable ledger, partition, and FK key.
+       Rust SessionId(String) remains a deterministic RNG namespace, is stored
+       verbatim for replay, and is never derived from the UUID. A G3 checkpoint
+       is (campaign_id, tick); no SaveId is minted. Explicit RNG seed and
+       ContentDigest remain separate replay inputs. The campaign row also pins
+       ref_digest, because ContentDigest covers defines and rules but not the
+       reference-data cohort. Versioned reference and bridge rows are keyed by
+       ref_digest.
+
+    7. HASH NAMES. ReplayIdentityHash is lineage only. GraphStateHash is the
+       graph-only diagnostic. TickContentHash/content_hash is reserved for the
+       complete constitutional tick/seed/state/actions byte contract. The
+       current Rust graph state_hash cannot be persisted under the stronger
+       content_hash name. A byte-compatible TickContentHash is a hard writer
+       cutover gate; the authoritative Rust writer cannot run without it.
+
+    8. H3. Rust validates H3CellId(u64); PostgreSQL stores it as checked positive
+       BIGINT, and text boundaries use lowercase unpadded hexadecimal. The
+       canonical hierarchy and measure-specific bridges live in babylon_ref.
+       Pinned reference artifacts and official H3 validation are the only
+       identity authorities. Runtime tables are reconciliation inputs; an
+       unknown or invalid runtime cell blocks cutover instead of becoming a
+       reference row. Land area, population, workplace, place, and linear-length
+       measures keep distinct columns, units, denominators, group keys, and
+       artifact-derived tolerances. No generic weight column conflates them. The
+       add/backfill/equivalence/view/cutover/retirement sequence is mandatory.
+       This ruling does not resolve GitHub #379's held physical
+       multi-resolution cache shape and does not require h3-pg without a
+       measured server-side query.
+
+    9. CLIENT SHAPE. The synchronous postgres crate remains the selected client.
+       No async API or application-level runtime enters the composition boundary
+       without measured need and a later architecture decision. Internal runtime
+       machinery used by the synchronous crate does not control game flow.
+
+    10. PLATFORM DISCLOSURE. Per Amendment AA, this pre-1.0 ruling makes no
+        Windows-support claim; the post-1.0 port must preserve the same schema,
+        identity, byte, and transaction contracts.
+  consequences: |
+    - PER-48 is decided and PER-20 may proceed with explicit writer and migration
+      ownership. PER-21 proceeds independently on the shared typed H3 contract.
+    - The current Python writer is not deleted by this ADR. It remains the only
+      live writer until all additive migrations, backfills, equivalence gates,
+      compatibility views, and Rust transaction tests are ready for one cutover.
+    - PostgreSQL unavailability cannot silently produce an acknowledged tick.
+      A failed or dropped transaction leaves no tick_commit marker.
+    - ADR176 ruling 32 remains binding: the player uses synchronous_commit=off.
+      COMMIT acknowledges a logically complete tick but can lose the latest
+      acknowledged tick before WAL flush. Resume detects the last surviving
+      tick_commit and re-simulates the bounded loss byte-identically.
+    - Python remains strategically important for AI and document work without
+      sharing authority over material state.
+    - The full working design and verification sequence live in
+      docs/superpowers/specs/2026-08-22-rust-postgresql-persistence-boundary-design.md.
+  supersedes:
+    - ADR174_python_glue_boundary_criterion  # PostgreSQL persistence clause only
+  related:
+    - ADR098_parquet_canonical_reference
+    - ADR172_amendment_ae_refoundation_ratified
+    - ADR176_director_rulings_batch_gds_dispositions
+    - ADR179_topology_spine_director_rulings

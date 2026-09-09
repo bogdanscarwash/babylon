@@ -1,0 +1,64 @@
+ADR172_amendment_ae_refoundation_ratified:
+  status: "accepted"
+  date: "2026-07-29"
+  title: >
+    Amendment AE ratified (v3.0.0) — The Refoundation: Rust is the engine
+    language, BSL re-opens the formalism surface additively, Amendment D
+    ruled NATIVE HYPEREDGE same-session, ratty+Ratatui required for in-game
+    topology/hypergraph/Sankey rendering, and the no-imposed-sigmoids
+    theory ruling recorded.
+  context: |
+    Program 27 Phase 0 (contracts & evidence) completed its engineering
+    surface 2026-07-29: all 16 in-scope plan tasks merged (defines_hash
+    unification #352, tick profile #361, currency census #350, numeric
+    closure #345 + pre-freeze traces #362, TickContext census #346,
+    sentinel/test/stops dispositions #351/#347/#348, porting contract
+    table #358, coverage backfill #359, III.12(a) extensions #349
+    reconciled by #363, tolerances/envelopes #360, ensemble ceremony
+    format #344), plus the Phase 1 prep drafts (BSL language reference
+    #355, Phase 1 plan #354). Two Director-gate PRs presented the
+    constitutional slate: #353 (Amendment D analysis, rulings D-1..D-7)
+    and #356 (the Amendment AE draft). Evidence findings of record: the
+    phi_hour live regression (every seed crashes michigan-canada at the
+    tick-52 year rollover; structural negative Leontief rents; the
+    model_copy validation-bypass scar class) and the RNG seed-threading
+    gap (SimulationConfig.random_seed never reaches System PRNG streams).
+  decision: |
+    The Director ruled interactively (Claude Code session, 2026-07-29):
+    (1) AMENDMENT D: NATIVE HYPEREDGE — hyperedges are first-class in
+        babylon-graph's exposed model and type system; Levi/incidence is
+        internal storage only; clique expansion rejected; sub-rulings
+        D-2..D-7 recorded in the analysis §9 (PR #353). II.3's
+        transition-state marker closes.
+    (2) AMENDMENT AE RATIFIED at v3.0.0 ("Ratify — merge #356"): the ten
+        operative clauses as drafted; draft §8 items 2-6 applied at their
+        drafted defaults. CONSTITUTION.md updated (sync report, II.3,
+        II.6, II.12 bindings, IX.2 registry entry, footer 3.0.0).
+    (3) PHI_HOUR: the allocator clamp fix is AUTHORIZED as a second
+        Phase-0 fix, drafted as a Director-gate PR (the negative-rent
+        theory question remains reserved and un-ruled).
+    (4) RNG ENVELOPES: Rust-side at cutover — the Python-side N=32 seed
+        ensemble is dropped (the seed-threading gap makes it unbuildable);
+        the single Python trajectory is the reference; R8's closed-epoch
+        posture governs. No third Python fix.
+    (5) THEORY LINE (same session): NO functional form — sigmoid included
+        — may be IMPOSED on mechanics; sigmoid-shaped behavior must EMERGE
+        from P(revolution)/P(acquiescence) dynamics and the algebraic
+        Lawverian operations. The P27 sigmoid-intrinsic ruling is
+        reframed; a proscription audit of formulas/tests/defines/goldens
+        was chartered same-session (workflow wf_b829f533-fe5).
+    (6) VISUALIZATION (same session, AE clause (xi)): ratty + Ratatui are
+        REQUIRED to render the topology, the hypergraph structures, and
+        value-flow Sankey diagrams in the game; extends Amendment AC (v);
+        glyph floor and AC (vi) dependency rule unchanged.
+  consequences: |
+    Phase 1 (babylon-kernel + babylon-bsl) execution unblocks on the
+    constitution application merging. babylon-graph's data shape is
+    committed: native hyperedge — bsl-language.rst §2.6/§2.8/§3.7 and the
+    Phase 1 plan's graph-trait task revise from the dyadic working
+    assumption. The freeze tag remains blocked on the phi_hour fix
+    landing (Director merge) so the frozen reference is not a crashing
+    engine. The proscription-audit report will scope which transcendental
+    intrinsics the BSL kernel surface actually needs — expected to
+    shrink. ADR063 moves to superseded-in-part (clause v). Sankey/3D
+    visualization targets join the client lane's v1.0 obligations.

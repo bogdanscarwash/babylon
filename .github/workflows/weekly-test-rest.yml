@@ -1,0 +1,43 @@
+name: Weekly — Non-Unit Tests
+
+# ADR181 R3(ii): per-leg split of the monolithic nightly — one broken leg
+# must not red the whole estate. Weekly deep tempo (owner ruling 2026-07-20).
+# Scheduled workflows run the file from the default branch (dev); checkout
+# pins ref: dev so a dispatch from any ref still tests dev HEAD.
+
+on:
+  schedule:
+    - cron: "0 6 * * 3"  # Wednesday 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly-test-rest
+  cancel-in-progress: false
+
+jobs:
+  test-rest:
+    name: Non-Unit Tests (dev HEAD)
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: dev
+      - uses: ./.github/actions/bootstrap-python
+      - name: Heavy shard (includes slow)
+        env:
+          # Self-salvage caps (2026-07-16 wedge incident): a hung shard SIGINTs
+          # itself inside the job budget and still uploads summary + junit.
+          BABYLON_REST_SHARD_TIMEOUT: 25m
+          BABYLON_SLOWUNIT_TIMEOUT: 8m
+        run: mise run test:rest-ci
+      - name: Upload test results + coverage
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: nightly-rest-results
+          path: reports/test-results/rest-ci/
+          retention-days: 14

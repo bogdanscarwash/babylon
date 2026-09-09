@@ -1,28 +1,42 @@
 # Dependabot configuration for Babylon
 # Docs: https://docs.github.com/en/code-security/dependabot
 #
-# Promotion model (Program 15, Phase 3): Dependabot never opens PRs against
-# `main`. Every ecosystem below targets `dev`. `dev`'s required-checks
-# ruleset is what makes `.github/workflows/dependabot-automerge.yml`
-# truthful — a PR can only auto-merge once it has actually satisfied the
-# checks the ruleset requires, not merely because the workflow ran.
-# `main` never receives a Dependabot PR directly; it only receives changes
-# via the fast-forward promotion (`tools/promote.sh`) once `dev` is green.
+# Branch model (Program 15, Phase 3): `dev` is the default branch, so
+# Dependabot opens every PR against `dev`. Omitting `target-branch` is
+# deliberate: GitHub then applies this configuration to security updates too.
+# The required-checks ruleset and `.github/workflows/dependabot-automerge.yml`
+# allow only exact-head, fully verified merges.
+# `main` never receives a Dependabot PR directly. A Director-authorized release PR
+# from `dev` carries these changes through the main qualification manifest.
+#
+# CONFIG-AUTHORITY INVARIANT (2026-07-12): Dependabot reads THIS FILE — every
+# group and every `ignore` below — from the repository's DEFAULT
+# branch ONLY. The default branch is now `dev` (changed from `main` on
+# 2026-07-12) precisely so rule/ignore edits take effect the moment they land
+# on `dev`, with no main release PR required. If the default branch is ever
+# moved back to `main`, edits here go INERT until a configuration PR reaches
+# `main`. Keep the default branch equal to the branch where this file changes.
 
 version: 2
 updates:
   # ==========================================================================
-  # Python dependencies (Poetry)
+  # Python dependencies (uv)
   # ==========================================================================
-  - package-ecosystem: "pip"
+  - package-ecosystem: "uv"
     directory: "/"
-    target-branch: "dev"
     schedule:
       interval: "weekly"
       day: "monday"
       time: "09:00"
-      timezone: "America/Chicago"
-    open-pull-requests-limit: 10
+      # Dependabot rejects YAML aliases; the policy test keeps all four copies equal.
+      timezone: "America/New_York"
+    open-pull-requests-limit: 5
+    # Cooldown (PER-264): fresh releases batch instead of trickling in as
+    # singleton PRs, and majors get a week of upstream bake time before a
+    # candidate even opens. Docker stays uncooled: monthly is already slow.
+    cooldown:
+      default-days: 3
+      semver-major-days: 7
     rebase-strategy: "auto"
     versioning-strategy: "increase-if-necessary"
     commit-message:
@@ -33,7 +47,7 @@ updates:
       - "python"
     groups:
       # Group all minor/patch updates into a single PR (reduces noise)
-      python-minor-patch:
+      uv-minor-patch:
         applies-to: version-updates
         patterns:
           - "*"
@@ -41,47 +55,41 @@ updates:
           - "minor"
           - "patch"
       # Security updates get their own group (higher priority)
-      python-security:
+      uv-security:
         applies-to: security-updates
         patterns:
           - "*"
-      # Majors arrive as ONE reviewable PR per ecosystem (never auto-merged —
-      # the automerge workflow only takes minor/patch). An agent unbundles
-      # locally if one member is red.
-      python-majors:
-        applies-to: version-updates
-        patterns:
-          - "*"
         update-types:
-          - "major"
-    # Deferred majors (OWNER ITEM 55 — django 6 + mypy 2 modernization). This is
-    # a deliberate railed batch (manage.py check + web suites + typecheck across
-    # 567 files), not a drive-by bump: django-stubs 6 + drf-stubs cap `mypy<2.2`
-    # via the compatible-mypy extras, so django 6 and mypy 2 are UNSATISFIABLE
-    # together on the current stubs. Hold the three majors until item 55 ships.
-    # `ignore` suppresses both version- and security-update PRs for the pinned
-    # MAJOR only — minor/patch security fixes within 5.x / 1.x still flow.
-    # UNBLOCK: delete these three entries when item 55 is executed.
+          - "minor"
+          - "patch"
+    # Hold the mypy major for its dedicated modernization batch.
     ignore:
-      - dependency-name: "django"
-        update-types: ["version-update:semver-major"]
-      - dependency-name: "django-stubs"
-        update-types: ["version-update:semver-major"]
       - dependency-name: "mypy"
         update-types: ["version-update:semver-major"]
+      # pyarrow stays byte-pinned for artifact determinism (see pyproject.toml);
+      # every bump is a declared regeneration ceremony, never a grouped PR.
+      - dependency-name: "pyarrow"
+        update-types:
+          - "version-update:semver-major"
+          - "version-update:semver-minor"
+          - "version-update:semver-patch"
 
   # ==========================================================================
   # GitHub Actions
+  # Run a day after the Python batch so each ecosystem gets its own CI queue.
   # ==========================================================================
   - package-ecosystem: "github-actions"
     directory: "/"
-    target-branch: "dev"
     schedule:
       interval: "weekly"
-      day: "monday"
+      day: "tuesday"
       time: "09:00"
-      timezone: "America/Chicago"
+      timezone: "America/New_York"
     open-pull-requests-limit: 5
+    # Cooldown (PER-264): Dependabot supports only default-days for the
+    # github-actions ecosystem; semver-major-days is rejected there.
+    cooldown:
+      default-days: 3
     rebase-strategy: "auto"
     commit-message:
       prefix: "ci(deps)"
@@ -89,58 +97,13 @@ updates:
       - "dependencies"
       - "ci"
     groups:
-      # Group all GitHub Actions updates together
-      github-actions-all:
-        patterns:
-          - "*"
-
-  # ==========================================================================
-  # Frontend dependencies (npm)
-  # ==========================================================================
-  - package-ecosystem: "npm"
-    directory: "/src/frontend"
-    target-branch: "dev"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "09:00"
-      timezone: "America/Chicago"
-    open-pull-requests-limit: 5
-    commit-message:
-      prefix: "fix(deps)"
-      prefix-development: "chore(deps-dev)"
-    labels:
-      - "dependencies"
-      - "frontend"
-    groups:
-      # Group all minor/patch updates into a single PR (reduces noise)
-      frontend-minor-patch:
-        applies-to: version-updates
+      # Major action updates remain individual manual-review PRs.
+      github-actions-minor-patch:
         patterns:
           - "*"
         update-types:
           - "minor"
           - "patch"
-      # Security updates get their own group (higher priority)
-      frontend-security:
-        applies-to: security-updates
-        patterns:
-          - "*"
-      # Majors as one reviewable PR (see python-majors rationale above).
-      frontend-majors:
-        applies-to: version-updates
-        patterns:
-          - "*"
-        update-types:
-          - "major"
-    # Deferred major: TypeScript 7. It removed `baseUrl` (our tsconfig relies on
-    # it) and `typescript-eslint ^8` has no TS7 support yet — taking it breaks
-    # both the tsc build and the eslint typecheck. Hold the major until
-    # typescript-eslint ships TS7 support; 5.x patches still flow.
-    # UNBLOCK: delete this entry once typescript-eslint supports TypeScript 7.
-    ignore:
-      - dependency-name: "typescript"
-        update-types: ["version-update:semver-major"]
 
   # ==========================================================================
   # Postgres base image (Docker) — monthly: base-image bumps are deliberate,
@@ -148,11 +111,10 @@ updates:
   # ==========================================================================
   - package-ecosystem: "docker"
     directory: "/docker/postgres"
-    target-branch: "dev"
     schedule:
       interval: "monthly"
       time: "09:00"
-      timezone: "America/Chicago"
+      timezone: "America/New_York"
     open-pull-requests-limit: 2
     commit-message:
       prefix: "ci(deps)"
@@ -161,37 +123,49 @@ updates:
       - "docker"
     # PG-major bumps (16 -> 17, alpine, etc.) are OWNER ITEM 45: a Postgres/
     # PostGIS major can alter geometry float behavior under the byte-identical
-    # determinism bundle and needs the full protocol (qa:e2e-regression on the
-    # new image + pg_upgrade path + testcontainers lockstep). Not a casual PR.
+    # determinism bundle and needs the full Rust adopter protocol on the new
+    # image plus its upgrade path and testcontainers lockstep. Not a casual PR.
     ignore:
       - dependency-name: "postgis/postgis"
         update-types: ["version-update:semver-major"]
 
   # ==========================================================================
-  # Ansible deploy tooling (pip) — monthly: infra tooling, not runtime deps.
+  # Rust workspace (cargo) — ADR181 R6: 355 locked crates previously had no
+  # proactive update PRs while the FROZEN Python stack got weekly bumps. The
+  # git-dep (hypergraph-rs) is invisible to Dependabot by construction — its
+  # rev-bump protocol is manual and deliberate (rust/deny.toml [sources]).
+  # Thursday avoids both the Monday/Tuesday dependency batches and Wednesday's
+  # scheduled deep-validation workflows.
   # ==========================================================================
-  - package-ecosystem: "pip"
-    directory: "/deploy/ansible"
-    target-branch: "dev"
+  - package-ecosystem: "cargo"
+    directory: "/rust"
     schedule:
-      interval: "monthly"
+      interval: "weekly"
+      day: "thursday"
       time: "09:00"
-      timezone: "America/Chicago"
+      timezone: "America/New_York"
+    open-pull-requests-limit: 5
+    cooldown:
+      default-days: 3
+      semver-major-days: 7
+    rebase-strategy: "auto"
+    commit-message:
+      prefix: "fix(deps)"
+      prefix-development: "chore(deps-dev)"
     labels:
       - "dependencies"
-      - "infra"
     groups:
-      # Infra tooling travels as (at most) two PRs: minors+patches, majors.
-      ansible-minor-patch:
+      rust-minor-patch:
         applies-to: version-updates
         patterns:
           - "*"
         update-types:
           - "minor"
           - "patch"
-      ansible-majors:
-        applies-to: version-updates
+      rust-security:
+        applies-to: security-updates
         patterns:
           - "*"
         update-types:
-          - "major"
+          - "minor"
+          - "patch"

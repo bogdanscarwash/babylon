@@ -1,0 +1,2 @@
+{"case_id":"base-opening-state","kind":"state","data":{"canonical_bytes":1555,"digest_hex":"3576baa1af2a38be8a1376259dc4423a470607ad9eef5969715931e16b30620a"}}
+{"case_id":"manifest","kind":"manifest","data":{"schema_version":1,"quantity_width_bits":64,"rows_per_family":65536,"production_resource_groups":131072,"error_code_count":16,"access_mode_count":1}}

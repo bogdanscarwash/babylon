@@ -9,9 +9,10 @@ Prerequisites
 
 - Git installed and configured
 - Repository cloned: ``git clone https://github.com/percy-raskova/babylon.git``
-- Poetry installed: ``pip install poetry``
-- Dependencies installed: ``poetry install``
-- Pre-commit hooks installed: ``poetry run pre-commit install``
+- mise installed: https://mise.jdx.dev/getting-started.html
+- Pinned Python and uv tools installed: ``mise install``
+- Dependencies installed: ``mise run install``
+- All Git hooks installed: ``mise run hooks``
 
 Branch from dev
 ---------------
@@ -66,14 +67,14 @@ Make Your Changes
    .. code-block:: bash
 
       # Manual run
-      poetry run pre-commit run --all-files
+      uv run pre-commit run --all-files
 
 3. **Run tests** to ensure nothing breaks:
 
    .. code-block:: bash
 
       # Fast tests (recommended during development)
-      poetry run pytest -m "not ai" --tb=short
+      uv run pytest -m "not ai" --tb=short
 
       # Or use mise
       mise run test:all
@@ -171,7 +172,7 @@ If CI fails, don't panic:
 **Lint failures (Ruff)**
    .. code-block:: bash
 
-      poetry run ruff check . --fix
+      uv run ruff check . --fix
       git add . && git commit -m "fix: address lint issues"
 
 **Type failures (MyPy)**
@@ -182,7 +183,7 @@ If CI fails, don't panic:
    .. code-block:: bash
 
       # Run the specific failing test
-      poetry run pytest tests/path/to/test.py -v
+      uv run pytest tests/path/to/test.py -v
 
 **Documentation failures (Sphinx)**
    Usually a malformed docstring. Check for RST syntax issues.

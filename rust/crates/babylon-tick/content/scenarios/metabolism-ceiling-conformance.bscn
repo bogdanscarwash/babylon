@@ -1,0 +1,29 @@
+; The CEILING conformance world for `metabolism/biocapacity-update` — proves
+; the min(new-max, current + delta) half of the double clamp actually binds.
+;
+; regeneration-rate is boosted to 0.9 here (legal per
+; Territory.regeneration_rate's own Field(ge=0.0, le=1.0) — no bypass
+; needed), because the production-default 0.02 can never push
+; current + delta above max-biocapacity for either int-seedable
+; extraction-intensity value (0 or 1) — see `metabolism_ceiling_
+; conformance.py`'s module docstring for the full algebra, including why
+; this vector is deliberately NOT also a "ratcheted ceiling" vector
+; (extraction-intensity 0 here makes the hysteresis damage exactly zero,
+; so this clamp binds against the ORIGINAL ceiling — the ratchet itself is
+; proven separately, by zero-floor-county in metabolism-conformance.bscn).
+;
+; See `metabolism_ceiling_conformance.py` for the provenance script.
+(scenario metabolism/ceiling-conformance
+  (deffield territory/biocapacity int extensive)
+  (deffield territory/max-biocapacity int extensive)
+  (deffield territory/extraction-intensity int intensive)
+
+  ; Boosted from the 0.02 production default — see the header.
+  (defconst metabolism/regeneration-rate 0.9c)
+  (defconst metabolism/entropy-factor-x1e6 1200000)
+  (defconst metabolism/hysteresis-rate 0.005c)
+
+  (node ceiling-county NodeType/TERRITORY
+    (territory/biocapacity 50)
+    (territory/max-biocapacity 100)
+    (territory/extraction-intensity 0)))

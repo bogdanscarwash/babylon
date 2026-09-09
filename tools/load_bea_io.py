@@ -22,9 +22,9 @@ Audit reports land at reports/ingest/bea_io_<timestamp>.{md,json}.
 
 Usage::
 
-    poetry run python tools/load_bea_io.py --years 2010-2024
-    poetry run python tools/load_bea_io.py --rollback
-    poetry run python tools/load_bea_io.py --dry-run --years 2010-2024
+    uv run python tools/load_bea_io.py --years 2010-2024
+    uv run python tools/load_bea_io.py --rollback
+    uv run python tools/load_bea_io.py --dry-run --years 2010-2024
 """
 
 from __future__ import annotations
@@ -39,6 +39,7 @@ from pathlib import Path
 
 from sqlalchemy import select
 
+from babylon.config.logging_config import setup_logging
 from babylon.reference.bea.ingest.audit_report import (
     BEAIngestAuditReport,
     IndustrySnapshot,
@@ -418,10 +419,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     """
     parser = _build_arg_parser()
     args = parser.parse_args(argv)
-    logging.basicConfig(
-        level=args.log_level,
-        format="%(asctime)s %(levelname)s %(name)s — %(message)s",
-    )
+    setup_logging(default_level=args.log_level)
     log = logging.getLogger("load_bea_io")
     log.info(
         "spec-068 BEA I-O ingest starting (years=%d-%d, rollback=%s, dry_run=%s)",

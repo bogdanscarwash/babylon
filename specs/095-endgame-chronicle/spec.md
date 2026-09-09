@@ -166,7 +166,7 @@ aspects). Matches `contracts/contradiction.yaml`.
 ## Success Criteria *(mandatory)*
 
 - **SC-095-01**: `mise run web:check` green (tsc + eslint + prettier + Vitest).
-- **SC-095-02**: `PYTHONPATH=src poetry run pytest tests/unit/web/ -q` green, including
+- **SC-095-02**: `PYTHONPATH=src uv run pytest tests/unit/web/ -q` green, including
   contradiction-snapshot contract test, endgame priority test, and 5-outcome test.
 - **SC-095-03**: Contradiction-snapshot contract test passes (bridge returns real
   contradiction data, not fixtures).

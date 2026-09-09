@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="384" height="256" viewBox="0 0 384 256">
+  <g id="hover" transform="translate(0 0)"><circle cx="64" cy="64" r="36" fill="none" stroke="#e8e8e8" stroke-width="6"/><circle cx="64" cy="64" r="8" fill="#e8e8e8"/></g>
+  <g id="selection" transform="translate(128 0)"><path d="M32 32H52M32 32V52M96 32H76M96 32V52M32 96H52M32 96V76M96 96H76M96 96V76" fill="none" stroke="#ffd700" stroke-width="8"/><circle cx="64" cy="64" r="9" fill="#ffd700"/></g>
+  <g id="pin" transform="translate(256 0)"><path d="M64 108C64 108 34 76 34 55A30 30 0 1 1 94 55C94 76 64 108 64 108Z" fill="#dc143c"/><circle cx="64" cy="55" r="9" fill="#1a0000"/></g>
+  <g id="event" transform="translate(0 128)"><path d="M64 20L74 52L108 52L80 72L90 106L64 86L38 106L48 72L20 52L54 52Z" fill="#ffd700"/></g>
+  <g id="origin" transform="translate(128 128)"><circle cx="64" cy="64" r="34" fill="none" stroke="#228b22" stroke-width="8"/><circle cx="64" cy="64" r="12" fill="#228b22"/></g>
+  <g id="target" transform="translate(256 128)"><circle cx="64" cy="64" r="36" fill="none" stroke="#dc143c" stroke-width="7"/><circle cx="64" cy="64" r="19" fill="none" stroke="#dc143c" stroke-width="7"/><circle cx="64" cy="64" r="5" fill="#dc143c"/></g>
+</svg>

@@ -21,3 +21,10 @@
 # environment reports zero known vulnerabilities, so the minimal passing policy
 # carries no [[ignore]] entries. Any new suppression added below must re-justify
 # itself and will trip the exact-pin test in tests/unit/tools/test_run_pip_audit.py.
+#
+# 2026-08-17 — POLICY EMPTIED AGAIN. The CVE-2026-11332 entry (ansible-core
+# 2.20.3, dev tooling only; time-boxed to 2026-08-15 pending a stable fix)
+# expired and tripped the hard-fail exactly as designed. The removal condition
+# it named is now met: uv.lock carries ansible-core 2.21.2 (stable, >= the
+# 2.20.7 fix line), so the vulnerability is fixed upstream in the locked
+# environment and the entry is removed rather than renewed.

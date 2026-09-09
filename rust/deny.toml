@@ -1,0 +1,72 @@
+# cargo-deny configuration (ADR181 R6, 2026-07-30) — the Rust workspace's
+# supply-chain gate, run by ci.yml's rust-gate job. Four checks: advisories
+# (RustSec), bans, licenses, sources. Every exemption below carries its
+# reason; tightening is routine, loosening is a reviewed change.
+
+[graph]
+all-features = true
+
+[advisories]
+# Defaults: vulnerabilities = deny. Unmaintained advisories carry explicit
+# reasoned ignores (first-triage 2026-07-30) — each names its dependency
+# path and its exit condition; a NEW advisory still reds the gate.
+version = 2
+yanked = "deny"
+ignore = [
+  # The babylon-tui-python entries (bincode, yaml-rust) left with the
+  # Amendment AF deletion ceremony (PR #473) — cargo-deny itself flagged
+  # them advisory-not-detected, so keeping them would be a stale claim.
+  { id = "RUSTSEC-2024-0436", reason = "paste unmaintained — transitive via Bevy 0.18 (wgpu-core proc-macro helper); no vulnerability; no fixed upstream exists; exits when wgpu drops paste (tracked upstream)" },
+  { id = "RUSTSEC-2026-0192", reason = "ttf-parser unmaintained — transitive via Bevy 0.18's text stack; no vulnerability; no fixed upstream exists; exits when cosmic-text/bevy_text migrate" },
+]
+
+[bans]
+# A workspace this size legitimately carries duplicate minor versions
+# (transitive pins); duplicates are noise, not risk — advisories and
+# sources are the load-bearing checks. Wildcard deps stay banned: a "*"
+# requirement defeats the lockfile's determinism story.
+multiple-versions = "allow"
+wildcards = "deny"
+# In-tree path dependencies carry no version requirement by design (one
+# workspace, one lockfile) — they are not the wildcard hazard the deny
+# targets (an unpinned REGISTRY requirement).
+allow-wildcard-paths = true
+
+[licenses]
+version = 2
+# Permissive-only allowlist for the shipped engine. Anything outside this
+# set fails the gate and gets an explicit reviewed exception here, never a
+# silent pass.
+allow = [
+  # The workspace's OWN license (rust/Cargo.toml: "in-tree = babylon's own
+  # license") — the allowlist governs what we SHIP WITH, and we ship as
+  # AGPL; hypergraph-rs (same author) rides the same allowance.
+  "AGPL-3.0-or-later",
+  "MIT",
+  "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "ISC",
+  "Zlib",
+  "Unicode-3.0",
+  "MPL-2.0",
+  "CC0-1.0",
+  "Unlicense",
+  "0BSD",
+  # Program 28 B0 (Bevy 0.18): encase / encase_derive / encase_derive_impl
+  # (bevy_render's GPU buffer-layout crates) are MIT-0 — MIT with the
+  # attribution clause dropped, strictly more permissive than plain MIT.
+  "MIT-0",
+]
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+# The ONE sanctioned git dependency: the Director's hypergraph-rs, rev-pinned
+# in rust/crates/babylon-graph/Cargo.toml (ADR179 T3 makes it babylon-graph's storage in
+# Phase 2). No advisory feed covers a git dep — the pin + this allowlist +
+# a deliberate rev-bump protocol is the whole defense; adding any OTHER git
+# source is a reviewed decision, not a convenience.
+allow-git = ["https://github.com/percy-raskova/hypergraph-rs"]

@@ -1147,7 +1147,7 @@ Per the audit dependency graph, completion of this spec unblocks:
 
 - **spec-071** (Reactionary Subject) — needs Faction model to
   assign drifted nodes to fascist Faction; provides material for
-  Doctrine NATIONALISM tag in spec-080.
+  Doctrine NATIONAL_CHAUVINISM tag in spec-080.
 - **spec-074** (Demographic Crisis & Resolution Pathway selector)
   — needs Faction / Sovereign model for the IMPERIAL pathway's
   biocap-transfer along EXPLOITATION edges.

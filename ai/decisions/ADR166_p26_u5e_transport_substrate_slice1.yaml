@@ -1,0 +1,52 @@
+ADR166_p26_u5e_transport_substrate_slice1:
+  status: "accepted"
+  date: "2026-07-27"
+  title: >
+    P26 U5e — transport substrate slice 1 (spec-108 under the ADR165
+    rulings): TransportSystem @9.5 default-OFF, corridor mesh over the
+    existing infrastructure DTOs, flux overlay as the state's budget-OODA
+    demand signal, uniform territory splash, county-pair connectivity read.
+  context: |
+    spec-108 (authored this lane, U5 spec leg) pins the transport
+    substrate; ADR165 ruled its five open items. Slice 1 delivers the
+    ruled shapes without the routing solver: Program 11's full res-8
+    NE/HPMS/NTAD mesh, min-cost flow, PHYSICAL_EXCHANGE production and
+    Vol III pricing remain solver-gated follow-ups (recorded in
+    tasks.md + the module docstrings, not silently dropped).
+  decision: |
+    - TransportSystem at position 9.5 (MATERIAL_BASE; 33 -> 34 systems):
+      after ImperialRent so the demand signal is materially fresh, before
+      OODA so the same tick's mesh serves the sovereign's read and
+      layer-3's write. DEFAULT-OFF (TransportDefines.enabled = False) —
+      pre-U5e ticks byte-identical, engine+ooda estates re-verified.
+    - CorridorMesh (domain/geography/corridor_mesh.py): sorted-
+      deterministic pure view over InfrastructureLinkState (+conductivity)
+      / DefaultInfrastructureInventory (+adjust_link_condition);
+      aggregate_connectivity_by_county_pair is the primitives-only
+      session-reachable read that will feed the Archive "supply lines"
+      indicator (ADR165 item 5).
+    - Demand signal, NOT auto-minting (ADR165 item 2): sustained flux
+      raises a demand signal consumed by the sovereign's budget OODA
+      evaluation; corridor creation/repair happens only through
+      resolve_build (engine/actions/build.py — implemented + tested,
+      deliberately NOT registered: the 10th-verb registration breaks the
+      9-verb registry pin and needs a projection/verbs preview entry,
+      both cross-lane; flagged as the next step, not improvised).
+    - Attack seam (item 4): uniform territory splash through the existing
+      layer3._propagate_infrastructure write; no Action schema change.
+    - Realization-crisis coupling (item 3): compute_overhang_delta damped
+      by CapitalVolumeIIDefines.transport_overhang_damping_coefficient
+      (0.3 default), stamped into context.persistent_data pending the
+      CirculationCrisis-vs-RealizationCrisis audit its wiring requires.
+    - TransportDefines: 10 declared coefficients; defines.yaml
+      regenerated; vocabulary + territory-excluded-fields sentinels fed.
+  consequences:
+    positive:
+      - "The ruled transport shapes exist behind one master gate; enabling is a declared defines change, not a code change"
+      - "The connectivity read the U6 dossier indicator needs is pinned and session-reachable"
+      - "Zero baseline drift: default-OFF verified across the engine/ooda estates (3305 tests)"
+    negative:
+      - "BUILD_INFRASTRUCTURE stays unreachable by players until the 10th-verb registration lands (registry pin + preview entry + capability gating)"
+      - "The overhang delta is computed but not yet consumed by circulation-crisis assessment (audit owed)"
+      - "The res-8 ingested mesh + routing solver remain a chartered data/algorithm unit — slice 1's mesh is a territory-hex view"
+  file: ADR166_p26_u5e_transport_substrate_slice1.yaml

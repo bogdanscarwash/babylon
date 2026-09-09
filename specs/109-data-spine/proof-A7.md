@@ -128,7 +128,7 @@ integrated `dev@373a6e7c` (A7 merged, plus the full spec-109/110 wave-1/2
 surface):
 
 ```
-poetry run python -m babylon.engine.headless_runner --scope michigan-canada \
+uv run python -m babylon.engine.headless_runner --scope michigan-canada \
   --ticks 520 --write-baseline tests/baselines/michigan-e2e.json
 ```
 

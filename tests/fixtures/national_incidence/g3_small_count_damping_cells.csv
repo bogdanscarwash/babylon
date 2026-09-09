@@ -1,0 +1,8 @@
+fips,county_name,universe_u,w
+48301,Loving County TX,15,0.50
+21063,Elliott County KY,31,0.48
+48269,King County TX,78,0.46
+99101,Control A (large-u),1000000,0.45
+99102,Control B (large-u),800000,0.44
+99103,Control C (large-u),600000,0.43
+99104,Control D (large-u),400000,0.42

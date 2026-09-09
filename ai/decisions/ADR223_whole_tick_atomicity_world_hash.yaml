@@ -1,0 +1,100 @@
+ADR223_whole_tick_atomicity_world_hash:
+  status: "accepted"
+  date: "2026-08-23"
+  title: >-
+    Rust adjudicates each weekly tick on a detached world, publishes graph,
+    events, allocator state, and completed time only after total success, and
+    names current in-memory identity with a versioned nominal world hash
+  context: |
+    The Rust tick driver executed governed BSL rules in order against the held
+    graph. A later rule failure could expose earlier mutations even though the
+    session counter did not advance. The graph-state hash also omitted two
+    monotonic identity allocators and completed weekly time. Those values affect
+    later identities and outcomes even when the live graph facts match.
+
+    PER-17 and ADR222 made causal phase placement executable and assigned
+    PER-18 the next Gate 2 obligation: whole-tick rollback and canonical
+    big-endian hashing for every auxiliary Rust tick register that exists.
+    Gate 3 separately owns PostgreSQL durability, the CommittedTickEnvelope,
+    campaign and content identity, and crash recovery. This decision cannot
+    claim that later boundary early.
+
+    Adversarial review found three places where a narrow implementation would
+    have lied: bare Clone does not promise detached mutable backing; one-shot
+    preparation hydrated caller state before the working-copy boundary; and a
+    graph-only or all-zero hash golden could not prove the whole byte layout.
+  decision: |
+    1. DETACHED-COPY CONTRACT. `babylon-graph` exposes `DetachedCopy` as an
+       explicit behavioral contract with no blanket Clone implementation.
+       MemoryGraph and HypergraphStore implement it. Conformance proves that
+       nodes, binary64 and Currency attributes, dyadic edges and attributes,
+       hyperedges and attributes, type indexes, membership queries, and both
+       identity cursors are independently mutable in either direction.
+
+    2. ATOMIC PREPARATION AND ADJUDICATION. A public one-shot call detaches the
+       caller world before scenario preparation. Preparation, scenario
+       hydration, every ordered rule, graph hashing, nominal-world hashing, and
+       event-batch reservation all complete on staged state. Only then may the
+       graph swap and the already-reserved event append occur. TickSession uses
+       the same adjudication boundary and advances its completed-tick counter
+       only after success. Any returned error leaves canonical graph bytes,
+       allocator cursors, prior events, and completed time unchanged.
+
+    3. EXPLICIT FAILURE. Node, hyperedge, and completed-tick arithmetic uses
+       checked operations. The u64 value MAX is the reserved exhausted cursor
+       sentinel; MAX-1 is the last mintable identity. Non-finite graph data,
+       pre-hash failure, post-hash failure, rule failure in any causal
+       partition, and event-reservation refusal all abort before publication.
+
+    4. TWO HASH NAMES. GraphStateHash remains the canonical graph-only
+       diagnostic and its established byte layout does not change.
+       NominalWorldHash names the current mutable graph-and-tick registers at
+       this gate. It covers GraphStateHash, completed weekly time,
+       next-node and next-hyperedge cursors, and the governed static
+       phase-schedule digest. The Bevy tick readout shows the committed
+       NominalWorldHash. Diagnostic CLI output labels graph and world hashes
+       separately.
+
+    5. NOMINAL WORLD HASH VERSION 1. The SHA-256 preimage is exactly the ASCII
+       domain `babylon.world-state` plus NUL, u32 big-endian layout version 1,
+       then these tagged sections in order: 0x01 plus the 32-byte graph hash;
+       0x02 plus i64 big-endian completed tick; 0x03 plus u64 big-endian node
+       cursor and u64 big-endian hyperedge cursor; 0x04 plus the 32-byte phase
+       schedule digest. Negative completed time refuses. A hand-written,
+       asymmetric, nonzero 116-byte vector pins every tag, position, and byte
+       order before pinning its SHA-256.
+
+    6. DETERMINISM EVIDENCE. A real multi-rule TickSession advance compares
+       both graph hashes, both nominal world hashes, total and per-rule firing,
+       and exact typed event payloads across parent and child processes,
+       insertion permutations, and both graph stores. A separate component
+       test proves equal live graph facts with different allocator histories
+       have different nominal world hashes.
+
+    7. NAMED LIMITS. Same-position BSL rules remain sequential; PER-19 owns
+       shared-prestate causal composition and direct-write law. This decision
+       adds no PostgreSQL connection, persistence envelope, campaign identity,
+       reference digest, content digest, RNG seed, action log, checkpoint, or
+       future political-economy register. ADR220 reserves TickContentHash for
+       that complete constitutional identity and makes it a writer-cutover
+       gate.
+  consequences: |
+    - Failure after representative Material Base, Action, or Consequence work
+      rolls back exact graph bytes, cursors, completed time, and prior events on
+      both graph stores.
+    - One-shot scenario hydration is now part of the same atomic operation as
+      its tick. A failed call cannot leave scenario nodes or consumed IDs in a
+      caller-owned world.
+    - A tick that emits events without moving graph facts still changes
+      NominalWorldHash because completed time is state. Graph and world hashes
+      therefore remain separately named in code, tests, CLI output, and docs.
+    - The current boundary protects in-process consistency but cannot
+      acknowledge durable progress. Gate 3 must wrap a successful adjudication
+      result in its own transactional database protocol without weakening this
+      rollback law.
+  supersedes: []
+  related:
+    - ADR179_topology_spine_director_rulings
+    - ADR220_rust_owned_postgresql_persistence_boundary
+    - ADR221_game_first_refoundation_v4
+    - ADR222_executable_bsl_phase_order

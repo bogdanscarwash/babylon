@@ -302,6 +302,13 @@ For county-level disaggregation factors (mode-specific):
 The metadata XLSX (already present at ``data/freight/faf/FAF5_metadata.xlsx``)
 contains zone names and zone-to-state mapping.
 
+The factor files populate ``bridge_cfs_county`` via
+``python -m babylon_data.faf_bridge`` (babylon-data repo; dry-run default,
+``--execute`` to commit). The bridge's single ``allocation_weight`` per
+(zone, county) is a Derived 2022-tonnage-weighted mean of the mode × SCTG-G5
+factors, origin+destination pooled; per-zone weight sums report the
+covered-tonnage share and are not renormalized.
+
 ----
 
 Related Documentation

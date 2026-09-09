@@ -1,0 +1,312 @@
+ADR072_divergence_channel:
+  status: "accepted"   # Amendment T ratified 2026-07-22 (BD-delegated; batch record ADR126)
+  date: "2026-07-15"
+  ratified: |
+    2026-07-22 — Amendment T ACCEPTED as drafted in proposed_amendment below
+    (BD-delegated ruling; delegation + rationale recorded in ADR126;
+    CONSTITUTION.md v2.16.0). Rider: Phase-1 implementation (the three additive
+    fields + the DT chauvinism_internationalism shadow binding) stays QUEUED off
+    the v1.0 critical path per NORTH_STAR §0 — ratification is governance, not a
+    scheduling event. Since Phase-0: the DT authored source is no longer unbuilt
+    (DoctrineSystem @14.7 + doctrine_tags shipped, ADR073), and P19 folded into
+    the spine — the two hard sequencing dependencies below are now satisfied;
+    only the ORGANIZATION_COMPUTED_FIELDS gate remains net-new work at Phase-1.
+  title: >-
+    The Divergence Channel (Option-C generalized): a shadow reading that pairs an
+    AUTHORED/subjective pole with a MATERIALLY-measured pole and surfaces their
+    DIVERGENCE as the first-class signal. Owner ruling "design general, build
+    concrete" — the ADR captures the full abstraction as the north star; Phase-1
+    code is only the three additive fields + the concrete DT chauvinism<->
+    internationalism shadow instance + honest-null discipline, with the
+    gating-ledger, generalized divergence sentinel, and SHADOW->GATING lifecycle
+    DEFERRED until a second real authored<->material instance exists. Proposes
+    Amendment T (Article VIII, observes-only) for BD ratification.
+  supersedes: []
+  relates_to: ["ADR070"]   # P19 Emergent Class Partition — this extends its read_poles surface
+  programs: ["17-living-engine", "19-emergent-class-partition", "doctrine-tree", "epistemic-horizon"]
+  phase: 0                 # design only, no code
+  new_primitive: "proposed-as-amendment"  # see Amendment T below — BD accepts or declines
+
+  provenance: |
+    Owner approved the Doctrine-Tree and Epistemic-Horizon program proposals
+    2026-07-15 and, for the DT tag pair NATIONAL_CHAUVINISM<->INTERNATIONALISM,
+    ruled Option C (hybrid shadow-first: authored accrual drives the tag, a
+    dialectics reading rides alongside) AND directed it be "abstracted enough to
+    really apply to whatever" — a general facility, not a one-off. This Phase-0
+    design was produced by a 9-agent Opus workflow (4 surveyors + 3 independent
+    design attempts + synthesis + adversarial critique). The critique returned
+    NEEDS-REVISION / leaning OVER-ABSTRACTED; its findings are folded in below,
+    and two calls were escalated to the owner 2026-07-15:
+      - SCOPE ruling: "design general, build concrete" (the ADR documents the
+        full abstraction; Phase-1 builds only the concrete DT instance + the
+        three cheap additive fields; the ledger/sentinel/FSM machinery is
+        deferred until a second real instance — rule of three).
+      - GOVERNANCE ruling: propose the Article VIII observes-only amendment
+        (Amendment T) for the BD to accept or decline, rather than pre-deciding
+        ADR-only.
+
+  context: |
+    Three ratified directions independently grew the same shape: a per-tick
+    reading that pairs an AUTHORED/subjective pole A (accrued off-graph — II.9/
+    VIII.9 forbid ideology on the five canonical morphisms) with a MATERIALLY-
+    measurable pole Ā (read from the graph each tick), where the DIVERGENCE
+    between what the authored side CLAIMS and what the material base SUPPORTS is
+    the signal worth surfacing. In the Doctrine Tree, a player's tag vector can
+    read "safe" (CLASS_ANALYSIS > NATIONAL_CHAUVINISM) while their material base
+    (solidarity) has collapsed; the divergence is what catches that lie.
+
+    The adversarial critique established the honest boundary of "apply to
+    whatever": at Phase 0 the facility has exactly ONE real user.
+      - P19 Emergent Class Partition is a NULL instance — both its poles are
+        material; the authored field simply defaults to None and P19 behaves
+        byte-identically to today. It validates that the extension does not
+        break the base case, not that the general facility is exercised.
+      - Epistemic Horizon is REFUSED, honestly: M_r/I_c/vision_state are a
+        fog-of-war VIEW of already-material state (p_acquiescence,
+        class_consciousness), not a claim audited against an independently-
+        tracked ground truth. There is no in-fiction "declared belief" object to
+        make the authored pole. Forcing sigma_authored onto EH would misdescribe
+        it. (Named forward seam below.)
+      - Doctrine Tree is the only genuine authored<->material instance — and its
+        authored source (DoctrineTree / calculate_tags) is UNBUILT: zero code in
+        src/babylon today.
+    Generalizing a full facility (a gating ledger, a seventh sentinel, a
+    lifecycle state machine) over one imagined instance is speculative
+    generality. The owner's "design general, build concrete" ruling resolves the
+    tension: capture the abstraction as the documented north star (so the seam is
+    real and the next instance is cheap), but build only the concrete DT reading
+    plus the three additive fields now; let the machinery emerge when a second
+    real instance justifies it.
+
+    Hard sequencing dependency: the P19 pole surface this extends
+    (PoleSample / PoleReading / read_poles / sentinels/partition/) is UNMERGED —
+    it lives on feature/19-emergent-class-partition, not on this branch. Per the
+    owner ruling that "P19 folds into the spine before the PR", P19 Phase-1 must
+    land in the spine before Divergence-Channel Phase-1 can build. Phase 0 is
+    design, so this is a sequencing note, not a blocker.
+
+  decision: |
+    Adopt the DIVERGENCE CHANNEL as the general abstraction and its Phase-1
+    concrete scope, per the "design general, build concrete" ruling.
+
+    THE ABSTRACTION (documented north star). An ASYMMETRIC opposition
+    D = (A, Ā, w, T, σ) where pole A is authored/subjective (off-graph, never a
+    morphism) and pole Ā is materially measured from the graph. The divergence
+    between A's claim and Ā's reality is a first-class, honest-null reading. It
+    extends the P19 read_poles surface; it does NOT mint a parallel registry
+    (the rejected AuthoredChannel/CoherenceRegistry factoring — DRY: one inputs
+    type, one registry, one write path). The material σ stays the primitive
+    anchor; the authored reading rides ALONGSIDE it and adjudicates nothing while
+    shadow.
+
+    PHASE-1 CONCRETE SCOPE (what actually gets built, after P19 lands):
+      (1) PoleSample.sigma_authored: Balance | None = None
+          — the authored claim on the SAME [-1,1] axis as the material sigma.
+            None = pure-material pole (III.11 honest null). Additive optional;
+            P19's existing pole_measures produce identical samples.
+      (2) PoleReading.divergence: DivergenceReading | None = None
+          — a PURPOSE-NAMED frozen type (NOT a reused GapReading — see fix #2):
+              DivergenceReading(gap: Intensity, claim: Balance, claim_side: Literal["a","b"])
+            gap = |sigma_authored - sigma| / 2 (distance from coherence);
+            claim = sigma_authored (the authored position);
+            claim_side derived via the existing _pole_side tie rule with a stored
+            prior-claim map (see fix #3 — the inertia term is NOT free).
+            None = pure-material pole.
+      (3) BoundOpposition.shadow: bool = False
+          — a shadow binding is READ by read_poles but SKIPPED by step() (one
+            `continue` at the head of the per-binding loop). It never enters
+            OppositionState / opposition_states / principal-contradiction ranking
+            — so a NEW opposition can be added without moving any stepped/pinned
+            output. This is what makes byte-identical safety STRUCTURAL, not
+            incidental. Existing bindings default shadow=False → stepped exactly
+            as before.
+      (4) A concrete shadow binding `chauvinism_internationalism` (shadow=True):
+            A  = normalize(CLASS_ANALYSIS - NATIONAL_CHAUVINISM) from a new
+                 `doctrine_tags` Mapping added to GraphInputs, sourced from
+                 DoctrineTree.calculate_tags() — the DoctrineTree's OWN structure,
+                 II.9/VIII.9 (never an edge); calculate_tags() UNCHANGED so the
+                 III.12 PatSoc golden trace stays pinnable.
+            Ā  = a new _chauvinism_internationalism_poles pole_measure over live
+                 SOLIDARITY-edge incidence per org — SEE FIX #4: this proxy is
+                 SOLIDARITY-in-general, NOT yet internationalism; it ships
+                 explicitly labelled "solidarity proxy, internationalism-
+                 unproven", and the FIRST job of the divergence reading is to let
+                 the sentinel measure whether the proxy tracks internationalism
+                 before any promotion. Cross-border-restricted SOLIDARITY (only
+                 edges crossing a sovereign/national boundary — genuinely
+                 inter-national) is the eventual target, dormant until multi-
+                 sovereign / nationwide scenarios exist.
+      (5) New per-org shadow attrs (sigma_internationalism, divergence_chauvinism)
+          behind an ORGANIZATION_COMPUTED_FIELDS gate — SEE FIX #5: this gate does
+          NOT exist today (only SOCIAL_CLASS_COMPUTED_FIELDS and
+          SOVEREIGN_COMPUTED_FIELDS do), so it is NET-NEW work: a new frozenset in
+          models/world_state.py AND its from_graph() exclusion filter, both wired
+          and verified, before the attrs can round-trip without breaking goldens.
+      Honest-null semantics (III.11), enumerated in the DT program doc, are
+      preserved verbatim from P19's shadow-attr discipline: None divergence =
+      UNPOSITIONED; a genuine measured zero is a real sample; de-position writes
+      an explicit None; an absent entity is skipped — never a fabricated 0.0.
+
+    DEFERRED until a SECOND real authored<->material instance exists (rule of
+    three — do NOT build over one imagined instance):
+      - the GATING_LEDGER constant + CI guard test ("you cannot silently gate");
+      - the generalized `sentinels/divergence/` seventh sentinel (Phase 1 uses a
+        MINIMAL DT-specific advisory check or extends the P19 partition sentinel
+        in place, not a new generalized sentinel package);
+      - the explicit SHADOW->GATING lifecycle state machine.
+    These are the RIGHT machinery once generality is real; building them now
+    would validate them against a set of size one.
+
+    CRITIQUE FIXES folded into the design (applied regardless of scope):
+      #1 (over-abstraction) — resolved by the "design general, build concrete"
+         scope above.
+      #2 (Amendment-S framing) — a shadow opposition is SKIPPED from step(), so
+         it has NO MOTION; the divergence is therefore an OBSERVATIONAL STATIC, a
+         derived reading pinned to an opposition's poles, NOT "a derived reading
+         of an opposition MOTION". We do not claim Amendment-S motion-compliance
+         for the shadow path (P19's shadow attrs never did either). Amendment S
+         is respected the honest way: the static reading adjudicates nothing; the
+         material sigma remains the primitive; motion (step()) is untouched.
+      #3 (GapReading punning) — DO NOT overload GapReading.balance (documented
+         "signed dominance of pole B over pole A") to sometimes mean "the
+         authored claim". Introduce a purpose-named DivergenceReading(gap, claim,
+         claim_side). The claim_side tie-inertia needs a STORED prior-claim map
+         (parallel to P19's prior-side map); it is NOT "derived, not stored" as
+         the synthesis claimed.
+      #4 (material proxy misgrounding / Aleksandrov) — raw SOLIDARITY incidence
+         measures class-solidarity-in-general, not the INTER-national character
+         (a reactionary national bloc has SOLIDARITY edges too). Phase 1 ships the
+         proxy explicitly downgraded to "internationalism-unproven" and makes the
+         divergence sentinel's first measurement be whether the proxy tracks
+         internationalism; cross-border-restricted SOLIDARITY is the target once
+         multi-sovereign scenarios exist. The [-1,1] normalization is specified as
+         an explicit squashing function with a written derivation (III.12 float-
+         honesty), never an unnamed coefficient.
+      #5 (byte-identity under-scoped) — ORGANIZATION_COMPUTED_FIELDS is net-new
+         (see scope item 5); the byte-identical claim is CONDITIONAL: byte-
+         identical AFTER P19 lands, AFTER the org gate is built and verified, and
+         AFTER re-confirming the regression harness excludes pole_readings. A DoD
+         line REQUIRES an actual qa:regression run, not an argument.
+      Bootstrap circularity (the flaw that killed pure-opposition): CLEARED —
+         pole A is sourced from doctrine_tags on GraphInputs (off-graph), never
+         from a graph morphism.
+
+    GOVERNANCE: propose Amendment T (below) for BD ratification, rather than
+    ratifying ADR-only. σ now carries an authored/subjective channel alongside
+    the objective one; whether that is within the existing primitive
+    D=(A,Ā,w,T,σ) or a meaningful extension of it is the BD's call. The
+    conservative, constitutionally-faithful move ("STOP and propose an amendment
+    if a limit is touched") is to draft the observes-only clause and let the BD
+    accept or decline it at Phase-0 review.
+
+  proposed_amendment: |
+    AMENDMENT T (PROPOSED — Article VIII, observes-only; awaiting BD ratification).
+    NOT yet written into CONSTITUTION.md; the BD accepts or declines at Phase-0
+    review.
+
+      "A pole reading MAY carry an authored/subjective channel (sigma_authored)
+       alongside its material sigma. The DIVERGENCE between them is an
+       OBSERVES-ONLY reading: it is a derived static that adjudicates nothing —
+       it may not mask, route, gate, or otherwise change any tick output — until
+       explicitly promoted to a gating role through the recorded promotion
+       ceremony (regenerated byte-identical baselines + an authorizing ADR). The
+       material sigma remains the primitive dialectical anchor; the authored
+       channel never replaces it and never becomes a canonical BabylonGraph
+       morphism."
+
+    Rationale for proposing rather than assuming: sigma_authored splits σ into a
+    material and a subjective component. That is either within the already-
+    primitive D=(A,Ā,w,T,σ) (the ADR-only reading — off-graph poles are already
+    sanctioned by II.9/VIII.9, and the reading is observational like P19's
+    PoleReading) or a meaningful clarification of what σ may carry. The BD
+    adjudicates. If declined, the facility ratifies via this ADR + the program
+    docs alone; if accepted, Amendment T becomes the standing observes-only
+    guarantee that keeps every future authored<->material instance honest.
+
+  three_instance_mapping:
+    p19_emergent_class_partition:
+      role: "NULL instance / pure-material base case (must not break)"
+      A_authored: "none — both poles are material net-flow sigma"
+      A_bar_material: "capital_labor + wage net-flow poles (already shipped)"
+      sigma_authored: "always None"
+      divergence: "None — agreement is the seeded-role<->derived-cell crosswalk in the partition sentinel"
+      fits: "yes, as the base case (pure-material path == today)"
+    epistemic_horizon:
+      role: "REFUSED — one-sided / material-only, scoped out of Phase 1 honestly"
+      A_authored: "none — no off-graph claim exists; M_r is a VIEW of material state, not a claim about it"
+      A_bar_material: "compute_epistemic_horizon -> M_r/I_c/vision_state (already shipped)"
+      sigma_authored: "always None"
+      divergence: "degenerate/null — no authored side"
+      fits: "no (partial) — named forward seam only"
+      forward_seam: >
+        EH's Phase-3 'Desert falsification' (server serves a FALSIFIED display M_r
+        that diverges from the engine's TRUE M_r) IS a genuine authored<->material
+        divergence — but on the DISPLAY/RENDER layer (server->client), not the
+        dialectical-opposition layer. Modeled as its own web-bridge mechanism; its
+        deliberate III.11 carve-out (plausible-but-false values with no UI tell,
+        proposal ruling #2) is a recorded exception, NOT this facility's authored
+        pole.
+    doctrine_tree:
+      role: "the only genuine authored<->material instance (and currently UNBUILT)"
+      A_authored: "NATIONAL_CHAUVINISM vs CLASS_ANALYSIS from DoctrineTree.calculate_tags() (off-graph, II.9/VIII.9)"
+      A_bar_material: "_chauvinism_internationalism_poles over live SOLIDARITY incidence (solidarity proxy, internationalism-UNPROVEN)"
+      sigma_authored: "normalize(CLASS_ANALYSIS - NATIONAL_CHAUVINISM), explicit squashing fn"
+      divergence: "DivergenceReading(gap=|sigma_authored-sigma|/2, claim=sigma_authored, claim_side via _pole_side); the lie = claim_side 'b'/safe while material side 'a'/collapsed"
+      shadow_attrs: "sigma_internationalism, divergence_chauvinism on org nodes (behind net-new ORGANIZATION_COMPUTED_FIELDS)"
+      fits: "yes — canonical Option-C shadow instance"
+
+  byte_identical_conditional: |
+    Byte-identical across all 5 qa:regression scenarios with UNMODIFIED baselines
+    is CONDITIONAL on ALL of:
+      - P19 Phase-1 has landed in the spine (this extends its surface);
+      - ORGANIZATION_COMPUTED_FIELDS frozenset + from_graph() filter built and
+        verified (the shadow attrs are otherwise round-tripped into goldens);
+      - the regression harness is re-confirmed to exclude pole_readings;
+      - the new chauvinism_internationalism binding is shadow=True (never steps).
+    DoD REQUIRES an actual `mise run qa:regression` run showing 5/5 byte-identical
+    — not the argument that it should be. Any byte move => STOP.
+
+  not_byte_identical_deferred_to_gating: |
+    Requires regenerated dense+sparse baselines + an R-PROOF divergence doc +
+    (once built) a GATING_LEDGER entry:
+      - flipping the opposition to shadow=False so it steps and emits OppositionState;
+      - any downstream consumer reading divergence to mask/route/gate behavior
+        (e.g. the DT fascism 'wormhole' transition requiring material corroboration);
+      - adding a `feeds` Coupling that changes downstream measurement.
+
+  constraints_honored: ["I.19", "II.9/VIII.9", "III.11", "III.12", "determinism"]
+  amendment_s_note: >
+    Amendment S (statics derived, motion primitive) is honored the HONEST way: the
+    shadow divergence is an observational STATIC that adjudicates nothing and does
+    not claim to be a reading of opposition MOTION (a shadow binding never steps).
+    The material sigma remains the primitive; motion is untouched. (Correcting the
+    synthesis's self-contradictory Amendment-S 'motion' claim.)
+
+  deferred_promotion_bookkeeping: |
+    - Formal promotion of the DT and EH proposals from project/research/ into
+      numbered project/programs/ docs is deferred to the spine consolidation (the
+      program-number space 18-20 is on unmerged branches; assigning 21/22 here
+      would orphan). The proposals in project/research/ are updated in place with
+      the Divergence-Channel integration as this ADR's program-doc deliverable.
+    - The P19 program doc (project/programs/19-*.md, unmerged) gets a one-line
+      note that read_poles/PoleReading/sentinels/partition are the seed the
+      Divergence Channel generalizes — added when P19 folds into the spine.
+
+  consequences:
+    positive:
+      - "One documented facility (north star) serves P19 (pure-material base case), DT (authored<->material), and a named EH Phase-3 display-layer seam."
+      - "Phase-1 is minimal and byte-identical-safe by construction (three additive fields + a shadow binding that never steps)."
+      - "DoctrineTree.calculate_tags() unchanged -> III.12 PatSoc golden trace (CLASS_ANALYSIS 3->1->0->-3, NATIONAL_CHAUVINISM 0->2->5->7->9) stays pinnable."
+      - "The divergence catches the 'safe on paper, collapsed in the base' lie the flat-counter design could not express."
+      - "Rule-of-three discipline: no speculative ledger/sentinel/FSM machinery built over a single unbuilt instance."
+    negative_or_gated:
+      - "DT — the only real instance — is unbuilt; Phase-1 cannot ship until the DoctrineTree program builds calculate_tags(), and until P19 lands and the org computed-fields gate is built."
+      - "The SOLIDARITY material proxy is internationalism-UNPROVEN; the sentinel must earn that claim before any promotion; cross-border restriction waits on multi-sovereign scenarios."
+      - "EH is a partial fit — scoped out, forward-compatible only (display-layer seam, not this facility's authored pole)."
+      - "Promotion to gating moves baselines; requires an R-PROOF divergence doc + regenerated baselines + (once built) a GATING_LEDGER entry."
+
+  follow_ups:
+    - "BD: accept or decline Amendment T (Article VIII, observes-only)."
+    - "Sequencing: land P19 Phase-1 in the spine; then build ORGANIZATION_COMPUTED_FIELDS; then the three additive fields + the concrete DT shadow binding."
+    - "The DoctrineTree program must build calculate_tags() before the DT instance can read a real authored pole."
+    - "Formal project/programs/ promotion of DT + EH at spine consolidation."

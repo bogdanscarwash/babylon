@@ -1,0 +1,8 @@
+tick 106: GENOCIDE: Atomized surplus population cannot resist. The system eliminates what it cannot exploit or control.
+  because: the atomized surplus population cannot resist — average organization 0.06 falls short of the revolution threshold 0.50
+tick 105: CONTROL RATIO CRISIS: 710 prisoners exceed 440 control capacity (1:4 ratio). The carceral state cannot contain the surplus.
+  because: triggered by class_decomposition, {absent} ticks earlier (carceral/control-ratio-delay, carceral-arc-conformance.bscn:18,138) — the prisoners exceed what the enforcers can hold
+tick 53: CLASS DECOMPOSITION: Labor aristocracy collapses. 90 become guards/cops. 510 fall into the precariat.
+  because: triggered by superwage_crisis, {absent} ticks earlier (carceral/decomposition-delay, carceral-arc-conformance.bscn:17,137)
+tick 1: SUPERWAGE CRISIS: Labor aristocracy wealth collapsing. Super-wages cannot sustain the privileged stratum.
+  because: the labor aristocracy's wealth clears the approaching, not dying, gate — super-wages can no longer sustain the privileged stratum

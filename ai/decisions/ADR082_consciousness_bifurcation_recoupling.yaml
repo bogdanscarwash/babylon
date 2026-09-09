@@ -1,0 +1,163 @@
+ADR082_consciousness_bifurcation_recoupling:
+  status: "accepted"
+  date: "2026-07-18"
+  title: "Consciousness recoupling: a positive wage-value balance redirects agitation to the chauvinist pole instead of gating it to zero — the first ceremony to move all 5 regression baselines"
+  context: |
+    Origin: owner ruling #13 (null-play flat axes) escalated by a
+    primary-source theory pass ratified 2026-07-18. Spec:
+    `docs/superpowers/specs/2026-07-18-consciousness-recoupling-design.md`.
+
+    THE DEFECT. Under null play every political axis was flat for 520 ticks.
+    Root cause chain, each link verified by reading the code rather than
+    inferred:
+
+    1. `agitation` was a pure first difference (`consciousness_routing.py`),
+       so material steady state drove it to zero and the unconditional decay
+       erased the remainder.
+    2. Commit `948e46ad` added a LEVEL term reading the wage opposition's
+       `balance`. Commit `7289df75` corrected it from a global class-MEAN to a
+       per-class read — the mean was an unweighted average of an INTENSIVE
+       quantity (`_mean_asymmetry`, catalog.py:144), a variance error under
+       this repo's own extensive/intensive type theorem.
+    3. The REMAINING defect, and the subject of this ADR: that term fired only
+       when `balance < 0`. Under the ratified theory `balance > 0` for every
+       wage-earning class inside US borders. So the term was correct and fired
+       NEVER — verified empirically: minimum per-class balance across all 5
+       canonical scenarios was ~1e-6, floor 0.0, never negative over 60 ticks.
+
+    The engine was discarding the entire positive branch, which is where the
+    whole domestic population lives. That is the complete explanation of
+    null-play flatness.
+
+    THE THEORY. Three primary sources converge independently on the same
+    correction — a positive balance does not suppress political energy, it
+    REDIRECTS it:
+      - Emmanuel, *Unequal Exchange* p.180: "the antagonism between rich and
+        poor nations is likely to prevail over that between classes." His
+        worked cases of positive-balance workers (British dockers defending
+        empire, the US labour aristocracy, Algeria's European proletariat,
+        pp.180-184) are all instances of HIGH political energy aimed at
+        chauvinism.
+      - MIM, `mim-lumpen.txt:206-217`: falling class status plus settler
+        national consciousness routes to fascism AS THE RULE; the
+        revolutionary exception requires CROSS-NATIONAL proximity
+        (`:190-193`).
+      - Amin, LWV p.127: the social-democratic compromise is the political
+        form of the bribe and was "difficult to imagine without the
+        imperialist rent."
+
+    Note the citation discipline recorded in the spec (§5a): the PER-CLASS
+    reading of the balance is licensed by COPE (*Divided World Divided Class*
+    p.204: "value-added (s+v) is less than wages (v)"; p.174), and is his
+    distinguishing thesis. Amin (LWV p.92) and Emmanuel (UE pp.162-164) both
+    DECLINE it. Do not attribute the per-worker reading to them.
+  decision: |
+    `balance` SIGN determines the DIRECTION of agitation; |balance| determines
+    its INTENSITY. The sign no longer gates whether agitation exists.
+
+    1. NEW FORMULA `sustained_exploitation_magnitude(balance, sensitivity,
+       chauvinist_peak_location, chauvinist_peak_falloff)` in
+       `formulas/sustained_exploitation.py`:
+
+           magnitude = -balance * sensitivity                       balance < 0
+                     = sensitivity * exp(-(balance - peak)^2
+                                          / (2 * falloff^2))       balance >= 0
+
+       The negative branch is byte-identical to the superseded
+       `sustained_exploitation_agitation`, which REMAINS exported and
+       unchanged (its tests still pin it).
+
+       The positive branch is a Gaussian bump peaking INSIDE (0,1), not at an
+       endpoint — deliberately non-monotonic. This encodes MIM
+       `mim-internal-colonies.txt:521-525`: the MARGINAL labour aristocracy,
+       "scrambling for crumbs," is "the most reactionary of all," while the
+       securely bribed are complacent. Any formula rising smoothly as
+       balance -> 0+ contradicts the theory.
+
+    2. `route_agitation_to_ternary` gains `chauvinist_pressure: float = 0.0`,
+       subtracted from `effective_solidarity` and clamped to [0,1]. Positive
+       balance produces chauvinist pressure, biasing the existing bifurcation
+       toward the fascist pole. Default 0.0 preserves every existing caller
+       byte-identically.
+
+    3. THREE NEW COEFFICIENTS in `GameDefines.consciousness` (regenerated into
+       `defines.yaml`; no hardcoded values):
+       - `chauvinist_peak_location = 0.1` — the precarious margin
+       - `chauvinist_peak_falloff = 0.3` — at balance 0.9 a securely bribed
+         class sits at ~3% of peak intensity
+       - `chauvinist_pressure_scale = 1.0` — pass-through; balance is already
+         normalized to [-1,1] against effective_solidarity's [0,1]
+
+    4. CORRECTNESS FIX found during implementation, not in the original scope:
+       the "no wage/value data this tick" fallback set
+       `class_wage_balance = 0.0`. That was inert under the old sign-gate but
+       sits NEAR THE GAUSSIAN PEAK under the new curve — it would have
+       silently fabricated near-peak chauvinist agitation for classes with no
+       recorded wage transaction. Absence of data now yields a hard 0.0 for
+       both magnitude and chauvinist_pressure, branched explicitly rather than
+       flowing through the curve.
+  consequences: |
+    CEREMONY — BASELINES REGENERATED. This is the first change in the
+    programme to genuinely move regression baselines (spine ceremony #1,
+    commit d14d2c42, and the Task-23 whitelist, 29ca28ab, both came back
+    byte-identical). Procedure per the ADR078 promotion pattern.
+
+    Per-scenario drift, ALL FIVE scenarios, direction and magnitude declared:
+      - two_node             tick 1  C001_national_identity  0.5 -> 0.5000266615916917  (+2.67e-5)
+      - imperial_circuit     tick 1  C004_national_identity  0.6 -> 0.6022703631...      (+2.27e-3)
+      - starvation           tick 1  C004_national_identity  0.6 -> 0.6022703630171798   (+2.27e-3)
+      - glut                 tick 1  C004_national_identity  0.6 -> 0.6022703632145479   (+2.27e-3)
+      - fascist_bifurcation  tick 1  C004_national_identity  0.6 -> 0.6022703631536578   (+2.27e-3)
+    `defines_hash` changed on all five (three new coefficients added).
+
+    THE DIRECTION IS THE RESULT. Every movement is in `national_identity` —
+    the chauvinist axis — and NONE in `class_consciousness`. Bribed classes
+    accumulate national identity rather than revolutionary consciousness,
+    emergently from the material base rather than by a scripted rule. This is
+    what Emmanuel, MIM and Amin each independently predict, and it is the
+    acceptance criterion the spec was written against (§9.1).
+
+    Verified independently by the controller (not merely reported by the
+    implementer): commit `13cfe419`, `git status --short tests/baselines/`
+    empty before regeneration, `mise run qa:regression` re-run from a clean
+    tree reproducing all five drifts.
+
+    STILL OPEN — this ADR does not close the null-play arc:
+      - the Phi-collapse gate (spec §4). NOTE spec §9a: the channel ALREADY
+        EXISTS (`rent_component = max(0.0, -imperial_rent_delta) * ...`,
+        consciousness_routing.py:83) but is DELTA-gated, so it dies at steady
+        state exactly as `agitation` did. De-delta it; do not rebuild it.
+      - `visibility` (consciousness_routing.py:104) is hardcoded to 0.0 at the
+        ideology call site; `compute_reification_buffer` (:130) has ZERO
+        production consumers. Both are built, tested, unconnected.
+      - the repression -> consciousness edge (StruggleSystem @16 already runs
+        before Consciousness @17 — ordering correct, edge not drawn)
+      - the national axis as an OppositionRegistry entry, with segmentation
+        modelled as a RELATION (owner ruling, spec §10.2)
+      - the five sentinels (spec §7), each to be mutation-validated
+    Coefficients are Cope-grounded for the resting balance (+0.13, spec §6)
+    but the three chauvinist-curve coefficients above remain PROVISIONAL and
+    are declared as such here rather than shipped silently.
+
+    DECONFLICTION: `refactor/vol3-money-scissors` is docs-only (2 commits, 542
+    lines of spec, zero source). It does NOT touch
+    `calculate_wealth_asymmetry_balance`, `w_paid`/`v_produced`, or NodeType,
+    so this design is unaffected. Both lines plan an ADR078-style ceremony;
+    these MUST be serialized — this one lands first, vol3 rebases onto the new
+    baselines before running its own delta analysis. Note vol3's U6
+    independently identified the SAME intensive-aggregation defect class in
+    `_mean_profit_rate` (unweighted -> capital-weighted mean), making three
+    instances across classes, space, and capitals.
+  alternatives_considered: |
+    - DEFINES-ONLY RETUNE: rejected. No coefficient makes a sign-gated driver
+      register a branch it structurally discards.
+    - KEEP THE GATE, ADD A SEPARATE FASCIST CHANNEL: rejected as redundant.
+      The bifurcation mechanism already exists and already routes +1/-1; a
+      parallel channel would duplicate it and violate DRY.
+    - SMOOTH MONOTONIC POSITIVE BRANCH: rejected on theory. MIM
+      `mim-internal-colonies.txt:521-525` makes the marginal aristocracy the
+      MOST reactionary; a monotonic curve inverts that.
+    - PER-CLASS `is_segmented` BOOLEAN: rejected (spec §10.2). Emmanuel's
+      noncompetition criterion is RELATIONAL — pools are noncompeting with
+      respect to each other — so a node attribute could not state segmented
+      FROM WHAT. Segmentation belongs in the OppositionRegistry.

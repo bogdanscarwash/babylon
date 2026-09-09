@@ -1,0 +1,20 @@
+meta:
+  version: 1.0.0
+  description: >
+    Fixture index for bsl-lint's namespace-unique (a) integration test.
+    ADR901_gamma is deliberately OMITTED (file-with-no-index-entry RED
+    case); ADR902_orphan is deliberately PRESENT with no backing file
+    (index-key-with-no-file RED case).
+decisions:
+  ADR900_alpha:
+    title: 'fixture alpha'
+    status: accepted
+    date: '2026-08-18'
+  ADR900_beta:
+    title: 'fixture beta'
+    status: accepted
+    date: '2026-08-18'
+  ADR902_orphan:
+    title: 'fixture orphan — no backing file'
+    status: accepted
+    date: '2026-08-18'

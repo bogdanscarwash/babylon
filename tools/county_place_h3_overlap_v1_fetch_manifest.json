@@ -1,0 +1,11 @@
+{
+  "contract": "CountyPlaceH3OverlapV1",
+  "version": 1,
+  "entries": [
+    {
+      "url": "https://www2.census.gov/geo/tiger/TIGER2023/COUNTY/tl_2023_us_county.zip",
+      "dest": "tiger/county/tl_2023_us_county.zip",
+      "sha256": "692e12c30c83adcaabdbac0d3954fafa55e1c89a24b36d95e72e02dff938652e"
+    }
+  ]
+}

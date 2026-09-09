@@ -1,0 +1,150 @@
+ADR219_exact_arithmetic_intrinsic_rider_train:
+  status: "accepted"
+  date: "2026-08-22"
+  title: "The exact-arithmetic intrinsic rider train — sqrt/round-half-even/min/max/abs/clamp join the declarable set (Director ruling 2026-08-22, in-session: 'i also approve adding exp/log/sqrt into BSL as formal mechanisms rather than trying to jerry-rig solutions cleverly, lets systematically get these in a principled way into our scripting language', and of #591 item 2: 'i approve of those as well, those are important and we will need them moving forward i believe if not needing them already'). Dispositions: ADR188 Row 6's sqrt fallback rider TAKEN (the measure-preferred branch still governs the platform-fit call site; the rider governs the language), Row 3's ratified-but-unlanded round-half-even housekeeping rider LANDED (D70 resolved), Rows 4/5's 'no rider' dispositions for abs and min/max SUPERSEDED on #591 item 2's accumulated port evidence (Director directive 2026-08-15, 'my top BSL-improvement candidate on accumulated evidence'). All six cross via IEEE-754 exactly-specified operations — correctly-rounded sqrt, roundTiesToEven, comparison/copysign arithmetic — so the pinned soft-float libm and §4.3 golden-vector clause are DECLINED per name, the D97 disposition shape, recorded explicitly in §3.10's normative paragraphs rather than silently omitted. E-EVAL-044 (IntrinsicOutOfDomain) minted, next free E-EVAL number at allocation time per the register's standing rule. DECLARABLE_INTRINSICS 4 → 10; kernel_signature rows for all six; KernelIntrinsicHost dispatch arms with the pinned comparison rule (never f64::min/f64::max — first argument wins on a ±0.0 tie, bit-pinned); spec §3.10 enumeration + normative-table rows + slate marks for Rows 3-6 + §2.7's declarable-set sentence + §4.6's allocation paragraph + §6.2 family 22's vector extension + D-register rows D226/D227/D228; the pre-existing kernel_signature doc staleness (exp/log 'not yet dispatchable', false since #576 Task 2) repaired in passing."
+  context: |
+    The Community port's c07 landed the first content declaration of `log`
+    (#693, D210's one-ulp libm-vs-glibc divisor note). The Director's morning
+    question (2026-08-22): does BSL itself or its tooling (tree-sitter, LSP)
+    need expansion? The exploration answer, verified against the tree: exp/log
+    were ALREADY formal kernel-provided intrinsics (the #576 intrinsic-host
+    train — pinned soft-float libm 0.2.16 + golden vectors, §3.10's cap,
+    intrinsic_host.rs's KernelIntrinsicHost); the content-side `(intrinsic log
+    …)` declaration is the mechanism working as designed (§2.7: content
+    declares what the kernel provides, so typecheck and fuel bounds stay
+    computable from content alone), not a jerry-rig. The genuine language gap
+    was `sqrt` — adjudicated at ADR188 Row 6 as "preferred: re-derive as a
+    measure; fallback: a rider" — plus `round-half-even`, ratified by Row 3
+    but never landed (D70's "recorded, not resolved"; it still refused at
+    load, e.g. floor_intrinsic_e2e.rs's pre-ADR219 refusal leg). #591 item 2
+    had separately reopened min/max/abs/clamp on accumulated port evidence
+    (every pack reinventing them as nested ifs), sequenced by its own
+    directive "after the class-surface port train completes"; the Director's
+    2026-08-22 approval in this train supersedes that sequencing for the
+    intrinsic four only — #591's five OTHER items (the docs pattern, edge-attr
+    seeding, scenario-declaration sharing, scientific-notation literals, the
+    storable real type) remain their own train under their own sequencing.
+
+    The one-ulp D210 divergence is the doctrine context: AGENTS.md's
+    behavioral-contracts rule ("libm transcendentals (exp, log) do NOT
+    reproduce across languages — cross-implementation checks need an explicit
+    tolerance policy with a written derivation") is exactly why the six new
+    names were confined to IEEE-754 exactly-specified operations, where no
+    cross-implementation divergence exists to policy over. Approach B
+    (transcendental-route sqrt: pinned libm + golden vectors) was presented
+    and rejected in the design review as over-engineering against the
+    Director's stated bar: there is no platform divergence on a correctly-
+    rounded operation to pin against. Approach C (fold in #591-2 wholesale +
+    the #646 floor co-load landmine) was rejected as scope creep; #646 is an
+    orthogonal loader duplicate-declaration matter (E-LOAD-001 on co-load of
+    territory.bsl/decomposition.bsl/vitality-attrition.bsl's byte-identical
+    floor decls), and the `:cost` provenance paragraph now names it as such.
+
+    **ADR number verification (this document's own), per the index's own
+    collision-lesson convention:** origin/dev tops at ADR217 at filing time;
+    ADR218 is earmarked for the Community port train's Task-12 handoff
+    (planned, not yet written); `gh pr list --state open` shows no PR adding
+    an ADR218/ADR219/ADR22x file. ADR219 is therefore the first genuinely-free
+    number that leaves the earmark undisturbed.
+  decision: |
+    **1. Six names join the declarable set (4 → 10), each under its cited
+    authority.** `sqrt` (Row 6 fallback taken), `round-half-even` (Row 3
+    landed, D70 resolved), `min`/`max`/`abs`/`clamp` (Rows 4/5 superseded on
+    #591 item 2's evidence, Director-approved 2026-08-22). The transcendental
+    roster stays the R10 pair alone; `sigmoid` stays prohibited outright
+    (E-LOAD-024); `tanh`/`entropy`/`renormalize`/`trunc` stay outside, and the
+    c13 family's rewritten assertion remains the standing proof the set never
+    silently grows.
+
+    **2. Signatures (kernel_signature, load-checked per §2.7's E-LOAD-020).**
+    `sqrt`/`round-half-even`/`abs`: (real) → real. `min`/`max`: (real real) →
+    real. `clamp`: (real real real) → real. No Int demotion anywhere in the
+    six — the Real→Int crossing remains `floor`'s alone (ADR188 Row 2). The
+    round-half-even signature reading (Real→Real, nearest integer VALUE within
+    the binary64 lane, the granularity-general form declined as speculative)
+    is a workforce reading recorded as D227, open to Director correction.
+
+    **3. The pinned comparison rule (D228).** `min`/`max`/`clamp` are built
+    from IEEE-754 comparisons alone, deliberately NEVER `f64::min`/`f64::max`
+    — those are licensed to return either zero on a ±0.0 tie and to propagate
+    NaN, the implementation-defined shape this codebase exists to exclude.
+    Landed rule: the second argument wins only on a strict comparison; on an
+    equal comparison (+0.0 vs -0.0 included — they compare equal) the FIRST
+    argument wins, bit-pinned by the host suite. `clamp(x, lo, hi)` composes
+    `min(max(x, lo), hi)`; `lo > hi` is E-EVAL-044, never a silent swap of the
+    bounds (§3.3's silent-clamping prohibition — this intrinsic is the legible
+    saturation that prohibition points at); an in-range `x` returns
+    bit-identical. `abs(-0.0)` is `+0.0`, the canonical zero, bit-pinned.
+
+    **4. Errors.** E-EVAL-044 `IntrinsicOutOfDomain` minted (the §4.6
+    register's next-free rule): sqrt's negative argument, clamp's lo > hi, and
+    a non-finite argument to any of the six (defense in depth under §4.3's
+    unrepresentability law — refused at the INPUT so no arm silently
+    propagates NaN or fails downstream with the wrong code, the eval_log
+    precedent). Reusing E-EVAL-043 was considered and rejected — the six are
+    not transcendentals, and a code named TranscendentalOutOfDomain would lie
+    about half its referents. NO result-side re-check exists on any of the
+    six: each maps finite inputs to a finite, exactly-specified result
+    (unlike exp's E-EVAL-014 overflow lane), so a result guard would be dead
+    code — the omission is dispositioned explicitly in §3.10's paragraphs and
+    D226, not accidental. Malformed calls (wrong arity, a non-Real-lane
+    argument) stay uncoded EvalError::plain, the eval_floor precedent
+    (no-invented-codes; §3.1/§3.3's no-coercions rule).
+
+    **5. The lockstep invariant is now a test, not a hope.**
+    `every_declarable_intrinsic_has_a_signature_row_and_a_dispatch_arm`
+    (intrinsic_host.rs) shapes arguments from kernel_signature itself and
+    proves no member of the cap falls through to the "no intrinsic registered"
+    fallthrough — so a future cap widening that forgets either half fails the
+    suite. This replaces the retired negative probe
+    (floor_intrinsic_e2e.rs's "ratified but still refuses the whole load"
+    round-half-even leg, whose premise ADR219 dissolved) with the positive
+    form of the same property; the e2e leg now proves round-half-even LOADS
+    AND RUNS through run_once, the production seam.
+
+    **6. Constitutional posture (AE(ii)).** The six express the closed algebra
+    more safely and mint no new mathematics: sqrt/min/max/abs/clamp/round-
+    half-even are arithmetic, not theory; the doctrine gate (§3.10 gate 2,
+    "can this be re-derived as a measure instead?") is untouched, and Row 7's
+    per-site exp dispositions (three of five frozen-estate exp call sites are
+    imposed sigmoids under ADR173) remain Director review when those systems
+    port — unchanged by this train.
+  consequences: |
+    - Content may now declare and call any of the six with
+      first-declarer-sets-the-:cost (the §3.10 `:cost` provenance rule);
+      #591 item 2's pack-simplification follow-up (replacing nested-if
+      reinventions with min/max/abs/clamp) is a declared cleanup, NOT folded
+      into this train, per that issue's own "declared follow-up" note.
+    - The Lifecycle port's blocked half (lifecycle.bsl:31-65 — pareto_alpha
+      and siblings waiting on out-of-[0,1] coefficient representation, #492)
+      and any future pack needing a norm or a bound now have the intrinsics
+      the W10 spike record wished for; whether that unblocks #492's specific
+      coefficient question is that issue's own call, not assumed here.
+    - #591 item 2 is DISCHARGED by this train (the other five items stand);
+      #591 should be annotated accordingly rather than closed (items 1, 3, 4,
+      5, 6 remain).
+    - ADR188 Rows 4/5's dispositions are superseded and Row 6's is taken;
+      ADR188 itself is NOT superseded as a document — the row-level
+      supersessions are recorded in §3.10's slate table marks and D226-D228.
+    - #646 (the floor co-load landmine) is unaffected and still open; the
+      `:cost` provenance paragraph and the table's floor row now name the
+      triplication honestly.
+    - D70 is resolved (round-half-even landed); the register row is not
+      edited — history stays immutable; D227 records the resolution and the
+      signature reading.
+    - `rust/clippy.toml`'s `f64::sqrt` disallowed-method row is REMOVED (its
+      recorded reason — "ADR188 Row 6 ELIMINATED it" — is superseded by this
+      ADR); the file's own comment block now records the reversal. The call is
+      direct (`f64::sqrt`), the `f64::floor` precedent: a
+      `babylon_kernel::transcendental` wrapper was considered and rejected —
+      the pinned-libm seam exists for operations where platform libms DIVERGE,
+      and a correctly-rounded operation has no divergence to route around, so
+      a wrapper would pin nothing the standard does not already pin
+      (approach-B over-engineering, against the Director's stated bar).
+      `f64::tanh`'s ban stands (ADR188 Row 8's elimination is untouched).
+  supersedes: []
+  related:
+    - ADR173_audit_and_stops_dispositions
+    - ADR176_director_rulings_batch_gds_dispositions
+    - ADR188_intrinsic_rider_slate_dispositions
+    - ADR213_intrinsic_host_train

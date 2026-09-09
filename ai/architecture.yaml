@@ -1,1104 +1,501 @@
-# Babylon System Architecture
-# How the pieces fit together
-
+---
 meta:
-  version: "4.1.0"
-  updated: "2025-12-30"
-  status: "Epoch 1 → 2 Bridge architecture defined"
-  epoch_compatibility: "1 → 2 Bridge"
-  changes:
-    - "4.1.0: Documented DearPyGui as Presentation Layer technology"
-  related_docs:
-    - "ai/database-spec.yaml - SQLite schema and DDL"
-    - "ai/rag-architecture.yaml - ChromaDB collections"
-    - "ai/formulas-spec.yaml - Mathematical formulas"
-    - "ai/ui-wireframes.yaml - DearPyGui layout specification"
-    - "ai/dpg-patterns.yaml - DearPyGui development patterns"
-
-# =============================================================================
-# THE EMBEDDED TRINITY
-# =============================================================================
-
-core_architecture:
-  name: "The Embedded Trinity"
-  principle: "Three-layer local system, no external servers"
-
-  layers:
-    ledger:
-      purpose: "Rigid, material state (persistent storage)"
-      technology: "SQLite + Pydantic"
-      location: "src/babylon/data/"
-      schema_spec: "ai/database-spec.yaml"
-      contains:
-        - "babylon.db: SQLite database (social_classes, territories, relationships)"
-        - "persistence.py: PersistenceService (hydration/dehydration)"
-        - "Pydantic models for validation"
-      tables:
-        social_classes: "SocialClass entities with IdeologicalProfile columns"
-        territories: "Territory entities (Layer 0 spatial substrate)"
-        relationships: "Directed edges (exploitation, solidarity, etc.)"
-      data_flow: "Hydration Pattern - load at startup, persist on save, NO DB I/O during tick"
-      key_insight: "Database is cold storage; simulation runs in RAM"
-
-    topology:
-      purpose: "Fluid, relational state (hot computation environment)"
-      technology: "Graph Abstraction Layer (GraphProtocol)"
-      approach: "Interface-First"
-      principle: |
-        The architecture defines a GraphProtocol interface, NOT a specific graph library.
-        The substrate is an implementation detail: BabylonGraph (rustworkx core,
-        Amendment L / ADR052) is both the GraphProtocol implementation and the
-        nx-compat authoring API. Backends can be swapped without changing any
-        System code, as long as they implement the GraphProtocol interface.
-      implementations:
-        current:
-          adapter: "BabylonGraph (the graph IS the protocol implementation)"
-          backing: "rustworkx PyDiGraph core + insertion-ordered payload/adjacency mirrors"
-          epoch: "Amendment L (2026-07-03) — replaced NetworkXAdapter (deleted)"
-          location: "src/babylon/engine/graph.py"
-          note: "Insertion-ordered mirrors reproduce NetworkX's iteration contract (III.7 determinism, byte-identical baselines)"
-        future:
-          adapter: "ColumnarAdapter"
-          backing: "DuckDB + DuckPGQ (persistent, OLAP-optimized)"
-          epoch: "Epoch 3+ (Platform)"
-          location: "src/babylon/engine/adapters/columnar_adapter.py (planned)"
-          benefits:
-            - "Native Parquet support for large-scale scenarios"
-            - "SQL/GQL hybrid queries for analytics"
-            - "Persistent graph state without custom serialization"
-      locations:
-        protocol: "src/babylon/engine/graph_protocol.py"
-        primary: "src/babylon/models/world_state.py (to_graph/from_graph)"
-        formulas: "src/babylon/systems/formulas.py"
-        engine: "src/babylon/engine/simulation_engine.py"
-      contains:
-        - "GraphProtocol - interface abstraction for graph operations"
-        - "WorldState.to_graph() - DiGraph of entities and relationships"
-        - "Relationship edges (EXPLOITATION, SOLIDARITY, REPRESSION)"
-        - "Node attributes (wealth, ideology, organization, p_*)"
-        - "Edge attributes (value_flow, tension, solidarity_strength)"
-      data_flow: "Hydrated from Ledger → mutated during tick → dehydrated back"
-      key_insight: "Graph + Math = History (ADR011)"
-      runtime_constraint: "No database queries during tick - pure RAM operations"
-      see_also: "ai/topology-system.yaml (GraphProtocol specification)"
-
-  # -------------------------------------------------------------------------
-  # THE FRANCHISE MODEL: Agents vs Infrastructure
-  # -------------------------------------------------------------------------
-  franchise_model:
-    name: "The Franchise Model"
-    status: "DESIGN PRINCIPLE"
-    epoch_compatibility: "Epoch 2+"
-
-    principle: |
-      Strategic Agents (e.g., Revolutionary Organization, State) are DISTINCT
-      from Graph Nodes (e.g., Cells, Territories, SocialClasses). Agents are
-      "CPUs" that MANIPULATE the "Data" (Graph) via the GraphProtocol interface.
-
-      This is like a franchise business:
-      - The Franchise Owner (Agent) manages multiple locations (Nodes)
-      - The Owner is NOT a location - they operate FROM OUTSIDE the graph
-      - Multiple Owners can compete for control of the same Nodes
-
-    separation:
-      agents:
-        description: "Strategic actors with resources, goals, and decision-making"
-        examples:
-          - "Revolutionary Organization (Player) - manages cells, has war_chest"
-          - "State (AI opponent) - controls territories, has legitimacy & budget"
-          - "Rival Organizations (future: multiplayer or AI factions)"
-        location: "NOT in the graph - external entities"
-
-      infrastructure:
-        description: "Material reality represented as graph nodes and edges"
-        examples:
-          - "SocialClass nodes - wealth, ideology, organization"
-          - "Territory nodes - heat, rent_level, profile"
-          - "Edges - SOLIDARITY, EXPLOITATION, TENANCY, ADJACENCY"
-        location: "The Graph (Topology layer)"
-
-    implications:
-      - "Agents query/mutate the graph via GraphProtocol (Epoch 2+)"
-      - "In Epoch 1, this separation is conceptual (no formal Agent class yet)"
-      - "Fog of War applies to Agents, not to the Graph (Graph is Truth)"
-      - "Multiple Agents can have different views of the same Graph"
-
-    archive:
-      purpose: "Semantic history and theory"
-      technology: "pgvector in Postgres (replaced ChromaDB, spec-037)"
-      location: "src/babylon/intelligence/rag/ + persistence/pgvector_store.py"
-      contains:
-        - "Historical events"
-        - "Theoretical texts (MLM-TW corpus) - NOT YET POPULATED"
-        - "Past game states for narrative"
-      data_flow: "AI queries for context, generates narrative from state changes"
-      key_insight: "AI observes and narrates, never controls mechanics"
-      current_status: "pgvector store live (spec-037); corpus ingestion remains partial"
-
-    superstructure:
-      purpose: "AI narrative layer (Phase 3)"
-      technology: "Observer Pattern + LLM Provider"
-      location: "src/babylon/ai/"
-      contains:
-        - "NarrativeDirector - SimulationObserver implementation"
-        - "DialecticalPromptBuilder - context hierarchy assembly"
-        - "LLM Provider (planned) - Claude/Ollama/DeepSeek abstraction"
-      data_flow: "Observes state → Queries RAG → Builds prompt → Calls LLM → Outputs narrative"
-      key_insight: "Read-only access to simulation state (ADR003)"
-      current_status: "Observer + RAG complete, LLM integration pending (Sprint 3.3)"
-
-# =============================================================================
-# EPOCH 2 BRIDGE: THE DUAL PIPELINE
-# =============================================================================
-# APPROVED_ARCHITECTURE - Prepares for Epoch 2 (The Game) without breaking Epoch 1
-
-dual_pipeline:
-  name: "The Shadow Layer"
-  epoch_compatibility: "1 → 2 Bridge"
-  status: "APPROVED_ARCHITECTURE"
-  created: "2025-12-26"
-
-  principle: |
-    The current Synopticon Dashboard is a "God View" connected directly to WorldState (Truth).
-    This MUST remain for Epoch 1 (The Demonstration) to function.
-
-    Epoch 2 (The Game) requires a PLAYER VIEW with Fog of War.
-    We achieve this by adding a SHADOW LAYER - NOT by refactoring the UI.
-
-    Two pipelines run in parallel:
-    - Pipeline A (Truth): Feeds the Synopticon Dashboard (God View)
-    - Pipeline B (Subjectivity): Feeds the future Game UI (Player View)
-
-  presentation_layer:
-    name: "The Cockpit"
-    technology: "React + deck.gl web app on :5173 (Program 12, 2026-07-10; the DearPyGui Synopticon and src/babylon/ui were retired 2026-05-10)"
-    status: "LIVE — THE frontend"
-    implementation:
-      main: "src/frontend/ (vite app; web/ Django bridge serves the API)"
-      design: "design/ canon + .design-sync/ (claude.ai/design pipeline)"
-      tests: "src/frontend vitest + e2e playwright suites"
-    aesthetic: "Bunker Constructivism - Cold War industrial surveillance theme"
-    features:
-      - "Native 1460x820 viewport with 60 FPS updates"
-      - "Real-time telemetry plots (Imperial Rent, LA Stability)"
-      - "4-class wealth trend chart with color-coded series"
-      - "Event log with EventType color coding"
-      - "Narrative feed from NarrativeDirector observer"
-      - "Key metrics panel (consciousness gap, wealth gap, tension)"
-      - "STEP/PLAY/PAUSE/RESET simulation controls"
-    specs:
-      wireframes: "ai/ui-wireframes.yaml"
-      patterns: "ai/dpg-patterns.yaml"
-
-  constraint: |
-    WorldState is ALWAYS the Source of Truth.
-    PlayerShadowState is ALWAYS a derivative view.
-    The Shadow may contain stale, approximate, or FALSIFIED data.
-    The Truth never lies; the Shadow may deceive.
-
-  pipelines:
-    pipeline_a_truth:
-      name: "Pipeline A: Truth (God View)"
-      description: "The retired Epoch 1 architecture - DearPyGui Synopticon Dashboard (superseded by the Cockpit, Program 12)"
-      flow: |
-        SimulationEngine
-             │
-             ▼
-         WorldState (Source of Truth)
-             │
-             ▼
-         Synopticon Dashboard (DearPyGui)
-      characteristics:
-        accuracy: "100% - sees TRUE state of all attributes"
-        latency: "0 - instant access to current tick"
-        masking: "None - no fog of war"
-        purpose: "Development, debugging, demonstration"
-      implementation:
-        technology: "DearPyGui (native GPU-accelerated)"
-        existing: true
-        location: "src/babylon/ui/dpg_runner.py"
-        changes_required: "None - preserve exactly as-is"
-
-    pipeline_b_subjectivity:
-      name: "Pipeline B: Subjectivity (Player View)"
-      description: "The Epoch 2 extension - new infrastructure"
-      flow: |
-        SimulationEngine
-             │
-             ▼
-         WorldState (Source of Truth)
-             │
-             ▼
-         FogOfWarSystem (Filter)
-             │
-             ▼
-         PlayerShadowState (Subjective View)
-             │
-             ▼
-         Game UI (Player View) [FUTURE]
-      characteristics:
-        accuracy: "Variable - depends on Mass_Receptivity"
-        latency: "May be stale - intel decays over time"
-        masking: "Yes - Desert territories show FALSIFIED data"
-        purpose: "Gameplay with fog of war"
-      implementation:
-        existing: false
-        spec: "ai/fog-of-war.yaml"
-        new_components:
-          - "FogOfWarSystem (filters WorldState → PlayerShadowState)"
-          - "PlayerShadowState (subjective snapshot)"
-          - "IntelligenceSystem (calculates Mass_Receptivity, Intel_Confidence)"
-
-  diagram: |
-    ┌─────────────────────────────────────────────────────────────────────────┐
-    │                         THE DUAL PIPELINE                               │
-    │                    (Epoch 1 → 2 Bridge Architecture)                    │
-    └─────────────────────────────────────────────────────────────────────────┘
-
-    ┌──────────────────┐
-    │ SimulationEngine │
-    │   (run_tick())   │
-    └────────┬─────────┘
-             │
-             ▼
-    ┌──────────────────┐
-    │   WorldState     │◄───────────────────────────────────────┐
-    │ (Source of Truth)│                                        │
-    │                  │   IMMUTABLE • ACCURATE • CANONICAL     │
-    └────────┬─────────┘                                        │
-             │                                                  │
-             ├─────────────────────────────────────┐            │
-             │                                     │            │
-             ▼                                     ▼            │
-    ┌──────────────────┐                  ┌──────────────────┐  │
-    │  PIPELINE A      │                  │  PIPELINE B      │  │
-    │  (Truth)         │                  │  (Subjectivity)  │  │
-    │                  │                  │                  │  │
-    │  WorldState      │                  │  FogOfWarSystem  │  │
-    │       │          │                  │       │          │  │
-    │       ▼          │                  │       ▼          │  │
-    │  Debug UI        │                  │ PlayerShadow-    │  │
-    │  (God View)      │                  │ State            │  │
-    │                  │                  │       │          │  │
-    │  EPOCH 1         │                  │       ▼          │  │
-    │  PRESERVED       │                  │  Game UI         │  │
-    │                  │                  │  (Player View)   │  │
-    │                  │                  │                  │  │
-    │                  │                  │  EPOCH 2         │  │
-    │                  │                  │  NEW             │  │
-    └──────────────────┘                  └──────────────────┘  │
-                                                                │
-    The Debug UI ALWAYS reads from WorldState (Truth).          │
-    The Game UI ALWAYS reads from PlayerShadowState (Shadow).   │
-    Shadow is DERIVED from Truth, never the reverse.────────────┘
-
-  player_shadow_state:
-    name: "PlayerShadowState"
-    purpose: "Subjective view of the world from player's perspective"
-    characteristics:
-      derivative: "Always generated FROM WorldState, never independent"
-      mutable: "Can be stale (intel decay), approximate (Mud), or FALSE (Desert)"
-      per_territory: "Each territory has its own Intel_Confidence"
-
-    data_quality_states:
-      water:
-        condition: "Mass_Receptivity >= 0.8"
-        intel_confidence: "0.9-1.0"
-        data: "TRUE - matches WorldState"
-        description: "Base area - masses are your eyes"
-
-      mud:
-        condition: "0.2 <= Mass_Receptivity < 0.8"
-        intel_confidence: "0.4-0.7"
-        data: "APPROXIMATE - ±0.2 margin of error"
-        description: "Contested - partial information"
-
-      desert:
-        condition: "Mass_Receptivity < 0.2"
-        intel_confidence: "0.1-0.3"
-        data: "MASKED - may be FALSIFIED"
-        description: "Hostile - locals deceive you"
-
-    generation_process:
-      trigger: "After each tick, or on demand"
-      steps:
-        - "1. Read WorldState (Truth)"
-        - "2. For each territory, calculate Mass_Receptivity"
-        - "3. For each territory, calculate Intel_Confidence"
-        - "4. For Desert territories, apply MASKING (generate plausible false data)"
-        - "5. For Mud territories, apply APPROXIMATION (add noise)"
-        - "6. Store result as PlayerShadowState"
-
-    integration_with_debug_ui:
-      principle: "Debug UI displays BOTH states for development"
-      display:
-        - "Left panel: WorldState (Truth) - always accurate"
-        - "Right panel: PlayerShadowState (Shadow) - what player would see"
-        - "Diff highlight: Show which values are masked/approximate"
-      benefit: "Developers can verify fog of war is working correctly"
-
-  fog_of_war_system:
-    name: "FogOfWarSystem"
-    type: "Observer System (read-only on WorldState)"
-    spec: "ai/fog-of-war.yaml"
-    responsibilities:
-      - "Calculate Mass_Receptivity per territory"
-      - "Calculate Intel_Confidence per territory"
-      - "Generate PlayerShadowState from WorldState"
-      - "Apply masking for Desert territories"
-      - "Apply approximation for Mud territories"
-      - "Track intel decay over time"
-
-    does_not_modify: "WorldState (Truth is immutable)"
-    produces: "PlayerShadowState (new object each tick)"
-
-  implementation_notes:
-    phase_1:
-      name: "Infrastructure Only"
-      scope: "Add FogOfWarSystem and PlayerShadowState models"
-      ui_changes: "None - Debug UI unchanged"
-      purpose: "Prepare backend for Epoch 2"
-
-    phase_2:
-      name: "Debug Integration"
-      scope: "Add Shadow display to Debug UI (side-by-side comparison)"
-      ui_changes: "Add optional Shadow panel"
-      purpose: "Verify fog of war calculations"
-
-    phase_3:
-      name: "Game UI"
-      scope: "Build separate Game UI that reads from PlayerShadowState"
-      ui_changes: "New UI entirely"
-      purpose: "Epoch 2 player experience"
-
-# =============================================================================
-# EPOCH 2 BRIDGE: DATA PERSISTENCE STRATEGY
-# =============================================================================
-# How Triple-Layer Traits are stored without schema migrations
-
-trait_persistence:
-  name: "Triple-Layer Trait Persistence"
-  status: "APPROVED_ARCHITECTURE"
-  epoch_compatibility: "1 → 2 Bridge"
-  created: "2025-12-26"
-
-  principle: |
-    The Triple-Layer Trait System (flags, modifiers, properties) must be
-    persisted WITHOUT requiring schema migrations. We achieve this by
-    storing all three layers as JSON/JSONB in a single column.
-
-  storage_strategy:
-    sqlite:
-      column: "traits_json TEXT DEFAULT '{}'"
-      format: |
-        {
-          "flags": ["URBAN", "HAS_CADRE", "STRIKE_READY"],
-          "modifiers": {
-            "chauvinism": 0.78,
-            "entitlement": 0.62,
-            "volatility": 0.45
-          },
-          "properties": {
-            "custom_name": "Oakland Proletariat",
-            "doctrine_alignment": "insurrectionist"
-          }
-        }
-
-    postgresql:
-      column: "traits JSONB DEFAULT '{}'"
-      note: "JSONB allows indexed queries on trait contents"
-
-  query_patterns:
-    sqlite:
-      find_by_flag: |
-        SELECT * FROM social_classes
-        WHERE json_extract(traits_json, '$.flags') LIKE '%HAS_CADRE%';
-
-      find_by_modifier_threshold: |
-        SELECT * FROM social_classes
-        WHERE CAST(json_extract(traits_json, '$.modifiers.chauvinism') AS REAL) > 0.5;
-
-      find_by_property: |
-        SELECT * FROM territories
-        WHERE json_extract(traits_json, '$.properties.doctrine_alignment') = 'insurrectionist';
-
-    postgresql:
-      find_by_flag: |
-        SELECT * FROM social_classes
-        WHERE traits->'flags' ? 'HAS_CADRE';
-
-      find_by_modifier_threshold: |
-        SELECT * FROM social_classes
-        WHERE (traits->'modifiers'->>'chauvinism')::float > 0.5;
-
-      find_by_property: |
-        SELECT * FROM territories
-        WHERE traits->'properties'->>'doctrine_alignment' = 'insurrectionist';
-
-  pydantic_integration:
-    model_definition: |
-      class BaseEntity(BaseModel):
-          id: str
-          name: str
-          # ... existing fields ...
-
-          # Triple-Layer Traits
-          flags: Set[str] = Field(default_factory=set)
-          modifiers: Dict[str, float] = Field(default_factory=dict)
-          properties: Dict[str, Any] = Field(default_factory=dict)
-
-    serialization: |
-      # Pydantic handles JSON serialization automatically
-      entity.model_dump_json()  # Includes flags, modifiers, properties
-
-      # For database storage, we may want just the traits
-      traits_json = json.dumps({
-          "flags": list(entity.flags),
-          "modifiers": entity.modifiers,
-          "properties": entity.properties
-      })
-
-    hydration: |
-      # When loading from database
-      traits_data = json.loads(row.traits_json)
-      entity = SocialClass(
-          id=row.id,
-          name=row.name,
-          flags=set(traits_data.get("flags", [])),
-          modifiers=traits_data.get("modifiers", {}),
-          properties=traits_data.get("properties", {})
-      )
-
-  migration_strategy:
-    existing_entities: "Get empty flags={}, modifiers={}, properties={}"
-    backward_compatible: true
-    no_schema_changes: "traits_json column is additive, not replacement"
-    rollback: "Simply ignore traits_json column if reverting to Epoch 1"
-
-# =============================================================================
-# EPOCH 2 BRIDGE: DEBUG UI PATTERNS (GOD VIEW)
-# =============================================================================
-# How the Debug Dashboard displays Triple-Layer Traits
-
-debug_ui_patterns:
-  name: "Generic Trait Inspector"
-  status: "APPROVED_ARCHITECTURE"
-  epoch_compatibility: "1 → 2 Bridge"
-  created: "2025-12-26"
-
-  principle: |
-    The Debug Dashboard (God View) must display Triple-Layer Traits in a way
-    that is:
-    1. Visually distinct per layer type
-    2. Editable for testing
-    3. Filterable for debugging
-    4. Consistent across all entity types
-
-  component_specification:
-    flags_display:
-      component_name: "FlagBadges"
-      render_as: "Horizontal row of colored chips/badges"
-      styling:
-        background: "Semi-transparent colored pill"
-        text: "Uppercase, monospace font"
-        colors:
-          identity: "Blue (URBAN, RURAL, LABOR_ARISTOCRACY)"
-          state: "Green (HAS_CADRE, STRIKE_READY)"
-          warning: "Yellow (DEFECTION_RISK, FASCIST_DRIFT)"
-          fog_of_war: "Red (MASKED, HOSTILE, STALE)"
-      interaction:
-        click: "Toggle flag on/off (for testing)"
-        right_click: "Filter view to entities with this flag"
-      example_render: "[URBAN] [HAS_CADRE] [STRIKE_READY]"
-
-    modifiers_display:
-      component_name: "ModifierBars"
-      render_as: "Vertical list of progress bars with values"
-      styling:
-        layout: "Label (left-aligned) | Bar (center) | Value (right-aligned)"
-        bar_fill: "Gradient based on value (green → yellow → red)"
-        value_format: "2 decimal places"
-        font: "Monospace for alignment"
-      color_coding:
-        low: "Green (0.0 - 0.3)"
-        medium: "Yellow (0.3 - 0.7)"
-        high: "Red (0.7 - 1.0)"
-        unbounded: "Purple (values > 1.0)"
-      interaction:
-        click: "Open inline editor for value"
-        drag: "Adjust value by dragging bar"
-      example_render: |
-        chauvinism:        ████████░░ 0.78
-        entitlement:       ██████░░░░ 0.62
-        volatility:        ████░░░░░░ 0.45
-        cadre_discipline:  ███████░░░ 0.71
-
-    properties_display:
-      component_name: "PropertyList"
-      render_as: "Collapsible key-value list"
-      styling:
-        layout: "Key: Value (monospace)"
-        key_style: "Bold, muted color"
-        value_style: "Normal weight, syntax highlighting for types"
-        nested: "Indent + collapse arrow for nested objects"
-      interaction:
-        click_key: "Copy key to clipboard"
-        click_value: "Open inline editor"
-        collapse: "Toggle visibility of nested content"
-      example_render: |
-        ▼ properties
-          custom_name: "Oakland Proletariat"
-          doctrine_alignment: "insurrectionist"
-          last_action_tick: 42
-
-  layout_specification:
-    entity_detail_panel:
-      location: "Right sidebar of Debug Dashboard"
-      sections:
-        - "Header: Entity ID, Name, Type"
-        - "Core Fields: wealth, ideology, organization (existing)"
-        - "FLAGS: FlagBadges component"
-        - "MODIFIERS: ModifierBars component"
-        - "PROPERTIES: PropertyList component"
-      collapsible: true
-      default_state: "FLAGS and MODIFIERS expanded, PROPERTIES collapsed"
-
-    diagram: |
-      ┌─────────────────────────────────────────────────┐
-      │ Entity: Oakland Proletariat (C_001)             │
-      │ Type: SocialClass | Role: Proletariat           │
-      ├─────────────────────────────────────────────────┤
-      │ CORE FIELDS:                                    │
-      │   wealth: 0.45    ideology: -0.23    org: 0.67  │
-      ├─────────────────────────────────────────────────┤
-      │ FLAGS:                                          │
-      │   [URBAN] [HAS_CADRE] [STRIKE_READY]           │
-      ├─────────────────────────────────────────────────┤
-      │ MODIFIERS:                                      │
-      │   chauvinism:        ████████░░ 0.78           │
-      │   entitlement:       ██████░░░░ 0.62           │
-      │   volatility:        ████░░░░░░ 0.45           │
-      │   cadre_discipline:  ███████░░░ 0.71           │
-      ├─────────────────────────────────────────────────┤
-      │ ▶ PROPERTIES (click to expand)                  │
-      └─────────────────────────────────────────────────┘
-
-  filtering_capability:
-    purpose: "Allow filtering entity list by trait values"
-    filter_types:
-      by_flag: "Show entities that have/don't have specific flag"
-      by_modifier_range: "Show entities where modifier is in range"
-      by_property_value: "Show entities with specific property value"
-    example_filters:
-      - "flags contains DEFECTION_RISK"
-      - "modifiers.chauvinism > 0.5"
-      - "properties.doctrine_alignment == 'insurrectionist'"
-
-# =============================================================================
-# DIRECTORY STRUCTURE
-# =============================================================================
-
-directory_map:
-  # Rewritten by Program 14 (Correspondence, 2026-07-11). The tree now
-  # states the constitutional layering directly; import-linter enforces it:
-  # kernel < models/formulas < topology < domain < persistence < engine.
-  # The Observer (intelligence) narrates and never mutates (II.5).
-  src/babylon/:
-    kernel/:
-      purpose: "Layer 0 — framework abstractions; imports nothing above itself (contract)"
-      key_files:
-        - "event_bus.py + interceptor.py: Event/EventBus + EventInterceptor/BlockedEvent"
-        - "system_base.py / system_protocol.py: SystemBase ABC + System protocol (ContextType)"
-        - "graph_protocol.py: GraphProtocol — the substrate interface"
-        - "services.py: ServicesProtocol (DI surface; concrete container lives in engine)"
-        - "database.py: DatabaseProtocol (impl lives in persistence)"
-        - "metrics.py: MetricsCollectorProtocol (collector impl in metrics/)"
-        - "log.py, math.py, retry.py, exceptions.py, schema_registry.py, sim_clock.py"
-    config/: "GameDefines (39 category sub-models) + BaseConfig + logging. Canonical player-editable coefficients: src/babylon/data/defines.yaml"
-    models/: "Frozen Pydantic state — WorldState (to_graph/from_graph), entities/, components/, enums/, constrained types"
-    formulas/: "Pure math (~56 functions / 17 modules); no engine imports (contract)"
-    protocols/: "Simulation control/state protocols (models-layer: they type against models.snapshots)"
-    topology/:
-      purpose: "Trinity pillar 2 — the graph substrate (rustworkx, Amendment L)"
-      key_files:
-        - "graph.py: BabylonGraph / BabylonUGraph"
-        - "adapters/: query/aggregation mixins, subgraph filter/view, compat seam"
-        - "graph_views.py, graph_algorithms.py"
-    domain/:
-      purpose: "The game's subject matter — material base between models/formulas and the engine; never imports the engine (contract)"
-      subdirs:
-        economics/: "Value, imperial rent, tensors (ValueTensor4x3), MELT, gamma, throughput, tensor_hierarchy/Leontief, protocol_kit"
-        dialectics/: "Lawverian oppositions + contradiction algebra (Amendment K)"
-        organizations/: "Org types + consciousness tendency modifier (F7 survivor)"
-        institution/: "spec-040 institution package"
-        bifurcation/: "Crisis routing — fascism (+1) vs revolution (−1)"
-        geography/: "Terrain, H3/R8 hex mesh, internet capacity, Natural Earth (formerly infrastructure/)"
-    intelligence/:
-      purpose: "Trinity pillar 3 — the Observer (II.5: AI narrates, the engine adjudicates)"
-      subdirs:
-        ai/: "NarrativeDirector, prompt builder, personas, LLM provider, judge"
-        rag/: "Chunking/embedding retrieval over the Archive (pgvector, spec-037)"
-    persistence/:
-      purpose: "Trinity pillar 1, runtime half — never imports the engine (contract)"
-      key_files:
-        - "postgres_runtime/: PostgresRuntime (spec-037) + schema DDL"
-        - "runtime_db.py: SQLite RuntimeDatabase (both satisfy RuntimePersistence)"
-        - "database.py: DatabaseConnection (SQLAlchemy impl of kernel DatabaseProtocol)"
-        - "pgvector_store.py, delta.py, envelope.py, hex_state.py, protocols.py"
-    reference/: "Trinity pillar 1, read-only half — reference-DB access (BEA lookup, schema). Self-contained: imports no other babylon package"
-    metrics/: "MetricsCollector implementation (its protocol lives in kernel.metrics)"
-    ooda/: "Organizational OODA machinery — attention/sparrow.py (path pinned by Constitution I.21), state_ai/, action effects"
-    engine/:
-      purpose: "Pure transformation (II.6) — the only layer that composes everything below"
-      key_files:
-        - "simulation_engine.py: SimulationEngine + step(); _DEFAULT_SYSTEMS is the source of truth for system order"
-        - "services.py: ServiceContainer (concrete DI; constructs persistence lazily at the composition factory)"
-        - "systems/: the 26 Systems in materialist-causality order"
-        - "actions/: verb resolvers (VERB_RESOLVERS)"
-        - "headless_runner/: the composition root (engine + persistence wired here)"
-        - "observers/: SessionRecorder (canonical replay seam) + jsonl_recorder.py"
-        - "formula_registry.py, factories.py, scenarios.py, hydration/"
-    data/: "Seeds + defines.yaml (constitutionally named path) + game JSON + schemas source"
-    schemas/: "JSON Schema envelopes (core/, entities/, collections/)"
-  src/frontend/: "The cockpit — THE web frontend (React + deck.gl, :5173, Program 12)"
-  web/: "Django bridge + API; game/engine_bridge.py is the sole sanctioned engine importer (AST-guarded)"
-  tests/: "unit/ integration/ property/ contract/ scenarios/ benchmark/ + baselines/ (dense goldens are III.12 behavioral artifacts, never LFS)"
-
-data_flows:
-  overview: |
-    The Embedded Trinity uses a "Hydration Pattern" for data flow.
-    The Engine does NOT query SQL during simulation - it loads SQL into
-    BabylonGraph (RAM), mutates it, and dumps it back. This ensures:
-    1. Deterministic simulation (no I/O latency or race conditions)
-    2. Fast tick execution (pure RAM operations)
-    3. Clean separation between storage and computation
-
-  # ---------------------------------------------------------------------------
-  # PHASE 1: HYDRATION (Wake)
-  # ---------------------------------------------------------------------------
-  hydration:
-    name: "Wake"
-    when: "Game startup, load save, new game"
-    input: "SQLite tables (social_classes, territories, relationships)"
-    output: "WorldState (Pydantic) → BabylonGraph"
-
-    process:
-      service: "PersistenceService.load_state()"
-      steps:
-        - "1. Query SQLite tables (SELECT * FROM social_classes, territories, relationships)"
-        - "2. Validate rows against Pydantic models (SocialClass, Territory, Relationship)"
-        - "3. Construct WorldState from validated entities"
-        - "4. Convert WorldState.to_graph() → BabylonGraph"
-        - "5. Initialize ChromaDB connection for Archive layer"
-
-    sql_operations:
-      social_classes: "SELECT * FROM social_classes"
-      territories: "SELECT * FROM territories"
-      relationships: "SELECT * FROM relationships"
-
-    pydantic_validation: |
-      Each row is validated through the corresponding Pydantic model:
-      - SocialClass: Validates IdeologicalProfile (class_consciousness, national_identity, agitation)
-      - Territory: Validates profile enum, heat bounds, foreign key references
-      - Relationship: Validates edge_type enum, solidarity_strength bounds
-
-    output_structure:
-      worldstate: "Immutable Pydantic model with all entities"
-      graph: "BabylonGraph with nodes and edges"
-
-  # ---------------------------------------------------------------------------
-  # PHASE 2: SIMULATION (Work)
-  # ---------------------------------------------------------------------------
-  simulation:
-    name: "Work"
-    when: "Each tick of the game loop"
-    environment: "Pure RAM (BabylonGraph — rustworkx core)"
-    constraint: "NO DATABASE I/O DURING TICK"
-
-    process:
-      implementation: "step(WorldState, SimulationConfig) → WorldState"
-      location: "src/babylon/engine/simulation_engine.py"
-      steps:
-        - "1. WorldState already in RAM (from hydration or previous tick)"
-        - "2. Require a BabylonGraph (raw nx no longer supported)"
-        - "3. Create ServiceContainer with config (no DB reference)"
-        - "4. Run Systems in historical materialist order"
-        - "5. Convert graph back to new WorldState"
-        - "6. Return new immutable WorldState (old state unchanged)"
-
-    systems_execution:
-      order: "Historical materialist causality (ADR032)"
-      systems:
-        - "1. VitalitySystem: The Drain (subsistence burn) + Grinding Attrition (probabilistic mortality) + The Reaper (extinction)"
-        - "2. TerritorySystem: Update heat, check eviction thresholds"
-        - "3. ProductionSystem: Generate value from labor and biocapacity (scales by population)"
-        - "4. SolidaritySystem: Transmit consciousness along SOLIDARITY edges"
-        - "5. ImperialRentSystem: Extract surplus value along EXPLOITATION edges"
-        - "6. MetabolismSystem: Ecological depletion and regeneration (consumption scales by population)"
-        - "7. SurvivalSystem: Calculate P(S|A) and P(S|R)"
-        - "8. StruggleSystem: Agency layer (George Floyd Dynamic)"
-        - "9. ConsciousnessSystem: Apply ideological routing (agitation → consciousness/identity)"
-        - "10. ContradictionSystem: Accumulate tension, check rupture thresholds"
-
-    # Mass Line Refactor: Agent-as-Block Population Dynamics
-    mass_line_refactor:
-      description: "1 agent = 1 demographic block (not 1 person)"
-      new_fields:
-        population: "int - Block size (default=1 for backward compat)"
-        inequality: "Gini [0,1] - Intra-class inequality coefficient"
-      phase_1_vitality:
-        grinding_attrition_formula: |
-          marginal_wealth = per_capita_wealth × (1 - inequality)
-          mortality_rate = max(0, (consumption_needs - marginal_wealth) / consumption_needs)
-          deaths = floor(population × mortality_rate × base_mortality_factor)
-        events:
-          - "POPULATION_DEATH: Probabilistic deaths from inequality"
-          - "ENTITY_DEATH: Full extinction (population=0)"
-      phase_2_physics:
-        production_scaling: |
-          produced_value = (base_labor_power × population) × bio_ratio
-          # 1000 workers produce 1000× what 1 worker produces
-        metabolism_scaling: |
-          total_consumption = (s_bio + s_class) × population
-          # Only active entities count (dead blocks don't consume)
-        causal_chain:
-          - "VitalitySystem: Deaths reduce population"
-          - "ProductionSystem: Smaller population = less production"
-          - "MetabolismSystem: Smaller population = less consumption"
-          - "Equilibrium: Population stabilizes at carrying capacity"
-
-    physics_calculations:
-      pure_math: |
-        All calculations are pure functions on graph state:
-        - Wealth transfers along edges
-        - Consciousness drift via formulas
-        - Heat accumulation/decay
-        - Probability updates
-      no_side_effects: |
-        Systems mutate the graph in place but never:
-        - Query the database
-        - Write to disk
-        - Make network calls
-        - Access external state
-
-    services:
-      container: "ServiceContainer aggregates dependencies (no DatabaseConnection during tick)"
-      config: "SimulationConfig (frozen, 11 parameters)"
-      formulas: "FormulaRegistry (12 hot-swappable formulas)"
-      event_bus: "EventBus for event publishing (in-memory)"
-
-  # ---------------------------------------------------------------------------
-  # PHASE 3: DEHYDRATION (Sleep)
-  # ---------------------------------------------------------------------------
-  dehydration:
-    name: "Sleep"
-    when: "Save game, auto-checkpoint, session end"
-    input: "WorldState (post-tick Pydantic model)"
-    output: "SQLite tables updated via INSERT OR REPLACE"
-
-    process:
-      service: "PersistenceService.save_state()"
-      steps:
-        - "1. Extract entities from WorldState (classes, territories, relationships)"
-        - "2. Convert Pydantic models to row dicts"
-        - "3. Execute INSERT OR REPLACE for each table"
-        - "4. Commit transaction (atomic write)"
-        - "5. Optionally update ZEITGEIST collection in ChromaDB"
-
-    sql_operations:
-      social_classes: |
-        INSERT OR REPLACE INTO social_classes
-        (id, name, role, wealth, class_consciousness, national_identity, agitation, ...)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ...)
-      territories: |
-        INSERT OR REPLACE INTO territories
-        (id, name, sector_type, host_id, occupant_id, profile, heat, rent_level, ...)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ...)
-      relationships: |
-        INSERT OR REPLACE INTO relationships
-        (source_id, target_id, edge_type, value_flow, tension, solidarity_strength, ...)
-        VALUES (?, ?, ?, ?, ?, ?, ...)
-
-    transaction_safety: |
-      All writes are wrapped in a transaction:
-      - BEGIN TRANSACTION
-      - [all INSERT OR REPLACE statements]
-      - COMMIT
-      On failure: ROLLBACK (database unchanged)
-
-    zeitgeist_update: |
-      Optionally append tick summary to THE_ZEITGEIST collection:
-      - Tick number
-      - Key events
-      - State vector embedding
-      - Shock value (distance from previous tick)
-
-  # ---------------------------------------------------------------------------
-  # HYDRATION CYCLE DIAGRAM
-  # ---------------------------------------------------------------------------
-  cycle_diagram: |
-    ┌─────────────────────────────────────────────────────────────────────────┐
-    │                         THE HYDRATION CYCLE                             │
-    └─────────────────────────────────────────────────────────────────────────┘
-
-    ┌──────────────┐     HYDRATE      ┌──────────────┐     SIMULATE     ┌──────────────┐
-    │   SQLite     │ ───────────────► │  WorldState  │ ───────────────► │ BabylonGraph │
-    │   (Cold)     │  load_state()    │  (Pydantic)  │   to_graph()     │   (Hot)      │
-    │              │                  │              │                  │              │
-    │ social_      │                  │ classes: []  │                  │  Nodes:      │
-    │   classes    │                  │ territories: │                  │   C001, C002 │
-    │ territories  │                  │   []         │                  │   T001, T002 │
-    │ relationships│                  │ relations: []│                  │  Edges:      │
-    └──────────────┘                  └──────────────┘                  │   C001→C002  │
-           ▲                                                            │   (exploit)  │
-           │                                                            └──────────────┘
-           │                                                                   │
-           │                                                                   │
-           │                           PHYSICS                                 │
-           │                         (Pure RAM)                                │
-           │                      No DB I/O here!                              │
-           │                                                                   │
-           │                                                                   ▼
-    ┌──────────────┐     DEHYDRATE    ┌──────────────┐     EXTRACT      ┌──────────────┐
-    │   SQLite     │ ◄─────────────── │  WorldState  │ ◄─────────────── │ BabylonGraph │
-    │   (Cold)     │  save_state()    │  (Pydantic)  │   from_graph()   │   (Hot)      │
-    │              │                  │              │                  │              │
-    │ INSERT OR    │                  │ New state    │                  │  Mutated     │
-    │ REPLACE      │                  │ (immutable)  │                  │  graph       │
-    └──────────────┘                  └──────────────┘                  └──────────────┘
-
-  # ---------------------------------------------------------------------------
-  # AI NARRATIVE FLOW (Observer Pattern)
-  # ---------------------------------------------------------------------------
-  ai_narrative:
-    principle: "AI is observer, not controller (ADR003)"
-    status: "Partially implemented - LLM call missing"
-    implementation:
-      observer: "NarrativeDirector implements SimulationObserver"
-      context: "DialecticalPromptBuilder assembles context hierarchy"
-      retrieval: "RagPipeline queries ChromaDB (currently empty)"
-      llm: "NOT YET IMPLEMENTED - Sprint 3.3"
-    steps:
-      - "Simulation.step() calls observer.on_tick(prev_state, new_state)"
-      - "NarrativeDirector detects new events in event_log"
-      - "Query RagPipeline for relevant history/theory"
-      - "Build context block: Material Conditions → RAG Context → Events"
-      - "Call LLM provider (MISSING)"
-      - "Output narrative text"
-      - "Never modify game mechanics"
-    gaps_identified:
-      - "ChromaDB has no corpus data (RAG returns empty)"
-      - "Only ContradictionSystem emits events (rupture only)"
-      - "No LLM client implementation"
-      - "No CLI runner for vertical slice demo"
-
-# =============================================================================
-# KEY INTERFACES
-# =============================================================================
-
-interfaces:
-
-  entity_to_ledger:
-    pattern: "Pydantic models validated against JSON Schema"
-    example: "Faction model → factions.json → factions.schema.json"
-
-  ledger_to_topology:
-    pattern: "JSON data → BabylonGraph nodes/edges"
-    example: "faction.dialectical_relationships → graph edges"
-
-  topology_to_archive:
-    pattern: "State changes → ChromaDB queries → narrative"
-    example: "Contradiction intensified → find similar historical events → generate description"
-
-# =============================================================================
-# CAUSAL DAG: FUNDAMENTALS → SYSTEMS → METRICS
-# =============================================================================
-# Understanding the flow from input parameters to observable outputs
-
-causal_dag:
-  description: |
-    The simulation follows a strict causal hierarchy:
-    1. FUNDAMENTALS (GameDefines) are the independent variables we control
-    2. SYSTEMS transform state according to formulas
-    3. METRICS (MetricsCollector) observe the derived outputs
-
-    This separation clarifies:
-    - What ParameterSweeper should vary (fundamentals)
-    - What MetricsCollector should observe (derived metrics)
-    - Why state variables should never be directly manipulated
-
-  diagram: |
-    ┌─────────────────────────────────────────────────────────────────────────┐
-    │                         FUNDAMENTALS (Level 1)                          │
-    │  GameDefines: extraction_efficiency, subsistence, repression,           │
-    │               organization, initial wealth, loss_aversion_lambda, k     │
-    │  Location: src/babylon/config/defines.py                                │
-    └─────────────────────────────────────────────────────────────────────────┘
-                                        │
-                                        ▼
-    ┌─────────────────────────────────────────────────────────────────────────┐
-    │                           SYSTEMS (Level 2)                             │
-    │  ImperialRentSystem, SurvivalSystem, SolidaritySystem,                  │
-    │  ConsciousnessSystem, ContradictionSystem, TerritorySystem              │
-    │  Location: src/babylon/engine/systems/                                  │
-    └─────────────────────────────────────────────────────────────────────────┘
-                                        │
-                                        ▼
-    ┌─────────────────────────────────────────────────────────────────────────┐
-    │                       STATE VARIABLES (Level 2b)                        │
-    │  WorldState: wealth[], consciousness[], tension[], imperial_rent_pool   │
-    │  Location: src/babylon/models/world_state.py                            │
-    └─────────────────────────────────────────────────────────────────────────┘
-                                        │
-                                        ▼
-    ┌─────────────────────────────────────────────────────────────────────────┐
-    │                       DERIVED METRICS (Level 3)                         │
-    │  MetricsCollector: pool_ratio, consciousness_gap, wealth_gap,           │
-    │                    global_tension, P(S|A), P(S|R), percolation_ratio    │
-    │  Location: src/babylon/engine/observers/metrics.py                      │
-    └─────────────────────────────────────────────────────────────────────────┘
-
-  levels:
-    level_1_fundamentals:
-      description: "TRUE FUNDAMENTALS - Independent variables, simulation's atoms"
-      location: "src/babylon/config/defines.py"
-      categories:
-        economy:
-          - "extraction_efficiency - Determines imperial rent (Phi)"
-          - "initial_rent_pool - Sets economic scale"
-          - "negligible_rent, negligible_subsidy - Noise filtering thresholds"
-        survival:
-          - "default_subsistence - P(S|A) baseline"
-          - "default_repression - P(S|R) denominator"
-        behavioral:
-          - "loss_aversion_lambda - Kahneman-Tversky constant"
-        topology:
-          - "gaseous_threshold (0.1) - Atomized state detection"
-          - "condensation_threshold (0.5) - Phase transition trigger"
-          - "vanguard_density_threshold (0.5) - Liquid→Solid distinction"
-        metabolism:
-          - "entropy_factor (1.2) - Extraction waste multiplier"
-          - "overshoot_threshold (1.0) - ECOLOGICAL_OVERSHOOT trigger"
-          - "max_overshoot_ratio (999.0) - Depleted biocapacity cap"
-        territory:
-          - "heat_decay_rate, eviction_heat_threshold - Carceral geography"
-        struggle:
-          - "spark_probability_scale, resistance_threshold - Agency Layer"
-      principle: "ParameterSweeper varies THESE"
-
-    level_2_systems:
-      description: "TRANSFORMATION LAYER - Pure functions on state"
-      location: "src/babylon/engine/systems/"
-      function: "step(WorldState, config, context, defines) → WorldState"
-      constraint: "No side effects, no DB I/O, no external state"
-
-    level_2b_state:
-      description: "STATE VARIABLES - Evolve over time via Systems"
-      location: "src/babylon/models/world_state.py"
-      examples:
-        - "wealth: Previous + inflows - outflows"
-        - "consciousness: dΨ = k(1 - W_c/V_c) - λΨ"
-        - "tension: Accumulates from wealth gaps"
-      constraint: "Never manipulate directly - let Systems transform them"
-
-    level_3_metrics:
-      description: "DERIVED METRICS - Observations computed from state"
-      location: "src/babylon/models/metrics.py"
-      examples:
-        - "pool_ratio = imperial_rent_pool / initial_pool"
-        - "consciousness_gap = P_w.Ψ - C_w.Ψ"
-        - "global_tension = avg(EXPLOITATION.tension)"
-        - "P(S|A) = σ(W - S)"
-      principle: "MetricsCollector observes THESE"
-
-  minimal_basis:
-    description: "The truly irreducible parameters from MLM-TW theory"
-    parameters:
-      - "Initial wealth distribution (4 values)"
-      - "Extraction rate (how fast imperial rent flows)"
-      - "Subsistence threshold (P(S|A) collapse point)"
-      - "Repression capacity (state violence)"
-      - "Solidarity edge weights (consciousness transmission)"
-    insight: |
-      Everything else derives from these + time. This is the simulation's
-      equivalent of physics' Planck constants (c, h, G).
-
-  architecture_principle: |
-    CORRECT USAGE:
-    - ParameterSweeper: Vary FUNDAMENTALS (GameDefines), observe METRICS
-    - MetricsCollector: Read-only observation of DERIVED METRICS
-    - Systems: Transform state according to formulas
-
-    ANTI-PATTERN:
-    - Directly manipulating state variables (bypasses Systems)
-    - Hardcoding metrics extraction (creates parallel paths)
-    - Mixing fundamental and derived in same interface
-
-# =============================================================================
-# EXTENSION POINTS
-# =============================================================================
-
-extension_points:
-
-  new_entity_type:
-    steps:
-      - "Add schema to schemas/entities/"
-      - "Add collection schema to schemas/collections/"
-      - "Add JSON data file to data/"
-      - "Add Pydantic model to data/models/"
-      - "Register in entity_registry.py"
-
-  new_game_mechanic:
-    steps:
-      - "Add formula to systems/formulas.py"
-      - "Register formula in formula_registry.py FormulaRegistry.default()"
-      - "Add tests with @pytest.mark.math"
-      - "Create new System class in engine/systems/ if needed"
-      - "Document in ai/ontology.yaml if new concept"
-
-  new_ai_capability:
-    steps:
-      - "Add to rag/ layer only"
-      - "Query existing state, never modify directly"
-      - "Add @pytest.mark.ai tests (separate from logic tests)"
-
-# =============================================================================
-# CROSS-CUTTING INFRASTRUCTURE
-# =============================================================================
-
-infrastructure:
-
-  logging:
-    summary: "Python stdlib logging with custom enhancements (no dependencies)"
-    related_docs:
-      - "ai/logging-architecture.yaml (comprehensive spec)"
-      - "ADR018_logging_strategy in decisions.yaml"
-    principle: "Dual output: human console + machine JSON files"
-    key_components:
-      custom_formatter: "JSONFormatter in src/babylon/utils/log.py (planned)"
-      custom_level: "TRACE (value=5) for ultra-verbose debugging"
-      rotation: "RotatingFileHandler (10MB main, 5MB errors)"
-    layer_loggers:
-      ledger: "babylon.data.* - Database/persistence events"
-      topology: "babylon.engine.* - Graph/tick events"
-      archive: "babylon.rag.* - Embedding/query events"
-      superstructure: "babylon.ai.* - Narrative/LLM events"
-
-  exceptions:
-    summary: "Unified exception hierarchy (10 classes)"
-    related_docs:
-      - "ai/exceptions-architecture.yaml (comprehensive spec)"
-      - "ADR019_exception_hierarchy in decisions.yaml"
-    location: "src/babylon/utils/exceptions.py"
-    hierarchy: |
-      BabylonError (base)
-      ├── InfrastructureError (retryable I/O)
-      │   ├── DatabaseError
-      │   └── StorageError
-      ├── ValidationError (bad input)
-      │   └── ConfigurationError
-      ├── SimulationError (fatal engine)
-      │   └── TopologyError
-      └── ObserverError (non-fatal AI)
-          └── LLMError
-    principle: "Log at handling boundary, not at raise site"
+  name: Babylon v4 architecture truth record
+  version: "4.3.0"
+  updated: "2026-09-01"
+  role: current_and_planned_architecture
+  authority: CONSTITUTION.md v4.2.0
+  interpretation: >-
+    Entries marked implemented_current describe evidence in this checkout.
+    Entries marked planned describe acceptance-gated work, not shipped behavior.
+
+control_surface:
+  portfolio_authority: Linear
+  linear:
+    project:
+      id: ebab3603-e391-4110-97e2-97422bc2037e
+      url: >-
+        https://linear.app/percy-raskova/project/babylon-v1-playable-political-economy-299b037e7feb
+    charter:
+      id: 4850c85c-1046-4a3d-8003-27cdbfebf5e0
+      url: >-
+        https://linear.app/percy-raskova/document/babylon-v4-roadmap-charter-2c67d2898306
+    owns:
+      - scope
+      - status
+      - priority
+      - dependencies
+      - horizon
+      - milestones
+      - schedule
+      - current_work
+  github:
+    role: delivery_and_history
+    owns:
+      - source_control
+      - pull_requests
+      - reviews
+      - historical_evidence
+    frozen_migration_inputs:
+      - "Project #7"
+      - "Project #8"
+
+roadmap:
+  dates_are_provisional: true
+  unlock_rule: acceptance_before_elapsed_time
+  milestones:
+    - id: G1
+      name: Governance & portfolio
+      target: "2026-09-30"
+      delivery_roots:
+        - PER-5
+    - id: G2
+      name: Executable causality
+      target: "2026-11-30"
+      delivery_roots:
+        - PER-6
+    - id: G3
+      name: PostgreSQL, H3 & Archive slice
+      target: "2027-02-28"
+      delivery_roots:
+        - PER-7
+        - PER-12
+    - id: G4
+      name: Productive & distributive circuit
+      target: "2027-04-30"
+      delivery_roots:
+        - PER-10
+        - PER-11
+        - PER-12
+    - id: G5
+      name: Player agency
+      target: "2027-06-30"
+      delivery_roots:
+        - PER-9
+    - id: G6
+      name: COVID emergence benchmark
+      target: "2027-10-31"
+      delivery_roots:
+        - PER-8
+        - PER-10
+    - id: G7
+      name: Systemic credit & 2008
+      target: "2027-12-31"
+      delivery_roots:
+        - PER-8
+        - PER-10
+    - id: G8
+      name: Representative-world v1
+      target: "2028-04-30"
+      delivery_roots:
+        - PER-13
+
+implementation_status:
+  implemented_current:
+    rust_graph_hypergraph:
+      status: implemented_current
+      scope:
+        - native_graph_elements
+        - native_hyperedges
+        - base_membership_identity
+        - canonical_state_sections
+      evidence:
+        - rust/crates/babylon-graph/src/lib.rs
+
+    bsl_pipeline:
+      status: implemented_current
+      scope:
+        - parser
+        - vocabulary_and_type_checking
+        - evaluator
+        - content_digests
+        - anchor_validation
+        - executable_phase_anchor_total_order
+        - pre_hydration_phase_composition
+        - mandatory_rule_role_and_evidence
+        - governed_production_rule_attribution_manifest
+        - restricted_role_effect_authorization
+        - rank_aware_same_tick_composition_refusals
+        - graph_execution
+      execution_truth: >-
+        The tick compiles rules onto the governed 34-system causal spine.
+        Namespace homes and explicit boundaries determine position; rule-ID
+        bytes break same-position ties only. Same-position rules execute
+        sequentially and later rules observe earlier working-copy writes. The
+        ranked analyzer rejects a non-rule form, an AST/supplied-ID mismatch,
+        or a duplicate ID before computing same-tick findings. A
+        built-in rule's declared role and evidence must match the independent
+        governed production attribution manifest; unknown mod and fixture IDs
+        remain self-declared.
+        Rules then execute against one detached working graph and buffer events
+        plus identity-free event-then-write AuditReceipts. Graph, events, and
+        receipts publish only after every rule and both hash boundaries succeed.
+      production_attribution:
+        manifest: causal_contract::GOVERNED_RULE_ATTRIBUTIONS
+        row_type: GovernedRuleAttribution
+        row_fields:
+          - rule_id
+          - role
+          - evidence
+          - owner
+          - date
+          - adr
+        adr_value: ADR224
+        known_id_drift: uncoded_typed_ContractError_GovernedAttributionMismatch
+        production_corpus_completeness: ci_exact_set_equality
+        unknown_mod_and_fixture_ids: self_declared
+      restricted_effect_allowances:
+        manifest: causal_contract::GOVERNED_EFFECT_ALLOWANCES
+        production_footprint_contract: exact_set_equality_per_non_mechanic_rule
+        allowance_keys: unique
+        dead_permissions: refused_by_ci_sentinel
+      limitation: >-
+        ExternalEvent and Intent roles have no governed effect allowances, so
+        executable shocks and player intents remain absent until Gates 4 and 5.
+        Durable subject-level provenance beyond the committed typed state remains
+        part of the Gate 3 decision-loop work.
+      absent_from_current_content:
+        - executable_shocks
+        - executable_player_actions
+      evidence:
+        - rust/crates/babylon-bsl/src/lib.rs
+        - rust/crates/babylon-bsl/src/causal_contract.rs
+        - rust/crates/babylon-tick/src/lib.rs
+
+    rust_tick_session:
+      status: implemented_current
+      scope:
+        - persistent_in_memory_graph
+        - sequential_rule_execution
+        - detached_whole_tick_working_copy
+        - buffered_event_publication
+        - atomic_audit_receipt_publication
+        - tick_increment_after_success
+      limitation: >-
+        This crate remains database-free and publishes atomically in memory.
+        babylon-persistence composes its identified result into the durable
+        marker-last transaction and restart boundary.
+      evidence:
+        - rust/crates/babylon-tick/src/session.rs
+
+    canonical_graph_hash:
+      status: implemented_current
+      scope:
+        - canonical_graph_sections
+        - unsigned_u64_big_endian_fields
+      limitation: graph_only_diagnostic_not_complete_tick_identity
+      evidence:
+        - rust/crates/babylon-graph/src/state_hash.rs
+
+    nominal_world_hash:
+      status: implemented_current
+      scope:
+        - canonical_graph_hash
+        - completed_four_week_tick
+        - node_and_hyperedge_allocator_cursors
+        - governed_phase_schedule_digest
+        - versioned_tagged_big_endian_layout
+      limitation: >-
+        This covers every auxiliary register that currently exists in the Rust
+        tick. It is not TickContentHashV1 and does not include content,
+        reference, seed, action, or durable campaign-envelope identity; the
+        replay and persistence layers add those distinct identities.
+      evidence:
+        - rust/crates/babylon-tick/src/world_hash.rs
+        - rust/crates/babylon-tick/src/session.rs
+
+    bevy_admin_viewer:
+      status: implemented_current
+      scope:
+        - tick_loop
+        - lenses
+        - event_feed
+        - administrative_material_truth_view
+      limitation: no_player_decision_loop
+      evidence:
+        - rust/crates/babylon-client/src/ui/admin.rs
+
+    rust_postgresql_persistence:
+      status: implemented_current
+      estate: sole_game_managed_postgresql_authority
+      database:
+        product: PostgreSQL
+        major: 17
+        reader_writer: v2_only
+        historical_v1_decoder: prohibited
+      scope:
+        - locked_epoch_9_predecessor_activation
+        - epoch_10_v2_preparation
+        - one_way_epoch_11_v2_activation
+        - typed_semantic_tick_rows
+        - choice_receipts_and_projected_event_provenance
+        - committed_tick_marker_last
+        - exact_restart_and_commit_ambiguity_reconciliation
+      evidence:
+        - rust/crates/babylon-persistence/src/runtime.rs
+        - rust/crates/babylon-persistence/migrations/0009_rust_persistence_activation.sql
+        - rust/crates/babylon-persistence/migrations/0010_committed_tick_v2_preparation.sql
+        - rust/crates/babylon-persistence/migrations/0011_committed_tick_v2_activation.sql
+        - contracts/rust_persistence_cutover_v2.yaml
+
+    python_reference_tools:
+      status: implemented_current
+      estate: reference_preparation_and_operator_tools
+      scope:
+        - source_acquisition
+        - deterministic_sqlite_and_parquet_builds
+        - repository_and_operator_cli
+      not_game_authority: true
+      evidence:
+        - src/babylon/reference/database.py
+        - src/babylon/reference/schema.py
+        - src/babylon/cli/__init__.py
+
+    legacy_h3_text_keys:
+      status: retired_by_epoch_9
+      estate: frozen_migration_history
+      inventory:
+        hex_cell:
+          h3_index: VARCHAR(15)
+          res6_parent: VARCHAR(15)
+          res5_parent: VARCHAR(15)
+        hex_r8_reference:
+          h3_index: VARCHAR(17)
+          parent_h3: VARCHAR(15)
+        hex_map:
+          h3_index: VARCHAR(16)
+        hex_spatial_map:
+          h3_index: TEXT
+          length_check: 15
+          eventual_primary_key:
+            - session_id
+            - h3_index
+          migrations:
+            - "0027"
+            - "0028"
+        dynamic_hex_state:
+          h3_index: TEXT
+          length_check: 15
+        python_str_models:
+          reference: str
+          snapshot: str
+          entity: str
+          persistence: str
+      evidence:
+        - src/babylon/persistence/migrations/0011_dynamic_hex_state.sql
+        - src/babylon/persistence/migrations/0027_hex_spatial_map.sql
+        - src/babylon/persistence/migrations/0028_hex_spatial_map_session_scope.sql
+        - rust/crates/babylon-persistence/migrations/0007_h3_canonical_readers.sql
+        - rust/crates/babylon-persistence/migrations/0009_rust_persistence_activation.sql
+        - contracts/h3_reader_cutover_v1.yaml
+      realized_disposition:
+        owner: PER-280/PER-281
+        target: positive BIGINT H3CellId(u64)
+        consolidated_table: babylon_ref.h3_cell
+        terminal: zero Python game-state readers and zero compatibility views
+        migration_sequence:
+          - add_keys
+          - backfill
+          - prove_count_hash_query_equivalence
+          - switch_readers_and_writers
+          - forbid_legacy_writes
+          - retire_duplicates
+
+  gate_2_delivery:
+    PER-17:
+      status: implemented_current
+      gate: G2
+      component: executable_phase_anchor_total_order
+      evidence:
+        - rust/crates/babylon-tick/src/phase_order.rs
+        - rust/crates/babylon-tick/tests/phase_anchor_conformance.rs
+        - ai/decisions/ADR222_executable_bsl_phase_order.yaml
+    PER-18:
+      status: implemented_current
+      gate: G2
+      component: >-
+        whole_tick_working_copy_rollback_and_canonical_big_endian_auxiliary_register_combined_world_hashing
+      evidence:
+        - rust/crates/babylon-graph/src/working_copy.rs
+        - rust/crates/babylon-tick/src/lib.rs
+        - rust/crates/babylon-tick/src/session.rs
+        - rust/crates/babylon-tick/src/world_hash.rs
+        - ai/decisions/ADR223_whole_tick_atomicity_world_hash.yaml
+    PER-19:
+      status: implemented_current
+      gate: G2
+      component: >-
+        bsl_causal_composition_dual_attribution_provenance_direct_write_whitelist_and_negative_outcome_write_contracts
+      evidence:
+        - rust/crates/babylon-bsl/src/causal_contract.rs
+        - rust/crates/babylon-bsl/src/same_tick_order.rs
+        - rust/crates/babylon-bsl/src/rule_pipeline.rs
+        - rust/crates/babylon-tick/src/lib.rs
+        - rust/crates/babylon-tick/tests/causal_contract_conformance.rs
+        - ai/decisions/ADR224_bsl_causal_composition_contract.yaml
+
+  gate_3_delivery:
+    PER-20:
+      status: implemented_current
+      gate: G3
+      component: durable_state_and_transactional_commit_boundary
+      writer_boundary:
+        issue: PER-48
+        status: resolved
+        adr: ADR220_rust_owned_postgresql_persistence_boundary
+      schemas:
+        - babylon_ref
+        - babylon_state
+        - babylon_meta
+      runtime_authority:
+        estate: rust
+        database: PostgreSQL
+        major: 17
+        reader_writer: v2_only
+        historical_v1_decoder: prohibited
+      includes:
+        - TickPayloadV2
+        - CommittedTickEnvelopeV2
+        - six_family_choice_receipt_envelope
+        - transactional_archive_outbox
+        - marker_last_tick_commit
+        - exact_retry_restart_reconstruction
+      historical_pre_cutover_foundation:
+        status: superseded_implementation_record
+        current_runtime_authority: none
+        artifacts:
+          - exact_schema_epoch_v4
+          - committed_tick_envelope_v1
+          - typed_eight_family_postgresql_storage_map
+      evidence:
+        - rust/crates/babylon-persistence/src/runtime.rs
+        - rust/crates/babylon-persistence/src/committed_tick_envelope.rs
+        - rust/crates/babylon-persistence/migrations/0009_rust_persistence_activation.sql
+        - rust/crates/babylon-persistence/migrations/0010_committed_tick_v2_preparation.sql
+        - rust/crates/babylon-persistence/migrations/0011_committed_tick_v2_activation.sql
+        - contracts/rust_persistence_cutover_v2.yaml
+
+  planned_gate_3:
+    PER-21:
+      status: planned
+      gate: G3
+      component: h3_bigint_migration_and_geography_consolidation
+      contract:
+        rust_identity: H3CellId(u64)
+        postgresql_identity: positive BIGINT
+        display_boundary: lowercase_hexadecimal
+        validation: pinned_h3o_CellIndex_try_from
+        signed_conversion: checked_never_as
+        hierarchy: persisted_semantic_parents_not_gapless_numeric_ranges
+        semantic_oracle: pinned_h3_pg_not_a_correctness_index_dependency
+    PER-22:
+      status: planned
+      gate: G3
+      component: fog_safe_semantic_archive_and_outbox_materializer
+    PER-23:
+      status: planned
+      gate: G3
+      component: county_place_archive_decision_consequence_loop
+    PER-24:
+      status: planned
+      gate: G3
+      owner: PER-24
+      component: DecisionSurfaceContract
+
+  planned_research:
+    PER-44:
+      status: planned
+      horizon: Research
+      component: attributed_membership_payload
+      current_truth:
+        payload_shape: empty
+        canonical_hash_covered: false
+        production_writer: false
+        production_consumer: false
+      activation_requires:
+        named_mechanic_consumer: true
+        production_payload_write: true
+        canonical_hash_coverage: true
+
+persistence_writer:
+  status: implemented_current
+  decision:
+    issue: PER-48
+    adr: ADR220_rust_owned_postgresql_persistence_boundary
+    implementation_contract: contracts/rust_persistence_cutover_v2.yaml
+  before_cutover:
+    authoritative_writer: Python
+    authority: sole_live_writer
+  cutover:
+    direction: one_way
+    order:
+      - disable_python_migrations_and_runtime_writes
+      - enable_rust_authoritative_writer
+    dual_writes: forbidden
+  after_cutover:
+    authoritative_writer: Rust
+    owns:
+      - game_managed_postgresql_connections
+      - migrations
+      - typed_tick_transaction
+      - checkpoint_hydration
+      - runtime_writes
+      - h3_codecs
+  surviving_python_roles:
+    - deterministic_data_acquisition_and_reference_builds
+    - external_api_adapters
+    - ai_and_document_periphery
+    - cli_periphery
+  transition_observers:
+    access: none
+    writes: forbidden
+    ddl: forbidden
+
+engine_boundary:
+  adjudication:
+    status: binding_design_law
+    rule: graph_bsl_and_tick_crates_remain_database_free
+  durability:
+    status: implemented_current
+    gate: G3
+    rule: durable_effects_begin_only_after_successful_adjudication
+    composition_root: babylon_persistence::runtime::DurableReplayRuntimeV2
+  determinism_meaning: computational_identity_not_scientific_truth
+
+reference_data:
+  canonical_build_inputs:
+    status: implemented_current
+    products:
+      - pinned_parquet_artifacts
+      - deterministic_sqlite_reference_database
+    mutability: immutable_install_global_reference
+  mutable_python_runtime_sqlite:
+    status: retired
+    preserved_evidence: p27-python-freeze
+    unique_data: preserved_outside_the_deleted_runtime
+
+port_policy:
+  dispositions:
+    - Port
+    - Adapt
+    - Replace
+    - Retire
+  selection: playable_causal_slice
+  frozen_python_systems: retired_source_preserved_at_p27_python_freeze
+  completion_rule: each_system_eventually_receives_one_disposition
+
+data_intake:
+  kimi:
+    status: Research
+    owner: PER-43
+    activation_requires:
+      named_mechanic: true
+      named_field_consumer: true
+    rule: ingest_only_the_fields_required_by_that_consumer
+
+historical_records:
+  state_ledger: ai/state.yaml
+  superseded_architecture_context:
+    - ai/decisions/index.yaml
+    - project/programs/
+    - docs/superpowers/specs/

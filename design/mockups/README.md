@@ -21,7 +21,7 @@ Babylon is a geopolitical simulation engine that models the collapse of American
 1. **Web App (Django + React/TypeScript)** — The primary player-facing interface ("The Cockpit"). Full viewport dashboard with hex map, topology graph panel, action composer, resource bar, event log, time series. Located at `web/frontend/`.
 2. **PyQt6 Desktop GUI** — "The Synopticon" — a local dashboard for observing simulation state in real-time with ECharts and DearPyGui components. Located at `src/babylon/ui/`.
 3. **Sphinx Docs Site** — Technical documentation at `docs/`. Themed in "Luxe Gothic" (deep burgundy + bronze rupture, walled off from the web UI).
-4. **CLI Simulation** — Run via `mise run sim:run`, no UI.
+4. **Rust CLI Simulation** — Run via `mise run sim:e2e-michigan`, no UI.
 
 ---
 

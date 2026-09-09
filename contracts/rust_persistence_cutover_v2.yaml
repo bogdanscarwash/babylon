@@ -1,0 +1,92 @@
+meta:
+  contract: RustPersistenceCutoverV2
+  version: 2
+  issue: PER-311
+  predecessor:
+    path: contracts/rust_persistence_cutover_v1.yaml
+    sha256: df438ddae7af7023e7a7b210712a51e09ca702ef1f47458891ced1e5ae28655f
+  predecessor_vectors:
+    path: contracts/rust_persistence_cutover_v1_vectors.jsonl
+    sha256: eb7e50f887e39a30d48e085b2d9b001bb3abd823089d7bd6df7c7a066e68ff94
+    disposition: offline_historical_verification_only
+
+authority:
+  canonical_crate: babylon-persistence
+  composition_module: rust/crates/babylon-persistence/src/runtime.rs
+  composition_type: DurableReplayRuntimeV2
+  prepared_tick_type: PreparedCommittedTickV2
+  identified_tick_input: babylon_tick::replay_session::IdentifiedTickReportV2
+  prepared_tick_constructor: prepare_committed_tick_v2
+  activation_function: activate_rust_persistence_v2
+  activation_report: ActivationReportV2
+  activation_error: RustPersistenceActivationErrorV2
+  runtime_error: RustPersistenceRuntimeErrorV2
+  committed_receipt: CommittedTickReceiptV2
+  retained_inner_v1:
+    - CampaignFoundationV1
+    - FoundationContentBundleV1
+    - hydrate_campaign_foundation_v1
+    - TickContentHashV1
+    - OrderedPracticeActionBatchV1
+
+activation:
+  required_postgresql_major: 17
+  predecessor_epoch: 9
+  preparation_epoch: 10
+  active_epoch: 11
+  predecessor_epoch_9:
+    migration:
+      path: rust/crates/babylon-persistence/migrations/0009_rust_persistence_activation.sql
+      sha256: 81838b67c0f01cacf59fdc4a7f4d7c101f5cbdc9c7b178b6a18751d725ece5d5
+    transaction_isolation: read_committed
+    relation_lock: access_exclusive
+    census_snapshot: fresh_after_lock_wait
+    lock_lifetime: through_census_disposition_drop_authority_row_and_commit
+  migrations:
+    - path: rust/crates/babylon-persistence/migrations/0010_committed_tick_v2_preparation.sql
+      sha256: 2d159056ace709ac4e42eb00d7a2fb1b0574705b5095a01ce9043926fcf148b7
+    - path: rust/crates/babylon-persistence/migrations/0011_committed_tick_v2_activation.sql
+      sha256: 7bd981eefe83d70d178954cb747aeaeac3589985bd42c56fc50822be3c70d066
+  pre_activation_inventory:
+    read_only_before_mutation: true
+    relation_targets: 93
+    nonzero_incompatible_data: typed_refusal
+  reader_writer: v2_only
+  historical_v1_decoder: prohibited
+
+tick_identity:
+  payload_type: TickPayloadV2
+  outer_hash: TickContentHashV1
+  outer_hash_codec_changed: false
+  graph_hash_scope: graph_only
+
+envelope:
+  type: CommittedTickEnvelopeV2
+  layout: 2
+  exact_retry_identity: complete_envelope_bytes
+  family_order:
+    - {name: graph, tag_u8: 16}
+    - {name: state, tag_u8: 17}
+    - {name: event, tag_u8: 18}
+    - {name: choice_receipt, tag_u8: 24}
+    - {name: checkpoint, tag_u8: 22}
+    - {name: archive_dirty_receipt, tag_u8: 23}
+  marker_last: true
+  post_commit_acknowledgement: infallible_after_preflight
+  concurrent_identical_retry: reconcile_exact_envelope_after_campaign_lock
+
+events:
+  row_type: successful_event_v2
+  relation: babylon_state.tick_event_v2
+  emitting_rule: required
+  choice_receipt_reference: optional_engine_derived
+  authored_probability_payload: prohibited
+
+choice_receipts:
+  type: ChoiceReceiptV1
+  family_position: between_event_and_checkpoint
+  parent_relation: babylon_state.tick_choice_receipt_v1
+  ordered_branch_relation: babylon_state.tick_choice_receipt_branch_v1
+  ordered_carrier_relation: babylon_state.tick_choice_receipt_carrier_element_v1
+  ticket_columns: NUMERIC(20,0)
+  no_op_outcome_receipted: true

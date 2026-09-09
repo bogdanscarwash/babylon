@@ -1,0 +1,407 @@
+# Closed practice-contract values. Every substantive value is a Designed game liberty.
+# yamllint disable rule:line-length
+schema: babylon.practice-contract
+schema_version: 1
+evidence_class: Designed
+purpose: Freeze bounded practice input identities without activating practice execution.
+domain_terminator_hex: "00"
+
+wire_layouts:
+  PracticeInputAuthorityV1:
+    - ascii_domain
+    - zero_u8
+    - schema_version_u16_be
+    - authority_kind_u8
+    - actor_org_id_u64_be
+    - producer_content_digest_32
+  PracticeIntentV1:
+    - ascii_domain
+    - zero_u8
+    - schema_version_u16_be
+    - submit_after_tick_u64_be
+    - resolve_tick_u64_be
+    - actor_org_id_u64_be
+    - practice_id_u8
+    - target_domain_u8
+    - target_node_id_u64_be
+    - quoted_content_digest_32
+    - quoted_action_budget_cost_u32_be
+    - parameters_count_u16_be
+    - length_framed_parameters
+    - evidence_count_u16_be
+    - evidence_digests_lexicographic
+  OrganizationBudgetDeltaV1:
+    - ascii_domain
+    - zero_u8
+    - schema_version_u16_be
+    - tick_u64_be
+    - actor_node_id_u64_be
+    - pre_action_world_hash_32
+    - budget_before_u32_be
+    - governed_cost_u32_be
+    - footprint_count_u32_be
+    - raw_credit_u32_be
+    - credited_credit_u32_be
+    - ceiling_bound_u8
+    - budget_after_u32_be
+  PracticeSubmissionRejectionV1:
+    - schema_version_u16_be
+    - submitted_bytes_digest_32
+    - reason_code_u16_be
+    - last_committed_tick_u64_be
+    - content_digest_32
+  PracticeParameterV1:
+    - key_u8
+    - value_kind_u8
+    - value_length_u16_be
+    - value_bytes
+
+scalar_types:
+  u8: {width_bits: 8, unsigned: true}
+  u16: {width_bits: 16, unsigned: true}
+  u32: {width_bits: 32, unsigned: true}
+  u64: {width_bits: 64, unsigned: true}
+  digest32: {width_bytes: 32, encoding: raw_bytes}
+  bool: {width_bits: 8, valid_values: [0, 1]}
+  f64_bits_u64: {width_bits: 64, encoding: ieee754_binary64_bits}
+  bytes: {encoding: raw_bytes}
+
+parser_bounds:
+  max_source_bytes: 262144
+  max_yaml_events: 65536
+  max_depth: 16
+  max_record_declarations: 64
+  max_enum_declarations: 64
+  max_fields_per_record: 64
+  max_members_per_enum: 256
+  max_error_codes: 256
+
+limits:
+  max_parameters: {value: 16, evidence_class: Designed, play_purpose: Bound intent complexity and adjudication fuel.}
+  max_parameter_value_bytes: {value: 256, evidence_class: Designed, play_purpose: Bound each future parameter value before allocation.}
+  max_parameter_bytes: {value: 256, evidence_class: Designed, play_purpose: Bound the complete V1 parameter payload.}
+  max_evidence_digests: {value: 64, evidence_class: Designed, play_purpose: Bound evidence attached to one practice choice.}
+  max_intent_canonical_bytes: {value: 16384, evidence_class: Designed, play_purpose: Bound one canonical next-week input.}
+  max_policy_authority_pairs: {value: 4096, evidence_class: Designed, play_purpose: Bound registered non-player policy authority.}
+  max_intents_per_resolve_tick: {value: 4096, evidence_class: Designed, play_purpose: Bound one deterministic resolve batch.}
+  max_organizations: {value: 4096, evidence_class: Designed, play_purpose: Bound organization scans and scenario fuel.}
+  max_org_solidarity_edges_per_org: {value: 256, evidence_class: Designed, play_purpose: Bound each organization solidarity footprint scan.}
+  max_jsonl_source_bytes: {value: 2097152, evidence_class: Designed, play_purpose: Bound shared vector-corpus input.}
+  max_jsonl_cases: {value: 512, evidence_class: Designed, play_purpose: Bound shared vector case iteration.}
+  max_jsonl_line_bytes: {value: 65536, evidence_class: Designed, play_purpose: Bound one shared vector case.}
+  max_jsonl_case_id_bytes: {value: 128, evidence_class: Designed, play_purpose: Bound stable vector case identities.}
+  max_json_depth: {value: 32, evidence_class: Designed, play_purpose: Bound vector parser nesting.}
+
+enums:
+  PracticeIdV1:
+    width: u8
+    evidence_class: Designed
+    play_purpose: Keep the three ruled player practices closed and legible.
+    members: {ORGANIZE: 1, AGITATE: 2, MUTUAL_AID: 3}
+  VerbStemV1:
+    width: u8
+    evidence_class: Designed
+    play_purpose: Bind display practices to closed machine stems.
+    members: {MOBILIZE: 1, AID: 2}
+  VerbModeV1:
+    width: u8
+    evidence_class: Designed
+    play_purpose: Distinguish the ruled mobilize sub-modes without a synthetic none mode.
+    members: {CANVASS: 1, AGITATE: 2}
+  PracticeAuthorityKindV1:
+    width: u8
+    evidence_class: Designed
+    play_purpose: Separate player-seat and deterministic-policy input authority.
+    members: {PLAYER_SEAT: 1, DETERMINISTIC_POLICY: 2}
+  PracticeTargetDomainV1:
+    width: u8
+    evidence_class: Designed
+    play_purpose: Name the only grounded V1 target NodeType semantics.
+    members: {SOCIAL_CLASS: 1}
+  PracticeRejectionCodeV1:
+    width: u16
+    evidence_class: Designed
+    play_purpose: Keep submission refusal identities stable across clients and runtimes.
+    members:
+      PRACTICE_UNWIRED: 1
+      PRACTICE_STALE_CONTENT: 2
+      PRACTICE_COST_MISMATCH: 3
+      PRACTICE_AUTHORITY_UNREGISTERED: 4
+      PRACTICE_ACTOR_MISMATCH: 5
+      PRACTICE_DUPLICATE_ACTOR: 6
+      PRACTICE_BATCH_LIMIT: 7
+      PRACTICE_TICK_MISMATCH: 8
+      PRACTICE_BUDGET_INSUFFICIENT: 9
+      PRACTICE_TARGET_INELIGIBLE: 10
+      PRACTICE_PENDING_DUPLICATE: 11
+  PracticeActivationBlockerV1:
+    width: u8
+    evidence_class: Designed
+    play_purpose: Expose immutable dependency metadata without performing admission.
+    members:
+      GATE3_COMMITTED_ENVELOPE: 1
+      GATE5_PENDING_INPUT: 2
+      PER30_ORDERS_INVENTORY: 3
+      PER31_FREIGHT_REALIZATION: 4
+
+contract_errors:
+  width: u16
+  evidence_class: Designed
+  play_purpose: Preserve language-neutral contract refusal identity without becoming a submission reason.
+  members:
+    PRACTICE_DOMAIN: 1
+    PRACTICE_SCHEMA_VERSION: 2
+    PRACTICE_ENUM_CODE: 3
+    PRACTICE_LENGTH: 5
+    PRACTICE_TRUNCATED: 6
+    PRACTICE_TRAILING_BYTES: 7
+    PRACTICE_BOOLEAN: 9
+    PRACTICE_PARAMETER: 10
+    PRACTICE_PARAMETER_LIMIT: 11
+    PRACTICE_PARAMETER_LENGTH: 12
+    PRACTICE_EVIDENCE_LIMIT: 13
+    PRACTICE_EVIDENCE_ORDER: 14
+    PRACTICE_EVIDENCE_DUPLICATE: 15
+    PRACTICE_TICK_OVERFLOW: 16
+    PRACTICE_TICK_MISMATCH: 17
+    PRACTICE_AUTHORITY_REGISTRY_LIMIT: 18
+    PRACTICE_AUTHORITY_REGISTRY_ORDER: 19
+    PRACTICE_AUTHORITY_REGISTRY_DUPLICATE: 20
+    PRACTICE_AUTHORITY_UNREGISTERED: 21
+    PRACTICE_ACTOR_MISMATCH: 22
+    PRACTICE_AUTHORITY_CONTENT_MISMATCH: 23
+    PRACTICE_QUOTE_CONTENT_MISMATCH: 24
+    PRACTICE_QUOTE_COST_MISMATCH: 25
+    PRACTICE_BATCH_LIMIT: 26
+    PRACTICE_DUPLICATE_ACTOR: 27
+    PRACTICE_BUDGET_NONFINITE: 28
+    PRACTICE_BUDGET_NEGATIVE: 29
+    PRACTICE_BUDGET_FRACTIONAL: 30
+    PRACTICE_BUDGET_RANGE: 31
+    PRACTICE_BUDGET_ROUNDTRIP: 32
+    PRACTICE_BUDGET_INSUFFICIENT: 33
+    PRACTICE_BUDGET_ARITHMETIC: 34
+    PRACTICE_FOOTPRINT_LIMIT: 35
+    PRACTICE_FOOTPRINT_ORDER: 36
+    PRACTICE_FOOTPRINT_DUPLICATE: 37
+    PRACTICE_FOOTPRINT_SOURCE: 38
+    PRACTICE_FOOTPRINT_STRENGTH_NONFINITE: 39
+    PRACTICE_FOOTPRINT_STRENGTH_NONPOSITIVE: 40
+    PRACTICE_TOPOLOGY_ORGANIZATION_LIMIT: 41
+    PRACTICE_TOPOLOGY_ORGANIZATION_ORDER: 42
+    PRACTICE_TOPOLOGY_ORGANIZATION_DUPLICATE: 43
+    PRACTICE_TOPOLOGY_BUDGET_MISSING: 44
+    PRACTICE_TOPOLOGY_EDGE_ORDER: 45
+    PRACTICE_TOPOLOGY_EDGE_DUPLICATE: 46
+
+submission_rejection_aliases:
+  16: PRACTICE_TICK_MISMATCH
+  17: PRACTICE_TICK_MISMATCH
+  21: PRACTICE_AUTHORITY_UNREGISTERED
+  22: PRACTICE_ACTOR_MISMATCH
+  23: PRACTICE_AUTHORITY_UNREGISTERED
+  24: PRACTICE_STALE_CONTENT
+  25: PRACTICE_COST_MISMATCH
+  26: PRACTICE_BATCH_LIMIT
+  27: PRACTICE_DUPLICATE_ACTOR
+  33: PRACTICE_BUDGET_INSUFFICIENT
+
+practice_mappings:
+  - practice: ORGANIZE
+    display_label: ORGANIZE
+    machine_stem: mobilize
+    machine_mode: CANVASS
+    parameter_allowlist: []
+  - practice: AGITATE
+    display_label: AGITATE
+    machine_stem: mobilize
+    machine_mode: AGITATE
+    parameter_allowlist: []
+  - practice: MUTUAL_AID
+    display_label: MUTUAL-AID
+    machine_stem: aid
+    machine_mode: null
+    parameter_allowlist: []
+
+activation_blockers:
+  ORGANIZE: [GATE3_COMMITTED_ENVELOPE, GATE5_PENDING_INPUT]
+  AGITATE: [GATE3_COMMITTED_ENVELOPE, GATE5_PENDING_INPUT]
+  MUTUAL_AID:
+    - GATE3_COMMITTED_ENVELOPE
+    - GATE5_PENDING_INPUT
+    - PER30_ORDERS_INVENTORY
+    - PER31_FREIGHT_REALIZATION
+
+validation_laws:
+  resolve_tick: checked_submit_after_tick_plus_one
+  parameters_v1: empty_allowlist_for_every_practice
+  parameter_sequence_bound: max_parameters
+  parameter_value_bound: max_parameter_value_bytes
+  parameter_total_bound: max_parameter_bytes
+  evidence_digests: sorted_unique_lexicographic
+  evidence_digest_bound: max_evidence_digests
+  intent_canonical_bound: max_intent_canonical_bytes
+  policy_authorities: sorted_unique_by_producer_digest_then_actor
+  policy_authority_bound: max_policy_authority_pairs
+  resolve_batch: shared_tick_unique_actor
+  resolve_batch_bound: max_intents_per_resolve_tick
+  budget_storage: finite_nonnegative_integral_binary64_exact_u32
+  budget_storage_canonical_bits: checked_u32_to_f64_bits
+  budget_storage_noncanonical_witness: negative_zero
+  budget_arithmetic: checked_u32_before_f64_storage
+  solidarity_footprint_order: ascending_source_then_target
+  solidarity_footprint_identity: source_target_EdgeType_SOLIDARITY
+  solidarity_strength: finite_strictly_positive
+  topology_organizations: ascending_unique_node_id
+  topology_organization_bound: max_organizations
+  topology_edges: ascending_unique_target_class_node_id
+  topology_edge_bound: max_org_solidarity_edges_per_org
+  topology_active_budget: required_when_active_optional_when_inactive
+  topology_supplied_budget: always_validate_binary64_exact_u32
+  rejection_only_deferred:
+    - PRACTICE_UNWIRED
+    - PRACTICE_TARGET_INELIGIBLE
+    - PRACTICE_PENDING_DUPLICATE
+
+records:
+  PracticeInputAuthorityV1:
+    wire_domain: babylon.practice-input-authority.v1
+    evidence_class: Designed
+    play_purpose: Bind source authorization to an actor without admitting an input.
+    fields:
+      - {name: schema_version, type: u16, byte_order: big_endian}
+      - {name: authority_kind, type: PracticeAuthorityKindV1, byte_order: single_byte}
+      - {name: actor_org_id, type: u64, byte_order: big_endian}
+      - {name: producer_content_digest, type: digest32, byte_order: raw_bytes}
+  PracticeParameterV1:
+    wire_domain: null
+    evidence_class: Designed
+    play_purpose: Freeze future bounded parameter framing while V1 allowlists remain empty.
+    fields:
+      - {name: key_u8, type: u8, byte_order: single_byte}
+      - {name: value_kind_u8, type: u8, byte_order: single_byte}
+      - {name: value_length_u16, type: u16, byte_order: big_endian}
+      - {name: value_bytes, type: bytes, byte_order: raw_bytes}
+  PracticeIntentV1:
+    wire_domain: babylon.practice-intent.v1
+    evidence_class: Designed
+    play_purpose: Seal a bounded next-week practice choice without persisting or resolving it.
+    fields:
+      - {name: schema_version, type: u16, byte_order: big_endian}
+      - {name: submit_after_tick, type: u64, byte_order: big_endian}
+      - {name: resolve_tick, type: u64, byte_order: big_endian}
+      - {name: actor_org_id, type: u64, byte_order: big_endian}
+      - {name: practice_id, type: PracticeIdV1, byte_order: single_byte}
+      - {name: target_domain, type: PracticeTargetDomainV1, byte_order: single_byte}
+      - {name: target_node_id, type: u64, byte_order: big_endian}
+      - {name: quoted_content_digest, type: digest32, byte_order: raw_bytes}
+      - {name: quoted_action_budget_cost, type: u32, byte_order: big_endian}
+      - {name: parameters, type: "sequence[PracticeParameterV1]", byte_order: length_framed_big_endian}
+      - {name: evidence_digests, type: "sequence[digest32]", byte_order: length_framed_big_endian}
+  PolicyAuthorityPairV1:
+    wire_domain: null
+    evidence_class: Designed
+    play_purpose: Bind one deterministic policy producer to one organization actor.
+    fields:
+      - {name: producer_content_digest, type: digest32, byte_order: raw_bytes}
+      - {name: actor_org_id, type: u64, byte_order: big_endian}
+  PracticeAuthorityContextV1:
+    wire_domain: null
+    evidence_class: Designed
+    play_purpose: Validate source authority against a detached bounded registry.
+    fields:
+      - {name: player_org_id, type: u64, byte_order: big_endian}
+      - {name: player_gateway_content_digest, type: digest32, byte_order: raw_bytes}
+      - {name: policy_authorities, type: "sequence[PolicyAuthorityPairV1]", byte_order: sorted_unique}
+  PracticeQuoteContextV1:
+    wire_domain: null
+    evidence_class: Designed
+    play_purpose: Validate tick, content, and governed cost against detached values.
+    fields:
+      - {name: last_committed_tick, type: u64, byte_order: big_endian}
+      - {name: content_digest, type: digest32, byte_order: raw_bytes}
+      - {name: budget_terms, type: PracticeBudgetTermsV1, byte_order: declared_record_order}
+  SolidarityFootprintEdgeV1:
+    wire_domain: null
+    evidence_class: Designed
+    play_purpose: Carry a graph-free replenishment witness after target-type validation.
+    fields:
+      - {name: source_org_node_id_u64, type: u64, byte_order: big_endian}
+      - {name: target_domain_u8, type: PracticeTargetDomainV1, byte_order: single_byte}
+      - {name: target_class_node_id_u64, type: u64, byte_order: big_endian}
+      - {name: strength_f64_bits_u64, type: f64_bits_u64, byte_order: big_endian}
+  OrganizationPracticeTopologyEdgeV1:
+    wire_domain: null
+    evidence_class: Designed
+    play_purpose: Count one typed outbound solidarity edge without granting graph authority.
+    fields:
+      - {name: target_domain, type: PracticeTargetDomainV1, byte_order: single_byte}
+      - {name: target_class_node_id_u64, type: u64, byte_order: big_endian}
+  OrganizationPracticeTopologyRowV1:
+    wire_domain: null
+    evidence_class: Designed
+    play_purpose: Preflight one authored organization and its bounded solidarity footprint.
+    fields:
+      - {name: node_id_u64, type: u64, byte_order: big_endian}
+      - {name: active_bool, type: bool, byte_order: single_byte}
+      - {name: action_budget_storage_f64_bits_u64, type: "optional[f64_bits_u64]", byte_order: optional_tag_then_big_endian}
+      - {name: edges, type: "sequence[OrganizationPracticeTopologyEdgeV1]", byte_order: sorted_unique}
+  OrganizationPracticeTopologyV1:
+    wire_domain: null
+    evidence_class: Designed
+    play_purpose: Bound scenario topology before a real loader mutates its graph.
+    fields:
+      - {name: organizations, type: "sequence[OrganizationPracticeTopologyRowV1]", byte_order: sorted_unique}
+  OrganizationBudgetDeltaV1:
+    wire_domain: babylon.organization-budget-delta.v1
+    evidence_class: Designed
+    play_purpose: Explain detached quota arithmetic without writing graph storage.
+    fields:
+      - {name: schema_version, type: u16, byte_order: big_endian}
+      - {name: tick, type: u64, byte_order: big_endian}
+      - {name: actor_node_id, type: u64, byte_order: big_endian}
+      - {name: pre_action_world_hash, type: digest32, byte_order: raw_bytes}
+      - {name: budget_before, type: u32, byte_order: big_endian}
+      - {name: governed_cost, type: u32, byte_order: big_endian}
+      - {name: footprint_count, type: u32, byte_order: big_endian}
+      - {name: raw_credit, type: u32, byte_order: big_endian}
+      - {name: credited_credit, type: u32, byte_order: big_endian}
+      - {name: ceiling_bound, type: bool, byte_order: single_byte}
+      - {name: budget_after, type: u32, byte_order: big_endian}
+  PracticeSubmissionRejectionV1:
+    wire_domain: null
+    evidence_class: Designed
+    play_purpose: Return a stable non-durable refusal without inventing a receipt identity.
+    fields:
+      - {name: schema_version, type: u16, byte_order: big_endian}
+      - {name: submitted_bytes_digest, type: digest32, byte_order: raw_bytes}
+      - {name: reason_code, type: PracticeRejectionCodeV1, byte_order: big_endian}
+      - {name: last_committed_tick, type: u64, byte_order: big_endian}
+      - {name: content_digest, type: digest32, byte_order: raw_bytes}
+  PracticeBudgetTermsV1:
+    wire_domain: null
+    evidence_class: Designed
+    play_purpose: Carry only terms consumed by detached quota arithmetic.
+    fields:
+      - {name: initial, type: u32, byte_order: big_endian}
+      - {name: weekly_credit_cap, type: u32, byte_order: big_endian}
+      - {name: storage_ceiling, type: u32, byte_order: big_endian}
+      - {name: organize_cost, type: u32, byte_order: big_endian}
+      - {name: agitate_cost, type: u32, byte_order: big_endian}
+      - {name: mutual_aid_cost, type: u32, byte_order: big_endian}
+
+budget_terms:
+  initial: {value: 1, evidence_class: Designed, play_purpose: Give each active organization one initial practice choice.}
+  weekly_credit_cap: {value: 1, evidence_class: Designed, play_purpose: Bound weekly decision-throughput replenishment.}
+  storage_ceiling: {value: 4, evidence_class: Designed, play_purpose: Prevent indefinite quota stockpiling.}
+  organize_cost: {value: 1, evidence_class: Designed, play_purpose: Make Organize a costed strategic choice.}
+  agitate_cost: {value: 1, evidence_class: Designed, play_purpose: Make Agitate a costed strategic choice.}
+  mutual_aid_cost: {value: 1, evidence_class: Designed, play_purpose: Reserve a governed cost while material aid remains unwired.}
+
+topology:
+  organization_node_type: NodeType/ORGANIZATION
+  solidarity_edge_type: EdgeType/SOLIDARITY
+  target_node_type: NodeType/SOCIAL_CLASS
+  graph_identity: [source, target, type]
+  target_domain_enters_graph_identity: false
+  dynamic_organization_creation: unavailable_v1

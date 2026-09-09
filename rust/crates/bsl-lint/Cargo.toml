@@ -1,0 +1,22 @@
+[package]
+name = "bsl-lint"
+description = "Repo-relationship checks for BSL identity, Rust authority, namespaces, and T3 non-authorability"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[[bin]]
+name = "bsl-lint"
+path = "src/main.rs"
+
+[dependencies]
+babylon-bsl = { path = "../babylon-bsl" }
+babylon-kernel = { path = "../babylon-kernel" }
+proc-macro2 = { version = "1", features = ["span-locations"] }
+syn = { version = "3", features = ["full"] }
+toml = "1"
+
+[dependencies.regex]
+version = "1"

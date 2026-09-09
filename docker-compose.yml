@@ -5,9 +5,12 @@
 #   mise run db:down    # remove container, keep data volume
 #   mise run db:nuke    # remove container AND named data volume
 #
-# Data location (FR-006): defaults to the named volume `babylon-pg-data`
-# (portable). Set BABYLON_PG_DATA in `.env` to an absolute path to bind-mount
-# instead — e.g. on this workstation the DB lives on the 3.6 TB data drive:
+# Data location (FR-006): defaults to the named volume
+# `babylon-pg-alpine-c-utf8-v1` (portable). The retired Debian-lineage volume
+# `babylon-pg-data` is deliberately not attached or declared here. Set
+# BABYLON_PG_DATA in `.env` to an empty/current-lineage absolute path to
+# bind-mount instead — e.g. on this workstation the DB lives on the 3.6 TB
+# data drive:
 #
 #   BABYLON_PG_DATA=/media/user/data/babylon-pg
 #
@@ -27,11 +30,40 @@ services:
     shm_size: 1g
     command: ["postgres", "-c", "config_file=/etc/postgresql/postgresql.conf"]
     volumes:
-      - ${BABYLON_PG_DATA:-babylon-pg-data}:/var/lib/postgresql/data
+      - ${BABYLON_PG_DATA:-babylon-pg-alpine-c-utf8-v1}:/var/lib/postgresql/data
       - ./docker/postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
       - ./docker/postgres/initdb:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U test -d babylon_test"]
+      test:
+        - CMD-SHELL
+        - >-
+          marker="$${PGDATA}/.babylon-postgres-lineage-v1";
+          expected='babylon-postgres-lineage-v1|postgres=17|locale-provider=builtin|locale=C.UTF-8|encoding=UTF8|postgis=3.5.7|h3=4.5.0|h3_postgis=4.5.0|vector=0.8.5';
+          test -f "$${marker}" &&
+          test ! -L "$${marker}" &&
+          test "$$(stat -c %a "$${marker}")" = '444' &&
+          test "$$(cat "$${marker}")" = "$${expected}" &&
+          test "$$(wc -c < "$${marker}")" -eq "$$(($${#expected} + 1))" &&
+          pg_isready -U test -d babylon_test &&
+          test "$$(psql -X -qAt -v ON_ERROR_STOP=1 -U test -d babylon_test -c
+          "SELECT pg_catalog.current_setting('server_version_num') = '170011'
+             AND pg_catalog.pg_encoding_to_char(database_row.encoding) = 'UTF8'
+             AND database_row.datlocprovider = 'b'
+             AND database_row.datlocale = 'C.UTF-8'
+             AND (SELECT extension_row.extversion = '3.5.7'
+                    FROM pg_catalog.pg_extension AS extension_row
+                   WHERE extension_row.extname = 'postgis')
+             AND (SELECT extension_row.extversion = '0.8.5'
+                    FROM pg_catalog.pg_extension AS extension_row
+                   WHERE extension_row.extname = 'vector')
+             AND (SELECT available.default_version = '4.5.0'
+                    FROM pg_catalog.pg_available_extensions AS available
+                   WHERE available.name = 'h3')
+             AND (SELECT available.default_version = '4.5.0'
+                    FROM pg_catalog.pg_available_extensions AS available
+                   WHERE available.name = 'h3_postgis')
+            FROM pg_catalog.pg_database AS database_row
+           WHERE database_row.datname = pg_catalog.current_database()")" = 't'
       interval: 2s
       timeout: 3s
       retries: 30
@@ -40,4 +72,4 @@ services:
 
 volumes:
   # Used only when BABYLON_PG_DATA is unset (the portable default).
-  babylon-pg-data:
+  babylon-pg-alpine-c-utf8-v1:

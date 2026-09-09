@@ -1,0 +1,91 @@
+meta:
+  contract: GlossaryConceptsV1
+  version: 1
+  issue: PER-23
+  digest: SHA-256 diagnostic; exact bytes govern retry equality
+
+production_decoder: prohibited
+
+authority:
+  owner: Rust persistence foundation grant seeder (ADR249 R12)
+  purpose: >-
+    Versioned glossary concept fixture seeding concept tooltips and the R6
+    placeholder composition; the dossier-displayed terms (median-wage,
+    phi-hour, and their kin) carry the canonical display labels pinned by
+    contracts/county_dossier_parity_v1.yaml.
+  classifications:
+    fixture_row_shape: Designed
+    required_concept_set: Designed
+    canonical_display_labels: Designed
+    glossary_definitions: Designed
+  invariants:
+    - The fixture holds exactly the required concept set, one concept per
+      line, sorted by concept_id, with no duplicate ids.
+    - Every concept id matches ^[a-z0-9][a-z0-9-]{0,127}$ and is granted
+      subject + identity at tick 0 by the foundation seeder; no other
+      concept keys are granted.
+    - The dossier-displayed magnitude concepts (median-wage, phi-hour,
+      employment, class-composition) stay ungranted as county/place grant
+      keys at foundation; magnitudes are earned, never seeded.
+    - Display labels are canonical bytes; median-wage renders "Median wage"
+      and phi-hour renders "Imperial rent Φ" exactly.
+    - evidence_class is one of Observed, Derived, Calibrated, Designed;
+      glossary definitions are Designed.
+    - The independent verifier recomputes fixture_sha256 over the exact
+      file bytes and semantic_sha256 over the canonical per-concept
+      (concept_id, display_label, definition) length-prefixed encoding.
+
+constants:
+  fixture_path: contracts/fixtures/glossary_concepts_v1.jsonl
+  fixture_sha256: f47e289dc4e7a11c595f0e42643e352e255775c77dde3a7ed35a91de8d84d85a
+  semantic_domain_ascii_nul: babylon.glossary-concepts.v1
+  semantic_sha256: d296f02168c66199168f732388abfeaf06d03932f784885884b82382b9454ebe
+  required_concept_ids:
+    - census-identity
+    - class-composition
+    - containment
+    - employment
+    - existence
+    - identity
+    - median-wage
+    - phi-hour
+  grant_keys:
+    - subject
+    - identity
+  grant_tick: 0
+  concept_id_regex: ^[a-z0-9][a-z0-9-]{0,127}$
+  citation_source_id: glossary-concepts-v1
+  citation_locator_prefix: contracts/fixtures/glossary_concepts_v1.jsonl#concept_id=
+
+bounds:
+  contract_bytes: 32768
+  fixture_bytes: 65536
+  concept_rows: 64
+  concept_id_bytes: 128
+  display_label_bytes: 256
+  definition_bytes: 4096
+  citation_source_id_bytes: 128
+  citation_locator_bytes: 4096
+
+layouts:
+  concept_row_v1:
+    fields:
+      - concept_id
+      - term
+      - display_label
+      - definition
+      - evidence_class
+      - citation_source_id
+      - citation_locator
+    order: sorted by concept_id
+  semantic_encoding_v1:
+    domain: semantic_domain_ascii_nul plus one trailing NUL byte
+    row_prefix: u64 big-endian concept row count
+    per_concept:
+      - length_prefixed_concept_id_utf8
+      - length_prefixed_display_label_utf8
+      - length_prefixed_definition_utf8
+    digest: SHA-256 over the concatenation
+
+vector_kinds:
+  required: []

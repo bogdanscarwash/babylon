@@ -1,0 +1,209 @@
+meta:
+  contract: StrikeProposalV2
+  schema_version: 2
+  status: accepted
+  evidence_class: Designed
+  live_activation: false
+  rust_owner: babylon-practice-contract
+
+preserves:
+  - every Practice Contract V1 byte, digest, refusal, and vector
+  - PracticeInputAuthorityV2 bytes and habitation law
+  - PracticeIntentV2 bytes, strike target law, and parameter prohibition
+  - ResolvedPracticeBatchV2 bytes and accepted-intent identity
+  - PracticeResourceAllocationV2 bytes and conservation law
+
+domains:
+  strike_contract: babylon.strike-proposal-contract.v2
+  labor_process_register: babylon.strike-labor-process-register.v2
+  admitted_proposal: babylon.admitted-strike-proposal.v2
+  terminator_hex: "00"
+
+encoding:
+  byte_order: big-endian
+  integer_encoding: unsigned-fixed-width
+  digest_encoding: raw-32-bytes
+  stable_identity_encoding: raw-32-bytes
+  input_authority_id_encoding: raw-16-byte-rfc4122-network-order
+  proposal_nonce_encoding: raw-16-bytes
+  row_count_encoding: u32
+  trailing_bytes: forbidden
+
+strike_contract_field_order:
+  - schema_version
+  - material_connection_law
+  - participation_law
+  - max_affected_cohorts
+  - max_organization_relations
+
+strike_contract_values:
+  material_connection_law: 1
+  participation_law: 1
+  max_affected_cohorts: 65536
+  max_organization_relations: 65536
+
+labor_process_register_field_order:
+  - schema_version
+  - resolve_tick
+  - content_digest
+  - affected_cohorts
+  - organization_relations
+
+affected_cohort_field_order:
+  - labor_process_id
+  - worker_cohort_id
+  - labor_relation_digest
+
+organization_relation_field_order:
+  - labor_process_id
+  - worker_cohort_id
+  - organization_id
+  - membership_attribution_digest
+
+proposal_key_field_order:
+  - resolve_tick
+  - input_authority_id
+  - actor_org_id
+  - practice_id
+  - target_tag
+  - target_identity
+  - proposal_nonce
+
+admitted_proposal_field_order:
+  - schema_version
+  - strike_contract_digest
+  - resolved_practice_batch_digest
+  - labor_process_register_digest
+  - proposal_key
+  - participation_rows
+
+participation_row_field_order:
+  - worker_cohort_id
+  - participation_state
+
+material_connection_law:
+  code: 1
+  name: affected_cohort_attributed_membership_intersection
+  affected_relation: >-
+    The validated labor-process register names a worker cohort as affected by one
+    exact labor process and cites the labor-relation digest that produced the
+    row.
+  organization_relation: >-
+    A separate row cites attributed membership between that affected worker
+    cohort and one organization. A generic presence, support, solidarity,
+    geography, organization kind, or centrality measurement cannot create the
+    row.
+  eligibility: >-
+    The proposing actor organization must match at least one organization row
+    for the exact target labor process and one affected cohort in that process.
+  retired_edge_rule: >-
+    The register does not re-mint the retired EMPLOYMENT edge. Its future
+    producer must derive the labor relation from the governed production and
+    labor registers and the organization relation from attributed MEMBERSHIP.
+
+participation_law:
+  code: 1
+  name: independent_pending_rows
+  admission_result: >-
+    Admission creates one PENDING_INDEPENDENT_RESOLUTION row for every affected
+    worker cohort in the target labor process.
+  proposer_authority: >-
+    The proposal cannot select, omit, rank, vote for, or command an affected
+    cohort's participation.
+  later_owner: >-
+    A separately governed worker-cohort resolver must replace each pending row
+    before any labor withholding can enter production.
+
+participation_states:
+  PENDING_INDEPENDENT_RESOLUTION: 1
+
+canonical_order:
+  affected_cohort_key:
+    - labor_process_id
+    - worker_cohort_id
+  organization_relation_key:
+    - labor_process_id
+    - worker_cohort_id
+    - organization_id
+  participation_row_key:
+    - worker_cohort_id
+  law: rows are strictly ascending and unique by their complete key
+  priority: canonical order grants no proposal or participation priority
+
+admission_laws:
+  - the complete ResolvedPracticeBatchV2 validates against its authority ledger
+  - the proposal key selects one exact accepted batch item
+  - the accepted authority row proves campaign habitation of actor_org_id
+  - practice_id is STRIKE and target_tag is LABOR_PROCESS
+  - intent and register resolve ticks match exactly
+  - intent quoted content digest and register content digest match exactly
+  - the target process has at least one affected worker cohort
+  - the actor organization has one material connection to the target process
+  - every affected cohort receives exactly one pending participation row
+  - admission changes no labor supply, production, wage, inventory, or graph state
+  - replayed admission bytes must equal the governed resolver output exactly
+
+limits:
+  affected_cohorts:
+    value: 65536
+    classification: Designed
+    purpose: >-
+      serialization and validation fuel ceiling, not a worker, organization,
+      workplace, or political quota
+  organization_relations:
+    value: 65536
+    classification: Designed
+    purpose: >-
+      serialization and validation fuel ceiling, not an organization count,
+      unit size, rank, or participation quota
+
+canonical_lengths:
+  strike_contract_bytes: 48
+  labor_process_register_header_bytes: 91
+  affected_cohort_row_bytes: 96
+  organization_relation_row_bytes: 104
+  proposal_key_bytes: 82
+  participation_row_bytes: 33
+  admitted_proposal_header_bytes: 220
+
+digest_contracts:
+  algorithm: SHA-256
+  strike_contract_preimage: validated canonical strike-contract bytes
+  labor_process_register_preimage: validated canonical register bytes
+  admitted_proposal_preimage: validated canonical admitted-proposal bytes
+
+error_codes:
+  strike_domain: 1
+  strike_schema_version: 2
+  strike_enum_code: 3
+  strike_truncated: 4
+  strike_trailing_bytes: 5
+  strike_contract_value: 6
+  strike_practice_mismatch: 7
+  strike_resolve_tick_mismatch: 8
+  strike_content_digest_mismatch: 9
+  strike_affected_cohort_limit: 10
+  strike_affected_cohort_order: 11
+  strike_affected_cohort_duplicate: 12
+  strike_organization_relation_limit: 13
+  strike_organization_relation_order: 14
+  strike_organization_relation_duplicate: 15
+  strike_relation_cohort_missing: 16
+  strike_target_no_affected_cohort: 17
+  strike_organization_not_connected: 18
+  strike_proposal_not_accepted: 19
+  strike_admission_contract_digest: 20
+  strike_admission_batch_digest: 21
+  strike_admission_register_digest: 22
+  strike_admission_mismatch: 23
+
+excluded_surfaces:
+  - actor-authored worker participation, turnout, or labor withholding
+  - remote command by a supporter, party, state, or outside organization
+  - eligibility from organization kind, presence, solidarity, or centrality alone
+  - re-minting the retired EMPLOYMENT edge
+  - strike success, wage gain, organization gain, or solidarity write
+  - production, inventory, freight, realization, or reproduction mutation
+  - accepted-input persistence transaction
+  - BSL effect, graph mutation, receipt, Archive, or Bevy action
+  - gameplay activation

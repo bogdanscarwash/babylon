@@ -1,64 +1,60 @@
 ---
 name: specification-discover
-description: Decompose problems and check scope against Babylon's constitutional constraints. Use before planning to ensure work traces to test cases or improves falsifiability. Enforces scope control (Article VI) and prevents feature creep.
+description: Test scope with Constitution v4 before you make a plan for Babylon.
 ---
 
-# Specification Discover Phase
+# Specification Scope
 
-## Purpose
+Use this phase before you make a plan. Test that the task belongs in Babylon.
+Test that one causal slice can use it.
 
-Before planning any implementation, decompose the user's intent into its structural components and verify it survives scope control. This phase answers: **Should we do this at all?**
+Read `CONSTITUTION.md` v4.0.0 and `NORTH_STAR.md` first. Babylon is an
+entertainment-first game. The North Star gives the gate order.
 
-## Constitutional Constraints (P1)
+Do not report these planned parts as complete:
 
-- **VI.1 Material Base First** — Economic extraction → class formation → solidarity → THEN repression. Do not let the user jump ahead.
-- **VI.2 Zoom Where Data Exists** — Resolution must match data availability. If the user wants county-level modeling but only has state-level data, flag it.
-- **VI.3 Flag Scope Creep** — Every feature must trace to either: (a) a Detroit prediction, (b) a Michigan test case improvement, or (c) improved falsifiability. Otherwise DEFER.
-- **I.20 Spatial Substrate** — Political claims overlay substrate; substrate is immutable. Any request implying substrate mutation must be rejected or escalated.
+- `player actions`
+- `Archive materialization`
+- `Postgres consolidation`
 
-## Procedure
+## Laws
 
-1. **Capture User Intent** — Restate what the user wants in your own words. Confirm with them before proceeding.
+- Connect the task to a player choice or one causal slice.
+- Do not make all system ports a condition for play.
+- Mark each value `Observed`, `Derived`, `Calibrated`, or `Designed`.
+- Keep the data resolution equal to the source resolution.
+- Let a shock add pressure. Do not let it write a result.
+- A game display must help the player read, choose, or understand an effect.
+- Keep geography fixed. Put political claims in overlays.
+- Put data storage after tick judgment.
 
-1. **Decompose into Components** — Break the intent into:
+## Steps
 
-   - **Material basis**: What data/structural change is needed?
-   - **Strategic intervention**: What organizing/verb mechanics are affected?
-   - **Formal construct**: What tensor/graph/operator is involved?
-   - **Test case impact**: Does this affect Michigan statewide (IV) or tri-county (IV.2)?
+1. Restate the user goal. Ask the user to check it.
+2. Name the data change and the game rule that will use it.
+3. Name the player choice or causal slice that will use the result.
+4. Name the formal operator and the behavioral test.
+5. Compare the requested resolution with the source resolution.
+6. Check that the shock does not write a downstream result.
+7. List each section of Constitution v4 that applies.
+8. Use ADR221 to translate an old citation.
 
-1. **Scope Control Check** — Answer these three questions:
+Give one verdict: `PASS`, `DEFER`, or `ESCALATE`.
 
-   - Does this trace to a Detroit prediction or improve falsifiability? (VI.3)
-   - Do we have data at the requested resolution? (VI.2)
-   - Does the material base support this intervention? (VI.1)
+For `DEFER`, name the source, game rule, or player choice that the task needs.
+For `ESCALATE`, give the law that stops the task.
 
-   If any answer is NO, tell the user explicitly and ask if they want to:
+Use `.specify` as the parent directory. Use the phase name as its child
+directory. Use `{YYYYMMDD}-{topic}.md` for the document name. Include the goal,
+parts, verdict, applicable laws, blockers, and recommended phase.
 
-   - Refine the scope to something tractable
-   - Gather missing data first
-   - Defer to a future sprint
+## Escalation
 
-1. **Identify Affected Principles** — Scan the constitution for principles this work would touch. List them explicitly. Examples:
+Load `specification-govern` if the task needs one of these changes:
 
-   - "Transport system" → I.21 Sparrow, II.13 Transport Substrate, II.11 Subsystem Ownership
-   - "New edge type" → I.6 Solidarity Edge Mode, II.9 Morphism Dyadic, II.7 Edges vs Hyperedges [TRANSITION STATE]
+- a new mathematical primitive
+- a weaker prohibition
+- a change to the reserved theory line
+- new content vocabulary without its ceremony
 
-1. **Check for Transition State Dependencies** — If any affected principle is marked `[TRANSITION STATE]`, STOP. Do not proceed to plan. Tell the user: "This work depends on Amendment X (pending). Implementing now would produce provisional code that may need rewrite. Options: (a) wait for amendment, (b) scope around the transition state, (c) propose spec to resolve transition state."
-
-1. **Output Discover Artifact** — Write a brief markdown file summarizing:
-
-   - Confirmed intent
-   - Component decomposition
-   - Scope control verdict (PASS / DEFER / ESCALATE)
-   - Affected principles
-   - Transition state blockers (if any)
-   - Recommended next phase
-
-   Save to `.specify/discover/{YYYYMMDD}-{topic}.md` (create directory if needed).
-
-## Escalation Rules
-
-- If the user insists on scope that fails VI.3 → load `specification-govern`
-- If the work requires a new primitive → load `specification-govern`
-- If transition state blocker exists and user wants to proceed anyway → load `specification-govern`
+Do not continue past such a change without authority.

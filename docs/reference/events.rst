@@ -1,16 +1,19 @@
-Event System Reference
-======================
+Frozen Python Event System Reference
+====================================
 
-This reference documents the typed event system that enables the AI narrative
-layer to observe simulation state changes. For conceptual background, see
-:doc:`/concepts/event-system`.
+This reference documents the frozen Python ``EventBus`` and Pydantic event-model
+surface retained as historical behavioral evidence. It does not define live
+Rust/BSL authored payloads, ``TickPayloadV2``, or committed-event provenance.
+The canonical live BSL emit registry is
+``docs/reference/event-schema-registry.toml``. For the current conceptual
+boundary, see :doc:`/concepts/event-system`.
 
 Overview
 --------
 
-The simulation emits typed Pydantic events during each tick. Events are
-captured by the :class:`EventBus`, converted to typed models, and persisted
-in :attr:`WorldState.events`. This enables:
+The frozen Python simulation emits typed Pydantic events during each tick. The
+:class:`EventBus` captures the events and converts them to typed models. The
+simulation persists them in :attr:`WorldState.events`. This enables:
 
 - AI narrative generation from structured data
 - Event-driven analysis and visualization
@@ -18,16 +21,16 @@ in :attr:`WorldState.events`. This enables:
 
 **Key Components:**
 
-- :py:mod:`babylon.models.events` - Pydantic event models (20+ classes)
-- :py:mod:`babylon.models.enums` - EventType enum (24 types)
+- :py:mod:`babylon.models.events` - Pydantic event models
+- :py:mod:`babylon.models.enums` - EventType enum
 - :py:mod:`babylon.kernel.event_bus` - Pub/sub event bus
 - :py:mod:`babylon.engine.simulation_engine` - Event conversion
 
 EventType Enum
 --------------
 
-All events are categorized by type. The :class:`EventType` enum defines 24
-distinct event types organized by category:
+The :class:`EventType` enum categorizes all frozen Python events by type. It
+defines the vocabulary below by category:
 
 **Economic Events:**
 
@@ -543,10 +546,12 @@ StruggleEvent (Base)
      - ``str``
      - Node where struggle occurs
 
-SparkEvent
-~~~~~~~~~~
+SparkEvent (frozen Python)
+~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Emitted when EXCESSIVE_FORCE event occurs (stochastic police brutality).
+The frozen Python reference emits ``SparkEvent`` when an ``EXCESSIVE_FORCE``
+event occurs. Its ``spark_probability`` field records the probability used by
+that historical producer.
 
 .. list-table::
    :header-rows: 1
@@ -566,7 +571,42 @@ Emitted when EXCESSIVE_FORCE event occurs (stochastic police brutality).
      - Repression level at node
    * - ``spark_probability``
      - ``float``
-     - Probability that triggered event
+     - Probability recorded by the frozen Python producer
+
+Live AJ BSL ``EXCESSIVE_FORCE`` payload
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The live Rust path does not construct ``SparkEvent`` and does not author event
+probability. Under Amendment AJ, the adjacent ``struggle/spark-recognizer``
+emits the following payload from
+``rust/crates/babylon-tick/content/rules/struggle-spark.bsl``. The canonical
+schema row is in ``docs/reference/event-schema-registry.toml``.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 25 25 50
+
+   * - Field
+     - BSL type
+     - Description
+   * - ``subject``
+     - ``NodeRef``
+     - Social-class carrier observed by the recognizer
+   * - ``repression``
+     - ``Intensity``
+     - Repression faced by the carrier
+   * - ``backfire``
+     - ``Intensity``
+     - Post-state agitation backfire
+   * - ``incident-tick``
+     - ``Int``
+     - Tick recorded by the selected material outcome
+
+The live BSL schema requires all four fields. ``node-id`` and
+``spark-probability`` remain documented in the registry only as optional
+``builder-only`` evidence for the frozen Python builder. They are absent from
+the live authored payload. ``emitting_rule`` and the automatically derived
+``choice_receipt_ref`` belong to committed-event metadata outside that payload.
 
 UprisingEvent
 ~~~~~~~~~~~~~
@@ -875,7 +915,9 @@ The :class:`BabylonAssert` class provides semantic assertions for events:
 See Also
 --------
 
-- :doc:`/concepts/event-system` - Conceptual explanation of event architecture
+- ``docs/reference/event-schema-registry.toml`` - Canonical live BSL emit
+  payload registry
+- :doc:`/concepts/event-system` - Current event architecture
 - :doc:`/reference/topology` - TopologyMonitor and phase transitions
 - :doc:`/reference/systems` - Systems that emit events
-- :py:mod:`babylon.kernel.event_bus` - Event bus implementation
+- :py:mod:`babylon.kernel.event_bus` - Frozen Python event bus implementation

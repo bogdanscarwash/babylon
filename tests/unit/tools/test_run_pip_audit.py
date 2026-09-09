@@ -103,16 +103,19 @@ class TestPolicyParsing:
             "GHSA-aaaa-bbbb-cccc",
         ]
 
-    def test_command_uses_poetry_by_default(self, tmp_path: Path) -> None:
+    def test_command_uses_uv_by_default(self, tmp_path: Path) -> None:
         policy_path = tmp_path / "ignores.toml"
         policy_path.write_text(VALID_TOML)
         entries = get_ignore_entries(load_ignores_file(policy_path))
 
-        command = build_pip_audit_command(entries, no_poetry=False)
+        command = build_pip_audit_command(entries, no_uv=False)
 
         assert command == [
-            "poetry",
+            "uv",
             "run",
+            "--frozen",
+            "--extra",
+            "ops",
             "pip-audit",
             "--ignore-vuln",
             "CVE-2026-3219",
@@ -120,15 +123,15 @@ class TestPolicyParsing:
             "GHSA-aaaa-bbbb-cccc",
         ]
 
-    def test_command_respects_no_poetry(self, tmp_path: Path) -> None:
+    def test_command_respects_no_uv(self, tmp_path: Path) -> None:
         policy_path = tmp_path / "ignores.toml"
         policy_path.write_text(VALID_TOML)
         entries = get_ignore_entries(load_ignores_file(policy_path))
 
-        command = build_pip_audit_command(entries, no_poetry=True)
+        command = build_pip_audit_command(entries, no_uv=True)
 
         assert command[:2] == ["pip-audit", "--ignore-vuln"]
-        assert "poetry" not in command
+        assert "uv" not in command
 
     def test_empty_ignores_file_is_valid_with_zero_flags(self, tmp_path: Path) -> None:
         policy_path = tmp_path / "ignores.toml"
@@ -303,18 +306,15 @@ class TestRealPolicyFile:
     def test_real_policy_passes_check_only(self) -> None:
         assert main(["--check-only"]) == 0
 
-    def test_real_policy_pins_the_item41_residue_exactly(self) -> None:
-        """The shipped policy carries no ignores — the item-41 residue is cleared.
+    def test_real_policy_pins_the_emptied_policy_exactly(self) -> None:
+        """The shipped policy carries no ignores at all.
 
-        The dependabot-wave-20260711 batch bumped sentence-transformers ^3.0 ->
-        ^5.6 (pulling transformers 5.13.1 and torch 2.13.0), which fixed every
-        entry the policy previously suppressed; a raw ``pip-audit`` now reports
-        zero vulnerabilities. This pin is intentionally empty: any new ignore
-        appearing without review must fail it.
+        The item-41 residue stayed cleared (dependabot-wave-20260711), and the
+        one later entry — CVE-2026-11332 (ansible-core 2.20.3, dev tooling
+        only, time-boxed to 2026-08-15) — was removed 2026-08-17 because its
+        own removal condition landed: uv.lock carries ansible-core 2.21.2
+        (stable, >= the 2.20.7 fix line). Any ignore appearing without review
+        must fail this pin.
         """
         entries = get_ignore_entries(load_ignores_file(DEFAULT_IGNORES_FILE))
-        ids = sorted(e["id"] for e in entries)
-        assert ids == []
-        for entry in entries:
-            assert entry["reason"]
-            assert entry["expires"] == "2026-10-01"
+        assert entries == []

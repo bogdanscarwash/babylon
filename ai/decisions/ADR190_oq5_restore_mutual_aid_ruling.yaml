@@ -1,0 +1,116 @@
+ADR190_oq5_restore_mutual_aid_ruling:
+  status: "accepted"
+  date: "2026-08-10"
+  title: >
+    OQ-5 RULED — the aid stem is MUTUAL AID first: its invariant write is
+    meeting people's immediate needs, and its gameplay function is the
+    mass-line recruitment channel ("this is how you actually recruit from
+    the masses who are most oppressed and make them give a shit about you
+    and want to join you"), standing in contrast to the Activist
+    Subculture's restricted pool. aid:restore therefore stipulates NO
+    metabolic term: each restoration practice, as content, declares what
+    it moves (B, R, or neither) — the ecological face is the content of
+    the act, not the identity of the verb. Budget spends on aid's
+    conservation footing. Closes ADR187's one reserved question.
+  context: |
+    ADR187 ratified the Article V 3×3 but reserved OQ-5: the draft asked
+    whether aid:restore raises R (regeneration), lowers E (extraction),
+    or repairs B (the stock) against the shipped metabolic identity
+    ΔB = R − (E·η), O = C / B — and declined to recommend, because the
+    answer states a theory of what an organization can do to a metabolic
+    rift. The options were presented to the Director in the 2026-08-10
+    session with the theoretical hazard of each: (a) risks teaching that
+    restoration under capitalism heals the rift from within; (b)
+    duplicates the struggle lane; (c) parallels the W-A strike ruling
+    ("you cannot garden your way out of the rift"). The Director answered
+    by CORRECTING THE QUESTION rather than picking an option — the same
+    move ADR185 records for R5/R7: the framing that restore is primarily
+    an ecological verb was itself the error.
+  decision: |
+    THE RULING (Director, 2026-08-10, verbatim-in-substance):
+
+    1. THE AID STEM IS MUTUAL AID. "Aid is intended to be like mutual
+       aid. Meeting people's immediate needs. It can be related to
+       biocapacity and overshoot but doesn't have to be." The verb's
+       INVARIANT write-set is the class's material condition — needs met
+       — the same surface aid proper serves. No aid sub-mode is
+       primarily an ecological verb.
+
+    2. THE GAMEPLAY FUNCTION IS MASS-LINE RECRUITMENT. "Mutual aid is
+       basically, from a gameplay perspective, 'this is how you actually
+       recruit from the masses who are most oppressed and make them give
+       a shit about you and want to join you' — and it stands in
+       contrast to merely restricting yourself to the realm of Proper
+       Activism and the Activist Subculture." Aid's distinct yield is
+       reach: membership/allegiance/consciousness effects among the MOST
+       OPPRESSED strata — the pool the activist-subculture verbs
+       (mobilize/campaign among the already-activated) structurally
+       cannot recruit from. This is aid's permanent product in exactly
+       the sense ADR176 (13) gave the strike ORGANIZATION as its
+       permanent product. Serve-the-people programs are the material
+       referent.
+
+    3. RESTORE STIPULATES NO METABOLIC TERM. The ecological face is the
+       CONTENT of the particular act, never the identity of the verb: a
+       water-remediation program is mutual aid that happens to repair B;
+       a soil/community-garden program is mutual aid that happens to
+       raise R; a food program touches neither term. Each restoration
+       practice — authored as BSL content per the kernel-loop/
+       content-brain doctrine (ADR186 R8 refinement) — DECLARES which
+       term it moves, within the identity's structure. No imposed
+       functional form anywhere: magnitudes come from defines (scale,
+       never shape — ADR185 R3).
+
+    4. CONSERVATION FOOTING: aid's. Restore spends organizational
+       capacity on the same allocation as aid proper (ADR184 — one
+       capacity, one allocation). A practice that writes B converts
+       budget cross-substance and is therefore a W-A4 conservation-
+       closure wiring motion carrying its sentinel row at
+       implementation; a practice that writes R moves no stock.
+
+    5. METABOLIC WRITE-SCALE IS LABOR POWER (Director, same session,
+       verbatim-in-substance): "logically, a small ragtag group of 10 or
+       20 can't really remediate an entire ecosystem — but if your party
+       has tens or hundreds of thousands of cadres and workers, then you
+       have the labor power available to do large-scale remediation." A
+       restoration practice's ecological magnitude derives STRUCTURALLY
+       from the organization's deployable labor — membership mass
+       allocated through the ADR184 capacity/allocation machinery —
+       never from budget alone. This closes the loop rulings 1-2 create:
+       mutual aid recruits the most oppressed; membership mass IS labor
+       power; labor power sets the scale of what the organization can
+       materially repair. No threshold constant anywhere (the Lane A
+       doctrine): a cell's garden and a mass party's watershed
+       remediation differ by the same structural scaling, and scale
+       drawn from sim state is a magnitude, not a shape (ADR185 R3
+       satisfied by construction).
+
+    6. THE PEDAGOGY EMERGES, UNSTIPULATED. E·η continues regardless of
+       what any practice writes; while accumulation drives extraction,
+       restoration is real, local, and insufficient — the rift is a
+       relation of production, not a gardening problem. This is
+       emergent from the identity, not authored as a debuff; narrator
+       legibility carries it (the W-A pattern).
+  consequences: |
+    - aid:restore's resolver UNBLOCKS (the last item on ADR187's
+      consequence queue that was blocked on this ruling).
+    - Restoration magnitude = f(deployed labor) is a structural design
+      obligation: the practice's effect scales with allocated membership
+      labor via ADR184's machinery — no per-practice magnitude constants
+      beyond defines-backed scale factors.
+    - The recruitment channel (ruling 2) becomes a design obligation on
+      the aid stem's implementation: aid effects must reach allegiance/
+      membership among deprivation-weighted strata, not just transfer
+      value — the mechanism lands with the verb-lane content work, its
+      shape structural, its magnitudes from defines.
+    - Restoration practices are content items: each declares its
+      metabolic write (B, R, or none) as BSL rule-pack data once the
+      C11/lattice + effect surfaces land.
+    - reports/article-v-3x3-draft-2026-08-10.md's OQ-5 reservation
+      closes; the draft doc header updates.
+  supersedes: []
+  related:
+    - ADR187_article_v_3x3_ratified
+    - ADR184_capacity_belongs_to_organizations
+    - ADR176_director_rulings_batch_gds_dispositions
+    - ADR186_bevy_cutover_amendment_af

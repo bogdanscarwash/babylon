@@ -1,0 +1,14 @@
+CREATE SCHEMA IF NOT EXISTS babylon_ref AUTHORIZATION CURRENT_USER;
+REVOKE ALL ON SCHEMA babylon_ref FROM PUBLIC;
+
+CREATE SCHEMA IF NOT EXISTS babylon_state AUTHORIZATION CURRENT_USER;
+REVOKE ALL ON SCHEMA babylon_state FROM PUBLIC;
+
+CREATE SCHEMA IF NOT EXISTS babylon_meta AUTHORIZATION CURRENT_USER;
+REVOKE ALL ON SCHEMA babylon_meta FROM PUBLIC;
+
+CREATE TABLE babylon_state.schema_migration (
+    version BIGINT PRIMARY KEY CHECK (version > 0),
+    checksum BYTEA NOT NULL CHECK (pg_catalog.octet_length(checksum) = 32)
+);
+REVOKE ALL ON TABLE babylon_state.schema_migration FROM PUBLIC;

@@ -1,17 +1,8 @@
 name: CI
 
-# Program 15 (The Gauntlet): the DEV FAST LANE.
-#
-# Tier model: push to dev = fast iteration with sanity checks (~8-10 min wall);
-# push to main = the full pipeline (main.yml); deep/slow legs run on a schedule
-# (nightly.yml). PRs to either branch get this fast lane; PRs to main
-# additionally trigger main.yml.
-#
-# House rules (Constitution III.11 — Loud Failure):
-#   - every job carries timeout-minutes (a hang must die loudly, not run 56min);
-#   - no continue-on-error except jobs explicitly named "(advisory)";
-#   - steps invoke the same mise tasks devs run locally — one invocation
-#     source of truth (the bootstrap composite pins the identical toolchain).
+# Dev validates changed executable inputs and a real PostgreSQL smoke.
+# Main PRs and manual runs execute the full native and database suites.
+# The final gate fails on missing, failed, or unexpectedly skipped jobs.
 
 on:
   push:
@@ -25,141 +16,416 @@ permissions:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  fast-gate:
-    name: Fast Gate (hygiene, lint, format, imports, types, lock)
+  scope:
+    name: Select CI Scope
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 5
+    outputs:
+      rust: ${{ steps.scope.outputs.rust }}
+      python: ${{ steps.scope.outputs.python }}
+      postgres: ${{ steps.scope.outputs.postgres }}
+      full: ${{ steps.scope.outputs.full }}
+      plan: ${{ steps.scope.outputs.plan }}
+      pg-matrix: ${{ steps.scope.outputs.pg-matrix }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - id: scope
+        run: python3 tools/ci_scope.py
 
-      # gdal:true — mypy's django-stubs plugin loads Django settings at
-      # startup, and the postgis backend imports GEOS/GDAL/PROJ.
+  fast-gate:
+    name: Repository Checks
+    needs: scope
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
       - uses: ./.github/actions/bootstrap-python
+      - name: Validate installed hook configuration and commit conventions
+        env:
+          COMMIT_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          COMMIT_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          uv run --frozen pre-commit validate-config
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            COMMIT_BASE="$(git rev-parse "${COMMIT_HEAD}^")"
+          fi
+          uv run --frozen python tools/release_version.py \
+            --check-commits "$COMMIT_BASE" "$COMMIT_HEAD"
+          python3 tools/release_version.py --json
+      - name: Static checks
+        run: mise run check:static
+
+  rust-gate:
+    name: Rust Validation
+    needs: scope
+    if: needs.scope.outputs.rust == 'true'
+    runs-on: ubuntu-latest
+    # Cold workspace compilation and tests can consume 20 minutes before
+    # doctests, documentation, sentinels and the dependency audit finish.
+    timeout-minutes: 45
+    # Retain filename/line backtraces in CI; local workspace debugger support
+    # keeps the full debug information configured by Cargo's dev/test defaults.
+    env:
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
+      CARGO_PROFILE_TEST_DEBUG: line-tables-only
+    steps:
+      # fetch-depth: 0 (full history + tags, matching ci.yml's own pattern at
+      # ceremony-gate/gitleaks below): check:bsl-sentinels' citation-drift
+      # check resolves `.py` citations via `git show p27-python-freeze:<path>`
+      # (Amendment AE) — a default shallow/no-tags checkout wouldn't have that
+      # tag ref at all, aborting the whole ci:rust leg (task-w1-review.md C1).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          gdal: "true"
+          fetch-depth: 0
 
-      # Incremental mypy state. Key ends in the commit SHA so every run saves
-      # a fresh snapshot; restore-keys fall back to the newest same-lock cache.
-      # Speed only — mypy's verdict is identical warm or cold.
-      - name: Cache mypy incremental state
-        uses: actions/cache@v6
+      # Bevy's Linux windowing/audio stack (babylon-client, Amendment AF)
+      # compiles against system Wayland/X11/ALSA/udev headers — the wayland-sys
+      # build script hard-fails without pkg-config entries for them. These are
+      # the four packages Bevy's own Linux CI installs; compile-time only, no
+      # display server needed (tests run headless).
+      - name: Install Bevy system dependencies (compile-time headers)
+        run: >-
+          tools/install_ci_apt_packages.sh
+          libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev
+
+      - name: Set up tools with mise
+        uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4
         with:
-          path: .mypy_cache
-          key: mypy-${{ runner.os }}-py3.12-${{ hashFiles('poetry.lock') }}-${{ github.sha }}
-          restore-keys: |
-            mypy-${{ runner.os }}-py3.12-${{ hashFiles('poetry.lock') }}-
+          version: 2026.9.1
+          cache: true
 
-      - name: Repo hygiene gate
-        run: mise run check:hygiene
+      - name: Install Rust toolchain (with rustfmt + clippy)
+        run: |
+          CHANNEL="$(sed -n 's/^channel = "\(.*\)"$/\1/p' rust/rust-toolchain.toml)"
+          rustup toolchain install "$CHANNEL" --profile minimal \
+            --component rustfmt --component clippy --no-self-update
 
-      - name: Lint (ruff check)
-        run: mise run lint:check
+      - name: Install Rust test reporter
+        uses: taiki-e/install-action@7b8d4719ee4aaa279bdf55df38dacb9ebfe12a6c # v2.87.6
+        with:
+          tool: cargo-nextest@0.9.143,cargo-deny@0.20.2
+          fallback: none
 
-      - name: Format (ruff format --check — blocking)
-        run: mise run format:check
+      # Restore is intentionally separate from save. Pull requests can consume
+      # the newest compatible dev cache but cannot publish build output. The
+      # source hash prevents a lock/toolchain-only exact hit from going stale.
+      - name: Restore cargo cache
+        id: cargo-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            rust/target/.rustc_info.json
+            rust/target/debug/.cargo-lock
+            rust/target/debug/.fingerprint
+            rust/target/debug/build
+            rust/target/debug/*.d
+            rust/target/debug/deps/*.d
+            rust/target/debug/deps/*.rlib
+            rust/target/debug/deps/*.rmeta
+            rust/target/debug/deps/*.so
+            rust/target/debug/deps/*.a
+            rust/target/debug/examples/*.d
+            rust/target/debug/examples/*.rlib
+            rust/target/debug/examples/*.rmeta
+            rust/target/debug/examples/*.so
+            rust/target/debug/examples/*.a
+            rust/target/doc
+          key: "cargo-gate-${{ runner.os }}-v4-dev-${{ env.CARGO_PROFILE_DEV_DEBUG }}-test-${{ \
+               env.CARGO_PROFILE_TEST_DEBUG }}-${{ hashFiles('rust/Cargo.lock', 'rust/rust-toolchain.toml', \
+               'rust/Cargo.toml') }}-${{ hashFiles('rust/crates/**', '!rust/crates/**/target/**', \
+               'rust/*.toml', 'rust/.cargo/**', 'rust/.config/**', 'contracts/**', 'content/**', 'assets/**', \
+               'docker/postgres/**', 'docker-compose*.yml', 'src/babylon/data/reference/economy/**', \
+               'tests/fixtures/qcew_economics/**', 'tools/pr_merge.py', 'tools/pr_policy.py', \
+               'tools/qcew_county_economics_v1_source_manifest.json', 'tools/run_rust_postgres.sh', \
+               'tools/rust_test_report.py', '.mise.toml', '.github/**') }}"
+          restore-keys: "cargo-gate-${{ runner.os }}-v4-dev-${{ env.CARGO_PROFILE_DEV_DEBUG }}-test-${{ \
+                        env.CARGO_PROFILE_TEST_DEBUG }}-${{ hashFiles('rust/Cargo.lock', \
+                        'rust/rust-toolchain.toml', 'rust/Cargo.toml') }}-\n\
+                        "
+      - name: Rust validation
+        env:
+          FULL_QUALIFICATION: ${{ needs.scope.outputs.full }}
+        run: |
+          if [ "$FULL_QUALIFICATION" = true ]; then
+            mise run ci:rust
+          else
+            mise run rust:check-no-docs -- --dev
+          fi
 
-      - name: Import-boundary contracts
-        run: mise run lint:imports
+      - name: Upload Rust test reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: rust-test-results-${{ github.sha }}
+          path: reports/test-results/rust/
+          retention-days: 14
+          if-no-files-found: error
 
-      - name: Type check (mypy strict)
-        run: mise run typecheck
+      # ADR181 R6: supply-chain gate for the engine language — advisories,
+      # bans, licenses, and a [sources] allowlist covering the rev-pinned
+      # hypergraph-rs git dep (invisible to version->advisory matching by
+      # construction; the allowlist + manual rev-bump protocol is the
+      # ceiling). Config: rust/deny.toml.
+      - name: cargo-deny (advisories, bans, licenses, sources)
+        # Same pinned audit and all-feature scope, without a second Rust
+        # installation inside the action's container.
+        # The dynamic-linking fence admits this exact physical audit command.
+        # yamllint disable-line rule:line-length
+        run: cargo-deny --log-level warn --manifest-path rust/Cargo.toml --all-features check advisories bans licenses sources
 
-      - name: Poetry lock consistency
-        run: poetry check --lock
+      # Cache reusable compiler outputs, not multi-gigabyte test executables or
+      # incremental state. Oversized caches never weaken the gate: validation
+      # remains green or red on its own merits, but publication is skipped and
+      # the reason is visible in both the log and run summary.
+      - name: Measure cargo cache payload
+        id: cargo-cache-size
+        shell: bash
+        env:
+          CARGO_CACHE_HIT: ${{ steps.cargo-cache.outputs.cache-hit }}
+          CARGO_CACHE_MATCHED_KEY: ${{ steps.cargo-cache.outputs.cache-matched-key }}
+        run: |
+          set -euo pipefail
+          max_bytes=$((8 * 1024 * 1024 * 1024))
+          cache_bytes=0
+          for cache_path in \
+            "$HOME/.cargo/registry" \
+            "$HOME/.cargo/git" \
+            rust/target/debug/.fingerprint \
+            rust/target/debug/build \
+            rust/target/doc; do
+            if [[ -e "$cache_path" ]]; then
+              path_bytes="$(du -sb "$cache_path" | cut -f1)"
+              cache_bytes=$((cache_bytes + path_bytes))
+            fi
+          done
+          for cache_file in rust/target/.rustc_info.json rust/target/debug/.cargo-lock; do
+            if [[ -f "$cache_file" ]]; then
+              cache_bytes=$((cache_bytes + $(stat -c %s "$cache_file")))
+            fi
+          done
+          find_roots=()
+          for cache_root in \
+            rust/target/debug \
+            rust/target/debug/deps \
+            rust/target/debug/examples; do
+            if [[ -d "$cache_root" ]]; then
+              find_roots+=("$cache_root")
+            fi
+          done
+          if (( ${#find_roots[@]} > 0 )); then
+            while IFS= read -r -d '' cache_file; do
+              cache_bytes=$((cache_bytes + $(stat -c %s "$cache_file")))
+            done < <(
+              find "${find_roots[@]}" -maxdepth 1 -type f \
+                \( -name '*.d' -o -name '*.rlib' -o -name '*.rmeta' \
+                -o -name '*.so' -o -name '*.a' \) -print0
+            )
+          fi
+          if (( cache_bytes <= max_bytes )); then
+            within_bound=true
+          else
+            within_bound=false
+          fi
+          echo "cargo-cache exact_restore=${CARGO_CACHE_HIT:-false}"
+          echo "cargo-cache matched_key=${CARGO_CACHE_MATCHED_KEY:-none}"
+          echo "cargo-cache payload_bytes=$cache_bytes"
+          echo "cargo-cache publication_bound_bytes=$max_bytes"
+          echo "cargo-cache within_publication_bound=$within_bound"
+          echo "bytes=$cache_bytes" >> "$GITHUB_OUTPUT"
+          echo "within-bound=$within_bound" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Rust cargo cache"
+            echo "- exact restore: ${CARGO_CACHE_HIT:-false}"
+            echo "- matched key: ${CARGO_CACHE_MATCHED_KEY:-none}"
+            echo "- payload bytes: $cache_bytes"
+            echo "- publication bound bytes: $max_bytes"
+            echo "- within publication bound: $within_bound"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publish trusted cargo cache
+        if: >-
+          github.event_name == 'push' && github.ref == 'refs/heads/dev' &&
+          success() && steps.cargo-cache-size.outputs.within-bound == 'true' &&
+          steps.cargo-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            rust/target/.rustc_info.json
+            rust/target/debug/.cargo-lock
+            rust/target/debug/.fingerprint
+            rust/target/debug/build
+            rust/target/debug/*.d
+            rust/target/debug/deps/*.d
+            rust/target/debug/deps/*.rlib
+            rust/target/debug/deps/*.rmeta
+            rust/target/debug/deps/*.so
+            rust/target/debug/deps/*.a
+            rust/target/debug/examples/*.d
+            rust/target/debug/examples/*.rlib
+            rust/target/debug/examples/*.rmeta
+            rust/target/debug/examples/*.so
+            rust/target/debug/examples/*.a
+            rust/target/doc
+          key: ${{ steps.cargo-cache.outputs.cache-primary-key }}
+
+  # §6.5 Provenance & Ceremony (owner ruling 2026-07-20; doctrine in CLAUDE.md
+  # "Baseline ceremonies"): every PR commit touching tests/baselines/** must
+  # declare its ceremony with a `Baselines: blessed(<slug>)` trailer. PR-only:
+  # dev/main only move via PRs, so the PR range is the authoritative boundary
+  # (the commit-msg pre-commit hook is the best-effort local leg). Stdlib-only
+  # script — no project dependency installation needed.
+  ceremony-gate:
+    name: Baseline Ceremony Gate (§6.5 provenance)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: scope
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - name: Ceremony declarations present on baseline-touching commits
+        if: github.event_name == 'pull_request'
+        run: >-
+          python3 tools/check_baseline_ceremony.py
+          --range "${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"
+          --respect-introduction
 
   test-unit:
-    name: Unit Tests (xdist, coverage gate)
+    name: Python Tooling Tests
+    needs: scope
+    if: needs.scope.outputs.python == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 1
+          persist-credentials: true
+
+      - name: Fetch pinned Constitution predecessors (bounded)
+        shell: bash
+        run: |
+          set -euo pipefail
+          git -c protocol.version=2 fetch \
+            --depth=1 --no-tags --prune --no-recurse-submodules origin \
+            +3acd1089b6b4e68177c99b4f4cec245e7b74317c:refs/remotes/origin/constitution-v3.1 \
+            +cbfc67921283ccb6e00c4b0278288a232281440a:refs/remotes/origin/constitution-v3.2
+          test "$(git rev-parse 3acd1089b6b4e68177c99b4f4cec245e7b74317c:CONSTITUTION.md)" = \
+            "a265b85120ed2a90be40c72e63ee5bf27fc6e703"
+          test "$(git rev-parse cbfc67921283ccb6e00c4b0278288a232281440a:CONSTITUTION.md)" = \
+            "e905e90d66bddc6e4eca36a3896428f5ce63de5b"
 
       - uses: ./.github/actions/bootstrap-python
-        with:
-          gdal: "true"
 
-      - name: Unit shard (excludes ai/slow/reference-DB; engine/systems cov >= 80%)
+      - name: Retained Python unit contracts
         run: mise run test:unit-ci
 
       - name: Upload test results + coverage
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: unit-ci-results
           path: reports/test-results/unit-ci/
+          retention-days: 14
 
-  qa-regression:
-    name: Determinism Gate (byte-identical dense goldens)
+  pg-integration-shards:
+    name: PostgreSQL Contract (${{ matrix.focus }})
+    needs: scope
+    if: needs.scope.outputs.postgres == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 55
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix: ${{ fromJSON(needs.scope.outputs.pg-matrix) }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      # No gdal: the 5 regression scenarios are synthetic in-memory factories
-      # (no Django, no reference DB, no Postgres) — proven by the Phase-0
-      # probe: byte-identical on hosted runners across CPU/glibc/Python.
-      - uses: ./.github/actions/bootstrap-python
+      - uses: ./.github/actions/bootstrap-persistence
+        id: persistence-cache
+        with:
+          cache-key: ${{ matrix.focus }}
 
-      - name: qa:regression (5 scenarios vs committed baselines)
-        run: mise run qa:regression
+      - uses: ./.github/actions/build-postgres
+        id: postgres-image
 
-  frontend:
-    name: Frontend (tsc, eslint, prettier, vitest, build)
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v7
+      - name: Rust PostgreSQL contract
+        timeout-minutes: 45
+        env:
+          BABYLON_POSTGRES_LIVE_FOCUS: ${{ matrix.focus }}
+          BABYLON_POSTGRES_IMAGE_ID: ${{ steps.postgres-image.outputs.image-id }}
+        run: tools/run_rust_postgres.sh
 
-      - uses: ./.github/actions/bootstrap-node
-
-      - name: Check (tsc + eslint + prettier + vitest)
-        working-directory: src/frontend
-        run: npm run check
-
-      - name: Build
-        working-directory: src/frontend
-        run: npm run build
-
-      - name: npm audit (prod deps, high+)
-        working-directory: src/frontend
-        run: npm audit --omit=dev --audit-level=high
+      - name: Save successful persistence cache
+        if: >-
+          success() && github.event_name != 'pull_request' &&
+          (github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/main') &&
+          steps.persistence-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          key: ${{ steps.persistence-cache.outputs.cache-key }}
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            rust/target/.rustc_info.json
+            rust/target/debug/.cargo-lock
+            rust/target/debug/.fingerprint
+            rust/target/debug/build
+            rust/target/debug/deps
+            rust/target/debug/babylon-runtime
+            rust/target/debug/babylon-runtime.d
 
   security:
+    needs: scope
+    if: needs.scope.outputs.python == 'true'
     # Blocking since 2026-07-11: item 41 closed the CVE wave (73 -> 5, the
     # residue in security/pip-audit-ignores.toml with reasons + expiries).
     name: Security Audit (pip-audit policy — blocking since item-41)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - uses: ./.github/actions/bootstrap-python
+        with:
+          ops: "true"
 
       - name: pip-audit (policy wrapper — ignores carry reason + expiry)
         run: mise run security:pip-audit
 
   gitleaks:
+    needs: scope
     name: Secret Scan (gitleaks, full history)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
-      - uses: gitleaks/gitleaks-action@v3
+      - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   trivy-config:
+    needs: scope
     name: IaC Config Scan (trivy, HIGH+CRITICAL blocking)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v7
-      - uses: aquasecurity/trivy-action@v0.36.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: config
           scan-ref: .
@@ -168,3 +434,25 @@ jobs:
           skip-dirs: .pre-commit-cache
           trivyignores: .trivyignore
           cache: "true"
+
+  ci-gate:
+    name: CI Gate
+    needs:
+      - scope
+      - fast-gate
+      - ceremony-gate
+      - rust-gate
+      - test-unit
+      - security
+      - gitleaks
+      - trivy-config
+      - pg-integration-shards
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Require every selected job
+        env:
+          CI_NEEDS: ${{ toJSON(needs) }}
+        run: python3 tools/ci_scope.py --verify

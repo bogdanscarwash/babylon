@@ -1,0 +1,243 @@
+; The PRIMARY conformance world for `class-dynamics/*` (Feature-016 Class
+; Dynamics Engine, Material Base @4.0), Task 2 of the TickDynamics port
+; train (`docs/superpowers/plans/2026-08-18-tickdynamics-port.md`).
+;
+; **Scope boundary (§0.1).** This pack ports ONLY Feature-016 — the seven
+; modules under `src/babylon/domain/economics/dynamics/` plus the single
+; `system/__init__.py:2346-2458` caller — NOT all of TickDynamicsSystem.
+; The residual @4.0 computations (external-service boundary, opaque object
+; metadata, reserve-army sigmoid) remain outside this train.
+;
+; **Declaration order is NodeId order (D96) — never renumber when extending.**
+;   wayne        NodeId(0)  TERRITORY — primary county, bootstrap shares.
+;   oakland      NodeId(1)  TERRITORY — different shares/rates, proves no
+;                              global flattening.
+;   wayne-prole  NodeId(2)  SOCIAL_CLASS — TENANCY→wayne; ternary rest (0,1,0).
+;   wayne-la     NodeId(3)  SOCIAL_CLASS — TENANCY→wayne; non-zero fascist
+;                              so `a13`'s readout is non-zero.
+;   shared-class NodeId(4)  SOCIAL_CLASS — TENANCY→wayne AND oakland;
+;                              the D136 dual-membership mean vector.
+;   orphan-class NodeId(5)  SOCIAL_CLASS — no TENANCY edge; contributes to
+;                              no county.
+;
+; **Seeding discipline.** Every declared field is seeded on every node of its
+; namespace (scenario.rs's no-defaults contract, §4.3). Fractional seeds are
+; legal on `real`/`probability`/`intensity`/`coefficient`; `int` fields refuse
+; them. Fields written ONLY by the pack are seeded to their neutral zero so
+; the no-defaults law stays visible and the first boundary's writes are
+; mutation-provable.
+;
+; **Which seeded value proves which gate, by name:**
+;   - `wayne` bootstrap shares (0.01/0.09/0.40/0.35/0.15) — R5 five-class seed.
+;   - `oakland` different shares + higher unemployment (0.10) — no global
+;     flattening across counties.
+;   - `wayne/median-wage 21.0` (hourly) — the F11 accumulation mirror's wage
+;     base; `phi-hour 0.0` — zero-Φ baseline.
+;   - `wayne-prole` ternary (r=0, f=0) vs `wayne-la` f=0.1p — non-zero a13.
+;   - `shared-class` dual TENANCY — D136 mean (not sum) attribution.
+;   - `orphan-class` no TENANCY — must not enter any county fold.
+;   - `wayne/baseline-la-known 0` — a10's run-start latch is initially open.
+;   - default rates 0.006/0.006/0.063 — dispossession fallback values.
+;
+; **The SPIKE RESULTS block (Task 1, 2026-08-18) lands in the header of
+; `content/rules/class-dynamics.bsl` — the dossier's §10 verbatim copy.**
+;
+; **CrisisPhase enum order is hash-bearing (ADR195)** — frozen declaration
+; order: NORMAL=0, ONSET=1, EARLY=2, DEEP=3, RECOVERY=4.
+(scenario class-dynamics/conformance
+  (defvocabulary NodeType (SOCIAL_CLASS TERRITORY))
+  (defvocabulary EdgeType (TENANCY))
+  (defenum CrisisPhase (NORMAL ONSET EARLY DEEP RECOVERY))
+
+  ; ---- territory fields: the 17-field roster + 7 staging fields (§4.2) ----
+  ; Five externally-fixed bootstrap shares — probability intensive.
+  (deffield territory/share-bourgeoisie probability intensive)
+  (deffield territory/share-petit-bourgeoisie probability intensive)
+  (deffield territory/share-labor-aristocracy probability intensive)
+  (deffield territory/share-proletariat probability intensive)
+  (deffield territory/share-lumpenproletariat probability intensive)
+  ; The distribution year, incremented once per boundary (D-NF+3/D-NF+4).
+  (deffield territory/dist-year int extensive)
+  ; R10 cumulative baseline and its III.11 loud-absence latch.
+  (deffield territory/baseline-la-share probability intensive)
+  (deffield territory/baseline-la-known int extensive)
+  ; Economic conditions inputs.
+  (deffield territory/unemployment-rate probability intensive)
+  (deffield territory/median-wage real intensive)
+  (deffield territory/phi-hour real intensive)
+  ; Dispossession fallback rates (frozen defaults).
+  (deffield territory/foreclosure-rate probability intensive)
+  (deffield territory/bankruptcy-rate probability intensive)
+  (deffield territory/eviction-rate probability intensive)
+  ; Crisis phase — declared input until the crisis-detector train lands
+  ; (BLOCKER-4, D-NF+27).
+  (deffield territory/crisis-phase enum CrisisPhase)
+  ; R9's published coupling, written by `economics/phi-savings-coupling`
+  ; (D-NF+18); seeded to zero because the rule runs every tick.
+  (deffield territory/phi-savings-adjustment coefficient intensive)
+  ; R6 readout range [−1,+1] by construction, so `real` (D-NF+17).
+  (deffield territory/bifurcation-score real intensive)
+  ; Staging fields: four rate constructors and three raw flow outputs.
+  (deffield territory/rate-accumulation probability intensive)
+  (deffield territory/rate-dispossession probability intensive)
+  (deffield territory/rate-precaritization probability intensive)
+  (deffield territory/rate-stabilization probability intensive)
+  (deffield territory/raw-share-labor-aristocracy real intensive)
+  (deffield territory/raw-share-proletariat real intensive)
+  (deffield territory/raw-share-lumpenproletariat real intensive)
+
+  ; ---- class-side fields: one net-new publication + three landed reads ----
+  (deffield social-class/ternary-net-fascist real intensive)
+  (deffield social-class/revolutionary probability intensive)
+  (deffield social-class/fascist probability intensive)
+  (deffield social-class/population int extensive)
+
+  ; ---- the 46-constant canonical block (§4.5) ----
+  ; Every constant carries frozen file:line provenance; register citations use
+  ; NEXT-FREE-AT-LANDING placeholders (D-NF+n). The seven multipliers that
+  ; exceed 1.0 use the scaled-Int x1e6 lane (D-NF+5); remaining multipliers
+  ; and all [0,1] rates use scaled literals directly.
+  ;
+  ; Engine parameters — transition_engine.py:51-54.
+  (defconst class-dynamics/wealth-threshold 142000)        ; int
+  (defconst class-dynamics/precaritization-unemployment-weight 0.5c)
+  (defconst class-dynamics/base-stabilization 0.15c)
+  (defconst class-dynamics/max-accumulation-rate 0.08c)
+  ; Phased amplification table — crisis.py:24-55 (20 constants).
+  ; NORMAL is passthrough (1.0); every multiplier > 1.0 is stored x1e6 per
+  ; D-NF+5 so a rule descales once with one rounding. The plan's §4.5 says
+  ; "seven"; the frozen table actually contains eight values > 1.0 (1.2
+  ; appears twice), so this block uses eight x1e6 constants — a plan-citation
+  ; drift adapted to the code.
+  (defconst class-dynamics/amp-normal-dispossession 1.0c)
+  (defconst class-dynamics/amp-normal-precaritization 1.0c)
+  (defconst class-dynamics/amp-normal-accumulation 1.0c)
+  (defconst class-dynamics/amp-normal-stabilization 1.0c)
+  (defconst class-dynamics/amp-onset-dispossession-x1e6 1200000)
+  (defconst class-dynamics/amp-onset-precaritization-x1e6 1500000)
+  (defconst class-dynamics/amp-onset-accumulation 0.8c)
+  (defconst class-dynamics/amp-onset-stabilization 0.7c)
+  (defconst class-dynamics/amp-early-dispossession-x1e6 1800000)
+  (defconst class-dynamics/amp-early-precaritization-x1e6 2500000)
+  (defconst class-dynamics/amp-early-accumulation 0.4c)
+  (defconst class-dynamics/amp-early-stabilization 0.4c)
+  (defconst class-dynamics/amp-deep-dispossession-x1e6 3000000)
+  (defconst class-dynamics/amp-deep-precaritization-x1e6 3500000)
+  (defconst class-dynamics/amp-deep-accumulation 0.1c)
+  (defconst class-dynamics/amp-deep-stabilization 0.2c)
+  (defconst class-dynamics/amp-recovery-dispossession-x1e6 1300000)
+  (defconst class-dynamics/amp-recovery-precaritization-x1e6 1200000)
+  (defconst class-dynamics/amp-recovery-accumulation 0.6c)
+  (defconst class-dynamics/amp-recovery-stabilization 0.5c)
+  ; Dispossession composite weights (LA→P only) — dispossession.py:30-36.
+  (defconst class-dynamics/foreclosure-weight-la-to-p 0.6c)
+  (defconst class-dynamics/bankruptcy-weight-la-to-p 0.3c)
+  (defconst class-dynamics/eviction-weight-la-to-p 0.1c)
+  ; Savings schedule — savings_schedule.py:21-31.
+  (defconst class-dynamics/savings-proletariat 0.03c)
+  (defconst class-dynamics/phi-cap 0.05c)
+  ; Dispossession-rate defaults — system/__init__.py:2383-2385.
+  (defconst class-dynamics/default-foreclosure-rate 0.006p)
+  (defconst class-dynamics/default-bankruptcy-rate 0.006p)
+  (defconst class-dynamics/default-eviction-rate 0.063p)
+  ; Wage / subsistence — system/__init__.py:2378-2380, defines.yaml.
+  (defconst class-dynamics/hours-per-year 2080)
+  (defconst class-dynamics/v-reproduction 12)
+  (defconst class-dynamics/accumulation-halt-floor-ratio 0.8c)
+  ; Bootstrap five-class shares — types.py:44-48 / R5.
+  (defconst class-dynamics/bootstrap-bourgeoisie 0.01c)
+  (defconst class-dynamics/bootstrap-petit-bourgeoisie 0.09c)
+  (defconst class-dynamics/bootstrap-labor-aristocracy 0.40c)
+  (defconst class-dynamics/bootstrap-proletariat 0.35c)
+  (defconst class-dynamics/bootstrap-lumpenproletariat 0.15c)
+  ; Cascade milestones + bifurcation threshold — R5 / R6.
+  (defconst class-dynamics/cascade-milestone-1 0.05c)
+  (defconst class-dynamics/cascade-milestone-2 0.10c)
+  (defconst class-dynamics/cascade-milestone-3 0.15c)
+  (defconst class-dynamics/bifurcation-event-threshold 0.5c)
+  ; Year clamp window — transition_engine.py / types.py validators.
+  (defconst class-dynamics/year-min 2007)
+  (defconst class-dynamics/year-max 2030)
+
+  ; ---- nodes (declaration order = NodeId order; never renumber) ----
+  (node wayne NodeType/TERRITORY
+    (territory/share-bourgeoisie 0.01c)
+    (territory/share-petit-bourgeoisie 0.09c)
+    (territory/share-labor-aristocracy 0.40c)
+    (territory/share-proletariat 0.35c)
+    (territory/share-lumpenproletariat 0.15c)
+    (territory/dist-year 2010)
+    (territory/baseline-la-share 0.0p)
+    (territory/baseline-la-known 0)
+    (territory/unemployment-rate 0.05p)
+    (territory/median-wage 21.0r)
+    (territory/phi-hour 0)
+    (territory/foreclosure-rate 0.006p)
+    (territory/bankruptcy-rate 0.006p)
+    (territory/eviction-rate 0.063p)
+    (territory/crisis-phase CrisisPhase/NORMAL)
+    (territory/phi-savings-adjustment 0.0c)
+    (territory/bifurcation-score 0)
+    (territory/rate-accumulation 0.0c)
+    (territory/rate-dispossession 0.0c)
+    (territory/rate-precaritization 0.0c)
+    (territory/rate-stabilization 0.0c)
+    (territory/raw-share-labor-aristocracy 0)
+    (territory/raw-share-proletariat 0)
+    (territory/raw-share-lumpenproletariat 0))
+
+  (node oakland NodeType/TERRITORY
+    (territory/share-bourgeoisie 0.02c)
+    (territory/share-petit-bourgeoisie 0.08c)
+    (territory/share-labor-aristocracy 0.35c)
+    (territory/share-proletariat 0.40c)
+    (territory/share-lumpenproletariat 0.15c)
+    (territory/dist-year 2010)
+    (territory/baseline-la-share 0.0p)
+    (territory/baseline-la-known 0)
+    (territory/unemployment-rate 0.10p)
+    (territory/median-wage 25.0r)
+    (territory/phi-hour 0)
+    (territory/foreclosure-rate 0.006p)
+    (territory/bankruptcy-rate 0.006p)
+    (territory/eviction-rate 0.063p)
+    (territory/crisis-phase CrisisPhase/NORMAL)
+    (territory/phi-savings-adjustment 0.0c)
+    (territory/bifurcation-score 0)
+    (territory/rate-accumulation 0.0c)
+    (territory/rate-dispossession 0.0c)
+    (territory/rate-precaritization 0.0c)
+    (territory/rate-stabilization 0.0c)
+    (territory/raw-share-labor-aristocracy 0)
+    (territory/raw-share-proletariat 0)
+    (territory/raw-share-lumpenproletariat 0))
+
+  (node wayne-prole NodeType/SOCIAL_CLASS
+    (social-class/revolutionary 0.0p)
+    (social-class/fascist 0.0p)
+    (social-class/population 100)
+    (social-class/ternary-net-fascist 0))
+
+  (node wayne-la NodeType/SOCIAL_CLASS
+    (social-class/revolutionary 0.0p)
+    (social-class/fascist 0.1p)
+    (social-class/population 50)
+    (social-class/ternary-net-fascist 0))
+
+  (node shared-class NodeType/SOCIAL_CLASS
+    (social-class/revolutionary 0.05p)
+    (social-class/fascist 0.0p)
+    (social-class/population 80)
+    (social-class/ternary-net-fascist 0))
+
+  (node orphan-class NodeType/SOCIAL_CLASS
+    (social-class/revolutionary 0.0p)
+    (social-class/fascist 0.0p)
+    (social-class/population 30)
+    (social-class/ternary-net-fascist 0))
+
+  ; ---- TENANCY edges (class → territory) ----
+  (edge EdgeType/TENANCY wayne-prole wayne 1)
+  (edge EdgeType/TENANCY wayne-la wayne 1)
+  (edge EdgeType/TENANCY shared-class wayne 1)
+  (edge EdgeType/TENANCY shared-class oakland 1))

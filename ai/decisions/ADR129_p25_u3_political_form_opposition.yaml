@@ -1,0 +1,50 @@
+ADR129_p25_u3_political_form_opposition:
+  status: "accepted"
+  date: "2026-07-22"
+  title: >-
+    P25 U3 — political_form joins the opposition catalog (19th binding, index
+    bound at this commit per ADR126 ruling 2): self-organization ⇄
+    representation, shadow-first per the ADR127 launch ruling with the
+    declared promotion ceremony scheduled at U10; measure reads the
+    pre-derived political_labor_share GraphInputs field (None → honest (0,0)
+    absence in every org-less scenario); couplings DEFERRED to their lighting
+    units; qa:regression byte-identical proved as the unit gate.
+  supersedes: []
+  relates_to: ["ADR127", "ADR126", "ADR077", "ADR078"]
+  programs: ["25-political-superstructure"]
+
+  decision: |
+    (1) BINDING: catalog key "political_form" (alphabetical slot between
+        national and price_value), poles self-organization (A) ⇄
+        representation (B), antagonistic=False (both are forms of one class's
+        political existence — the-electoral-question.md §2.6), level_name ""
+        (unplaced; aggregates class-wide, the national/credit idiom).
+    (2) MEASURE: _political_form_measure reads GraphInputs.political_labor_share
+        (new field, None default) — the pre-derived signed share of class
+        political labor-hours through representation vs self-organization,
+        I-FRESH per the ruling (measured from flows each tick, no
+        accumulator). None → GapReading(0,0), the by-construction honest
+        absence (III.11) in all six qa:regression scenarios; the field's
+        producer arrives with U5's party/organ flow producers.
+    (3) SHADOW-FIRST (ADR127 launch ruling B): rides shadow_opposition_states
+        exactly as national/price_value did at birth; barred from principal
+        contention by the _principal_key filter — the DECLARED ADR078-style
+        promotion ceremony at U10 (regenerated baselines + R-PROOF) is where
+        §2.6's principal-contradiction payoff arrives, loudly.
+    (4) COUPLINGS DEFERRED: wage→political_form (feeds), political_form→
+        atomization (constrains), imperial→political_form (transforms) are
+        NOT authored now — the coupling graph is a claim about the code
+        (catalog.py's own discipline note), and their operational sides are
+        U8's valve and U9's funding identity. Each lighting unit adds its
+        edge with its citation.
+    (5) GATE: mise run qa:regression byte-identical 6/6 post-change (no
+        ceremony — GameDefines untouched by this unit); dialectics suite
+        364/364; registry-shape pins updated 18→19 with the shadow set.
+
+  consequences:
+    positive:
+      - "The §2.6 dialectics housing exists; U5's producers light the measure without another catalog touch."
+      - "Byte-safety proved, not asserted — the unit gate ran."
+    negative_or_gated:
+      - "political_form cannot lead the principal scorer until U10's ceremony (deliberate, loud)."
+      - "The measure reads absence everywhere until U5 — a live-but-unfed binding, declared here."

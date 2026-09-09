@@ -1,0 +1,21 @@
+# Babylon bundled model manifest (D3, ADR096).
+#
+# This versioned manifest ships inside the package. Native source installation
+# provides no separate manifest signature; downloads must match the declared
+# SHA-256 and byte length. Weights are fetched by `babylon doctor --provision`
+# into ~/.local/share/babylon/models/.
+#
+# Every entry is `available = false` until the owner uploads the gguf to the
+# babylon-data R2 bucket and fills url/sha256/bytes, then flips available.
+# Provision reports the owner-provisioning gate loudly while nothing is available.
+
+[[model]]
+name = "babylon-chat"
+kind = "chat"
+available = false
+
+[[model]]
+name = "babylon-embed"
+kind = "embed"
+available = false
+dims = 768

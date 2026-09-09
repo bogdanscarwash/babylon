@@ -1,0 +1,164 @@
+ADR089_vol3_money_scissors:
+  status: "accepted"
+  date: "2026-07-19"
+  title: "Volume III Money wired live through the Value-Price Scissors: the dormant Vol III estate (SurplusValueDistribution, DebtAccumulation, FictitiousCapitalStock) connected via calculator_overrides + a new NationalFinancialParameters graph publication + a monetary anchor pulling the market-scissors oscillator toward real FRED-backed ratios where data exists (2010-2024), four new bound oppositions (surplus_distribution/debt_spiral/credit/financial, catalog 6->10) with CouplingGraph activated as ContradictionSystem's first production consumer, a 13-item honesty sweep (including a latent year-ceiling ValidationError crash on the live MELT path), six new sentinel classes, and an endogenous national interest rate (Capital Vol. III Part V) that replaces the FRED interest read with a bounded share of the average rate of profit driven by loan-market tightness, the rate now total (never absent), U9 -- gate byte-identical vs the frozen baselines; regeneration declined as unnecessary under the recorded owner approval (Option B, 2026-07-19)"
+  context: |
+    Design: docs/superpowers/specs/2026-07-18-vol3-money-scissors-design.md.
+    spec-024-capital-volume-iii was built but disconnected: create_financial_
+    services() and the tensor_registry it needs only reached the live engine
+    through engine/simulation/_legacy.py's calculator_overrides conduit, not
+    through web/game/engine_bridge.py (the playable game, national-only) nor
+    tools/regression_test.py (the qa:regression gate, fully dark). Two
+    independent "fictitious capital" concepts existed with no coupling
+    between them (FictitiousCapitalStock, FRED-grounded, dead after one
+    boolean; fictitious_log, the synthetic oscillator with all the teeth).
+    Four dialectic coupling edges (surplus_distribution->debt_spiral,
+    credit->financial, plus price_value<->financial derived against
+    coupling.py's operational definitions) sat reserved-but-unbound for
+    months, logged at INFO and never surfaced.
+  decision: |
+    U1: wired create_financial_services()+tensor_registry through
+    calculator_overrides in both the headless runner and the web bridge;
+    built a committed deterministic FRED fixture
+    (tests/fixtures/vol3_fred_series.json, 10 series) so qa:regression can
+    inject the same overrides hermetically (no DB, no babylon-data drive);
+    repointed graph_bridge.py's tick_ground_rent stamp from the always-None
+    DefaultRentCalculator path to DefaultDistributionCalculator's real
+    FRED-backed figure.
+    U2: honesty sweep -- killed inline coefficients (DEBT_SPIRAL_THRESHOLD,
+    DISTRIBUTION_EPSILON, COUNTER_TENDENCY_WEIGHTS,
+    IMPERIAL_RENT_REFERENCE_SCALE, STAGNATION_CREDIT_GROWTH's bare-
+    GameDefines() import bug) into GameDefines fields; fixed the
+    ge=2007/le=2040 ValidationError (reached at tick ~1612 of 5200 on the
+    already-live MELT path) to degrade to NoDataSentinel past the horizon.
+    U3: NationalFinancialParameters instantiated in
+    _compute_national_financial_state, published via graph_bridge under
+    NATIONAL_FINANCIAL_ATTR = "national_financial", readable by
+    CONSEQUENCE-phase Systems the same tick it's computed.
+    U4: domain/economics/monetary/anchor.py -- fictitious_anchor (log-space
+    pull toward FictitiousCapitalStock.ratio_to_real) and
+    serviceability_anchor (real interest burden i/s), both
+    NoDataSentinel-honest, pure, RNG-free; scissors dynamics unchanged when
+    absent (the ~85%-of-campaign default state).
+    U5: four new oppositions bound in build_default_registry (catalog 6->10,
+    all antagonistic=False -- intra-capital conflict, not the
+    capital_labor/imperial class-rupture pair); GraphInputs gains
+    rentier_share/debt_ratio/credit_fragility/financialization_index;
+    CouplingGraph activated as ServiceContainer's first production
+    consumer, constraining ContradictionSystem's principal-contradiction
+    ranking so a transforms target cannot rank principal while its source
+    reads absent.
+    U6: MarketScissorsSystem's calculate_serviceable_divergence gains an
+    interest-burden term (MarketDefines.correction_interest_slope);
+    correction severity gains an accumulated-debt term
+    (correction_debt_slope); the fictitious oscillator is pulled toward
+    the anchor by MarketDefines.anchor_pull when present.
+    U9 (owner ruling 2026-07-19, spliced after U6): endogenous national
+    interest rate per Capital Vol. III Part V -- no natural rate exists to
+    fall back to (ch. 22), so the rate is computed, never read: i =
+    r*share(tau), bounded 0 <= i < r as an EndogenousInterestRate
+    construction invariant (ch. 22's "maximum limit of interest is the
+    profit itself"); tau = loan-market tightness from the reserve-army
+    demand signal; four capital_vol3 interest_* coefficients,
+    FRED-calibrated and test-pinned; the FRED 4-tuple
+    (national_rate, national_spread, fictitious, interest_unavailable_reason)
+    migrated to the total 3-tuple; interest_unavailable_reason removed.
+    POST-REVIEW REPAIR (the final whole-branch review caught U9 as first
+    landed STRUCTURALLY INERT -- i identically 0.0, a read-before-write on
+    tick-stamped graph attrs dropped by the per-tick to_graph() rebuild):
+    fix wave 0ffe1dc2..2abe5a06 re-sourced r and s_r IN SCOPE from the
+    tick's own county_states/reference tensors (r = Sum(total_s) /
+    Sum(total_s/profit_rate); tensors, deliberately NOT the county MELT
+    quantities, whose capital_stock=0 + employment-placeholder gaps
+    collapse Sum(s)/Sum(c+v) to the rate of EXPLOITATION), restored both
+    anti-inertness sentinel tests as load-bearing end-to-end drives, and
+    unified the duplicate _capital_weighted_mean helpers so the U6
+    serviceability line and the U9 interest ceiling read ONE published
+    rate-of-profit definition. Wayne 26163/2011 pins: r=0.0597, i=0.019855,
+    interest_payments=1.179e9 (33.3% of surplus), profit_of_enterprise
+    positive -- s = p + i + r + t holds substantively, not vacuously.
+    U7: six sentinel packages/extensions -- sentinels/liveness/
+    (correct-but-inert), sentinels/aggregation/ (intensive-aggregation,
+    fixing _mean_profit_rate's unweighted-mean variance error -- and, on
+    its first live scan, catching a SECOND real instance:
+    catalog.py::_mean_asymmetry, wealth-weighted under owner ruling
+    2026-07-19, commit 3072efd4), sentinels/coupling/ (undeclared-coupling,
+    verifying every declared CouplingGraph edge against a real measurement
+    dependency in both directions), gate-blindness extending the existing
+    sentinels/coverage/ package, and sentinels/surface/ (public-surface
+    baseline blindness -- wired as a real check:surface gate, owner
+    ruling 2026-07-19).
+    U8: empirical two-independent-process determinism proof (ADR056
+    precedent) of the per-tick ServiceContainer.create(**overrides)
+    cadence now carrying the Vol III calculator_overrides;
+    reports/vol3-baseline-delta.md's per-scenario mechanism-named delta
+    analysis, adversarially verified (every number independently
+    reproduced); owner approval recorded verbatim in that report and
+    committed as b791aba7. Baseline regeneration DECLINED as unnecessary
+    (owner Option B): the gate is byte-identical against the pre-Vol-III
+    frozen baselines, so tests/baselines/ is untouched -- preserving the
+    invariant that a baselines commit always records a behavioral change.
+    The stale advisory defines_hash values are inherited by the
+    qa:regression modernization program (spec
+    docs/superpowers/specs/2026-07-19-qa-regression-modernization-design.md,
+    element E5), owner-sequenced BEFORE the Volume II circulation program.
+  consequences: |
+    Dialectic catalog grows 6 -> 10 bound oppositions; CouplingGraph gains
+    its first production consumer (ContradictionSystem's principal ranking),
+    so a `transforms` target can no longer rank principal while its source
+    reads absent. TWO places this program alters existing semantics rather
+    than filling absence: that coupling-constrained ranking, and the
+    wealth-weighted asymmetry field (catalog.py::_mean_asymmetry now weights
+    each pair by its engaged wealth a+b, telescoping to gap =
+    Sum|b-a|/Sum(a+b) -- affects the capital_labor, wage, imperial and
+    tenancy oppositions; owner ruling 2026-07-19). GameDefines gains a
+    `capital_vol3` category (13 fields incl. credit_fragility_scale and the
+    four interest_* coefficients) and three MarketDefines coefficients
+    (anchor_pull, correction_interest_slope, correction_debt_slope);
+    defines.yaml regenerated. NationalTickParameters loses its le=2040
+    ceiling (the fabricated-year bug); the Volume III structured layer
+    degrades to NoDataSentinel past 2040 rather than raising. CreditState
+    gains its first production constructor (U3.4) and DEBT_SPIRAL_THRESHOLD
+    its first consumer (U5.10) -- both were dead on arrival before this
+    program. NationalFinancialParameters.interest_rate_state removed
+    (vestigial post-U9; a reader would mistake the live endogenous rate for
+    absent data). Baselines UNTOUCHED: gate byte-identical (the five
+    canonical scenarios are county-free and cannot observe the county-level
+    financial layer -- the coverage blindness that motivated the
+    qa:regression modernization program). Principal contradiction changed
+    in: none of the five frozen scenarios (all county-free; per-scenario
+    tables in reports/vol3-baseline-delta.md).
+    FRED BAA10Y/net-interest series demoted to calibration of
+    capital_vol3.interest_profit_share_* (test-pinned), U9.
+    DISCLOSED INHERITED GAPS (not resolved here): the employment-100k
+    placeholder scales SC-001's ground_rent/taxes_on_surplus magnitudes
+    (the interest headline is placeholder-clean); Wayne capital_stock=0 in
+    the county MELT path (why the tensor r-source is correct); the five
+    stale advisory defines_hash values (modernization program E5).
+    DEFERRED, explicitly: the three-way agricultural/resource/urban rent
+    split (RentCategory stays DORMANT -- no data source); the Volumes I/II
+    economics estate remains outside the qa:regression gate, narrowed with
+    a reason in GATE_ESTATES rather than silently; no UI/lens work; no FRED
+    acquisition beyond the ten committed series in
+    tests/fixtures/vol3_fred_series.json.
+  evidence: |
+    docs/superpowers/specs/2026-07-18-vol3-money-scissors-design.md,
+    reports/vol3-baseline-delta.md (owner approval recorded, b791aba7),
+    docs/superpowers/specs/2026-07-19-qa-regression-modernization-design.md,
+    tests/unit/tools/test_regression_construction_cadence_determinism.py,
+    tests/integration/economics/test_vol3_surplus_distribution_live.py
+    (SC-001, the real-DB anti-inertness drive),
+    src/babylon/domain/economics/monetary/anchor.py,
+    src/babylon/domain/economics/credit/endogenous_interest.py,
+    src/babylon/domain/economics/tick/graph_bridge.py,
+    src/babylon/domain/dialectics/instances/catalog.py,
+    src/babylon/config/defines/capital_vol3.py,
+    src/babylon/config/defines/market.py,
+    src/babylon/sentinels/liveness/, src/babylon/sentinels/aggregation/,
+    src/babylon/sentinels/coupling/, src/babylon/sentinels/coverage/,
+    src/babylon/sentinels/surface/,
+    tests/fixtures/vol3_fred_series.json,
+    ADR056_spec102_gamma_hydration_and_shocks.yaml (determinism-proof
+    precedent), ADR077_market_scissors.yaml, ADR078_market_correction.yaml
+    (shadow-then-ceremony precedent),
+    ADR088_sentinel_error_classes.yaml (the U7 sentinel family)

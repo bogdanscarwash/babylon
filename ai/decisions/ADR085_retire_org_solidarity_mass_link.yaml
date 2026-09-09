@@ -1,0 +1,131 @@
+ADR085_retire_org_solidarity_mass_link:
+  status: "accepted"
+  date: "2026-07-18"
+  title: "Retire the org-sourced MASS_LINK solidarity-transmission branch (DoctrineSystem Unit 6b, ADR073): the only reachable path was a fabricated test fixture — no verb or system ever creates an organization-sourced SOLIDARITY edge — so the read-side code, its defines coefficient, and its fixture are deleted; the sibling CLASS_ANALYSIS theory bonus (same commit, same Unit 6b) stays, because it IS wired to real production verb dispatch"
+  context: |
+    Slice C task T3-4 (Track 2 follow-up) asked to disposition
+    `ideology.py:264-280`, which amplified `solidarity_pressure` when a
+    SOLIDARITY edge's source is an `organization` node, gated by the
+    source org's `MASS_LINK` doctrine tag (ADR073 Unit 6b, commit
+    `9f7e942b`, 2026-07-15).
+
+    VERIFIED (not inferred) before choosing: grepped every `EdgeType.
+    SOLIDARITY` reference and every `add_edge`/`Relationship(edge_type=`
+    call site in `src/`. Exactly two places ever construct a SOLIDARITY
+    edge — `engine/scenarios/_legacy.py:441-450` (PERIPHERY_WORKER ->
+    LABOR_ARISTOCRACY) and `engine/scenarios/_legacy_wayne.py:424-435`
+    (DETROIT_PROLETARIAT -> DEARBORN_WORKERS) — both `SocialClass` ->
+    `SocialClass`, both static scenario genesis, never re-fired mid-game.
+    `struggle.py:341-354` and `community.py:547-573` only `update_edge` on
+    edges that already exist. `DoctrineSystem.step`/`compute_doctrine`
+    (`engine/systems/doctrine.py`) never touches edges — it only rewrites
+    the org node's own three attrs (`acquired_doctrine_ids`,
+    `theoretical_labor`, `doctrine_tags`). No OODA verb
+    (`ooda/action_effects.py`, `engine/actions/*.py`) creates an edge of
+    any kind from an org to a class node except `TRANSACTIONAL`/
+    `PRESENCE`/`HOUSES` (unrelated edge types, unrelated call sites). The
+    ONLY place in the entire repository an organization-sourced SOLIDARITY
+    edge existed was a fixture in
+    `tests/unit/engine/systems/test_ideology.py::
+    test_org_solidarity_transmits_through_mass_link`, which fabricated a
+    node `"vanguard"` (`_node_type="organization"`) and hand-built the
+    edge directly with `graph.add_edge(...)` — the exact "fixture stamps
+    a shape production never emits" failure class CLAUDE.md already names
+    (task #45 audit), just on an edge's source-type combination rather
+    than a node's own type or attribute shape (no existing sentinel rule
+    covers that combination yet; `vocabulary`/`synthetic`/`inert`/
+    `unconsumed` all ran clean before AND after this change — the failure
+    mode is real but outside all four sentinels' current declared scope).
+
+    ADR073's own record (`Unit 6b` paragraph) shows the design INTENT was
+    real: "MASS_LINK-gated org solidarity transmission into the
+    bifurcation router" was one of two Unit 6b feedback mechanisms, sibling
+    to the CLASS_ANALYSIS theory bonus. But only the READ side (this
+    amplification branch) was ever built; the WRITE side — some verb or
+    system that creates or strengthens an org->class SOLIDARITY edge from
+    mass work — was never designed or implemented. The sibling mechanism
+    (CLASS_ANALYSIS theory bonus, `theory_bonus_per_class_analysis`,
+    `ooda/action_effects.py::compute_consciousness_delta`) is NOT in this
+    ADR's scope and is NOT dead: it is called from `resolve_action`, which
+    `resolve_educate`/`resolve_campaign` call on every real EDUCATE/
+    CAMPAIGN verb dispatch — confirmed live and left untouched.
+  decision: |
+    RETIRE (option b of the two the task offered), not WIRE (option a).
+    Reasoning: wiring a real producer is not "genuinely cheap" — it
+    requires new design decisions ADR073's own six-ruling slate needed
+    for the read side (which class node(s) an org's mass work creates or
+    strengthens a SOLIDARITY edge toward, at what magnitude, growth vs.
+    decay policy, which verb triggers it, whether the target is chosen by
+    proximity/membership/community overlap). That is genuine new engine
+    behavior — an "engine change" the task's own instructions flagged as
+    baseline-risking and requiring a STOP-and-report rather than an
+    unauthorized ceremony. Retiring dead code, by contrast, is honest,
+    reversible (this ADR + ADR073 preserve the intent for whoever designs
+    the write side later), and — verified, not assumed — genuinely
+    changes zero production behavior: the branch was unreachable in every
+    real graph, so removing it cannot move `qa:regression` (confirmed:
+    5/5 byte-identical, `git status --short tests/baselines/` empty).
+
+    Removed:
+      - `engine/systems/ideology.py`: the `if src_type == "organization":`
+        branch and its `mass_link` read/amplification (22 lines); the
+        `src_node.node_type` read that existed only to feed that branch.
+        A comment now documents the invariant (SOLIDARITY sources are
+        always social_class) and points here.
+      - `config/defines/doctrine.py::DoctrineDefines.mass_link_
+        solidarity_bonus` (the only reader was the removed branch);
+        `data/defines.yaml` regenerated via
+        `tools/generate_defines_config.py` (one line removed, round-trip
+        verified).
+      - `tests/unit/engine/systems/test_ideology.py::
+        test_org_solidarity_transmits_through_mass_link` (the fabricated
+        fixture). Verified RED before deleting: with the production
+        branch already removed, re-running this test FIRST (before
+        deleting it) failed exactly as expected —
+        `assert 0.5 > 0.5 : "a mass-linked org's solidarity must route
+        agitation to revolution"` — proving the test's only coverage was
+        the dead branch, not any real behavior.
+
+    Kept, deliberately, out of scope: `theory_bonus_per_class_analysis`
+    and its `ooda/action_effects.py` wiring (the sibling Unit 6b
+    mechanism — live, tested via `tests/contract/verbs/test_effects.py::
+    TestDoctrineTheoryBonus`, untouched here).
+  consequences: |
+    `ConsciousnessSystem`'s solidarity-pressure loop is now simpler (one
+    fewer branch, one fewer node-type read) and has no dead code hanging
+    off it. `DoctrineDefines.mass_link_solidarity_bonus` no longer exists
+    as a moddable coefficient — a mod file setting it will fail to load
+    (Pydantic extra-field rejection), which is the correct loud failure
+    for a retired knob, not a silent no-op.
+
+    ADR073's Unit 6b claim ("MASS_LINK-gated org solidarity transmission
+    into the bifurcation router") is now HISTORICALLY INACCURATE as a
+    description of current behavior — ADR073 is left unedited (Immutability
+    of History: it captured the reasoning that made sense 2026-07-15) and
+    this ADR is the correction record.
+
+    IF a future session wants MASS_LINK to genuinely affect solidarity
+    transmission, it needs: (1) an owner-ratified design for the producer
+    (which verb, which target selection, what magnitude/decay formula —
+    the same order of decision the original six DT rulings required), (2)
+    a `qa:regression` baseline-ceremony obligation if any golden scenario
+    ever gains organization nodes performing that verb (currently none
+    do, so the org-bearing determinism harness in
+    `test_doctrine_system.py`, not the 5 goldens, is the contract to
+    extend), (3) new fixtures built from a REAL producer's output shape,
+    not hand-stamped edges.
+  verification: |
+    `mise run test:q -- tests/unit/engine/systems/test_ideology.py` 11/11
+    green (was 12, minus the deleted fixture). `test_constants_sync.py`
+    18/18 green post-regen. Sentinels run: `vocabulary`, `synthetic`,
+    `inert`, `unconsumed` — all clean before and after (confirming, as
+    expected, that none of the four currently declare a rule covering
+    "edge source-type combination a fixture fabricates" — a real gap in
+    sentinel coverage, noted above, not claimed fixed by this ADR).
+    `mise run qa:regression` 5/5 byte-identical; `git status --short
+    tests/baselines/` empty.
+  references:
+    - "ai/decisions/ADR073_doctrine_system.yaml (the original Unit 6b record; superseded in part by this ADR, left unedited per Immutability of History)"
+    - "src/babylon/engine/systems/ideology.py (the edit), src/babylon/config/defines/doctrine.py, src/babylon/data/defines.yaml"
+    - "tests/unit/engine/systems/test_ideology.py (fixture removed), tests/contract/verbs/test_effects.py::TestDoctrineTheoryBonus (sibling mechanism, untouched, confirms it is live)"
+    - "CLAUDE.md gotchas section (fixture-fabricated shape failure class, task #45) — this is the same failure class applied to an edge's source-node-type combination"

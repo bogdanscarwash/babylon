@@ -1,0 +1,75 @@
+ADR065_program16_living_map:
+  status: "accepted"
+  date: "2026-07-11"
+  title: "Program 16 (The Living Map): map-first game UI — real TIGER county cartography with redrawable political claims, imperial-rent default lens, recursive InspectionStack over a formula-provenance endpoint, research-derived Design Bible"
+  context: |
+    Percy's directive (2026-07-11): "a true frontend complete with playable
+    maps... less like a corporate dashboard and more like a game", executed
+    ultracode with all subagents on Sonnet 5, in worktree isolation (another
+    session owned ci/two-tier-refactor). Binding mid-planning clarification:
+    "map-centric" means an actually readable map corresponding to data — NOT
+    abstract hexes; the visible map encodes colonial county borders aggregated
+    into states, and those borders get REDRAWN through revolution, liberation
+    movements, political collapse, instability. Hexes are tiles underneath.
+    A 21-agent research fan-out (10 UX books, 5 Paradox titles, Maxis +
+    Paradox studio dives, a babylon-data mappability survey, 2 MIM-archive
+    ideology reads, a cockpit component audit; 2.65M tokens, reports in
+    project/research/16-living-map/) was synthesized into a Design Bible
+    whose findings converged: the map must be the permanent stage (Paradox),
+    every number must explain itself in place via click-pin recursion (Vic3's
+    hover-only nesting was its #1 launch complaint), and what the default map
+    SHOWS is itself the thesis (Amin/Cope: extraction, not "development").
+    The existing cockpit was already map-centric under the hood (deck.gl H3
+    over a Carto basemap) but wrapped in a 5-region dashboard shell, shipped
+    no real geometry (blobby member_h3 hulls), and defaulted to hex framing.
+  decision: |
+    Structure (specs/113-living-map/architecture.md, 8 file-disjoint lanes):
+    AppShell recomposed to MapStage (full-bleed, always mounted) + pointer-
+    transparent floating chrome strata + takeovers; recomposition not rewrite
+    (audit: 30 keep / 4 reskin / 11 restructure / 5 kill of 51 components).
+    Cartography: TIGER 2024 national county shapefile -> simplified TopoJSON
+    (counties 2.4MB / states / nation / AIANNH), vendored in
+    src/frontend/public/geo/ (owner-approved per-case large-file exemption,
+    annotated in .pre-commit-config.yaml; LFS rejected — pointers would break
+    the Vite-served runtime path); NATURAL geography, no AK/HI insets (deck.gl
+    overlays use real coordinates; repositioned geometry would desync H3 hexes
+    and flow arcs). De jure county/state borders are the immutable substrate;
+    de facto polity claims re-dissolve client-side via topojson-client
+    shared-arc merge as counties change hands — geometry never animates,
+    claims do (Constitution: substrate immutable, claims are overlays).
+    Default lens = Imperial Rent (Φ) choropleth, not population/GDP (a
+    development-style default would reproduce the ideology the game refutes);
+    lens registry with four groups (Extraction/Struggle/Political/
+    Reproduction) as presentation metadata over the existing Lens union.
+    Disclosure: recursive InspectionStack (click-pin stacked cards, breadcrumb,
+    depth-capped) fed by a strictly ADDITIVE backend: /explain/ endpoint +
+    web/game/provenance.py manifest reading FormulaRegistry through the
+    engine_bridge import boundary (one re-export line; src/babylon/ untouched);
+    metrics with no live engine source (profit_rate, occ) return honest nulls
+    per III.11 rather than fabricated mappings. Two additive /map/ properties
+    (dominant_class, solidarity_index) from real TENANCY/SOLIDARITY edges.
+    Voice: MIM-derived lexicon and two-register copy rules adopted
+    (wire=newspaper, drill-down=theory); orthographic stunts, factional
+    invective, and the "gender aristocracy" frame explicitly NOT adopted.
+    AI-narration scaffolding (owner directive): typed NarrationBeat slots +
+    MSW mocks against a defined future /narration/ contract; offline state is
+    labeled, never silently empty (flag BABYLON_LLM_NARRATOR remains OFF).
+    Execution model: waves of file-disjoint Sonnet lanes in one worktree with
+    orchestrator-owned integration seams (specs/113-living-map/
+    integration-ledger.md), agents never commit, orchestrator verifies and
+    commits per lane.
+  consequences: |
+    - New frontend deps (owner-approved, preserved): topojson-client,
+      @types/topojson-client, @deck.gl/extensions.
+    - ~3.4MB of vendored TopoJSON in-repo, regenerable via
+      tools/build_geo_assets.mjs; check-added-large-files exemption scoped to
+      src/frontend/public/geo/*.topojson with annotation.
+    - Carto Dark Matter external basemap dependency removed (self-contained
+      minimal style) once Lane B lands.
+    - Engine and qa:regression untouched by construction; backend additive-only.
+    - Follow-ups recorded: bridge_county_h3 res-5/7 vs Constitution II.13
+      res-8 discrepancy (Program 11 owner); profit_rate/occ engine-side
+      sources; BLS LAUS re-fetch; true contested-claim striping in design
+      phase; real-loop.spec.ts dispersal assertions (Lane G).
+  supersedes: ""
+  related: "ADR061 (Program 12 cockpit), ADR063 (Program 14), DESIGN_BIBLE (project/research/16-living-map/), spec-113"

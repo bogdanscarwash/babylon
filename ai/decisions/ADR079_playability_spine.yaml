@@ -1,0 +1,347 @@
+ADR079_playability_spine:
+  status: "accepted"
+  date: "2026-07-17"
+  title: "Program 24 sub-project 1 — The Playability Spine: fixed 100-year (5200-tick) campaign horizon replaces adjudicated endgame termination; the five terminal outcomes (REVOLUTIONARY_VICTORY, ECOLOGICAL_COLLAPSE, FASCIST_CONSOLIDATION, RED_OGV, FRAGMENTED_COLLAPSE) become recognized patterns the world can be in along the way, never terminators; event salience, lobby/briefing, and nine evidence-backed UI wirings connect existing engine riches to existing surfaces (spec-116, seeded with Task 1's defines; completed at Task 25)"
+  context: |
+    Seeded with spec-116 Task 1's first commit batch per the spec-116 header
+    requirement (ADR authored with the program's first commit batch). Flipped
+    to `accepted` at Task 25 (the acceptance sweep) once all 25 tasks of
+    `docs/superpowers/plans/2026-07-17-playability-spine.md` landed.
+
+    Owner ruling 2026-07-17 (post-design, supersedes the parent design's
+    "520-tick" framing, `docs/superpowers/specs/2026-07-17-viable-game-design.md`
+    §4):
+
+    > "The endgame: it's 100 years of in-game time, not a specific
+    > condition. The game ends when it ends; the scenario it's in is up to
+    > player actions and the economy."
+
+    At 1 tick = 1 week (`GameDefines.timescale.weeks_per_year: 52`), the
+    campaign horizon is 100 * 52 = 5200 ticks. This executes the
+    2026-07-14 emergent-endgames ruling (fixed horizon + recognized
+    patterns) which the live app had not yet implemented (it was showing
+    "Endgame Reached — tick 18"). Termination = horizon only, or the
+    player's own fast-forward-to-epilogue once a pattern locks (FR-116-5).
+  decision: |
+    1. DEFINES (Task 1, fa0a33a7): three new `GameDefines.endgame` fields —
+       `campaign_horizon_years` (100, in-game years), `pattern_lock_ticks`
+       (26, consecutive ticks a recognized pattern must hold before the
+       Council may accept it early), and `fascist_majority_fraction`
+       (0.75 at seed time, recalibrated to 0.9 at Task 6 — see item 3 below).
+       `BalkanizationDefines` (spec-070, previously defined but never
+       composed into `GameDefines`) is now reachable as
+       `GameDefines().balkanization` for the RED_OGV/FRAGMENTED_COLLAPSE
+       thresholds the Task 3 pattern recognizer consumes.
+
+    2. PATTERN RECOGNITION (Tasks 2-3, 9e53db9c + f61977aa): `CollapseTransition`
+       now exempts the exterior null sovereign (`SOV_EXTERIOR_NULL`) from
+       Phase-1 collapse — fixed the tick-0 "Sovereign Collapse" spam bug (the
+       exterior-null sentinel was being scored as if it were a real domestic
+       sovereign). `EndgameDetector` converted from adjudicator (ends the
+       run) to pure pattern recognizer with real per-axis progress (labels
+       the run; never calls `sys.exit`/raises/truncates) — the same five
+       outcomes, now observed rather than enforced. The old `is_game_over`/
+       `outcome`/`_emit_endgame_event` adjudicator API is deleted; nothing in
+       the engine or bridge can terminate a run early except the horizon
+       tick count itself or the player's own accept-outcome call.
+
+    3. BRIDGE + MERCY + CEREMONY #1 (Tasks 4-6, 83ab75a8 + d43f6d99 +
+       a7b8a553 + 0042e4c6 + 78e2b0ab + d14d2c42): fixed-horizon game-over
+       (the bridge stops treating any recognized pattern as terminal —
+       `resolve_tick` runs to 5200 regardless), `PATTERN_SHIFT` event
+       (fired when the recognized pattern changes tick-over-tick, informational
+       salience — see item 5), per-tick `endgame_progress` payload
+       (`{axes, pattern, since_tick, horizon_tick, locked}`) fed by real
+       `EndgameDetector` axis values (no more `consciousness_avg`/`heat_avg`/
+       `principal_gap` proxy math), and `accept_outcome` (the mercy
+       affordance, FR-116-5: once a pattern has held `pattern_lock_ticks`
+       consecutive ticks, the Council may end the campaign early via
+       `POST /accept-outcome/`, which appends an `ENDGAME` journal event and
+       is the ONLY early exit — `web/game/engine_bridge.py`'s
+       `accept_outcome`, ~line 3900).
+
+       Ceremony #1 (`mise run sim:pacing`, the headless `pacing_probe.py`
+       instrument, 78e2b0ab): tick-of-first-recognition per outcome pattern +
+       per-axis progress curves on `wayne_county` (full 5200 ticks) and `us`
+       (260-tick sample; the full `us` 5200-tick run was launched but
+       KILLED AND DEFERRED by owner ruling — "I don't want to complete a
+       century run yet — there's a lot of work to be done before I put that
+       kind of work into it", `reports/pacing-calibration-2026-07-17.md` §4
+       addendum). Single defines-level recalibration:
+       `endgame.fascist_majority_fraction` 0.75 -> 0.9 — a defensive
+       granularity fix (both scenarios seed only 6/4 archetypal `SocialClass`
+       entities regardless of territory count, so the fascist fraction is
+       quantized in 1/6 or 1/4 steps; at the original 0.75 a single entity's
+       ideology flip could jump the fraction from 4/6=0.667 straight past
+       the threshold, an instant semantically-wrong lock; at 0.9 only 6/6 —
+       total capture — matches). Full drift table in "Ceremony drift tables"
+       below; report: `reports/pacing-calibration-2026-07-17.md`.
+
+    4. EVENT SALIENCE (Task 7-10, cc7bc95c + 8482aa8d + fbde77bf + 72890100):
+       (i) tick-independent `dedupKey`/`eventSubject` (`src/lib/eventDedup.ts`)
+       collapses a consecutive same-(type,subject) run into one card with a
+       count badge + first/last tick, across the events feed, toasts, and
+       tray uniformly; (ii) salience re-tier — crimson reserved for
+       `endgame_reached`-class genuine rupture, political churn (uprising,
+       fascist_drift, etc.) drops to gold/muted informational — a
+       FRONTEND-ONLY vocabulary change (`eventClassifier.ts`'s severity map);
+       the bridge's own `_EVENT_SEVERITY` (engine_bridge.py) is untouched
+       except additive entries for newly-whitelisted types (see item 7) —
+       this is now a deliberate two-vocabulary seam (owner flag in the PR
+       body); (iii) autopause-once — `computeAutopauseDecision` fires at
+       most once per distinct (type,subject) key per session, tracked via
+       `events.acknowledgedAutopauseKeys` recorded BEFORE the pause lands so
+       a second in-flight fetch can never re-fire on the same condition.
+
+    5. LOBBY & BRIEFING (Tasks 11-13, d85bf2e9 + 87d95e4c + d74fa8ef +
+       8ff1ae2d): server-derived operation codenames (two uppercase words
+       per session UUID) + delete (arm-then-confirm, real FK cascade,
+       exercised by a dedicated test) / archive (reversible soft-delete)
+       lifecycle in the lobby; curated difficulty presets (agitator/cadre/
+       besieged — vetted `GameDefines` override bundles, never raw defines
+       exposure) via the existing `CreateGameSerializer`. Game creation now
+       lands on `/game/:id/briefing` (`BriefingRoute.tsx`) BEFORE the cockpit
+       mounts (no heartbeat/polling/autopause machinery starts until
+       "Begin Operation" is clicked): cadre-council framing, the five
+       patterns from `get_journal_objectives` with the win condition
+       (`revolution`) badged, and fixed-horizon copy ("100 years — 5,200
+       weekly turns... nothing ends early").
+
+    6. QUICK-WIN WIRING SET (Tasks 14-24, FR-116-4.1 through 4.9 + FR-4.8):
+       nine evidence-backed connections between existing engine riches and
+       existing UI surfaces, per the parent design §9, PLUS a real-data
+       ACQUIRE wave that superseded one of them:
+       (1) CausalChainObserver -> bridge -> Wire/journal (74f367c2 + 5cdf8485
+           + 4c16c04d + 82fd989e): deterministic causal narration heartbeat,
+           served regardless of the LLM flag;
+       (2) six distinct endgame epilogues (9bd01b43 + 498f4e3e): kills the
+           "THE BUNKER FAILS" x4 duplicate — every `GameOutcome` (including
+           `UNRESOLVED`) gets its own headline/body/palette, copy as DATA
+           (`web/game/epilogues.py`), pairwise-distinct, engine never imports
+           the module;
+       (3) `preview_action` costs/warnings rendered before every submit
+           (afab78b3 + 94ee1132): the probability line + AP cost line in
+           `VerbForm.tsx` (`preview-probability`/`verb-cost` testids) —
+           acceptance gate 5;
+       (4) per-target expected deltas in TargetPicker (7b718dfd + e4252408 +
+           043855ca): honest-null delta chips (zero/undefined deltas render
+           no chip, never a fabricated zero);
+       (5) Group C/D `tick_*` attributes (85eeea38 + f07343f0 + 7574c3aa):
+           crisis/bifurcation history series + economy chip contract —
+           SUPERSEDED PARTIALLY by the real-data ACQUIRE wave below (item 7);
+       (6) EconomyDashboard phantom-chip fixes against real fields (folded
+           into item 5's commits);
+       (7) event whitelist widened 34 -> 64 of 84 EventTypes with POGROM/
+           LOCKOUT/VIGILANTISM first-class (137724ac, 44->50/84) then the
+           ceremony #2 sweep (29ca28ab, 50->64/84 — own EventType, severity,
+           title, geographic anchor per new type; see "Ceremony #2" below);
+       (8) verb dead-ends -> disabled-with-reason (f9a1efe7 + b4612190,
+           spec-116 FR-4.8): `get_verb_eligibility` + `/actions/eligibility/`
+           feed `VerbGrid`'s per-verb disabled state with a visible reason +
+           remedy (never a silent hide, never a dead "No eligible targets"
+           click) — EDUCATE stays structurally ineligible in every reachable
+           tick-0 state (an engine-level gap, not a UI one; owner-flagged in
+           the PR body);
+       (9) the permanent "PROFIT no data" chip wired (7574c3aa, folded into
+           item 5).
+
+       Separately, RED_OGV/sovereignty-layer inertness was repaired
+       (a8cd7602 + f0a0dd78, ADR080 — its own ADR, cross-referenced here
+       because it unblocks two of the five recognized patterns' reachability).
+
+    7. REAL-DATA ACQUIRE WAVE (this session, superseding quick-win 5's
+       "declared-dark" framing for the economy cluster): per the owner's
+       no-compromise ruling (connect/wire/repair real data; mock only when
+       live data genuinely can't provide it), the web bridge now wires
+       `create_circulation_services`/`create_financial_services` (FRED-backed;
+       7b590a2e) and `create_vol1_services` (FRED-backed reserve-army /
+       wage-pressure dynamics; ac95e944, test tier-marked in aa865b3a). 15 of
+       16 Group C/D economy fields are now genuinely computed from live FRED
+       series instead of declared-dark placeholders; `tick_ground_rent`
+       remains honestly dark (no live source yet) — a SECOND, narrower gate
+       than the original quick-win 5 scope, not a regression. All wiring is
+       byte-identical against `qa:regression` (the regression harness never
+       passes `calculator_overrides`, so the new real-service wiring is
+       inert for the 5 baseline scenarios by construction).
+
+    8. SCHEMA-OWNERSHIP CHANGE (Task 19, 1f7eae3e): the web (Django) path
+       previously ran ONLY `init_schema` (`CREATE TABLE IF NOT EXISTS` — a
+       no-op against a pre-existing `tick_summary`), so ALTER-bearing runtime
+       migrations 0033/0034 (Market Scissors' `price_log`/`fictitious_log`
+       and `market_corrections` columns) never reached a web-created
+       database, and `persist_tick_summary`/`query_tick_summary_series` swallowed
+       `UndefinedColumn` into their best-effort catches forever — the
+       permanent "No timeseries data yet" Trends-tab bug. `init_persistence`
+       now also runs `_apply_runtime_migrations` on web boot, mirroring the
+       headless runner's own digest-stamped, advisory-locked migration
+       applier (`persistence/migrations/00*.sql`). OWNERSHIP BOUNDARY: the
+       headless runner was previously the SOLE owner of the simulation
+       schema (dynamic_* + tick_summary etc.) under Constitution II.11; the
+       web path is now a SECOND, idempotent applier of the same migration
+       set (digest-stamped + advisory-locked, so concurrent web/runner boot
+       cannot double-apply or race) — not a competing schema owner, since
+       both appliers run the identical migration files against the identical
+       digest ledger. Surfaced in the PR body for BD sign-off (this changes
+       who can trigger schema changes against the runtime DB, even though
+       the migrations themselves are unchanged).
+
+       Distinct from this: the Django ORM's OWN migration system (`web/game/
+       migrations/*.py`, e.g. `0015_narrationrecord.py` for the causal-voice
+       heartbeat, item 6.1) was already the Django app's normal schema
+       ownership — `manage.py migrate` is a routine dev-environment step,
+       not a schema-ownership change; a stale local dev database missing
+       migrations 0014/0015 was found and closed out during Task 25's
+       acceptance sweep (see "Known honest limitations" below) as an
+       environment-drift finding, not a code change.
+
+    9. MARKET_CORRECTION EVENT PROMOTION (folded into item 6.7's ceremony
+       #2 sweep, 29ca28ab): Program 23/ADR078 designed `MARKET_CORRECTION`
+       as an observe-only counter (`tick_summary.market_corrections`); this
+       spine promotes it to a discrete, first-class wire event (own
+       `MarketCorrectionEvent` payload, severity tier, title) reaching the
+       frontend events feed/toasts like any other classified event. SCOPE
+       EXTENSION over Program 23's counter-only design — recorded here and
+       flagged in the PR body for owner ratification (not a correctness
+       change: the underlying correction mechanism, snap conditions, and
+       wealth-axis feedback are all untouched; this only adds a player-
+       visible notification channel for an event that already fired
+       silently). A real bug was found and fixed during this sweep:
+       `MarketCorrectionEvent.profit_rate` was typed non-optional but the
+       live publisher (`market_scissors.py`'s `_mean_profit_rate`) genuinely
+       returns `None` when no territory carries `tick_profit_rate` that
+       tick — crashed `qa:regression` on a real tick; fixed to
+       `float | None = None` (same honesty pattern as
+       `CrisisPhaseTransitionEvent`), with a regression test locking in the
+       `None` path.
+  consequences: |
+    ACCEPTANCE GATES (spec-116 §gates, all six MET — see spec.md's gates
+    table for the authoritative record):
+      1. Null-play horizon: HELD on wayne_county's full 5200-tick run and
+         the us 260-tick sample; the us full-horizon confirmatory run is
+         OWNER-DEFERRED (not a ceremony blocker — qa:regression's 5
+         scenarios never read EndgameDefines/BalkanizationDefines).
+      2. No two consecutive identical event cards: dedup vitest
+         (`src/lib/__tests__/eventDedup.test.ts`) + first-session.spec.ts's
+         live resolve-two-ticks step (exercises the real dedup output
+         against wayne_county's actual ~160-card-per-tick event volume).
+      3. Autopause <= 1 per distinct event: autopause-once vitest
+         (`src/store/slices/worldSlice.test.ts`'s "autopause-once" describe
+         block) + first-session.spec.ts's live two-resolve step.
+      4. Distinct epilogues: `tests/unit/web/test_epilogues.py` (6 outcomes,
+         pairwise-distinct headline+body, "THE BUNKER FAILS" x4 duplicate
+         proven dead).
+      5. Preview before every submit: `first-session.spec.ts` +
+         `verb-submit.spec.ts` (`preview-probability`/`verb-cost` visible
+         before the submit click resolves).
+      6. Fresh player unaided: `src/frontend/e2e/first-session.spec.ts`
+         (this task) — the full lobby -> briefing -> disabled-with-reason
+         verb grid -> preview -> submit -> two-tick resolve -> honest
+         endgame_progress trunk, against the live stack, 5/5 tests green.
+
+    CEREMONY DRIFT TABLES (per-scenario qa:regression baseline movement,
+    Market Scissors promotion-ceremony pattern):
+
+      Ceremony #1 (Task 6, pacing calibration — `endgame.fascist_majority_fraction`
+      0.75 -> 0.9): `imperial_circuit`/`two_node`/`starvation`/`glut`/
+      `fascist_bifurcation` all BYTE-IDENTICAL (zero dense-CSV diff lines);
+      only the advisory `defines_hash` checkpoint field moved (WARNING, not
+      a failure — none of these 5 scenarios seed factions/sovereigns, so
+      `EndgameDefines`/`BalkanizationDefines` are read by nothing in their
+      tick loop). `mise run qa:regression`: 5 passed, 0 failed. Full report:
+      `reports/pacing-calibration-2026-07-17.md` §7.
+
+      Ceremony #2 (Task 23, event-whitelist widening 50->64/84 handled
+      types): BYTE-IDENTICAL, NO baseline regeneration needed — `mise run
+      qa:regression` passed 5/5 on the first run after implementation.
+      Verified not a false negative by inspecting `tools/regression_test.py`'s
+      `BaselineData`/`CheckpointData`/`DenseTrace` schemas directly: none
+      ever reads `WorldState.events`, only wealth/tension/consciousness
+      state, so additive event emission has no channel by which to move
+      either baseline. `tests/baselines/` shows zero diff. (Per spec-116
+      §Constraints' declared DEVIATION: the parent design reserved
+      "ceremony #2" for Track 3 Unit 6 — this is the spine's OWN second
+      ceremony, riding the byte-identical fallback the deviation note
+      declared; owner-sanction flagged in the PR body.)
+
+    DETERMINISM GATE RE-VERIFICATION: `mise run qa:regression` green
+    (5/5) as of this task's verification battery (see spec.md and the PR
+    body for the exact run recorded at Task 25 close-out). Every commit in
+    this program either observes only (serialization boundary — events,
+    epilogues, previews, deltas, lobby/briefing metadata), is one of the
+    two declared ceremonies above (values-only defines changes with
+    explicit per-scenario drift), or is the real-data ACQUIRE wave (item 7),
+    which is inert against the 5 regression baselines by construction (the
+    harness never passes `calculator_overrides`).
+
+    DEFERRED ITEMS WITH REASONS:
+      - The full `us` 5200-tick null-play confirmatory run: owner-killed
+        deliberately ("a lot of work to be done before I put that kind of
+        work into it") — deferred to a later validation pass, not lost;
+        `reports/pacing-calibration-2026-07-17.md` §4 carries the full
+        record and the owner's exact words.
+      - `tick_ground_rent` (Group C/D quick-win 5): stays declared-dark —
+        no live FRED (or other) source identified yet; serializing a
+        fabricated value would be dishonest chrome per Constitution III.11.
+      - Fascist verbs (POGROM/LOCKOUT/VIGILANTISM): Task 22 wires the
+        resolver pipe end-to-end, but no live-loop emitter reaches them yet
+        (a reachability gap, not a missing handler) — flagged in the PR
+        body for an owner ruling on priority.
+      - EDUCATE's structural tick-0 ineligibility: making it eligible is an
+        engine-level change (organized-community seeding), out of this
+        spine's scope; honest disabled-with-reason copy ships instead.
+
+    KNOWN HONEST LIMITATIONS:
+      - Two-vocabulary severity seam: the frontend's salience re-tier
+        (`eventClassifier.ts`) and the bridge's `_EVENT_SEVERITY`
+        (`engine_bridge.py`) are now DELIBERATELY different vocabularies
+        (crimson-reserved-for-rupture on the frontend vs. the bridge's
+        broader tiers) — a follow-up ruling on whether to unify is an owner
+        flag in the PR body, not resolved here.
+      - `engine_bridge.py`'s `accept_outcome` (~line 3957) carries a
+        pre-existing mypy nit not gated by CI (`web/` is excluded from the
+        `mypy src` command) — noted as a non-blocking follow-up, not fixed
+        in this program.
+      - The runtime-migration glob at `engine_bridge.py:9504`
+        (`migrations_dir.glob("00*.sql")`, shared with
+        `headless_runner.runner._apply_migrations`) caps at 99 migrations
+        before lexicographic-sort ordering breaks (`00*.sql` doesn't match
+        a 3-digit `100_*.sql`) — not biting yet (well under 100 migrations
+        exist), flagged for a future one-line fix (`[0-9]*.sql`).
+      - Task 25's acceptance sweep found the LOCAL dev Postgres was two
+        Django migrations behind (`0014_classsnapshot`/`0015_narrationrecord`,
+        both authored 2026-07-15) — every delete-game call 500'd
+        (`ProgrammingError: relation "narration_record" does not exist`)
+        until `manage.py migrate` was run. This is environment drift, not a
+        code defect (both migrations were already committed); applying them
+        is not part of this commit's diff.
+      - `end-turn-flow.spec.ts`'s third test ("selecting 2x speed then
+        Play... spacebar pauses") reproduced a real, pre-existing failure
+        during the acceptance sweep's full-suite run (the auto-play loop
+        does not settle to PAUSED/AUTOPAUSED within its 45s budget even
+        after Space is pressed) — that spec's OWN docstring already
+        documents a "KNOWN RED (engine, not frontend)" risk for this exact
+        path. Not caused by, or fixed by, this program's commits (no
+        timeSlice/engine code changed here); flagged for the coordinator,
+        not silently worked around.
+  evidence: |
+    src/babylon/config/defines/endgame.py, src/babylon/config/defines/balkanization.py,
+    src/babylon/config/defines/_assembler.py, src/babylon/data/defines.yaml,
+    src/babylon/engine/systems/collapse_transition.py, src/babylon/engine/observers/endgame_detector.py,
+    web/game/engine_bridge.py (get_journal_objectives, accept_outcome, _apply_runtime_migrations),
+    web/game/epilogues.py, web/game/api.py,
+    src/frontend/src/lib/eventDedup.ts, src/frontend/src/lib/eventClassifier.ts,
+    src/frontend/src/components/events/EventsFeed.tsx, src/frontend/src/components/chrome/EventToasts.tsx,
+    src/frontend/src/components/chrome/CriticalEventModal.tsx,
+    src/frontend/src/routes/LobbyRoute.tsx, src/frontend/src/routes/BriefingRoute.tsx,
+    src/frontend/src/components/action/VerbGrid.tsx, src/frontend/src/components/action/VerbForm.tsx,
+    src/frontend/src/components/action/TargetPicker.tsx, src/frontend/src/components/objectives/ObjectivesTracker.tsx,
+    web/game/migrations/0014_classsnapshot.py, web/game/migrations/0015_narrationrecord.py,
+    tests/unit/web/test_epilogues.py, tests/unit/config/test_endgame_defines_spine.py,
+    tests/unit/engine/test_endgame_detector.py, src/frontend/src/lib/__tests__/eventDedup.test.ts,
+    src/frontend/src/store/slices/worldSlice.test.ts,
+    src/frontend/e2e/first-session.spec.ts, src/frontend/e2e/lobby-briefing.spec.ts,
+    src/frontend/e2e/verb-submit.spec.ts, src/frontend/e2e/event-popup.spec.ts,
+    reports/pacing-calibration-2026-07-17.md,
+    specs/116-playability-spine/spec.md, docs/superpowers/plans/2026-07-17-playability-spine.md,
+    docs/superpowers/specs/2026-07-17-viable-game-design.md (parent design §4),
+    ai/decisions/ADR080_redogv_domestic_sovereign_fallback.yaml (cross-referenced RED_OGV repair).

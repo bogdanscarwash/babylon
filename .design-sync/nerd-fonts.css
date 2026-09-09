@@ -1,0 +1,47 @@
+/*
+ * Iosevka Nerd Font (Mono, Latin subset) substitute for the [FONT_MISSING]
+ * families the shipped CSS references without an @font-face. Owner-approved
+ * 2026-07-11 ("for the fonts just use Iosevka Nerd Font",
+ * github.com/ryanoasis/nerd-fonts Iosevka).
+ *
+ * These five are all FALLBACK-stack entries behind shipping primaries
+ * (JetBrains Mono / Space Grotesk / Redaction 35 / Departure Mono), so they
+ * never actually activate — this resolves the validator's [FONT_MISSING] and
+ * guarantees a real mono face if a primary ever fails to load. src is relative
+ * to THIS file (.design-sync/); the converter copies the woff into fonts/.
+ */
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./fonts-nerd/iosevka-nerd-mono.woff") format("woff");
+}
+@font-face {
+  font-family: "VT323";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./fonts-nerd/iosevka-nerd-mono.woff") format("woff");
+}
+@font-face {
+  font-family: "Major Mono Display";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./fonts-nerd/iosevka-nerd-mono.woff") format("woff");
+}
+@font-face {
+  font-family: "DIN Alternate";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./fonts-nerd/iosevka-nerd-mono.woff") format("woff");
+}
+@font-face {
+  font-family: "DIN Next";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./fonts-nerd/iosevka-nerd-mono.woff") format("woff");
+}

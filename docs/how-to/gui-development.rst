@@ -97,7 +97,7 @@ The dashboard is launched via the ``babylon.ui.dashboard`` module:
 
 .. code-block:: bash
 
-   poetry run python -m babylon.ui.dashboard
+   uv run python -m babylon.ui.dashboard
 
 Or via mise:
 

@@ -1,0 +1,80 @@
+ADR173_audit_and_stops_dispositions:
+  status: "accepted"
+  date: "2026-07-29"
+  title: >
+    Ratification-day follow-on dispositions: survival-curve emergence lands
+    Rust/BSL-only (Python freezes with its imposed logistic as honest
+    reference), the two endgame outcome-equality assertions are repaired +
+    excluded from the conformance corpus, and the in-flight-stops
+    disposition table is approved in full (7 R2 closures, 4 absorptions,
+    12 carried).
+  context: |
+    The proscription audit chartered by ADR172 ruling (5) executed
+    same-day (workflow wf_b829f533-fe5; report merged as
+    reports/p27-proscription-audit-2026-07-29.md, PR #366): 24 findings
+    raised, 21 killed by adversarial verification, 3 confirmed —
+    (a) the survival calculus imposes its logistic: P(S|A) applied to the
+    class MEAN with a free steepness_k=10.0 knob whose defines rationale
+    reads "Game design: sigmoid sharpness", and the electoral-hope path
+    binds to it past the formula-registry hot-swap seam;
+    (b) an off-registry twin in precarity_state.py with divergent k=1 and
+    a live OverflowError at large arguments;
+    (c) tests/scenarios/test_endgame_flow.py:233,:427 assert
+    outcome == GameOutcome.FASCIST_CONSOLIDATION while the file's own
+    docstrings declare the fascist fixture a mere vehicle — a
+    letter-of-ruling violation of the emergent-endgames ruling (owner
+    2026-07-16: outcomes are fixture vehicles, never asserted subjects).
+    Phase 1 Task 17 transcribes the test estate into the Rust conformance
+    corpus, so poisoned assertions would propagate into the rewrite's
+    behavioral contract. Separately, the in-flight-stops disposition table
+    (reports/p27-estate-and-stops-disposition-2026-07-29.md, PR #348)
+    reached its declared trigger — it becomes actionable on v3.0.0
+    sign-off but reserves line-by-line accept/amend/reject for the
+    Director.
+  decision: |
+    The Director ruled interactively (Claude Code session, 2026-07-29):
+    (1) SURVIVAL CURVE — "Rust/BSL only": the emergence construct —
+        P(S|A) as the measure of class members whose wealth clears
+        subsistence, the S-curve derived as a THEOREM from within-class
+        wealth dispersion integrated against the threshold — becomes the
+        Rust kernel/BSL formulation; Phase 1 conformance vectors encode
+        IT, not the logistic. The Python engine freezes as-is (reference
+        estate, honest about its imposed curve; no third Phase-0 fix).
+        The precarity_state.py twin folds into the same emergent
+        construct at port time. steepness_k ceases to exist as a knob:
+        curve steepness becomes the class's actual wealth dispersion.
+    (2) ENDGAME ASSERTIONS — "Fix + exclude": a test-only repair rewrites
+        :233 and :427 to the wiring contract the file already uses at
+        :273/:518 (outcome != IN_PROGRESS; outcome ==
+        endgame_detector.recognized_pattern) — test repair is not an R2
+        engine-feature train; AND the Phase 1 Task 17 conformance-corpus
+        transcription rules out outcome-equality assertions as a class.
+    (3) STOPS TABLE — "Approve all as proposed": the disposition table is
+        accepted line-by-line as written. Closures under R2 citing
+        Amendment AE with re-charter notes: #266 (activation-drift bake),
+        #268 (Doctrine Tree Unit 6), #269 (Material Triad engine train),
+        #270 (Balkanization/RED_OGV engine half), #271 (Divergence
+        Channel Phase-1 code), #288 (org estate), #337 (national axis
+        Phase 2 engine train). Absorptions into P27 phases, recorded by
+        comment: #264 (wiring-doctrine enforcement), #267
+        (Fog/EpistemicHorizon player wiring), #293 (v1.0.0 release
+        ceremony -> freeze/cutover machinery), #282 (hypergraph_rs swap ->
+        kernel graph-substrate decision). The 12 carried client-side
+        trains continue unaffected.
+  consequences: |
+    The BSL kernel-intrinsic surface sheds the survival logistic as a
+    stipulated mechanism — Phase 1's conformance vectors for the survival
+    family are derived from the emergence formulation (within-class
+    distribution integrated against subsistence), and Task 8's
+    transcendental analysis is scoped to the transcendentals the algebra
+    actually still needs. The frozen Python reference diverges from the
+    Rust engine BY DESIGN on this family: cross-implementation checks for
+    survival quantities compare against the emergent formulation's own
+    vectors, not Python replay. Re-chartering any of the seven closed
+    trains happens post-cutover against the ported surfaces (each closure
+    comment carries the pointer). The tier-2 audit findings
+    (consciousness_sigmoid tuned cliff, wealth-distribution spring
+    attractor, reserve-army wage pressure) remain OPEN for Phase 2
+    intrinsic review — deliberately not ruled here. D26 (per-membership
+    payload inexpressible in BSL) remains an open Phase-1 draft-ruling
+    register item feeding ADR171 Phase 2's seeder design.

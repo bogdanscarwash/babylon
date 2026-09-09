@@ -1,0 +1,35 @@
+; The T3 (Program 29, issue #560, ADR198 R1-R3) edge-WRITE-lane e2e fixture — update-edge through
+; the real production seam (run_once_into → run_tick's collect-then-apply). Ships NO Solidarity
+; content — Solidarity's own PORT is a separate Wave C train (ADR198 consequences); this fixture's
+; rules are minimal anticipatory idioms (bsl-language.rst §2.10's worked example, §6.2 chapters
+; C2/C6's required vectors), exactly the posture edge-lane-e2e.bscn took for the read half.
+;
+; Node groups, in declaration order (fixes id assignment, scenario.rs's own contract):
+;   0     writer    Shape 1 subject — for-each over EVERY SOLIDARITY edge (chapter C6's shape)
+;   1-3   base-a/base-b/base-c   the two seeded edges: base-a -> base-b (0.5), base-b -> base-c
+;                                (0.25); base-a is ALSO the Shape 2 subject (shape 2)
+;
+; Every strength literal is c-suffixed and an exact dyadic rational (T2 Task 6a's kind-blind
+; widening; the suffix changes no value). Every expected value below is exact in binary64:
+; 0.5 * 0.5 = 0.25, 0.25 * 0.5 = 0.125, 0.5 + 0.25 = 0.75 — no rounding anywhere.
+;
+; solidarity/tension is a DEFFIELD-declared edge field (ADR198 R1's deffield-rows-per-edge-type,
+; :kind intensive — a per-edge rate, D32's own "authors wanting a genuinely intensive per-edge
+; attribute" clause). solidarity/strength stays IMPLICIT (D32) — declaring it would be
+; E-LOAD-001, and this fixture proves the implicit seeding carries the write side too.
+;
+; social-class/shape discriminates which rule fires on which node (the territory/shape
+; convention, query_lane_e2e.rs): writer is shape 1, base-a is shape 2, the rest inert (0).
+(scenario social-class/edge-write-lane-e2e
+  (defvocabulary NodeType (SOCIAL_CLASS))
+  (defvocabulary EdgeType (SOLIDARITY))
+  (deffield social-class/shape int extensive)
+  (deffield solidarity/tension intensity intensive)
+
+  (node writer NodeType/SOCIAL_CLASS (social-class/shape 1))
+  (node base-a NodeType/SOCIAL_CLASS (social-class/shape 2))
+  (node base-b NodeType/SOCIAL_CLASS (social-class/shape 0))
+  (node base-c NodeType/SOCIAL_CLASS (social-class/shape 0))
+
+  (edge EdgeType/SOLIDARITY base-a base-b 0.5c)
+  (edge EdgeType/SOLIDARITY base-b base-c 0.25c))

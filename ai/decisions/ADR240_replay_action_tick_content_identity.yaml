@@ -1,0 +1,140 @@
+ADR240_replay_action_tick_content_identity:
+  status: accepted
+  date: '2026-08-26'
+  title: >-
+    TickContentHashV1 owns canonical replay-tick identity while campaign
+    durability and P27 evidence stay separate
+  issue: PER-60
+  owners:
+    replay_primitives_and_outer_hash: babylon-kernel
+    accepted_action_identity: babylon-practice-contract
+    stable_graph_identity: babylon-graph
+    bsl_identity_sections: babylon-bsl
+    replay_transaction_and_publication: babylon-tick
+  canonical_contract:
+    schema: contracts/tick_content_hash_v1.yaml
+    vectors: contracts/tick_content_hash_v1_vectors.jsonl
+    independent_verifier: tools/verify_tick_content_hash_v1.py
+  runtime_action_boundary:
+    accepted_batch: exact empty OrderedPracticeActionBatchV1 with matching replay session and resolve tick
+    nonempty_batch: structural contract evidence only
+    execution: false
+  persistence_identity_use: direct owning kernel module paths only; no aliases or re-exports
+  context: |
+    PER-60 needs one database-free Rust replay tick whose identity survives a
+    rewrite and does not depend on runtime graph handles. The current
+    `GraphStateHash` and `NominalWorldHash` remain useful diagnostics, but they
+    contain runtime allocation facts and cannot identify the replay contract.
+
+    P27 has frozen executable Python bytes, scenarios, and tests. Those
+    artifacts remain valuable reference evidence. They encode a different JSON
+    record and cannot also serve as the Rust replay-tick wire contract. Treating
+    both encodings as one identity would create two authorities that require
+    reconciliation.
+
+    Campaign identity belongs to durability and player history. Replay session
+    identity belongs to deterministic adjudication. A UUID-shaped string does
+    not make those concepts interchangeable.
+  decision: |
+    Babylon has one canonical `TickContentHashV1` path. The fixed outer preimage
+    binds `ReplaySessionIdV1`, resolve tick, `ReplaySeed`, RNG V2, content and
+    reference digests, prepared mechanics, stable prior and result worlds, the
+    ordered accepted-action batch, and the exact tick payload. SHA-256 of that
+    preimage is the published replay-tick identity.
+
+    P27 stays executable and byte-pinned as frozen reference evidence. P27 bytes
+    never enter `TickContentHashV1`. There is no adapter, alias, fallback, or
+    second resolver between the P27 serializer and the Rust identity path. The
+    shared YAML schema, JSONL vectors, independent Python verifier, Rust
+    contract consumer, and production Rust tests define and check the accepted
+    language-neutral bytes.
+
+    `ReplaySessionIdV1` and campaign identity remain separate typed inputs. No
+    conversion joins them, and campaign identity does not enter the material
+    replay-tick preimage. PER-20 must provide each identity to its own consumer
+    when it adds durability.
+
+    The kernel owns the replay session, seed, RNG V2 derivation, nominal digest
+    types, and outer codec. The practice-contract crate owns action identity and
+    the ordered batch. The graph crate owns stable element, resolver, carrier,
+    and stable-graph identity. BSL owns its typed identity sections and threads
+    the seed-aware RNG context. The tick crate owns the stable world, payload,
+    detached transaction, and atomic publication. Persistence uses the exact
+    kernel types directly. It defines no short identity type, alias, re-export,
+    or independent hash calculation.
+
+    `ReplayTickSession` accepts only RNG V2 and the exact empty
+    `OrderedPracticeActionBatchV1`. A nonempty batch exists only as structural
+    contract evidence. It grants no accepted-input provenance and cannot enter
+    replay adjudication. PER-60 adds no PostgreSQL I/O, `CommittedTickEnvelope`,
+    Archive or outbox, Bevy behavior, BSL intent, player-action execution, or
+    broader runtime authority.
+
+    Each new identity type has one public owning-module path. `GraphStateHash`,
+    `NominalWorldHash`, the current `TickSession`, RNG V1, P27, and Practice V2
+    bytes remain unchanged. None of those identities can replace or be
+    substituted for `TickContentHashV1`.
+  consequences: |
+    Equal accepted replay inputs now produce exact language-neutral bytes and
+    one nominal hash across process, graph-backend, and handle-allocation
+    differences. A successful replay advance publishes graph state, events,
+    completed time, nested identity evidence, and `TickContentHashV1` together.
+    A returned failure publishes none of them.
+
+    Campaign durability can wrap this evidence later without redefining replay
+    identity. P27 remains independently executable without creating a second
+    runtime route. Nonempty action execution remains unavailable until its
+    owning gate provides accepted-input provenance and mechanics.
+  verification: |
+    The shared corpus pins all nested layouts, BSL discriminants, stable graph
+    and graph-owned carrier forms, action forms, seed extremes, refusal classes,
+    independently variable outer inputs, derived action links, and every layout
+    mutation. The independent verifier reconstructs semantic bytes and digests
+    instead of trusting supplied canonical bodies. It uses compiled bounded
+    reads before it accepts schema data. A separate Rust consumer reconstructs
+    the same corpus and production integration tests run the real RNG, graph,
+    BSL, and detached replay path.
+
+    Both consumers execute the corpus's reachable operation-specific maximum
+    and maximum-plus-one refusal rows for every string, row, member, aggregate,
+    and byte ceiling. The Rust consumer calls the public resolver, graph, BSL,
+    and ordered-action operations; the independent verifier reconstructs and
+    validates the complete semantic generators. Both also refuse duplicate
+    authored resolver names and nonempty, wrong-session, and wrong-tick outer
+    action links. Frozen P27, RNG V1, and Practice V2 tests prove that their
+    bytes did not move. Exact-head review and the sequential repository gates
+    remain required before merge.
+  preserves:
+    - Constitution v4 deterministic identity and rewrite-contract law
+    - ADR223 TickSession atomicity and NominalWorldHash bytes
+    - ADR229 Rust gameplay-contract authority and frozen Python boundary
+    - P27 Python bytes, scenarios, tests, and reference evidence
+    - RNG V1 preimage, validation, stream, and TickSession results
+    - Practice V2 schemas, vectors, admission validation, and bytes
+    - Python sole-writer authority until the one-way PER-20 cutover
+  partially_supersedes:
+    - >-
+      ADR220 and related writer-boundary wording only where it made reproduction
+      of the complete P27 JSON encoder a condition of the Rust tick-content
+      identity; its one-way writer cutover and language-neutral byte contract
+      remain
+    - >-
+      the Python tick-hash module claim that babylon-kernel must produce the
+      identical P27 digest
+    - >-
+      the open P27 disposition in the live determinism reference; P27 is now
+      frozen reference evidence outside TickContentHashV1
+    - >-
+      the ADR233 destination that placed campaign UUID inside a future nominal
+      world hash; campaign durability and replay session identity stay separate
+    - >-
+      the ADR235 implication that ResolvedPracticeBatchV2 itself is the final
+      detached-tick action identity; it remains the admission source for the
+      ordered session-scoped projection
+  related:
+    - ADR220_rust_owned_postgresql_persistence_boundary
+    - ADR223_whole_tick_atomicity_world_hash
+    - ADR229_rust_gameplay_contract_authority
+    - ADR233_practice_input_authority_v2
+    - ADR235_resolved_practice_batch_v2
+    - ADR236_practice_resource_allocation_v2

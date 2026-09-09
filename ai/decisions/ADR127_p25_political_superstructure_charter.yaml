@@ -1,0 +1,93 @@
+ADR127_p25_political_superstructure_charter:
+  status: "accepted"
+  date: "2026-07-22"
+  title: >-
+    Program 25 — The Political Superstructure (electoralism) chartered as the one
+    engine train on feature/political-superstructure; ADR block 127-139 claimed;
+    13-unit train ratified from the launch recon; two delegated launch rulings:
+    the valve binds a REAL new Agitation->Organization conversion pathway (never
+    the consciousness router), and political_form ships shadow-first with a
+    declared promotion ceremony at U10.
+  supersedes: []
+  relates_to: ["ADR126", "ADR073", "ADR084", "ADR049", "ADR109", "ADR078"]
+  programs: ["25-political-superstructure"]
+
+  provenance: |
+    BD in-session goal 2026-07-22 (~13:20 EDT): "Expanding the playable interface
+    earlier as we discussed with electoralism and filling in all of those things
+    that emerged about organizations that we already discussed" — set as a
+    session goal under the standing delegated-judgment grant. Design authority:
+    ai/_inbox/the-electoral-question.md with all 8 rulings approved (ADR126).
+    Launch recon: 5 read-only sonnet verifiers + opus synthesis over dev
+    e0ece454 (post adversary-train, post interface-shell), re-verifying the
+    brief's §1 inventory per ADR126's launch checklist.
+
+  context: |
+    The three launch gates named in ADR126 all cleared today: the adversary
+    train merged (PR #253), the 8 electoral rulings are recorded, and the
+    action-surface foundation merged (PR #254, with its boot proceeding in the
+    interface-refinement train). The engine-train slot is open. Recon corrected
+    the brief's stale claims: s=p+i+r+t lives in domain/economics/distribution/
+    (engine/systems/distribution.py is dead scaffold); the opposition catalog is
+    18 entries not 10; qa:regression is 6 scenarios not 5; debt_service, the
+    equalization investment-strike wire, and InternalBalanceOfForces activation
+    are BUILDS the brief mislabeled "already built". Three correctness traps
+    were identified and are owned by named units (charter §traps).
+
+  decision: |
+    (1) CHARTER: project/programs/25-political-superstructure.md carries the
+        13-unit train (U1 defines / U2 events / U3 political_form shadow /
+        U4 OrganizationComponent port / U5 party seeding + MEMBERSHIP + donor
+        producers / U6 spec-070 ELECTORAL faction seeding (NodeType.FACTION
+        honest-empty repair, ratifies ADR049) / U7 pure politics kernel /
+        U8 AllegianceSystem + the valve / U9 PolicySystem + LEGISLATE resolver
+        + reform ceiling / U10 ElectoralSystem clocked + political_form
+        promotion ceremony / U11 doctrine fork five stances + trap_detection
+        absorption / U12 conjunctures + governance endgame + L-RECEIPTS /
+        U13 five goldens + property-law estate + the declared baseline
+        ceremony). Org fill-ins (U4/U5/U6) are IN the program per the BD goal's
+        "filling in ... organizations" clause and the roadmap's carried-task
+        rule (OrganizationComponent belongs to whichever program next touches
+        the Organization entity).
+    (2) ADR BLOCK: 127-139 claimed for this lane (Vol II's 120-129 dissolved at
+        merge; 126 was the mainline ceiling). political_form's catalog index is
+        bound at U3's implementation commit, never pre-pinned (ADR126 ruling 2).
+    (3) LAUNCH RULING A (TRAP 1, delegated): the §2.5 valve binds a REAL, NEW
+        Agitation->Organization conversion pathway built in U8. Rationale:
+        P(S|R) = Organization/Repression — the numerator is Organization, and
+        `organization` today is a static seeded attribute with no dynamic
+        producer; throttling route_agitation_to_ternary's revolutionary channel
+        would conflate class_consciousness with Organization and L-VALVE would
+        pin the wrong quantity. The no-MVP rule and the BD's organizations
+        clause both point at the honest build.
+    (4) LAUNCH RULING B (TRAP 2, delegated): political_form ships shadow-first
+        (8-for-8 catalog discipline preserved; byte-safety structural) WITH a
+        declared ADR078-style promotion ceremony scheduled at U10 — regenerated
+        baselines + R-PROOF doc — so the principal-contradiction payoff of §2.6
+        arrives loudly at a named commit instead of being silently unreachable
+        behind the _principal_key shadow filter.
+    (5) TRAP 3 DISCIPLINE: no class-node write without a parties-exist guard /
+        absence sentinel; stamping a neutral 0.0 onto a node that never carried
+        the attribute is a serialization-drift bug even when numerically inert.
+        Every system unit carries qa:regression byte-identical as its unit gate;
+        the ONLY baseline-touching commit is U13's declared ceremony.
+    (6) ADR109: each system unit ships its typed-motion sentinel row where the
+        registry exists by then; otherwise the blocking-dependency citation
+        (enforcement train) — same discharge the interface shell used. U11's
+        verb-parameter growth cites the interface-train ActionSpec registry as
+        its blocking dependency rather than authoring interface files.
+
+  consequences:
+    positive:
+      - "The richest horizontal gameplay system starts as a properly-gated train the day its gates cleared."
+      - "The org layer gets its three structural fill-ins (typed capacity, party producers, FACTION seeding) inside the program that needs them."
+      - "Every byte-safety claim is a proved unit gate, not an assumption; baselines move exactly once, at U13's ceremony."
+    negative_or_gated:
+      - "U8's conversion pathway is a genuine modeling build; L-VALVE is only as honest as that mechanics work."
+      - "U9 must BUILD debt_service and wire the equalization operator — scope the brief did not advertise."
+      - "political_form stays shadow until U10's ceremony; §2.6's payoff is deferred, loudly."
+
+  follow_ups:
+    - "U1-U2-U3 parallel foundations; U8->U9->U10 strict serial (system-order pins)."
+    - "Interface-train seam: election dossiers/ballot surfaces land Archive-side after U10; engine publishes projections only."
+    - "At U6: ratify ADR049 (proposed->accepted) with the county-FIPS re-keying."

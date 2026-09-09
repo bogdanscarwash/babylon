@@ -21,7 +21,7 @@ Prerequisites Overview
    * - Python
      - 3.12 or higher
      - Runtime environment
-   * - Poetry
+   * - uv
      - Any recent
      - Dependency management
    * - Git
@@ -57,16 +57,18 @@ Step 1: Install Python 3.12+
    python3 --version
    # Should show: Python 3.12.x or higher
 
-Step 2: Install Poetry
-^^^^^^^^^^^^^^^^^^^^^^
+Step 2: Install uv
+^^^^^^^^^^^^^^^^^^
 
-Poetry manages Python dependencies and virtual environments.
+uv manages Python dependencies and virtual environments. `mise <https://mise.jdx.dev/>`_
+(see "Using Mise" below) provisions the pinned uv version automatically; install
+it standalone only if you're staying off mise for this walkthrough:
 
 .. code-block:: bash
 
-   curl -sSL https://install.python-poetry.org | python3 -
+   curl -LsSf https://astral.sh/uv/install.sh | sh
 
-Add Poetry to your PATH by adding this to your ``~/.bashrc`` or ``~/.zshrc``:
+Add uv to your PATH by adding this to your ``~/.bashrc`` or ``~/.zshrc``:
 
 .. code-block:: bash
 
@@ -77,7 +79,7 @@ Reload your shell and verify:
 .. code-block:: bash
 
    source ~/.bashrc  # or ~/.zshrc
-   poetry --version
+   uv --version
 
 Step 3: Install Git
 ^^^^^^^^^^^^^^^^^^^
@@ -110,14 +112,14 @@ Step 4: Clone and Set Up the Project
    git clone https://github.com/percy-raskova/babylon.git
    cd babylon
 
-   # Install dependencies (creates virtual environment automatically)
-   poetry install
+   # Install locked dependencies (creates virtual environment automatically)
+   uv sync --extra ops --frozen
 
-   # Install pre-commit hooks
-   poetry run pre-commit install --hook-type commit-msg --hook-type pre-commit
+   # Install pre-commit, commit-msg, and pre-push hooks
+   uv run --frozen pre-commit install
 
    # Verify everything works
-   poetry run pytest -m "not ai" -x -q
+   uv run pytest -m "not ai" -x -q
 
 You should see all tests passing. You're ready to develop!
 
@@ -206,13 +208,13 @@ Open your Ubuntu terminal (search for "Ubuntu" in Windows Start menu):
    sudo apt update && sudo apt upgrade -y
    sudo apt install python3 python3-pip python3-venv git curl wget ca-certificates -y
 
-**Install Poetry:**
+**Install uv:**
 
 .. code-block:: bash
 
-   curl -sSL https://install.python-poetry.org | python3 -
+   curl -LsSf https://astral.sh/uv/install.sh | sh
 
-**Add Poetry to PATH:**
+**Add uv to PATH:**
 
 .. code-block:: bash
 
@@ -224,7 +226,7 @@ Open your Ubuntu terminal (search for "Ubuntu" in Windows Start menu):
 .. code-block:: bash
 
    python3 --version   # Should be 3.12+
-   poetry --version    # Should show Poetry version
+   uv --version        # Should show uv version
    git --version       # Should show Git version
 
 Step 4: Clone the Project in WSL
@@ -243,14 +245,14 @@ side. This ensures proper file permissions and much better performance.
    git clone https://github.com/percy-raskova/babylon.git
    cd babylon
 
-   # Install dependencies
-   poetry install
+   # Install locked dependencies
+   uv sync --extra ops --frozen
 
-   # Install pre-commit hooks
-   poetry run pre-commit install --hook-type commit-msg --hook-type pre-commit
+   # Install pre-commit, commit-msg, and pre-push hooks
+   uv run --frozen pre-commit install
 
    # Verify
-   poetry run pytest -m "not ai" -x -q
+   uv run pytest -m "not ai" -x -q
 
 Step 5: Open Project in VSCode (Remote)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -306,11 +308,12 @@ To share credentials between Windows and WSL:
 
    git config --global credential.helper "/mnt/c/Program\ Files/Git/mingw64/bin/git-credential-manager.exe"
 
-Using Mise (Optional)
----------------------
+Using Mise
+----------
 
-The project uses `mise <https://mise.jdx.dev/>`_ as a task runner for common
-operations. While optional, it provides convenient shortcuts.
+The project uses `mise <https://mise.jdx.dev/>`_ as the canonical task runner.
+The standalone walkthrough above remains valid, but contributors using the
+repository commands should install Mise and its pinned Python and uv tools:
 
 **Install mise:**
 
@@ -319,6 +322,7 @@ operations. While optional, it provides convenient shortcuts.
    curl https://mise.run | sh
    echo 'eval "$(~/.local/bin/mise activate bash)"' >> ~/.bashrc
    source ~/.bashrc
+   mise install
 
 **Common mise commands:**
 
@@ -344,30 +348,30 @@ Run through this checklist to confirm everything is working:
    python3 --version
    # Expected: Python 3.12.x or higher
 
-   # 2. Poetry works
-   poetry --version
+   # 2. uv works
+   uv --version
 
    # 3. Dependencies installed
-   poetry run python -c "import babylon; print('Babylon imported!')"
+   uv run python -c "import babylon; print('Babylon imported!')"
 
    # 4. Tests pass
-   poetry run pytest -m "not ai" -x -q
+   uv run pytest -m "not ai" -x -q
    # Expected: All tests pass
 
    # 5. Pre-commit hooks installed
-   poetry run pre-commit run --all-files
+   uv run pre-commit run --all-files
    # Expected: All hooks pass (may auto-fix some files)
 
    # 6. Documentation builds
-   cd docs && poetry run sphinx-build -b html . _build/html
+   cd docs && uv run sphinx-build -b html . _build/html
    # Expected: No errors
 
 Troubleshooting
 ---------------
 
-**Poetry command not found:**
+**uv command not found:**
 
-Ensure Poetry is in your PATH:
+Ensure uv is in your PATH:
 
 .. code-block:: bash
 
@@ -376,11 +380,11 @@ Ensure Poetry is in your PATH:
 
 **Tests fail with import errors:**
 
-Make sure you ran ``poetry install``:
+Make sure you installed the locked dependency set:
 
 .. code-block:: bash
 
-   poetry install
+   mise run install
 
 **WSL: "code" command not found:**
 
@@ -404,8 +408,8 @@ Run the fix commands:
 
 .. code-block:: bash
 
-   poetry run ruff check . --fix
-   poetry run ruff format .
+   uv run ruff check . --fix
+   uv run ruff format .
 
 Then try committing again.
 

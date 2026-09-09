@@ -1,0 +1,165 @@
+# Rust-authoritative simulation and persistence-slice tasks. `sim:*` never
+# runs the frozen Python reference engine. Campaign UUIDs isolate rows, while
+# the local PostgreSQL service and schema remain shared across worktrees.
+
+["sim:e2e-michigan"]
+description = "Run a one-shot Rust Michigan validation (fresh unless BABYLON_CAMPAIGN_ID is explicit)"
+run = """
+export BABYLON_RUNTIME_DSN="${BABYLON_RUNTIME_DSN:-host=127.0.0.1 port=5433 dbname=babylon_test user=test password=test}"
+sim_campaign_id="$(python3 tools/devtools/worktree_campaign.py --purpose michigan-e2e --fresh)" || exit
+export BABYLON_CAMPAIGN_ID="$sim_campaign_id"
+export PATH="$PWD/rust/target/debug:$PATH"
+babylon-runtime run --ticks 130
+"""
+
+["sim:e2e-bg"]
+description = "Resume an explicit Michigan campaign, or the worktree-local default, in the background"
+run = '''
+mkdir -p .sim-pids
+if [ -f .sim-pids/e2e.pid ] && kill -0 "$(cat .sim-pids/e2e.pid)" 2>/dev/null; then
+  echo "already running: PID $(cat .sim-pids/e2e.pid)"; exit 1
+fi
+export BABYLON_RUNTIME_DSN="${BABYLON_RUNTIME_DSN:-host=127.0.0.1 port=5433 dbname=babylon_test user=test password=test}"
+sim_campaign_id="$(python3 tools/devtools/worktree_campaign.py --purpose michigan-e2e)" || exit
+export BABYLON_CAMPAIGN_ID="$sim_campaign_id"
+export PATH="$PWD/rust/target/debug:$PATH"
+printf '%s\n' "$sim_campaign_id" > .sim-pids/e2e.campaign-id
+nohup babylon-runtime run --ticks 130 > .sim-pids/e2e.log 2>&1 &
+echo $! > .sim-pids/e2e.pid
+echo "started PID $(cat .sim-pids/e2e.pid) — log .sim-pids/e2e.log"
+'''
+
+["sim:status"]
+description = "Show the daemon and its recorded campaign tail plus global aggregates"
+run = '''
+if [ -f .sim-pids/e2e.pid ] && kill -0 "$(cat .sim-pids/e2e.pid)" 2>/dev/null; then
+  ps -o pid,pcpu,etime -p "$(cat .sim-pids/e2e.pid)" | tail -1
+  background_is_live=true
+else
+  echo "(no daemonized run)"
+  background_is_live=false
+fi
+if [ -f .sim-pids/e2e.campaign-id ]; then
+  stored_campaign_id="$(cat .sim-pids/e2e.campaign-id)" || exit
+  sim_campaign_id="$(BABYLON_CAMPAIGN_ID="$stored_campaign_id" python3 tools/devtools/worktree_campaign.py --purpose michigan-e2e)" || exit
+elif [ "$background_is_live" = true ]; then
+  echo "background campaign identity is missing: .sim-pids/e2e.campaign-id" >&2
+  exit 2
+else
+  sim_campaign_id="$(python3 tools/devtools/worktree_campaign.py --purpose michigan-e2e)" || exit
+fi
+export BABYLON_RUNTIME_DSN="${BABYLON_RUNTIME_DSN:-host=127.0.0.1 port=5433 dbname=babylon_test user=test password=test}"
+export BABYLON_CAMPAIGN_ID="$sim_campaign_id"
+export PATH="$PWD/rust/target/debug:$PATH"
+babylon-runtime probe
+'''
+
+["sim:watch"]
+description = "Live 30s refresh of sim:status"
+run = "watch -n 30 mise run sim:status"
+
+["sim:probe"]
+description = "Probe an explicit campaign, or the worktree-local default, plus global aggregates"
+run = '''
+export BABYLON_RUNTIME_DSN="${BABYLON_RUNTIME_DSN:-host=127.0.0.1 port=5433 dbname=babylon_test user=test password=test}"
+sim_campaign_id="$(python3 tools/devtools/worktree_campaign.py --purpose michigan-e2e)" || exit
+export BABYLON_CAMPAIGN_ID="$sim_campaign_id"
+export PATH="$PWD/rust/target/debug:$PATH"
+babylon-runtime probe
+'''
+
+["sim:archive"]
+description = "Install or verify the semantic Archive schema and report its global estate"
+run = '''
+export BABYLON_RUNTIME_DSN="${BABYLON_RUNTIME_DSN:-host=127.0.0.1 port=5433 dbname=babylon_test user=test password=test}"
+export PATH="$PWD/rust/target/debug:$PATH"
+babylon-runtime archive
+'''
+
+["sim:dossier-demo"]
+description = "Provision the fog-safe reader role, then drive the headless dossier CLI against a fresh local campaign"
+run = '''
+set -e
+export BABYLON_RUNTIME_DSN="${BABYLON_RUNTIME_DSN:-host=127.0.0.1 port=5433 dbname=babylon_test user=test password=test}"
+sim_campaign_id="$(python3 tools/devtools/worktree_campaign.py --purpose dossier-demo --fresh)"
+export BABYLON_CAMPAIGN_ID="$sim_campaign_id"
+(cd rust && cargo build -p babylon-persistence --bin babylon-runtime --locked && cargo build -p babylon-client --bin babylon-client --locked)
+export PATH="$PWD/rust/target/debug:$PATH"
+babylon-runtime run --ticks 2
+sim_demo_password="${BABYLON_DOSSIER_DEMO_PASSWORD:-babylon_dossier_demo}"
+# The password is interpolated into SQL literals and a connection URI, so
+# anything outside a strict charset would break the heredoc or inject.
+case "$sim_demo_password" in
+    *[!A-Za-z0-9_-]*)
+        printf 'refusing BABYLON_DOSSIER_DEMO_PASSWORD %s: only ASCII letters, digits, "_" and "-" are admissible\n' "$sim_demo_password" >&2
+        exit 1
+        ;;
+esac
+psql "$BABYLON_RUNTIME_DSN" <<SQL
+DO \$\$
+BEGIN
+    IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'babylon_reader') THEN
+        CREATE ROLE babylon_reader NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE;
+    END IF;
+END
+\$\$;
+CREATE OR REPLACE VIEW public.v_committed_tick_status_v1 AS
+SELECT campaign_id, resolve_tick, envelope_layout_version, tick_content_hash, envelope_digest
+FROM babylon_state.tick_commit;
+GRANT SELECT ON public.v_committed_tick_status_v1 TO babylon_reader;
+DO \$\$
+BEGIN
+    IF pg_catalog.to_regclass('public.v_archive_page_known_v1') IS NOT NULL THEN
+        GRANT SELECT ON public.v_archive_page_known_v1 TO babylon_reader;
+    END IF;
+    IF pg_catalog.to_regclass('public.v_archive_atom_visible') IS NOT NULL THEN
+        GRANT SELECT ON public.v_archive_atom_visible TO babylon_reader;
+    END IF;
+    IF pg_catalog.to_regclass('public.v_county_card_atoms') IS NOT NULL THEN
+        GRANT SELECT ON public.v_county_card_atoms TO babylon_reader;
+    END IF;
+    IF pg_catalog.to_regclass('public.v_archive_subject_atoms') IS NOT NULL THEN
+        GRANT SELECT ON public.v_archive_subject_atoms TO babylon_reader;
+    END IF;
+END
+\$\$;
+DO \$\$
+BEGIN
+    IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'babylon_dossier_demo') THEN
+        CREATE ROLE babylon_dossier_demo LOGIN PASSWORD '${sim_demo_password}'
+          NOSUPERUSER NOCREATEDB NOCREATEROLE;
+    END IF;
+END
+\$\$;
+ALTER ROLE babylon_dossier_demo PASSWORD '${sim_demo_password}';
+GRANT babylon_reader TO babylon_dossier_demo;
+GRANT SET ON PARAMETER event_triggers TO babylon_dossier_demo;
+SQL
+export BABYLON_READER_DSN="postgresql://babylon_dossier_demo:${sim_demo_password}@127.0.0.1:5433/babylon_test"
+echo "== tick status =="
+babylon-client --headless tick status
+echo "== dossier show 26163 (no Archive page yet: archive-pending) =="
+babylon-client --headless dossier show 26163
+echo "== changelog 26163 =="
+babylon-client --headless changelog 26163
+echo "== dossier search Wayne =="
+babylon-client --headless dossier search Wayne
+echo "campaign: $sim_campaign_id"
+'''
+
+["sim:report"]
+description = "Diagnose the embedded Michigan Rust persistence slice with post-commit evidence and resource telemetry"
+usage = '''
+arg "[ticks]" help="Number of four-week simulation periods" default="15"
+arg "[timeout_seconds]" help="Runtime wall-clock timeout" default="3000"
+arg "[database_scope]" help="Database attribution scope: shared or exclusive" default="shared"
+'''
+run = """
+export BABYLON_RUNTIME_DSN="${BABYLON_RUNTIME_DSN:-host=127.0.0.1 port=5433 dbname=babylon_test user=test password=test}"
+(cd rust && CARGO_BUILD_JOBS=4 cargo build -p babylon-persistence --bin babylon-runtime --locked)
+python3 tools/devtools/sim_report.py \
+  --runtime rust/target/debug/babylon-runtime \
+  --ticks ${usage_ticks} --timeout-seconds ${usage_timeout_seconds} \
+  --database-scope ${usage_database_scope} \
+  --output-root reports/sim-runs
+"""

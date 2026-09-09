@@ -1,0 +1,26 @@
+; The HIGH-ENTROPY conformance world for `metabolism/biocapacity-update` —
+; the other half of the mutation-verification pair for the D-1 scaled-Int
+; workaround. Seeds the IDENTICAL territory as
+; metabolism-entropy-low-conformance.bscn (same biocapacity/
+; max-biocapacity/extraction-intensity/regeneration-rate), with
+; entropy-factor-x1e6 at the declared cap instead (3.0, inclusive — legal,
+; MetabolismDefines(entropy_factor=3.0) constructs cleanly). At this cap the
+; ecological cost is high enough that the max(0.0, ...) floor binds, unlike
+; the low-entropy companion — the clearest possible proof the scaled-Int
+; workaround carries the coefficient's effect end to end.
+;
+; See `metabolism_entropy_high_conformance.py` for the provenance script.
+(scenario metabolism/entropy-high-conformance
+  (deffield territory/biocapacity int extensive)
+  (deffield territory/max-biocapacity int extensive)
+  (deffield territory/extraction-intensity int intensive)
+
+  (defconst metabolism/regeneration-rate 0.02c)
+  ; 3.0 x 1,000,000 — at the cap, inclusive.
+  (defconst metabolism/entropy-factor-x1e6 3000000)
+  (defconst metabolism/hysteresis-rate 0.005c)
+
+  (node high-entropy-county NodeType/TERRITORY
+    (territory/biocapacity 10)
+    (territory/max-biocapacity 100)
+    (territory/extraction-intensity 1)))

@@ -11,10 +11,11 @@ Overview
 QCEW is integrated into Babylon to provide:
 
 - **County-level employment**: Detailed establishment and worker counts by NAICS industry
-- **State-level aggregates**: Broader geographic patterns for macro analysis
-- **Metro area data**: MSA, Micropolitan, and CSA aggregates for urban economic analysis
 - **Location quotients**: Industry concentration metrics for comparative analysis
 - **Class composition**: NAICS industry mapping to Marxian class categories
+
+(State and metro aggregate tables were retired 2026-07-17 — ADR075 ruling 1;
+county-level ``fact_qcew_annual`` is the canonical QCEW surface.)
 
 All data is stored in ``data/sqlite/marxist-data-3NF.sqlite`` using a normalized
 star schema.
@@ -81,7 +82,7 @@ Python API
 Geographic Levels
 -----------------
 
-QCEW data is loaded at three geographic levels based on aggregation level codes:
+QCEW data is loaded at the county level based on aggregation level codes:
 
 .. list-table::
    :header-rows: 1
@@ -95,22 +96,10 @@ QCEW data is loaded at three geographic levels based on aggregation level codes:
      - 70-78
      - ``fact_qcew_annual``
      - 3,200+ US counties
-   * - State
-     - 20-28
-     - ``fact_qcew_state_annual``
-     - 52 states/territories
-   * - MSA
-     - 30-38
-     - ``fact_qcew_metro_annual``
-     - Metropolitan Statistical Areas
-   * - Micropolitan
-     - 40-48
-     - ``fact_qcew_metro_annual``
-     - Micropolitan Statistical Areas
-   * - CSA
-     - 50-58
-     - ``fact_qcew_metro_annual``
-     - Combined Statistical Areas
+
+State/metro rollups (``fact_qcew_state_annual``, ``fact_qcew_metro_annual``)
+and ``dim_sector`` were retired 2026-07-17 (ADR075 ruling 1) — county-level
+``fact_qcew_annual`` is the canonical QCEW table.
 
 Database Schema
 ---------------
@@ -163,9 +152,6 @@ Fact Tables
    * - disclosure_code
      - VARCHAR
      - Data suppression indicator
-
-**fact_qcew_state_annual** and **fact_qcew_metro_annual** follow the same
-structure, with FK references to ``dim_state`` and ``dim_metro_area`` respectively.
 
 NAICS Hierarchy Levels
 ^^^^^^^^^^^^^^^^^^^^^^
@@ -245,64 +231,6 @@ The cache is built on first use and persists across sessions. When the
 ``cache_version`` column is missing or does not match the current version,
 the table is dropped and rebuilt with leaf-only NAICS filtering.
 
-SQL Queries
------------
-
-**Employment by Class Composition**
-
-.. code-block:: sql
-
-    SELECT
-        sec.class_composition,
-        SUM(q.employment) as total_employment,
-        ROUND(SUM(q.total_wages_usd) / 1e9, 2) as wages_billions
-    FROM fact_qcew_annual q
-    JOIN dim_industry i ON q.industry_id = i.industry_id
-    JOIN dim_sector sec ON i.sector_code = sec.sector_code
-    JOIN dim_time t ON q.time_id = t.time_id
-    WHERE t.year = 2023 AND sec.class_composition IS NOT NULL
-    GROUP BY sec.class_composition
-    ORDER BY total_employment DESC;
-
-**State-Level Industry Concentration**
-
-.. code-block:: sql
-
-    SELECT
-        s.state_name,
-        i.naics_title,
-        q.lq_employment as concentration,
-        q.employment
-    FROM fact_qcew_state_annual q
-    JOIN dim_state s ON q.state_id = s.state_id
-    JOIN dim_industry i ON q.industry_id = i.industry_id
-    JOIN dim_time t ON q.time_id = t.time_id
-    WHERE t.year = 2023
-      AND q.lq_employment > 2.0  -- Highly concentrated
-    ORDER BY q.lq_employment DESC
-    LIMIT 20;
-
-**Metro Area Manufacturing Employment**
-
-.. code-block:: sql
-
-    SELECT
-        m.metro_name,
-        q.area_type,
-        SUM(q.employment) as manufacturing_jobs,
-        ROUND(AVG(q.avg_annual_pay_usd), 0) as avg_pay
-    FROM fact_qcew_metro_annual q
-    JOIN dim_metro_area m ON q.metro_area_id = m.metro_area_id
-    JOIN dim_industry i ON q.industry_id = i.industry_id
-    JOIN dim_time t ON q.time_id = t.time_id
-    WHERE i.naics_code LIKE '31%'
-       OR i.naics_code LIKE '32%'
-       OR i.naics_code LIKE '33%'
-    AND t.year = 2023
-    GROUP BY m.metro_name, q.area_type
-    ORDER BY manufacturing_jobs DESC
-    LIMIT 20;
-
 API Client
 ----------
 
@@ -337,7 +265,8 @@ QCEW data supports Marxian class analysis through:
 
 **Class Composition by Sector**
 
-Industries are mapped to class composition categories in ``dim_sector``:
+Industries are mapped to class composition categories directly on
+``dim_industry`` (the ``dim_sector`` rollup was retired 2026-07-17, ADR075):
 
 - ``goods_producing`` - Manufacturing, construction (productive labor)
 - ``service_producing`` - Services, retail (mixed productive/unproductive)

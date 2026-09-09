@@ -1,0 +1,238 @@
+ADR090_qa_regression_modernization:
+  status: "accepted"
+  date: "2026-07-20"
+  title: "qa:regression modernized from a silent-blind byte-identical gate into a declared-and-proved one: E1 ScenarioCoverage/CoverageGap declarations (sentinel-enforced, static + dynamic-truth), E2 two new county-bearing canonical scenarios (single_county Wayne + detroit_tri_county bundle promoted to the byte-identical tier, 5->6 baselines), E3 financial dense-trace channels plus a no-dead-columns rule (the concrete U9-class-inertness detector), E4 first-divergence attribution replacing hand-derivation, E5 a real defines_hash gate (E5a) and an in-gate two-process determinism leg (E5b) -- headline finding: the five original scenarios exercise only 12 of the engine's 30 Systems, the org layer is exercised NOWHERE (org_count=0 even in the detroit_tri_county e2e bundle), and 17 CoverageGap rows remain honestly declared as debt; gate runtime 9.632s, far under the 5-minute budget"
+  context: |
+    Design: docs/superpowers/specs/2026-07-19-qa-regression-modernization-design.md.
+    The Volume III money-scissors program (ADR089) proved the byte-identical gate's
+    determinism contract (Constitution III.7) sound but its COVERAGE unknown: the
+    U9 endogenous interest rate shipped structurally inert (i identically 0.0) and
+    qa:regression stayed green in both the broken and the fixed state, because
+    none of the five canonical scenarios (imperial_circuit, two_node, starvation,
+    glut, fascist_bifurcation) carry a county_fips -- the entire Vol III financial
+    layer lives at county level, outside every channel the gate compared. Three
+    more instruments were found empirically toothless the same week: the
+    qa:e2e-regression Δ% summary never serialized anything downstream of
+    interest_payments; the defines_hash guard was WARNING-only and excluded from
+    the pass filter (all five stored hashes were stale and mutually different,
+    yet green); and a divergence's first-diverging (tick, system, channel) was
+    hand-derived per incident rather than computed by the tool. This is the
+    gate-blindness error class (sentinels/coverage/, ADR088's U7.9) applied to
+    the measuring instrument itself. This program (12 tasks, branch
+    refactor/qa-regression-modernization, base dev post-vol3-merge) closes all
+    five gaps without touching III.7 or determinism strictness.
+  decision: |
+    E1 (Tasks 1-4) -- Declared coverage, sentinel-enforced. `tools/
+    regression_scenarios.py` gained frozen Pydantic models (SystemEvidence,
+    AtRestChannel, ScenarioCoverage, CoverageGap) and two data tables:
+    SCENARIO_COVERAGE_DATA (which of the engine's 30 _SYSTEM_CLASSES each
+    scenario demonstrably exercises, verified against live 40- and 150-tick
+    spot-runs, not source-reading alone) and COVERAGE_GAPS_DATA (every System
+    the five scenarios cannot exercise, with a verified-true mechanistic reason
+    and a remediation). HEADLINE FINDING: the five original scenarios exercise
+    only 12 of 30 Systems (13 evidence rows -- one System, MarketScissorsSystem,
+    evidenced twice). 18 Systems were genuinely unevidenceable, corrected down
+    to 17 after Task 3 closed ContradictionSystem via a new detroit_tri_county
+    bundle_field row (terminal_state.max_tension, proven non-seed via a
+    forbidden_values tooth so a future regen collapsing back to the 0.1 seed or
+    the 0.0 empty-table default reds the gate, not just checks key-presence).
+    OODASystem was tried against the same bundle and explicitly NOT closed: the
+    bundle's 5 organizational_action events all carry
+    {"org_count": 0, "action_count": 0, "layer0_count": 0} -- the org layer is
+    exercised NOWHERE, not in the five scenarios and not in the e2e bundle
+    either. Two sentinels gate the declarations: check:gate-coverage (static,
+    fast lane -- src/babylon/sentinels/gate_coverage/checks.py, AST-parses the
+    declaration tables and the engine's _SYSTEM_CLASSES list, proves the union
+    covers exactly 30 with no invented names) and check:gate-coverage-truth
+    (dynamic, qa lane -- runs every declared scenario and mechanically checks
+    each of the (by the end of the program) evidence rows against the exact
+    probe semantics, catching "correct-but-inert" claims a static AST scan
+    cannot).
+    E2 (Tasks 8, 10, 11) -- County-bearing canonical scenarios promoted into the
+    byte-identical tier. single_county: a committed Wayne-County (FIPS 26163,
+    year 2010) fixture extracted through the real production MarxianHydrator
+    chain (tests/fixtures/single_county_wayne.json), the smallest graph where
+    the Vol III financial layer, MELT path, and distribution identity all fire
+    through step() the same way the other five scenarios do. detroit_tri_county:
+    the pre-existing e2e bundle scenario promoted from a Δ%-summary metric to
+    full dense-trace bundle membership (dense_trace.csv, 29 columns x 6 rows,
+    minted from one canonical strict 5-tick headless-runner run and
+    byte-match-proven against a second independent run, md5
+    a293f41f31299dca44cfa662b4b0eee2 on both). Baselines: 5 -> 6 JSON/dense
+    pairs (single_county.json + dense/single_county.csv new; dense/
+    detroit_tri_county.csv new; the original 5 dense CSVs re-minted for E3's
+    widened header, value-identical on every shared cell). The nationwide slot
+    stays owner-tabled (Amendment R/S, task #49) -- reserved, not implemented.
+    E3 (Tasks 7, 9, 11) -- Financial dense-trace channels + the no-dead-columns
+    rule. Dense traces gained 4 financial_* columns (endogenous rate,
+    profit_rate_ceiling, s_r/reserve_army_signal, tightness) plus per-county
+    channels (interest_payments, ground_rent, taxes_on_surplus, MELT
+    aggregates). check_dead_columns (tools/regression_test.py) fails the gate
+    on any channel that is all-zeros/all-absent across an entire scenario run
+    UNLESS the scenario's ScenarioCoverage.at_rest declares it with a reason --
+    this is the concrete instrument that makes a future U9-class inertness
+    unmissable (its own docstring names the failure mode: "a channel that is
+    all-zeros/all-absent ... is an inertness signal (the U9 failure mode) --
+    never a default"). 118 at_rest rows minted across the six harness
+    scenarios (every one individually verified against source + a live probe,
+    none blanket-declared) plus 13 more for the detroit_tri_county bundle path
+    (extended there in the ceremony, Task 11). single_county's two live
+    financial_* channels (financial_endogenous_rate, financial_profit_rate_
+    ceiling) are the U9 detector now armed for real: rate=0.017833969800785755,
+    profit_rate_ceiling=0.059447, pinned in the committed baseline -- a future
+    regression that silently zeroes the endogenous rate again reds this gate,
+    not just a task review. DECLARED DEVIATION (Task 7): the brief's original
+    plan was to also restore national_financial from persistent_context onto
+    the graph every tick (not just save it); this was BLOCKED after empirical
+    discovery that TickDynamicsSystem's annual-boundary gate fires on the very
+    first step() call (context.tick is the pre-increment state.tick, and a
+    fresh WorldState starts at tick=0, so 0 % 52 == 0) -- restoring the value
+    moved 4 of 5 baselines (C002_wealth Δ up to 0.21 at tick 2), a real
+    dynamics change, not noise. Descoped to SAVE-ONLY: persistent_context
+    retains the last-stamped value for the harness/probe to read; the engine's
+    live tick-to-tick behavior is untouched, byte-neutral by construction. The
+    restore-side question is recorded as an OWNER-GATED OPEN QUESTION below.
+    E4 (Task 5) -- First-divergence attribution. compare_dense_trace /
+    attribute_divergence (tools/regression_test.py) walk the dense trace
+    ordered and report the first (tick, column, old value, new value, delta,
+    candidate systems) where a run departs its baseline, replacing the
+    Vol-III-program's hand-derivation (U8.2/U8.3). A header-mismatch (e.g. E3's
+    column-widening) short-circuits into its own explicit "<header>" finding
+    before any per-cell walk, so a schema change is never misreported as a
+    single-cell divergence.
+    E5a (Task 6) -- Real defines_hash gate. Promoted from an advisory
+    `WARNING:`-prefixed diff (excluded from the pass filter) to a real gating
+    failure naming the regeneration ceremony. DECLARED DEVIATION: the five
+    stale, stored hashes were refreshed AS PART OF TASK 6 itself (commit
+    d803fdd7), not deferred to the Task 11 ceremony -- because a
+    value-identity proof script (every checkpoint value compared with
+    defines_hash and generated_at stripped from both sides) showed all five
+    scenarios value-identical to the stored checkpoints; only the hash moved,
+    never a checkpoint value. This is a real baseline-file change (5 JSONs),
+    landed early and cited by name because it is NOT the ceremony commit
+    (c69e1bbe) despite touching tests/baselines/ -- the ceremony's own drift
+    table treats the JSON generated_at movement in those same 5 files as a
+    byproduct confirming the hash is still valid, not a second hash refresh.
+    E5b (Task 10, folded closed in Task 11) -- In-gate two-process determinism.
+    The ADR056-precedent two-independent-process byte-comparison is now an
+    unconditional leg of `qa:regression compare` itself (not only a separate
+    unit test), PASS in 5.35-5.43s across every measured run, golden-independent
+    (it re-runs the construction cadence twice and diffs the two runs against
+    each other, not against a committed file).
+    Ceremony (Task 11, commit c69e1bbe) closed the red window Tasks 8-10
+    sanctioned: minted single_county's checkpoint+dense baselines and detroit_
+    tri_county's dense golden, re-minted the five originals' widened dense
+    goldens, removed both allowlist mechanisms' pending state -- PENDING_
+    CEREMONY (tools/regression_scenarios.py) is RETAINED, now permanently
+    empty (frozenset()), as the live mechanism for any future scenario's mint
+    window; STALE_UNTIL_CEREMONY is RETIRED entirely (deleted, no successor) --
+    turned compare-bundle's missing-detroit-golden branch from a non-fatal
+    PENDING print into a hard fail, extended check_dead_columns to the bundle
+    path (13 more at_rest rows, empirically verified, zero over/under-
+    declaration), and wrote single_county's real minted numbers into reports/
+    vol3-baseline-delta.md as a dated addendum (Immutability of History -- the
+    existing approved narrative untouched). Measured runtime (`time mise run
+    qa:regression`): 9.632s real, far under the 5-minute (300s) budget -- the
+    per-scenario max_ticks override fallback specced as a contingency was never
+    needed.
+  consequences: |
+    qa:regression is now 6 scenarios (imperial_circuit, two_node, starvation,
+    glut, fascist_bifurcation, single_county) byte-identical, plus the
+    no-dead-columns leg and the in-gate two-process determinism leg, plus
+    qa:e2e-regression's detroit_tri_county dense byte leg and bundle-path
+    dead-column guard -- all green, 9.632s local. Two new gating sentinels ship:
+    check:gate-coverage (fast lane, static) and check:gate-coverage-truth
+    (qa lane, dynamic) -- both wired into CI exactly like check:surface/
+    check:coverage. `defines_hash` mismatches now hard-fail instead of
+    warning. tests/baselines/ grows by 3 files (single_county.json, dense/
+    single_county.csv, dense/detroit_tri_county.csv) and the original 5 dense
+    CSVs carry 4 new financial_* columns each.
+    NEW OWED SENTINEL CLASS (Task 9 finding, not yet built -- added to the
+    project's owed-sentinel list, nothing struck): frozen-constant inertness.
+    check_dead_columns's all-zeros/all-absent test cannot see a dormant field
+    that was seeded to a nonzero constant and then never touched again -- live
+    specimens C005 (Carceral Enforcer)/C006 (Internal Proletariat) in the
+    imperial_circuit family: both seeded active=False/population=0 "until
+    CLASS_DECOMPOSITION" (which never fires in 52 ticks), so every consciousness/
+    survival/struggle System skips them every tick, yet C006_repression_faced
+    (seeded 0.9) and both entities' class_consciousness/national_identity/
+    organization fields (nonzero seeds) never get flagged dead by the all-zeros
+    detector the way C005_repression_faced (seeded 0.0) correctly does. Same
+    root cause (DecompositionSystem gap, already a declared CoverageGap row),
+    two different detectability outcomes purely from seed value -- a follow-up
+    frozen-constant detector is recommended, explicitly NOT built by this
+    program.
+    OWNER-GATED OPEN QUESTION (from the E3 descope, Task 7): should the engine
+    itself see persisted national_financial state between annual boundaries
+    (i.e. restore it onto the graph every tick, not just save it for
+    observability)? The Vol III Part V semantics suggest yes -- MarketScissors/
+    ContradictionSystem would then read the real tick-1-computed financial
+    params for ticks 2-52 instead of falling back to None -- but doing so moves
+    4 of 5 frozen baselines (a genuine dynamics change, verified: C002_wealth
+    Δ≈0.21 at tick 2 of imperial_circuit) and therefore belongs to a deliberate,
+    owner-approved Vol III dynamics ceremony, not to an observability-only
+    program. Left unresolved by design.
+    Two other latent defects were found and fixed en route, both outside this
+    program's stated scope but discovered while exercising the wider test
+    suite the briefs mandated: (1) the Task-5-latent attribution import
+    script-mode crash -- attribute_divergence()'s lazy `from tools.
+    regression_scenarios import CHANNEL_WRITERS` could not resolve under the
+    stock `poetry run python tools/regression_test.py compare` invocation
+    (no repo-root on sys.path in script mode), meaning the tool would crash
+    instead of attributing on any run with a REAL divergence to report --
+    fixed in Task 7 to the bare sibling-import idiom already used elsewhere in
+    the same file, with a genuine subprocess regression test. (2) gate_
+    coverage_probe.run_probe hardcoded _build_vol3_calculator_overrides for
+    every scenario including single_county -- undetected, the dynamic truth
+    probe would have certified single_county's _national_financial/
+    _tick_dynamics evidence rows as true against a HOLLOW run (no real
+    tensor_registry, rate structurally 0.0), exactly the "presence != truth"
+    trap this sentinel family exists to catch; fixed in Task 8 with the same
+    scenario-conditional dispatch used elsewhere.
+    FORWARD CONTINGENCY (Task 9, disclosed, not actioned): single_county's
+    financial_s_r/financial_tightness channels are legitimately at_rest today
+    because Wayne County's 2010 unemployment_rate=0.05 (itself downstream of
+    the KNOWN employment-100k placeholder, Program 17 lineage) sits below
+    capital_vol3.interest_reserve_reference=0.08. A future correction to that
+    U-3 figure of more than ~8 percentage points would make these channels
+    live again, and the stale-at_rest detector (check_dead_columns's second
+    direction: a declared-at-rest channel that is observed live is itself a
+    finding) would then correctly force removal of both at_rest rows -- by
+    design, not a bug to pre-empt.
+    DEFERRED, explicitly: the nationwide canonical scenario (task #49, still
+    owner-tabled); a frozen-constant inertness sentinel (new owed class,
+    above); the engine-side national_financial restore (open question, above).
+  evidence: |
+    docs/superpowers/specs/2026-07-19-qa-regression-modernization-design.md,
+    .superpowers/sdd/progress.md (the program ledger, all 12 tasks),
+    .superpowers/sdd/task-2-report.md (12/30 evidenced, 18-then-17 gaps),
+    .superpowers/sdd/task-3-report.md (ContradictionSystem bundle closure,
+    OODASystem org_count=0 non-closure, forbidden_values tooth),
+    .superpowers/sdd/task-6-report.md (defines_hash gate + value-identity
+    refresh proof),
+    .superpowers/sdd/task-7-report.md (E3-pre restore BLOCKED + save-only
+    rescope + the owner-gated question + the script-mode import fix),
+    .superpowers/sdd/task-8-report.md (single_county fixture provenance +
+    the hardcoded-overrides probe fix),
+    .superpowers/sdd/task-9-report.md (no-dead-columns rule, 118 at_rest
+    rows, the C005/C006 frozen-constant finding),
+    .superpowers/sdd/task-10-report.md (detroit_tri_county dense leg,
+    trace_format.py extraction, the E5b determinism leg),
+    .superpowers/sdd/task-11-report.md (the ceremony: drift table, value
+    pins, 9.632s measured runtime),
+    tools/regression_scenarios.py (SystemEvidence/AtRestChannel/
+    ScenarioCoverage/CoverageGap, SCENARIO_COVERAGE_DATA, COVERAGE_GAPS_DATA,
+    PENDING_CEREMONY),
+    tools/regression_test.py (check_dead_columns, attribute_divergence,
+    compare_dense_trace, the defines_hash gating block),
+    src/babylon/sentinels/gate_coverage/checks.py,
+    tests/unit/tools/test_dead_columns.py,
+    tests/unit/tools/test_defines_hash_gate.py,
+    tests/unit/tools/test_regression_construction_cadence_determinism.py,
+    tests/baselines/single_county.json, tests/baselines/dense/single_county.csv,
+    tests/baselines/dense/detroit_tri_county.csv,
+    reports/vol3-baseline-delta.md (Task 11 Ceremony Addendum section),
+    ADR088_sentinel_error_classes.yaml (the sentinel-per-error-class precedent
+    this program's two new sentinels follow),
+    ADR089_vol3_money_scissors.yaml (the U9 finding that motivated this
+    program)

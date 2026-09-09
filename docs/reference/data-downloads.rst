@@ -80,14 +80,20 @@ The HPMS loader requires spatial road segment data from FHWA.
     data/dot/
     └── HPMS_Spatial_All_Sections_-_2024.csv
 
-**Key Columns Used:**
+**Key Columns Used (2024 export):**
 
-- ``State_Code``, ``County_Code`` - Geographic identifiers
-- ``Route_ID``, ``Begin_Point``, ``End_Point`` - Route segment location
-- ``AADT`` - Annual average daily traffic
-- ``F_System`` - Functional system classification
-- ``NHS`` - National Highway System designation
-- ``Lanes``, ``Speed_Limit`` - Physical characteristics
+- ``StateID``, ``COUNTY_ID`` - Geographic identifiers
+- ``ROUTE_ID``, ``BEGIN_POINT``, ``END_POINT`` - Route segment location
+- ``AADT``, ``AADT_SINGLE_UNIT``, ``AADT_COMBINATION`` - Annual average daily
+  traffic, with truck splits
+- ``F_SYSTEM`` - Functional system classification
+- ``NHS``, ``NHFN`` - National Highway System / Highway Freight Network flags
+- ``THROUGH_LANES``, ``SPEED_LIMIT``, ``LANE_WIDTH``, ``SectionLength`` -
+  Physical characteristics
+- ``YEAR_RECORD``, ``line`` - Observation year and WKT LineString geometry
+
+Load with ``python -m babylon_data.dot --execute`` (babylon-data package;
+Michigan-scoped by default via ``--state-fips``).
 
 Census LODES Crosswalk
 ~~~~~~~~~~~~~~~~~~~~~~

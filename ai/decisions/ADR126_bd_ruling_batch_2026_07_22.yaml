@@ -1,0 +1,125 @@
+ADR126_bd_ruling_batch_2026_07_22:
+  status: "accepted"
+  date: "2026-07-22"
+  title: >-
+    BD ruling batch 2026-07-22: adversary-train merge authorized; the Electoral
+    Question's eight open rulings all approved as recommended (program queued as
+    an engine train, not forked); Amendment T ratified under explicit BD
+    delegation with an off-critical-path rider (CONSTITUTION.md v2.16.0); the
+    Player Interface Shell plan approved for execution on feature/interface-shell.
+  supersedes: []
+  relates_to: ["ADR072", "ADR073", "ADR109", "ADR125"]
+  programs: ["24-the-archive", "doctrine-tree", "the-electoral-question"]
+
+  provenance: |
+    In-session BD directives, 2026-07-22 (~11:00 EDT), verbatim: "mere [merge]
+    the adversary train - yes / electoral rulings - approved / you can decide
+    for me on amendment T / i approve of the interface shell / i trust your
+    judgment just make this happen and be loyal to NORTH_STAR.md". The
+    directives answered a decision list produced by a 9-agent read-only
+    ultracode recon of gameplay-expansion candidates (7 sonnet recon agents
+    over ai/, specs/, project/, reports/, memory, and live code; an opus
+    synthesis; an opus adversarial critique that field-verified every
+    load-bearing claim against the tree — including catching that adversary
+    train W4 had landed mid-recon and that the shell lane's only real engine
+    collision is the ooda.py _FIRST_CLASS_ACTION_EVENTS frozenset).
+
+  context: |
+    The recon's headline finding, verified: the player cannot currently issue a
+    single action in the shipping TUI. All nine Article V verbs have real,
+    non-stub resolvers in the engine dispatch table, but submit_verb has zero
+    production callers, render_verb_plate is never mounted, and the palette is
+    navigation-only. DoctrineSystem @14.7 (ADR073) is live and player-invisible
+    for the same reason. Horizontal gameplay expansion (electoralism, doctrine)
+    is therefore worthless-until-felt without the action surface — so the shell
+    lands first and the Electoral Question queues.
+
+  decision: |
+    (1) ADVERSARY TRAIN — merge to dev AUTHORIZED. The train-owner session
+        (bg 756d4549) holds the checkout occupancy marker and prepared its own
+        landing sequence; it grew a W5 (repression-cascade fix) after its W1-W4
+        review pass. Landing stays with that session; this batch records the
+        authorization and the takeover rule: if the owner session dies before
+        landing, the delegated session executes the same sequence (merge dev
+        into the branch, gates green, PR, self-merge on green per the standing
+        2026-07-19 autonomy ruling, delete the occupancy marker).
+
+    (2) THE ELECTORAL QUESTION (ai/_inbox/the-electoral-question.md, committed
+        with this batch) — all eight §7 rulings APPROVED AS RECOMMENDED:
+          1. Allegiance = node-attribute distribution over (parties ∪
+             abstention); never a REPRESENTS edge fabric (keeps Modulus C/G/P).
+          2. political_form joins the opposition catalog as a new entry; its
+             numeric index is assigned AT IMPLEMENTATION, not now — three lanes
+             race for catalog append slots (metabolic, the national extension,
+             political_form) and pre-pinning an index would manufacture a
+             collision.
+          3. Fascist electoral vehicle = capture of the RESTORATIONIST machine
+             (reuses spec-070 seeding); no distinct latent party org.
+          4. Officeholder capture accrues at ORG level (ADR084's KeyFigure
+             retirement stays honored); no per-seat ledger rows.
+          5. Primaries deferred to a Phase-2 fiber of ElectoralSystem;
+             entryism's host-discipline projection covers the mechanism at
+             launch fidelity.
+          6. This program OWNS spec-070's anticipated "election" decision-moment
+             type.
+          7. MVP doctrine tree migration: the reformist trunk is replaced IN
+             PLACE (electoral_socialism → the Electoral Question fork);
+             liquidationism demotes from purchasable node to DETECTED absorbing
+             state.
+          8. trap_detection.py is ABSORBED: its liberal-trap factors become
+             political_form measures; its hardcoded thresholds retire (III.1
+             remediation); no parallel diagnostic kept.
+        SEQUENCING (same batch): the program is spec-ready and QUEUED as an
+        engine train. It does NOT fork now: its §2.3 surface (FactionBalance-
+        gated RuleBasedStateAI) is exactly the file set the adversary train
+        just rewrote, four of its systems are Vol III-class scope, and its
+        payoff is invisible until the action surface exists. ADR/spec numbers
+        re-picked at launch per the §6 numbering rule.
+
+    (3) AMENDMENT T — RATIFIED, under explicit BD delegation ("you can decide
+        for me"). Ruling: ACCEPT as drafted in ADR072.proposed_amendment
+        (Article VIII, observes-only), registered in CONSTITUTION.md v2.16.0,
+        WITH RIDER: ratification is governance only — ADR072's Phase-1 scope
+        stays queued off the v1.0 critical path per NORTH_STAR §0. Rationale:
+        T is a guarantee of RESTRAINT (the authored channel adjudicates
+        nothing without a declared promotion ceremony) — declining would leave
+        the facility ratifying ADR-only with LESS explicit protection; three
+        programs cite the reservation (DT Unit 6, P19's read_poles surface,
+        the Electoral Question's practice-derived tag drift); and both of
+        ADR072's hard sequencing dependencies (P19 in the spine; the DT
+        authored source built) have since been satisfied, so the reservation
+        was the last dangling piece. Zero code, zero baselines, zero player
+        impact today.
+
+    (4) PLAYER INTERFACE SHELL — APPROVED for execution:
+        project/research/24-the-archive/PLAYER_INTERFACE_SHELL_plan.md (11
+        tasks, BD-approved design), branch feature/interface-shell off dev.
+        The plan's own gating constraint (merged cascade + T3 EconomyView) is
+        satisfied by the overnight merges (#245-#248). ADR109 discipline: the
+        lane's wiring motions (W-P: verb-plate → submit_verb → game_turn) cite
+        the unbuilt sentinels/wiring registry as their blocking dependency —
+        the ADR109 enforcement train (FIRST in the standing post-cascade
+        queue) builds it; rows are entered when it exists. The one deliberate
+        engine hunk — promoting player verbs into ooda.py's
+        _FIRST_CLASS_ACTION_EVENTS so actions are FELT in the chronicle —
+        lands as a coordinated post-train-merge commit, not inside the
+        TUI-only tasks; qa:regression stays byte-identical for every TUI-only
+        task by construction and is verified at merge.
+
+  consequences:
+    positive:
+      - "The action surface unblocks every future action family (electoral, doctrinal) and turns nine already-real verbs into gameplay."
+      - "The Electoral Question is fully spec-ready the moment its train slot opens — zero ruling latency at launch."
+      - "Amendment T's disposition stops three programs from citing a dangling reservation; the observes-only fence is now constitutional."
+      - "The adversary train lands with its owner session, avoiding the exact parallel-edit collision the occupancy marker exists to prevent."
+    negative_or_gated:
+      - "The interface-shell lane cannot enter its ADR109 sentinel rows until the enforcement train builds the registry — the citation is loud, ledgered debt."
+      - "Electoralism's richest content waits on its queue slot; the valve/ceiling/hysteresis machine is ruled, not built."
+      - "Amendment T Phase-1 (divergence shadow binding) remains queued; the DT Unit-6 feedback channel is unblocked in governance but unscheduled in code."
+
+  follow_ups:
+    - "Monitor the train-owner session's landing; take over per decision (1) if it stalls."
+    - "Execute PLAYER_INTERFACE_SHELL_plan.md task-by-task on feature/interface-shell (order 1→2→10→3→4→5→6→7→8→9→11 per the plan's own self-review)."
+    - "ADR109 enforcement train remains FIRST in the standing post-cascade queue; enter the shell lane's sentinel rows when its registry exists."
+    - "Assign the opposition-catalog indices (metabolic / national extension / political_form) at each lane's implementation commit, append-only."
+    - "At Electoral Question launch: re-pick ADR/spec numbers; re-verify the §1 exists-at-pin inventory against then-current dev."

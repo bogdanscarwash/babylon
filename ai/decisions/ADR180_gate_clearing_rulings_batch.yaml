@@ -1,0 +1,163 @@
+ADR180_gate_clearing_rulings_batch:
+  status: "accepted"
+  date: "2026-07-30"
+  title: >
+    Director rulings, live session 2026-07-30 (third batch — the gate
+    clearing): all remaining reserved calls on #407 (funding), #408
+    (organizational surface), #411 (heat), #414 (topology Q4/Q5) ruled in
+    one sitting; Constitution v3.0.1 (PR #420) approved and merged. Lane A
+    (heat) is unblocked.
+  context: |
+    The Director asked to be presented with every open decision gate
+    ("hit me with the decision gates you need") and ruled all 24 calls in
+    one interactive session. Sources: the three 2026-07-30 dossiers
+    (funding / organizational-methods / heat) and the social-topology
+    spine audit. ADR178 had already ruled the calibration class (C1) and
+    co-optation ownership (C2) earlier the same day; today's answers
+    reconfirm C1 and refine C2 (see R3). ADR179 had ruled #414 T1-T4;
+    Q4/Q5 completed here. Recommendations were presented with each call;
+    where the Director diverged from the recommendation it is noted, and
+    her words are verbatim where they carry the line.
+  decision: |
+    CONSTITUTION:
+    (R1) PR #420 APPROVED and merged - Constitution v3.0.1: III.7 names
+        the tick content hash as its deterministic hash; the replay stamp
+        is named as NOT it (records ADR179 T2).
+    TOPOLOGY (#414, completing ADR179):
+    (R2) Q4 - COMPETITION: CHARTER A PRODUCER (against the retire
+        recommendation). The type stays; a material producer is chartered
+        Rust-side (candidate: P26 inter-sector rivalry) so its three
+        readers go live. No dead vocabulary EITHER way: the charter is a
+        commitment, tracked until the producer exists.
+    (R2b) Q5 - the community tier WAITS FOR RUST. No Python interim
+        against the Amendment-D-superseded shape; ADR171 Phase 2's
+        blocked-on annotation moves to the P27 native-hyperedge milestone.
+    HEAT (#411; Lane A unblocks):
+    (R3) Co-optation enters the REPRESSION CATALOGUE as COMPOSITION -
+        refining ADR178 C2: still ONE implementation owned by the
+        electoral/allegiance machinery, but the heat system PRICES AND
+        TRIGGERS it, not merely reads it. The reform ceiling and the
+        electoral valve are thereby asserted to be instruments of
+        repression. Baseline-moving for P25; lands under ceremony.
+    (R4) Historical constants: CALIBRATION-ONLY reconfirmed (ADR178 C1
+        verbatim controls).
+    (R5) The settler bribe Omega-hat is AUTHORIZED as a live engine
+        account; the ADR171 OQ6 section-6.5 un-shadowing ceremony remains
+        the Director's and fires when the implementing PR lands.
+    (R6) BAD-JACKETING IS REPRESENTABLE AS GROUNDED (one ruling covering
+        #411 c4 and #408 c4): mechanical, an internal-cohesion attack,
+        damage scaling WITH organizational strength. The pedagogy is the
+        discomfort: security culture and internal due process are material
+        defenses.
+    (R7) The indiscriminate and comprador-proxy modes against internal
+        colonies are PLAYER-VISIBLE mechanics. The slot is designed now;
+        the modes land when ADR171's national-incidence data exists -
+        never approximated with a coefficient in the interim.
+    FUNDING (#407):
+    (R8) THE PHI STAMP IS MECHANICAL - the ideological line ruling of the
+        gate: core-raised mass money (dues, crowdfunding inside a
+        majority-exploiter country) carries imperial-rent provenance via
+        the P26 sigma-composition pattern. Budgets see their class
+        content; downstream mechanics may read it.
+    (R9) THE MIM(P) MODIFIER SHIPS (against the dossier's hold
+        recommendation): inside the imperial core, the imprisoned/lumpen
+        population is a REVOLUTIONARY SUBJECT - no Insurrectionist
+        class-character penalty applies there; the surface may be
+        positively organizable. Lenin's lumpen-drift coefficient is NOT
+        encoded globally. This encodes the aligned line mechanically.
+    (R10) EXTERNAL TRANSFER IS A FIFTH CHANNEL, doctrine-gated, with
+        direction-dependent class content (core-to-periphery solidarity /
+        periphery-to-core diaspora dues / state patronage WITH TASKING as
+        a trap surface).
+    (R11) Ruling 37's boundary: ALL SEIZURE STAYS UNDER BUILD. The
+        funding cell's illegal_economy means STANDING illegal economies
+        (the FLN's monthly income), never a liquid heist variant.
+    (R12) mass_appeal IS A REAL LEVY on the population node, as designed:
+        the rate-versus-growth tradeoff is live and the Autonomist
+        trunk's material cost is the theory's own claim.
+    (R13) TENANCY SUB-MODE: PREMISE REJECTED FOR THE US SETTING.
+        Director verbatim: "there is no peasantry in the united states,
+        read MIM particularly the FLPMIMP document." Disposition: the
+        org-as-landlord-over-peasant-households shape (Jiangxi/Yan'an) has
+        NO US REFERENT; the Scientific channel's US-theater transcription
+        must ground in MIM's actual US class structure (labor aristocracy
+        majority, lumpen/imprisoned, internal semi-colonies) per the
+        FLPMIMP document - corpus read owed and in flight. The sub-mode
+        survives only for theaters that HAVE a peasantry.
+    (R14) THE REFORMIST RATCHET IS ESCAPABLE AT RUINOUS COST (against the
+        irreversibility recommendation): a congress-level line struggle
+        can break professionalization on institutional money, at massive
+        practice/cadre cost. Agency preserved; the door is nearly - not
+        absolutely - one-way.
+    ORGANIZATIONAL SURFACE (#408):
+    (R15) W-H - CLANDESTINITY IS A DOCTRINE-IDENTITY PROPERTY (a G3
+        coefficient family on the org's identity), covering #411 c5: no
+        per-campaign compartmentalization dial; the org's line sets its
+        clandestine character. The MIM-2005/PCP-1977 "acts" become
+        identity transitions (see R19).
+    (R16) THE PLAYER MAY LOSE BY BEING TOO SECRETIVE: left liquidationism
+        is a losable failure mode, symmetric with right liquidationism.
+    (R17) LEADER ANONYMITY IS GEOGRAPHY-CONDITIONAL per MIM's own
+        scoping: inside long-pluralist imperialist cores, named-leader
+        capital carries a pluralism-reinforcement cost and anonymity is
+        the correct-line default; Third-World orgs are unconstrained.
+    (R18) AID CARRIES THE TARGETING CONSTRAINT: organizing-relevant,
+        beneficiary-staffed aid builds structure; undifferentiated
+        charity remains playable but yields legitimacy only, never
+        organizational structure.
+    (R18b) Labor-for-budget substitution is OWNED BY THE FUNDING CELL as
+        a party_enterprise facet, priced in cadre-labor.
+    (R19) THE ARMED/UNDERGROUND TRANSITION IS CHARTERED NOW (against the
+        hold-for-amendment recommendation): under R15 it is a
+        DOCTRINE-IDENTITY TRANSITION (congress-mediated shape), not a
+        verb - so it lives outside the Article V verb matrix and the
+        verb-algebra seed's reservation (#336) is DISCHARGED for this
+        item by direct Director ruling.
+    (R20) CORPUS REPAIR AUTHORIZED: fetch Mao's 1943 "Some Questions
+        Concerning Methods of Leadership" and What Is To Be Done? Ch. IV
+        from the live web, stored as clearly-marked post-mirror
+        additions; re-ground the two dossier arguments on primary text.
+  grounding_note_r13_r9: |
+    FLPMIMP read executed same session (2nd ed. March 2023, fetched from
+    prisoncensorship.info/archive/books/FPLmimp.pdf - absent from the
+    local mirror, which stops ~2008; stored at
+    /media/user/data/babylon-data/corpus-additions/2026-07-30/ with
+    provenance README). Primary-text grounding:
+    - R13: FLPMIMP glossary, EXPLOITATION: "The main exploited classes in
+      the world today are the peasantry, proletariat and
+      lumpen-proletariat - almost wholly found in the Third World."
+      Corroborated in the mirror by mt/imp97/imp97b3.html ("the role of
+      the peasantry has obviously decreased to zero"). The US-theater
+      class structure the Scientific channel transcribes against:
+      oppressor-nation labor aristocracy (parasitic, the mass base for
+      imperialism - six points, point 4), oppressed nations / internal
+      semi-colonies (the principal contradiction INSIDE US borders is
+      imperialism vs the oppressed nations), and the FIRST WORLD LUMPEN
+      as a distinct class excluded from production.
+    - R9 NUANCE the implementation must carry: FLPMIMP's forefront thesis
+      is about PRISONERS ("we see prisoners in this country as being at
+      the forefront of any anti-imperialist and revolutionary movement")
+      and the oppressed-nation lumpen organized through closed, obscure
+      outreach roads; the First World lumpen AS A WHOLE "receives more
+      material benefits from imperialism than the global proletariat"
+      and "their interests are not the same as the exploited classes."
+      The MIM(P) modifier therefore keys on the IMPRISONED and
+      oppressed-nation lumpen surfaces, never a blanket First-World
+      lumpen bonus.
+    - Side grounding: FLPMIMP's cell-based-strategy and
+      obscurity-organizing passages independently support R15
+      (clandestinity as identity) and R17 (leader anonymity) for
+      US-theater orgs.
+  consequences: |
+    - Lane A (heat) is UNBLOCKED: the L/K/X split, topological targeting,
+      org-to-org inducement from MEMBERSHIP+PRESENCE co-projections, and
+      the co-optation composition proceed as engineering under R3-R7.
+      Under Amendment AE the mechanic lands Rust/BSL-native.
+    - The funding verb's design is fully gated-through: five channels
+      (four ruled + R10's external transfer), sub-mode dispositions per
+      R11-R13, the Phi stamp per R8.
+    - #407, #408, #411, #414 close with this ADR as evidence. #420 merged.
+    - R13's design consequence awaits the FLPMIMP corpus read (in
+      flight); the RULING itself is complete.
+    - Every baseline-moving consequence (R3, R8, R12) lands under its own
+      declared ceremony at implementation time, per section 6.5.

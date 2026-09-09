@@ -1,0 +1,45 @@
+ADR161_p26_u1_sigma_gradient_spec:
+  status: "accepted"
+  date: "2026-07-27"
+  title: >
+    P26 U1 — spec-107 (Spectrum of Unequal Exchange / sigma-gradient) authored,
+    with a pure-math domain package and every theory-line choice packaged for
+    Director ruling rather than improvised (IX.5).
+  context: |
+    Program 10 was RATIFIED 2026-07-08 but specs/107-* was never written (the
+    ratification's own next-actions named it and it sat undone; re-confirmed by
+    the ADR160 audit). The P26 charter makes authoring it Unit U1: off-pipeline,
+    no system insertion, consumption seams declared for U5. Executed by a
+    Sonnet subagent against the ratified prose, reviewed and gate-verified by
+    the lane session.
+  decision: |
+    specs/107-sigma-gradient/ (spec/plan/research/tasks, house format) pins:
+    the three raw ingredients (OCC = K/v from BEA fixed assets over the QCEW
+    wage bill; capital intensity K/L; vertically-integrated labor content via
+    the Pasinetti construction — a BEA TOTAL_REQ Leontief-inverse row dotted
+    against QCEW labor coefficients), z-score standardization + an
+    EXPLICIT-weights composition, Hickel-ERDI world-scale anchoring (Owner
+    Ruling 1: one global axis for US counties and external blocs), and
+    wage-alignment OLS kept strictly OUT of sigma's inputs (Owner Ruling 2:
+    wages align, never define). Implementation:
+    src/babylon/domain/economics/sigma/ — 7 modules, pure functions, frozen
+    Pydantic, new constrained types (LaborContent, SigmaScore, SignedCurrency),
+    no I/O; 38 unit tests + red-phase contract pins for the deliberately
+    unbuilt halves (artifact generation, U5 seams). DIRECTOR RULING ITEMS
+    recorded in spec.md, not resolved here: (1) the composite-sigma
+    normalization method + canonical component weights; (2) what grounds the
+    world-anchor sample (Hickel ERDI is national-aggregate only); (3) whether
+    to re-ingest the amputated Ricci unequal-exchange dataset
+    (babylon_ricci_final.csv, 51 rows — the closest real data to Program 10's
+    intended second anchor). Pending defines: a SpectrumDefines category
+    (weights + wage-gravitation rate) listed in tasks.md for the wiring unit,
+    NOT added here (defines.yaml regeneration stays out of this unit).
+  consequences:
+    positive:
+      - "sigma finally exists as spec + executable math — U4's attribution options paper and U5's engine train have a concrete axis to consume"
+      - "Theory-line content (weights, anchor, Ricci) is packaged for the Director instead of silently defaulted"
+      - "The dormant formulas/unequal_exchange.py family gains its intended theoretical frame without gaining an improvised caller"
+    negative:
+      - "The composite sigma shipped with a documented DEFAULT weighting that is explicitly non-canonical until ruled — consumers must treat weights as caller-supplied"
+      - "sigma-index artifact generation deferred (schema pinned; generation waits on the ruled weights + the data lane)"
+  file: ADR161_p26_u1_sigma_gradient_spec.yaml

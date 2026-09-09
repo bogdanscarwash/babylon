@@ -1,0 +1,175 @@
+id: ADR107
+title: >-
+  Corpus canon, canon extensions, and the apocrypha class: the v1.0.0 BD
+  allow/deny ruling for the narrator/RAG corpus, a fourth canon_status
+  (`apocryphal`) alongside allow/deny/flag_bd, and the durable extraction
+  home at `~/Documents/ocr/` that the in-repo corpus manifest will glob
+  into.
+status: accepted
+date: '2026-07-21'
+context: >-
+  The v1.0.0 Playable Archive program
+  (ai/_inbox/PROGRAM_v1_0_0_playable_archive.md, ratified 2026-07-21) ships
+  a curated corpus embedded in the installer (Decision record #5, "Corpus
+  redistribution": ship curated canon texts, not the raw ~26GB marxists.org
+  mirrors, which stay BYO; copyright exposure accepted as an owner ruling).
+  Decision record #8, "Canon additions", ruled the additions and denials:
+  "ALL: Cope, Marini, J. Smith, MIM Theory #1 (after re-OCR), MIWS csdraft,
+  Federici & Mies (canon extends to social-reproduction line). Nitzan-Bichler
+  = Divergence-Channel steelman only. content.jsonl = canon poison,
+  quarantined. Hoxha OUT." The governance-batch list riding T1.0/T1.1
+  (line 263) names this exact deliverable: "canon-extension note (ruling 8)"
+  — this ADR is that note. The "Corpus + step zero" section (lines 269-291)
+  specs the mechanics: a durable OCR/extraction tree at `~/Documents/ocr/`
+  (MANIFEST.yaml fields id/author/work/slugs/source_path/source_sha256/
+  method/quality/canon_status/outputs[]/extracted_at) that an in-repo
+  `src/babylon/data/corpus/manifest.yaml` + frozen-Pydantic `CorpusManifest`
+  loader will glob into, replacing the hardcoded `MVP_CORPUS` tuple in
+  `tools/ingest_corpus.py` (verified: `MVP_CORPUS` at
+  tools/ingest_corpus.py:58-108 is still live and unchanged — 7 texts: Marx
+  x2, Engels, Lenin, Fanon, Mao x2 — this ADR's manifest design supersedes
+  it but the code migration itself is T5 scope, not yet executed). Manifest
+  rows carry role-enum(narrator, atlas_*, concept_card, glossary, doctrine)
+  / format / canon_status(allow|deny|flag_bd) / provenance, with "deny rows
+  honored inside allowed globs" (line 282) — i.e. a deny author can sit
+  inside an otherwise-allowed directory glob and still be excluded.
+
+  Step zero (execution-kickoff item 0, "mechanical, immediate") has already
+  run: `~/Documents/ocr/MANIFEST.yaml` exists (manifest_version 1, created
+  2026-07-21) with 4 works extracted (zak-cope/divided-world-divided-class
+  rescued from an ephemeral claude-tmp-snapshots dir; samir-amin/the-law-
+  of-worldwide-value, mim-prisons/fundamental-political-line, mim/mim-
+  theory-10-labor-aristocracy all pdftotext'd born-digital), an extraction
+  queue for the degraded-OCR and no_text sets, and an `_apocrypha/` entry
+  for `content.jsonl` — but this entry is the FIRST DRIFT this ADR must
+  record.
+
+  Drift vs. the master plan: line 277 of the program doc says "Quarantine
+  `content.jsonl` (canon poison)" and Decision record #8 says "content.jsonl
+  = canon poison, quarantined" — both use the word "quarantine." The actual
+  executed disposition, recorded same-day in
+  `~/Documents/ocr/_apocrypha/NOTES.md` and `~/Documents/ocr/MANIFEST.yaml`,
+  is NOT a quarantine — it is a new, named class the plan's prose did not
+  anticipate: `canon_status: apocryphal`. NOTES.md draws the distinction
+  explicitly: "quarantine = keep only for audit, never touch again. Apocrypha
+  = kept because it matters, usable as hand-picked easter-egg content, never
+  as canon." `content.jsonl` is a 2026-01 scrape of "Moltbook" (a parody
+  AI-agent social platform) containing AI-generated Maoist-flavored pastiche
+  ("cloud bourgeoisie," "means of inference") — kept by explicit BD ruling
+  2026-07-21 as a personally significant artifact from that moment, moved to
+  `~/Documents/ocr/_apocrypha/content.jsonl` from
+  `~/Downloads/babylon_books/content.jsonl`, sha256
+  4b380fb853b981d88875711ac6269c9743b88b38dc31732df054376f4d1915af (verified
+  by hand against the file on disk). It is explicitly NOT purged and IS
+  eligible for one or two hand-curated easter eggs (author's choice), which
+  "quarantine" as the plan's prose used it (audit-only, untouchable) would
+  have foreclosed. The verifiable code/data truth — apocryphal as a fourth
+  disposition, distinct from quarantine — supersedes the plan's looser
+  wording; this ADR records the fourth class as ruled.
+decision: >-
+  Four canon dispositions govern every corpus manifest row (extends the
+  program doc's allow|deny|flag_bd triad with a fourth):
+
+  - `allow` — CANON: Mao, Fanon, Stalin, Lenin, Che, African national-
+    liberation (Cabral, Nkrumah, Sankara), Black Panther Party, J. Sakai,
+    Jason Hickel, MIM/MIM(Prisons) (ruling 8's base list plus the acquisition-
+    queue authors already implied by the program's "BD acquisition queue" —
+    Sakai *Settlers*, Hickel books, Sankara — all recorded absent-but-ruled-
+    in, per line 289).
+
+  - `allow` (EXTENSIONS, ruling 8): Zak Cope (*Divided World, Divided Class*
+    — already extracted, `~/Documents/ocr/zak-cope/divided-world-divided-
+    class/`, canon_status allow), Ruy Mauro Marini (*Dialectics of
+    Dependency*, in `ai/_inbox/babylon_books/`, not yet extracted), John
+    Smith (*Imperialism in the Twenty-First Century*, in `babylon_books/`,
+    not yet extracted), MIM Theory #1 (`mt1.pdf` — flagged in the program's
+    extraction queue as the WORST scan on file, "re-acquire"; allow is
+    conditional on a clean re-OCR, not the current copy), MIWS csdraft
+    (`csdraft.pdf` in `babylon_books/`), and — the one line ruling 8 bolds —
+    **Federici & Mies: canon formally extends to the social-reproduction
+    line** (Silvia Federici, *Caliban and the Witch*; Maria Mies, *Patriarchy
+    and Accumulation on a World Scale*; both present as PDFs in
+    `ai/_inbox/babylon_books/`, not yet extracted). This is a doctrinal
+    widening, not a housekeeping add: the corpus previously had no social-
+    reproduction-theory line at all.
+
+  - `deny`: CPUSA, Trotsky, Kautsky, Hoxha — denied as anti-Maoist / anti-
+    Three-Worlds-Theory positions incompatible with the MLM-TW doctrinal
+    spine (Hoxha specifically: anti-Mao, denies the Three Worlds thesis the
+    engine's Φ/imperial-rent math is built on). Deny rows are honored INSIDE
+    allowed globs (program line 282) — e.g. a marxists.org mirror path_glob
+    that happens to contain a Trotsky subdirectory still excludes it by
+    per-row canon_status, not by directory exclusion.
+
+  - `flag_bd` (adversarial-only, never doctrine): Nitzan-Bichler (*Capital
+    as Power*, in `babylon_books/`) is the program's named example — usable
+    ONLY as a Divergence-Channel (ADR072) steelman opponent, never
+    retrievable by the narrator as if it were doctrine. This is a distinct
+    disposition from `deny`: the text is wanted, but only inside the
+    adversarial-critique surface, never the narrator's RAG path.
+
+  - `apocryphal` (NEW, this ADR): kept deliberately, EXCLUDED from every
+    corpus/RAG ingestion path_glob by construction (no glob may ever resolve
+    into `~/Documents/ocr/_apocrypha/`), eligible for hand-curated,
+    author-selected easter-egg content only — never bulk-ingested, never
+    retrievable as doctrine. First (and, per the ruling, likely only)
+    member: `_apocrypha/content.jsonl` (the Moltbook Maoist-pastiche scrape,
+    Jan 2026), kept as a personally significant BD artifact under an
+    explicit 2026-07-21 ruling. `apocryphal` is stricter than `deny` (a
+    denied author is simply absent from canon; an apocryphal file is present
+    on disk, physically fenced by directory, and its exclusion is enforced
+    by the glob boundary rather than by a per-row filter) — this is why it
+    is its own class and not `deny` with a comment.
+
+  Durable extraction home: `~/Documents/ocr/` (MANIFEST.yaml is the machine
+  index; layout `<author-slug>/<work-slug>/{source.json, full.txt,
+  ch-NN-*.txt, pages/pNNNN.txt}`; extraction happens once, ever). The
+  in-repo corpus manifest (`src/babylon/data/corpus/manifest.yaml` +
+  frozen-Pydantic `CorpusManifest` loader, replacing `MVP_CORPUS` in
+  `tools/ingest_corpus.py`, T5 scope — NOT YET BUILT as of this ADR) points
+  its `path_glob` rows INTO this tree for every PDF-sourced work; its
+  `canon_status` field must be widened from the program doc's stated
+  allow|deny|flag_bd to the four values above, or the manifest cannot
+  represent the apocrypha row at all. Ingestion reuses the existing pipeline
+  unchanged (`import_corpus_files` -> `RagPipeline.aingest_files` ->
+  `PgVectorStore.add_chunks`); role rides chunk `metadata jsonb` for `@>`
+  retrieval, exactly as the program doc specs.
+
+  Acquisition gaps owed to BD (unresolved, carried from the program's "BD
+  acquisition queue," line 289): J. Sakai's *Settlers* (absent from both
+  `~/Documents/ocr/` and `ai/_inbox/babylon_books/` — verified by listing),
+  Hickel books beyond the PDFs already on disk (`hickel2020*.pdf`,
+  `hickel2021.pdf`, *The Divide*, *Democracy As Death* — present in
+  `babylon_books/`, but *Less Is More* and other named Hickel works are not),
+  Thomas Sankara texts (absent), and a clean re-OCR of MIM Theory #1
+  (`mt1.pdf`, 31MB, flagged worst-scan-on-file in the program doc's
+  degraded/no_text extraction queue).
+consequences: >-
+  The corpus's doctrinal center of gravity widens beyond classical MLM-TW +
+  Third Worldism to include social reproduction theory (Federici, Mies) as
+  formally canon, not an add-on — any future narrator-retrieval or doctrine-
+  tree work must treat that line as first-class, not experimental. The
+  `apocryphal` class establishes a precedent: a corpus item can be
+  deliberately retained for provenance/personal-significance reasons while
+  being made structurally unreachable by ingestion tooling — the exclusion
+  is enforced by the glob boundary (directory fencing), not by trusting
+  every future path_glob author to remember a deny row. Any new corpus
+  manifest work (T5) MUST: (1) widen `canon_status` to the four-value set
+  recorded here (not the program doc's original three), (2) never write a
+  path_glob that could resolve into `_apocrypha/`, and (3) treat
+  `flag_bd`/Nitzan-Bichler as reachable only from the Divergence-Channel
+  surface, never the narrator's RagPipeline path — a sentinel analogous to
+  the existing vocabulary/seam sentinels would catch a future glob
+  regression here, but does not exist yet (owed, not yet built). `tools/
+  ingest_corpus.py`'s `MVP_CORPUS` tuple remains live and untouched by this
+  ADR — it is a design ruling and a corpus-status ruling, not the code
+  migration; the migration itself, and the sentinel enforcing glob/
+  apocrypha separation, are still owed to the T5 train. The MIM Theory #1
+  allow status is conditional (re-OCR required); until that re-OCR lands,
+  no path_glob should point at the current `mt1.pdf` extraction. Marini,
+  John Smith, Federici, and Mies are ruled `allow` but have zero extracted
+  text in `~/Documents/ocr/` today (verified: only zak-cope, samir-amin,
+  mim-prisons, and mim/mim-theory-10 have `source.json`/`full.txt` pairs) —
+  their canon status is real and binding, but their manifest rows will be
+  unreachable until someone runs the extraction pass the program doc's
+  step-zero queues them for.

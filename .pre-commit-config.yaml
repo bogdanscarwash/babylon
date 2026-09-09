@@ -1,21 +1,50 @@
 # Pre-commit hooks for Babylon
-# Install: poetry run pre-commit install --hook-type commit-msg --hook-type pre-commit --hook-type pre-push
-# Run manually: poetry run pre-commit run --all-files
+# Install: mise run hooks
+# Run manually: uv run pre-commit run --all-files
 
+minimum_pre_commit_version: "4.6.2"
 default_stages: [pre-commit]
+default_install_hook_types: [pre-commit, commit-msg, pre-push]
 
 repos:
+  # ==========================================================================
+  # WORKTREE ENVIRONMENT CONTRACT - first and fail_fast: verify the pinned
+  # interpreter, staged dependency inputs and resolved lock before other hooks.
+  # Dataset and operator prerequisites belong to the tools that consume them.
+  # ==========================================================================
+  - repo: local
+    hooks:
+      - id: worktree-contract
+        name: worktree environment contract
+        entry: python3 tools/check_worktree_contract.py
+        language: system
+        pass_filenames: false
+        always_run: true
+        fail_fast: true
+
+  # Keep path filters honest. These meta hooks would have rejected the four
+  # dead src/frontend hooks left behind by the Bevy cutover.
+  - repo: meta
+    hooks:
+      - id: check-hooks-apply
+      - id: check-useless-excludes
+
   # ==========================================================================
   # RUFF - Linting and Formatting
   # ==========================================================================
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.21
+    # Keep the commit hook on the same patch release as the uv-locked CI tool.
+    rev: v0.16.6
     hooks:
       - id: ruff
         name: ruff (lint)
         args: [--fix, --exit-non-zero-on-fix]
+        # Policy v11 is an immutable cross-repository byte contract. Its exact
+        # inventory, hashes, syntax, and behavior have their own executable law.
+        exclude: ^\.codex/host/
       - id: ruff-format
         name: ruff (format)
+        exclude: ^\.codex/host/
 
   # ==========================================================================
   # MYPY - Type Checking
@@ -24,53 +53,16 @@ repos:
     hooks:
       - id: mypy
         name: mypy (typecheck, CI parity)
-        entry: poetry run mypy src
+        entry: uv run mypy src
         language: system
         pass_filenames: false
         files: '^(src/.*\.py|pyproject\.toml)$'
 
   # ==========================================================================
-  # FAST TESTS - Run on every commit
-  # ==========================================================================
-  - repo: local
-    hooks:
-      - id: pytest-fast
-        name: pytest (fast push gate — NOT CI-predictive)
-        entry: poetry run pytest tests/unit/formulas tests/unit/engine -q --tb=no -m "not red_phase and not slow"
-        language: system
-        pass_filenames: false
-        always_run: true
-        stages: [pre-push]
-
-  # ==========================================================================
-  # COMPLEXITY + MAINTAINABILITY GATES - Catch quality regressions before CI
-  # ==========================================================================
-  - repo: local
-    hooks:
-      - id: import-boundaries
-        name: import-linter (layer boundaries, program 14)
-        entry: poetry run lint-imports
-        language: system
-        pass_filenames: false
-        always_run: true
-        stages: [pre-push]
-
-      - id: radon-mi
-        name: radon (maintainability index >= B)
-        entry: >-
-          bash -c 'set -euo pipefail; output="$(poetry run radon mi src/babylon -s)";
-          echo "$output"; if echo "$output" | grep -Eq " - [CDEF]"; then
-          echo "radon: maintainability rank below B detected"; exit 1; fi'
-        language: system
-        pass_filenames: false
-        always_run: true
-        stages: [pre-push]
-
-  # ==========================================================================
   # SEMGREP - Architectural Pattern Enforcement
   # ==========================================================================
   - repo: https://github.com/returntocorp/semgrep
-    rev: v1.153.0
+    rev: v1.165.0
     hooks:
       - id: semgrep
         name: semgrep (patterns)
@@ -79,53 +71,97 @@ repos:
         always_run: true
         stages: [pre-push]
 
-  # ==========================================================================
-  # FRONTEND - src/frontend (the cockpit, spec-110; THE frontend since the
-  # spec-112 cutover deleted web/frontend)
-  # ==========================================================================
-  - repo: https://github.com/pre-commit/mirrors-prettier
-    rev: v3.1.0
-    hooks:
-      - id: prettier
-        name: prettier (cockpit format)
-        files: ^src/frontend/src/.*\.(ts|tsx|css)$
-        # Version must track src/frontend/package.json's prettier (CI checks
-        # with that one) — a mismatch makes this hook fight `npm run check`.
-        additional_dependencies: ["prettier@3.9.5"]
+      # R9a (ADR181): the wall-clock-test ban lives in its own config so the
+      # architectural rules above never start matching tests/ by accident.
+      - id: semgrep
+        name: semgrep (test-estate process rules)
+        args: [--config, .semgrep-tests.yml, --severity, ERROR, --error, --quiet, tests/]
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
 
+  # ==========================================================================
+  # RUST - the engine estate (Amendment AE). Dev CI and ordinary pre-push use
+  # rust:check-no-docs --dev; full release CI uses ci:rust. Pre-push stops before Rustdoc because
+  # repository law prohibits local documentation generation. fmt runs at
+  # commit time on staged Rust source or formatter/toolchain policy. At
+  # pre-push, pre-commit supplies the exact remote..local refs. Its filename
+  # classifier removes deleted paths, so the range runner re-diffs those refs
+  # and keeps deletions without another fetch or a dev-specific merge-base
+  # guess. Both modes retain all-target Clippy, doctests and repository sentinels.
+  # Dev selects integration targets; full release CI adds all tests and Rustdoc.
+  # ==========================================================================
   - repo: local
     hooks:
-      - id: cockpit-typecheck
-        name: tsc (cockpit typecheck)
-        entry: bash -c 'cd src/frontend && npx tsc --noEmit'
-        language: node
+      - id: rust-fmt-check
+        name: cargo fmt --check (Rust source and formatting policy)
+        entry: bash -c 'cd rust && cargo fmt --all -- --check'
+        language: system
         pass_filenames: false
-        files: ^src/frontend/src/.*\.(ts|tsx)$
+        files: '^(rust/.*\.rs|rust/rustfmt\.toml|rust/rust-toolchain\.toml)$'
 
-      - id: cockpit-eslint
-        name: eslint (cockpit lint)
-        entry: bash -c 'cd src/frontend && npx eslint src/'
-        language: node
+      - id: rust-dev-gate
+        name: rust:check-no-docs --dev (local Rust dev gate, pre-push)
+        entry: python3 tools/run_pre_push_gate.py rust-dev-gate
+        language: system
         pass_filenames: false
-        files: ^src/frontend/src/.*\.(ts|tsx)$
+        always_run: true
+        stages: [pre-push]
 
-      - id: cockpit-vitest
-        name: vitest (cockpit tests)
-        entry: bash -c 'cd src/frontend && npx vitest run'
-        language: node
+      # bsl-lint also owns two repository relationships outside rust/: ADR
+      # namespace uniqueness and the exact retired Python authority paths.
+      # Rust changes already select rust-dev-gate, so this lighter hook covers
+      # only those non-Rust inputs without duplicating the Cargo gate.
+      - id: bsl-repo-sentinels
+        name: bsl-lint repository sentinels (non-Rust inputs, pre-push)
+        entry: python3 tools/run_pre_push_gate.py bsl-repo-sentinels
+        language: system
         pass_filenames: false
-        files: ^src/frontend/src/.*\.(ts|tsx)$
+        always_run: true
         stages: [pre-push]
 
   # ==========================================================================
   # COMMITIZEN - Conventional Commits
   # ==========================================================================
   - repo: https://github.com/commitizen-tools/commitizen
-    rev: v4.11.0
+    rev: v4.18.0
     hooks:
       - id: commitizen
         name: commitizen (commit message)
         stages: [commit-msg]
+
+  # ==========================================================================
+  # BASELINE CEREMONY - §6.5 Provenance & Ceremony (owner ruling 2026-07-20)
+  # Commits touching tests/baselines/** must declare their ceremony with a
+  # `Baselines: blessed(<slug>)` trailer. The commit-msg leg is best-effort
+  # (an --amend or pathspec commit can slip past it, since it only inspects
+  # the index at commit time). The pre-push leg below closes that gap
+  # locally by re-running the CHECKER'S OWN --range MODE against the
+  # upstream ref, mirroring the CI ceremony-gate job (which diffs the PR's
+  # base..head) so a slipped amend is caught before it ever leaves the box —
+  # not a substitute for the CI leg, which stays authoritative.
+  # ==========================================================================
+  - repo: local
+    hooks:
+      - id: baseline-ceremony
+        name: baseline ceremony declaration (§6.5)
+        entry: python3 tools/check_baseline_ceremony.py --commit-msg-file
+        language: system
+        always_run: true
+        stages: [commit-msg]
+
+      - id: baseline-ceremony-range
+        name: baseline ceremony range check (§6.5, pre-push CI mirror)
+        entry: >-
+          bash -c 'set -euo pipefail;
+          git fetch -q origin dev 2>/dev/null || true;
+          base="$(git merge-base HEAD origin/dev 2>/dev/null || git merge-base HEAD dev 2>/dev/null || echo "")";
+          if [ -z "$base" ]; then exit 0; fi;
+          python3 tools/check_baseline_ceremony.py --range "${base}..HEAD"'
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
 
   # ==========================================================================
   # GENERAL HYGIENE
@@ -134,15 +170,71 @@ repos:
     rev: v6.0.0
     hooks:
       - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+        # tests/**/__snapshots__/**/*.raw: pytest-textual-snapshot goldens are
+        # Rich-exported SVG (ADR097/ADR099 snapshot lanes, III.13 determinism).
+        # Rich's own SVG template bakes in a fixed blank-with-spaces line (the
+        # title-bar gap) that is identical on every render — trimming it in the
+        # committed golden desyncs it from the live re-render `snap_compare`
+        # always produces, permanently red-gating the test (discovered
+        # independently by WO-16, WO-17, AND the ADR097 render seam; the
+        # pre-existing county golden has this same untrimmed line, silently
+        # relying on no hook having touched it since P1 keel). Broadest variant
+        # kept at the Wave-1 merge: integration-tier goldens live under
+        # tests/integration/**/__snapshots__/ too. Excluded, not fixed: these
+        # are generated artifacts, not hand-authored text.
+        #
+        # rust/crates/babylon-md/: the vendored tui-markdown fork (ADR150) —
+        # upstream's bytes carry trailing whitespace, including inside insta
+        # .snap goldens where trimming desyncs the byte-exact match (same
+        # failure class as the .raw goldens above). The fork's diff-vs-upstream
+        # must stay the two declared patches, not a whitespace normalization.
+        # openwiki/: generated by the OpenWiki engine (hand-editing prohibited,
+        # CLAUDE.md) — normalizing its bytes makes every daily regen PR fight
+        # this hook.
+        # reports/ is historical evidence and is not normalized in place.
+        exclude: ^(tests/.*/__snapshots__/.*\.raw$|rust/crates/babylon-md/|openwiki/|reports/)
       - id: end-of-file-fixer
+        # Same vendored-fork + generated-openwiki rationale as above. The two
+        # legacy vectors are NUL-framed byte contracts; appending a text newline
+        # changes their digest and makes the Python source-drift guard fail.
+        # Agent and host bundles are provider-managed, mounted read-only in
+        # governed worktrees, and validated by their own executable contracts.
+        exclude: ^(\.agents/|\.codex/|rust/crates/babylon-md/|openwiki/|reports/|rust/crates/babylon-persistence/tests/fixtures/legacy_(schema_ddl_v1|migrations_0010_0044_v1)\.bin$)
       - id: check-yaml
         args: [--unsafe]  # Allow custom tags in GitHub Actions
       - id: check-json
+        # These paths are tracked Git LFS pointers in an ordinary checkout, not
+        # materialized JSON. lfs-pointer-check owns their integrity pre-push.
+        exclude: ^\.understand-anything/(fingerprints|knowledge-graph)\.json$
       - id: check-toml
       - id: check-added-large-files
         args: ['--maxkb=1024']
-        exclude: ^tests/baselines/.*\.json$|^src/babylon/data/game/balkanization/seed_influences\.json$
+        # uv.lock: single-lock fork (ADR095 D3) — uv's lock format embeds wheel
+        # hashes per-platform (301 resolved packages), landing ~1030 KB, just over
+        # the 1024 KB gate; poetry.lock was ~808 KB for the same dependency set.
+        # Generated + regenerated by `uv lock`, never hand-edited.
+        # county_atlas.bin: the Program 28 B1 county map — Amendment AF ships a
+        # pure Rust binary, so the geometry has to arrive as a committed asset.
+        # 1.64 MB of 3,222 quantized TIGER 2024 counties + CSR adjacency, budget
+        # recorded in tools/build_county_atlas.py, regenerable via
+        # `mise run data:county-atlas`; the Bevy client include_bytes!s it, so an
+        # LFS pointer would hand the reader 130 bytes of text where it expects
+        # geometry.
+        # The two embedded theme renders have a separate 2 MiB check below.
+        # Their exact source, render recipe and bytes are pinned in
+        # assets/audio-renders.json; this changes no licensing decision.
+        exclude: ^tests/baselines/.*\.json$|^src/babylon/data/game/balkanization/seed_influences\.json$|^uv\.lock$|^assets/map/county_atlas\.bin$|^assets/music/babylon_theme_(phi|panopticon)\.ogg$
+      - id: check-added-large-files
+        name: check embedded theme size (2 MiB per named render)
+        args: ['--maxkb=2048', '--enforce-all']
+        files: ^assets/music/babylon_theme_(phi|panopticon)\.ogg$
       - id: check-merge-conflict
+      - id: check-case-conflict
+      - id: forbid-new-submodules
+        # There is intentionally no current gitlink for check-hooks-apply to
+        # match; run the cheap guard so the first attempted one is refused.
+        always_run: true
       - id: no-commit-to-branch
         args: [--branch, main, --branch, dev]
 
@@ -155,22 +247,10 @@ repos:
       - id: gitleaks
 
   # ==========================================================================
-  # DEPENDENCY LOCK CONSISTENCY
-  # ==========================================================================
-  - repo: local
-    hooks:
-      - id: poetry-lock-consistency
-        name: poetry check --lock
-        entry: poetry check --lock
-        language: system
-        pass_filenames: false
-        files: '^(pyproject\.toml|poetry\.lock)$'
-
-  # ==========================================================================
   # YAML LINTING - Advanced YAML validation
   # ==========================================================================
   - repo: https://github.com/adrienverge/yamllint
-    rev: v1.37.1
+    rev: v1.38.0
     hooks:
       - id: yamllint
         name: yamllint (yaml lint)
@@ -195,16 +275,18 @@ repos:
         name: doc8 (rst style)
 
   - repo: https://github.com/igorshubovych/markdownlint-cli
-    rev: v0.47.0
+    rev: v0.49.1
     hooks:
       - id: markdownlint
         name: markdownlint (md lint)
         args: [--config, .markdownlint.yaml]
         exclude: |
           (?x)^(
+            \.serena/.*|
             \.specify/.*|
             specs/.*|
-            \.agents/.*|
+            openwiki/.*|
+            design/mockups/SKILL\.md|
             CONSTITUTION\.md
           )$
 
@@ -217,13 +299,19 @@ repos:
       - id: actionlint
 
   - repo: https://github.com/shellcheck-py/shellcheck-py
-    rev: v0.11.0.1
+    rev: v0.11.0.1-1
     hooks:
       - id: shellcheck
         files: '\.sh$'
+        # Policy v11 is an immutable cross-repository byte contract. Its exact
+        # inventory and hashes, POSIX syntax, and executable behavior are
+        # enforced by test_rust_host_policy_contract.py. The Spec Kit shell
+        # bundle is integration-managed and recorded in its manifest; audit it
+        # when its provider is updated, not as Babylon-owned shell.
+        exclude: '^(\.codex/host/|\.specify/scripts/bash/)'
 
   - repo: https://github.com/hadolint/hadolint
-    rev: v2.14.0
+    rev: v2.15.1
     hooks:
       - id: hadolint-docker
         files: 'Dockerfile'

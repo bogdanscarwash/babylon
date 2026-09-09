@@ -1,0 +1,15 @@
+# Managed by nnsims .codex/host/install.sh (policy v11).
+[Unit]
+Description=Babylon Rust build budget
+
+[Slice]
+CPUAccounting=yes
+MemoryAccounting=yes
+IOAccounting=yes
+TasksAccounting=yes
+CPUQuota=400%
+MemoryHigh=10G
+MemoryMax=12G
+MemorySwapMax=2G
+IOWeight=500
+TasksMax=512

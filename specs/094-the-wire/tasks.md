@@ -57,7 +57,7 @@ owner-run flow documented.
 ## Phase 5 — Quality gate + Playwright
 
 - [x] T024 `mise run web:check` green (tsc + eslint + prettier + Vitest).
-- [x] T025 `PYTHONPATH=src poetry run pytest tests/unit/web/ -q` green.
+- [x] T025 `PYTHONPATH=src uv run pytest tests/unit/web/ -q` green.
 - [x] T026 Playwright `wire-50-tick.spec.ts` — owner-run, gated on
   `SPEC061_TEST_SESSION_ID`.
 

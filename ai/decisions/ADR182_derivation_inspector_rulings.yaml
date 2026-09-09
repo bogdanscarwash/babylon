@@ -1,0 +1,109 @@
+ADR182_derivation_inspector_rulings:
+  status: "accepted"
+  date: "2026-07-30"
+  title: >
+    Director rulings on the derivation inspector (five reserved calls) plus two
+    CI gate-topology rulings from the same session: the BSL write log ships on a
+    closing window, the exploitation chain's STRUCTURE is public while its
+    magnitudes are earned, stipulation marks stay review-tier, a player-facing
+    :gloss is minted alongside :material-basis, inspection DEPTH is gated by
+    DoctrineCapability; the integration shard stays nightly-only and G1 pacing
+    is retired until its Rust successor exists.
+  context: |
+    The Director installed Victoria 3 and commissioned an assessment of what to
+    take from its UI/UX while keeping the project's TUI character. The
+    assessment: V3's one real invention is "no number is a dead end", achieved
+    with five tooltip systems and ~154 localization files of AUTHORED prose;
+    its failure mode is the ephemeral tooltip labyrinth. A TUI improves on it
+    with a persistent, keyboard-navigable, pinnable inspector plus a
+    since-last-tick diff that V3 structurally cannot offer.
+
+    The design doc (docs/superpowers/specs/2026-07-30-derivation-inspector-design.md)
+    was grounded by five code surveys, and it CORRECTED A FALSE PREMISE of the
+    commissioning assessment: the "constitutional rent record" is a design-time
+    review discipline (the Aleksandrov Test), NOT a runtime structure. There is
+    no general provenance mechanism in the Python engine; the richest
+    decomposition that exists (Leontief phi_vector / dept_phi) is computed every
+    tick and DISCARDED, and the composition combinators that stamp
+    component_keys provenance are property-tested with ZERO live call sites.
+
+    The real substrate is in the Rust lane, which none of the five surveys read:
+    babylon-bsl's evaluator is already a strict depth-first tree walk visiting
+    every AST node with its value in hand (the fuel meter charges per node), and
+    every field write funnels through ONE effect executor in structural_verbs.rs.
+    A derivation tree is that same walk with intermediates retained; per-rule
+    attribution collapses to one interception point.
+  decision: |
+    INSPECTOR (five reserved calls, all ruled 2026-07-30):
+
+    (R1) THE WRITE LOG SHIPS; THE DIFF UI NEED NOT. Install the effect-executor
+        interception point WHILE the Phase 1/2 store boundary is under
+        construction; let the diff pane land on its own schedule. Rationale: the
+        hook costs a struct and a Vec now and a full retrofit later. This is a
+        PHASE 2 OBLIGATION WITH A CLOSING WINDOW.
+
+    (R2) STRUCTURE IS THE PREMISE; MAGNITUDES ARE EARNED. An unorganized player
+        sees THAT their wage traces through imperial rent to a named periphery
+        node, values REDACTED with a remedy. The exploitation relation is the
+        game's thesis, legible from tick 0 — organizing buys the QUANTITY, not
+        the FACT. Consequence: REDACTED is the default for the sigma-inflow
+        chain; ABSENT narrows to genuinely secret EXISTENCE (clandestine
+        membership, formations with no contact). Wiring apply_fog onto the
+        Lane-P projectors becomes a HARD v1.0 PREREQUISITE — they call it
+        nowhere today (fog is currently legacy-web-bridge-only).
+
+    (R3) STIPULATION MARKS ARE REVIEW-TIER ONLY. Leaf::Coefficient renders its
+        "stipulated" mark in a review/dev tier, never to the player. The ADR172
+        ruling-5 enforcement surface is preserved where it is actionable
+        (review) without the fiction narrating its own epistemology.
+
+    (R4) MINT A SEPARATE PLAYER-FACING :gloss. :material-basis stays the
+        engineering/Aleksandrov artifact (parse-enforced, E-PARSE-011); a
+        distinct authored :gloss carries the player-facing register. The
+        anti-spreadsheet-vulgarization defence now rests on :gloss, making
+        :gloss quality Director-owned player-facing content.
+
+    (R5) INSPECTION DEPTH IS GATED BY DoctrineCapability. Shallow inspection
+        free; deeper traversal requires the org to have developed analytical
+        practice. ANALYSIS IS A PRACTICE THE MOVEMENT DEVELOPS — "no
+        investigation, no right to speak" as a mechanic. Consequence: the
+        inspector joins the DOCTRINE ESTATE (composes with the
+        DoctrineCapability verb gating, P25 U11 / ADR137) rather than being a
+        neutral instrument; a capability must be declared for it. Deliberately
+        the larger commitment: investigation becomes something the player
+        INVESTS IN, which pairs with R2 (thesis public, measurement earned,
+        deep tracing built).
+
+    CI GATE TOPOLOGY (same session):
+
+    (R6) THE INTEGRATION SHARD STAYS NIGHTLY-ONLY. tests/integration, scenarios,
+        property and contract get NO PR-time gate on dev. Drift surfaces within
+        24h via the ADR181 per-leg split rather than at PR time; dev iteration
+        stays fast. The PR-#395 class (a reclassification sweep leaving one
+        integration file behind for 17h) is ACCEPTED as a 24-hour-latency risk,
+        now that the nightly signal is legible for the first time.
+
+    (R7) G1 PACING IS RETIRED until its Rust successor exists. The frozen Python
+        engine CANNOT regress — it is pinned at p27-python-freeze — so a weekly
+        two-hour survival run over immutable code buys nothing.
+        .github/workflows/nightly-pacing.yml is DELETED; the Rust G1 is
+        chartered as a PHASE 3/4 EXIT GATE, written when the Rust engine can
+        carry 520 ticks.
+  consequences: |
+    - The inspector spec's §10 is now a rulings register, not an open-questions
+      list; §11 records R6/R7.
+    - R1 creates a dated Phase-2 obligation: the write log must be installed
+      before the production store boundary closes. Tracked as a task and named
+      in the Phase 2 plan.
+    - R2 promotes fog-on-Lane-P from "later" to a v1.0 prerequisite.
+    - R4 adds a BSL keyword (:gloss). Additive to the grammar; it does not
+      re-open the formalism surface (it is authored content, not mathematics) —
+      but it IS a bsl-language.rst change and lands under that document's
+      normative-home discipline.
+    - R5 makes the inspector a doctrine-estate consumer; the capability it
+      requires must be declared alongside the existing DoctrineCapability verbs.
+    - R7 removes a workflow and a weekly ~2h runner cost. The 120-minute budget
+      raised in PR #448 earlier the same session is superseded by the retirement
+      (correct under the prior assumption, moot under this ruling).
+    - Superseded by nothing; supersedes no prior ADR. ADR181 (the CI synergy
+      train) is the immediate predecessor for R6/R7's estate.

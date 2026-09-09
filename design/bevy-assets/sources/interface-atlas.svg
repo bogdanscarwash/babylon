@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <g id="play" transform="translate(0 0)"><path d="M48 32L96 64L48 96Z" fill="#ffd700"/></g>
+  <g id="pause" transform="translate(128 0)"><path d="M40 32H56V96H40ZM72 32H88V96H72Z" fill="#e8e8e8"/></g>
+  <g id="step" transform="translate(256 0)"><path d="M32 32L76 64L32 96Z" fill="#e8e8e8"/><path d="M88 32V96" stroke="#ffd700" stroke-width="12"/></g>
+  <g id="speed" transform="translate(384 0)"><path d="M32 84L54 48L70 68L96 28" fill="none" stroke="#ffd700" stroke-width="10"/><path d="M32 96H96" stroke="#404040" stroke-width="8"/></g>
+  <g id="lens" transform="translate(0 128)"><circle cx="58" cy="58" r="26" fill="none" stroke="#e8e8e8" stroke-width="10"/><path d="M78 78L98 98" stroke="#ffd700" stroke-width="10"/></g>
+  <g id="map" transform="translate(128 128)"><path d="M30 36L54 28L78 36L98 28V92L78 100L54 92L30 100Z" fill="none" stroke="#e8e8e8" stroke-width="8"/><path d="M54 28V92M78 36V100" stroke="#4169e1" stroke-width="6"/></g>
+  <g id="story" transform="translate(256 128)"><path d="M32 30H82A14 14 0 0 1 96 44V94H46A14 14 0 0 0 32 108Z" fill="none" stroke="#e8e8e8" stroke-width="8"/><path d="M48 50H80M48 68H80" stroke="#ffd700" stroke-width="6"/></g>
+  <g id="beat" transform="translate(384 128)"><path d="M28 72H46L58 38L72 90L82 58H100" fill="none" stroke="#dc143c" stroke-width="9"/></g>
+  <g id="roster" transform="translate(0 256)"><circle cx="50" cy="48" r="14" fill="#e8e8e8"/><circle cx="80" cy="58" r="11" fill="#404040"/><path d="M28 98C30 74 70 74 72 98M64 98C66 80 94 80 98 98" fill="none" stroke="#ffd700" stroke-width="8"/></g>
+  <g id="material" transform="translate(128 256)"><path d="M30 90L64 30L98 90Z" fill="#404040" stroke="#e8e8e8" stroke-width="8"/><path d="M48 90L64 58L80 90" fill="none" stroke="#ffd700" stroke-width="7"/></g>
+  <g id="topology" transform="translate(256 256)"><circle cx="36" cy="48" r="10" fill="#e8e8e8"/><circle cx="86" cy="34" r="10" fill="#ffd700"/><circle cx="82" cy="90" r="10" fill="#dc143c"/><path d="M45 46L77 36M43 55L75 84M84 44L83 80" stroke="#e8e8e8" stroke-width="6"/></g>
+  <g id="flow" transform="translate(384 256)"><path d="M30 44H78L66 32M78 44L66 56M50 84H98L86 72M98 84L86 96" fill="none" stroke="#4169e1" stroke-width="8"/></g>
+  <g id="pin" transform="translate(0 384)"><path d="M64 100C64 100 34 70 34 52A30 30 0 1 1 94 52C94 70 64 100 64 100Z" fill="#dc143c"/><circle cx="64" cy="52" r="10" fill="#1a0000"/></g>
+  <g id="inspect" transform="translate(128 384)"><circle cx="56" cy="54" r="26" fill="none" stroke="#e8e8e8" stroke-width="9"/><path d="M76 74L98 96M46 54H66M56 44V64" stroke="#ffd700" stroke-width="8"/></g>
+  <g id="warning" transform="translate(256 384)"><path d="M64 24L104 98H24Z" fill="#ffd700" stroke="#e8e8e8" stroke-width="6"/><path d="M64 48V72M64 84V86" stroke="#1a0000" stroke-width="8"/></g>
+  <g id="close" transform="translate(384 384)"><path d="M34 34L94 94M94 34L34 94" stroke="#dc143c" stroke-width="11"/></g>
+</svg>

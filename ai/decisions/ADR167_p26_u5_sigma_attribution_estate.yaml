@@ -1,0 +1,54 @@
+ADR167_p26_u5_sigma_attribution_estate:
+  status: "accepted"
+  date: "2026-07-28"
+  title: >
+    P26 U5a-d — the sigma-composition Phi-attribution estate: core-bloc
+    theory research, Ricci GVC reference table, disjoint partner data, and
+    the live Option C attribution in session bootstrap (+ real ERDI).
+  context: |
+    ADR165 ruled Option C with a research directive for the core-bloc
+    treatment. Four coordinated legs delivered it: U5a (theory doc), U5b
+    (Ricci table, ADR165 D3), U5c (disjoint partner rows, Q3/Q4), U5d
+    (pure math + persistence wiring, Q1/Q2/Q7).
+  decision: |
+    - U5a (specs/101-trade-activation/u5a-core-bloc-theory.md): Amin +
+      Wallerstein + MIM converge with the Ricci data (zero CORE OUTFLOW
+      rows in 51) — CORE blocs source ZERO Phi; SEMI_PERIPHERY damped;
+      PERIPHERY undamped. Flagged theory calls recorded (w_semi
+      derivation, russia_csi re-map, Amin's generalized-monopoly-rent
+      channel left OPEN, internal-colonies domestic seed).
+    - U5b: fact_ricci_unequal_exchange_gvc (51 rows, CORE=17/SEMI=11/
+      PERIPHERY=23) — declared partial undo of the 2026-07-17 amputation.
+    - U5c: 540-row disjoint bilateral estate (28 partner codes; Mexico ->
+      latin_america; the containing-bloc 138.6% denominator retired).
+    - U5d math (domain/economics/sigma/attribution.py): compute_bloc_shares
+      three-tier rule, derive_w_semi (DATA-DERIVED, w_semi = 0.7395...
+      from the full Ricci OUTFLOW sample), nearest_vintage; 13 tests.
+    - U5d wiring (persistence/postgres_initialization.py):
+      _NODE_TO_PARTNERS crosswalk; tiers from Ricci region_type
+      (russia_csi RE-MAPPED to SEMI_PERIPHERY — the remarked Q2 change);
+      sigma gaps = Ricci OUTFLOW value_pct_gdp nearest-vintage; U5f
+      tariff seam applied; ERDI = real national Hickel Intensive series
+      (2010 -> 7.6), never the dead 1.0. 31 rewritten attribution tests.
+    - 2010 real-DB shares: eu 0, canada 0, china .1008, russia_csi .0345,
+      india .0227, southeast_asia .1525, sub_saharan_africa .0177,
+      latin_america .6718. DIRECTOR-VISIBLE DISCLOSURE: latin_america's
+      sigma gap uses the **Non-OECD** Ricci region as proxy (Ricci has no
+      Latin America region) — the dominant-share driver alongside its
+      NAFTA-scale trade volume (Mexico). Re-rulable by declaring a
+      different proxy or ingesting region-resolved LatAm UE data.
+    - Sigma-index artifact: investigated GENERABLE (QCEW/BEA I-O/
+      concordance all loaded; the red-phase "drive absent" rationale is
+      stale) but deferred as its own data unit — two documented gotchas
+      (bridge_naics_bea.weight 100% NULL with one double-map; QCEW
+      suppression flags). Bloc attribution never depends on it.
+  consequences:
+    positive:
+      - "Phi attribution is now a consequence of production-structure position grounded in real UE data — the ruled Option C, live in every bootstrapping session"
+      - "The 48.5%-core-drain defect (L1) is dead; conservation holds to float precision"
+      - "qa + vault byte-identical (headless estate untouched); defines-hash ceremony blessed(p26-defines-categories)"
+    negative:
+      - "latin_america's Non-OECD gap proxy concentrates .6718 of Phi — flagged for Director review, not silently normalized"
+      - "sigma_index.parquet generator remains a chartered follow-up data unit"
+      - "ci-data release re-cut still owner-gated (now needed for product sha 5e1e60fc...)"
+  file: ADR167_p26_u5_sigma_attribution_estate.yaml

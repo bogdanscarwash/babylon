@@ -1,0 +1,160 @@
+==================================================
+Membership payload deffields (bsl-language.rst §2.9 worked example)
+==================================================
+
+(deffield community/strength   :type coefficient :kind extensive
+          :member NodeType/SOCIAL_CLASS)
+(deffield community/visibility :type probability :kind intensive
+          :member NodeType/SOCIAL_CLASS)
+
+---
+
+(source_file
+  (deffield
+    (qname)
+    (type_name
+      (symbol))
+    (field_kind)
+    (enum_ref))
+  (deffield
+    (qname)
+    (type_name
+      (symbol))
+    (field_kind)
+    (enum_ref)))
+
+==================================================
+Element-indexed metric declaration (bsl-language.rst §2.11 worked example)
+==================================================
+
+(metric betweenness-centrality
+  :type coefficient :kind intensive
+  (domain NodeType/ORGANIZATION)
+  :provider topology-scores)
+
+---
+
+(source_file
+  (metric_decl
+    (symbol)
+    (type_name
+      (symbol))
+    (field_kind)
+    (domain
+      (enum_ref))
+    (symbol)))
+
+==================================================
+Graph-scope metric declaration (§2.11, the <domain> :graph shape)
+==================================================
+
+(metric solidarity-density
+  :type coefficient :kind intensive
+  (domain :graph)
+  :provider topology-scores)
+
+---
+
+(source_file
+  (metric_decl
+    (symbol)
+    (type_name
+      (symbol))
+    (field_kind)
+    (domain
+      (graph_flag))
+    (symbol)))
+
+==================================================
+Intrinsic declaration (§2.7; the declarable set is {exp, log}, §3.10)
+==================================================
+
+(intrinsic exp :params (real) :returns real :cost 20)
+
+---
+
+(source_file
+  (intrinsic_decl
+    (symbol)
+    (type_name
+      (symbol))
+    (type_name
+      (symbol))
+    (int_lit)))
+
+==================================================
+Manifest with a substrate rung and two adjunctions (§3.9 worked example)
+==================================================
+
+; illustrative; the delineation counts are a scenario's, not the document's
+(manifest usa-2026
+  (ceiling NodeType/TERRITORY       :ceiling 3143 :invariant)
+  (ceiling NodeType/COMMUTING_ZONE  :ceiling 741  :invariant)
+  (ceiling EdgeType/IN_SCALE        :ceiling 3143 :invariant)
+  (ceiling HyperedgeType/COMMUNITY  :ceiling 500 :max-members 40)
+  (rung county-cz NodeType/TERRITORY NodeType/COMMUTING_ZONE
+        :via EdgeType/IN_SCALE :substrate)
+  (adjunction wage-bill
+              territory/wage-bill commuting-zone/wage-bill
+              :rung county-cz)
+  (adjunction unemployment
+              territory/unemployment-rate commuting-zone/unemployment-rate
+              :rung county-cz :weighted-by territory/labor-force))
+
+---
+
+(source_file
+  (comment)
+  (manifest
+    (symbol)
+    (ceiling
+      (enum_ref)
+      (int_lit))
+    (ceiling
+      (enum_ref)
+      (int_lit))
+    (ceiling
+      (enum_ref)
+      (int_lit))
+    (ceiling
+      (enum_ref)
+      (int_lit)
+      (int_lit))
+    (rung
+      (symbol)
+      (enum_ref)
+      (enum_ref)
+      (enum_ref))
+    (adjunction
+      (symbol)
+      (qname)
+      (qname)
+      (symbol))
+    (adjunction
+      (symbol)
+      (qname)
+      (qname)
+      (symbol)
+      (qname))))
+
+==================================================
+defenum and defvocabulary (§2.13, D101, Organization spec §1 Q12)
+==================================================
+
+(defenum OrgKind (STATE_APPARATUS BUSINESS POLITICAL_FACTION CIVIL_SOCIETY))
+(defvocabulary NodeType (SOCIAL_CLASS TERRITORY ORGANIZATION))
+
+---
+
+(source_file
+  (defenum
+    (enum_type)
+    (enum_member)
+    (enum_member)
+    (enum_member)
+    (enum_member))
+  (defvocabulary
+    (enum_type)
+    (enum_member)
+    (enum_member)
+    (enum_member)))

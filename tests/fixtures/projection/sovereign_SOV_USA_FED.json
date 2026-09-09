@@ -1,0 +1,15 @@
+{
+  "capital_county_fips": null,
+  "capital_territory_id": null,
+  "claimed_county_fips": null,
+  "dissolved_tick": null,
+  "extraction_policy": null,
+  "founded_tick": null,
+  "kind": "sovereign",
+  "legitimacy": null,
+  "name": null,
+  "ruling_faction_id": null,
+  "sovereign_id": "SOV_USA_FED",
+  "sovereignty_type": null,
+  "verified_tick": 5
+}

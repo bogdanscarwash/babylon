@@ -1,0 +1,38 @@
+ADR130_p25_u4_organization_component_port:
+  status: "accepted"
+  date: "2026-07-22"
+  title: >-
+    P25 U4 — the OrganizationComponent carried task discharged: the deprecated
+    shim, its lazy PEP-562 loader, and its 274-line suite are DELETED; the
+    capacity contract (defaults, Probability bounds, immutability, JSON +
+    graph round-trip) is re-pinned against the Organization entity hierarchy
+    where the semantics have lived since Feature 031; the probability-bounds
+    discovery-walk regression test simplifies to an unconditional
+    warnings-as-errors pin.
+  supersedes: []
+  relates_to: ["ADR127"]
+  programs: ["25-political-superstructure"]
+
+  decision: |
+    (1) PORT: tests/unit/models/entities/test_organization_capacity.py pins
+        the behavioral contract on CivilSocietyOrg (representative subtype):
+        defaults cohesion=0.1/cadre_level=0.0 (the shim's contract values,
+        preserved verbatim on the entity), four bounds rejections, frozen
+        immutability, JSON round-trip, and the GRAPH round-trip through
+        model_dump() -> _reconstruct_organization (the from_graph
+        silently-defaulted-field gotcha, now a pinned behavior).
+    (2) DELETE: models/components/organization.py (the shim),
+        components/__init__.py's lazy __getattr__ + TYPE_CHECKING import +
+        __all__ entry, tests/unit/models/components/test_organization.py
+        (274 lines incl. test_package_access_warns, which pinned the shim's
+        own deprecation warning and dies with it), and the pop/restore
+        module dance in test_probability_bounds (existed solely because the
+        shim warned at import; the walk now runs warnings-as-errors clean,
+        and the simplified pin guards against any FUTURE import-time-warning
+        module). Stale comments corrected in models/__init__.py +
+        tests/constants.py.
+    (3) PROVENANCE: roadmap carried task ("belongs to whichever program next
+        touches the Organization entity" — P25 by the BD's organizations
+        clause). U5/U11 build on the now-uncontested entity capacity fields.
+    (4) GATES: models+property suites 1253/1253; mypy clean; check:vocabulary
+        clean; qa:regression byte-identical (no defines change — no ceremony).

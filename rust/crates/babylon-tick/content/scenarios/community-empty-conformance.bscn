@@ -1,0 +1,94 @@
+; Community port train world 6 (issue #667, Task 10 Step 4 — plan
+; docs/superpowers/plans/2026-08-18-community-port.md §1.2): frozen law
+; L2's analogue — one carrier, one community whose members are ALL
+; inactive classes. Frozen's `step()` EARLY-RETURNS on zero memberships
+; (community.py:337-338) — a GLOBAL control-flow shortcut no per-rule pack
+; reproduces — so the honest pins are the LANES, not a blanket no-op:
+; c01's census skips the inactive (member-count 0), c04 pushes nothing,
+; c05/c06a's density gate preserves the seeded simplex byte-exactly, and
+; c09/c10 write no cost modifier (the active guard, §1.4). The two
+; divergences FROM the plan's own "byte-exact no-op" phrase are recorded
+; in D205: c00's reset WRITES the accumulator zeros (they exist
+; post-tick), and c11's decay is ungated (heat moves 0.5 -> 0.475) —
+; frozen's early return suppresses both, and the port's per-rule
+; structure cannot express a cross-rule early return.
+;
+; Declaration order is id order — never renumber when extending. The
+; 14-row floor table and the decay alphas are re-declared per scenario
+; (§6.2); the cross-world parity test pins every world's table equal.
+(scenario community/empty-conformance
+  (defvocabulary NodeType (INSTITUTION SOCIAL_CLASS ORGANIZATION))
+  (defvocabulary EdgeType (MEMBERSHIP))
+  (defvocabulary HyperedgeType (COMMUNITY))
+  (defenum CommunityType
+    (SETTLER PATRIARCHAL NEW_AFRIKAN FIRST_NATIONS CHICANO WOMEN TRANS
+     DISABLED QUEER UNDOCUMENTED INCARCERATED YOUTH ADULT ELDER))
+  (deffield institution/community-carrier int extensive)
+  (deffield social-class/active int extensive)
+  (deffield social-class/community-cost-modifier real intensive)
+  (deffield community/kind enum CommunityType)
+  (deffield community/heat intensity intensive)
+  (deffield community/cohesion intensity intensive)
+  (deffield community/education-pressure intensity intensive)
+  (deffield community/reproduction-cost-modifier real intensive)
+  (deffield community/revolutionary probability intensive)
+  (deffield community/liberal probability intensive)
+  (deffield community/fascist probability intensive)
+  (deffield community/member-count int extensive)
+  (deffield community/r-raw real extensive)
+  (deffield community/l-raw real extensive)
+  (deffield community/f-raw real extensive)
+  (deffield community/density-sum real extensive)
+  (deffield community/substrate-floor probability intensive)
+  ; DG-2 (PUBLISH, the 2026-08-18 sitting): c07/c08's readout fields.
+  (deffield community/contestation probability intensive)
+  (deffield community/dominant-tendency enum ConsciousnessTendency)
+  (deffield social-class/org-r-weight real extensive)
+  (deffield social-class/org-l-weight real extensive)
+  (deffield social-class/org-f-weight real extensive)
+  (deffield social-class/org-count int extensive)
+
+  ; ---- the 14-row ADR214 floor table (§6.1 verbatim) + the decay alphas ----
+  (defconst community/floor-new-afrikan 0.136p)
+  (defconst community/floor-first-nations 0.155p)
+  (defconst community/floor-chicano 0.113p)
+  (defconst community/floor-settler 0.0p)
+  (defconst community/floor-patriarchal 0.0p)
+  (defconst community/floor-youth 0.0p)
+  (defconst community/floor-adult 0.0p)
+  (defconst community/floor-incarcerated 0.18p)
+  (defconst community/floor-women 0.04p)
+  (defconst community/floor-trans 0.06p)
+  (defconst community/floor-disabled 0.03p)
+  (defconst community/floor-queer 0.04p)
+  (defconst community/floor-undocumented 0.10p)
+  (defconst community/floor-elder 0.02p)
+  (defconst community/heat-decay-alpha 0.05c)
+  (defconst community/cohesion-decay-alpha 0.03c)
+  (defconst community/education-pressure-decay 0.1c)
+
+  ; ---- nodes (id order) ----
+  (node empty-register NodeType/INSTITUTION (institution/community-carrier 1))
+  ; The two all-inactive members.
+  (node idle-a NodeType/SOCIAL_CLASS (social-class/active 0))
+  (node idle-b NodeType/SOCIAL_CLASS (social-class/active 0))
+  ; The load-law org (world 4's header names why): one edge, into idle-a —
+  ; c03 pushes its weight onto the INACTIVE class, where it stays inert
+  ; (c04's active gate never reads it; c02's ungated reset zeroes it next
+  ; tick).
+  (node idle-org NodeType/ORGANIZATION
+    (organization/cadre-level 0.5p) (organization/cohesion 0.5p)
+    (organization/consciousness-tendency ConsciousnessTendency/REVOLUTIONARY))
+
+  (edge EdgeType/MEMBERSHIP idle-org idle-a 1)
+
+  ; h0: NEW_AFRIKAN over (idle-a, idle-b) — every member inactive.
+  (hyperedge idle-comm HyperedgeType/COMMUNITY (members idle-a idle-b))
+  (hyperedge-attr idle-comm community/kind CommunityType/NEW_AFRIKAN)
+  (hyperedge-attr idle-comm community/heat 0.5i)
+  (hyperedge-attr idle-comm community/cohesion 0.75i)
+  (hyperedge-attr idle-comm community/education-pressure 0.25i)
+  (hyperedge-attr idle-comm community/reproduction-cost-modifier 0.875r)
+  (hyperedge-attr idle-comm community/revolutionary 0.5p)
+  (hyperedge-attr idle-comm community/liberal 0.25p)
+  (hyperedge-attr idle-comm community/fascist 0.25p))

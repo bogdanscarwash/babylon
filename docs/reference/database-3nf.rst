@@ -206,20 +206,6 @@ has_fred_data           BOOLEAN       Has FRED unemployment data
 has_qcew_data           BOOLEAN       Has QCEW employment data
 ======================  ============  ================================================
 
-dim_sector
-^^^^^^^^^^
-
-NAICS sectors (27 records).
-
-==================  ============  ================================================
-Column              Type          Description
-==================  ============  ================================================
-sector_id           INTEGER       Primary key (surrogate)
-sector_code         VARCHAR(2)    2-digit NAICS sector code (unique)
-sector_name         VARCHAR(100)  Sector description
-class_composition   VARCHAR(20)   Marxian classification
-==================  ============  ================================================
-
 dim_ownership
 ^^^^^^^^^^^^^
 
@@ -614,22 +600,6 @@ household_count  INTEGER       Number of renter households
 
 **Primary Key**: (county_id, source_id, burden_id)
 
-fact_census_commute
-^^^^^^^^^^^^^^^^^^^
-
-Commute mode by county (67,662 records).
-
-==============  ============  ================================================
-Column          Type          Description
-==============  ============  ================================================
-county_id       INTEGER       FK to dim_county
-source_id       INTEGER       FK to dim_data_source
-mode_id         INTEGER       FK to dim_commute_mode
-worker_count    INTEGER       Number of workers
-==============  ============  ================================================
-
-**Primary Key**: (county_id, source_id, mode_id)
-
 Employment Facts (QCEW)
 -----------------------
 
@@ -773,22 +743,23 @@ Query Examples
 Class Composition by County
 ---------------------------
 
-Analyze employment distribution by Marxian class composition::
+Analyze employment distribution by Marxian class composition
+(``dim_sector`` was retired 2026-07-17, ADR075; ``class_composition``
+comes directly from ``dim_industry``)::
 
     SELECT
         c.county_name,
         s.state_abbrev,
-        sec.class_composition,
+        i.class_composition,
         SUM(q.employment) as total_employment,
         SUM(q.total_wages_usd) as total_wages
     FROM fact_qcew_annual q
     JOIN dim_county c ON q.county_id = c.county_id
     JOIN dim_state s ON c.state_id = s.state_id
     JOIN dim_industry i ON q.industry_id = i.industry_id
-    JOIN dim_sector sec ON i.sector_code = sec.sector_code
     JOIN dim_time t ON q.time_id = t.time_id
-    WHERE t.year = 2023 AND sec.class_composition IS NOT NULL
-    GROUP BY c.county_name, s.state_abbrev, sec.class_composition
+    WHERE t.year = 2023 AND i.class_composition IS NOT NULL
+    GROUP BY c.county_name, s.state_abbrev, i.class_composition
     ORDER BY total_employment DESC;
 
 Rent Burden by Income

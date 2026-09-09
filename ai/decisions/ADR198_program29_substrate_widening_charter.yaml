@@ -1,0 +1,111 @@
+ADR198_program29_substrate_widening_charter:
+  status: "accepted"
+  date: "2026-08-12"
+  title: "Program 29 — The Substrate Widening: eight Director rulings chartering the lane-building program the adjudicated port-estate survey demands (D35/D65 edge-attribute storage ruled FULL SYMMETRIC with an empty-elided fifth canonical section and full write parity; AG(i) payloads a separate later ceremony; the ADR188 Row-7 curve estate ruled dossier-then-session; the carrier-node idiom BLESSED as the graph-scope standard; identity keys ruled int-encoded FIPS, no string type minted; Program 29 chartered with full GitHub markup)"
+  context: |
+    The port-estate survey (reports/port-estate-survey-2026-08-12.md,
+    synthesizing 29 adjudicated Phase-1 inventories in
+    reports/port-inventories/, PR #554) found: zero whole systems
+    PORTABLE NOW; twenty BLOCKED; the dominant blocker NOT a query slice
+    but the GraphSubstrate edge-attribute STORAGE gap (D35/D65) gating
+    eleven systems; the carrier-node ruling (survey section 3.6) able to
+    withdraw ~8 systems' graph-scope blockers on landed Slice 1; the
+    ADR188 Row-7 sigmoid prohibition carrying unperformed design work
+    that gates ReserveArmy, TickDynamics and eight director-gate curve
+    rows; and Checkpoint A (post-port refactor WS3 at MATERIAL BASE
+    COMPLETE) unreachable on the then-current surface. ADR197 had
+    explicitly deferred edge/hyperedge/membership attribute storage
+    (its "slice 4") to a Director escalation under Constitution III.7,
+    "an ADR of its own." This is that ADR. The Director ruled all eight
+    questions live in-session (2026-08-12, two structured rounds of
+    four, options each
+    carrying a workforce recommendation; every selection recorded
+    verbatim below), then approved the consolidated program design.
+  decision: |
+    **R1 — D35/D65 SHAPE: FULL SYMMETRIC EDGE ATTRIBUTES.** Edges get
+    declared, typed fields exactly as nodes have them: deffield rows per
+    edge type, the same closed type vocabulary (int / probability /
+    intensity / coefficient / enum; Currency STORAGE still refused per
+    the 2026-08-11 first-consumer ruling), read via field-of over an
+    EdgeRef once Slice 2 serves it. One general mechanism, one
+    escalation; the named-field-grants alternative (repeated III.7
+    ceremonies) and the edge-reification alternative (the Levi-shaped
+    workaround Amendment AE already rejected for hyperedges) were both
+    declined.
+
+    **R2 — HASH ENCODING: NEW SECTION, ELIDED WHEN EMPTY.** CanonicalState
+    gains a fifth section (edge attributes, mirroring how node
+    attributes sit beside nodes) hashed ONLY when at least one edge
+    attribute exists. Consequence: every existing golden, baseline and
+    save stays byte-identical at landing — no estate-wide rebless
+    ceremony. The elision rule is documented and versioned in the hash
+    contract (babylon-graph/src/state_hash.rs's canonical-layout doc);
+    if the hyperedge section's existing convention differs, the
+    implementing train's ADR records the deliberate asymmetry.
+
+    **R3 — WRITE SURFACE: FULL UPDATE-NODE PARITY AT LANDING.** set /
+    add / sub / scale through the SAME PendingWrite collect-then-apply
+    machinery (apply-time accumulation, D104), enum set included. The
+    set-only alternative was declined: frozen systems (EdgeTransition,
+    Solidarity) do read-modify-write on edge attributes, so set-only
+    would force a second ceremony almost immediately.
+
+    **R4 — AG(i) PAYLOADS: A SEPARATE, LATER CEREMONY.** The attributed-
+    membership payload (Amendment AG clause i, what Community needs)
+    does NOT bundle into this storage ceremony. Community's own train
+    (#536) charters it when its memberships design is done — its
+    adjudicator found the node-local list-of-structs shape may not even
+    be AG(i)'s shape. Two save-compat steps accepted over one.
+
+    **R5 — THE CURVE ESTATE (ADR188 Row 7 + the register's 8 curve
+    rows): DOSSIER THEN SESSION.** Engineering produces ONE curves
+    dossier — every stipulated curve in the frozen engine, its material
+    meaning, and a derived emergent reformulation per the ADR173
+    P(S|A)-as-measure pattern — then a dedicated session where the
+    Director rules the lot (the heat-dossier precedent). Piecemeal
+    per-train ratification and defer-to-first-consumer were declined.
+
+    **R6 — CARRIER-NODE: BLESSED AS THE STANDARD graph-scope idiom.**
+    Graph-scope scalars ride a :ceiling 1 carrier NodeType naming a
+    REAL aggregate (the national economy, the state apparatus — the
+    Aleksandrov grounding), documented once (architecture-standard
+    pattern section + a D-record template), used by every pack that
+    needs it. Case-by-case litigation declined.
+
+    **R7 — IDENTITY KEYS: INT-ENCODED FIPS, NO STRING TYPE.** FIPS-keyed
+    carries port as int fields with the leading-zero trap D-recorded;
+    where the string was really naming a node, key by node identity
+    instead. Minting a string/identity field type (an AE(ii) amendment
+    with hash-canonicalization questions) was declined.
+
+    **R8 — PROGRAM IDENTITY: PROGRAM 29 WITH FULL MARKUP.** Umbrella
+    issue; one issue per lane-train (T1 carrier-pattern doc, T2 Query
+    Slice 2, T3 the R1-R3 storage implementation, T4 curves dossier +
+    Director session, T5 structural-verb execution surface, T6
+    TickDynamics re-read + charter) and per port wave; the director-gate
+    register (24 rows) as one tracked issue; everything on GitHub
+    project 8; goal-lane checkpoint notes updated (Checkpoint A's gates
+    are now NAMED: T2, T3, T4, T6). The WS1-at-Checkpoint-B ratification
+    STANDS, with the survey's 67-emission load noted on #502.
+  consequences: |
+    Sequencing: Wave A ports need no lane and run now (Territory —
+    in flight; Production @3.0; Decomposition @11.0 + ControlRatio
+    @12.0 joint). T1 unblocks Wave B (~8 carrier-node consumers).
+    T2+T3 unblock Wave C (Solidarity, Sovereignty, EdgeTransition,
+    the storage class). T4 unblocks Wave D (the curve-bearing
+    systems). Wave E is per-charter (Community #536 post-AG(i)-design,
+    OODA as its own split, Doctrine reserved-line heavy, Electoral's
+    clock design). T3 is the one train that widens CanonicalState; its
+    implementation lands with mutation-verified law tests and the
+    empty-elision proof (existing goldens byte-identical). The
+    formalism surface stays CLOSED (AE ii): nothing here mints new
+    mathematics — R1-R3 widen storable STATE using existing constructs,
+    R6/R7 are modeling idioms, R5 derives from the already-ruled
+    no-imposed-forms law.
+  supersedes: []
+  related:
+    - ADR197_bsl_query_evaluation_slice1_handoff
+    - ADR195_enum_deffield_row
+    - ADR189_amendment_ag_attributed_membership_lattice_instances
+    - ADR188_intrinsics_rider_slate
+    - ADR173_survival_calculus_reference_form

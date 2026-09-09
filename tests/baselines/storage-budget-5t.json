@@ -8,15 +8,15 @@
   "floor_pct": 50.0,
   "rows_per_tick": {
     "dynamic_hex_state": 209.0,
-    "boundary_flow_register": 14.4,
+    "boundary_flow_register": 16.8,
     "conservation_audit_log": 5.6,
-    "dynamic_external_node_state": 9.0,
     "dynamic_consciousness_state": 3.0,
     "dynamic_demographics_state": 3.0,
     "dynamic_employment_state": 3.0,
-    "dynamic_relationship_state": 9.0,
+    "dynamic_external_node_state": 9.0,
+    "dynamic_relationship_state": 12.0,
     "tick_commit": 1.0,
-    "contradiction_field": 4.0
+    "contradiction_field": 8.8
   },
   "floors": {
     "dynamic_hex_state": 209.0,

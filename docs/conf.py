@@ -3,6 +3,8 @@
 
 import os
 import sys
+import tomllib
+from pathlib import Path
 
 # Add source directory to path for autodoc
 sys.path.insert(0, os.path.abspath("../src"))
@@ -15,9 +17,10 @@ project = "Babylon"
 copyright = "2025, Babylon Project Contributors"
 author = "Babylon Project Contributors"
 
-# The full version, including alpha/beta/rc tags
-release = "0.2.0"
-version = "0.2"
+# The release manual follows the same tracked project version as packaging.
+with (Path(__file__).resolve().parents[1] / "pyproject.toml").open("rb") as metadata_file:
+    release = tomllib.load(metadata_file)["project"]["version"]
+version = ".".join(release.split(".")[:2])
 
 # -- General configuration ---------------------------------------------------
 extensions = [
@@ -153,9 +156,9 @@ myst_heading_anchors = 3  # Generate anchors for h1-h3 headings
 # Todo extension
 todo_include_todos = True
 
-# Autosummary
-autosummary_generate = True
-autosummary_imported_members = False  # Prevent documenting re-exported members twice
+# The API overview links the authoritative Rust source and current Python
+# periphery explicitly. Retired recursive Python API generation has no consumer.
+autosummary_generate = False
 
 # Suppress known-benign warnings that don't affect documentation quality
 # This allows CI to run with -W (warnings as errors) while ignoring noise

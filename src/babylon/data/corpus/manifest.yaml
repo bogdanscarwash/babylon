@@ -1,0 +1,262 @@
+# Babylon corpus manifest — canon-as-data for the narrator's grounding corpus.
+#
+# Replaces the hardcoded MVP_CORPUS tuple in tools/ingest_corpus.py:58-108
+# (ADR107; loader: babylon.intelligence.corpus_manifest.CorpusManifest).
+#
+# Every path_glob is RELATIVE to a corpus_root supplied by the caller — the
+# durable OCR/extraction tree at ~/Documents/ocr/ (see that tree's own
+# MANIFEST.yaml for extraction provenance: method/quality/sha256/word counts).
+# This file never hardcodes an absolute, user-specific path. tools/ingest_corpus.py
+# defaults corpus_root to ~/Documents/ocr; unit tests inject a tmp fixture tree.
+#
+# canon_status (ADR107 widens the original allow|deny|flag_bd triad to four —
+# apocryphal could not otherwise be represented at all):
+#   allow      - canon; eligible for narrator/RAG ingestion
+#   deny       - ruled OUT (anti-MLM-TW positions). Honored even INSIDE an
+#                enclosing allow glob — computed as a set-difference over
+#                matched files, never a directory-level carve-out — so a
+#                denied sub-path wins over whatever allow glob sweeps over it
+#                (a nested denied-source case)
+#   flag_bd    - adversarial-only (Divergence Channel, ADR072). Never reachable
+#                from CorpusManifest.ingest_targets() — that method excludes
+#                every non-allow row's matched files (not deny rows alone), so
+#                no allow glob, however broad, can sweep a flag_bd row's files
+#                back in
+#   apocryphal - kept deliberately, structurally fenced two ways: CorpusRow's
+#                validator requires every row resolving into _apocrypha/ to
+#                declare this status (and forbids every other row from
+#                resolving there), AND ingest_targets() independently drops any
+#                resolved file under _apocrypha/ regardless of which row
+#                matched it
+#
+# role is multi-valued (narrator, atlas_ru, atlas_cn, atlas_us, concept_card,
+# glossary, doctrine). It rides chunk metadata jsonb for `@>` retrieval
+# filtering and is ORTHOGONAL to canon_status: role says WHERE a chunk can
+# surface once ingested, canon_status says WHETHER it is ever ingested at
+# all. Role assignments below are best-effort per theme, refined when the RAG
+# semantic-map port (T5: "port director.py SEMANTIC_MAP onto the vault
+# prompt-builder") lands.
+#
+# format is what every ~/Documents/ocr/ extraction normalizes to (txt) except
+# the one apocryphal row (content.jsonl).
+
+rows:
+  # =========================================================================
+  # v1 nine-work set (charter "V1 set: 9 works ~413k words ~2,900 chunks")
+  # =========================================================================
+
+  - path_glob: "fanon/the-wretched-of-the-earth/*.txt"
+    author: "Frantz Fanon"
+    work: "The Wretched of the Earth"
+    role: [narrator, doctrine]
+    format: txt
+    canon_status: allow
+    provenance: >-
+      Classical MLM-TW canon (BD ruling 2026-07-21, ADR107 base allow list).
+      Includes the "On National Culture" chapter. Public-domain marxists.org
+      mirror is the eventual source text; NOT YET extracted into
+      ~/Documents/ocr/ on this box — absence here is a MANIFEST fact, not an
+      error (program doc "step zero", line 283).
+
+  - path_glob: "zak-cope/divided-world-divided-class/*.txt"
+    author: "Zak Cope"
+    work: "Divided World, Divided Class"
+    role: [doctrine]
+    format: txt
+    canon_status: allow
+    provenance: >-
+      ADR107 ruling-8 canon extension (labor-aristocracy / unequal-exchange
+      line). Extracted 2026-07-21 (rescued-copy, clean_ocr, 122506 words) —
+      see ~/Documents/ocr/MANIFEST.yaml id
+      zak-cope/divided-world-divided-class, sha256
+      317faeee502a1f394fdd6f60097fec5ba40b32efb361e338bed24a7b5be97f07.
+
+  - path_glob: "samir-amin/the-law-of-worldwide-value/*.txt"
+    author: "Samir Amin"
+    work: "The Law of Worldwide Value"
+    role: [doctrine]
+    format: txt
+    canon_status: allow
+    provenance: >-
+      ADR107 base allow list (unequal-exchange theory). Extracted 2026-07-21
+      (pdftotext, born_digital, 38171 words) — see
+      ~/Documents/ocr/MANIFEST.yaml id samir-amin/the-law-of-worldwide-value,
+      sha256 600333fa17e1a5a0aa18552f7f2fffdb82c03c34374e55336aa6bae0804f7e38.
+
+  - path_glob: "mim-prisons/fundamental-political-line/*.txt"
+    author: "MIM(Prisons)"
+    work: "Fundamental Political Line"
+    role: [doctrine, glossary]
+    format: txt
+    canon_status: allow
+    provenance: >-
+      ADR107 base allow list (MIM / MIM(Prisons)); the "MIM(P) FPLmimp" of
+      the v1 nine-work set. Extracted 2026-07-21 (pdftotext, born_digital,
+      46046 words) — see ~/Documents/ocr/MANIFEST.yaml id
+      mim-prisons/fundamental-political-line, sha256
+      f89a92ffb3f3b2e171b4ae9a83a6eebce75f22e07f8d5744a4fdb1423400c6b8.
+
+  - path_glob: "mao/selected-works-curated/*.txt"
+    author: "Mao Zedong"
+    work: "Selected Works (curated essays)"
+    role: [narrator, doctrine, atlas_cn]
+    format: txt
+    canon_status: allow
+    provenance: >-
+      Classical MLM-TW canon (ADR107 base allow list). A curated subset of
+      the Selected Works volumes — successor to the two Mao essays in the
+      retired MVP_CORPUS ("On Contradiction", "Analysis of the Classes in
+      Chinese Society", tools/ingest_corpus.py:58-108 pre-T5). NOT YET
+      extracted into ~/Documents/ocr/ on this box.
+
+  - path_glob: "lenin/imperialism-highest-stage-of-capitalism/*.txt"
+    author: "V.I. Lenin"
+    work: "Imperialism, the Highest Stage of Capitalism"
+    role: [doctrine]
+    format: txt
+    canon_status: allow
+    provenance: >-
+      Classical MLM-TW canon (ADR107 base allow list); also the sole Lenin
+      text in the retired MVP_CORPUS. NOT YET extracted into
+      ~/Documents/ocr/ on this box.
+
+  - path_glob: "lenin/state-and-revolution/*.txt"
+    author: "V.I. Lenin"
+    work: "State and Revolution"
+    role: [doctrine, atlas_ru]
+    format: txt
+    canon_status: allow
+    provenance: >-
+      Classical MLM-TW canon (ADR107 base allow list). NOT YET extracted
+      into ~/Documents/ocr/ on this box.
+
+  - path_glob: "stalin/foundations-of-leninism/*.txt"
+    author: "Joseph Stalin"
+    work: "Foundations of Leninism"
+    role: [doctrine, atlas_ru]
+    format: txt
+    canon_status: allow
+    provenance: >-
+      Classical MLM-TW canon (ADR107 base allow list). NOT YET extracted
+      into ~/Documents/ocr/ on this box.
+
+  - path_glob: "che-guevara/1965-speeches-curated/*.txt"
+    author: 'Ernesto "Che" Guevara'
+    work: "Selected 1965 Speeches and Writings"
+    role: [narrator, doctrine]
+    format: txt
+    canon_status: allow
+    provenance: >-
+      Classical MLM-TW canon (ADR107 base allow list); a curated selection
+      (e.g. "Socialism and Man in Cuba"). NOT YET extracted into
+      ~/Documents/ocr/ on this box.
+
+  # =========================================================================
+  # ruled-out lines (ADR107)
+  # =========================================================================
+
+  - path_glob: "trotsky/**/*.txt"
+    author: "Leon Trotsky"
+    work: "(all works — denied author)"
+    role: [doctrine]
+    format: txt
+    canon_status: deny
+    exclusion_policy: director
+    provenance: >-
+      Director exclusion ruling, 2026-08-23. This row exists solely to prevent ingestion.
+
+  - path_glob: "pannekoe/**/*.txt"
+    author: "Anton Pannekoek"
+    work: "(all works — denied author)"
+    role: [doctrine]
+    format: txt
+    canon_status: deny
+    exclusion_policy: director
+    provenance: >-
+      Director exclusion ruling, 2026-08-23. This row exists solely to prevent ingestion.
+
+  - path_glob: "bordiga/**/*.txt"
+    author: "Amadeo Bordiga"
+    work: "(all works — denied author)"
+    role: [doctrine]
+    format: txt
+    canon_status: deny
+    exclusion_policy: director
+    provenance: >-
+      Director exclusion ruling, 2026-08-23. This row exists solely to prevent ingestion.
+
+  - path_glob: "kautsky/**/*.txt"
+    author: "Karl Kautsky"
+    work: "(all works — denied author)"
+    role: [doctrine]
+    format: txt
+    canon_status: deny
+    provenance: >-
+      ADR107 deny ruling: Second-International-revisionist position,
+      incompatible with the MLM-TW doctrinal spine.
+
+  - path_glob: "cpusa/**/*.txt"
+    author: "Communist Party USA"
+    work: "(all works — denied author)"
+    role: [doctrine]
+    format: txt
+    canon_status: deny
+    provenance: >-
+      ADR107 deny ruling. This deny is honored even where a CPUSA article is
+      quoted for rebuttal INSIDE an otherwise-allowed work (e.g.
+      miws/contemporary-services-draft — see that work's own note in
+      ~/Documents/ocr/MANIFEST.yaml) — the quote stays inside its allowed
+      host file; this row exists so a standalone CPUSA source is never
+      separately ingested as if it were doctrine.
+
+  - path_glob: "hoxha/**/*.txt"
+    author: "Enver Hoxha"
+    work: "(all works — denied author)"
+    role: [doctrine]
+    format: txt
+    canon_status: deny
+    provenance: >-
+      ADR107 deny ruling: anti-Mao, denies the Three Worlds Theory the
+      engine's imperial-rent math is built on (Fundamental Theorem, W_c vs
+      V_c) — specifically incompatible with this codebase's doctrinal spine.
+
+  # =========================================================================
+  # adversarial-only (ADR072 Divergence Channel) — never the narrator's
+  # RagPipeline ingestion path; CorpusManifest.ingest_targets() excludes this
+  # row's matched files from every allow row's results too (not just its own
+  # absence from allow_rows()), so a flag_bd row's files can never leak in
+  # via some broader, unrelated allow glob either.
+  # =========================================================================
+
+  - path_glob: "nitzan-bichler/capital-as-power/*.txt"
+    author: "Jonathan Nitzan and Shimshon Bichler"
+    work: "Capital as Power"
+    role: [doctrine]
+    format: txt
+    canon_status: flag_bd
+    provenance: >-
+      ADR107 flag_bd ruling: Divergence-Channel (ADR072) steelman opponent
+      only, never narrator-retrievable as doctrine. NOT extracted into
+      ~/Documents/ocr/ on this box. The Divergence-Channel adversarial
+      surface itself is Amendment T, still awaiting BD ratification — this
+      row is declarative only until that surface exists.
+
+  # =========================================================================
+  # apocrypha (ADR107 fourth canon_status) — glob-fenced, never bulk-ingested
+  # =========================================================================
+
+  - path_glob: "_apocrypha/content.jsonl"
+    author: "unknown (Moltbook scrape)"
+    work: "content.jsonl"
+    role: [narrator]
+    format: jsonl
+    canon_status: apocryphal
+    provenance: >-
+      ADR107: AI-generated Maoist pastiche (Moltbook scrape, Jan 2026), kept
+      as a personally significant BD artifact (ruling 2026-07-21). Canon-
+      excluded by construction: CorpusRow's apocrypha-fencing validator
+      requires this path to live under _apocrypha/, and forbids every other
+      row from resolving there. Eligible only for hand-curated,
+      author-selected easter-egg content — never bulk RAG ingestion. See
+      ~/Documents/ocr/_apocrypha/NOTES.md and MANIFEST.yaml, sha256
+      4b380fb853b981d88875711ac6269c9743b88b38dc31732df054376f4d1915af.

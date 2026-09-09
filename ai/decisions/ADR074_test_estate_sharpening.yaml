@@ -1,0 +1,110 @@
+ADR074_test_estate_sharpening:
+  status: "accepted"
+  date: "2026-07-16"
+  title: "Test-estate sharpening (owner-invoked full review): tier discipline (dev fast/loud, main heavy), first-party deprecation-as-error, digest-stamped concurrent-safe DDL application, the emergent-endgames testing corollary (outcomes are fixture vehicles, never asserted subjects), the declared-synthetic-data sentinel, and the empirical-invariants program (WID/Piketty + Fed DFA + BEA laws as behavioral contracts with capitalist-mode conditionality)"
+  context: |
+    Owner invocation (2026-07-16, ultracode): benchmark every test leg, make
+    every test green (fix or discard), sweep so tests test the CURRENT
+    codebase, and land sane CI — dev tier fast/fail-loud, main tier
+    production-grade. Working artifact: reports/test-estate-audit-2026-07-16.md
+    (32-agent audit + all execution phases + evidence).
+
+    The benchmark surfaced structural rot beyond individual reds: a
+    12-strong DeadlockDetected family from concurrent DDL re-application,
+    outcome-adjudication test doctrine contradicting the emergent-endgames
+    ruling, false-confidence tests (tautologies, dead skips, stale
+    premises), PG-requiring tests homed in the unit tier, and ghost/mock
+    data with no central declaration.
+  decision: |
+    1. TIER DISCIPLINE. tests/unit is import-light, mock-based, PG-free by
+       requirement (guarded live extras allowed); anything REQUIRING live
+       Postgres lives in tests/integration (B1 relocation: atomicity,
+       trace-view x2, migration-healing; the healing applier is now
+       tests/integration/persistence/migration_healing.py). Reference-DB
+       suites carry requires_reference_db and run in the refdata lane
+       against the ci-data-vN subset artifact.
+    2. CONCURRENT DDL IS STAMPED. All migration/schema application flows
+       through babylon.persistence.postgres_schema.ensure_ddl_applied:
+       order-sensitive sha256 digest stamp (_babylon_schema_stamp) +
+       session advisory lock + per-family transactions in partitioning.
+       Bare conn.execute(migration) loops are BANNED in fixtures — three
+       more were caught and replaced during the triage (each burned ~230s
+       and could deadlock sibling workers). A failed apply leaves no stamp
+       (healing retry re-applies exactly when needed).
+    3. FIRST-PARTY DEPRECATION IS AN ERROR.
+       filterwarnings = error::DeprecationWarning:babylon.* — with
+       stacklevel=2 attribution this errors ONLY when babylon code calls
+       deprecated babylon APIs; tests exercising them get visible plain
+       warnings. Deprecated public methods delegate to an unwarned private
+       impl for internal callers (wealth_proxy._estimate_la_share_unwarned
+       is the pattern exemplar).
+    4. EMERGENT-ENDGAMES TESTING COROLLARY. No test asserts WHICH outcome
+       a scenario adjudicates to. An outcome may serve as a fixture VEHICLE
+       to trigger machinery; the asserted SUBJECT must be mechanics.
+       The outcome-doctrine test family was deleted (-1,377 lines);
+       EndgameDetector's five _check_* predicates are deliberately
+       uncovered until the emergent-endgames ADR demotes the detector to
+       a recognizer.
+    5. DECLARED SYNTHETIC DATA. babylon.sentinels.synthetic carries the
+       registry of sanctioned synthetic/mock data sources (frozen Pydantic
+       records; pure-ast existence checks; tools/sentinel_check.py
+       "synthetic" sensor; docs/reference/declared-synthetic-data.rst).
+       A mock that is not declared is a sentinel failure.
+    6. EMPIRICAL INVARIANTS ARE BEHAVIORAL CONTRACTS. Verified historical
+       laws ship as tests: the WID Pareto wealth quantile structure
+       (~1/3 top1 / 1/3 p90-99 / 1/3 p50-90 / ~0 bottom-50; 111-year
+       bottom-50 ceiling 0.04; 205-year top-decile floor 0.60) pinning
+       GameDefines class_dynamics equilibria; Fed DFA redundant-source
+       corroboration (fact_fred_wealth_shares, un-orphaned); Ricci/Hickel
+       unequal-exchange artifacts in-repo with exact internal identities
+       (cumulative-drain running sum; CORE<=>INFLOW extraction direction;
+       the 2007 Non-OECD GVC>TOTAL anomaly PINNED as a crisis-onset data
+       fact); and the owner-approved trio — beta [2,7] over 225 years,
+       US aggregate labor share [0.52,0.61] with W_c < V_c every year on
+       record (the Fundamental Theorem's empirical anchor), and the
+       imperial-rent multiple [10,40] with the labor-aristocracy anchor
+       (US bottom-50 average >= 3x SSA mean for 75 years).
+       CONDITIONALITY (owner ruling): these are laws of the CAPITALIST
+       mode of production. They gate calibration defines and reference
+       data ONLY — never simulation trajectories, where a communist
+       revolution breaking the distribution is the mechanic working.
+       Runtime checks take the contrapositive form (distribution leaves
+       the capitalist band => a rupture event exists in history) and are
+       BLOCKED on the wealth-share axis landing in the tick engine
+       (population-vs-wealth conflation: 4 hardcoded call sites, no
+       GameDefines, formulas/class_dynamics.py orphaned — owner-triage).
+    7. DETERMINISM CLAIMS REQUIRE INPUT-IDENTITY PAIRING. SC-006 compares
+       regen artifacts only when manifest reproducibility.input_hash
+       matches; cross-era comparisons measured code drift (observed 33%),
+       not non-determinism, and now SKIP with regen instructions.
+    8. CI/tests never touch the babylon-data drive: empirical series ship
+       as small in-repo CSV artifacts (src/babylon/data/reference/)
+       derived by documented extractors (tools/extract/, tools/ingest/)
+       and cross-verified before landing; the WID single-country LCU /
+       same-year-FX division trap (up to 17x distortion) is documented in
+       the extractor — use WID's pre-aggregated USD regional files.
+  consequences: |
+    - Full unit gate: 10,316+ passed under the new strict config
+      (-n4 loadscope, warnings-as-errors); the 10-red integration battery
+      went 0-failed in 2:51 (was 21:09). qa:regression 5/5 byte-identical
+      throughout.
+    - ci-data-v5 subset released (fact_fred_wealth_shares FULL, Ricci rows
+      populated) and the fetch-reference-db composite bumped — refdata CI
+      legs stay green with the new refdb sync tests.
+    - tests/baselines/michigan-e2e.json requires `git lfs pull` locally;
+      the ci_gate pytest guard skips on an un-smudged pointer and now
+      compares like-for-like against detroit-tri-county-5t.json.
+    - Owner-triage residue (production, deliberately untouched):
+      the wealth-share axis program (item 6), fact_hickel_drain schema
+      with no source data, fact_productivity_annual EMPTY under
+      view_surplus_value, fact_bls_productivity all-zero rows,
+      fact_census_gini orphaned (45k rows), FR-041 dead clamp branch,
+      employment-100k placeholder.
+  evidence: |
+    reports/test-estate-audit-2026-07-16.md (full phase log + numbers);
+    commits of record — afcc498f/03ce6b1b (CI hardening + refdb lane),
+    352bdb1b/b5c79c0d (dead-test + endgame-doctrine prune),
+    39f17627/33c1222c (false-confidence repairs), 7b22fdb9 (4-layer DDL
+    fix), c2f386f6 (synthetic sentinel), 95b10fa3/194b3315 (Phase D
+    config + fallout), 46d7cede/532b2307/11a8307f (empirical invariants),
+    79a9da4a (10-red triage).

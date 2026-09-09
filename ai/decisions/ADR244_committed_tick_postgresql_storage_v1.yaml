@@ -1,0 +1,80 @@
+ADR244_committed_tick_postgresql_storage_v1:
+  status: accepted
+  date: '2026-08-27'
+  title: >-
+    Migration 0004 stores every CommittedTickEnvelopeV1 family in one exact
+    schema-qualified PostgreSQL relation without activating Rust writes
+  issue: PER-20
+  canonical_contract:
+    schema: contracts/committed_tick_storage_v1.yaml
+    migration: rust/crates/babylon-persistence/migrations/0004_committed_tick_storage.sql
+    rust_mapping: rust/crates/babylon-persistence/src/committed_tick_storage.rs
+  owners:
+    migration_and_prefix: babylon-persistence schema epoch
+    envelope_family_mapping: babylon-persistence CommittedTickStorageEnvelopeV1
+    tick_content_identity: babylon-kernel TickContentHashV1
+    runtime_writer_authority: closed writer gate
+  context: |
+    ADR243 closed the exact database-free envelope and its eight mandatory row
+    families. ADR225 requires each additive schema change to install under one
+    serializable migration transaction, validate an exact resulting catalog,
+    insert its version and checksum marker last, and preserve a contiguous
+    prefix across failed or ambiguous outcomes. The storage relations and the
+    typed family-to-table boundary were still absent.
+  decision: |
+    Migration 0004 adds one campaign relation, one tick_commit marker relation,
+    and one explicit babylon_state relation for each of the eight closed
+    CommittedTickEnvelopeV1 families. Every family relation stores the durable
+    campaign and nonnegative PostgreSQL BIGINT tick, zero-based canonical row
+    ordinal, exact canonical row key, and exact canonical row payload. The
+    bounded ordinal is the physical primary-key component. The exact opaque key
+    remains unindexed, so every envelope-valid key stays storeable instead of
+    encountering PostgreSQL B-tree entry limits. The checked envelope already
+    enforces key uniqueness and strict ordering, and the ordinal preserves that
+    order without a digest collision. The family map is one-to-one, ordered,
+    schema-qualified, and exposed by a database-free Rust type.
+
+    Campaign storage keeps CampaignId, replay session, replay seed, defines
+    digest, rules digest, and reference digest separate. The tick_commit marker
+    keeps TickContentHashV1 authoritative and stores the whole-envelope digest
+    only as a diagnostic. Every family row has a deferred foreign key to the
+    marker, which permits the future atomic writer to insert tick_commit last.
+
+    Schema epoch 4 binds the exact Migration 0004 checksum and exact resulting
+    catalog. Fresh and exact-legacy origins must converge on the same owned
+    shape. Ownership, table and column ACLs, constraints, indexes, collation,
+    and the absence of babylon_intel authority are part of the verified shape.
+    A failed transaction leaves the prefix at epoch 3. An ambiguous commit is
+    accepted only after exact-prefix reconciliation proves epoch 4 durable.
+
+    This decision adds no committed-tick database execution method and cannot
+    construct RustWriterAuthority. Python remains the sole live writer and
+    migrator until the separately accepted one-way cutover. It adds no row
+    codec, hydration path, Archive processor, or player-facing behavior.
+  consequences: |
+    The complete envelope now has a stable typed PostgreSQL destination, and a
+    future atomic-writer slice can bind parameters without reopening relation
+    identity or row-family partitioning. Installing the schema cannot be
+    mistaken for writer activation. PER-20 and Gate 3 remain in progress.
+  verification: |
+    Rust contract tests prove the closed eight-family mapping and writer-gate
+    refusal. PostgreSQL 17 integration tests prove fresh installation, exact
+    legacy adoption, every prior-prefix upgrade, exact ownership and ACLs,
+    catalog census, storage of an opaque key larger than a B-tree entry, failure
+    rollback before the migration marker, killed-commit reconciliation, and
+    exact version/checksum conflicts.
+  preserves:
+    - ADR220 one-way writer cutover and complete atomic tick requirements
+    - ADR223 whole-tick atomic publication
+    - ADR225 marker-last schema epoch and cutover interlock
+    - ADR240 TickContentHashV1 ownership and campaign-replay separation
+    - ADR242 TickCommitClaimV1 identity and conflict semantics
+    - ADR243 exact whole-envelope retry equality
+    - Python sole-writer authority until the accepted one-way cutover
+  related:
+    - ADR220_rust_owned_postgresql_persistence_boundary
+    - ADR223_whole_tick_atomicity_world_hash
+    - ADR225_rust_schema_epoch_and_cutover_interlock
+    - ADR240_replay_action_tick_content_identity
+    - ADR242_tick_commit_claim_v1
+    - ADR243_committed_tick_envelope_v1

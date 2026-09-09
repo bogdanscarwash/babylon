@@ -1,8 +1,8 @@
 {
   "scenario": "fascist_bifurcation",
   "description": "Consciousness routing to national identity",
-  "generated_at": "2026-07-09T12:35:30+00:00",
-  "defines_hash": "b2c396148f1ba203",
+  "generated_at": "2026-07-30T13:44:17+00:00",
+  "defines_hash": "75b073c5b6ddb401f878de3b786dab34d839b99a62f1d48d76a28c574d906e01",
   "max_ticks": 52,
   "checkpoints": [
     {
@@ -15,79 +15,86 @@
       "exploitation_tension": 0.0,
       "p_w_consciousness": 0.0,
       "p_w_p_revolution": 0.0,
-      "p_w_active": true
+      "p_w_active": true,
+      "content_hash": "394fef99caa0f7aff4c68cb263dd3974985594808524cec869adc6141112b894"
     },
     {
       "tick": 10,
       "p_w_wealth": 0.752462,
       "p_c_wealth": 0.408404,
       "c_b_wealth": 1.546618,
-      "c_w_wealth": 58.520195,
+      "c_w_wealth": 58.568337,
       "imperial_rent_pool": 98.755207,
-      "exploitation_tension": 0.966398,
+      "exploitation_tension": 0.966425,
       "p_w_consciousness": 0.0,
       "p_w_p_revolution": 0.2,
-      "p_w_active": true
+      "p_w_active": true,
+      "content_hash": "fde969c176c8b93c832536cef7ff265210570af9ada9142f9d4f34511de1982f"
     },
     {
       "tick": 20,
       "p_w_wealth": 0.898099,
       "p_c_wealth": 0.136371,
       "c_b_wealth": 1.70604,
-      "c_w_wealth": 94.293373,
+      "c_w_wealth": 94.353057,
       "imperial_rent_pool": 97.053915,
-      "exploitation_tension": 0.979012,
+      "exploitation_tension": 0.979025,
       "p_w_consciousness": 0.0,
       "p_w_p_revolution": 0.2,
-      "p_w_active": true
+      "p_w_active": true,
+      "content_hash": "dac4bc1a1c9b885a837cb85ef711ccdb90e7c42ce48f6c82aed6012afc2943c8"
     },
     {
       "tick": 30,
-      "p_w_wealth": 1.037291,
+      "p_w_wealth": 1.037292,
       "p_c_wealth": 0.045278,
       "c_b_wealth": 1.692141,
-      "c_w_wealth": 124.604182,
+      "c_w_wealth": 124.638982,
       "imperial_rent_pool": 95.21522,
-      "exploitation_tension": 0.984077,
+      "exploitation_tension": 0.984081,
       "p_w_consciousness": 0.0,
       "p_w_p_revolution": 0.2,
-      "p_w_active": true
+      "p_w_active": true,
+      "content_hash": "01f0c9f506111dd968752957d90c0dd8f26e8b532787a6f2af776978d2c37c69"
     },
     {
       "tick": 40,
-      "p_w_wealth": 1.170397,
-      "p_c_wealth": 0.017068,
-      "c_b_wealth": 1.621829,
-      "c_w_wealth": 153.121947,
-      "imperial_rent_pool": 93.357281,
-      "exploitation_tension": 0.987023,
+      "p_w_wealth": 1.170398,
+      "p_c_wealth": 0.017014,
+      "c_b_wealth": 1.616502,
+      "c_w_wealth": 153.107677,
+      "imperial_rent_pool": 93.357269,
+      "exploitation_tension": 0.987022,
       "p_w_consciousness": 0.0,
       "p_w_p_revolution": 0.2,
-      "p_w_active": true
+      "p_w_active": true,
+      "content_hash": "d48da96072129451861701301aaf362674ea47a6490eb21c0b069ffb535f793d"
     },
     {
       "tick": 50,
-      "p_w_wealth": 1.344146,
-      "p_c_wealth": 0.009714,
-      "c_b_wealth": 1.525197,
-      "c_w_wealth": 181.009575,
-      "imperial_rent_pool": 91.510154,
-      "exploitation_tension": 0.989012,
+      "p_w_wealth": 1.344147,
+      "p_c_wealth": 0.00967,
+      "c_b_wealth": 1.505966,
+      "c_w_wealth": 180.92691,
+      "imperial_rent_pool": 91.510132,
+      "exploitation_tension": 0.989007,
       "p_w_consciousness": 0.0,
       "p_w_p_revolution": 0.2,
-      "p_w_active": true
+      "p_w_active": true,
+      "content_hash": "4ab2e790024fb4b980ceee66e153304d1ea3663c835263231d070191294ddc03"
     },
     {
       "tick": 52,
-      "p_w_wealth": 1.381103,
-      "p_c_wealth": 0.009714,
-      "c_b_wealth": 1.505197,
-      "c_w_wealth": 186.553135,
-      "imperial_rent_pool": 91.14448,
-      "exploitation_tension": 0.989336,
+      "p_w_wealth": 1.381104,
+      "p_c_wealth": 0.00967,
+      "c_b_wealth": 1.485966,
+      "c_w_wealth": 186.454656,
+      "imperial_rent_pool": 91.144458,
+      "exploitation_tension": 0.989331,
       "p_w_consciousness": 0.0,
       "p_w_p_revolution": 0.2,
-      "p_w_active": true
+      "p_w_active": true,
+      "content_hash": "9f41a9cb2f166cce8470cf377c70dd77d9487698ed365617d3c67ed9023d4046"
     }
   ],
   "final_outcome": "SURVIVED",

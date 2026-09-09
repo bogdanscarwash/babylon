@@ -1,0 +1,122 @@
+ADR081_declarative_system_ordering:
+  status: "accepted"
+  date: "2026-07-18"
+  title: "spec-116 systems-dedup Phase 4 — Declarative tick ordering: each System declares partition/position ClassVars; simulation_engine DERIVES _DEFAULT_SYSTEMS + the three spec-056 partition frozensets from them (was a hand-ordered list + three hand-maintained sets held in sync by import-time assertions)"
+  context: |
+    Origin: the "Second-Generation Duplication Sweep" spec (systems-dedup,
+    verified against dev @ 744f865), Phase 4 — the ADR-gated phase. Owner
+    ratified the design live 2026-07-18 (chose "full spec: position + partition
+    ClassVars on all 30 systems" over a lower-churn "partition-only, keep the
+    readable list" alternative).
+
+    The engine ran 30 Systems in strict materialist-causality order (ADR032).
+    Before this change that order + its partition classification lived in FOUR
+    coupled places in simulation_engine.py:
+    - `_DEFAULT_SYSTEMS`: the hand-ordered list of 30 instantiated Systems,
+      with the position of each encoded only in a trailing `# 17.8.` comment.
+    - three hand-maintained frozensets (`MATERIAL_BASE_SYSTEMS`,
+      `ACTION_PHASE_SYSTEMS`, `CONSEQUENCE_SYSTEMS`, spec-056 FR-002) restating
+      each System's partition membership.
+    - four import-time assertions (`_ALL_PARTITIONED != _DEFAULT_SYSTEM_TYPES`
+      plus three pairwise-disjoint checks) that existed solely to catch the
+      list and the sets drifting apart.
+
+    A System's ordering metadata was thus stated up to three times (list slot,
+    a frozenset, a comment), and the assertions were scaffolding guarding that
+    duplication. Adding or moving a System meant touching the list AND exactly
+    one frozenset AND keeping the position comment honest — a classic
+    duplication-drift hazard.
+  decision: |
+    Make the ordering metadata DECLARATIVE and co-located with each System,
+    and DERIVE both structures from it (single source of truth).
+
+    - New kernel enum `babylon.kernel.tick_partition.TickPartition`
+      (MATERIAL_BASE / ACTION / CONSEQUENCE, StrEnum, materialist-causality
+      order). Kernel-layer so every layer above may import it.
+    - `SystemBase` declares two ClassVars with NO default —
+      `partition: ClassVar[TickPartition]` and `position: ClassVar[float]` —
+      exactly like the existing `name: ClassVar[str]`. No default = a
+      registry-listed System that omits them fails LOUD at import (the
+      derivation reads them); ad-hoc test stubs outside the registry never
+      touch them, so `disallow_untyped_defs`/protocol structural typing are
+      unaffected.
+    - Each of the 30 concrete Systems declares its `partition` + `position`
+      (the fractional slots 2.5, 14.5, 14.7, 17.4, 17.5, 17.8, 20.5, 21.5
+      carried over verbatim from the old position comments, preserving the
+      historical "inserted between N and N+1" semantics).
+    - simulation_engine.py now holds only `_SYSTEM_CLASSES` — a membership
+      tuple of the 30 classes — and DERIVES:
+        * `_DEFAULT_SYSTEMS` = `[cls() for cls in sorted(_SYSTEM_CLASSES,
+          key=lambda c: c.position)]`
+        * the three frozensets = `_partition_members(TickPartition.X)`
+      A distinct-positions check (ambiguous order = loud RuntimeError) and a
+      cheap coverage check replace the four old drift/overlap assertions, which
+      are now structurally impossible to violate (each System declares exactly
+      one partition; the sets are grouped from that single field).
+
+    Chosen over the "partition-only, keep the ordered list" alternative on the
+    owner's explicit call: the spec's intent is that a System own ALL its
+    ordering metadata (position included), so a reorder is a one-line ClassVar
+    edit on the System rather than a move within a central list. Trade-off
+    acknowledged and mitigated: the execution order is no longer readable as a
+    single linear list — the descriptive ADR032 order+rationale comment block
+    above `_SYSTEM_CLASSES` is retained for at-a-glance reading, and the golden
+    order test pins the derived sequence so that comment cannot silently drift
+    from reality.
+
+    `engine/phase.py` (the Spec-040 Marxian-circuit `Phase` IntEnum:
+    PRODUCTION/DISTRIBUTION/CONSCIOUSNESS/STRUGGLE) is a DIFFERENT concept from
+    the tick partitions and remains consumed by ProductionSystem + two tests —
+    the spec's "retire phase.py if unconsumed" clause does not fire; it is left
+    untouched.
+  consequences: |
+    Determinism: VERIFIED byte-identical, not asserted. The derived
+    `_DEFAULT_SYSTEMS` is order-identical to the former hand-written list (30
+    Systems, confirmed name-for-name and class-for-class), and the three
+    derived frozensets are membership-identical to the former hand-maintained
+    sets (14 / 1 / 15). `mise run qa:regression` is 5/5 byte-identical
+    (imperial_circuit, two_node, starvation, glut, fascist_bifurcation) — the
+    engine constructs the same Systems in the same order, so no baseline moves.
+
+    Determinism note (III.7): the order derives from a stable `sorted()` on
+    distinct float positions, so it is a pure function of the declared
+    positions — no dict/set iteration order enters the sequence.
+
+    Public API preserved: `_DEFAULT_SYSTEMS`, `MATERIAL_BASE_SYSTEMS`,
+    `ACTION_PHASE_SYSTEMS`, `CONSEQUENCE_SYSTEMS` keep their names and types
+    (`list[System]` / `frozenset[type[System]]`), so the property tests
+    (`test_material_base_ordering`, `test_consequence_after_actions`) and unit
+    consumers (`test_simulation_engine`, `test_wealth_distribution_system`) are
+    untouched and green.
+
+    Tests: the pre-existing `tests/unit/engine/test_system_order.py::
+    TestMaterialistCausalityOrder` already pins the exact 30-System order by
+    `.name` (the golden-order guard) and passes unchanged. A new
+    `TestDeclarativeDerivation` class adds the Phase-4 invariants the old test
+    could not express: every registered System declares both ClassVars, the
+    positions are distinct, the derived order equals the position sort, the
+    frozensets are derived + cover + are pairwise disjoint, and the three
+    partitions are contiguous blocks (all MATERIAL_BASE precede ACTION precede
+    CONSEQUENCE).
+
+    Gates: mypy strict clean (637 files), ruff + ruff-format + import-linter
+    (6/6) clean; the new kernel->everywhere `TickPartition` import respects the
+    Program-14 layering (kernel is the floor). Full unit suite green apart from
+    the two pre-existing web-layer failures unrelated to this refactor.
+
+    Migration cost: 30 System files each gained a two-line ClassVar block + one
+    kernel import (mechanical, AST-inserted after the class docstring). This is
+    the churn the "partition-only" alternative would have avoided; the owner
+    accepted it for the full declarative-on-System property.
+  evidence: |
+    src/babylon/kernel/tick_partition.py (new TickPartition StrEnum),
+    src/babylon/kernel/system_base.py (partition/position ClassVar
+    declarations), src/babylon/engine/simulation_engine.py (`_SYSTEM_CLASSES`
+    registry + `_partition_members` derivation, replacing the hand-ordered list
+    + three frozensets + four drift/overlap assertions), the 30 System files
+    (partition/position ClassVars; TickDynamicsSystem lives at
+    src/babylon/domain/economics/tick/system/__init__.py),
+    tests/unit/engine/test_system_order.py (`TestDeclarativeDerivation` +
+    the unchanged `TestMaterialistCausalityOrder` golden pin),
+    `mise run qa:regression` (5/5 byte-identical). Owner design ratification:
+    live 2026-07-18 (full position+partition ClassVars).

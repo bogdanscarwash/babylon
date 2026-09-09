@@ -1,0 +1,276 @@
+meta:
+  contract: MaterialCircuitV1
+  schema_version: 1
+  status: accepted
+  evidence_class: Designed
+  live_activation: false
+  rust_owner: babylon-material-circuit
+
+preserves:
+  - every existing graph, BSL, nominal-world-hash, and Practice Contract byte
+  - the frozen Python engine as reference-only evidence
+  - the PER-31 ownership of routed freight, loss, rerouting, and settlement
+
+domains:
+  state: babylon.material-circuit-state.v1
+  terminator_hex: "00"
+
+encoding:
+  byte_order: big-endian
+  integer_encoding: unsigned-fixed-width
+  quantity_encoding: u64
+  identity_encoding: raw-32-bytes
+  row_count_encoding: u32
+  trailing_bytes: forbidden
+  noncanonical_row_order: forbidden
+
+state_field_order:
+  - schema_version
+  - opening_week
+  - process_outputs
+  - input_output_coefficients
+  - labor_coefficients
+  - supplier_candidates
+  - inventory
+  - orders
+  - backlog
+  - transit_lots
+  - capacities
+  - labor_capacity
+  - production_commitments
+
+process_output_field_order:
+  - process_id
+  - site_id
+  - output_good_id
+  - unit_id
+  - quantity_per_batch
+
+input_output_coefficient_field_order:
+  - process_id
+  - input_good_id
+  - unit_id
+  - quantity_per_batch
+
+labor_coefficient_field_order:
+  - process_id
+  - labor_unit_id
+  - quantity_per_batch
+
+supplier_candidate_field_order:
+  - buyer_site_id
+  - supplier_site_id
+  - good_id
+  - unit_id
+  - transit_delay_weeks
+
+inventory_field_order:
+  - site_id
+  - good_id
+  - unit_id
+  - on_hand_quantity
+
+order_field_order:
+  - order_id
+  - access_mode
+  - buyer_site_id
+  - supplier_site_id
+  - good_id
+  - unit_id
+  - ordered_quantity
+  - shipped_quantity
+  - delivered_quantity
+  - realized_quantity
+
+backlog_field_order:
+  - order_id
+  - unshipped_quantity
+
+transit_lot_field_order:
+  - order_id
+  - dispatch_week
+  - arrival_week
+  - source_site_id
+  - destination_site_id
+  - good_id
+  - unit_id
+  - quantity
+
+capacity_field_order:
+  - process_id
+  - site_id
+  - week
+  - available_batches
+
+labor_capacity_field_order:
+  - site_id
+  - labor_unit_id
+  - week
+  - available_quantity
+
+production_commitment_field_order:
+  - process_id
+  - site_id
+  - week
+  - planned_batches
+
+access_modes:
+  commodity_sale: 1
+
+canonical_order:
+  process_outputs:
+    - process_id
+  input_output_coefficients:
+    - process_id
+    - good_id
+    - unit_id
+  labor_coefficients:
+    - process_id
+  supplier_candidates:
+    - buyer_site_id
+    - supplier_site_id
+    - good_id
+    - unit_id
+  inventory:
+    - site_id
+    - good_id
+    - unit_id
+  orders:
+    - order_id
+  backlog:
+    - order_id
+  transit_lots:
+    - arrival_week
+    - order_id
+    - dispatch_week
+  capacities:
+    - week
+    - site_id
+    - process_id
+  labor_capacity:
+    - week
+    - site_id
+    - unit_id
+  production_commitments:
+    - week
+    - site_id
+    - process_id
+  priority: canonical order grants no material priority
+
+weekly_transition_order:
+  - validate and canonicalize the complete opening state
+  - credit due arrivals to destination inventory
+  - record accepted delivery for each credited commodity-sale arrival
+  - record realization only after that accepted delivery
+  - execute prior-week production commitments through current Leontief limits
+  - allocate remaining supplier inventory proportionally across open orders
+  - debit supplier inventory and create delayed transit lots
+  - rebuild exact unshipped backlog
+  - derive following-week production from closing inputs, labor, and capacity
+  - discard consumed current-week labor and capacity rows
+  - validate and canonicalize the complete successor state
+
+production_law:
+  actual_batches: >-
+    min(planned batches, available process batches, each order-neutral shared
+    labor grant divided by labor per batch, and each order-neutral shared input
+    grant divided by its input per batch)
+  shared_scarcity: >-
+    each exact labor or input principal grants floor(available * requested_i /
+    total_requested) to every competing process; integer residual remains with
+    the resource principal
+  shared_priority: canonical process order receives no residual and selects no winner
+  temporal_priority: >-
+    a prior-week production commitment executes before new order dispatch; this
+    is commitment timing, not canonical-row priority
+  input_debit: each material input and labor quantity is debited before output is credited
+  output_credit: actual batches times exact output quantity per batch
+  zero_supply: zero production is a committed material outcome, not an engine error
+
+order_allocation_law:
+  grouping: open orders group by exact supplier inventory identity
+  full_supply: every order receives its remaining unshipped quantity
+  scarcity: shipped_i = floor(available * unshipped_i / total_unshipped)
+  intermediate: u128 product and sum over u64 quantities
+  residual: division remainder stays in supplier inventory
+  missing_supplier_relation: the order remains backlog and no goods move
+  missing_stock: the order remains backlog and no goods are created
+
+timing_laws:
+  - transit delay is at least one week
+  - dispatch never arrives or realizes during its dispatch week
+  - arrival credits destination inventory before accepted delivery
+  - accepted delivery precedes commodity realization
+  - delivered inputs can create a following-week commitment but not a new arrival-week commitment
+  - a stored following-week commitment is bounded again when it executes
+
+conservation_laws:
+  - realized quantity is at most delivered quantity
+  - delivered quantity is at most shipped quantity
+  - shipped quantity is at most ordered quantity
+  - backlog equals ordered quantity minus shipped quantity
+  - dispatch debits supplier inventory by the exact transit-lot quantity
+  - arrival removes the exact transit lot and credits destination inventory by the same quantity
+  - opening transit plus dispatch equals arrival plus closing transit
+  - proportional allocation never exceeds opening available inventory
+  - shared production grants never exceed opening labor or material input
+  - checked overflow refuses without publishing a successor state
+
+limits:
+  rows_per_family:
+    value: 65536
+    classification: Designed
+    purpose: serialization, memory, and transition fuel ceiling, not material abundance
+  production_resource_groups:
+    value: 131072
+    derivation: rows_per_family * 2 for the disjoint input and labor resource families
+
+canonical_lengths:
+  fixed_state_header_bytes: 88
+  process_output_row_bytes: 136
+  input_output_coefficient_row_bytes: 104
+  labor_coefficient_row_bytes: 72
+  supplier_candidate_row_bytes: 130
+  inventory_row_bytes: 104
+  order_row_bytes: 193
+  backlog_row_bytes: 40
+  transit_lot_row_bytes: 184
+  capacity_row_bytes: 80
+  labor_capacity_row_bytes: 80
+  production_commitment_row_bytes: 80
+
+digest_contract:
+  algorithm: SHA-256
+  preimage: validated canonical complete-state bytes
+
+base_vector:
+  canonical_bytes: 1555
+  digest_hex: 3576baa1af2a38be8a1376259dc4423a470607ad9eef5969715931e16b30620a
+
+error_codes:
+  row_limit: 1
+  zero_quantity: 2
+  duplicate_row: 3
+  order_invariant: 4
+  backlog_invariant: 5
+  transit_invariant: 6
+  process_invariant: 7
+  week_invariant: 8
+  arithmetic: 9
+  wire_limit: 10
+  wire_domain: 11
+  wire_version: 12
+  wire_truncated: 13
+  wire_trailing: 14
+  wire_enum: 15
+  wire_noncanonical: 16
+
+excluded_surfaces:
+  - monetary price, escrow, default, or settlement
+  - corridor, port, rail, road, border, loss, or rerouting state
+  - access modes other than commodity sale
+  - service or care production
+  - waste, spoilage, damage, or ecological residue
+  - strike, blockade, occupation, damage, or capital-strike effects
+  - graph, BSL, TickSession, nominal-world-hash, envelope, or persistence integration
+  - receipt bytes, Archive output, Bevy action, or gameplay activation

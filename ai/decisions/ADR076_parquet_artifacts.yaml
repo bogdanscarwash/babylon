@@ -1,0 +1,164 @@
+ADR076_parquet_artifacts:
+  status: "accepted"
+  date: "2026-07-17"
+  title: "Parquet/CSV reference-data artifact program — per-table hashed artifacts with a repo-root manifest execute triage rulings R1-R5, seed the deterministic-data-artifacts pipeline, and define the demotion handoff from data-catalog.yaml"
+  context: |
+    Two owner rulings converge here. 2026-07-14 (verbatim, recorded in
+    project/research/deterministic-data-artifacts.md): "from a CI perspective,
+    CI and tests should never be pulling from the babylon-data drive. any
+    files it needs need to be encoded in parquet or some other form of file
+    that can be loaded deterministically into postgres." 2026-07-16 (ADR075
+    rulings_resolved): the Data Constitution triage's five ARTIFACT_IZE
+    conversions R1-R5 approved for execution.
+
+    The R1-R5 targets (row counts re-verified against the live 6.1GB
+    reference DB, 2026-07-17, mode=ro):
+    - R1: bridge_county_bea_ea (83) + dim_bea_economic_area (8) — one-shot
+      BEA-EA loader deliberately retired post-population; catalog says
+      "target = checked-in CSV artifact".
+    - R2: fact_ricci_unequal_exchange (29) — the in-repo CSV
+      (src/babylon/data/reference/babylon_ricci_final.csv) is ALREADY
+      canonical (tools/ingest/ricci_unequal.py re-derives the DB rows from
+      it); the DB mirror is the redundant copy to demote.
+    - R3: fact_energy_annual (525) + dim_energy_series/dim_energy_table
+      (currently disposition:investigate — they resolve with R3); EIA MER
+      1949-2023 series, superseded by fact_state_minerals per spec-065.
+      Contradiction #2 from the triage applies: view_energy_consumption
+      (KEEP) reads fact_energy_annual — view and base resolve as a unit.
+    - R4: bridge_lodes_block (1,150,562 rows, 109.7MB) — census-block-to-
+      county crosswalk for future hex-level commuter disaggregation; zero
+      code consumers today; subset_policy already "skip".
+    - R5: staging_arcgis_feature (5,974 geometry-bearing rows) — facility-
+      grain provenance; an UNGOVERNED staging table (no catalog row).
+
+    What exists today (recorded so the reuse is accurate):
+    - Distribution channel: GitHub release assets under ci-data-vN tags
+      (currently ci-data-v5, asset reference-subset-20260716-v5.sqlite),
+      fetched by .github/actions/fetch-reference-db with a hardcoded sha256
+      verified BEFORE first open (readers flip journal_mode=WAL, mutating
+      bytes), actions/cache keyed on tag+hash, ~2GB asset ceiling.
+    - Generator precedent: tools/make_reference_subset.py — per-table
+      TablePolicy dict (full/michigan/skip), loud hard-fail on any
+      unclassified table, VACUUM + journal_mode=DELETE byte-stabilization,
+      JSON manifest + .sha256 sidecar.
+    - In-repo CSV home: src/babylon/data/reference/*.csv (hickel, ricci,
+      wid, bea_us_labor_share) with the .gitattributes LFS exemption
+      (`-filter -diff -merge text`) added 2026-07-16 — reviewable plain-text
+      diffs, no LFS pointer trap.
+    - Sentinel interaction: the catalog DB-probe reds PHANTOM declarations
+      (catalog row naming an object the DB lacks) regardless of disposition
+      — so dropping an artifact-ized table REQUIRES removing its catalog row
+      in the same commit, which in turn requires a successor registry or the
+      lineage is lost. That successor is the artifact manifest decided here.
+    - pyproject already pins pyarrow ^25.0.0 and polars ^1.38.1 (locked).
+  decision: |
+    1. TWO ARTIFACT TIERS, chosen per table:
+       a. IN-REPO CSV for tiny tables — home src/babylon/data/reference/,
+          riding the existing .gitattributes exemption. Reviewable diffs,
+          zero fetch machinery, hash-checked in the fast gate.
+       b. RELEASE-SHIPPED PARQUET for large tables — assets on the existing
+          ci-data release channel (first carrier: ci-data-v6), sha256-pinned
+          in the manifest, verified before first use exactly like the
+          SQLite subset (fetch-reference-db generalizes from "one sqlite
+          file" to "sqlite + N parquet files").
+    2. THE MANIFEST: repo-root `data-artifacts.yaml`, sibling and successor
+       of data-catalog.yaml rows for demoted tables. One entry per artifact:
+       name, format (csv|parquet), source_table, generator, rows, sha256,
+       home (in-repo path OR release tag+asset), material_relation (carried
+       over verbatim from the catalog row it replaces), and notes. The
+       coverage sensor (fast gate) gains a static check: every in-repo
+       manifest entry's file exists and its sha256 matches; release-tier
+       entries are pin-verified at fetch time (CI), not in the fast gate.
+    3. THE GENERATOR: `tools/make_data_artifacts.py`, modeled on
+       make_reference_subset.py — an explicit per-table ArtifactPolicy dict
+       (loud SystemExit on any R-table it cannot find), reads the reference
+       DB mode=ro, emits artifacts + rewrites the manifest entries it owns.
+       Determinism discipline (Constitution III.7/III.12, per the seed doc):
+       rows sorted by explicit natural key, explicit pyarrow.Schema mapped
+       from src/babylon/reference/schema.py types (never inferred), a single
+       row group per file, pinned compression codec+level, pyarrow pinned by
+       poetry.lock. Byte-stability is PROVEN by the spike's double-generation
+       test, never asserted: whether the parquet footer's created_by string
+       is the only environment-sensitive byte is an empirical question the
+       test answers. A pyarrow version bump that shifts bytes is a DECLARED
+       regeneration event: rerun the generator, update manifest hashes, say
+       so in the commit — the qa:regression baseline discipline applied to
+       data artifacts.
+    4. THE DEMOTION HANDOFF (catalog <-> manifest): a table's DB copy may be
+       dropped ONLY when (a) its artifact exists with a manifest entry, (b) a
+       preservation test reads the artifact (not the DB) and pins row count +
+       a known row, and (c) the same commit removes the data-catalog.yaml row
+       (bijection) — lineage moves to the manifest, never vanishes. Until all
+       three hold, the catalog row stays disposition:artifact (declared debt,
+       tracked not gated).
+    5. PER-RULING EXECUTION MAP:
+       - R1 -> two in-repo CSVs (91 rows total). No consumer change needed;
+         tests/integration/test_michigan_reference_data.py coverage of the
+         DB rows retires with the drop; the preservation test replaces it.
+       - R2 -> no new artifact (CSV already canonical); demote = drop the DB
+         mirror + catalog row once the existing unequal-exchange artifact
+         tests are confirmed to gate the CSV, not the DB rows.
+       - R3 -> parquet per the ruling text (fact + both energy dims resolve
+         together; dims flip investigate->artifact when executed). MUST
+         resolve view_energy_consumption (KEEP) in the same commit: re-point
+         it at fact_state_minerals' grain if the supersession holds, or
+         retire it with the base — a view over a dropped table is the exact
+         pathology the KEEP-emptiness sentinel exists to prevent.
+       - R4 -> parquet on the release channel. THE SPIKE (see 6).
+       - R5 -> parquet on the release channel; ungoverned staging table, so
+         no catalog row is involved — manifest entry only.
+    6. THE SPIKE: R4 bridge_lodes_block proves the pipeline end-to-end
+       first. Chosen over the seed doc's QCEW pilot deliberately: zero code
+       consumers (safe to demote), real scale (1.15M rows exercises sort/
+       row-group/compression determinism honestly, where a 91-row CSV cannot),
+       and subset_policy "skip" (no interaction with the CI SQLite subset).
+       "PROVEN" means, with fresh verification evidence: (i) the generator
+       run twice from the same source produces byte-identical files (equal
+       sha256); (ii) the manifest hash check passes; (iii) a preservation
+       test reads the parquet via pyarrow/polars and pins the row count
+       (1,150,562) plus at least one known crosswalk row; (iv) the artifact
+       uploads to ci-data-v6 and the pinned fetch path verifies it.
+    7. SEQUENCING: spike (R4) -> R1 + R2 (same session, trivial) -> R3 + R5.
+       DB drops of demoted copies ride the next reference-DB surgery batch
+       and ci-data cut — never before their preservation tests are green.
+       The seed program's Waves A-D (QCEW-first migration of ALL reference
+       tests off the drive) inherit this machinery — generator, manifest,
+       schema-mapped pyarrow types, fetch generalization — but remain their
+       own sequenced program with their own owner gates.
+  consequences: |
+    - New: tools/make_data_artifacts.py, data-artifacts.yaml, a coverage-
+      sensor static check (manifest paths + hashes), preservation tests per
+      demoted table, parquet assets on ci-data-v6+.
+    - data-catalog.yaml loses one row per executed demotion (5 artifact rows
+      -> 0 as R1-R4 complete; R5 never had one); the census's lineage
+      lives on in the manifest's material_relation fields.
+    - view_energy_consumption resolves (re-point or retire) with R3; the
+      catalog's KEEP row for it changes in the same commit.
+    - fetch-reference-db grows optional parquet-asset inputs; the SQLite
+      subset asset itself is UNCHANGED by this program (R-tables are either
+      skip-policy or tiny), so no test that reads the subset moves.
+    - The 2026-07-14 hermeticity ruling gains its first executed increment:
+      five more tables whose truth ships as deterministic, hash-pinned
+      artifacts rather than dev-box DB state.
+    - Open questions (flagged, not asserted): (a) whether 525-row R3 should
+      be CSV instead of parquet for reviewability — parquet stands per the
+      ruling text unless the owner prefers otherwise; (b) hosting: GitHub
+      release assets continue as the channel (the seed doc's open hosting
+      question is answered "status quo" for this slice; a move to R2/other
+      hosting would be its own ADR); (c) whether the parquet footer
+      created_by string varies across same-version rebuilds on different
+      machines — the spike's double-generation test answers it empirically
+      on this box; cross-machine identity is NOT claimed until a second
+      machine reproduces the hashes.
+  evidence: |
+    project/research/deterministic-data-artifacts.md (the seed: current
+    drive-coupled surface, target architecture, Waves A-D, reuse inventory);
+    reports/data-constitution-triage-2026-07-16.md §ARTIFACT_IZE (R1-R5) +
+    contradiction #2 (views over dropped bases); data-catalog.yaml rows for
+    the five artifact-disposition tables; .github/actions/fetch-reference-db/
+    action.yml (ci-data-v5 pins, verify-before-first-open contract);
+    tools/make_reference_subset.py (TablePolicy + manifest + sha256 sidecar
+    precedent); src/babylon/sentinels/coverage/db_probe.py (phantom-
+    declaration law forcing the catalog->manifest handoff); live row counts
+    re-verified 2026-07-17 via sqlite3 mode=ro; ADR075 rulings_resolved
+    (owner approval 2026-07-16).

@@ -1,0 +1,158 @@
+id: ADR110
+title: >-
+  Vol I U3 — The accumulation loop: organic composition (ValueTensor4x3, QCEW
+  -populated) wired through a new DefaultAccumulationLoopCalculator into
+  ReserveArmyDynamics flows into a real, derived reserve_ratio/reserve_army_stock
+  producer on territory nodes (TickDynamicsSystem._compute_accumulation_loop, Step
+  3.6); DispossessionEventSystem fed real foreclosure_rate/eviction_rate from the
+  same FRED adapter; create_vol1_services now also wires transition_engine against
+  that SAME adapter (no parallel dispossession-data path), satisfying
+  _simulate_transitions's transition_engine gate with real data for the first time.
+status: accepted
+date: '2026-07-21'
+context: >-
+  ai/_inbox/vol1-value-production-program-prompt.md §7 U3 and ADR116 ruling (a)
+  charter this unit: "organic composition -> mechanization displacement ->
+  ReserveArmyDynamics flows -> reserve_ratio producer; DispossessionEventSystem
+  fed real rates; dispossession wired into class transitions to satisfy the
+  transition_engine gate; MarketScissors's crisis-swell becomes one input among
+  several, not the only producer." Re-verified at unit start: ``organic_composition``
+  (``domain/economics/tensor.py:216`` per-department, ``:422`` tensor-aggregate)
+  had zero Vol-I-System production readers anywhere (the one hit at
+  ``tick/system/__init__.py:2187-2188`` is ``DerivedRateCalculator``'s unrelated
+  ``k/v``-proxy ``tick_occ`` TickSummary aggregation, a different formula entirely
+  — never the tensor's own field). ``ReserveArmyDynamics.mechanization_displacement``
+  /``firm_failures`` (``domain/economics/reserve_army/types.py`` — the prompt's cited
+  ``firm_failure_displacement`` field name has drifted; the real field is
+  ``firm_failures``) had zero production writers — only
+  ``tests/unit/economics/reserve_army/test_types.py`` constructs them. ``ReserveArmySystem``
+  (#5) and ``DispossessionEventSystem`` (#10) read ``reserve_ratio``/
+  ``foreclosure_rate``/``eviction_rate``/``displacement_rate`` off territory nodes
+  that no scenario, system, or calculator wrote to — confirming the program prompt's
+  "ends exist, middle doesn't" diagnosis exactly. ``MarketScissors._swell_reserve_army``
+  (``engine/systems/market_scissors.py:439-461``) was the one live activation path,
+  and — verified by reading it — is ALREADY additive
+  (``base = attrs.get("reserve_ratio") or 0.0; reserve_ratio = min(base + influx, 1.0)``),
+  so it needed no code change to become "one input among several": it was already
+  structurally ready for a baseline producer to exist upstream. Separately,
+  ``_simulate_transitions``'s ``services.transition_engine is None`` gate
+  (``tick/system/__init__.py:2040``, prompt cited ``:2010-2062`` for the whole
+  method, actual ``def`` at ``:2020`` — the ~10-line drift the orientation brief
+  flagged) was never satisfied by a production caller: ``create_economics_services``
+  builds a real ``transition_engine`` but its only caller passing calculator
+  overrides is ``engine/simulation/_legacy.py``'s ``from_sqlite(..., years=...)``,
+  itself invoked in production only by ``tools/validate_detroit.py`` (a one-off
+  validation script, not the canonical headless runner or the web bridge — both of
+  which call ``create_vol1_services`` for the OTHER three Vol I fields but never
+  ``create_economics_services``). Reading ``DefaultClassTransitionEngine.simulate_transitions``
+  closely also surfaced a second, independent finding: its ``dispossession_rate``
+  (the ``la_to_p_rate`` driving ``_apply_flows``) comes from its OWN injected
+  ``dispossession_calculator``, never from ``EconomicConditions.foreclosure_rate``/
+  ``.bankruptcy_rate`` (only ``.eviction_rate`` feeds precaritization) — so even
+  the existing ``_legacy.py`` wiring, which builds
+  ``DefaultDispossessionCalculator(HardcodedNationalDispossessionSource())``
+  independently of the FRED-backed ``dispossession_data_source`` it ALSO wires,
+  would have driven class transitions off hardcoded national averages rather than
+  the real per-county-year FRED data feeding everything else in this program.
+decision: >-
+  1. New ``domain.economics.reserve_army.accumulation.DefaultAccumulationLoopCalculator``
+  (frozen-input, no engine/graph dependency): ``compute_dynamics(fips_code, tick,
+  occ_current, occ_prior, bankruptcy_rate, employment)`` derives
+  ``ReserveArmyDynamics`` — ``mechanization_displacement`` from a POSITIVE
+  year-over-year organic-composition delta only (Ch. 25 is about RISING
+  composition; a falling/flat OCC contributes zero, never a fabricated negative
+  displacement), ``firm_failures`` from the FRED bankruptcy rate — returning
+  ``None`` (not a zero-flow record) when neither input is available, an honest
+  empty domain. ``compute_reserve_ratio(prior_stock, dynamics, employment)``
+  accumulates the tick's net inflow into a carried stock (floored at 0.0) and
+  derives ``reserve_ratio = stock / (stock + employment)``, clamped to [0, 1] by
+  construction. Two new ``ReserveArmyDefines`` fields (extended in place per ADR116
+  ruling (b)): ``mechanization_displacement_rate`` (default 0.05) and
+  ``firm_failure_conversion_rate`` (default 0.5), both docstring-cited to this
+  calculator; ``defines.yaml`` regenerated.
+
+  2. New ``Territory.reserve_army_stock`` field (frozen, ``ge=0.0``, default 0.0) —
+  a REAL model field, not a ``tick_``/``flow_``-prefixed ephemeral, mirroring the
+  ``investigation_intel`` precedent exactly, so the accumulated stock survives the
+  ``WorldState`` round trip for both headless (already persistent-graph, unaffected)
+  and web (round-trips every ``resolve_tick`` call) paths alike.
+
+  3. New ``TickDynamicsSystem._compute_accumulation_loop`` (Step 3.6, inside the Vol
+  I room-partition banner, called from ``step()`` right after ``_compute_vol1_layer``,
+  at year boundaries only): for each territory with a resolvable ``county_fips``,
+  reads ``services.tensor_registry.get(fips, year)``/``.get(fips, year-1)`` for the
+  OCC delta and ``services.dispossession_data_source.get_bankruptcy_rate(fips, year)``
+  for the firm-failure input, runs the calculator, and writes
+  ``reserve_army_stock``/``reserve_ratio`` DIRECTLY onto the territory node (these are
+  territory-node facts with no ``CountyEconomicState`` field, so — like
+  ``_accrue_flows``/``_reset_flow_accrual`` — the write bypasses the
+  ``county_states``/``write_tick_state_to_graph`` round-trip entirely). Also writes
+  ``foreclosure_rate``/``eviction_rate`` from the SAME ``dispossession_data_source``
+  onto the territory node, feeding ``DispossessionEventSystem``'s gate for the first
+  time; a ``None`` reading from the data source leaves the attribute unwritten
+  (honest absence), never a fabricated 0.0. ``displacement_rate`` is left permanently
+  unfed — no FRED-backed data source for gentrification displacement exists
+  (``DispossessionDataSource`` protocol has no such method); the system's gate is an
+  OR across all three rates, so foreclosure+eviction alone (weights 0.40+0.30 = 0.70
+  of ``DispossessionDefines``' total intensity) is sufficient to light it. Neither
+  ``ReserveArmySystem`` nor ``DispossessionEventSystem`` needed any code change —
+  both already read exactly these attributes and were only ever missing a producer.
+
+  4. ``MarketScissors._swell_reserve_army`` is UNCHANGED (verified already-additive,
+  point above) — it now genuinely becomes "one input among several" the moment a
+  baseline producer exists, with zero code edits to that system.
+
+  5. ``create_vol1_services`` (``domain/economics/factory.py``, the one factory both
+  the web bridge and (pending U5) the headless runner call) now ALSO returns a real
+  ``transition_engine``: ``DefaultClassTransitionEngine`` wired with
+  ``DefaultAccumulationCalculator(DefaultSavingsRateSchedule())``,
+  ``DefaultDispossessionCalculator(fred_dispossession)``, ``DefaultCrisisAmplifier()``
+  — where ``fred_dispossession`` is the SAME ``_FredDispossessionAdapter`` instance
+  returned as ``dispossession_data_source``, not a second, independently-constructed
+  ``HardcodedNationalDispossessionSource`` (the "no parallel Phi"-style collision the
+  program prompt's data-path discipline forbids). This makes the engine's actual
+  ``dispossession_rate``/``la_to_p_rate`` (computed via ``transition_engine``'s own
+  ``dispossession_calculator``, independently of the ``EconomicConditions`` fields
+  ``_simulate_transitions`` already builds) reflect real FRED data for the first
+  time, closing the second finding from the context section. Key count 3 -> 4.
+consequences: >-
+  Staged activation, exactly as the room-partition/gate design intended: the
+  headless canonical run already wires ``tensor_registry`` (``scope_fips`` is set
+  for real runs, per ``headless_runner/runner.py``'s ``_build_economics_overrides``),
+  so the mechanization-displacement half of the accumulation loop activates in the
+  canonical run IMMEDIATELY — real, expected baseline drift on any scenario with
+  county territories and QCEW tensor coverage. ``dispossession_data_source`` (and
+  therefore the firm-failure half, the foreclosure/eviction feed to
+  ``DispossessionEventSystem``, and the FRED-backed ``transition_engine``) stays
+  dormant in the canonical headless run until U5 (headless-runner parity, ADR116
+  ruling (c) — landing ``create_vol1_services`` in ``headless_runner/runner.py``)
+  lands; it is ALREADY live for the web bridge (``engine_bridge.py`` already calls
+  ``create_vol1_services`` unconditionally — "no change needed" per the ADR103 room
+  partition holds exactly, since only the FACTORY's return shape changed, not the
+  bridge's call site) and for ``_legacy.py``'s ``from_sqlite(..., years=...)`` path.
+  qa:regression baselines are EXPECTED to move once this lands on a scenario with
+  tensor coverage — not regenerated in this lane per the standing hard constraint
+  (baseline ceremonies are controller/merge-time work); flagged here as an owed
+  ceremony. ``create_vol1_services``'s key count changing 3 -> 4 does not change
+  ``tests/integration/economics/test_detroit_wiring.py``'s pinned
+  ``len(sim._calculator_overrides) == 25`` assertion (verified green against the
+  real reference DB, 7/7): "transition_engine" already existed in that combined
+  dict from ``create_economics_services``, called earlier in ``_legacy.py``'s
+  ``from_sqlite``; ``vol1_overrides``'s ``.update()`` now overwrites it with the
+  FRED-backed engine (a strict improvement, same key). The seam registry's two
+  ``dispossession_intensity`` rows (``sentinels/seam/registry.py:411-430,1160-1183``)
+  were already correctly ``DECLARED_CONDITIONAL`` (dated 2026-07-15, predating this
+  lane) — no seam-registry edit was needed or made this unit; whether Sensor 2 now
+  finds its required "at least one non-null witness across the golden scenarios" is
+  a dynamic/qa-tier check out of this lane's permitted tool surface, left for U9
+  (monitoring) or the controller to verify at consolidation. U5 (parity) and U6-U9
+  remain open, unstarted by this unit. Full scoped suites green: 243 tests across
+  ``tests/unit/economics/{tick,reserve_army,dispossession}/``,
+  ``tests/unit/economics/test_vol1_factory.py``, ``tests/unit/economics/test_factory.py``,
+  ``tests/unit/engine/systems/test_{reserve_army,dispossession_event}_system.py``;
+  ``tests/unit/models/test_{territory,graph_roundtrip,node_type_roundtrip_contract,world_state}.py``
+  (65+189 tests); ``tests/unit/config/test_constants_sync.py`` (18, defines.yaml
+  regenerated); ``mypy``/``ruff``/all 14 static+DB-probe sentinels clean; the
+  real-reference-DB integration suite (``test_detroit_wiring.py``, 7/7) exercises
+  the full accumulation-loop + transition-engine wiring against real Wayne/Oakland
+  QCEW/FRED data across 52+ ticks without error.

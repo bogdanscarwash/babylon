@@ -1,0 +1,109 @@
+id: ADR116
+title: >-
+  Vol I U1 — Activation audit re-verified on lane HEAD; three design rulings
+  (derive not seed the gated-dormancy scalars, extend-plus-new-file defines
+  split, Vol I owns the runner-parity unit) settle the questions gating
+  U2-U9 of the value-production program.
+status: accepted
+date: '2026-07-21'
+context: >-
+  ai/_inbox/vol1-value-production-program-prompt.md §2 was authored 2026-07-20
+  against feature/queue-2026-07-19 @ 4c812d96 and explicitly calls for
+  re-verification at program start ("lines drift"). Re-verified on
+  lane/vol1-value-production HEAD (84d8405a, forked from dev post the
+  ADR103 contract commit): every §2 claim still holds, with only a
+  line-number drift, no content drift. `ReserveArmySystem` early-continues
+  on `reserve_ratio <= 0.0` at
+  `src/babylon/engine/systems/reserve_army.py:72` (prompt cited :67-72).
+  `DispossessionEventSystem` early-continues when
+  `foreclosure_rate`/`eviction_rate`/`displacement_rate` are all `<= 0.0` at
+  `src/babylon/engine/systems/dispossession_events.py:75` (prompt cited
+  :69-74). `src/babylon/models/entities/territory.py:212`'s comment ("Zero
+  defaults keep both systems inert unless a scenario seeds them") is
+  unchanged verbatim. Zero scenario under `engine/scenarios/` seeds any of
+  the four gating attrs; `DispossessionEventSystem` has zero production
+  producers of any of its three inputs repo-wide.
+  `MarketScissors._swell_reserve_army`
+  (`src/babylon/engine/systems/market_scissors.py:439-461`, invoked
+  `:384-385`) remains the one real activation path, and it reaches
+  `reserve_ratio` only — dispossession has no equivalent. No new drift
+  beyond the cited line-number shift; no contradiction with the program
+  prompt found.
+
+  This re-verification also confirms the ADR103 contract commit
+  (`ai/decisions/ADR103_vol1_vol2_contract_commit.yaml`, `84d8405a`,
+  already on this lane's HEAD) already reserved
+  `VOL_I_RESERVED_OPPOSITIONS` / three dead Vol I coupling slots in
+  `src/babylon/domain/dialectics/instances/catalog.py:656-692` and recorded
+  its own §10.2 deviation: the shared gated-dormancy sentinel is hoisted to
+  the T1.1 keel (built once, outside either volume lane), while
+  headless-runner parity for `create_vol1_services` "stays assigned to Vol
+  I" — settling design question (c) below without further analysis needed.
+
+  Three owner design questions from the prompt's U1 skeleton (§7) are
+  settled here because U2 (accumulation-loop provenance), U8 (defines
+  placement), and U5 (parity ownership) each depend on the answer before
+  their own units can start:
+
+  (a) Seed vs. derive `reserve_ratio` / dispossession rates. RULING:
+  DERIVE. A scenario-seeded scalar with no producer is a fabricated input
+  under the Aleksandrov Test (Constitution III.8) — it would let a
+  territory node carry a `reserve_ratio` that traces to no material
+  relation, exactly the ungrounded-tensor failure mode the Constitution
+  bars. U3's accumulation loop (organic composition -> mechanization
+  displacement -> `ReserveArmyDynamics` flows -> `reserve_ratio`) and the
+  county-tick FRED adapters (`factory.py:672-794`, already live for the
+  web path) are the two real candidate producers; `MarketScissors`'s
+  crisis-swell becomes one input among several rather than the only one,
+  per the prompt's own U3 framing.
+
+  (b) Defines split: extend `ReserveArmyDefines` / `DispossessionDefines`
+  / `WorkingDayDefines` in place vs. a new `capital_vol1.py`. RULING: BOTH,
+  as the prompt's own §5 recommendation states, confirmed here rather than
+  re-litigated. `src/babylon/config/defines/economy_labor.py:12,55,120`
+  (assembled `_assembler.py:165-167,318-320`) already own the three
+  mechanics-specific categories from spec-021 and gain new fields for
+  their existing mechanics (e.g. accumulation-loop coefficients that
+  parametrize `ReserveArmyDynamics` itself). Genuinely NEW Vol I
+  mechanics with no existing category home — the Fundamental Theorem
+  computation (U2), the new opposition scales (U6) — get a new
+  `capital_vol1.py` -> `CapitalVolumeIDefines`, mirroring the
+  `capital_vol3.py` -> `CapitalVolumeIIIDefines` precedent (ADR089) both
+  in file shape (frozen `BaseModel`, `ConfigDict(frozen=True)`, every
+  field's docstring naming its exact consumer `file:function`, `gt=0.0`
+  for live divisors) and in the reason it exists (extracting
+  hot module-level constants into `defines.yaml`-editable fields).
+
+  (c) Is the parity ruling (U5: headless runner wires
+  `create_vol1_services`) already closed by Vol II's lane? RULING: NO —
+  and it is explicitly NOT Vol II's to close. ADR103's own consequences
+  section states plainly: "runner-parity stays assigned to Vol I as §10.2
+  wrote it." Vol II's shared-unit assignment (per the same contract
+  commit) is the gated-dormancy sentinel, hoisted out of both lanes
+  entirely into the T1.1 keel — Vol II carries none of the parity
+  obligation. Vol I's U5 must land BOTH `create_vol1_services` and
+  `create_circulation_services` in `headless_runner/runner.py` (§10 of
+  the program prompt), not just its own family.
+decision: >-
+  (a) DERIVE reserve_ratio and the three dispossession rates from real
+  producers (U3's accumulation loop + the existing county-tick FRED
+  adapters), never scenario-seed them as bare scalars. (b) EXTEND
+  ReserveArmyDefines/DispossessionDefines/WorkingDayDefines in place for
+  their existing mechanics AND author a new capital_vol1.py ->
+  CapitalVolumeIDefines (mirroring capital_vol3.py) for genuinely new Vol I
+  mechanics (theorem computation, accumulation-loop coefficients, opposition
+  scales) — this is additive to both, not an either/or choice. (c) Vol I
+  OWNS the headless-runner parity unit (U5) outright; it is not shared with
+  or closable by Vol II's lane, per ADR103's explicit assignment.
+consequences: >-
+  U3 may not introduce a scenario-seeding path for reserve_ratio or the
+  dispossession rates as a shortcut — any implementation that does is a
+  violation of ruling (a) and must be rejected in review. U8's defines
+  sweep has its category-placement question answered up front: no ambiguity
+  survives into that unit's own design phase. U5 proceeds solo in the Vol I
+  lane with no cross-lane coordination dependency beyond the already-landed
+  ADR103 contract; Vol II's lane needs no parity work of its own. No code
+  changed by this unit (audit + ruling only); no baseline drift; no
+  ceremony due. Re-verification found the program prompt's §2 estate
+  description still accurate on this HEAD, so U2-U9 may proceed against it
+  without a second full recon pass.

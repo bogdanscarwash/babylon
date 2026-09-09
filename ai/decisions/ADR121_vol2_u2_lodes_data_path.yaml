@@ -1,0 +1,111 @@
+id: ADR121
+title: >-
+  Vol II Circulation program, Unit 2 (Data path): the raw hex-resolution LODES
+  OD .csv.gz source (lodes_commute_matrix.py's actual read target — distinct
+  from the already-registered county-grain fact_lodes_commuter_flow and
+  block-grain bridge_lodes_block) is now a hash-stamped, checked-in
+  deterministic artifact (data-artifacts.yaml's lodes_xwalk_tri_county_hex /
+  lodes_od_tri_county_hex_2010..2021), cataloged as data-catalog.yaml's
+  LODES_OD_HEX source; initialize_session's four previously-never-supplied
+  LODES hydration kwargs now have a real production supplier
+  (engine/headless_runner/lodes_hydration.resolve_lodes_hydration_kwargs),
+  wired into runner.py's run(), honoring CI-no-drive.
+status: accepted
+date: '2026-07-21'
+context: >-
+  Unit 2 of ai/_inbox/vol2-circulation-engine-program-prompt.md §3, executed
+  in worktree .claude/worktrees/vol2 (branch lane/vol2-circulation) on top of
+  ADR120 (U1, renumbered from ADR108 — controller notice 2026-07-21, ADR
+  reallocation). The program prompt's §1.3 hard gate ("strongly preferred: the
+  parquet reference-pipeline program has cut over") was already satisfied —
+  ADR098/PR #227 merged 2026-07-20. §3's specific finding: `LODESCommuteMatrix
+  Loader` (`domain/economics/lodes_commute_matrix.py`) reads raw LODES OD
+  `.csv.gz` files directly off `lodes_root` — never through the sqlite
+  reference DB — and that raw source had NO `data-catalog.yaml` or
+  `data-artifacts.yaml` entry at all, a genuine Data Constitution gap. The
+  standing owner rule (CI/tests never touch the `babylon-data` drive; data
+  ships as deterministic artifacts) meant this data path could not simply
+  point production code at `/media/user/data/babylon-data/lodes/` — it needed
+  the same artifact-ization treatment as `bridge_lodes_block` (adjacent
+  precedent per §3: "generated-but-unconsumed", 1.15M-row crosswalk).
+
+  Re-verified U1's finding still held: `postgres_initialization.py`'s four
+  LODES kwargs (`lodes_root`, `lodes_crosswalk`, `lodes_study_area_hexes`,
+  `lodes_study_area_states`) were still never supplied by the one production
+  caller, `headless_runner/runner.py`'s `initialize_session(...)` call.
+decision: >-
+  Ship the AGGREGATE hex-resolution OD matrix as a checked-in artifact rather
+  than the raw ~1.2M-row-per-year national census-block data: a new
+  `tools/make_lodes_tri_county_artifact.py` reads the drive ONCE, at
+  authoring time only (never at test/CI/runtime), and re-aggregates through
+  the REAL, UNMODIFIED `LODESCommuteMatrixLoader._read_one_state_file` /
+  `build_year_matrix` — preserving Constitution II.12's sole-CSR-producer
+  discipline (this is not a second matrix producer, just a smaller checked-in
+  input to the same one) — into a synthetic-but-faithful pair of files:
+  `tri_county_hex_xwalk.csv.gz` (H3 res-7 cell used as its own synthetic LODES
+  block geocode, round-trips losslessly through `_build_block_to_hex_map` —
+  proven at generation time and by `test_lodes_tri_county_artifact.py`) and
+  twelve `mi_od_main_JT00_<year>.csv.gz` files (2010-2021, one row per
+  hex-pair with `S000` pre-summed to the aggregate a full block-level run
+  would compute for the Detroit tri-county study area). This keeps the files
+  small enough (16 KB crosswalk, ~630-690 KB/year) for the ADR076 Tier-1
+  in-repo-CSV convention (no ci-data release upload, no git-lfs — `.csv.gz`
+  is untracked by `.gitattributes`' `*.csv` rule, and each file sits well
+  under `check_repo_hygiene.py`'s 1 MiB non-LFS blob ceiling).
+
+  Registered `LODES_OD_HEX` as a new `sources:` row in `data-catalog.yaml`
+  (categories block), explicitly cross-referenced against and distinguished
+  from the pre-existing `fact_lodes_commuter_flow` table row (added a `notes:`
+  field there pointing back) — same LEHD LODES lineage, different grain and
+  different consumer. Registered 13 hand-maintained `data-artifacts.yaml`
+  entries (1 crosswalk + 12 OD years) under a new `EXCEPTION` block at the top
+  of that file: these entries have no backing sqlite table and their
+  `generator` is `tools/make_lodes_tri_county_artifact.py`, not
+  `tools/make_data_artifacts.py` — so they sit outside that generator's
+  `ARTIFACTS` tuple entirely. Documented the KNOWN, UNDISCHARGED risk this
+  creates (`make_data_artifacts.py main()`'s regeneration would silently drop
+  these 13 entries, since `_rewrite_manifest_preserving_blocks` rebuilds the
+  whole `artifacts:` list from `ARTIFACTS` alone) rather than changing that
+  shared, actively-maintained generator without an owner ruling — mitigated,
+  not eliminated, by a new content-pinning tripwire test,
+  `tests/unit/tools/test_lodes_artifact_manifest_entries.py`, that reds
+  loudly the moment those 13 entries vanish from the committed manifest.
+
+  New `babylon.domain.economics.lodes_study_area` module supplies the checked-
+  in artifact paths (`LODES_ARTIFACT_ROOT`, `LODES_ARTIFACT_CROSSWALK`) and
+  the Michigan-only `LODES_STUDY_AREA_STATES`, plus
+  `lodes_tri_county_hexes_res7()` — the H3 res-7 cell set for the Detroit
+  tri-county polygon, computed independently of `tests/constants_063.py`'s
+  identical polygon (no production→tests import; proven identical by test,
+  mirroring the existing `default_tri_county_aggregate_hex` precedent in
+  `border_commute_synthesis.py`). New
+  `engine/headless_runner/lodes_hydration.resolve_lodes_hydration_kwargs(scope
+  _fips)` is the real production supplier wired into `runner.py`'s `run()`
+  immediately before its `initialize_session(...)` call: returns the four
+  kwargs when `scope_fips` intersects `DETROIT_TRI_COUNTY_FIPS` (the only area
+  the checked-in artifact covers), else `None` — honest absence (Constitution
+  III.8), no fabricated hydration for out-of-coverage runs, logged once at
+  INFO.
+consequences: >-
+  The LODES OD-matrix hydration path (`postgres_initialization.py`'s
+  `LODESCommuteMatrixLoader` construction, gated `:874-877`) now actually
+  RUNS for Detroit-tri-county-scoped runs — Level 2 of U1's two-level
+  dormancy finding is closed. Level 1 (the `vol2_step` context-key gate in
+  `ImperialRentSystem._invoke_vol2_circulation_if_wired`) remains open —
+  U4's job, per U1's disposition. No baseline drift: `vol2_step` is still
+  never set, so `Vol2CirculationStep.step()` still never runs in the engine
+  proper; this unit is data-path plumbing plus a hydration call, not a tick
+  behavior change. Fixed a real regression the 13 new manifest entries caused
+  in the pre-existing `tests/unit/reference/test_data_artifacts.py` (a
+  hardcoded `src/`-homed-artifact count of 4, now 17; two manifest round-trip
+  fixtures now filter to `generator == "tools/make_data_artifacts.py"`,
+  since `_write_manifest` unconditionally stamps that literal on every entry
+  it writes with no per-entry `generator` concept — round-tripping the LODES
+  entries through it would silently overwrite their true generator field, a
+  fact about that writer's scope, not a defect this suite is chartered to
+  pin). The `EXCEPTION`/`KNOWN RISK` note atop `data-artifacts.yaml` and this
+  ADR are the durable record of the undischarged shared-generator risk;
+  revisit if `make_data_artifacts.py` ever grows a per-entry `generator`
+  field or an owner ruling authorizes folding the LODES specs into its
+  `ARTIFACTS` tuple. Next: U3 (truth in the tick — replace the §2c
+  reproduction/turnover/fixed_circulating stubs with the real calculators).

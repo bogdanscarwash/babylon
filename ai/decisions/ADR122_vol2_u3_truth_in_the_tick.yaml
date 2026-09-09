@@ -1,0 +1,157 @@
+id: ADR122
+title: >-
+  Vol II Circulation program, Unit 3 (Truth in the tick): the three confirmed
+  stubs in `_compute_county_circulation_state` — an always-balanced
+  `ReproductionBalance`/`ReproductionAnalysis` hardcode, a `DepreciationFundState`
+  rebuilt from scratch every tick, and `advance_circuit` never called — are
+  replaced with the real Feature-023 calculators
+  (`check_simple_reproduction`, `check_extended_reproduction`,
+  `compute_disproportionality`, `update_depreciation_fund`, `advance_circuit`),
+  fed real per-county department data from the `TensorRegistry`
+  (`ValueTensor4x3`, the quickstart-designated data source) and genuine
+  cross-tick state. `assess_circulation_crisis` is now fed honestly.
+status: accepted
+date: '2026-07-21'
+context: >-
+  Unit 3 of ai/_inbox/vol2-circulation-engine-program-prompt.md §7/U3,
+  executed in worktree .claude/worktrees/vol2 (branch lane/vol2-circulation)
+  on top of ADR121 (U2). Re-verified the orientation brief's three anchors on
+  this tree: `ReproductionBalance(condition_met=True, gap=0.0,
+  interpretation="Default reproduction balance")` and a same-shaped
+  `ReproductionAnalysis` were hardcoded and fed to `assess_circulation_crisis`
+  every tick; `DepreciationFundState` was constructed directly with a
+  `max(county_depr, 1.0)` floor and no call to `update_depreciation_fund`
+  (no cross-tick accumulation); `initialize_circuit_state` ran unconditionally
+  every tick (`advance_circuit` had zero callers, confirmed).
+
+  Cross-tick continuity design question: the natural channel,
+  `CountyEconomicState.circulation_state`, cannot carry the prior tick's real
+  `CirculationCrisisState` into this method — `_compute_county_states` (the
+  shared per-year county reconstruction; well outside the ADR103 Vol II
+  banner this unit's room partition covers) constructs a fresh
+  `CountyEconomicState` every tick without threading `circulation_state`
+  forward from `prev_county_states`, so it always defaults to
+  `CirculationCrisisState.default()` regardless of history. Fixing that
+  shared method is out of this unit's room partition (risk of stomping a
+  concurrent Vol I lane edit to the same method) and is recorded here as an
+  upstream gap, not fixed. Instead, genuine cross-tick state (the prior
+  `CircuitState` for `advance_circuit`, the prior `DepreciationFundState` for
+  `update_depreciation_fund`) is carried on the `TickDynamicsSystem` instance
+  itself (`self._circulation_prev_state: dict[str, CirculationCrisisState]`,
+  lazily initialized), mirroring the already-established
+  `self._vol3_sentinel_logged` instance-cache convention in the same class —
+  wholly inside the Vol II banner, no shared-code edit required.
+
+  Department-row sourcing: `specs/023-capital-volume-ii/quickstart.md`'s
+  "Integration Points" section names the designated source explicitly —
+  "Reads ValueTensor4x3 from TensorRegistry for department data". Reused
+  Volume III's nearest-available-year fallback (`_get_best_tensor_year`,
+  `_get_county_surplus` — Vol III banner methods, called read-only, not
+  edited) since tensor hydration (`TensorRegistry.MIN_YEAR`/`MAX_YEAR`,
+  2010-2025) does not cover the full simulation horizon (a pre-existing,
+  shared data-coverage limitation, not introduced by this unit).
+
+  Found and fixed a determinism bug while wiring `compute_disproportionality`
+  live for the first time: it stamped `datetime.datetime.now(tz=UTC).year`
+  unconditionally — harmless as a zero-caller function, but would have made
+  a live tick's result depend on wall-clock time, violating the
+  deterministic-tick-hash constitutional MUST the moment it went live.
+decision: >-
+  `_compute_reproduction_state` (new helper, Vol II banner): fetches
+  `(dept_I, dept_II, dept_III)` via a new `_get_county_departments` helper
+  (tensor registry lookup + `combine_departments_ii` for IIa+IIb), then calls
+  `check_simple_reproduction`/`check_extended_reproduction` for the balance/
+  analysis pair and `compute_disproportionality` for a new
+  `CirculationCrisisState.disproportionality: DisproportionalityCrisis | None`
+  field (Feature 023's fourth reproduction calculator had zero production
+  callers AND zero production consumer field before this unit — both added).
+  When no tensor department data exists for a county-year (the common case
+  outside 2010-2025), degrades to a documented, cited-exemption
+  always-balanced default (NOT the same silent lie as before — the
+  interpretation string names the honest reason,
+  "No tensor department data for this county-year") and
+  `disproportionality=None` (Constitution III.11: absence of underlying
+  data, not a fabricated assessment).
+
+  `compute_disproportionality` gained an optional `year: int | None = None`
+  parameter (defaults to the prior wall-clock behavior when omitted, so the
+  9 pre-existing tests are unaffected); the Volume II tick call site passes
+  the simulation year explicitly.
+
+  Circuit state: first observation of a county (no cached prior state, or a
+  cached state with `total_capital <= 0`) still calls
+  `initialize_circuit_state` from `capital_stock`, matching the pre-existing
+  first-tick behavior. Every subsequent observation calls
+  `advance_circuit(prev_circuit_state, profile, surplus_value, elapsed_days)`
+  — `surplus_value` from `_get_county_surplus` (tensor registry, floored at
+  0.0), `elapsed_days` from `services.defines.timescale.days_per_year`
+  (the existing `TimescaleDefines.days_per_year` computed property — no new
+  define needed). The circuit's own conserved-plus-surplus trajectory is
+  deliberately NOT reconciled against Volume I's independently-computed
+  `capital_stock` on subsequent ticks (they are two distinct state
+  variables — Volume I's K-accumulation calculator vs. Volume II's own
+  circuit dynamics — consistent with spec.md's own layering: production
+  and circulation are separate models). Recorded as an open modeling
+  question for a future unit/owner ruling, not silently resolved by an
+  ad hoc rescaling heuristic.
+
+  Depreciation fund: first observation constructs `DepreciationFundState`
+  directly (unchanged initialize semantics); every subsequent observation
+  calls `update_depreciation_fund(prev.depreciation_fund, ...)`, so
+  `accumulated_depreciation` genuinely compounds tick over tick and `year`
+  advances via the calculator's own `previous.year + 1` (matching this
+  pipeline's fixed one-year-per-annual-tick cadence).
+
+  New `CapitalVolumeIIDefines` (`src/babylon/config/defines/capital_vol2.py`,
+  registered in `GameDefines.capital_vol2`, `defines.yaml` regenerated):
+  `reproduction_tolerance` (default 0.01, matches the calculator's own
+  pre-existing tested default) and `dept_i_share_required` (default 0.6667,
+  derived from Marx's own simple-reproduction numerical illustration,
+  Capital Vol. II Ch. 20 SS II: I=4000c+1000v+1000s=6000,
+  II=2000c+500v+500s=3000, 6000/9000=0.6667) — both read at the new call
+  site, neither hardcoded inline.
+consequences: >-
+  `assess_circulation_crisis`'s `reproduction_crisis` flag can now actually
+  fire from real department imbalance/labor-power-capacity data where a
+  tensor exists for the county-year; outside tensor coverage it degrades to
+  the documented always-balanced default rather than the old unconditional
+  hardcode — same numeric behavior in that fallback case, but now an
+  explicit, auditable branch instead of the only path. `CircuitState` and
+  `DepreciationFundState` now carry real multi-tick history for the
+  lifetime of a `TickDynamicsSystem` instance (a fresh instance — a new
+  process, not a same-process save/reload — restarts cross-tick
+  accumulation at the first-observation branch; this instance-cache
+  limitation is recorded, not hidden, and does not affect single-process
+  campaign runs).
+
+  No baseline drift is expected from a Vol II-only calculator-wiring change
+  in isolation: no golden scenario currently sets `vol2_step` (U1's Level-1
+  gate remains open; U4's job) and the qa:regression fixtures do not carry
+  a `tensor_registry` wired the way this unit's tests do, so
+  `_get_county_departments` returns `None` (honest-absence branch) on those
+  runs exactly as the old hardcode always did for reproduction/analysis;
+  the depreciation/circuit cross-tick change is new PER-TICK MATH
+  (`update_depreciation_fund`/`advance_circuit` instead of
+  reinitialize-from-scratch) that DOES change `circulation_state`'s
+  contents whenever `capital_stock > 0` and a `turnover_profile_source` is
+  wired for a canonical run's counties — this was NOT verified against
+  `qa:regression` in this unit (scoped-test-only constraint for this lane);
+  the parent workflow should run the byte-identical gate before merge and
+  treat any circulation-state-only drift as expected (a declared, not
+  undischarged, ceremony) if it fires.
+
+  Follow-ups, explicitly out of this unit's scope: (1) the upstream
+  `_compute_county_states` circulation_state carry-forward gap (recorded
+  above, needs either a Vol-I-lane-coordinated fix or an explicit owner
+  ruling that the instance-cache is the permanent design); (2) U6 binds the
+  `circulation`/`realization` and `reproduction`/`disproportionality`
+  reserved coupling slots — this unit makes `disproportionality` a real,
+  live value for that binding to read, but does not touch
+  `domain/dialectics/instances/catalog.py`; (3) U7's gated-dormancy and
+  stub-fed-liveness sentinels are not yet written for the new call sites
+  (this unit fixes the two stub-fed-liveness instances the U1/program-prompt
+  investigation named, it does not ship the mutation-validated gate); (4)
+  U9's seam-registry rows and observability surface for the new
+  `disproportionality` emission are not added here. Next: U4 (light the
+  step) per U1's disposition, or U6 (oppositions) — either may proceed
+  independently since neither depends on the other's completion.

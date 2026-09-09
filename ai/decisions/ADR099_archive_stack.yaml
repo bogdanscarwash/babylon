@@ -1,0 +1,84 @@
+id: ADR099
+title: >-
+  Program 24 (The Archive) stack ADR — P0 spike-evidenced TUI client pins:
+  Textual 8.2.x + fenced-directives-only Markdown pipeline + wikilink inline
+  rule, Jinja2 ImmutableSandbox templating, Postgres FTS epistemic search,
+  dulwich sim-time vault git, TGP-raster/half-block graphics lanes, snapshot
+  lane with the syrupy-vs-pytest-9 resolution, and the local-first deployment
+  guardrails (D1-D3) for the keel
+status: accepted
+date: '2026-07-20'
+context: >-
+  Charter P0 (project/programs/24-the-archive.md) requires a stack ADR with
+  in-env evidence; the design brief's non-prescription clause makes the
+  2026-07-19 stack research advisory until spiked. The sanctioned throwaway
+  spike ran 2026-07-20 night (scratchpad archive-spike/, 19/19 tests green,
+  RESULTS.md + SVG evidence; never shipped) against the stack research's
+  8-item falsifiable checklist, on Python 3.12.12. Tree facts at pin
+  docs/archive-p0: jinja2 3.1.6 / markdown-it-py 4.2.0 / mdit-py-plugins
+  0.6.1 already resolve transitively AT the recommended pins; textual 8.0.0
+  present only as a mutmut transitive; pytest locked 9.1.1; psycopg 3.3.x
+  present; dulwich/textual-image/pytest-textual-snapshot/syrupy absent.
+decision: >-
+  ADOPTED (spike-verified): (1) Textual pinned >=8.2,<8.3 as a DIRECT
+  dependency (8.2.8 spiked; the 8.0.0 mutmut floor is compatible) — hover
+  Enter/Leave, command palette Provider (10k-name fuzzy pass 56.9 ms),
+  Theme carrying the ksbc section-9b tokens. (2) Markdown pipeline:
+  markdown-it-py 4.2.x + mdit-py-plugins 0.6.x, FENCED DIRECTIVES ONLY (the
+  8.2.8 token walker's generic close-pop breaks paired container tokens —
+  re-confirmed in source); ONE MarkdownFence subclass dispatches on
+  token.info ({statblock}/{absence}/{narrative}/{paoh} verified; unknown
+  directives fail loud per III.11; ordinary fences still highlight); custom
+  ~30-line wikilink inline rule emitting standard link tokens with
+  babylon:// hrefs (LinkClicked fires natively; unknown entities get
+  babylon://redlink/ + a distinct register — spike used an .em-wrapper
+  shortcut, the keel extends _token_to_content with a wikilink span);
+  front_matter plugin confirmed flat+hidden-safe. (3) Templating: Jinja2
+  3.1.6 ImmutableSandboxedEnvironment + StrictUndefined; construction is
+  code never data (no custom finalize/filters/globals); dunder access and
+  mutation both raise SecurityError (tested); render watchdog owed at the
+  materializer when modding opens. (4) Epistemic search: Postgres FTS
+  (tsvector GENERATED + GIN + pg_trgm) — the fog filter composes as a WHERE
+  clause; no second search store. (5) Vault git: dulwich 1.2.x with
+  SIM-TIME-pinned author/commit timestamps — two independent builds produce
+  identical commit shas (tested); NOTE API drift: stage()/commit() live on
+  repo.get_worktree() in 1.2, not Repo. (6) Graphics: half-block cell art
+  as the portable floor (200x50 full-repaint 58.2 ms/frame headless incl.
+  harness overhead; real panes delta-repaint), kitty graphics protocol via
+  textual-image 0.13.x as the raster lane for county-resolution fills;
+  detection runs BEFORE app boot (probe demonstrates the ordering); SIXEL
+  IS NOT A TARGET. (7) Snapshot lane: pytest-textual-snapshot 1.1.0 — with
+  the spike's REAL FINDING that its exact syrupy==4.8.0 pin is IMPOSSIBLE
+  beside pytest 9.1.1 (syrupy 4.8.0 declares pytest<9); RESOLUTION: pin
+  syrupy>=5.5 and install the plugin with its dep pin overridden (vendor if
+  packaging friction demands); SVG snapshots byte-identical across
+  delete-and-regenerate (sha256 double-bake) — the III.13 render-lane
+  evidence. (8) Sphinx: export/AAR path only, never the per-tick renderer.
+  REJECTED (carry from research, re-affirmed): MyST runtime in-client,
+  mistune, marko, minijinja-py (binding disclaims its sandbox), tantivy,
+  whoosh, drawille (AGPL), sixel. DEPLOYMENT GUARDRAILS bound into the keel
+  now (local-first section 8.1, X.8 alignment): all connection handling
+  reads a DSN from config and MUST work over unix sockets (no hardcoded
+  localhost:5433 anywhere in the keel); PG major pinned 17 for the beta;
+  narrator/embedding provider precedence Ollama -> Workers AI -> mute with
+  mute always legal; campaign uuid minted at creation; the per-campaign
+  embedding model + dimensionality pinned in campaign metadata (never mixed
+  within a campaign; concrete default model named at P1 when the intelligence
+  lane lands); telemetry cadence lives in config.toml [telemetry], never in
+  GameDefines.
+consequences: >-
+  The keel adds direct deps: textual >=8.2,<8.3, textual-image >=0.13,<0.14,
+  dulwich >=1.2,<2 (runtime); pytest-textual-snapshot 1.1.0 + syrupy >=5.5
+  (dev group, dep-override install documented in the group notes). No
+  version churn for jinja2/markdown-it-py/mdit-py-plugins (already at pins,
+  promoted to direct). Risks accepted: Textual bus factor ~1 (pin exact,
+  budget upgrade time, pure-Python vendor option); the snapshot plugin's
+  upstream syrupy pin is watched for a fix release. Three eyes-on items
+  remain owner-verifiable in Kitty (TGP probe + ssh hop, map-room feel,
+  real-mouse hover) — commands in the spike RESULTS.md; failure of any
+  reopens only the graphics-lane rows of this ADR, not the pipeline core.
+  Tick hash chains are unaffected by provider choice (narrator observes
+  only); a behavioral contract asserting hash-identity across
+  ollama/cloudflare/mute joins the sentinel estate with the intelligence
+  lane. The golden-vault artifact (III.12/III.13) is seeded at P4 as the
+  program's one declared ceremony.

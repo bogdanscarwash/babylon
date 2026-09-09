@@ -1,0 +1,7 @@
+# Babylon PER-20 fresh-origin Rust schema epoch owned-object census v1
+# provenance|source|legacy_adopter_census.sql
+# format|kind|schema|name|sha256
+relation|babylon_state|schema_migration|9dab3f0b9141a054202b62a4d52391545fc39c8835e8daa8a8f6299a149fb291
+schema|pg_namespace|babylon_ref|7c2fe2c6f3e9487d43b1e67e182c399cadd5d70087dd445f274de00d502ff45b
+schema|pg_namespace|babylon_state|1dce3b1b7211642bbc8265afb67cdfa1a6781d55d3a2e4b8e616ef8ac1686e7e
+schema_grant|pg_namespace|babylon_meta|5c0ed6508e7b1598182c8b7440dade9cc39061bb35c672d949b0f3713cf772cc

@@ -1,0 +1,5 @@
+# Small stdlib-only entry points for worktree-local developer diagnostics.
+
+["dev:doctor"]
+description = "Report worktree, Mise, and declared Rust host-policy facts without mutation"
+run = "python3 tools/devtools/doctor.py"

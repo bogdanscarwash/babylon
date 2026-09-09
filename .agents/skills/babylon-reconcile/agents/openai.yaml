@@ -1,0 +1,6 @@
+interface:
+  display_name: "Babylon Reconcile"
+  short_description: "Reconcile repo, worktrees, Linear, GitHub, and task state"
+  default_prompt: "Build a current evidence map and identify the smallest safe next action."
+policy:
+  allow_implicit_invocation: true

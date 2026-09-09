@@ -1,0 +1,149 @@
+; Canonical organization practice scenario. One civil-society organization
+; is seeded with one ROOTED_WORK action while one state apparatus holds the
+; local COMMAND relation. The player-facing intent boundary has not landed yet,
+; so practice is seeded state in this proof rather than a live input.
+;
+; Geography is relational. TENANCY anchors each class to a territory;
+; ADJACENCY forms circulation paths whose fields distinguish throughput,
+; alternate capacity, inventory buffers, and reproductive dependence;
+; PRESENCE and COMMAND locate organizational capacities. A typed payload on
+; PRESENCE distinguishes the material setting of a branch without turning
+; workplace, neighborhood, reproductive, or associational practice into a
+; territory kind or an intrinsic bonus. All territories share one node type
+; and differ only through relations and material state.
+;
+; The `OrgKind`, `PracticeKind`, and `PracticeEmbedding` enums remain content
+; declarations rather than kernel primitives. Constants below are Designed
+; controls for this experiment, not universal coefficients.
+(scenario organization/foundation
+  (defvocabulary NodeType (SOCIAL_CLASS TERRITORY ORGANIZATION))
+  (defvocabulary EdgeType
+    (MEMBERSHIP PRESENCE COMMAND TRANSACTIONAL SOLIDARISTIC SOLIDARITY
+     TENANCY ADJACENCY))
+  (defenum PracticeKind (NONE ROOTED_WORK))
+  (defenum PracticeEmbedding (NONE WORKPLACE NEIGHBORHOOD REPRODUCTION ASSOCIATION))
+  (deffield organization/practice enum PracticeKind)
+  (deffield organization/practice-embedding enum PracticeEmbedding)
+  (deffield organization/membership-share coefficient intensive)
+  (deffield social-class/population int extensive)
+  (deffield territory/rooted-capacity coefficient intensive)
+  (deffield territory/rooted-work-inbox coefficient intensive)
+  (deffield territory/rooted-relay-inbox coefficient intensive)
+  (deffield territory/command-pressure coefficient intensive)
+  (deffield territory/reproduction-pressure coefficient intensive)
+  (deffield territory/resident-population int extensive)
+  (deffield adjacency/throughput-share coefficient intensive)
+  (deffield adjacency/alternate-capacity-share coefficient intensive)
+  (deffield adjacency/inventory-buffer-share coefficient intensive)
+  (deffield adjacency/reproduction-dependence coefficient intensive)
+  (deffield presence/embedding enum PracticeEmbedding)
+  (deffield presence/local-base-population int extensive)
+  (deffield presence/practice-branch int extensive)
+
+  ; Designed control values for this experiment, not universal coefficients.
+  (defconst organization/practice-rate 0.03c)
+  (defconst organization/relay-rate 0.5c)
+  (defconst organization/command-response-rate 0.25c)
+
+  ; The social base: a working-class block in which the reading group is rooted.
+  (node workers NodeType/SOCIAL_CLASS (social-class/population 1000))
+  ; The territorial anchor both organizations are present in.
+  (node county NodeType/TERRITORY
+    (territory/rooted-capacity 0.0c)
+    (territory/rooted-work-inbox 0.0c)
+    (territory/rooted-relay-inbox 0.0c)
+    (territory/command-pressure 0.0c)
+    (territory/reproduction-pressure 0.9c)
+    (territory/resident-population 1000))
+  ; Civil society: a small propaganda/education circle, present in the county,
+  ; with a MEMBERSHIP edge to its existing class base.
+  (node reading-group NodeType/ORGANIZATION
+    (organization/kind OrgKind/CIVIL_SOCIETY)
+    (organization/practice PracticeKind/ROOTED_WORK)
+    (organization/practice-embedding PracticeEmbedding/NEIGHBORHOOD)
+    (organization/active 1)
+    (organization/cadre-level 0.5p)
+    (organization/cohesion 0.5p)
+    (organization/consciousness-tendency ConsciousnessTendency/LIBERAL)
+    (organization/action-budget 1)
+    (organization/membership-share 0.01c))
+  ; The state apparatus: the local coercive organization.
+  (node precinct NodeType/ORGANIZATION
+    (organization/kind OrgKind/STATE_APPARATUS)
+    (organization/practice PracticeKind/NONE)
+    (organization/practice-embedding PracticeEmbedding/NONE)
+    (organization/active 1)
+    (organization/cadre-level 0.5p)
+    (organization/cohesion 0.5p)
+    (organization/consciousness-tendency ConsciousnessTendency/LIBERAL)
+    (organization/action-budget 1)
+    (organization/membership-share 0.0c))
+
+  ; Two more class/territory pairs make geography relational rather than a
+  ; label on one county. The directed ring gives every territory one sender
+  ; and one receiver, so each fresh-work relay has one deterministic writer.
+  (node workers-b NodeType/SOCIAL_CLASS (social-class/population 700))
+  (node workers-c NodeType/SOCIAL_CLASS (social-class/population 400))
+  (node county-b NodeType/TERRITORY
+    (territory/rooted-capacity 0.0c)
+    (territory/rooted-work-inbox 0.0c)
+    (territory/rooted-relay-inbox 0.0c)
+    (territory/command-pressure 0.0c)
+    (territory/reproduction-pressure 0.6c)
+    (territory/resident-population 700))
+  (node county-c NodeType/TERRITORY
+    (territory/rooted-capacity 0.0c)
+    (territory/rooted-work-inbox 0.0c)
+    (territory/rooted-relay-inbox 0.0c)
+    (territory/command-pressure 0.0c)
+    (territory/reproduction-pressure 0.4c)
+    (territory/resident-population 400))
+
+  ; A fourth territory is materially identical to county-b at the node level.
+  ; Its route from county differs: firms can reroute most flow and inventories
+  ; absorb part of an interruption. The contrast lives on the relation.
+  (node workers-d NodeType/SOCIAL_CLASS (social-class/population 700))
+  (node county-d NodeType/TERRITORY
+    (territory/rooted-capacity 0.0c)
+    (territory/rooted-work-inbox 0.0c)
+    (territory/rooted-relay-inbox 0.0c)
+    (territory/command-pressure 0.0c)
+    (territory/reproduction-pressure 0.6c)
+    (territory/resident-population 700))
+
+  (edge EdgeType/MEMBERSHIP reading-group workers 1)
+  (edge EdgeType/PRESENCE reading-group county 1)
+  (edge EdgeType/PRESENCE precinct county 1)
+  (edge-attr EdgeType/PRESENCE reading-group county presence/embedding PracticeEmbedding/NEIGHBORHOOD)
+  (edge-attr EdgeType/PRESENCE precinct county presence/embedding PracticeEmbedding/NONE)
+  (edge EdgeType/COMMAND precinct county 1)
+  (edge EdgeType/TENANCY workers county 1)
+  (edge EdgeType/TENANCY workers-b county-b 1)
+  (edge EdgeType/TENANCY workers-c county-c 1)
+  (edge EdgeType/TENANCY workers-d county-d 1)
+  (edge EdgeType/ADJACENCY county county-b 1)
+  (edge EdgeType/ADJACENCY county county-d 1)
+  (edge EdgeType/ADJACENCY county-b county-c 1)
+  (edge EdgeType/ADJACENCY county-c county 1)
+  ; The two county routes carry equal throughput and reproductive dependence.
+  ; Only the alternate-route and inventory-buffer relations differ.
+  (edge-attr EdgeType/ADJACENCY county county-b adjacency/throughput-share 0.8c)
+  (edge-attr EdgeType/ADJACENCY county county-b adjacency/alternate-capacity-share 0.0c)
+  (edge-attr EdgeType/ADJACENCY county county-b adjacency/inventory-buffer-share 0.0c)
+  (edge-attr EdgeType/ADJACENCY county county-b adjacency/reproduction-dependence 0.8c)
+  (edge-attr EdgeType/ADJACENCY county county-d adjacency/throughput-share 0.8c)
+  (edge-attr EdgeType/ADJACENCY county county-d adjacency/alternate-capacity-share 0.75c)
+  (edge-attr EdgeType/ADJACENCY county county-d adjacency/inventory-buffer-share 0.5c)
+  (edge-attr EdgeType/ADJACENCY county county-d adjacency/reproduction-dependence 0.8c)
+  (edge-attr EdgeType/ADJACENCY county-b county-c adjacency/throughput-share 0.5c)
+  (edge-attr EdgeType/ADJACENCY county-b county-c adjacency/alternate-capacity-share 0.25c)
+  (edge-attr EdgeType/ADJACENCY county-b county-c adjacency/inventory-buffer-share 0.25c)
+  (edge-attr EdgeType/ADJACENCY county-b county-c adjacency/reproduction-dependence 0.6c)
+  (edge-attr EdgeType/ADJACENCY county-c county adjacency/throughput-share 0.3c)
+  (edge-attr EdgeType/ADJACENCY county-c county adjacency/alternate-capacity-share 0.5c)
+  (edge-attr EdgeType/ADJACENCY county-c county adjacency/inventory-buffer-share 0.5c)
+  (edge-attr EdgeType/ADJACENCY county-c county adjacency/reproduction-dependence 0.4c)
+  (edge EdgeType/SOLIDARITY workers workers-b 1)
+  (edge EdgeType/SOLIDARITY workers-b workers-c 1)
+  ; The deliberate org<->org SOLIDARITY edge (Q15/Q18) — see header.
+  (edge EdgeType/SOLIDARITY reading-group precinct 1))

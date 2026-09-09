@@ -1,0 +1,80 @@
+ADR178_calibration_class_and_cooptation_ownership:
+  status: "accepted"
+  date: "2026-07-30"
+  title: >
+    Director rulings, live session 2026-07-30 (second batch, research-driven):
+    historical figures may CALIBRATE BUT NEVER STIPULATE (the class-of-question
+    answer under ADR172 ruling 5); co-optation is modelled ONCE in the
+    Electoral lane and READ by the heat system, with a declared coefficient
+    owner; PR #370's phi_hour clamp is RESOLVED by ADR175 and cleared to
+    merge; and the whole multi-lane program proceeds — no lane may be
+    abandoned after one is finished.
+  context: |
+    The 2026-07-30 research program (three dossiers from sixteen corpus
+    sweeps: reports/funding-verb-historical-dossier.md,
+    reports/organizational-methods-dossier.md,
+    reports/heat-system-dossier.md) surfaced twenty-one Director-reserved
+    calls, filed as director-gates #407, #408 and #411. Four were escalated
+    live because they gate the workforce's next moves rather than a distant
+    design. The research had produced hard numbers for the first time —
+    Serge's primary-verified Commune ratio (20,000 machine-gunned of 160,000
+    fighters, about 1-in-8), the 1930 CPUSA language-work audit's cadre
+    ratios (1 per 10 members in controlled organizations, 1 per 175 in
+    influenced ones), the FLN's monthly income rates — which forced the
+    question ADR172 ruling 5 had not explicitly answered: the ruling forbids
+    IMPOSED FUNCTIONAL FORMS, but does it forbid historical ANCHORING?
+  decision: |
+    (C1) HISTORICAL FIGURES CALIBRATE, THEY NEVER STIPULATE. A
+        primary-verified historical quantity may set ENVELOPES, PRIORS and
+        VALIDATION TARGETS — the simulation's OUTPUT must land near it, and
+        a §6 verification-layer test may assert that. It may NEVER appear as
+        a threshold, coefficient or constant INSIDE a mechanic. History
+        judges the model; it does not parameterize it. This is the
+        class-of-question answer and it settles #411 Q2 plus every
+        like-shaped item in the funding and organizational dossiers (the
+        cadre ratios, the 80/20 underground ratio, the 45-48% org-store
+        figure): each becomes a calibration target, none becomes a define.
+        Consequence for practice: a test that pins a historical number is a
+        VALIDATION test and must be written as one (asserting the sim's
+        emergent output against the record), never a mechanic pin.
+    (C2) CO-OPTATION: BOTH, WITH ONE OWNER. The mechanic is modelled ONCE,
+        in the Electoral/Allegiance lane (P25's ratified machinery — the
+        reform ceiling and the electoral valve keep their existing home and
+        their coefficients), and the heat system READS it as a mode the
+        state may choose. The Electoral lane is the DECLARED OWNER of the
+        coefficient; heat holds no duplicate. This avoids a P25 baseline
+        move and duplicated tuning surfaces while still letting the
+        repression model name the state's most effective instrument (RAND:
+        politics is the largest single channel by which movements end;
+        Zubatovshchina makes the sponsored reformist rival a police
+        instrument).
+    (C3) PR #370 (the phi_hour negative-rent clamp) is RESOLVED by ADR175
+        and cleared to merge. The clamp stands as the FROZEN PYTHON
+        REFERENCE's declared noise floor: negatives below 1e-3 clamp
+        silently, magnitudes at or beyond it clamp AND emit a loud
+        PhiHourOutlierEvent carrying the pre-clamp value, so structural
+        negatives stay visible (III.11). Signed-Φ-with-attribution is
+        carried into the Rust engine per ADR175, not into Python.
+    (C4) THE PROGRAM RUNS ALL LANES. Verbatim in substance: "we need to do
+        all of this! Ensure that your plans accomplish working on all of
+        these and you don't just quit after you finish one of them." The
+        four candidate lanes — the narration ladder (loop 4 of the
+        vision-complete clause), the heat reformulation, G3's cost/efficacy
+        lever, and P27 Phase 1 — are a SEQUENCE to complete, not a menu to
+        choose from. Sequencing is delegated to the workforce; abandonment
+        after one lane is not.
+  consequences: |
+    - C1 gives the verification estate a new obligation and the mechanics a
+      new prohibition: historical constants move OUT of any proposed define
+      table and INTO §6 validation targets. The heat, funding and
+      organizational dossiers' calibration proposals are re-read under this
+      rule before any implementation.
+    - C2 unblocks heat's mode catalogue without a P25 ceremony; the heat
+      lane must reference the Electoral lane's coefficient rather than
+      declare its own.
+    - C3 unblocks the p27-python-freeze tag (state.yaml listed #370 among
+      its blockers).
+    - C4 converts the loop's lane choice into a standing multi-lane plan;
+      the digest records progress per lane so no lane silently stalls.
+  supersedes: []
+  amends: []

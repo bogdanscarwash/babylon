@@ -17,13 +17,14 @@ ignores rot silently. This wrapper reads a policy file
 
 Only once every entry is valid and unexpired does the wrapper build
 ``--ignore-vuln`` flags and hand off to the real ``pip-audit`` (via
-``poetry run pip-audit`` by default, or plain ``pip-audit`` with
-``--no-poetry``), streaming its output and propagating its exit code.
+``uv run pip-audit`` by default — ADR095 swept the Poetry toolchain — or
+plain ``pip-audit`` with ``--no-uv``), streaming its output and
+propagating its exit code.
 
 Usage:
-    poetry run python tools/run_pip_audit.py                # full run
-    poetry run python tools/run_pip_audit.py --check-only    # policy lint only
-    poetry run python tools/run_pip_audit.py --no-poetry     # plain pip-audit
+    uv run python tools/run_pip_audit.py                # full run
+    uv run python tools/run_pip_audit.py --check-only    # policy lint only
+    uv run python tools/run_pip_audit.py --no-uv         # plain pip-audit
 """
 
 from __future__ import annotations
@@ -151,15 +152,16 @@ def build_ignore_vuln_args(entries: list[dict[str, Any]]) -> list[str]:
     return args
 
 
-def build_pip_audit_command(entries: list[dict[str, Any]], no_poetry: bool) -> list[str]:
+def build_pip_audit_command(entries: list[dict[str, Any]], no_uv: bool) -> list[str]:
     """Build the full pip-audit invocation.
 
     :param entries: Parsed (and validated) ``[[ignore]]`` entries.
-    :param no_poetry: If ``True``, invoke plain ``pip-audit``; else
-        ``poetry run pip-audit``.
+    :param no_uv: If ``True``, invoke plain ``pip-audit``; else
+        ``uv run --frozen --extra ops pip-audit`` (ADR095: uv is the
+        dependency toolchain).
     :returns: The full argv to hand to :func:`subprocess.run`.
     """
-    base = ["pip-audit"] if no_poetry else ["poetry", "run", "pip-audit"]
+    base = ["pip-audit"] if no_uv else ["uv", "run", "--frozen", "--extra", "ops", "pip-audit"]
     return base + build_ignore_vuln_args(entries)
 
 
@@ -187,9 +189,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help=f"Path to the ignore policy TOML file (default: {DEFAULT_IGNORES_FILE})",
     )
     parser.add_argument(
-        "--no-poetry",
+        "--no-uv",
         action="store_true",
-        help="Invoke plain 'pip-audit' instead of 'poetry run pip-audit'",
+        help="Invoke plain 'pip-audit' instead of 'uv run pip-audit'",
     )
     parser.add_argument(
         "--check-only",
@@ -250,7 +252,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"pip-audit policy OK: {count} ignore entr{plural} valid.")
         return 0
 
-    command = build_pip_audit_command(entries, args.no_poetry)
+    command = build_pip_audit_command(entries, args.no_uv)
     try:
         result = subprocess.run(command, check=False)
     except FileNotFoundError as exc:

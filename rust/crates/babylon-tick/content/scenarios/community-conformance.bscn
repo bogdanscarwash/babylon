@@ -1,0 +1,229 @@
+; The Community @6.0 port train's world 1 (issue #667, plan
+; docs/superpowers/plans/2026-08-18-community-port.md Task 7 Step 3).
+; Built fresh per the plan's node table — declaration order is id order:
+; n0..n9 below are NodeId(0)..NodeId(9), h0..h2 are HyperedgeId(0..2).
+; **Declare in this order and never renumber when extending** (the plan's
+; own instruction); later tasks APPEND deffields/defconsts above the node
+; block and never touch the node/hyperedge order.
+;
+; §3.7a CARRIER DISCLOSURE: n0 `community-register` is this world's ONE and
+; only NodeType/INSTITUTION node — the subject-type anchor for the pack's
+; six carrier-subject rules (c00/c05-c08/c11), not a mint of this pack's
+; own; §8c guard 4 (`exactly_one_institution_carrier`) asserts there is
+; exactly one, and never zero (a carrier-free world runs those six rules
+; over an empty population — silent inertness dressed as a passing test).
+;
+; The org tendency field is `organization/consciousness-tendency`, an
+; enum-typed deffield over ConsciousnessTendency in FROZEN DECLARATION
+; ORDER (ADR195): LIBERAL=0, FASCIST=1, REVOLUTIONARY=2 — the same ordinal
+; contract CommunityType carries below. `cadre-level`/`cohesion` are
+; probability-typed, mirroring the frozen reads (`community.py:413-414`).
+;
+; Dyadic-literal discipline (the plan's Step 3 instruction): every seed is
+; an exact dyadic rational EXCEPT `rev-org`'s `cohesion 0.8p` — 4/5 is not
+; dyadic, and the plan's node table pins 0.8p verbatim. That one value is
+; carried bit-identically anyway: the crate's scaled-literal contract
+; computes 8/10 as one correctly-rounded IEEE-754 division, and Python's
+; float("0.8") is the same correctly-rounded binary64 — the mirror and the
+; substrate agree to the bit without tolerance.
+;
+; §4-SPIKE VERDICTS (Task 7 Step 5, recorded here per the
+; solidarity-conformance.bscn:9-20 precedent) — ALL SEVEN PASS, each proven
+; by a throwaway rule through the real `run_once_into` driver against THIS
+; world (the throwaway file was deleted at the step's end; the verdicts
+; here and `community_conformance.rs`'s doc comment are the record):
+;  (a) a `for-each` over `(hyperedges HyperedgeType/COMMUNITY)` from a
+;      carrier-subject rule FIRES — one write landed on each of all three
+;      communities off a single firing (one carrier subject).
+;  (b) `(update-hyperedge it community/heat (set 0.5i))` inside that body
+;      WRITES — read back bit-exact (0.5) on h0/h1/h2.
+;  (c) `(for-each (hyperedges-of self HyperedgeType/COMMUNITY) …)` from a
+;      SOCIAL_CLASS-subject rule FIRES and `(field-of it community/heat)`
+;      READS inside — na-worker's two memberships iterated in ascending
+;      HyperedgeId order (proven by last-write-wins: 0.75 = h2's heat, not
+;      h0's 0.5); unaffiliated n4 was never written (honest null).
+;  (d) repeated `(scale 0.5c)` across a `for-each` ACCUMULATES
+;      MULTIPLICATIVELY — na-worker's seeded active=1 read back 0.25
+;      (1 × 0.5 × 0.5): the operand is pre-computed per write, and the
+;      COMBINE reads the current value at APPLY, so two collected scales
+;      compose as a product.
+;  (e) the 14-arm `if`-chain over `(field-of it community/kind)` enum
+;      equality LOADS and EVALUATES — h0/h1/h2 landed 0.136/0.0/0.04, each
+;      community's own ADR214 floor. The only landed precedent was 3-arm
+;      (territory.bsl:130-137); the 14-arm is now demonstrated, and §6.2's
+;      c06 dispatch stands on it.
+;  (f) a same-tick cross-rule read SEES the earlier rule's write —
+;      `community/spike-f-a`'s `set 0.125i` was read by `community/
+;      spike-f-b` as 0.125 (rule-id byte order carried it), never the
+;      seeded 0.25 (§8b's fatal rows rely on exactly this).
+;  (g) the world LOADS with hyperedge-querying rules under the measured
+;      static bound — Task 4's ceiling supply chain reaches this scenario
+;      (census-fed HyperedgeType/COMMUNITY ceiling 3, max-members 3); no
+;      E-LOAD-040/042/045 fired for any spike rule above.
+; No shape refused; §8's rule split stands as planned.
+;
+; The 14-row ADR214 floor table (§6.2 / DG-3: all 14 rows, never a partial
+; transcription) and the three decay alphas are the defconst block below;
+; each floor row carries its ADR214 provenance (Ruling 1 + erratum 9,
+; Ruling 2's demotions, INCARCERATED's named unreachability).
+(scenario community/conformance-world-1
+  ; ---- the closed vocabulary: all three element kinds, so every field
+  ; namespace below resolves a POSITIVE owner (the D29 filter's positive-
+  ; answer-only law, D202) ----
+  (defvocabulary NodeType (INSTITUTION SOCIAL_CLASS ORGANIZATION))
+  (defvocabulary EdgeType (MEMBERSHIP))
+  (defvocabulary HyperedgeType (COMMUNITY))
+  ; ---- the two enum registries, FROZEN DECLARATION ORDER (ADR195) ----
+  ; CommunityType: models/enums/community.py:38-55 verbatim — SETTLER=0,
+  ; PATRIARCHAL=1, NEW_AFRIKAN=2, FIRST_NATIONS=3, CHICANO=4, WOMEN=5,
+  ; TRANS=6, DISABLED=7, QUEER=8, UNDOCUMENTED=9, INCARCERATED=10,
+  ; YOUTH=11, ADULT=12, ELDER=13. The ordinal-parity test pins this order.
+  (defenum CommunityType
+    (SETTLER PATRIARCHAL NEW_AFRIKAN FIRST_NATIONS CHICANO WOMEN TRANS
+     DISABLED QUEER UNDOCUMENTED INCARCERATED YOUTH ADULT ELDER))
+  ; ---- deffields ----
+  ; The §3.7a anchor: bound by every carrier-subject rule, never read
+  ; again (control-ratio.bsl:277's "SUBJECT-TYPE ANCHOR ONLY" pattern).
+  (deffield institution/community-carrier int extensive)
+  (deffield social-class/active int extensive)
+  ; c09/c10's per-class accumulator (real: a product of per-community
+  ; modifiers, not [0,1]-bounded — formulas/community.py:164-174).
+  (deffield social-class/community-cost-modifier real intensive)
+  ; The hyperedge own-fields (Task 5 storage, Task 6 surface).
+  (deffield community/kind enum CommunityType)
+  (deffield community/heat intensity intensive)
+  (deffield community/cohesion intensity intensive)
+  (deffield community/education-pressure intensity intensive)
+  (deffield community/reproduction-cost-modifier real intensive)
+  ; The prior-tick ternary — c05/c06's `density-sum > 0` skip gate has
+  ; something to preserve (the plan's Step 3 hyperedge note).
+  (deffield community/revolutionary probability intensive)
+  (deffield community/liberal probability intensive)
+  (deffield community/fascist probability intensive)
+  ; ---- the c00-c04 accumulators (Task 8) — written ONLY by the pack,
+  ; never seeded; member-count is the census, the raw weights and
+  ; density-sum are extensive sums (magnitudes NOT [0,1]-bounded — a
+  ; multi-membership density exceeds 1, world 1's h2 reads 2.0) ----
+  (deffield community/member-count int extensive)
+  (deffield community/r-raw real extensive)
+  (deffield community/l-raw real extensive)
+  (deffield community/f-raw real extensive)
+  (deffield community/density-sum real extensive)
+  ; c06a's cache (Task 9) — written per tick by the pack's only 14-arm
+  ; dispatch, read by c06b the same tick (the pre-state law forces the
+  ; split — D204; a write inside one rule's collect pass is invisible to a
+  ; later operand's field-of, so the floor cannot be computed and consumed
+  ; in one rule).
+  (deffield community/substrate-floor probability intensive)
+  ; DG-2 (PUBLISH, the 2026-08-18 sitting): c07/c08's readout fields.
+  (deffield community/contestation probability intensive)
+  (deffield community/dominant-tendency enum ConsciousnessTendency)
+  (deffield social-class/org-r-weight real extensive)
+  (deffield social-class/org-l-weight real extensive)
+  (deffield social-class/org-f-weight real extensive)
+  (deffield social-class/org-count int extensive)
+
+  ; ---- the 14-row ADR214 floor table (§6.1 verbatim values) ----
+  (defconst community/floor-new-afrikan 0.136p)   ; measured, unrestricted_3218: 0.232693906 − 0.096223732 = 0.136470174 → 3dp 0.136 (erratum 9: the posted 0.137 was a double-rounding artifact)
+  (defconst community/floor-first-nations 0.155p) ; measured, same variant (Ruling 3: FIRST_NATIONS > NEW_AFRIKAN breaks the frozen tie — emergent, not stipulated)
+  (defconst community/floor-chicano 0.113p)       ; measured, same variant
+  (defconst community/floor-settler 0.0p)         ; identically zero by construction — the settler pole IS the norm (preserves consciousness.py:420-426's hegemonic-default claim)
+  (defconst community/floor-patriarchal 0.0p)     ; structural: hegemonic default
+  (defconst community/floor-youth 0.0p)           ; structural: lifecycle phase
+  (defconst community/floor-adult 0.0p)           ; structural: lifecycle phase
+  (defconst community/floor-incarcerated 0.18p)   ; unchanged (Ruling 2) — NAMED PROBLEM: unreachable in principle from B17001 (the universe excludes the institutionalized); a future ruling needs BJS/Vera-class data
+  (defconst community/floor-women 0.04p)          ; unchanged, CONFIDENCE DEMOTED per Ruling 2 (only cited provenance is the literal string "estimated")
+  (defconst community/floor-trans 0.06p)          ; unchanged, demoted as above
+  (defconst community/floor-disabled 0.03p)       ; unchanged, demoted as above
+  (defconst community/floor-queer 0.04p)          ; unchanged, demoted as above
+  (defconst community/floor-undocumented 0.10p)   ; unchanged, demoted as above
+  (defconst community/floor-elder 0.02p)          ; estimated (generational memory)
+  ; ---- the decay alphas (plan §-table 493-495) ----
+  (defconst community/heat-decay-alpha 0.05c)              ; config/defines/organizations.py:22-27
+  (defconst community/cohesion-decay-alpha 0.03c)          ; organizations.py:28-33
+  (defconst community/education-pressure-decay 0.1c)       ; config/defines/consciousness.py:138-143
+
+  ; ---- nodes (id order — never renumber) ----
+  ; n0: THE world's one and only INSTITUTION node (§3.7a).
+  (node community-register NodeType/INSTITUTION
+    (institution/community-carrier 1))
+  ; n1: member of NEW_AFRIKAN + QUEER — the multi-community witness.
+  (node na-worker NodeType/SOCIAL_CLASS (social-class/active 1))
+  ; n2: member of NEW_AFRIKAN only.
+  (node na-organizer NodeType/SOCIAL_CLASS (social-class/active 1))
+  ; n3: member of SETTLER — the 0.0-floor control.
+  (node settler-la NodeType/SOCIAL_CLASS (social-class/active 1))
+  ; n4: NO membership — pins `community-cost-modifier == 1.0` exactly
+  ; (c09's reset writes it; c10's empty for-each leaves it).
+  (node unaffiliated NodeType/SOCIAL_CLASS (social-class/active 1))
+  ; n5: member of NEW_AFRIKAN but INACTIVE — excluded from the census
+  ; (frozen community.py:472-474) AND from the cost-modifier write
+  ; entirely: its `community-cost-modifier` must read as the substrate's
+  ; honest-null error, never 1.0 (§1.4, C4).
+  (node inactive-member NodeType/SOCIAL_CLASS (social-class/active 0))
+  ; n6: REVOLUTIONARY tendency; MEMBERSHIP → n1, n2.
+  (node rev-org NodeType/ORGANIZATION
+    (organization/cadre-level 0.5p) (organization/cohesion 0.8p)
+    (organization/consciousness-tendency ConsciousnessTendency/REVOLUTIONARY))
+  ; n7: LIBERAL; MEMBERSHIP → n1, n3.
+  (node lib-org NodeType/ORGANIZATION
+    (organization/cadre-level 0.25p) (organization/cohesion 0.5p)
+    (organization/consciousness-tendency ConsciousnessTendency/LIBERAL))
+  ; n8: FASCIST; MEMBERSHIP → n3.
+  (node fash-org NodeType/ORGANIZATION
+    (organization/cadre-level 0.5p) (organization/cohesion 0.25p)
+    (organization/consciousness-tendency ConsciousnessTendency/FASCIST))
+  ; n9: ZERO MEMBERSHIP edges — pins frozen's `:421` skip (no member_agents
+  ; → never enters org_data).
+  (node no-member-org NodeType/ORGANIZATION
+    (organization/cadre-level 1.0p) (organization/cohesion 1.0p)
+    (organization/consciousness-tendency ConsciousnessTendency/REVOLUTIONARY))
+
+  ; ---- MEMBERSHIP edges (org → class), strength 1 exactly ----
+  (edge EdgeType/MEMBERSHIP rev-org na-worker 1)
+  (edge EdgeType/MEMBERSHIP rev-org na-organizer 1)
+  (edge EdgeType/MEMBERSHIP lib-org na-worker 1)
+  (edge EdgeType/MEMBERSHIP lib-org settler-la 1)
+  (edge EdgeType/MEMBERSHIP fash-org settler-la 1)
+
+  ; ---- hyperedges (own id counter — never renumber) ----
+  ; h0: new-afrikan (n1, n2, n5) — n5's membership is REAL but inactive.
+  (hyperedge new-afrikan HyperedgeType/COMMUNITY
+    (members na-worker na-organizer inactive-member))
+  ; h1: settler (n3).
+  (hyperedge settler HyperedgeType/COMMUNITY (members settler-la))
+  ; h2: queer (n1).
+  (hyperedge queer HyperedgeType/COMMUNITY (members na-worker))
+
+  ; ---- hyperedge own-field seeds (Task 5 storage, Task 6's
+  ; (hyperedge-attr …) form): kind + heat + cohesion + education-pressure
+  ; + reproduction-cost-modifier + the prior-tick ternary, per the plan's
+  ; Step 3 hyperedge note ----
+  (hyperedge-attr new-afrikan community/kind CommunityType/NEW_AFRIKAN)
+  (hyperedge-attr new-afrikan community/heat 0.5i)
+  (hyperedge-attr new-afrikan community/cohesion 0.75i)
+  (hyperedge-attr new-afrikan community/education-pressure 0.25i)
+  (hyperedge-attr new-afrikan community/reproduction-cost-modifier 0.875r)
+  (hyperedge-attr new-afrikan community/revolutionary 0.5p)
+  (hyperedge-attr new-afrikan community/liberal 0.25p)
+  (hyperedge-attr new-afrikan community/fascist 0.25p)
+
+  (hyperedge-attr settler community/kind CommunityType/SETTLER)
+  (hyperedge-attr settler community/heat 0.25i)
+  (hyperedge-attr settler community/cohesion 0.5i)
+  (hyperedge-attr settler community/education-pressure 0.125i)
+  (hyperedge-attr settler community/reproduction-cost-modifier 1)
+  (hyperedge-attr settler community/revolutionary 0.0p)
+  (hyperedge-attr settler community/liberal 0.75p)
+  (hyperedge-attr settler community/fascist 0.25p)
+
+  (hyperedge-attr queer community/kind CommunityType/QUEER)
+  (hyperedge-attr queer community/heat 0.75i)
+  (hyperedge-attr queer community/cohesion 0.625i)
+  (hyperedge-attr queer community/education-pressure 0.5i)
+  ; >1.0 — the one modifier a [0,1]-bounded literal cannot carry; the
+  ; r-lane carries it exactly (5/4 is dyadic).
+  (hyperedge-attr queer community/reproduction-cost-modifier 1.25r)
+  (hyperedge-attr queer community/revolutionary 0.25p)
+  (hyperedge-attr queer community/liberal 0.5p)
+  (hyperedge-attr queer community/fascist 0.25p))

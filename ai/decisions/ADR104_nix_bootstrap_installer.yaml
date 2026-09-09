@@ -1,0 +1,96 @@
+id: ADR104
+title: >-
+  Installer = nix bootstrap (amends ADR094): install.sh now INSTALLS Nix for
+  the player (BD ruling 2026-07-21, ruling table item 1 — e.g. the
+  Determinate installer), reversing ADR094's install.sh:30-33 "we never
+  install it for the user" refusal — Nix becomes the MEANS of a one-script
+  Ubuntu/Debian install, not a power-user-only channel. Carries the
+  game-managed Postgres cluster (initdb into ~/.local/share/babylon/pg, unix
+  socket, child process) built from the flake closure, and the 4.49GB
+  reference-data DB delivered as a sha-pinned fixed-output derivation through
+  the same signed cache. apt fallback documented only. Four BD-owed
+  critical-path ceremonies (keygen, R2/cache-worker, GGUF+manifest, CI
+  secrets) are carried by T7, per PROGRAM_v1_0_0_ceremony_runbook.md.
+status: accepted
+date: '2026-07-21'
+context: >-
+  ADR094 (2026-07-20, ai/decisions/ADR094_nix_channel_deployment.yaml) scoped
+  install.sh to the "Player Channel" model: a thin nix-profile-install
+  wrapper that assumes Nix is already on the box. install.sh codifies this at
+  lines 30-33 ("# Nix must already be present; we never install it for the
+  user." -> die pointing at nixos.org/install.determinate.systems) — a
+  SEPARATE guard from lines 24-28, which refuses on the placeholder
+  CACHE_KEY ("babylon-cache-1:REPLACE_WITH_PUBLIC_KEY", line 13) until the
+  owner-run keygen lands; that guard is unaffected by this amendment. The
+  v1.0.0 Playable Archive program
+  (ai/_inbox/PROGRAM_v1_0_0_playable_archive.md, ratified 2026-07-21) BD
+  directive requires one end state: "installable: one shell script on any
+  Ubuntu/Debian box, local-first (game-managed Postgres, on-disk markdown
+  vault, local narrator)". Its "Decision record (BD rulings, binding)" table
+  item 1 (Installer) and item 2 (Postgres) rule the reversal and the
+  game-managed cluster respectively; the T7 train entry names the closure
+  contents; PROGRAM_v1_0_0_ceremony_runbook.md carries the four owner-only
+  ceremonies this decision depends on, plus a FLAKE_REF drift (since fixed):
+  install.sh:16 carried a stale pre-rename repository slug — verified here
+  via `git remote -v`, origin is github.com/percy-raskova/babylon — ruled a
+  required separate pre-req before T7's `github:` smoke target is correct,
+  not part of these ceremonies. RESOLVED 2026-07-21: T7-alpha repointed the
+  installer and a BD-directed sweep purged the dead slug repo-wide. Code-state check: flake.nix
+  today vendors only postgresql_16.lib (libpq, for psycopg) — a full
+  postgresql+postgis+pgvector server package is NOT yet in the closure; that
+  build-out is T7 scope, not landed by ADR102's devshell vendoring.
+decision: >-
+  Reverse ADR094's install.sh:30-33 refusal clause only. install.sh's
+  nix-bootstrap branch installs Nix for the user (e.g. piping the Determinate
+  installer, pinned to a version tag per ceremony-runbook G1), then proceeds
+  to subscribe the signed R2 cache exactly as ADR094 D1/D2 already specified
+  (CACHE_KEY narinfo verification, cache.babylon.percypedia.biz substituter).
+  The lines 24-28 CACHE_KEY-placeholder guard is UNCHANGED and stays the hard
+  merge-blocker for the T7 PR (ceremony runbook: "C1 keygen is the one true
+  hard blocker"). Postgres (ruling 2): game-managed cluster is all-new code
+  built from the flake closure — `initdb` into `~/.local/share/babylon/pg`,
+  unix domain socket, child process of the game, superuser-in-own-cluster (so
+  `CREATE EXTENSION postgis`/`pgvector` needs no host-admin step); apt-based
+  Postgres is documented as a fallback path only, not the primary or tested
+  one. Reference data: the 4.49GB reference DB ships as a sha-pinned
+  fixed-output derivation flowing through the SAME narinfo-signed cache
+  install.sh already trusts (ADR094 D1) — no second trust mechanism. The four
+  BD-owed critical-path ceremonies from PROGRAM_v1_0_0_ceremony_runbook.md are
+  carried, not executed, by this ADR: C1 ed25519 keygen (`nix key
+  generate-secret --key-name babylon-cache-1`) -> secret half to
+  NIX_CACHE_SIGNING_KEY, public half into install.sh CACHE_KEY (line 13); C2
+  R2 API token (Object R/W, babylon-cache bucket only) + CF_ACCOUNT_ID +
+  cache-worker deploy to cache.babylon.percypedia.biz + D3 Terraform-import of
+  the hand-provisioned babylon-cache/babylon-data buckets and the
+  babylon-beta-keys KV namespace; C3 GGUF upload (Llama 3.1 8B +
+  embeddinggemma-300M) to babylon-data + `model_manifest.toml`
+  available/url/sha256/bytes flip — signing is NOT a separate step, the
+  closure's narinfo signature covers the manifest transitively; C4 the four
+  game-repo CI secrets (NIX_CACHE_SIGNING_KEY, R2_ACCESS_KEY_ID,
+  R2_SECRET_ACCESS_KEY, CF_ACCOUNT_ID — already read by
+  .github/workflows/nix-release.yml's sign-and-push step) plus the first
+  `vX.Y.Z` tag push and end-to-end smoke. Runbook critical path: C1 keygen
+  (hard blocker) in parallel with C2's R2 token -> C4 secrets + release ->
+  cache populated -> T7 smoke passes; C3 GGUF gates narrator-on-fresh-box
+  only, not the installer merge. The FLAKE_REF fix (install.sh:16, stale
+  pre-rename slug -> percy-raskova/babylon) is a T7 pre-req per the runbook,
+  tracked here as a required companion change, not a ceremony (DONE).
+consequences: >-
+  T7 (train structure, ai/_inbox/PROGRAM_v1_0_0_playable_archive.md) becomes
+  the nix-bootstrap installer variant: it must add the Nix-install branch,
+  correct FLAKE_REF, build out the postgresql+postgis+pgvector server
+  packages the closure doesn't carry yet, write the game-managed-cluster
+  code (initdb/pg_ctl/unix-socket lifecycle, first-run idempotent DDL
+  applier + stamp table), and wire the fixed-output reference-data
+  derivation — all riskiest, all-new units per the program's own framing.
+  WSL support is explicitly OUT of v1.0 (deferred post-1.0 per the program's
+  Definition-of-Done exclusions) — this amendment does not extend
+  nix-bootstrap to WSL. install.sh's own guard (lines 24-28) keeps refusing
+  to run until C1's real keygen replaces the placeholder CACHE_KEY, so T7
+  cannot pass its own smoke test before that ceremony lands, independent of
+  this decision. Security posture inherited from the runbook: piping a
+  remote installer to `sh` is a real trust boundary — pin the Nix-installer
+  version tag (never an unpinned rolling endpoint) and offer a
+  download-then-inspect path for cautious players. Rejecting this ADR
+  reinstates ADR094's refusal clause and blocks the program's "installable"
+  end state entirely (no other one-script path is proposed).

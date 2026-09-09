@@ -1,0 +1,41 @@
+; The RATCHETED-CEILING conformance world for `metabolism/biocapacity-update`
+; — proves the ceiling clamp binds AGAINST THE RATCHETED VALUE
+; (`new-max`), not the original `max-biocapacity` seed (F2 fix round,
+; adversarial review of PR #501: the earlier `metabolism-ceiling-
+; conformance.bscn` alone left the `capped-at-ceiling` binding's operand
+; choice (`new-max` vs `max-cap`) mutation-dead — swapping it left all
+; prior tests green).
+;
+; `metabolism_ceiling_conformance.py`'s own earlier "provably unreachable"
+; argument fixed `entropy_factor`/`hysteresis_rate` at their PRODUCTION
+; DEFAULTS while reasoning about reachability — an analytical error: both
+; are ALSO per-scenario `:const`s, exactly like `regeneration_rate`. Pushed
+; to more extreme (still legal) values — `regeneration_rate=1.0` (the
+; declared `le=1.0` maximum), `entropy_factor=1.005` (barely above its
+; declared `gt=1.0` floor, so the ecological-cost coefficient
+; `(1 - entropy_factor)` is nearly zero instead of the default's `-0.2`),
+; `hysteresis_rate=0.01` (the declared `le=0.01` maximum) — a single
+; `extraction_intensity=1` territory hits BOTH conditions at once: damage
+; is nonzero (`raw_extraction * hysteresis_rate = 50 * 0.01 = 0.5`, so
+; `new_max = 99.5`, strictly ratcheted below the `100` seed) AND
+; `current + delta` (`99.75`) exceeds that RATCHETED ceiling — so the
+; clamp must bind against `99.5`, not `100`.
+;
+; See `metabolism_ratcheted_ceiling_conformance.py` for the provenance
+; script.
+(scenario metabolism/ratcheted-ceiling-conformance
+  (deffield territory/biocapacity int extensive)
+  (deffield territory/max-biocapacity int extensive)
+  (deffield territory/extraction-intensity int intensive)
+
+  ; Legal maximum — see the header.
+  (defconst metabolism/regeneration-rate 1.0c)
+  ; 1.005 x 1,000,000 — barely above the declared floor (1.0, exclusive).
+  (defconst metabolism/entropy-factor-x1e6 1005000)
+  ; Legal maximum — see the header.
+  (defconst metabolism/hysteresis-rate 0.01c)
+
+  (node ratcheted-ceiling-county NodeType/TERRITORY
+    (territory/biocapacity 50)
+    (territory/max-biocapacity 100)
+    (territory/extraction-intensity 1)))

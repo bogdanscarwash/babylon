@@ -1,0 +1,128 @@
+ADR236_practice_resource_allocation_v2:
+  status: "accepted"
+  date: "2026-08-26"
+  title: >-
+    Practice Resource Allocation V2 derives exact material requests from sealed
+    content and conserves scarcity without order priority
+  crate: babylon-practice-contract
+  production_dependencies:
+    - babylon-kernel
+  forbidden_dependencies:
+    - babylon-graph
+    - babylon-bsl
+    - babylon-tick
+    - babylon-persistence
+    - babylon-client
+  live_activation: false
+  context: |
+    ADR234 gives every PracticeIntentV2 a quoted resource-contract digest, and
+    ADR235 binds that digest into the accepted batch. Neither decision defines
+    the quoted law, derives material requests, records true capacity, resolves
+    scarcity, or distinguishes a same-authority admission conflict from
+    cross-actor contention.
+
+    Treating canonical order, submission order, proposal nonce, or digest as
+    priority would let serialization author a material winner. Letting actors
+    name request quantities would reward inflated claims. Reusing
+    `babylon-graph::Capacity::allocate` would also be wrong: that allocator
+    ranks one actor's candidates by expected yield per cost. Shared practice
+    resources need a conserved, order-neutral clearing law, not an actor's
+    dossier-scoped action ranking.
+  decision: |
+    `PracticeResourceAllocationContractV2` is the pure, database-free owner of
+    the first practice reservation and capacity-allocation law. Its exact
+    language-neutral schema and vectors live in
+    `contracts/practice_resource_allocation_v2.yaml` and
+    `contracts/practice_resource_allocation_v2_vectors.jsonl`. Rust in
+    `babylon-practice-contract` is the sole executable implementation.
+
+    Each request derives from an accepted intent and sealed content, never
+    actor-authored intent parameters. A content requirement names its practice,
+    shared or actor-organization locator, stable resource identity, stable unit
+    identity, and positive u64 quantity. Derivation requires the practice to
+    match and consumes `quoted_resource_contract_digest`; it must equal the
+    digest of the exact V2 allocation contract. Actor-organization requirements
+    inherit the intent's actor organization. Shared requirements carry no
+    disguised owner.
+
+    The contract freezes a 64-bit unsigned exact-quantity lane. Allocation uses
+    a u128 intermediate, so multiplying two u64 quantities cannot overflow. For
+    one capacity, full supply grants every request in full. Divisible scarcity
+    grants `floor(available * requested_i / total_requested)` to every request.
+    The sum of grants is never above capacity. The division remainder remains
+    explicitly unallocated; canonical request order cannot receive it.
+
+    Exclusive capacity uses an all-or-none law. If true capacity covers every
+    request, every request receives its exact quantity. Under cross-actor
+    scarcity, the allocator selects no winner: every competing request receives
+    zero and the capacity remains unallocated. Cross-actor contention is a
+    committed material outcome, not a submission refusal.
+
+    Admission groups requests by `(resolve_tick, input_authority_id,
+    actor_org_id)`. When two or more distinct proposals in one group make
+    exclusive claims on one capacity and their group quantity exceeds that
+    capacity, the complete group receives `authority_resource_conflict` before
+    accepted-input admission. No proposal in that group enters the ledger.
+
+    Requests canonicalize by resource owner, resource identity, unit identity,
+    and complete proposal key. Capacities canonicalize by owner, resource, and
+    unit. Allocation outcomes bind the allocation-contract digest, every
+    request digest and granted quantity, and every capacity digest with exact
+    allocated and unallocated quantities. Input permutations produce identical
+    outcomes, but canonical order grants no material priority.
+
+    The contract, request, capacity, and outcome domains have fixed big-endian
+    bytes and SHA-256 identities. Decoding an outcome replays the allocator over
+    the supplied sealed requests and true capacities and requires an exact
+    identity match. A balanced but forged grant refuses.
+
+    The 16 requests per intent, 65,536 total requests, and 65,536 capacity rows
+    are Designed byte, memory, and fuel ceilings. They are not material
+    capacity, organization quotas, ranks, stages, or political laws. The
+    complete 22-code refusal registry is closed and language-neutral.
+
+    This slice does not reuse `babylon-graph::Capacity::allocate`, inspect the
+    graph, extract capacities, persist accepted input, emit BSL effects, withhold
+    labor, transfer goods or money, publish receipts, or activate gameplay.
+  consequences: |
+    PracticeIntentV2's quoted resource digest now names an executable law, and
+    request derivation is no longer an actor-controlled quantity channel. Later
+    content and material-register owners can produce typed requirements and
+    capacity rows without choosing a new scarcity algorithm.
+
+    Proportional floor allocation is a Designed game law, not a claim that
+    capitalist allocation is fair or scientifically optimal. It preserves
+    material request ratios, makes scarcity legible, and refuses to hide a
+    winner in byte order. The explicit residual provides a conserved input for
+    later inventory, labor, money, and capacity consumers.
+
+    Live practice remains unavailable until the accepted-input transaction,
+    sealed content requirements, capacity extraction, auxiliary registers,
+    BSL carriers, receipts, persistence, Archive, and Bevy consumers land.
+  verification: |
+    Rust tests pin independent literal bytes and SHA-256 digests for the
+    allocation contract, one request, one capacity row, and one proportional
+    outcome. They prove request-quote consumption, proportional scarcity,
+    exclusive cross-actor no-allocation, same-authority atomic conflict,
+    permutation identity, unused-capacity preservation, forged-outcome refusal,
+    the per-intent maximum-plus-one boundary, closed error codes, and exact
+    capacity residuals. Language-neutral vectors pin schema identity, all four
+    example digests, and contract-wire refusals. Existing V1 and earlier V2
+    suites remain unchanged.
+  preserves:
+    - ADR227 Practice Contract V1 byte and activation boundary
+    - ADR232 material causality, no authored sigmoid, and successor-versioning law
+    - ADR233 authoritative campaign habitation and input-authority ledger
+    - ADR234 stable proposal identity, next-week timing, and target law
+    - ADR235 exact accepted-input batch identity and no-priority canonical order
+  supersedes: []
+  related:
+    - ADR184_organization_owned_capacity
+    - ADR220_rust_owned_postgresql_persistence_boundary
+    - ADR223_whole_tick_atomicity_world_hash
+    - ADR227_practice_contract_groundwork
+    - ADR229_rust_gameplay_contract_authority
+    - ADR232_neel_integration_program_architecture
+    - ADR233_practice_input_authority_v2
+    - ADR234_practice_intent_v2
+    - ADR235_resolved_practice_batch_v2

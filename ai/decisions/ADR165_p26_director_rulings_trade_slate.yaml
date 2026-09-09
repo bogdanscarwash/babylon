@@ -1,0 +1,100 @@
+ADR165_p26_director_rulings_trade_slate:
+  status: "accepted"
+  date: "2026-07-27"
+  title: >
+    P26 Director rulings (IX.5, interactive session 2026-07-27): the full
+    trade-slate ruling queue answered — Phi-attribution model C (sigma-gradient
+    composition), core-bloc drain routed through Amin/Wallerstein/MIM
+    internal-colonies research, Mexico -> latin_america, disjoint taxonomy,
+    Ricci re-ingestion, sub-national Phi accepted-disclosed, spec-108 items
+    1-5 — unblocking the U5 engine train.
+  context: |
+    U1-U6 phase 1 (ADR161-164) deliberately packaged every theory-line
+    choice as a ruling request instead of improvising (IX.5). The Director
+    answered the consolidated queue (PR #315 body) in an interactive
+    session: U4 Q1-Q7, spec-107 D1-D3, spec-108 items 1-5. This ADR is the
+    durable record; the spec docs carry disposition pointers to it.
+  decision: |
+    U4 (Phi-attribution):
+    - Q1 RULED: **Option C — sigma-gradient composition** governs Phi
+      attribution across the external bloc nodes (not A/status-quo, not the
+      engineering-recommended B-then-C'). The U5 train implements the full
+      sigma pipeline; the paper's B-stage is subsumed.
+    - Q2 RULED (research directive, not a binary): whether/how imperialist-
+      core blocs source rent into the US is to be grounded in **Samir Amin
+      (unequal exchange/imperial rent) + Immanuel Wallerstein (world-systems
+      core/semi-periphery/periphery) + MIM internal-colonies theory** —
+      "incorporate stuff like internal colonies from MIM". Existing anchors:
+      mim-internal-colonies.txt already grounds consciousness defines
+      (chauvinist_peak_location, defines.yaml); Wallerstein acquisition is a
+      program-10 s8 deferred item; Emmanuel UE p.180 cited in defines. A
+      theory-research pass PRECEDES the core-bloc treatment in the C
+      implementation; the 48.5%-of-drain-to-core status quo is NOT
+      re-affirmed.
+    - Q3 RULED: india grounded AND latin_america constructed, **Mexico
+      belongs to latin_america** (consistent with U3's FAF zone-802 fold;
+      the canada node shrinks to actual Canada — the Census "North America"
+      aggregate feed needs the matching split in the C implementation).
+    - Q4 RULED: **disjoint partner taxonomy** replaces the Census
+      containing-bloc set (kills the 138.6% denominator).
+    - Q5 RULED: sub-national Phi (~84-141x at Wayne scale) **accepted,
+      disclosed** pending the Amendment R nationwide cutover — U2's
+      interactive wiring is ratified; disclosure lands in-game text + ADR.
+    - Q7 RULED: `_fetch_node_erdi` inertness **fixed inside the U5 train**
+      (field carries the real national ERDI series, disclosed as national-
+      only; sigma remains the attribution driver).
+    spec-107 (sigma-gradient):
+    - D1 DELEGATED to the engineering agent ("i will let you decide").
+      Agent decision under delegation: **z-score standardization + linear
+      weighted sum with canonical weights (1/3, 1/3, 1/3)** for OCC /
+      capital intensity / Pasinetti labor content, homed in defines.yaml so
+      any re-weighting is a declared coefficient change. Rationale: neutral
+      prior, matches the already-tested default, keeps theory-visibility in
+      a moddable artifact rather than code.
+    - D2/D3 RULED: **re-ingest the Ricci GVC unequal-exchange CSV as a
+      reference-DB table** (babylon_ricci_final.csv -> parquet source +
+      pinned rebuild, the U3 ceremony) to ground world_stats — a declared
+      partial undo of the 2026-07-17 amputation (ADR076 R2), by ruling.
+    spec-108 (transport substrate):
+    - Item 1 RULED: blocs are a **static label set at campaign start**
+      (slice-1); dynamic realignment recorded as a chartered future unit.
+    - Item 2 RULED (design reframe): the conductivity/flux overlay is the
+      **demand signal feeding the STATE's budget OODA loop** — corridor
+      expansion/repair becomes a state budget decision (dovetails with the
+      planned BUILD_INFRASTRUCTURE resolver), NOT automatic slime-mold edge
+      minting. Director flagged uncertainty ("i could be wrong");
+      interpretation pinned here: sustained flux raises the demand signal;
+      the sovereign's OODA evaluates it against budget; formal corridor
+      creation/repair executes through BUILD_INFRASTRUCTURE. Auto-minting
+      of INFORMAL edges without a state act is OUT for slice 1.
+    - Item 3 RULED: realization-crisis coupling is **damped via a declared
+      coefficient in CapitalVolumeIIDefines** (commodity_overhang is a
+      Vol II quantity).
+    - Item 4 RULED: **uniform territory splash** — attacks degrade all
+      touching corridor edges through the existing seam; edge-targeted
+      attacks deferred (Action-schema/verb change, amendment-gated).
+    - Item 5 RULED: the **aggregated per-county-pair connectivity indicator
+      surfaces in the Archive client** (dossier/trade views: supply lines
+      healthy/degraded/cut) while the res-8 mesh stays invisible —
+      consistent with the epistemic-fog line. U6 phase 2 spec depends on
+      this.
+    Additional Director directive (same session, mid-turn):
+    - **Trade-policy instruments — tariff rates, import duties, taxes —
+      belong to the international trade system, ADJUSTED via the Policy/
+      Electoral machinery** (P25: Policy @17.47 LEGISLATE resolver + reform
+      ceiling; Electoral @17.45). Design shape for the U5 train: tariff/
+      duty coefficients live as declared trade defines consumed by the
+      trade/attribution dataflow; LEGISLATE motions and electoral outcomes
+      move them (subject to the reform ceiling); this is the first concrete
+      P25<->P26 coupling and gets its own spec section in the U5 train
+      before code.
+  consequences:
+    positive:
+      - "The U5 engine train is UNBLOCKED: sigma pipeline (C) + Ricci re-ingestion + disjoint taxonomy + ERDI fix + transport slice-1 all have ruled shapes"
+      - "Every theory-line choice traces to a Director ruling or an explicitly-delegated agent decision — zero improvised theory (IX.5 upheld)"
+      - "U6 phase 2 client spec can proceed once M3 closes (item 5 answered)"
+    negative:
+      - "Option C is the most expensive path (~600 ktok-1.5 Mtok estimated in the U4 paper) and adds a theory-research pass (Amin/Wallerstein/MIM) before the core-bloc treatment"
+      - "Mexico -> latin_america obligates a Census North-America split in the attribution crosswalk (the canada node currently eats the whole aggregate)"
+      - "Ricci re-ingestion partially reverses a prior amputation ruling — recorded here as a deliberate Director decision, not drift"
+  file: ADR165_p26_director_rulings_trade_slate.yaml

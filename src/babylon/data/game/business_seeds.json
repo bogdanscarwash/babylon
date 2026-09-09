@@ -1,0 +1,87 @@
+{
+  "schema_version": 1,
+  "source": {
+    "dataset": "BLS QCEW annual (fact_qcew_annual)",
+    "reference_db": "data/sqlite/marxist-data-3NF.sqlite",
+    "year": 2024,
+    "ownership": "private (own_code=5)",
+    "naics_level_aggregated": "6-digit leaves -> 2-digit combined labels",
+    "imputation_policy": "includes BLS-imputed leaves (house policy)",
+    "top_k": 5
+  },
+  "content_hash": "cee4f198ef2230a9a1dca70ccf507cc46e824f01eb12b74aedd0636195e470f7",
+  "scopes": {
+    "US": {
+      "display_name": "United States",
+      "id_prefix": "BIZ_US_",
+      "sectors": [
+        {
+          "rank": 1,
+          "naics_2digit": "62",
+          "sector_title": "Healthcare",
+          "employment_count": 22046994
+        },
+        {
+          "rank": 2,
+          "naics_2digit": "44-45",
+          "sector_title": "Retail",
+          "employment_count": 15427923
+        },
+        {
+          "rank": 3,
+          "naics_2digit": "72",
+          "sector_title": "Accommodation/Food",
+          "employment_count": 14147792
+        },
+        {
+          "rank": 4,
+          "naics_2digit": "31-33",
+          "sector_title": "Manufacturing",
+          "employment_count": 12619915
+        },
+        {
+          "rank": 5,
+          "naics_2digit": "54",
+          "sector_title": "Professional Services",
+          "employment_count": 9812771
+        }
+      ]
+    },
+    "26163": {
+      "display_name": "Wayne County",
+      "id_prefix": "BIZ_WAYNE_",
+      "sectors": [
+        {
+          "rank": 1,
+          "naics_2digit": "62",
+          "sector_title": "Healthcare",
+          "employment_count": 116760
+        },
+        {
+          "rank": 2,
+          "naics_2digit": "31-33",
+          "sector_title": "Manufacturing",
+          "employment_count": 89659
+        },
+        {
+          "rank": 3,
+          "naics_2digit": "44-45",
+          "sector_title": "Retail",
+          "employment_count": 64086
+        },
+        {
+          "rank": 4,
+          "naics_2digit": "72",
+          "sector_title": "Accommodation/Food",
+          "employment_count": 60099
+        },
+        {
+          "rank": 5,
+          "naics_2digit": "48-49",
+          "sector_title": "Transportation",
+          "employment_count": 58035
+        }
+      ]
+    }
+  }
+}

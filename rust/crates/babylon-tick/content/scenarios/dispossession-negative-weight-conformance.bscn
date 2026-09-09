@@ -1,0 +1,48 @@
+; The NEGATIVE-WEIGHT conformance world for `dispossession/territory-transfer`
+; — closes the LAST gap in the per-clamp mutation table (F3, PR #498).
+;
+; The ten per-INPUT floor/ceiling clamps (`dispossession-negative-input-
+; conformance.bscn` + `dispossession-ceiling-matrix-conformance.bscn`)
+; guarantee every rate/structural term feeding the weighted sum is in
+; `[0, 1]`, which makes D-3's total-sum FLOOR clamp mutation-DEAD against
+; any rate/structural mutation alone: five non-negative terms cannot sum
+; negative. But `DispossessionDefines`' WEIGHTS are exactly the same
+; unguarded `:const` surface — nothing stops `weight-foreclosure` from being
+; authored negative and unsuffixed, and a NEGATIVE weight times an in-domain
+; positive rate is a genuinely negative term the per-input clamps (which
+; only touch the RATE side) cannot catch.
+;
+; ONE subject: `weight-foreclosure` DELIBERATELY NEGATIVE and UNSUFFIXED
+; (`-1`); every other weight `0c`; `foreclosure-rate` `1c` (in-domain,
+; passes the gate) with the other four rate/structural inputs `0c`. Raw
+; intensity is `-1 * 1 = -1`; D-3's floor clamp must bring it to exactly
+; `0.0`, not leave it negative (which the frozen engine's own
+; `min(max(-1,0),1)` proves is the correct behavior — an intensity below
+; zero is nonsensical regardless of what produced it).
+;
+; See `dispossession_negative_weight_conformance.py` for the frozen-engine
+; provenance (via the same `DispossessionDefines.model_construct` bypass
+; the saturation/negative-input scripts use, since weights ARE
+; `GameDefines`-sourced and Pydantic-gated at construction).
+(scenario dispossession/negative-weight-conformance
+  (deffield territory/wealth int extensive)
+  (deffield territory/dispossession-intensity int intensive)
+
+  (defconst dispossession/foreclosure-rate 1c)
+  (defconst dispossession/eviction-rate 0c)
+  (defconst dispossession/displacement-rate 0c)
+  (defconst dispossession/concentrated-ownership 0c)
+  (defconst dispossession/absentee-landlord-share 0c)
+
+  ; Deliberately UNSUFFIXED and NEGATIVE — see the header.
+  (defconst dispossession/weight-foreclosure -1)
+  (defconst dispossession/weight-eviction 0c)
+  (defconst dispossession/weight-displacement 0c)
+  (defconst dispossession/weight-tax-sale 0c)
+  (defconst dispossession/weight-eminent-domain 0c)
+  (defconst dispossession/deadweight-loss-fraction 0.05c)
+  (defconst dispossession/transfer-scale 0.01c)
+
+  (node negative-weight-county NodeType/TERRITORY
+    (territory/wealth 1000000)
+    (territory/dispossession-intensity 0)))

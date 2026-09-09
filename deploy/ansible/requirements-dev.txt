@@ -1,7 +1,0 @@
--r requirements.txt
-
-ansible-lint==26.6.0
-flake8==7.3.0
-molecule==26.6.0
-molecule-plugins[docker]
-yamllint==1.38.0

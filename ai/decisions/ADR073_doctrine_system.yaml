@@ -1,0 +1,159 @@
+ADR073_doctrine_system:
+  status: "accepted"
+  date: "2026-07-15"
+  title: "The DoctrineSystem (Doctrine Tree, Epoch 3 Wave 6 headline): per-organization ideological development as the 28th engine system — owner-ratified 6-ruling slate executed shadow-first (Units 1-4 + 7a live read-only canvas); RECORDING ADR — the three org attrs are domain state fields under the ratified DT program, not new formal primitives, so no constitutional amendment is required (contrast Divergence Channel/Amendment T); Unit 6 wiring is explicitly BASELINE-MOVING with a regenerate-and-document obligation"
+  context: |
+    The epochs vision-gap audit (reports/epochs-vision-gap-audit.md) named
+    the Doctrine Tree / Theoretical Labor / ideological-DAG layer "the
+    single largest coherent MISSING cluster in the whole audit" and placed
+    it as Wave 6's headline item. The owner ratified the DT program on
+    2026-07-15 morning (Phase 0 promotion, task #85; grounded by the
+    Marxists.org/ProleWiki history sweep, task #84) and the same afternoon
+    ratified the six open mechanics rulings as a slate:
+      1. Scope -> full, phased.  2. Faction-flip -> yes, Phase 2.
+      3. Tag decay -> 0.55%/tick.  4. Study_Allocation -> 0.15-0.25.
+      5. Party Congress -> seeded-RNG weighted by tag deltas.
+      6. Trap-escape -> self_criticism @ 300 theoretical labor.
+    The reactionary trunk tag is NATIONAL_CHAUVINISM (owner 2026-07-15,
+    8fa29a43) — oppressor-nation chauvinism, never natlib; its dialectical
+    negation INTERNATIONALISM is already live as the SolidaritySystem.
+
+    The false gate that had blocked the build: "wiring the DoctrineSystem
+    WILL move qa:regression baselines" was assumed. Direct inspection
+    (tools/regression_test.py SCENARIOS + scenarios/_legacy.py builders)
+    proved all 5 golden scenarios carry ZERO organization nodes — an
+    org-only system is byte-identical on all goldens even fully wired.
+    That finding dissolved the sequencing constraint and let Units 1-4+7a
+    ship the same day as consolidation (PR #188, dev @ c191799d).
+
+    Constitutional posture: the Divergence Channel (ADR072, same session
+    family) proposed Amendment T because it introduces a GENERAL
+    shadow-opposition facility with authored/subjective poles — new formal
+    machinery beside the dialectic. The DoctrineSystem is different in
+    kind: it adds three state fields to an EXISTING entity (Organization)
+    and one domain mechanic consuming existing primitives (orgs, ticks,
+    GameDefines coefficients). The dialectic D=(A,Ā,w,T,σ) remains the
+    sole apex; doctrine_tags are a bounded accumulator OVER org behavior,
+    not a partition or opposition primitive. Under the Compact's "MUST NOT
+    invent primitives without a constitutional amendment", these are
+    ordinary domain state — the same class as cadre_level or
+    theoretical_labor's sibling org fields — so a recording ADR (this
+    document) plus the owner-ratified program suffices. The trap
+    conditions trace to material relations (Aleksandrov III.8): losing all
+    MASS_LINK = liquidation into movementism; CLASS_ANALYSIS and MILITANCY
+    both nil = electoral absorption — both are historical failure modes of
+    real parties (history-sweep grounding), not gamified flavor.
+  decision: |
+    Build shadow-first on feature/doctrine-system (off consolidated dev),
+    one commit per unit, byte-identical at every step:
+
+    Unit 1 (b1a02366) — DoctrineDefines: 6 owner-ratified coefficients
+    (tag_decay_rate=0.0055, study_allocation_min/max=0.15/0.25,
+    congress_interval_ticks=52, trap_escape_tl=300,
+    faction_flip_enabled=False) in config/defines/doctrine.py, assembled
+    into GameDefines, defines.yaml regenerated (sync-guarded).
+    congress_interval_ticks and trap_escape_tl and faction_flip_enabled
+    ship AHEAD of their consumers (Units 5/6/Phase-2) deliberately: the
+    slate was ratified as one document and the moddable surface should
+    expose it whole.
+
+    Unit 2 (4a7f3239) — doctrine state on the Organization base model:
+    acquired_doctrine_ids: tuple[str,...], theoretical_labor: float>=0,
+    doctrine_tags: dict[DoctrineTag,float]. PERSISTED fields (not
+    computed): they are cross-tick accumulators, must survive
+    to_graph/from_graph and Postgres snapshot->hydrate. NOT added to
+    ORGANIZATION_EXCLUDED_FIELDS — round-trip verified.
+
+    Unit 3 (c30acba6+f4c75552) — pure mechanics in domain/doctrine/:
+    evaluate_trap_condition is a bounded recursive-descent parser over a
+    fixed grammar (NEVER eval/exec — the conditions come from data files);
+    can_acquire/acquire (parents + cost), accrue_theoretical_labor
+    (max(0,surplus) * clamped allocation), decay_tags (multiplicative,
+    ruling 3). 40 TDD cases red-first.
+
+    Unit 4 (b58d27ef) — DoctrineSystem, the 28th member of
+    _DEFAULT_SYSTEMS, position 14.7 (after FactionInfluence 14.5, before
+    Survival 15; CONSEQUENCE phase): doctrine develops as a CONSEQUENCE of
+    the org's material action, and downstream systems (Survival, Struggle,
+    Consciousness) will read it in Unit 6 — ideology mediates between
+    action and consequence, per the theory. Per-org loop: decay -> accrue
+    TL (surplus proxy = cadre_level: theory is produced by cadre
+    intellectual labor; the Study verb refines this in Unit 7b) ->
+    bootstrap root -> greedy cheapest-first auto-acquire (deterministic
+    (cost_tl, node_id) tie-break; the AI-org default policy — player
+    direction arrives with the Study verb) -> compute reachable traps.
+    Trap EVENTS are computed but deliberately not published (Unit 6).
+
+    Unit 7a (10e15b60) — live read-only canvas: engine_bridge
+    get_doctrine_tree overlays the player faction's real state
+    (hydrate_state + is_player, honest starting-position fallback, no
+    bare except), DoctrineTakeover renders acquired nodes lit + X/N + TL
+    meter; the Study affordance is explicitly labeled "coming", never
+    faked (III.11).
+
+    Engineering decisions recorded (made under the ratified slate, not
+    owner-reserved): doctrine_tags as decaying FLOAT accumulator (the only
+    reading consistent with "0.55%/tick decay"); org-held doctrine
+    (PoliticalFaction et al.), not class-held; greedy auto-acquire as the
+    non-player default; position 14.7.
+
+    REMAINING UNITS — ALL EXECUTED same-day (2026-07-15 evening), this
+    tracker updated post-hoc: Unit 5 Party Congress (415f54d0 — seeded-RNG
+    purge weighted by tag deltas per DT-5, congress_tag_snapshot field,
+    congress_delta_weight/congress_contingency_floor defines); Unit 6a
+    events (DOCTRINE_TRAP_SPRUNG/ESCAPED/PURGE_FAILED EventTypes 79->82,
+    DoctrineEvent family in the TickEvent discriminated union, bus
+    publication mirroring UPRISING, conversion + bridge severity whitelist
+    + narrator + frontend classifier); Unit 6b behavioural feedback
+    (9f7e942b — CLASS_ANALYSIS theory bonus on consciousness deltas,
+    MASS_LINK-gated org solidarity transmission into the bifurcation
+    router; both coefficients defines); Unit 7b Study order (d0ac6b1d +
+    12785996 — Educate(Doctrine) sub-verb through the action queue,
+    save-toward-target mechanics, canvas Study buttons + Studying badge).
+    The anticipated golden regeneration was NOT needed: all five
+    qa:regression scenarios are org-less, so every unit landed
+    byte-identical; the org-bearing determinism harness (the 100-tick
+    golden chain in test_doctrine_system.py) is the doctrine-motion
+    contract instead. Remaining DT scope beyond this ADR: Phase 2
+    faction-flip (ratified, faction_flip_enabled=False until then).
+  consequences: |
+    The engine's system count is 28; CLAUDE.md and ai/architecture.yaml
+    must say so (staleness found and fixed in the 2026-07-15 review).
+    Until Unit 6, doctrine state has zero gameplay consumers — the system
+    is observes-and-accumulates, matching the P19/EH shadow convention;
+    "shadow" here means no downstream reads, NOT no writes: it mutates its
+    own three org attrs every tick. The qa:regression gate is VACUOUS for
+    doctrine (org-less goldens prove no-op, not determinism-in-motion) —
+    hence the org-bearing determinism test is a pre-Unit-6 obligation, and
+    the Postgres snapshot->hydrate path for the three fields (StrEnum-
+    keyed dict through the _is_json_serializable filter) requires an
+    explicit test — both identified by the 2026-07-15 adversarial review
+    and scheduled ahead of the dev PR merge. congress_interval_ticks
+    remains a dead coefficient until Unit 5; acceptable because the slate
+    ships whole and the defines sync-guard pins it.
+  verification: |
+    Owner ratification: slate ruled 2026-07-15 ~4:50pm (session record;
+    memory dev-consolidation-2026-07-15); Phase-0 program promotion task
+    #85; NATIONAL_CHAUVINISM naming 8fa29a43. Zero-orgs golden proof:
+    tools/regression_test.py:100-134 (5 scenarios = create_imperial_
+    circuit_scenario x4 + create_two_node_scenario, defines-only
+    overrides) + scenarios/_legacy.py builders (SocialClass + Territory
+    only) — independently confirmed by the 21-agent ultracode review
+    (2026-07-15 8pm), which also adversarially confirmed: exactly 6
+    commits; registration at 14.7 in both _DEFAULT_SYSTEMS and
+    CONSEQUENCE_SYSTEMS (partition-integrity assertion satisfied); no
+    eval/exec anywhere in domain/doctrine/; in-memory round-trip of all
+    three fields; zero TODO/placeholder across the 20 touched files; live
+    gates green (96 doctrine tests, qa:regression 5/5, tsc, 1175/1175
+    vitest, check:quick). Review-identified obligations (Postgres path
+    test, org-bearing determinism, stub-bridge parity) are tracked as
+    pre-merge/pre-Unit-6 work, not silently absorbed.
+  references:
+    - "project/research/doctrine-tree-program-proposal.md (the ratified program; six-ruling slate)"
+    - "ai/epochs/epoch3/doctrine-tree-mvp.yaml (11-node MVP tree, trunks, traps, ui_requirements)"
+    - "reports/epochs-vision-gap-audit.md §Wave 6 (the 'single largest coherent MISSING cluster' finding)"
+    - "CONSTITUTION.md Compact (primitives clause), III.8 (Aleksandrov), III.11 (loud failure / no fake affordances)"
+    - "ai/decisions/ADR072_divergence_channel.yaml (the contrast case: general facility -> Amendment T proposed)"
+    - "ai/decisions/ADR070_emergent_class_partition.yaml (shadow-first convention precedent)"
+    - "memory: doctrine-tag-national-chauvinism.md (tag naming ruling), dev-consolidation-2026-07-15.md (slate + build + review record)"
+    - "src/babylon/engine/systems/doctrine.py, src/babylon/domain/doctrine/, src/babylon/config/defines/doctrine.py (the implementation, commits b1a02366..10e15b60)"

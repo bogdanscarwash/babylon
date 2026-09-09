@@ -12,7 +12,6 @@ antigravity-babylon/
 assets/
 data/
 datagaps/
-deploy/
 docs/
 hack/
 htmlcov/
@@ -25,10 +24,8 @@ specs/
 tests/
 thoughts/
 tools/
-web/
 
 # === Hidden top-level dirs (tooling, caches, runtime data) ===
-.agents/
 .claude/
 .continue/
 .github/
@@ -47,7 +44,6 @@ web/
 .specify/
 .venv/
 .vscode/
-.web-pids/
 
 # === Hidden top-level files ===
 # Linter/formatter configs and env-related files (low orientation value).
@@ -66,7 +62,6 @@ web/
 DEBT.md
 CONTRIBUTORS.md
 CHANGELOG.md
-hexmap_contract.md
 
 # === Top-level junk/transient files ===
 test_hang.py

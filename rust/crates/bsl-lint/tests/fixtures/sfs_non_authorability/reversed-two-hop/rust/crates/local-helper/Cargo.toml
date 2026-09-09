@@ -1,0 +1,6 @@
+[package]
+name = "local-helper"
+version = "0.0.0"
+
+[dependencies]
+babylon-evidence = { path = "../babylon-evidence" }

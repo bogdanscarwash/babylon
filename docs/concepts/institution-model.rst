@@ -224,22 +224,6 @@ tools for critical analysis (proletarian potential). The contest is
 structural, not merely political.
 
 
-Community Embeddedness
-----------------------
-
-The ``community_embeddedness`` graph query measures how deeply an
-institution is embedded in community networks. For each territory the
-institution occupies, the query finds community nodes with matching
-territory and computes an overlap ratio per community type.
-
-An institution with high embeddedness in a community type has material
-presence where that community lives. A school (ISA_EDUCATIONAL) embedded
-in working-class neighborhoods has different political dynamics than one
-embedded only in affluent areas. The embeddedness score feeds into the
-institution's effectiveness at ideological reproduction and its
-vulnerability to community-based organizing.
-
-
 Relationship to Feature 031 and Feature 039
 ---------------------------------------------
 

@@ -1,0 +1,6 @@
+[package]
+name = "babylon-tick"
+version = "0.0.0"
+
+[target.'cfg(unix)'.dependencies]
+evidence = { package = "babylon-evidence", path = "../babylon-evidence" }

@@ -1,0 +1,56 @@
+ADR228_relational_territory_dossier_contract:
+  status: "accepted"
+  date: "2026-08-23"
+  title: >-
+    Relational Territory Dossier V1 is a language-neutral administrative
+    projection contract, not a live game or persistence boundary
+  context: |
+    Babylon needs a bounded administrative representation of territorial
+    relations that Rust and Python can validate and encode independently. A
+    hand-maintained schema in each language would duplicate authority and allow
+    the implementations to drift. Reusing a live engine record, persistence
+    envelope, Archive document, fog projection, or player surface would also
+    make an administrative research artifact appear to be game-authoritative.
+
+    The T1 control remains outside the H3 activation, durable writer, Archive,
+    fog, and player-agency programs. Until those programs supply their own
+    governed boundaries, the contract must name unavailable material as typed
+    gaps rather than infer a geographic, player, or persistence result.
+  decision: |
+    The checked-in Relational Territory Dossier V1 YAML contract is the sole
+    structural source of truth for its closed records, enums, required fields,
+    identity forms, sorting rules, limits, and error registry. Deterministic
+    generation renders frozen Python and Rust structural declarations from that
+    contract. Validators and canonical encoders remain hand-written and
+    independent in the two languages; neither encoder compares its result with
+    the other encoder as its proof of correctness.
+
+    The isolated `babylon-rtd` crate may depend one way on `babylon-kernel`.
+    The engine must not depend on `babylon-rtd`. T1 creates no generic schema
+    framework, engine authority, persistence writer, database schema, Archive
+    outbox, fog policy, player input, player display, or live data producer.
+    An administrative fixture is not player evidence and cannot satisfy a
+    gameplay, player-agency, emergence, committed-Archive, or Bevy milestone.
+  consequences: |
+    Contract changes require one governed YAML edit followed by regenerated
+    structural declarations and independent language-specific validation. A
+    new repository-root `contracts` directory is an exact hygiene allowlist
+    entry; similar or unknown roots remain refused.
+
+    The contract can carry typed missingness for material whose governed
+    producer is absent, but it cannot mint H3, metropolitan, player, fog, or
+    durable-persistence authority. Those boundaries remain owned by their
+    respective programs and need their own decisions and verification.
+  verification: |
+    The repository-hygiene behavioral contract proves that the exact
+    `contracts` root is admitted while `contractz` and another unknown root
+    refuse. The BSL sentinel gate proves that this ADR filename stem has a
+    matching decision-index key; it does not validate the ADR top-level key or
+    the index row values. The ADR228 decision-index contract test parses both
+    YAML documents and proves the top-level key plus the exact index title,
+    status, date, and file. YAML lint checks the ADR and decision index syntax.
+  supersedes: []
+  related:
+    - ADR220_rust_owned_postgresql_persistence_boundary
+    - ADR221_game_first_refoundation_v4
+    - ADR224_bsl_causal_composition_contract

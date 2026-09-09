@@ -1,0 +1,41 @@
+D01_DRIVER_SHAPE|DRIVER|attempt ledger to cumulative driver trace|authoritative trace derivation plus class refusal|GATE5|-
+D02_TIME_SHIFT|DRIVER|paired material samples to aligned comparator|exact aligned material equality|SYNTHETIC|aligned_material_bits_match
+D03_INPUT_PERMUTATION|DRIVER|input order to canonical ledger|exact bytes equal|SYNTHETIC|input_permutations_preserve_bytes
+D04_NO_INTENT|DRIVER|accepted actions to mechanics|declared difference|GATE5|-
+D05_ALTERNATE_PRACTICE|DRIVER|practice ID to mechanics|declared difference|GATE5|-
+D06_ZERO_INVENTORY|DYNAMIC|inventory to aid route|no material transfer|G6|-
+D07_ZERO_LABOR|DYNAMIC|labor to aid route|no material transfer|G6|-
+D08_SEVER_PRESENCE|DYNAMIC|presence relation to scoped mechanic|declared causal difference|LIVE_T3|-
+D09_SEVER_COMMUNICATION|DYNAMIC|communication relation to scoped mechanic|declared causal difference|LIVE_T3|-
+D10_SEVER_TRANSPORT|DYNAMIC|transport relation to scoped mechanic|declared causal difference|LIVE_T3|-
+D11_SEVER_SOLIDARITY|DYNAMIC|solidarity relation to scoped mechanic|declared causal difference|LIVE_T3|-
+D12_SEVER_MEMBERSHIP|DYNAMIC|membership relation to reducer|declared causal difference|PER44|-
+D13_REMOVE_RESOLVER|DYNAMIC|encounter producer to membership|observable unavailable|PER44|-
+D14_DEGREE_REWIRE|DYNAMIC|topology to local propagation|declared relational difference|LIVE_T3|-
+D15_ROUTE_CUT|DYNAMIC|redundant route to cut bridge|declared routing difference|LIVE_T3|-
+D16_CARRIER_DISTRIBUTION|DYNAMIC|equal total to carrier distribution|aggregate traces differ lawfully|LIVE_T3|-
+E01_MISSING_AS_ZERO|EVALUATOR|missing payload to reducer|unavailable, not zero|PER44|-
+E02_CONTRIBUTION_OMISSION|EVALUATOR|contribution set to aggregate|digest or aggregate mismatch|PER44|-
+E03_CONTRIBUTION_DOUBLE|EVALUATOR|contribution set to aggregate|duplicate identity refusal|PER44|-
+E04_SUMMATION_ORDER|EVALUATOR|sorted contributions to aggregate|canonical order mismatch|PER44|-
+E05_WINDOW_OFF_BY_ONE|EVALUATOR|samples to classifier|wrong length refusal|SYNTHETIC|classifier_rejects_off_by_one
+E06_COMPARATOR|EVALUATOR|deltas to classifier|adversarial class mismatch|SYNTHETIC|the_eight_w2_vectors_pin_predicate_order
+E07_UNCOMMITTED_SAMPLE|EVALUATOR|committed envelope to sample|envelope identity mismatch|GATE3|-
+E08_OMITTED_RUN_FIELD|EVALUATOR|executable input to run identity|mutation changes digest|SYNTHETIC|every_run_field_moves_identity
+E09_PROCESS_RESTART|EVALUATOR|persisted envelope to replay|exact trace bytes equal|GATE3|-
+E10_GRAPH_BACKEND|EVALUATOR|graph backend to committed trace|exact trace bytes equal|LIVE_T3|-
+S01_NAMED_SHAPE|STATIC|BSL AST to intrinsic profile|forbidden intrinsic|SYNTHETIC|forbidden_corpus_exact
+S02_EXP_RESPONSE|STATIC|BSL AST to intrinsic profile|forbidden exp response|SYNTHETIC|forbidden_corpus_exact
+S03_LOG_RESPONSE|STATIC|BSL AST to intrinsic profile|forbidden log response|SYNTHETIC|forbidden_corpus_exact
+S04_STORED_AGGREGATE|STATIC|engine source to authoritative field|reserved engine token|SYNTHETIC|every_reserved_token_and_language_surface_fails
+S05_STORED_STAGE|STATIC|engine source to authoritative field|reserved engine token|SYNTHETIC|every_reserved_token_and_language_surface_fails
+S06_TIME_READ|STATIC|BSL binding to rule|forbidden binding source|SYNTHETIC|forbidden_corpus_exact
+S07_CALENDAR_READ|STATIC|BSL binding to rule|forbidden binding source|SYNTHETIC|forbidden_corpus_exact
+S08_RNG_READ|STATIC|BSL intrinsic to rule|forbidden intrinsic|SYNTHETIC|forbidden_corpus_exact
+S09_ABSOLUTE_SCHEDULE|STATIC|time binding to effect guard|forbidden absolute schedule|SYNTHETIC|forbidden_corpus_exact
+S10_SCENARIO_LATER_STATE|STATIC|scenario field to authoritative state|reserved engine token|SYNTHETIC|every_reserved_token_and_language_surface_fails
+S11_DIRECT_MEMBERSHIP|STATIC|intent effect to membership payload|exact membership effect refusal|PER44|-
+S12_UNAUTHORIZED_WRITE|STATIC|BSL effect to profile|unexpected effect|SYNTHETIC|forbidden_corpus_exact
+S13_ROLE_RELABEL|STATIC|BSL attribution to source digest|profile source mismatch|SYNTHETIC|role_relabel_moves_identity_and_fails_profile
+S14_DEAD_PERMISSION|STATIC|governed row to absent AST use|exact footprint mismatch|SYNTHETIC|forbidden_corpus_exact
+S15_AST_IDENTITY_STASIS|STATIC|semantic AST to content identity|source digest mismatch|SYNTHETIC|semantic_change_moves_identity

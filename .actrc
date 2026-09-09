@@ -1,0 +1,6 @@
+# act (gh act) defaults — local simulation of the ubuntu runner so CI debugging
+# does not burn GitHub minutes (mise run ci:local / ci:local:install).
+# act-latest (~1.5GB) not full-latest (~60GB): only the installer-e2e job needs
+# full runner parity and it gets nix from an action, not from the image.
+-P ubuntu-latest=ghcr.io/catthehacker/ubuntu:act-latest
+--container-architecture linux/amd64

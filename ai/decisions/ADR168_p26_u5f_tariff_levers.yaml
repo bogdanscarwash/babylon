@@ -1,0 +1,43 @@
+ADR168_p26_u5f_tariff_levers:
+  status: "accepted"
+  date: "2026-07-27"
+  title: >
+    P26 U5f — tariff/duty/tax trade levers through the P25 Policy
+    gauntlet: PolicyAxis.TRADE_TARIFF joins the regulatory-redistributive
+    set; TradePolicyDefines carries the per-node rates; effective_trade is
+    the pure consumption seam. First concrete P25<->P26 coupling.
+  context: |
+    Director directive (ADR165, same session): tariff rates, import
+    duties and trade taxes are trade-system instruments ADJUSTED via the
+    Policy/Electoral machinery. The contract (u5-engine-train-contracts.md
+    §U5f) demanded zero new system positions and start-values-in-defines.
+  decision: |
+    - PolicyAxis.TRADE_TARIFF added to _REGULATORY_REDISTRIBUTIVE
+      (domain/politics/policy.py): LEGISLATE motions on tariffs run the
+      SAME preemption/judicial/capital-strike gauntlet (reform ceiling
+      included) as wage_floor/labor_law; PolicySystem dispatches axes
+      generically — no new machinery.
+    - TradePolicyDefines (config/defines/trade_policy.py): tariff_rates
+      per-node map (default {} — inert), import_duty_rate, trade_tax_rate,
+      tariff_dampening_coefficient (DISCLOSED synthetic linear placeholder
+      pending elasticity calibration). defines.yaml regenerated; sync
+      guard green. No redundant per-motion cap — the existing generic
+      gauntlet already bounds TRADE_TARIFF motions.
+    - Pure consumption seam: domain/economics/trade_policy.py
+      effective_trade(trade, tariff_rates, dampening) — deterministic,
+      sorted, loud on out-of-range inputs; the U5d attribution pipeline
+      is its consumer (wiring lives with that lane).
+    - DOCUMENTED LIMIT: PolicyAgendaItem has no per-partner-node target
+      field, so per-node LEGISLATE targeting ("tariff China specifically")
+      needs a shared P25 schema change — a Director-visible follow-up,
+      not improvised. One national dial moves uniformly; per-node
+      asymmetry lives in the defines map.
+    - Default-inert pinned by test: zero-rate defaults move nothing.
+  consequences:
+    positive:
+      - "Electoral/legislative outcomes can now move trade policy through the exact machinery P25 built — the coupling is real, not parallel plumbing"
+      - "38 new tests; byte-identical defaults"
+    negative:
+      - "Per-node LEGISLATE targeting deferred (P25 schema change)"
+      - "The dampening coefficient is a declared placeholder until elasticity calibration"
+  file: ADR168_p26_u5f_tariff_levers.yaml

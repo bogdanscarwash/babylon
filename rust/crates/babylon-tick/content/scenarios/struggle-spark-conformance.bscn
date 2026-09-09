@@ -1,0 +1,22 @@
+; Amendment AJ's narrow Struggle spark pilot. This is not the full frozen
+; Python Struggle transcription: uprising, solidarity, wealth damage,
+; consciousness, peripheral revolt, and electoral amplification are absent.
+(scenario struggle/spark-conformance
+  (defvocabulary NodeType (SOCIAL_CLASS))
+  (defenum StruggleSparkOutcome (EXCESSIVE_FORCE NO_INCIDENT))
+
+  (deffield social-class/repression-faced intensity intensive)
+  (deffield social-class/agitation-backfire intensity intensive)
+  (deffield social-class/last-incident-known int intensive)
+  (deffield social-class/last-incident-tick int extensive)
+
+  ; Designed pilot coefficients. `spark-scale` keeps repression × scale in
+  ; [0,1] for the declared Intensity carrier before explicit Mass quantization.
+  (defconst struggle/spark-scale 0.5c)
+  (defconst struggle/backfire-step 0.2c)
+
+  (node workers NodeType/SOCIAL_CLASS
+    (social-class/repression-faced 0.5i)
+    (social-class/agitation-backfire 0.1i)
+    (social-class/last-incident-known 0)
+    (social-class/last-incident-tick -1)))

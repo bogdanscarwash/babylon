@@ -1,0 +1,444 @@
+==================================================
+Fundamental theorem (content/rules/fundamental-theorem.bsl — ABRIDGED: :material-basis truncated, header comment cut)
+==================================================
+
+; W_c > V_c: while core wages exceed the value core labour produces, the
+; difference is imperial rent.
+(rule economics/fundamental-theorem
+  :role mechanic
+  :evidence derived
+  :material-basis "core wages above the value core labour produces is imperial rent"
+  :fuel 64
+  (bindings
+    (binding wages :field social-class/wages)
+    (binding value-produced :field social-class/value-produced))
+  (when (> wages value-produced))
+  (effects
+    (update-node self social-class/imperial-rent (set (- wages value-produced)))))
+
+---
+
+(source_file
+  (comment)
+  (comment)
+  (rule
+    (qname)
+    (rule_role)
+    (evidence)
+    (material_basis
+      (string))
+    (fuel
+      (int_lit))
+    (bindings
+      (binding
+        (symbol)
+        (bind_src
+          (qname)))
+      (binding
+        (symbol)
+        (bind_src
+          (qname))))
+    (when
+      (comparison
+        (cmp)
+        (symbol)
+        (symbol)))
+    (effects
+      (update_node
+        (symbol)
+        (qname)
+        (update_op
+          (arith_expr
+            (arith)
+            (symbol)
+            (symbol)))))))
+
+==================================================
+Unconditional rule — an omitted <when> (conformance/unconditional.bsl — VERBATIM)
+==================================================
+
+(rule event/unconditional
+  :material-basis "a standing levy applies every tick by declared intent"
+  :fuel 16
+  (bindings)
+  (effects
+    (emit EventType/CONSCIOUSNESS_SHIFT (standing 1))))
+
+---
+
+(source_file
+  (rule
+    (qname)
+    (material_basis
+      (string))
+    (fuel
+      (int_lit))
+    (bindings)
+    (effects
+      (emit
+        (enum_ref)
+        (payload_item
+          (symbol)
+          (literal
+            (int_lit)))))))
+
+==================================================
+Guarded effects (conformance/event_bifurcation.bsl — ABRIDGED: :material-basis truncated)
+==================================================
+
+(rule event/bifurcation
+  :material-basis "agitation routes by solidarity density"
+  :fuel 512
+  (bindings
+    (binding agitation :field social-class/agitation)
+    (binding solidarity-density :metric solidarity-density))
+  (when (>= agitation 0.5p))
+  (effects
+    (guard (< solidarity-density 0.1c)
+      (update-node self social-class/national-identity (add 0.15i)))
+    (guard (>= solidarity-density 0.1c)
+      (update-node self social-class/class-consciousness (add 0.15i)))))
+
+---
+
+(source_file
+  (rule
+    (qname)
+    (material_basis
+      (string))
+    (fuel
+      (int_lit))
+    (bindings
+      (binding
+        (symbol)
+        (bind_src
+          (qname)))
+      (binding
+        (symbol)
+        (bind_src
+          (symbol))))
+    (when
+      (comparison
+        (cmp)
+        (symbol)
+        (literal
+          (scaled_lit))))
+    (effects
+      (guard
+        (comparison
+          (cmp)
+          (symbol)
+          (literal
+            (scaled_lit)))
+        (update_node
+          (symbol)
+          (qname)
+          (update_op
+            (literal
+              (scaled_lit)))))
+      (guard
+        (comparison
+          (cmp)
+          (symbol)
+          (literal
+            (scaled_lit)))
+        (update_node
+          (symbol)
+          (qname)
+          (update_op
+            (literal
+              (scaled_lit))))))))
+
+==================================================
+Folds, aggregation and a weighted mean (conformance/event_wealth_aggregates.bsl — VERBATIM)
+==================================================
+
+(rule event/wealth-aggregates
+  :material-basis "total and extremal wealth positions gate the conjuncture"
+  :fuel 1024
+  (bindings
+    (binding wealth :field social-class/wealth)
+    (binding agitation :field social-class/agitation)
+    (binding population :field social-class/population))
+  (when (and (>= (fold sum (nodes NodeType/SOCIAL_CLASS) wealth) 550)
+             (>= (fold max (nodes NodeType/SOCIAL_CLASS) wealth) 500)
+             (<= (fold min (nodes NodeType/SOCIAL_CLASS) wealth) 50)
+             (>= (fold mean (nodes NodeType/SOCIAL_CLASS) agitation :weight population) 0.3i)))
+  (effects
+    (emit EventType/CONSCIOUSNESS_SHIFT (gate 2))))
+
+---
+
+(source_file
+  (rule
+    (qname)
+    (material_basis
+      (string))
+    (fuel
+      (int_lit))
+    (bindings
+      (binding
+        (symbol)
+        (bind_src
+          (qname)))
+      (binding
+        (symbol)
+        (bind_src
+          (qname)))
+      (binding
+        (symbol)
+        (bind_src
+          (qname))))
+    (when
+      (and_cond
+        (comparison
+          (cmp)
+          (fold
+            (fold_op)
+            (nodes
+              (enum_ref))
+            (symbol))
+          (literal
+            (int_lit)))
+        (comparison
+          (cmp)
+          (fold
+            (fold_op)
+            (nodes
+              (enum_ref))
+            (symbol))
+          (literal
+            (int_lit)))
+        (comparison
+          (cmp)
+          (fold
+            (fold_op)
+            (nodes
+              (enum_ref))
+            (symbol))
+          (literal
+            (int_lit)))
+        (comparison
+          (cmp)
+          (fold
+            (fold_op)
+            (nodes
+              (enum_ref))
+            (symbol)
+            (weight
+              (symbol)))
+          (literal
+            (scaled_lit)))))
+    (effects
+      (emit
+        (enum_ref)
+        (payload_item
+          (symbol)
+          (literal
+            (int_lit)))))))
+
+==================================================
+exists / forall over a node query (conformance/event_node_condition.bsl + event_forall.bsl — ABRIDGED: both :material-basis strings truncated)
+==================================================
+
+(rule event/agitation-anywhere
+  :material-basis "any class fraction past the agitation threshold"
+  :fuel 512
+  (bindings
+    (binding agitation :field social-class/agitation))
+  (when (exists (nodes NodeType/SOCIAL_CLASS) (>= agitation 0.6p)))
+  (effects
+    (emit EventType/CONSCIOUSNESS_SHIFT (threshold 0.6p))))
+
+(rule event/agitation-everywhere
+  :material-basis "a threshold held by every fraction"
+  :fuel 512
+  (bindings
+    (binding agitation :field social-class/agitation))
+  (when (forall (nodes NodeType/SOCIAL_CLASS) (>= agitation 0.5p)))
+  (effects
+    (emit EventType/CONSCIOUSNESS_SHIFT (threshold 0.5p))))
+
+---
+
+(source_file
+  (rule
+    (qname)
+    (material_basis
+      (string))
+    (fuel
+      (int_lit))
+    (bindings
+      (binding
+        (symbol)
+        (bind_src
+          (qname))))
+    (when
+      (exists
+        (nodes
+          (enum_ref))
+        (comparison
+          (cmp)
+          (symbol)
+          (literal
+            (scaled_lit)))))
+    (effects
+      (emit
+        (enum_ref)
+        (payload_item
+          (symbol)
+          (literal
+            (scaled_lit))))))
+  (rule
+    (qname)
+    (material_basis
+      (string))
+    (fuel
+      (int_lit))
+    (bindings
+      (binding
+        (symbol)
+        (bind_src
+          (qname))))
+    (when
+      (forall
+        (nodes
+          (enum_ref))
+        (comparison
+          (cmp)
+          (symbol)
+          (literal
+            (scaled_lit)))))
+    (effects
+      (emit
+        (enum_ref)
+        (payload_item
+          (symbol)
+          (literal
+            (scaled_lit)))))))
+
+==================================================
+Edge query with count, and an empty bindings list (conformance/event_edge_count.bsl — VERBATIM)
+==================================================
+
+(rule event/solidarity-web
+  :material-basis "the solidarity web's existence conditions rupture routing"
+  :fuel 128
+  (bindings)
+  (when (>= (fold count (edges EdgeType/SOLIDARITY) it) 1))
+  (effects
+    (emit EventType/CONSCIOUSNESS_SHIFT (web 1))))
+
+---
+
+(source_file
+  (rule
+    (qname)
+    (material_basis
+      (string))
+    (fuel
+      (int_lit))
+    (bindings)
+    (when
+      (comparison
+        (cmp)
+        (fold
+          (fold_op)
+          (edges
+            (enum_ref))
+          (symbol))
+        (literal
+          (int_lit))))
+    (effects
+      (emit
+        (enum_ref)
+        (payload_item
+          (symbol)
+          (literal
+            (int_lit)))))))
+
+==================================================
+:optional / :default and :const bindings (doctrine_adventurism.bsl VERBATIM + doctrine_liquidation_absorbing.bsl ABRIDGED to two of six bindings)
+==================================================
+
+(rule doctrine/adventurism
+  :material-basis "isolation from the mass base severs the practice loop"
+  :fuel 16
+  (bindings
+    (binding mass-link :field organization/mass-link :optional :default 0))
+  (when (<= mass-link 0))
+  (effects
+    (emit EventType/DOCTRINE_TRAP (trap-id 1))))
+
+(rule doctrine/liquidation-absorbing
+  :material-basis "solidarity collapsed, co-optation dominant"
+  :fuel 32
+  (bindings
+    (binding solidarity-mass :field organization/solidarity-mass :optional :default 0)
+    (binding solidarity-liquidation-floor :const doctrine/solidarity-liquidation-floor))
+  (when (<= solidarity-mass solidarity-liquidation-floor))
+  (effects
+    (emit EventType/DOCTRINE_TRAP (trap-id 3))))
+
+---
+
+(source_file
+  (rule
+    (qname)
+    (material_basis
+      (string))
+    (fuel
+      (int_lit))
+    (bindings
+      (binding
+        (symbol)
+        (bind_src
+          (qname))
+        (bind_opt)
+        (bind_opt
+          (literal
+            (int_lit)))))
+    (when
+      (comparison
+        (cmp)
+        (symbol)
+        (literal
+          (int_lit))))
+    (effects
+      (emit
+        (enum_ref)
+        (payload_item
+          (symbol)
+          (literal
+            (int_lit))))))
+  (rule
+    (qname)
+    (material_basis
+      (string))
+    (fuel
+      (int_lit))
+    (bindings
+      (binding
+        (symbol)
+        (bind_src
+          (qname))
+        (bind_opt)
+        (bind_opt
+          (literal
+            (int_lit))))
+      (binding
+        (symbol)
+        (bind_src
+          (qname))))
+    (when
+      (comparison
+        (cmp)
+        (symbol)
+        (symbol)))
+    (effects
+      (emit
+        (enum_ref)
+        (payload_item
+          (symbol)
+          (literal
+            (int_lit)))))))

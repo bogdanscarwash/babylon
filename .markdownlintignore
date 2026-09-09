@@ -60,8 +60,6 @@ data/census/
 # Thoughts
 project/notes/
 
-# Agent workflows and data
-.agents/
 .claude/
 antigravity-babylon/
 

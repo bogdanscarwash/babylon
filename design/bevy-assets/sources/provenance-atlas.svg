@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <g id="material" transform="translate(0 0)"><path d="M32 88L64 26L96 88Z" fill="#228b22"/><path d="M46 88L64 54L82 88" fill="none" stroke="#e8e8e8" stroke-width="6"/></g>
+  <g id="absent" transform="translate(128 0)"><circle cx="64" cy="64" r="38" fill="none" stroke="#404040" stroke-width="9"/><path d="M37 91L91 37" stroke="#e8e8e8" stroke-width="8"/></g>
+  <g id="not-computed" transform="translate(0 128)"><path d="M30 34H98V94H30Z" fill="none" stroke="#4169e1" stroke-width="8"/><path d="M46 50H82M46 66H70M46 82H76" stroke="#4169e1" stroke-width="6"/></g>
+  <g id="redacted" transform="translate(128 128)"><path d="M28 42H100V86H28Z" fill="#1a0000" stroke="#dc143c" stroke-width="8"/><path d="M38 54H90M38 66H90M38 78H90" stroke="#dc143c" stroke-width="6"/></g>
+</svg>

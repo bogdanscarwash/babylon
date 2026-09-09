@@ -1,0 +1,40 @@
+ADR169_p26_train_closure:
+  status: "accepted"
+  date: "2026-07-28"
+  title: >
+    P26 U5g + U6 phase 2 + train closure: the Vol2 composer closes
+    ADR162's inert half, trade surfaces render in BOTH Archive clients
+    through the generic subject seam, and the P26 engine train closes with
+    all gates green — the program's remaining items are enumerated
+    follow-ups, not silent gaps.
+  context: |
+    The last two build units plus the closure ledger for Program 26
+    (charter ADR160; units U0-U6 executed across ADR161-168).
+  decision: |
+    - U5g: build_vol2_circulation_step (game/vol2.py) composes the step
+      from its two live suppliers (checked-in LODES artifact + the
+      session's real hex->county adjunction); cli/play.py probes
+      tiger_shapefile_available() (drive symlink; CI degrades LOUDLY,
+      never crashes creation) and folds the step into TradeWiring;
+      interactive campaigns now hydrate hexes at creation (runner twin).
+      ADR162's blocking-dependency citation is closed.
+    - U6 phase 2: NO new Host method — the generic read_page/subject_view/
+      known_subjects seam serves trade/overview + trade/<node> in Textual
+      (palette/jumplist/wikilink) AND the Rust client (WikiView/Palette/
+      peek), proven by 59 Python + 5 Rust tests; honest absence
+      everywhere; tutorial estate untouched; vault baking deferred per
+      contract.
+    - Closure gates: mise run check green (15,000+ tests incl. new
+      estates), qa:regression 11/11 byte-identical + determinism leg,
+      golden vault byte-identical. One declared ceremony:
+      blessed(p26-defines-categories) — defines_hash-only drift from the
+      two new INERT categories, zero cell drift.
+    - Sentinel pins updated in lockstep (system count 33->34,
+      MATERIAL_BASE citation, defines public surface, TransportSystem
+      CoverageGap row, player_actions allowlist un-rotted).
+  consequences:
+    positive:
+      - "Program 26 units U0-U6 are all EXECUTED; the playable game has grounded international trade end-to-end: data -> attribution -> tick flows -> policy levers -> client surfaces"
+    negative:
+      - "Enumerated follow-ups (chartered, not silent): sigma_index generator unit; BUILD_INFRASTRUCTURE 10th-verb registration (registry pin + preview + capability gating); transport routing solver + res-8 ingested mesh + transport-enabled qa scenario; per-node LEGISLATE tariff targeting (P25 PolicyAgendaItem schema); circulation-crisis consumption of the overhang delta; ci-data release re-cut (owner-gated, sha 5e1e60fc...); _write_manifest clobber ticket (owner-gated file); FAF pre-2018 backcast; U6 vault-baked trade pages; latin_america Ricci-proxy review (ADR167)"
+  file: ADR169_p26_train_closure.yaml

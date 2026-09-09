@@ -11,6 +11,8 @@ from typing import Final
 
 from dotenv import load_dotenv
 
+from babylon.config.paths import player_data_dir
+
 # Load .env file if it exists
 load_dotenv()
 
@@ -43,7 +45,11 @@ class BaseConfig:
     LOG_FORMAT: Final[str] = os.getenv(
         "LOG_FORMAT", "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     )
-    LOG_DIR: Final[Path] = Path(os.getenv("LOG_DIR", "./logs"))
+    # Player data dir (ADR094/096 D3 provisioning canon), not a repo-relative
+    # path: logs are runtime player state, same root as model weights
+    # (`babylon.intelligence.provision.default_models_dir`). LOG_DIR env var
+    # still overrides for dev/CI (e.g. pointing logs at a repo-local dir).
+    LOG_DIR: Final[Path] = Path(os.getenv("LOG_DIR", str(player_data_dir() / "logs")))
 
     # === Metrics Configuration ===
     METRICS_ENABLED: Final[bool] = os.getenv("METRICS_ENABLED", "true").lower() == "true"

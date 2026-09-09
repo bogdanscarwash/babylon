@@ -13,13 +13,18 @@ rules:
   # LAYER BOUNDARY: Formulas must not import engine/data/rag/models/ui/metrics
   # =========================================================================
 
+  # NOTE (ADR181 R9 alignment, 2026-07-30): `models` was removed from the
+  # banned set — the ratified Program-14 layering (pyproject.toml
+  # [tool.importlinter], the authoritative gate) places models/formulas as
+  # SIBLINGS and forbids only formulas->engine; formulas importing frozen
+  # types/enums from models is data, not a service object.
   - id: babylon.layer-boundary.formulas-no-from-import
     message: >-
-      Formulas layer must not import from engine/data/rag/models/ui/metrics.
+      Formulas layer must not import from engine/data/rag/ui/metrics.
       Formulas are pure math — they receive values, not service objects.
     severity: ERROR
     languages: [python]
-    pattern-regex: "^from babylon\\.(engine|data|rag|models|ui|metrics)"
+    pattern-regex: "^from babylon\\.(engine|data|rag|ui|metrics)"
     paths:
       include:
         - "**/formulas/"
@@ -29,11 +34,11 @@ rules:
 
   - id: babylon.layer-boundary.formulas-no-bare-import
     message: >-
-      Formulas layer must not import from engine/data/rag/models/ui/metrics.
+      Formulas layer must not import from engine/data/rag/ui/metrics.
       Formulas are pure math — they receive values, not service objects.
     severity: ERROR
     languages: [python]
-    pattern-regex: "^import babylon\\.(engine|data|rag|models|ui|metrics)"
+    pattern-regex: "^import babylon\\.(engine|data|rag|ui|metrics)"
     paths:
       include:
         - "**/formulas/"
@@ -172,4 +177,3 @@ rules:
     paths:
       include:
         - "src/"
-        - "web/"

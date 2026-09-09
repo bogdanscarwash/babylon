@@ -1,0 +1,110 @@
+ADR181_ci_synergy_rulings:
+  status: "accepted"
+  date: "2026-07-30"
+  title: >
+    Director rulings, live session 2026-07-30 (fourth batch — the CI
+    synergy train): every recommendation of the Director-commissioned
+    CI/Copilot/CodeQL audit (reports/ci-copilot-codeql-synergy-2026-07-30.md,
+    PR #437) APPROVED via the interactive question flow, plus the two
+    estate calls the audit surfaced (OpenWiki landing, XDG paths). The CI
+    train executes BEFORE Lane A opens.
+  context: |
+    The Director asked mid-session "see how we can more efficiently use
+    copilot and codeql and all that stuff to synergize with the way we
+    work here". A six-agent audit (5 evidence lanes + Opus synthesis)
+    produced the report; the main loop independently verified every
+    defect claim before delivery (report §5) and fixed the four confirmed
+    Rust conformance defects immediately (PR #438). The Director then
+    ruled ALL recommendations through the interactive question UI
+    ("i want the pop up questions"), two batches, eight questions.
+    Evidence anchors: Copilot review 83% substantive / 0% acted-on
+    (37 comments, 18 PRs); CodeQL 418 min/day on the frozen Python
+    estate, zero Rust coverage; Rust Gate not required on dev; nightly
+    76/76 failed ever; 22% of post-merge dev runs cancelled; eight
+    process scar classes living as prose.
+  decision: |
+    COPILOT (question 1):
+    (R1) HARVEST PROTOCOL ADOPTED: before self-merging, an agent waits
+        for the Copilot review and, for each inline comment, pushes a fix
+        or posts a reply stating why not — zero unaddressed comments is a
+        merge precondition. Protocol law in CLAUDE.md, NOT a GitHub
+        required check (WND-2: no stochastic verdict on the merge path).
+    (R1b) copilot-instructions.md REWRITTEN around repo invariants
+        (determinism/-0.0/NaN, no imposed sigmoids, model_copy skips
+        validation, native-hyperedge law, cross-language transcription,
+        vocabulary classes, "never comment on formatting"), replacing the
+        323 stale lines (NetworkX/ChromaDB/ai-docs era).
+    MERGE MECHANISM (question 2 — all three):
+    (R2a) dev ruleset 18807584 gains three required contexts: Rust Gate,
+        Baseline Ceremony Gate, Postgres Integration Tier (each finishes
+        inside the unit-test job; zero added latency; Rust could
+        previously merge red).
+    (R2b) gh pr merge --auto DELETED from dependabot-automerge.yml (the
+        literal #392 mechanism) — replaced with wait-then-verify-merge.
+    (R2c) post-merge dev CI runs are never cancelled (cancel-in-progress
+        false for push:dev) — 22% were dying mid-flight, leaving 1 in 5
+        merged states unvalidated.
+    NIGHTLY (question 3):
+    (R3) FULL SPLIT + TRIAGE: per-leg workflows so one red leg cannot
+        mask the estate; qa:michigan-rollover-smoke extracted to its own
+        visible lane; the five failing legs triaged (read-only
+        investigation dispatched same session).
+    CODEQL / RUST SUPPLY CHAIN (question 4 — all four):
+    (R5a) CodeQL gains the rust matrix leg (public-preview extractor,
+        build-mode none, informational — WND-4 stands: never required).
+    (R5b) CodeQL pull_request trigger DROPPED (push dev/main + weekly
+        cron remain); concurrency block added.
+    (R5c) the 11 standing legacy web/ alerts are dismissed/path-ignored
+        citing Amendment V, so the alert floor is ZERO and any new alert
+        on src/ or rust/ is actionable news.
+    (R6) dependabot cargo ecosystem block (weekly, grouped) + cargo-deny
+        in the Rust Gate with a [sources] allowlist for the hypergraph-rs
+        git dependency.
+    HYGIENE (question 5 — all four):
+    (R4) pre-push full-tree sentinel leg (kills the staged-files blind
+        spot, the #1 recurring scar class).
+    (R7) main.yml loses its pull_request trigger — PRs to main run ci.yml
+        only (the stronger twin; removes the weaker-copy race on the
+        required path).
+    (R8) babylon-tui wheel built once per PR head and shared as an
+        artifact; restore-keys added to the CARGO caches only (the venv
+        cache exact-match key is deliberate — WND-3 stands).
+    (R9) three process sentinels: semgrep wall-clock-test ban;
+        workflow-hygiene rules (scheduled workflows must exist on the
+        default branch; doc-referenced workflows must be tracked);
+        worktree environment contract incl. uv.lock-unmodified.
+    (R10) mise run pr:merge wrapper mechanizes the four merge-discipline
+        prose rules (no --auto, headRefOid==headSha, non-required-check
+        red refusal, stacked-PR delete-branch guard) PLUS the R1 harvest
+        precondition; CLAUDE.md names it the only sanctioned merge path.
+    ESTATE CALLS (questions 6-7):
+    (R11) OPENWIKI: the agent LANDS the Director's untracked
+        openwiki-update.yml + openwiki/ tree (from the main checkout's
+        working tree, read fully before committing) — resolving the
+        CLAUDE.md verifiability violation the audit flagged.
+    (R12) XDG HONORED: logs AND archives resolve $XDG_DATA_HOME (falling
+        back to ~/.local/share) — an amendment to the 2026-07-28 logging
+        directive's literal path, applied to the Python periphery and the
+        Rust client logging together, never half-and-half.
+    SEQUENCING (question 8):
+    (R13) THE CI TRAIN EXECUTES FIRST — before Lane A (heat) opens.
+        Order: protocol (A) -> merge mechanism (B) -> CodeQL/cargo (D) ->
+        hygiene (E) -> nightly (C) -> OpenWiki (F) -> XDG (G).
+  consequences: |
+    - The merge protocol section of CLAUDE.md changes (R1, R10) — agents
+      MUST harvest Copilot before merging from this ADR forward.
+    - The dev ruleset change (R2a) is a SETTINGS mutation executed via
+      gh api, recorded here as its audit trail.
+    - WND-1..8 of the report remain binding negative space: Copilot and
+      CodeQL stay non-required; no merge queue; no test-impact selection;
+      no venv-cache restore-keys; no ci.yml/main.yml workflow_call
+      refactor.
+    - The michigan-rollover gate becomes a visible, standalone signal for
+      the first time since its creation.
+    - The audit report (PR #437) + the fix PR (#438) + this ADR are the
+      train's evidence spine; the train issue tracks execution.
+  verification: |
+    Popup answers recorded verbatim in the session (two AskUserQuestion
+    batches, 2026-07-30): Q1 "Yes — R1 + R1b"; Q2 all three options; Q3
+    "Full split + triage"; Q4 all four options; Q5 all four options; Q6
+    "I land them (agent)"; Q7 "Honor XDG"; Q8 "CI train first".

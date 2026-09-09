@@ -1,0 +1,510 @@
+==================================================
+Computed bindings and the calendar bind-srcs (§2.5 worked example, D68)
+==================================================
+
+(rule vitality/drain
+  :material-basis "subsistence deficit at the point of reproduction"
+  :fuel 64
+  (bindings
+    (binding wealth      :field social-class/wealth)
+    (binding subsistence :const vitality/subsistence-cost)
+    (binding drained     :expr (- wealth subsistence))
+    (binding now         :tick)
+    (binding y           :year)
+    (binding toy         :tick-of-year)
+    (binding phase       :tick-in-cycle 52))
+  (when (> drained 0$))
+  (effects
+    (update-node self social-class/agitation (add 0.05i))))
+
+---
+
+(source_file
+  (rule
+    (qname)
+    (material_basis
+      (string))
+    (fuel
+      (int_lit))
+    (bindings
+      (binding
+        (symbol)
+        (bind_src
+          (qname)))
+      (binding
+        (symbol)
+        (bind_src
+          (qname)))
+      (binding
+        (symbol)
+        (bind_src
+          (arith_expr
+            (arith)
+            (symbol)
+            (symbol))))
+      (binding
+        (symbol)
+        (bind_src))
+      (binding
+        (symbol)
+        (bind_src))
+      (binding
+        (symbol)
+        (bind_src))
+      (binding
+        (symbol)
+        (bind_src
+          (int_lit))))
+    (when
+      (comparison
+        (cmp)
+        (symbol)
+        (literal
+          (scaled_lit))))
+    (effects
+      (update_node
+        (symbol)
+        (qname)
+        (update_op
+          (literal
+            (scaled_lit)))))))
+
+==================================================
+Two-hop fold naming the outer element with :as (§2.6, §2.12 worked example)
+==================================================
+
+(rule community/exposure
+  :material-basis "community exposure is carried by attributed membership"
+  :fuel 4096
+  (bindings
+    (binding peak-exposure :expr
+      (fold max (hyperedges-of self HyperedgeType/COMMUNITY) :as c
+            (fold mean (members-of c HyperedgeType/COMMUNITY)
+                  (membership-field-of c it community/visibility)
+                  :weight (membership-field-of c it community/strength)))))
+  (when (> peak-exposure 0.5p))
+  (effects
+    (update-node self social-class/agitation (add 0.01i))))
+
+---
+
+(source_file
+  (rule
+    (qname)
+    (material_basis
+      (string))
+    (fuel
+      (int_lit))
+    (bindings
+      (binding
+        (symbol)
+        (bind_src
+          (fold
+            (fold_op)
+            (hyperedges_of
+              (symbol)
+              (enum_ref))
+            (elem_name
+              (symbol))
+            (fold
+              (fold_op)
+              (members_of
+                (symbol)
+                (enum_ref))
+              (membership_field_of
+                (symbol)
+                (symbol)
+                (qname))
+              (weight
+                (membership_field_of
+                  (symbol)
+                  (symbol)
+                  (qname))))))))
+    (when
+      (comparison
+        (cmp)
+        (symbol)
+        (literal
+          (scaled_lit))))
+    (effects
+      (update_node
+        (symbol)
+        (qname)
+        (update_op
+          (literal
+            (scaled_lit)))))))
+
+==================================================
+Weighted mean over an edge query with field-of (§2.10 worked shape)
+==================================================
+
+(rule contradiction/tension
+  :material-basis "tension is carried by the exploitation relation"
+  :fuel 2048
+  (bindings
+    (binding tension :expr
+      (fold mean (edges EdgeType/EXPLOITATION)
+            (field-of it exploitation/tension)
+            :weight (field-of it exploitation/value-flow))))
+  (when (> tension 0.5i))
+  (effects
+    (update-node self social-class/agitation (add 0.02i))))
+
+---
+
+(source_file
+  (rule
+    (qname)
+    (material_basis
+      (string))
+    (fuel
+      (int_lit))
+    (bindings
+      (binding
+        (symbol)
+        (bind_src
+          (fold
+            (fold_op)
+            (edges
+              (enum_ref))
+            (field_of
+              (symbol)
+              (qname))
+            (weight
+              (field_of
+                (symbol)
+                (qname)))))))
+    (when
+      (comparison
+        (cmp)
+        (symbol)
+        (literal
+          (scaled_lit))))
+    (effects
+      (update_node
+        (symbol)
+        (qname)
+        (update_op
+          (literal
+            (scaled_lit)))))))
+
+==================================================
+Typed neighbours and the self-anchored edge idiom (§2.6 D51, §3.8 item 8)
+==================================================
+
+(rule solidarity/inbound
+  :material-basis "inbound solidarity ties carry the tie weight"
+  :fuel 2048
+  (bindings
+    (binding inbound :expr
+      (fold sum (neighbors self EdgeType/SOLIDARITY :in NodeType/SOCIAL_CLASS)
+            (field-of (edge-between EdgeType/SOLIDARITY it self)
+                      solidarity/strength)))
+    (binding consciousness :expr
+      (fold mean (neighbors self EdgeType/TENANCY :in NodeType/SOCIAL_CLASS)
+            (field-of it social-class/consciousness)
+            :weight (field-of it social-class/population))))
+  (when (> inbound 0c))
+  (effects
+    (update-node self social-class/class-consciousness (add 0.01i))))
+
+---
+
+(source_file
+  (rule
+    (qname)
+    (material_basis
+      (string))
+    (fuel
+      (int_lit))
+    (bindings
+      (binding
+        (symbol)
+        (bind_src
+          (fold
+            (fold_op)
+            (neighbors
+              (symbol)
+              (enum_ref)
+              (direction)
+              (enum_ref))
+            (field_of
+              (edge_between
+                (enum_ref)
+                (symbol)
+                (symbol))
+              (qname)))))
+      (binding
+        (symbol)
+        (bind_src
+          (fold
+            (fold_op)
+            (neighbors
+              (symbol)
+              (enum_ref)
+              (direction)
+              (enum_ref))
+            (field_of
+              (symbol)
+              (qname))
+            (weight
+              (field_of
+                (symbol)
+                (qname)))))))
+    (when
+      (comparison
+        (cmp)
+        (symbol)
+        (literal
+          (scaled_lit))))
+    (effects
+      (update_node
+        (symbol)
+        (qname)
+        (update_op
+          (literal
+            (scaled_lit)))))))
+
+==================================================
+Selection, the carrier accessor, and reference identity (§2.7, §2.10 worked examples)
+==================================================
+
+(rule electoral/office
+  :material-basis "the strongest claim takes the office it can hold"
+  :fuel 1024
+  (bindings
+    (binding drawn :field polity/draw))
+  (when (= (the NodeType/POLITY) (the NodeType/POLITY)))
+  (effects
+    (update-node (select-max (nodes NodeType/ORGANIZATION)
+                             (field-of it organization/claim-strength))
+                 organization/holds-office (set #t))
+    (update-node (the NodeType/POLITY)
+                 polity/imperial-rent-pool (sub drawn))))
+
+---
+
+(source_file
+  (rule
+    (qname)
+    (material_basis
+      (string))
+    (fuel
+      (int_lit))
+    (bindings
+      (binding
+        (symbol)
+        (bind_src
+          (qname))))
+    (when
+      (comparison
+        (cmp)
+        (the
+          (enum_ref))
+        (the
+          (enum_ref))))
+    (effects
+      (update_node
+        (selection
+          (nodes
+            (enum_ref))
+          (field_of
+            (symbol)
+            (qname)))
+        (qname)
+        (update_op
+          (literal
+            (bool_lit))))
+      (update_node
+        (the
+          (enum_ref))
+        (qname)
+        (update_op
+          (symbol))))))
+
+==================================================
+The intersection idiom — no set algebra (§2.7 D67)
+==================================================
+
+(rule community/shared
+  :material-basis "shared community membership is a material tie"
+  :fuel 4096
+  (bindings
+    (binding shared :expr
+      (fold count (hyperedges-of a HyperedgeType/COMMUNITY) :as ha
+            (if (exists (hyperedges-of b HyperedgeType/COMMUNITY) (= it ha))
+                1 0))))
+  (when (> shared 0))
+  (effects
+    (update-node self social-class/class-consciousness (add 0.01i))))
+
+---
+
+(source_file
+  (rule
+    (qname)
+    (material_basis
+      (string))
+    (fuel
+      (int_lit))
+    (bindings
+      (binding
+        (symbol)
+        (bind_src
+          (fold
+            (fold_op)
+            (hyperedges_of
+              (symbol)
+              (enum_ref))
+            (elem_name
+              (symbol))
+            (if_expr
+              (exists
+                (hyperedges_of
+                  (symbol)
+                  (enum_ref))
+                (comparison
+                  (cmp)
+                  (symbol)
+                  (symbol)))
+              (literal
+                (int_lit))
+              (literal
+                (int_lit)))))))
+    (when
+      (comparison
+        (cmp)
+        (symbol)
+        (literal
+          (int_lit))))
+    (effects
+      (update_node
+        (symbol)
+        (qname)
+        (update_op
+          (literal
+            (scaled_lit)))))))
+
+==================================================
+An intrinsic call and an if-expression (§2.7, §3.10)
+==================================================
+
+(rule metabolism/decay
+  :material-basis "the metabolic rift compounds against a declared budget"
+  :fuel 256
+  (bindings
+    (binding stock :field territory/biomass)
+    (binding rate  :const metabolism/decay-rate)
+    (binding decayed :expr (* stock (exp (- 0c rate)))))
+  (when (> stock 0$))
+  (effects
+    (update-node self territory/biomass
+                 (set (if (> decayed 0$) decayed 0$)))))
+
+---
+
+(source_file
+  (rule
+    (qname)
+    (material_basis
+      (string))
+    (fuel
+      (int_lit))
+    (bindings
+      (binding
+        (symbol)
+        (bind_src
+          (qname)))
+      (binding
+        (symbol)
+        (bind_src
+          (qname)))
+      (binding
+        (symbol)
+        (bind_src
+          (arith_expr
+            (arith)
+            (symbol)
+            (intrinsic_call
+              (symbol)
+              (arith_expr
+                (arith)
+                (literal
+                  (scaled_lit))
+                (symbol)))))))
+    (when
+      (comparison
+        (cmp)
+        (symbol)
+        (literal
+          (scaled_lit))))
+    (effects
+      (update_node
+        (symbol)
+        (qname)
+        (update_op
+          (if_expr
+            (comparison
+              (cmp)
+              (symbol)
+              (literal
+                (scaled_lit)))
+            (symbol)
+            (literal
+              (scaled_lit))))))))
+
+==================================================
+select-min over hyperedges, metric-of, and the remaining boolean forms (§2.4, §2.7, §2.11)
+==================================================
+
+(rule community/weakest
+  :material-basis "the least visible formation is the one repression reaches first"
+  :fuel 2048
+  (bindings
+    (binding centrality :expr (metric-of self betweenness-centrality)))
+  (when (or (not (> centrality 0.9c))
+            (exists (hyperedges HyperedgeType/COMMUNITY))))
+  (effects
+    (update-hyperedge (select-min (hyperedges HyperedgeType/COMMUNITY)
+                                  (field-of it community/size))
+                      community/size (add 1))))
+
+---
+
+(source_file
+  (rule
+    (qname)
+    (material_basis
+      (string))
+    (fuel
+      (int_lit))
+    (bindings
+      (binding
+        (symbol)
+        (bind_src
+          (metric_of
+            (symbol)
+            (symbol)))))
+    (when
+      (or_cond
+        (not_cond
+          (comparison
+            (cmp)
+            (symbol)
+            (literal
+              (scaled_lit))))
+        (exists
+          (hyperedges
+            (enum_ref)))))
+    (effects
+      (update_hyperedge
+        (selection
+          (hyperedges
+            (enum_ref))
+          (field_of
+            (symbol)
+            (qname)))
+        (qname)
+        (update_op
+          (literal
+            (int_lit)))))))

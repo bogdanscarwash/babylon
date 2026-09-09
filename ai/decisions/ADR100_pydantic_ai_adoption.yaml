@@ -1,0 +1,78 @@
+id: ADR100
+title: >-
+  Pydantic AI as canonical LLM SDK (Amendment Y): replace the hand-rolled
+  per-provider chat clients and the judge's hand-rolled JSON extraction with
+  pydantic-ai-slim[openai] 2.14 — LLMProvider protocol and error taxonomy
+  preserved, judge upgraded to schema-validated structured output with
+  retry, providers.py narrate lane migrated, ALLOW_MODEL_REQUESTS=False
+  test-tier guard
+status: accepted
+date: '2026-07-20'
+context: >-
+  BD directive 2026-07-20: "we amend the constitution to use Pydantic AI and
+  we replace our hand rolled vibecode ai client, and use the well maintained
+  pydantic." Prior deep-dive (same session) found two parallel hand-rolled
+  LLM stacks: intelligence/ai/llm_provider.py (DeepSeekClient +
+  WorkersAIClient — duplicated message assembly and exception ladders over
+  the raw openai client) and intelligence/providers.py narrate() (a third
+  copy of the same chat-completions plumbing), plus the weakest seam:
+  judge.py NarrativeCommissar hand-stripping markdown fences and
+  json.loads-ing LLM output into JudgmentResult(**data). providers.py's
+  docstring rejected orchestration frameworks under the X.6 solo-dev filter
+  ("No litellm, no langchain"); adopting pydantic-ai therefore required a
+  constitutional amendment (Y, v2.13.0), which the BD ordered. pydantic-ai
+  2.14 verified in-env before adoption: OpenAIProvider(openai_client=...)
+  accepts a pre-built AsyncOpenAI (custom base_url/headers/timeout),
+  AgentInfo exposes instructions + model_settings to FunctionModel tests,
+  structured output validates against constrained pydantic models with
+  re-prompt on failure, empty text output and exhausted retries both raise
+  UnexpectedModelBehavior (the SDK itself refuses to fabricate/accept empty
+  prose), and RunResult.usage carries exact token counts.
+decision: >-
+  ADOPTED: (1) Dependency pydantic-ai-slim[openai] ^2.14.0 declared in
+  [tool.poetry.dependencies] (Poetry 2 hybrid mode — [project] keeps
+  dynamic=["dependencies"]; NOTE: `uv add` on this pre-ADR095 base wrote a
+  static [project].dependencies list that gutted poetry.lock resolution to
+  one package — reverted; on this base poetry is the only lock authority).
+  (2) llm_provider.py: one PydanticAIChatClient (Agent per generate() call)
+  replaces both hand-rolled clients; DeepSeekClient/WorkersAIClient survive
+  as thin lane subclasses so the LLMProvider protocol, class names, error
+  codes (LLM_001 API/behavior, LLM_002 timeout, LLM_003 rate-limit incl.
+  ModelHTTPError 429), and build_llm_provider() semantics are unchanged for
+  all consumers (director, narrative_service, MockLLM test estate). The
+  test seam is ModelFactory (zero-arg -> Model): a FRESH model and
+  AsyncOpenAI client are built per generate() call so no httpx pool
+  outlives run_sync's per-call event loop — structurally retiring the
+  "Event loop is closed" failure class the old sync-client tests defended
+  against. (3) judge.py: NarrativeCommissar runs
+  Agent(output_type=JudgmentResult, retries=1) — schema validation at the
+  SDK layer with one re-prompt, then loud LLMGenerationError; the
+  fence-stripping _extract_json is deleted; constructor takes model_factory
+  (tests inject TestModel/FunctionModel). (4) providers.py: narrate() runs
+  on pydantic-ai via a ChatModelFactory seam; embed() and health() stay on
+  the stock openai client (pydantic-ai has no embedding API); MuteProvider
+  and the §A7.6 resolution walk untouched. (5) tests/conftest.py sets
+  pydantic_ai.models.ALLOW_MODEL_REQUESTS = False globally — a
+  network-bound model run in any test raises instead of spending (the
+  frame-entailment live-eval lane speaks raw openai and is unaffected).
+  (6) MockLLM kept verbatim: 30+ narrative-pipeline integration tests ride
+  the protocol seam, zero churn.
+consequences: >-
+  Two of the three duplicated chat-transport implementations are gone; the
+  third (providers.py) shares the SDK. The judge gains real
+  validation-retry (tested: out-of-bounds first answer re-prompted once,
+  never-valid fails loud LLM_001). New deps: pydantic-ai-slim 2.14.0 +
+  pydantic-graph + genai-prices/opentelemetry-api transitive (~+274
+  poetry.lock lines). Risks: pydantic-ai's agentic surface (tools, deps
+  injection) is constitutionally out of scope (Amendment V/Y letter) — any
+  future use of @agent.tool against engine state is an amendment-level
+  question, not a code review one. run_sync cannot be called from inside a
+  running event loop (same constraint as the old sync clients; observers
+  are sync). Follow-ups owed: consolidate director/narrative_service off
+  llm_provider.py onto the providers.py NarratorProvider seam (the dual
+  stacks now share one SDK but remain two seams); consider pydantic-evals
+  for the ai-marked eval tier. Verification: 95 tests across the four
+  rewritten suites, 290 across the consumer estate, full `mise run check`
+  green (11,849 unit tests), qa:regression 6/6 byte-identical + two-process
+  determinism leg PASS.
+file: ADR100_pydantic_ai_adoption.yaml

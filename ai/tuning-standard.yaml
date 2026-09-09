@@ -1,184 +1,175 @@
+---
 meta:
-  name: "The 20-Year Entropy Standard"
-  version: "2.0.0"
-  updated: "2025-12-31"
-  purpose: "Tuning methodology for realistic imperial decay over 1040 ticks"
-  status: "ACTIVE"
-  doctrine: "The Tragedy of Inevitability"
-  references:
-    rst: "docs/reference/tuning.rst"
+  name: Babylon v4 behavioral tuning standard
+  version: "4.1.0"
+  updated: "2026-08-23"
+  authority: CONSTITUTION.md v4.2.0 Articles I, III, IV, and VIII
+  purpose: >-
+    Tune a legible and entertaining causal simulation without prescribing a
+    terminal outcome or disguising design choices as empirical observations.
 
-overview: |
-  The simulation asks "How does the empire die?" not "Can the empire survive?"
-  The default state is COLLAPSE. Stability is temporary deviation.
-  20-year timeline (1040 ticks) is sufficient to observe systematic decay.
+provenance_classes:
+  - Observed
+  - Derived
+  - Calibrated
+  - Designed
 
-teleological_pivot:
-  old_question: "Can the empire survive?"
-  new_question: "How does the empire die?"
-  insight: "Collapse is default. Stability is temporary deviation."
+provenance_rules:
+  Observed: measured directly in a named source artifact
+  Derived: computed from declared observed inputs and a reproducible method
+  Calibrated: inferred to reproduce a bounded causal signature or operating range
+  Designed: chosen for pacing, legibility, expression, or play
+  substantive_value_rule: every_substantive_value_declares_one_class
+  designed_liberty_rule: >-
+    Designed choices are valid when declared, causally coherent, and in service
+    of play. They must not be presented as observations.
 
-eden_mode_problem:
-  causes:
-    - "Existence was free (base_subsistence = 0.0)"
-    - "Earth was infinite (no biocapacity hysteresis)"
-    - "Zombies were possible (entities survive with near-zero wealth)"
-  result: "Flatline simulations where nothing happened"
+causal_rule_contract:
+  status: implemented_current
+  adr: ADR224_bsl_causal_composition_contract
+  roles:
+    - Mechanic
+    - Recognizer
+    - ExternalEvent
+    - Intent
+  authority:
+    Mechanic: ordinary_typed_effect_algebra
+    Recognizer: exact_allowlist_default_deny
+    ExternalEvent: exact_allowlist_default_deny
+    Intent: exact_allowlist_default_deny
+  attribution_ledgers:
+    declared_metadata: every_rule
+    governed_production_manifest:
+      symbol: causal_contract::GOVERNED_RULE_ATTRIBUTIONS
+      row_fields:
+        - rule_id
+        - role
+        - evidence
+        - owner
+        - date
+        - adr
+      adr_value: ADR224
+      known_id_drift: uncoded_typed_ContractError_GovernedAttributionMismatch
+      production_corpus_completeness: ci_exact_set_equality
+      unknown_mod_and_fixture_ids: self_declared
+  current_production_rules:
+    total: 60
+    mechanic_derived: 58
+    recognizer_derived: 2
+    external_event: 0
+    intent: 0
+  current_restricted_allowances:
+    recognizer:
+      control-ratio/c03-crisis:
+        - event/EventType/CONTROL_RATIO_CRISIS
+        - node-field/institution/control-crisis-emitted
+        - node-field/institution/control-crisis-tick
+      control-ratio/c04-terminal:
+        - event/EventType/TERMINAL_DECISION
+        - node-field/institution/terminal-decision-emitted
+    external_event: []
+    intent: []
+    production_sentinel:
+      footprint_contract: exact_set_equality_per_non_mechanic_rule
+      allowance_keys: unique
+      dead_permissions: refused
+  same_rank_execution: deterministic_sequential_later_rule_sees_earlier_writes
+  same_tick_dispositions:
+    E-LOAD-058: 13
+    E-LOAD-059: 11
+  restricted_shape_effects: forbidden
+  unauthorized_effect_error: E-LOAD-060
+  audit_receipt:
+    order: actual_events_then_actual_writes
+    identity_free: true
+    publication: whole_tick_success_only
+    durable: false
+  future_allowance_rule: >-
+    A benchmark shock or player intent receives only exact governed burden,
+    capacity, pressure, or next-week-intent rows. A plausible name never grants
+    effect authority.
 
-dying_world_physics:
-  principles:
-    - name: "Existence costs calories"
-      rule: "base_subsistence > 0.0 always (The Calorie Check)"
-      parameter: "economy.base_subsistence"
-      implemented: true
-    - name: "Earth remembers wounds"
-      rule: "Extraction causes permanent hysteresis in max_biocapacity"
-      parameter: "metabolism.hysteresis_rate"
-      implemented: false  # NOTE: NOT YET IN GameDefines
-    - name: "Death is real"
-      rule: "VitalitySystem kills entities when wealth < consumption_needs"
-      implemented: true
+outcome_policy:
+  predetermined_outcomes: forbidden
+  historical_trajectory: not_prescribed
+  stable_or_surviving_run: valid_if_causally_produced
 
-benchmark:
-  duration:
-    old: "52 ticks (1 year)"
-    new: "1040 ticks (20 years)"
-  rationale:
-    - "Long enough to observe TRPF"
-    - "Long enough for ecological degradation to compound"
-    - "Long enough for generational effects"
-    - "Short enough for meaningful simulation runs (~10-20 minutes)"
+tuning_targets:
+  form: plausible_operating_range_or_causal_signature
+  permitted:
+    - bounded_pacing_window
+    - signal_legibility
+    - decision_feedback_timing
+    - heterogeneous_sector_response
+    - heterogeneous_geographic_response
+    - persistent_post_shock_effect
+    - counterfactual_sensitivity
+  prohibited:
+    - mandatory_terminal_outcome
+    - mandatory_empire_death
+    - death_at_a_prescribed_tick
+    - objective_weights_for_death_timing
+    - pruning_a_run_only_because_it_stays_stable
 
-success_criteria:
-  deprecated: "Success = Survival"
-  current: "Success = Realistic Decay"
-  ideal_profile:
-    p_c_wealth: "declining ~0.05% per tick"
-    total_biocapacity: "declining ~0.08% per tick"
-    imperial_rent_pool: "exhibiting TRPF (declining rate of return)"
-    death_timing: "tick 800-900 (Year 15-17)"
+validation_contract:
+  dimensions:
+    - conservation
+    - deterministic_replay
+    - control_shock_twins
+    - counterfactual_responsiveness
+    - mutation_tests
+    - heterogeneous_effects
+    - hysteresis
+    - direct_write_audits
+  interpretation:
+    conservation: declared stocks and flows close within their exact contract
+    deterministic_replay: identical inputs produce byte-identical state
+    control_shock_twins: the shock run diverges from its matched control
+    counterfactual_responsiveness: changed capacities or actions change results
+    mutation_tests: severing a causal link removes its downstream signature
+    heterogeneous_effects: effects vary across relevant territories and sectors
+    hysteresis: some consequences persist after the exogenous shock ends
+    direct_write_audits: >-
+      External-event and intent roles are default-deny; exact governed rows
+      may introduce only their declared input carriers, never downstream
+      outcomes.
 
-calorie_check:
-  invariant: "base_subsistence > 0.0 in ALL scenarios"
-  purpose: "Prevents Eden Mode - existence must have a cost"
-  validation_code: |
-    def create_scenario() -> tuple[WorldState, SimulationConfig, GameDefines]:
-        defines = GameDefines()
-        assert defines.economy.base_subsistence > 0.0, \
-            "Eden Mode detected: base_subsistence must be > 0.0"
-        return state, config, defines
+benchmark_horizons:
+  covid_e0:
+    status: planned
+    gate: G4
+    owner: PER-8
+    tick_unit: week
+    weeks: 104
+    runs:
+      - no_shock_control
+      - historical_envelope_shock
+      - strong_capacity_counterfactual
+      - weak_capacity_counterfactual
+    checkpoints:
+      - onset
+      - peak
+      - shock_end
+      - week_52
+      - week_104
+    note: >-
+      These are planned acceptance criteria. Their presence here does not claim
+      that the benchmark, hydration, or executable shock exists.
+  full_circuit_covid:
+    status: planned
+    gate: G7
+    horizon_rule: scenario_specific
+  systemic_credit_2008:
+    status: planned
+    gate: G8
+    horizon_rule: scenario_specific
 
-objective_function:
-  name: "objective_v2"
-  components:
-    - name: "Death Timing"
-      weight: 0.4
-      target: "Death around tick 850"
-      formula: "1.0 - abs(death_tick - 850) / 400"
-    - name: "Decay Shape"
-      weight: 0.3
-      target: "Smooth decline, not flatline or cliff"
-    - name: "TRPF Manifestation"
-      weight: 0.2
-      target: "Rate of profit declines over time"
-    - name: "Biocapacity Exhaustion"
-      weight: 0.1
-      target: "Near-zero around death tick"
-
-anti_patterns:
-  - name: "Zombie State (Flatline)"
-    symptom: "Wealth graph is horizontal"
-    cause: "base_subsistence = 0.0 or consumption_needs too low"
-    detection: "std(wealth_timeseries) < 0.01"
-    fix: "Increase consumption_needs, verify Calorie Check"
-
-  - name: "Instant Death (Cliff)"
-    symptom: "Simulation ends before tick 100"
-    cause: "Extraction too aggressive, initial wealth too low"
-    detection: "death_tick < 100"
-    fix: "Reduce extraction_efficiency, increase initial wealth"
-
-  - name: "Eternal Empire (Eden Mode)"
-    symptom: "Survives 1040 ticks without significant decay"
-    cause: "Extraction perfectly balanced with production"
-    detection: "wealth[tick_1000] / wealth[tick_0] > 0.9"
-    fix: "Enable biocapacity hysteresis, increase entropy_factor"
-
-  - name: "Hollow Stability"
-    symptom: "Metrics oscillate around stable point"
-    cause: "System finds equilibrium (theoretically impossible)"
-    detection: "mean(wealth[500:1000]) ≈ mean(wealth[0:500])"
-    fix: "Increase TRPF coefficient, add extraction hysteresis"
-
-hyperband_pruning:
-  - condition: "Flatline detected"
-    threshold: "Any tick"
-    action: "Prune (invalid)"
-  - condition: "Death before tick 100"
-    threshold: "tick < 100"
-    action: "Prune (too aggressive)"
-  - condition: "No decay by tick 500"
-    threshold: "tick 500"
-    action: "Prune (zombie/eden)"
-  - condition: "Still alive at tick 1040"
-    threshold: "tick 1040"
-    action: "Flag for review"
-
-parameter_ranges:
-  entropy:
-    - name: "economy.base_subsistence"
-      range: [0.01, 0.05]
-      purpose: "Calorie drain per tick"
-      # Note: actual default is 0.0005, not in this range
-    - name: "metabolism.entropy_factor"
-      range: [1.1, 1.5]
-      purpose: "Extraction inefficiency"
-    - name: "metabolism.hysteresis_rate"
-      range: [0.001, 0.01]
-      purpose: "Permanent max_biocapacity damage"
-      status: "NOT YET IMPLEMENTED"
-
-  trpf:
-    - name: "economy.trpf_coefficient"
-      range: [0.0001, 0.001]
-      purpose: "Rate of profit decay"
-    - name: "economy.rent_pool_decay"
-      range: [0.001, 0.005]
-      purpose: "Background rent evaporation"
-
-  recalibrated:
-    - name: "extraction_efficiency"
-      old_range: [0.1, 0.9]
-      new_range: [0.3, 0.7]
-      notes: "Narrower for stability"
-    - name: "comprador_cut"
-      old_range: [0.5, 1.0]
-      new_range: [0.6, 0.9]
-      notes: "Avoid extremes"
-
-workflow:
-  - step: 1
-    name: "Verify Calorie Check"
-    command: |
-      poetry run python -c "
-      from babylon.config.defines import GameDefines
-      d = GameDefines()
-      assert d.economy.base_subsistence > 0.0
-      print('Calorie Check: PASSED')"
-
-  - step: 2
-    name: "Run 20-Year Audit"
-    command: "mise run qa:audit --max-ticks 1040"
-
-  - step: 3
-    name: "Verify Decay Curve"
-    command: "mise run sim:trace --ticks 1040"
-
-  - step: 4
-    name: "Check for Anti-Patterns"
-    status: "PLANNED - tools/entropy_audit.py not yet implemented"
-
-see_also:
-  - "ai/theory.yaml"
-  - "ai/balance-targets.yaml"
-  - "ai/metabolic-slice.yaml"
+change_control:
+  balance_change_requires:
+    - provenance_review
+    - scoped_behavioral_contract
+    - deterministic_regression_evidence
+    - declared_baseline_ceremony_when_bytes_move
+  failure_rule: >-
+    Diagnose the shared causal machinery before changing a target. Do not tune
+    toward a desired historical winner.

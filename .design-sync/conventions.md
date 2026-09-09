@@ -8,7 +8,7 @@ panels sit on `bg-concrete`, elevated surfaces on `bg-rebar`, borders `border-re
 ## Setup — no provider; one global store
 
 Components need **no wrapper**. Interactive/stateful components (EventsFeed,
-TimeControls, StatusBar, Outliner, takeovers…) read one global zustand store.
+TimeControls, TopBar, Outliner, takeovers…) read one global zustand store.
 Seed it **before** composing them, always spreading the existing slice (its
 actions live there):
 
@@ -31,7 +31,7 @@ export function Feed() {
 Slices: `world` (snapshot), `time` (status: paused|playing|resolving|autopaused|error),
 `map` (selection/lens), `ui` (docks, takeovers), `panels` (per-panel data),
 `session`, `actions`. Purely prop-driven leaves (StatChip, Sparkline, BblLabel,
-Stat…) take plain props — see each component's `.d.ts`.
+ValueRow…) take plain props — see each component's `.d.ts`.
 
 ## Styling idiom — Tailwind utilities bound to Cold Collapse tokens
 

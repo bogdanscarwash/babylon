@@ -1,0 +1,95 @@
+ADR183_get_it_right_in_rust:
+  status: "accepted"
+  date: "2026-07-30"
+  title: >
+    Get it right in Rust: the frozen Python engine is the contract source for
+    structure and ordering, NOT a correctness oracle for its unfed adapters or
+    its uncalled gates. Defects found by the tech-debt census are repaired at
+    the port, never in the frozen lane.
+  context: |
+    A six-lane tech-debt census (2026-07-30, reports/tech-debt-ledger-2026-07-30.md,
+    30 rows) organized by DEBT CLASS rather than by directory found that 22 of 30
+    rows are dormant constructs inside the deliberately frozen Python engine.
+    Those cost nothing at runtime and most die at the Rust port — a transcription
+    question, not a debt question.
+
+    Two findings were NOT of that kind, and both were verified by hand rather
+    than taken from the census agents:
+
+    (1) THE GATE LAYER NEVER RUNS ON THE SHIPPING PATH. src/babylon/game/session.py
+        and every src/babylon/projection/vault/render_*.py contain zero references
+        to apply_fog, apply_political_gates, compute_veil_status or
+        gate_value_axis_fields. apply_political_gates has no production caller
+        anywhere — not even the legacy web bridge. And the failure presents as
+        coverage: projection/vault/render_organization.py:38-47 declares a remedy
+        dict stating heat / consciousness_tendency / cohesion / cadre_level each
+        require Investigate(Organization), then prints all four at :90-97 under a
+        bare `is not None` check. The file documents its own gating and does not
+        gate.
+
+    (2) THE 100k EMPLOYMENT LITERAL IS NOT A FALLBACK, IT IS THE VALUE.
+        services.employment_source is assigned at exactly one site tree-wide —
+        web/game/engine_bridge.py:7857, the legacy bridge. headless_runner/runner.py
+        wires unemployment_source and wage_source but NOT employment_source, so
+        every canonical tick divides by
+        domain/economics/tick/initializer.py:44's _DEFAULT_EMPLOYMENT = 100_000.0.
+        Two sentinels/assumptions rows wrongly describe it as conditional.
+
+    Finding (2) posed the question this ADR answers, because it gates the whole
+    disposition: IS THE FROZEN PYTHON ENGINE THE CORRECTNESS ORACLE FOR THE RUST
+    PORT? If it were, that literal would be enshrined as the oracle's answer for
+    every wage / profit / exploitation-rate denominator — an Aleksandrov Test
+    failure promoted to a conformance contract.
+  decision: |
+    Director ruling, 2026-07-30, verbatim in substance: "if we're going to do
+    Rust let's get this correct in Rust."
+
+    (R1) THE FROZEN ENGINE IS A CONTRACT SOURCE, NOT A CORRECTNESS ORACLE. It is
+        authoritative for STRUCTURE and ORDERING — the 34-system order, event-bus
+        dispatch semantics, canonical byte layouts, the tick partition. It is NOT
+        authoritative for VALUES produced by adapters that were never fed, nor for
+        the call graph of a projection whose gates were never called. Conformance
+        vectors may not be drawn from those surfaces.
+
+    (R2) DEFECTS ARE REPAIRED AT THE PORT, NOT IN THE FROZEN LANE. Repairing them
+        in Python costs an 11-scenario qa:regression baseline ceremony PLUS the
+        separate golden-vault estate (III.13), to correct numbers the Rust engine
+        will read straight from the reference DB. That is the archetypal
+        frozen-engine repair trap. The census's tier (b) is therefore ruled: do
+        not fix in Python.
+
+    (R3) GATING IS A PROPERTY OF THE PROJECTION BOUNDARY, NOT A DECORATION.
+        Rust must make an ungated read UNEXPRESSIBLE — the projector takes the
+        reach/vision ledger as a required argument, so "forgot to gate" is a
+        compile error rather than a silent leak. This is the enforcement mechanism
+        for ADR182 R2 (structure public, magnitudes earned), which supplies the
+        content rule. Seam 15 already absorbs game/session.py into Rust and seam 11
+        ports the projectors, so BOTH call sites are Rust-bound: there is nothing
+        to retrofit in Python, and ADR182 R2's "wire apply_fog onto the Lane-P
+        projectors" obligation is discharged in the Rust lane instead.
+
+    (R4) THE MAP RECORDS THE DEFECTS. ai/bsl-architecture-standard.md gains §5.4
+        "Defects not to transcribe" (four verified rows) and seam 11's disposition
+        is amended from a bare "PORTED / preserved" to "port the contract, NOT the
+        call graph". §5.2 says what crosses; §5.4 says what the reference
+        implementation gets wrong. Without it, "reproduce the Python behaviour"
+        reads as an instruction to ship an ungated projection.
+  consequences: |
+    - ADR182 R2's fog-on-Lane-P v1.0 prerequisite MOVES LANES: it is now a Rust
+      projection-boundary obligation, not a Python wiring task. The Python
+      renderers are absorbed (seam 15) or ported (seam 11) regardless.
+    - The frozen engine's wage / profit / exploitation-rate outputs are unusable
+      as oracle values wherever employment is a denominator. Any conformance
+      vector drawn from them must be re-derived from fed data.
+    - Census tier (a) narrows sharply: with fog moved to the Rust lane, what
+      remains in Python is the sentinel-reporting honesty work (closed allowlists
+      whose green output reads as coverage) and CI hygiene — not engine repair.
+    - The ⊗/⊕ combinators (domain/dialectics/core/composition.py:57,100 — verified
+      re-exported, property-tested, invoked by none of the 19 registered
+      OppositionSpecs) carry forward WITH PRIORITY: they are the closed algebra
+      BSL expresses, and ADR172 mints no new mathematics.
+    - Merely-inert constructs (TopologyMonitor, BifurcationMonitor, the
+      domain/bifurcation/resilience.py chain) are explicitly NOT defects. They
+      compute nothing wrong; they compute nothing at all. Transcription question.
+    - Supersedes no prior ADR. ADR172 (Amendment AE) is the enabling authority;
+      ADR182 R2 supplies the content rule R3 enforces.

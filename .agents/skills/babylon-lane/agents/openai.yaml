@@ -1,0 +1,6 @@
+interface:
+  display_name: "Babylon Lane"
+  short_description: "Execute a named PER issue through tested evidence"
+  default_prompt: "Resume or create the smallest isolated lane that satisfies this PER issue."
+policy:
+  allow_implicit_invocation: true

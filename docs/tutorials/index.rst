@@ -28,7 +28,7 @@ What You'll Learn
 -----------------
 
 **Installation**
-   Set up Python, Poetry, and all dependencies. Verify your environment
+   Set up Python, uv, and all dependencies. Verify your environment
    is working correctly.
 
 **First Simulation**

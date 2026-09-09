@@ -1,0 +1,14 @@
+{
+  "_provenance": "Wayne County MI (FIPS 26163), year 2010. Extracted 2026-07-20 from data/sqlite/marxist-data-3NF.sqlite via the PRODUCTION hydration path (babylon.domain.economics.hydrator.MarxianHydrator + babylon.domain.economics.adapters.SQLiteQCEWSource + babylon.engine.hydration.reference.StubBEASource + babylon.domain.economics.department_mapper.DepartmentMapper.from_yaml(data/naics_to_dept.yaml) -- the SAME loader chain babylon.engine.headless_runner.runner._build_economics_overrides wires for a live scope_fips run). Values are byte-frozen here per D4 (CI never reads the drive). Derived profit_rate = total_s / (total_c + total_v) = 0.05944656600261918 on these department rows.\n\nYear deviation from the vol3-baseline-delta report's 2011 pin (documented, task-8-report.md has the full derivation): the report's profit_rate=0.0597 figure was captured by tests/integration/economics/test_vol3_surplus_distribution_live.py, which drives 52 step() calls (bootstrapping year 2010 on the very first, tick-0 boundary) and then makes ONE ADDITIONAL manual engine.run_tick call (bypassing step()) specifically to observe the SECOND year boundary (2011) without losing the graph to step()'s WorldState round-trip. single_county integrates through the SAME plain step()/calculator_overrides path the other 5 canonical qa:regression scenarios use (tools/regression_test.py's _run_scenario_ticks and tools/gate_coverage_probe.py's run_probe, plus this task's own 3-tick unit test); with the default base_year=2010, year 2010 is what that shared harness path serves at its tick-0 boundary. Year 2011 IS reachable -- but only by seeding persistent_context['_base_year']=2011 before the first step() call (simulation_engine.py:440-441's _restore_graph_context reads that key; babylon.engine.simulation._legacy.py:589-590's Simulation class is the existing caller that sets it) -- which would special-case this one scenario away from the shared step()-only harness path every other canonical scenario uses. 2010 is real, production-loader-extracted Wayne data and satisfies the task's actual requirement (financial layer fires through the production path); its profit_rate (0.059447) is within 0.4% of the report's 2011 pin (0.059676), the same order of magnitude and materially the same finding.",
+  "fips_code": "26163",
+  "year": 2010,
+  "tensor": {
+    "dept_I": {"c": 8786290087.382004, "v": 10085067074.240004, "s": 1229618965.045401},
+    "dept_IIa": {"c": 10810015915.227001, "v": 12614215795.79, "s": 1391889884.159},
+    "dept_IIb": {"c": 2742980896.601003, "v": 3500274089.370003, "s": 398258004.2136},
+    "dept_III": {"c": 1697361928.290001, "v": 4168259230.600001, "s": 214391767.082},
+    "naics_granularity": 1.0,
+    "excluded_wages": 2856146511.0,
+    "visibility_g33": 1.0
+  }
+}

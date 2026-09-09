@@ -1,0 +1,32 @@
+# CI override for the isolated Postgres (ADR176 ruling 33: the CI config
+# fork + the PG-tier un-gate). Compose merge:
+#
+#   tools/ci_postgres_compose.sh up
+#
+# Differences from the dev shape, each deliberate:
+#   - BABYLON_PG_DATA=babylon-pg-ci (set by the shared CI wrapper): a
+#     bare name is a NAMED VOLUME per the base file's own convention —
+#     inherently fresh per job on an ephemeral runner, guaranteeing a clean
+#     initdb (no schema-stamp archaeology, no version-migration hazard).
+#     A tmpfs override was tried first and abandoned: compose `up` (v5.3.1)
+#     provably diverges from its own `config` render when merging a tmpfs
+#     entry over the base bind at the same target — the maiden run failed
+#     on "already mounted", and the corrected forms recreated the container
+#     with the BASE mount. Variable interpolation has no merge semantics to
+#     disagree about.
+#   - postgresql.ci.conf: runner-sized memory (the dev file assumes a
+#     >=16 GB workstation dedicating 4 GB to shared_buffers). Same-target
+#     volume entries DO merge correctly (override replaces base, verified
+#     by container inspection).
+#   - no restart policy: a crashed Postgres must fail the job loudly
+#     (Constitution III.11), never self-heal behind CI's back.
+services:
+  babylon-pg:
+    restart: "no"
+    volumes:
+      - ./docker/postgres/postgresql.ci.conf:/etc/postgresql/postgresql.conf:ro
+
+volumes:
+  # Declared for the CI wrapper's BABYLON_PG_DATA=babylon-pg-ci (top-level
+  # volume sections merge by key; the base file only declares the dev name).
+  babylon-pg-ci:

@@ -1,390 +1,103 @@
-CI/CD Workflow Reference
-========================
+CI and Release Validation
+=========================
 
-Technical reference for GitHub Actions workflows, branch protection, and
-the Benevolent Dictator governance model.
+``.github/workflows/ci.yml`` runs on dev pushes and pull requests to dev or
+main. ``tools/ci_scope.py`` selects jobs from the complete changed-path set,
+including deletions. Changes to CI policy, unknown executable inputs, contracts,
+or reference inputs select all affected validation. Documentation-only changes
+retain repository checks and security scans.
 
-Governance Model
+Dev feedback
+------------
+
+The dev gate runs repository hygiene, static boundary checks, Ruff, mypy,
+lock validation, baseline provenance, secret scanning, and infrastructure
+security checks. Python changes run the retained data/operator unit tests and
+dependency audit. Rust changes run formatting, Clippy, nextest, doctests and
+BSL sentinels. Dev CI and ordinary pre-push checks select all library and
+binary unit targets plus the integration targets declared by the Rust test
+reporter. They use ``mise run rust:check-no-docs -- --dev``. The default command
+retains the full workspace test selection. All-target Clippy, doctests, and
+BSL sentinels run in both modes. PostgreSQL changes run the pinned fresh-runtime
+smoke.
+
+The frozen Python engine and its formula, scenario, regression, coverage-floor
+and optimization jobs are retired. Language-neutral vectors, Rust mechanics
+contracts, source datasets, and historical evidence remain.
+
+``CI Gate`` waits for every job with ``always()``. It requires success from
+every selected job and permits a skipped result only when the scope plan
+explicitly deselected that job. A failed prerequisite, absent receipt,
+unexpected skip or cancellation fails the gate. Required-check names must
+match both ``tools/pr_policy.py`` and ``.github/settings/pr-policy.json``
+before this workflow change can be merged. Changing files does not change
+GitHub's live rulesets; the policy synchronization is a separate operation.
+
+CodeQL continues on dev and main pull requests, protected-branch pushes,
+weekly runs and manual dispatch. Its native code-scanning rule requires zero
+open alerts. Gitleaks, Trivy, Python dependency auditing and cargo-deny retain
+their existing security responsibilities.
+
+Main qualification
+------------------
+
+Pull requests to main select full Rust validation, including documentation,
+and all six PostgreSQL focuses: ``runtime_smoke``, ``reference_integrity``,
+``runtime``, ``archive``, ``reader``, and ``client``. These retain fresh schema
+activation, H3 integrity and rollback, runtime and writer bounds, Archive,
+authenticated reader, and live client contracts. Manual CI dispatch also selects
+full validation.
+
+``main.yml`` adds the event contract, retained non-unit Python behavior,
+PostgreSQL restart/determinism, reference-data contracts, release documentation
+and container-image security checks. Reference-data qualification needs the
+configured data fixture; an absent fixture cannot count as release evidence.
+Documentation warning debt remains explicitly advisory in its build step.
+
+The Director controls main merges. Follow ``docs/agents/governance.md`` for
+exact-source qualification, the main-to-dev lineage sync, and release tagging.
+``release.yml`` currently creates release notes; it does not yet package the
+complete runnable observer session. The session includes the Bevy client,
+Rust runtime, launcher and a compatible PostgreSQL service. A client executable
+alone is not the complete distribution.
+
+Performance and caches
+----------------------
+
+Measure test execution separately from installation, compilation, database
+activation and cache transfer. Five-minute targets apply to complete jobs;
+a fast test body does not prove the whole job meets its target.
+
+Cargo caches use the pinned toolchain and dependency lock together with
+source identity. Pull requests restore compatible protected-branch caches.
+Only successful trusted protected-branch runs publish reusable outputs.
+PostgreSQL uses the pinned runtime and disposable test databases. Transaction
+durability, constraints and authentication remain enabled during performance
+measurement.
+
+Pull-request runs cancel when a newer head supersedes them. Protected dev
+pushes retain complete evidence for each commit. Rust reports live under
+``reports/test-results/rust/``; start with ``latest.json`` and its compact
+summary before opening full logs.
+
+Review and merge
 ----------------
 
-Babylon uses the **Benevolent Dictator (BD)** governance model:
+Copilot instructions focus review on causal behavior, authority boundaries,
+transaction safety, deterministic identity, and measured performance. Treat
+its findings as advisory evidence and check them against the current diff.
+Every review thread still requires a disposition and resolution.
 
-- **Benevolent Dictator**: Persephone Raskova (@percy-raskova)
-- **Authority**: Final decision on all merges to ``main``
-- **Contributors**: Branch from ``dev``, PR to ``dev``
+Use ``mise run pr:merge -- N`` after authorization and exact-head checks.
+The merge helper validates the actual head, required check producers, review
+threads and code-scanning alerts. GitHub rulesets preserve the PR requirement
+and prevent force pushes and branch deletion.
 
-Branch Structure
+Local validation
 ----------------
 
-.. mermaid::
-
-   flowchart TB
-       subgraph protected["Protected Branches"]
-           MAIN["main<br/>(stable releases)"]
-           DEV["dev<br/>(integration)"]
-       end
-
-       subgraph work["Working Branches"]
-           FEAT["feature/*"]
-           FIX["fix/*"]
-           DOCS["docs/*"]
-           REFACT["refactor/*"]
-           TEST["test/*"]
-       end
-
-       FEAT & FIX & DOCS & REFACT & TEST -->|"PR"| DEV
-       DEV -->|"BD merge"| MAIN
-       MAIN -.->|"hotfix backport"| DEV
-
-   %% Luxe Gothic styling
-   classDef protected fill:#8B0A1A,stroke:#DC143C,color:#F7F5F3
-   classDef work fill:#1A3A1A,stroke:#2A6B2A,color:#39FF14
-
-   class MAIN,DEV protected
-   class FEAT,FIX,DOCS,REFACT,TEST work
-
-.. list-table::
-   :widths: 15 20 65
-   :header-rows: 1
-
-   * - Branch
-     - Who Merges
-     - Purpose
-   * - ``main``
-     - BD only
-     - Stable releases, protected history
-   * - ``dev``
-     - BD
-     - Integration branch, accepts contributor PRs
-   * - ``feature/*``
-     - Author
-     - New functionality (branch from dev)
-   * - ``fix/*``
-     - Author
-     - Bug fixes (branch from dev, or main for hotfixes)
-   * - ``docs/*``
-     - Author
-     - Documentation changes
-   * - ``refactor/*``
-     - Author
-     - Code improvements
-   * - ``test/*``
-     - Author
-     - Test additions/changes
-
-Workflow Files
---------------
-
-All workflow files are in ``.github/workflows/``:
-
-ci.yml
-~~~~~~
-
-**File**: ``.github/workflows/ci.yml``
-
-**Triggers**:
-
-- Push to ``main`` or ``dev``
-- Pull request to ``main`` or ``dev``
-
-**Jobs**:
-
-.. list-table::
-   :widths: 20 15 65
-   :header-rows: 1
-
-   * - Job
-     - Blocks
-     - Steps
-   * - ``ci``
-     - Yes
-     - ``ruff check .``, ``mypy src``, ``pytest -m "not ai"``
-   * - ``docs``
-     - Yes
-     - ``pytest --doctest-modules``, ``sphinx-build -b html``
-   * - ``style``
-     - No
-     - ``ruff format --check .`` (``continue-on-error: true``)
-
-**Concurrency**: Cancels in-progress runs on same branch.
-
-docs.yml
-~~~~~~~~
-
-**File**: ``.github/workflows/docs.yml``
-
-**Triggers**:
-
-- Push to ``main`` (paths: ``docs/**``, ``src/**``)
-- Manual dispatch
-
-**Purpose**: Build and deploy documentation to GitHub Pages.
-
-**Jobs**:
-
-1. ``build`` - Build HTML documentation
-2. ``deploy`` - Deploy to GitHub Pages
-
-**Note**: Only runs on ``main``—development docs are not deployed.
-
-extended-analysis.yml
-~~~~~~~~~~~~~~~~~~~~~
-
-**File**: ``.github/workflows/extended-analysis.yml``
-
-**Triggers**:
-
-- Release published
-- Weekly schedule (Sunday midnight)
-- Manual dispatch
-
-**Jobs**:
-
-.. list-table::
-   :widths: 25 75
-   :header-rows: 1
-
-   * - Job
-     - Purpose
-   * - ``extended_tests``
-     - Python 3.12/3.13 matrix testing
-   * - ``parameter_analysis``
-     - Run ``mise run sim:trace`` and ``mise run sim:sweep``
-   * - ``ai_evaluation``
-     - Run AI tests (release only): ``pytest -m "ai"``
-
-release.yml
-~~~~~~~~~~~
-
-**File**: ``.github/workflows/release.yml``
-
-**Triggers**: Push tag matching ``v*``
-
-**Purpose**: Create GitHub Release with changelog and artifacts.
-
-dependabot-automerge.yml
-~~~~~~~~~~~~~~~~~~~~~~~~
-
-**File**: ``.github/workflows/dependabot-automerge.yml``
-
-**Triggers**: Pull request from Dependabot
-
-**Purpose**: Auto-merge minor/patch dependency updates after CI passes.
-
-Branch Protection Rules
------------------------
-
-Configured in GitHub Settings → Branches → Branch protection rules.
-
-dev Branch
-~~~~~~~~~~
-
-.. list-table::
-   :widths: 50 15 35
-   :header-rows: 1
-
-   * - Setting
-     - Value
-     - Rationale
-   * - Require PR before merging
-     - ON
-     - No direct pushes
-   * - Require status checks: ``ci``
-     - ON
-     - Quality gate
-   * - Require branches up to date
-     - OFF
-     - Avoid rebase churn
-   * - Require review
-     - OFF
-     - BD can self-merge
-   * - Allow force push
-     - OFF
-     - Protect history
-   * - Allow deletions
-     - OFF
-     - Prevent accidents
-
-main Branch
-~~~~~~~~~~~
-
-.. list-table::
-   :widths: 50 15 35
-   :header-rows: 1
-
-   * - Setting
-     - Value
-     - Rationale
-   * - Require PR before merging
-     - ON
-     - Even BD uses PRs
-   * - Require status checks: ``ci``, ``docs``
-     - ON
-     - Release quality
-   * - Require branches up to date
-     - ON
-     - No stale releases
-   * - Require review (Code Owners)
-     - ON
-     - BD self-review as pause
-   * - Allow force push
-     - OFF
-     - Immutable releases
-   * - Allow deletions
-     - OFF
-     - Protect history
-
-CODEOWNERS
-----------
-
-**File**: ``.github/CODEOWNERS``
-
-.. code-block:: text
-
-   # Default owner for everything
-   * @percy-raskova
-
-Makes the BD required reviewer for all PRs to ``main``.
-
-PR Template
------------
-
-**File**: ``.github/PULL_REQUEST_TEMPLATE.md``
-
-Sections:
-
-1. **What does this PR do?** - Brief description
-2. **Related Issue** - Link or "N/A"
-3. **Checklist** - Guide (not strict requirements)
-4. **Questions for Reviewers** - Encourages asking
-
-Philosophy: Welcoming to beginners. Checklist is guidance, not gatekeeping.
-
-Required vs Advisory Checks
----------------------------
-
-**PRs to dev**:
-
-- Required: ``ci`` (lint, types, tests)
-- Advisory: ``docs``, ``style``
-
-**PRs to main**:
-
-- Required: ``ci``, ``docs``
-- Advisory: ``style``
-
-The ``style`` job always has ``continue-on-error: true``—it shows warnings
-but never blocks merge.
-
-Merge Strategies
-----------------
-
-**Feature → Dev**: Squash merge
-
-- Each PR becomes one atomic commit
-- Easy to revert
-- Clean history
-
-**Dev → Main**: Merge commit (no squash)
-
-- Preserves individual commits
-- Creates release boundary
-- Easy to diff between releases
-
-Hotfix Workflow
----------------
-
-Hotfixes bypass ``dev`` for critical issues:
-
-1. Branch from ``main``: ``git checkout -b fix/critical-bug main``
-2. Fix the issue
-3. PR to ``main`` (BD only)
-4. After merge, backport to ``dev`` (create separate PR)
-
-.. warning::
-
-   Always backport hotfixes to ``dev``. Otherwise the next dev→main merge
-   may re-introduce the bug or create conflicts.
-
-Environment Variables
----------------------
-
-CI workflows may use these variables:
-
-.. list-table::
-   :widths: 30 70
-   :header-rows: 1
-
-   * - Variable
-     - Purpose
-   * - ``PYTHON_VERSION``
-     - Python version for setup-python (default: 3.12)
-   * - ``POETRY_VERSION``
-     - Poetry version for install-poetry (default: 2.2.1)
-
-Secrets (not used in current config):
-
-- ``GITHUB_TOKEN`` - Auto-provided for GitHub API calls
-- ``CODECOV_TOKEN`` - If coverage reporting enabled (not currently used)
-
-Local Testing
--------------
-
-**Direct commands**:
-
-.. code-block:: bash
-
-   poetry run ruff check .
-   poetry run mypy src
-   poetry run pytest -m "not ai"
-
-**Mise tasks**:
-
-.. code-block:: bash
-
-   mise run ci        # lint + format + typecheck + test:unit
-   mise run test:all  # all non-AI tests
-   mise run docs:build # build documentation
-
-**gh act** (full simulation):
-
-.. code-block:: bash
-
-   gh act --dryrun    # validate workflow
-   gh act -j ci       # run ci job
-   gh act push        # simulate push event
-
-See :doc:`/how-to/run-ci-locally` for detailed instructions.
-
-Troubleshooting
----------------
-
-**CI not running on PR to dev**
-   Verify ``.github/workflows/ci.yml`` has ``dev`` in the triggers:
-
-   .. code-block:: yaml
-
-      on:
-        pull_request:
-          branches: [main, dev]
-
-**Style check blocking merge**
-   Style should have ``continue-on-error: true``. Check the workflow.
-
-**Sphinx warnings causing failures**
-   Warnings are allowed in CI (no ``-W`` flag). For strict local builds:
-
-   .. code-block:: bash
-
-      mise run docs:strict
-
-**Duplicate object warnings (autodoc)**
-   Expected with Pydantic model re-exports. Suppressed via ``suppress_warnings``
-   in ``docs/conf.py``.
-
-See Also
---------
-
-- :doc:`/how-to/contribute` - Contribution workflow
-- :doc:`/how-to/run-ci-locally` - Local CI testing
-- ``ai/ci-workflow.yaml`` - Machine-readable CI documentation
+Run the smallest applicable test first. Use ``mise run check`` for retained
+Python tooling, or scoped Cargo tests followed by the applicable native gate.
+``mise run rust:check-no-docs`` is the complete local Rust gate. Documentation
+generation requires an explicit request. Run heavy Cargo and PostgreSQL jobs
+serially using each worktree's own target and environment.

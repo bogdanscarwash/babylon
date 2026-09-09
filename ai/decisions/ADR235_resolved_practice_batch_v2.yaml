@@ -1,0 +1,98 @@
+ADR235_resolved_practice_batch_v2:
+  status: "accepted"
+  date: "2026-08-26"
+  title: >-
+    ResolvedPracticeBatchV2 binds exact accepted proposals to committed
+    authority without allocation priority or a self-referential digest
+  crate: babylon-practice-contract
+  production_dependencies:
+    - babylon-kernel
+  forbidden_dependencies:
+    - babylon-graph
+    - babylon-bsl
+    - babylon-tick
+    - babylon-persistence
+    - babylon-client
+  live_activation: false
+  context: |
+    ADR233 freezes authoritative campaign habitation and ADR234 freezes stable
+    proposal identity, but the detached tick still lacks an immutable accepted
+    input boundary. Passing a loose list of intents would omit the committed
+    authority-ledger identity and exact authority rows. Sorting by submission
+    order, a digest prefix, or nonce would also risk turning serialization into
+    material priority.
+
+    The approved Neel integration design requires the resolved batch to bind
+    campaign, resolution tick, committed authority, content, the resource
+    allocation contract, every accepted intent, and a derived batch digest. It
+    also forbids any byte preimage from depending on its own digest.
+  decision: |
+    `ResolvedPracticeBatchV2` is a pure, database-free canonical input contract
+    owned by `babylon-practice-contract`. The exact schema and vectors live in
+    `contracts/resolved_practice_batch_v2.yaml` and
+    `contracts/resolved_practice_batch_v2_vectors.jsonl`.
+
+    The batch uses domain `babylon.resolved-practice-batch.v2`, fixed
+    big-endian fields, and length-framed nested V2 authority-row and intent
+    bytes. It binds schema version, campaign identity, resolution tick, the
+    committed input-authority-ledger digest, the governed resource-allocation
+    contract digest, content identity, and at most 4,096 exact accepted item
+    pairs. An empty batch still binds every top-level identity.
+
+    Validation first checks the batch ceiling, then validates and hashes the
+    supplied authoritative ledger. Every item must carry the exact active row
+    selected from that ledger for its campaign, authority, actor, and resolve
+    tick. Every intent must quote the batch content and resource-contract
+    digests. Missing, inactive, stale, altered, or actor-mismatched rows refuse
+    before a detached working copy can run.
+
+    Items sort by the complete `PracticeProposalKeyV2`; duplicate keys refuse
+    even if non-key intent fields differ. This is canonical serialization only
+    and grants no material priority. The batch digest is SHA-256 of validated
+    canonical bytes and never appears inside those bytes, so the contract has
+    no self-reference.
+
+    The 4,096-item and 16,384-byte nested-intent ceilings are Designed
+    serialization and validation fuel limits. The nested authority length is
+    the existing exact 127-byte V2 row layout, not a new allowance. Their
+    derived 67,645,599-byte batch ceiling is not actor capacity, organization
+    count, political rank, or a gameplay quota. Maximum-plus-one refuses before
+    nested allocation or sorting.
+
+    This slice does not create the accepted-input persistence transaction,
+    resource requests, reservations, clearing, allocation outcomes,
+    `authority_resource_conflict`, material eligibility, BSL effects, receipts,
+    Archive rows, or player verbs. Those remain separately versioned owners.
+  consequences: |
+    The detached Rust tick can receive one stable accepted-input identity whose
+    authority and proposal provenance are replayable without trusting client
+    order. The future resource allocator can bind the same resource-contract
+    digest without inheriting canonical-order priority.
+
+    This slice creates no database row, allocation, reservation, graph or
+    register read, graph write, labor withholding, receipt, event, outbox row,
+    player action, or gameplay effect. V1 and the two earlier V2 contracts stay
+    byte-identical.
+  verification: |
+    Rust tests pin independent literal bytes and SHA-256, empty and populated
+    round trips, every batch error code, nested error preservation, ledger
+    digest mismatch, missing and stale authority rows, exact-row alteration,
+    campaign, tick, content, resource-contract, proposal-key order and
+    duplicate refusals, maximum and maximum-plus-one bounds, and digest
+    sensitivity. Language-neutral vectors exercise the valid preimage and
+    bounded wire refusals. The complete V1, authority V2, and intent V2 suites
+    remain unchanged.
+  preserves:
+    - ADR227 Practice Contract V1 byte and activation boundary
+    - ADR232 source, causal, and successor-versioning law
+    - ADR233 authoritative campaign habitation and input-authority ledger
+    - ADR234 stable proposal identity and target law
+  supersedes: []
+  related:
+    - ADR220_rust_owned_postgresql_persistence_boundary
+    - ADR223_whole_tick_atomicity_world_hash
+    - ADR227_practice_contract_groundwork
+    - ADR229_rust_gameplay_contract_authority
+    - ADR232_neel_integration_program_architecture
+    - ADR233_practice_input_authority_v2
+    - ADR234_practice_intent_v2

@@ -1,0 +1,23 @@
+# Babylon PER-272 current fresh schema epoch with babylon_intel census fixture v2
+# provenance|source|legacy_adopter_census.sql
+# provenance|census_sql_sha256|f6b876b0e379081adf25a89165eac7a57f1e596fc369abbbc34807d6268a6c22
+# provenance|postgres_image|postgis/postgis:17-3.5-alpine@sha256:08f4b1e1f4a571008c60272ceb9e0d1f9f8f643792d006b74a35b1bec44c2218
+# provenance|postgres_server_version_num|170011
+# provenance|locale_provider|builtin
+# provenance|locale|C.UTF-8
+# provenance|encoding|UTF8
+# provenance|postgis_version|3.5.7
+# provenance|pgvector_version|0.8.5
+# provenance|h3_version|4.5.0
+# provenance|artifact_contract|digest-pinned-base|checksum-pinned-sources|exact-final-runtime-packages|behaviorally-verified|not-byte-reproducible
+# provenance|startup_options|default_transaction_read_only=on|statement_timeout=5000ms|lock_timeout=5000ms|idle_in_transaction_session_timeout=5000ms|quote_all_identifiers=off|search_path=pg_catalog|jit=off|event_triggers=off
+# provenance|optional_cluster_role|babylon_intel
+# format|kind|schema|name|sha256
+database|pg_database|current_database|db47b60d05393717417b24579078c99adf19ae592739a89f59b0d054cbbc81fc
+extension|pg_extension|pg_stat_statements|086de786a36ba35c49cdc536a7ff50bd21f87bf53fa6142447ab866395580cea
+extension|pg_extension|plpgsql|4822f9ff8bbbdc5390ea3064c9216b63e2a6d1f57d421a0e9afaa3bedb35bd7d
+extension|pg_extension|postgis|034e3fa689fbd4a6d1ede34af486b73537db201240f31904f01691642f6e01da
+extension|pg_extension|uuid-ossp|73833fbe0f1b319f9c36c783f05c171cc2a6e3a56f1de5b50ccba111b3f9c4fd
+extension|pg_extension|vector|d03885fd9a8631ea9209820c234adb88f0d9e8fe40aa9a0a151331395a6be3e9
+role|pg_roles|babylon_intel|c3eac28a2cc8dcc019a4d1158d1e22c79737113927816086ca7d268f7ad77184
+schema_grant|pg_namespace|public|c5cd4f26587430e95806f14674bec3572f90e3fcd782658f27a2be0b03b0c317

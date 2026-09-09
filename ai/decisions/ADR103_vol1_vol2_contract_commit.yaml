@@ -1,0 +1,65 @@
+id: ADR103
+title: >-
+  Capital Vol I ∥ Vol II contract commit (T1.0, the parallel-build fork gate):
+  reserved opposition keys + dead coupling skeleton + tick-system room
+  partition, physics-neutral by construction — plus the §10.2 deviation
+  hoisting the dormancy sentinel into the T1.1 keel.
+status: accepted
+date: '2026-07-21'
+context: >-
+  The v1.0.0 Playable Archive program (ai/_inbox/PROGRAM_v1_0_0_playable_archive.md,
+  ratified 2026-07-21) runs Capital Vol I (value production) and Vol II
+  (circulation) as one parallel workflow per the §10 protocol in
+  ai/_inbox/vol1-value-production-program-prompt.md: contract commit FIRST, then
+  the two lanes fork into separate worktrees and never collide on shared
+  surfaces. Surface verified at HEAD 17f4d61e before mutation: 11 registered
+  oppositions (test-pinned tuple), 13 GraphInputs fields, 13 declared couplings
+  of which exactly 2 are dead (the Vol II circulation transforms edges,
+  skipped-count test-pinned at 2), Vol I had NO reserved slots anywhere, and
+  the three Vol I keys (value_usevalue, labor_laborpower,
+  absolute_relative_surplus) appeared nowhere in src/ or tests/. The dead-edge
+  precedent already existed: _DEFAULT_COUPLINGS declares edges whose endpoints
+  are unregistered and build_default_coupling_graph skips them loudly — the
+  same mechanism that held the two Vol III transforms edges dormant until
+  ADR089 bound them.
+decision: >-
+  One commit on chore/vol1-vol2-contract establishes the whole contract with
+  ZERO live bindings: (1) VOL_I_RESERVED_OPPOSITIONS
+  (value_usevalue, labor_laborpower, absolute_relative_surplus) and
+  VOL_II_RESERVED_OPPOSITIONS (circulation, realization, reproduction,
+  disproportionality) exported from dialectics/instances/catalog.py under a
+  '=== CAPITAL VOL I ∥ VOL II CONTRACT ===' block that also states the
+  GraphInputs field-partition convention (Vol I adds production-layer fields,
+  Vol II circulation-layer fields; never rename/reorder existing ones).
+  (2) Three dead Vol I coupling slots in _DEFAULT_COUPLINGS
+  (value_usevalue→labor_laborpower feeds; labor_laborpower→
+  absolute_relative_surplus feeds; absolute_relative_surplus→wage feeds — the
+  bridge into the LIVE Fundamental-Theorem wage axis), skipped by the builder
+  exactly as the Vol II pair is. (3) Room-partition banners over
+  _compute_vol1_layer / _compute_circulation_layer / _compute_financial_layer
+  in domain/economics/tick/system/__init__.py (Vol III marked owned-by-neither,
+  landed ADR089). (4) tests/unit/dialectics/test_contract.py pins the reserved
+  tuples, proves registry∩reserved=∅ (physics-neutrality by construction — the
+  registry shape and therefore the tick hash are untouched), and proves the
+  skeleton is declared-but-dead; the skipped-count test moves 2→5
+  (test_reserved_slots_are_skipped). ADR numbering: this batch claims
+  ADR103–ADR107 (104 installer/nix-bootstrap, 105 inference-lane amendments,
+  106 determinism boundary, 107 corpus canon + apocrypha). §10.2 DEVIATION,
+  recorded here rather than a separate note: the shared dormancy-sentinel unit
+  is HOISTED out of the volume lanes into the T1.1 keel (seam-algebra sentinel
+  family), because T1.1 generalizes exactly that check; runner-parity stays
+  assigned to Vol I as §10.2 wrote it.
+consequences: >-
+  Both volume lanes may fork immediately and register bindings only inside
+  their reserved key namespace; the coupling map needs no further shared edits
+  (each lane deletes its own dead markers as it binds them, lighting the edges
+  the builder already declares). Registering a reserved key flips
+  test_reserved_oppositions_are_dormant's set arithmetic and the 2→5
+  skipped-count — each lane updates those counts as part of its binding unit,
+  which is the loud signal the contract intended. The 11-opposition tuple test
+  and the surviving-edge-set test are UNCHANGED by this commit (nothing live
+  was added), so no ceremony is due: byte-identity holds by construction, and
+  per the BD fast-dev ruling 2026-07-21 the qa:regression proof runs at
+  merge-time, not per local commit. Stale prose noted, not fixed here (Vol I
+  lane owns the file next): catalog.py's docstring still says "ten bound
+  contradictions" / "five-opposition registry" while 11 are registered.

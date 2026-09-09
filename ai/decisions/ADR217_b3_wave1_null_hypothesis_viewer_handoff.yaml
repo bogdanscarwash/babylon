@@ -1,0 +1,434 @@
+ADR217_b3_wave1_null_hypothesis_viewer_handoff:
+  status: "accepted"
+  date: "2026-08-18"
+  title: "The B3 wave-1 null-hypothesis viewer train handoff (issue #663, milestone Bevy B3 — Client Completion, plan docs/superpowers/plans/2026-08-17-b3-null-hypothesis-viewer.md rev 2) — 'watch the null hypothesis run': one bounded auto-run clock (autoplay-until-critical default, byte-identical hash whether N ticks arrive as N steps or one batch), a four-provenance projection seam (Material/Absent/NotComputed/Redacted-declared-dead) replacing eleven raw graph.node_attribute call sites, a drained tick-stamped severity-ranked beat feed with the transcribed causal because: chain and a Python parity guard, a two-story compile-time catalog (counties default, carceral discoverable) with per-story SessionId closing ADR213 follow-on (iii), the countdown/pressure instrument and its executable no-20-tick-frozen-window cadence gate, the carceral arc landed as the first shipped story with a byte-identical text golden plus a three-layer G1/G2/G3 engine-unchanged proof, the lens registry replacing a five-file match cascade, and this train's own 40-row FieldCoverage ledger (the M22 artifact) — nine tasks, one continuous branch feature/b3-null-hypothesis-viewer (HEAD f2377df5 before this ADR's own commits), not yet split into the plan's three PRs and not yet merged to dev."
+  context: |
+    Issue #663 was chartered by Director ruling (GH#617 Admin Debug Dashboard, GH#619's
+    static-first sequencing ruling, memory `visualization-directives-2026-08-17.md`) as
+    the "make an unattended simulation run engaging" lane — explicitly NOT #577's body of
+    work (Patches tutorial, topology-as-3D stay the capstone, unblocked but later, #648
+    named as the 3D gate; recorded on #577 at Task 0). The design of record is
+    `docs/superpowers/plans/2026-08-17-b3-null-hypothesis-viewer.md` (revision 2,
+    re-verified against dev tip `b5a3268a`, PR #657) — its own §0 scope verdict, §1 Global
+    Constraints, §2 engineering calls, §3 design details, and §8 blocker/escalation table
+    (B1-B15) are binding over any looser summary of the same ground. An adversarial
+    critique of record (`b3-charter/plan-critique.md`, 4 Critical/9 Important/9 Minor) is
+    dispositioned across the plan's own sections; §0.3 records what the dev merge
+    dissolved.
+
+    Nine tasks executed on worktree `/media/user/data/worktrees/wt-b3`, branch
+    `feature/b3-null-hypothesis-viewer`, as one continuous branch — the plan's own §6 three-PR
+    split (A: Tasks 0/1/2/8; B: Tasks 3/4; C: Tasks 5/6/7/9) was never executed; no PR is open
+    against this branch and it has not merged to `dev`. This ADR records the WHOLE train
+    (Tasks 0-9) per the same "record the whole train, not merely the merged slice" convention
+    ADR213 used for its own un-PR'd tail. Two real incidents are part of this train's own
+    story, not merely process trivia: Task 6's implementer died mid-GREEN (API failure, not
+    a code defect) with its RED commit (`da9b3106`) already landed and its GREEN work sitting
+    uncommitted in the worktree; a fresh implementer audited the inherited draft
+    line-by-line against the RED suite and the interface contracts it depended on, found
+    exactly one real defect (a rustfmt-only reflow, fixed), and committed GREEN (`55db47ef`)
+    rather than discarding and re-deriving the draft from scratch — the takeover is disclosed
+    in `task-6-report.md`'s own "draft audit" section. Task 7's review found one MAJOR: the
+    roster panel published two `institution/*-tick` fields (`decomposition-fire-tick`,
+    `control-crisis-tick`) through a bare `Projector::material()` read, rendering a
+    fabricated "fired at tick 0" before either beat's owning rule actually fired — exactly
+    the seeded-0 trap `ui::countdown::resolve` was already built to gate for the SAME two
+    fields, not reused by the roster panel. The fix extracted the shared mechanism
+    (`ui::countdown::read_gated_operand`, `pub(crate)`) rather than duplicating a second
+    gate, closing the review's own "reuse, don't re-derive" instruction. Task 8 disclosed
+    one accepted partial collapse: `format_lens_line`'s per-lens text arms are the one piece
+    of the old five-file match cascade the registry does NOT eliminate — each lens phrases
+    its own reading in genuinely different words (signed w + pole name; classification +
+    tick; signed delta + direction + tick), so no generic formatter can absorb them; a new
+    `(id, Some(_)) => panic!(...)` fallback arm makes an unimplemented lens's real reading a
+    loud failure rather than a silent one, replacing the enum's old compiler-enforced
+    exhaustiveness with two cheap tests instead (the plan's own §2.10 "Rejected: keep the
+    enum, add arms" accepted trade-off).
+
+    This ADR is Task 9 (§9.2 of the plan): 9.1 lands `coverage.rs`, the M22 artifact; 9.2 is
+    this document; 9.3 is `ai/state.yaml`'s closing entry plus the `CLAUDE.md` client-status
+    paragraph; 9.4 is the GH evidence pass; 9.5 revises the plan's own Mtok estimate.
+  decision: |
+    **1. Scope verdict held (§0.1) — nothing renegotiated.** The train shipped exactly the
+    five deliverables the scope verdict named (time controls, narrative beats, the carceral
+    arc, the lens/pane seam, the declared admin/material-truth framing) and nothing from
+    #577's own body of work. No 3D moment was built (Global Constraint 12 / B12 held for the
+    whole train — the tick-phase heartbeat is 2D, three discrete palette steps, claiming
+    nothing per M8). No terminal/verdict/ending surface was built (B14 held — Task 4.5/7.2
+    both assert the negative: the rendered latch card contains none of
+    `REVOLUTIONARY_VICTORY`/`FASCIST_CONSOLIDATION`/`RED_OGV`/`ECOLOGICAL_COLLAPSE`/
+    `FRAGMENTED_COLLAPSE`/`verdict`/`campaign`, and `GENOCIDE`/`REVOLUTION` are
+    `control-ratio.bsl`'s own numeric-encoding names, not the Director-reserved
+    five-outcome vocabulary — verified end-to-end in Task 7's G3 layer, not merely at Task
+    4's unit-test layer). Premise copy transcribed cleanly (I1/B15 — no escalation needed;
+    both `COUNTIES_PREMISE`/`CARCERAL_PREMISE` byte-match their `.bscn` sources, proved by a
+    substring test).
+
+    **2. What the dev merge dissolved (§0.3), confirmed still dissolved.** `node_content_ids`
+    (`babylon-bsl/src/scenario.rs:311`) landed with #657 before this train started and stayed
+    public throughout — the roster is DERIVED everywhere in this train's code (`story.rs`'s
+    `derive_full_roster`/roster-from-loaded functions), never hand-transcribed; no
+    `DEMO_FIPS`-shaped constant exists anywhere in the tree today (Task 5 deleted the last
+    one). The tick-1-only carceral golden (`tick_goldens.rs:709`) was never treated as a
+    tick-110 oracle at any point in this train — Task 7's G1/G2/G3 layer (below) is the real
+    tick-110 proof, built precisely because that golden could not serve as one.
+
+    **3. The engineering calls (§2), each landed as specified, with its rejected
+    alternative on record:**
+
+    - **§2.1 The clock** — one `RunState` resource + one `Update` system (`advance_ticks`,
+      `ui/time.rs`), a `const`-bounded catch-up loop (`MAX_TICKS_PER_FRAME = 8`, clamped
+      accumulator), defaults `running=true, autopause=OnCritical, speed_index=2` (5 t/s —
+      autoplay-until-event, GDS §3). Rejected: `FixedUpdate`/`Time<Fixed>` (a second
+      schedule the crate's own `.chain()` ordering guarantees don't reach); a Bevy
+      `States<Playing|Paused>` machine (no precedent in the crate, pause needs to halt ONLY
+      the advance while render/HUD keep running, which a bool + early return expresses and a
+      state-gated schedule does not). Task 2's own gate: byte-identical hash at tick 10
+      whether reached by 10 discrete `Space` presses or one auto-run batch (row 6 of
+      `tests/time_controls.rs`) — the executable form of Global Constraint 2. Two
+      beyond-brief bugs were caught and fixed by this same task, mutation-validated: Bevy's
+      `Time<Virtual>` default `max_delta` (250ms) pre-empted the stall clamp before it could
+      ever fire (raised to 3600s); `ticks_due`'s original f32 repeated-subtraction form
+      silently undercounted at high speeds (rewritten as integer division, zero loops,
+      Power-of-10 rule 2 compliant by construction rather than by inspection).
+    - **§2.2 The event-feed data path** — tick-stamped at the advance site (drain
+      `CollectingSink` into a bounded `VecDeque<Beat>`, `BEAT_LOG_CAPACITY = 512`), severity
+      ranked via a transcribed 12-row taxonomy (`severity.rs::SEVERITY_TAXONOMY`, token-for-
+      token verified against `event_severity.py::SEVERITY_TAXONOMY` by task-4-review), and
+      same-tick FLOW collapse with a magnitude term (Σ|Δpop-d-prime|, not merely a count) so
+      the collapsed counties line moves every tick. Rejected: teaching BSL/`CollectingSink`
+      to carry the tick and narration string (an engine change to two crates for a
+      presentation concern, forbidden by Global Constraint 6/7 and §2.8's no-string-payload
+      rule); an LLM/RAG narrator (non-deterministic, `chronicle_adapter.py`'s own module doc
+      draws the "NO LLM here" line). Closes the unbounded event-feed memory item tracked on
+      **#503** — the drain-with-cursor pattern is proven bounded across a full validated
+      horizon of auto-run (`tests/beats.rs`, ~320 ticks × 12+ events ≈ 3,800 beats through
+      the cap, `session.sink.events.is_empty()` asserted throughout).
+    - **§2.3 The causal chain** — every critical beat's `because:` line is transcribed from
+      the frozen source, never authored; all four rows (`SUPERWAGE_CRISIS`,
+      `CLASS_DECOMPOSITION`, `CONTROL_RATIO_CRISIS`, `TERMINAL_DECISION`) render with their
+      slots bound, verified by rendering (not merely `is_some()`-checking, after task-4-
+      review's I4 fix) against production-shaped payloads.
+    - **§2.4 Pacing** — the wave-1 cadence claim ("no 20-tick window renders a frozen
+      screen, on every shipped story") is a real, executed gate (Task 6.3): measured longest
+      identical window = 3 ticks for counties (validated horizon 600) and 5 ticks for
+      carceral (validated horizon 110), both well under the 20-tick bar, with counties'
+      per-tick-delta path additionally isolated and independently verified (state panel
+      alone, 3 ticks). The seeded-0 latch trap (§2.4's own I2 interaction) is gated
+      correctly: `institution/*-tick` fields read `NotComputed { "not yet latched" }`
+      before their companion flag flips, never a guessed countdown from the seeded 0 —
+      verified as a genuine RED-then-GREEN trap in Task 6.1's own test, not merely asserted.
+    - **§2.5 Scenario selection** — a compile-time `STORIES: &'static [Story]` catalog
+      (`pub static`, not `const` — Task 5 caught and fixed a `std::ptr::eq`
+      cross-codegen-unit reliability bug the `const` form would have reintroduced), `--story
+      <id>` via bare `std::env::args()` (no `clap` dependency added), counties stays the
+      default (the crate's only spatial instrument, moves every tick), carceral is
+      discoverable-by-construction (the tick-0 card prints the whole catalog, `N` restarts
+      into the next entry). Rejected: defaulting to carceral (hides the map on first run);
+      a Bevy lobby screen now (needs a `States` machine and a UI layout estate that does not
+      exist — the catalog IS the lobby's future data model); runtime file paths (would let
+      unconformance-gated content become a second source of truth about what the game
+      contains — modding is #531, post-1.0).
+    - **§2.6 The admin/player seam** — `Projector::read` with FOUR provenances
+      (`Material`/`Absent`/`NotComputed`/`Redacted`) replaces eleven raw
+      `graph.node_attribute` call sites at one seam (`projection.rs`); the admin banner
+      (`ADMIN · MATERIAL TRUTH · UNFOGGED`) renders persistently. `NotComputed`'s wave-1
+      membership (§2.6's I2 table — the two `SUPERWAGE_CRISIS` structural-zero payload keys,
+      `ENTITY_DEATH.cause`, every `institution/*-tick` latch before its flag flips) is
+      exhaustively enumerated and render-tested to contain no digit. `Redacted` is
+      declared-dead per I9 — see decision point 6, below.
+    - **§2.7 Validated horizons** — `carceral = 110` (measured from the conformance suite's
+      own four full-arc assertions), `counties = 600` (Task 4.3's own measurement: the
+      original revision-1 claim of "600 auto-run ticks" with no numeric-sanity proof was
+      replaced by an executed
+      `counties_stay_numerically_sane_to_the_validated_horizon` test — every
+      `territory/{pop-d,pop-p,pop-d-prime,wealth-d-prime,dependency-ratio}` and every
+      `social-class/{population,wealth}` finite and non-negative across the full 600-tick
+      run, first attempt, no failure to record or horizon to lower).
+    - **§2.8 Test discipline** — every new UI system in this train gained a headless
+      real-`App` assertion driving real `KeyboardInput` events (never a hand-built fixture),
+      per the estate's own hard-won doctrine; every time-advancing test used
+      `TimeUpdateStrategy::ManualDuration` (never an uncontrolled wall clock); the carceral
+      arc's text golden (`tests/goldens/carceral_arc_beats.txt`) is byte-compared, not
+      pixel-compared (B8 — no GPU/display in CI).
+    - **§2.9 The engine-unchanged proof (C1's fix)** — see decision point 4, below; the
+      revision-1 defect (a gate citing a tick-110 hash assertion that did not exist anywhere
+      in the estate) is fully replaced by G1/G2/G3, none of which cites a hash that does not
+      exist.
+    - **§2.10 The lens seam** — `LensSpec`/`LENSES: &'static [LensSpec]` replaces the closed
+      3-variant `ActiveLens` enum + five exhaustive match sites; `paint: LensPaint` (one
+      variant, `CountyFill`) is the declared, named landing site for #615's edge-painting
+      flow lens. Rejected: keep the enum, add arms (the compiler-enforced-exhaustiveness
+      virtue is preserved by two cheap registry tests instead; the enum's real cost — five
+      edit sites and a hand-maintained footer constant — is removed; an edge-painting lens
+      could not be an arm of a county-fill match at all). The Tension lens ships IN the
+      registry, whole-lens-absent, its reserved field names (`territory/tick-exploitation-
+      rate`, `territory/tick-total-surplus`) visible in `help` — the honest placeholder for
+      #615, not deleted (deleting it would erase the names the economics port is meant to
+      write, per B5).
+    - **§2.11 Map absence** — `MapBinding::None` (carceral) hides the county mesh and
+      renders the declared banner rather than painting 3,222 counties `PANEL` while a story
+      runs elsewhere (III.11); the roster panel, beat feed and countdown carry the story
+      instead. Verified: zero stale-color painting on the switch (`map/bands.rs:171-190`'s
+      FB1 discipline generalizes correctly — an empty derived roster resolves zero lens
+      cells by construction).
+
+    **4. The engine-unchanged proof, G1/G2/G3 (§2.9/C1's fix), landed exactly as specified.**
+    Revision 1's gate cited a tick-110 hash assertion in `carceral_arc_conformance.rs` that
+    does not exist (that file pins tick 1 only, via `run_once`). Task 7 replaced it with three
+    layers, each naming where its oracle value comes from:
+    - **G1** — a fresh, independent `TickSession` (own sink) advanced 110 times inside the
+      SAME test as the client `App`, computed live — the real oracle, no blessed constant.
+      Asserts the client `App`'s own 110-entry `TickReport.after` sequence and final
+      `state_hash` are byte-identical to it.
+    - **G2** — the tick-110 hash pinned as a `const` inside
+      `babylon-client/tests/carceral_arc_story.rs` itself (never in `babylon-tick`, Global
+      Constraint 6 held), value `bd5fe4d5b2a982f2bd1191f14bef6a623e0d14a3e2563f882964d03736
+      856dcc`, measured from G1's own oracle session and doc-commented as such.
+      Mutation-proven twice, both reverted: flipping the pin's last hex digit reds the
+      `assert_eq!`; deleting one `advance()` call from the oracle loop reds the length-
+      mismatch assertion (110 vs 109 entries).
+    - **G3** — the beat conformance restated over the RENDERED feed, mirroring
+      `carceral_arc_conformance.rs`'s own actual assertions: the four beats at ticks 1/53/
+      105/106, exactly once each and four total, `TERMINAL_DECISION`'s `outcome =
+      Value::Int(0)` (the numeric GENOCIDE encoding, never confused with the Director-
+      reserved five-outcome vocabulary), and the run genuinely paused at 106 with the latch
+      card's negative assertion restated end-to-end.
+    A fourth, honest caveat is made executable rather than merely stated: G1 pins the client
+    and the oracle to the SAME `SessionId` by construction, so
+    `the_story_session_id_does_not_yet_move_the_run` proves the separate claim that the
+    session id itself is not (yet) load-bearing — the same 110-tick content under two
+    different `SessionId`s hashes identically today because no landed pack calls `rng-draw`
+    (re-verified this session, zero hits). This is a witness, not a law: the day a pack
+    lands an `rng-draw` call, that test goes red — correctly and loudly — and must be
+    re-anchored, never deleted.
+
+    **5. The per-story `SessionId` decision (§3.5) — closes ADR213 follow-on (iii).** Each
+    story's `session_id` is its scenario's own qualified name, read out of the `.bscn`
+    `(scenario …)` form at implementation, not derived from the file name: `counties` =
+    `"lifecycle/us-counties-demo"` (`us-counties-lifecycle-demo.bscn:61` — note this is NOT
+    the shape the file name suggests), `carceral` = `"carceral/arc-conformance"`
+    (`carceral-arc-conformance.bscn:91`). This adopts D179's (ADR213's session-id
+    provenance row) "`ContentDigest` hex OR the scenario id, minted client-side, never a
+    UUID or wall-clock read" convention, choosing the scenario-id half: deterministic,
+    stable across rebuilds, human-legible in a log line, unique per story by the catalog's
+    own uniqueness test — the `ContentDigest` hex is the stronger convention for a
+    *campaign* with mutable content, which this curated two-scenario catalog is not. The
+    placeholder `SessionId::new("babylon-client-b2-demo")` (`engine_link.rs:130`,
+    pre-existing) is DELETED, not left beside the new path — grep confirms zero live
+    remnants crate-wide (Task 5). **ADR213 follow-on (iii)** ("adopting D179's convention at
+    `babylon-client`'s call site... separate, undirected follow-on work") is discharged by
+    this train.
+
+    **6. The narration-transcription contract, its parity guard, and the guard's lifecycle
+    across the Python deletion ceremony (I7).** `narration.rs::NarrationSpec` carries
+    `event_type`/`subject_key`/`template`/`because`/`source`, where `source` names the
+    frozen file, its line range, AND the freeze tag (`"src/babylon/engine/systems/
+    decomposition.py:361-365 @ p27-python-freeze"`). The drift guard,
+    `tests/unit/render/test_rust_narration_parity.py`, parses `severity.rs`/`narration.rs`
+    and asserts every transcribed row's shape against the Python originals — mutation-
+    validated (Task 4.6: a changed Rust template slot name reds the Python test; reverted)
+    and, after task-4-review's C1 finding, corrected for a genuine fixture-shape defect: the
+    two rows whose Python source interpolates a bare `int` with no format spec
+    (`CLASS_DECOMPOSITION`'s two population-transfer slots, `CONTROL_RATIO_CRISIS`'s three)
+    now render through a per-slot `INTEGRAL_SLOTS` table rather than the general `:.2f`
+    path, fixed with the fixture restamped to the REAL wire shape (`Value::Real`, never
+    `Value::Int` — every `field-of` read returns `Real` regardless of the field's declared
+    logical type) rather than the shape a hand-written test had assumed. **The guard's own
+    lifecycle, recorded here per §9.2's own instruction:** when the Python engine deletion
+    ceremony (memory `python-engine-deletion-endgame`) executes, the Rust `NarrationSpec`/
+    `SeverityRow` tables become the declared source of truth and
+    `test_rust_narration_parity.py` retires BY NAMED CEREMONY (not silently, matching the
+    §6.5 baseline-ceremony discipline's own spirit for a different artifact class) —
+    provenance is preserved after that retirement by each row's own `source` field, which
+    already carries the frozen file's `file:line @ p27-python-freeze` citation independent
+    of whether the frozen file itself still exists in the tree.
+
+    **7. `Provenance::Redacted` — a declared-dead extension point gated on #593 (I9).** The
+    variant stays in the enum (ADR182 R2 rules redaction-with-remedy a genuinely different
+    fact than absence — a fog filter withholding a value that DOES exist — and baking a
+    two-state world in now would foreclose that ruling); its match arm exists ONLY because
+    the compiler requires exhaustiveness, documented as such in its own comment. Its test,
+    `redacted_is_declared_dead_until_593`, is inverted from what a naive implementation
+    would ship: rather than constructing the variant and asserting it renders (the exact
+    fixture-shape defect class CLAUDE.md names — a fixture stamping something production
+    never emits, giving a green test over a dead feature), it SOURCE-SCANS
+    `babylon-client/src/**` for `Provenance::Redacted` constructions and asserts there are
+    ZERO outside the enum definition — the same source-scan shape
+    `tests/unit/render/test_rust_theme_parity.py` already uses for `palette.rs`'s own
+    `Color::srgb_u8` literals. It counts the construct as dead; it does not imply coverage.
+    This is registered here, per §9.2's own instruction, in the same register the `inert`
+    sentinel family keeps for Python constructs
+    (`src/babylon/sentinels/inert/registry.py`'s `DECLARED_PRODUCERS` doctrine) — the
+    registry itself scans Python production roots and cannot see Rust, which is why the
+    Rust-side source-scan test is the mechanism and this ADR row is the record. The
+    extension point discharges the moment #593 (the player-verb surface) lands and
+    `apply_fog`'s Rust transcription needs a real filter to swap into `Projector`'s seam.
+
+    **8. The `observe()` conformance gap and the AF (ii) client-side-projector argument
+    (Minor 8).** M4 (the register) calls the client a "presentation-only viewport over
+    `observe()`-projection shapes"; there is no `observe()` function or type anywhere in
+    `rust/` as of this train's own landing — `Projector::read` calls `graph.node_attribute`
+    directly, the same call `revision 1`'s critique (B2, before its own dissolution) already
+    found. Amendment AF clause (ii) licenses a Rust-native re-derivation of the projection
+    contract rather than a literal FFI port of the Python `observe()` function, and this
+    train's `Projector` is that re-derivation's wave-1 instance: it establishes the ONE seam
+    every panel/lens now reads through (eleven raw call sites collapsed to one), which is
+    the structural precondition for a later `observe()`-shaped contract to exist at all —
+    but it is not itself that contract, and does not claim to be. What would have to change
+    if the Rust engine ever grows a formal `observe()` seam: `Projector::read`'s signature
+    would need to accept whatever projection-shape argument `observe()` itself takes (a
+    vision ledger, a capability set, or similar — ADR183 R3's Python-side precedent is
+    `render_organization.py`'s gated read), and every existing call site would need zero
+    changes, since they already go through the one seam this train built. This is recorded
+    as a gap, not papered over, per §2.6's own instruction.
+
+    **9. The admin surface as the AF-measured exception (B13), and the #617 divergence
+    (Minor 9).** Wave 1 ships an unfogged surface — `Projector::material()` constructs
+    `Material`/`Absent`/`NotComputed` only, never `Redacted` — while ADR182 R2 makes
+    `apply_fog` on the player path a hard v1.0 prerequisite. This is legitimate TODAY
+    because a no-player observatory has no epistemic state to protect
+    (`b3-charter/data-seam.md` §1), PROVIDED the surface is named (the persistent
+    `ADMIN · MATERIAL TRUTH · UNFOGGED` banner, Task 3) and the filter seam exists
+    (`Provenance::Redacted`, declared-dead per decision point 7). This ADR states, as B13
+    requires: **the admin surface built by this train is the NAMED exception any future
+    player-facing path (AF's own eventual scope) will be measured against** — a player view
+    that reads through `Projector` without a real `apply_fog`-backed constructor would be
+    the exact regression this banner exists to make visible, not a quiet default. **The
+    #617 divergence (Minor 9):** the register's own illustrative sketch for an admin surface
+    implies a togglable/flagged instrument; this train's admin banner is ALWAYS ON (no
+    flag, no hidden-by-default state) while the deeper `F3` panel (TickReport + raw roster
+    dump) is the one thing gated behind a keypress. The banner's own justification is
+    exactly why it cannot be optional: an unfogged material-truth surface that could be
+    silently toggled off would let a viewer forget it is looking at unfogged truth, which is
+    the fabrication-by-omission III.11 forbids at the presentation layer as much as at the
+    data layer. **Wave 1 does NOT discharge #617** — the write-log pane (#617's own "first
+    genuinely new instrument") needs a `WriteObserver` seam through
+    `babylon-tick::run_tick` that does not exist (B4); this train's admin pane ships the
+    `TickReport` instrument instead (already computed every tick, previously discarded at
+    the call site, now rendered for free).
+
+    **10. The coverage ledger (§3.4/I5) — the M22 artifact, rendered in full.**
+    `coverage.rs::FIELD_COVERAGE` is 40 rows, transcribed from the four landed packs' own
+    `update-node` call sites (a derivation, not a survey), one row per field per story that
+    writes it. Three completeness properties are gate-tested (`coverage.rs`'s own
+    `#[cfg(test)]` module): every `(story, field)` pair is unique; every `Panel`/`Lens`/
+    `BeatCard` home names an id that genuinely exists in this train's own registries
+    (`KNOWN_PANEL_IDS` — a ledger-local list, since no earlier task built a data-driven pane
+    registry the way Task 8 built one for lenses; `crate::map::LENSES`;
+    `crate::narration::NARRATION_TABLE`); every `RuledAbsent` row carries a non-empty
+    `reason` AND a non-empty `future_home`. 24 of the 40 fields have a real, verified home;
+    16 are `RuledAbsent`, each with a stated reason and a named future home — never silently
+    dropped.
+
+    | Story | Field | Written by | Home |
+    |---|---|---|---|
+    | counties | territory/pop-d | lifecycle.bsl:383 | Panel(state_panel) |
+    | counties | territory/pop-p | lifecycle.bsl:384 | Panel(state_panel) |
+    | counties | territory/pop-d-prime | lifecycle.bsl:385 | Lens(county_population_trend) |
+    | counties | territory/wealth-d-prime | lifecycle.bsl:386 | Panel(admin) — raw all_attributes() dump, territory-scoped only |
+    | counties | territory/dependency-ratio | lifecycle.bsl:387 | BeatCard(LIFECYCLE_TRANSITION) |
+    | counties | territory/legitimation-index | lifecycle.bsl:398 | BeatCard(LEGITIMATION_CRISIS) |
+    | counties | territory/legitimation-crisis | lifecycle.bsl:399 | Lens(county_legitimation) |
+    | counties | territory/transmitted-ideology | lifecycle.bsl:409 | Panel(admin) |
+    | counties | social-class/wealth | vitality.bsl:78 | BeatCard(ENTITY_DEATH) |
+    | counties | social-class/active | vitality.bsl:88 | RuledAbsent — death-guard-only write, no reader; future: widen the admin dump to the vitality-fixture nodes |
+    | counties | social-class/population | vitality.bsl:89 | RuledAbsent — same as social-class/active |
+    | carceral | social-class/la-census-population | decomposition.bsl:242 | RuledAbsent — per-node census intermediate folded same tick; future: roster_panel widening |
+    | carceral | social-class/la-census-wealth | decomposition.bsl:243 | RuledAbsent — same class |
+    | carceral | social-class/la-approaching-flag | decomposition.bsl:244 | RuledAbsent — same class |
+    | carceral | social-class/la-dying-flag | decomposition.bsl:245 | RuledAbsent — same class |
+    | carceral | social-class/population | decomposition.bsl:331,349 | Panel(roster_panel) |
+    | carceral | social-class/wealth | decomposition.bsl:332,350 | Panel(roster_panel) |
+    | carceral | social-class/active | decomposition.bsl:333,351,376 | Panel(roster_panel) |
+    | carceral | institution/superwage-crisis-known | decomposition.bsl:266-268 | Panel(roster_panel) |
+    | carceral | institution/superwage-crisis-tick | decomposition.bsl:269-271 | Countdown |
+    | carceral | institution/decomposition-fire-tick | decomposition.bsl:309 | Panel(roster_panel) — seeded-0-gated |
+    | carceral | institution/decomposition-fired-known | decomposition.bsl:310 | Panel(roster_panel) |
+    | carceral | institution/decomposition-complete | decomposition.bsl:311 | RuledAbsent — idempotency latch, never a payload key |
+    | carceral | institution/la-population | decomposition.bsl:304 | RuledAbsent — carrier relay, read same tick it is written |
+    | carceral | institution/la-wealth | decomposition.bsl:305 | RuledAbsent — same class |
+    | carceral | institution/la-approaching-count | decomposition.bsl:306 | RuledAbsent — same class |
+    | carceral | institution/la-dying-count | decomposition.bsl:307 | RuledAbsent — same class |
+    | carceral | institution/enforcer-pop-gain | decomposition.bsl:312 | BeatCard(CLASS_DECOMPOSITION) |
+    | carceral | institution/ip-population | decomposition.bsl:313 | BeatCard(CLASS_DECOMPOSITION) |
+    | carceral | institution/enforcer-wealth-gain | decomposition.bsl:314 | RuledAbsent — on the payload, unbound by the shipped template |
+    | carceral | institution/ip-wealth | decomposition.bsl:315 | RuledAbsent — same class |
+    | carceral | social-class/enforcer-census-population | control-ratio.bsl:272 | RuledAbsent — per-node census contribution, aggregate has a home |
+    | carceral | social-class/prisoner-census-population | control-ratio.bsl:273 | RuledAbsent — same class |
+    | carceral | social-class/prisoner-census-org-weighted | control-ratio.bsl:274 | RuledAbsent — same class |
+    | carceral | institution/enforcer-population | control-ratio.bsl:289 | Panel(roster_panel) |
+    | carceral | institution/prisoner-population | control-ratio.bsl:290 | Panel(roster_panel) |
+    | carceral | institution/prisoner-org-weighted | control-ratio.bsl:291 | Panel(roster_panel) |
+    | carceral | institution/control-crisis-emitted | control-ratio.bsl:337 | Panel(roster_panel) |
+    | carceral | institution/control-crisis-tick | control-ratio.bsl:338 | Panel(roster_panel) — seeded-0-gated |
+    | carceral | institution/terminal-decision-emitted | control-ratio.bsl:379 | Panel(roster_panel) |
+
+    The asymmetry between the two stories' RuledAbsent counts (2/11 for counties vs. 14/29
+    for carceral) is itself a finding, not noise: `ui::admin::refresh_admin_panel`'s raw
+    `graph.all_attributes()` dump is a genuine fallback home for EVERY `territory/*` field on
+    a `MapBinding::Fips` story (it is keyed off `EngineSession::roster`, the FIPS-territory
+    roster), so counties' only true gaps are the two `vitality.bsl` fields the death guard
+    writes to `social-class/*` nodes the admin dump's territory-keyed fallback cannot reach.
+    Carceral has NO equivalent raw-dump fallback — `ui::roster_panel`'s
+    `SOCIAL_CLASS_FIELDS`/`INSTITUTION_FIELDS` are curated, fixed lists (§2.11), not a raw
+    dump keyed off `EngineSession::full_roster` the way the admin panel is keyed off
+    `roster` — so every carceral field the two curated lists omit is a genuine gap with no
+    safety net. This is a real, useful wave-2 candidate (a carceral-story raw admin dump),
+    named here rather than silently discovered later.
+
+    **11. ADR number verification (this document's own).** The plan's own §9.2 projected
+    ADR215 at planning time, explicitly flagged as a projection to VERIFY, not assume, citing
+    the known #334 train's then-unpushed ADR214 claim. At this ADR's own landing:
+    `origin/dev` (fetched fresh, tip `87d5056a`, 2026-08-18) has merged THROUGH ADR215
+    (`ADR214_national_incidence_artifact_train`, `ADR215_entity_voice_suite` both present in
+    `origin/dev:ai/decisions/index.yaml`) — this branch's own local `ai/decisions/` still
+    tops at ADR213 because this worktree has not merged `dev`'s intervening 30 commits.
+    `gh pr list --state open` was checked for every open PR's own diff for a new
+    `ai/decisions/ADR2*.yaml` file: PR #672 (`feature/491-language-and-units`, #491 PR A, base
+    `dev`) adds `ai/decisions/ADR216_kind_straddle_repair_ceremony.yaml`; PRs #673, #674, #675
+    (the #491 stack's PRs B/C and the unrelated #675 sentinels-registry PR) add no ADR files.
+    **ADR217 — this document's own number — is therefore the first genuinely-free number**,
+    verified against both dev's merged state (tops at 215) and every open PR's own claim
+    (216 claimed by #672, unmerged). This numbering-collision lesson is a named failure class
+    in this repo (`index.yaml`'s own meta-block ADR108/109 three-way-collision history); this
+    ADR's own verification is recorded here so a future reader does not have to re-derive it.
+  consequences: |
+    - The M22 artifact (`coverage.rs`, 40 rows, 8 gate tests, all green) is a permanent
+      declaration surface — a future field this train's two packs might grow (there are
+      none pending) or a future story's own coverage claim inherits this table's shape and
+      test discipline, not a fresh survey.
+    - `ai/decisions/ADR213_intrinsic_host_train`'s follow-on (iii) is CLOSED (decision point
+      5) — issue #576's own closeout tracking should reflect this at whatever future point
+      #576 itself closes.
+    - `Provenance::Redacted` and its source-scan sentinel are load-bearing, declared-dead
+      infrastructure until #593 lands a player-verb surface; any future PR that constructs
+      the variant outside `projection.rs`'s own enum definition should expect
+      `redacted_is_declared_dead_until_593` to go red BY DESIGN, and that red is the correct
+      signal to escalate (does #593 exist yet? does `apply_fog` exist yet?), not to silently
+      widen the sentinel's exemption list.
+    - The admin surface (decision point 9) is now the concrete reference implementation any
+      future AF-scoped player path must diff itself against for fog compliance — a future
+      reviewer auditing ADR182 R2 compliance on a new player-facing pane should compare its
+      `Projector` construction against `Projector::material()`'s own (declared, banner-named)
+      unfogged mode, not assume parity.
+    - Wave-2 candidates surfaced BY this train's own coverage work, not previously named:
+      widening `ui::roster_panel`'s curated field lists to close several of the 14 carceral
+      `RuledAbsent` rows (a small, low-risk follow-up, explicitly NOT done here — task 9's
+      own scope is the declaration, not new wiring); a carceral-story raw admin dump
+      (decision point 10's own closing paragraph) as the structural fix for the
+      admin-dump asymmetry; a wealth-transfer clause on `CLASS_DECOMPOSITION`'s narration
+      template, closing 2 of the 14 rows at once.
+    - This branch (`feature/b3-null-hypothesis-viewer`) is, as of this ADR, feature-complete
+      against the plan's own nine tasks but UNMERGED and UNSPLIT from the plan's own §6
+      three-PR structure. Landing it (splitting into PR A/B/C or merging as one PR, per
+      whatever the controller's own merge-protocol judgment call is at that time) is
+      NOT executed by this ADR — this document records the completed engineering, not the
+      completed merge.
+  supersedes: []
+  related:
+    - ADR170_tension_lens_ruling
+    - ADR182_derivation_inspector_rulings
+    - ADR186_bevy_cutover_amendment_af
+    - ADR212_decomposition_controlratio_port_handoff
+    - ADR213_intrinsic_host_train

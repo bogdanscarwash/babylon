@@ -1,0 +1,74 @@
+meta:
+  contract: TickCommitClaimV1
+  version: 1
+  issue: PER-20
+  byte_order: big-endian
+  digest: SHA-256 for vector verification only
+
+production_decoder: prohibited
+
+authority:
+  owner: Rust persistence boundary
+  purpose: future tick_commit key and tick-content retry claim
+  classifications:
+    layout_version: Designed
+    domain_and_tags: Designed
+    bounds: Designed
+    fixture_values: Designed
+  invariants:
+    - Campaign identity and replay identity remain separate typed concepts.
+    - Persistence uses the kernel-owned TickContentHashV1 without an alias or re-hash.
+    - Equal typed fields produce equal canonical claim bytes.
+    - A same-key different-content retry refuses loudly.
+    - The claim does not assert whole-envelope payload equality.
+
+constants:
+  domain_ascii_nul: babylon.tick-commit-claim
+  layout_u32: 1
+  tick_content_layout_u32: 1
+  tags: [1, 2, 3]
+  canonical_bytes: 93
+
+bounds:
+  schema_bytes: 32768
+  vector_rows: 32
+  vector_line_bytes: 4096
+  campaign_uuid_text_bytes: 36
+  tick_content_digest_bytes: 32
+
+layouts:
+  campaign_id_v1:
+    semantic_type: UUID
+    vector_text: canonical lowercase 8-4-4-4-12 hexadecimal
+    canonical_value: exact 16 UUID bytes in network order
+    engine_physics: excluded
+  tick_content_link_v1:
+    owning_type: babylon_kernel::tick_content_hash::TickContentHashV1
+    fields: [tick_content_layout_u32_1, exact_digest32]
+    persistence_alias: prohibited
+  tick_commit_claim_v1:
+    fields:
+      - domain_ascii_nul
+      - layout_u32_1
+      - {tag: 1, value: campaign_id_v1_bytes16}
+      - {tag: 2, value: resolve_tick_u64}
+      - {tag: 3, value: tick_content_link_v1}
+    key: [campaign_id, resolve_tick]
+    fixed_bytes: 93
+
+retry_semantics:
+  requested_against_existing:
+    different_key: key_mismatch
+    same_key_same_tick_content_hash: idempotent
+    same_key_different_tick_content_hash: content_identity_mismatch
+
+vector_families:
+  required: [claim, mutation, retry, refusal]
+
+excluded_authority:
+  - PostgreSQL I/O or DDL
+  - CommittedTickEnvelope or whole-payload equality
+  - state, event, checkpoint, or outbox rows
+  - hydration or lost-tail replay
+  - Python writer changes
+  - Rust writer authority

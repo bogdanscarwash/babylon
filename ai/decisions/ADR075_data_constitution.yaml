@@ -1,0 +1,123 @@
+ADR075_data_constitution:
+  status: "accepted"
+  date: "2026-07-16"
+  title: "Program 21 — the Data Constitution: per-table lineage registry in data-catalog.yaml (enforced by a catalog sentinel), the 99-table census triage, and the wealth-share axis Phase-1 shadow (the runtime consumer that unblocks contrapositive empirical invariants)"
+  context: |
+    Owner invocation (2026-07-16, ultracode): "address all the things in the
+    Mermaid flowchart" — the Data Constitution program proposed after the
+    test-estate sharpening (ADR074) exposed the data layer as the weakest
+    stratum: view_surplus_value SELECTing from an EMPTY table, 11 empty
+    tables, all-zero placeholder rows, a 15M-row vestigial __pre_086 copy,
+    and a reference DB whose schema accumulated faster than lineage — nobody
+    could answer, per table: source? extractor? consumers? tests?
+
+    Census evidence: a 56-agent workflow profiled all 99 tables + 10 views
+    (41 orphan/AMPUTATE claims adversarially re-verified; 11 overturned on
+    appeal — the census-then-refute pattern is now proven twice).
+    Deliverables: reports/data-constitution-triage-2026-07-16.md,
+    data-constitution-catalog-sentinel-brief.md,
+    data-constitution-wealth-axis-brief.md.
+  decision: |
+    1. DATA-CATALOG BECOMES ENFORCING. data-catalog.yaml (III.4.1) gains a
+       per-table `tables:` registry — name/kind/source/extractor/reads/
+       consumers/tests/disposition/subset_policy/material_relation — loaded
+       into frozen CatalogTable rows (sentinels/coverage/catalog.py; loud
+       SentinelCheckError on any malformation, III.11).
+    2. TWO SENTINEL TIERS. Static (fast-gate, extends the coverage sensor):
+       declared consumer/test paths must exist; subset_policy must byte-match
+       tools/make_reference_subset.py's TABLE dict (two SoTs pinned
+       together). DB-probe (new `catalog` sensor, refdata lane only, lazy
+       import): catalog<->DB bijection over fact_/dim_/bridge_/view_ objects
+       + the KEEP-emptiness law — a disposition:keep table with zero rows,
+       or a keep view over an empty base table, reds (the view_surplus_value
+       pathology as a permanent regression contract). fill/artifact/
+       amputate/investigate rows are DECLARED DEBT — tracked, not gated, so
+       CI stays green on known triage while new rot is loud. Subset DBs
+       carry no views (the generator copies type='table' only) — view rows
+       there are advisory, not violations.
+    3. TRIAGE DISPOSITIONS (census + adversarial verify + synthesis):
+       KEEP 47 / FILL 8 / ARTIFACT_IZE 6 / INVESTIGATE 15 / AMPUTATE 23.
+       Every AMPUTATE is a PROPOSAL — schema drops require an owner ruling,
+       always. The disposition lives in the catalog row; flipping it is a
+       reviewed edit that the sentinel then enforces.
+    4. WEALTH-SHARE AXIS PHASE 1 (the flowchart's endpoint). The orphaned
+       formulas/class_dynamics ODE is wired as WealthDistributionSystem
+       @21.5: national 4-bracket vector (top-1%/p90-99/p50-90/bottom-50)
+       seeded from equilibrium_w1..w4, advanced per tick (ticks_per_quarter
+       define), metadata round-trip via G.graph["wealth_distribution"]
+       (written only when set — EH ruling-6 byte-safety), wealth_share
+       projected onto social_class nodes as a DECLARED field. Observe-only:
+       qa:regression stayed 5/5 with zero baseline movement, verified.
+       This resolves the population-vs-wealth conflation the census found
+       (4 sites hardcode POPULATION shares; their docstrings lied) — those
+       sites are untouched; the wealth axis is additive.
+    5. OWNER RULINGS REQUIRED (recorded, not executed):
+       a. The 23 AMPUTATE proposals (schema drops; scripts to follow ruling).
+       b. The 8-role -> 4-bracket fold (PROVISIONAL: Fed-DFA babylon_class
+          correspondence; naming collision equilibrium_w3 "proletariat" vs
+          p50-90 = labor aristocracy needs authoritative resolution).
+       c. Phase-2 feedback (wealth axis -> consciousness/bifurcation) —
+          moves all baselines; gate like the EH phases.
+       d. National-vs-per-county wealth altitude (per-county needs data the
+          Data Constitution has not yet filled).
+    6. FILL/ARTIFACT_IZE EXECUTION is sequenced work, not this commit:
+       FILL rides recovered loaders (deleted @ 4ce7c96a^; babylon-data
+       trove) per triage row; ARTIFACT_IZE rides the Parquet artifact
+       program (task #8, owner-approved 2026-07-16) — per-table hashed
+       artifacts decompose the 1.19GB monolithic ci-data blob.
+  consequences: |
+    - A new table without a catalog row now reds the refdata lane; a new
+      table without a TablePolicy reds the fast-gate parity check. Schema
+      can no longer outrun lineage silently.
+    - data-catalog.yaml version 2.6.3 -> 2.7.0 (tables: block, 109 rows).
+    - CI: `sentinel_check.py catalog --check` added to refdata jobs in
+      main.yml + nightly.yml (needs fetch-reference-db; never fast-gate).
+    - qa:regression 5/5 byte-identical post-wealth-axis (no regeneration —
+      even the predicted defines_hash warning did not surface as a failure).
+    - The runtime contrapositive invariant (distribution leaves the
+      capitalist band => rupture event exists in history) is now BUILDABLE
+      as a replay assertion over SessionRecorder history; it stays pending
+      because the Phase-1 relaxation dynamics never leave the band — it
+      lands with Phase-2 feedback (ruling 5c).
+  rulings_resolved: |
+    Owner ruled 2026-07-16 (same session, all four approved with amendments):
+    1. AMPUTATIONS: approved as proposed EXCEPT (a) fact_productivity_annual
+       -> FILL (build the loader from the staged labor-productivity xlsx;
+       view_surplus_value + view_imperial_rent come alive); (b) the
+       fact_census_median_income + fact_census_rent_burden pair -> FILL
+       ("find a place to fit those in" — view_rent_crisis housing mechanics);
+       (c) the minerals/commodity subtree (A15-A18 + dims + dim_commodity)
+       -> PROGRAM 22 "Resources & Raw Materials": three-altitude scheme —
+       ~90 USGS MCS minerals national / 42 SCTG flow classes on the Program
+       11 transport substrate (FAF5 2.49M rows already loaded) / per-hex
+       stocks already live in MetabolismSystem. "Realistic and detailed":
+       full resolution where data exists, honest class-aggregation where it
+       does not, never fabricated precision. R1-R5 artifact conversions
+       approved (ride the Parquet program). Net dispositions after flips:
+       keep 54 / fill 16 / amputate 16 (all APPROVED, execution pending) /
+       investigate 16 / artifact 5.
+    2. BRACKET FOLD: ratified as shipped. CARCERAL_ENFORCER = a distinctive
+       SUBCLASS of the labor aristocracy (same w3 bracket; role retained for
+       decomposition mechanics). INTERNAL_ + PERIPHERY_PROLETARIAT read as
+       ONE singular proletariat in w4 (migrant farm workers, the $7.25
+       stratum) — periphery stays IN the national fold; the periphery-
+       internal distinction is an extraction-channel fact, not a wealth-
+       bracket fact. Define labels fixed (w3 "proletariat" mislabel -> labor
+       aristocracy; w4 -> proletariat singular). Enum-level merge of the two
+       proletariat roles NOTED as future simplification, not executed.
+    3. PHASE-2 FEEDBACK: option (b) — authorized in principle, spec-first,
+       sequenced after the data work.
+    4. ALTITUDE: PER-COUNTY, via principled H3/sheaf downward projection —
+       "that's the point of the sheaf topology and the h3 structure: to be
+       able to disaggregate in a principled way." The national measured
+       vector remains the anchor; county/hex wealth distributions are
+       DERIVED sections conditioned on local observables (county income
+       distribution, housing, QCEW), labeled derived-not-measured. This is
+       a design directive for the Phase-2 spec, not a same-day build.
+  evidence: |
+    reports/data-constitution-triage-2026-07-16.md (99-table matrix);
+    reports/data-constitution-catalog-sentinel-brief.md;
+    reports/data-constitution-wealth-axis-brief.md;
+    commits 8845cc6d (census deliverables), 828cdc84 (wealth axis Phase 1),
+    + the catalog/sentinel commit following the tables: backfill;
+    workflow wf_7b4c3bec (56 agents, 41 adversarial verdicts, 0 errors).

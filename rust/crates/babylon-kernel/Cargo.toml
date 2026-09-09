@@ -1,0 +1,22 @@
+[package]
+name = "babylon-kernel"
+description = "Program 27 kernel: scalars, Currency, ContentDigest, sim clock, event bus, RNG service"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+bnum = "0.14"
+h3o = { version = "=0.11.0", default-features = false }
+libm = { version = "0.2.16", default-features = false }
+rand_chacha = "0.10"
+rand_core = "0.10"
+sha2 = "0.11"
+
+[dev-dependencies]
+pretty_assertions = "1"

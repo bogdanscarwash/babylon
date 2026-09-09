@@ -44,7 +44,7 @@ convention used across the codebase.
 | `tests/integration/economics/test_volume_iii_equalization.py`       | FR-019                      |
 | `tests/unit/test_transformation_mode_probe.py`                      | FR-008/FR-021 gate behavior |
 
-Run the whole bundle: `poetry run pytest -m invariant`.
+Run the whole bundle: `uv run pytest -m invariant`.
 
 ## Deliberate-bug recipes
 

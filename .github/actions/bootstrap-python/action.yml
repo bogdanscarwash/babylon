@@ -1,21 +1,17 @@
 # Shared Python bootstrap (Program 15). ONE provisioner: mise installs the
-# exact [tools] pins from .mise.toml (python 3.12 + poetry 2.2.1), so CI and
-# local dev run the identical toolchain. The venv cache key carries every
-# invalidating input: OS, python, poetry, lock hash, and a -vN generation
-# counter (bump it to evict a poisoned cache fleet-wide).
+# exact [tools] pins from .mise.toml (python 3.12 + uv), so CI and local dev
+# run the identical toolchain against the single uv.lock. The venv cache key
+# hashes uv.lock, .mise.toml, and mise.lock (the exact interpreter build).
 name: Bootstrap Python
-description: mise toolchain + in-project venv cache + poetry install
+description: mise toolchain + uv-managed venv cache + uv sync
 
 inputs:
-  gdal:
-    description: >-
-      Install GeoDjango system libraries (GEOS/GDAL/PROJ) — needed by anything
-      importing Django settings, including mypy (django-stubs plugin loads
-      settings at startup)
-    required: false
-    default: "false"
   docs:
     description: Install the docs dependency group
+    required: false
+    default: "false"
+  ops:
+    description: Install the operator-only Ansible/RST/Boto dependency extra
     required: false
     default: "false"
 
@@ -23,44 +19,30 @@ runs:
   using: composite
   steps:
     - name: Set up tools with mise
-      uses: jdx/mise-action@v4
+      uses: jdx/mise-action@3c2e0cf82a5b2e5249f0d3635a4d83d0ae861518 # v4
       with:
+        version: 2026.9.1
         cache: true
+        install_args: --locked
 
-    - name: Configure in-project venv
-      shell: bash
-      run: poetry config virtualenvs.in-project true
-
+    # Amendment AF (ADR186) deletion ceremony: the babylon-tui maturin wheel
+    # (ADR181 R8's "once per head" build-wheel job + this action's former
+    # wheel-dir injection mode) is gone — `uv sync` needs no cargo/rustc, so
+    # the venv cache key needs no rust/ hashes either.
     - name: Load cached venv
       id: venv-cache
-      uses: actions/cache@v6
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: .venv
-        key: venv-${{ runner.os }}-py3.12-poetry2.2.1-v3-${{ inputs.docs }}-${{ hashFiles('poetry.lock') }}
+        key: >-
+          venv-${{ runner.os }}-py3.12-uv-v4-${{ inputs.docs }}-${{ inputs.ops }}-${{
+          hashFiles('uv.lock', '.mise.toml', 'mise.lock') }}
 
-    - name: Install dependencies (cache miss)
-      if: steps.venv-cache.outputs.cache-hit != 'true'
+    - name: Sync dependencies (uv)
       shell: bash
       run: |
-        if [ "${{ inputs.docs }}" = "true" ]; then
-          poetry install --no-interaction --no-root --with docs
-        else
-          poetry install --no-interaction --no-root
-        fi
-
-    - name: Install project
-      shell: bash
-      run: |
-        if [ "${{ inputs.docs }}" = "true" ]; then
-          poetry install --no-interaction --with docs
-        else
-          poetry install --no-interaction
-        fi
-
-    # GeoDjango: settings/base.py uses the postgis backend, which loads
-    # GEOS/GDAL/PROJ at import — pytest touching Django settings AND mypy
-    # (django-stubs plugin) die with ImproperlyConfigured without these.
-    - name: Install GeoDjango system libraries
-      if: inputs.gdal == 'true'
-      shell: bash
-      run: sudo apt-get update && sudo apt-get install -y --no-install-recommends binutils libproj-dev gdal-bin
+        EXTRA=""
+        GROUP=""
+        if [ "${{ inputs.ops }}" = "true" ]; then EXTRA="--extra ops"; fi
+        if [ "${{ inputs.docs }}" = "true" ]; then GROUP="--group docs"; fi
+        uv sync --frozen $EXTRA $GROUP

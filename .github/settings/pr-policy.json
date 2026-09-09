@@ -1,0 +1,159 @@
+{
+  "repository": {
+    "allow_merge_commit": true,
+    "allow_squash_merge": false,
+    "allow_rebase_merge": false,
+    "allow_auto_merge": false,
+    "delete_branch_on_merge": false
+  },
+  "actions_permissions": {
+    "enabled": true,
+    "allowed_actions": "all",
+    "sha_pinning_required": true
+  },
+  "dev_ruleset": {
+    "name": "dev protection (PR, exact checks, resolved threads)",
+    "target": "branch",
+    "enforcement": "active",
+    "bypass_actors": [],
+    "conditions": {
+      "ref_name": {
+        "exclude": [],
+        "include": [
+          "refs/heads/dev"
+        ]
+      }
+    },
+    "rules": [
+      {
+        "type": "deletion"
+      },
+      {
+        "type": "non_fast_forward"
+      },
+      {
+        "type": "pull_request",
+        "parameters": {
+          "allowed_merge_methods": [
+            "merge"
+          ],
+          "dismiss_stale_reviews_on_push": false,
+          "required_reviewers": [],
+          "require_code_owner_review": false,
+          "require_last_push_approval": false,
+          "required_approving_review_count": 0,
+          "required_review_thread_resolution": true,
+          "require_extra_approval_for_unattributed_changes": false
+        }
+      },
+      {
+        "type": "required_status_checks",
+        "parameters": {
+          "strict_required_status_checks_policy": true,
+          "do_not_enforce_on_create": false,
+          "required_status_checks": [
+            {
+              "context": "CI Gate",
+              "integration_id": 15368
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "main_ruleset": {
+    "name": "main protection (Director-only PR, combined qualification)",
+    "target": "branch",
+    "enforcement": "active",
+    "bypass_actors": [],
+    "conditions": {
+      "ref_name": {
+        "exclude": [],
+        "include": [
+          "refs/heads/main"
+        ]
+      }
+    },
+    "rules": [
+      {
+        "type": "deletion"
+      },
+      {
+        "type": "non_fast_forward"
+      },
+      {
+        "type": "pull_request",
+        "parameters": {
+          "allowed_merge_methods": [
+            "merge"
+          ],
+          "dismiss_stale_reviews_on_push": false,
+          "required_reviewers": [],
+          "require_code_owner_review": false,
+          "require_last_push_approval": false,
+          "required_approving_review_count": 0,
+          "required_review_thread_resolution": true,
+          "require_extra_approval_for_unattributed_changes": false
+        }
+      },
+      {
+        "type": "required_status_checks",
+        "parameters": {
+          "strict_required_status_checks_policy": true,
+          "do_not_enforce_on_create": false,
+          "required_status_checks": [
+            {
+              "context": "CI Gate",
+              "integration_id": 15368
+            },
+            {
+              "context": "Main Qualification / Event Contract",
+              "integration_id": 15368
+            },
+            {
+              "context": "Main Qualification / Non-Unit Behavioral Contracts",
+              "integration_id": 15368
+            },
+            {
+              "context": "Main Qualification / PostgreSQL Determinism Bundle",
+              "integration_id": 15368
+            },
+            {
+              "context": "Main Qualification / Reference-Data Contracts",
+              "integration_id": 15368
+            },
+            {
+              "context": "Main Qualification / Release Documentation",
+              "integration_id": 15368
+            },
+            {
+              "context": "Main Qualification / Container Image Scan",
+              "integration_id": 15368
+            },
+            {
+              "context": "Main Qualification / Native Download / Linux x86_64",
+              "integration_id": 15368
+            }
+          ]
+        }
+      },
+      {
+        "type": "code_scanning",
+        "parameters": {
+          "code_scanning_tools": [
+            {
+              "tool": "CodeQL",
+              "alerts_threshold": "all",
+              "security_alerts_threshold": "all"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "automerge_label": {
+    "name": "dependencies:automerge",
+    "color": "1f883d",
+    "description": "Patch/minor Dependabot update eligible for exact-head merge"
+  }
+}

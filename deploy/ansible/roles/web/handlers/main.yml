@@ -1,9 +1,0 @@
----
-
-- name: Restart application
-  community.general.supervisorctl: name={{ application_name }} state=restarted
-
-# spec 061 T022: handler for the systemd unit installed via setup_systemd.yml.
-- name: Reload systemd
-  ansible.builtin.systemd:
-    daemon_reload: true

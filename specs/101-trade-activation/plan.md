@@ -25,7 +25,7 @@ _tick_loop → _advance_tick (every tick):
 
 | File | Change |
 |------|--------|
-| `src/babylon/economics/county_exposure.py` (new) | `load_county_exposure_map(*, sqlite_path, year, scope_fips) -> dict[str,float]`; pure, read-only sqlite, scope-renorm; raises on empty. |
+| `src/babylon/domain/economics/county_exposure.py` (new; written pre-Program-14 as `src/babylon/economics/county_exposure.py`, re-pointed by the domain move `5faedd2f`) | `load_county_exposure_map(*, sqlite_path, year, scope_fips) -> dict[str,float]`; pure, read-only sqlite, scope-renorm; raises on empty. |
 | `src/babylon/persistence/postgres_initialization.py` | `_NODE_TO_BLOC` injective crosswalk; `_attribute_national_phi_and_trade(...)` reading `fact_bilateral_trade_annual` from sqlite; `_bootstrap_external_nodes` gains `sqlite_path`, `start_year` already present; sets phi + bilateral_trade_value. |
 | `src/babylon/engine/headless_runner/runner.py` | Build exposure map + external_nodes_phi at setup; register conservation evaluator; thread 4 keys through `_tick_loop`→`_advance_tick`→`TickContext`. |
 | `src/babylon/engine/headless_runner/bridge.py` | Pass `context={"boundary_rows":…, "external_nodes_phi":…}` to `auditor.audit_end_of_tick`. |

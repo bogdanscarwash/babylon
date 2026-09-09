@@ -1,0 +1,20 @@
+{
+  "name": "tree-sitter-bsl",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Tree-sitter grammar for BSL (the Babylon Scripting Language) — DERIVED from docs/reference/bsl.ebnf; docs/reference/bsl-language.rst is normative",
+  "license": "AGPL-3.0-or-later",
+  "main": "bindings/node",
+  "keywords": ["parser", "tree-sitter", "bsl", "babylon"],
+  "scripts": {
+    "generate": "tree-sitter generate",
+    "test": "tree-sitter generate && tree-sitter test"
+  },
+  "tree-sitter": [
+    {
+      "scope": "source.bsl",
+      "file-types": ["bsl", "bscn"],
+      "highlights": "queries/highlights.scm"
+    }
+  ]
+}

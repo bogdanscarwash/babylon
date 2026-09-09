@@ -1,0 +1,177 @@
+ADR204_worldview_ternary_unification:
+  status: "accepted"
+  date: "2026-08-14"
+  title: >
+    The World-View Ternary unification — twelve Director rulings (W1-W12)
+    from the 2026-08-14 live brainstorm on representing
+    fascist/liberal/revolutionary in an ideologically principled way:
+    unify every surface onto spec 034's ruled (r, l, f) ternary (W1);
+    ideology is a WORLD VIEW, not a meter (W2); the poles are asymmetric
+    by nature — revolutionary = the doctrine tree, liberal = hegemonic
+    common sense computed from the ruling bloc, fascist = the
+    capture/degeneration terminus (W3); Approach A, the World-View
+    Registry — declared content + measured alignment + a computed gap
+    readout (W4); the practice rule — organized mass work moves minds,
+    comms-only moves nothing (W5); orgs carry LINES, not points (W6);
+    the per-county seeding data spec is chartered as ADR043's named
+    replacement (W7); war of position stands as a forward constraint
+    (W8); one declared faction-classification enum kills the four token
+    lists (W9); the deliverable is design + MINT + PORT (W10, a scope
+    expansion superseding the Program-29 charter's no-Wave-ports
+    boundary for this workstream only); the legacy `Ideology` [-1,1]
+    scalar is struck from THE_FORMALISM's LAW table (W11); and ideology
+    is a gravitational pull that commands labor vis-à-vis hegemony —
+    the ternary couples to the value-flow estate, never an inert label
+    (W12).
+  context: |
+    Mid-session 2026-08-14, with Program 29's T3 train waiting on subagent
+    quota, the Director steered the workforce into a brainstorm: fascist,
+    liberal, and revolutionary are "fundamentally the political simplex
+    we're working in," so the engine must represent them "in an
+    ideologically principled way." Five read-only archaeology sweeps
+    preceded the rulings: the ai/ corpus (specs 034/071, ADR016, ADR043,
+    ADR051, ADR054, ADR070, ADR087, ADR171, the CCL drafts, Q17's war-of-
+    position preconditions), the docs/ estate, the as-built Python surface
+    (`consciousness.py`, `social_class.py:142-152`'s sign-flipping
+    `to_legacy_ideology`, `projection/aggregation.py:69-73`, the five
+    scattered liberal tie-break sites), the MIA and MIM mirrors (The German
+    Ideology, Lukács, the Gramsci estate, MIM's theses on fascism and the
+    labor aristocracy), and the prior Gramsci deep-dive reports.
+
+    The Director then answered eleven ruling questions (each presented with
+    options and a workforce recommendation) and approved the resulting
+    design section by section. While the spec was being finalized she added
+    a twelfth directive in her own words: "if we want to think of how
+    ideology relates to the flow of value, an ideology is like a
+    gravitational pull that commands labor viz a viz hegemony." The design
+    of record is `docs/superpowers/specs/2026-08-14-worldview-ternary-
+    unification-design.md` (vale-clean; §1 carries the full normative
+    ledger, §5 the reserved ledger). Also this session, on her directive,
+    the user-level dialectical-brainstorm skill was deleted — the
+    superpowers:brainstorming skill is the one sanctioned brainstorm
+    process.
+  decision: |
+    THE RULINGS (Director, 2026-08-14; "(R)" = accepted the workforce
+    recommendation, "(D)" = her own direction; the spec's §1 table is the
+    full normative text, quoted verbatim there).
+
+    W1 (R) — UNIFY ONTO THE RULED TERNARY. Spec 034's (r, l, f) simplex is
+      the one canonical representation; classes, orgs, and factions migrate
+      onto it. The ruled theory stays as-is — nothing in spec 034's frame
+      is re-opened.
+    W2 (D) — IDEOLOGY IS A WORLD VIEW, NOT A METER. Quoted verbatim [sic]:
+      "Ideology is fundamentally a world view this i why I had you read
+      Gramsci and Engels and Marx and MIM and all that." The poles are content, not
+      coordinates; the ternary measures which world view holds hegemonic
+      leadership over which population. This ruling redirected the design
+      away from a storage-shape question to the content-first frame.
+    W3 (R) — THE POLES ARE ASYMMETRIC BY NATURE. Only the revolutionary
+      pole has an articulated content structure (the doctrine tree — the
+      line IS its world view). Liberalism is hegemonic common sense: no
+      tree; the design computes its content per conjuncture from the
+      ruling bloc. Fascism is the capture/degeneration terminus: no tree;
+      coarse parasitism-defense affect plus a demagogy flag (MIM:
+      "not politically conscious in a detailed way"). Three poles, three
+      kinds of thing.
+    W4 (R) — APPROACH A, THE WORLD-VIEW REGISTRY. Declared world-view
+      content + measured alignment + a computed gap readout; all current
+      surfaces migrate to projections/readings of the one representation.
+      Rejected: B projection-only (no first-class home, keeps the
+      dual-storage rot) and C full gap-machine (kills the shipped
+      accumulator, risks AE(ii) new-formalism).
+    W5 (R) — THE PRACTICE RULE: MASS WORK COUNTS.
+      EDUCATE/PROPAGANDIZE/PROVIDE_SERVICE move alignment because
+      organized mass work alters the conditions of intercourse (ADR087's
+      ruled pattern); narrative with no organization behind it moves
+      nothing. The German Ideology's "fighting phrases with phrases"
+      polemic stands as a hard rule: no mechanic may move minds without
+      moving practice/conditions.
+    W6 (R) — ORGS CARRY LINES, NOT POINTS. An organization never holds a
+      ternary position; it carries a line (doctrine (Major, Minor) +
+      measured practice) and moves populations through mass work and
+      apparatus. Populations have alignments; orgs have lines. Disposes
+      CCL OQ-3 in its cleanest horn.
+    W7 (R) — CHARTER THE PER-COUNTY SEEDING DATA SPEC. ADR043's named
+      replacement: ACS correlates + 2010–2020 election results, logit
+      model; the uniform placeholder (0.05, 0.50, 0.45) stays explicit
+      and uniform until that spec lands.
+    W8 (R) — WAR OF POSITION STANDS AS A FORWARD CONSTRAINT. Rupture
+      readiness reads hegemonic-organization depth (Q17 §28's three
+      preconditions); the mechanics land with the doctrine/organization
+      trains, not here.
+    W9 (R) — ONE DECLARED FACTION CLASSIFICATION. The token lists (four
+      homes) and free-text labels collapse to a single content-declared
+      closed enum on faction content, minted by defenum ceremony; every
+      predicate (capturability, spoiler poles, fascist vehicle) computes
+      from it. The FAC_DECOLONIAL substring-bug class dies with the lists.
+    W10 (D — scope expansion) — DELIVERABLE = DESIGN + MINT + PORT. Beyond
+      the workforce recommendation (design + ceremony charters): this
+      train mints the `WorldView` defenum into the Rust closed vocabulary
+      and begins the class-surface migration port. Recorded as a Director
+      directive; it supersedes, for this workstream only, the Program-29
+      charter's (ADR198) "no Wave ports beyond design docs" boundary.
+    W11 (R) — STRIKE THE LEGACY SCALAR. The `Ideology` [-1,1] sort leaves
+      THE_FORMALISM's ⟦LAW⟧ table (contradiction C1's reconciliation);
+      sign conventions live in the flow field (ADR051), never on the
+      simplex state. Executed in this ADR's train — the II.1 sorts table
+      loses the row and gains a pointer note; the Haskell drafts stay as
+      historical artifacts (immutable history).
+    W12 (D) — IDEOLOGY IS A GRAVITATIONAL PULL THAT COMMANDS LABOR
+      VIS-À-VIS HEGEMONY. Quoted: "if we want to think of how ideology
+      relates to the flow of value, an ideology is like a gravitational
+      pull that commands labor viz a viz hegemony." The three poles are
+      three modes of pull: liberal is the hegemonic pull proper (the
+      ruling bloc's world view commands unorganized labor through common
+      sense — the why beneath A-001's unorganized-is-liberal default);
+      revolutionary is the counter-hegemonic pull (W8's war of position
+      reads as accumulating the counter-pull's organizational mass until
+      it commands labor away from capital); fascist is the capture pull
+      keyed to the rent gradient (W3 — labor rallied to defend the
+      extraction position). Recorded as a forward constraint on the port:
+      the pull cashes out as couplings to the EXISTING value-flow estate
+      (WAGES/EXPLOITATION/SOLIDARITY edges, the wealth axis, the reserve
+      army) — chartered port-stage design work, minting no new formalism
+      (AE ii).
+  consequences: |
+    - The spec is the design of record: `docs/superpowers/specs/2026-08-14-
+      worldview-ternary-unification-design.md`. Its §5 reserved ledger
+      stands untouched — pole names and content text, floor values, enum
+      taxonomy membership, ADR171 OQ8, the five canonical outcomes, the
+      RED_OGV two-expansions contradiction, and any ternary→scalar collapse
+      all remain Director-only.
+    - W11 EXECUTED HERE: `ai/THE_FORMALISM.md` II.1's sorts table no longer
+      carries the `Ideology` 𝔾 ∩ [−1,1] row; a pointer note records the
+      strike. No code referenced the sort (the grep surface was the one
+      table row), so no code change rides this strike.
+    - W10 SEQUENCING: next train is the vocabulary ceremony PR minting the
+      `WorldView` defenum via the ADR195/196 ceremony machinery, with the
+      mint-and-retire record per ADR176 (34)/ADR187 OQ-7; the faction
+      enum (W9) joins that ceremony if the Director rules its member list
+      content-complete, otherwise it charters separately. The
+      class-surface migration port (measured-ternary read path +
+      UNPOSITIONED first, practice-coupled updates after) follows. Both
+      are new backlog this ADR authorizes, not work this ADR ships.
+    - W7 CHARTERS new backlog: the per-county (r, l, f) seeding data spec
+      (ACS correlates + 2010–2020 election results, logit model), which
+      also houses the SYNTHETIC community-defaults calibration (spec 034
+      SC-007).
+    - W8 and W12 are FORWARD CONSTRAINTS ONLY: no rupture-gate mechanics
+      and no pull-dynamic formalism are minted by this ADR (AE ii); both
+      bind the port stage's chartered design work.
+    - The 0.5-default disease class is ruled dead by law (UNPOSITIONED on
+      absence, L-ABS) at the port; until the port lands, the frozen Python
+      engine's surfaces stay as they are — reference-only, untouched by
+      this ADR.
+  supersedes: []
+  related:
+    - ADR016_fascist_bifurcation
+    - ADR043_ideology_baseline_placeholder
+    - ADR051_lawverian_dialectics_refactor
+    - ADR054_spec_071_reactionary_subject
+    - ADR070_emergent_class_partition
+    - ADR087_mass_work_solidarity_producer
+    - ADR171_national_question_rulings
+    - ADR194_director_rulings_batch2_2026_08_11
+    - ADR195_enum_deffield_row
+    - ADR196_org_vocabulary_ceremony
+    - ADR202_t4_curves_ruling_session

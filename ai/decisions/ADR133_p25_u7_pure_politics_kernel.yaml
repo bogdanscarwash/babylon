@@ -1,0 +1,30 @@
+ADR133_p25_u7_pure_politics_kernel:
+  status: "accepted"
+  date: "2026-07-22"
+  title: >-
+    P25 U7 — the pure politics kernel: formulas/politics.py (valve law, hope
+    field H(c) with the counterfactual sigmoid gain, funding identity /
+    reform ceiling, delivery ratio+gap, derived platform vector, interest
+    fit) with the four property laws pinned in pure form — L-VALVE,
+    L-CEILING, L-HOPE-MATERIAL, L-PRZ. Zero system wiring (byte-safe by
+    construction; consumers arrive U8-U10); FormulaRegistry membership
+    deferred to U8 where the first system consumer lands.
+  supersedes: []
+  relates_to: ["ADR127", "ADR129"]
+  programs: ["25-political-superstructure"]
+
+  decision: |
+    Eight pure functions, engine-free, composing the EXISTING survival
+    calculus (counterfactual_hope_gain evaluates the same
+    calculate_acquiescence_probability sigmoid the engine adjudicates —
+    previews are evaluations, never a parallel feed, T-5). Property laws as
+    behavioral contracts (20 tests): L-VALVE (multiplier monotone-decreasing
+    in H and in valve_strength, clamped [0,1] — hope suppresses, never
+    amplifies); L-CEILING (sw_deliverable <= max(0, t+phi_slice-debt) and
+    <= promised, swept; politics routes value, never mints it); L-HOPE-
+    MATERIAL (a platform promising no P(S|A) improvement contributes exactly
+    zero — no hope without a promise trace); L-PRZ (broadening the coalition
+    or adding donor pull strictly reduces the original base's interest fit).
+    delivery_ratio(_, promised=0) = 1.0: no gap accrues from silence.
+    domain/politics/ modules arrive with their consuming units (U8 allegiance,
+    U9 funding/policy) rather than as empty scaffolds now.

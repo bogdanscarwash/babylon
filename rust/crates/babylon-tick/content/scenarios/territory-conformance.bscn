@@ -1,0 +1,248 @@
+; The ACTIVE conformance world for `territory/p1-heat-dynamics` +
+; `territory/p2-eviction-pipeline` + `territory/p3-spillover` +
+; `territory/p4-camp-decay` + `territory/p4-penal-suppression` — the
+; Territory port (P27, PR B, Tasks 3-8; frozen source:
+; `src/babylon/engine/systems/territory.py`, 378 lines, four phases).
+;
+; **Enum orders are hash-bearing transcriptions of the frozen Python
+; declaration order (ADR195)** — do not reorder:
+;   `src/babylon/models/enums/territory.py:28-29` — OperationalProfile
+;   (LOW_PROFILE HIGH_PROFILE); `:78-82` — TerritoryType (CORE PERIPHERY
+;   RESERVATION PENAL_COLONY CONCENTRATION_CAMP).
+;
+; **`territory/under-eviction` is an int 0/1 latch, not a bool field** — the
+; live `.bscn` deffield dialect (`scenario.rs::load_deffield`) admits no
+; `bool` type name, and `update-node` has no Bool-typed store path either
+; (`reports/territory-bsl-surface-facts-2026-08-12.md` §1(c)). This follows
+; the `social-class/active`/`organization/active` precedent exactly.
+;
+; **`territory/rent-level-x1e6` is the scaled bare-Int lane** — the same
+; escape hatch `metabolism.bsl`'s `entropy-factor-x1e6` D-1 uses: rent has
+; no [0,1] domain (it starts at 1.0 and grows via the 1.5x eviction spike),
+; so it cannot be a `probability`/`intensity`/`coefficient`-typed field
+; without a domain violation, and there is no `Currency`-typed field
+; storage on the live pipeline (surface-facts §1(d)). Stored as the rent
+; value x1,000,000, an ordinary `int` field.
+;
+; **`territory/heat` is declared EXTENSIVE, not intensive — a DEVIATION
+; from a naive kind reading, forced by §3.4's aggregation law and
+; D-recorded at register row D131 (`docs/reference/bsl-language.rst`).**
+; `territory/p3-spillover`'s pull-side fold (`fold sum (neighbors …)
+; (field-of it territory/heat)`) would refuse to typecheck as
+; `E-TYPE-041` ("sum of intensive field") if `heat` were declared
+; `intensive` — confirmed against `typecheck.rs::typecheck_aggregation`.
+; `query-lane-e2e.bscn` (the query-evaluation train's own synthetic
+; fixture) already made and documented this exact same choice for the
+; identical field/reason. Physically heat reads as an intensive per-node
+; level, not a summed extensive quantity — whether it SHOULD aggregate as
+; extensive at all stays an open question D131 states explicitly (this is
+; a typecheck-forced storage choice, not a ruling that heat IS
+; extensive); D111/Q9 is a DIFFERENT, already-discharged question
+; (small-closed-field representation, not aggregation kind — see D131 and
+; ADR199 for the discharge), not the open question here.
+;
+; **No defaults (scenario.rs's own contract): every field every rule reads
+; is seeded on every node of that rule's subject type.** Because
+; `bind_subject` resolves every declared `:field` binding for EVERY subject
+; before any rule's guard runs (`query_lane_e2e.rs`'s own header names this
+; precisely), every TERRITORY node below seeds all six of profile,
+; territory-type, heat, rent-level-x1e6, under-eviction, population — even
+; where a given node's own conformance role never exercises a particular
+; rule's guard.
+;
+; Twelve territories, covering every conformance case in one world (a
+; PENAL_COLONY sink node doing double duty as the p4-penal-suppression
+; subject, per the plan's own economy):
+;
+;   0  sub-threshold-high      p1 HIGH_PROFILE gain; p2 guard-false (untouched)
+;   1  sub-threshold-low       p1 LOW_PROFILE decay; p2 guard-false (untouched)
+;   2  latch-tick-source       p1 gain crosses the 0.8 threshold THIS tick;
+;                              p2 latches, rent spikes, displaces toward the
+;                              EXTRACTION-priority winner among its two sinks
+;   3  sink-reservation        RESERVATION — the tiebreak LOSER (priority 2);
+;                              declared BEFORE sink-penal (fix round NIT-10)
+;                              so the tiebreak proof discriminates score
+;                              from declaration-id order; seeded a NONZERO
+;                              population (fix round MINOR-4) so "untouched"
+;                              is a real assertion, not floor(0*x)=0 vacuity
+;   4  sink-penal              PENAL_COLONY — the tiebreak WINNER (priority 3);
+;                              also the p4-penal-suppression subject (TENANCY)
+;   5  latch-no-sink           already crosses this tick, NO OUTGOING
+;                              adjacency — the dedicated no-sink population-
+;                              disappears case; ALSO the D123 directed-walk
+;                              witness (fix round MINOR-7): one INCOMING
+;                              ADJACENCY edge from sink-penal exists, but
+;                              p2's directed `:out` sink walk cannot see it
+;   6  already-latched-to-camp under-eviction seeded 1 — the 2-tick rent-
+;                              compounding case; its only sink is the camp
+;   7  concentration-camp      seed population 500; receives +100 this tick
+;                              from node 6, then p4-camp-decay eats the total
+;   8  chain-1                 HIGH_PROFILE, heat 0.9 — p1's own clamp pins it
+;                              at 1.0; ALSO crosses the eviction threshold
+;                              (composes p1-clamp + p2-latch + p3-clamp); the
+;                              near-1.0 spillover-clamps-at-exactly-1.0 case
+;   9  chain-2                 the middle of the 3-chain — gains spillover
+;                              from BOTH chain-1 and chain-3
+;   10 chain-3                 the other end — gains spillover from chain-2 only
+;   11 isolated-fallback       zero ADJACENCY, sub-threshold — p3's exists-
+;                              guarded fallback: heat ends byte-unmoved
+;
+; Plus three SOCIAL_CLASS nodes for p4-penal-suppression: two TENANCY-
+; connected to `sink-penal` (organization zeroed) and one unconnected
+; (`test_social_class_without_tenancy_edge_is_untouched`, transcribed).
+(scenario territory/conformance
+  (defvocabulary NodeType (SOCIAL_CLASS TERRITORY))
+  (defvocabulary EdgeType (ADJACENCY TENANCY))
+  (defenum OperationalProfile (LOW_PROFILE HIGH_PROFILE))
+  (defenum TerritoryType (CORE PERIPHERY RESERVATION PENAL_COLONY CONCENTRATION_CAMP))
+  (deffield territory/profile enum OperationalProfile)
+  (deffield territory/territory-type enum TerritoryType)
+  (deffield territory/heat intensity extensive)
+  (deffield territory/rent-level-x1e6 int extensive)
+  (deffield territory/under-eviction int extensive)
+  (deffield territory/population int extensive)
+  (deffield social-class/organization coefficient intensive)
+
+  ; TerritoryDefines, src/babylon/data/defines.yaml:235-242.
+  (defconst territory/heat-decay-rate 0.1c)               ; :235
+  (defconst territory/high-profile-heat-gain 0.15c)       ; :236
+  (defconst territory/eviction-heat-threshold 0.8c)       ; :237
+  ; rent_spike_multiplier 1.5 is outside [0,1] — scaled bare-Int lane
+  ; (D-1 class, metabolism.bsl's entropy-factor-x1e6 precedent):
+  (defconst territory/rent-spike-multiplier-x1e6 1500000) ; :238, x1,000,000
+  (defconst territory/displacement-rate 0.1c)             ; :239
+  (defconst territory/heat-spillover-rate 0.05c)          ; :240
+  ; :241 (clarity_profile_coefficient) is read by NO TerritorySystem code
+  ; path — it belongs to the fog/clarity estate, deliberately not a
+  ; defconst here. :243 (displacement_priority_mode) is the WS1-ledgered
+  ; EXTRACTION-const (this pack transcribes EXTRACTION directly).
+  (defconst territory/concentration-camp-decay-rate 0.2c) ; :242
+
+  (node sub-threshold-high NodeType/TERRITORY
+    (territory/profile OperationalProfile/HIGH_PROFILE)
+    (territory/territory-type TerritoryType/CORE)
+    (territory/heat 0.3c)
+    (territory/rent-level-x1e6 1000000)
+    (territory/under-eviction 0)
+    (territory/population 100))
+
+  (node sub-threshold-low NodeType/TERRITORY
+    (territory/profile OperationalProfile/LOW_PROFILE)
+    (territory/territory-type TerritoryType/CORE)
+    (territory/heat 0.4c)
+    (territory/rent-level-x1e6 1000000)
+    (territory/under-eviction 0)
+    (territory/population 100))
+
+  (node latch-tick-source NodeType/TERRITORY
+    (territory/profile OperationalProfile/HIGH_PROFILE)
+    (territory/territory-type TerritoryType/CORE)
+    (territory/heat 0.68c)
+    (territory/rent-level-x1e6 1000000)
+    (territory/under-eviction 0)
+    (territory/population 1000))
+
+  (node sink-reservation NodeType/TERRITORY
+    (territory/profile OperationalProfile/LOW_PROFILE)
+    (territory/territory-type TerritoryType/RESERVATION)
+    (territory/heat 0.1c)
+    (territory/rent-level-x1e6 1000000)
+    (territory/under-eviction 0)
+    ; NIT-10/MINOR-4 (fix round): declared BEFORE sink-penal (so the
+    ; sink-pick assertion discriminates score-order from declaration-id
+    ; order -- a tied score would previously stay green by ID-order
+    ; coincidence, since PENAL_COLONY was declared first regardless) and
+    ; seeded a NONZERO population (so "untouched" is a real assertion,
+    ; not floor(0*x)=0 vacuity).
+    (territory/population 200))
+
+  (node sink-penal NodeType/TERRITORY
+    (territory/profile OperationalProfile/LOW_PROFILE)
+    (territory/territory-type TerritoryType/PENAL_COLONY)
+    (territory/heat 0.1c)
+    (territory/rent-level-x1e6 1000000)
+    (territory/under-eviction 0)
+    (territory/population 0))
+
+  (node latch-no-sink NodeType/TERRITORY
+    (territory/profile OperationalProfile/HIGH_PROFILE)
+    (territory/territory-type TerritoryType/CORE)
+    (territory/heat 0.68c)
+    (territory/rent-level-x1e6 1000000)
+    (territory/under-eviction 0)
+    (territory/population 1000))
+
+  (node already-latched-to-camp NodeType/TERRITORY
+    (territory/profile OperationalProfile/LOW_PROFILE)
+    (territory/territory-type TerritoryType/CORE)
+    (territory/heat 0.5c)
+    (territory/rent-level-x1e6 1000000)
+    (territory/under-eviction 1)
+    (territory/population 1000))
+
+  (node concentration-camp NodeType/TERRITORY
+    (territory/profile OperationalProfile/LOW_PROFILE)
+    (territory/territory-type TerritoryType/CONCENTRATION_CAMP)
+    (territory/heat 0.1c)
+    (territory/rent-level-x1e6 1000000)
+    (territory/under-eviction 0)
+    (territory/population 500))
+
+  (node chain-1 NodeType/TERRITORY
+    (territory/profile OperationalProfile/HIGH_PROFILE)
+    (territory/territory-type TerritoryType/CORE)
+    (territory/heat 0.9c)
+    (territory/rent-level-x1e6 1000000)
+    (territory/under-eviction 0)
+    (territory/population 1000))
+
+  (node chain-2 NodeType/TERRITORY
+    (territory/profile OperationalProfile/LOW_PROFILE)
+    (territory/territory-type TerritoryType/CORE)
+    (territory/heat 0.3c)
+    (territory/rent-level-x1e6 1000000)
+    (territory/under-eviction 0)
+    (territory/population 100))
+
+  (node chain-3 NodeType/TERRITORY
+    (territory/profile OperationalProfile/LOW_PROFILE)
+    (territory/territory-type TerritoryType/CORE)
+    (territory/heat 0.2c)
+    (territory/rent-level-x1e6 1000000)
+    (territory/under-eviction 0)
+    (territory/population 100))
+
+  (node isolated-fallback NodeType/TERRITORY
+    (territory/profile OperationalProfile/LOW_PROFILE)
+    (territory/territory-type TerritoryType/CORE)
+    (territory/heat 0.25c)
+    (territory/rent-level-x1e6 1000000)
+    (territory/under-eviction 0)
+    (territory/population 100))
+
+  (node tenant-1 NodeType/SOCIAL_CLASS
+    (social-class/organization 0.6c))
+
+  (node tenant-2 NodeType/SOCIAL_CLASS
+    (social-class/organization 0.6c))
+
+  (node non-tenant NodeType/SOCIAL_CLASS
+    (social-class/organization 0.6c))
+
+  (edge EdgeType/ADJACENCY latch-tick-source sink-penal 1)
+  (edge EdgeType/ADJACENCY latch-tick-source sink-reservation 1)
+  (edge EdgeType/ADJACENCY already-latched-to-camp concentration-camp 1)
+  (edge EdgeType/ADJACENCY chain-1 chain-2 1)
+  (edge EdgeType/ADJACENCY chain-2 chain-3 1)
+  ; MINOR-7 (fix round): the D123 directed-walk witness. This edge points
+  ; INTO latch-no-sink (source=sink-penal, target=latch-no-sink) -- the
+  ; `:out` neighbour query p2's sink walk uses only matches edges where
+  ; latch-no-sink is the SOURCE, so this edge is invisible to it even
+  ; though a PENAL_COLONY is topologically adjacent; population still
+  ; disappears (p2's own test pins this). p3-spillover's `:any` walk sees
+  ; it regardless of direction, so both endpoints DO spill heat to each
+  ; other -- proving the frozen directed-sink-walk-vs-any-spillover-walk
+  ; asymmetry (D123) rather than merely asserting it in prose.
+  (edge EdgeType/ADJACENCY sink-penal latch-no-sink 1)
+  (edge EdgeType/TENANCY tenant-1 sink-penal 1)
+  (edge EdgeType/TENANCY tenant-2 sink-penal 1))
