@@ -130,6 +130,7 @@ pub(crate) fn account_reading(
                         && route.good_id == order.good_id
                         && route.unit_id == order.unit_id
                 }) else {
+                    output.push_str("Reservation route detail unavailable in this observation.\n");
                     continue;
                 };
                 writeln!(
@@ -228,6 +229,7 @@ fn compare_orders(
             route.id == o_a.route_id && route.good_id == o_a.good_id && route.unit_id == o_a.unit_id
         });
         let Some(route) = route else {
+            output.push_str("Comparable route endpoints unavailable.\n");
             continue;
         };
         let other_route = participating_routes(b, compared).into_iter().find(|other| {
@@ -485,6 +487,32 @@ pub(crate) mod tests {
         assert!(text.contains("Requested 600 kg | dispatched 120 kg\nUnshipped 480 kg"));
         assert!(text.contains("Requested 200 kg | dispatched 40 kg\nUnshipped 160 kg"));
         assert!(text.contains("Reservations use capacity; goods arrive after travel"));
+    }
+
+    #[test]
+    fn unmatched_reservation_reports_unavailable_detail_without_disclosing_order_data() {
+        let mut snapshot = fixture();
+        let orders = &mut snapshot.freight_capacity_accounts[0]
+            .completed
+            .as_mut()
+            .unwrap()
+            .reservations[0]
+            .orders;
+        let mut unavailable = orders[0].clone();
+        unavailable.order_id = "private-order".into();
+        unavailable.route_id = "private-route".into();
+        unavailable.requested = 987_654;
+        orders.push(unavailable);
+        let reading = account_reading(&snapshot.freight_capacity_accounts[0], &snapshot);
+        assert!(reading.contains("Reservation route detail unavailable in this observation."));
+        let comparison = comparison_reading(1, &snapshot, &snapshot);
+        assert!(comparison.contains("Comparable route endpoints unavailable."));
+        for text in [reading, comparison] {
+            assert!(!text.contains("private-"));
+            assert!(!text.contains("987654"));
+            assert!(text.contains("steel -> panels / sheets"));
+            assert!(text.contains("mill -> meals / meal"));
+        }
     }
 
     #[test]
