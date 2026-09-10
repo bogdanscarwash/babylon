@@ -549,6 +549,28 @@ mod tests {
     }
 
     #[test]
+    fn current_census_provenance_matches_exact_constructed_sources() {
+        for (name, source) in [
+            ("current_schema.sql", CURRENT_SCHEMA_SQL),
+            ("current_archive.sql", CURRENT_ARCHIVE_SQL),
+            ("current_views.sql", CURRENT_VIEWS_SQL),
+            ("postgres_catalog.sql", include_str!("postgres_catalog.sql")),
+        ] {
+            let digest = sha256_of(source.as_bytes())
+                .iter()
+                .map(|byte| format!("{byte:02x}"))
+                .collect::<String>();
+            let expected = format!("# source|{name}|{digest}");
+            for fixture in CURRENT_CENSUSES {
+                assert!(
+                    fixture.lines().any(|line| line == expected),
+                    "census source differs: {name}"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn schema_identity_binds_all_current_source_fragments() {
         let parts = [CURRENT_SCHEMA_SQL, CURRENT_ARCHIVE_SQL, CURRENT_VIEWS_SQL];
         let digest = current_schema_sha256();
