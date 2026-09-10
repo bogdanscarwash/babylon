@@ -231,9 +231,8 @@ fn generate_vectors() -> String {
         "kind": "identity",
         "data": {
             "source_path": "rust/crates/babylon-persistence/src/archive.rs",
-            "schema_path": "rust/crates/babylon-persistence/migrations/archive_atom_v1.sql",
+            "schema_path": "rust/crates/babylon-persistence/migrations/current_archive.sql",
             "atom_domain_ascii_nul": "babylon.semantic-archive-atom.v1",
-            "atom_schema_contract_id": "babylon.archive-atom-schema.v1",
             "kind_tags": tag_map(&KIND_TAGS),
             "evidence_tags": tag_map(&EVIDENCE_TAGS),
             "value_tags": tag_map(&VALUE_TAGS),
@@ -442,14 +441,4 @@ fn shared_identity_vectors_match_the_pinned_domain_and_tags() {
         data["atom_domain_ascii_nul"].as_str(),
         Some("babylon.semantic-archive-atom.v1")
     );
-    assert_eq!(
-        data["atom_schema_contract_id"].as_str(),
-        Some("babylon.archive-atom-schema.v1")
-    );
-    let schema_bytes = include_bytes!("../migrations/archive_atom_v1.sql");
-    assert!(sha256_hex(schema_bytes).len() == 64);
-    let schema = std::str::from_utf8(schema_bytes).expect("schema utf8");
-    assert!(schema.contains("babylon.archive-atom-schema.v1"));
-    assert!(schema.contains("value_f64 = value_f64"));
-    assert!(schema.contains("abs(value_f64) <> 'Infinity'::float8"));
 }

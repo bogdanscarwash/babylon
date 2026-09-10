@@ -1,11 +1,11 @@
-//! Checked immutable publication payload. Adoption never rerenders this record.
+//! Checked immutable publication payload with its required emission witness.
 
 use std::collections::BTreeSet;
 
 use sha2::{Digest as _, Sha256};
 
 use super::emission::ArchiveEmissionManifestV2;
-use super::{ArchivePublicationOriginV2, ArchiveReadScopeV2};
+use super::ArchiveReadScopeV2;
 use crate::archive::{validate_text, MAX_LINKS, MAX_PAGE_BYTES, MAX_SIGNALS};
 use crate::{
     ArchiveAtomSubjectV1, ArchiveAtomV1, ArchiveCitationV1, ArchivePageRefV1,
@@ -29,7 +29,6 @@ pub(super) struct RevisionRecord {
     pub source: ArchiveReadScopeV2,
     pub subject: ArchivePageRefV1,
     pub effective_tick: u64,
-    pub origin: ArchivePublicationOriginV2,
     pub title: String,
     pub template_sha256: [u8; 32],
     pub content_sha256: [u8; 32],
@@ -38,17 +37,15 @@ pub(super) struct RevisionRecord {
     pub provenance_json: String,
     pub atoms: Vec<ArchiveAtomV1>,
     pub grants: Vec<GrantDependency>,
-    pub emission: Option<ArchiveEmissionManifestV2>,
+    pub emission: ArchiveEmissionManifestV2,
 }
 
 impl RevisionRecord {
     pub fn validate(&self) -> Result<(), SemanticArchiveErrorV1> {
         validate_text(&self.title)?;
         if self.source.tick() == 0
-            || self.effective_tick < self.source.tick()
+            || self.effective_tick != self.source.tick()
             || self.effective_tick > i64::MAX as u64
-            || (self.origin == ArchivePublicationOriginV2::Materialized
-                && self.effective_tick != self.source.tick())
         {
             return Err(SemanticArchiveErrorV1::InvalidVerifiedTick);
         }
@@ -65,11 +62,7 @@ impl RevisionRecord {
         self.validate_header()?;
         self.validate_atoms()?;
         self.validate_grants()?;
-        match &self.emission {
-            Some(emission) => emission.verify(self),
-            None if self.origin == ArchivePublicationOriginV2::AdoptedHead => Ok(()),
-            None => Err(SemanticArchiveErrorV1::StoredPageMismatch),
-        }
+        self.emission.verify(self)
     }
 
     fn validate_header(&self) -> Result<(), SemanticArchiveErrorV1> {
@@ -165,7 +158,6 @@ impl RevisionRecord {
         hash_text(&mut hash, self.subject.kind().as_str());
         hash_text(&mut hash, self.subject.id());
         hash.update(self.effective_tick.to_be_bytes());
-        hash.update(self.origin.tag().to_be_bytes());
         hash.update(self.source.tick().to_be_bytes());
         hash.update(
             self.source
@@ -203,10 +195,7 @@ impl RevisionRecord {
             hash_text(&mut hash, grant.citation.source_id());
             hash_text(&mut hash, grant.citation.locator());
         }
-        hash.update([u8::from(self.emission.is_some())]);
-        if let Some(emission) = &self.emission {
-            hash_text(&mut hash, &emission.encode()?);
-        }
+        hash_text(&mut hash, &self.emission.encode()?);
         Ok(hash.finalize().into())
     }
 }

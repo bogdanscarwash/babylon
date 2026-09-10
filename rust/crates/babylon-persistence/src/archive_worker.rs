@@ -218,18 +218,6 @@ pub trait ArchiveDossierProducerV1 {
         knowledge: &crate::ArchiveKnowledgeV1,
         page_budget: usize,
     ) -> Result<ArchiveProducerOutcomeV1, SemanticArchiveErrorV1>;
-
-    /// Declare the complete disclosed subject domain required to seal adoption.
-    /// # Errors
-    /// Unregistered diagnostic producers cannot certify cutover completeness.
-    fn cutover_subjects(
-        &self,
-        _campaign_id: Uuid,
-        _receipt: &PendingArchiveReceiptV1,
-        _knowledge: &crate::ArchiveKnowledgeV1,
-    ) -> Result<Vec<crate::ArchivePageRefV1>, SemanticArchiveErrorV1> {
-        Err(SemanticArchiveErrorV1::ArchiveCoverageUnavailable)
-    }
 }
 
 /// Producer for a scope with no pages: every successful receipt settles empty.
@@ -332,25 +320,6 @@ impl ArchiveDossierProducerV1 for CompositeArchiveDossierProducerV1 {
             ArchiveDirtyBatchV1::try_new(receipt.resolve_tick, receipt.tick_content_hash, pages)?;
         Ok(ArchiveProducerOutcomeV1::new(batch, remaining))
     }
-    fn cutover_subjects(
-        &self,
-        campaign: Uuid,
-        receipt: &PendingArchiveReceiptV1,
-        knowledge: &crate::ArchiveKnowledgeV1,
-    ) -> Result<Vec<crate::ArchivePageRefV1>, SemanticArchiveErrorV1> {
-        let mut subjects = std::collections::BTreeSet::new();
-        for producer in &self.producers {
-            for subject in producer.cutover_subjects(campaign, receipt, knowledge)? {
-                if !subjects.insert(subject) {
-                    return Err(SemanticArchiveErrorV1::DuplicateKey);
-                }
-            }
-        }
-        if subjects.len() > 65535 {
-            return Err(SemanticArchiveErrorV1::CollectionBound);
-        }
-        Ok(subjects.into_iter().collect())
-    }
 }
 
 /// Per-sweep worker report with ordered dispositions and derived aggregates.
@@ -359,7 +328,6 @@ pub struct ArchiveWorkerSweepReportV1 {
     dispositions: Vec<(u64, ArchiveReceiptDispositionV1)>,
     durable_tick: u64,
     verified_tick: u64,
-    retention_ready: bool,
     pending_work: bool,
 }
 
@@ -371,14 +339,12 @@ impl ArchiveWorkerSweepReportV1 {
         dispositions: Vec<(u64, ArchiveReceiptDispositionV1)>,
         durable_tick: u64,
         verified_tick: u64,
-        retention_ready: bool,
         pending_work: bool,
     ) -> Self {
         Self {
             dispositions,
             durable_tick,
             verified_tick,
-            retention_ready,
             pending_work,
         }
     }
@@ -393,12 +359,6 @@ impl ArchiveWorkerSweepReportV1 {
     #[must_use]
     pub const fn has_pending_work(&self) -> bool {
         self.pending_work
-    }
-
-    /// Whether the retained adoption has completed exact cutover validation.
-    #[must_use]
-    pub const fn retention_ready(&self) -> bool {
-        self.retention_ready
     }
 
     /// Borrow the ordered per-receipt outcomes.

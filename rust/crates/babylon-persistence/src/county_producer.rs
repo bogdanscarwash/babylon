@@ -1238,24 +1238,6 @@ impl ArchiveDossierProducerV1 for CountyDossierProducerV1 {
             county_page_input_v1,
         )
     }
-    fn cutover_subjects(
-        &self,
-        campaign_id: Uuid,
-        receipt: &PendingArchiveReceiptV1,
-        knowledge: &crate::ArchiveKnowledgeV1,
-    ) -> Result<Vec<ArchivePageRefV1>, SemanticArchiveErrorV1> {
-        let campaign = CampaignId::from_uuid(campaign_id);
-        let desired = self.desired_pages(campaign, receipt.resolve_tick())?;
-        let mut subjects = std::collections::BTreeSet::new();
-        for plan in &desired {
-            let page =
-                county_page_input_v1(plan, receipt.resolve_tick(), *receipt.tick_content_hash())?;
-            if knowledge.knows_subject(page.subject().page_ref()) {
-                subjects.insert(page.subject().page_ref().clone());
-            }
-        }
-        Ok(subjects.into_iter().collect())
-    }
 }
 
 fn verify_pinned_artifact_digests(

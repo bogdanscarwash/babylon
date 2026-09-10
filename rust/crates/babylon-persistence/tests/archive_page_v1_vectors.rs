@@ -5,7 +5,7 @@ use babylon_persistence::{
     ArchiveKnowledgeGrantV1, ArchiveKnowledgeV1, ArchiveLinkV1, ArchivePageInputV1,
     ArchivePageRefV1, ArchiveSignalV1, ArchiveSubjectKindV1, ArchiveSubjectV1,
     FogSafeArchiveRendererV1, SemanticArchiveErrorV1, ARCHIVE_PAGE_TEMPLATE_SHA256_V1,
-    SEMANTIC_ARCHIVE_SCHEMA_V1_SQL,
+    CURRENT_ARCHIVE_SCHEMA_SQL,
 };
 use serde_json::{json, Value};
 
@@ -293,7 +293,7 @@ fn generate_vectors() -> String {
         "data": {
             "template_path": "rust/crates/babylon-persistence/src/archive_page_v1.md.j2",
             "template_sha256_hex": hex_encode(&ARCHIVE_PAGE_TEMPLATE_SHA256_V1),
-            "schema_path": "rust/crates/babylon-persistence/migrations/semantic_archive_v1.sql",
+            "schema_path": "rust/crates/babylon-persistence/migrations/current_archive.sql",
             "worker_domain_ascii_nul": "babylon.semantic-archive-worker.v1",
             "worker_contract_sha256_hex": hex_encode(&archive_worker_contract_sha256_v1()),
         },
@@ -450,5 +450,5 @@ fn shared_identity_vectors_match_the_pinned_template_and_worker_contract() {
         data["worker_contract_sha256_hex"].as_str(),
         Some(hex_encode(&archive_worker_contract_sha256_v1()).as_str())
     );
-    assert!(SEMANTIC_ARCHIVE_SCHEMA_V1_SQL.contains("archive_page_v1"));
+    assert!(CURRENT_ARCHIVE_SCHEMA_SQL.contains("archive_page_revision_v2"));
 }

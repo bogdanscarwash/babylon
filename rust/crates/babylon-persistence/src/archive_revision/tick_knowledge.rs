@@ -1,4 +1,4 @@
-//! Receipt-pinned disclosure membership, shared by every Stage and cutover at T.
+//! Receipt-pinned disclosure membership, shared by every staged batch and consumption at the same tick.
 
 use super::storage::{signed, unsigned};
 use super::ArchiveReadScopeV2;
@@ -22,7 +22,7 @@ pub(super) fn pin(
         let hash=scope.tick_content_hash().ok_or(SemanticArchiveErrorV1::InvalidVerifiedTick)?;
         client.execute("INSERT INTO babylon_meta.archive_tick_knowledge_v2 \
             (campaign_id,resolve_tick,tick_content_hash,worker_contract_sha256,knowledge_sha256,grant_count) VALUES($1,$2,$3,$4,$5,$6)",
-            &[campaign.as_uuid(),&tick,&&hash[..],&&super::publication::worker_contract()[..],&&knowledge.sha256()[..],&count])
+            &[campaign.as_uuid(),&tick,&&hash[..],&&crate::archive_worker_contract_sha256_v1()[..],&&knowledge.sha256()[..],&count])
             .map_err(|error|database("pin exact Archive knowledge identity",&error))?;
         // Preserve the captured membership without a database round trip per grant.
         let mut subject_kinds = Vec::new();
@@ -69,7 +69,7 @@ pub(super) fn load(
         .map_err(|error| database("read pinned Archive knowledge identity", &error))?
         .ok_or(SemanticArchiveErrorV1::StoredPageMismatch)?;
     if Some(decode_digest(&header, 0)?) != scope.tick_content_hash()
-        || decode_digest(&header, 1)? != super::publication::worker_contract()
+        || decode_digest(&header, 1)? != crate::archive_worker_contract_sha256_v1()
     {
         return Err(SemanticArchiveErrorV1::ReceiptConflict);
     }

@@ -816,23 +816,6 @@ impl ArchiveDossierProducerV1 for PlaceDossierProducerV1 {
             place_page_input_v1,
         )
     }
-    fn cutover_subjects(
-        &self,
-        _campaign_id: Uuid,
-        receipt: &PendingArchiveReceiptV1,
-        knowledge: &crate::ArchiveKnowledgeV1,
-    ) -> Result<Vec<ArchivePageRefV1>, SemanticArchiveErrorV1> {
-        let desired = self.desired_pages()?;
-        let mut subjects = std::collections::BTreeSet::new();
-        for plan in &desired {
-            let page =
-                place_page_input_v1(plan, receipt.resolve_tick(), *receipt.tick_content_hash())?;
-            if knowledge.knows_subject(page.subject().page_ref()) {
-                subjects.insert(page.subject().page_ref().clone());
-            }
-        }
-        Ok(subjects.into_iter().collect())
-    }
 }
 
 fn verify_pinned_artifact_digests(

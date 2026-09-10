@@ -3,7 +3,7 @@ use babylon_persistence::{
     ArchiveCitationV1, ArchiveDirtyBatchV1, ArchiveKnowledgeGrantV1, ArchiveKnowledgeV1,
     ArchiveLinkV1, ArchivePageInputV1, ArchivePageRefV1, ArchiveSignalV1, ArchiveSubjectKindV1,
     ArchiveSubjectV1, FogSafeArchiveRendererV1, SemanticArchiveErrorV1, SemanticArchiveStoreV1,
-    ARCHIVE_KNOWLEDGE_SQL_V1, ARCHIVE_PAGE_TEMPLATE_SHA256_V1, SEMANTIC_ARCHIVE_SCHEMA_V1_SQL,
+    ARCHIVE_KNOWLEDGE_SQL_V1, ARCHIVE_PAGE_TEMPLATE_SHA256_V1, CURRENT_ARCHIVE_SCHEMA_SQL,
 };
 
 fn county() -> ArchiveSubjectV1 {
@@ -80,7 +80,7 @@ fn receipt_retry_identity_includes_the_exact_dirty_batch() {
     .expect("changed dirty batch");
 
     assert_ne!(first.sha256(), changed.sha256());
-    assert!(SEMANTIC_ARCHIVE_SCHEMA_V1_SQL.contains("batch_sha256 BYTEA NOT NULL"));
+    assert!(CURRENT_ARCHIVE_SCHEMA_SQL.contains("batch_sha256 BYTEA NOT NULL"));
 }
 
 #[test]
@@ -176,7 +176,7 @@ fn knowledge_snapshot_identity_includes_exact_grant_provenance() {
         knowledge().sha256(),
         knowledge_with_subject_locator("county/26163/revised").sha256()
     );
-    assert!(SEMANTIC_ARCHIVE_SCHEMA_V1_SQL.contains("knowledge_sha256 BYTEA NOT NULL"));
+    assert!(CURRENT_ARCHIVE_SCHEMA_SQL.contains("knowledge_sha256 BYTEA NOT NULL"));
 }
 
 #[test]
@@ -251,15 +251,16 @@ fn schema_contract_keeps_epistemic_rows_out_of_material_state() {
     for relation in [
         "babylon_meta.archive_knowledge_grant_v1",
         "babylon_meta.archive_receipt_consumption_v1",
-        "babylon_meta.archive_page_v1",
+        "babylon_meta.archive_page_revision_v2",
     ] {
-        assert!(SEMANTIC_ARCHIVE_SCHEMA_V1_SQL.contains(relation));
+        assert!(CURRENT_ARCHIVE_SCHEMA_SQL.contains(relation));
     }
-    assert!(SEMANTIC_ARCHIVE_SCHEMA_V1_SQL
-        .contains("REFERENCES babylon_state.archive_dirty_receipt_v1"));
-    assert!(SEMANTIC_ARCHIVE_SCHEMA_V1_SQL.contains("REFERENCES babylon_state.tick_commit"));
-    assert!(!SEMANTIC_ARCHIVE_SCHEMA_V1_SQL.contains("CREATE TABLE babylon_state.archive_page"));
-    assert!(!SEMANTIC_ARCHIVE_SCHEMA_V1_SQL.contains("IF NOT EXISTS"));
+    assert!(
+        CURRENT_ARCHIVE_SCHEMA_SQL.contains("REFERENCES babylon_state.archive_dirty_receipt_v1")
+    );
+    assert!(CURRENT_ARCHIVE_SCHEMA_SQL.contains("REFERENCES babylon_state.tick_commit"));
+    assert!(!CURRENT_ARCHIVE_SCHEMA_SQL.contains("CREATE TABLE babylon_state.archive_page"));
+    assert!(!CURRENT_ARCHIVE_SCHEMA_SQL.contains("IF NOT EXISTS"));
 }
 
 #[test]
@@ -271,9 +272,9 @@ fn persistence_queries_enforce_grants_in_sql_and_hide_raw_ledgers() {
     assert!(ARCHIVE_KNOWLEDGE_SQL_V1.contains("granted_tick <= $2"));
     assert!(ARCHIVE_KNOWLEDGE_SQL_V1.contains("provenance_source_id"));
     assert!(ARCHIVE_KNOWLEDGE_SQL_V1.contains("provenance_locator"));
-    let revision = include_str!("../migrations/archive_revision_v2.sql");
+    let revision = include_str!("../migrations/current_archive.sql");
     assert!(revision.contains("grant_row.granted_tick = dependency.granted_tick"));
-    assert!(revision.contains("emission_json IS NOT NULL"));
+    assert!(revision.contains("emission_json TEXT NOT NULL"));
     let read = include_str!("../src/archive_revision/read.rs");
     assert!(!read.contains("babylon_meta."));
     assert!(!read.contains("babylon_state."));

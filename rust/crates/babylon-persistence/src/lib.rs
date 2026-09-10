@@ -63,7 +63,7 @@ pub use archive_foundation_grants::{
     FOUNDATION_PLACE_IDENTITY_SOURCE_ID_V1, MICHIGAN_GEOID_PREFIX_V1,
     PINNED_FOUNDATION_GRANTS_SEMANTIC_SHA256_V1, STATEWIDE_RESIDUAL_COUNTY_FIPS_V1,
 };
-pub use archive_wakeup::{archive_wakeup_migration_sha256_v1, ARCHIVE_WAKEUP_CHANNEL_V1};
+pub use archive_wakeup::ARCHIVE_WAKEUP_CHANNEL_V1;
 pub use archive_worker::*;
 pub use babylon_markdown::{
     fog_chip_v1, git_export_markdown_v1, is_citation_line_v1, validate_babylon_markdown_v1,

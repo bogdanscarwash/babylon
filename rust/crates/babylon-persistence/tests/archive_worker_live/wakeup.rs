@@ -25,7 +25,7 @@ fn next_hint(client: &mut postgres::Client, wait: Duration) -> Option<postgres::
         .next()
         .expect("notification connection")
 }
-fn assert_installer_refuses_wakeup_drift(
+fn assert_verifier_refuses_wakeup_drift(
     store: &SemanticArchiveStoreV1,
     writer: &mut postgres::Client,
 ) {
@@ -34,10 +34,10 @@ fn assert_installer_refuses_wakeup_drift(
             "ALTER TABLE babylon_state.tick_commit DISABLE TRIGGER archive_wakeup_tick_v1",
         )
         .expect("isolated trigger corruption");
-    assert_eq!(
-        store.install_schema(),
-        Err(SemanticArchiveErrorV1::SchemaMismatch)
-    );
+    assert!(matches!(
+        store.verify_schema(),
+        Err(SemanticArchiveErrorV1::CurrentSchema(_)) | Err(SemanticArchiveErrorV1::SchemaMismatch)
+    ));
     writer
         .batch_execute(
             "ALTER TABLE babylon_state.tick_commit ENABLE TRIGGER archive_wakeup_tick_v1",
@@ -46,17 +46,14 @@ fn assert_installer_refuses_wakeup_drift(
     writer
         .batch_execute("GRANT EXECUTE ON FUNCTION babylon_meta.archive_wakeup_v1() TO PUBLIC")
         .expect("isolated function exposure");
-    assert_eq!(
-        store.install_schema(),
-        Err(SemanticArchiveErrorV1::SchemaMismatch)
-    );
+    assert!(matches!(
+        store.verify_schema(),
+        Err(SemanticArchiveErrorV1::CurrentSchema(_)) | Err(SemanticArchiveErrorV1::SchemaMismatch)
+    ));
     writer
         .batch_execute("REVOKE ALL ON FUNCTION babylon_meta.archive_wakeup_v1() FROM PUBLIC")
         .expect("restore owner-only function");
-    assert_eq!(
-        store.install_schema().expect("exact restored install"),
-        ArchiveSchemaDispositionV1::AlreadyCurrent
-    );
+    store.verify_schema().expect("exact restored schema");
 }
 fn assert_empty_hint(listener: &mut postgres::Client) {
     let hint = next_hint(listener, Duration::from_secs(2)).expect("committed hint");
@@ -66,14 +63,11 @@ fn assert_empty_hint(listener: &mut postgres::Client) {
 
 #[test]
 #[ignore = "requires the task-owned disposable PostgreSQL runtime"]
-fn live_wakeup_is_commit_bound_empty_and_installer_refuses_trigger_drift() {
+fn live_wakeup_is_commit_bound_empty_and_verifier_refuses_trigger_drift() {
     let target =
         LiveWorkerTarget::create("wakeupcommit", 0x2200_0000_0000_0000_0000_0000_0000_00f1, 1);
     let store = SemanticArchiveStoreV1::new(&target.config);
-    assert_eq!(
-        store.install_schema().expect("idempotent install"),
-        ArchiveSchemaDispositionV1::AlreadyCurrent
-    );
+    store.verify_schema().expect("current schema");
     let mut listener = listen(&target.config);
     let mut writer = target.config.connect(NoTls).expect("probe writer");
     let mut tx = writer
@@ -81,8 +75,11 @@ fn live_wakeup_is_commit_bound_empty_and_installer_refuses_trigger_drift() {
         .expect("rolled back enrollment statement");
     // Statement triggers also fire for zero rows; use rollback without inventing
     // a campaign or an invalid retained enrollment merely to test the transport.
-    tx.execute("INSERT INTO babylon_meta.archive_retention_v2 SELECT * FROM babylon_meta.archive_retention_v2 WHERE FALSE", &[])
-        .expect("transactional enrollment hint");
+    tx.execute(
+        "INSERT INTO babylon_meta.campaign SELECT * FROM babylon_meta.campaign WHERE FALSE",
+        &[],
+    )
+    .expect("transactional enrollment hint");
     assert!(next_hint(&mut listener, Duration::from_millis(150)).is_none());
     tx.rollback().expect("rollback enrollment hint");
     assert!(next_hint(&mut listener, Duration::from_millis(150)).is_none());
@@ -104,7 +101,7 @@ fn live_wakeup_is_commit_bound_empty_and_installer_refuses_trigger_drift() {
         .expect("canonical Archive publication");
     assert_eq!(report.verified_tick(), 2);
     assert!(next_hint(&mut listener, Duration::from_millis(200)).is_none());
-    assert_installer_refuses_wakeup_drift(&store, &mut writer);
+    assert_verifier_refuses_wakeup_drift(&store, &mut writer);
     drop(listener);
     drop(writer);
     target.finish();
@@ -165,10 +162,9 @@ fn live_worker_stop_rolls_back_uncommitted_pin_and_page_then_retry_drains() {
         (
             report.durable_tick(),
             report.verified_tick(),
-            report.retention_ready(),
             report.has_pending_work()
         ),
-        (1, 1, true, false)
+        (1, 1, false)
     );
     assert_eq!(archive_page_count(&target.config, target.campaign_id), 1);
     target.finish();
@@ -185,7 +181,6 @@ fn wait_progress(receiver: &Receiver<ArchiveDriverEventV1>, tick: u64, request: 
                 request_id,
                 durable_tick,
                 verified_tick,
-                retention_ready,
             } => {
                 assert!(
                     verified_tick <= durable_tick,
@@ -193,7 +188,6 @@ fn wait_progress(receiver: &Receiver<ArchiveDriverEventV1>, tick: u64, request: 
                 );
                 if durable_tick == tick
                     && verified_tick == tick
-                    && retention_ready
                     && (request.is_none() || request_id == request)
                 {
                     return;
@@ -455,7 +449,7 @@ fn live_notification_failure_rolls_back_material_commit_and_preserves_memory_bef
         .expect("test-owned trigger fault connection");
     assert_marker_fault_rolls_back(&mut runtime, &mut writer);
     SemanticArchiveStoreV1::new(&config)
-        .install_schema()
+        .verify_schema()
         .expect("restored trigger identity is exact");
     let next_actions = material_actions(&runtime, 2);
     let second = runtime

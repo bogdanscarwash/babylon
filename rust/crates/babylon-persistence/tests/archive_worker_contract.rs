@@ -180,7 +180,6 @@ fn sweep_report_aggregates_dispositions_and_carries_the_persisted_watermark() {
         9,
         7,
         true,
-        true,
     );
 
     assert_eq!(report.applied_count(), 1);

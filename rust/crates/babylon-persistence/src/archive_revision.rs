@@ -2,13 +2,11 @@
 
 mod changes;
 pub(crate) mod emission;
-mod enrollment;
 mod knowledge;
 pub(crate) mod publication;
 mod read;
 mod read_history;
 mod record;
-pub(crate) mod schema;
 mod storage;
 mod tick_knowledge;
 pub(crate) mod worker;
@@ -78,10 +76,6 @@ impl ArchiveReadScopeV2 {
 /// Why a retained page cannot yet certify the requested observation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ArchiveDossierPendingV2 {
-    /// Original bytes survive privately, but their complete emitted structure is unproved.
-    EmissionWitnessRequired,
-    /// The adopted head awaits validation against its committed cutover tick.
-    CutoverValidation,
     /// An earlier committed receipt has not completed its bounded page drain.
     ReceiptProcessing,
     /// A grant arrived after this tick's immutable knowledge snapshot was pinned.
@@ -93,38 +87,10 @@ pub enum ArchiveDossierPendingV2 {
 pub enum ArchiveDossierUnavailableV2 {
     /// Foundation is not a rendered committed Archive page.
     FoundationHasNoPage,
-    /// The requested tick precedes retained coverage; old prose was overwritten.
-    HistoryNotRetained,
     /// No subject grant covers this observation.
     SubjectNotDisclosed,
     /// Subject identity is disclosed, but no page has been retained for this scope.
     PageNotMaterialized,
-}
-
-/// Closed publication origin; adoption never impersonates the live renderer.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ArchivePublicationOriginV2 {
-    /// Exact existing page retained at the upgrade's durable tail.
-    AdoptedHead,
-    /// Exact output published by the revision-aware materializer.
-    Materialized,
-}
-
-impl ArchivePublicationOriginV2 {
-    pub(crate) const fn tag(self) -> i16 {
-        match self {
-            Self::AdoptedHead => 0,
-            Self::Materialized => 1,
-        }
-    }
-
-    pub(crate) fn from_tag(tag: i16) -> Result<Self, SemanticArchiveErrorV1> {
-        match tag {
-            0 => Ok(Self::AdoptedHead),
-            1 => Ok(Self::Materialized),
-            _ => Err(SemanticArchiveErrorV1::StoredPageMismatch),
-        }
-    }
 }
 
 /// Availability of the exact link target, independent from the retained label.
@@ -134,7 +100,7 @@ pub enum ArchiveLinkedPageStateV2 {
     Unknown,
     /// A known target has no retained page at the requested scope.
     KnownUnavailable,
-    /// A retained target awaits Archive processing or cutover validation.
+    /// A retained target awaits Archive processing.
     KnownPending,
     /// The target has a verified page at the requested scope.
     KnownReady,
@@ -171,7 +137,6 @@ pub struct ArchiveChangeCursorV2 {
     pub(crate) subject: ArchivePageRefV1,
     pub(crate) history_digest: [u8; 32],
     pub(crate) publication_tick: u64,
-    pub(crate) publication_origin: i16,
     pub(crate) change_offset: u32,
 }
 
@@ -213,7 +178,7 @@ impl ArchiveDossierBoundsV2 {
 /// One bounded page of actual retained composition changes.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ArchiveChangePageV2 {
-    /// Earlier ticks cannot be inferred from an adopted baseline.
+    /// Current campaigns retain their complete publication history from foundation.
     pub coverage_from_tick: u64,
     /// Ordered exact atom changes.
     pub changes: Vec<ArchiveAtomChangeV2>,
@@ -228,8 +193,6 @@ pub struct ArchiveDossierPageV2 {
     pub revision_id: [u8; 32],
     /// Tick where this publication enters retained coverage.
     pub effective_tick: u64,
-    /// Adoption or live publication; neither changes substantive evidence classes.
-    pub origin: ArchivePublicationOriginV2,
     /// Original committed content tick and hash, preserved through quiet validation.
     pub content_source: ArchiveReadScopeV2,
     /// Exact retained title.
@@ -262,7 +225,7 @@ pub enum ArchiveDossierStateV2 {
         /// Exactly the requested tick, separate from the content source.
         verified_through_tick: u64,
     },
-    /// Preserve a readable adopted/staged page without claiming verification.
+    /// Preserve a readable staged page without claiming verification.
     Pending {
         /// Eligible retained content, when available.
         page: Option<ArchiveDossierPageV2>,
@@ -284,8 +247,6 @@ pub struct ArchiveDossierReadV2 {
     pub durable_tick: u64,
     /// Global contiguous receipt progress; distinct from selected-page verification.
     pub processed_tick: u64,
-    /// Conservative retained history floor.
-    pub history_floor_tick: u64,
     /// The only authority for selected dossier freshness.
     pub state: ArchiveDossierStateV2,
 }
@@ -313,7 +274,6 @@ pub struct ArchiveSearchReadV2 {
     pub scope: ArchiveReadScopeV2,
     pub durable_tick: u64,
     pub processed_tick: u64,
-    pub history_floor_tick: u64,
     pub state: ArchiveSearchStateV2,
     pub hits: Vec<ArchiveSearchHitV2>,
     /// More matching retained pages exist than the explicit result bound.

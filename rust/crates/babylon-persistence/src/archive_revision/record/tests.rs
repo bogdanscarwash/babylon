@@ -1,8 +1,6 @@
 use super::*;
 use crate::{ArchiveAtomValueV1, ArchiveEvidenceClassV1, ArchiveSubjectKindV1, CampaignId};
 
-const MARKDOWN: &str = "---\nschema: babylon.archive-page.v1\nsubject: county/26163\nverified_tick: 2\ntick_content_hash: 0202020202020202020202020202020202020202020202020202020202020202\n---\n# Wayne County\n\nA retained question.\n\n## Signals\n- **Employment:** 3 — fixture; county/26163\n- **Wages:** 7 — fixture; county/26163\n";
-
 fn atom(record: &RevisionRecord, key: &str, value: &str) -> ArchiveAtomV1 {
     ArchiveAtomV1::try_new(
         record.source.campaign_id(),
@@ -24,81 +22,9 @@ fn atom(record: &RevisionRecord, key: &str, value: &str) -> ArchiveAtomV1 {
     .unwrap()
 }
 
-fn retained() -> RevisionRecord {
-    let mut record = RevisionRecord {
-        source: ArchiveReadScopeV2::committed(
-            CampaignId::from_uuid(uuid::Uuid::from_bytes([1; 16])),
-            2,
-            [2; 32],
-        )
-        .unwrap(),
-        subject: ArchivePageRefV1::try_new(ArchiveSubjectKindV1::County, "26163".to_owned())
-            .unwrap(),
-        effective_tick: 5,
-        origin: ArchivePublicationOriginV2::AdoptedHead,
-        title: "Wayne County".to_owned(),
-        template_sha256: [3; 32],
-        content_sha256: Sha256::digest(MARKDOWN.as_bytes()).into(),
-        markdown: MARKDOWN.to_owned(),
-        search_text: "Wayne County A retained question.".to_owned(),
-        provenance_json: r#"[{"source_id":"fixture","locator":"county/26163"}]"#.to_owned(),
-        atoms: Vec::new(),
-        grants: Vec::new(),
-        emission: None,
-    };
-    record.atoms = vec![
-        atom(&record, "subject", &record.title),
-        atom(&record, "employment", "3"),
-        atom(&record, "wages", "7"),
-    ];
-    record.grants = ["employment", "subject", "wages"]
-        .into_iter()
-        .map(|key| GrantDependency {
-            subject: record.subject.clone(),
-            key: key.to_owned(),
-            granted_tick: 0,
-            citation: record.atoms[0].citation().clone(),
-        })
-        .collect();
-    record
-}
-
 #[test]
-fn adoption_preserves_source_markdown_and_atoms_but_has_its_own_effective_identity() {
-    let adopted = retained();
-    let original = adopted.clone();
-    let digest = adopted.digest().unwrap();
-    // Independently encoded with Python hashlib + struct.pack, including V1 atom ids.
-    assert_eq!(
-        digest,
-        [
-            0x78, 0xf1, 0xf3, 0x41, 0xb7, 0x6f, 0xb7, 0x0c, 0x81, 0x37, 0x24, 0xd9, 0x5c, 0x1f,
-            0x85, 0x57, 0xa2, 0x9b, 0x57, 0xf4, 0x62, 0xd2, 0x79, 0x4f, 0x6d, 0x66, 0xf0, 0x1c,
-            0x3e, 0xf3, 0xb6, 0xd6
-        ]
-    );
-    assert_eq!(adopted, original);
-    assert_eq!(adopted.source.tick(), 2);
-    assert_eq!(adopted.effective_tick, 5);
-    let mut materialized = adopted.clone();
-    materialized.origin = ArchivePublicationOriginV2::Materialized;
-    assert_eq!(
-        materialized.digest(),
-        Err(SemanticArchiveErrorV1::InvalidVerifiedTick)
-    );
-    materialized.effective_tick = 2;
-    assert_eq!(
-        materialized.digest(),
-        Err(SemanticArchiveErrorV1::StoredPageMismatch)
-    );
-    assert_eq!(materialized.markdown, adopted.markdown);
-    assert_eq!(materialized.content_sha256, adopted.content_sha256);
-    assert_eq!(materialized.atoms, adopted.atoms);
-}
-
-#[test]
-fn digest_covers_provenance_search_template_source_and_order_beyond_markdown_hash() {
-    let original = retained();
+fn required_emission_binds_provenance_search_template_source_and_atom_order() {
+    let original = witnessed();
     let expected = original.digest().unwrap();
     let mut variants = Vec::new();
     let mut changed = original.clone();
@@ -113,25 +39,25 @@ fn digest_covers_provenance_search_template_source_and_order_beyond_markdown_has
     let mut changed = original.clone();
     changed.source =
         ArchiveReadScopeV2::committed(changed.source.campaign_id(), 2, [4; 32]).unwrap();
-    assert_eq!(
-        changed.digest(),
-        Err(SemanticArchiveErrorV1::StoredPageMismatch)
-    );
+    variants.push(changed);
     let mut changed = original.clone();
-    changed.grants[0].granted_tick = 1;
+    changed.atoms.swap(1, 2);
     variants.push(changed);
     for changed in variants {
         assert_eq!(changed.content_sha256, original.content_sha256);
-        assert_ne!(changed.digest().unwrap(), expected);
+        assert_eq!(
+            changed.digest(),
+            Err(SemanticArchiveErrorV1::StoredPageMismatch)
+        );
     }
     let mut changed = original;
-    changed.atoms.swap(1, 2);
+    changed.grants[0].granted_tick = 1;
     assert_ne!(changed.digest().unwrap(), expected);
 }
 
 #[test]
 fn missing_duplicate_foreign_and_future_membership_refuses() {
-    let original = retained();
+    let original = witnessed();
     let mut changed = original.clone();
     changed.atoms.clear();
     assert_eq!(
@@ -147,6 +73,7 @@ fn missing_duplicate_foreign_and_future_membership_refuses() {
     let mut changed = original.clone();
     changed.source =
         ArchiveReadScopeV2::committed(changed.source.campaign_id(), 3, [2; 32]).unwrap();
+    changed.effective_tick = 3;
     assert_eq!(
         changed.digest(),
         Err(SemanticArchiveErrorV1::StoredPageMismatch)
@@ -164,7 +91,7 @@ fn missing_duplicate_foreign_and_future_membership_refuses() {
         changed.digest(),
         Err(SemanticArchiveErrorV1::StoredPageMismatch)
     );
-    let mut changed = retained();
+    let mut changed = witnessed();
     changed.grants.remove(0);
     assert_eq!(
         changed.digest(),
@@ -174,7 +101,7 @@ fn missing_duplicate_foreign_and_future_membership_refuses() {
 
 #[test]
 fn scope_cannot_disguise_zero_as_a_commit_or_exceed_storage_domain() {
-    let campaign = retained().source.campaign_id();
+    let campaign = witnessed().source.campaign_id();
     assert_eq!(
         ArchiveReadScopeV2::committed(campaign, 0, [0; 32]),
         Err(SemanticArchiveErrorV1::InvalidVerifiedTick)
@@ -187,10 +114,6 @@ fn scope_cannot_disguise_zero_as_a_commit_or_exceed_storage_domain() {
         ArchiveReadScopeV2::foundation(campaign).tick_content_hash(),
         None
     );
-    assert_eq!(
-        super::super::ArchivePublicationOriginV2::from_tag(2),
-        Err(SemanticArchiveErrorV1::StoredPageMismatch)
-    );
 }
 
 fn witnessed() -> RevisionRecord {
@@ -198,30 +121,47 @@ fn witnessed() -> RevisionRecord {
         ArchiveKnowledgeGrantV1, ArchiveKnowledgeV1, ArchivePageInputV1, ArchiveSignalV1,
         ArchiveSubjectV1, FogSafeArchiveRendererV1,
     };
-    let mut record = retained();
+    let source = ArchiveReadScopeV2::committed(
+        CampaignId::from_uuid(uuid::Uuid::from_bytes([1; 16])),
+        2,
+        [2; 32],
+    )
+    .unwrap();
+    let subject = ArchiveSubjectV1::try_new(
+        ArchiveSubjectKindV1::County,
+        "26163".to_owned(),
+        "Wayne County".to_owned(),
+    )
+    .unwrap();
+    let citation =
+        ArchiveCitationV1::try_new("fixture".to_owned(), "county/26163".to_owned()).unwrap();
+    let grants: Vec<_> = ["employment", "subject", "wages"]
+        .into_iter()
+        .map(|key| GrantDependency {
+            subject: subject.page_ref().clone(),
+            key: key.to_owned(),
+            granted_tick: 0,
+            citation: citation.clone(),
+        })
+        .collect();
     let input = ArchivePageInputV1::try_new(
-        ArchiveSubjectV1::try_new(
-            record.subject.kind(),
-            record.subject.id().to_owned(),
-            record.title.clone(),
-        )
-        .unwrap(),
-        record.source.tick(),
-        record.source.tick_content_hash().unwrap(),
+        subject.clone(),
+        source.tick(),
+        source.tick_content_hash().unwrap(),
         "A retained question.".to_owned(),
         vec![
             ArchiveSignalV1::try_new(
                 "employment".to_owned(),
                 "Employment".to_owned(),
                 "3".to_owned(),
-                record.grants[0].citation.clone(),
+                citation.clone(),
             )
             .unwrap(),
             ArchiveSignalV1::try_new(
                 "wages".to_owned(),
                 "Wages".to_owned(),
                 "7".to_owned(),
-                record.grants[0].citation.clone(),
+                citation,
             )
             .unwrap(),
         ],
@@ -229,8 +169,7 @@ fn witnessed() -> RevisionRecord {
     )
     .unwrap();
     let knowledge = ArchiveKnowledgeV1::try_new(
-        record
-            .grants
+        grants
             .iter()
             .map(|grant| {
                 ArchiveKnowledgeGrantV1::try_new(
@@ -246,35 +185,32 @@ fn witnessed() -> RevisionRecord {
     .unwrap();
     let renderer = FogSafeArchiveRendererV1::new().unwrap();
     let (page, emission) = renderer.render_with_emission(&input, &knowledge).unwrap();
-    record.template_sha256 = renderer.template_sha256();
-    record.content_sha256 = page.sha256();
-    record.markdown = page.markdown().to_owned();
-    record.search_text = page.search_text().to_owned();
-    record.provenance_json = serde_json::to_string(page.citations()).unwrap();
-    record.atoms = crate::archive::mint_page_atoms(
-        record.source.campaign_id(),
-        record.source.tick(),
-        &input,
-        &knowledge,
-    )
-    .unwrap();
-    record.emission = Some(emission);
-    record
+    RevisionRecord {
+        effective_tick: source.tick(),
+        atoms: crate::archive::mint_page_atoms(
+            source.campaign_id(),
+            source.tick(),
+            &input,
+            &knowledge,
+        )
+        .unwrap(),
+        source,
+        subject: subject.page_ref().clone(),
+        title: subject.title().to_owned(),
+        template_sha256: renderer.template_sha256(),
+        content_sha256: page.sha256(),
+        markdown: page.markdown().to_owned(),
+        search_text: page.search_text().to_owned(),
+        provenance_json: serde_json::to_string(page.citations()).unwrap(),
+        grants,
+        emission,
+    }
 }
 
 #[test]
 fn complete_emission_witness_validates_the_actual_renderer_without_rewriting_retained_bytes() {
     let record = witnessed();
     record.validate().unwrap();
-    let digest = record.digest().unwrap();
-    let mut materialized = record.clone();
-    materialized.origin = ArchivePublicationOriginV2::Materialized;
-    materialized.effective_tick = record.source.tick();
-    assert_ne!(materialized.digest().unwrap(), digest);
-    assert_eq!(record.markdown, materialized.markdown);
-    let mut opaque = record.clone();
-    opaque.emission = None;
-    assert_ne!(opaque.digest().unwrap(), digest);
     let mut mismatch = record;
     mismatch.search_text.push('!');
     assert_eq!(
@@ -298,7 +234,6 @@ fn later(original: &RevisionRecord) -> RevisionRecord {
     let mut record = original.clone();
     record.source = ArchiveReadScopeV2::committed(record.source.campaign_id(), 6, [2; 32]).unwrap();
     record.effective_tick = 6;
-    record.origin = ArchivePublicationOriginV2::Materialized;
     record.markdown = record
         .markdown
         .replace("verified_tick: 2", "verified_tick: 6");
@@ -368,7 +303,7 @@ fn changed_value_and_removed_assertion_keep_exact_original_atoms_without_zero_fi
     next.content_sha256 = page.sha256();
     next.search_text = page.search_text().to_owned();
     next.provenance_json = serde_json::to_string(page.citations()).unwrap();
-    next.emission = Some(emission);
+    next.emission = emission;
     next.atoms[1] = atom(&next, "employment", "5");
     next.atoms.pop();
     next.grants.pop();

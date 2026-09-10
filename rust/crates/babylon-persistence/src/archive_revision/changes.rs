@@ -16,8 +16,7 @@ pub(super) fn between(
         previous.validate()?;
         if previous.source.campaign_id() != next.source.campaign_id()
             || previous.subject != next.subject
-            || (previous.effective_tick, previous.origin.tag())
-                >= (next.effective_tick, next.origin.tag())
+            || previous.effective_tick >= next.effective_tick
         {
             return Err(SemanticArchiveErrorV1::StoredPageMismatch);
         }

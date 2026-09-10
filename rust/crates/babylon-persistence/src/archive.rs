@@ -11,18 +11,10 @@ use sha2::{Digest as _, Sha256};
 
 use crate::archive_revision::emission::{ArchiveEmissionLinkV2, ArchiveEmissionManifestV2};
 use crate::identity::CampaignId;
-use crate::migration_manifest::SCHEMA_ADVISORY_LOCK_KEY;
 use crate::postgres_diagnostic::PostgresDiagnosticV1;
 
-/// Exact additive schema used by the semantic Archive worker.
-pub const SEMANTIC_ARCHIVE_SCHEMA_V1_SQL: &str =
-    include_str!("../migrations/semantic_archive_v1.sql");
-/// Exact additive atom schema consumed by the semantic Archive worker
-/// (ADR249 R1/R2); these bytes fold into [`archive_worker_contract_sha256_v1`].
-pub const ARCHIVE_ATOM_SCHEMA_V1_SQL: &str = include_str!("../migrations/archive_atom_v1.sql");
-/// Receipt-processing status view; page bytes and their source ticks stay immutable.
-pub const ARCHIVE_VERIFICATION_SCHEMA_V1_SQL: &str =
-    include_str!("../migrations/archive_verification_v1.sql");
+/// Current Archive schema installed atomically with the material runtime schema.
+pub const CURRENT_ARCHIVE_SCHEMA_SQL: &str = include_str!("../migrations/current_archive.sql");
 const ARCHIVE_PAGE_TEMPLATE_V1: &str = include_str!("archive_page_v1.md.j2");
 const MAX_ID_BYTES: usize = 128;
 const MAX_TEXT_BYTES: usize = 4_096;
@@ -30,30 +22,10 @@ pub(crate) const MAX_SIGNALS: usize = 256;
 pub(crate) const MAX_LINKS: usize = 256;
 const MAX_KNOWLEDGE_GRANTS: usize = 65_535;
 pub(crate) const MAX_PAGE_BYTES: usize = 1_048_576;
-const ARCHIVE_SCHEMA_CONTRACT_ID: &str = "babylon.semantic-archive-schema.v1";
-const ARCHIVE_ATOM_SCHEMA_CONTRACT_ID: &str = "babylon.archive-atom-schema.v1";
 const ARCHIVE_WORKER_DOMAIN_V1: &[u8] = b"babylon.semantic-archive-worker.v1\0";
 const ARCHIVE_DIRTY_BATCH_DOMAIN_V1: &[u8] = b"babylon.semantic-archive-dirty-batch.v1\0";
 const ARCHIVE_KNOWLEDGE_DOMAIN_V1: &[u8] = b"babylon.semantic-archive-knowledge.v1\0";
 const ARCHIVE_ATOM_DOMAIN_V1: &[u8] = b"babylon.semantic-archive-atom.v1\0";
-const ARCHIVE_SCHEMA_MARKERS_SQL_V1: &str = "SELECT \
-    pg_catalog.to_regclass('babylon_meta.semantic_archive_schema_v1') IS NOT NULL, \
-    pg_catalog.to_regclass('babylon_meta.archive_knowledge_grant_v1') IS NOT NULL, \
-    pg_catalog.to_regclass('babylon_meta.archive_receipt_consumption_v1') IS NOT NULL, \
-    pg_catalog.to_regclass('babylon_meta.archive_page_v1') IS NOT NULL, \
-    EXISTS (\
-        SELECT 1 FROM pg_catalog.pg_constraint \
-        WHERE conname = 'archive_page_v1_campaign_id_source_resolve_tick_fkey' \
-          AND conrelid = pg_catalog.to_regclass('babylon_meta.archive_page_v1') \
-          AND confrelid = pg_catalog.to_regclass('babylon_state.archive_dirty_receipt_v1')\
-    )";
-const ARCHIVE_ATOM_SCHEMA_MARKERS_SQL_V1: &str = "SELECT \
-    pg_catalog.to_regclass('babylon_meta.archive_atom_schema_v1') IS NOT NULL, \
-    pg_catalog.to_regclass('babylon_meta.archive_atom_v1') IS NOT NULL, \
-    pg_catalog.to_regclass('babylon_meta.archive_page_atom_v1') IS NOT NULL, \
-    pg_catalog.to_regclass('public.v_archive_page_known_v1') IS NOT NULL, \
-    pg_catalog.to_regclass('public.v_archive_atom_visible') IS NOT NULL, \
-    pg_catalog.to_regclass('public.v_county_card_atoms') IS NOT NULL";
 /// SQL-only knowledge boundary used before any template receives values.
 /// Page-subject knowledge only: seeded concept grants widen the grant table's
 /// subject domain (ADR249 R3/R12) but never enter the page knowledge snapshot.
@@ -739,15 +711,6 @@ impl ArchiveKnowledgeGrantV1 {
     }
 }
 
-/// Idempotent schema-install result.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ArchiveSchemaDispositionV1 {
-    /// The exact additive schema committed now.
-    Installed,
-    /// The exact contract marker and all relations already existed.
-    AlreadyCurrent,
-}
-
 /// Idempotent receipt-consumption result.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ArchiveMaterializeDispositionV1 {
@@ -1219,244 +1182,27 @@ impl SemanticArchiveStoreV1 {
     #[must_use]
     pub fn new(config: &Config) -> Self {
         Self {
-            config: config.clone(),
+            config: crate::current_schema::bounded_config(config),
         }
     }
 
-    /// Install the additive Archive schemas under the shared schema lock.
-    ///
-    /// The base semantic Archive schema and the additive atom schema each
-    /// install idempotently with their own marker census; either one missing
-    /// installs, and the disposition reports `Installed` unless both were
-    /// already byte-current.
+    /// Verify the current runtime schema and its Archive wake hints.
     ///
     /// # Errors
-    /// Refuses partial markers, a wrong contract row, or database failure.
-    pub fn install_schema(&self) -> Result<ArchiveSchemaDispositionV1, SemanticArchiveErrorV1> {
-        let mut client = self.connect("connect Archive revision installer")?;
-        if crate::archive_revision::schema::installed(&mut client)? {
-            let revisions = crate::archive_revision::schema::install(&mut client)?;
-            let wakeup = crate::archive_wakeup::install(&mut client)?;
-            return Ok(
-                if revisions == ArchiveSchemaDispositionV1::Installed
-                    || wakeup == ArchiveSchemaDispositionV1::Installed
-                {
-                    ArchiveSchemaDispositionV1::Installed
-                } else {
-                    ArchiveSchemaDispositionV1::AlreadyCurrent
-                },
-            );
-        }
-        crate::archive_revision::schema::require_empty_campaigns(&mut client)?;
-        let mut disposition = self.install_base_schema()?;
-        if self.install_atom_schema()? == ArchiveSchemaDispositionV1::Installed {
-            disposition = ArchiveSchemaDispositionV1::Installed;
-        }
-        if self.install_verification_view()? == ArchiveSchemaDispositionV1::Installed {
-            disposition = ArchiveSchemaDispositionV1::Installed;
-        }
-        if crate::archive_revision::schema::install(&mut client)?
-            == ArchiveSchemaDispositionV1::Installed
-        {
-            disposition = ArchiveSchemaDispositionV1::Installed;
-        }
-        if crate::archive_wakeup::install(&mut client)? == ArchiveSchemaDispositionV1::Installed {
-            disposition = ArchiveSchemaDispositionV1::Installed;
-        }
-        Ok(disposition)
-    }
-
-    fn install_verification_view(
-        &self,
-    ) -> Result<ArchiveSchemaDispositionV1, SemanticArchiveErrorV1> {
-        let mut client = self.connect("connect Archive verification installer")?;
-        let mut transaction = client
-            .transaction()
-            .map_err(|error| database("begin Archive verification install", &error))?;
-        transaction
-            .query_one(
-                "SELECT pg_catalog.pg_advisory_xact_lock($1)",
-                &[&SCHEMA_ADVISORY_LOCK_KEY],
-            )
-            .map_err(|error| database("lock Archive verification install", &error))?;
-        let row = transaction
-            .query_one(
-                "SELECT pg_catalog.to_regclass('public.v_archive_verification_v1') IS NOT NULL",
-                &[],
-            )
-            .map_err(|error| database("inspect Archive verification view", &error))?;
-        let installed = decode::<bool>(&row, 0)?;
-        if !installed {
-            transaction
-                .batch_execute(ARCHIVE_VERIFICATION_SCHEMA_V1_SQL)
-                .map_err(|error| database("install Archive verification view", &error))?;
-        }
-        transaction
-            .commit()
-            .map_err(|error| database("commit Archive verification install", &error))?;
-        Ok(if installed {
-            ArchiveSchemaDispositionV1::AlreadyCurrent
-        } else {
-            ArchiveSchemaDispositionV1::Installed
-        })
-    }
-
-    /// Install the additive base semantic Archive schema under the shared
-    /// schema lock.
-    ///
-    /// # Errors
-    /// Refuses partial markers, a wrong contract row, or database failure.
-    pub fn install_base_schema(
-        &self,
-    ) -> Result<ArchiveSchemaDispositionV1, SemanticArchiveErrorV1> {
-        let mut client = self.connect("connect Archive schema installer")?;
-        client
-            .query_one(
-                "SELECT pg_catalog.pg_advisory_lock($1)",
-                &[&SCHEMA_ADVISORY_LOCK_KEY],
-            )
-            .map_err(|error| database("lock Archive schema installer", &error))?;
-        let result = (|| {
-            let row = client
-                .query_one(ARCHIVE_SCHEMA_MARKERS_SQL_V1, &[])
-                .map_err(|error| database("inspect Archive schema markers", &error))?;
-            let markers = [
-                decode::<bool>(&row, 0)?,
-                decode::<bool>(&row, 1)?,
-                decode::<bool>(&row, 2)?,
-                decode::<bool>(&row, 3)?,
-            ];
-            let page_fk_current = decode::<bool>(&row, 4)?;
-            if markers == [false; 4] && !page_fk_current {
-                let mut transaction = client
-                    .build_transaction()
-                    .isolation_level(IsolationLevel::Serializable)
-                    .start()
-                    .map_err(|error| database("begin Archive schema install", &error))?;
-                transaction
-                    .batch_execute(
-                        "SET LOCAL search_path TO pg_catalog; SET LOCAL synchronous_commit TO on",
-                    )
-                    .map_err(|error| database("set Archive schema install settings", &error))?;
-                transaction
-                    .batch_execute(SEMANTIC_ARCHIVE_SCHEMA_V1_SQL)
-                    .map_err(|error| database("install Archive schema", &error))?;
-                transaction
-                    .commit()
-                    .map_err(|error| database("commit Archive schema", &error))?;
-                Ok(ArchiveSchemaDispositionV1::Installed)
-            } else if markers == [true; 4] {
-                let row = client
-                    .query_one(
-                        "SELECT contract_id FROM babylon_meta.semantic_archive_schema_v1",
-                        &[],
-                    )
-                    .map_err(|error| database("read Archive schema contract", &error))?;
-                let contract_id: String = decode(&row, 0)?;
-                if contract_id != ARCHIVE_SCHEMA_CONTRACT_ID {
-                    return Err(SemanticArchiveErrorV1::SchemaMismatch);
-                }
-                if !page_fk_current {
-                    return Err(SemanticArchiveErrorV1::SchemaMismatch);
-                }
-                Ok(ArchiveSchemaDispositionV1::AlreadyCurrent)
-            } else {
-                Err(SemanticArchiveErrorV1::PartialSchema)
-            }
-        })();
-        let unlock = client
-            .query_one(
-                "SELECT pg_catalog.pg_advisory_unlock($1)",
-                &[&SCHEMA_ADVISORY_LOCK_KEY],
-            )
-            .and_then(|row| row.try_get::<_, bool>(0))
-            .map_err(|error| database("unlock Archive schema installer", &error));
-        match (result, unlock) {
-            (Err(error), _) | (Ok(_), Err(error)) => Err(error),
-            (Ok(disposition), Ok(true)) => Ok(disposition),
-            (Ok(_), Ok(false)) => Err(SemanticArchiveErrorV1::SchemaMismatch),
-        }
-    }
-
-    /// Install the additive Archive atom schema under the shared schema lock.
-    ///
-    /// The atom schema widens the knowledge-grant subject domain to concepts,
-    /// so the base semantic Archive schema must already be installed. The
-    /// fog-safe views land in the `public` schema (never `babylon_meta`) with
-    /// guarded reader grants.
-    ///
-    /// # Errors
-    /// Refuses partial markers, a wrong contract row, or database failure.
-    pub fn install_atom_schema(
-        &self,
-    ) -> Result<ArchiveSchemaDispositionV1, SemanticArchiveErrorV1> {
-        let mut client = self.connect("connect Archive atom schema installer")?;
-        client
-            .query_one(
-                "SELECT pg_catalog.pg_advisory_lock($1)",
-                &[&SCHEMA_ADVISORY_LOCK_KEY],
-            )
-            .map_err(|error| database("lock Archive atom schema installer", &error))?;
-        let result = (|| {
-            let row = client
-                .query_one(ARCHIVE_ATOM_SCHEMA_MARKERS_SQL_V1, &[])
-                .map_err(|error| database("inspect Archive atom schema markers", &error))?;
-            let markers = [
-                decode::<bool>(&row, 0)?,
-                decode::<bool>(&row, 1)?,
-                decode::<bool>(&row, 2)?,
-                decode::<bool>(&row, 3)?,
-                decode::<bool>(&row, 4)?,
-                decode::<bool>(&row, 5)?,
-            ];
-            if markers == [false; 6] {
-                let mut transaction = client
-                    .build_transaction()
-                    .isolation_level(IsolationLevel::Serializable)
-                    .start()
-                    .map_err(|error| database("begin Archive atom schema install", &error))?;
-                transaction
-                    .batch_execute(
-                        "SET LOCAL search_path TO pg_catalog; SET LOCAL synchronous_commit TO on",
-                    )
-                    .map_err(|error| {
-                        database("set Archive atom schema install settings", &error)
-                    })?;
-                transaction
-                    .batch_execute(ARCHIVE_ATOM_SCHEMA_V1_SQL)
-                    .map_err(|error| database("install Archive atom schema", &error))?;
-                transaction
-                    .commit()
-                    .map_err(|error| database("commit Archive atom schema install", &error))?;
-                Ok(ArchiveSchemaDispositionV1::Installed)
-            } else if markers == [true; 6] {
-                let row = client
-                    .query_one(
-                        "SELECT contract_id FROM babylon_meta.archive_atom_schema_v1",
-                        &[],
-                    )
-                    .map_err(|error| database("read Archive atom schema contract", &error))?;
-                let contract_id: String = decode(&row, 0)?;
-                if contract_id != ARCHIVE_ATOM_SCHEMA_CONTRACT_ID {
-                    return Err(SemanticArchiveErrorV1::SchemaMismatch);
-                }
-                Ok(ArchiveSchemaDispositionV1::AlreadyCurrent)
-            } else {
-                Err(SemanticArchiveErrorV1::PartialSchema)
-            }
-        })();
-        let unlock = client
-            .query_one(
-                "SELECT pg_catalog.pg_advisory_unlock($1)",
-                &[&SCHEMA_ADVISORY_LOCK_KEY],
-            )
-            .and_then(|row| row.try_get::<_, bool>(0))
-            .map_err(|error| database("unlock Archive atom schema installer", &error));
-        match (result, unlock) {
-            (Err(error), _) | (Ok(_), Err(error)) => Err(error),
-            (Ok(disposition), Ok(true)) => Ok(disposition),
-            (Ok(_), Ok(false)) => Err(SemanticArchiveErrorV1::SchemaMismatch),
-        }
+    /// Refuses unsupported schema identity, altered wake hints,
+    /// or database failure. Schema creation belongs to the atomic runtime bootstrap.
+    pub fn verify_schema(&self) -> Result<(), SemanticArchiveErrorV1> {
+        let mut client = self.connect("connect Archive schema verifier")?;
+        let mut tx = client
+            .build_transaction()
+            .isolation_level(IsolationLevel::RepeatableRead)
+            .start()
+            .map_err(|error| database("begin Archive schema verification", &error))?;
+        crate::current_schema::require_current_schema(&mut tx)
+            .map_err(SemanticArchiveErrorV1::CurrentSchema)?;
+        crate::archive_wakeup::validate(&mut tx)?;
+        tx.commit()
+            .map_err(|error| database("commit Archive schema verification", &error))
     }
 
     /// Insert one immutable subject or field knowledge grant.
@@ -1518,17 +1264,11 @@ impl SemanticArchiveStoreV1 {
 /// Hash the exact schema and template inputs used by the idempotent worker.
 #[must_use]
 pub fn archive_worker_contract_sha256_v1() -> [u8; 32] {
-    let mut bytes = Vec::with_capacity(
-        ARCHIVE_WORKER_DOMAIN_V1.len()
-            + SEMANTIC_ARCHIVE_SCHEMA_V1_SQL.len()
-            + ARCHIVE_ATOM_SCHEMA_V1_SQL.len()
-            + ARCHIVE_PAGE_TEMPLATE_SHA256_V1.len(),
-    );
-    bytes.extend_from_slice(ARCHIVE_WORKER_DOMAIN_V1);
-    bytes.extend_from_slice(SEMANTIC_ARCHIVE_SCHEMA_V1_SQL.as_bytes());
-    bytes.extend_from_slice(ARCHIVE_ATOM_SCHEMA_V1_SQL.as_bytes());
-    bytes.extend_from_slice(&ARCHIVE_PAGE_TEMPLATE_SHA256_V1);
-    sha256_of(&bytes)
+    let mut hash = Sha256::new();
+    hash.update(ARCHIVE_WORKER_DOMAIN_V1);
+    hash.update(CURRENT_ARCHIVE_SCHEMA_SQL.as_bytes());
+    hash.update(ARCHIVE_PAGE_TEMPLATE_SHA256_V1);
+    hash.finalize().into()
 }
 
 /// Insert one immutable knowledge-grant row by exact subject kind and id.
@@ -1979,16 +1719,12 @@ pub enum SemanticArchiveErrorV1 {
     GrantConflict,
     /// A history cursor belongs to another scope or unfinished composition.
     ArchiveCursorMismatch,
-    /// A worker attempted to pass an earlier pending receipt or unsealed cutover.
+    /// A worker attempted to pass an earlier pending receipt.
     ArchiveOrderViolation,
-    /// A producer cannot prove the complete cutover subject domain.
-    ArchiveCoverageUnavailable,
-    /// Only part of the additive Archive schema exists.
-    PartialSchema,
-    /// The Archive schema marker or unlock result was not exact.
+    /// The Archive wakeup shape or advisory unlock result was not exact.
     SchemaMismatch,
-    /// Existing campaigns lack the current revision schema and cannot be adopted.
-    RevisionSchemaAbsentForExistingCampaigns,
+    /// The runtime schema is absent, unsupported, or altered.
+    CurrentSchema(crate::CurrentSchemaError),
     /// A stored page, digest, kind, tick, or provenance row was malformed.
     StoredPageMismatch,
     /// A pinned reference-artifact digest diverged from its contract-pinned value.

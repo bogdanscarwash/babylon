@@ -1,13 +1,13 @@
-//! Exact revision row persistence, shared by adoption and live publication.
+//! Exact immutable publication persistence for the writer and confined reader.
 
 use postgres::{GenericClient, Row};
 
 use super::record::{GrantDependency, RevisionRecord};
-use super::{ArchivePublicationOriginV2, ArchiveReadScopeV2};
+use super::ArchiveReadScopeV2;
 use crate::archive::{database, decode, decode_digest, decode_stored_atom, decode_subject_kind};
 use crate::{ArchiveCitationV1, ArchivePageRefV1, CampaignId, SemanticArchiveErrorV1};
 
-pub(super) const COLUMNS: &str = "campaign_id, subject_kind, subject_id, effective_tick, origin, \
+pub(super) const COLUMNS: &str = "campaign_id, subject_kind, subject_id, effective_tick, \
     source_tick, source_content_hash, template_sha256, content_sha256, revision_sha256, \
     title, markdown, search_text, provenance_json, atom_count, grant_count, emission_json";
 const ATOM_COLUMNS: &str =
@@ -16,7 +16,7 @@ const ATOM_COLUMNS: &str =
     atom.value_u64, atom.value_bool, atom.provenance_source_id, atom.provenance_locator, \
     atom.valid_tick, atom.atom_id, membership.position";
 const KEY_PREDICATE: &str = "campaign_id=$1 AND subject_kind=$2 AND subject_id=$3 \
-    AND effective_tick=$4 AND origin=$5";
+    AND effective_tick=$4";
 
 #[derive(Clone, Copy)]
 pub(super) enum ReadAuthority {
@@ -59,7 +59,6 @@ pub(super) fn load(
                 &record.subject.kind().as_str(),
                 &record.subject.id(),
                 &tick,
-                &record.origin.tag(),
             ],
         )
         .map_err(|error| database("read retained Archive revision", &error))?;
@@ -81,26 +80,22 @@ pub(super) fn decode_record(
     let mut record = RevisionRecord {
         source: ArchiveReadScopeV2::committed(
             campaign,
-            unsigned(decode(row, 5)?)?,
-            decode_digest(row, 6)?,
+            unsigned(decode(row, 4)?)?,
+            decode_digest(row, 5)?,
         )?,
         subject,
         effective_tick: unsigned(decode(row, 3)?)?,
-        origin: ArchivePublicationOriginV2::from_tag(decode(row, 4)?)?,
-        template_sha256: decode_digest(row, 7)?,
-        content_sha256: decode_digest(row, 8)?,
-        title: decode(row, 10)?,
-        markdown: decode(row, 11)?,
-        search_text: decode(row, 12)?,
-        provenance_json: decode(row, 13)?,
+        template_sha256: decode_digest(row, 6)?,
+        content_sha256: decode_digest(row, 7)?,
+        title: decode(row, 9)?,
+        markdown: decode(row, 10)?,
+        search_text: decode(row, 11)?,
+        provenance_json: decode(row, 12)?,
         atoms: Vec::new(),
         grants: Vec::new(),
-        emission: decode::<Option<String>>(row, 16)?
-            .as_deref()
-            .map(super::emission::ArchiveEmissionManifestV2::decode)
-            .transpose()?,
+        emission: super::emission::ArchiveEmissionManifestV2::decode(&decode::<String>(row, 15)?)?,
     };
-    let counts = (decode::<i32>(row, 14)?, decode::<i32>(row, 15)?);
+    let counts = (decode::<i32>(row, 13)?, decode::<i32>(row, 14)?);
     if !(1..=513).contains(&counts.0) || !(1..=513).contains(&counts.1) {
         return Err(SemanticArchiveErrorV1::StoredPageMismatch);
     }
@@ -109,7 +104,7 @@ pub(super) fn decode_record(
         != usize::try_from(counts.0).map_err(|_| SemanticArchiveErrorV1::CollectionBound)?
         || record.grants.len()
             != usize::try_from(counts.1).map_err(|_| SemanticArchiveErrorV1::CollectionBound)?
-        || record.digest()? != decode_digest(row, 9)?
+        || record.digest()? != decode_digest(row, 8)?
     {
         return Err(SemanticArchiveErrorV1::StoredPageMismatch);
     }
@@ -127,7 +122,7 @@ fn read_membership(
         ReadAuthority::Writer => format!("SELECT {ATOM_COLUMNS} FROM babylon_meta.archive_revision_atom_v2 membership \
             JOIN babylon_meta.archive_atom_v1 atom USING(atom_id) WHERE membership.campaign_id=$1 \
             AND membership.subject_kind=$2 AND membership.subject_id=$3 AND membership.effective_tick=$4 \
-            AND membership.origin=$5 ORDER BY membership.position LIMIT 514"),
+            ORDER BY membership.position LIMIT 514"),
         ReadAuthority::Confined => format!("SELECT {} FROM public.v_archive_revision_atom_v2 atom \
             WHERE {KEY_PREDICATE} ORDER BY position LIMIT 514", ATOM_COLUMNS.replace("membership.position", "atom.position")),
     };
@@ -136,7 +131,6 @@ fn read_membership(
         &record.subject.kind().as_str(),
         &record.subject.id(),
         &tick,
-        &record.origin.tag(),
     ];
     let atoms = client
         .query(&atom_query, params)
@@ -195,24 +189,19 @@ pub(super) fn insert(
         i32::try_from(record.atoms.len()).map_err(|_| SemanticArchiveErrorV1::CollectionBound)?;
     let grants =
         i32::try_from(record.grants.len()).map_err(|_| SemanticArchiveErrorV1::CollectionBound)?;
-    let emission = record
-        .emission
-        .as_ref()
-        .map(super::emission::ArchiveEmissionManifestV2::encode)
-        .transpose()?;
+    let emission = record.emission.encode()?;
     let inserted = client
         .execute(
             &format!(
                 "INSERT INTO babylon_meta.archive_page_revision_v2 ({COLUMNS}) \
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) \
-        ON CONFLICT (campaign_id,subject_kind,subject_id,effective_tick,origin) DO NOTHING"
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) \
+        ON CONFLICT (campaign_id,subject_kind,subject_id,effective_tick) DO NOTHING"
             ),
             &[
                 campaign.as_uuid(),
                 &record.subject.kind().as_str(),
                 &record.subject.id(),
                 &effective,
-                &record.origin.tag(),
                 &source,
                 &&source_hash[..],
                 &&record.template_sha256[..],
@@ -250,14 +239,13 @@ fn insert_membership(
         client
             .execute(
                 "INSERT INTO babylon_meta.archive_revision_atom_v2 \
-            (campaign_id,subject_kind,subject_id,effective_tick,origin,position,atom_id) \
-            VALUES ($1,$2,$3,$4,$5,$6,$7)",
+            (campaign_id,subject_kind,subject_id,effective_tick,position,atom_id) \
+            VALUES ($1,$2,$3,$4,$5,$6)",
                 &[
                     campaign.as_uuid(),
                     &record.subject.kind().as_str(),
                     &record.subject.id(),
                     &effective,
-                    &record.origin.tag(),
                     &position,
                     &&atom.atom_id()[..],
                 ],
@@ -268,14 +256,27 @@ fn insert_membership(
         let position =
             i32::try_from(position).map_err(|_| SemanticArchiveErrorV1::CollectionBound)?;
         let granted = signed(grant.granted_tick)?;
-        client.execute("INSERT INTO babylon_meta.archive_revision_grant_v2 \
-            (campaign_id,subject_kind,subject_id,effective_tick,origin,position,grant_subject_kind, \
+        client
+            .execute(
+                "INSERT INTO babylon_meta.archive_revision_grant_v2 \
+            (campaign_id,subject_kind,subject_id,effective_tick,position,grant_subject_kind, \
             grant_subject_id,grant_key,granted_tick,provenance_source_id,provenance_locator) \
-            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)",
-            &[campaign.as_uuid(), &record.subject.kind().as_str(), &record.subject.id(), &effective,
-            &record.origin.tag(), &position, &grant.subject.kind().as_str(), &grant.subject.id(),
-            &grant.key, &granted, &grant.citation.source_id(), &grant.citation.locator()],
-        ).map_err(|error| database("insert immutable Archive grant dependency", &error))?;
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)",
+                &[
+                    campaign.as_uuid(),
+                    &record.subject.kind().as_str(),
+                    &record.subject.id(),
+                    &effective,
+                    &position,
+                    &grant.subject.kind().as_str(),
+                    &grant.subject.id(),
+                    &grant.key,
+                    &granted,
+                    &grant.citation.source_id(),
+                    &grant.citation.locator(),
+                ],
+            )
+            .map_err(|error| database("insert immutable Archive grant dependency", &error))?;
     }
     Ok(())
 }

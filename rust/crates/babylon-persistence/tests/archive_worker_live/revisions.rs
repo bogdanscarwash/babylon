@@ -245,7 +245,7 @@ fn live_late_grant_stays_pending_at_tail_and_never_rewrites_old_tick() {
 
 #[test]
 #[ignore = "requires the task-owned disposable PostgreSQL runtime and committed ticks"]
-fn live_revision_install_refuses_existing_campaign_without_current_schema() {
+fn live_archive_verifier_refuses_missing_current_schema_without_repair() {
     let target = LiveWorkerTarget::create(
         "revisionmissing",
         0x2200_0000_0000_0000_0000_0000_0000_00d3,
@@ -257,20 +257,58 @@ fn live_revision_install_refuses_existing_campaign_without_current_schema() {
         .connect(NoTls)
         .expect("owned incomplete-schema fixture");
     admin
-        .batch_execute("DROP TABLE babylon_meta.archive_revision_schema_v2")
-        .expect("remove only the owned scratch revision marker");
-    assert_eq!(
-        SemanticArchiveStoreV1::new(&target.config).install_schema(),
-        Err(SemanticArchiveErrorV1::RevisionSchemaAbsentForExistingCampaigns)
-    );
+        .batch_execute("DROP TABLE babylon_meta.current_schema")
+        .expect("remove only the owned scratch current schema marker");
+    assert!(matches!(
+        SemanticArchiveStoreV1::new(&target.config).verify_schema(),
+        Err(SemanticArchiveErrorV1::CurrentSchema(_))
+    ));
     assert_eq!(scope_at(&target.config, target.campaign_id, 1), scope);
     let absent: bool = admin
         .query_one(
-            "SELECT pg_catalog.to_regclass('babylon_meta.archive_revision_schema_v2') IS NULL",
+            "SELECT pg_catalog.to_regclass('babylon_meta.current_schema') IS NULL",
             &[],
         )
         .expect("refusal leaves the missing marker absent")
         .get(0);
     assert!(absent);
+    target.finish();
+}
+
+#[test]
+#[ignore = "requires the task-owned disposable PostgreSQL runtime"]
+fn live_archive_atom_schema_rejects_every_non_finite_numeric_value() {
+    let target = LiveWorkerTarget::create(
+        "archivefinite",
+        0x2200_0000_0000_0000_0000_0000_0000_00e9,
+        1,
+    );
+    let mut writer = target.config.connect(NoTls).expect("atom constraint probe");
+    let insert = "INSERT INTO babylon_meta.archive_atom_v1 \
+        (atom_id,campaign_id,subject_kind,subject_id,signal_key,grant_key,evidence_class,\
+        value_kind,value_f64,provenance_source_id,provenance_locator,valid_tick) \
+        VALUES($1,$2,'county','26163','employment','employment','Observed',\
+        'f64',$3,'qcew-2024','county/26163',1)";
+    for value in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+        let error = writer
+            .execute(
+                insert,
+                &[&&[0x91_u8; 32][..], target.campaign_id.as_uuid(), &value],
+            )
+            .expect_err("SQL must reject non-finite atoms independently of the Rust encoder");
+        assert_eq!(
+            error.code(),
+            Some(&postgres::error::SqlState::CHECK_VIOLATION)
+        );
+    }
+    assert_eq!(
+        writer
+            .execute(
+                insert,
+                &[&&[0x91_u8; 32][..], target.campaign_id.as_uuid(), &0.0_f64]
+            )
+            .expect("finite zero remains a valid numeric observation"),
+        1
+    );
     target.finish();
 }
