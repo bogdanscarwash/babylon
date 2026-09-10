@@ -951,7 +951,7 @@ fn bifurcation_routes_by_solidarity_density() {
         let env = EvalEnv {
             bindings: env_map,
             intrinsic_costs: &costs,
-            graph: None,
+            graph: Some(&graph),
             types: None,
             enums: None,
             elements: Vec::new(),
@@ -972,19 +972,15 @@ fn bifurcation_routes_by_solidarity_density() {
             })
             .unwrap();
         let registries = registries();
-        let mut executor = EffectExecutor::new(&registries.types, &registries.enums, None);
+        let mut executor = EffectExecutor::new(&registries.types, &registries.enums);
         let mut sink = CollectingSink::default();
         let mut fuel = 512;
-        executor
-            .execute_effects(
-                effects,
-                &env,
-                &EmptyIntrinsicHost,
-                &mut graph,
-                &mut sink,
-                &mut fuel,
-            )
+        let pending = executor
+            .collect_effects(effects, &env, &EmptyIntrinsicHost, &mut sink, &mut fuel)
             .unwrap();
+        for write in &pending {
+            executor.apply_pending_write(write, &mut graph).unwrap();
+        }
         let after = graph.node_attribute(self_id, touched_field).unwrap();
         assert!(
             (after - (before + 0.15)).abs() < 1e-12,

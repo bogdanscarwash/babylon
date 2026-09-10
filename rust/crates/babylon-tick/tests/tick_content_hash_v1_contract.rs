@@ -15,8 +15,7 @@ use babylon_kernel::tick_content_hash::{
     StableWorldDigestV1, TickContentPartsV1, TickContentPreimageV1, TickPayloadDigestV1,
 };
 use babylon_kernel::{
-    seed_for, seed_for_v2, sha256_of, ContentDigest, Currency, H3CellId, H3CellIdError, KernelRng,
-    Ratio, SessionId,
+    seed_for, sha256_of, ContentDigest, Currency, H3CellId, H3CellIdError, KernelRng, Ratio,
 };
 use babylon_practice_contract::ordered_action_v1::OrderedPracticeActionBatchV1;
 use serde::Deserialize;
@@ -28,7 +27,7 @@ mod contract_support;
 const VECTORS: &str = include_str!("../../../../contracts/tick_content_hash_v1_vectors.jsonl");
 const MAX_ROWS: usize = 256;
 const MAX_LINE_BYTES: usize = 262_144;
-const REQUIRED_FAMILIES: [&str; 20] = [
+const REQUIRED_FAMILIES: [&str; 19] = [
     "action_id",
     "bsl_discriminant",
     "carrier_segment",
@@ -41,7 +40,6 @@ const REQUIRED_FAMILIES: [&str; 20] = [
     "replay_seed",
     "replay_session",
     "resolver_manifest",
-    "rng_v1",
     "rng_v2",
     "stable_element",
     "stable_carrier_key",
@@ -490,34 +488,8 @@ fn stable_bsl_projection_reuses_the_governed_stable_element_bytes() {
 }
 
 #[test]
-fn production_rng_matches_both_language_neutral_vectors() {
+fn production_rng_matches_the_language_neutral_vector() {
     let vectors = rows();
-    let v1 = &row(&vectors, "rng_v1").data;
-    let session = SessionId::new(text(v1, "session")).expect("current session");
-    assert_eq!(
-        seed_for(
-            &session,
-            unsigned(v1, "tick"),
-            text(v1, "domain"),
-            text(v1, "carrier")
-        ),
-        hex32(text(v1, "stream_seed_hex"))
-    );
-    let mut rng = KernelRng::for_carrier(
-        &session,
-        unsigned(v1, "tick"),
-        text(v1, "domain"),
-        text(v1, "carrier"),
-    );
-    for expected in v1["first_four_u64"]
-        .as_array()
-        .expect("V1 draws")
-        .iter()
-        .take(4)
-    {
-        assert_eq!(rng.next_u64(), expected.as_u64().expect("u64 draw"));
-    }
-
     let v2 = &row(&vectors, "rng_v2").data;
     let replay = ReplaySessionIdV1::try_from(text(v2, "session")).expect("replay session");
     let seed = ReplaySeed::new(integer(v2, "seed"));
@@ -573,7 +545,7 @@ fn production_rng_matches_both_language_neutral_vectors() {
         hex_bytes(text(&carrier_row.data, "canonical_hex"))
     );
     assert_eq!(
-        seed_for_v2(
+        seed_for(
             &replay,
             seed,
             unsigned(v2, "tick"),
@@ -583,7 +555,7 @@ fn production_rng_matches_both_language_neutral_vectors() {
         .expect("V2 key"),
         hex32(text(v2, "stream_seed_hex"))
     );
-    let mut rng = KernelRng::for_carrier_v2(
+    let mut rng = KernelRng::for_carrier(
         &replay,
         seed,
         unsigned(v2, "tick"),
@@ -599,15 +571,6 @@ fn production_rng_matches_both_language_neutral_vectors() {
     {
         assert_eq!(rng.next_u64(), expected.as_u64().expect("u64 draw"));
     }
-    let mut fresh = KernelRng::for_carrier_v2(
-        &replay,
-        seed,
-        unsigned(v2, "tick"),
-        &domain,
-        carrier.validated_bytes(),
-    )
-    .expect("fresh V2 stream");
-    assert_eq!(fresh.next_f64().to_bits(), unsigned(v2, "fresh_f64_bits"));
 }
 
 #[test]

@@ -80,7 +80,6 @@ impl Fixture {
             StaffingEffectContextV1 {
                 types: &self.types,
                 enums: &self.enums,
-                vocabulary: None,
                 resolver: &self.resolver,
             },
             composition,
@@ -480,7 +479,6 @@ fn missing_node_fields_wrong_owners_and_foreign_scopes_refuse() {
         &StaffingEffectContextV1 {
             types: &fixture.types,
             enums: &fixture.enums,
-            vocabulary: None,
             resolver: &fixture.resolver
         }
     )
@@ -642,7 +640,6 @@ fn dropping_a_successful_detached_candidate_does_not_publish_its_writes() {
         StaffingEffectContextV1 {
             types: &fixture.types,
             enums: &fixture.enums,
-            vocabulary: None,
             resolver: &fixture.resolver,
         },
         &composition,

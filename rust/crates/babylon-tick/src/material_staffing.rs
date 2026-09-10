@@ -18,7 +18,6 @@ use babylon_bsl::structural_verbs::{
 };
 use babylon_bsl::typecheck::TypeEnv;
 use babylon_bsl::types::{BslType, EnumRegistry, FieldKind};
-use babylon_bsl::vocabulary::ClosedVocabulary;
 use babylon_bsl::write_log::{CollectingWriteLog, WriteRecord};
 use babylon_graph::stable_element::{
     StableElementKeyV1, StableElementResolverV1, StableIdentityError,
@@ -189,7 +188,6 @@ impl StaffingCompositionV1 {
 pub struct StaffingEffectContextV1<'a> {
     pub types: &'a TypeEnv,
     pub enums: &'a EnumRegistry,
-    pub vocabulary: Option<&'a ClosedVocabulary>,
     pub resolver: &'a StableElementResolverV1,
 }
 
@@ -435,7 +433,6 @@ pub fn apply_material_staffing_v1(
         let mut executor = EffectExecutor::observed(
             context.types,
             context.enums,
-            context.vocabulary,
             STAFFING_COMPOSITION_ID_V1,
             &mut log,
         );

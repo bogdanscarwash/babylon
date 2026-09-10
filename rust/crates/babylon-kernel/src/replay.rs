@@ -2,7 +2,6 @@
 //!
 //! These values define the database-free replay boundary. They intentionally
 //! have no conversion to campaign, persistence, or graph identities.
-use crate::clock::SessionId;
 use std::collections::TryReserveError;
 
 const MIN_REPLAY_SESSION_BYTES: usize = 1;
@@ -139,8 +138,6 @@ impl ReplaySeed {
 /// The governed RNG layouts parsed once at the replay boundary.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum RngLayoutVersion {
-    /// The frozen current `TickSession` layout.
-    V1,
     /// The seed-aware replay layout.
     V2,
 }
@@ -150,7 +147,6 @@ impl TryFrom<u32> for RngLayoutVersion {
 
     fn try_from(value: u32) -> Result<Self, Self::Error> {
         match value {
-            1 => Ok(Self::V1),
             2 => Ok(Self::V2),
             _ => Err(ReplayIdentityError::UnsupportedRngLayoutVersion { value }),
         }
@@ -198,19 +194,11 @@ impl TryFrom<&str> for RngDomainV2 {
 /// The typed context that prevents replay callers from selecting an unparsed
 /// numeric RNG layout.
 #[derive(Debug, Clone, Copy)]
-pub enum RngSeedContext<'a> {
-    /// Frozen V1 derivation using the current `TickSession` identity.
-    V1 {
-        /// The current `TickSession` session identity.
-        session: &'a SessionId,
-    },
-    /// V2 derivation using the replay session and explicit replay seed.
-    V2 {
-        /// The checked replay session identity.
-        session: &'a ReplaySessionIdV1,
-        /// The explicit replay seed.
-        seed: ReplaySeed,
-    },
+pub struct RngSeedContext<'a> {
+    /// The checked replay session identity.
+    pub session: &'a ReplaySessionIdV1,
+    /// The explicit replay seed.
+    pub seed: ReplaySeed,
 }
 
 fn validate_rng_domain_qname(value: &[u8]) -> Result<(), ReplayIdentityError> {

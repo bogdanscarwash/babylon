@@ -1,154 +1,98 @@
-//! `TickSession` — the persistent load-once, advance-many seam B2 needs,
-//! now multi-rule (Phase A, Tasks 2-4). `run_once`/`run_once_into`
-//! (`lib.rs`) model one tick end to end and hardcode `run_tick`'s tick
-//! argument to `1` for every rule the content set holds; a player-driven
-//! loop needs the split this type provides instead: parse and load cost
-//! paid ONCE in `new`, the SAME `PreparedRules` and the SAME graph reused
-//! by every `advance()` call, every rule in the content set run once per
-//! call in the governed 34-slot causal order, with `tick` incremented by
-//! this type. D16's ascending rule-ID byte order breaks ties at one resolved
-//! position.
+//! Graph-only diagnostics use the same seeded, sealed rule transaction as campaign replay.
+//! They report graph/events without inventing geographic material inputs or durable commit identity.
 
-use crate::{prepare_rules, run_prepared_tick, PreparedRules, TickReport};
+use crate::{prepare_rules, run_prepared_tick_with, PreparedRules, TickReport};
 use babylon_bsl::structural_verbs::CollectingSink;
 use babylon_graph::allocator_state::AllocatorState;
+use babylon_graph::stable_element::StableElementResolverV1;
 use babylon_graph::state_hash::CanonicalState;
 use babylon_graph::substrate::GraphSubstrate;
 use babylon_graph::working_copy::DetachedCopy;
-use babylon_kernel::SessionId;
+use babylon_kernel::replay::{ReplaySeed, ReplaySessionIdV1, RngSeedContext};
 
-/// One content set, loaded once, advanced tick by tick against ONE held
-/// graph. `G` is caller-supplied (same shape as `run_once_into`) so the
-/// caller picks the substrate — production callers pass `HypergraphStore`
-/// (ADR193).
-pub struct TickSession<G> {
+/// A loaded scenario/rule diagnostic with explicit reproducible inputs.
+pub struct RuleDiagnosticSession<G> {
     graph: G,
     prepared: PreparedRules,
     tick: i64,
-    /// Deterministic identity for the legacy V1 non-replay execution path.
-    /// It is constant for this session's whole lifetime, unlike `tick`,
-    /// which `advance()` increments. Finite kernels require the governed V2
-    /// replay path and therefore refuse from this session type.
-    session: SessionId,
+    session: ReplaySessionIdV1,
+    seed: ReplaySeed,
+    resolver: StableElementResolverV1,
 }
 
-impl<G: GraphSubstrate + CanonicalState + AllocatorState + DetachedCopy> TickSession<G> {
-    /// Parse `rule_src` (one or more `(rule …)` forms) and load
-    /// `scenario_src` into `graph` once. `prepare_rules` compiles the forms
-    /// into governed phase order before this returns — the caller's own
-    /// concatenation order is never observable.
-    ///
-    /// `session` is a caller-supplied deterministic namespace for the V1
-    /// execution context (III.7: never a UUID or wall-clock read). It does
-    /// not authorize a finite draw; content containing `choose` must run in
-    /// [`crate::replay_session::ReplayTickSession`].
+impl<G: GraphSubstrate + CanonicalState + AllocatorState + DetachedCopy> RuleDiagnosticSession<G> {
+    /// Load and seal a diagnostic. No campaign, player action, or geographic state is implied.
     ///
     /// # Errors
-    /// The same failure modes `run_once_into`'s load half has: an
-    /// intrinsic declaration, a scenario load, or a rule load — named to
-    /// its own rule id when more than one rule is present.
+    /// Refuses invalid content or graph identities before any tick can execute.
     pub fn new(
-        scenario_src: &str,
-        rule_src: &str,
+        scenario: &str,
+        prelude: Option<&str>,
+        rules: &str,
         mut graph: G,
-        session: SessionId,
+        session: ReplaySessionIdV1,
+        seed: ReplaySeed,
     ) -> Result<Self, String> {
-        // Train B item 4 (#591, D157): no prelude — `Self::new_with_prelude`
-        // (below) is the prelude-threaded sibling.
         let prepared =
-            prepare_rules(scenario_src, None, rule_src, &mut graph).map_err(|e| e.to_string())?;
+            prepare_rules(scenario, prelude, rules, &mut graph).map_err(|e| e.to_string())?;
+        let resolver = StableElementResolverV1::seal(
+            &graph,
+            &prepared.scenario_scope,
+            &prepared.node_content_ids,
+            &prepared.hyperedge_content_ids,
+        )
+        .map_err(|error| format!("diagnostic identity refused: {error:?}"))?;
         Ok(Self {
             graph,
             prepared,
             tick: 0,
             session,
+            seed,
+            resolver,
         })
     }
 
-    /// `Self::new`, with the scenario load routed through a **declaration
-    /// prelude** first (Train B item 4, issue #591, D157) — see
-    /// `babylon_bsl::scenario::load_scenario_with_prelude`'s own doc for the
-    /// mechanism. Added alongside `Self::new` because
-    /// `consciousness_ternary_conformance.rs`'s `tick_two_accumulation_witness`
-    /// is a REAL consumer, not speculative surface: once
-    /// `consciousness-ternary-conformance.bscn` stopped re-declaring
-    /// `WorldView` itself (this train), that test's `TickSession::new` call
-    /// needed a prelude too.
+    /// Adjudicate and atomically publish the next graph-only diagnostic tick.
     ///
     /// # Errors
-    /// The same failure modes `Self::new` has, plus the prelude's own (a
-    /// non-declaration top-form, or an unreadable prelude source).
-    pub fn new_with_prelude(
-        scenario_src: &str,
-        prelude_src: &str,
-        rule_src: &str,
-        mut graph: G,
-        session: SessionId,
-    ) -> Result<Self, String> {
-        let prepared = prepare_rules(scenario_src, Some(prelude_src), rule_src, &mut graph)
-            .map_err(|e| e.to_string())?;
-        Ok(Self {
-            graph,
-            prepared,
-            tick: 0,
-            session,
-        })
-    }
-
-    /// Run one more tick against the held graph: every rule in the
-    /// content set in the governed phase order compiled once at load time
-    /// by `prepare_rules`. D16 orders same-position ties by rule-ID bytes.
-    /// Each rule runs to completion before the next starts against the same
-    /// disposable working graph, so a later rule sees an earlier rule's
-    /// writes from this tick. The working graph and its buffered events are
-    /// published together only after every rule and hash succeeds.
-    ///
-    /// ADR224 makes this sequential rule-to-rule behavior explicit. The
-    /// post-phase-compile analyzer accepts reviewed compositions and refuses
-    /// unknown stale-default or unreset-fan-in shapes before this session is
-    /// constructed. Within one rule, subject effects still use the rule's
-    /// shared prestate and collect before apply. The first call runs tick 1
-    /// (matching `run_once`'s own numbering), the second tick 2, and so on.
-    ///
-    /// # Errors
-    /// The tick itself (named to its own rule id), or a pre/post
-    /// schedule/world/graph hash failure, event reservation failure, or a
-    /// checked tick-counter overflow. On any error the graph, caller's
-    /// existing events, and session counter stay unchanged — `tick()` counts
-    /// completed ticks only.
+    /// Any evaluation, identity, hash, event reservation, or counter failure leaves the diagnostic unchanged.
     pub fn advance(&mut self, sink: &mut CollectingSink) -> Result<TickReport, String> {
-        let next_tick = self
+        let next = self
             .tick
             .checked_add(1)
-            .ok_or_else(|| "tick counter overflow before adjudication".to_owned())?;
-        let report = run_prepared_tick(
+            .ok_or("tick counter overflow before adjudication")?;
+        let report = run_prepared_tick_with(
             &self.prepared,
             &mut self.graph,
             sink,
-            &self.session,
-            next_tick,
+            RngSeedContext {
+                session: &self.session,
+                seed: self.seed,
+            },
+            &self.resolver,
+            next,
+            |_boundary, graph| graph.state_hash(),
         )?;
-        self.tick = next_tick;
+        self.tick = next;
         Ok(report)
     }
 
-    /// The current tick number — 0 before the first `advance()` call.
+    /// Number of completed ticks.
     #[must_use]
-    pub fn tick(&self) -> i64 {
+    pub const fn tick(&self) -> i64 {
         self.tick
     }
 
-    /// Read-only access to the held graph — the client's map lens and
-    /// state panel project live state through this.
+    /// The last successfully published graph.
     #[must_use]
-    pub fn graph(&self) -> &G {
+    pub const fn graph(&self) -> &G {
         &self.graph
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::session::TickSession;
+    use crate::diagnostic::RuleDiagnosticSession;
     use crate::{
         run_prepared_tick_with, EventRecord, HashBoundary, PreparedEventBatchSink, TickReport,
     };
@@ -162,7 +106,7 @@ mod tests {
     use babylon_graph::substrate::{GraphError, GraphSubstrate, NodeId};
     use babylon_graph::working_copy::DetachedCopy;
     use babylon_kernel::replay::{ReplaySeed, ReplaySessionIdV1, RngSeedContext};
-    use babylon_kernel::{Currency, SessionId};
+    use babylon_kernel::Currency;
     use std::fmt::Write as _;
     use std::process::Command;
 
@@ -312,11 +256,9 @@ mod tests {
         format!("{VITALITY}\n{LIFECYCLE}")
     }
 
-    /// Fixed deterministic V1 execution namespace for this module's tests.
-    /// These fixtures contain no finite kernel; III.7 still forbids a UUID
-    /// or wall-clock identity.
-    fn test_session() -> SessionId {
-        SessionId::new("tick-session-test").expect("literal is non-empty")
+    /// Fixed replay namespace for reproducible diagnostic fixtures.
+    fn test_session() -> ReplaySessionIdV1 {
+        ReplaySessionIdV1::try_from("tick-session-test").expect("literal is non-empty")
     }
 
     #[derive(Default)]
@@ -359,12 +301,14 @@ mod tests {
     fn run_struggle_spark_with<B: PreparedEventBatchSink>(
         seed: i64,
         publisher: &mut B,
-    ) -> (TickReport, TickSession<HypergraphStore>) {
-        let mut session = TickSession::new(
+    ) -> (TickReport, RuleDiagnosticSession<HypergraphStore>) {
+        let mut session = RuleDiagnosticSession::new(
             STRUGGLE_SPARK_SCENARIO,
+            None,
             STRUGGLE_SPARK_RULES,
             HypergraphStore::new(),
             test_session(),
+            babylon_kernel::replay::ReplaySeed::new(0),
         )
         .expect("the governed Struggle spark pilot loads");
         let resolver = StableElementResolverV1::seal(
@@ -380,11 +324,11 @@ mod tests {
             &session.prepared,
             &mut session.graph,
             publisher,
-            RngSeedContext::V2 {
+            RngSeedContext {
                 session: &replay_session,
                 seed: ReplaySeed::new(seed),
             },
-            Some(&resolver),
+            &resolver,
             1,
             |_boundary, graph: &HypergraphStore| graph.state_hash(),
         )
@@ -509,11 +453,13 @@ mod tests {
 
     #[test]
     fn a_post_selection_publication_failure_exposes_no_state_event_or_receipt() {
-        let mut session = TickSession::new(
+        let mut session = RuleDiagnosticSession::new(
             STRUGGLE_SPARK_SCENARIO,
+            None,
             STRUGGLE_SPARK_RULES,
             HypergraphStore::new(),
             test_session(),
+            babylon_kernel::replay::ReplaySeed::new(0),
         )
         .expect("the governed Struggle spark pilot loads");
         let before = session.graph.encode_state().unwrap().as_bytes().to_vec();
@@ -533,11 +479,11 @@ mod tests {
             &session.prepared,
             &mut session.graph,
             &mut publisher,
-            RngSeedContext::V2 {
+            RngSeedContext {
                 session: &replay_session,
                 seed: ReplaySeed::new(STRUGGLE_SPARK_EXCESSIVE_FORCE_SEED),
             },
-            Some(&resolver),
+            &resolver,
             1,
             |_boundary, graph: &HypergraphStore| graph.state_hash(),
         )
@@ -553,11 +499,13 @@ mod tests {
 
     #[test]
     fn rejecting_event_publication_happens_before_graph_publication() {
-        let mut session = TickSession::new(
+        let mut session = RuleDiagnosticSession::new(
             CLOCK_SCENARIO,
+            None,
             CLOCK_RULE,
             HypergraphStore::new(),
             test_session(),
+            babylon_kernel::replay::ReplaySeed::new(0),
         )
         .expect("the event publication probe loads");
         let before = session.graph.encode_state().unwrap().as_bytes().to_vec();
@@ -568,10 +516,11 @@ mod tests {
             &session.prepared,
             &mut session.graph,
             &mut publisher,
-            RngSeedContext::V1 {
+            RngSeedContext {
                 session: &session.session,
+                seed: session.seed,
             },
-            None,
+            &session.resolver,
             1,
             |_boundary: HashBoundary, graph: &HypergraphStore| graph.state_hash(),
         )
@@ -586,32 +535,22 @@ mod tests {
     }
 
     #[test]
-    fn rng_v2_refuses_a_missing_resolver_and_topology_changed_after_sealing() {
-        let mut session = TickSession::new(
+    fn seeded_execution_refuses_topology_changed_after_sealing() {
+        let mut session = RuleDiagnosticSession::new(
             CLOCK_SCENARIO,
+            None,
             CLOCK_RULE,
             HypergraphStore::new(),
             test_session(),
+            babylon_kernel::replay::ReplaySeed::new(0),
         )
         .unwrap();
         let replay_session = ReplaySessionIdV1::try_from("replay/session").unwrap();
-        let seed_context = RngSeedContext::V2 {
+        let seed_context = RngSeedContext {
             session: &replay_session,
             seed: ReplaySeed::new(7),
         };
         let mut sink = CollectingSink::default();
-        let missing = run_prepared_tick_with(
-            &session.prepared,
-            &mut session.graph,
-            &mut sink,
-            seed_context,
-            None,
-            1,
-            |_boundary, graph: &HypergraphStore| graph.state_hash(),
-        )
-        .unwrap_err();
-        assert!(missing.contains("requires a sealed StableElementResolverV1"));
-
         let resolver = StableElementResolverV1::seal(
             &session.graph,
             &session.prepared.scenario_scope,
@@ -625,7 +564,7 @@ mod tests {
             &mut session.graph,
             &mut sink,
             seed_context,
-            Some(&resolver),
+            &resolver,
             1,
             |_boundary, graph: &HypergraphStore| graph.state_hash(),
         )
@@ -637,9 +576,15 @@ mod tests {
     where
         G: GraphSubstrate + CanonicalState + AllocatorState + DetachedCopy + Default,
     {
-        let mut session =
-            TickSession::new(PHASE_FAULT_SCENARIO, rules, G::default(), test_session())
-                .expect("the phase fault fixture loads");
+        let mut session = RuleDiagnosticSession::new(
+            PHASE_FAULT_SCENARIO,
+            None,
+            rules,
+            G::default(),
+            test_session(),
+            babylon_kernel::replay::ReplaySeed::new(0),
+        )
+        .expect("the phase fault fixture loads");
         let before = session.graph().encode_state().unwrap().as_bytes().to_vec();
         let cursors = session.graph().allocator_cursors();
         let completed_tick = session.tick();
@@ -678,11 +623,13 @@ mod tests {
     where
         H: FnMut(HashBoundary, &HypergraphStore) -> Result<[u8; 32], GraphError>,
     {
-        let mut session = TickSession::new(
+        let mut session = RuleDiagnosticSession::new(
             HASH_FAILURE_SCENARIO,
+            None,
             HASH_FAILURE_RULE,
             HypergraphStore::new(),
             test_session(),
+            babylon_kernel::replay::ReplaySeed::new(0),
         )
         .expect("the hash fault fixture loads");
         let before = session.graph.encode_state().unwrap().as_bytes().to_vec();
@@ -696,10 +643,11 @@ mod tests {
             &session.prepared,
             &mut session.graph,
             &mut sink,
-            RngSeedContext::V1 {
+            RngSeedContext {
                 session: &session.session,
+                seed: session.seed,
             },
-            None,
+            &session.resolver,
             1,
             &mut state_hash,
         )
@@ -921,14 +869,33 @@ mod tests {
     where
         G: GraphSubstrate + CanonicalState + AllocatorState + DetachedCopy + Default,
     {
-        let graph = envelope_prestate::<G>(reverse_writes);
-        let mut session = TickSession::new(
-            ENVELOPE_SCENARIO,
-            ENVELOPE_RULES,
-            graph,
-            SessionId::new("per18-envelope").unwrap(),
+        let mut graph = envelope_prestate::<G>(reverse_writes);
+        let mut prepared =
+            crate::prepare_rules(ENVELOPE_SCENARIO, None, ENVELOPE_RULES, &mut graph).unwrap();
+        // This fixture constructs its graph directly; each input identity is named explicitly.
+        prepared.node_content_ids.extend([
+            (NodeId(0), "territory".to_owned()),
+            (NodeId(1), "organization".to_owned()),
+        ]);
+        prepared.hyperedge_content_ids.extend([(
+            babylon_graph::substrate::HyperedgeId(0),
+            "presence-group".to_owned(),
+        )]);
+        let resolver = StableElementResolverV1::seal(
+            &graph,
+            &prepared.scenario_scope,
+            &prepared.node_content_ids,
+            &prepared.hyperedge_content_ids,
         )
-        .expect("the real multi-rule envelope fixture loads");
+        .unwrap();
+        let mut session = RuleDiagnosticSession {
+            graph,
+            prepared,
+            tick: 0,
+            session: ReplaySessionIdV1::try_from("per18-envelope").unwrap(),
+            seed: ReplaySeed::new(0),
+            resolver,
+        };
         let mut sink = CollectingSink::default();
         let report = session.advance(&mut sink).expect("the real tick commits");
         let expected_events = vec![
@@ -986,7 +953,7 @@ mod tests {
             .env(ENVELOPE_CHILD_ENV, mode)
             .args([
                 "--exact",
-                "session::tests::real_tick_envelope_child_probe",
+                "diagnostic::tests::real_tick_envelope_child_probe",
                 "--nocapture",
             ])
             .output()
@@ -1031,11 +998,13 @@ mod tests {
 
     #[test]
     fn a_failed_tick_leaves_graph_counter_and_prior_events_unchanged() {
-        let mut session = TickSession::new(
+        let mut session = RuleDiagnosticSession::new(
             ATOMICITY_SCENARIO,
+            None,
             ATOMICITY_RULE,
             HypergraphStore::new(),
             test_session(),
+            babylon_kernel::replay::ReplaySeed::new(0),
         )
         .expect("the rollback probe loads");
         let before_hash = session.graph().state_hash().expect("pre-state hashes");
@@ -1074,11 +1043,13 @@ mod tests {
 
     #[test]
     fn nominal_world_hash_moves_with_completed_time_when_graph_hash_does_not() {
-        let mut session = TickSession::new(
+        let mut session = RuleDiagnosticSession::new(
             CLOCK_SCENARIO,
+            None,
             CLOCK_RULE,
             HypergraphStore::new(),
             test_session(),
+            babylon_kernel::replay::ReplaySeed::new(0),
         )
         .expect("the world-clock probe loads");
         let mut sink = CollectingSink::default();
@@ -1098,11 +1069,13 @@ mod tests {
 
     #[test]
     fn completed_tick_overflow_refuses_before_any_world_or_event_mutation() {
-        let mut session = TickSession::new(
+        let mut session = RuleDiagnosticSession::new(
             CLOCK_SCENARIO,
+            None,
             CLOCK_RULE,
             HypergraphStore::new(),
             test_session(),
+            babylon_kernel::replay::ReplaySeed::new(0),
         )
         .expect("the world-clock probe loads");
         session.tick = i64::MAX;
@@ -1124,11 +1097,13 @@ mod tests {
 
     #[test]
     fn advance_numbers_ticks_starting_at_one_over_a_two_rule_session() {
-        let mut session = TickSession::new(
+        let mut session = RuleDiagnosticSession::new(
             SCENARIO,
+            None,
             &rule_src(),
             HypergraphStore::new(),
             test_session(),
+            babylon_kernel::replay::ReplaySeed::new(0),
         )
         .expect("load");
         assert_eq!(session.tick(), 0);
@@ -1142,11 +1117,13 @@ mod tests {
 
     #[test]
     fn advance_moves_state_and_each_tick_hashes_differently() {
-        let mut session = TickSession::new(
+        let mut session = RuleDiagnosticSession::new(
             SCENARIO,
+            None,
             &rule_src(),
             HypergraphStore::new(),
             test_session(),
+            babylon_kernel::replay::ReplaySeed::new(0),
         )
         .expect("load");
         let mut sink = CollectingSink::default();
@@ -1162,30 +1139,46 @@ mod tests {
 
     #[test]
     fn two_independent_sessions_over_the_same_content_hash_identically() {
-        // The determinism guard this plan's own instructions require, at
-        // the babylon-tick level — Phase E's test (tests/determinism.rs in
-        // babylon-client) repeats this same property through the client's
-        // own seam end to end. Both sessions share the same deterministic
-        // V1 execution namespace.
-        let mut a = TickSession::new(
+        // All execution owners use explicit identity; draw-free mechanics remain identity-independent.
+        let mut a = RuleDiagnosticSession::new(
             SCENARIO,
+            None,
             &rule_src(),
             HypergraphStore::new(),
             test_session(),
+            babylon_kernel::replay::ReplaySeed::new(0),
         )
         .expect("load a");
-        let mut b = TickSession::new(
+        let mut b = RuleDiagnosticSession::new(
             SCENARIO,
+            None,
             &rule_src(),
             HypergraphStore::new(),
             test_session(),
+            babylon_kernel::replay::ReplaySeed::new(0),
         )
         .expect("load b");
+        let mut other_identity = RuleDiagnosticSession::new(
+            SCENARIO,
+            None,
+            &rule_src(),
+            HypergraphStore::new(),
+            ReplaySessionIdV1::try_from("diagnostic/other-identity").unwrap(),
+            ReplaySeed::new(-57),
+        )
+        .unwrap();
+        let mut other_sink = CollectingSink::default();
         let mut sink_a = CollectingSink::default();
         let mut sink_b = CollectingSink::default();
         for _ in 0..5 {
             let ra = a.advance(&mut sink_a).expect("a advances");
             let rb = b.advance(&mut sink_b).expect("b advances");
+            let other = other_identity.advance(&mut other_sink).unwrap();
+            assert_eq!(
+                ra.after, other.after,
+                "draw-free graph writes do not consume identity"
+            );
+            assert_eq!(sink_a.events, other_sink.events);
             assert_eq!(
                 ra.after, rb.after,
                 "same content + same tick count must hash identically"

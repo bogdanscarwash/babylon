@@ -1,5 +1,5 @@
 use babylon_kernel::replay::{ReplaySeed, ReplaySessionIdV1, RngDomainV2};
-use babylon_kernel::{seed_for, seed_for_v2, KernelRng, SessionId};
+use babylon_kernel::{seed_for, KernelRng};
 use sha2::{Digest, Sha256};
 
 const VECTOR_SEED: i64 = -72_623_859_790_382_856;
@@ -21,7 +21,6 @@ const EXPECTED_DRAWS: [u64; 9] = [
     0x92a4_48a2_3497_ea02,
     0x73db_ed74_ddd5_0f51,
 ];
-const EXPECTED_F64_BITS: u64 = 0x3fe6_6ddf_41ff_14a0;
 
 #[test]
 fn v2_preimage_key_and_stream_match_the_language_neutral_vector() {
@@ -50,7 +49,7 @@ fn v2_preimage_key_and_stream_match_the_language_neutral_vector() {
     assert_eq!(independent_preimage, EXPECTED_PREIMAGE);
     assert_eq!(Sha256::digest(EXPECTED_PREIMAGE).as_slice(), EXPECTED_KEY);
     assert_eq!(
-        seed_for_v2(&session, seed, VECTOR_TICK, &domain, VECTOR_CARRIER).unwrap(),
+        seed_for(&session, seed, VECTOR_TICK, &domain, VECTOR_CARRIER).unwrap(),
         EXPECTED_KEY
     );
 
@@ -60,13 +59,9 @@ fn v2_preimage_key_and_stream_match_the_language_neutral_vector() {
     assert_eq!(reference_draws, EXPECTED_DRAWS);
 
     let mut rng =
-        KernelRng::for_carrier_v2(&session, seed, VECTOR_TICK, &domain, VECTOR_CARRIER).unwrap();
+        KernelRng::for_carrier(&session, seed, VECTOR_TICK, &domain, VECTOR_CARRIER).unwrap();
     let actual_draws = std::array::from_fn(|_| rng.next_u64());
     assert_eq!(actual_draws, EXPECTED_DRAWS);
-
-    let mut fresh =
-        KernelRng::for_carrier_v2(&session, seed, VECTOR_TICK, &domain, VECTOR_CARRIER).unwrap();
-    assert_eq!(fresh.next_f64().to_bits(), EXPECTED_F64_BITS);
 }
 
 #[test]
@@ -76,10 +71,10 @@ fn v2_seed_derivation_changes_when_any_identity_component_changes() {
     let seed = ReplaySeed::new(VECTOR_SEED);
     let domain = RngDomainV2::try_from("vitality/per60-vector").unwrap();
     let other_domain = RngDomainV2::try_from("vitality/per60-vectos").unwrap();
-    let original = seed_for_v2(&session, seed, VECTOR_TICK, &domain, VECTOR_CARRIER).unwrap();
+    let original = seed_for(&session, seed, VECTOR_TICK, &domain, VECTOR_CARRIER).unwrap();
 
     assert_ne!(
-        seed_for_v2(
+        seed_for(
             &session,
             ReplaySeed::new(VECTOR_SEED + 1),
             VECTOR_TICK,
@@ -90,19 +85,19 @@ fn v2_seed_derivation_changes_when_any_identity_component_changes() {
         original
     );
     assert_ne!(
-        seed_for_v2(&other_session, seed, VECTOR_TICK, &domain, VECTOR_CARRIER).unwrap(),
+        seed_for(&other_session, seed, VECTOR_TICK, &domain, VECTOR_CARRIER).unwrap(),
         original
     );
     assert_ne!(
-        seed_for_v2(&session, seed, VECTOR_TICK + 1, &domain, VECTOR_CARRIER).unwrap(),
+        seed_for(&session, seed, VECTOR_TICK + 1, &domain, VECTOR_CARRIER).unwrap(),
         original
     );
     assert_ne!(
-        seed_for_v2(&session, seed, VECTOR_TICK, &other_domain, VECTOR_CARRIER).unwrap(),
+        seed_for(&session, seed, VECTOR_TICK, &other_domain, VECTOR_CARRIER).unwrap(),
         original
     );
     assert_ne!(
-        seed_for_v2(
+        seed_for(
             &session,
             seed,
             VECTOR_TICK,
@@ -111,31 +106,6 @@ fn v2_seed_derivation_changes_when_any_identity_component_changes() {
         )
         .unwrap(),
         original
-    );
-}
-
-#[test]
-fn v1_conformance_vector_remains_byte_for_byte_unchanged() {
-    let session = SessionId::new("conformance").unwrap();
-    let mut rng = KernelRng::for_carrier(&session, 1, "conformance-domain", "carrier-0");
-
-    assert_eq!(
-        [
-            rng.next_u64(),
-            rng.next_u64(),
-            rng.next_u64(),
-            rng.next_u64(),
-        ],
-        [
-            0x6774_721d_2209_092f,
-            0x6d42_2bc9_af84_28f1,
-            0x0ce2_91ab_fcb1_1e7a,
-            0xdd11_9629_7249_5117,
-        ]
-    );
-    assert_ne!(
-        seed_for(&session, 1, "conformance-domain", "carrier-0"),
-        seed_for(&session, 1, "conformance-domain", "carrier-1")
     );
 }
 

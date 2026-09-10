@@ -63,8 +63,8 @@ fn replay_seed_uses_exact_signed_i64_big_endian_bytes() {
 }
 
 #[test]
-fn rng_layout_version_accepts_only_the_two_governed_layouts() {
-    assert_eq!(RngLayoutVersion::try_from(1), Ok(RngLayoutVersion::V1));
+fn rng_layout_version_accepts_only_the_current_layout() {
+    assert!(RngLayoutVersion::try_from(1).is_err());
     assert_eq!(RngLayoutVersion::try_from(2), Ok(RngLayoutVersion::V2));
 
     for value in [0, 3, u32::MAX] {

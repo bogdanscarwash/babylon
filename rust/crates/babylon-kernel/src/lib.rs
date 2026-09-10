@@ -24,7 +24,7 @@ pub use event_bus::{
 };
 pub use grid::{quantize, GRID_PRECISION};
 pub use h3_cell_id::{H3CellId, H3CellIdError, H3ImmediateChildren};
-pub use rng::{seed_for, seed_for_v2, KernelRng, SEED_SALT};
+pub use rng::{seed_for, KernelRng};
 pub use scalars::{
     Balance, Coefficient, Ideology, Intensity, OutOfBoundsError, Probability, Ratio,
 };

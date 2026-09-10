@@ -1577,7 +1577,6 @@ fn detached_forecast_applies_each_real_branch_and_runs_the_adjacent_recognizer()
             costs: &costs,
             defines: &scenario.consts,
             tick: 1,
-            vocabulary: None,
         },
     )
     .unwrap();
@@ -1660,12 +1659,11 @@ fn runtime_never_evaluates_an_unselected_branch_body() {
         &costs,
         &scenario.consts,
         1,
-        Some(&scenario.node_content_ids),
-        RngSeedContext::V2 {
+        RngSeedContext {
             session: &session,
             seed: ReplaySeed::new(313),
         },
-        Some(&resolver),
+        &resolver,
         None,
         &mut writes,
     )

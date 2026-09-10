@@ -48,11 +48,11 @@ use babylon_graph::state_hash::CanonicalState;
 use babylon_graph::substrate::{GraphError, GraphSubstrate, HyperedgeId, NodeId};
 use babylon_graph::working_copy::DetachedCopy;
 use babylon_kernel::replay::{ReplaySeed, ReplaySessionIdV1, RngSeedContext};
-use babylon_kernel::SessionId;
 use std::collections::{HashMap, HashSet};
 
 pub mod choice_receipt;
 pub mod committed_event;
+pub mod diagnostic;
 pub mod h3_runtime;
 pub mod kernel_slot;
 pub mod material_replay;
@@ -62,9 +62,8 @@ pub mod material_world;
 mod phase_order;
 pub mod replay_identity;
 pub mod replay_session;
-pub mod session;
 mod world_hash;
-pub use session::TickSession;
+pub use diagnostic::RuleDiagnosticSession;
 
 use replay_session::{IdentifiedTickReportV2, ReplayTickError};
 
@@ -222,11 +221,11 @@ pub fn run_once_with_prelude(
 /// intrinsic declarations, load the scenario into `graph`, and load every
 /// `(rule …)` form `split_content` returns against the vocabulary/types/
 /// ceilings that scenario declared — compiled into the governed phase order
-/// before this returns, so every later stage (`TickSession::advance`,
+/// before this returns, so every later stage (`RuleDiagnosticSession::advance`,
 /// `run_once_into`) just iterates the already-correct order. D16's ascending
 /// rule-ID byte order breaks ties at one resolved position. Shared by
-/// `run_once_into` (which still runs exactly tick 1) and, from `session.rs`
-/// on, `TickSession::new` (Program 28 B2,
+/// `run_once_into` (which still runs exactly tick 1) and, from `diagnostic.rs`
+/// on, `RuleDiagnosticSession::new` (Program 28 B2,
 /// `docs/superpowers/plans/2026-08-11-b2-tick-loop-plan.md` Phase A Task 4).
 ///
 /// `Debug` (T2, issue #559): needed so `Result<PreparedRules, PrepareError>`
@@ -248,31 +247,11 @@ pub(crate) struct PreparedRules {
     /// read path (`bind_subject` rendering a stored ordinal back to its
     /// member) both resolve against this.
     pub enums: EnumRegistry,
-    /// **Content-stable node identity (plan §3.4, Task 3).** `LoadedScenario
-    /// ::node_content_ids`, threaded through unchanged — `TickSession` holds
-    /// it for the tick's lifetime by holding this whole struct. **First
-    /// production consumer landed (Task 4, #576 intrinsic-host train):**
-    /// `run_prepared_tick` passes `&prepared.node_content_ids` into
-    /// `run_tick`, which builds one [`babylon_bsl::intrinsic_host::
-    /// DrawContext`] per subject from it (plan §3.3's `subject` key
-    /// component) — the same `require_graph` precedent's lifecycle
-    /// (`babylon-bsl/src/evaluator.rs`) this field's Task-3 doc named:
-    /// dropped its `#[allow(dead_code)]` the moment a real caller landed.
-    /// Still reaches no `babylon-graph` write path and carries no
-    /// canonical-state weight — `state_hash` is computed over the substrate
-    /// alone.
+    /// Authored node identities used to seal the replay resolver.
     pub node_content_ids: HashMap<NodeId, String>,
     /// Validated scenario qname retained for stable replay identity.
-    #[allow(
-        dead_code,
-        reason = "PER-60 Task 7 retains this for Task 9's prepared-environment composer"
-    )]
     pub scenario_scope: String,
-    /// Authored hyperedge identities retained from scenario hydration.
-    #[allow(
-        dead_code,
-        reason = "PER-60 Task 7 retains this for Task 10's sealed stable resolver"
-    )]
+    /// Authored hyperedge identities used to seal the replay resolver.
     pub hyperedge_content_ids: HashMap<HyperedgeId, String>,
     /// The scenario's closed vocabulary, when it declared one —
     /// `run_tick`'s D29 owner-kind filter (`subject_type_of`, Community
@@ -1375,12 +1354,11 @@ pub fn forecast_event_likelihoods_with_kernel_slots(
             &prepared.intrinsics,
             &prepared.consts,
             tick,
-            Some(&prepared.node_content_ids),
-            RngSeedContext::V2 {
+            RngSeedContext {
                 session: &analysis_session,
                 seed: analysis_seed,
             },
-            Some(&resolver),
+            &resolver,
             prepared.vocabulary.as_ref(),
             &mut ignored_writes,
         )
@@ -1399,7 +1377,6 @@ pub fn forecast_event_likelihoods_with_kernel_slots(
         costs: &prepared.intrinsics,
         defines: &prepared.consts,
         tick,
-        vocabulary: prepared.vocabulary.as_ref(),
     };
     babylon_bsl::tick::forecast_event_likelihoods(
         &rules,
@@ -1568,7 +1545,7 @@ pub(crate) fn prepare_rules<G: GraphSubstrate + CanonicalState>(
 fn prepare_rules_with_kernel_slots<G: GraphSubstrate + CanonicalState>(
     scenario_src: &str,
     // Train B item 4 (#591, D157): `None` for every pre-existing caller
-    // (`run_once_into`, `TickSession::new`) — behavior unchanged, byte for
+    // (`run_once_into`, `RuleDiagnosticSession::new`) — behavior unchanged, byte for
     // byte. `Some(prelude)` routes the scenario load through
     // `load_scenario_with_prelude` instead of `load_scenario`.
     prelude_src: Option<&str>,
@@ -1746,7 +1723,7 @@ pub fn run_once_into<G: GraphSubstrate + CanonicalState + AllocatorState + Detac
 /// needs it directly: once `consciousness-ternary-conformance.bscn` stopped
 /// re-declaring `WorldView` itself (this train), every one of its callers —
 /// not only `tick_goldens.rs`'s golden — needs the prelude, and this
-/// module's other entry points (`run_once`, `TickSession`) are all it has
+/// module's other entry points (`run_once`, `RuleDiagnosticSession`) are all it has
 /// to route through.
 ///
 /// # Errors
@@ -1771,43 +1748,34 @@ pub fn run_once_into_with_prelude<
     Ok(report)
 }
 
-/// Deterministic V1 execution namespace for every one-shot driver in this
-/// module. These drivers are pinned at tick 1 and cannot realize a finite
-/// kernel; governed choice requires [`replay_session::ReplayTickSession`].
-/// The fixed literal remains non-random and never reads a UUID or wall clock.
-fn run_once_session() -> SessionId {
-    SessionId::new("run-once").expect("literal is non-empty")
+/// Explicit deterministic inputs for graph-only command-line diagnostics.
+fn run_once_session() -> ReplaySessionIdV1 {
+    ReplaySessionIdV1::try_from("diagnostic/run-once").expect("fixed diagnostic namespace")
 }
 
-/// `run_once_with_prelude` (this train) and `run_once_into` (above) share
-/// this from the point `prepare_rules` has already returned: clone the
-/// committed graph, run every prepared rule to completion against that one
-/// working copy, buffer its events, and publish both only after every rule
-/// and hash succeeds. Extracted so a prelude-bearing caller does not
-/// duplicate this loop — `prepare_rules`'s own `prelude_src` parameter is
-/// the only thing that differs between the two callers, and it is fully
-/// resolved before this function ever runs.
-///
-/// # Errors
-///
-/// An invalid tick number, schedule/world/graph hashing, event reservation,
-/// or the tick itself (named to its own rule id). Every error leaves the
-/// caller's graph and existing events unchanged.
-pub(crate) fn run_prepared_tick<
-    G: GraphSubstrate + CanonicalState + AllocatorState + DetachedCopy,
->(
+fn run_prepared_tick<G: GraphSubstrate + CanonicalState + AllocatorState + DetachedCopy>(
     prepared: &PreparedRules,
     graph: &mut G,
     sink: &mut CollectingSink,
-    session: &SessionId,
+    session: &ReplaySessionIdV1,
     tick: i64,
 ) -> Result<TickReport, String> {
+    let resolver = StableElementResolverV1::seal(
+        graph,
+        &prepared.scenario_scope,
+        &prepared.node_content_ids,
+        &prepared.hyperedge_content_ids,
+    )
+    .map_err(|error| format!("diagnostic identity refused: {error:?}"))?;
     run_prepared_tick_with(
         prepared,
         graph,
         sink,
-        RngSeedContext::V1 { session },
-        None,
+        RngSeedContext {
+            session,
+            seed: ReplaySeed::new(0),
+        },
+        &resolver,
         tick,
         |_boundary, candidate| candidate.state_hash(),
     )
@@ -1832,9 +1800,9 @@ fn checked_considered_total(per_rule_considered: &[(String, usize)]) -> Result<u
 }
 
 enum ExecutionIdentity<'a, C> {
-    Current {
+    Diagnostic {
         rng_seed: RngSeedContext<'a>,
-        stable_resolver: Option<&'a StableElementResolverV1>,
+        stable_resolver: &'a StableElementResolverV1,
     },
     Replay(replay_session::ReplayExecutionInputs<'a, C>),
 }
@@ -1842,20 +1810,20 @@ enum ExecutionIdentity<'a, C> {
 impl<C> ExecutionIdentity<'_, C> {
     fn rng_seed(&self) -> RngSeedContext<'_> {
         match self {
-            Self::Current { rng_seed, .. } => *rng_seed,
-            Self::Replay(execution) => RngSeedContext::V2 {
+            Self::Diagnostic { rng_seed, .. } => *rng_seed,
+            Self::Replay(execution) => RngSeedContext {
                 session: execution.session,
                 seed: execution.seed,
             },
         }
     }
 
-    fn stable_resolver(&self) -> Option<&StableElementResolverV1> {
+    fn stable_resolver(&self) -> &StableElementResolverV1 {
         match self {
-            Self::Current {
+            Self::Diagnostic {
                 stable_resolver, ..
-            } => *stable_resolver,
-            Self::Replay(execution) => Some(execution.resolver),
+            } => stable_resolver,
+            Self::Replay(execution) => execution.resolver,
         }
     }
 
@@ -1891,7 +1859,7 @@ struct ExecutedRules<G> {
 }
 
 enum TickTransactionError {
-    Current(String),
+    Diagnostic(String),
     Replay(ReplayTickError),
 }
 
@@ -1902,7 +1870,7 @@ fn transaction_error<C>(
     if identity.is_replay() {
         TickTransactionError::Replay(ReplayTickError::Execution { message })
     } else {
-        TickTransactionError::Current(message)
+        TickTransactionError::Diagnostic(message)
     }
 }
 
@@ -1911,7 +1879,7 @@ fn run_prepared_tick_with<G, B, H>(
     graph: &mut G,
     sink: &mut B,
     rng_seed: RngSeedContext<'_>,
-    stable_resolver: Option<&StableElementResolverV1>,
+    stable_resolver: &StableElementResolverV1,
     tick: i64,
     state_hash: H,
 ) -> Result<TickReport, String>
@@ -1921,14 +1889,14 @@ where
     H: FnMut(HashBoundary, &G) -> Result<[u8; 32], GraphError>,
 {
     let identity: ExecutionIdentity<'_, replay_session::ProductionReplayIdentityComposer> =
-        ExecutionIdentity::Current {
+        ExecutionIdentity::Diagnostic {
             rng_seed,
             stable_resolver,
         };
     run_prepared_tick_transaction(prepared, graph, sink, &identity, tick, state_hash, None)
         .map(|result| result.report)
         .map_err(|error| match error {
-            TickTransactionError::Current(message) => message,
+            TickTransactionError::Diagnostic(message) => message,
             TickTransactionError::Replay(replay) => replay.to_string(),
         })
 }
@@ -1962,7 +1930,7 @@ where
         material_base,
     )
     .map_err(|error| match error {
-        TickTransactionError::Current(message) => ReplayTickError::Execution { message },
+        TickTransactionError::Diagnostic(message) => ReplayTickError::Execution { message },
         TickTransactionError::Replay(replay) => replay,
     })?;
     let artifacts = result.replay.ok_or_else(|| ReplayTickError::Composer {
@@ -2039,7 +2007,7 @@ where
     )
     .map_err(|error| transaction_error(identity, error))?;
     let replay_prior = match identity {
-        ExecutionIdentity::Current { .. } => None,
+        ExecutionIdentity::Diagnostic { .. } => None,
         ExecutionIdentity::Replay(execution) => Some(
             replay_session::compose_replay_prior(graph, execution, completed_before)
                 .map_err(TickTransactionError::Replay)?,
@@ -2075,15 +2043,10 @@ where
     for position in 0..=prepared.rules.len() {
         if position == prepared.material_base_index {
             if let Some(inputs) = material_base.take() {
-                let resolver = identity.stable_resolver().ok_or({
-                    TickTransactionError::Replay(ReplayTickError::MaterialBase(
-                        material_replay::MaterialBaseErrorV1::MissingResolver,
-                    ))
-                })?;
+                let resolver = identity.stable_resolver();
                 let context = material_staffing::StaffingEffectContextV1 {
                     types: &prepared.types,
                     enums: &prepared.enums,
-                    vocabulary: prepared.vocabulary.as_ref(),
                     resolver,
                 };
                 let (candidate, effects) = inputs
@@ -2123,7 +2086,6 @@ where
             // read it; `:year`/`:tick-of-year` need an epoch slice 1 does
             // not pin and are refused by name at `run_tick` entry.
             tick,
-            Some(&prepared.node_content_ids),
             identity.rng_seed(),
             identity.stable_resolver(),
             prepared.vocabulary.as_ref(),
@@ -2133,14 +2095,7 @@ where
             transaction_error(identity, format!("tick failed in rule {id}: {error}"))
         })?;
         for realization in outcome.kernel_realizations {
-            let RngSeedContext::V2 { session, seed } = identity.rng_seed() else {
-                return Err(transaction_error(
-                    identity,
-                    format!(
-                        "finite choice in rule {id} reached the transaction without a sealed V2 replay identity"
-                    ),
-                ));
-            };
+            let RngSeedContext { session, seed } = identity.rng_seed();
             let encounter_ordinal = u32::try_from(choice_receipts.len()).map_err(|_| {
                 transaction_error(
                     identity,
@@ -2183,9 +2138,7 @@ where
         }
         let new_events = &working_sink.events[event_start..];
         let event_subjects = outcome.event_provenance;
-        if matches!(identity.rng_seed(), RngSeedContext::V2 { .. })
-            && event_subjects.len() != new_events.len()
-        {
+        if event_subjects.len() != new_events.len() {
             return Err(transaction_error(
                 identity,
                 format!(
@@ -2306,7 +2259,7 @@ where
         committed_events: executed.committed_events,
     };
     let replay = match (identity, prelude.replay_prior) {
-        (ExecutionIdentity::Current { .. }, None) => None,
+        (ExecutionIdentity::Diagnostic { .. }, None) => None,
         (ExecutionIdentity::Replay(execution), Some(prior)) => Some(
             execution
                 .composer
@@ -2384,7 +2337,7 @@ impl std::fmt::Display for FuelBoundRow {
 
 /// Load one content set (scenario, optional declaration prelude, rule
 /// source) through the REAL production pipeline (`prepare_rules` — the same
-/// function `run_once`/`TickSession::new` use) and report its fuel bounds,
+/// function `run_once`/`RuleDiagnosticSession::new` use) and report its fuel bounds,
 /// one row per rule, in the SAME governed phase order `prepare_rules`
 /// compiles. D16's ascending rule-ID byte order breaks same-position ties.
 ///
@@ -2593,7 +2546,7 @@ mod tests {
     where
         G: GraphSubstrate + CanonicalState + AllocatorState + DetachedCopy + Default,
     {
-        let mut graph = prepopulated_graph::<G>();
+        let mut graph = G::default();
         let before = graph.encode_state().unwrap().as_bytes().to_vec();
         let cursors = graph.allocator_cursors();
         let mut sink = CollectingSink {
@@ -2625,11 +2578,11 @@ mod tests {
         assert_eq!(sink.events, events);
     }
 
-    fn assert_one_shot_success_preserves_relative_allocation<G>(with_prelude: bool)
+    fn assert_one_shot_success_publishes_named_allocations<G>(with_prelude: bool)
     where
         G: GraphSubstrate + CanonicalState + AllocatorState + DetachedCopy + Default,
     {
-        let mut graph = prepopulated_graph::<G>();
+        let mut graph = G::default();
         let mut sink = CollectingSink::default();
         let report = if with_prelude {
             run_once_into_with_prelude(
@@ -2649,10 +2602,10 @@ mod tests {
         }
         .expect("the staged one-shot tick commits");
 
-        assert_eq!(graph.nodes("SOCIAL_CLASS"), vec![NodeId(1)]);
+        assert_eq!(graph.nodes("SOCIAL_CLASS"), vec![NodeId(0)]);
         assert_eq!(
             graph
-                .node_attribute(NodeId(1), "social-class/count")
+                .node_attribute(NodeId(0), "social-class/count")
                 .unwrap()
                 .to_bits(),
             2.0f64.to_bits()
@@ -2660,8 +2613,8 @@ mod tests {
         assert_eq!(
             graph.allocator_cursors(),
             AllocatorCursors {
-                next_node: 2,
-                next_hyperedge: 1,
+                next_node: 1,
+                next_hyperedge: 0,
             }
         );
         assert_eq!(report.fired, 1);
@@ -2689,6 +2642,23 @@ mod tests {
     }
 
     #[test]
+    fn one_shot_refuses_unnamed_preexisting_graph_without_publication() {
+        let mut graph = prepopulated_graph::<HypergraphStore>();
+        let before = graph.encode_state().unwrap().as_bytes().to_vec();
+        let mut sink = CollectingSink::default();
+        let error = run_once_into(
+            ONE_SHOT_SUCCESS_SCENARIO,
+            ONE_SHOT_SUCCESS_RULE,
+            &mut graph,
+            &mut sink,
+        )
+        .unwrap_err();
+        assert!(error.contains("identity refused"), "{error}");
+        assert_eq!(graph.encode_state().unwrap().as_bytes(), before);
+        assert!(sink.events.is_empty());
+    }
+
+    #[test]
     fn both_one_shot_variants_roll_back_hydration_on_both_backends() {
         assert_one_shot_failure_is_atomic::<MemoryGraph>(false);
         assert_one_shot_failure_is_atomic::<MemoryGraph>(true);
@@ -2697,11 +2667,11 @@ mod tests {
     }
 
     #[test]
-    fn both_one_shot_variants_keep_preexisting_allocation_on_success() {
-        assert_one_shot_success_preserves_relative_allocation::<MemoryGraph>(false);
-        assert_one_shot_success_preserves_relative_allocation::<MemoryGraph>(true);
-        assert_one_shot_success_preserves_relative_allocation::<HypergraphStore>(false);
-        assert_one_shot_success_preserves_relative_allocation::<HypergraphStore>(true);
+    fn both_one_shot_variants_publish_named_allocations_on_success() {
+        assert_one_shot_success_publishes_named_allocations::<MemoryGraph>(false);
+        assert_one_shot_success_publishes_named_allocations::<MemoryGraph>(true);
+        assert_one_shot_success_publishes_named_allocations::<HypergraphStore>(false);
+        assert_one_shot_success_publishes_named_allocations::<HypergraphStore>(true);
     }
 
     // Task W3 (BSL Hygiene Knock-out): the fuel-bound report's smallest

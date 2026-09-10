@@ -1057,13 +1057,13 @@ fn load_prelude_forms(
                      or `defconst` — found `{tag}` (node/edge/edge-attr/hyperedge forms \
                      belong in the scenario, never the prelude — a prelude never touches \
                      the graph)"
-                )))
+                )));
             }
             _ => {
                 return Err(err(
                     "a prelude form must begin with a symbol naming `defenum`, \
                      `defvocabulary`, `deffield` or `defconst`",
-                ))
+                ));
             }
         }
     }
@@ -1137,15 +1137,16 @@ fn load_scenario_forms(
         )));
     };
 
-    let (head, id, body) =
-        match items.as_slice() {
-            [SExpr::Atom(Atom::Symbol(head)), SExpr::Atom(Atom::QName(id)), body @ ..] => {
-                (head.as_str(), id.clone(), body)
-            }
-            _ => return Err(err(
+    let (head, id, body) = match items.as_slice() {
+        [SExpr::Atom(Atom::Symbol(head)), SExpr::Atom(Atom::QName(id)), body @ ..] => {
+            (head.as_str(), id.clone(), body)
+        }
+        _ => {
+            return Err(err(
                 "expected (scenario <qname> <form>*) — the id must be a qname, e.g. ft/two-classes",
-            )),
-        };
+            ));
+        }
+    };
     if head != "scenario" {
         return Err(err(format!(
             "expected a (scenario ...) form, found ({head} ...)"
@@ -1310,7 +1311,7 @@ fn load_scenario_forms(
                     "a scenario body form must begin with `defenum`, `defvocabulary`, \
                      `deffield`, `defconst`, `node`, `edge`, `edge-attr`, `hyperedge` \
                      or `hyperedge-attr`",
-                ))
+                ));
             }
         }
     }
@@ -1492,7 +1493,7 @@ fn load_defconst(
             return Err(err(format!(
                 "defconst `{qname}`: expected an int, Mass, scaled or boolean \
                  literal, found {other:?}"
-            )))
+            )));
         }
     };
     if consts.insert(qname.clone(), value).is_some() {
@@ -1551,7 +1552,7 @@ fn parse_bound_keywords<'a>(
                 return Err(err(format!(
                     "defconst `{qname}`: unrecognized keyword :{other} — only \
                      :floor and :cap are legal here (§3.2 addendum, #492/ADR194)"
-                )))
+                )));
             }
         };
         if slot.replace(operand).is_some() {
@@ -1881,7 +1882,7 @@ fn load_deffield(
                 return Err(err(format!(
                     "deffield `{qname}`: unknown type `{other}` — one of \
                      int / real / probability / intensity / coefficient / currency / enum"
-                )))
+                )));
             }
         };
         let kind = match kind.as_str() {
@@ -1892,7 +1893,7 @@ fn load_deffield(
                     "deffield `{qname}`: unknown kind `{other}` — intensive or extensive. \
                      An intensive field averaged without an extensive weight is the \
                      variance error §3.4 exists to catch, so this is not optional"
-                )))
+                )));
             }
         };
         FieldDecl { ty, kind }
@@ -2269,7 +2270,7 @@ fn attribute_value_unit_interval(
             return Err(err(format!(
                 "{local} field `{field}`: expected an int or scaled (p/i/c) \
                  literal, found {other:?}"
-            )))
+            )));
         }
     };
     if !(0.0..=1.0).contains(&value) {
@@ -2430,7 +2431,7 @@ fn load_edge(
             return Err(err(format!(
                 "edge {member}: expected an integer or p/i/c-suffixed \
                  unit-interval strength literal, found {other:?}"
-            )))
+            )));
         }
     };
     let (from_id, to_id) = (resolve(from)?, resolve(to)?);
@@ -2839,12 +2840,13 @@ mod tests {
     use crate::reader::read_all_spanned;
     use crate::rule_pipeline::{load_rule, LoadContext};
     use crate::structural_verbs::CollectingSink;
-    use crate::tick::{run_tick, DefinesEnv};
+    use crate::tick::{run_fixture_rule, DefinesEnv};
     use crate::typecheck::TypeEnv;
     use babylon_graph::memory::MemoryGraph;
     use babylon_graph::state_hash::{CanonicalState, StateEncoder};
     use babylon_graph::substrate::{Direction, GraphSubstrate, HyperedgeId, NodeId};
-    use babylon_kernel::{Currency, SessionId};
+    use babylon_kernel::replay::ReplaySessionIdV1;
+    use babylon_kernel::Currency;
     use std::collections::{HashMap, HashSet};
 
     const TWO_CLASSES: &str = r"
@@ -3276,10 +3278,7 @@ mod tests {
             let mut graph = MemoryGraph::new();
             // Review round 1 (#576, Minor): thread the REAL `node_content_ids`
             // this hydration produces, rather than discarding it and passing
-            // an empty map — this test genuinely hydrates a scenario, so it
-            // should exercise the hydrated path honestly, not the
-            // empty-map-fixture fallback (`evaluator::element_content_id`'s
-            // own doc names the two shapes explicitly).
+            // an empty map: the hydrated names are the sealed fixture identities.
             let loaded_scenario = load_scenario(&source, &mut graph).unwrap();
 
             let types = TypeEnv {
@@ -3340,7 +3339,7 @@ mod tests {
                 load_rule(&rule, &ctx).unwrap_or_else(|e| panic!("{literal}: rule must load: {e}"));
             let mut sink = CollectingSink::default();
             let enums = EnumRegistry::default();
-            run_tick(
+            run_fixture_rule(
                 &loaded,
                 &types,
                 &enums,
@@ -3351,7 +3350,8 @@ mod tests {
                 &DefinesEnv::new(),
                 1,
                 Some(&loaded_scenario.node_content_ids),
-                &SessionId::new("scenario-bit-equality-test").expect("literal is non-empty"),
+                &ReplaySessionIdV1::try_from("scenario-bit-equality-test")
+                    .expect("literal is non-empty"),
                 None,
             )
             .unwrap_or_else(|e| panic!("{literal}: tick must run: {e}"));
@@ -3451,7 +3451,7 @@ mod tests {
                 load_rule(&rule, &ctx).unwrap_or_else(|e| panic!("{literal}: rule must load: {e}"));
             let mut sink = CollectingSink::default();
             let enums = EnumRegistry::default();
-            run_tick(
+            run_fixture_rule(
                 &loaded,
                 &types,
                 &enums,
@@ -3462,7 +3462,8 @@ mod tests {
                 &DefinesEnv::new(),
                 1,
                 Some(&loaded_scenario.node_content_ids),
-                &SessionId::new("scenario-currency-bit-equality-test").expect("non-empty"),
+                &ReplaySessionIdV1::try_from("scenario-currency-bit-equality-test")
+                    .expect("non-empty"),
                 None,
             )
             .unwrap_or_else(|e| panic!("{literal}: tick must run: {e}"));
