@@ -65,6 +65,7 @@ impl ProductionNavigation {
         });
         if !resume {
             self.county_open = true;
+            self.details_open = false;
             self.cohort_page = 0;
             self.selected_site = None;
             self.history.clear();
@@ -221,6 +222,7 @@ struct ProductionUi<'w> {
 
 struct ProductionControlAvailability {
     scene: bool,
+    readings: bool,
     previous_index: Option<usize>,
     county_back: bool,
 }
@@ -232,6 +234,8 @@ impl ProductionControlAvailability {
     ) -> Self {
         Self {
             scene: snapshot.is_some_and(|snapshot| !snapshot.sites.is_empty()),
+            readings: !navigation.county_open
+                && snapshot.is_some_and(|snapshot| !snapshot.sites.is_empty()),
             county_back: navigation.selected_site.is_some()
                 && navigation.county_geoid.is_some()
                 && !navigation.county_open,
@@ -247,9 +251,8 @@ impl ProductionControlAvailability {
     fn display(&self, command: &ProductionCommand) -> Option<Display> {
         let available = match command {
             ProductionCommand::Back => self.previous_index.is_some() || self.county_back,
-            ProductionCommand::Details
-            | ProductionCommand::Flat
-            | ProductionCommand::Reading(_) => self.scene,
+            ProductionCommand::Details | ProductionCommand::Reading(_) => self.readings,
+            ProductionCommand::Flat => self.scene,
             _ => return None,
         };
         Some(if available {
@@ -272,6 +275,11 @@ impl ProductionControlAvailability {
             }
             ProductionCommand::Flat if !self.scene => {
                 Some("Display controls need disclosed production relationships.")
+            }
+            ProductionCommand::Details | ProductionCommand::Reading(_)
+                if navigation.county_open && !navigation.details_open =>
+            {
+                Some("Choose a county cohort before opening its readings.")
             }
             ProductionCommand::Details if !self.scene && !navigation.details_open => {
                 Some("Exact readings need disclosed production relationships.")
@@ -3893,6 +3901,54 @@ mod tests {
             .resource_mut::<Messages<ProductionCommand>>()
             .write(command);
         app.update();
+    }
+
+    #[test]
+    fn county_selection_keeps_readings_closed_until_a_cohort_is_chosen() {
+        let mut app = production_panel_app();
+        let context = app.world().resource::<ObserverSession>().context();
+        send_command(
+            &mut app,
+            ProductionCommand::Select {
+                site_id: "b".into(),
+                context: context.clone(),
+            },
+        );
+        send_command(&mut app, ProductionCommand::Details);
+        assert!(app.world().resource::<ProductionNavigation>().details_open);
+        send_command(&mut app, ProductionCommand::Map);
+        let macomb = {
+            let atlas = app.world().resource::<CountyAtlas>();
+            (0..atlas.len())
+                .find(|index| atlas.county(*index).unwrap().fips == "26099")
+                .unwrap()
+        };
+        app.world_mut().resource_mut::<SelectedCounty>().0 = Some(macomb);
+        app.update();
+        send_command(&mut app, ProductionCommand::Open);
+        assert!(app.world().resource::<ProductionNavigation>().county_open);
+        assert!(!app.world().resource::<ProductionNavigation>().details_open);
+        assert_eq!(
+            control_display(&mut app, &ProductionCommand::Details),
+            Display::None
+        );
+        for command in [
+            ProductionCommand::Details,
+            ProductionCommand::Reading(ProductionReadingSection::Flow),
+        ] {
+            send_command(&mut app, command);
+            assert!(!app.world().resource::<ProductionNavigation>().details_open);
+            assert!(app.world().resource::<ObserverFeedback>().message.is_some());
+        }
+        send_command(
+            &mut app,
+            ProductionCommand::Select {
+                site_id: "a".into(),
+                context,
+            },
+        );
+        send_command(&mut app, ProductionCommand::Details);
+        assert!(app.world().resource::<ProductionNavigation>().details_open);
     }
 
     #[test]
