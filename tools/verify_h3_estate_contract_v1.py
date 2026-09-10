@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-"""Verify the bounded PER-275 H3 estate and governed artifact contract."""
+"""Verify the pinned H3 reference predecessor and its governed artifacts."""
 
 from __future__ import annotations
 
 import argparse
-import ast
 import hashlib
 import json
 import math
@@ -29,20 +28,7 @@ MAX_VECTOR_LINES: Final = 256
 MAX_SOURCE_BYTES: Final = 1_048_576
 MAX_ARTIFACT_BYTES: Final = 67_108_864
 MAX_ARTIFACT_ROWS: Final = 65_536
-MAX_CATALOG_SOURCES: Final = 128
-MAX_CONSUMER_SOURCES: Final = 4_096
 CANONICAL_H3_TEXT = re.compile(r"^[0-9a-f]{15}$")
-LEGACY_H3_FIELDS: Final = {
-    "h3_index",
-    "home_hex",
-    "parent_h3",
-    "r7_parent",
-    "res5_parent",
-    "res6_parent",
-    "source_h3",
-    "target_h3",
-    "workplace_dest",
-}
 EXPECTED_META: Final = {
     "contract": "H3EstateContractV1",
     "version": 1,
@@ -57,7 +43,6 @@ EXPECTED_HARD_GAPS: Final = {
 EXPECTED_HISTORICAL_CONTRACT_DIGEST: Final = (
     "b7fcde99da1d68d1f389f3e1f905d8434f97d2a9d620979001ce4d0f793e4db7"
 )
-TERMINAL_READER_CONTRACT: Final = Path("contracts/h3_reader_cutover_v1.yaml")
 
 
 class _UniqueKeyLoader(yaml.SafeLoader):
@@ -114,14 +99,6 @@ def _bounded_bytes(path: Path, maximum: int, overflow_code: str) -> bytes:
         return path.read_bytes()
     except OSError as error:
         raise H3EstateContractRefusal("file_read", str(path)) from error
-
-
-def _bounded_text(path: Path) -> str:
-    raw = _bounded_bytes(path, MAX_SOURCE_BYTES, "source_too_large")
-    try:
-        return raw.decode("utf-8")
-    except UnicodeDecodeError as error:
-        raise H3EstateContractRefusal("source_utf8", str(path)) from error
 
 
 def load_contract(path: Path) -> dict[str, Any]:
@@ -309,471 +286,6 @@ def _verify_contract_shape(contract: dict[str, Any]) -> None:
         ):
             if key not in artifact:
                 raise H3EstateContractRefusal("contract_shape", f"{artifact.get('name')}.{key}")
-
-
-def _python_string_constants(path: Path) -> list[str]:
-    text = _bounded_text(path)
-    try:
-        tree = ast.parse(text, filename=str(path))
-    except SyntaxError as error:
-        raise H3EstateContractRefusal("source_parse", str(path)) from error
-    constants = [
-        (node.lineno, node.col_offset, node.value)
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Constant) and isinstance(node.value, str)
-    ]
-    return [value for _line, _column, value in sorted(constants)]
-
-
-def _ddl_texts(path: Path) -> list[str]:
-    if path.suffix == ".py":
-        return [_without_sql_comments(text) for text in _python_string_constants(path)]
-    return [_without_sql_comments(_bounded_text(path))]
-
-
-def _without_sql_comments(text: str) -> str:
-    def blank(match: re.Match[str]) -> str:
-        return "".join("\n" if character == "\n" else " " for character in match.group())
-
-    without_blocks = re.sub(r"/\*.*?\*/", blank, text, flags=re.DOTALL)
-    return re.sub(r"--[^\n]*", blank, without_blocks)
-
-
-CREATE_TABLE = re.compile(
-    r"CREATE\s+TABLE(?:\s+IF\s+NOT\s+EXISTS)?\s+"
-    r"(?:public\.)?([a-z_][a-z0-9_]*)\s*\((.*?)\n\s*\)\s*;?",
-    re.IGNORECASE | re.DOTALL,
-)
-DROP_TABLE = re.compile(
-    r"DROP\s+TABLE(?:\s+IF\s+EXISTS)?\s+(?:public\.)?([a-z_][a-z0-9_]*)\b",
-    re.IGNORECASE,
-)
-ALTER_COLUMN_TYPE = re.compile(
-    r"ALTER\s+TABLE(?:\s+IF\s+EXISTS)?\s+(?:public\.)?([a-z_][a-z0-9_]*)\s+"
-    r"ALTER\s+(?:COLUMN\s+)?([a-z_][a-z0-9_]*)\s+(?:SET\s+DATA\s+)?TYPE\s+"
-    r"([A-Z]+(?:\(\d+\))?)",
-    re.IGNORECASE,
-)
-DROP_COLUMN = re.compile(
-    r"ALTER\s+TABLE(?:\s+IF\s+EXISTS)?\s+(?:public\.)?([a-z_][a-z0-9_]*)\s+"
-    r"DROP\s+(?:COLUMN\s+)?(?:IF\s+EXISTS\s+)?(?!CONSTRAINT\b)([a-z_][a-z0-9_]*)\b",
-    re.IGNORECASE,
-)
-ADD_COLUMN = re.compile(
-    r"ALTER\s+TABLE(?:\s+IF\s+EXISTS)?\s+(?:public\.)?([a-z_][a-z0-9_]*)\s+"
-    r"ADD\s+(?:COLUMN\s+)?(?:IF\s+NOT\s+EXISTS\s+)?([a-z_][a-z0-9_]*)\s+"
-    r"([A-Z]+(?:\(\d+\))?)",
-    re.IGNORECASE,
-)
-DROP_CONSTRAINT = re.compile(
-    r"ALTER\s+TABLE(?:\s+IF\s+EXISTS)?\s+(?:public\.)?([a-z_][a-z0-9_]*)\s+"
-    r"DROP\s+CONSTRAINT(?:\s+IF\s+EXISTS)?\s+([a-z_][a-z0-9_]*)\b",
-    re.IGNORECASE,
-)
-ADD_TAG_CHECK = re.compile(
-    r"ALTER\s+TABLE(?:\s+IF\s+EXISTS)?\s+(?:public\.)?([a-z_][a-z0-9_]*)\s+"
-    r"ADD\s+(?:CONSTRAINT\s+[a-z_][a-z0-9_]*\s+)?CHECK\s*\(\s*"
-    r"([a-z_][a-z0-9_]*)\s+IN\s*\((.*?)\)\s*\)",
-    re.IGNORECASE | re.DOTALL,
-)
-
-
-def _identity_columns(block: str) -> dict[str, str]:
-    result: dict[str, str] = {}
-    for line in re.split(r"[\n,]", block):
-        match = re.match(
-            r"\s*([a-z_][a-z0-9_]*)\s+([A-Z]+(?:\(\d+\))?)(?=\s|,|$)",
-            line,
-            re.IGNORECASE,
-        )
-        if match is None:
-            continue
-        name = match.group(1).lower()
-        if name in LEGACY_H3_FIELDS:
-            result[name] = match.group(2).upper()
-    return result
-
-
-def _tagged_discriminators(block: str) -> dict[str, dict[str, Any]]:
-    columns = {
-        match.group(1).lower(): match.group(2).upper()
-        for match in re.finditer(
-            r"(?m)^\s*([a-z_][a-z0-9_]*)\s+([A-Z]+(?:\(\d+\))?)(?=\s|,|$)",
-            block,
-            re.IGNORECASE,
-        )
-    }
-    result: dict[str, dict[str, Any]] = {}
-    for name, legacy_type in columns.items():
-        if not name.endswith("_kind"):
-            continue
-        check = re.search(
-            rf"CHECK\s*\(\s*{re.escape(name)}\s+IN\s*\((.*?)\)\s*\)",
-            block,
-            re.IGNORECASE | re.DOTALL,
-        )
-        values = None
-        if check is not None:
-            values = _quoted_allowlist(check.group(1))
-        result[name] = {"legacy_type": legacy_type, "allowed_values": values}
-    return result
-
-
-def _quoted_allowlist(raw: str) -> list[str]:
-    return sorted(value.replace("''", "'") for value in re.findall(r"'((?:''|[^'])*)'", raw))
-
-
-def _table_shape(block: str) -> dict[str, Any]:
-    return {
-        "identity_fields": _identity_columns(block),
-        "tagged_discriminators": _tagged_discriminators(block),
-    }
-
-
-def _table_events(text: str) -> list[tuple[int, str, tuple[Any, ...]]]:
-    events: list[tuple[int, str, tuple[Any, ...]]] = []
-    for match in CREATE_TABLE.finditer(text):
-        events.append(
-            (match.start(), "create", (match.group(1).lower(), _table_shape(match.group(2))))
-        )
-    for pattern, kind in (
-        (DROP_TABLE, "drop_table"),
-        (ALTER_COLUMN_TYPE, "alter_type"),
-        (DROP_COLUMN, "drop_column"),
-        (ADD_COLUMN, "add_column"),
-        (DROP_CONSTRAINT, "drop_constraint"),
-    ):
-        for match in pattern.finditer(text):
-            values = tuple(
-                value.upper()
-                if index == len(match.groups()) and kind in {"alter_type", "add_column"}
-                else value.lower()
-                for index, value in enumerate(match.groups(), start=1)
-            )
-            events.append((match.start(), kind, values))
-    for match in ADD_TAG_CHECK.finditer(text):
-        events.append(
-            (
-                match.start(),
-                "add_tag_check",
-                (match.group(1).lower(), match.group(2).lower(), _quoted_allowlist(match.group(3))),
-            )
-        )
-    return sorted(events, key=lambda row: row[0])
-
-
-def _catalog_source_paths(repo_root: Path) -> list[Path]:
-    persistence = repo_root / "src" / "babylon" / "persistence"
-    source_files = [
-        persistence / "postgres_schema.py",
-        *sorted((persistence / "migrations").glob("*.sql")),
-    ]
-    if len(source_files) > MAX_CATALOG_SOURCES:
-        raise H3EstateContractRefusal("catalog_scan_bound", str(len(source_files)))
-    return source_files
-
-
-def discover_persistent_table_census(repo_root: Path) -> dict[str, dict[str, Any]]:
-    """Discover the current H3 table shape after ordered catalog migrations."""
-    discovered: dict[str, dict[str, Any]] = {}
-    for path in _catalog_source_paths(repo_root):
-        for text in _ddl_texts(path):
-            for _position, kind, values in _table_events(text):
-                name = values[0]
-                if kind == "create":
-                    shape = values[1]
-                    if not shape["identity_fields"]:
-                        continue
-                    if name in discovered:
-                        raise H3EstateContractRefusal("persistent_table_duplicate", name)
-                    discovered[name] = shape
-                elif kind == "drop_table":
-                    discovered.pop(name, None)
-                elif kind == "alter_type":
-                    field, legacy_type = values[1:]
-                    shape = discovered.get(name)
-                    if shape is None:
-                        continue
-                    if field in shape["identity_fields"]:
-                        shape["identity_fields"][field] = legacy_type
-                    if field in shape["tagged_discriminators"]:
-                        shape["tagged_discriminators"][field]["legacy_type"] = legacy_type
-                elif kind == "drop_column":
-                    field = values[1]
-                    shape = discovered.get(name)
-                    if shape is None:
-                        continue
-                    shape["identity_fields"].pop(field, None)
-                    shape["tagged_discriminators"].pop(field, None)
-                    if not shape["identity_fields"]:
-                        discovered.pop(name)
-                elif kind == "add_column":
-                    field, legacy_type = values[1:]
-                    if field in LEGACY_H3_FIELDS:
-                        shape = discovered.setdefault(
-                            name, {"identity_fields": {}, "tagged_discriminators": {}}
-                        )
-                        shape["identity_fields"][field] = legacy_type
-                elif kind == "drop_constraint":
-                    shape = discovered.get(name)
-                    if shape is not None:
-                        for discriminator in shape["tagged_discriminators"].values():
-                            discriminator["allowed_values"] = None
-                elif kind == "add_tag_check":
-                    field, allowed_values = values[1:]
-                    shape = discovered.get(name)
-                    if shape is not None and field in shape["tagged_discriminators"]:
-                        shape["tagged_discriminators"][field]["allowed_values"] = allowed_values
-    return discovered
-
-
-CREATE_VIEW = re.compile(
-    r"CREATE(?:\s+OR\s+REPLACE)?\s+VIEW\s+(?:public\.)?([a-z_][a-z0-9_]*)\s+AS\s+"
-    r"(.*?)(?=;\s*(?:\n|$)|\Z)",
-    re.IGNORECASE | re.DOTALL,
-)
-DROP_VIEW = re.compile(
-    r"DROP\s+VIEW(?:\s+IF\s+EXISTS)?\s+(?:public\.)?([a-z_][a-z0-9_]*)\b",
-    re.IGNORECASE,
-)
-
-
-def discover_current_view_census(contract: dict[str, Any], repo_root: Path) -> set[str]:
-    """Discover current H3-related views after ordered catalog migrations."""
-    table_names = {row["name"] for row in contract["estate"]["persistent_tables"]}
-    discovered: set[str] = set()
-    for path in _catalog_source_paths(repo_root):
-        for text in _ddl_texts(path):
-            events = [
-                (match.start(), "create", match.group(1).lower(), match.group(2))
-                for match in CREATE_VIEW.finditer(text)
-            ]
-            events.extend(
-                (match.start(), "drop", match.group(1).lower(), "")
-                for match in DROP_VIEW.finditer(text)
-            )
-            for _position, kind, name, body in sorted(events, key=lambda row: row[0]):
-                if kind == "drop":
-                    discovered.discard(name)
-                    continue
-                lowered = body.lower()
-                related = (
-                    "h3_index" in lowered
-                    or "cell_id" in lowered
-                    or any(re.search(rf"\b{re.escape(table)}\b", lowered) for table in table_names)
-                )
-                if related:
-                    discovered.add(name)
-                else:
-                    discovered.discard(name)
-    return discovered
-
-
-def _discover_temporary_shapes(
-    contract: dict[str, Any], repo_root: Path
-) -> dict[str, dict[str, str]]:
-    relative = contract["estate"]["source_files"]["temporary_shapes"]
-    path = repo_root / relative
-    discovered: dict[str, dict[str, str]] = {}
-    pattern = re.compile(
-        r"CREATE\s+TEMP\s+TABLE\s+([a-z_][a-z0-9_]*)\s*\((.*?)\)\s+ON\s+COMMIT\s+DROP",
-        re.IGNORECASE | re.DOTALL,
-    )
-    for text in _python_string_constants(path):
-        for match in pattern.finditer(text):
-            fields = _identity_columns(match.group(2))
-            if fields:
-                discovered[match.group(1).lower()] = fields
-    return discovered
-
-
-def _declared_fields(rows: list[dict[str, Any]]) -> dict[str, dict[str, str]]:
-    return {
-        row["name"]: {field["legacy_name"]: field["legacy_type"].upper() for field in row["fields"]}
-        for row in rows
-    }
-
-
-def _declared_table_shapes(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
-    result: dict[str, dict[str, Any]] = {}
-    for row in rows:
-        tagged: dict[str, dict[str, Any]] = {}
-        tag_field = row.get("tag_field")
-        if tag_field is not None:
-            tagged[tag_field] = {
-                "legacy_type": row.get("tag_legacy_type"),
-                "allowed_values": row.get("tag_allowed_values"),
-            }
-        result[row["name"]] = {
-            "identity_fields": {
-                field["legacy_name"]: field["legacy_type"].upper() for field in row["fields"]
-            },
-            "tagged_discriminators": tagged,
-        }
-    return result
-
-
-def _verify_reader_owners(contract: dict[str, Any], repo_root: Path) -> None:
-    rows = [
-        *contract["estate"]["persistent_tables"],
-        *contract["estate"]["current_views"],
-    ]
-    for row in rows:
-        relation = row["name"]
-        owners = row.get("reader_owners")
-        if not isinstance(owners, list):
-            raise H3EstateContractRefusal("reader_owner_shape", relation)
-        for relative in owners:
-            path = repo_root / relative
-            text = _bounded_text(path)
-            if relation not in text:
-                raise H3EstateContractRefusal("reader_owner_drift", f"{relation}:{relative}")
-
-
-def discover_runtime_consumer_census(
-    contract: dict[str, Any], repo_root: Path
-) -> list[dict[str, str]]:
-    """Discover bounded raw-SQL reads and writes of the frozen estate."""
-    relation_names = sorted(
-        {
-            row["name"]
-            for row in (
-                *contract["estate"]["persistent_tables"],
-                *contract["estate"]["current_views"],
-            )
-        }
-        | {
-            child
-            for child in [contract["estate"].get("partition", {}).get("default_child")]
-            if isinstance(child, str)
-        },
-        key=lambda value: (-len(value), value),
-    )
-    alternatives = "|".join(re.escape(name) for name in relation_names)
-    pattern = re.compile(
-        rf"\b(FROM|JOIN|INSERT\s+INTO|UPDATE|DELETE\s+FROM)\s+(?:public\.)?({alternatives})\b",
-        re.IGNORECASE,
-    )
-    excluded = {
-        Path("src/babylon/persistence/postgres_schema.py"),
-        Path("src/babylon/persistence/migrations/__init__.py"),
-    }
-    discovered: set[tuple[str, str, str]] = set()
-    paths = sorted(
-        {
-            *repo_root.joinpath("src", "babylon").rglob("*.py"),
-            *repo_root.joinpath("tools").rglob("*.py"),
-        }
-    )
-    if len(paths) > MAX_CONSUMER_SOURCES:
-        raise H3EstateContractRefusal("consumer_scan_bound", str(len(paths)))
-    for path in paths:
-        relative = path.relative_to(repo_root)
-        if relative in excluded:
-            continue
-        for literal in _python_string_constants(path):
-            for match in pattern.finditer(literal):
-                operation = match.group(1).upper()
-                access = "read" if operation in {"FROM", "JOIN"} else "write"
-                discovered.add((relative.as_posix(), match.group(2).lower(), access))
-    return [
-        {"path": path, "relation": relation, "access": access}
-        for path, relation, access in sorted(discovered)
-    ]
-
-
-def verify_source_inventory(contract: dict[str, Any], repo_root: Path) -> None:
-    """Verify the frozen estate or its exact terminal reader handoff."""
-    estate = contract.get("estate")
-    if not isinstance(estate, dict):
-        raise H3EstateContractRefusal("contract_shape", "estate")
-    terminal_reader = repo_root / TERMINAL_READER_CONTRACT
-    if terminal_reader.is_file():
-        tables = _require_list(estate, "persistent_tables")
-        views = _require_list(estate, "current_views")
-        consumers = _require_list(estate, "runtime_consumer_census")
-        if len(tables) != 15:
-            raise H3EstateContractRefusal("persistent_table_census", "historical epoch-7 snapshot")
-        if len(views) != 10:
-            raise H3EstateContractRefusal("view_census", "historical epoch-7 snapshot")
-        if len(consumers) != 31:
-            raise H3EstateContractRefusal("runtime_consumer_census", "historical epoch-7 snapshot")
-        if canonical_contract_digest(contract) != EXPECTED_HISTORICAL_CONTRACT_DIGEST:
-            raise H3EstateContractRefusal(
-                "historical_inventory_digest", EXPECTED_HISTORICAL_CONTRACT_DIGEST
-            )
-        from tools.verify_h3_reader_cutover_v1 import (
-            H3ReaderCutoverRefusal,
-            load_reader_cutover_contract,
-            verify_reader_cutover_contract,
-        )
-
-        try:
-            reader_contract = load_reader_cutover_contract(terminal_reader)
-            verify_reader_cutover_contract(reader_contract, repo_root)
-        except H3ReaderCutoverRefusal as error:
-            raise H3EstateContractRefusal("terminal_reader_contract", str(error)) from error
-        return
-
-    declared_tables = _declared_table_shapes(_require_list(estate, "persistent_tables"))
-    discovered_tables = discover_persistent_table_census(repo_root)
-    if set(declared_tables) != set(discovered_tables):
-        raise H3EstateContractRefusal(
-            "persistent_table_census",
-            f"declared={sorted(declared_tables)} discovered={sorted(discovered_tables)}",
-        )
-    for name in sorted(declared_tables):
-        if declared_tables[name] != discovered_tables[name]:
-            raise H3EstateContractRefusal(
-                "persistent_field_census",
-                f"{name}: declared={declared_tables[name]} discovered={discovered_tables[name]}",
-            )
-    declared_views = {row["name"] for row in _require_list(estate, "current_views")}
-    discovered_views = discover_current_view_census(contract, repo_root)
-    if declared_views != discovered_views:
-        raise H3EstateContractRefusal(
-            "view_census",
-            f"declared={sorted(declared_views)} discovered={sorted(discovered_views)}",
-        )
-    declared_temporary = _declared_fields(_require_list(estate, "temporary_shapes"))
-    discovered_temporary = _discover_temporary_shapes(contract, repo_root)
-    if declared_temporary != discovered_temporary:
-        raise H3EstateContractRefusal(
-            "temporary_shape_census",
-            f"declared={declared_temporary} discovered={discovered_temporary}",
-        )
-    domain = estate.get("unused_domain")
-    if not isinstance(domain, dict):
-        raise H3EstateContractRefusal("contract_shape", "unused_domain")
-    domain_source = _bounded_text(repo_root / domain["source"])
-    if re.search(r"CREATE\s+DOMAIN\s+h3index\b", domain_source, re.IGNORECASE) is None:
-        raise H3EstateContractRefusal("domain_census", "h3index")
-    if any(
-        field["legacy_type"].lower() == "h3index"
-        for table in estate["persistent_tables"]
-        for field in table["fields"]
-    ):
-        raise H3EstateContractRefusal("domain_usage_drift", "h3index")
-    partition = estate.get("partition")
-    if (
-        not isinstance(partition, dict)
-        or partition.get("parent") != "dynamic_hex_state"
-        or partition.get("default_child") != "dynamic_hex_state_default"
-    ):
-        raise H3EstateContractRefusal("partition_census", "contract")
-    partition_source = _bounded_text(repo_root / estate["source_files"]["partition_registry"])
-    if '"dynamic_hex_state"' not in partition_source or "session_id.hex" not in partition_source:
-        raise H3EstateContractRefusal("partition_census", "source")
-    _verify_reader_owners(contract, repo_root)
-    declared_consumers = estate.get("runtime_consumer_census")
-    if not isinstance(declared_consumers, list):
-        raise H3EstateContractRefusal("contract_shape", "runtime_consumer_census")
-    discovered_consumers = discover_runtime_consumer_census(contract, repo_root)
-    if declared_consumers != discovered_consumers:
-        raise H3EstateContractRefusal(
-            "runtime_consumer_census",
-            f"declared={declared_consumers} discovered={discovered_consumers}",
-        )
 
 
 def _load_yaml_mapping(path: Path, maximum: int) -> dict[str, Any]:
@@ -1136,9 +648,12 @@ def verify_artifact_bytes(contract: dict[str, Any], artifact_root: Path) -> dict
 
 
 def verify_contract(contract: dict[str, Any], repo_root: Path) -> list[str]:
-    """Verify the contract, source inventory, shared vectors, and artifact pins."""
+    """Verify the immutable reference predecessor, shared vectors, and artifact pins."""
     _verify_contract_shape(contract)
-    verify_source_inventory(contract, repo_root)
+    if canonical_contract_digest(contract) != EXPECTED_HISTORICAL_CONTRACT_DIGEST:
+        raise H3EstateContractRefusal(
+            "historical_contract_digest", EXPECTED_HISTORICAL_CONTRACT_DIGEST
+        )
     verify_artifact_manifest(contract, repo_root / "data-artifacts.yaml")
     vectors = contract["vectors"]
     verify_h3_vectors(contract, repo_root / vectors["path"])
@@ -1152,7 +667,6 @@ def verify_contract(contract: dict[str, Any], repo_root: Path) -> list[str]:
         ).hexdigest()
         if actual != artifact.get("source_manifest_sha256"):
             raise H3EstateContractRefusal("source_manifest_digest", artifact["name"])
-    canonical_contract_digest(contract)
     return []
 
 
