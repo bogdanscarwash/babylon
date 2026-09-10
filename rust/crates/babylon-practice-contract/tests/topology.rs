@@ -1,12 +1,12 @@
 use babylon_practice_contract::{
-    validate_topology, OrganizationPracticeTopologyEdgeV1, OrganizationPracticeTopologyRowV1,
-    OrganizationPracticeTopologyV1, PracticeContractError, PracticeTargetDomainV1,
+    validate_topology, OrganizationPracticeTopology, OrganizationPracticeTopologyEdge,
+    OrganizationPracticeTopologyRow, PracticeContractError, PracticeTargetDomain,
     PracticeTopologyLoadCounter,
 };
 
-fn edge(target: u64) -> OrganizationPracticeTopologyEdgeV1 {
-    OrganizationPracticeTopologyEdgeV1 {
-        target_domain: PracticeTargetDomainV1::SocialClass,
+fn edge(target: u64) -> OrganizationPracticeTopologyEdge {
+    OrganizationPracticeTopologyEdge {
+        target_domain: PracticeTargetDomain::SocialClass,
         target_class_node_id_u64: target,
     }
 }
@@ -15,9 +15,9 @@ fn row(
     node_id: u64,
     active: bool,
     storage: Option<f64>,
-    edges: Vec<OrganizationPracticeTopologyEdgeV1>,
-) -> OrganizationPracticeTopologyRowV1 {
-    OrganizationPracticeTopologyRowV1 {
+    edges: Vec<OrganizationPracticeTopologyEdge>,
+) -> OrganizationPracticeTopologyRow {
+    OrganizationPracticeTopologyRow {
         node_id_u64: node_id,
         active_bool: active,
         action_budget_storage_f64_bits_u64: storage.map(f64::to_bits),
@@ -25,8 +25,8 @@ fn row(
     }
 }
 
-fn topology(rows: Vec<OrganizationPracticeTopologyRowV1>) -> OrganizationPracticeTopologyV1 {
-    OrganizationPracticeTopologyV1 {
+fn topology(rows: Vec<OrganizationPracticeTopologyRow>) -> OrganizationPracticeTopology {
+    OrganizationPracticeTopology {
         organizations: rows,
     }
 }
@@ -114,7 +114,7 @@ fn load_counter_is_detached_and_uses_only_validation_local_keys() {
     let mut counter = PracticeTopologyLoadCounter::new();
     counter.observe_organization(10, true, Some(1.0)).unwrap();
     counter
-        .observe_solidarity_edge(10, PracticeTargetDomainV1::SocialClass, 20)
+        .observe_solidarity_edge(10, PracticeTargetDomain::SocialClass, 20)
         .unwrap();
     assert_eq!(counter.finish(), Ok(()));
 }

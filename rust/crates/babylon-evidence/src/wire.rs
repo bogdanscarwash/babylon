@@ -15,7 +15,7 @@ const _: () = assert!(unicode_normalization::UNICODE_VERSION.2 == 0);
 /// Exact refusals shared by all canonical T3 record families.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SfsWireError {
-    /// The encoded schema version is not V1.
+    /// The encoded schema version is not current.
     UnsupportedSchemaVersion { found: u16 },
     /// The encoded domain differs from the record's exact domain.
     WrongDomain,

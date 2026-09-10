@@ -1,0 +1,38 @@
+# Current fixture-only evidence contract. It neither admits nor executes gameplay.
+record: SfsPreregistration
+wire_domain: babylon.sfs-preregistration.v2
+envelope_schema_version: 1
+max_payload_bytes: 319
+byte_order: big_endian
+fields:
+  - {name: preregistered_at_tick, type: u64}
+  - {name: start_tick, type: u64, law: checked_preregistered_at_tick_plus_one}
+  - {name: relational_scope_digest, type: digest32}
+  - {name: practice_candidate_schedule_digest, type: digest32}
+  - {name: sfs_proof_profile_digest, type: digest32}
+  - {name: driver_contract_digest, type: digest32}
+  - {name: mutation_manifest_digest, type: digest32}
+  - {name: expected_exogenous_ledger_digest, type: digest32}
+  - {name: exogenous_policy, type: u8, allowed: [0]}
+  - {name: cadence_kind, type: u8, allowed: [0]}
+  - {name: first_attempt_tick, type: u64}
+  - {name: attempt_stride, type: u16, law: strictly_positive}
+  - {name: attempt_count, type: u16}
+  - {name: practice_code, type: PracticeId}
+  - {name: target_selection_policy_digest, type: digest32}
+  - {name: resource_contract_digest, type: digest32}
+  - {name: parameter_bytes_digest, type: digest32}
+input: practice_intent.yaml
+candidate_projection:
+  - exact_current_intent_digest_matches_candidate_row
+  - resolve_tick_matches_attempt_tick
+  - practice_matches_preregistration
+  - fixed_stable_target_digest_matches_preregistration
+  - quoted_resource_contract_digest_matches_preregistration
+  - canonical_parameter_digest_matches_preregistration
+  - schedule_and_attempt_ledger_projection_match
+boundary:
+  - typed_authority_actor_and_nonce_are_bound_by_complete_intent_digest
+  - this_fixture_driver_does_not_admit_authority_or_prove_resource_availability
+  - current_authority_resource_and_batch_validation_remain_separate_contracts
+  - old_preregistration_domain_and_old_intent_inputs_are_unsupported

@@ -1,8 +1,8 @@
 //! Pure detached organization-practice topology validation.
 
 use crate::{
-    read_action_budget, OrganizationPracticeTopologyV1, PracticeContractError,
-    PracticeTargetDomainV1, MAX_ORGANIZATIONS, MAX_ORG_SOLIDARITY_EDGES_PER_ORG,
+    read_action_budget, OrganizationPracticeTopology, PracticeContractError, PracticeTargetDomain,
+    MAX_ORGANIZATIONS, MAX_ORG_SOLIDARITY_EDGES_PER_ORG,
 };
 use std::collections::{HashMap, HashSet};
 
@@ -56,11 +56,11 @@ impl PracticeTopologyLoadCounter {
     pub fn observe_solidarity_edge(
         &mut self,
         source_organization_key: u64,
-        target_domain: PracticeTargetDomainV1,
+        target_domain: PracticeTargetDomain,
         target_key: u64,
     ) -> Result<(), PracticeContractError> {
         match target_domain {
-            PracticeTargetDomainV1::SocialClass => {}
+            PracticeTargetDomain::SocialClass => {}
         }
         let identity = (source_organization_key, target_key);
         if self.solidarity_edges.contains(&identity) {
@@ -98,7 +98,7 @@ impl PracticeTopologyLoadCounter {
 ///
 /// Returns the exact bounded identity, budget, or edge refusal.
 pub fn validate_topology(
-    topology: &OrganizationPracticeTopologyV1,
+    topology: &OrganizationPracticeTopology,
 ) -> Result<(), PracticeContractError> {
     if topology.organizations.len() > MAX_ORGANIZATIONS {
         return Err(PracticeContractError::PracticeTopologyOrganizationLimit);

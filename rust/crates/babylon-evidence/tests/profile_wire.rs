@@ -1,10 +1,10 @@
 //! Language-neutral contracts for the frozen T3 proof-profile records.
 
 use babylon_evidence::{
-    canonical_envelope, decode_envelope, CanonicalProfileSet, CausalConeV1, ComponentKindV1,
-    DifferingLedgerKindV1, Digest32, InterventionDeltaRowV1, InterventionDeltaV1,
-    InterventionOperationV1, PersistenceClassError, PersistenceComparisonV1,
-    SfsComponentProofProfileV1, SfsProfileRecordError, SfsProofProfileV1, SfsWireError, T3Record,
+    canonical_envelope, decode_envelope, CanonicalProfileSet, CausalCone, ComponentKind,
+    DifferingLedgerKind, Digest32, InterventionDelta, InterventionDeltaRow, InterventionOperation,
+    PersistenceClassError, PersistenceComparison, SfsComponentProofProfile, SfsProfileRecordError,
+    SfsProofProfile, SfsWireError, T3Record,
 };
 
 fn digest(tag: u8) -> Digest32 {
@@ -85,7 +85,7 @@ fn literal_component_envelope(component_id: &str, field_reads: &[&str]) -> Vec<u
     for _index in 0..7 {
         payload.extend_from_slice(&0_u16.to_be_bytes());
     }
-    literal_envelope(SfsComponentProofProfileV1::DOMAIN, &payload)
+    literal_envelope(SfsComponentProofProfile::DOMAIN, &payload)
 }
 
 fn profile_set(field: &'static str, values: &[&str]) -> CanonicalProfileSet {
@@ -100,10 +100,10 @@ fn empty_set(field: &'static str) -> CanonicalProfileSet {
     profile_set(field, &[])
 }
 
-fn component(component_id: &str, field_reads: &[&str]) -> SfsComponentProofProfileV1 {
-    SfsComponentProofProfileV1::new(
+fn component(component_id: &str, field_reads: &[&str]) -> SfsComponentProofProfile {
+    SfsComponentProofProfile::new(
         component_id,
-        ComponentKindV1::BslRule,
+        ComponentKind::BslRule,
         digest(1),
         profile_set("field_reads", field_reads),
         empty_set("edge_reads"),
@@ -117,8 +117,8 @@ fn component(component_id: &str, field_reads: &[&str]) -> SfsComponentProofProfi
     .unwrap()
 }
 
-fn proof_profile(components: Vec<SfsComponentProofProfileV1>) -> SfsProofProfileV1 {
-    SfsProofProfileV1::new(
+fn proof_profile(components: Vec<SfsComponentProofProfile>) -> SfsProofProfile {
+    SfsProofProfile::new(
         digest(2),
         digest(3),
         "babylon.sfs.audit.v1",
@@ -158,12 +158,12 @@ fn maximum_profile_set() -> CanonicalProfileSet {
     CanonicalProfileSet::new("maximum_set", entries).unwrap()
 }
 
-fn maximum_component(index: usize) -> SfsComponentProofProfileV1 {
+fn maximum_component(index: usize) -> SfsComponentProofProfile {
     let component_id = format!("{index:02}{}", "c".repeat(254));
     let set = maximum_profile_set();
-    SfsComponentProofProfileV1::new(
+    SfsComponentProofProfile::new(
         &component_id,
-        ComponentKindV1::PostCommitProducer,
+        ComponentKind::PostCommitProducer,
         digest(1),
         set.clone(),
         set.clone(),
@@ -180,33 +180,30 @@ fn maximum_component(index: usize) -> SfsComponentProofProfileV1 {
 #[test]
 fn profile_domains_maxima_and_closed_codes_are_exact() {
     assert_eq!(
-        SfsComponentProofProfileV1::DOMAIN,
+        SfsComponentProofProfile::DOMAIN,
         b"babylon.sfs-component-proof-profile.v1"
     );
-    assert_eq!(SfsComponentProofProfileV1::MAX_PAYLOAD_BYTES, 50_483);
-    assert_eq!(SfsProofProfileV1::DOMAIN, b"babylon.sfs-proof-profile.v1");
-    assert_eq!(SfsProofProfileV1::MAX_PAYLOAD_BYTES, 3_233_944);
-    assert_eq!(CausalConeV1::DOMAIN, b"babylon.sfs-causal-cone.v1");
-    assert_eq!(CausalConeV1::MAX_PAYLOAD_BYTES, 49_542);
+    assert_eq!(SfsComponentProofProfile::MAX_PAYLOAD_BYTES, 50_483);
+    assert_eq!(SfsProofProfile::DOMAIN, b"babylon.sfs-proof-profile.v1");
+    assert_eq!(SfsProofProfile::MAX_PAYLOAD_BYTES, 3_233_944);
+    assert_eq!(CausalCone::DOMAIN, b"babylon.sfs-causal-cone.v1");
+    assert_eq!(CausalCone::MAX_PAYLOAD_BYTES, 49_542);
+    assert_eq!(InterventionDelta::DOMAIN, b"babylon.intervention-delta.v1");
+    assert_eq!(InterventionDelta::MAX_PAYLOAD_BYTES, 6_356_900);
     assert_eq!(
-        InterventionDeltaV1::DOMAIN,
-        b"babylon.intervention-delta.v1"
-    );
-    assert_eq!(InterventionDeltaV1::MAX_PAYLOAD_BYTES, 6_356_900);
-    assert_eq!(
-        PersistenceComparisonV1::DOMAIN,
+        PersistenceComparison::DOMAIN,
         b"babylon.persistence-comparison.v1"
     );
-    assert_eq!(PersistenceComparisonV1::MAX_PAYLOAD_BYTES, 598);
-    assert_eq!(ComponentKindV1::BslRule as u8, 0);
-    assert_eq!(ComponentKindV1::RustBoundary as u8, 1);
-    assert_eq!(ComponentKindV1::Reducer as u8, 2);
-    assert_eq!(ComponentKindV1::PostCommitProducer as u8, 3);
-    assert_eq!(DifferingLedgerKindV1::ExogenousInput as u8, 0);
-    assert_eq!(DifferingLedgerKindV1::PracticeAttempt as u8, 1);
-    assert_eq!(InterventionOperationV1::Add as u8, 0);
-    assert_eq!(InterventionOperationV1::Remove as u8, 1);
-    assert_eq!(InterventionOperationV1::Replace as u8, 2);
+    assert_eq!(PersistenceComparison::MAX_PAYLOAD_BYTES, 598);
+    assert_eq!(ComponentKind::BslRule as u8, 0);
+    assert_eq!(ComponentKind::RustBoundary as u8, 1);
+    assert_eq!(ComponentKind::Reducer as u8, 2);
+    assert_eq!(ComponentKind::PostCommitProducer as u8, 3);
+    assert_eq!(DifferingLedgerKind::ExogenousInput as u8, 0);
+    assert_eq!(DifferingLedgerKind::PracticeAttempt as u8, 1);
+    assert_eq!(InterventionOperation::Add as u8, 0);
+    assert_eq!(InterventionOperation::Remove as u8, 1);
+    assert_eq!(InterventionOperation::Replace as u8, 2);
 }
 
 #[test]
@@ -214,7 +211,7 @@ fn component_profile_proof_profile_and_cone_maximum_shapes_encode() {
     let component = maximum_component(0);
     let component_bytes = canonical_envelope(&component).unwrap();
     assert_eq!(
-        payload_length::<SfsComponentProofProfileV1>(&component_bytes),
+        payload_length::<SfsComponentProofProfile>(&component_bytes),
         50_483
     );
     let mut components = Vec::with_capacity(64);
@@ -223,12 +220,9 @@ fn component_profile_proof_profile_and_cone_maximum_shapes_encode() {
     }
     let profile = proof_profile(components);
     let profile_bytes = canonical_envelope(&profile).unwrap();
+    assert_eq!(payload_length::<SfsProofProfile>(&profile_bytes), 3_233_944);
     assert_eq!(
-        payload_length::<SfsProofProfileV1>(&profile_bytes),
-        3_233_944
-    );
-    assert_eq!(
-        decode_envelope::<SfsProofProfileV1>(&profile_bytes).unwrap(),
+        decode_envelope::<SfsProofProfile>(&profile_bytes).unwrap(),
         profile
     );
 
@@ -236,10 +230,10 @@ fn component_profile_proof_profile_and_cone_maximum_shapes_encode() {
     for index in 0..64 {
         ids.push(format!("{index:02}{}", "i".repeat(254)));
     }
-    let cone = CausalConeV1::new(ids.clone(), ids.clone(), ids).unwrap();
+    let cone = CausalCone::new(ids.clone(), ids.clone(), ids).unwrap();
     let cone_bytes = canonical_envelope(&cone).unwrap();
-    assert_eq!(payload_length::<CausalConeV1>(&cone_bytes), 49_542);
-    assert_eq!(decode_envelope::<CausalConeV1>(&cone_bytes).unwrap(), cone);
+    assert_eq!(payload_length::<CausalCone>(&cone_bytes), 49_542);
+    assert_eq!(decode_envelope::<CausalCone>(&cone_bytes).unwrap(), cone);
 }
 
 #[test]
@@ -252,9 +246,9 @@ fn component_id_and_profile_set_string_bounds_are_closed() {
         96
     );
 
-    let empty_component = SfsComponentProofProfileV1::new(
+    let empty_component = SfsComponentProofProfile::new(
         "",
-        ComponentKindV1::BslRule,
+        ComponentKind::BslRule,
         digest(1),
         empty_set("field_reads"),
         empty_set("edge_reads"),
@@ -272,9 +266,9 @@ fn component_id_and_profile_set_string_bounds_are_closed() {
         }))
     );
     assert_eq!(
-        SfsComponentProofProfileV1::new(
+        SfsComponentProofProfile::new(
             &"a".repeat(257),
-            ComponentKindV1::BslRule,
+            ComponentKind::BslRule,
             digest(1),
             empty_set("field_reads"),
             empty_set("edge_reads"),
@@ -307,7 +301,7 @@ fn component_id_and_profile_set_string_bounds_are_closed() {
     );
     let non_nfc = literal_component_envelope("cafe\u{301}", &[]);
     assert_eq!(
-        decode_envelope::<SfsComponentProofProfileV1>(&non_nfc),
+        decode_envelope::<SfsComponentProofProfile>(&non_nfc),
         Err(SfsProfileRecordError::Wire(SfsWireError::NonNfc {
             field: "component_id",
         }))
@@ -345,16 +339,16 @@ fn profile_sets_sort_and_reject_counts_duplicates_non_nfc_and_wire_order() {
     );
     let out_of_order = literal_component_envelope("a", &["b", "a"]);
     assert_eq!(
-        decode_envelope::<SfsComponentProofProfileV1>(&out_of_order),
+        decode_envelope::<SfsComponentProofProfile>(&out_of_order),
         Err(SfsProfileRecordError::Wire(SfsWireError::OutOfOrder {
             field: "field_reads",
         }))
     );
     let mut too_many = literal_component_envelope("a", &[]);
-    let count = payload_start::<SfsComponentProofProfileV1>() + 36;
+    let count = payload_start::<SfsComponentProofProfile>() + 36;
     too_many[count..count + 2].copy_from_slice(&65_u16.to_be_bytes());
     assert_eq!(
-        decode_envelope::<SfsComponentProofProfileV1>(&too_many),
+        decode_envelope::<SfsComponentProofProfile>(&too_many),
         Err(SfsProfileRecordError::Wire(SfsWireError::CountTooLarge {
             field: "field_reads",
             limit: 64,
@@ -366,31 +360,31 @@ fn profile_sets_sort_and_reject_counts_duplicates_non_nfc_and_wire_order() {
 #[test]
 fn component_profile_literal_wire_and_kind_decoder_are_exact() {
     let value = component("a", &["field"]);
-    assert_eq!(value.component_kind(), ComponentKindV1::BslRule);
+    assert_eq!(value.component_kind(), ComponentKind::BslRule);
     assert_eq!(value.component_source_digest(), digest(1));
     let expected = literal_component_envelope("a", &["field"]);
     assert_eq!(canonical_envelope(&value).unwrap(), expected);
     assert_eq!(
-        decode_envelope::<SfsComponentProofProfileV1>(&expected).unwrap(),
+        decode_envelope::<SfsComponentProofProfile>(&expected).unwrap(),
         value
     );
-    let kind_offset = payload_start::<SfsComponentProofProfileV1>() + 3;
+    let kind_offset = payload_start::<SfsComponentProofProfile>() + 3;
     for (code, kind) in [
-        (0, ComponentKindV1::BslRule),
-        (1, ComponentKindV1::RustBoundary),
-        (2, ComponentKindV1::Reducer),
-        (3, ComponentKindV1::PostCommitProducer),
+        (0, ComponentKind::BslRule),
+        (1, ComponentKind::RustBoundary),
+        (2, ComponentKind::Reducer),
+        (3, ComponentKind::PostCommitProducer),
     ] {
         let mut encoded = expected.clone();
         encoded[kind_offset] = code;
-        let decoded = decode_envelope::<SfsComponentProofProfileV1>(&encoded).unwrap();
+        let decoded = decode_envelope::<SfsComponentProofProfile>(&encoded).unwrap();
         assert_eq!(decoded.component_kind(), kind);
         assert_eq!(canonical_envelope(&decoded).unwrap(), encoded);
     }
     let mut invalid_kind = expected;
     invalid_kind[kind_offset] = 4;
     assert_eq!(
-        decode_envelope::<SfsComponentProofProfileV1>(&invalid_kind),
+        decode_envelope::<SfsComponentProofProfile>(&invalid_kind),
         Err(SfsProfileRecordError::InvalidComponentKind { value: 4 })
     );
 }
@@ -406,14 +400,14 @@ fn proof_profile_sorts_complete_nested_envelopes_and_closes_audit_semantics() {
         literal_component_envelope("a", &[]),
         literal_component_envelope("b", &[]),
     ]);
-    let expected = literal_envelope(SfsProofProfileV1::DOMAIN, &expected_payload);
+    let expected = literal_envelope(SfsProofProfile::DOMAIN, &expected_payload);
     assert_eq!(canonical_envelope(&profile).unwrap(), expected);
     assert_eq!(
-        decode_envelope::<SfsProofProfileV1>(&expected).unwrap(),
+        decode_envelope::<SfsProofProfile>(&expected).unwrap(),
         profile
     );
     assert_eq!(
-        SfsProofProfileV1::new(
+        SfsProofProfile::new(
             digest(2),
             digest(3),
             "babylon.sfs.audit.v2",
@@ -424,13 +418,13 @@ fn proof_profile_sorts_complete_nested_envelopes_and_closes_audit_semantics() {
         Err(SfsProfileRecordError::InvalidAuditSemanticsId)
     );
     assert_eq!(
-        SfsProofProfileV1::new(digest(2), digest(3), "", digest(4), digest(5), vec![]),
+        SfsProofProfile::new(digest(2), digest(3), "", digest(4), digest(5), vec![]),
         Err(SfsProfileRecordError::Wire(SfsWireError::StringEmpty {
             field: "audit_semantics_id",
         }))
     );
     assert_eq!(
-        SfsProofProfileV1::new(
+        SfsProofProfile::new(
             digest(2),
             digest(3),
             &"a".repeat(65),
@@ -445,7 +439,7 @@ fn proof_profile_sorts_complete_nested_envelopes_and_closes_audit_semantics() {
         }))
     );
     assert_eq!(
-        SfsProofProfileV1::new(
+        SfsProofProfile::new(
             digest(2),
             digest(3),
             "audit-é",
@@ -464,14 +458,14 @@ fn proof_profile_empty_and_singleton_envelopes_round_trip() {
     let empty = proof_profile(vec![]);
     let empty_bytes = canonical_envelope(&empty).unwrap();
     assert_eq!(
-        decode_envelope::<SfsProofProfileV1>(&empty_bytes).unwrap(),
+        decode_envelope::<SfsProofProfile>(&empty_bytes).unwrap(),
         empty
     );
 
     let singleton = proof_profile(vec![component("only-component", &["field"])]);
     let singleton_bytes = canonical_envelope(&singleton).unwrap();
     assert_eq!(
-        decode_envelope::<SfsProofProfileV1>(&singleton_bytes).unwrap(),
+        decode_envelope::<SfsProofProfile>(&singleton_bytes).unwrap(),
         singleton
     );
 }
@@ -482,7 +476,7 @@ fn proof_profile_component_count_duplicates_order_and_trailing_are_closed() {
     for index in 0..65 {
         components.push(component(&format!("component-{index:02}"), &[]));
     }
-    assert!(SfsProofProfileV1::new(
+    assert!(SfsProofProfile::new(
         digest(2),
         digest(3),
         "babylon.sfs.audit.v1",
@@ -492,7 +486,7 @@ fn proof_profile_component_count_duplicates_order_and_trailing_are_closed() {
     )
     .is_ok());
     assert_eq!(
-        SfsProofProfileV1::new(
+        SfsProofProfile::new(
             digest(2),
             digest(3),
             "babylon.sfs.audit.v1",
@@ -507,7 +501,7 @@ fn proof_profile_component_count_duplicates_order_and_trailing_are_closed() {
         }))
     );
     assert_eq!(
-        SfsProofProfileV1::new(
+        SfsProofProfile::new(
             digest(2),
             digest(3),
             "babylon.sfs.audit.v1",
@@ -521,18 +515,18 @@ fn proof_profile_component_count_duplicates_order_and_trailing_are_closed() {
         literal_component_envelope("b", &[]),
         literal_component_envelope("a", &[]),
     ]);
-    let reversed = literal_envelope(SfsProofProfileV1::DOMAIN, &reversed_payload);
+    let reversed = literal_envelope(SfsProofProfile::DOMAIN, &reversed_payload);
     assert_eq!(
-        decode_envelope::<SfsProofProfileV1>(&reversed),
+        decode_envelope::<SfsProofProfile>(&reversed),
         Err(SfsProfileRecordError::Wire(SfsWireError::OutOfOrder {
             field: "components",
         }))
     );
     let mut trailing_payload = literal_proof_payload(&[]);
     trailing_payload.push(0xaa);
-    let trailing = literal_envelope(SfsProofProfileV1::DOMAIN, &trailing_payload);
+    let trailing = literal_envelope(SfsProofProfile::DOMAIN, &trailing_payload);
     assert_eq!(
-        decode_envelope::<SfsProofProfileV1>(&trailing),
+        decode_envelope::<SfsProofProfile>(&trailing),
         Err(SfsProfileRecordError::Wire(SfsWireError::TrailingBytes {
             count: 1,
         }))
@@ -541,7 +535,7 @@ fn proof_profile_component_count_duplicates_order_and_trailing_are_closed() {
 
 #[test]
 fn causal_cone_canonicalizes_each_set_and_rejects_named_duplicates() {
-    let cone = CausalConeV1::new(
+    let cone = CausalCone::new(
         vec!["root-b".to_owned(), "root-a".to_owned()],
         vec!["sink-b".to_owned(), "sink-a".to_owned()],
         vec!["component-b".to_owned(), "component-a".to_owned()],
@@ -571,7 +565,7 @@ fn causal_cone_canonicalizes_each_set_and_rejects_named_duplicates() {
         ),
     ] {
         assert_eq!(
-            CausalConeV1::new(roots, sinks, components),
+            CausalCone::new(roots, sinks, components),
             Err(SfsProfileRecordError::DuplicateConeId { set })
         );
     }
@@ -579,7 +573,7 @@ fn causal_cone_canonicalizes_each_set_and_rejects_named_duplicates() {
 
 #[test]
 fn causal_cone_literal_wire_order_and_64_65_bounds_are_exact() {
-    let cone = CausalConeV1::new(
+    let cone = CausalCone::new(
         vec!["root".to_owned()],
         vec!["sink".to_owned()],
         vec!["component".to_owned()],
@@ -588,17 +582,17 @@ fn causal_cone_literal_wire_order_and_64_65_bounds_are_exact() {
     let mut payload = literal_set(&["root"]);
     payload.extend_from_slice(&literal_set(&["sink"]));
     payload.extend_from_slice(&literal_set(&["component"]));
-    let expected = literal_envelope(CausalConeV1::DOMAIN, &payload);
+    let expected = literal_envelope(CausalCone::DOMAIN, &payload);
     assert_eq!(canonical_envelope(&cone).unwrap(), expected);
-    assert_eq!(decode_envelope::<CausalConeV1>(&expected).unwrap(), cone);
+    assert_eq!(decode_envelope::<CausalCone>(&expected).unwrap(), cone);
 
     let mut ids = Vec::new();
     for index in 0..65 {
         ids.push(format!("id-{index:02}"));
     }
-    assert!(CausalConeV1::new(ids[..64].to_vec(), vec![], vec![]).is_ok());
+    assert!(CausalCone::new(ids[..64].to_vec(), vec![], vec![]).is_ok());
     assert_eq!(
-        CausalConeV1::new(ids, vec![], vec![]),
+        CausalCone::new(ids, vec![], vec![]),
         Err(SfsProfileRecordError::Wire(SfsWireError::CountTooLarge {
             field: "roots",
             limit: 64,
@@ -608,21 +602,21 @@ fn causal_cone_literal_wire_order_and_64_65_bounds_are_exact() {
     let mut reversed_payload = literal_set(&["b", "a"]);
     reversed_payload.extend_from_slice(&literal_set(&[]));
     reversed_payload.extend_from_slice(&literal_set(&[]));
-    let reversed = literal_envelope(CausalConeV1::DOMAIN, &reversed_payload);
+    let reversed = literal_envelope(CausalCone::DOMAIN, &reversed_payload);
     assert_eq!(
-        decode_envelope::<CausalConeV1>(&reversed),
+        decode_envelope::<CausalCone>(&reversed),
         Err(SfsProfileRecordError::Wire(SfsWireError::OutOfOrder {
             field: "roots",
         }))
     );
     assert_eq!(
-        CausalConeV1::new(vec![String::new()], vec![], vec![]),
+        CausalCone::new(vec![String::new()], vec![], vec![]),
         Err(SfsProfileRecordError::Wire(SfsWireError::StringEmpty {
             field: "roots",
         }))
     );
     assert_eq!(
-        CausalConeV1::new(vec!["a".repeat(257)], vec![], vec![]),
+        CausalCone::new(vec!["a".repeat(257)], vec![], vec![]),
         Err(SfsProfileRecordError::Wire(SfsWireError::StringTooLong {
             field: "roots",
             limit: 256,
@@ -631,16 +625,13 @@ fn causal_cone_literal_wire_order_and_64_65_bounds_are_exact() {
     );
 }
 
-fn intervention_row(
-    operation: InterventionOperationV1,
-    stable: Digest32,
-) -> InterventionDeltaRowV1 {
+fn intervention_row(operation: InterventionOperation, stable: Digest32) -> InterventionDeltaRow {
     let (control, intervention) = match operation {
-        InterventionOperationV1::Add => (zero_digest(), digest(10)),
-        InterventionOperationV1::Remove => (digest(11), zero_digest()),
-        InterventionOperationV1::Replace => (digest(12), digest(13)),
+        InterventionOperation::Add => (zero_digest(), digest(10)),
+        InterventionOperation::Remove => (digest(11), zero_digest()),
+        InterventionOperation::Replace => (digest(12), digest(13)),
     };
-    InterventionDeltaRowV1::new(operation, stable, control, intervention).unwrap()
+    InterventionDeltaRow::new(operation, stable, control, intervention).unwrap()
 }
 
 fn literal_delta_payload(
@@ -666,49 +657,41 @@ fn literal_delta_payload(
 
 #[test]
 fn intervention_operations_enforce_exact_zero_and_nonzero_sides() {
-    assert!(InterventionDeltaRowV1::new(
-        InterventionOperationV1::Add,
+    assert!(InterventionDeltaRow::new(
+        InterventionOperation::Add,
         digest(1),
         zero_digest(),
         digest(2),
     )
     .is_ok());
-    assert!(InterventionDeltaRowV1::new(
-        InterventionOperationV1::Remove,
+    assert!(InterventionDeltaRow::new(
+        InterventionOperation::Remove,
         digest(1),
         digest(2),
         zero_digest(),
     )
     .is_ok());
-    assert!(InterventionDeltaRowV1::new(
-        InterventionOperationV1::Replace,
+    assert!(InterventionDeltaRow::new(
+        InterventionOperation::Replace,
         digest(1),
         digest(2),
         digest(3),
     )
     .is_ok());
     for (operation, control, intervention) in [
-        (InterventionOperationV1::Add, digest(2), digest(3)),
-        (InterventionOperationV1::Add, digest(2), zero_digest()),
-        (InterventionOperationV1::Add, zero_digest(), zero_digest()),
-        (
-            InterventionOperationV1::Remove,
-            zero_digest(),
-            zero_digest(),
-        ),
-        (InterventionOperationV1::Remove, zero_digest(), digest(3)),
-        (InterventionOperationV1::Remove, digest(2), digest(3)),
-        (
-            InterventionOperationV1::Replace,
-            zero_digest(),
-            zero_digest(),
-        ),
-        (InterventionOperationV1::Replace, zero_digest(), digest(3)),
-        (InterventionOperationV1::Replace, digest(2), zero_digest()),
-        (InterventionOperationV1::Replace, digest(2), digest(2)),
+        (InterventionOperation::Add, digest(2), digest(3)),
+        (InterventionOperation::Add, digest(2), zero_digest()),
+        (InterventionOperation::Add, zero_digest(), zero_digest()),
+        (InterventionOperation::Remove, zero_digest(), zero_digest()),
+        (InterventionOperation::Remove, zero_digest(), digest(3)),
+        (InterventionOperation::Remove, digest(2), digest(3)),
+        (InterventionOperation::Replace, zero_digest(), zero_digest()),
+        (InterventionOperation::Replace, zero_digest(), digest(3)),
+        (InterventionOperation::Replace, digest(2), zero_digest()),
+        (InterventionOperation::Replace, digest(2), digest(2)),
     ] {
         assert_eq!(
-            InterventionDeltaRowV1::new(operation, digest(1), control, intervention),
+            InterventionDeltaRow::new(operation, digest(1), control, intervention),
             Err(SfsProfileRecordError::InvalidInterventionRow)
         );
     }
@@ -718,15 +701,15 @@ fn intervention_operations_enforce_exact_zero_and_nonzero_sides() {
 fn intervention_delta_literal_wire_sorts_and_rejects_duplicate_stable_ids() {
     let stable_a = digest(20);
     let stable_b = digest(21);
-    let value = InterventionDeltaV1::new(
-        DifferingLedgerKindV1::PracticeAttempt,
+    let value = InterventionDelta::new(
+        DifferingLedgerKind::PracticeAttempt,
         vec![
-            intervention_row(InterventionOperationV1::Replace, stable_b),
-            intervention_row(InterventionOperationV1::Add, stable_a),
+            intervention_row(InterventionOperation::Replace, stable_b),
+            intervention_row(InterventionOperation::Add, stable_a),
         ],
     )
     .unwrap();
-    assert_eq!(value.ledger_kind(), DifferingLedgerKindV1::PracticeAttempt);
+    assert_eq!(value.ledger_kind(), DifferingLedgerKind::PracticeAttempt);
     let payload = literal_delta_payload(
         1,
         2,
@@ -735,16 +718,16 @@ fn intervention_delta_literal_wire_sorts_and_rejects_duplicate_stable_ids() {
             (2, stable_b, digest(12), digest(13)),
         ],
     );
-    let expected = literal_envelope(InterventionDeltaV1::DOMAIN, &payload);
+    let expected = literal_envelope(InterventionDelta::DOMAIN, &payload);
     assert_eq!(canonical_envelope(&value).unwrap(), expected);
     assert_eq!(
-        decode_envelope::<InterventionDeltaV1>(&expected).unwrap(),
+        decode_envelope::<InterventionDelta>(&expected).unwrap(),
         value
     );
-    let duplicate = intervention_row(InterventionOperationV1::Add, stable_a);
+    let duplicate = intervention_row(InterventionOperation::Add, stable_a);
     assert_eq!(
-        InterventionDeltaV1::new(
-            DifferingLedgerKindV1::ExogenousInput,
+        InterventionDelta::new(
+            DifferingLedgerKind::ExogenousInput,
             vec![duplicate.clone(), duplicate],
         ),
         Err(SfsProfileRecordError::Wire(SfsWireError::DuplicateEntry {
@@ -755,32 +738,30 @@ fn intervention_delta_literal_wire_sorts_and_rejects_duplicate_stable_ids() {
 
 #[test]
 fn intervention_delta_decoder_closes_kind_operation_order_and_row_rules() {
-    let invalid_kind = literal_envelope(
-        InterventionDeltaV1::DOMAIN,
-        &literal_delta_payload(2, 0, &[]),
-    );
+    let invalid_kind =
+        literal_envelope(InterventionDelta::DOMAIN, &literal_delta_payload(2, 0, &[]));
     assert_eq!(
-        decode_envelope::<InterventionDeltaV1>(&invalid_kind),
+        decode_envelope::<InterventionDelta>(&invalid_kind),
         Err(SfsProfileRecordError::InvalidLedgerKind { value: 2 })
     );
     let invalid_operation = literal_envelope(
-        InterventionDeltaV1::DOMAIN,
+        InterventionDelta::DOMAIN,
         &literal_delta_payload(0, 1, &[(3, digest(1), zero_digest(), digest(2))]),
     );
     assert_eq!(
-        decode_envelope::<InterventionDeltaV1>(&invalid_operation),
+        decode_envelope::<InterventionDelta>(&invalid_operation),
         Err(SfsProfileRecordError::InvalidInterventionOperation { value: 3 })
     );
     let invalid_row = literal_envelope(
-        InterventionDeltaV1::DOMAIN,
+        InterventionDelta::DOMAIN,
         &literal_delta_payload(0, 1, &[(0, digest(1), digest(2), digest(3))]),
     );
     assert_eq!(
-        decode_envelope::<InterventionDeltaV1>(&invalid_row),
+        decode_envelope::<InterventionDelta>(&invalid_row),
         Err(SfsProfileRecordError::InvalidInterventionRow)
     );
     let reversed = literal_envelope(
-        InterventionDeltaV1::DOMAIN,
+        InterventionDelta::DOMAIN,
         &literal_delta_payload(
             0,
             2,
@@ -791,13 +772,13 @@ fn intervention_delta_decoder_closes_kind_operation_order_and_row_rules() {
         ),
     );
     assert_eq!(
-        decode_envelope::<InterventionDeltaV1>(&reversed),
+        decode_envelope::<InterventionDelta>(&reversed),
         Err(SfsProfileRecordError::Wire(SfsWireError::OutOfOrder {
             field: "intervention_rows",
         }))
     );
     let duplicate = literal_envelope(
-        InterventionDeltaV1::DOMAIN,
+        InterventionDelta::DOMAIN,
         &literal_delta_payload(
             0,
             2,
@@ -808,7 +789,7 @@ fn intervention_delta_decoder_closes_kind_operation_order_and_row_rules() {
         ),
     );
     assert_eq!(
-        decode_envelope::<InterventionDeltaV1>(&duplicate),
+        decode_envelope::<InterventionDelta>(&duplicate),
         Err(SfsProfileRecordError::Wire(SfsWireError::DuplicateEntry {
             field: "intervention_rows",
         }))
@@ -820,12 +801,12 @@ fn intervention_count_maximum_succeeds_and_plus_one_preflights() {
     let mut rows = Vec::with_capacity(65_536);
     for index in 0..65_536 {
         rows.push(intervention_row(
-            InterventionOperationV1::Add,
+            InterventionOperation::Add,
             indexed_digest(index),
         ));
     }
     assert_eq!(
-        InterventionDeltaV1::new(DifferingLedgerKindV1::ExogenousInput, rows.clone()),
+        InterventionDelta::new(DifferingLedgerKind::ExogenousInput, rows.clone()),
         Err(SfsProfileRecordError::Wire(SfsWireError::CountTooLarge {
             field: "intervention_rows",
             limit: 65_535,
@@ -833,18 +814,18 @@ fn intervention_count_maximum_succeeds_and_plus_one_preflights() {
         }))
     );
     rows.pop();
-    let maximum = InterventionDeltaV1::new(DifferingLedgerKindV1::ExogenousInput, rows).unwrap();
+    let maximum = InterventionDelta::new(DifferingLedgerKind::ExogenousInput, rows).unwrap();
     let encoded = canonical_envelope(&maximum).unwrap();
-    assert_eq!(payload_length::<InterventionDeltaV1>(&encoded), 6_356_900);
+    assert_eq!(payload_length::<InterventionDelta>(&encoded), 6_356_900);
     assert_eq!(
-        decode_envelope::<InterventionDeltaV1>(&encoded).unwrap(),
+        decode_envelope::<InterventionDelta>(&encoded).unwrap(),
         maximum
     );
-    let empty = InterventionDeltaV1::new(DifferingLedgerKindV1::PracticeAttempt, vec![]).unwrap();
+    let empty = InterventionDelta::new(DifferingLedgerKind::PracticeAttempt, vec![]).unwrap();
     let empty_bytes = canonical_envelope(&empty).unwrap();
-    assert_eq!(payload_length::<InterventionDeltaV1>(&empty_bytes), 5);
+    assert_eq!(payload_length::<InterventionDelta>(&empty_bytes), 5);
     assert_eq!(
-        decode_envelope::<InterventionDeltaV1>(&empty_bytes).unwrap(),
+        decode_envelope::<InterventionDelta>(&empty_bytes).unwrap(),
         empty
     );
 }
@@ -852,11 +833,11 @@ fn intervention_count_maximum_succeeds_and_plus_one_preflights() {
 #[test]
 fn intervention_decoder_preflights_product_count_truncation_and_trailing() {
     let overflow = literal_envelope(
-        InterventionDeltaV1::DOMAIN,
+        InterventionDelta::DOMAIN,
         &literal_delta_payload(0, u32::MAX, &[]),
     );
     assert_eq!(
-        decode_envelope::<InterventionDeltaV1>(&overflow),
+        decode_envelope::<InterventionDelta>(&overflow),
         Err(SfsProfileRecordError::Wire(
             SfsWireError::ArithmeticOverflow {
                 field: "intervention_rows",
@@ -864,11 +845,11 @@ fn intervention_decoder_preflights_product_count_truncation_and_trailing() {
         ))
     );
     let too_many = literal_envelope(
-        InterventionDeltaV1::DOMAIN,
+        InterventionDelta::DOMAIN,
         &literal_delta_payload(0, 65_536, &[]),
     );
     assert_eq!(
-        decode_envelope::<InterventionDeltaV1>(&too_many),
+        decode_envelope::<InterventionDelta>(&too_many),
         Err(SfsProfileRecordError::Wire(SfsWireError::CountTooLarge {
             field: "intervention_rows",
             limit: 65_535,
@@ -877,16 +858,16 @@ fn intervention_decoder_preflights_product_count_truncation_and_trailing() {
     );
     let mut truncated_payload = literal_delta_payload(0, 1, &[]);
     truncated_payload.push(3);
-    let truncated = literal_envelope(InterventionDeltaV1::DOMAIN, &truncated_payload);
+    let truncated = literal_envelope(InterventionDelta::DOMAIN, &truncated_payload);
     assert_eq!(
-        decode_envelope::<InterventionDeltaV1>(&truncated),
+        decode_envelope::<InterventionDelta>(&truncated),
         Err(SfsProfileRecordError::Wire(SfsWireError::TruncatedEnvelope))
     );
     let mut trailing_payload = literal_delta_payload(0, 0, &[]);
     trailing_payload.push(3);
-    let trailing = literal_envelope(InterventionDeltaV1::DOMAIN, &trailing_payload);
+    let trailing = literal_envelope(InterventionDelta::DOMAIN, &trailing_payload);
     assert_eq!(
-        decode_envelope::<InterventionDeltaV1>(&trailing),
+        decode_envelope::<InterventionDelta>(&trailing),
         Err(SfsProfileRecordError::Wire(SfsWireError::TrailingBytes {
             count: 1,
         }))
@@ -894,11 +875,11 @@ fn intervention_decoder_preflights_product_count_truncation_and_trailing() {
 }
 
 fn persistence(
-    kind: DifferingLedgerKindV1,
+    kind: DifferingLedgerKind,
     post_width: u16,
     separations: Vec<f64>,
-) -> Result<PersistenceComparisonV1, SfsProfileRecordError> {
-    PersistenceComparisonV1::new(
+) -> Result<PersistenceComparison, SfsProfileRecordError> {
+    PersistenceComparison::new(
         digest(30),
         digest(31),
         kind,
@@ -939,7 +920,7 @@ fn literal_persistence_payload(kind: u8, separations: &[f64], class: u8) -> Vec<
 #[test]
 fn persistence_comparison_literal_wire_accessors_and_all_classes_are_exact() {
     let value = persistence(
-        DifferingLedgerKindV1::PracticeAttempt,
+        DifferingLedgerKind::PracticeAttempt,
         2,
         vec![2.0, 1.0, -1.0],
     )
@@ -948,16 +929,16 @@ fn persistence_comparison_literal_wire_accessors_and_all_classes_are_exact() {
     assert_eq!(value.intervention_trace_digest(), digest(31));
     assert_eq!(
         value.differing_ledger_kind(),
-        DifferingLedgerKindV1::PracticeAttempt
+        DifferingLedgerKind::PracticeAttempt
     );
     assert_eq!(value.control_differing_ledger_digest(), digest(32));
     assert_eq!(value.intervention_differing_ledger_digest(), digest(33));
     assert_eq!(value.intervention_delta_digest(), digest(34));
     let expected_payload = literal_persistence_payload(1, &[2.0, 1.0, -1.0], 1);
-    let expected = literal_envelope(PersistenceComparisonV1::DOMAIN, &expected_payload);
+    let expected = literal_envelope(PersistenceComparison::DOMAIN, &expected_payload);
     assert_eq!(canonical_envelope(&value).unwrap(), expected);
     assert_eq!(
-        decode_envelope::<PersistenceComparisonV1>(&expected).unwrap(),
+        decode_envelope::<PersistenceComparison>(&expected).unwrap(),
         value
     );
     for (separations, class) in [
@@ -967,18 +948,18 @@ fn persistence_comparison_literal_wire_accessors_and_all_classes_are_exact() {
         (vec![2.0, 0.0, 1.0], 3),
     ] {
         let encoded = canonical_envelope(
-            &persistence(DifferingLedgerKindV1::ExogenousInput, 2, separations).unwrap(),
+            &persistence(DifferingLedgerKind::ExogenousInput, 2, separations).unwrap(),
         )
         .unwrap();
         assert_eq!(encoded.last(), Some(&class));
-        assert!(decode_envelope::<PersistenceComparisonV1>(&encoded).is_ok());
+        assert!(decode_envelope::<PersistenceComparison>(&encoded).is_ok());
     }
 }
 
 #[test]
 fn persistence_requires_exact_p_plus_one_and_maximum_width() {
     assert_eq!(
-        persistence(DifferingLedgerKindV1::ExogenousInput, 2, vec![1.0, 2.0]),
+        persistence(DifferingLedgerKind::ExogenousInput, 2, vec![1.0, 2.0]),
         Err(SfsProfileRecordError::Classification(
             PersistenceClassError::WrongLength {
                 expected: 3,
@@ -987,7 +968,7 @@ fn persistence_requires_exact_p_plus_one_and_maximum_width() {
         ))
     );
     assert_eq!(
-        persistence(DifferingLedgerKindV1::ExogenousInput, 2, vec![1.0; 4]),
+        persistence(DifferingLedgerKind::ExogenousInput, 2, vec![1.0; 4]),
         Err(SfsProfileRecordError::Classification(
             PersistenceClassError::WrongLength {
                 expected: 3,
@@ -995,14 +976,11 @@ fn persistence_requires_exact_p_plus_one_and_maximum_width() {
             }
         ))
     );
-    let maximum = persistence(DifferingLedgerKindV1::ExogenousInput, 52, vec![0.0; 53]).unwrap();
+    let maximum = persistence(DifferingLedgerKind::ExogenousInput, 52, vec![0.0; 53]).unwrap();
     let maximum_bytes = canonical_envelope(&maximum).unwrap();
+    assert_eq!(payload_length::<PersistenceComparison>(&maximum_bytes), 598);
     assert_eq!(
-        payload_length::<PersistenceComparisonV1>(&maximum_bytes),
-        598
-    );
-    assert_eq!(
-        decode_envelope::<PersistenceComparisonV1>(&maximum_bytes).unwrap(),
+        decode_envelope::<PersistenceComparison>(&maximum_bytes).unwrap(),
         maximum
     );
 }
@@ -1012,9 +990,9 @@ fn persistence_decoder_rejects_ledger_and_class_codes_before_recompute_mismatch(
     let valid_payload = literal_persistence_payload(0, &[2.0, 1.0, -1.0], 1);
     let mut invalid_ledger_payload = valid_payload.clone();
     invalid_ledger_payload[64] = 2;
-    let invalid_ledger = literal_envelope(PersistenceComparisonV1::DOMAIN, &invalid_ledger_payload);
+    let invalid_ledger = literal_envelope(PersistenceComparison::DOMAIN, &invalid_ledger_payload);
     assert_eq!(
-        decode_envelope::<PersistenceComparisonV1>(&invalid_ledger),
+        decode_envelope::<PersistenceComparison>(&invalid_ledger),
         Err(SfsProfileRecordError::InvalidLedgerKind { value: 2 })
     );
     let mut invalid_class_payload = valid_payload.clone();
@@ -1022,9 +1000,9 @@ fn persistence_decoder_rejects_ledger_and_class_codes_before_recompute_mismatch(
     let separation_start = 64 + 1 + 96 + 8 + 2 + 2;
     invalid_class_payload[separation_start..separation_start + 8]
         .copy_from_slice(&f64::NAN.to_bits().to_be_bytes());
-    let invalid_class = literal_envelope(PersistenceComparisonV1::DOMAIN, &invalid_class_payload);
+    let invalid_class = literal_envelope(PersistenceComparison::DOMAIN, &invalid_class_payload);
     assert_eq!(
-        decode_envelope::<PersistenceComparisonV1>(&invalid_class),
+        decode_envelope::<PersistenceComparison>(&invalid_class),
         Err(SfsProfileRecordError::Wire(SfsWireError::InvalidCode {
             field: "persistence_class",
             value: 4,
@@ -1033,18 +1011,18 @@ fn persistence_decoder_rejects_ledger_and_class_codes_before_recompute_mismatch(
     let mut nonfinite_payload = valid_payload.clone();
     nonfinite_payload[separation_start..separation_start + 8]
         .copy_from_slice(&f64::NAN.to_bits().to_be_bytes());
-    let nonfinite = literal_envelope(PersistenceComparisonV1::DOMAIN, &nonfinite_payload);
+    let nonfinite = literal_envelope(PersistenceComparison::DOMAIN, &nonfinite_payload);
     assert_eq!(
-        decode_envelope::<PersistenceComparisonV1>(&nonfinite),
+        decode_envelope::<PersistenceComparison>(&nonfinite),
         Err(SfsProfileRecordError::Classification(
             PersistenceClassError::NonFiniteSeparation { index: 0 }
         ))
     );
     let mut mismatch_payload = valid_payload;
     *mismatch_payload.last_mut().unwrap() = 0;
-    let mismatch = literal_envelope(PersistenceComparisonV1::DOMAIN, &mismatch_payload);
+    let mismatch = literal_envelope(PersistenceComparison::DOMAIN, &mismatch_payload);
     assert_eq!(
-        decode_envelope::<PersistenceComparisonV1>(&mismatch),
+        decode_envelope::<PersistenceComparison>(&mismatch),
         Err(SfsProfileRecordError::ClassificationMismatch {
             stored: 0,
             computed: 1,

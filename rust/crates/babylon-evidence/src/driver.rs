@@ -2,14 +2,14 @@
 #![allow(dead_code, reason = "called only by the source-bound driver handle")]
 
 use babylon_practice_contract::{
-    intent_digest, parameter_bytes_digest, target_selection_policy_digest, PracticeIntentV1,
+    fixed_practice_target_digest, practice_intent_digest, practice_parameter_bytes_digest,
+    PracticeIntent,
 };
 
 use crate::{
-    canonical_envelope, classify_sfs, record_digest, DifferingLedgerKindV1, Digest32,
-    InterventionDeltaV1, PersistenceComparisonV1, PracticeAttemptLedgerV1,
-    PracticeCandidateScheduleV1, RunIdentityField, RunIdentityV1, SfsClass, SfsPreregistrationV1,
-    SfsTraceV1,
+    canonical_envelope, classify_sfs, record_digest, DifferingLedgerKind, Digest32,
+    InterventionDelta, PersistenceComparison, PracticeAttemptLedger, PracticeCandidateSchedule,
+    RunIdentity, RunIdentityField, SfsClass, SfsPreregistration, SfsTrace,
 };
 
 /// One fixture-only material sample admitted to the aligned comparator.
@@ -55,7 +55,7 @@ pub enum SyntheticDriverError {
     CandidateTargetPolicyMismatch {
         index: usize,
     },
-    CandidateGovernedCostMismatch {
+    CandidateResourceContractMismatch {
         index: usize,
     },
     CandidateParameterBytesMismatch {
@@ -144,11 +144,11 @@ impl SyntheticMaterialSample {
 }
 
 pub(crate) fn validate_candidate_projection(
-    run_identity: &RunIdentityV1,
-    preregistration: &SfsPreregistrationV1,
-    schedule: &PracticeCandidateScheduleV1,
-    attempts: &PracticeAttemptLedgerV1,
-    intents: &[PracticeIntentV1],
+    run_identity: &RunIdentity,
+    preregistration: &SfsPreregistration,
+    schedule: &PracticeCandidateSchedule,
+    attempts: &PracticeAttemptLedger,
+    intents: &[PracticeIntent],
     actual_exogenous_ledger_digest: Digest32,
 ) -> Result<(), SyntheticDriverError> {
     let attempt_digest = digest_record(attempts)?;
@@ -191,9 +191,9 @@ pub(crate) fn validate_candidate_projection(
 }
 
 fn validate_candidate_rows(
-    preregistration: &SfsPreregistrationV1,
-    schedule: &PracticeCandidateScheduleV1,
-    intents: &[PracticeIntentV1],
+    preregistration: &SfsPreregistration,
+    schedule: &PracticeCandidateSchedule,
+    intents: &[PracticeIntent],
 ) -> Result<(), SyntheticDriverError> {
     #[allow(clippy::needless_range_loop)]
     for index in 0..65_535 {
@@ -229,34 +229,36 @@ fn validate_candidate_rows(
 
 fn validate_intent(
     index: usize,
-    preregistration: &SfsPreregistrationV1,
-    row: &crate::PracticeCandidateRowV1,
-    intent: &PracticeIntentV1,
+    preregistration: &SfsPreregistration,
+    row: &crate::PracticeCandidateRow,
+    intent: &PracticeIntent,
 ) -> Result<(), SyntheticDriverError> {
-    let parameter_digest = parameter_bytes_digest(intent)
+    let parameter_digest = practice_parameter_bytes_digest(intent)
         .map(Digest32::from_bytes)
         .map_err(|_| SyntheticDriverError::CandidateParameterBytesMismatch { index })?;
-    let complete_digest = intent_digest(intent)
+    let complete_digest = practice_intent_digest(intent)
         .map(Digest32::from_bytes)
         .map_err(|_| SyntheticDriverError::CandidateIntentDigestMismatch { index })?;
     if complete_digest != row.practice_intent_digest() {
         return Err(SyntheticDriverError::CandidateIntentDigestMismatch { index });
     }
-    if intent.resolve_tick() != row.attempt_tick() {
+    if intent.resolve_tick != row.attempt_tick() {
         return Err(SyntheticDriverError::CandidateIntentTickMismatch { index });
     }
-    if intent.practice_id() != preregistration.practice_code() {
+    if intent.practice_id != preregistration.practice_code() {
         return Err(SyntheticDriverError::CandidatePracticeMismatch { index });
     }
-    let target = Digest32::from_bytes(target_selection_policy_digest(
-        intent.target_domain(),
-        intent.target_node_id(),
+    let target = Digest32::from_bytes(fixed_practice_target_digest(
+        intent.target.tag,
+        intent.target.identity,
     ));
     if target != preregistration.target_selection_policy_digest() {
         return Err(SyntheticDriverError::CandidateTargetPolicyMismatch { index });
     }
-    if intent.quoted_action_budget_cost() != preregistration.governed_cost() {
-        return Err(SyntheticDriverError::CandidateGovernedCostMismatch { index });
+    if Digest32::from_bytes(intent.quoted_resource_contract_digest)
+        != preregistration.resource_contract_digest()
+    {
+        return Err(SyntheticDriverError::CandidateResourceContractMismatch { index });
     }
     if parameter_digest != preregistration.parameter_bytes_digest() {
         return Err(SyntheticDriverError::CandidateParameterBytesMismatch { index });
@@ -265,9 +267,9 @@ fn validate_intent(
 }
 
 pub(crate) fn validate_twin_identity_difference(
-    control: &RunIdentityV1,
-    intervention: &RunIdentityV1,
-    selected: DifferingLedgerKindV1,
+    control: &RunIdentity,
+    intervention: &RunIdentity,
+    selected: DifferingLedgerKind,
 ) -> Result<(), SyntheticDriverError> {
     let fields = control.differing_fields(intervention);
     let exogenous = fields.contains(&RunIdentityField::ExogenousInputLedger);
@@ -288,8 +290,8 @@ pub(crate) fn validate_twin_identity_difference(
         }
     }
     let expected = match selected {
-        DifferingLedgerKindV1::ExogenousInput => exogenous && !practice,
-        DifferingLedgerKindV1::PracticeAttempt => practice && !exogenous,
+        DifferingLedgerKind::ExogenousInput => exogenous && !practice,
+        DifferingLedgerKind::PracticeAttempt => practice && !exogenous,
     };
     if !expected {
         return Err(SyntheticDriverError::TwinChangedWrongLedger);
@@ -298,12 +300,12 @@ pub(crate) fn validate_twin_identity_difference(
 }
 
 pub(crate) fn validate_persistence_comparison_identity(
-    control: &RunIdentityV1,
-    intervention: &RunIdentityV1,
-    control_trace: &SfsTraceV1,
-    intervention_trace: &SfsTraceV1,
-    comparison: &PersistenceComparisonV1,
-    intervention_delta: &InterventionDeltaV1,
+    control: &RunIdentity,
+    intervention: &RunIdentity,
+    control_trace: &SfsTrace,
+    intervention_trace: &SfsTrace,
+    comparison: &PersistenceComparison,
+    intervention_delta: &InterventionDelta,
 ) -> Result<(), SyntheticDriverError> {
     if control_trace.run_identity_digest() != digest_record(control)? {
         return Err(SyntheticDriverError::ControlTraceRunIdentityMismatch);
@@ -336,16 +338,16 @@ pub(crate) fn validate_persistence_comparison_identity(
 }
 
 fn selected_ledgers(
-    control: &RunIdentityV1,
-    intervention: &RunIdentityV1,
-    kind: DifferingLedgerKindV1,
+    control: &RunIdentity,
+    intervention: &RunIdentity,
+    kind: DifferingLedgerKind,
 ) -> (Digest32, Digest32) {
     match kind {
-        DifferingLedgerKindV1::ExogenousInput => (
+        DifferingLedgerKind::ExogenousInput => (
             control.exogenous_input_ledger_digest(),
             intervention.exogenous_input_ledger_digest(),
         ),
-        DifferingLedgerKindV1::PracticeAttempt => (
+        DifferingLedgerKind::PracticeAttempt => (
             control.practice_attempt_ledger_digest(),
             intervention.practice_attempt_ledger_digest(),
         ),
@@ -482,7 +484,7 @@ fn digest_record<T: crate::T3Record>(record: &T) -> Result<Digest32, SyntheticDr
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{PracticeAttemptRowV1, PracticeCandidateRowV1, PracticeDispositionV1};
+    use crate::{PracticeAttemptRow, PracticeCandidateRow, PracticeDisposition};
 
     fn digest(tag: u8) -> Digest32 {
         let mut bytes = [0_u8; 32];
@@ -659,39 +661,29 @@ mod tests {
 
     #[test]
     fn input_permutations_preserve_bytes() {
-        let first = PracticeCandidateRowV1::new(10, digest(2), digest(3));
-        let second = PracticeCandidateRowV1::new(12, digest(4), digest(5));
-        let left = PracticeCandidateScheduleV1::new(vec![first.clone(), second.clone()]).unwrap();
-        let right = PracticeCandidateScheduleV1::new(vec![second.clone(), first.clone()]).unwrap();
+        let first = PracticeCandidateRow::new(10, digest(2), digest(3));
+        let second = PracticeCandidateRow::new(12, digest(4), digest(5));
+        let left = PracticeCandidateSchedule::new(vec![first.clone(), second.clone()]).unwrap();
+        let right = PracticeCandidateSchedule::new(vec![second.clone(), first.clone()]).unwrap();
         assert_eq!(
             canonical_envelope(&left).unwrap(),
             canonical_envelope(&right).unwrap()
         );
-        let left_attempts = PracticeAttemptLedgerV1::new(
+        let left_attempts = PracticeAttemptLedger::new(
             digest(6),
             vec![
-                PracticeAttemptRowV1::new(
-                    first.clone(),
-                    PracticeDispositionV1::Rejected,
-                    digest(7),
-                )
-                .unwrap(),
-                PracticeAttemptRowV1::new(
-                    second.clone(),
-                    PracticeDispositionV1::Rejected,
-                    digest(8),
-                )
-                .unwrap(),
+                PracticeAttemptRow::new(first.clone(), PracticeDisposition::Rejected, digest(7))
+                    .unwrap(),
+                PracticeAttemptRow::new(second.clone(), PracticeDisposition::Rejected, digest(8))
+                    .unwrap(),
             ],
         )
         .unwrap();
-        let right_attempts = PracticeAttemptLedgerV1::new(
+        let right_attempts = PracticeAttemptLedger::new(
             digest(6),
             vec![
-                PracticeAttemptRowV1::new(second, PracticeDispositionV1::Rejected, digest(8))
-                    .unwrap(),
-                PracticeAttemptRowV1::new(first, PracticeDispositionV1::Rejected, digest(7))
-                    .unwrap(),
+                PracticeAttemptRow::new(second, PracticeDisposition::Rejected, digest(8)).unwrap(),
+                PracticeAttemptRow::new(first, PracticeDisposition::Rejected, digest(7)).unwrap(),
             ],
         )
         .unwrap();
@@ -703,13 +695,13 @@ mod tests {
 
     #[test]
     fn semantic_row_mutation_moves_bytes_and_digest() {
-        let original = PracticeCandidateScheduleV1::new(vec![PracticeCandidateRowV1::new(
+        let original = PracticeCandidateSchedule::new(vec![PracticeCandidateRow::new(
             10,
             digest(2),
             digest(3),
         )])
         .unwrap();
-        let changed = PracticeCandidateScheduleV1::new(vec![PracticeCandidateRowV1::new(
+        let changed = PracticeCandidateSchedule::new(vec![PracticeCandidateRow::new(
             11,
             digest(2),
             digest(3),

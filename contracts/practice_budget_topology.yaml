@@ -1,0 +1,284 @@
+# Current detached budget/topology contract; practice execution remains unwired.
+schema: babylon.practice-budget-topology
+evidence_class: Designed
+purpose: Validate detached organization budgets and authored solidarity topology.
+domain_terminator_hex: '00'
+schema_version: 1
+limits:
+  max_organizations:
+    value: 4096
+    evidence_class: Designed
+    play_purpose: Bound organization scans and scenario fuel.
+  max_org_solidarity_edges_per_org:
+    value: 256
+    evidence_class: Designed
+    play_purpose: Bound each organization solidarity footprint scan.
+enums:
+  VerbStem:
+    width: u8
+    evidence_class: Designed
+    play_purpose: Bind display practices to closed machine stems.
+    members:
+      MOBILIZE: 1
+      AID: 2
+  VerbMode:
+    width: u8
+    evidence_class: Designed
+    play_purpose: Distinguish the ruled mobilize sub-modes without a synthetic none mode.
+    members:
+      CANVASS: 1
+      AGITATE: 2
+  PracticeTargetDomain:
+    width: u8
+    evidence_class: Designed
+    play_purpose: Name the only grounded current target NodeType semantics.
+    members:
+      SOCIAL_CLASS: 1
+contract_errors:
+  width: u16
+  evidence_class: Designed
+  play_purpose: Preserve language-neutral contract refusal identity without becoming a submission reason.
+  members:
+    PRACTICE_DOMAIN: 1
+    PRACTICE_SCHEMA_VERSION: 2
+    PRACTICE_ENUM_CODE: 3
+    PRACTICE_TRUNCATED: 6
+    PRACTICE_TRAILING_BYTES: 7
+    PRACTICE_BOOLEAN: 9
+    PRACTICE_BUDGET_NONFINITE: 28
+    PRACTICE_BUDGET_NEGATIVE: 29
+    PRACTICE_BUDGET_FRACTIONAL: 30
+    PRACTICE_BUDGET_RANGE: 31
+    PRACTICE_BUDGET_ROUNDTRIP: 32
+    PRACTICE_BUDGET_INSUFFICIENT: 33
+    PRACTICE_BUDGET_ARITHMETIC: 34
+    PRACTICE_FOOTPRINT_LIMIT: 35
+    PRACTICE_FOOTPRINT_ORDER: 36
+    PRACTICE_FOOTPRINT_DUPLICATE: 37
+    PRACTICE_FOOTPRINT_SOURCE: 38
+    PRACTICE_FOOTPRINT_STRENGTH_NONFINITE: 39
+    PRACTICE_FOOTPRINT_STRENGTH_NONPOSITIVE: 40
+    PRACTICE_TOPOLOGY_ORGANIZATION_LIMIT: 41
+    PRACTICE_TOPOLOGY_ORGANIZATION_ORDER: 42
+    PRACTICE_TOPOLOGY_ORGANIZATION_DUPLICATE: 43
+    PRACTICE_TOPOLOGY_BUDGET_MISSING: 44
+    PRACTICE_TOPOLOGY_EDGE_ORDER: 45
+    PRACTICE_TOPOLOGY_EDGE_DUPLICATE: 46
+    PRACTICE_BUDGET_UNPRICED: 47
+records:
+  SolidarityFootprintEdge:
+    wire_domain: null
+    evidence_class: Designed
+    play_purpose: Carry a graph-free replenishment witness after target-type validation.
+    fields:
+      - name: source_org_node_id_u64
+        type: u64
+        byte_order: big_endian
+      - name: target_domain_u8
+        type: PracticeTargetDomain
+        byte_order: single_byte
+      - name: target_class_node_id_u64
+        type: u64
+        byte_order: big_endian
+      - name: strength_f64_bits_u64
+        type: f64_bits_u64
+        byte_order: big_endian
+  OrganizationPracticeTopologyEdge:
+    wire_domain: null
+    evidence_class: Designed
+    play_purpose: Count one typed outbound solidarity edge without granting graph authority.
+    fields:
+      - name: target_domain
+        type: PracticeTargetDomain
+        byte_order: single_byte
+      - name: target_class_node_id_u64
+        type: u64
+        byte_order: big_endian
+  OrganizationPracticeTopologyRow:
+    wire_domain: null
+    evidence_class: Designed
+    play_purpose: Preflight one authored organization and its bounded solidarity footprint.
+    fields:
+      - name: node_id_u64
+        type: u64
+        byte_order: big_endian
+      - name: active_bool
+        type: bool
+        byte_order: single_byte
+      - name: action_budget_storage_f64_bits_u64
+        type: optional[f64_bits_u64]
+        byte_order: optional_tag_then_big_endian
+      - name: edges
+        type: sequence[OrganizationPracticeTopologyEdge]
+        byte_order: sorted_unique
+  OrganizationPracticeTopology:
+    wire_domain: null
+    evidence_class: Designed
+    play_purpose: Bound scenario topology before a real loader mutates its graph.
+    fields:
+      - name: organizations
+        type: sequence[OrganizationPracticeTopologyRow]
+        byte_order: sorted_unique
+  OrganizationBudgetDelta:
+    wire_domain: babylon.organization-budget-delta.v1
+    evidence_class: Designed
+    play_purpose: Explain detached quota arithmetic without writing graph storage.
+    fields:
+      - name: schema_version
+        type: u16
+        byte_order: big_endian
+      - name: tick
+        type: u64
+        byte_order: big_endian
+      - name: actor_node_id
+        type: u64
+        byte_order: big_endian
+      - name: pre_action_world_hash
+        type: digest32
+        byte_order: raw_bytes
+      - name: budget_before
+        type: u32
+        byte_order: big_endian
+      - name: governed_cost
+        type: u32
+        byte_order: big_endian
+      - name: footprint_count
+        type: u32
+        byte_order: big_endian
+      - name: raw_credit
+        type: u32
+        byte_order: big_endian
+      - name: credited_credit
+        type: u32
+        byte_order: big_endian
+      - name: ceiling_bound
+        type: bool
+        byte_order: single_byte
+      - name: budget_after
+        type: u32
+        byte_order: big_endian
+  PracticeBudgetTerms:
+    wire_domain: null
+    evidence_class: Designed
+    play_purpose: Carry only terms consumed by detached quota arithmetic.
+    fields:
+      - name: initial
+        type: u32
+        byte_order: big_endian
+      - name: period_credit_cap
+        type: u32
+        byte_order: big_endian
+      - name: storage_ceiling
+        type: u32
+        byte_order: big_endian
+      - name: organize_cost
+        type: u32
+        byte_order: big_endian
+      - name: agitate_cost
+        type: u32
+        byte_order: big_endian
+      - name: mutual_aid_cost
+        type: u32
+        byte_order: big_endian
+budget_terms:
+  initial:
+    value: 1
+    evidence_class: Designed
+    play_purpose: Give each active organization one initial practice choice.
+  period_credit_cap:
+    value: 1
+    evidence_class: Designed
+    play_purpose: Bound period decision-throughput replenishment.
+  storage_ceiling:
+    value: 4
+    evidence_class: Designed
+    play_purpose: Prevent indefinite quota stockpiling.
+  organize_cost:
+    value: 1
+    evidence_class: Designed
+    play_purpose: Make Organize a costed strategic choice.
+  agitate_cost:
+    value: 1
+    evidence_class: Designed
+    play_purpose: Make Agitate a costed strategic choice.
+  mutual_aid_cost:
+    value: 1
+    evidence_class: Designed
+    play_purpose: Reserve a governed cost while material aid remains unwired.
+topology:
+  organization_node_type: NodeType/ORGANIZATION
+  solidarity_edge_type: EdgeType/SOLIDARITY
+  target_node_type: NodeType/SOCIAL_CLASS
+  graph_identity:
+    - source
+    - target
+    - type
+  target_domain_enters_graph_identity: false
+  dynamic_organization_creation: unavailable
+validation_laws:
+  budget_storage: finite_nonnegative_integral_binary64_exact_u32
+  budget_storage_canonical_bits: checked_u32_to_f64_bits
+  budget_arithmetic: checked_u32_before_f64_storage
+  unpriced_practice: explicit_refusal
+  solidarity_footprint_order: ascending_source_then_target
+  solidarity_strength: finite_strictly_positive
+  topology_organizations: ascending_unique_node_id
+  topology_edges: ascending_unique_target_class_node_id
+  topology_active_budget: required_when_active_optional_when_inactive
+scalar_types:
+  u8:
+    width_bits: 8
+    unsigned: true
+  u16:
+    width_bits: 16
+    unsigned: true
+  u32:
+    width_bits: 32
+    unsigned: true
+  u64:
+    width_bits: 64
+    unsigned: true
+  digest32:
+    width_bytes: 32
+    encoding: raw_bytes
+  bool:
+    width_bits: 8
+    valid_values:
+      - 0
+      - 1
+  f64_bits_u64:
+    width_bits: 64
+    encoding: ieee754_binary64_bits
+wire_layouts:
+  OrganizationBudgetDelta:
+    - ascii_domain
+    - zero_u8
+    - schema_version_u16_be
+    - tick_u64_be
+    - actor_node_id_u64_be
+    - pre_action_world_hash_32
+    - budget_before_u32_be
+    - governed_cost_u32_be
+    - footprint_count_u32_be
+    - raw_credit_u32_be
+    - credited_credit_u32_be
+    - ceiling_bound_u8
+    - budget_after_u32_be
+depends_on:
+  - practice_intent.yaml
+practice_mappings:
+  - practice: ORGANIZE
+    display_label: ORGANIZE
+    machine_stem: mobilize
+    machine_mode: CANVASS
+    parameter_allowlist: []
+  - practice: AGITATE
+    display_label: AGITATE
+    machine_stem: mobilize
+    machine_mode: AGITATE
+    parameter_allowlist: []
+  - practice: MUTUAL_AID
+    display_label: MUTUAL-AID
+    machine_stem: aid
+    machine_mode: null
+    parameter_allowlist: []

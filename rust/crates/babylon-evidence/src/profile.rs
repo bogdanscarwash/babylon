@@ -18,13 +18,13 @@ const AUDIT_SEMANTICS_ID: &str = "babylon.sfs.audit.v1";
 pub enum SfsProfileRecordError {
     /// A uniform-envelope or primitive wire rule failed.
     Wire(SfsWireError),
-    /// A component-kind byte is outside the closed V1 registry.
+    /// A component-kind byte is outside the closed current registry.
     InvalidComponentKind { value: u8 },
-    /// The audit-semantics identifier is not the exact V1 identifier.
+    /// The audit-semantics identifier is not the exact current identifier.
     InvalidAuditSemanticsId,
-    /// A ledger-kind byte is outside the closed V1 registry.
+    /// A ledger-kind byte is outside the closed current registry.
     InvalidLedgerKind { value: u8 },
-    /// An intervention operation is outside the closed V1 registry.
+    /// An intervention operation is outside the closed current registry.
     InvalidInterventionOperation { value: u8 },
     /// An intervention row violates its operation-specific digest law.
     InvalidInterventionRow,
@@ -53,7 +53,7 @@ impl From<PersistenceClassError> for SfsProfileRecordError {
 /// Closed component kinds admitted by the synthetic proof profile.
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ComponentKindV1 {
+pub enum ComponentKind {
     /// One BSL rule component.
     BslRule = 0,
     /// One governed Rust boundary component.
@@ -64,7 +64,7 @@ pub enum ComponentKindV1 {
     PostCommitProducer = 3,
 }
 
-impl ComponentKindV1 {
+impl ComponentKind {
     const fn from_code(value: u8) -> Option<Self> {
         match value {
             0 => Some(Self::BslRule),
@@ -112,9 +112,9 @@ impl CanonicalProfileSet {
 
 /// One sealed component audit profile with eight canonical sets.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SfsComponentProofProfileV1 {
+pub struct SfsComponentProofProfile {
     component_id: String,
-    component_kind: ComponentKindV1,
+    component_kind: ComponentKind,
     component_source_digest: Digest32,
     field_reads: CanonicalProfileSet,
     edge_reads: CanonicalProfileSet,
@@ -126,7 +126,7 @@ pub struct SfsComponentProofProfileV1 {
     effects: CanonicalProfileSet,
 }
 
-impl SfsComponentProofProfileV1 {
+impl SfsComponentProofProfile {
     /// Constructs one exact component profile.
     ///
     /// # Errors
@@ -134,7 +134,7 @@ impl SfsComponentProofProfileV1 {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         component_id: &str,
-        component_kind: ComponentKindV1,
+        component_kind: ComponentKind,
         component_source_digest: Digest32,
         field_reads: CanonicalProfileSet,
         edge_reads: CanonicalProfileSet,
@@ -169,7 +169,7 @@ impl SfsComponentProofProfileV1 {
 
     /// Returns the closed component kind.
     #[must_use]
-    pub const fn component_kind(&self) -> ComponentKindV1 {
+    pub const fn component_kind(&self) -> ComponentKind {
         self.component_kind
     }
 
@@ -180,7 +180,7 @@ impl SfsComponentProofProfileV1 {
     }
 }
 
-impl T3Record for SfsComponentProofProfileV1 {
+impl T3Record for SfsComponentProofProfile {
     const DOMAIN: &'static [u8] = b"babylon.sfs-component-proof-profile.v1";
     const MAX_PAYLOAD_BYTES: usize = 50_483;
     type Error = SfsProfileRecordError;
@@ -202,7 +202,7 @@ impl T3Record for SfsComponentProofProfileV1 {
     fn decode_payload(cursor: &mut PayloadCursor<'_>) -> Result<Self, Self::Error> {
         let component_id = cursor.read_nfc_utf8("component_id", COMPONENT_ID_MAX_BYTES)?;
         let kind_value = cursor.read_u8()?;
-        let component_kind = ComponentKindV1::from_code(kind_value)
+        let component_kind = ComponentKind::from_code(kind_value)
             .ok_or(SfsProfileRecordError::InvalidComponentKind { value: kind_value })?;
         Self::new(
             &component_id,
@@ -222,16 +222,16 @@ impl T3Record for SfsComponentProofProfileV1 {
 
 /// Complete closed proof profile for one synthetic causal cone.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SfsProofProfileV1 {
+pub struct SfsProofProfile {
     governed_manifest_digest: Digest32,
     forbidden_corpus_digest: Digest32,
     audit_semantics_id: String,
     audit_source_digest: Digest32,
     causal_cone_digest: Digest32,
-    components: Vec<SfsComponentProofProfileV1>,
+    components: Vec<SfsComponentProofProfile>,
 }
 
-impl SfsProofProfileV1 {
+impl SfsProofProfile {
     /// Constructs and canonicalizes one complete synthetic proof profile.
     ///
     /// # Errors
@@ -242,7 +242,7 @@ impl SfsProofProfileV1 {
         audit_semantics_id: &str,
         audit_source_digest: Digest32,
         causal_cone_digest: Digest32,
-        mut components: Vec<SfsComponentProofProfileV1>,
+        mut components: Vec<SfsComponentProofProfile>,
     ) -> Result<Self, SfsProfileRecordError> {
         validate_ascii("audit_semantics_id", audit_semantics_id, 64)?;
         if audit_semantics_id != AUDIT_SEMANTICS_ID {
@@ -263,7 +263,7 @@ impl SfsProofProfileV1 {
 
     /// Returns the immutable canonical component profiles.
     #[must_use]
-    pub fn components(&self) -> &[SfsComponentProofProfileV1] {
+    pub fn components(&self) -> &[SfsComponentProofProfile] {
         &self.components
     }
 
@@ -280,7 +280,7 @@ impl SfsProofProfileV1 {
     }
 }
 
-impl T3Record for SfsProofProfileV1 {
+impl T3Record for SfsProofProfile {
     const DOMAIN: &'static [u8] = b"babylon.sfs-proof-profile.v1";
     const MAX_PAYLOAD_BYTES: usize = 3_233_944;
     type Error = SfsProfileRecordError;
@@ -327,13 +327,13 @@ impl T3Record for SfsProofProfileV1 {
 
 /// Exact root, sink, and reachable component identity sets.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CausalConeV1 {
+pub struct CausalCone {
     roots: Vec<String>,
     sinks: Vec<String>,
     components: Vec<String>,
 }
 
-impl CausalConeV1 {
+impl CausalCone {
     /// Constructs and independently canonicalizes all three cone sets.
     ///
     /// # Errors
@@ -369,7 +369,7 @@ impl CausalConeV1 {
     }
 }
 
-impl T3Record for CausalConeV1 {
+impl T3Record for CausalCone {
     const DOMAIN: &'static [u8] = b"babylon.sfs-causal-cone.v1";
     const MAX_PAYLOAD_BYTES: usize = 49_542;
     type Error = SfsProfileRecordError;
@@ -391,14 +391,14 @@ impl T3Record for CausalConeV1 {
 /// Closed ledger kinds that may differ between synthetic twins.
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DifferingLedgerKindV1 {
+pub enum DifferingLedgerKind {
     /// Governed exogenous-input ledger.
     ExogenousInput = 0,
     /// Governed practice-attempt ledger.
     PracticeAttempt = 1,
 }
 
-impl DifferingLedgerKindV1 {
+impl DifferingLedgerKind {
     const fn from_code(value: u8) -> Option<Self> {
         match value {
             0 => Some(Self::ExogenousInput),
@@ -411,7 +411,7 @@ impl DifferingLedgerKindV1 {
 /// Closed intervention row operations.
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum InterventionOperationV1 {
+pub enum InterventionOperation {
     /// Add one canonical ledger row.
     Add = 0,
     /// Remove one canonical ledger row.
@@ -420,7 +420,7 @@ pub enum InterventionOperationV1 {
     Replace = 2,
 }
 
-impl InterventionOperationV1 {
+impl InterventionOperation {
     const fn from_code(value: u8) -> Option<Self> {
         match value {
             0 => Some(Self::Add),
@@ -433,32 +433,32 @@ impl InterventionOperationV1 {
 
 /// One fixed canonical row-level ledger delta.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct InterventionDeltaRowV1 {
-    operation: InterventionOperationV1,
+pub struct InterventionDeltaRow {
+    operation: InterventionOperation,
     stable_row_id_digest: Digest32,
     control_row_digest: Digest32,
     intervention_row_digest: Digest32,
 }
 
-impl InterventionDeltaRowV1 {
+impl InterventionDeltaRow {
     /// Constructs a row under the exact operation-specific zero rules.
     ///
     /// # Errors
-    /// Returns `InvalidInterventionRow` when its digest sides violate V1.
+    /// Returns `InvalidInterventionRow` when its digest sides violate current.
     pub fn new(
-        operation: InterventionOperationV1,
+        operation: InterventionOperation,
         stable_row_id_digest: Digest32,
         control_row_digest: Digest32,
         intervention_row_digest: Digest32,
     ) -> Result<Self, SfsProfileRecordError> {
         let valid = match operation {
-            InterventionOperationV1::Add => {
+            InterventionOperation::Add => {
                 control_row_digest.is_zero() && !intervention_row_digest.is_zero()
             }
-            InterventionOperationV1::Remove => {
+            InterventionOperation::Remove => {
                 !control_row_digest.is_zero() && intervention_row_digest.is_zero()
             }
-            InterventionOperationV1::Replace => {
+            InterventionOperation::Replace => {
                 !control_row_digest.is_zero()
                     && !intervention_row_digest.is_zero()
                     && control_row_digest != intervention_row_digest
@@ -478,19 +478,19 @@ impl InterventionDeltaRowV1 {
 
 /// Canonical row-level difference for one selected synthetic ledger.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct InterventionDeltaV1 {
-    ledger_kind: DifferingLedgerKindV1,
-    rows: Vec<InterventionDeltaRowV1>,
+pub struct InterventionDelta {
+    ledger_kind: DifferingLedgerKind,
+    rows: Vec<InterventionDeltaRow>,
 }
 
-impl InterventionDeltaV1 {
+impl InterventionDelta {
     /// Preflights, bounds, sorts, and rejects duplicate stable row IDs.
     ///
     /// # Errors
     /// Returns exact count or duplicate-entry refusals before publication.
     pub fn new(
-        ledger_kind: DifferingLedgerKindV1,
-        rows: Vec<InterventionDeltaRowV1>,
+        ledger_kind: DifferingLedgerKind,
+        rows: Vec<InterventionDeltaRow>,
     ) -> Result<Self, SfsProfileRecordError> {
         validate_delta_count(rows.len())?;
         let mut admitted = Vec::with_capacity(rows.len());
@@ -507,12 +507,12 @@ impl InterventionDeltaV1 {
 
     /// Returns the selected differing-ledger kind.
     #[must_use]
-    pub const fn ledger_kind(&self) -> DifferingLedgerKindV1 {
+    pub const fn ledger_kind(&self) -> DifferingLedgerKind {
         self.ledger_kind
     }
 }
 
-impl T3Record for InterventionDeltaV1 {
+impl T3Record for InterventionDelta {
     const DOMAIN: &'static [u8] = b"babylon.intervention-delta.v1";
     const MAX_PAYLOAD_BYTES: usize = 6_356_900;
     type Error = SfsProfileRecordError;
@@ -536,7 +536,7 @@ impl T3Record for InterventionDeltaV1 {
 
     fn decode_payload(cursor: &mut PayloadCursor<'_>) -> Result<Self, Self::Error> {
         let kind_value = cursor.read_u8()?;
-        let ledger_kind = DifferingLedgerKindV1::from_code(kind_value)
+        let ledger_kind = DifferingLedgerKind::from_code(kind_value)
             .ok_or(SfsProfileRecordError::InvalidLedgerKind { value: kind_value })?;
         let declared = cursor.read_u32()?;
         let product =
@@ -560,10 +560,10 @@ impl T3Record for InterventionDeltaV1 {
 
 /// One computed post-intervention persistence comparison.
 #[derive(Debug, Clone, PartialEq)]
-pub struct PersistenceComparisonV1 {
+pub struct PersistenceComparison {
     control_trace_digest: Digest32,
     intervention_trace_digest: Digest32,
-    differing_ledger_kind: DifferingLedgerKindV1,
+    differing_ledger_kind: DifferingLedgerKind,
     control_differing_ledger_digest: Digest32,
     intervention_differing_ledger_digest: Digest32,
     intervention_delta_digest: Digest32,
@@ -573,7 +573,7 @@ pub struct PersistenceComparisonV1 {
     persistence_class: PersistenceClass,
 }
 
-impl PersistenceComparisonV1 {
+impl PersistenceComparison {
     /// Constructs exact `P + 1` separations and computes their class.
     ///
     /// # Errors
@@ -582,7 +582,7 @@ impl PersistenceComparisonV1 {
     pub fn new(
         control_trace_digest: Digest32,
         intervention_trace_digest: Digest32,
-        differing_ledger_kind: DifferingLedgerKindV1,
+        differing_ledger_kind: DifferingLedgerKind,
         control_differing_ledger_digest: Digest32,
         intervention_differing_ledger_digest: Digest32,
         intervention_delta_digest: Digest32,
@@ -620,7 +620,7 @@ impl PersistenceComparisonV1 {
 
     /// Returns the selected differing-ledger kind.
     #[must_use]
-    pub const fn differing_ledger_kind(&self) -> DifferingLedgerKindV1 {
+    pub const fn differing_ledger_kind(&self) -> DifferingLedgerKind {
         self.differing_ledger_kind
     }
 
@@ -643,7 +643,7 @@ impl PersistenceComparisonV1 {
     }
 }
 
-impl T3Record for PersistenceComparisonV1 {
+impl T3Record for PersistenceComparison {
     const DOMAIN: &'static [u8] = b"babylon.persistence-comparison.v1";
     const MAX_PAYLOAD_BYTES: usize = 598;
     type Error = SfsProfileRecordError;
@@ -676,7 +676,7 @@ impl T3Record for PersistenceComparisonV1 {
         let control_trace = cursor.read_digest()?;
         let intervention_trace = cursor.read_digest()?;
         let kind_value = cursor.read_u8()?;
-        let ledger_kind = DifferingLedgerKindV1::from_code(kind_value)
+        let ledger_kind = DifferingLedgerKind::from_code(kind_value)
             .ok_or(SfsProfileRecordError::InvalidLedgerKind { value: kind_value })?;
         let control_ledger = cursor.read_digest()?;
         let intervention_ledger = cursor.read_digest()?;
@@ -821,17 +821,14 @@ fn decode_profile_set(
     CanonicalProfileSet::new(field, entries)
 }
 
-fn component_order(
-    left: &SfsComponentProofProfileV1,
-    right: &SfsComponentProofProfileV1,
-) -> Ordering {
+fn component_order(left: &SfsComponentProofProfile, right: &SfsComponentProofProfile) -> Ordering {
     left.component_id
         .as_bytes()
         .cmp(right.component_id.as_bytes())
 }
 
 fn reject_component_duplicates(
-    components: &[SfsComponentProofProfileV1],
+    components: &[SfsComponentProofProfile],
 ) -> Result<(), SfsProfileRecordError> {
     for index in 1..64 {
         if index >= components.len() {
@@ -847,13 +844,13 @@ fn reject_component_duplicates(
 fn decode_components(
     cursor: &mut PayloadCursor<'_>,
     count: usize,
-) -> Result<Vec<SfsComponentProofProfileV1>, SfsProfileRecordError> {
+) -> Result<Vec<SfsComponentProofProfile>, SfsProfileRecordError> {
     let mut components = Vec::with_capacity(count);
     for index in 0..64 {
         if index >= count {
             break;
         }
-        let value = cursor.read_complete_envelope::<SfsComponentProofProfileV1>()?;
+        let value = cursor.read_complete_envelope::<SfsComponentProofProfile>()?;
         validate_next_component(components.last(), &value)?;
         components.push(value);
     }
@@ -861,8 +858,8 @@ fn decode_components(
 }
 
 fn validate_next_component(
-    previous: Option<&SfsComponentProofProfileV1>,
-    value: &SfsComponentProofProfileV1,
+    previous: Option<&SfsComponentProofProfile>,
+    value: &SfsComponentProofProfile,
 ) -> Result<(), SfsProfileRecordError> {
     let Some(previous) = previous else {
         return Ok(());
@@ -947,7 +944,7 @@ fn validate_delta_count(actual: usize) -> Result<(), SfsProfileRecordError> {
     }
 }
 
-fn reject_delta_duplicates(rows: &[InterventionDeltaRowV1]) -> Result<(), SfsProfileRecordError> {
+fn reject_delta_duplicates(rows: &[InterventionDeltaRow]) -> Result<(), SfsProfileRecordError> {
     for index in 1..65_535 {
         if index >= rows.len() {
             break;
@@ -975,7 +972,7 @@ fn validate_exact_remaining(actual: usize, expected: usize) -> Result<(), SfsPro
 
 fn encode_delta_row(
     out: &mut PayloadEncoder,
-    row: &InterventionDeltaRowV1,
+    row: &InterventionDeltaRow,
 ) -> Result<(), SfsWireError> {
     out.push_u8(row.operation as u8)?;
     out.push_digest(row.stable_row_id_digest)?;
@@ -985,14 +982,14 @@ fn encode_delta_row(
 
 fn decode_delta_row(
     cursor: &mut PayloadCursor<'_>,
-) -> Result<InterventionDeltaRowV1, SfsProfileRecordError> {
+) -> Result<InterventionDeltaRow, SfsProfileRecordError> {
     let operation_value = cursor.read_u8()?;
-    let operation = InterventionOperationV1::from_code(operation_value).ok_or(
+    let operation = InterventionOperation::from_code(operation_value).ok_or(
         SfsProfileRecordError::InvalidInterventionOperation {
             value: operation_value,
         },
     )?;
-    InterventionDeltaRowV1::new(
+    InterventionDeltaRow::new(
         operation,
         cursor.read_digest()?,
         cursor.read_digest()?,
@@ -1003,7 +1000,7 @@ fn decode_delta_row(
 fn decode_delta_rows(
     cursor: &mut PayloadCursor<'_>,
     count: usize,
-) -> Result<Vec<InterventionDeltaRowV1>, SfsProfileRecordError> {
+) -> Result<Vec<InterventionDeltaRow>, SfsProfileRecordError> {
     let mut rows = Vec::with_capacity(count);
     for index in 0..65_535 {
         if index >= count {
@@ -1017,8 +1014,8 @@ fn decode_delta_rows(
 }
 
 fn validate_next_delta(
-    previous: Option<&InterventionDeltaRowV1>,
-    row: &InterventionDeltaRowV1,
+    previous: Option<&InterventionDeltaRow>,
+    row: &InterventionDeltaRow,
 ) -> Result<(), SfsProfileRecordError> {
     let Some(previous) = previous else {
         return Ok(());
