@@ -474,14 +474,9 @@ fn project_workforce(
             result.unavailable = LensUnavailable::InvalidObservation;
             return result;
         };
-        if !identities.insert((&account.pool_id, &account.site_id, &account.unit_id))
-            || account.employed.checked_add(account.reserve) != Some(account.labor_force)
-            || snapshot.resolve_tick.checked_add(1) != Some(account.next_opening_period)
-            || (snapshot.resolve_tick == 0) != account.completed.is_none()
-            || account
-                .completed
-                .as_ref()
-                .is_some_and(|completed| completed.period != snapshot.resolve_tick)
+        if !identities.insert(crate::workforce::StaffingIdentity::from(account))
+            || crate::workforce::validate_staffing_balance(account).is_err()
+            || crate::workforce::validate_staffing_period(account, snapshot.resolve_tick).is_err()
         {
             result.counties.clear();
             result.unavailable = LensUnavailable::InvalidObservation;

@@ -1,16 +1,9 @@
-//! The PER-24 contract for every shipped Bevy decision surface.
+//! Contracts for the surfaces composed by the durable campaign observer.
 //!
-//! A surface may enter a gameplay gate only when it asks a decision
-//! question and declares every input/output side of the player loop. Most
-//! shipped rows are still the explicitly unfogged administrative viewer's
-//! instruments, each carrying an administrative exemption and ineligible for
-//! gameplay gates. The exception is the county dossier card (PER-23, ADR249
-//! R9): the first Gameplay-role row — it declares the full decision loop but
-//! its only action, Investigate, is visibly unavailable until Gate 5, so
-//! [`DecisionSurfaceContract::satisfies_gameplay_gate`] still stays false for
-//! it. [`DeclaredSurface`] binds rendered entities back to this manifest so
-//! the production plugin composition can be checked as executable code rather
-//! than inferred from documentation.
+//! Observation and administrative presentation cannot satisfy a gameplay gate.
+//! The county dossier declares the decision loop, but its Investigate action
+//! stays visibly unavailable until Gate 5. `DeclaredSurface` binds rendered
+//! entities to this manifest so the production composition is checked directly.
 
 use bevy::prelude::Component;
 use std::fmt;
@@ -19,18 +12,6 @@ use std::fmt;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SurfaceId {
     TitleLockup,
-    StoryBanner,
-    CountyMap,
-    CountyLensHud,
-    TickTransport,
-    StatePanel,
-    BeatFeed,
-    TerminalLatch,
-    StoryCard,
-    MapAbsenceNotice,
-    Countdown,
-    AdminDisclosure,
-    AdminInspector,
     CountyDossier,
     ObserverShell,
     ObserverProduction,
@@ -38,20 +19,8 @@ pub enum SurfaceId {
 
 impl SurfaceId {
     /// Complete closed set used by the manifest-exhaustiveness sentinel.
-    pub const ALL: [Self; 16] = [
+    pub const ALL: [Self; 4] = [
         Self::TitleLockup,
-        Self::StoryBanner,
-        Self::CountyMap,
-        Self::CountyLensHud,
-        Self::TickTransport,
-        Self::StatePanel,
-        Self::BeatFeed,
-        Self::TerminalLatch,
-        Self::StoryCard,
-        Self::MapAbsenceNotice,
-        Self::Countdown,
-        Self::AdminDisclosure,
-        Self::AdminInspector,
         Self::CountyDossier,
         Self::ObserverShell,
         Self::ObserverProduction,
@@ -62,18 +31,6 @@ impl fmt::Display for SurfaceId {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(match self {
             Self::TitleLockup => "title-lockup",
-            Self::StoryBanner => "story-banner",
-            Self::CountyMap => "county-map",
-            Self::CountyLensHud => "county-lens-hud",
-            Self::TickTransport => "tick-transport",
-            Self::StatePanel => "state-panel",
-            Self::BeatFeed => "beat-feed",
-            Self::TerminalLatch => "terminal-latch",
-            Self::StoryCard => "story-card",
-            Self::MapAbsenceNotice => "map-absence-notice",
-            Self::Countdown => "countdown",
-            Self::AdminDisclosure => "admin-disclosure",
-            Self::AdminInspector => "admin-inspector",
             Self::CountyDossier => "county-dossier",
             Self::ObserverShell => "observer-shell",
             Self::ObserverProduction => "observer-production",
@@ -347,16 +304,6 @@ const fn gameplay_surface(
 
 /// Authoritative inventory of the surfaces composed by `main.rs`.
 ///
-/// Thirteen rows are the administrative viewer's own instruments, exempt and
-/// gate-ineligible; the county dossier card is the first Gameplay-role row
-/// (ADR249 R9). It declares the full decision loop — question, signals,
-/// uncertainty, fog requirements, receipts, Archive subjects — while its
-/// only action, Investigate, is declared visibly unavailable until Gate 5,
-/// so `satisfies_gameplay_gate()` stays false and the capstone sentinel
-/// `current_client_cannot_claim_a_gameplay_gate` holds. The manifest makes
-/// that limitation executable: rich visual output cannot become gameplay
-/// evidence merely by existing, and a gameplay-role row cannot claim player
-/// agency before Gate 5 enables the verb.
 pub const SHIPPED_SURFACE_MANIFEST: &[DecisionSurfaceContract] = &[
     DecisionSurfaceContract {
         id: SurfaceId::ObserverProduction,
@@ -411,70 +358,6 @@ pub const SHIPPED_SURFACE_MANIFEST: &[DecisionSurfaceContract] = &[
         &["county/<geoid>", "place/<geoid>"],
     ),
     admin_surface(SurfaceId::TitleLockup, &["application identity"], NONE),
-    admin_surface(SurfaceId::StoryBanner, &["selected story identity"], NONE),
-    admin_surface(
-        SurfaceId::CountyMap,
-        &["unfogged county lens values", "county boundaries"],
-        &["absent lens values are visibly distinct from zero"],
-    ),
-    admin_surface(
-        SurfaceId::CountyLensHud,
-        &["selected county", "active lens value and source"],
-        &["absence banner for unavailable readings"],
-    ),
-    admin_surface(
-        SurfaceId::TickTransport,
-        &["tick", "nominal world hash", "viewer playback state"],
-        NONE,
-    ),
-    admin_surface(
-        SurfaceId::StatePanel,
-        &["selected node engine fields"],
-        &["missing fields render as absent"],
-    ),
-    admin_surface(
-        SurfaceId::BeatFeed,
-        &["engine events", "severity", "tick"],
-        &["bounded feed history"],
-    ),
-    admin_surface(
-        SurfaceId::TerminalLatch,
-        &["terminal-decision event payload"],
-        &["uncomputed outcomes remain explicitly absent"],
-    ),
-    admin_surface(
-        SurfaceId::StoryCard,
-        &["story premise", "story catalog", "viewer controls"],
-        &["open-ended stories show unknown beat totals"],
-    ),
-    admin_surface(
-        SurfaceId::MapAbsenceNotice,
-        &["declared territorial-substrate absence"],
-        NONE,
-    ),
-    admin_surface(
-        SurfaceId::Countdown,
-        &["engine-derived phase countdown"],
-        &["unlatched countdowns remain absent"],
-    ),
-    admin_surface(
-        SurfaceId::AdminDisclosure,
-        &[
-            "administrative viewer status",
-            "unfogged material-truth status",
-        ],
-        NONE,
-    ),
-    admin_surface(
-        SurfaceId::AdminInspector,
-        &[
-            "raw selected-node attributes",
-            "per-rule tick report after a completed viewer tick",
-            "tick report \u{2014} not yet run",
-            "roster \u{2014} no county selected",
-        ],
-        &["pre-tick and roster-selection status are explicit"],
-    ),
 ];
 
 /// Resolves one surface id to its sole manifest declaration.
@@ -499,7 +382,7 @@ mod tests {
 
     fn gameplay_contract(actions: &'static [SurfaceActionV1]) -> DecisionSurfaceContract {
         DecisionSurfaceContract {
-            id: SurfaceId::CountyMap,
+            id: SurfaceId::ObserverShell,
             role: DecisionSurfaceRole::Gameplay,
             decision_question: Some("What is true here?"),
             visible_signals: SIGNAL,

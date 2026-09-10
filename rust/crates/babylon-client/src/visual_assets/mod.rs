@@ -3,7 +3,6 @@
 mod catalog;
 mod fonts;
 mod gallery;
-mod presentation;
 
 pub use catalog::{
     FrameKind, InterfaceIcon, MarkerIcon, ProvenanceIcon, SurfaceKind, VisualAssetDescriptor,
@@ -11,7 +10,6 @@ pub use catalog::{
 };
 pub use fonts::ObserverFonts;
 pub use gallery::{GalleryAssetLabel, GalleryScrollRoot, VisualAssetGalleryPlugin};
-pub use presentation::{ReadableTitle, StoryBanner, TitleMark, VisualPresentationPlugin};
 
 use bevy::asset::io::embedded::EmbeddedAssetRegistry;
 use bevy::asset::{AssetApp, AssetServer, Assets, Handle};

@@ -586,16 +586,15 @@ impl Drop for ReaderEnvGuard {
     }
 }
 
-fn held_county_app(campaign: CampaignId) -> App {
+fn held_county_app(target: &ReaderTarget) -> App {
+    let campaign = target.campaign_id;
     let mut app = App::new();
     app.add_plugins((MinimalPlugins, bevy::asset::AssetPlugin::default()));
     app.add_plugins(babylon_client::map::MapPlugin);
-    app.add_plugins(babylon_client::loop_ui::TickLoopPlugin);
     app.add_plugins(DossierCardPlugin);
     app.insert_resource(DossierCampaignId(campaign));
-    app.insert_resource(babylon_client::story::SelectedStory(
-        babylon_client::story::counties(),
-    ));
+    app.insert_resource(babylon_client::observer::ObserverSession::new(campaign));
+    install_held_observation(&mut app, target, 2);
     app.insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(
         std::time::Duration::ZERO,
     ));
@@ -609,6 +608,32 @@ fn held_county_app(campaign: CampaignId) -> App {
         .resource_mut::<babylon_client::map::SelectedCounty>()
         .0 = Some(index);
     app
+}
+
+fn install_held_observation(app: &mut App, target: &ReaderTarget, tick: u64) {
+    use babylon_client::observer::ObserverSession;
+    use babylon_client::observer_ui::ObserverFrame;
+    use babylon_persistence::{ObserverEconomySnapshotV1, ObserverVisibilityV1};
+
+    let hash = tick_content_hash(&target.config, target.campaign_id, tick);
+    let content_hash: String = hash.iter().map(|byte| format!("{byte:02x}")).collect();
+    app.world_mut()
+        .resource_mut::<ObserverSession>()
+        .ready(tick, Some(content_hash.clone()));
+    app.insert_resource(ObserverFrame(Some(ObserverEconomySnapshotV1 {
+        campaign_id: target.campaign_id.as_uuid().to_string(),
+        resolve_tick: tick,
+        foundation_digest: String::new(),
+        nominal_world_hash: None,
+        tick_content_hash: Some(content_hash),
+        envelope_digest: None,
+        visibility: ObserverVisibilityV1::FullObserver,
+        counties: Vec::new(),
+        production: None,
+    })));
+    let mut session = app.world_mut().resource_mut::<ObserverSession>();
+    let context = session.context();
+    assert!(session.installed(&context));
 }
 
 fn collect_held_card(app: &mut App) -> InstalledDossier {
@@ -776,7 +801,7 @@ fn live_dossier_cli_reads_through_the_confined_reader_and_survives_restart() {
     let _ = writeln!(sink, "dossier_cli_live: running dossier show");
     let card = assert_archive_current_card(&reader_dsn, &campaign);
     let reader_env = ReaderEnvGuard::set(&reader_dsn);
-    let mut held_app = held_county_app(target.campaign_id);
+    let mut held_app = held_county_app(&target);
     let held_before = collect_held_card(&mut held_app);
     assert_eq!(
         retained_page(&held_before.read)
@@ -807,6 +832,7 @@ fn live_dossier_cli_reads_through_the_confined_reader_and_survives_restart() {
         "dossier_cli_live: dossier show under the dual-tick gap"
     );
     assert_pending_card_after_tick_three(&reader_dsn, &campaign);
+    install_held_observation(&mut held_app, &target, 3);
     assert_pending_held_card(&mut held_app);
 
     assert_quiet_sweep_refreshes_held_card(

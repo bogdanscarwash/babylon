@@ -1,22 +1,10 @@
-//! PER-23 Slice 4 harness (ADR249 R5/R6/R9): the county dossier card's real
-//! headless proofs. Legacy conformance uses `MapPlugin`, `TickLoopPlugin`,
-//! and `DossierCardPlugin`. The observer proof uses the shared shell, history,
-//! and dossier plugins. Both run on `MinimalPlugins` with real resources,
-//! messages, and pointer events — the composition discipline `tests/projection.rs`
-//! established (direct `ButtonInput::press` is wiped by `InputPlugin`'s
-//! `PreUpdate`, so key presses ride real `KeyboardInput` messages).
-//!
-//! The parity thesis under test: the card's repaint derives ONLY from
-//! `ActiveCountyDossier`, `DossierFetchState`, and `DossierPageView`, so a
-//! seeded projection renders byte-identical zone text headless that the
-//! windowed viewer renders from a real fetch — one resource family, one
-//! paint path (the rationale `ui::dossier_card`'s module doc commits to).
+//! Current Archive dossier proofs with immutable observer frames and real Bevy
+//! resources, messages, and pointer events. No in-process simulation is installed.
 
 use babylon_client::atlas::CountyAtlas;
 use babylon_client::decision_surface::{DeclaredSurface, SurfaceId};
 use babylon_client::map::SelectedCounty;
 use babylon_client::palette;
-use babylon_client::story;
 use babylon_client::ui::dossier_card::{
     ActiveCountyDossier, DossierCampaignId, DossierCardPlugin, DossierCardRoot, DossierFetchError,
     DossierFetchState, DossierPageView, DossierRefresh, DossierRequestScope, DossierZone,
@@ -35,8 +23,6 @@ use babylon_persistence::{
     ArchiveSubjectKindV1, CampaignId,
 };
 use bevy::asset::AssetPlugin;
-use bevy::input::keyboard::{Key, KeyboardInput, NativeKey};
-use bevy::input::ButtonState;
 use bevy::picking::backend::HitData;
 use bevy::picking::events::{Click, Pointer};
 use bevy::picking::pointer::{Location, PointerButton, PointerId};
@@ -83,8 +69,6 @@ impl Drop for ReaderDsnGuard {
     }
 }
 
-/// Builds the legacy conformance app. `SelectedStory(counties())` mirrors
-/// `tests/projection.rs::new_app`; the durable observer uses its own fixture.
 fn new_app() -> (ReaderDsnGuard, App) {
     // Determinism contract: this harness never has an Archive reader. A
     // developer's shell may export `BABYLON_READER_DSN` for the live foci;
@@ -95,20 +79,20 @@ fn new_app() -> (ReaderDsnGuard, App) {
     let mut app = App::new();
     app.add_plugins((MinimalPlugins, AssetPlugin::default()));
     app.add_plugins(babylon_client::map::MapPlugin);
-    app.add_plugins(babylon_client::loop_ui::TickLoopPlugin);
     app.add_plugins(DossierCardPlugin);
-    app.insert_resource(DossierCampaignId(CampaignId::from_uuid(Uuid::nil())));
-    app.insert_resource(story::SelectedStory(story::counties()));
-    // I4 (tests/projection.rs): pin zero injected sim time before the first
-    // update so `RunState.running`'s wall-clock batch can never advance the
-    // engine mid-assertion.
+    let campaign = CampaignId::from_uuid(Uuid::nil());
+    let mut session = babylon_client::observer::ObserverSession::new(campaign);
+    session.ready(12, Some("0c".repeat(32)));
+    app.insert_resource(session);
+    app.insert_resource(DossierCampaignId(campaign));
+    install_observer_frame(&mut app);
     app.insert_resource(TimeUpdateStrategy::ManualDuration(Duration::ZERO));
     app.update(); // Startup
     (dsn_guard, app)
 }
 
-/// The observer uses the shared shell's real layout, without a transport or
-/// the legacy in-process tick engine. A headless window supplies its size.
+/// The observer uses the shared shell's real layout and an immutable frame.
+/// A headless window supplies its size.
 fn new_observer_app(window_size: (u32, u32)) -> (ReaderDsnGuard, App) {
     use babylon_client::observer::ObserverSession;
     use babylon_client::observer_io::ObserverSet;
@@ -169,29 +153,6 @@ fn new_observer_app(window_size: (u32, u32)) -> (ReaderDsnGuard, App) {
     install_observer_frame(&mut app);
     app.update();
     (dsn_guard, app)
-}
-
-/// Presses `key` through the REAL `KeyboardInput` message pipeline — the
-/// house pattern (`tests/projection.rs::press_key_via_real_event`): with
-/// `MapPlugin`'s `InputPlugin` present, a direct `ButtonInput::press()` is
-/// cleared before any `Update` system observes it.
-fn press_key_via_real_event(app: &mut App, key: KeyCode) {
-    app.world_mut()
-        .resource_mut::<Messages<KeyboardInput>>()
-        .write(KeyboardInput {
-            key_code: key,
-            logical_key: Key::Unidentified(NativeKey::Unidentified),
-            state: ButtonState::Pressed,
-            text: None,
-            repeat: false,
-            window: Entity::PLACEHOLDER,
-        });
-}
-
-fn release_key(app: &mut App, key: KeyCode) {
-    app.world_mut()
-        .resource_mut::<ButtonInput<KeyCode>>()
-        .release(key);
 }
 
 // ---- fixtures ----
@@ -814,24 +775,19 @@ fn undisclosed_link_cannot_navigate_or_synthesize_a_place_page() {
     assert!(!zone_text(&mut app, DossierZone::Signals).contains("0199999"));
 }
 
-/// The N-key restart clears the card THROUGH the selection signal:
-/// `restart_on_n_key`'s `SelectedCounty = None` write is what
-/// `drive_dossier_fetch` reacts to — the projection, the page view, and
-/// the root visibility all return to the resting state in the same frame.
 #[test]
-fn n_key_restart_clears_the_card_through_the_selection_signal() {
+fn clearing_selection_invalidates_the_card() {
     let (_dsn_guard, mut app) = new_app();
     seize_card(&mut app, fixture_projection());
     assert_eq!(zone_text(&mut app, DossierZone::Title), "Autauga County");
 
-    press_key_via_real_event(&mut app, KeyCode::KeyN);
+    app.world_mut().resource_mut::<SelectedCounty>().0 = None;
     app.update();
-    release_key(&mut app, KeyCode::KeyN);
 
     assert_eq!(app.world().resource::<SelectedCounty>().0, None);
     assert!(
         app.world().resource::<ActiveCountyDossier>().0.is_none(),
-        "the restart must drop the projection"
+        "clearing selection must drop the projection"
     );
     assert_eq!(
         app.world().resource::<DossierPageView>(),
@@ -904,8 +860,13 @@ fn obsolete_campaign_generation_and_county_results_cannot_install_or_report_erro
                 campaign: requested_campaign,
                 county_geoid: fips.into(),
                 refresh_generation: requested_generation,
-                observer: None,
-                read_scope: ArchiveReadScopeV2::foundation(requested_campaign),
+                observer: Some(
+                    app.world()
+                        .resource::<babylon_client::observer::ObserverSession>()
+                        .context(),
+                ),
+                read_scope: ArchiveReadScopeV2::committed(requested_campaign, 12, [12; 32])
+                    .unwrap(),
                 subject: ArchivePageRefV1::try_new(ArchiveSubjectKindV1::County, fips.into())
                     .unwrap(),
             },
@@ -953,8 +914,12 @@ fn unchanged_card_and_unfinished_task_preserve_the_rendered_subtree() {
             campaign,
             county_geoid: "01001".into(),
             refresh_generation: generation,
-            observer: None,
-            read_scope: ArchiveReadScopeV2::foundation(campaign),
+            observer: Some(
+                app.world()
+                    .resource::<babylon_client::observer::ObserverSession>()
+                    .context(),
+            ),
+            read_scope: ArchiveReadScopeV2::committed(campaign, 12, [12; 32]).unwrap(),
             subject: ArchivePageRefV1::try_new(ArchiveSubjectKindV1::County, "01001".into())
                 .unwrap(),
         },

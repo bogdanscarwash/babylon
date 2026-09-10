@@ -27,33 +27,12 @@ pub(crate) fn dependency_sites<'a>(
     snapshot: &'a ProductionSnapshotV2,
 ) -> Vec<(DependencyDirection, &'a ProductionSiteV2)> {
     let mut links = BTreeSet::new();
-    for input in site.processes.iter().flat_map(|process| &process.inputs) {
-        for supplier in &input.supplier_site_ids {
-            links.insert((DependencyDirection::Upstream, supplier.as_str()));
+    for relation in crate::material_relations::declared_material_relations(snapshot) {
+        if relation.buyer == site.id {
+            links.insert((DependencyDirection::Upstream, relation.supplier));
         }
-    }
-    for buyer in &snapshot.sites {
-        if buyer
-            .processes
-            .iter()
-            .flat_map(|process| &process.inputs)
-            .any(|input| input.supplier_site_ids.contains(&site.id))
-        {
-            links.insert((DependencyDirection::Downstream, buyer.id.as_str()));
-        }
-    }
-    for route in &snapshot.routes {
-        if route.buyer_site_id == site.id {
-            links.insert((
-                DependencyDirection::Upstream,
-                route.supplier_site_id.as_str(),
-            ));
-        }
-        if route.supplier_site_id == site.id {
-            links.insert((
-                DependencyDirection::Downstream,
-                route.buyer_site_id.as_str(),
-            ));
+        if relation.supplier == site.id {
+            links.insert((DependencyDirection::Downstream, relation.buyer));
         }
     }
     links
@@ -218,50 +197,30 @@ fn material_relations(
     snapshot: &ProductionSnapshotV2,
 ) -> BTreeMap<RelationKey<'_>, MaterialRelation<'_>> {
     let mut relations = BTreeMap::new();
-    for buyer in &snapshot.sites {
-        for input in buyer.processes.iter().flat_map(|process| &process.inputs) {
-            for supplier_id in &input.supplier_site_ids {
-                let Some(supplier) = snapshot.sites.iter().find(|site| site.id == *supplier_id)
-                else {
-                    continue;
-                };
-                let key = (
-                    supplier.id.as_str(),
-                    buyer.id.as_str(),
-                    input.good_id.as_str(),
-                    input.unit_id.as_str(),
-                );
-                let relation = relations
-                    .entry(key)
-                    .or_insert_with(|| MaterialRelation::new(supplier, buyer));
-                relation.requirement = true;
-                relation.labels.insert((&input.good, &input.unit));
-            }
-        }
-    }
-    for route in &snapshot.routes {
+    for declared in crate::material_relations::declared_material_relations(snapshot) {
         let supplier = snapshot
             .sites
             .iter()
-            .find(|site| site.id == route.supplier_site_id);
-        let buyer = snapshot
-            .sites
-            .iter()
-            .find(|site| site.id == route.buyer_site_id);
+            .find(|site| site.id == declared.supplier);
+        let buyer = snapshot.sites.iter().find(|site| site.id == declared.buyer);
         let (Some(supplier), Some(buyer)) = (supplier, buyer) else {
             continue;
         };
         let key = (
-            supplier.id.as_str(),
-            buyer.id.as_str(),
-            route.good_id.as_str(),
-            route.unit_id.as_str(),
+            declared.supplier,
+            declared.buyer,
+            declared.good_id,
+            declared.unit_id,
         );
         let relation = relations
             .entry(key)
             .or_insert_with(|| MaterialRelation::new(supplier, buyer));
-        relation.labels.insert((&route.good, &route.unit));
-        relation.route_ids.insert(&route.id);
+        relation.labels.insert((declared.good, declared.unit));
+        let Some(route) = declared.route else {
+            relation.requirement = true;
+            continue;
+        };
+        relation.route_ids.insert(route.id.as_str());
         for (quantity, fact) in [
             (route.shipped, FlowFact::Shipped),
             (route.delivered, FlowFact::Delivered),

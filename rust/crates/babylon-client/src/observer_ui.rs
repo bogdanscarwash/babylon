@@ -1867,7 +1867,7 @@ impl Plugin for ObserverShellPlugin {
             .init_resource::<ObserverFeedback>()
             .init_resource::<ObserverKeyboardClaim>()
             .add_message::<ObserverCommand>()
-            .add_systems(Startup, spawn_shell.after(crate::map::spawn_map_surface))
+            .add_systems(Startup, spawn_shell.after(crate::map::load_county_atlas))
             .add_systems(PostUpdate, apply_fonts.before(bevy::ui::UiSystems::Content))
             .add_systems(
                 Update,

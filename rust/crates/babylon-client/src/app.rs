@@ -81,14 +81,8 @@ pub fn build_app(mode: AppMode) -> Result<App, String> {
                 .add_plugins(crate::campaign_browser::CampaignBrowserPlugin)
                 .add_plugins(crate::observer_history::ObserverHistoryPlugin)
                 .add_plugins(crate::observer_performance::ObserverPerformancePlugin)
-                // PER-23 Slice 4 (ADR249 R9): the county dossier card — the
-                // first Gameplay-role surface. Its resource family must exist
-                // identically in windowed and headless compositions, so it
-                // rides its own plugin rather than TickLoopPlugin's wiring.
+                // The card and telemetry consume the same scoped Archive resources.
                 .add_plugins(ui::dossier_card::DossierCardPlugin)
-                // Session observers ride the same resource family (every
-                // observer tolerates its absence), so the session log sees
-                // exactly what the card renderer saw.
                 .add_plugins(session_log::SessionLogPlugin)
                 .insert_resource(crate::production::PrimaryView::Map)
                 .insert_resource(session)

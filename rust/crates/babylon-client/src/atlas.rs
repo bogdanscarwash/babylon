@@ -200,13 +200,9 @@ struct CountyRow {
 /// everything it needs out of that buffer, so it owns its data and carries
 /// no lifetime.
 ///
-/// `Resource` (adversarial-panel fix FB5): `map::mesh::spawn_map_surface`
-/// inserts the ONE parse it already does at Startup as this resource, so
-/// per-frame `Update` systems (`refresh_hud`, `refresh_state_panel`,
-/// `recolor_on_lens_changed`) read it instead of each re-parsing the
-/// 1.7 MB embedded atlas — a full SHA-256 hash plus a table decode — on
-/// every call. Never re-derive `CountyAtlas::parse(ATLAS_BYTES)` in a
-/// system that could instead read `Res<CountyAtlas>`.
+/// Loaded once by `map::load_county_atlas` and shared by geographic views.
+/// Update systems read `Res<CountyAtlas>` instead of decoding the embedded
+/// geography again.
 #[derive(Debug, bevy::prelude::Resource)]
 pub struct CountyAtlas {
     counties: Vec<CountyRow>,

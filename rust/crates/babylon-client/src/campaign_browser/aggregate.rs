@@ -12,7 +12,10 @@ use crate::map_economy_lens::{
     project_map_lens, CountyLensReading, MapLens, MaterialGoodKey, MaterialLensKind,
 };
 
-use super::{staffing_difference, staffing_scope_error, StaffingIdentity};
+use super::staffing_difference;
+use crate::workforce::{
+    validate_staffing_balance, validate_staffing_period, StaffingError, StaffingIdentity,
+};
 
 fn owners(
     snapshot: &ProductionSnapshotV2,
@@ -79,12 +82,8 @@ fn workforce(
         if !owners.contains_key(account.site_id.as_str()) {
             return Err("workforce owner is not disclosed");
         }
-        if let Some(error) = staffing_scope_error(account, tick) {
-            return Err(error);
-        }
-        if account.employed.checked_add(account.reserve) != Some(account.labor_force) {
-            return Err("employed and reserve do not conserve the workforce");
-        }
+        validate_staffing_period(account, tick).map_err(StaffingError::message)?;
+        validate_staffing_balance(account).map_err(StaffingError::message)?;
         staffed.insert(account.site_id.as_str());
         employed = employed
             .checked_add(account.employed)

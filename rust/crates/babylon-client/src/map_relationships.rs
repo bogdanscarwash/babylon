@@ -199,34 +199,19 @@ struct RelationshipProjection {
 }
 
 fn declared_relations(snapshot: &ProductionSnapshotV2) -> BTreeMap<RelationKey, (String, String)> {
-    let mut relations = BTreeMap::new();
-    for buyer in &snapshot.sites {
-        for input in buyer.processes.iter().flat_map(|process| &process.inputs) {
-            for supplier in &input.supplier_site_ids {
-                relations.insert(
-                    RelationKey {
-                        supplier: supplier.clone(),
-                        buyer: buyer.id.clone(),
-                        good: input.good_id.clone(),
-                        unit: input.unit_id.clone(),
-                    },
-                    (input.good.clone(), input.unit.clone()),
-                );
-            }
-        }
-    }
-    for route in &snapshot.routes {
-        relations.insert(
-            RelationKey {
-                supplier: route.supplier_site_id.clone(),
-                buyer: route.buyer_site_id.clone(),
-                good: route.good_id.clone(),
-                unit: route.unit_id.clone(),
-            },
-            (route.good.clone(), route.unit.clone()),
-        );
-    }
-    relations
+    crate::material_relations::declared_material_relations(snapshot)
+        .map(|relation| {
+            (
+                RelationKey {
+                    supplier: relation.supplier.to_owned(),
+                    buyer: relation.buyer.to_owned(),
+                    good: relation.good_id.to_owned(),
+                    unit: relation.unit_id.to_owned(),
+                },
+                (relation.good.to_owned(), relation.unit.to_owned()),
+            )
+        })
+        .collect()
 }
 
 fn county_label(name: &str) -> &str {

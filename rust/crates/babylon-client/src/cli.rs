@@ -278,7 +278,7 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<CliRequest, Cli
     if !headless {
         if !rest.is_empty() {
             return Err(CliError::at(concat!(file!(), ":", line!()),
-                format!("windowed mode observes one durable campaign; use {HEADLESS_FLAG} for commands; demo stories are conformance-only")));
+                format!("windowed mode observes one durable campaign; use {HEADLESS_FLAG} for commands; demo stories are retired")));
         }
         return Ok(CliRequest::Windowed {
             initial_target: windowed_target(campaign, new_campaign, preset)?,
@@ -293,7 +293,7 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<CliRequest, Cli
     if rest.iter().any(|word| word == STORY_FLAG) {
         return Err(CliError::at(
             concat!(file!(), ":", line!()),
-            format!("{STORY_FLAG} is conformance-only; the client observes a durable campaign"),
+            format!("{STORY_FLAG} is retired; the client observes a durable campaign"),
         ));
     }
     if rest.first().is_some_and(|word| word == "help") {
@@ -743,7 +743,7 @@ mod tests {
     }
 
     #[test]
-    fn story_flag_in_headless_mode_refuses_as_conformance_only() {
+    fn retired_story_flag_is_refused_in_headless_mode() {
         let error = parse(os(&[
             HEADLESS_FLAG,
             STORY_FLAG,
@@ -754,8 +754,8 @@ mod tests {
         .expect_err("a story flag in headless mode refuses");
         let message = error.to_string();
         assert!(
-            message.contains(STORY_FLAG) && message.contains("conformance-only"),
-            "the refusal names the flag and its conformance-only scope, got {error}"
+            message.contains(STORY_FLAG) && message.contains("retired"),
+            "the refusal identifies the retired flag, got {error}"
         );
     }
 

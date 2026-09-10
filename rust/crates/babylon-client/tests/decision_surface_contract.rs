@@ -13,36 +13,6 @@ use bevy::time::TimeUpdateStrategy;
 use std::collections::HashSet;
 use std::time::Duration;
 
-fn conformance_app() -> App {
-    let mut app = App::new();
-    app.add_plugins((
-        MinimalPlugins,
-        AssetPlugin::default(),
-        ImagePlugin::default(),
-        bevy::text::TextPlugin,
-        TexturePlugin,
-    ));
-    app.add_plugins((
-        babylon_client::visual_assets::VisualAssetsPlugin,
-        babylon_client::visual_assets::VisualPresentationPlugin,
-    ));
-    app.add_plugins(babylon_client::map::MapPlugin);
-    app.add_plugins(babylon_client::loop_ui::TickLoopPlugin);
-    // Retained graph-viewer conformance composition, including its dossier.
-    app.add_plugins(babylon_client::ui::dossier_card::DossierCardPlugin);
-    app.insert_resource(babylon_client::story::SelectedStory(
-        babylon_client::story::counties(),
-    ));
-    app.insert_resource(TimeUpdateStrategy::ManualDuration(Duration::ZERO));
-    app.finish();
-    app.update(); // Startup.
-    app.world_mut()
-        .resource_mut::<babylon_client::map::SelectedCounty>()
-        .0 = Some(0);
-    app.update(); // Exercise the selection-outline spawn path too.
-    app
-}
-
 fn observer_app() -> App {
     use babylon_client::observer::{ObserverSession, SessionPhase};
     use babylon_client::observer_io::ObserverSet;
@@ -259,7 +229,7 @@ fn gameplay_contract_requires_every_decision_field() {
     const PRESENT: &[&str] = &["declared"];
     const ACTIONS: &[SurfaceActionV1] = &[SurfaceActionV1::available("declared")];
     let complete = DecisionSurfaceContract {
-        id: SurfaceId::CountyMap,
+        id: SurfaceId::ObserverShell,
         role: DecisionSurfaceRole::Gameplay,
         decision_question: Some("What should I do here next period?"),
         visible_signals: PRESENT,
@@ -320,7 +290,7 @@ fn gameplay_contract_rejects_blank_entries_in_every_required_list() {
         SurfaceActionV1::available(" \t\n"),
     ];
     let complete = DecisionSurfaceContract {
-        id: SurfaceId::CountyMap,
+        id: SurfaceId::ObserverShell,
         role: DecisionSurfaceRole::Gameplay,
         decision_question: Some("What should I do here next period?"),
         visible_signals: PRESENT,
@@ -366,40 +336,11 @@ fn gameplay_contract_rejects_blank_entries_in_every_required_list() {
 }
 
 #[test]
-fn admin_inspector_manifest_matches_its_pre_tick_rendering() {
-    const PRE_TICK_REPORT: &str = "tick report \u{2014} not yet run";
-    const ROSTER_STATUS: &str = "roster \u{2014} no county selected";
-
-    let contract = contract_for(SurfaceId::AdminInspector);
-    assert!(contract.visible_signals.contains(&PRE_TICK_REPORT));
-    assert!(contract.visible_signals.contains(&ROSTER_STATUS));
-
-    let mut app = conformance_app();
-    app.world_mut()
-        .resource_mut::<babylon_client::map::SelectedCounty>()
-        .0 = None;
-    app.world_mut()
-        .resource_mut::<babylon_client::ui::admin::AdminPanelVisible>()
-        .0 = true;
-    app.update();
-
-    let world = app.world_mut();
-    let mut query =
-        world.query_filtered::<&Text, With<babylon_client::ui::admin::AdminPanelText>>();
-    let rendered = &query
-        .single(world)
-        .expect("exactly one admin inspector text entity")
-        .0;
-    assert!(rendered.contains(PRE_TICK_REPORT), "got {rendered:?}");
-    assert!(rendered.contains(ROSTER_STATUS), "got {rendered:?}");
-}
-
-#[test]
 fn admin_exemptions_never_satisfy_gameplay_gates() {
     const PRESENT: &[&str] = &["declared"];
     const ACTIONS: &[SurfaceActionV1] = &[SurfaceActionV1::available("declared")];
     let exempt_gameplay = DecisionSurfaceContract {
-        id: SurfaceId::CountyMap,
+        id: SurfaceId::ObserverShell,
         role: DecisionSurfaceRole::Gameplay,
         decision_question: Some("Looks complete, but is exempt"),
         visible_signals: PRESENT,
@@ -414,7 +355,7 @@ fn admin_exemptions_never_satisfy_gameplay_gates() {
     assert!(!exempt_gameplay.satisfies_gameplay_gate());
 
     let disguised_admin = DecisionSurfaceContract {
-        id: SurfaceId::CountyMap,
+        id: SurfaceId::ObserverShell,
         role: DecisionSurfaceRole::AdminDebug,
         decision_question: Some("Looks complete, but is administrative"),
         visible_signals: PRESENT,
@@ -437,9 +378,7 @@ fn admin_exemptions_never_satisfy_gameplay_gates() {
 
 #[test]
 fn every_shipped_visual_entity_declares_a_manifest_surface() {
-    let mut conformance = conformance_app();
     let mut observer = observer_app();
-    let conformance_ids = visual_surface_ids(conformance.world_mut());
     let observer_ids = visual_surface_ids(observer.world_mut());
     let observer_surfaces = HashSet::from([
         SurfaceId::TitleLockup,
@@ -448,22 +387,7 @@ fn every_shipped_visual_entity_declares_a_manifest_surface() {
         SurfaceId::ObserverProduction,
     ]);
     assert_eq!(observer_ids, observer_surfaces);
-    assert_eq!(
-        conformance_ids,
-        SurfaceId::ALL
-            .into_iter()
-            .filter(|id| !matches!(id, SurfaceId::ObserverShell | SurfaceId::ObserverProduction))
-            .collect(),
-        "the retained conformance composition must still instantiate all of its surfaces"
-    );
-    assert_eq!(
-        conformance_ids
-            .union(&observer_ids)
-            .copied()
-            .collect::<HashSet<_>>(),
-        SurfaceId::ALL.into_iter().collect(),
-        "the actual observer and retained conformance compositions cover the full manifest"
-    );
+    assert_eq!(observer_ids, SurfaceId::ALL.into_iter().collect());
 
     let world = observer.world_mut();
     let mesh_surfaces: HashSet<_> = world
@@ -514,7 +438,7 @@ fn visual_surface_ids(world: &mut World) -> HashSet<SurfaceId> {
                 "shipped county-map entity {entity:?} has no DecisionSurfaceContract declaration"
             )
         });
-        assert_eq!(declared.id, SurfaceId::CountyMap);
+        assert_eq!(declared.id, SurfaceId::ObserverShell);
     }
 
     let mut mesh_query = world.query::<(Entity, &Mesh3d, Option<&DeclaredSurface>)>();

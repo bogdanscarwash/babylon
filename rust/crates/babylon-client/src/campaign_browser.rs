@@ -2,6 +2,8 @@
 
 mod aggregate;
 
+use crate::workforce::{validate_staffing_period, StaffingIdentity};
+
 use std::collections::BTreeSet;
 use std::fmt::Write as _;
 use std::fs::{self, OpenOptions};
@@ -606,39 +608,6 @@ fn receipt_text(site: &babylon_persistence::ProductionProcessV2, tick: u64) -> S
     }
 }
 
-/// Canonical identities from the authenticated DTO, never display labels.
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-struct StaffingIdentity<'a> {
-    pool: &'a str,
-    site: &'a str,
-    unit: &'a str,
-}
-
-impl<'a> From<&'a ProductionStaffingAccountV1> for StaffingIdentity<'a> {
-    fn from(account: &'a ProductionStaffingAccountV1) -> Self {
-        Self {
-            pool: &account.pool_id,
-            site: &account.site_id,
-            unit: &account.unit_id,
-        }
-    }
-}
-
-fn staffing_scope_error(account: &ProductionStaffingAccountV1, tick: u64) -> Option<&'static str> {
-    if tick.checked_add(1) != Some(account.next_opening_period) {
-        return Some("workforce account does not match the selected period");
-    }
-    match (&account.completed, tick) {
-        (None, 0) => None,
-        (Some(_), 0) => Some("foundation unexpectedly has a completed staffing receipt"),
-        (None, _) => Some("no completed staffing receipt for the selected period"),
-        (Some(receipt), _) if receipt.period != tick => {
-            Some("staffing receipt does not match the selected period")
-        }
-        (Some(_), _) => None,
-    }
-}
-
 fn staffing_difference(output: &mut String, label: &str, current: u64, compared: u64) {
     let difference = i128::from(current) - i128::from(compared);
     writeln!(
@@ -686,12 +655,12 @@ fn compare_staffing(
         }
         writeln!(output, "Modeled workforce: {}", current.subject.local_name)
             .expect("writing to a String cannot fail");
-        if let Some(error) = staffing_scope_error(current, tick) {
+        if let Err(error) = validate_staffing_period(current, tick) {
             writeln!(output, "CURRENT workforce unavailable: {error}.")
                 .expect("writing to a String cannot fail");
             continue;
         }
-        if let Some(error) = staffing_scope_error(compared, tick) {
+        if let Err(error) = validate_staffing_period(compared, tick) {
             writeln!(output, "COMPARED workforce unavailable: {error}.")
                 .expect("writing to a String cannot fail");
             continue;

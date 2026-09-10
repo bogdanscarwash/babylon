@@ -198,7 +198,7 @@ struct DossierPresentation {
 }
 
 fn fetch_dossier(
-    mut scope: DossierRequestScope,
+    scope: DossierRequestScope,
     cursor: Option<ArchiveChangeCursorV2>,
 ) -> Result<InstalledDossier, DossierFetchError> {
     let read_error = |error: babylon_persistence::SemanticArchiveReaderErrorV1| {
@@ -206,11 +206,6 @@ fn fetch_dossier(
     };
     let reader = SemanticArchiveReaderV1::from_env()
         .map_err(|error| DossierFetchError::ReaderAbsent(error.to_string()))?;
-    if scope.observer.is_none() {
-        // The standalone conformance card pins one marker before its canonical read.
-        scope.read_scope = crate::dossier::pinned_scope(&reader, scope.campaign)
-            .map_err(DossierFetchError::ReadFailed)?;
-    }
     let bounds = ArchiveDossierBoundsV2::try_new(32, cursor)
         .map_err(|error| DossierFetchError::ReadFailed(error.to_string()))?;
     let read = reader
@@ -229,7 +224,7 @@ fn fetch_dossier(
 /// Which zone of the card one entity renders. One marker per zone so the
 /// repaint finds its targets and headless tests can assert the whole zone
 /// tree exists and renders the expected text (the same pub-marker pattern
-/// `ui::countdown::CountdownPaneText` and friends use).
+/// the observer text surfaces use).
 #[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DossierZone {
     /// The county title line.
@@ -435,21 +430,18 @@ impl DossierReadIdentity<'_> {
 
     fn scope(&self, view: &DossierPageView) -> Option<DossierRequestScope> {
         let county = self.county()?;
-        let observer = self.observer.as_ref().map(|session| session.context());
-        let read_scope = if let Some(session) = &self.observer {
-            let snapshot = self.frame.as_ref()?.for_session(session)?;
-            if session.campaign != self.campaign.0 {
-                return None;
-            }
-            observation_scope(
-                session.campaign,
-                snapshot.resolve_tick,
-                snapshot.tick_content_hash.as_deref(),
-            )
-            .ok()?
-        } else {
-            ArchiveReadScopeV2::foundation(self.campaign.0)
-        };
+        let session = self.observer.as_ref()?;
+        let snapshot = self.frame.as_ref()?.for_session(session)?;
+        if session.campaign != self.campaign.0 {
+            return None;
+        }
+        let observer = Some(session.context());
+        let read_scope = observation_scope(
+            session.campaign,
+            snapshot.resolve_tick,
+            snapshot.tick_content_hash.as_deref(),
+        )
+        .ok()?;
         let subject = match view {
             DossierPageView::Card => {
                 ArchivePageRefV1::try_new(ArchiveSubjectKindV1::County, county.into()).ok()?
@@ -484,7 +476,6 @@ impl DossierReadIdentity<'_> {
             (Some(session), Some(frame)) => installed
                 .for_observer(session, frame, self.refresh.0, &expected.county_geoid)
                 .is_some(),
-            (None, _) => true,
             _ => false,
         }
     }
@@ -626,10 +617,7 @@ fn collect_dossier_fetch(
         return;
     };
     *state = match result {
-        Ok(installed)
-            if identity.admits(&installed, &view)
-                && (expected.observer.is_none() || installed.scope == expected) =>
-        {
+        Ok(installed) if identity.admits(&installed, &view) && installed.scope == expected => {
             projection.0 = Some(installed);
             DossierFetchState::Idle
         }
@@ -1510,13 +1498,7 @@ impl Plugin for DossierCardPlugin {
             .add_systems(
                 Update,
                 (
-                    // `.after(restart_on_n_key)`: the N-key restart clears
-                    // the card THROUGH this system — its `SelectedCounty =
-                    // None` write is the change this system reacts to, and
-                    // the ordering makes the clear land in the same frame
-                    // instead of one frame late. Vacuous when TickLoopPlugin
-                    // is absent (headless unit compositions).
-                    drive_dossier_fetch.after(crate::ui::story_card::restart_on_n_key),
+                    drive_dossier_fetch,
                     collect_dossier_fetch,
                     apply_page_requests,
                     repaint_dossier_card,

@@ -16,9 +16,8 @@ use crate::observer_io::ObserverSet;
 use crate::observer_layout::ObserverRegion;
 use crate::observer_theme as theme;
 use crate::observer_ui::{grouped, ObserverFeedback, ObserverFrame, ObserverUiState};
-use crate::production::{
-    readings_panel_visible, PrimaryView, ProductionCommand, ProductionNavigation,
-};
+use crate::production::navigation::readings_panel_visible;
+use crate::production::{PrimaryView, ProductionCommand, ProductionNavigation};
 use crate::ui::dossier_card::DossierRefresh;
 use delivery_groups::{
     delivery_log_entries, DeliveryGroup, DeliveryGroupKey, DeliveryLog, DeliveryLogEntry,
