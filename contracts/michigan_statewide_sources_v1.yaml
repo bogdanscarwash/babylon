@@ -1,0 +1,40 @@
+version: 1
+name: MichiganStatewideSourcesV1
+producer: tools/capture_michigan_statewide_sources.py
+consumer: rust/crates/babylon-persistence/src/michigan_material/source.rs
+boundary:
+  role: capture already-qualified authoring facts; no routing, allocation or experiment selection
+  groups: explicit supplied key, label and edge_keys; every selected edge covered, no unused group edges
+  sources: qualification pins actual defines, roster and compressed county matrix; matrix pins actual defines and
+    full graph
+  selected_geometry: one streamed canonical graph scan, retaining only deduplicated qualified-order edges and their
+    endpoint nodes
+  path_identity: preserve ordered edge IDs; verify exact matrix path, original way identity, geometry, endpoints
+    and summed distance
+  disconnected: refuse unqualified diagnostics, unattached terminals or missing selected directed paths
+  unused_matrix_pairs: may remain disconnected; no selected relationship may use them
+outputs:
+  directory: siblings of the supplied canonical defines.toml
+  manifest: statewide-sources.json
+  manifest_fields: [schema, defines_sha256, qualification_sha256, physical_network_sha256]
+  schema: MichiganStatewideSourcesV1
+  qualification: statewide-qualification.json.gz; retain every qualification field and ordered route path
+  physical: statewide-physical.json.gz; exact MichiganPhysicalNetworkV2
+  physical_fields: [source, profile, terminal_source_pins, terminal_policy, terminal_attachment_limit_meters,
+                    terminals, edges, capacity_groups]
+  road_source: original graph.source plus routing_profile_version and SHA-256 of the complete graph artifact
+  routing_profile_version: require michigan-freight-routing-v1; missing and unsupported policy versions refuse
+    publication
+  default_height: physical profile includes the positive Designed DEFAULT_MAXHEIGHT_MM bound for maxheight=default;
+    all truck fields and this bound must match the authored definitions
+  terminal_facts: matrix source_pins, policy and terminals preserved exactly; attachment limit agrees with defines
+  capacity_group_order: key ascending; edge membership ascending; overlapping supplied constraints remain explicit
+  hashes: lowercase SHA-256 of compressed output bytes; defines hash covers exact TOML bytes
+  json: ASCII-safe UTF-8, sorted object keys, compact separators, one trailing newline
+  gzip: empty filename, mtime zero, compression level nine
+  byte_bounds: at most 67108864 bytes each before and after compression, matching Rust captured-content bound
+publication:
+  preflight: refuse input/output overlap, symlink outputs and any existing non-identical output
+  success: fsync staged files, exclusive publication, manifest last
+  identical_rerun: retain identical output bytes
+  failure: retain existing files; remove only this invocation's newly published files and temporary files

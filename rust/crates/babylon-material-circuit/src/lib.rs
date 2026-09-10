@@ -8,30 +8,27 @@
 
 mod model;
 mod model_v2;
+mod model_v3;
 mod staffing;
 mod transition;
-mod transition_v2;
-mod wire;
+mod transition_v3;
 mod wire_common;
-mod wire_v2;
+mod wire_v3;
 
 pub use model::*;
 pub use model_v2::*;
 pub use staffing::{
-    advance_staffing_v1, StaffingErrorV1, StaffingPolicyV1, StaffingPoolBindingV1,
-    StaffingPoolIdV1, StaffingPoolStateV1, StaffingReceiptV1, StaffingStateV1,
-    StaffingTransitionV1, StaffingWorkRequestV1,
+    advance_staffing_v2, StaffingErrorV2, StaffingPolicyV1, StaffingPoolBindingV2,
+    StaffingPoolIdV1, StaffingPoolStateV2, StaffingReceiptV2, StaffingStateV2,
+    StaffingTransitionV2, StaffingWorkRequestV2, StaffingWorkSourceV2,
 };
-pub use transition::advance_material_circuit_v1;
-pub use transition_v2::{
-    advance_material_circuit_v2, close_material_period_v2, ClosedMaterialPeriodV2,
+
+pub use model_v3::*;
+pub use transition_v3::{
+    advance_material_circuit_v3, close_material_period_v3, ClosedMaterialPeriodV3,
 };
-pub use wire::{
-    decode_material_circuit_state_v1, encode_material_circuit_state_v1,
-    material_circuit_state_v1_digest, MATERIAL_CIRCUIT_STATE_V1_DOMAIN_BYTES,
-};
-pub use wire_v2::{
-    decode_material_circuit_state_v2, encode_material_circuit_state_v2,
-    material_circuit_state_v2_digest, MATERIAL_CIRCUIT_STATE_V2_DOMAIN_BYTES,
-    MATERIAL_CIRCUIT_V2_SOURCE_SHA256,
+pub use wire_v3::{
+    decode_material_circuit_state_v3, encode_material_circuit_state_v3,
+    material_circuit_state_v3_digest, MATERIAL_CIRCUIT_STATE_V3_DOMAIN_BYTES,
+    MATERIAL_CIRCUIT_V3_SOURCE_SHA256,
 };

@@ -4,7 +4,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use babylon_persistence::{ProductionSiteV1, ProductionSnapshotV1};
+use babylon_persistence::{ProductionSiteV2, ProductionSnapshotV2};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum DependencyDirection {
@@ -23,19 +23,20 @@ impl DependencyDirection {
 /// Recipe supplier declarations and committed route accounts identify real
 /// relations. Missing capability-scoped endpoints never become named links.
 pub(crate) fn dependency_sites<'a>(
-    site: &ProductionSiteV1,
-    snapshot: &'a ProductionSnapshotV1,
-) -> Vec<(DependencyDirection, &'a ProductionSiteV1)> {
+    site: &ProductionSiteV2,
+    snapshot: &'a ProductionSnapshotV2,
+) -> Vec<(DependencyDirection, &'a ProductionSiteV2)> {
     let mut links = BTreeSet::new();
-    for input in &site.inputs {
+    for input in site.processes.iter().flat_map(|process| &process.inputs) {
         for supplier in &input.supplier_site_ids {
             links.insert((DependencyDirection::Upstream, supplier.as_str()));
         }
     }
     for buyer in &snapshot.sites {
         if buyer
-            .inputs
+            .processes
             .iter()
+            .flat_map(|process| &process.inputs)
             .any(|input| input.supplier_site_ids.contains(&site.id))
         {
             links.insert((DependencyDirection::Downstream, buyer.id.as_str()));
@@ -67,15 +68,15 @@ pub(crate) fn dependency_sites<'a>(
         .collect()
 }
 
-fn unfinished_plan(site: &ProductionSiteV1) -> bool {
-    matches!((site.produced_batches, site.planned_batches), (Some(done), Some(plan)) if done < plan)
+fn unfinished_plan(site: &ProductionSiteV2) -> bool {
+    site.processes.iter().any(|process| matches!((process.produced_batches, process.planned_batches), (Some(done), Some(plan)) if done < plan))
 }
 
 /// Deterministic entry into an existing relation, without a strategic score.
 /// An unfulfilled committed plan comes first; otherwise choose a visible
 /// link between suppliers and buyers, then the first stable site identity.
-pub(crate) fn opening_site(snapshot: &ProductionSnapshotV1) -> Option<&ProductionSiteV1> {
-    let first = |predicate: &dyn Fn(&ProductionSiteV1) -> bool| {
+pub(crate) fn opening_site(snapshot: &ProductionSnapshotV2) -> Option<&ProductionSiteV2> {
+    let first = |predicate: &dyn Fn(&ProductionSiteV2) -> bool| {
         snapshot
             .sites
             .iter()
@@ -98,8 +99,40 @@ pub(crate) fn opening_site(snapshot: &ProductionSnapshotV1) -> Option<&Productio
 }
 
 /// Only the committed plan and output determine this label, never closing stock.
-pub(crate) fn committed_plan_status(site: &ProductionSiteV1) -> &'static str {
-    match (site.produced_batches, site.planned_batches) {
+pub(crate) fn committed_plan_status(site: &ProductionSiteV2) -> &'static str {
+    if site.processes.is_empty() {
+        return match site.role {
+            babylon_persistence::ProductionSiteRoleV2::Wholesale => {
+                "Wholesale / handling and onward distribution"
+            }
+            babylon_persistence::ProductionSiteRoleV2::Retail => {
+                "Retail / delivery to final demand"
+            }
+            babylon_persistence::ProductionSiteRoleV2::Production => {
+                "No productive process disclosed"
+            }
+        };
+    }
+    if site.processes.len() > 1 {
+        return if unfinished_plan(site) {
+            "One or more process plans partly completed"
+        } else if site
+            .processes
+            .iter()
+            .all(|process| process.produced_batches.is_none())
+        {
+            "Opening state; no committed production yet"
+        } else {
+            "Committed processes / read each material separately"
+        };
+    }
+    process_plan_status(&site.processes[0])
+}
+
+pub(crate) fn process_plan_status(
+    process: &babylon_persistence::ProductionProcessV2,
+) -> &'static str {
+    match (process.produced_batches, process.planned_batches) {
         (None, None) => "Opening state; no committed production yet",
         (Some(0), Some(0)) => "No production planned this period",
         (Some(0), Some(_)) => "No work committed against the plan",
@@ -122,8 +155,8 @@ enum FlowFact {
 type RelationKey<'a> = (&'a str, &'a str, &'a str, &'a str);
 
 struct MaterialRelation<'a> {
-    supplier: &'a ProductionSiteV1,
-    buyer: &'a ProductionSiteV1,
+    supplier: &'a ProductionSiteV2,
+    buyer: &'a ProductionSiteV2,
     labels: BTreeSet<(&'a str, &'a str)>,
     requirement: bool,
     route_ids: BTreeSet<&'a str>,
@@ -131,7 +164,7 @@ struct MaterialRelation<'a> {
 }
 
 impl<'a> MaterialRelation<'a> {
-    fn new(supplier: &'a ProductionSiteV1, buyer: &'a ProductionSiteV1) -> Self {
+    fn new(supplier: &'a ProductionSiteV2, buyer: &'a ProductionSiteV2) -> Self {
         Self {
             supplier,
             buyer,
@@ -182,11 +215,11 @@ impl<'a> MaterialRelation<'a> {
 }
 
 fn material_relations(
-    snapshot: &ProductionSnapshotV1,
+    snapshot: &ProductionSnapshotV2,
 ) -> BTreeMap<RelationKey<'_>, MaterialRelation<'_>> {
     let mut relations = BTreeMap::new();
     for buyer in &snapshot.sites {
-        for input in &buyer.inputs {
+        for input in buyer.processes.iter().flat_map(|process| &process.inputs) {
             for supplier_id in &input.supplier_site_ids {
                 let Some(supplier) = snapshot.sites.iter().find(|site| site.id == *supplier_id)
                 else {
@@ -258,10 +291,10 @@ fn material_relations(
 /// The dependency button already names its endpoint. Its second line describes
 /// the disclosed material and flow without repeating the name or summing goods.
 pub(crate) fn dependency_flow_summary(
-    site: &ProductionSiteV1,
-    other: &ProductionSiteV1,
+    site: &ProductionSiteV2,
+    other: &ProductionSiteV2,
     direction: DependencyDirection,
-    snapshot: &ProductionSnapshotV1,
+    snapshot: &ProductionSnapshotV2,
 ) -> String {
     let relations = material_relations(snapshot);
     let relevant: Vec<_> = relations
@@ -290,7 +323,7 @@ pub(crate) fn dependency_flow_summary(
 }
 
 /// Keep the introduction brief; neighboring buttons carry material and flow.
-pub(crate) fn describe_brief(site: &ProductionSiteV1, snapshot: &ProductionSnapshotV1) -> String {
+pub(crate) fn describe_brief(site: &ProductionSiteV2, snapshot: &ProductionSnapshotV2) -> String {
     let guidance = if dependency_sites(site, snapshot).is_empty() {
         "No material relationships disclosed."
     } else {
@@ -300,7 +333,7 @@ pub(crate) fn describe_brief(site: &ProductionSiteV1, snapshot: &ProductionSnaps
 }
 
 /// A bounded map of disclosed material relationships, with no cross-good totals.
-pub(crate) fn describe_overview(snapshot: &ProductionSnapshotV1) -> String {
+pub(crate) fn describe_overview(snapshot: &ProductionSnapshotV2) -> String {
     if snapshot.sites.is_empty() {
         return "No production cohorts are visible in this observation.".to_owned();
     }
@@ -329,46 +362,57 @@ pub(crate) fn describe_overview(snapshot: &ProductionSnapshotV1) -> String {
 mod tests {
     use super::*;
     use babylon_persistence::{
-        ProductionFreightV1, ProductionInputV1, ProductionLaborV1, ProductionRouteV1,
+        ProductionFreightV2, ProductionInputV1, ProductionLaborV1, ProductionRouteV2,
     };
 
-    fn site(id: &str, suppliers: &[&str]) -> ProductionSiteV1 {
-        ProductionSiteV1 {
+    fn site(id: &str, suppliers: &[&str]) -> ProductionSiteV2 {
+        ProductionSiteV2 {
             id: id.into(),
             county_geoid: "26163".into(),
             name: format!("Cohort {id}"),
             industry_code: "331".into(),
             observed_employment: Some(999_999),
-            output_good_id: "output".into(),
-            output_unit_id: "kg".into(),
-            output_good: "steel".into(),
-            output_unit: "kg".into(),
-            output_per_batch: 10,
-            available_batches: 8,
-            planned_batches: Some(8),
-            produced_batches: Some(8),
             inventory: Vec::new(),
-            inputs: suppliers
-                .iter()
-                .map(|supplier| ProductionInputV1 {
-                    good_id: (*supplier).into(),
-                    unit_id: "kg".into(),
-                    good: format!("Input {supplier}"),
-                    unit: "kg".into(),
-                    quantity_per_batch: 3,
-                    on_hand: 5,
-                    supplier_site_ids: vec![(*supplier).into()],
-                })
-                .collect(),
-            labor: vec![ProductionLaborV1 {
-                unit: "labor-hours".into(),
-                available: 7,
-                quantity_per_batch: 2,
+            role: babylon_persistence::ProductionSiteRoleV2::Production,
+            sector_code: "31-33".into(),
+            processes: vec![babylon_persistence::ProductionProcessV2 {
+                id: "fixture-process".into(),
+                name: "Fixture process".into(),
+                output_good_id: "output".into(),
+                output_unit_id: "kg".into(),
+                output_good: "steel".into(),
+                output_unit: "kg".into(),
+                output_per_batch: 10,
+                available_batches: 8,
+                planned_batches: Some(8),
+                produced_batches: Some(8),
+                inputs: suppliers
+                    .iter()
+                    .map(|supplier| ProductionInputV1 {
+                        good_id: (*supplier).into(),
+                        unit_id: "kg".into(),
+                        good: format!("Input {supplier}"),
+                        unit: "kg".into(),
+                        quantity_per_batch: 3,
+                        on_hand: 5,
+                        supplier_site_ids: vec![(*supplier).into()],
+                    })
+                    .collect(),
+                labor: vec![ProductionLaborV1 {
+                    unit: "labor-hours".into(),
+                    available: 7,
+                    quantity_per_batch: 2,
+                }],
             }],
         }
     }
-    fn chain() -> ProductionSnapshotV1 {
-        ProductionSnapshotV1 {
+    fn chain() -> ProductionSnapshotV2 {
+        ProductionSnapshotV2 {
+            content_authority_sha256: "a".repeat(64),
+            road_source: None,
+            physical_edges: Vec::new(),
+            merchant_handling_accounts: Vec::new(),
+            final_demand_accounts: Vec::new(),
             freight_capacity_accounts: Vec::new(),
             material_balance: None,
             labor_accounts: Vec::new(),
@@ -389,17 +433,17 @@ mod tests {
     fn opening_uses_unfinished_plan_then_connected_site_then_stable_id() {
         let mut snapshot = chain();
         assert_eq!(opening_site(&snapshot).expect("connected site").id, "b");
-        snapshot.sites[2].produced_batches = Some(0);
+        snapshot.sites[2].processes[0].produced_batches = Some(0);
         assert_eq!(opening_site(&snapshot).expect("unfinished plan").id, "c");
-        snapshot.sites[0].produced_batches = Some(7);
+        snapshot.sites[0].processes[0].produced_batches = Some(7);
         assert_eq!(
             opening_site(&snapshot).expect("stable unfinished ID").id,
             "a"
         );
         for site in &mut snapshot.sites {
-            site.planned_batches = None;
-            site.produced_batches = None;
-            site.inputs.clear();
+            site.processes[0].planned_batches = None;
+            site.processes[0].produced_batches = None;
+            site.processes[0].inputs.clear();
         }
         snapshot.sites.reverse();
         assert_eq!(opening_site(&snapshot).expect("stable default").id, "a");
@@ -408,7 +452,7 @@ mod tests {
     #[test]
     fn closing_resources_do_not_rewrite_the_committed_work_reading() {
         let mut snapshot = chain();
-        snapshot.sites[1].produced_batches = Some(3);
+        snapshot.sites[1].processes[0].produced_batches = Some(3);
         let text = describe_brief(&snapshot.sites[1], &snapshot);
         for fact in [
             "Cohort b",
@@ -430,16 +474,17 @@ mod tests {
         ] {
             assert!(!text.contains(invented), "invented {invented}: {text}");
         }
-        snapshot.sites[1].inputs[0].on_hand = 0;
-        snapshot.sites[1].labor[0].available = 0;
-        snapshot.sites[1].available_batches = 0;
+        snapshot.sites[1].processes[0].inputs[0].on_hand = 0;
+        snapshot.sites[1].processes[0].labor[0].available = 0;
+        snapshot.sites[1].processes[0].available_batches = 0;
         assert_eq!(describe_brief(&snapshot.sites[1], &snapshot), text);
     }
 
     #[test]
     fn unavailable_endpoints_never_become_names_or_political_claims() {
         let mut snapshot = chain();
-        snapshot.sites[1].inputs[0].supplier_site_ids = vec!["withheld-endpoint".into()];
+        snapshot.sites[1].processes[0].inputs[0].supplier_site_ids =
+            vec!["withheld-endpoint".into()];
         snapshot.sites.retain(|site| site.id != "c");
         let text = describe_brief(&snapshot.sites[1], &snapshot);
         assert!(text.contains("No material relationships disclosed."));
@@ -450,27 +495,27 @@ mod tests {
     #[test]
     fn foundation_missing_reading_and_committed_zero_stay_distinct() {
         let mut snapshot = chain();
-        snapshot.sites[1].planned_batches = None;
-        snapshot.sites[1].produced_batches = None;
+        snapshot.sites[1].processes[0].planned_batches = None;
+        snapshot.sites[1].processes[0].produced_batches = None;
         assert!(
             describe_brief(&snapshot.sites[1], &snapshot).contains("no committed production yet")
         );
-        snapshot.sites[1].planned_batches = Some(0);
+        snapshot.sites[1].processes[0].planned_batches = Some(0);
         assert!(describe_brief(&snapshot.sites[1], &snapshot).contains("reading unavailable"));
-        snapshot.sites[1].produced_batches = Some(0);
+        snapshot.sites[1].processes[0].produced_batches = Some(0);
         assert!(describe_brief(&snapshot.sites[1], &snapshot)
             .contains("No production planned this period"));
-        snapshot.sites[1].planned_batches = Some(8);
+        snapshot.sites[1].processes[0].planned_batches = Some(8);
         assert_eq!(
             committed_plan_status(&snapshot.sites[1]),
             "No work committed against the plan"
         );
-        snapshot.sites[1].produced_batches = Some(8);
+        snapshot.sites[1].processes[0].produced_batches = Some(8);
         assert_eq!(
             committed_plan_status(&snapshot.sites[1]),
             "Committed plan completed"
         );
-        snapshot.sites[1].produced_batches = Some(9);
+        snapshot.sites[1].processes[0].produced_batches = Some(9);
         assert_eq!(
             committed_plan_status(&snapshot.sites[1]),
             "Committed output exceeds recorded plan"
@@ -480,7 +525,7 @@ mod tests {
     #[test]
     fn ordering_and_duplicate_supplier_mentions_do_not_change_the_reading() {
         let mut snapshot = chain();
-        snapshot.sites[1].inputs[0]
+        snapshot.sites[1].processes[0].inputs[0]
             .supplier_site_ids
             .push("a".into());
         let site = snapshot.sites[1].clone();
@@ -520,9 +565,13 @@ mod tests {
         );
     }
 
-    fn route() -> ProductionRouteV1 {
-        ProductionRouteV1 {
-            corridor_legs: Vec::new(),
+    fn route() -> ProductionRouteV2 {
+        ProductionRouteV2 {
+            physical_edge_ids: Vec::new(),
+            distance_mm: None,
+            transport_kind: babylon_persistence::ProductionRouteTransportV2::Staged,
+            grams_per_unit: 1000,
+            stages: Vec::new(),
             id: "route-a-b".into(),
             supplier_site_id: "a".into(),
             buyer_site_id: "b".into(),
@@ -540,8 +589,11 @@ mod tests {
         }
     }
 
-    fn freight() -> ProductionFreightV1 {
-        ProductionFreightV1 {
+    fn freight() -> ProductionFreightV2 {
+        ProductionFreightV2 {
+            current_stage_index: 0,
+            grams_per_unit: 1000,
+            mass_grams: 1000,
             id: "lot-a-b".into(),
             route_id: "route-a-b".into(),
             source_site_id: "a".into(),
@@ -618,13 +670,13 @@ mod tests {
     #[test]
     fn material_identity_prevents_mixed_goods_and_units_from_collapsing() {
         let mut snapshot = chain();
-        let mut food = snapshot.sites[1].inputs[0].clone();
+        let mut food = snapshot.sites[1].processes[0].inputs[0].clone();
         food.good_id = "food".into();
         food.good = "Food".into();
-        let mut tonnes = snapshot.sites[1].inputs[0].clone();
+        let mut tonnes = snapshot.sites[1].processes[0].inputs[0].clone();
         tonnes.unit_id = "tonne".into();
         tonnes.unit = "tonne".into();
-        snapshot.sites[1].inputs.extend([food, tonnes]);
+        snapshot.sites[1].processes[0].inputs.extend([food, tonnes]);
         snapshot.routes.extend([route(), route()]);
         snapshot.freight.extend([freight(), freight()]);
         let before = describe_overview(&snapshot);
@@ -634,7 +686,7 @@ mod tests {
         }
         assert_eq!(before.matches("goods in transit").count(), 1);
         assert!(!before.contains("100"));
-        snapshot.sites[1].inputs.reverse();
+        snapshot.sites[1].processes[0].inputs.reverse();
         snapshot.sites.reverse();
         snapshot.routes.reverse();
         snapshot.freight.reverse();

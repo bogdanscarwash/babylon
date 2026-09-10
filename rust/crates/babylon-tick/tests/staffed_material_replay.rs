@@ -22,11 +22,12 @@ use babylon_kernel::replay::{ReplaySeed, ReplaySessionIdV1};
 use babylon_kernel::tick_content_hash::RefDigestV1;
 use babylon_kernel::{sha256_of, ContentDigest};
 use babylon_material_circuit::{
-    BacklogRowV1, CapacityRowV1, CorridorCapacityV2, CorridorIdV2, GoodIdV1,
-    InputOutputCoefficientV1, InventoryRowV1, LaborCapacityRowV1, LaborCoefficientV1,
-    LogisticsNodeIdV2, MaterialCircuitStateV2, OrderAccessModeV1, OrderIdV1, OrderRowV2,
-    ProcessIdV1, ProcessOutputV1, RouteIdV2, RouteLegV2, SiteIdV1, SiteLogisticsNodeV2,
-    StaffingPolicyV1, StaffingPoolBindingV1, StaffingPoolIdV1, SupplierRouteV2, UnitIdV1,
+    BacklogRowV1, CapacityRowV1, CorridorCapacityV3, CorridorIdV2, FreightMassCoefficientV3,
+    GoodIdV1, InputOutputCoefficientV1, InventoryRowV1, LaborCapacityRowV1, LaborCoefficientV1,
+    LogisticsNodeIdV2, MaterialCircuitStateV3, OrderAccessModeV1, OrderIdV1, OrderRowV2,
+    ProcessIdV1, ProcessOutputV1, RouteIdV2, RouteStageCapacityV3, RouteStageV3, SiteIdV1,
+    SiteLogisticsNodeV2, StaffingPolicyV1, StaffingPoolBindingV2, StaffingPoolIdV1,
+    StaffingWorkSourceV2, SupplierRouteV3, SupplierTransportV3, UnitIdV1,
 };
 use babylon_practice_contract::ordered_action_v1::OrderedPracticeActionBatchV1;
 use babylon_tick::h3_runtime::MichiganDynamicHexValueBitsV1;
@@ -43,7 +44,7 @@ use babylon_tick::material_state::{
     OrganizationStateRowV1, TerritoryStateRowV1, WorldRegisterRowV1,
 };
 use babylon_tick::material_world::{
-    decode_material_receipts_v3, MaterialTickReceiptsV3, MaterialWorldRegisterV2,
+    decode_material_receipts_v4, MaterialTickReceiptsV4, MaterialWorldRegisterV3,
 };
 use babylon_tick::replay_session::{ReplayCommitDispositionV1, ReplayTickError, ReplayTickSession};
 
@@ -127,8 +128,8 @@ fn labor(period: u64, available: u64) -> LaborCapacityRowV1 {
     }
 }
 
-fn opening() -> MaterialCircuitStateV2 {
-    let mut state = MaterialCircuitStateV2 {
+fn opening() -> MaterialCircuitStateV3 {
+    let mut state = MaterialCircuitStateV3 {
         period: 1,
         site_logistics_nodes: [1, 2]
             .map(|id| SiteLogisticsNodeV2 {
@@ -155,7 +156,15 @@ fn opening() -> MaterialCircuitStateV2 {
             quantity_per_batch: 40,
         }],
         supplier_routes: Vec::new(),
-        route_legs: Vec::new(),
+        route_stages: Vec::new(),
+        route_stage_capacities: Vec::new(),
+        freight_mass_coefficients: [1, 2]
+            .map(|id| FreightMassCoefficientV3 {
+                good_id: good(id),
+                unit_id: unit(2),
+                grams_per_unit: 1000,
+            })
+            .to_vec(),
         inventory: vec![InventoryRowV1 {
             site_id: site(2),
             good_id: good(1),
@@ -176,30 +185,39 @@ fn opening() -> MaterialCircuitStateV2 {
             .collect(),
         labor: vec![labor(1, 160)],
         production_commitments: Vec::new(),
+        merchants: Vec::new(),
+        handling_coefficients: Vec::new(),
+        final_demand_principals: Vec::new(),
+        final_demand_orders: Vec::new(),
     };
     install_freight(&mut state);
     state
 }
 
-fn install_freight(state: &mut MaterialCircuitStateV2) {
+fn install_freight(state: &mut MaterialCircuitStateV3) {
     let route = RouteIdV2::from_bytes([1; 32]);
     let corridor = CorridorIdV2::from_bytes([1; 32]);
     let order = OrderIdV1::from_bytes([1; 32]);
-    state.supplier_routes.push(SupplierRouteV2 {
+    state.supplier_routes.push(SupplierRouteV3 {
+        transport_kind: SupplierTransportV3::Staged,
         buyer_site_id: site(1),
         supplier_site_id: site(2),
         good_id: good(1),
         unit_id: unit(2),
         route_id: route,
     });
-    state.route_legs.push(RouteLegV2 {
+    state.route_stages.push(RouteStageV3 {
         route_id: route,
-        leg_index: 0,
-        corridor_id: corridor,
+        stage_index: 0,
         from_node_id: LogisticsNodeIdV2::from_bytes([2; 32]),
         to_node_id: LogisticsNodeIdV2::from_bytes([1; 32]),
         travel_periods: 2,
         loss_ppm: 0,
+    });
+    state.route_stage_capacities.push(RouteStageCapacityV3 {
+        route_id: route,
+        stage_index: 0,
+        corridor_id: corridor,
     });
     state.orders.push(OrderRowV2 {
         order_id: order,
@@ -218,22 +236,21 @@ fn install_freight(state: &mut MaterialCircuitStateV2) {
         order_id: order,
         quantity: 4,
     });
-    state.corridor_capacities.push(CorridorCapacityV2 {
+    state.corridor_capacities.push(CorridorCapacityV3 {
         corridor_id: corridor,
-        unit_id: unit(2),
         period: 1,
-        available: 4,
+        available_grams: 4000,
     });
 }
 
 fn staffed_labor() -> MaterialLaborV1 {
-    let pool = StaffingPoolBindingV1::try_new(
+    let pool = StaffingPoolBindingV2::try_new(
         StaffingPoolIdV1::from_bytes([1; 32]),
         site(1),
         unit(1),
         1,
         StaffingPolicyV1::one_period(160).unwrap(),
-        vec![process()],
+        vec![StaffingWorkSourceV2::Production(process())],
     )
     .unwrap();
     let composition =
@@ -265,7 +282,7 @@ fn try_session(rules: &str, labor: MaterialLaborV1) -> Result<Session, MaterialR
     .map_err(MaterialReplayErrorV3::Graph)?;
     MaterialReplaySessionV3::new(
         graph,
-        MaterialWorldRegisterV2::try_new(0, opening()).unwrap(),
+        MaterialWorldRegisterV3::try_new(0, opening()).unwrap(),
         sha256_of(b"staffed-replay-fixture-foundation"),
         7,
         labor,
@@ -298,9 +315,9 @@ fn commit(
         .0
 }
 
-fn advance(session: &mut Session, sink: &mut CollectingSink) -> MaterialTickReceiptsV3 {
+fn advance(session: &mut Session, sink: &mut CollectingSink) -> MaterialTickReceiptsV4 {
     let candidate = prepare(session);
-    let receipts = decode_material_receipts_v3(candidate.material().receipt_bytes()).unwrap();
+    let receipts = decode_material_receipts_v4(candidate.material().receipt_bytes()).unwrap();
     commit(session, sink, candidate);
     receipts
 }
@@ -405,7 +422,7 @@ fn one_empty_period_holds_then_releases_and_real_arrival_rehires_for_next_period
     assert_eq!(staffing_field(&first, "current-unretained-hours"), 0);
     assert_eq!(staffing_field(&first, "retained-hours"), 160);
     assert_eq!(staffing_field(&first, "separations"), 0);
-    let receipts = decode_material_receipts_v3(first.material().receipt_bytes()).unwrap();
+    let receipts = decode_material_receipts_v4(first.material().receipt_bytes()).unwrap();
     assert_eq!(
         (
             receipts.dispatches[0].quantity,
@@ -428,7 +445,7 @@ fn one_empty_period_holds_then_releases_and_real_arrival_rehires_for_next_period
     let arrival = prepare(&session);
     assert_eq!(staffing_field(&arrival, "current-unretained-hours"), 40);
     assert_eq!(staffing_field(&arrival, "hires"), 1);
-    let receipts = decode_material_receipts_v3(arrival.material().receipt_bytes()).unwrap();
+    let receipts = decode_material_receipts_v4(arrival.material().receipt_bytes()).unwrap();
     assert_eq!(receipts.arrivals.len(), 1);
     assert_eq!(receipts.arrivals[0].quantity, 4);
     assert!(receipts.production.is_empty());

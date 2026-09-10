@@ -4,7 +4,7 @@ use babylon_kernel::sha256_of;
 use babylon_tick::{
     material_replay::IdentifiedMaterialTickV3,
     material_world::{
-        decode_material_receipts_v3, nominal_material_world_hash_v2, MaterialWorldRegisterV2,
+        decode_material_receipts_v4, nominal_material_world_hash_v3, MaterialWorldRegisterV3,
     },
 };
 use postgres::{Config, GenericClient, NoTls};
@@ -18,7 +18,7 @@ use crate::{
     michigan_economy::digest_hex,
     observer_reader::{ObserverEconomyErrorV1, ObserverVisibilityV1},
     production_projection::project_material_observation_v1,
-    CampaignId, ProductionSnapshotV1,
+    CampaignId, ProductionSnapshotV2,
 };
 
 const SCHEMA: &str = include_str!("../migrations/observer_material_v1.sql");
@@ -29,7 +29,7 @@ const VIEWS: [&str; 2] = [
 
 pub(crate) struct MaterialObservationV1 {
     pub(crate) foundation_digest: String,
-    pub(crate) production: Option<ProductionSnapshotV1>,
+    pub(crate) production: Option<ProductionSnapshotV2>,
     pub(crate) nominal_world_hash: Option<String>,
 }
 
@@ -156,7 +156,7 @@ pub(crate) fn material_observation(
         if &row_campaign != campaign.as_uuid() || usize::try_from(row_tick).ok() != Some(index) {
             return Err(ObserverEconomyErrorV1::InvalidProjection);
         }
-        let next = MaterialWorldRegisterV2::decode(&register_bytes)
+        let next = MaterialWorldRegisterV3::decode(&register_bytes)
             .map_err(|_| ObserverEconomyErrorV1::InvalidProjection)?;
         if usize::try_from(next.completed_tick()).ok() != Some(index) {
             return Err(ObserverEconomyErrorV1::InvalidProjection);
@@ -184,15 +184,15 @@ pub(crate) fn material_observation(
                 || content_hash.as_deref()
                     != Some(identity.tick_content_hash().as_bytes().as_slice())
                 || sha256_of(&receipt_bytes) != identity.receipt_digest()
-                || nominal_material_world_hash_v2(identity.graph_world_after(), &next)
+                || nominal_material_world_hash_v3(identity.graph_world_after(), &next)
                     != identity.result_world_hash()
-                || nominal_material_world_hash_v2(identity.graph_world_before(), &register)
+                || nominal_material_world_hash_v3(identity.graph_world_before(), &register)
                     != identity.prior_world_hash()
                 || prior_world.is_some_and(|prior| prior != identity.prior_world_hash())
             {
                 return Err(ObserverEconomyErrorV1::InvalidProjection);
             }
-            let receipt = decode_material_receipts_v3(&receipt_bytes)
+            let receipt = decode_material_receipts_v4(&receipt_bytes)
                 .map_err(|_| ObserverEconomyErrorV1::InvalidProjection)?;
             if receipt.resolve_tick != identity.resolve_tick() {
                 return Err(ObserverEconomyErrorV1::InvalidProjection);
@@ -205,7 +205,7 @@ pub(crate) fn material_observation(
             opening = Some(previous);
         }
     }
-    let MichiganPhysicalProjectionV1::FiveProcessV1 = expected.physical_projection;
+    let MichiganPhysicalProjectionV1::NormalizedV2 = expected.physical_projection;
     let mut production = project_material_observation_v1(
         &expected.catalog,
         expected.preset.delivery(),
@@ -233,8 +233,8 @@ fn authenticated_staffing(
     transaction: &mut impl GenericClient,
     campaign: CampaignId,
     expected: &MichiganContentAdmissionV1,
-    register: &MaterialWorldRegisterV2,
-    opening: Option<&MaterialWorldRegisterV2>,
+    register: &MaterialWorldRegisterV3,
+    opening: Option<&MaterialWorldRegisterV3>,
     result_world: Option<[u8; 32]>,
 ) -> Result<Vec<crate::ProductionStaffingAccountV1>, ObserverEconomyErrorV1> {
     use crate::production_projection::staffing::project_staffing_accounts_v1;
@@ -291,10 +291,10 @@ fn authenticated_staffing(
 }
 
 fn attribute_production(
-    mut production: ProductionSnapshotV1,
+    mut production: ProductionSnapshotV2,
     expected: &MichiganContentAdmissionV1,
     visibility: ObserverVisibilityV1,
-) -> Result<ProductionSnapshotV1, ObserverEconomyErrorV1> {
+) -> Result<ProductionSnapshotV2, ObserverEconomyErrorV1> {
     expected
         .preset
         .label()

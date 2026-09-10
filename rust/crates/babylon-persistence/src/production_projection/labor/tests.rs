@@ -2,14 +2,14 @@ use babylon_material_circuit::{
     CapacityRowV1, GoodIdV1, LaborCapacityRowV1, LaborCoefficientV1, LogisticsNodeIdV2,
     ProcessOutputV1, ProductionCommitmentV1, SiteLogisticsNodeV2,
 };
-use babylon_tick::material_world::{decode_material_receipts_v3, MaterialWorldRegisterV2};
+use babylon_tick::material_world::{decode_material_receipts_v4, MaterialWorldRegisterV3};
 
 use super::*;
 
-fn shared_opening() -> MaterialCircuitStateV2 {
+fn shared_opening() -> MaterialCircuitStateV3 {
     let site = SiteIdV1::from_bytes([1; 32]);
     let labor_unit = UnitIdV1::from_bytes([2; 32]);
-    let mut state = MaterialCircuitStateV2 {
+    let mut state = MaterialCircuitStateV3 {
         period: 1,
         site_logistics_nodes: vec![SiteLogisticsNodeV2 {
             site_id: site,
@@ -19,7 +19,13 @@ fn shared_opening() -> MaterialCircuitStateV2 {
         input_coefficients: vec![],
         labor_coefficients: vec![],
         supplier_routes: vec![],
-        route_legs: vec![],
+        route_stages: vec![],
+        route_stage_capacities: vec![],
+        freight_mass_coefficients: vec![],
+        merchants: vec![],
+        handling_coefficients: vec![],
+        final_demand_principals: vec![],
+        final_demand_orders: vec![],
         inventory: vec![],
         orders: vec![],
         backlog: vec![],
@@ -68,18 +74,18 @@ fn shared_opening() -> MaterialCircuitStateV2 {
 }
 
 fn committed_pair(
-    state: MaterialCircuitStateV2,
+    state: MaterialCircuitStateV3,
 ) -> (
-    MaterialCircuitStateV2,
-    MaterialCircuitStateV2,
-    MaterialTickReceiptsV3,
+    MaterialCircuitStateV3,
+    MaterialCircuitStateV3,
+    MaterialTickReceiptsV4,
 ) {
-    let opening = MaterialWorldRegisterV2::try_new(0, state).unwrap();
+    let opening = MaterialWorldRegisterV3::try_new(0, state).unwrap();
     let next = opening.prepare_next().unwrap();
     (
         opening.state().clone(),
         next.register().state().clone(),
-        decode_material_receipts_v3(next.receipt_bytes()).unwrap(),
+        decode_material_receipts_v4(next.receipt_bytes()).unwrap(),
     )
 }
 
@@ -92,12 +98,14 @@ fn shared_principal_is_counted_once_and_time_closes_from_actual_receipts() {
     assert_eq!(rows[0].next_opening_available, 30);
     assert_eq!(
         rows[0].completed,
-        Some(CompletedProductionLaborV1 {
+        Some(CompletedProductionLaborV2 {
             period: 1,
             opening: 12,
             planned: 13,
             used: 8,
             unused: 4,
+            handling_needed: 0,
+            handling_used: 0,
         })
     );
     let mut reversed = receipt.clone();
@@ -149,10 +157,10 @@ fn multiplication_and_shared_sum_overflow_refuse_without_mutating_inputs() {
     let (mut opening, _, mut receipt) = committed_pair(shared_opening());
     opening.labor_coefficients[0].quantity_per_batch = u64::MAX;
     let before = opening.clone();
-    assert_eq!(
+    assert!(matches!(
         completed_totals(&opening, &receipt),
         Err(ProductionProjectionErrorV1::Arithmetic)
-    );
+    ));
     assert_eq!(opening, before);
     for coefficient in &mut opening.labor_coefficients {
         coefficient.quantity_per_batch = u64::MAX;
@@ -164,10 +172,10 @@ fn multiplication_and_shared_sum_overflow_refuse_without_mutating_inputs() {
         row.planned_batches = 1;
         row.produced_batches = 0;
     }
-    assert_eq!(
+    assert!(matches!(
         completed_totals(&opening, &receipt),
         Err(ProductionProjectionErrorV1::Arithmetic)
-    );
+    ));
 }
 
 #[test]

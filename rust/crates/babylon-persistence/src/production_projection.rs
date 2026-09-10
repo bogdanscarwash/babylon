@@ -4,20 +4,23 @@ pub(crate) mod context;
 mod freight;
 mod labor;
 pub(crate) mod material_balance;
+mod merchants;
+mod outbound;
 pub(crate) mod staffing;
 
-use babylon_material_circuit::{MaterialCircuitStateV2, OrderIdV1, ProcessIdV1, SiteIdV1};
-use babylon_tick::material_world::{MaterialTickReceiptsV3, MaterialWorldRegisterV2};
+use babylon_material_circuit::{MaterialCircuitStateV3, OrderIdV1, ProcessIdV1, SiteIdV1};
+use babylon_tick::material_world::{MaterialTickReceiptsV4, MaterialWorldRegisterV3};
 
 use crate::michigan_economy::digest_hex;
 use crate::michigan_material::{
-    MichiganDeliveryPresetV1, MichiganMaterialCatalogV1, MichiganMaterialRouteV1,
-    MICHIGAN_INDUSTRY_BASELINE_SHA256_V1,
+    MichiganDeliveryPresetV1, MichiganMaterialCatalogV1, MichiganMaterialPathV2,
+    MichiganMaterialRouteV1, MichiganSiteRoleV2,
 };
 use crate::{
     ProductionDeliveryEvidenceV1, ProductionDeliveryStageV1, ProductionEventV1,
-    ProductionFreightV1, ProductionInputV1, ProductionLaborV1, ProductionRouteV1, ProductionSiteV1,
-    ProductionSnapshotV1, ProductionStockV1,
+    ProductionFreightV2, ProductionInputV1, ProductionLaborV1, ProductionPhysicalEdgeV2,
+    ProductionProcessV2, ProductionRoadSourceV2, ProductionRouteTransportV2, ProductionRouteV2,
+    ProductionSiteRoleV2, ProductionSiteV2, ProductionSnapshotV2, ProductionStockV1,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -31,10 +34,10 @@ pub(crate) enum ProductionProjectionErrorV1 {
 pub(crate) fn project_material_observation_v1(
     catalog: &MichiganMaterialCatalogV1,
     preset: MichiganDeliveryPresetV1,
-    register: &MaterialWorldRegisterV2,
-    opening: Option<&MaterialWorldRegisterV2>,
-    history: &[(MaterialTickReceiptsV3, [u8; 32])],
-) -> Result<ProductionSnapshotV1, ProductionProjectionErrorV1> {
+    register: &MaterialWorldRegisterV3,
+    opening: Option<&MaterialWorldRegisterV3>,
+    history: &[(MaterialTickReceiptsV4, [u8; 32])],
+) -> Result<ProductionSnapshotV2, ProductionProjectionErrorV1> {
     let tick = register.completed_tick();
     if tick > catalog.horizon_ticks() || u64::try_from(history.len()).ok() != Some(tick) {
         return Err(ProductionProjectionErrorV1::History);
@@ -47,22 +50,82 @@ pub(crate) fn project_material_observation_v1(
     let state = register.state();
     let labor_accounts = labor::project_labor_accounts(
         state,
-        opening.map(MaterialWorldRegisterV2::state),
+        opening.map(MaterialWorldRegisterV3::state),
         history.last().map(|(receipt, _)| receipt),
     )?;
     let material_balance = material_balance::project_material_balance(
+        catalog,
         state,
-        opening.map(MaterialWorldRegisterV2::state),
+        opening.map(MaterialWorldRegisterV3::state),
         history.last().map(|(receipt, _)| receipt),
     )?;
     let freight_capacity_accounts = freight::project_freight_capacity_accounts(
         catalog,
         state,
-        opening.map(MaterialWorldRegisterV2::state),
+        opening.map(MaterialWorldRegisterV3::state),
+        history.last().map(|(receipt, _)| receipt),
+    )?;
+    let (merchant_handling_accounts, final_demand_accounts) = merchants::project_merchants(
+        catalog,
+        state,
+        opening.map(MaterialWorldRegisterV3::state),
         history.last().map(|(receipt, _)| receipt),
     )?;
     let sites = project_sites(catalog, state, history.last().map(|(receipt, _)| receipt))?;
     let routes = project_routes(catalog, state)?;
+    let freight = project_in_transit_freight(catalog, state, &routes)?;
+    let mut events = Vec::new();
+    for (receipt, digest) in history {
+        project_events(catalog, receipt, *digest, &mut events)?;
+    }
+    let physical_edges = catalog.physical_network().map_or_else(Vec::new, |network| {
+        network
+            .edges
+            .iter()
+            .map(|edge| ProductionPhysicalEdgeV2 {
+                id: edge.id.clone(),
+                shape_e7: edge.shape_e7.clone(),
+                distance_mm: edge.distance_mm,
+            })
+            .collect()
+    });
+    let road_source = catalog.physical_network().map(|network| {
+        let source = &network.source;
+        ProductionRoadSourceV2 {
+            pbf_sha256: source.pbf_sha256.clone(),
+            pbf_bytes: source.pbf_bytes,
+            pbf_url: source.pbf_url.clone(),
+            replication_timestamp: source.replication_timestamp.clone(),
+            footprint_sha256: source.footprint_sha256.clone(),
+            buffer_degrees_e7: source.buffer_degrees_e7,
+            extraction_version: source.extraction_version.clone(),
+            distance_version: source.distance_version.clone(),
+            routing_profile_version: source.routing_profile_version.clone(),
+            graph_sha256: source.graph_sha256.clone(),
+        }
+    });
+    Ok(ProductionSnapshotV2 {
+        scenario_label: scenario_label(preset).to_owned(),
+        horizon_period: catalog.horizon_ticks(), content_authority_sha256: digest_hex(&catalog.defines_hash()),
+        sites, routes, freight, events, labor_accounts, material_balance, freight_capacity_accounts,
+        merchant_handling_accounts, final_demand_accounts, physical_edges, road_source,
+        staffing_accounts: Vec::new(), observed_contexts: Vec::new(), process_attributions: Vec::new(),
+        provenance: vec![
+            format!("Designed {}-period physical circuit at {} resolution.", catalog.horizon_ticks(), catalog.geographic_scale()),
+            "Recipes, stock, finite orders, workforce schedules and capacity quantities are Designed.".to_owned(),
+            "Observed QCEW annual-average jobs are separate from current modeled employed and reserve people.".to_owned(),
+            catalog.terminal_output_disposition().to_owned(),
+            "Capacity reservations precede physical arrivals. Local transfer and end-buyer fulfillment are distinct stock movements; no payments or consumption are inferred.".to_owned(),
+            format!("Captured content authority sha256:{}", digest_hex(&catalog.defines_hash())),
+        ],
+    })
+}
+
+fn project_in_transit_freight(
+    catalog: &MichiganMaterialCatalogV1,
+    state: &MaterialCircuitStateV3,
+    routes: &[ProductionRouteV2],
+) -> Result<Vec<ProductionFreightV2>, ProductionProjectionErrorV1> {
     let mut freight = Vec::new();
     for lot in &state.freight {
         let good = catalog
@@ -77,7 +140,7 @@ pub(crate) fn project_material_observation_v1(
         {
             return Err(ProductionProjectionErrorV1::State);
         }
-        freight.push(ProductionFreightV1 {
+        freight.push(ProductionFreightV2 {
             id: digest_hex(&lot.lot_id.as_bytes()),
             route_id: digest_hex(&lot.route_id.as_bytes()),
             source_site_id: digest_hex(&lot.source_site_id.as_bytes()),
@@ -88,123 +151,161 @@ pub(crate) fn project_material_observation_v1(
             unit: good.unit_key.clone(),
             quantity: lot.quantity,
             dispatch_period: lot.dispatch_period,
-            arrival_period: lot.leg_arrival_period,
+            arrival_period: lot.stage_arrival_period,
+            current_stage_index: lot.current_stage_index,
+            grams_per_unit: outbound::mass(state, lot.good_id, lot.unit_id)?,
+            mass_grams: lot
+                .quantity
+                .checked_mul(outbound::mass(state, lot.good_id, lot.unit_id)?)
+                .ok_or(ProductionProjectionErrorV1::Arithmetic)?,
         });
     }
-    let mut events = Vec::new();
-    for (receipt, digest) in history {
-        project_events(catalog, receipt, *digest, &mut events)?;
+    Ok(freight)
+}
+
+fn scenario_label(preset: MichiganDeliveryPresetV1) -> &'static str {
+    match preset {
+        MichiganDeliveryPresetV1::Standard => "Michigan: standard delivery",
+        MichiganDeliveryPresetV1::Delayed => "Michigan: delayed delivery",
+        MichiganDeliveryPresetV1::SharedFreightAmple => "Michigan: shared freight — ample",
+        MichiganDeliveryPresetV1::SharedFreightConstrained => {
+            "Michigan: shared freight — constrained"
+        }
+        MichiganDeliveryPresetV1::StatewideBaseline => "Michigan statewide: baseline",
+        MichiganDeliveryPresetV1::StatewideFreightConstraint => {
+            "Michigan statewide: freight constraint"
+        }
+        MichiganDeliveryPresetV1::StatewidePackagingShortage => {
+            "Michigan statewide: packaging shortage"
+        }
+        MichiganDeliveryPresetV1::StatewideBoth => {
+            "Michigan statewide: freight and packaging constraints"
+        }
     }
-    Ok(ProductionSnapshotV1 {
-        scenario_label: match preset {
-            MichiganDeliveryPresetV1::Standard => "Michigan: standard delivery",
-            MichiganDeliveryPresetV1::Delayed => "Michigan: delayed delivery",
-            MichiganDeliveryPresetV1::SharedFreightAmple => "Michigan: shared freight — ample",
-            MichiganDeliveryPresetV1::SharedFreightConstrained => "Michigan: shared freight — constrained",
-        }.to_owned(),
-        horizon_period: catalog.horizon_ticks(), sites, routes, freight, events, labor_accounts, material_balance, freight_capacity_accounts,
-        staffing_accounts: Vec::new(), observed_contexts: Vec::new(), process_attributions: Vec::new(),
-        provenance: vec![
-            format!("Designed {}-period ({}-week) physical demonstration: county-industry aggregates; no factory locations.", catalog.horizon_ticks(), catalog.horizon_ticks() * babylon_kernel::clock::WEEKS_PER_TICK),
-            "Recipes, opening stock, orders, labor-hours, capacity and route delays are Designed.".to_owned(),
-            "QCEW 2024 private-industry employment is observed annual-average jobs; model labor-hours are separate.".to_owned(),
-            "Terminal subassemblies and packaged meal remain unsold on hand. Quantity realization is delivery evidence, never payment.".to_owned(),
-            format!("Designed parameters sha256:{}", digest_hex(&catalog.defines_hash())),
-            format!("Observed industry artifact sha256:{MICHIGAN_INDUSTRY_BASELINE_SHA256_V1}; {}", catalog.source_url()),
-        ],
-    })
 }
 
 fn project_sites(
     catalog: &MichiganMaterialCatalogV1,
-    state: &MaterialCircuitStateV2,
-    receipt: Option<&MaterialTickReceiptsV3>,
-) -> Result<Vec<ProductionSiteV1>, ProductionProjectionErrorV1> {
+    state: &MaterialCircuitStateV3,
+    receipt: Option<&MaterialTickReceiptsV4>,
+) -> Result<Vec<ProductionSiteV2>, ProductionProjectionErrorV1> {
     let mut result = Vec::new();
     for site in catalog.sites() {
-        let process = catalog
+        let processes = catalog
             .processes()
             .iter()
-            .find(|row| row.site_key == site.key)
-            .ok_or(ProductionProjectionErrorV1::Content)?;
-        let output = state
-            .process_outputs
-            .iter()
-            .find(|row| row.process_id == process.id() && row.site_id == site.id())
-            .ok_or(ProductionProjectionErrorV1::State)?;
-        let good = catalog
-            .good(&process.output_good_key)
-            .ok_or(ProductionProjectionErrorV1::Content)?;
-        if output.good_id != good.id() || output.unit_id != good.unit_id() {
+            .filter(|row| row.site_key == site.key)
+            .map(|process| project_process(catalog, state, process, receipt))
+            .collect::<Result<Vec<_>, _>>()?;
+        let role = match site.role {
+            MichiganSiteRoleV2::Production => ProductionSiteRoleV2::Production,
+            MichiganSiteRoleV2::Wholesale => ProductionSiteRoleV2::Wholesale,
+            MichiganSiteRoleV2::Retail => ProductionSiteRoleV2::Retail,
+        };
+        if (role == ProductionSiteRoleV2::Production) == processes.is_empty() {
             return Err(ProductionProjectionErrorV1::State);
         }
-        let inventory = project_inventory(catalog, state, site.id())?;
-        let inputs = project_inputs(catalog, state, site.id(), process.id())?;
-        let labor = state
-            .labor_coefficients
-            .iter()
-            .filter(|row| row.process_id == process.id())
-            .map(|coefficient| {
-                let available = state
-                    .labor
-                    .iter()
-                    .find(|row| {
-                        row.site_id == site.id()
-                            && row.unit_id == coefficient.unit_id
-                            && row.period == state.period
-                    })
-                    .map_or(0, |row| row.available);
-                ProductionLaborV1 {
-                    unit: "labor-hours".to_owned(),
-                    available,
-                    quantity_per_batch: coefficient.quantity_per_batch,
-                }
-            })
-            .collect();
-        let latest = receipt.and_then(|receipt| {
-            receipt
-                .production
-                .iter()
-                .find(|row| row.process_id == process.id() && row.site_id == site.id())
-        });
         let baseline = catalog
             .industry_for_site(site)
             .ok_or(ProductionProjectionErrorV1::Content)?;
-        result.push(ProductionSiteV1 {
+        result.push(ProductionSiteV2 {
             id: digest_hex(&site.id().as_bytes()),
             county_geoid: site.county_geoid.clone(),
             name: site.label.clone(),
             industry_code: site.naics.clone(),
-            observed_employment: Some(baseline.annual_avg_emplvl),
-            output_good_id: digest_hex(&good.id().as_bytes()),
-            output_unit_id: digest_hex(&good.unit_id().as_bytes()),
-            output_good: good.label.clone(),
-            output_unit: good.unit_key.clone(),
-            output_per_batch: output.quantity_per_batch,
-            available_batches: state
-                .capacities
-                .iter()
-                .find(|row| {
-                    row.process_id == process.id()
-                        && row.site_id == site.id()
-                        && row.period == state.period
-                })
-                .map_or(0, |row| row.available_batches),
-            // The complete committed family omits zero commitments. This is a
-            // derived zero reading, never a fabricated receipt or event.
-            planned_batches: receipt.map(|_| latest.map_or(0, |row| row.planned_batches)),
-            produced_batches: receipt.map(|_| latest.map_or(0, |row| row.produced_batches)),
-            inventory,
-            inputs,
-            labor,
+            observed_employment: baseline.annual_avg_emplvl,
+            role,
+            sector_code: site.sector_code.clone(),
+            processes,
+            inventory: project_inventory(catalog, state, site.id())?,
         });
+    }
+    if result
+        .iter()
+        .map(|site| site.processes.len())
+        .sum::<usize>()
+        != state.process_outputs.len()
+        || result
+            .iter()
+            .filter(|site| site.role != ProductionSiteRoleV2::Production)
+            .count()
+            != state.merchants.len()
+    {
+        return Err(ProductionProjectionErrorV1::State);
     }
     Ok(result)
 }
 
+fn project_process(
+    catalog: &MichiganMaterialCatalogV1,
+    state: &MaterialCircuitStateV3,
+    process: &crate::michigan_material::MichiganMaterialProcessV1,
+    receipt: Option<&MaterialTickReceiptsV4>,
+) -> Result<ProductionProcessV2, ProductionProjectionErrorV1> {
+    let site = process.site_id();
+    let output = state
+        .process_outputs
+        .iter()
+        .find(|row| row.process_id == process.id() && row.site_id == site)
+        .ok_or(ProductionProjectionErrorV1::State)?;
+    let good = catalog
+        .good(&process.output_good_key)
+        .ok_or(ProductionProjectionErrorV1::Content)?;
+    if output.good_id != good.id() || output.unit_id != good.unit_id() {
+        return Err(ProductionProjectionErrorV1::State);
+    }
+    let latest = receipt.and_then(|receipt| {
+        receipt
+            .production
+            .iter()
+            .find(|row| row.process_id == process.id() && row.site_id == site)
+    });
+    let labor = state
+        .labor_coefficients
+        .iter()
+        .filter(|row| row.process_id == process.id())
+        .map(|coefficient| {
+            let available = state
+                .labor
+                .iter()
+                .find(|row| {
+                    row.site_id == site
+                        && row.unit_id == coefficient.unit_id
+                        && row.period == state.period
+                })
+                .map_or(0, |row| row.available);
+            ProductionLaborV1 {
+                unit: "labor-hours".to_owned(),
+                available,
+                quantity_per_batch: coefficient.quantity_per_batch,
+            }
+        })
+        .collect();
+    Ok(ProductionProcessV2 {
+        id: digest_hex(&process.id().as_bytes()),
+        name: process.key.clone(),
+        output_good_id: digest_hex(&good.id().as_bytes()),
+        output_unit_id: digest_hex(&good.unit_id().as_bytes()),
+        output_good: good.label.clone(),
+        output_unit: good.unit_key.clone(),
+        output_per_batch: output.quantity_per_batch,
+        available_batches: state
+            .capacities
+            .iter()
+            .find(|row| {
+                row.process_id == process.id() && row.site_id == site && row.period == state.period
+            })
+            .map_or(0, |row| row.available_batches),
+        planned_batches: receipt.map(|_| latest.map_or(0, |row| row.planned_batches)),
+        produced_batches: receipt.map(|_| latest.map_or(0, |row| row.produced_batches)),
+        inputs: project_inputs(catalog, state, site, process.id())?,
+        labor,
+    })
+}
+
 fn project_inventory(
     catalog: &MichiganMaterialCatalogV1,
-    state: &MaterialCircuitStateV2,
+    state: &MaterialCircuitStateV3,
     site_id: SiteIdV1,
 ) -> Result<Vec<ProductionStockV1>, ProductionProjectionErrorV1> {
     let mut inventory = Vec::new();
@@ -227,7 +328,7 @@ fn project_inventory(
 
 fn project_inputs(
     catalog: &MichiganMaterialCatalogV1,
-    state: &MaterialCircuitStateV2,
+    state: &MaterialCircuitStateV3,
     site_id: SiteIdV1,
     process_id: ProcessIdV1,
 ) -> Result<Vec<ProductionInputV1>, ProductionProjectionErrorV1> {
@@ -274,8 +375,8 @@ fn project_inputs(
 
 fn project_routes(
     catalog: &MichiganMaterialCatalogV1,
-    state: &MaterialCircuitStateV2,
-) -> Result<Vec<ProductionRouteV1>, ProductionProjectionErrorV1> {
+    state: &MaterialCircuitStateV3,
+) -> Result<Vec<ProductionRouteV2>, ProductionProjectionErrorV1> {
     catalog
         .routes()
         .iter()
@@ -288,20 +389,28 @@ fn project_routes(
             let good = catalog
                 .good(&route.good_key)
                 .ok_or(ProductionProjectionErrorV1::Content)?;
-            let travel_periods = state
-                .route_legs
+            let stages = freight::project_route_stages(state, route.id())?;
+            let travel_periods = stages
                 .iter()
-                .filter(|leg| leg.route_id == route.id())
-                .try_fold(0_u64, |sum, leg| {
-                    sum.checked_add(u64::from(leg.travel_periods))
-                })
-                .ok_or(ProductionProjectionErrorV1::State)?;
-            let backlog = state
-                .backlog
-                .iter()
-                .find(|row| row.order_id == order.order_id)
-                .map_or(0, |row| row.quantity);
-            Ok(ProductionRouteV1 {
+                .try_fold(0_u64, |sum, stage| sum.checked_add(stage.travel_periods))
+                .ok_or(ProductionProjectionErrorV1::Arithmetic)?;
+            let (transport_kind, physical_edge_ids, distance_mm) = match &route.path {
+                MichiganMaterialPathV2::Local if stages.is_empty() => {
+                    (ProductionRouteTransportV2::Local, Vec::new(), None)
+                }
+                MichiganMaterialPathV2::Routed {
+                    travel_periods: authored,
+                    physical_edge_keys,
+                    distance_mm,
+                    ..
+                } if travel_periods == u64::from(*authored) => (
+                    ProductionRouteTransportV2::Staged,
+                    physical_edge_keys.clone(),
+                    *distance_mm,
+                ),
+                _ => return Err(ProductionProjectionErrorV1::State),
+            };
+            Ok(ProductionRouteV2 {
                 id: digest_hex(&route.id().as_bytes()),
                 supplier_site_id: digest_hex(&order.supplier_site_id.as_bytes()),
                 buyer_site_id: digest_hex(&order.buyer_site_id.as_bytes()),
@@ -310,13 +419,20 @@ fn project_routes(
                 good: good.label.clone(),
                 unit: good.unit_key.clone(),
                 travel_periods,
-                corridor_legs: freight::project_route_legs(state, route.id())?,
+                stages,
+                transport_kind,
+                physical_edge_ids,
+                distance_mm,
+                grams_per_unit: outbound::mass(state, good.id(), good.unit_id())?,
                 ordered: order.ordered,
                 shipped: order.shipped,
                 delivered: order.delivered,
                 lost: order.lost,
                 realized: order.realized,
-                backlog,
+                backlog: order
+                    .ordered
+                    .checked_sub(order.shipped)
+                    .ok_or(ProductionProjectionErrorV1::State)?,
             })
         })
         .collect()
@@ -335,7 +451,7 @@ fn order_route(
 
 fn project_events(
     catalog: &MichiganMaterialCatalogV1,
-    receipts: &MaterialTickReceiptsV3,
+    receipts: &MaterialTickReceiptsV4,
     digest: [u8; 32],
     events: &mut Vec<ProductionEventV1>,
 ) -> Result<(), ProductionProjectionErrorV1> {
@@ -369,6 +485,7 @@ fn project_events(
             &mut emit,
         )?;
     }
+    emit_local_trade_events(catalog, receipts, &mut emit)?;
     for loss in &receipts.losses {
         emit_route_event(
             catalog,
@@ -412,6 +529,66 @@ fn project_events(
             Some(ProductionDeliveryStageV1::QuantityRealization),
             &mut emit,
         )?;
+    }
+    Ok(())
+}
+
+fn emit_local_trade_events(
+    catalog: &MichiganMaterialCatalogV1,
+    receipts: &MaterialTickReceiptsV4,
+    emit: &mut impl FnMut(&str, Vec<String>, String, Option<ProductionDeliveryEvidenceV1>),
+) -> Result<(), ProductionProjectionErrorV1> {
+    for transfer in &receipts.local_transfers {
+        let route = order_route(catalog, transfer.order_id)?;
+        let supplier = catalog
+            .site(&route.supplier_site_key)
+            .ok_or(ProductionProjectionErrorV1::Content)?;
+        let buyer = catalog
+            .site(&route.buyer_site_key)
+            .ok_or(ProductionProjectionErrorV1::Content)?;
+        let good = catalog
+            .good(&route.good_key)
+            .ok_or(ProductionProjectionErrorV1::Content)?;
+        if route.path != MichiganMaterialPathV2::Local
+            || transfer.supplier_site_id != supplier.id()
+            || transfer.buyer_site_id != buyer.id()
+            || transfer.good_id != good.id()
+            || transfer.unit_id != good.unit_id()
+        {
+            return Err(ProductionProjectionErrorV1::State);
+        }
+        emit_route_event(
+            catalog,
+            route,
+            "local transfer",
+            transfer.quantity,
+            None,
+            None,
+            emit,
+        )?;
+    }
+    for fulfillment in &receipts.local_fulfillments {
+        let order = catalog
+            .final_demands()
+            .iter()
+            .find(|order| order.order_id() == fulfillment.order_id)
+            .ok_or(ProductionProjectionErrorV1::State)?;
+        let retailer = catalog
+            .site(&order.retailer_site_key)
+            .ok_or(ProductionProjectionErrorV1::Content)?;
+        let good = catalog
+            .good(&order.good_key)
+            .ok_or(ProductionProjectionErrorV1::Content)?;
+        if fulfillment.retailer_site_id != retailer.id()
+            || fulfillment.demand_principal_id != order.principal_id()
+            || fulfillment.good_id != good.id()
+            || fulfillment.unit_id != good.unit_id()
+        {
+            return Err(ProductionProjectionErrorV1::State);
+        }
+        emit("end-buyer fulfillment", vec![digest_hex(&retailer.id().as_bytes())],
+            format!("{}: {} {} {} delivered to local end buyers; consumption and payment are not inferred.",
+                retailer.label, fulfillment.quantity, good.unit_key, good.label), None);
     }
     Ok(())
 }
@@ -502,7 +679,7 @@ mod tests {
     use babylon_bsl::structural_verbs::CollectingSink;
     use babylon_kernel::sha256_of;
     use babylon_practice_contract::ordered_action_v1::OrderedPracticeActionBatchV1;
-    use babylon_tick::material_world::decode_material_receipts_v3;
+    use babylon_tick::material_world::decode_material_receipts_v4;
     use babylon_tick::replay_session::ReplayCommitDispositionV1;
 
     #[test]
@@ -522,10 +699,7 @@ mod tests {
             &[],
         )
         .unwrap();
-        assert_eq!(
-            initial.provenance[0],
-            "Designed 16-period (64-week) physical demonstration: county-industry aggregates; no factory locations."
-        );
+        assert!(initial.provenance[0].starts_with("Designed 16-period physical circuit"));
         assert!(initial.freight.is_empty());
         assert!(initial.events.is_empty());
         assert!(initial.material_balance.is_none());
@@ -534,10 +708,10 @@ mod tests {
             .labor_accounts
             .iter()
             .all(|row| { row.completed.is_none() && row.next_opening_period == 1 }));
-        assert!(initial
-            .sites
+        assert!(initial.sites.iter().all(|site| site
+            .processes
             .iter()
-            .all(|site| site.produced_batches.is_none()));
+            .all(|process| process.produced_batches.is_none())));
         let actions = OrderedPracticeActionBatchV1::empty(
             session.graph_session().session_identity().clone(),
             1,
@@ -545,7 +719,7 @@ mod tests {
         .unwrap();
         let prepared = session.prepare_advance(&actions).unwrap();
         let next = prepared.material();
-        let receipt = decode_material_receipts_v3(next.receipt_bytes()).unwrap();
+        let receipt = decode_material_receipts_v4(next.receipt_bytes()).unwrap();
         let history = vec![(receipt, sha256_of(next.receipt_bytes()))];
         let snapshot = project_material_observation_v1(
             &crate::test_support::catalog(),
@@ -560,8 +734,8 @@ mod tests {
             .iter()
             .find(|site| site.industry_code == "332")
             .unwrap();
-        assert_eq!(starved.planned_batches, Some(0));
-        assert_eq!(starved.produced_batches, Some(0));
+        assert_eq!(starved.processes[0].planned_batches, Some(0));
+        assert_eq!(starved.processes[0].produced_batches, Some(0));
         assert!(!history[0]
             .0
             .production
@@ -616,10 +790,10 @@ mod tests {
             &source.replace("HORIZON_PERIODS = 16", "HORIZON_PERIODS = 8"),
         )
         .unwrap();
-        let foundation = MichiganContentPresetV1::FourWeekStandardV6
+        let foundation = MichiganContentPresetV1::FourWeekStandardV7
             .create_foundation(&catalog)
             .unwrap();
-        let stored = crate::sector_bundle::foundation::decode_stored_bundle_defines_v3(
+        let stored = crate::sector_bundle::foundation::decode_stored_bundle_defines_v4(
             foundation
                 .graph_foundation()
                 .content_bundle()
@@ -636,13 +810,10 @@ mod tests {
         )
         .unwrap();
         assert_eq!(snapshot.horizon_period, 8);
-        assert_eq!(
-            snapshot.provenance[0],
-            "Designed 8-period (32-week) physical demonstration: county-industry aggregates; no factory locations."
-        );
+        assert!(snapshot.provenance[0].starts_with("Designed 8-period physical circuit"));
     }
 
-    fn period_three(preset: MichiganDeliveryPresetV1) -> ProductionSnapshotV1 {
+    fn period_three(preset: MichiganDeliveryPresetV1) -> ProductionSnapshotV2 {
         let mut session = MichiganContentPresetV1::new_campaign(preset)
             .create_foundation(&crate::test_support::catalog())
             .unwrap()
@@ -658,7 +829,7 @@ mod tests {
             .unwrap();
             let next = session.prepare_advance(&actions).unwrap();
             history.push((
-                decode_material_receipts_v3(next.material().receipt_bytes()).unwrap(),
+                decode_material_receipts_v4(next.material().receipt_bytes()).unwrap(),
                 sha256_of(next.material().receipt_bytes()),
             ));
             opening = Some(session.material().clone());
@@ -669,7 +840,7 @@ mod tests {
                 .unwrap();
         }
         project_material_observation_v1(
-            &crate::test_support::catalog(),
+            &crate::test_support::catalog().with_preset(preset).unwrap(),
             preset,
             session.material(),
             opening.as_ref(),
@@ -682,12 +853,13 @@ mod tests {
     fn physical_projection_preserves_good_identity_and_delivery_delay_causality() {
         let standard = period_three(MichiganDeliveryPresetV1::Standard);
         let delayed = period_three(MichiganDeliveryPresetV1::Delayed);
-        let macomb = |snapshot: &ProductionSnapshotV1| {
+        let macomb = |snapshot: &ProductionSnapshotV2| {
             snapshot
                 .sites
                 .iter()
                 .find(|site| site.county_geoid == "26099")
                 .unwrap()
+                .processes[0]
                 .produced_batches
         };
         // The first 32 rolling batches consume 320 of the 600 billet units.
@@ -721,11 +893,15 @@ mod tests {
                 .iter()
                 .find(|site| site.id == route.buyer_site_id)
                 .unwrap();
-            assert_eq!(route.good_id, supplier.output_good_id);
-            assert_eq!(route.unit_id, supplier.output_unit_id);
-            assert!(buyer
-                .inputs
+            assert!(supplier
+                .processes
                 .iter()
+                .any(|process| process.output_good_id == route.good_id
+                    && process.output_unit_id == route.unit_id));
+            assert!(buyer
+                .processes
+                .iter()
+                .flat_map(|process| &process.inputs)
                 .any(|input| input.good_id == route.good_id && input.unit_id == route.unit_id));
             assert!(standard
                 .freight

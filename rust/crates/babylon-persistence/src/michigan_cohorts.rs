@@ -75,9 +75,18 @@ pub fn michigan_business_local_name_v1(row: &MichiganCountySectorV1) -> String {
 
 #[must_use]
 pub fn michigan_business_subject_v2(row: &MichiganCountySectorV1) -> StableElementKeyV1 {
+    michigan_business_subject_for_owner_v2(row.county_geoid(), row.sector_code().as_str())
+}
+
+/// Construct the same subject from captured owner identity without reading current sources.
+#[must_use]
+pub fn michigan_business_subject_for_owner_v2(
+    county_geoid: &str,
+    sector_code: &str,
+) -> StableElementKeyV1 {
     StableElementKeyV1::Node {
         scenario: MICHIGAN_COHORT_SCENARIO_V2.to_owned(),
-        local_name: michigan_business_local_name_v1(row),
+        local_name: format!("business-{county_geoid}-{sector_code}"),
     }
 }
 

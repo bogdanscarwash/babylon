@@ -338,6 +338,7 @@ def test_dev_selection_keeps_light_contracts_and_current_heavy_seams() -> None:
         "new_contract",
         "material_runtime_v3",
         "michigan_material",
+        "statewide_material",
         "staffed_material_replay",
         "decision_surface_contract",
         "dynamic_linking_fence",

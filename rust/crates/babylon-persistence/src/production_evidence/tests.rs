@@ -1,4 +1,4 @@
-use std::{process::Command, sync::OnceLock};
+use std::sync::OnceLock;
 
 use babylon_bsl::structural_verbs::CollectingSink;
 use babylon_graph::{hypergraph_store::HypergraphStore, stable_state::StableGraphStateV1};
@@ -6,7 +6,7 @@ use babylon_practice_contract::ordered_action_v1::OrderedPracticeActionBatchV1;
 use babylon_tick::{
     material_replay::{MaterialLaborV1, PreparedMaterialTickV3},
     material_staffing::StaffingCompositionV1,
-    material_world::decode_material_receipts_v3,
+    material_world::decode_material_receipts_v4,
     replay_session::ReplayCommitDispositionV1,
 };
 use serde_json::Value;
@@ -81,7 +81,7 @@ fn published_observations() -> &'static [ObserverEconomySnapshotV1] {
             let prepared = session.prepare_advance(&actions).unwrap();
             let staffing = prepared_staffing(&composition, &opening_graph, &prepared);
             let identity = *prepared.identity();
-            let receipt = decode_material_receipts_v3(prepared.material().receipt_bytes()).unwrap();
+            let receipt = decode_material_receipts_v4(prepared.material().receipt_bytes()).unwrap();
             let families = prepare_committed_tick_v2(prepared.graph_report())
                 .unwrap()
                 .into_material_families(identity.tick_content_hash())
@@ -154,22 +154,143 @@ fn committed() -> ObserverEconomySnapshotV1 {
     published_observations()[1].clone()
 }
 
-fn reverse_unordered(snapshot: &mut ProductionSnapshotV1) {
-    snapshot.sites.reverse();
-    snapshot.labor_accounts.reverse();
-    snapshot.staffing_accounts.reverse();
-    if let Some(balance) = &mut snapshot.material_balance {
-        balance.rows.reverse();
+fn digest(snapshot: &ObserverEconomySnapshotV1) -> ProductionEvidenceDigestV6 {
+    snapshot.production_evidence_digest().unwrap().unwrap()
+}
+
+/// Add the disclosure families absent from the small regional engine fixture.
+/// All state/receipt projections are tested at their authenticated seams; this
+/// fixture tests that the public evidence encoder binds every disclosed field.
+fn full_disclosure() -> ObserverEconomySnapshotV1 {
+    use crate::*;
+    let mut observation = committed();
+    let production = observation.production.as_mut().unwrap();
+    let site = production.sites[0].id.clone();
+    let stock = production.sites[0].inventory[0].clone();
+    production.physical_edges = vec![
+        ProductionPhysicalEdgeV2 {
+            id: "edge-a".to_owned(),
+            shape_e7: vec![[-830_000_000, 420_000_000], [-830_001_000, 420_001_000]],
+            distance_mm: 17_000,
+        },
+        ProductionPhysicalEdgeV2 {
+            id: "edge-b".to_owned(),
+            shape_e7: vec![[-830_001_000, 420_001_000], [-830_003_000, 420_003_000]],
+            distance_mm: 33_000,
+        },
+    ];
+    production.routes[0].physical_edge_ids = vec![
+        "edge-a".to_owned(),
+        "edge-b".to_owned(),
+        "edge-a".to_owned(),
+    ];
+    production.routes[0].distance_mm = Some(67_000);
+    production.road_source = Some(ProductionRoadSourceV2 {
+        pbf_sha256: "pbf-sha".to_owned(),
+        pbf_bytes: 100,
+        pbf_url: "https://example.org/roads.pbf".to_owned(),
+        replication_timestamp: "2026-09-09T00:00:00Z".to_owned(),
+        footprint_sha256: "footprint-sha".to_owned(),
+        buffer_degrees_e7: 200_000,
+        extraction_version: "extract-v1".to_owned(),
+        distance_version: "integer-v1".to_owned(),
+        routing_profile_version: "michigan-freight-routing-v1".to_owned(),
+        graph_sha256: "graph-sha".to_owned(),
+    });
+    production
+        .merchant_handling_accounts
+        .push(ProductionMerchantHandlingAccountV2 {
+            site_id: site.clone(),
+            capacity_id: "handling-capacity".to_owned(),
+            labor_unit_id: "labor".to_owned(),
+            coefficients: vec![ProductionHandlingCoefficientV2 {
+                good_id: stock.good_id.clone(),
+                unit_id: stock.unit_id.clone(),
+                grams_per_unit: 10,
+                hours_per_unit: 2,
+            }],
+            completed: Some(CompletedProductionMerchantHandlingV2 {
+                period: 1,
+                needed_hours: 12,
+                used_hours: 6,
+                handled_grams: 30,
+                orders: vec![ProductionMerchantHandlingOrderV2 {
+                    order_id: "final-order".to_owned(),
+                    kind: ProductionOutboundKindV2::LocalFinalDemand,
+                    good_id: stock.good_id.clone(),
+                    unit_id: stock.unit_id.clone(),
+                    requested: 10,
+                    feasible_quantity: 6,
+                    handled_quantity: 3,
+                    needed_hours: 12,
+                    used_hours: 6,
+                    remaining_unshipped: 7,
+                }],
+            }),
+        });
+    production
+        .final_demand_accounts
+        .push(ProductionFinalDemandAccountV2 {
+            demand_principal_id: "county-demand".to_owned(),
+            county_geoid: "26163".to_owned(),
+            good_id: stock.good_id.clone(),
+            unit_id: stock.unit_id.clone(),
+            good: stock.good,
+            unit: stock.unit,
+            ordered: 10,
+            fulfilled: 3,
+            outstanding: 7,
+            retail_stock_on_hand: 7,
+            retailer_site_ids: vec![site.clone()],
+            orders: vec![ProductionFinalDemandOrderV2 {
+                order_id: "final-order".to_owned(),
+                retailer_site_id: site,
+                ordered: 10,
+                fulfilled: 3,
+                outstanding: 7,
+            }],
+            completed: Some(CompletedProductionFinalDemandV2 {
+                period: 1,
+                opening_fulfilled: 0,
+                newly_fulfilled: 3,
+                closing_fulfilled: 3,
+            }),
+        });
+    observation
+}
+
+#[test]
+fn presentation_multisets_permute_without_changing_evidence_identity() {
+    let before = full_disclosure();
+    let mut permuted = before.clone();
+    let rows = permuted.production.as_mut().unwrap();
+    rows.sites.reverse();
+    for site in &mut rows.sites {
+        site.inventory.reverse();
+        site.processes.reverse();
+        for process in &mut site.processes {
+            process.inputs.reverse();
+            process.labor.reverse();
+            for input in &mut process.inputs {
+                input.supplier_site_ids.reverse();
+            }
+        }
     }
-    snapshot.observed_contexts.reverse();
-    snapshot.process_attributions.reverse();
-    snapshot.routes.reverse();
-    for route in &mut snapshot.routes {
-        route.corridor_legs.reverse();
+    rows.routes.reverse();
+    for route in &mut rows.routes {
+        route.stages.reverse();
+        for stage in &mut route.stages {
+            stage.capacity_ids.reverse();
+        }
     }
-    snapshot.freight_capacity_accounts.reverse();
-    for account in &mut snapshot.freight_capacity_accounts {
+    rows.freight.reverse();
+    rows.physical_edges.reverse();
+    rows.labor_accounts.reverse();
+    rows.staffing_accounts.reverse();
+    rows.freight_capacity_accounts.reverse();
+    for account in &mut rows.freight_capacity_accounts {
         account.route_ids.reverse();
+        account.merchant_site_ids.reverse();
         if let Some(completed) = &mut account.completed {
             completed.reservations.reverse();
             for reservation in &mut completed.reservations {
@@ -177,846 +298,206 @@ fn reverse_unordered(snapshot: &mut ProductionSnapshotV1) {
             }
         }
     }
-    snapshot.freight.reverse();
-    snapshot.provenance.reverse();
-    for site in &mut snapshot.sites {
-        site.inventory.reverse();
-        site.inputs.reverse();
-        site.labor.reverse();
-        for input in &mut site.inputs {
-            input.supplier_site_ids.reverse();
-        }
-    }
-    for event in &mut snapshot.events {
-        event.subject_site_ids.reverse();
-    }
+    rows.material_balance.as_mut().unwrap().rows.reverse();
+    rows.provenance.reverse();
+    assert_eq!(digest(&before), digest(&permuted));
 }
 
 #[test]
-fn published_replay_and_insertion_order_twins_have_the_same_evidence() {
-    for original in published_observations() {
-        let before = original.clone();
-        let mut twin = original.clone();
-        reverse_unordered(twin.production.as_mut().unwrap());
-        assert_eq!(
-            original.production_evidence_digest(),
-            twin.production_evidence_digest()
-        );
-        let decoded: ObserverEconomySnapshotV1 =
-            serde_json::from_slice(&serde_json::to_vec(original).unwrap()).unwrap();
-        assert_eq!(
-            original.production_evidence_digest(),
-            decoded.production_evidence_digest()
-        );
-        assert_eq!(
-            original, &before,
-            "canonicalization cannot mutate the observation"
-        );
-    }
-    let digests: std::collections::HashSet<_> = published_observations()
-        .iter()
-        .map(ObserverEconomySnapshotV1::production_evidence_digest)
-        .collect();
-    assert_eq!(
-        digests.len(),
-        4,
-        "each published scope has a distinct identity"
-    );
-}
-
-#[test]
-fn nested_rows_exact_units_and_duplicate_multiplicity_are_preserved() {
-    let mut original = committed();
-    let site = &mut original.production.as_mut().unwrap().sites[0];
-    let mut stock = site.inventory[0].clone();
-    stock.unit_id.push_str("-different-unit");
-    stock.quantity = u64::MAX;
-    site.inventory.push(stock);
-    let mut input = site.inputs[0].clone();
-    input.good_id.push_str("-different-good");
-    input.supplier_site_ids = vec!["supplier-z".to_owned(), "supplier-a".to_owned()];
-    site.inputs.push(input);
-    let mut labor = site.labor[0].clone();
-    labor.unit.push_str("-different-unit");
-    site.labor.push(labor);
-    let mut twin = original.clone();
-    reverse_unordered(twin.production.as_mut().unwrap());
-    assert_eq!(
-        original.production_evidence_digest(),
-        twin.production_evidence_digest()
-    );
-
-    let site = &mut twin.production.as_mut().unwrap().sites[0];
-    site.inventory.push(site.inventory[0].clone());
-    assert_ne!(
-        original.production_evidence_digest(),
-        twin.production_evidence_digest(),
-        "sorting must not discard duplicate rows"
-    );
-}
-
-#[test]
-fn scope_and_committed_identity_changes_are_bound() {
-    let original = committed();
-    let mut changed = serde_json::to_value(&original).unwrap();
-    for field in [
-        "campaign_id",
-        "foundation_digest",
-        "tick_content_hash",
-        "envelope_digest",
-        "nominal_world_hash",
+fn physical_path_repetition_vertex_order_and_event_sequence_remain_semantic() {
+    let before = full_disclosure();
+    for mutation in [
+        |rows: &mut ProductionSnapshotV2| {
+            rows.routes[0].physical_edge_ids.swap(0, 1);
+        },
+        |rows: &mut ProductionSnapshotV2| {
+            rows.routes[0].physical_edge_ids.pop();
+        },
+        |rows: &mut ProductionSnapshotV2| {
+            rows.physical_edges[0].shape_e7.reverse();
+        },
+        |rows: &mut ProductionSnapshotV2| {
+            rows.events.reverse();
+        },
     ] {
-        changed[field] = Value::String("different-identity".to_owned());
-        let twin: ObserverEconomySnapshotV1 = serde_json::from_value(changed.clone()).unwrap();
-        assert_ne!(
-            original.production_evidence_digest(),
-            twin.production_evidence_digest(),
-            "{field}"
-        );
-        changed = serde_json::to_value(&original).unwrap();
+        let mut changed = before.clone();
+        mutation(changed.production.as_mut().unwrap());
+        assert_ne!(digest(&before), digest(&changed));
     }
-    let mut twin = original.clone();
-    twin.resolve_tick += 1;
-    assert_ne!(
-        original.production_evidence_digest(),
-        twin.production_evidence_digest()
-    );
-    twin = original.clone();
-    twin.visibility = ObserverVisibilityV1::KnownPreview;
-    assert_ne!(
-        original.production_evidence_digest(),
-        twin.production_evidence_digest()
-    );
 }
 
-#[test]
-fn meaningful_event_order_remains_bound() {
-    let original = committed();
-    let mut twin = original.clone();
-    let production = twin.production.as_mut().unwrap();
-    assert!(production.events.len() > 1);
-    production.events.reverse();
-    assert_ne!(
-        original.production_evidence_digest(),
-        twin.production_evidence_digest()
-    );
-}
-
-#[test]
-fn missing_production_and_foundation_absence_do_not_masquerade_as_zero() {
-    let mut known = committed();
-    known.visibility = ObserverVisibilityV1::KnownPreview;
-    known.production = None;
-    known.nominal_world_hash = None;
-    assert_eq!(known.production_evidence_digest(), None);
-
-    let foundation = &published_observations()[0];
-    let mut invented_zero = foundation.clone();
-    invented_zero.production.as_mut().unwrap().sites[0].produced_batches = Some(0);
-    assert_ne!(
-        foundation.production_evidence_digest(),
-        invented_zero.production_evidence_digest()
-    );
-    let mut invented_labor = foundation.clone();
-    invented_labor.production.as_mut().unwrap().labor_accounts[0].completed =
-        Some(crate::CompletedProductionLaborV1 {
-            period: 0,
-            opening: 0,
-            planned: 0,
-            used: 0,
-            unused: 0,
-        });
-    assert_ne!(
-        foundation.production_evidence_digest(),
-        invented_labor.production_evidence_digest(),
-        "an absent completed account is not a zero account"
-    );
-    let mut invented_balance = foundation.clone();
-    invented_balance
-        .production
-        .as_mut()
-        .unwrap()
-        .material_balance = Some(crate::CompletedMaterialBalanceV1 {
-        period: 0,
-        rows: Vec::new(),
-    });
-    assert_ne!(
-        foundation.production_evidence_digest(),
-        invented_balance.production_evidence_digest(),
-        "an absent material account is not an empty completed account"
-    );
-    let mut invented_identity = foundation.clone();
-    invented_identity.tick_content_hash = Some(String::new());
-    assert_ne!(
-        foundation.production_evidence_digest(),
-        invented_identity.production_evidence_digest()
-    );
-}
-
-/// Independent traversal through the public serde schema catches a newly added
-/// scalar field that the fixed evidence encoder accidentally omits.
-fn scalar_paths(value: &Value, prefix: &str, result: &mut Vec<String>) {
+fn scalar_changes(value: &Value, pointer: &str, changes: &mut Vec<(String, Value)>) {
     match value {
-        Value::Object(fields) => {
-            for (key, value) in fields {
-                scalar_paths(value, &format!("{prefix}/{key}"), result);
+        Value::Object(values) => {
+            for (key, value) in values {
+                scalar_changes(
+                    value,
+                    &format!("{pointer}/{}", key.replace('~', "~0").replace('/', "~1")),
+                    changes,
+                );
             }
         }
-        Value::Array(rows) => {
-            for (index, value) in rows.iter().enumerate() {
-                scalar_paths(value, &format!("{prefix}/{index}"), result);
+        Value::Array(values) => {
+            for (index, value) in values.iter().enumerate() {
+                scalar_changes(value, &format!("{pointer}/{index}"), changes);
             }
         }
-        _ => result.push(prefix.to_owned()),
-    }
-}
-
-fn changed_production_scalar(field: &Value, path: &str) -> Value {
-    if path.ends_with("/delivery_evidence") && field.is_null() {
-        let snapshot = &published_observations()[2];
-        let delivery = snapshot
-            .production
-            .as_ref()
-            .unwrap()
-            .events
-            .iter()
-            .find_map(|event| event.delivery_evidence.as_ref())
-            .unwrap();
-        return serde_json::to_value(delivery).unwrap();
-    }
-    if path.ends_with("/delivery_evidence/stage") {
-        return Value::String(
-            if field.as_str() == Some("Arrival") {
-                "Delivery"
-            } else {
-                "Arrival"
-            }
-            .to_owned(),
-        );
-    }
-    match field {
-        Value::String(text) => Value::String(format!("{text}\0altered")),
-        Value::Number(number) => Value::from(number.as_u64().unwrap() + 1),
-        Value::Null => Value::from(0),
-        other => panic!("unexpected scalar {other:?}"),
-    }
-}
-
-#[test]
-fn every_disclosed_production_scalar_including_catalog_provenance_is_bound() {
-    let original = committed();
-    let value = serde_json::to_value(original.production.as_ref().unwrap()).unwrap();
-    let mut paths = Vec::new();
-    scalar_paths(&value, "", &mut paths);
-    assert!(paths.iter().any(|path| path.starts_with("/freight/")));
-    assert!(paths
-        .iter()
-        .any(|path| path.starts_with("/labor_accounts/")));
-    assert!(paths.iter().any(|path| path.starts_with("/provenance/")));
-    assert!(paths
-        .iter()
-        .any(|path| path.starts_with("/staffing_accounts/")));
-    assert!(paths
-        .iter()
-        .any(|path| path.starts_with("/material_balance/rows/")));
-    for path in paths {
-        let mut changed = value.clone();
-        let field = changed.pointer_mut(&path).unwrap();
-        *field = changed_production_scalar(field, &path);
-        let mut twin = original.clone();
-        twin.production = Some(serde_json::from_value(changed).unwrap());
-        assert_ne!(
-            original.production_evidence_digest(),
-            twin.production_evidence_digest(),
-            "{path}"
-        );
-    }
-}
-
-#[test]
-fn presentation_identity_does_not_alias_world_or_envelope_identity() {
-    let snapshot = committed();
-    let digest = snapshot.production_evidence_digest().unwrap();
-    assert_eq!(digest.as_bytes().len(), 32);
-    let hex = digest.to_hex();
-    assert_eq!(hex.len(), 64);
-    assert!(hex
-        .bytes()
-        .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)));
-    assert_ne!(Some(&hex), snapshot.nominal_world_hash.as_ref());
-    assert_ne!(Some(&hex), snapshot.envelope_digest.as_ref());
-    assert_ne!(Some(&hex), snapshot.tick_content_hash.as_ref());
-}
-
-#[test]
-fn digest_is_identical_in_two_fresh_processes() {
-    const ENV: &str = "BABYLON_PRODUCTION_EVIDENCE_PROCESS";
-    const MARKER: &str = "production-observation-evidence:";
-    if let Some(order) = std::env::var_os(ENV) {
-        let mut observation = contextual_observation();
-        if order == "reverse" {
-            reverse_unordered(observation.production.as_mut().unwrap());
+        Value::String(value) => {
+            let replacement = match value.as_str() {
+                "Local" => "Staged".to_owned(),
+                "Staged" => "Local".to_owned(),
+                "Delivery" => "LocalFinalDemand".to_owned(),
+                "LocalFinalDemand" => "Delivery".to_owned(),
+                "Transport" => "MerchantHandling".to_owned(),
+                "MerchantHandling" => "Transport".to_owned(),
+                "Production" => "Retail".to_owned(),
+                "Observed" => "Designed".to_owned(),
+                "Designed" => "Observed".to_owned(),
+                _ => format!("{value} changed"),
+            };
+            changes.push((pointer.to_owned(), Value::String(replacement)));
         }
-        println!(
-            "{MARKER}{}",
-            observation.production_evidence_digest().unwrap().to_hex()
-        );
-        return;
+        Value::Number(number) => {
+            let replacement = number.as_i64().map_or_else(
+                || Value::from(number.as_u64().unwrap() - 1),
+                |n| Value::from(n.checked_add(1).unwrap()),
+            );
+            changes.push((pointer.to_owned(), replacement));
+        }
+        Value::Bool(value) => changes.push((pointer.to_owned(), Value::Bool(!value))),
+        Value::Null => {}
     }
-    let executable = std::env::current_exe().unwrap();
-    let run_child = |order| {
-        let output = Command::new(&executable)
-            .args([
-                "--exact",
-                "production_evidence::tests::digest_is_identical_in_two_fresh_processes",
-                "--nocapture",
-            ])
-            .env(ENV, order)
-            .output()
-            .unwrap();
-        assert!(output.status.success(), "{output:?}");
-        String::from_utf8(output.stdout)
-            .unwrap()
-            .lines()
-            .find_map(|line| line.strip_prefix(MARKER).map(str::to_owned))
-            .unwrap()
-    };
-    let forward = run_child("forward");
-    assert_eq!(forward, run_child("reverse"));
-    assert_eq!(
-        forward,
-        contextual_observation()
-            .production_evidence_digest()
-            .unwrap()
-            .to_hex()
-    );
-}
-
-// Reuse the current staffed campaign reading to isolate the observed
-// context presentation family; no source totals allocate modeled workers.
-fn contextual_observation() -> ObserverEconomySnapshotV1 {
-    let mut snapshot = published_observations()[2].clone();
-    let admitted = crate::michigan_content::MichiganContentPresetV1::FourWeekStandardV6
-        .admitted(&crate::test_support::catalog())
-        .unwrap();
-    snapshot.foundation_digest = digest_hex(&admitted.digest());
-    crate::production_projection::context::attach_observed_context_v1(
-        &admitted,
-        ObserverVisibilityV1::FullObserver,
-        snapshot.production.as_mut().unwrap(),
-    )
-    .unwrap();
-    snapshot
 }
 
 #[test]
-fn every_attribution_and_observed_context_scalar_is_bound() {
-    let original = contextual_observation();
-    let value = serde_json::to_value(original.production.as_ref().unwrap()).unwrap();
-    let mut paths = Vec::new();
-    for field in ["observed_contexts", "process_attributions"] {
-        scalar_paths(&value[field], &format!("/{field}"), &mut paths);
-    }
-    assert!(paths.iter().any(|path| path.ends_with("/subject/scenario")));
-    assert!(paths
-        .iter()
-        .any(|path| path.ends_with("/cohort_subject/local_name")));
-    assert!(paths.iter().any(|path| path.ends_with("/source_sha256")));
-    for path in paths {
-        let mut changed = value.clone();
-        let field = changed.pointer_mut(&path).unwrap();
-        *field = if path.ends_with("/evidence_class") {
-            Value::String(
-                if field.as_str() == Some("Observed") {
-                    "Designed"
-                } else {
-                    "Observed"
-                }
-                .to_owned(),
-            )
-        } else {
-            match &*field {
-                Value::String(text) => Value::String(format!("{text} altered")),
-                Value::Number(number) => Value::from(number.as_u64().unwrap() + 1),
-                Value::Null => Value::from(0),
-                other => panic!("unexpected context scalar {other:?}"),
-            }
+fn every_disclosed_scalar_is_bound_or_refused_including_new_accounting_families() {
+    let before = full_disclosure();
+    let expected = digest(&before);
+    let json = serde_json::to_value(&before).unwrap();
+    let mut mutations = Vec::new();
+    scalar_changes(&json["production"], "/production", &mut mutations);
+    let mut checked = 0;
+    for (pointer, replacement) in mutations {
+        let mut changed = json.clone();
+        *changed.pointer_mut(&pointer).unwrap() = replacement;
+        // An unknown enum is rejected at the disclosure boundary before hashing.
+        let Ok(changed) = serde_json::from_value::<ObserverEconomySnapshotV1>(changed) else {
+            continue;
         };
-        let mut twin = original.clone();
-        twin.production = Some(serde_json::from_value(changed).unwrap());
         assert_ne!(
-            original.production_evidence_digest(),
-            twin.production_evidence_digest(),
-            "{path}"
+            changed.production_evidence_digest(),
+            Ok(Some(expected)),
+            "unbound scalar {pointer}"
         );
+        checked += 1;
     }
-}
-
-#[test]
-fn context_order_is_irrelevant_but_multiplicity_and_unknown_values_remain_distinct() {
-    let original = contextual_observation();
-    let mut twin = original.clone();
-    reverse_unordered(twin.production.as_mut().unwrap());
-    assert_eq!(
-        original.production_evidence_digest(),
-        twin.production_evidence_digest()
-    );
-    let decoded: ObserverEconomySnapshotV1 =
-        serde_json::from_slice(&serde_json::to_vec(&original).unwrap()).unwrap();
-    assert_eq!(
-        decoded.production_evidence_digest(),
-        original.production_evidence_digest()
-    );
-    let rows = twin.production.as_mut().unwrap();
-    rows.observed_contexts
-        .push(rows.observed_contexts[0].clone());
-    assert_ne!(
-        original.production_evidence_digest(),
-        twin.production_evidence_digest()
-    );
-    twin = original.clone();
-    let rows = twin.production.as_mut().unwrap();
-    rows.process_attributions
-        .push(rows.process_attributions[0].clone());
-    assert_ne!(
-        original.production_evidence_digest(),
-        twin.production_evidence_digest()
-    );
-    twin = original.clone();
-    twin.production.as_mut().unwrap().observed_contexts[0].annual_avg_emplvl = None;
-    let absent_digest = twin.production_evidence_digest();
-    assert_ne!(original.production_evidence_digest(), absent_digest);
-    twin.production.as_mut().unwrap().observed_contexts[0].annual_avg_emplvl = Some(0);
-    assert_ne!(twin.production_evidence_digest(), absent_digest);
-}
-
-#[test]
-fn every_typed_delivery_field_and_stage_is_bound_without_merging_receipts() {
-    let original = published_observations()[2].clone();
-    let rows = original.production.as_ref().unwrap();
-    let stages: std::collections::BTreeSet<_> = rows
-        .events
-        .iter()
-        .filter_map(|event| event.delivery_evidence.as_ref().map(|row| row.stage))
-        .collect();
-    assert_eq!(
-        stages,
-        [
-            crate::ProductionDeliveryStageV1::Arrival,
-            crate::ProductionDeliveryStageV1::Delivery,
-            crate::ProductionDeliveryStageV1::QuantityRealization
-        ]
-        .into_iter()
-        .collect()
-    );
-    let value = serde_json::to_value(rows).unwrap();
-    let mut paths = Vec::new();
-    scalar_paths(&value["events"], "/events", &mut paths);
-    for path in paths
-        .iter()
-        .filter(|path| path.contains("/delivery_evidence"))
-    {
-        let mut changed = value.clone();
-        let field = changed.pointer_mut(path).unwrap();
-        *field = changed_production_scalar(field, path);
-        let mut twin = original.clone();
-        twin.production = Some(serde_json::from_value(changed).unwrap());
-        assert_ne!(
-            original.production_evidence_digest(),
-            twin.production_evidence_digest(),
-            "{path}"
-        );
-    }
-    let mut duplicated = original.clone();
-    let rows = duplicated.production.as_mut().unwrap();
-    rows.events.push(
-        rows.events
-            .iter()
-            .find(|event| event.delivery_evidence.is_some())
-            .unwrap()
-            .clone(),
-    );
-    assert_ne!(
-        original.production_evidence_digest(),
-        duplicated.production_evidence_digest()
-    );
-    let mut absent = original.clone();
-    let event = absent
-        .production
-        .as_mut()
-        .unwrap()
-        .events
-        .iter_mut()
-        .find(|event| event.delivery_evidence.is_some())
-        .unwrap();
-    event.delivery_evidence = None;
-    assert_ne!(
-        original.production_evidence_digest(),
-        absent.production_evidence_digest()
-    );
-}
-
-#[test]
-fn material_balance_row_multiplicity_and_presence_are_bound() {
-    let original = committed();
-    let mut twin = original.clone();
-    let balance = twin
-        .production
-        .as_mut()
-        .unwrap()
-        .material_balance
-        .as_mut()
-        .unwrap();
-    balance.rows.push(balance.rows[0].clone());
-    assert_ne!(
-        original.production_evidence_digest(),
-        twin.production_evidence_digest()
-    );
-    let mut absent = original.clone();
-    absent.production.as_mut().unwrap().material_balance = None;
-    assert_ne!(
-        original.production_evidence_digest(),
-        absent.production_evidence_digest()
-    );
-}
-
-fn fixture_wire(vector: &Value) -> Vec<u8> {
-    let hex = vector["canonical_hex"].as_str().unwrap();
-    assert_eq!(hex.len() % 2, 0);
-    hex.as_bytes()
-        .chunks_exact(2)
-        .map(|pair| u8::from_str_radix(std::str::from_utf8(pair).unwrap(), 16).unwrap())
-        .collect()
-}
-
-#[test]
-fn historical_v3_wire_vector_keeps_its_exact_bytes_without_a_live_encoder() {
-    let vector: Value = serde_json::from_str(include_str!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../../../contracts/fixtures/production_evidence_v3.json"
-    )))
-    .unwrap();
-    let wire = fixture_wire(&vector);
-    assert_eq!(vector["schema_version"], 3);
-    assert_eq!(wire.len(), 442);
-    assert_eq!(vector["byte_length"], 442);
-    assert!(wire.starts_with(b"babylon.production-observation-evidence.v3\0\0\0\0\x03"));
-    let expected = "4e5e6efd36f6e9ec5e052cf95815e4f4f33dc6a8a49eb15df5448fb1ecc140fe";
-    assert_eq!(vector["sha256"], expected);
-    assert_eq!(digest_hex(&Sha256::digest(&wire)), expected);
-    assert!(vector["snapshot"]["production"]
-        .get("staffing_accounts")
-        .is_none());
     assert!(
-        serde_json::from_value::<ObserverEconomySnapshotV1>(vector["snapshot"].clone()).is_err()
+        checked > 300,
+        "the actual committed accounts and new DTO families were exercised"
     );
 }
 
 #[test]
-fn historical_v4_wire_vectors_keep_exact_bytes_without_a_live_encoder() {
-    let fixture: Value = serde_json::from_str(include_str!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../../../contracts/fixtures/production_evidence_v4.json"
-    )))
-    .unwrap();
-    assert_eq!(fixture["schema_version"], 4);
-    let vectors = fixture["vectors"].as_array().unwrap();
-    assert_eq!(vectors.len(), 2);
-    for vector in vectors {
-        assert!(
-            serde_json::from_value::<ObserverEconomySnapshotV1>(vector["snapshot"].clone())
-                .is_err()
-        );
-        let wire = fixture_wire(vector);
-        assert!(wire.starts_with(b"babylon.production-observation-evidence.v4\0\0\0\0\x04"));
-        assert_eq!(vector["byte_length"], wire.len());
-        let expected = vector["sha256"].as_str().unwrap();
-        assert_eq!(digest_hex(&Sha256::digest(&wire)), expected);
-    }
-}
-
-#[test]
-fn staffing_shape_is_required_and_unknown_fields_are_refused() {
-    let original = serde_json::to_value(staffing_observation()).unwrap();
-    let mut missing = original.clone();
-    missing["production"]
-        .as_object_mut()
-        .unwrap()
-        .remove("staffing_accounts");
-    assert!(serde_json::from_value::<ObserverEconomySnapshotV1>(missing).is_err());
-    for pointer in [
-        "/production/staffing_accounts/0",
-        "/production/staffing_accounts/0/subject",
-        "/production/staffing_accounts/0/completed",
+fn scope_completed_zero_and_absent_preview_are_distinct() {
+    let before = committed();
+    for mutate in [
+        |row: &mut ObserverEconomySnapshotV1| {
+            row.campaign_id.push('x');
+        },
+        |row: &mut ObserverEconomySnapshotV1| {
+            row.resolve_tick += 1;
+        },
+        |row: &mut ObserverEconomySnapshotV1| {
+            row.foundation_digest.push('x');
+        },
+        |row: &mut ObserverEconomySnapshotV1| {
+            row.tick_content_hash = None;
+        },
+        |row: &mut ObserverEconomySnapshotV1| {
+            row.envelope_digest = None;
+        },
+        |row: &mut ObserverEconomySnapshotV1| {
+            row.nominal_world_hash = None;
+        },
+        |row: &mut ObserverEconomySnapshotV1| {
+            row.production.as_mut().unwrap().labor_accounts[0].completed = None;
+        },
     ] {
-        let mut changed = original.clone();
-        changed
-            .pointer_mut(pointer)
-            .unwrap()
-            .as_object_mut()
-            .unwrap()
-            .insert("unsupported".into(), Value::Bool(true));
-        assert!(
-            serde_json::from_value::<ObserverEconomySnapshotV1>(changed).is_err(),
-            "{pointer}"
-        );
+        let mut changed = before.clone();
+        mutate(&mut changed);
+        assert_ne!(digest(&before), digest(&changed));
     }
+    assert_ne!(digest(&published_observations()[0]), digest(&before));
+    let mut preview = before;
+    preview.visibility = ObserverVisibilityV1::KnownPreview;
+    assert_eq!(
+        preview.production_evidence_digest(),
+        Err(ProductionEvidenceErrorV6::InvalidIdentity)
+    );
+    preview.production = None;
+    assert_eq!(preview.production_evidence_digest(), Ok(None));
 }
 
-fn staffing_observation() -> ObserverEconomySnapshotV1 {
-    use crate::production_observation::{
-        CompletedProductionStaffingV1, ProductionStaffingAccountV1, ProductionStaffingSubjectV1,
-    };
-    let mut value = committed();
-    value.production.as_mut().unwrap().staffing_accounts = vec![ProductionStaffingAccountV1 {
-        pool_id: "pool-a".into(),
-        site_id: "site-a".into(),
-        unit_id: "labor-hour".into(),
-        subject: ProductionStaffingSubjectV1 {
-            scenario: "fixture/workforce".into(),
-            local_name: "workers-a".into(),
+#[test]
+fn duplicate_principals_and_row_bounds_refuse_instead_of_acquiring_a_digest() {
+    let before = full_disclosure();
+    for mutate in [
+        |rows: &mut ProductionSnapshotV2| {
+            rows.sites.push(rows.sites[0].clone());
         },
-        hours_per_person: 40,
-        labor_force: 4,
-        employed: 2,
-        reserve: 2,
-        previous_unretained_hours: 80,
-        next_opening_period: 2,
-        next_opening_hours: 80,
-        completed: Some(CompletedProductionStaffingV1 {
-            period: 1,
-            opening_employed: 4,
-            opening_reserve: 0,
-            previous_unretained_hours: 40,
-            current_unretained_hours: 80,
-            retained_hours: 80,
-            target_employed: 2,
-            hires: 0,
-            separations: 2,
-        }),
-    }];
-    value
-}
-
-#[test]
-fn every_staffing_scalar_is_bound() {
-    let original = staffing_observation();
-    let value = serde_json::to_value(original.production.as_ref().unwrap()).unwrap();
-    let mut paths = Vec::new();
-    scalar_paths(
-        &value["staffing_accounts"],
-        "/staffing_accounts",
-        &mut paths,
-    );
-    assert_eq!(paths.len(), 21);
-    for path in paths {
-        let mut changed = value.clone();
-        let field = changed.pointer_mut(&path).unwrap();
-        *field = changed_production_scalar(field, &path);
-        let mut twin = original.clone();
-        twin.production = Some(serde_json::from_value(changed).unwrap());
-        assert_ne!(
-            original.production_evidence_digest(),
-            twin.production_evidence_digest(),
-            "{path}"
-        );
-    }
-}
-
-#[test]
-fn staffing_order_multiplicity_and_completed_absence_are_distinct() {
-    let mut original = staffing_observation();
-    let rows = &mut original.production.as_mut().unwrap().staffing_accounts;
-    let mut second = rows[0].clone();
-    second.pool_id = "pool-b".into();
-    second.completed = None;
-    rows.push(second);
-    let mut reordered = original.clone();
-    reordered
-        .production
-        .as_mut()
-        .unwrap()
-        .staffing_accounts
-        .reverse();
-    assert_eq!(
-        original.production_evidence_digest(),
-        reordered.production_evidence_digest()
-    );
-    let mut duplicated = original.clone();
-    let rows = &mut duplicated.production.as_mut().unwrap().staffing_accounts;
-    rows.push(rows[0].clone());
-    assert_ne!(
-        original.production_evidence_digest(),
-        duplicated.production_evidence_digest()
-    );
-    let mut absent = original.clone();
-    absent.production.as_mut().unwrap().staffing_accounts[0].completed = None;
-    assert_ne!(
-        original.production_evidence_digest(),
-        absent.production_evidence_digest()
-    );
-    let mut zero = absent.clone();
-    zero.production.as_mut().unwrap().staffing_accounts[0].completed = Some(
-        crate::production_observation::CompletedProductionStaffingV1 {
-            period: 0,
-            opening_employed: 0,
-            opening_reserve: 0,
-            previous_unretained_hours: 0,
-            current_unretained_hours: 0,
-            retained_hours: 0,
-            target_employed: 0,
-            hires: 0,
-            separations: 0,
+        |rows: &mut ProductionSnapshotV2| {
+            rows.physical_edges.push(rows.physical_edges[0].clone());
         },
+        |rows: &mut ProductionSnapshotV2| {
+            rows.freight_capacity_accounts
+                .push(rows.freight_capacity_accounts[0].clone());
+        },
+        |rows: &mut ProductionSnapshotV2| {
+            rows.merchant_handling_accounts
+                .push(rows.merchant_handling_accounts[0].clone());
+        },
+        |rows: &mut ProductionSnapshotV2| {
+            rows.final_demand_accounts
+                .push(rows.final_demand_accounts[0].clone());
+        },
+    ] {
+        let mut changed = before.clone();
+        mutate(changed.production.as_mut().unwrap());
+        assert_eq!(
+            changed.production_evidence_digest(),
+            Err(ProductionEvidenceErrorV6::InvalidIdentity)
+        );
+    }
+    let mut bounded = before;
+    bounded.production.as_mut().unwrap().routes =
+        vec![bounded.production.as_ref().unwrap().routes[0].clone(); MAX_ROWS + 1];
+    assert_eq!(
+        bounded.production_evidence_digest(),
+        Err(ProductionEvidenceErrorV6::Bound)
     );
-    assert_ne!(
-        zero.production_evidence_digest(),
-        absent.production_evidence_digest()
-    );
-}
-
-/// This V5 vector extends the independently authored historical foundation
-/// vector. Its expected hash was calculated with an independent Python encoder
-/// using length-prefixed UTF-8 and unsigned big-endian integers, including >2^53.
-fn freight_evidence_vector() -> ObserverEconomySnapshotV1 {
-    let fixture: Value = serde_json::from_str(include_str!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../../../contracts/fixtures/production_evidence_v4.json"
-    )))
-    .unwrap();
-    let mut value = fixture["vectors"][1]["snapshot"].clone();
-    value["production"]["freight_capacity_accounts"] = serde_json::json!([{
-        "corridor_id": "c", "corridor_label": "Regional freight", "unit_id": "u", "unit": "kg",
-        "route_ids": ["r2", "r1"], "next_opening_period": 2, "next_opening_available": 40,
-        "completed": {"period": 1, "reservations": [
-            {"reservation_period": 2, "opening_available": 160, "newly_reserved": 120, "remaining_available": 40,
-             "orders": [{"order_id": "a", "route_id": "r1", "good_id": "g1", "unit_id": "u", "requested": 600, "dispatched": 120, "remaining_unshipped": 480}]},
-            {"reservation_period": 1, "opening_available": 9_007_199_254_740_993_u64, "newly_reserved": 160, "remaining_available": 9_007_199_254_740_833_u64,
-             "orders": [
-                {"order_id": "z", "route_id": "r2", "good_id": "g2", "unit_id": "u", "requested": 200, "dispatched": 40, "remaining_unshipped": 160},
-                {"order_id": "a", "route_id": "r1", "good_id": "g1", "unit_id": "u", "requested": 600, "dispatched": 120, "remaining_unshipped": 480}
-             ]}
-        ]}
-    }]);
-    serde_json::from_value(value).unwrap()
 }
 
 #[test]
-fn v5_independent_digest_vector_binds_shared_capacity_and_future_reservations() {
-    let original = freight_evidence_vector();
-    assert_eq!(
-        original.production_evidence_digest().unwrap().to_hex(),
-        "a830b341a08dad4e4efe6ea360f7725831c191a802c1e71f30ca03d4021b7e62"
-    );
-    let mut twin = original.clone();
-    reverse_unordered(twin.production.as_mut().unwrap());
-    assert_eq!(
-        original.production_evidence_digest(),
-        twin.production_evidence_digest()
-    );
-    let value = serde_json::to_value(original.production.as_ref().unwrap()).unwrap();
-    let mut paths = Vec::new();
-    scalar_paths(
-        &value["freight_capacity_accounts"],
-        "/freight_capacity_accounts",
-        &mut paths,
-    );
-    assert!(paths
-        .iter()
-        .any(|path| path.ends_with("/reservation_period")));
-    assert!(paths
-        .iter()
-        .any(|path| path.ends_with("/remaining_unshipped")));
-    for path in paths {
-        let mut changed = value.clone();
-        let field = changed.pointer_mut(&path).unwrap();
-        *field = changed_production_scalar(field, &path);
-        let mut twin = original.clone();
-        twin.production = Some(serde_json::from_value(changed).unwrap());
-        assert_ne!(
-            original.production_evidence_digest(),
-            twin.production_evidence_digest(),
-            "{path}"
-        );
-    }
-}
-
-#[test]
-fn freight_account_multiplicity_and_completed_zero_are_hash_distinct() {
-    let original = freight_evidence_vector();
-    for duplicate in [0, 1, 2, 3] {
-        let mut twin = original.clone();
-        let accounts = &mut twin.production.as_mut().unwrap().freight_capacity_accounts;
-        match duplicate {
-            0 => accounts.push(accounts[0].clone()),
-            1 => {
-                let duplicate_route = accounts[0].route_ids[0].clone();
-                accounts[0].route_ids.push(duplicate_route);
-            }
-            2 => {
-                let rows = &mut accounts[0].completed.as_mut().unwrap().reservations;
-                rows.push(rows[0].clone());
-            }
-            _ => {
-                let rows = &mut accounts[0].completed.as_mut().unwrap().reservations[0].orders;
-                rows.push(rows[0].clone());
-            }
-        }
-        assert_ne!(
-            original.production_evidence_digest(),
-            twin.production_evidence_digest()
-        );
-    }
-    let mut absent = original.clone();
-    absent
+fn native_requests_larger_than_u64_grams_are_hashed_without_narrowing() {
+    let mut observation = committed();
+    let expected = digest(&observation);
+    let request = &mut observation
         .production
         .as_mut()
         .unwrap()
         .freight_capacity_accounts[0]
-        .completed = None;
-    let mut zero = absent.clone();
-    zero.production.as_mut().unwrap().freight_capacity_accounts[0].completed =
-        Some(crate::CompletedProductionFreightCapacityV1 {
-            period: 1,
-            reservations: vec![crate::ProductionFreightReservationV1 {
-                reservation_period: 1,
-                opening_available: 0,
-                newly_reserved: 0,
-                remaining_available: 0,
-                orders: vec![],
-            }],
-        });
-    assert_ne!(
-        absent.production_evidence_digest(),
-        zero.production_evidence_digest()
-    );
-}
-
-#[test]
-fn freight_account_shape_is_required_and_unknown_fields_are_refused() {
-    let original = serde_json::to_value(freight_evidence_vector()).unwrap();
-    let mut missing = original.clone();
-    missing["production"]
-        .as_object_mut()
+        .completed
+        .as_mut()
         .unwrap()
-        .remove("freight_capacity_accounts");
-    assert!(serde_json::from_value::<ObserverEconomySnapshotV1>(missing).is_err());
-    for pointer in [
-        "/production/freight_capacity_accounts/0",
-        "/production/freight_capacity_accounts/0/completed",
-        "/production/freight_capacity_accounts/0/completed/reservations/0",
-        "/production/freight_capacity_accounts/0/completed/reservations/0/orders/0",
-    ] {
-        let mut changed = original.clone();
-        changed
-            .pointer_mut(pointer)
-            .unwrap()
-            .as_object_mut()
-            .unwrap()
-            .insert("unsupported".into(), Value::Bool(true));
-        assert!(
-            serde_json::from_value::<ObserverEconomySnapshotV1>(changed).is_err(),
-            "{pointer}"
-        );
-    }
+        .reservations[0]
+        .orders[0];
+    request.requested_grams = u128::from(u64::MAX) * u128::from(u64::MAX);
+    assert_ne!(digest(&observation), expected);
+    let mut writer = EvidenceWriter {
+        hash: Sha256::new(),
+        remaining: 2,
+        bound: false,
+    };
+    assert!(writer.write_all(b"abc").is_err());
+    assert!(writer.bound);
 }

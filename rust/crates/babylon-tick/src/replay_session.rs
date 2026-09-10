@@ -805,7 +805,7 @@ impl<G: GraphSubstrate + CanonicalState + AllocatorState + DetachedCopy> ReplayT
     ) -> Result<
         (
             PreparedReplayTickV1<G>,
-            crate::material_world::PreparedMaterialWorldV3,
+            crate::material_world::PreparedMaterialWorldV4,
         ),
         ReplayTickError,
     > {
@@ -823,7 +823,7 @@ impl<G: GraphSubstrate + CanonicalState + AllocatorState + DetachedCopy> ReplayT
     ) -> Result<
         (
             PreparedReplayTickV1<G>,
-            Option<crate::material_world::PreparedMaterialWorldV3>,
+            Option<crate::material_world::PreparedMaterialWorldV4>,
         ),
         ReplayTickError,
     > {

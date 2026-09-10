@@ -1,10 +1,10 @@
 use babylon_material_circuit::{
-    BacklogRowV1, CapacityRowV1, CorridorCapacityV2, CorridorIdV2, InputOutputCoefficientV1,
-    InventoryRowV1, LaborCapacityRowV1, LaborCoefficientV1, LogisticsNodeIdV2, OrderAccessModeV1,
-    ProcessOutputV1, ProductionCommitmentV1, RouteIdV2, RouteLegV2, SiteLogisticsNodeV2,
-    SupplierRouteV2,
+    BacklogRowV1, CapacityRowV1, CorridorCapacityV3, CorridorIdV2, FreightMassCoefficientV3,
+    InputOutputCoefficientV1, InventoryRowV1, LaborCapacityRowV1, LaborCoefficientV1,
+    LogisticsNodeIdV2, OrderAccessModeV1, ProcessOutputV1, ProductionCommitmentV1, RouteIdV2,
+    RouteStageCapacityV3, RouteStageV3, SiteLogisticsNodeV2, SupplierRouteV3, SupplierTransportV3,
 };
-use babylon_tick::material_world::{decode_material_receipts_v3, MaterialWorldRegisterV2};
+use babylon_tick::material_world::{decode_material_receipts_v4, MaterialWorldRegisterV3};
 
 use super::*;
 use crate::{
@@ -15,20 +15,26 @@ use babylon_practice_contract::ordered_action_v1::OrderedPracticeActionBatchV1;
 use babylon_tick::replay_session::ReplayCommitDispositionV1;
 
 type Pair = (
-    MaterialCircuitStateV2,
-    MaterialCircuitStateV2,
-    MaterialTickReceiptsV3,
+    MaterialCircuitStateV3,
+    MaterialCircuitStateV3,
+    MaterialTickReceiptsV4,
 );
 
-fn empty_state() -> MaterialCircuitStateV2 {
-    MaterialCircuitStateV2 {
+fn empty_state() -> MaterialCircuitStateV3 {
+    MaterialCircuitStateV3 {
         period: 1,
         site_logistics_nodes: vec![],
         process_outputs: vec![],
         input_coefficients: vec![],
         labor_coefficients: vec![],
         supplier_routes: vec![],
-        route_legs: vec![],
+        route_stages: vec![],
+        route_stage_capacities: vec![],
+        freight_mass_coefficients: vec![],
+        merchants: vec![],
+        handling_coefficients: vec![],
+        final_demand_principals: vec![],
+        final_demand_orders: vec![],
         inventory: vec![],
         orders: vec![],
         backlog: vec![],
@@ -40,31 +46,38 @@ fn empty_state() -> MaterialCircuitStateV2 {
     }
 }
 
-fn pair(state: MaterialCircuitStateV2) -> Pair {
-    let opening = MaterialWorldRegisterV2::try_new(state.period - 1, state).unwrap();
+fn pair(state: MaterialCircuitStateV3) -> Pair {
+    let opening = MaterialWorldRegisterV3::try_new(state.period - 1, state).unwrap();
     let next = opening.prepare_next().unwrap();
     (
         opening.state().clone(),
         next.register().state().clone(),
-        decode_material_receipts_v3(next.receipt_bytes()).unwrap(),
+        decode_material_receipts_v4(next.receipt_bytes()).unwrap(),
     )
 }
 
-fn project(pair: &Pair) -> Result<Option<CompletedMaterialBalanceV1>, ProductionProjectionErrorV1> {
+fn project(pair: &Pair) -> Result<Option<CompletedMaterialBalanceV2>, ProductionProjectionErrorV1> {
     project_with_labels(&pair.1, Some(&pair.0), Some(&pair.2), |good, unit| {
         Some((digest_hex(&good.as_bytes()), digest_hex(&unit.as_bytes())))
     })
 }
 
-fn complete(pair: &Pair) -> CompletedMaterialBalanceV1 {
+fn complete(pair: &Pair) -> CompletedMaterialBalanceV2 {
     project(pair).unwrap().unwrap()
 }
 
-fn conserved(balance: &CompletedMaterialBalanceV1) {
+fn conserved(balance: &CompletedMaterialBalanceV2) {
     for row in &balance.rows {
         assert_eq!(
-            u128::from(row.opening) + u128::from(row.arrivals) + u128::from(row.produced),
-            u128::from(row.consumed) + u128::from(row.dispatched) + u128::from(row.closing),
+            u128::from(row.opening)
+                + u128::from(row.arrivals)
+                + u128::from(row.local_received)
+                + u128::from(row.produced),
+            u128::from(row.consumed)
+                + u128::from(row.dispatched)
+                + u128::from(row.local_transferred)
+                + u128::from(row.final_demand_fulfilled)
+                + u128::from(row.closing),
             "{row:?}",
         );
     }
@@ -79,7 +92,7 @@ fn stock(site: u8, good: u8, unit: u8, quantity: u64) -> InventoryRowV1 {
     }
 }
 
-fn production_state(specs: &[(u8, u64, u64, u64)], opening: u64) -> MaterialCircuitStateV2 {
+fn production_state(specs: &[(u8, u64, u64, u64)], opening: u64) -> MaterialCircuitStateV3 {
     let mut state = empty_state();
     let inventory = stock(1, 2, 3, opening);
     let mut labor = 0_u64;
@@ -190,7 +203,7 @@ fn exact_units_and_sites_never_merge_even_when_labels_match() {
     conserved(&balance);
 }
 
-fn freight_state(loss_ppm: u32) -> MaterialCircuitStateV2 {
+fn freight_state(loss_ppm: u32) -> MaterialCircuitStateV3 {
     let mut state = empty_state();
     let inventory = stock(1, 2, 3, 100);
     let buyer = SiteIdV1::from_bytes([4; 32]);
@@ -209,27 +222,31 @@ fn freight_state(loss_ppm: u32) -> MaterialCircuitStateV2 {
             node_id: destination,
         },
     ];
-    state.supplier_routes.push(SupplierRouteV2 {
+    state.supplier_routes.push(SupplierRouteV3 {
+        transport_kind: SupplierTransportV3::Staged,
         buyer_site_id: buyer,
         supplier_site_id: inventory.site_id,
         good_id: inventory.good_id,
         unit_id: inventory.unit_id,
         route_id: route,
     });
-    state.route_legs.push(RouteLegV2 {
+    state.route_stage_capacities.push(RouteStageCapacityV3 {
         route_id: route,
-        leg_index: 0,
+        stage_index: 0,
         corridor_id: corridor,
+    });
+    state.route_stages.push(RouteStageV3 {
+        route_id: route,
+        stage_index: 0,
         from_node_id: source,
         to_node_id: destination,
         travel_periods: 1,
         loss_ppm,
     });
-    state.corridor_capacities.push(CorridorCapacityV2 {
+    state.corridor_capacities.push(CorridorCapacityV3 {
         corridor_id: corridor,
-        unit_id: inventory.unit_id,
         period: 1,
-        available: 100,
+        available_grams: 100,
     });
     state.orders.push(OrderRowV2 {
         order_id: order,
@@ -248,11 +265,18 @@ fn freight_state(loss_ppm: u32) -> MaterialCircuitStateV2 {
         order_id: order,
         quantity: 100,
     });
+    state
+        .freight_mass_coefficients
+        .push(FreightMassCoefficientV3 {
+            good_id: inventory.good_id,
+            unit_id: inventory.unit_id,
+            grams_per_unit: 1,
+        });
     state.inventory.push(inventory);
     state
 }
 
-fn site_row(balance: &CompletedMaterialBalanceV1, site: u8) -> &ProductionMaterialBalanceRowV1 {
+fn site_row(balance: &CompletedMaterialBalanceV2, site: u8) -> &ProductionMaterialBalanceRowV2 {
     let id = digest_hex(&[site; 32]);
     balance.rows.iter().find(|row| row.site_id == id).unwrap()
 }
@@ -290,34 +314,37 @@ fn dispatch_and_partial_or_total_loss_do_not_charge_local_stock_twice() {
     }
 }
 
-fn two_leg_work_state() -> MaterialCircuitStateV2 {
+fn two_leg_work_state() -> MaterialCircuitStateV3 {
     let mut state = freight_state(250_000);
-    let destination = state.route_legs[0].to_node_id;
+    let destination = state.route_stages[0].to_node_id;
     let intermediate = LogisticsNodeIdV2::from_bytes([10; 32]);
-    state.route_legs[0].to_node_id = intermediate;
-    state.route_legs.push(RouteLegV2 {
-        route_id: state.route_legs[0].route_id,
-        leg_index: 1,
+    state.route_stages[0].to_node_id = intermediate;
+    state.route_stage_capacities.push(RouteStageCapacityV3 {
+        route_id: state.route_stages[0].route_id,
+        stage_index: 1,
         corridor_id: CorridorIdV2::from_bytes([11; 32]),
+    });
+    state.route_stages.push(RouteStageV3 {
+        route_id: state.route_stages[0].route_id,
+        stage_index: 1,
         from_node_id: intermediate,
         to_node_id: destination,
         travel_periods: 1,
         loss_ppm: 0,
     });
-    // The actual V2 dispatcher reserves the full dispatched quantity on every
+    // The actual V3 dispatcher reserves the full dispatched quantity on every
     // leg, without anticipating the loss that will later occur in transit.
-    state.corridor_capacities.push(CorridorCapacityV2 {
-        corridor_id: state.route_legs[1].corridor_id,
-        unit_id: state.inventory[0].unit_id,
+    state.corridor_capacities.push(CorridorCapacityV3 {
+        corridor_id: state.route_stage_capacities[1].corridor_id,
         period: 2,
-        available: 100,
+        available_grams: 100,
     });
     add_receiving_work(&mut state);
     add_receiving_dispatch(&mut state);
     state
 }
 
-fn add_receiving_work(state: &mut MaterialCircuitStateV2) {
+fn add_receiving_work(state: &mut MaterialCircuitStateV3) {
     let buyer = state.orders[0].buyer_site_id;
     let mut work = production_state(&[(17, 1, 2, 1)], 5);
     work.process_outputs[0].site_id = buyer;
@@ -346,7 +373,7 @@ fn add_receiving_work(state: &mut MaterialCircuitStateV2) {
         .extend(work.production_commitments);
 }
 
-fn add_receiving_dispatch(state: &mut MaterialCircuitStateV2) {
+fn add_receiving_dispatch(state: &mut MaterialCircuitStateV3) {
     let supplier = state.orders[0].buyer_site_id;
     let buyer = SiteIdV1::from_bytes([15; 32]);
     let destination = LogisticsNodeIdV2::from_bytes([14; 32]);
@@ -357,16 +384,21 @@ fn add_receiving_dispatch(state: &mut MaterialCircuitStateV2) {
         site_id: buyer,
         node_id: destination,
     });
-    state.route_legs.push(RouteLegV2 {
+    state.route_stage_capacities.push(RouteStageCapacityV3 {
         route_id: route,
-        leg_index: 0,
+        stage_index: 0,
         corridor_id: corridor,
-        from_node_id: state.route_legs[1].to_node_id,
+    });
+    state.route_stages.push(RouteStageV3 {
+        route_id: route,
+        stage_index: 0,
+        from_node_id: state.route_stages[1].to_node_id,
         to_node_id: destination,
         travel_periods: 1,
         loss_ppm: 0,
     });
-    state.supplier_routes.push(SupplierRouteV2 {
+    state.supplier_routes.push(SupplierRouteV3 {
+        transport_kind: SupplierTransportV3::Staged,
         supplier_site_id: supplier,
         buyer_site_id: buyer,
         route_id: route,
@@ -383,11 +415,10 @@ fn add_receiving_dispatch(state: &mut MaterialCircuitStateV2) {
         order_id: order,
         quantity: 4,
     });
-    state.corridor_capacities.push(CorridorCapacityV2 {
+    state.corridor_capacities.push(CorridorCapacityV3 {
         corridor_id: corridor,
-        unit_id: state.orders[0].unit_id,
         period: 3,
-        available: 4,
+        available_grams: 4,
     });
 }
 
@@ -398,7 +429,7 @@ fn assert_intermediate_transit_loss(intermediate: &Pair) {
     assert!(intermediate.2.deliveries.is_empty());
     assert!(intermediate.2.realizations.is_empty());
     assert_eq!(intermediate.1.freight.len(), 1);
-    assert_eq!(intermediate.1.freight[0].current_leg_index, 1);
+    assert_eq!(intermediate.1.freight[0].current_stage_index, 1);
     assert_eq!(intermediate.1.freight[0].quantity, 75);
     let intermediate_balance = complete(intermediate);
     let supplier = site_row(&intermediate_balance, 1);
@@ -487,7 +518,7 @@ fn michigan_period(preset: MichiganDeliveryPresetV1, period: u64) -> Pair {
             return (
                 session.material().state().clone(),
                 next.material().register().state().clone(),
-                decode_material_receipts_v3(next.material().receipt_bytes()).unwrap(),
+                decode_material_receipts_v4(next.material().receipt_bytes()).unwrap(),
             );
         }
         session
@@ -503,12 +534,22 @@ fn michigan_period(preset: MichiganDeliveryPresetV1, period: u64) -> Pair {
 fn delivery_twins_explain_downstream_input_use_and_preserve_unrelated_food() {
     let standard = michigan_period(MichiganDeliveryPresetV1::Standard, 3);
     let delayed = michigan_period(MichiganDeliveryPresetV1::Delayed, 3);
-    let a = project_material_balance(&standard.1, Some(&standard.0), Some(&standard.2))
-        .unwrap()
-        .unwrap();
-    let b = project_material_balance(&delayed.1, Some(&delayed.0), Some(&delayed.2))
-        .unwrap()
-        .unwrap();
+    let a = project_material_balance(
+        &crate::test_support::catalog(),
+        &standard.1,
+        Some(&standard.0),
+        Some(&standard.2),
+    )
+    .unwrap()
+    .unwrap();
+    let b = project_material_balance(
+        &crate::test_support::catalog(),
+        &delayed.1,
+        Some(&delayed.0),
+        Some(&delayed.2),
+    )
+    .unwrap()
+    .unwrap();
     let catalog = crate::test_support::catalog();
     let macomb = digest_hex(
         &catalog
@@ -547,7 +588,13 @@ fn delivery_twins_explain_downstream_input_use_and_preserve_unrelated_food() {
     conserved(&complete(&later));
     assert_eq!(standard, original);
     assert_eq!(
-        project_material_balance(&standard.1, Some(&standard.0), Some(&standard.2)).unwrap(),
+        project_material_balance(
+            &crate::test_support::catalog(),
+            &standard.1,
+            Some(&standard.0),
+            Some(&standard.2)
+        )
+        .unwrap(),
         Some(a)
     );
 }
@@ -660,7 +707,7 @@ fn check_arrival_refusals(arrival: &Pair) {
             1 => changed.2.deliveries.clear(),
             2 => changed.2.realizations.clear(),
             3 => changed.2.losses.clear(),
-            4 => changed.2.losses[0].corridor_id = CorridorIdV2::from_bytes([99; 32]),
+            4 => changed.2.losses[0].route_id = RouteIdV2::from_bytes([99; 32]),
             5 => changed.2.losses.push(changed.2.losses[0].clone()),
             6 => changed.2.arrivals[0].order_id = OrderIdV1::from_bytes([99; 32]),
             7 => changed.2.deliveries[0].quantity += 1,
@@ -680,7 +727,306 @@ fn unknown_unit_metadata_refuses_instead_of_inventing_a_label() {
         Err(ProductionProjectionErrorV1::Content)
     );
     assert_eq!(
-        project_material_balance(&current, Some(&prior), Some(&receipt)),
+        project_material_balance(
+            &crate::test_support::catalog(),
+            &current,
+            Some(&prior),
+            Some(&receipt)
+        ),
         Err(ProductionProjectionErrorV1::Content)
     );
+}
+
+fn retail_state() -> MaterialCircuitStateV3 {
+    use babylon_material_circuit::{
+        CorridorCapacityV3, FinalDemandOrderV3, FinalDemandPrincipalIdV3, FinalDemandPrincipalV3,
+        FreightMassCoefficientV3, MerchantHandlingCoefficientV3, MerchantHandlingV3,
+        MerchantRoleV3,
+    };
+    let mut state = empty_state();
+    let catalog = crate::test_support::catalog();
+    let good = catalog.good("meal").unwrap();
+    let inventory = InventoryRowV1 {
+        good_id: good.id(),
+        unit_id: good.unit_id(),
+        ..stock(1, 2, 3, 10)
+    };
+    let labor_unit_id = UnitIdV1::from_bytes([4; 32]);
+    let capacity_id = catalog.corridors()[0].id();
+    let demand_principal_id = FinalDemandPrincipalIdV3::from_bytes([6; 32]);
+    state.site_logistics_nodes.push(SiteLogisticsNodeV2 {
+        site_id: inventory.site_id,
+        node_id: LogisticsNodeIdV2::from_bytes([7; 32]),
+    });
+    state
+        .freight_mass_coefficients
+        .push(FreightMassCoefficientV3 {
+            good_id: inventory.good_id,
+            unit_id: inventory.unit_id,
+            grams_per_unit: 10,
+        });
+    state.merchants.push(MerchantHandlingV3 {
+        site_id: inventory.site_id,
+        county_geoid: *b"26163",
+        role: MerchantRoleV3::Retail,
+        capacity_id,
+        labor_unit_id,
+    });
+    state
+        .handling_coefficients
+        .push(MerchantHandlingCoefficientV3 {
+            site_id: inventory.site_id,
+            good_id: inventory.good_id,
+            unit_id: inventory.unit_id,
+            hours_per_unit: 2,
+        });
+    state.final_demand_principals.push(FinalDemandPrincipalV3 {
+        id: demand_principal_id,
+        county_geoid: *b"26163",
+    });
+    state.final_demand_orders.push(FinalDemandOrderV3 {
+        order_id: OrderIdV1::from_bytes([8; 32]),
+        retailer_site_id: inventory.site_id,
+        demand_principal_id,
+        good_id: inventory.good_id,
+        unit_id: inventory.unit_id,
+        ordered: 10,
+        fulfilled: 0,
+    });
+    state.labor.push(LaborCapacityRowV1 {
+        site_id: inventory.site_id,
+        unit_id: labor_unit_id,
+        period: 1,
+        available: 6,
+    });
+    state.corridor_capacities.push(CorridorCapacityV3 {
+        corridor_id: capacity_id,
+        period: 1,
+        available_grams: 100,
+    });
+    state.inventory.push(inventory);
+    state
+}
+
+#[test]
+fn retail_final_handoff_has_a_distinct_committed_stock_sink() {
+    let committed = pair(retail_state());
+    assert_eq!(committed.2.local_fulfillments[0].quantity, 3);
+    assert!(committed.2.dispatches.is_empty());
+    assert!(committed.2.arrivals.is_empty());
+    let balance = complete(&committed);
+    let retailer = site_row(&balance, 1);
+    assert_eq!(
+        (
+            retailer.opening,
+            retailer.final_demand_fulfilled,
+            retailer.closing
+        ),
+        (10, 3, 7)
+    );
+    assert_eq!(
+        (
+            retailer.arrivals,
+            retailer.dispatched,
+            retailer.local_received,
+            retailer.local_transferred
+        ),
+        (0, 0, 0, 0)
+    );
+}
+
+#[test]
+fn local_internal_transfer_moves_same_native_stock_without_physical_arrival() {
+    let mut opening = freight_state(0);
+    opening.supplier_routes[0].transport_kind = SupplierTransportV3::Local;
+    opening.route_stages.clear();
+    opening.route_stage_capacities.clear();
+    opening.corridor_capacities.clear();
+    let committed = pair(opening);
+    assert_eq!(committed.2.local_transfers[0].quantity, 100);
+    assert!(committed.2.dispatches.is_empty());
+    assert!(committed.2.arrivals.is_empty());
+    assert!(committed.1.freight.is_empty());
+    let balance = complete(&committed);
+    assert_eq!(
+        (
+            site_row(&balance, 1).local_transferred,
+            site_row(&balance, 1).closing
+        ),
+        (100, 0)
+    );
+    assert_eq!(
+        (
+            site_row(&balance, 4).local_received,
+            site_row(&balance, 4).closing
+        ),
+        (100, 100)
+    );
+    conserved(&balance);
+    for mutate in [
+        |pair: &mut Pair| {
+            pair.2.local_transfers.clear();
+        },
+        |pair: &mut Pair| {
+            pair.2.local_transfers[0].quantity -= 1;
+        },
+        |pair: &mut Pair| {
+            pair.2.local_transfers[0].buyer_site_id = SiteIdV1::from_bytes([99; 32]);
+        },
+        |pair: &mut Pair| {
+            pair.2
+                .local_transfers
+                .push(pair.2.local_transfers[0].clone());
+        },
+        |pair: &mut Pair| {
+            pair.1.orders[0].delivered -= 1;
+        },
+    ] {
+        let mut changed = committed.clone();
+        mutate(&mut changed);
+        refuses_unchanged(&changed, ProductionProjectionErrorV1::State);
+    }
+}
+
+#[test]
+fn finite_fulfillment_and_quiet_successor_reconcile_handling_work_stock_and_mass() {
+    let catalog = crate::test_support::catalog();
+    let mut state = retail_state();
+    state.final_demand_orders[0].ordered = 3;
+    let foundation =
+        super::super::merchants::project_merchants(&catalog, &state, None, None).unwrap();
+    assert!(foundation.0[0].completed.is_none());
+    assert!(foundation.1[0].completed.is_none());
+    let completed = pair(state);
+    let balances = complete(&completed);
+    conserved(&balances);
+    let (handling, demand) = super::super::merchants::project_merchants(
+        &catalog,
+        &completed.1,
+        Some(&completed.0),
+        Some(&completed.2),
+    )
+    .unwrap();
+    let work = handling[0].completed.as_ref().unwrap();
+    assert_eq!(
+        (work.needed_hours, work.used_hours, work.handled_grams),
+        (6, 6, 30)
+    );
+    assert_eq!(
+        (
+            demand[0].ordered,
+            demand[0].fulfilled,
+            demand[0].outstanding,
+            demand[0].retail_stock_on_hand
+        ),
+        (3, 3, 0, 7)
+    );
+    let labor = super::super::labor::project_labor_accounts(
+        &completed.1,
+        Some(&completed.0),
+        Some(&completed.2),
+    )
+    .unwrap();
+    let time = labor[0].completed.as_ref().unwrap();
+    assert_eq!(
+        (
+            time.planned,
+            time.handling_needed,
+            time.handling_used,
+            time.used,
+            time.unused
+        ),
+        (0, 6, 6, 6, 0)
+    );
+    let capacity = super::super::freight::project_freight_capacity_accounts(
+        &catalog,
+        &completed.1,
+        Some(&completed.0),
+        Some(&completed.2),
+    )
+    .unwrap();
+    let reservation = &capacity[0].completed.as_ref().unwrap().reservations[0];
+    assert_eq!(
+        (
+            reservation.opening_available_grams,
+            reservation.newly_reserved_grams,
+            reservation.remaining_available_grams
+        ),
+        (100, 30, 70)
+    );
+    assert!(reservation.orders[0].route_id.is_none());
+    let quiet = pair(completed.1);
+    let (handling, demand) = super::super::merchants::project_merchants(
+        &catalog,
+        &quiet.1,
+        Some(&quiet.0),
+        Some(&quiet.2),
+    )
+    .unwrap();
+    assert_eq!(handling[0].completed.as_ref().unwrap().used_hours, 0);
+    assert_eq!(demand[0].completed.as_ref().unwrap().newly_fulfilled, 0);
+    assert_eq!(demand[0].retail_stock_on_hand, 7);
+    assert_eq!(site_row(&complete(&quiet), 1).final_demand_fulfilled, 0);
+    conserved(&complete(&quiet));
+}
+
+#[test]
+fn completed_local_fulfillment_and_handling_require_exact_receipt_identity() {
+    let catalog = crate::test_support::catalog();
+    let committed = pair(retail_state());
+    for mutate in [
+        |pair: &mut Pair| {
+            pair.2.local_fulfillments.clear();
+        },
+        |pair: &mut Pair| {
+            pair.2.local_fulfillments[0].quantity -= 1;
+        },
+        |pair: &mut Pair| {
+            pair.2.local_fulfillments[0].unit_id = UnitIdV1::from_bytes([99; 32]);
+        },
+        |pair: &mut Pair| {
+            pair.2
+                .local_fulfillments
+                .push(pair.2.local_fulfillments[0].clone());
+        },
+        |pair: &mut Pair| {
+            pair.1.final_demand_orders[0].fulfilled += 1;
+        },
+    ] {
+        let mut changed = committed.clone();
+        mutate(&mut changed);
+        refuses_unchanged(&changed, ProductionProjectionErrorV1::State);
+    }
+    for mutate in [
+        |pair: &mut Pair| {
+            pair.2.handling.clear();
+        },
+        |pair: &mut Pair| {
+            pair.2.handling[0].needed_hours += 1;
+        },
+        |pair: &mut Pair| {
+            pair.2.handling[0].used_hours += 1;
+        },
+        |pair: &mut Pair| {
+            pair.2.handling[0].handled_quantity += 1;
+        },
+        |pair: &mut Pair| {
+            pair.2.handling[0].site_id = SiteIdV1::from_bytes([99; 32]);
+        },
+        |pair: &mut Pair| {
+            pair.2.handling.push(pair.2.handling[0].clone());
+        },
+    ] {
+        let mut changed = committed.clone();
+        mutate(&mut changed);
+        assert!(matches!(
+            super::super::merchants::project_merchants(
+                &catalog,
+                &changed.1,
+                Some(&changed.0),
+                Some(&changed.2)
+            ),
+            Err(ProductionProjectionErrorV1::State)
+        ));
+    }
 }

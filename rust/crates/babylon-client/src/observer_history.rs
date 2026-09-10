@@ -2,7 +2,7 @@
 
 mod delivery_groups;
 
-use babylon_persistence::{ObserverEconomyReaderV1, ProductionEventV1, ProductionSiteV1};
+use babylon_persistence::{ObserverEconomyReaderV1, ProductionEventV1, ProductionProcessV2};
 use bevy::ecs::{query::QueryData, system::SystemParam};
 use bevy::input_focus::tab_navigation::TabGroup;
 use bevy::prelude::*;
@@ -31,6 +31,7 @@ const LOG_ENTRIES: usize = 160;
 struct HistoryScope {
     context: ObservationContext,
     site: Option<String>,
+    process: Option<(String, String, String)>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -41,7 +42,7 @@ struct PeriodOutput {
 }
 
 impl PeriodOutput {
-    fn from_site(period: u64, site: &ProductionSiteV1) -> Result<Self, String> {
+    fn from_process(period: u64, site: &ProductionProcessV2) -> Result<Self, String> {
         let quantity = |batches: Option<u64>| {
             batches
                 .map(|batches| {
@@ -230,7 +231,7 @@ fn history_control_visibility(
     ui: &ObserverUiState,
     navigation: &ProductionNavigation,
     view: PrimaryView,
-    snapshot: Option<&babylon_persistence::ProductionSnapshotV1>,
+    snapshot: Option<&babylon_persistence::ProductionSnapshotV2>,
 ) -> ControlAvailability {
     use ControlAvailability::{Disabled, Enabled};
     if ui.menu_open || ui.splash_visible || ui.comparison_open {
@@ -397,7 +398,8 @@ fn focus_eligibility(
 }
 
 fn fetch(scope: &HistoryScope) -> Result<Vec<PeriodOutput>, String> {
-    let Some(site_id) = &scope.site else {
+    let (Some(site_id), Some((process_id, good_id, unit_id))) = (&scope.site, &scope.process)
+    else {
         return Ok(Vec::new());
     };
     let reader = match scope.context.perspective {
@@ -417,7 +419,8 @@ fn fetch(scope: &HistoryScope) -> Result<Vec<PeriodOutput>, String> {
         else {
             return Err("Production history is not disclosed by this read capability.".into());
         };
-        points.push(PeriodOutput::from_site(period, site)?);
+        let process = site.processes.iter().find(|process| process.id == *process_id && process.output_good_id == *good_id && process.output_unit_id == *unit_id).ok_or("The selected process/material identity is unavailable in this historical observation.")?;
+        points.push(PeriodOutput::from_process(period, process)?);
     }
     Ok(points)
 }
@@ -436,6 +439,23 @@ fn update(
     let scope = HistoryScope {
         context: session.context(),
         site: navigation.selected_site.clone(),
+        process: frame
+            .for_session(&session)
+            .and_then(|frame| frame.production.as_ref())
+            .and_then(|snapshot| {
+                snapshot
+                    .sites
+                    .iter()
+                    .find(|site| navigation.selected_site.as_ref() == Some(&site.id))
+            })
+            .and_then(|site| navigation.process(site))
+            .map(|process| {
+                (
+                    process.id.clone(),
+                    process.output_good_id.clone(),
+                    process.output_unit_id.clone(),
+                )
+            }),
     };
     if history.scope.as_ref() != Some(&scope) {
         history.pending = None;
@@ -660,8 +680,8 @@ fn paint(
             }
         }
         let site=navigation.selected_site.as_ref().and_then(|id|snapshot.sites.iter().find(|site|site.id==*id));
-        if let Some(site)=site {
-            panel.spawn(label(format!("{} / {} {} per period | P planned / D produced",site.name,site.output_unit,site.output_good),13.0,theme::YELLOW));
+        if let Some((owner, site))=site.and_then(|owner| navigation.process(owner).map(|process| (owner, process))) {
+            panel.spawn(label(format!("{} / {} / {} {} per period | P planned / D produced",owner.name,site.name,site.output_unit,site.output_good),13.0,theme::YELLOW));
             if let Some(error)=&history.error {panel.spawn(label(error,13.0,theme::RED));}
             else if history.points.is_empty() {panel.spawn(label("Reading committed periods...",13.0,theme::GRAY));}
             else {
@@ -685,7 +705,7 @@ fn paint(
                 });
                 panel.spawn(label(format!("Scale 0-{} {} | - means no production receipt at foundation. Click a period to inspect.",grouped(maximum),site.output_unit),11.0,theme::GRAY));
             }
-        } else {panel.spawn(label("Select a producer to chart its committed output. The log locates affected subjects.",13.0,theme::YELLOW));}
+        } else {panel.spawn(label("Select a productive process to chart its exact material output; merchants have handling accounts. The log locates affected subjects.",13.0,theme::YELLOW));}
 
     });
 }
@@ -768,7 +788,7 @@ fn paint_log(
 
 fn spawn_log_entries(
     panel: &mut ChildSpawnerCommands,
-    snapshot: &babylon_persistence::ProductionSnapshotV1,
+    snapshot: &babylon_persistence::ProductionSnapshotV2,
     context: &ObservationContext,
     history: &HistoryState,
 ) {
@@ -951,8 +971,9 @@ impl Plugin for ObserverHistoryPlugin {
 mod tests {
     use super::*;
     use crate::observer::SessionPhase;
+    use babylon_persistence::ProductionSiteV2;
     use babylon_persistence::{
-        CampaignId, ObserverEconomySnapshotV1, ObserverVisibilityV1, ProductionSnapshotV1,
+        CampaignId, ObserverEconomySnapshotV1, ObserverVisibilityV1, ProductionSnapshotV2,
     };
 
     fn event(period: u64) -> ProductionEventV1 {
@@ -981,7 +1002,12 @@ mod tests {
             envelope_digest: None,
             visibility: ObserverVisibilityV1::FullObserver,
             counties: vec![],
-            production: Some(ProductionSnapshotV1 {
+            production: Some(ProductionSnapshotV2 {
+                content_authority_sha256: "a".repeat(64),
+                road_source: None,
+                physical_edges: Vec::new(),
+                merchant_handling_accounts: Vec::new(),
+                final_demand_accounts: Vec::new(),
                 freight_capacity_accounts: Vec::new(),
                 labor_accounts: Vec::new(),
                 staffing_accounts: Vec::new(),
@@ -1134,30 +1160,36 @@ mod tests {
         assert_eq!(app.world().resource::<DossierRefresh>().0, generation);
     }
 
-    fn delivery_site(id: &str, name: &str) -> ProductionSiteV1 {
-        ProductionSiteV1 {
+    fn delivery_site(id: &str, name: &str) -> ProductionSiteV2 {
+        ProductionSiteV2 {
             id: id.into(),
             county_geoid: "26163".into(),
             name: name.into(),
             industry_code: "331".into(),
             observed_employment: None,
-            output_good_id: "sheet".into(),
-            output_unit_id: "tonnes".into(),
-            output_good: "Sheet metal".into(),
-            output_unit: "tonnes".into(),
-            output_per_batch: 1,
-            available_batches: 1,
-            planned_batches: None,
-            produced_batches: None,
             inventory: vec![],
-            inputs: vec![],
-            labor: vec![],
+            role: babylon_persistence::ProductionSiteRoleV2::Production,
+            sector_code: "31-33".into(),
+            processes: vec![babylon_persistence::ProductionProcessV2 {
+                id: "fixture-process".into(),
+                name: "Fixture process".into(),
+                output_good_id: "sheet".into(),
+                output_unit_id: "tonnes".into(),
+                output_good: "Sheet metal".into(),
+                output_unit: "tonnes".into(),
+                output_per_batch: 1,
+                available_batches: 1,
+                planned_batches: None,
+                produced_batches: None,
+                inputs: vec![],
+                labor: vec![],
+            }],
         }
     }
 
     fn delivery_app(parts: usize, period: u64) -> App {
         use babylon_persistence::{
-            ProductionDeliveryEvidenceV1, ProductionDeliveryStageV1, ProductionRouteV1,
+            ProductionDeliveryEvidenceV1, ProductionDeliveryStageV1, ProductionRouteV2,
         };
         let (mut app, _) = history_app(event(period));
         app.world_mut()
@@ -1169,8 +1201,12 @@ mod tests {
             delivery_site("supplier", "Wayne metal"),
             delivery_site("buyer", "Macomb parts"),
         ];
-        snapshot.routes = vec![ProductionRouteV1 {
-            corridor_legs: Vec::new(),
+        snapshot.routes = vec![ProductionRouteV2 {
+            physical_edge_ids: Vec::new(),
+            distance_mm: None,
+            transport_kind: babylon_persistence::ProductionRouteTransportV2::Staged,
+            grams_per_unit: 1000,
+            stages: Vec::new(),
             id: "route".into(),
             supplier_site_id: "supplier".into(),
             buyer_site_id: "buyer".into(),
@@ -2021,36 +2057,47 @@ mod tests {
 
     #[test]
     fn exact_history_distinguishes_foundation_zero_and_overflow() {
-        let mut site = ProductionSiteV1 {
+        let mut site = ProductionSiteV2 {
             id: "site".into(),
             county_geoid: "26163".into(),
             name: "cohort".into(),
             industry_code: "331".into(),
             observed_employment: None,
-            output_good_id: "a".repeat(64),
-            output_unit_id: "b".repeat(64),
-            output_good: "sheet".into(),
-            output_unit: "kg".into(),
-            output_per_batch: 10,
-            available_batches: 8,
-            planned_batches: None,
-            produced_batches: None,
             inventory: vec![],
-            inputs: vec![],
-            labor: vec![],
+            role: babylon_persistence::ProductionSiteRoleV2::Production,
+            sector_code: "31-33".into(),
+            processes: vec![babylon_persistence::ProductionProcessV2 {
+                id: "fixture-process".into(),
+                name: "Fixture process".into(),
+                output_good_id: "a".repeat(64),
+                output_unit_id: "b".repeat(64),
+                output_good: "sheet".into(),
+                output_unit: "kg".into(),
+                output_per_batch: 10,
+                available_batches: 8,
+                planned_batches: None,
+                produced_batches: None,
+                inputs: vec![],
+                labor: vec![],
+            }],
         };
-        assert_eq!(PeriodOutput::from_site(0, &site).unwrap().produced, None);
-        site.planned_batches = Some(8);
-        site.produced_batches = Some(0);
         assert_eq!(
-            PeriodOutput::from_site(1, &site).unwrap(),
+            PeriodOutput::from_process(0, &site.processes[0])
+                .unwrap()
+                .produced,
+            None
+        );
+        site.processes[0].planned_batches = Some(8);
+        site.processes[0].produced_batches = Some(0);
+        assert_eq!(
+            PeriodOutput::from_process(1, &site.processes[0]).unwrap(),
             PeriodOutput {
                 period: 1,
                 planned: Some(80),
                 produced: Some(0)
             }
         );
-        site.produced_batches = Some(u64::MAX);
-        assert!(PeriodOutput::from_site(2, &site).is_err());
+        site.processes[0].produced_batches = Some(u64::MAX);
+        assert!(PeriodOutput::from_process(2, &site.processes[0]).is_err());
     }
 }

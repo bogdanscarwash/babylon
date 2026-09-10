@@ -172,12 +172,15 @@ fn catalog_for_target(
     defines_path: &std::path::Path,
 ) -> Result<Option<crate::michigan_material::MichiganMaterialCatalogV1>, RuntimeSessionErrorCodeV3>
 {
-    if matches!(target, RuntimeSessionTargetV3::Open { .. }) {
+    let RuntimeSessionTargetV3::New { preset, .. } = target else {
         return Ok(None);
-    }
+    };
     // Load for each New request. Open never touches the mutable source file.
-    let catalog = crate::michigan_material::MichiganMaterialCatalogV1::load_defines(defines_path)
-        .map_err(|error| {
+    let catalog = crate::michigan_material::MichiganMaterialCatalogV1::load_for_preset(
+        defines_path,
+        preset.delivery(),
+    )
+    .map_err(|error| {
         eprintln!("{error}");
         match error {
             crate::MichiganDefinesErrorV1::Read(_) => RuntimeSessionErrorCodeV3::DefinesMissing,
@@ -232,6 +235,50 @@ fn runtime_content(
 #[cfg(test)]
 mod defines_tests {
     use super::*;
+    #[test]
+    fn statewide_new_requires_qualified_sources_before_storage_admission() {
+        use super::super::RuntimeSessionPresetV3;
+        let directory =
+            std::env::temp_dir().join(format!("babylon-statewide-defines-{}", std::process::id()));
+        std::fs::create_dir(&directory).unwrap();
+        let path = directory.join("defines.toml");
+        let manifest = directory.join("statewide-sources.json");
+        std::fs::write(
+            &path,
+            include_str!(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/../../../content/scenarios/michigan/defines.toml"
+            )),
+        )
+        .unwrap();
+        for preset in [
+            RuntimeSessionPresetV3::StatewideBaseline,
+            RuntimeSessionPresetV3::StatewideFreightConstraint,
+            RuntimeSessionPresetV3::StatewidePackagingShortage,
+            RuntimeSessionPresetV3::StatewideBoth,
+        ] {
+            let target = RuntimeSessionTargetV3::New {
+                campaign_id: uuid::Uuid::from_u128(31).to_string(),
+                preset,
+            };
+            assert!(matches!(
+                catalog_for_target(&target, &path),
+                Err(RuntimeSessionErrorCodeV3::DefinesMissing)
+            ));
+            std::fs::write(&manifest, b"{}").unwrap();
+            assert!(matches!(
+                catalog_for_target(&target, &path),
+                Err(RuntimeSessionErrorCodeV3::DefinesInvalid)
+            ));
+            std::fs::remove_file(&manifest).unwrap();
+        }
+        std::fs::remove_file(&path).unwrap();
+        std::fs::remove_dir(&directory).unwrap();
+        let open = RuntimeSessionTargetV3::Open {
+            campaign_id: uuid::Uuid::from_u128(31).to_string(),
+        };
+        assert!(catalog_for_target(&open, &path).unwrap().is_none());
+    }
     #[test]
     fn new_reloads_config_while_open_never_reads_it() {
         let path =

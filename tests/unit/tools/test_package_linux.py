@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import io
+import json
 import os
 import subprocess
 import sys
@@ -13,6 +14,38 @@ from pathlib import Path
 
 import pytest
 from tools.release import package_linux as package
+
+
+def test_distribution_contains_the_complete_pinned_statewide_authority(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    binaries = tmp_path / "binaries"
+    binaries.mkdir()
+    for name in package.BINARIES:
+        (binaries / name).write_bytes(b"fixture executable")
+    monkeypatch.setattr(package, "check_binary", lambda _path: None)
+    monkeypatch.setattr(package, "launcher_wheels", lambda _root: [])
+    monkeypatch.setattr(package, "copy_rust_notices", lambda _root, _destination: None)
+    destination = tmp_path / "distribution"
+    package.assemble(
+        package.ROOT,
+        destination,
+        version="0.4.0",
+        source_sha="a" * 40,
+        binaries_dir=binaries,
+        wheel_cache=tmp_path / "wheels",
+    )
+    content = destination / "content/scenarios/michigan"
+    manifest = json.loads((content / "statewide-sources.json").read_text())
+    for filename, pin in (
+        ("defines.toml", "defines_sha256"),
+        ("statewide-qualification.json.gz", "qualification_sha256"),
+        ("statewide-physical.json.gz", "physical_network_sha256"),
+    ):
+        assert package.digest(content / filename) == manifest[pin]
+    assert (content / "NOTICE").read_bytes() == (
+        package.ROOT / "content/scenarios/michigan/NOTICE"
+    ).read_bytes()
 
 
 @pytest.mark.parametrize("ambient_adapter", [None, "c", "binary"])

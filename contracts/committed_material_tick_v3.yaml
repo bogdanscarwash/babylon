@@ -1,7 +1,7 @@
 version: 3
 name: committed_material_tick_v3
-authority: ADR251
-purpose: One marker-last transaction binds graph, H3, circuit, receipts and full restart state.
+authority: [ADR251, ADR260]
+purpose: One marker-last transaction binds graph, H3, material, receipts and full restart state.
 envelope:
   domain: "babylon.committed-material-tick.v3\0"
   header:
@@ -16,33 +16,79 @@ envelope:
     - {tag: 4, name: choice_receipt, codec: existing_choice_receipt_rows_v1}
     - {tag: 5, name: graph_full_checkpoint, codec: existing_nine_checkpoint_sections_v1}
     - {tag: 6, name: archive_dirty_receipt, count: 1, hash: combined_material_tick_content_v3}
-    - {tag: 7, name: complete_material_register, count: 1, key: empty, payload: exact_material_world_register_v2_bytes}
-    - {tag: 8, name: material_receipts, count: 1, key: empty, payload: exact_material_tick_receipts_v3_bytes}
+    - {tag: 7, name: complete_material_register, count: 1, key: empty, payload: exact_material_world_register_v3_bytes}
+    - {tag: 8, name: material_receipts, count: 1, key: empty, payload: exact_material_tick_receipts_v4_bytes}
   family_frame: u8_tag_then_u64_big_endian_count
   row_frame: u32_big_endian_key_length_then_key_then_u32_big_endian_payload_length_then_payload
   ordering: Existing six families preserve strict canonical key order; singular added families cannot reorder.
   digest: sha256_exact_complete_envelope_bytes
   maximum_complete_bytes: 67108864
 receipts:
-  domain: "babylon.material-tick-receipts.v3\0"
-  header: u32_big_endian_version_3_then_u64_big_endian_positive_resolve_tick
+  version: 4
+  domain: "babylon.material-tick-receipts.v4\0"
+  header: u32_big_endian_version_4_then_u64_big_endian_positive_resolve_tick
   family_frame: u8_tag_then_u64_big_endian_count
-  identities: Exact_32_bytes
-  quantities_and_weeks: u64_big_endian
+  family_count: 9
+  identities: exact_32_bytes
+  quantities_periods_and_hours: u64_big_endian
+  stage_index: u16_big_endian_less_than_16
+  outbound_order_tag: {delivery: 1, local_final_demand: 2}
   rows:
     - {tag: 1, fields: [process_id, site_id, planned_batches, produced_batches], width: 80}
-    - {tag: 2, fields: [lot_id, order_id, route_id, quantity, final_arrival_week], width: 112}
-    - {tag: 3, fields: [lot_id, order_id, corridor_id, quantity], width: 104}
-    - {tag: 4, fields: [order_id, quantity], width: 40, meaning: arrival}
+    - tag: 2
+      fields: [lot_id, order_id, route_id, quantity, final_arrival_period]
+      width: 112
+      meaning: staged_dispatch
+    - {tag: 3, fields: [lot_id, order_id, route_id, stage_index, quantity], width: 106, meaning: native_stage_loss}
+    - {tag: 4, fields: [order_id, quantity], width: 40, meaning: physical_arrival}
     - {tag: 5, fields: [order_id, quantity], width: 40, meaning: accepted_delivery}
     - {tag: 6, fields: [order_id, quantity], width: 40, meaning: quantity_realization}
-  order: Exact deterministic encounter order from advance_material_circuit_v2.
+    - tag: 7
+      fields: [site_id, outbound_order_tag, order_id, feasible_quantity, handled_quantity, needed_hours, used_hours]
+      width: 97
+      meaning: merchant_outbound_handling
+    - tag: 8
+      fields: [order_id, retailer_site_id, demand_principal_id, good_id, unit_id, quantity]
+      width: 168
+      meaning: local_retail_final_demand_fulfillment
+    - tag: 9
+      fields: [order_id, supplier_site_id, buyer_site_id, good_id, unit_id, quantity]
+      width: 168
+      meaning: local_internal_transfer
+  ordering:
+    families: Tags 1 through 9 appear exactly once in declared order, including empty families.
+    original_families: Preserve deterministic encounter order from advance_material_circuit_v3.
+    handling: Strict increasing unique site_id_and_tagged_outbound_order.
+    local_fulfillment: Strict increasing unique order_id.
+    local_transfer: Strict increasing unique order_id.
+  validation:
+    - Reject wrong domain, version, family tag, truncation or trailing bytes.
+    - Produced batches cannot exceed planned batches.
+    - Staged dispatch quantity is positive and final arrival is later than resolve_tick.
+    - Loss, physical arrival, delivery, realization and local transfer quantities are positive.
+    - Local final fulfillment quantity is positive; zero fulfillment has no positive movement row.
+    - Handling permits completed zero but handled_quantity cannot exceed feasible_quantity.
+    - Used hours cannot exceed needed hours and both quantity-hour pairs agree on zero.
+    - The exact quantity-hour cross-products agree in u128 arithmetic.
+    - Local internal supplier and buyer must be distinct.
+  interpretation:
+    native_quantity: Identified good-unit quantity; gram reservations use the captured mass coefficient.
+    handling_need: Resource-feasible work before opening labor limits actual outbound movement.
+    final_fulfillment: A finite demand-account credit, without a freight lot or claim of actual consumption.
+    local_transfer: One supplier debit and buyer credit, without physical arrival or staged-dispatch receipts.
+    authentication: Register and receipt identity, coefficient and account joins are verified before disclosure.
   maximum_rows_per_family: 65536
+  maximum_complete_bytes: 67108864
 persistence:
   material_rows: babylon_state.material_tick_v3
   marker: babylon_state.tick_commit_with_envelope_layout_version_3
   marker_order: Final durable statement, after full checkpoint, material rows and Archive outbox.
   success: Acknowledgement only after COMMIT or exact reconciliation of the same committed candidate.
-  restart: Verify contiguous V3 markers, full eight-family envelope, exact foundation and combined world hash.
-  old_campaign: Cannot gain material state implicitly and cannot receive a V3 marker.
+  restart: Verify contiguous V3 markers, full eight-family envelope, captured foundation and combined world hash.
+  incompatible_campaign: Refuse reopening without changing stored data; no implicit material or content upgrade.
   material_campaign: Cannot receive a graph-only V2 marker.
+related_contracts:
+  - contracts/material_circuit_v3.yaml
+  - contracts/material_world_register_v3.yaml
+  - contracts/nominal_material_world_v3.yaml
+  - contracts/material_campaign_foundation_v2.yaml

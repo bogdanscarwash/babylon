@@ -50,6 +50,7 @@ DEV_INTEGRATION_TARGETS: Final = {
         "archive_semantic_contract",
         "archive_worker_contract",
         "michigan_material",
+        "statewide_material",
         "schema_epoch_sql_contract",
         "schema_epoch_v2_shape_contract",
         "schema_epoch_v2_sql_contract",

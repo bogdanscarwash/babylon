@@ -34,6 +34,14 @@ pub enum RuntimeSessionPresetV3 {
     SharedFreightAmple,
     #[serde(rename = "shared-freight-constrained")]
     SharedFreightConstrained,
+    #[serde(rename = "statewide-baseline")]
+    StatewideBaseline,
+    #[serde(rename = "statewide-freight-constraint")]
+    StatewideFreightConstraint,
+    #[serde(rename = "statewide-packaging-shortage")]
+    StatewidePackagingShortage,
+    #[serde(rename = "statewide-both")]
+    StatewideBoth,
 }
 impl RuntimeSessionPresetV3 {
     pub(super) const fn delivery(self) -> MichiganDeliveryPresetV1 {
@@ -42,6 +50,14 @@ impl RuntimeSessionPresetV3 {
             Self::Delayed => MichiganDeliveryPresetV1::Delayed,
             Self::SharedFreightAmple => MichiganDeliveryPresetV1::SharedFreightAmple,
             Self::SharedFreightConstrained => MichiganDeliveryPresetV1::SharedFreightConstrained,
+            Self::StatewideBaseline => MichiganDeliveryPresetV1::StatewideBaseline,
+            Self::StatewideFreightConstraint => {
+                MichiganDeliveryPresetV1::StatewideFreightConstraint
+            }
+            Self::StatewidePackagingShortage => {
+                MichiganDeliveryPresetV1::StatewidePackagingShortage
+            }
+            Self::StatewideBoth => MichiganDeliveryPresetV1::StatewideBoth,
         }
     }
 }

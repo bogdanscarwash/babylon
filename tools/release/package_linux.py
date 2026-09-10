@@ -200,6 +200,10 @@ def assemble(
     for path in (
         "tools/run_observer_session.py",
         "content/scenarios/michigan/defines.toml",
+        "content/scenarios/michigan/statewide-sources.json",
+        "content/scenarios/michigan/statewide-qualification.json.gz",
+        "content/scenarios/michigan/statewide-physical.json.gz",
+        "content/scenarios/michigan/NOTICE",
         "docker/postgres/Dockerfile",
         "docker/postgres/patch-entrypoint.awk",
         "docker/postgres/initdb/01-babylon-init.sql",

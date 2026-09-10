@@ -1210,3 +1210,8 @@ decisions:
     status: accepted
     date: '2026-09-08'
     file: ADR259_shared_freight_capacity.yaml
+  ADR260_statewide_commodity_circulation:
+    title: Finite statewide commodities use captured physical paths and merchant accounts
+    status: accepted
+    date: '2026-09-09'
+    file: ADR260_statewide_commodity_circulation.yaml

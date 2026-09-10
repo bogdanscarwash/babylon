@@ -1,0 +1,863 @@
+{
+  "nodes": [
+    {
+      "id": 184072649,
+      "lat_e7": 457866553,
+      "lon_e7": -847323125,
+      "tags": {},
+      "timestamp": "2025-09-06 07:49:41+00:00",
+      "version": 7
+    },
+    {
+      "id": 184126970,
+      "lat_e7": 458037616,
+      "lon_e7": -847298411,
+      "tags": {},
+      "timestamp": "2014-06-04 03:10:19+00:00",
+      "version": 4
+    },
+    {
+      "id": 184126978,
+      "lat_e7": 458101396,
+      "lon_e7": -847288660,
+      "tags": {},
+      "timestamp": "2012-05-25 20:25:46+00:00",
+      "version": 4
+    },
+    {
+      "id": 184127009,
+      "lat_e7": 458037593,
+      "lon_e7": -847297501,
+      "tags": {},
+      "timestamp": "2014-06-04 03:10:19+00:00",
+      "version": 4
+    },
+    {
+      "id": 184127015,
+      "lat_e7": 458101355,
+      "lon_e7": -847287448,
+      "tags": {},
+      "timestamp": "2012-05-25 20:25:46+00:00",
+      "version": 4
+    },
+    {
+      "id": 184334480,
+      "lat_e7": 457866682,
+      "lon_e7": -847324111,
+      "tags": {},
+      "timestamp": "2015-08-02 23:58:22+00:00",
+      "version": 5
+    },
+    {
+      "id": 185090726,
+      "lat_e7": 458478174,
+      "lon_e7": -847237324,
+      "tags": {},
+      "timestamp": "2026-06-10 19:21:43+00:00",
+      "version": 6
+    },
+    {
+      "id": 185136920,
+      "lat_e7": 458206328,
+      "lon_e7": -847272949,
+      "tags": {},
+      "timestamp": "2010-09-28 17:59:42+00:00",
+      "version": 3
+    },
+    {
+      "id": 185136922,
+      "lat_e7": 458269745,
+      "lon_e7": -847263639,
+      "tags": {},
+      "timestamp": "2010-09-28 17:59:42+00:00",
+      "version": 3
+    },
+    {
+      "id": 185136926,
+      "lat_e7": 458369268,
+      "lon_e7": -847249113,
+      "tags": {},
+      "timestamp": "2015-10-15 06:43:22+00:00",
+      "version": 4
+    },
+    {
+      "id": 185136933,
+      "lat_e7": 458395991,
+      "lon_e7": -847245274,
+      "tags": {},
+      "timestamp": "2010-09-28 17:49:07+00:00",
+      "version": 3
+    },
+    {
+      "id": 185136937,
+      "lat_e7": 458455539,
+      "lon_e7": -847236477,
+      "tags": {},
+      "timestamp": "2025-03-04 04:52:36+00:00",
+      "version": 4
+    },
+    {
+      "id": 185136941,
+      "lat_e7": 458463329,
+      "lon_e7": -847235361,
+      "tags": {},
+      "timestamp": "2025-03-04 04:52:36+00:00",
+      "version": 4
+    },
+    {
+      "id": 185136944,
+      "lat_e7": 458487570,
+      "lon_e7": -847238902,
+      "tags": {},
+      "timestamp": "2023-12-19 11:01:45+00:00",
+      "version": 8
+    },
+    {
+      "id": 456044394,
+      "lat_e7": 458206265,
+      "lon_e7": -847271736,
+      "tags": {},
+      "timestamp": "2010-09-28 17:59:43+00:00",
+      "version": 3
+    },
+    {
+      "id": 456044395,
+      "lat_e7": 458269717,
+      "lon_e7": -847262660,
+      "tags": {},
+      "timestamp": "2010-09-28 17:59:42+00:00",
+      "version": 3
+    },
+    {
+      "id": 456044396,
+      "lat_e7": 458369196,
+      "lon_e7": -847248113,
+      "tags": {},
+      "timestamp": "2015-10-15 06:43:23+00:00",
+      "version": 4
+    },
+    {
+      "id": 456044397,
+      "lat_e7": 458395873,
+      "lon_e7": -847244174,
+      "tags": {},
+      "timestamp": "2010-09-28 17:49:14+00:00",
+      "version": 3
+    },
+    {
+      "id": 456044398,
+      "lat_e7": 458455470,
+      "lon_e7": -847235439,
+      "tags": {},
+      "timestamp": "2025-03-04 04:52:36+00:00",
+      "version": 4
+    },
+    {
+      "id": 456044400,
+      "lat_e7": 458463399,
+      "lon_e7": -847234224,
+      "tags": {},
+      "timestamp": "2025-03-04 04:52:36+00:00",
+      "version": 4
+    },
+    {
+      "id": 456044401,
+      "lat_e7": 458478199,
+      "lon_e7": -847234127,
+      "tags": {},
+      "timestamp": "2010-09-28 17:49:09+00:00",
+      "version": 3
+    },
+    {
+      "id": 929267284,
+      "lat_e7": 458482936,
+      "lon_e7": -847238097,
+      "tags": {
+        "barrier": "toll_booth"
+      },
+      "timestamp": "2023-12-19 11:01:45+00:00",
+      "version": 4
+    },
+    {
+      "id": 929267289,
+      "lat_e7": 458471581,
+      "lon_e7": -847235799,
+      "tags": {},
+      "timestamp": "2025-03-04 04:52:36+00:00",
+      "version": 2
+    },
+    {
+      "id": 929267308,
+      "lat_e7": 458460624,
+      "lon_e7": -847235677,
+      "tags": {},
+      "timestamp": "2025-03-04 04:52:36+00:00",
+      "version": 2
+    },
+    {
+      "id": 929267311,
+      "lat_e7": 458457927,
+      "lon_e7": -847235113,
+      "tags": {},
+      "timestamp": "2025-03-04 04:52:36+00:00",
+      "version": 2
+    },
+    {
+      "id": 929267336,
+      "lat_e7": 458470854,
+      "lon_e7": -847233699,
+      "tags": {},
+      "timestamp": "2010-09-28 17:48:53+00:00",
+      "version": 1
+    },
+    {
+      "id": 929267363,
+      "lat_e7": 458457990,
+      "lon_e7": -847236065,
+      "tags": {},
+      "timestamp": "2025-03-04 04:52:36+00:00",
+      "version": 2
+    },
+    {
+      "id": 929267427,
+      "lat_e7": 458483167,
+      "lon_e7": -847235009,
+      "tags": {
+        "barrier": "toll_booth"
+      },
+      "timestamp": "2025-03-04 04:52:36+00:00",
+      "version": 3
+    },
+    {
+      "id": 2074037435,
+      "lat_e7": 458474620,
+      "lon_e7": -847233918,
+      "tags": {},
+      "timestamp": "2012-12-19 02:29:26+00:00",
+      "version": 1
+    },
+    {
+      "id": 4115216830,
+      "lat_e7": 458487648,
+      "lon_e7": -847235954,
+      "tags": {},
+      "timestamp": "2025-03-04 04:52:36+00:00",
+      "version": 2
+    },
+    {
+      "id": 5112956746,
+      "lat_e7": 458482123,
+      "lon_e7": -847237907,
+      "tags": {},
+      "timestamp": "2023-12-19 11:01:45+00:00",
+      "version": 3
+    },
+    {
+      "id": 5112956747,
+      "lat_e7": 458482355,
+      "lon_e7": -847234828,
+      "tags": {},
+      "timestamp": "2017-09-20 06:05:37+00:00",
+      "version": 2
+    },
+    {
+      "id": 5787559620,
+      "lat_e7": 457991068,
+      "lon_e7": -847305472,
+      "tags": {},
+      "timestamp": "2018-07-26 16:18:00+00:00",
+      "version": 1
+    },
+    {
+      "id": 5787559621,
+      "lat_e7": 457990974,
+      "lon_e7": -847304433,
+      "tags": {},
+      "timestamp": "2018-07-26 16:18:00+00:00",
+      "version": 1
+    },
+    {
+      "id": 9632289847,
+      "lat_e7": 458475906,
+      "lon_e7": -847236718,
+      "tags": {},
+      "timestamp": "2022-04-02 22:35:24+00:00",
+      "version": 1
+    },
+    {
+      "id": 12635071846,
+      "lat_e7": 458465149,
+      "lon_e7": -847235279,
+      "tags": {},
+      "timestamp": "2025-03-04 04:52:36+00:00",
+      "version": 1
+    },
+    {
+      "id": 12635071847,
+      "lat_e7": 458469589,
+      "lon_e7": -847235459,
+      "tags": {},
+      "timestamp": "2025-03-04 04:52:36+00:00",
+      "version": 1
+    }
+  ],
+  "profile": {
+    "axle_load_kg": null,
+    "default_maxheight_mm": 4000,
+    "evidence_class": "Designed",
+    "gross_weight_kg": 40000,
+    "height_mm": 4000,
+    "length_mm": 16500,
+    "width_mm": 2550
+  },
+  "provenance": {
+    "attribution": "\u00a9 OpenStreetMap contributors",
+    "license": "ODbL-1.0",
+    "spool_sha256": "cb5bbada3d09c571f0f1eb6d3657c16ac317d0a8fe9068310ce4d6f9f5ddf70b",
+    "unit_specification": "https://wiki.openstreetmap.org/wiki/Map_features/Units"
+  },
+  "source": {
+    "buffer_degrees_e7": 100000,
+    "distance_version": "WGS84-segment-mm-half-up;pyproj=3.7.2;PROJ=9.5.1",
+    "extraction_version": "michigan-road-extract-v2-regional-freight;osmium=4.3.1;shapely=2.1.2;GEOS=3.13.1;native-preparation-sha256=c89f1611c584ff407ab94575aa1b6dcd7cf5962d8153a7155f0cced6f49567a0",
+    "footprint_sha256": "74b7932b77bb96782026b281e638513d4debcf93928514e2ca7709b57506b7b9",
+    "pbf_bytes": 19349498972,
+    "pbf_sha256": "31abe79b95cab2836ac9c6924701dc5ed0e6001ff102c572581097573df1d094",
+    "pbf_url": "https://download.geofabrik.de/north-america-260908.osm.pbf",
+    "replication_timestamp": "2026-09-08T20:21:01Z"
+  },
+  "ways": [
+    {
+      "id": 17876601,
+      "node_ids": [
+        185090726,
+        9632289847,
+        929267289,
+        12635071847,
+        12635071846,
+        185136941,
+        929267308,
+        929267363
+      ],
+      "tags": {
+        "bicycle": "no",
+        "charge": "4 USD",
+        "foot": "no",
+        "hgv": "designated",
+        "hgv:national_network": "yes",
+        "highway": "motorway",
+        "horse": "no",
+        "lanes": "2",
+        "maxspeed": "45 mph",
+        "maxweight": "72 st",
+        "oneway": "yes",
+        "ref": "I 75",
+        "source:hgv:national_network": "https://hepgis-usdot.hub.arcgis.com/apps/usdot::national-network-conventional-combination-trucks-map/explore",
+        "surface": "concrete",
+        "tiger:cfcc": "A11:A19",
+        "tiger:county": "Cheboygan, MI:Mackinac, MI",
+        "tiger:name_base": "I-75",
+        "tiger:name_base_1": "Mackinac",
+        "tiger:name_type_1": "Brg",
+        "toll": "yes",
+        "wikipedia": "en:Mackinac Bridge"
+      },
+      "timestamp": "2025-06-27 12:55:51+00:00",
+      "version": 23
+    },
+    {
+      "id": 38537011,
+      "node_ids": [
+        184072649,
+        5787559621
+      ],
+      "tags": {
+        "bicycle": "no",
+        "bridge": "yes",
+        "charge": "4 USD",
+        "foot": "no",
+        "hgv": "designated",
+        "hgv:national_network": "yes",
+        "highway": "motorway",
+        "horse": "no",
+        "lanes": "2",
+        "layer": "1",
+        "maxspeed": "45 mph",
+        "maxspeed:hgv": "20 mph",
+        "maxweight": "72 st",
+        "oneway": "yes",
+        "ref": "I 75",
+        "source:hgv:national_network": "https://hepgis-usdot.hub.arcgis.com/apps/usdot::national-network-conventional-combination-trucks-map/explore",
+        "surface": "asphalt",
+        "tiger:cfcc": "A15",
+        "tiger:county": "Cheboygan, MI",
+        "tiger:name_base": "I-75",
+        "tiger:name_base_1": "Mackinac",
+        "tiger:name_type_1": "Brg",
+        "toll": "yes",
+        "wikipedia": "en:Mackinac Bridge"
+      },
+      "timestamp": "2025-06-27 12:55:51+00:00",
+      "version": 29
+    },
+    {
+      "id": 79636330,
+      "node_ids": [
+        929267363,
+        185136937
+      ],
+      "tags": {
+        "bicycle": "no",
+        "bridge": "yes",
+        "charge": "4 USD",
+        "foot": "no",
+        "hgv": "designated",
+        "hgv:national_network": "yes",
+        "highway": "motorway",
+        "horse": "no",
+        "lanes": "2",
+        "layer": "1",
+        "maxspeed": "45 mph",
+        "maxspeed:hgv": "20 mph",
+        "maxweight": "72 st",
+        "oneway": "yes",
+        "ref": "I 75",
+        "source:hgv:national_network": "https://hepgis-usdot.hub.arcgis.com/apps/usdot::national-network-conventional-combination-trucks-map/explore",
+        "surface": "concrete",
+        "tiger:cfcc": "A11:A19",
+        "tiger:county": "Cheboygan, MI:Mackinac, MI",
+        "tiger:name_base": "I-75",
+        "tiger:name_base_1": "Mackinac",
+        "tiger:name_type_1": "Brg",
+        "toll": "yes",
+        "wikipedia": "en:Mackinac Bridge"
+      },
+      "timestamp": "2025-06-27 12:55:51+00:00",
+      "version": 17
+    },
+    {
+      "id": 79636334,
+      "node_ids": [
+        185136926,
+        185136922,
+        185136920,
+        184126978,
+        184126970,
+        5787559620
+      ],
+      "tags": {
+        "bicycle": "no",
+        "bridge": "yes",
+        "charge": "4 USD",
+        "foot": "no",
+        "hgv": "designated",
+        "hgv:national_network": "yes",
+        "highway": "motorway",
+        "horse": "no",
+        "lanes": "2",
+        "layer": "1",
+        "maxspeed": "45 mph",
+        "maxspeed:hgv": "20 mph",
+        "maxweight": "72 st",
+        "oneway": "yes",
+        "ref": "I 75",
+        "source:hgv:national_network": "https://hepgis-usdot.hub.arcgis.com/apps/usdot::national-network-conventional-combination-trucks-map/explore",
+        "surface": "paved",
+        "surface:note": "half asphalt, half metal grate for drainage",
+        "tiger:cfcc": "A11:A19",
+        "tiger:county": "Cheboygan, MI:Mackinac, MI",
+        "tiger:name_base": "I-75",
+        "tiger:name_base_1": "Mackinac",
+        "tiger:name_type_1": "Brg",
+        "toll": "yes",
+        "wikipedia": "en:Mackinac Bridge"
+      },
+      "timestamp": "2025-06-27 12:55:51+00:00",
+      "version": 22
+    },
+    {
+      "id": 79636340,
+      "node_ids": [
+        456044398,
+        929267311
+      ],
+      "tags": {
+        "bicycle": "no",
+        "bridge": "yes",
+        "charge": "4 USD",
+        "foot": "no",
+        "hgv": "designated",
+        "hgv:national_network": "yes",
+        "highway": "motorway",
+        "horse": "no",
+        "lanes": "2",
+        "layer": "1",
+        "maxspeed": "45 mph",
+        "maxspeed:hgv": "20 mph",
+        "maxweight": "72 st",
+        "oneway": "yes",
+        "ref": "I 75",
+        "source:hgv:national_network": "https://hepgis-usdot.hub.arcgis.com/apps/usdot::national-network-conventional-combination-trucks-map/explore",
+        "surface": "concrete",
+        "tiger:cfcc": "A15",
+        "tiger:county": "Cheboygan, MI",
+        "tiger:name_base": "I-75",
+        "tiger:name_base_1": "Mackinac",
+        "tiger:name_type_1": "Brg",
+        "toll": "yes",
+        "wikipedia": "en:Mackinac Bridge"
+      },
+      "timestamp": "2025-06-27 12:55:51+00:00",
+      "version": 18
+    },
+    {
+      "id": 79636348,
+      "node_ids": [
+        185136937,
+        185136933,
+        185136926
+      ],
+      "tags": {
+        "bicycle": "no",
+        "charge": "4 USD",
+        "foot": "no",
+        "hgv": "designated",
+        "hgv:national_network": "yes",
+        "highway": "motorway",
+        "horse": "no",
+        "lanes": "2",
+        "maxspeed": "45 mph",
+        "maxspeed:hgv": "20 mph",
+        "maxweight": "72 st",
+        "oneway": "yes",
+        "ref": "I 75",
+        "source:hgv:national_network": "https://hepgis-usdot.hub.arcgis.com/apps/usdot::national-network-conventional-combination-trucks-map/explore",
+        "surface": "asphalt",
+        "tiger:cfcc": "A11:A19",
+        "tiger:county": "Cheboygan, MI:Mackinac, MI",
+        "tiger:name_base": "I-75",
+        "tiger:name_base_1": "Mackinac",
+        "tiger:name_type_1": "Brg",
+        "toll": "yes",
+        "wikipedia": "en:Mackinac Bridge"
+      },
+      "timestamp": "2025-06-27 12:55:51+00:00",
+      "version": 17
+    },
+    {
+      "id": 79636350,
+      "node_ids": [
+        456044396,
+        456044397,
+        456044398
+      ],
+      "tags": {
+        "bicycle": "no",
+        "charge": "4 USD",
+        "foot": "no",
+        "hgv": "designated",
+        "hgv:national_network": "yes",
+        "highway": "motorway",
+        "horse": "no",
+        "lanes": "2",
+        "maxspeed": "45 mph",
+        "maxspeed:hgv": "20 mph",
+        "maxweight": "72 st",
+        "oneway": "yes",
+        "ref": "I 75",
+        "source:hgv:national_network": "https://hepgis-usdot.hub.arcgis.com/apps/usdot::national-network-conventional-combination-trucks-map/explore",
+        "surface": "asphalt",
+        "tiger:cfcc": "A15",
+        "tiger:county": "Cheboygan, MI",
+        "tiger:name_base": "I-75",
+        "tiger:name_base_1": "Mackinac",
+        "tiger:name_type_1": "Brg",
+        "toll": "yes",
+        "wikipedia": "en:Mackinac Bridge"
+      },
+      "timestamp": "2025-06-27 12:55:51+00:00",
+      "version": 17
+    },
+    {
+      "id": 79636354,
+      "node_ids": [
+        929267311,
+        456044400,
+        929267336,
+        2074037435,
+        456044401
+      ],
+      "tags": {
+        "bicycle": "no",
+        "charge": "4 USD",
+        "foot": "no",
+        "hgv": "designated",
+        "hgv:national_network": "yes",
+        "highway": "motorway",
+        "horse": "no",
+        "lanes": "2",
+        "maxspeed": "25 mph",
+        "maxweight": "72 st",
+        "oneway": "yes",
+        "ref": "I 75",
+        "source:hgv:national_network": "https://hepgis-usdot.hub.arcgis.com/apps/usdot::national-network-conventional-combination-trucks-map/explore",
+        "surface": "concrete",
+        "tiger:cfcc": "A15",
+        "tiger:county": "Cheboygan, MI",
+        "tiger:name_base": "I-75",
+        "tiger:name_base_1": "Mackinac",
+        "tiger:name_type_1": "Brg",
+        "toll": "yes",
+        "wikipedia": "en:Mackinac Bridge"
+      },
+      "timestamp": "2025-06-27 12:55:51+00:00",
+      "version": 15
+    },
+    {
+      "id": 525615139,
+      "node_ids": [
+        5112956746,
+        185090726
+      ],
+      "tags": {
+        "bicycle": "no",
+        "charge": "4 USD",
+        "foot": "no",
+        "hgv": "designated",
+        "hgv:national_network": "yes",
+        "highway": "motorway",
+        "horse": "no",
+        "lanes": "5",
+        "maxspeed": "45 mph",
+        "maxweight": "72 st",
+        "oneway": "yes",
+        "ref": "I 75",
+        "source:hgv:national_network": "https://hepgis-usdot.hub.arcgis.com/apps/usdot::national-network-conventional-combination-trucks-map/explore",
+        "surface": "concrete",
+        "tiger:cfcc": "A11",
+        "tiger:county": "Mackinac, MI",
+        "tiger:name_base": "I-75",
+        "toll": "yes"
+      },
+      "timestamp": "2025-06-27 12:55:51+00:00",
+      "version": 6
+    },
+    {
+      "id": 525615140,
+      "node_ids": [
+        5112956747,
+        929267427
+      ],
+      "tags": {
+        "bicycle": "no",
+        "charge": "4 USD",
+        "covered": "yes",
+        "foot": "no",
+        "hgv": "designated",
+        "hgv:national_network": "yes",
+        "highway": "motorway",
+        "horse": "no",
+        "lanes": "4",
+        "maxheight": "default",
+        "maxspeed": "45 mph",
+        "oneway": "yes",
+        "ref": "I 75",
+        "source:hgv:national_network": "https://hepgis-usdot.hub.arcgis.com/apps/usdot::national-network-conventional-combination-trucks-map/explore",
+        "surface": "concrete",
+        "toll": "yes"
+      },
+      "timestamp": "2025-06-25 11:53:04+00:00",
+      "version": 6
+    },
+    {
+      "id": 525615141,
+      "node_ids": [
+        929267284,
+        5112956746
+      ],
+      "tags": {
+        "bicycle": "no",
+        "charge": "4 USD",
+        "covered": "yes",
+        "foot": "no",
+        "hgv": "designated",
+        "hgv:national_network": "yes",
+        "highway": "motorway",
+        "horse": "no",
+        "lanes": "5",
+        "maxheight": "default",
+        "maxspeed": "45 mph",
+        "oneway": "yes",
+        "ref": "I 75",
+        "source:hgv:national_network": "https://hepgis-usdot.hub.arcgis.com/apps/usdot::national-network-conventional-combination-trucks-map/explore",
+        "surface": "concrete",
+        "toll": "yes"
+      },
+      "timestamp": "2025-06-25 11:53:04+00:00",
+      "version": 6
+    },
+    {
+      "id": 525615142,
+      "node_ids": [
+        456044401,
+        5112956747
+      ],
+      "tags": {
+        "bicycle": "no",
+        "charge": "4 USD",
+        "foot": "no",
+        "hgv": "designated",
+        "hgv:national_network": "yes",
+        "highway": "motorway",
+        "horse": "no",
+        "lanes": "4",
+        "maxspeed": "45 mph",
+        "maxweight": "72 st",
+        "oneway": "yes",
+        "ref": "I 75",
+        "source:hgv:national_network": "https://hepgis-usdot.hub.arcgis.com/apps/usdot::national-network-conventional-combination-trucks-map/explore",
+        "surface": "concrete",
+        "tiger:cfcc": "A11",
+        "tiger:county": "Mackinac, MI",
+        "tiger:name_base": "I-75",
+        "toll": "yes"
+      },
+      "timestamp": "2025-06-27 12:55:51+00:00",
+      "version": 6
+    },
+    {
+      "id": 611248692,
+      "node_ids": [
+        5787559620,
+        184334480
+      ],
+      "tags": {
+        "bicycle": "no",
+        "bridge": "yes",
+        "charge": "4 USD",
+        "foot": "no",
+        "hgv": "designated",
+        "hgv:national_network": "yes",
+        "highway": "motorway",
+        "horse": "no",
+        "lanes": "2",
+        "layer": "1",
+        "maxspeed": "45 mph",
+        "maxspeed:hgv": "20 mph",
+        "maxweight": "72 st",
+        "oneway": "yes",
+        "ref": "I 75",
+        "source:hgv:national_network": "https://hepgis-usdot.hub.arcgis.com/apps/usdot::national-network-conventional-combination-trucks-map/explore",
+        "surface": "asphalt",
+        "tiger:cfcc": "A11:A19",
+        "tiger:county": "Cheboygan, MI:Mackinac, MI",
+        "tiger:name_base": "I-75",
+        "tiger:name_base_1": "Mackinac",
+        "tiger:name_type_1": "Brg",
+        "toll": "yes",
+        "wikipedia": "en:Mackinac Bridge"
+      },
+      "timestamp": "2025-06-27 12:55:51+00:00",
+      "version": 11
+    },
+    {
+      "id": 611248703,
+      "node_ids": [
+        5787559621,
+        184127009,
+        184127015,
+        456044394,
+        456044395,
+        456044396
+      ],
+      "tags": {
+        "bicycle": "no",
+        "bridge": "yes",
+        "charge": "4 USD",
+        "foot": "no",
+        "hgv": "designated",
+        "hgv:national_network": "yes",
+        "highway": "motorway",
+        "horse": "no",
+        "lanes": "2",
+        "layer": "1",
+        "maxspeed": "45 mph",
+        "maxspeed:hgv": "20 mph",
+        "maxweight": "72 st",
+        "name": "Mackinac Bridge",
+        "oneway": "yes",
+        "ref": "I 75",
+        "source:hgv:national_network": "https://hepgis-usdot.hub.arcgis.com/apps/usdot::national-network-conventional-combination-trucks-map/explore",
+        "surface": "paved",
+        "surface:note": "half asphalt, half metal grate for drainage",
+        "tiger:cfcc": "A15",
+        "tiger:county": "Cheboygan, MI",
+        "tiger:name_base": "I-75",
+        "tiger:name_base_1": "Mackinac",
+        "tiger:name_type_1": "Brg",
+        "toll": "yes",
+        "wikipedia": "en:Mackinac Bridge"
+      },
+      "timestamp": "2025-06-27 12:55:51+00:00",
+      "version": 10
+    },
+    {
+      "id": 1042481389,
+      "node_ids": [
+        929267427,
+        4115216830
+      ],
+      "tags": {
+        "bicycle": "no",
+        "charge": "4 USD",
+        "foot": "no",
+        "hgv": "designated",
+        "hgv:national_network": "yes",
+        "highway": "motorway",
+        "horse": "no",
+        "lanes": "4",
+        "maxspeed": "45 mph",
+        "maxweight": "72 st",
+        "oneway": "yes",
+        "ref": "I 75",
+        "source:hgv:national_network": "https://hepgis-usdot.hub.arcgis.com/apps/usdot::national-network-conventional-combination-trucks-map/explore",
+        "surface": "concrete",
+        "tiger:cfcc": "A11",
+        "tiger:county": "Mackinac, MI",
+        "tiger:name_base": "I-75",
+        "toll": "yes"
+      },
+      "timestamp": "2025-06-27 12:55:51+00:00",
+      "version": 4
+    },
+    {
+      "id": 1042481390,
+      "node_ids": [
+        185136944,
+        929267284
+      ],
+      "tags": {
+        "bicycle": "no",
+        "charge": "4 USD",
+        "foot": "no",
+        "hgv": "designated",
+        "hgv:national_network": "yes",
+        "highway": "motorway",
+        "horse": "no",
+        "lanes": "5",
+        "maxspeed": "45 mph",
+        "maxweight": "72 st",
+        "oneway": "yes",
+        "ref": "I 75",
+        "source:hgv:national_network": "https://hepgis-usdot.hub.arcgis.com/apps/usdot::national-network-conventional-combination-trucks-map/explore",
+        "surface": "concrete",
+        "tiger:cfcc": "A11",
+        "tiger:county": "Mackinac, MI",
+        "tiger:name_base": "I-75",
+        "toll": "yes"
+      },
+      "timestamp": "2025-06-27 12:55:51+00:00",
+      "version": 5
+    }
+  ]
+}

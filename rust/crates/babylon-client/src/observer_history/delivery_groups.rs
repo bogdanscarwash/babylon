@@ -5,8 +5,8 @@
 use std::collections::BTreeMap;
 
 use babylon_persistence::{
-    ProductionDeliveryEvidenceV1, ProductionDeliveryStageV1, ProductionEventV1, ProductionRouteV1,
-    ProductionSiteV1, ProductionSnapshotV1,
+    ProductionDeliveryEvidenceV1, ProductionDeliveryStageV1, ProductionEventV1, ProductionRouteV2,
+    ProductionSiteV2, ProductionSnapshotV2,
 };
 
 /// Wrap this key in the current `ObservationContext` before storing expansion.
@@ -45,9 +45,9 @@ pub(super) struct DeliveryStageTotal {
 #[derive(Debug)]
 pub(super) struct DeliveryGroup<'a> {
     pub key: DeliveryGroupKey,
-    pub route: &'a ProductionRouteV1,
-    pub supplier: &'a ProductionSiteV1,
-    pub buyer: &'a ProductionSiteV1,
+    pub route: &'a ProductionRouteV2,
+    pub supplier: &'a ProductionSiteV2,
+    pub buyer: &'a ProductionSiteV2,
     pub events: Vec<&'a ProductionEventV1>,
     pub arrivals: Option<DeliveryStageTotal>,
     pub deliveries: Option<DeliveryStageTotal>,
@@ -180,9 +180,9 @@ impl std::fmt::Display for DeliveryGroupingError {
 }
 
 struct DisclosedRoute<'a> {
-    route: &'a ProductionRouteV1,
-    supplier: &'a ProductionSiteV1,
-    buyer: &'a ProductionSiteV1,
+    route: &'a ProductionRouteV2,
+    supplier: &'a ProductionSiteV2,
+    buyer: &'a ProductionSiteV2,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -234,12 +234,12 @@ impl<'a> OrderBindings<'a> {
 }
 
 struct DisclosedRoutes<'a> {
-    routes: BTreeMap<&'a str, &'a ProductionRouteV1>,
-    sites: BTreeMap<&'a str, &'a ProductionSiteV1>,
+    routes: BTreeMap<&'a str, &'a ProductionRouteV2>,
+    sites: BTreeMap<&'a str, &'a ProductionSiteV2>,
 }
 
 impl<'a> DisclosedRoutes<'a> {
-    fn new(snapshot: &'a ProductionSnapshotV1) -> Result<Self, DeliveryGroupingError> {
+    fn new(snapshot: &'a ProductionSnapshotV2) -> Result<Self, DeliveryGroupingError> {
         let mut routes = BTreeMap::new();
         for route in &snapshot.routes {
             if routes.insert(route.id.as_str(), route).is_some() {
@@ -306,7 +306,7 @@ impl<'a> DisclosedRoutes<'a> {
 /// No endpoint, total, or label comes from a cache or another observation.
 /// Stage metadata, not descriptions or labels, determines membership.
 pub(super) fn delivery_log_entries(
-    snapshot: &ProductionSnapshotV1,
+    snapshot: &ProductionSnapshotV2,
     limit: usize,
 ) -> Result<DeliveryLog<'_>, DeliveryGroupingError> {
     let routes = DisclosedRoutes::new(snapshot)?;
@@ -346,29 +346,40 @@ pub(super) fn delivery_log_entries(
 mod tests {
     use super::*;
 
-    fn site(id: &str, name: &str) -> ProductionSiteV1 {
-        ProductionSiteV1 {
+    fn site(id: &str, name: &str) -> ProductionSiteV2 {
+        ProductionSiteV2 {
             id: id.into(),
             county_geoid: "26163".into(),
             name: name.into(),
             industry_code: "331".into(),
             observed_employment: None,
-            output_good_id: "sheet".into(),
-            output_unit_id: "tonnes".into(),
-            output_good: "Sheet metal".into(),
-            output_unit: "tonnes".into(),
-            output_per_batch: 1,
-            available_batches: 1,
-            planned_batches: None,
-            produced_batches: None,
             inventory: vec![],
-            inputs: vec![],
-            labor: vec![],
+            role: babylon_persistence::ProductionSiteRoleV2::Production,
+            sector_code: "31-33".into(),
+            processes: vec![babylon_persistence::ProductionProcessV2 {
+                id: "fixture-process".into(),
+                name: "Fixture process".into(),
+                output_good_id: "sheet".into(),
+                output_unit_id: "tonnes".into(),
+                output_good: "Sheet metal".into(),
+                output_unit: "tonnes".into(),
+                output_per_batch: 1,
+                available_batches: 1,
+                planned_batches: None,
+                produced_batches: None,
+                inputs: vec![],
+                labor: vec![],
+            }],
         }
     }
 
-    fn snapshot() -> ProductionSnapshotV1 {
-        ProductionSnapshotV1 {
+    fn snapshot() -> ProductionSnapshotV2 {
+        ProductionSnapshotV2 {
+            content_authority_sha256: "a".repeat(64),
+            road_source: None,
+            physical_edges: Vec::new(),
+            merchant_handling_accounts: Vec::new(),
+            final_demand_accounts: Vec::new(),
             freight_capacity_accounts: Vec::new(),
             scenario_label: "Designed delivery evidence fixture".into(),
             horizon_period: 16,
@@ -376,8 +387,12 @@ mod tests {
                 site("supplier", "Wayne metal"),
                 site("buyer", "Macomb parts"),
             ],
-            routes: vec![ProductionRouteV1 {
-                corridor_legs: Vec::new(),
+            routes: vec![ProductionRouteV2 {
+                physical_edge_ids: Vec::new(),
+                distance_mm: None,
+                transport_kind: babylon_persistence::ProductionRouteTransportV2::Staged,
+                grams_per_unit: 1000,
+                stages: Vec::new(),
                 id: "route".into(),
                 supplier_site_id: "supplier".into(),
                 buyer_site_id: "buyer".into(),

@@ -69,11 +69,20 @@ fn observer_command_name(command: ObserverCommand) -> &'static str {
         ObserverCommand::NextPeriod => "next_period",
         ObserverCommand::Live => "live",
         ObserverCommand::Lens(_) => "lens",
+        ObserverCommand::Workforce(_) => "modeled_workforce_lens",
         ObserverCommand::MaterialLens(_) => "material_lens",
         ObserverCommand::CycleGood(_) => "cycle_good",
         ObserverCommand::Archive => "archive",
         ObserverCommand::Menu => "menu",
         ObserverCommand::NewCampaign => "new_campaign",
+        ObserverCommand::NewStatewideBaselineCampaign => "new_statewide_baseline",
+        ObserverCommand::NewStatewideFreightConstraintCampaign => {
+            "new_statewide_freight_constraint"
+        }
+        ObserverCommand::NewStatewidePackagingShortageCampaign => {
+            "new_statewide_packaging_shortage"
+        }
+        ObserverCommand::NewStatewideBothCampaign => "new_statewide_both",
         ObserverCommand::NewDelayedCampaign => "new_delayed_campaign",
         ObserverCommand::NewSharedFreightAmpleCampaign => "new_shared_freight_ample_campaign",
         ObserverCommand::NewSharedFreightConstrainedCampaign => {
@@ -93,6 +102,16 @@ fn observer_command_name(command: ObserverCommand) -> &'static str {
         ObserverCommand::Evidence => "evidence",
         ObserverCommand::EconomicDetails => "economic_details",
         ObserverCommand::Relationships => "relationships",
+        ObserverCommand::NetworkSector(_) => "network_sector",
+        ObserverCommand::RoadLayer(crate::observer_ui::RoadLayer::EconomyNetwork) => {
+            "economy_network"
+        }
+        ObserverCommand::RoadLayer(crate::observer_ui::RoadLayer::SelectedPaths) => {
+            "selected_paths_layer"
+        }
+        ObserverCommand::RoadLayer(crate::observer_ui::RoadLayer::CapturedRoads) => {
+            "captured_roads_layer"
+        }
     }
 }
 
@@ -128,6 +147,9 @@ fn log_requests(
             ProductionCommand::Details => "production_details",
             ProductionCommand::Reading(_) => "production_reading_section",
             ProductionCommand::Select { .. } => "production_select",
+            ProductionCommand::Focus { .. } => "production_focus",
+            ProductionCommand::Page { .. } => "production_page",
+            ProductionCommand::Process { .. } => "production_process",
         };
         scoped_info!(session, command = name, "observer command requested");
     }
@@ -206,6 +228,8 @@ fn log_feedback(
 // These are independent applied controls, not mutually exclusive session states.
 #[allow(clippy::struct_excessive_bools)]
 struct PresentationSnapshot {
+    network_layer: crate::observer_ui::RoadLayer,
+    network_sector: crate::observer_ui::NetworkSector,
     perspective: Perspective,
     lens: String,
     view: PrimaryView,
@@ -279,6 +303,8 @@ fn log_presentation(
     });
     let next = PresentationSnapshot {
         perspective: session.perspective,
+        network_layer: ui.road_layer,
+        network_sector: ui.network_sector,
         lens: ui.lens.label_for_log(snapshot),
         view: view.as_deref().copied().unwrap_or_default(),
         flat: navigation
@@ -315,7 +341,7 @@ fn log_presentation(
     if last.as_ref() == Some(&next) {
         return;
     }
-    scoped_info!(session, lens = %next.lens, view = ?next.view, flat = next.flat,
+    scoped_info!(session, lens = %next.lens, network_layer = ?next.network_layer, network_sector = ?next.network_sector, view = ?next.view, flat = next.flat,
         details = next.details, reading_section = ?next.reading_section, disclosure = next.disclosure, evidence = next.evidence, economic_details = next.economic_details,
         selected_site = next.site.as_deref().unwrap_or("none_or_undisclosed"),
         county = next.county.as_deref().unwrap_or("none"), archive = next.archive,
@@ -558,8 +584,8 @@ fn log_camera(
 mod tests {
     use super::*;
     use babylon_persistence::{
-        CampaignId, ObserverEconomySnapshotV1, ObserverVisibilityV1, ProductionSiteV1,
-        ProductionSnapshotV1,
+        CampaignId, ObserverEconomySnapshotV1, ObserverVisibilityV1, ProductionSiteV2,
+        ProductionSnapshotV2,
     };
     use bevy::log::tracing_subscriber::layer::SubscriberExt as _;
     use std::time::Duration;
@@ -577,30 +603,41 @@ mod tests {
             envelope_digest: None,
             visibility: ObserverVisibilityV1::FullObserver,
             counties: Vec::new(),
-            production: Some(ProductionSnapshotV1 {
+            production: Some(ProductionSnapshotV2 {
+                content_authority_sha256: "a".repeat(64),
+                road_source: None,
+                physical_edges: Vec::new(),
+                merchant_handling_accounts: Vec::new(),
+                final_demand_accounts: Vec::new(),
                 freight_capacity_accounts: Vec::new(),
                 material_balance: None,
                 labor_accounts: Vec::new(),
                 staffing_accounts: Vec::new(),
                 scenario_label: "Designed telemetry fixture".into(),
                 horizon_period: 16,
-                sites: vec![ProductionSiteV1 {
+                sites: vec![ProductionSiteV2 {
                     id: HIDDEN_SITE.into(),
                     name: HIDDEN_LABEL.into(),
                     county_geoid: "26163".into(),
                     industry_code: "331".into(),
                     observed_employment: None,
-                    output_good_id: "hidden-good-id".into(),
-                    output_unit_id: "hidden-unit-id".into(),
-                    output_good: "hidden-good-name".into(),
-                    output_unit: "kg".into(),
-                    output_per_batch: 1,
-                    available_batches: 1,
-                    planned_batches: None,
-                    produced_batches: None,
                     inventory: Vec::new(),
-                    inputs: Vec::new(),
-                    labor: Vec::new(),
+                    role: babylon_persistence::ProductionSiteRoleV2::Production,
+                    sector_code: "31-33".into(),
+                    processes: vec![babylon_persistence::ProductionProcessV2 {
+                        id: "fixture-process".into(),
+                        name: "Fixture process".into(),
+                        output_good_id: "hidden-good-id".into(),
+                        output_unit_id: "hidden-unit-id".into(),
+                        output_good: "hidden-good-name".into(),
+                        output_unit: "kg".into(),
+                        output_per_batch: 1,
+                        available_batches: 1,
+                        planned_batches: None,
+                        produced_batches: None,
+                        inputs: Vec::new(),
+                        labor: Vec::new(),
+                    }],
                 }],
                 routes: Vec::new(),
                 freight: Vec::new(),

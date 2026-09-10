@@ -9,6 +9,12 @@ use babylon_kernel::clock::{DAYS_PER_TICK, WEEKS_PER_TICK};
 use serde::{Deserialize, Serialize};
 
 pub const MAX_MICHIGAN_DEFINES_BYTES: usize = 32_768;
+mod statewide;
+pub(crate) use statewide::{
+    CommodityDefines, CommodityDisposition, CommodityUnit, MerchantDefines, StatewideDefines,
+    TemplateDefines, TransportDefines,
+};
+
 const MAX_EXACT_INTEGER: u64 = 1 << 53;
 
 #[derive(Debug)]
@@ -76,7 +82,18 @@ pub(crate) struct SharedFreightDefines {
 
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields, rename_all = "SCREAMING_SNAKE_CASE")]
-pub(crate) struct MichiganDefinesV2 {
+pub(crate) struct RegionalMassDefines {
+    pub evidence_class: statewide::DesignedEvidence,
+    pub kilogram_grams_per_unit: u64,
+    pub panel_grams_per_unit: u64,
+    pub subassembly_grams_per_unit: u64,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields, rename_all = "SCREAMING_SNAKE_CASE")]
+pub(crate) struct MichiganDefinesV3 {
+    #[serde(rename = "regional_mass")]
+    pub regional_mass: RegionalMassDefines,
     pub schema_version: u16,
     pub tick_duration_days: u64,
     pub horizon_periods: u64,
@@ -90,8 +107,18 @@ pub(crate) struct MichiganDefinesV2 {
     pub route: BTreeMap<String, RouteDefines>,
     #[serde(rename = "shared_freight")]
     pub shared_freight: SharedFreightDefines,
+    #[serde(rename = "statewide")]
+    pub statewide: StatewideDefines,
+    #[serde(rename = "transport")]
+    pub transport: TransportDefines,
+    #[serde(rename = "merchant")]
+    pub merchant: MerchantDefines,
+    #[serde(rename = "commodity")]
+    pub commodity: BTreeMap<String, CommodityDefines>,
+    #[serde(rename = "template")]
+    pub template: BTreeMap<String, TemplateDefines>,
 }
-impl MichiganDefinesV2 {
+impl MichiganDefinesV3 {
     pub fn load(path: &Path) -> Result<Self, MichiganDefinesErrorV1> {
         let file = std::fs::File::open(path).map_err(MichiganDefinesErrorV1::Read)?;
         let mut bytes = Vec::new();
@@ -132,8 +159,8 @@ impl MichiganDefinesV2 {
     }
     fn validate(&self) -> Result<(), MichiganDefinesErrorV1> {
         use MichiganDefinesErrorV1::Value;
-        if self.schema_version != 2 {
-            return Err(Value("SCHEMA_VERSION must equal 2"));
+        if self.schema_version != 3 {
+            return Err(Value("SCHEMA_VERSION must equal 3"));
         }
         if self.tick_duration_days != DAYS_PER_TICK {
             return Err(Value(
@@ -200,7 +227,15 @@ impl MichiganDefinesV2 {
                 "constrained shared freight capacity cannot exceed ample capacity",
             ));
         }
-        Ok(())
+        if self.regional_mass.kilogram_grams_per_unit != 1000
+            || !(1..=MAX_EXACT_INTEGER).contains(&self.regional_mass.panel_grams_per_unit)
+            || !(1..=MAX_EXACT_INTEGER).contains(&self.regional_mass.subassembly_grams_per_unit)
+        {
+            return Err(Value(
+                "regional mass requires exact kilogram conversion and positive item masses",
+            ));
+        }
+        statewide::validate(self)
     }
 }
 
@@ -277,26 +312,26 @@ mod tests {
     ));
     #[test]
     fn equivalent_toml_has_one_canonical_identity_and_stored_values_round_trip() {
-        let original = MichiganDefinesV2::parse(SOURCE).unwrap();
+        let original = MichiganDefinesV3::parse(SOURCE).unwrap();
         let reformatted =
-            MichiganDefinesV2::parse(&format!("# author note\n\n{SOURCE}\n")).unwrap();
+            MichiganDefinesV3::parse(&format!("# author note\n\n{SOURCE}\n")).unwrap();
         assert_eq!(original.encode().unwrap(), reformatted.encode().unwrap());
         assert_eq!(
-            MichiganDefinesV2::decode(&original.encode().unwrap()).unwrap(),
+            MichiganDefinesV3::decode(&original.encode().unwrap()).unwrap(),
             original
         );
         let mut padded = original.encode().unwrap();
         padded.push(b' ');
         assert!(matches!(
-            MichiganDefinesV2::decode(&padded),
+            MichiganDefinesV3::decode(&padded),
             Err(MichiganDefinesErrorV1::Canonical)
         ));
     }
     #[test]
     fn missing_unknown_fractional_and_invalid_units_are_refused() {
         for changed in [
-            SOURCE.replace("SCHEMA_VERSION = 2", "UNUSED_COEFFICIENT = 1"),
-            SOURCE.replace("SCHEMA_VERSION = 2", "SCHEMA_VERSION = 1"),
+            SOURCE.replace("SCHEMA_VERSION = 3", "UNUSED_COEFFICIENT = 1"),
+            SOURCE.replace("SCHEMA_VERSION = 3", "SCHEMA_VERSION = 1"),
             SOURCE.replace("[route.sheet_transfer]", "[route.unknown_transfer]"),
             SOURCE.replace(
                 "CONSTRAINED_UNITS_PER_WEEK = 40",
@@ -329,12 +364,12 @@ mod tests {
             format!("{SOURCE}\nUNKNOWN = 1\n"),
         ] {
             assert!(
-                MichiganDefinesV2::parse(&changed).is_err(),
+                MichiganDefinesV3::parse(&changed).is_err(),
                 "unexpectedly admitted {changed}"
             );
         }
         assert!(matches!(
-            MichiganDefinesV2::parse(&" ".repeat(MAX_MICHIGAN_DEFINES_BYTES + 1)),
+            MichiganDefinesV3::parse(&" ".repeat(MAX_MICHIGAN_DEFINES_BYTES + 1)),
             Err(MichiganDefinesErrorV1::TooLarge)
         ));
     }
@@ -351,11 +386,44 @@ mod tests {
                     &format!("LABOR_HOURS_PER_BATCH = {coefficient}"),
                 );
             assert!(matches!(
-                MichiganDefinesV2::parse(&changed),
+                MichiganDefinesV3::parse(&changed),
                 Err(MichiganDefinesErrorV1::Value(
                     "maximal period staffing request exceeds the exact integer bound"
                 ))
             ));
         }
+    }
+
+    #[test]
+    fn statewide_physical_coefficients_and_source_classification_are_validated() {
+        let baseline = MichiganDefinesV3::parse(SOURCE).unwrap();
+        assert_eq!(baseline.template.len(), 16);
+        assert_eq!(baseline.commodity.len(), 23);
+        assert_eq!(baseline.transport.road_travel_periods, 1);
+        for changed in [
+            SOURCE.replace("GRAMS_PER_UNIT = 1000", "GRAMS_PER_UNIT = 999"),
+            SOURCE.replace("GRAMS_PER_UNIT = 50000", "GRAMS_PER_UNIT = 0"),
+            SOURCE.replace(
+                "EVIDENCE_CLASS = \"Designed\"",
+                "EVIDENCE_CLASS = \"Observed\"",
+            ),
+            SOURCE.replace("ROAD_TRAVEL_PERIODS = 1", "ROAD_TRAVEL_PERIODS = 2"),
+            SOURCE.replace("FINITE_ORDER_PERIODS = 4", "FINITE_ORDER_PERIODS = 17"),
+            SOURCE.replace("OUTPUT_GOOD = \"machinery\"", "OUTPUT_GOOD = \"unknown\""),
+            SOURCE.replace("crop_feedstock = 100", "crop_feedstock = 0"),
+            SOURCE.replace("crop_feedstock = 25600", "unknown = 25600"),
+            SOURCE.replace(
+                "LABOR_HOURS_PER_ITEM = 10",
+                "LABOR_HOURS_PER_ITEM = 9007199254740992",
+            ),
+        ] {
+            assert!(
+                MichiganDefinesV3::parse(&changed).is_err(),
+                "accepted invalid statewide input"
+            );
+        }
+        let no_workers = SOURCE.replace("EMPLOYED_PEOPLE = 8", "EMPLOYED_PEOPLE = 0");
+        // A reserve-only producer remains physically admitted so staffing can recover.
+        assert!(MichiganDefinesV3::parse(&no_workers).is_ok());
     }
 }

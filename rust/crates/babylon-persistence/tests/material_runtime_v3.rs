@@ -7,7 +7,7 @@ use babylon_persistence::{
 use babylon_practice_contract::ordered_action_v1::OrderedPracticeActionBatchV1;
 use babylon_tick::{
     material_replay::{MaterialCommitErrorV3, MaterialReplaySessionV3},
-    material_world::{decode_material_receipts_v3, MaterialWorldRegisterV2},
+    material_world::{decode_material_receipts_v4, MaterialWorldRegisterV3},
     replay_session::ReplayCommitDispositionV1,
 };
 
@@ -38,7 +38,7 @@ fn material_commit_failure_leaves_graph_circuit_world_time_and_sink_unchanged() 
         let world = session.current_world_hash().unwrap();
         let candidate = session.prepare_advance(&actions(&session)).unwrap();
         let prepared_receipt_bytes = candidate.material().receipt_bytes().to_vec();
-        let receipts = decode_material_receipts_v3(&prepared_receipt_bytes).unwrap();
+        let receipts = decode_material_receipts_v4(&prepared_receipt_bytes).unwrap();
         let catalog = crate::test_support::catalog();
         let (sheet, meal) = if preset == MichiganDeliveryPresetV1::SharedFreightConstrained {
             (120, 40)
@@ -97,7 +97,7 @@ fn material_commit_failure_leaves_graph_circuit_world_time_and_sink_unchanged() 
 #[test]
 fn material_transition_failure_abandons_prepared_graph_and_identity() {
     let (graph, _) = michigan_observer_foundation_v1().unwrap();
-    let mut initial = MichiganContentPresetV1::FourWeekStandardV6
+    let mut initial = MichiganContentPresetV1::FourWeekStandardV7
         .create_foundation(&crate::test_support::catalog())
         .unwrap()
         .initial_register()
@@ -130,7 +130,7 @@ fn material_transition_failure_abandons_prepared_graph_and_identity() {
                 quantity: u64::MAX,
             });
     }
-    let register = MaterialWorldRegisterV2::try_new(0, initial).unwrap();
+    let register = MaterialWorldRegisterV3::try_new(0, initial).unwrap();
     let session = MaterialReplaySessionV3::new(
         graph,
         register,
@@ -164,10 +164,10 @@ fn staffed_arrival_feeds_following_commitments_through_the_full_horizon() {
         ] {
             let candidate = session.prepare_advance(&actions(session)).unwrap();
             let receipts =
-                decode_material_receipts_v3(candidate.material().receipt_bytes()).unwrap();
+                decode_material_receipts_v4(candidate.material().receipt_bytes()).unwrap();
             assert_eq!(receipts.resolve_tick, tick);
             let decoded =
-                MaterialWorldRegisterV2::decode(candidate.material().register().canonical_bytes())
+                MaterialWorldRegisterV3::decode(candidate.material().register().canonical_bytes())
                     .unwrap();
             assert_eq!(&decoded, candidate.material().register());
             for produced in &receipts.production {

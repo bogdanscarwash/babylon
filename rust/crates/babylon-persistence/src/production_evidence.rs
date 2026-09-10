@@ -1,96 +1,284 @@
-//! Presentation identity for the already-authorized production observation.
+//! V6 identity of an already-authorized production presentation.
 //!
-//! V5 uses a fixed domain/version, big-endian u64 quantities and lengths,
-//! length-prefixed UTF-8, and explicit 0/1 option tags. Unordered rows sort by
-//! their complete typed fields (including exact good/unit identities), after
-//! nested collections have been sorted. Duplicates retain their multiplicity.
-//! Events retain their supplied sequence; their subject sets and provenance
-//! declarations are unordered. Each event includes optional typed delivery evidence
-//! (stage tags 1 arrival, 2 delivery, 3 quantity realization), and an
-//! optional completed material balance after provenance. Each balance encodes
-//! period, row count, then site/good/unit identities and labels followed by
-//! opening/arrivals/produced/consumed/dispatched/closing quantities. V1, V2,
-//! V3, and V4 identities retain their historical meaning; V5 is the sole live encoder.
-//! After the material balance, the layout appends the staffing-account count and rows.
-//! Each row follows its DTO field order: pool/site/unit, stable subject strings,
-//! seven u64 stocks/policy/opening values, then an optional completed account
-//! containing its nine u64 values. None and completed zero flows remain distinct.
-//! V5 adds each route's ordered corridor-leg rows after its quantities, then
-//! appends freight-capacity accounts after staffing. Account fields follow DTO
-//! order; optional completed accounts encode dispatch period and reservation rows.
-//! Reservations encode departure period, opening/new/remaining quantities, then
-//! order rows with exact IDs and requested/dispatched/remaining quantities.
-//! Changing this layout requires a new version.
-//!
-//! This is neither a world hash nor an authorization proof. It commits to what
-//! the reader disclosed, including labels and assumptions, without fetching
-//! additional data or performing economic calculations. Camera, lens and UI
-//! preferences are not production-observation inputs in the current client.
+//! Scope and the complete typed DTO are serialized as canonical JSON after the
+//! fixed domain/version. True multisets sort; events, geometry vertices and each
+//! route's physical edge sequence retain their semantic order. Serialization
+//! streams into the hash with an explicit byte ceiling. This replaces the V5
+//! field-by-field encoder; historical digest bytes keep their historical meaning.
 
+use crate::{ObserverEconomySnapshotV1, ObserverVisibilityV1, ProductionSnapshotV2};
+use serde::Serialize;
 use sha2::{Digest as _, Sha256};
-
-use crate::{
-    ObserverEconomySnapshotV1, ObserverVisibilityV1, ProductionEventV1, ProductionFreightV1,
-    ProductionInputV1, ProductionRouteV1, ProductionSiteV1, ProductionSnapshotV1,
-    ProductionStockV1,
+use std::{
+    collections::BTreeSet,
+    io::{self, Write},
 };
 
-const DOMAIN: &[u8] = b"babylon.production-observation-evidence.v5\0";
+const DOMAIN: &[u8] = b"babylon.production-observation-evidence.v6\0";
+const MAX_ROWS: usize = 65_536;
+const MAX_PHYSICAL_ROWS: usize = 1_114_112;
+const MAX_EVIDENCE_BYTES: usize = 128 * 1024 * 1024;
 
-/// SHA-256 of one scope-bound production presentation, distinct from world identity.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct ProductionEvidenceDigestV5([u8; 32]);
-
-impl ProductionEvidenceDigestV5 {
+pub struct ProductionEvidenceDigestV6([u8; 32]);
+impl ProductionEvidenceDigestV6 {
     #[must_use]
     pub const fn as_bytes(&self) -> &[u8; 32] {
         &self.0
     }
-
-    /// Lowercase hexadecimal suitable for the observation's evidence details.
     #[must_use]
     pub fn to_hex(self) -> String {
         crate::michigan_economy::digest_hex(&self.0)
     }
 }
 
+/// A malformed disclosure cannot acquire a production evidence identity.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ProductionEvidenceErrorV6 {
+    InvalidIdentity,
+    Bound,
+    Serialization,
+}
+impl std::fmt::Display for ProductionEvidenceErrorV6 {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "production evidence refused: {self:?}")
+    }
+}
+impl std::error::Error for ProductionEvidenceErrorV6 {}
+
+type Result<T> = std::result::Result<T, ProductionEvidenceErrorV6>;
+
+#[derive(Serialize)]
+struct EvidenceScopeV6<'a> {
+    campaign_id: &'a str,
+    resolve_tick: u64,
+    foundation_digest: &'a str,
+    tick_content_hash: Option<&'a str>,
+    envelope_digest: Option<&'a str>,
+    nominal_world_hash: Option<&'a str>,
+    visibility: &'static str,
+    production: &'a ProductionSnapshotV2,
+}
+
 impl ObserverEconomySnapshotV1 {
-    /// Bind the exact disclosed production rows to their campaign and committed scope.
+    /// Hash the complete role-scoped disclosure after observation authentication.
+    /// `None` means no production was disclosed, including a restricted preview.
     ///
-    /// Absent production returns `None`, including today's known-only preview.
-    /// Call only after validating that this observation belongs to the current
-    /// session; the digest does not validate provenance or confer read authority.
-    /// Compute on observation installation or evidence disclosure, not per frame.
-    #[must_use]
-    pub fn production_evidence_digest(&self) -> Option<ProductionEvidenceDigestV5> {
-        let production = canonical_production(self.production.as_ref()?);
-        let mut encoder = EvidenceEncoder(Sha256::new());
-        encoder.0.update(DOMAIN);
-        encoder.0.update(5_u32.to_be_bytes());
-        encoder.text(&self.campaign_id);
-        encoder.number(self.resolve_tick);
-        encoder.text(&self.foundation_digest);
-        encoder.optional_text(self.tick_content_hash.as_deref());
-        encoder.optional_text(self.envelope_digest.as_deref());
-        encoder.optional_text(self.nominal_world_hash.as_deref());
-        encoder.0.update([match self.visibility {
-            ObserverVisibilityV1::FullObserver => 0,
-            ObserverVisibilityV1::KnownPreview => 1,
-        }]);
-        encoder.production(&production);
-        Some(ProductionEvidenceDigestV5(encoder.0.finalize().into()))
+    /// # Errors
+    /// Refuses duplicate identities, malformed preview disclosure, row/byte bounds
+    /// and serialization errors; failure is never reported as absent production.
+    pub fn production_evidence_digest(&self) -> Result<Option<ProductionEvidenceDigestV6>> {
+        let Some(source) = &self.production else {
+            return Ok(None);
+        };
+        if self.visibility != ObserverVisibilityV1::FullObserver {
+            return Err(ProductionEvidenceErrorV6::InvalidIdentity);
+        }
+        validate_identities(source)?;
+        let production = canonical_production(source);
+        let scope = EvidenceScopeV6 {
+            campaign_id: &self.campaign_id,
+            resolve_tick: self.resolve_tick,
+            foundation_digest: &self.foundation_digest,
+            tick_content_hash: self.tick_content_hash.as_deref(),
+            envelope_digest: self.envelope_digest.as_deref(),
+            nominal_world_hash: self.nominal_world_hash.as_deref(),
+            visibility: "full_observer",
+            production: &production,
+        };
+        let mut output = EvidenceWriter {
+            hash: Sha256::new(),
+            remaining: MAX_EVIDENCE_BYTES,
+            bound: false,
+        };
+        output.hash.update(DOMAIN);
+        output.hash.update(6_u32.to_be_bytes());
+        if serde_json::to_writer(&mut output, &scope).is_err() {
+            return Err(if output.bound {
+                ProductionEvidenceErrorV6::Bound
+            } else {
+                ProductionEvidenceErrorV6::Serialization
+            });
+        }
+        Ok(Some(ProductionEvidenceDigestV6(
+            output.hash.finalize().into(),
+        )))
     }
 }
 
-fn canonical_production(source: &ProductionSnapshotV1) -> ProductionSnapshotV1 {
+struct EvidenceWriter {
+    hash: Sha256,
+    remaining: usize,
+    bound: bool,
+}
+impl Write for EvidenceWriter {
+    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+        if bytes.len() > self.remaining {
+            self.bound = true;
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "production evidence byte bound",
+            ));
+        }
+        self.remaining -= bytes.len();
+        self.hash.update(bytes);
+        Ok(bytes.len())
+    }
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
+
+fn unique<T: Ord>(rows: impl IntoIterator<Item = T>) -> Result<()> {
+    let mut ids = BTreeSet::new();
+    for id in rows {
+        if !ids.insert(id) {
+            return Err(ProductionEvidenceErrorV6::InvalidIdentity);
+        }
+    }
+    Ok(())
+}
+
+fn validate_identities(rows: &ProductionSnapshotV2) -> Result<()> {
+    for count in [
+        rows.sites.len(),
+        rows.routes.len(),
+        rows.freight.len(),
+        rows.labor_accounts.len(),
+        rows.staffing_accounts.len(),
+        rows.freight_capacity_accounts.len(),
+        rows.merchant_handling_accounts.len(),
+        rows.final_demand_accounts.len(),
+        rows.observed_contexts.len(),
+        rows.process_attributions.len(),
+    ] {
+        if count > MAX_ROWS {
+            return Err(ProductionEvidenceErrorV6::Bound);
+        }
+    }
+    if rows.physical_edges.len() > MAX_PHYSICAL_ROWS || rows.events.len() > MAX_PHYSICAL_ROWS {
+        return Err(ProductionEvidenceErrorV6::Bound);
+    }
+    unique(rows.sites.iter().map(|row| &row.id))?;
+    unique(
+        rows.sites
+            .iter()
+            .flat_map(|row| row.processes.iter().map(|row| &row.id)),
+    )?;
+    unique(rows.routes.iter().map(|row| &row.id))?;
+    unique(rows.freight.iter().map(|row| &row.id))?;
+    unique(rows.events.iter().map(|row| &row.id))?;
+    unique(rows.physical_edges.iter().map(|row| &row.id))?;
+    unique(
+        rows.labor_accounts
+            .iter()
+            .map(|row| (&row.site_id, &row.unit_id)),
+    )?;
+    unique(rows.staffing_accounts.iter().map(|row| &row.pool_id))?;
+    unique(
+        rows.staffing_accounts
+            .iter()
+            .map(|row| (&row.site_id, &row.unit_id)),
+    )?;
+    unique(
+        rows.freight_capacity_accounts
+            .iter()
+            .map(|row| &row.corridor_id),
+    )?;
+    unique(
+        rows.merchant_handling_accounts
+            .iter()
+            .map(|row| &row.site_id),
+    )?;
+    unique(
+        rows.final_demand_accounts
+            .iter()
+            .map(|row| (&row.demand_principal_id, &row.good_id, &row.unit_id)),
+    )?;
+    for site in &rows.sites {
+        if site.processes.len() > MAX_ROWS || site.inventory.len() > MAX_ROWS {
+            return Err(ProductionEvidenceErrorV6::Bound);
+        }
+        unique(
+            site.inventory
+                .iter()
+                .map(|row| (&row.good_id, &row.unit_id)),
+        )?;
+        for process in &site.processes {
+            unique(
+                process
+                    .inputs
+                    .iter()
+                    .map(|row| (&row.good_id, &row.unit_id)),
+            )?;
+        }
+    }
+    for route in &rows.routes {
+        if route.physical_edge_ids.len() > MAX_PHYSICAL_ROWS || route.stages.len() > 16 {
+            return Err(ProductionEvidenceErrorV6::Bound);
+        }
+        unique(route.stages.iter().map(|row| row.stage_index))?;
+        for stage in &route.stages {
+            unique(&stage.capacity_ids)?;
+        }
+    }
+    validate_account_rows(rows)
+}
+
+fn validate_account_rows(rows: &ProductionSnapshotV2) -> Result<()> {
+    for account in &rows.freight_capacity_accounts {
+        unique(&account.route_ids)?;
+        unique(&account.merchant_site_ids)?;
+        if let Some(completed) = &account.completed {
+            unique(
+                completed
+                    .reservations
+                    .iter()
+                    .map(|row| row.reservation_period),
+            )?;
+            for row in &completed.reservations {
+                unique(row.orders.iter().map(|row| (row.kind, &row.order_id)))?;
+            }
+        }
+    }
+    for account in &rows.merchant_handling_accounts {
+        unique(
+            account
+                .coefficients
+                .iter()
+                .map(|row| (&row.good_id, &row.unit_id)),
+        )?;
+        if let Some(completed) = &account.completed {
+            unique(completed.orders.iter().map(|row| (row.kind, &row.order_id)))?;
+        }
+    }
+    for account in &rows.final_demand_accounts {
+        unique(&account.retailer_site_ids)?;
+        unique(account.orders.iter().map(|row| &row.order_id))?;
+    }
+    if let Some(balance) = &rows.material_balance {
+        unique(
+            balance
+                .rows
+                .iter()
+                .map(|row| (&row.site_id, &row.good_id, &row.unit_id)),
+        )?;
+    }
+    Ok(())
+}
+
+fn canonical_production(source: &ProductionSnapshotV2) -> ProductionSnapshotV2 {
     let mut rows = source.clone();
     for site in &mut rows.sites {
         site.inventory.sort_unstable();
-        for input in &mut site.inputs {
-            input.supplier_site_ids.sort_unstable();
+        for process in &mut site.processes {
+            for input in &mut process.inputs {
+                input.supplier_site_ids.sort_unstable();
+            }
+            process.inputs.sort_unstable();
+            process.labor.sort_unstable();
         }
-        site.inputs.sort_unstable();
-        site.labor.sort_unstable();
+        site.processes.sort_unstable();
     }
     rows.sites.sort_unstable();
     rows.labor_accounts.sort_unstable();
@@ -100,12 +288,17 @@ fn canonical_production(source: &ProductionSnapshotV1) -> ProductionSnapshotV1 {
     }
     rows.observed_contexts.sort_unstable();
     rows.process_attributions.sort_unstable();
+    rows.physical_edges.sort_unstable();
     for route in &mut rows.routes {
-        route.corridor_legs.sort_unstable();
+        for stage in &mut route.stages {
+            stage.capacity_ids.sort_unstable();
+        }
+        route.stages.sort_unstable();
     }
     rows.routes.sort_unstable();
     for account in &mut rows.freight_capacity_accounts {
         account.route_ids.sort_unstable();
+        account.merchant_site_ids.sort_unstable();
         if let Some(completed) = &mut account.completed {
             for reservation in &mut completed.reservations {
                 reservation.orders.sort_unstable();
@@ -114,372 +307,24 @@ fn canonical_production(source: &ProductionSnapshotV1) -> ProductionSnapshotV1 {
         }
     }
     rows.freight_capacity_accounts.sort_unstable();
+    for account in &mut rows.merchant_handling_accounts {
+        account.coefficients.sort_unstable();
+        if let Some(completed) = &mut account.completed {
+            completed.orders.sort_unstable();
+        }
+    }
+    rows.merchant_handling_accounts.sort_unstable();
+    for account in &mut rows.final_demand_accounts {
+        account.orders.sort_unstable();
+        account.retailer_site_ids.sort_unstable();
+    }
+    rows.final_demand_accounts.sort_unstable();
     rows.freight.sort_unstable();
     for event in &mut rows.events {
         event.subject_site_ids.sort_unstable();
     }
     rows.provenance.sort_unstable();
     rows
-}
-
-struct EvidenceEncoder(Sha256);
-
-impl EvidenceEncoder {
-    fn number(&mut self, value: u64) {
-        self.0.update(value.to_be_bytes());
-    }
-
-    fn count(&mut self, length: usize) {
-        // Supported Rust targets have at most 64-bit pointers; no truncation
-        // or saturating fallback is permitted in the identity layout.
-        self.number(u64::try_from(length).expect("collection length fits u64"));
-    }
-
-    fn text(&mut self, value: &str) {
-        self.count(value.len());
-        self.0.update(value.as_bytes());
-    }
-
-    fn optional_text(&mut self, value: Option<&str>) {
-        self.0.update([u8::from(value.is_some())]);
-        if let Some(value) = value {
-            self.text(value);
-        }
-    }
-
-    fn optional_number(&mut self, value: Option<u64>) {
-        self.0.update([u8::from(value.is_some())]);
-        if let Some(value) = value {
-            self.number(value);
-        }
-    }
-
-    fn strings(&mut self, values: &[String]) {
-        self.count(values.len());
-        for value in values {
-            self.text(value);
-        }
-    }
-
-    fn production(&mut self, rows: &ProductionSnapshotV1) {
-        self.text(&rows.scenario_label);
-        self.number(rows.horizon_period);
-        self.count(rows.sites.len());
-        for site in &rows.sites {
-            self.site(site);
-        }
-        self.count(rows.routes.len());
-        for route in &rows.routes {
-            self.route(route);
-        }
-        self.count(rows.freight.len());
-        for lot in &rows.freight {
-            self.freight(lot);
-        }
-        self.count(rows.events.len());
-        for event in &rows.events {
-            self.event(event);
-        }
-        self.count(rows.labor_accounts.len());
-        for account in &rows.labor_accounts {
-            self.text(&account.site_id);
-            self.text(&account.unit_id);
-            self.text(&account.unit);
-            self.number(account.next_opening_period);
-            self.number(account.next_opening_available);
-            self.0.update([u8::from(account.completed.is_some())]);
-            if let Some(completed) = &account.completed {
-                self.number(completed.period);
-                self.number(completed.opening);
-                self.number(completed.planned);
-                self.number(completed.used);
-                self.number(completed.unused);
-            }
-        }
-        self.count(rows.observed_contexts.len());
-        for context in &rows.observed_contexts {
-            self.observed_context(context);
-        }
-        self.count(rows.process_attributions.len());
-        for link in &rows.process_attributions {
-            self.text(&link.process_id);
-            self.text(&link.site_id);
-            self.text(&link.industry_code);
-            self.business_subject(&link.cohort_subject);
-            self.text(&link.scenario_artifact_sha256);
-            self.text(&link.industry_artifact_sha256);
-            self.text(link.evidence_class.as_str());
-        }
-        self.strings(&rows.provenance);
-        self.material_balance(rows.material_balance.as_ref());
-        self.count(rows.staffing_accounts.len());
-        for account in &rows.staffing_accounts {
-            self.staffing_account(account);
-        }
-        self.count(rows.freight_capacity_accounts.len());
-        for account in &rows.freight_capacity_accounts {
-            self.freight_capacity_account(account);
-        }
-    }
-
-    fn freight_capacity_account(&mut self, account: &crate::ProductionFreightCapacityAccountV1) {
-        for value in [
-            &account.corridor_id,
-            &account.corridor_label,
-            &account.unit_id,
-            &account.unit,
-        ] {
-            self.text(value);
-        }
-        self.strings(&account.route_ids);
-        self.number(account.next_opening_period);
-        self.number(account.next_opening_available);
-        self.0.update([u8::from(account.completed.is_some())]);
-        if let Some(completed) = &account.completed {
-            self.number(completed.period);
-            self.count(completed.reservations.len());
-            for row in &completed.reservations {
-                for value in [
-                    row.reservation_period,
-                    row.opening_available,
-                    row.newly_reserved,
-                    row.remaining_available,
-                ] {
-                    self.number(value);
-                }
-                self.count(row.orders.len());
-                for order in &row.orders {
-                    for value in [
-                        &order.order_id,
-                        &order.route_id,
-                        &order.good_id,
-                        &order.unit_id,
-                    ] {
-                        self.text(value);
-                    }
-                    for value in [order.requested, order.dispatched, order.remaining_unshipped] {
-                        self.number(value);
-                    }
-                }
-            }
-        }
-    }
-
-    fn staffing_account(
-        &mut self,
-        account: &crate::production_observation::ProductionStaffingAccountV1,
-    ) {
-        for value in [
-            &account.pool_id,
-            &account.site_id,
-            &account.unit_id,
-            &account.subject.scenario,
-            &account.subject.local_name,
-        ] {
-            self.text(value);
-        }
-        for value in [
-            account.hours_per_person,
-            account.labor_force,
-            account.employed,
-            account.reserve,
-            account.previous_unretained_hours,
-            account.next_opening_period,
-            account.next_opening_hours,
-        ] {
-            self.number(value);
-        }
-        self.0.update([u8::from(account.completed.is_some())]);
-        if let Some(completed) = &account.completed {
-            for value in [
-                completed.period,
-                completed.opening_employed,
-                completed.opening_reserve,
-                completed.previous_unretained_hours,
-                completed.current_unretained_hours,
-                completed.retained_hours,
-                completed.target_employed,
-                completed.hires,
-                completed.separations,
-            ] {
-                self.number(value);
-            }
-        }
-    }
-
-    fn material_balance(&mut self, balance: Option<&crate::CompletedMaterialBalanceV1>) {
-        self.0.update([u8::from(balance.is_some())]);
-        if let Some(balance) = balance {
-            self.number(balance.period);
-            self.count(balance.rows.len());
-            for row in &balance.rows {
-                for value in [
-                    &row.site_id,
-                    &row.good_id,
-                    &row.unit_id,
-                    &row.good,
-                    &row.unit,
-                ] {
-                    self.text(value);
-                }
-                for value in [
-                    row.opening,
-                    row.arrivals,
-                    row.produced,
-                    row.consumed,
-                    row.dispatched,
-                    row.closing,
-                ] {
-                    self.number(value);
-                }
-            }
-        }
-    }
-
-    fn business_subject(&mut self, subject: &crate::ProductionBusinessSubjectV1) {
-        self.text(&subject.scenario);
-        self.text(&subject.local_name);
-    }
-
-    fn observed_context(&mut self, context: &crate::ObservedManufacturingContextV1) {
-        self.business_subject(&context.subject);
-        self.text(&context.county_geoid);
-        self.text(&context.sector_code);
-        self.text(&context.sector_title);
-        self.number(u64::from(context.vintage));
-        self.number(context.annual_avg_estabs_count);
-        self.optional_number(context.annual_avg_emplvl);
-        self.optional_number(context.total_annual_wages);
-        self.optional_number(context.annual_avg_wkly_wage);
-        self.text(&context.source_url);
-        self.text(&context.source_file);
-        self.text(&context.source_sha256);
-        self.text(&context.artifact_sha256);
-        self.text(context.evidence_class.as_str());
-    }
-
-    fn site(&mut self, site: &ProductionSiteV1) {
-        self.text(&site.id);
-        self.text(&site.county_geoid);
-        self.text(&site.name);
-        self.text(&site.industry_code);
-        self.optional_number(site.observed_employment);
-        self.text(&site.output_good_id);
-        self.text(&site.output_unit_id);
-        self.text(&site.output_good);
-        self.text(&site.output_unit);
-        self.number(site.output_per_batch);
-        self.number(site.available_batches);
-        self.optional_number(site.planned_batches);
-        self.optional_number(site.produced_batches);
-        self.count(site.inventory.len());
-        for stock in &site.inventory {
-            self.stock(stock);
-        }
-        self.count(site.inputs.len());
-        for input in &site.inputs {
-            self.input(input);
-        }
-        self.count(site.labor.len());
-        for labor in &site.labor {
-            self.text(&labor.unit);
-            self.number(labor.available);
-            self.number(labor.quantity_per_batch);
-        }
-    }
-
-    fn stock(&mut self, stock: &ProductionStockV1) {
-        self.text(&stock.good_id);
-        self.text(&stock.unit_id);
-        self.text(&stock.good);
-        self.text(&stock.unit);
-        self.number(stock.quantity);
-    }
-
-    fn input(&mut self, input: &ProductionInputV1) {
-        self.text(&input.good_id);
-        self.text(&input.unit_id);
-        self.text(&input.good);
-        self.text(&input.unit);
-        self.number(input.quantity_per_batch);
-        self.number(input.on_hand);
-        self.strings(&input.supplier_site_ids);
-    }
-
-    fn route(&mut self, route: &ProductionRouteV1) {
-        for value in [
-            &route.id,
-            &route.supplier_site_id,
-            &route.buyer_site_id,
-            &route.good_id,
-            &route.unit_id,
-            &route.good,
-            &route.unit,
-        ] {
-            self.text(value);
-        }
-        for value in [
-            route.travel_periods,
-            route.ordered,
-            route.shipped,
-            route.delivered,
-            route.lost,
-            route.realized,
-            route.backlog,
-        ] {
-            self.number(value);
-        }
-        self.count(route.corridor_legs.len());
-        for leg in &route.corridor_legs {
-            self.number(u64::from(leg.leg_index));
-            self.text(&leg.corridor_id);
-            self.number(leg.travel_periods);
-        }
-    }
-
-    fn freight(&mut self, lot: &ProductionFreightV1) {
-        for value in [
-            &lot.id,
-            &lot.route_id,
-            &lot.source_site_id,
-            &lot.destination_site_id,
-            &lot.good_id,
-            &lot.unit_id,
-            &lot.good,
-            &lot.unit,
-        ] {
-            self.text(value);
-        }
-        self.number(lot.quantity);
-        self.number(lot.dispatch_period);
-        self.number(lot.arrival_period);
-    }
-
-    fn event(&mut self, event: &ProductionEventV1) {
-        self.text(&event.id);
-        self.number(event.period);
-        self.strings(&event.subject_site_ids);
-        self.text(&event.kind);
-        self.text(&event.description);
-        self.text(&event.receipt_digest);
-        self.0.update([u8::from(event.delivery_evidence.is_some())]);
-        if let Some(delivery) = &event.delivery_evidence {
-            self.0.update([match delivery.stage {
-                crate::ProductionDeliveryStageV1::Arrival => 1,
-                crate::ProductionDeliveryStageV1::Delivery => 2,
-                crate::ProductionDeliveryStageV1::QuantityRealization => 3,
-            }]);
-            for value in [
-                &delivery.order_id,
-                &delivery.route_id,
-                &delivery.good_id,
-                &delivery.unit_id,
-            ] {
-                self.text(value);
-            }
-            self.number(delivery.quantity);
-        }
-    }
 }
 
 #[cfg(test)]

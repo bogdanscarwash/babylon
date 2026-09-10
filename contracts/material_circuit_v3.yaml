@@ -1,0 +1,241 @@
+meta:
+  contract: MaterialCircuitV3
+  schema_version: 3
+  evidence_class: Designed
+  rust_owner: babylon-material-circuit
+
+scope:
+  - native-unit conserved stock, production, orders, and staged freight
+  - positive exact grams per native shipment unit
+  - shared mass capacity independent of a good's shipment unit
+  - geometry and preselected physical paths are captured by campaign content
+  - explicit local inter-owner circulation without timed transport or a road
+  - staffed wholesale and retail outbound handling without changing goods
+  - finite county-local retail handoff orders with no road journey
+  - no routing, household behavior, consumption, money, or payment decisions occur in this transition
+
+domains:
+  state: babylon.material-circuit-state.v3
+  freight_lot_identity: babylon.freight-lot.v2
+  terminator_hex: "00"
+
+encoding:
+  byte_order: big-endian
+  identity: raw-32-bytes
+  schema_version: u16
+  period: u64
+  quantity: u64
+  stage_index: u16
+  travel_periods: u16
+  loss_ppm: u32
+  county_geoid: five ASCII decimal digits
+  merchant_role_u8: {wholesale: 1, retail: 2}
+  supplier_transport_u8: {local: 1, staged: 2}
+  row_count: u32
+  noncanonical_order: forbidden
+  trailing_bytes: forbidden
+  header: [state_domain, terminator, schema_version, period]
+
+state_field_order:
+  - site_logistics_nodes
+  - process_outputs
+  - input_coefficients
+  - labor_coefficients
+  - freight_mass_coefficients
+  - supplier_routes
+  - route_stages
+  - route_stage_capacities
+  - inventory
+  - orders
+  - backlog
+  - freight
+  - corridor_capacities
+  - capacities
+  - labor
+  - production_commitments
+  - merchants
+  - handling_coefficients
+  - final_demand_principals
+  - final_demand_orders
+
+row_field_order:
+  site_logistics_nodes: [site_id, node_id]
+  process_outputs: [process_id, site_id, good_id, unit_id, quantity_per_batch]
+  input_coefficients: [process_id, good_id, unit_id, quantity_per_batch]
+  labor_coefficients: [process_id, unit_id, quantity_per_batch]
+  freight_mass_coefficients: [good_id, unit_id, grams_per_unit]
+  supplier_routes: [buyer_site_id, supplier_site_id, good_id, unit_id, route_id, transport_kind_u8]
+  route_stages: [route_id, stage_index, from_node_id, to_node_id, travel_periods, loss_ppm]
+  route_stage_capacities: [route_id, stage_index, corridor_id]
+  inventory: [site_id, good_id, unit_id, quantity]
+  orders: [order_id, access_mode_u8, buyer_site_id, supplier_site_id, good_id, unit_id, ordered, shipped, lost,
+           delivered, realized]
+  backlog: [order_id, quantity]
+  freight: [lot_id, order_id, route_id, dispatch_period, current_stage_index, stage_arrival_period, source_site_id,
+            destination_site_id, good_id, unit_id, quantity]
+  corridor_capacities: [corridor_id, period, available_grams]
+  capacities: [process_id, site_id, period, available_batches]
+  labor: [site_id, unit_id, period, available]
+  production_commitments: [process_id, site_id, period, planned_batches]
+  merchants: [site_id, county_geoid, role_u8, capacity_id, labor_unit_id]
+  handling_coefficients: [site_id, good_id, unit_id, hours_per_unit]
+  final_demand_principals: [id, county_geoid]
+  final_demand_orders: [order_id, retailer_site_id, demand_principal_id, good_id, unit_id, ordered, fulfilled]
+
+canonical_keys:
+  site_logistics_nodes: [site_id]
+  process_outputs: [process_id]
+  input_coefficients: [process_id, good_id, unit_id]
+  labor_coefficients: [process_id]
+  freight_mass_coefficients: [good_id, unit_id]
+  supplier_routes: [buyer_site_id, supplier_site_id, good_id, unit_id]
+  route_stages: [route_id, stage_index]
+  route_stage_capacities: [route_id, stage_index, corridor_id]
+  inventory: [site_id, good_id, unit_id]
+  orders: [order_id]
+  backlog: [order_id]
+  freight: [stage_arrival_period, lot_id]
+  corridor_capacities: [period, corridor_id]
+  capacities: [period, site_id, process_id]
+  labor: [period, site_id, unit_id]
+  production_commitments: [period, site_id, process_id]
+  merchants: [site_id]
+  handling_coefficients: [site_id, good_id, unit_id]
+  final_demand_principals: [id]
+  final_demand_orders: [order_id]
+
+admission:
+  - each site and logistics node have unique ownership
+  - each supplier relation selects one relationship identity and explicit local or staged transport
+  - local relations connect distinct known sites and have no timed stages or memberships
+  - staged relations have connected positive timed stages; one relationship cannot mix transport modes
+  - stages are contiguous, connected, and positive-duration
+  - every stage has a nonempty unique set of capacity memberships
+  - every capacity membership references an existing stage
+  - every capacity budget references a principal in stage memberships or merchant handling
+  - every order and supplier good-unit principal has one positive mass coefficient
+  - extra mass coefficients and unused route topology may remain
+  - missing period capacity means zero availability, not a malformed register
+  - every merchant owns a unique site and handling capacity, disjoint from production sites and route capacities
+  - every merchant site has a logistics node, valid county GEOID, and one labor-unit principal
+  - each merchant outbound good-unit has positive exact handling hours and mass per native unit
+  - each final-demand principal owns one unique county account
+  - a local order names a retail merchant in its demand principal county
+  - local order quantities satisfy zero <= fulfilled <= ordered with ordered positive
+  - routed and local order identity domains are disjoint even if their raw order IDs match
+  - all ordinary material and production invariants remain enforced
+
+allocation:
+  order_request: full remaining native quantity
+  inventory_request: native quantity
+  capacity_request: native quantity multiplied by grams_per_unit
+  intermediate: checked u128 request products and group sums
+  resource_grant: floor(available_resource * resource_request / total_requested)
+  native_grant: floor(resource_grant / resource_per_native_unit)
+  feasible_outbound: minimum native grant across inventory and every route or merchant handling capacity
+  labor_request: feasible merchant native quantity multiplied by hours_per_unit
+  actual_outbound: minimum feasible native quantity and the same proportional-floor reducer applied to opening labor
+  labor_scope: routed and local merchant orders share one site-unit labor budget
+  handling_reservation: actual native outbound multiplied by grams_per_unit once at departure period
+  handling_labor_debit: actual native outbound multiplied by hours_per_unit once
+  handling_need: checked u64 feasible outbound multiplied by hours_per_unit, independent of current employment
+  reservation: actual native dispatch multiplied by grams_per_unit, once per unique capacity/departure principal
+  residual: no redistribution after proportional flooring or another resource limit
+  missing_route: leave unshipped order in backlog
+  failed_close: publish no successor state or receipt
+
+period_close:
+  - complete due stages and attribute stage-specific native-unit loss
+  - credit retained final arrival to destination inventory once
+  - execute existing prior production commitments
+  - allocate routed and local outbound requests against shared stock, route mass and merchant handling mass
+  - record merchant feasible quantities before current labor
+  - constrain feasible handling with opening labor through the same resource reducer
+  - reserve future-stage capacity before dispatch
+  - debit supplier inventory and create one lot and dispatch receipt per positive order/period grant
+  - debit local internal supplier stock and advance shipped, delivered, and realized together
+  - debit merchant handling mass and labor exactly once per actual outbound
+  - debit retail stock and credit positive local order fulfillment exactly once without a freight lot
+  - record handling receipts including explicit zero feasible and actual work
+  - credit local internal buyers only after all outbound grants and debits are fixed
+  - local credits cannot feed another outbound order until a following close
+  - rebuild unshipped backlog
+  - derive next-period staffing and production through their existing exact rules
+  - prune expired capacity and validate the successor
+
+transit:
+  lot_identity: SHA256(freight_lot_domain + terminator + order_id + dispatch_period_u64)
+  arrival: dispatch period plus cumulative stage durations
+  loss: floor(native_quantity * loss_ppm / 1000000)
+  loss_receipt: [lot_id, order_id, route_id, stage_index, quantity]
+  dispatch_receipt: [lot_id, order_id, route_id, quantity, final_arrival_period]
+  conservative_capacity: later loss never releases advance reservations
+  geometry: many physical edges and capacity memberships may share one timed stage
+
+conservation:
+  - realized <= delivered
+  - delivered + lost <= shipped <= ordered
+  - backlog = ordered - shipped
+  - shipped = delivered + lost + live freight quantity
+  - dispatch debits native stock exactly once
+  - each route capacity debit equals actual dispatch grams for its unique membership
+  - each merchant handling capacity debit equals routed plus local actual outbound grams
+  - opening stock plus physical arrivals plus local transfer receipts plus production equals consumed inputs plus
+    staged dispatch plus local transfer outflow plus final fulfillment plus closing stock
+  - local fulfilled cumulative quantity increments only by positive local fulfillment receipts
+  - final-demand account totals are derived from finite order rows and do not assert actual consumption
+
+limits:
+  rows_per_family: 65536
+  combined_routed_and_local_orders: 65536
+  stages_per_route: 16
+  total_freight_resource_requests: 1114112
+  classification: Designed bounds on execution and serialization, not material abundance
+
+error_codes:
+  row_limit: 1
+  zero_quantity: 2
+  duplicate_row: 3
+  order_invariant: 4
+  backlog_invariant: 5
+  freight_invariant: 6
+  process_invariant: 7
+  period_invariant: 8
+  arithmetic: 9
+  route_invariant: 10
+  capacity_invariant: 11
+  wire_limit: 12
+  wire_domain: 13
+  wire_version: 14
+  wire_truncated: 15
+  wire_trailing: 16
+  wire_enum: 17
+  wire_noncanonical: 18
+  mass_invariant: 19
+  merchant_invariant: 20
+  final_demand_invariant: 21
+
+merchant_receipts:
+  handling_fields: [site_id, outbound_order, feasible_quantity, handled_quantity, needed_hours, used_hours]
+  handling_key: [site_id, outbound_order]
+  outbound_order_tags: {delivery: 1, local_final_demand: 2}
+  local_fulfillment_fields: [order_id, retailer_site_id, demand_principal_id, good_id, unit_id, quantity]
+  local_fulfillment_key: [order_id]
+  local_fulfillment_zero: omit event; preserve completed zero handling evidence
+  local_transfer_fields: [order_id, supplier_site_id, buyer_site_id, good_id, unit_id, quantity]
+  local_transfer_key: [order_id]
+  local_transfer_zero: omit event; preserve completed zero handling evidence
+  local_transfer_accounts: shipped equals delivered equals realized; lost equals zero
+  local_transfer_evidence: no freight lot, physical arrival, or staged dispatch receipt
+
+staffing:
+  schema: StaffingV2
+  work_source_tags: {production: 1, merchant_handling: 2}
+  work_source_identity: process ID for production, site ID for merchant handling
+  binding_membership: unique tagged work sources, one conserved site-unit person principal
+  production_request: next-period input and process-capacity feasible work
+  merchant_request: recorded current-period nonlabor-feasible outbound handling hours
+  complete_requests: one explicit request including zero per admitted work source
+  retention: max(current unretained hours, previous unretained hours)
+  employment: ceil(retained hours / hours per person), capped by conserved labor force
+  execution: current opening hours only; subsequent hires supply next-period hours

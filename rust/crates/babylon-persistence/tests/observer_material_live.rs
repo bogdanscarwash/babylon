@@ -21,7 +21,7 @@ use babylon_persistence::{
     PlaceDossierProducerV1, SemanticArchiveReaderV1, SemanticArchiveStoreV1,
 };
 use babylon_practice_contract::ordered_action_v1::OrderedPracticeActionBatchV1;
-use babylon_tick::material_world::MaterialWorldRegisterV2;
+use babylon_tick::material_world::MaterialWorldRegisterV3;
 use postgres::{Config, NoTls};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
@@ -640,7 +640,7 @@ fn identity_hex(bytes: [u8; 32]) -> String {
 fn assert_known_material_absence(snapshot: &babylon_persistence::ObserverEconomySnapshotV1) {
     assert_eq!(snapshot.visibility, ObserverVisibilityV1::KnownPreview);
     assert!(snapshot.production.is_none());
-    assert!(snapshot.production_evidence_digest().is_none());
+    assert!(snapshot.production_evidence_digest().unwrap().is_none());
 }
 
 fn assert_material_accounts(snapshot: &babylon_persistence::ObserverEconomySnapshotV1) {
@@ -703,8 +703,15 @@ fn assert_material_accounts(snapshot: &babylon_persistence::ObserverEconomySnaps
         let principal = (&row.site_id, &row.good_id, &row.unit_id);
         assert!(principals.insert(principal));
         assert_eq!(
-            u128::from(row.opening) + u128::from(row.arrivals) + u128::from(row.produced),
-            u128::from(row.consumed) + u128::from(row.dispatched) + u128::from(row.closing)
+            u128::from(row.opening)
+                + u128::from(row.arrivals)
+                + u128::from(row.local_received)
+                + u128::from(row.produced),
+            u128::from(row.consumed)
+                + u128::from(row.dispatched)
+                + u128::from(row.local_transferred)
+                + u128::from(row.final_demand_fulfilled)
+                + u128::from(row.closing)
         );
         assert_eq!(
             u128::from(row.arrivals),
@@ -732,10 +739,10 @@ fn assert_corrupted_register_is_rejected(
 ) {
     // A syntactically valid stored register mutation cannot retain its committed identity.
     let original: Vec<u8> = connection.query_one("SELECT register_bytes FROM babylon_state.material_tick_v3 WHERE campaign_id=$1 AND resolve_tick=6", &[campaign.as_uuid()]).unwrap().get(0);
-    let register = MaterialWorldRegisterV2::decode(&original).unwrap();
+    let register = MaterialWorldRegisterV3::decode(&original).unwrap();
     let mut state = register.state().clone();
     state.inventory[0].quantity += 1;
-    let corrupt = MaterialWorldRegisterV2::try_new(6, state).unwrap();
+    let corrupt = MaterialWorldRegisterV3::try_new(6, state).unwrap();
     connection.execute("UPDATE babylon_state.material_tick_v3 SET register_bytes=$2 WHERE campaign_id=$1 AND resolve_tick=6", &[campaign.as_uuid(), &corrupt.canonical_bytes()]).unwrap();
     assert_eq!(
         observer.snapshot(campaign, 6),
@@ -746,11 +753,15 @@ fn assert_corrupted_register_is_rejected(
 
 #[test]
 #[ignore = "requires the existing disposable PostgreSQL harness and restricted reader roles"]
-fn live_content_revisions_resume_exactly_and_catalog_filters_before_its_limit() {
+fn live_regional_content_revisions_resume_exactly_and_catalog_filters_before_its_limit() {
     use babylon_persistence::michigan_content::MICHIGAN_CONTENT_PRESETS_V1;
     let mut target = DisposableTarget::create();
     let mut campaigns = Vec::new();
-    for (index, preset) in MICHIGAN_CONTENT_PRESETS_V1.into_iter().enumerate() {
+    for (index, preset) in MICHIGAN_CONTENT_PRESETS_V1
+        .into_iter()
+        .filter(|preset| !preset.delivery().is_statewide())
+        .enumerate()
+    {
         let campaign =
             CampaignId::from_uuid(Uuid::from_u128(10_000 + u128::try_from(index).unwrap()));
         let mut runtime = DurableMaterialRuntimeV3::create(
@@ -1605,6 +1616,11 @@ mod staffing_history;
 
 #[path = "observer_material_live/persisted_twins.rs"]
 mod persisted_twins;
+
+#[path = "observer_material_live/statewide.rs"]
+mod statewide;
+#[path = "observer_material_live/statewide_qualified.rs"]
+mod statewide_qualified;
 
 #[path = "support/material_config.rs"]
 mod test_support;

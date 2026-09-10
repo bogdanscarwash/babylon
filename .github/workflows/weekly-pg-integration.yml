@@ -9,6 +9,14 @@ on:
   schedule:
     - cron: "0 6 * * 3"  # Wednesday 06:00 UTC
   workflow_dispatch:
+    inputs:
+      focus:
+        description: Run every database contract or only the actual statewide campaigns
+        type: choice
+        default: all
+        options:
+          - all
+          - statewide_qualified
 
 permissions:
   contents: read
@@ -19,18 +27,21 @@ concurrency:
 
 jobs:
   runtime-contracts:
-    name: Fresh Rust PostgreSQL (${{ matrix.focus }}, dev HEAD)
+    name: Fresh Rust PostgreSQL (${{ matrix.focus }})
     runs-on: ubuntu-latest
-    timeout-minutes: 55
+    timeout-minutes: 95
     strategy:
       fail-fast: false
       max-parallel: 4
-      matrix:
-        focus: [runtime_smoke, reference_integrity, runtime, archive, reader, client]
+      matrix: >-
+        ${{ fromJSON(inputs.focus == 'statewide_qualified' &&
+          '{"focus":["statewide_qualified"]}' ||
+          '{"focus":["runtime_smoke","reference_integrity","runtime","archive",
+          "reader","client","statewide_qualified"]}') }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: dev
+          ref: ${{ github.event_name == 'schedule' && 'dev' || github.sha }}
       - uses: ./.github/actions/bootstrap-persistence
         id: persistence-cache
         with:
@@ -38,7 +49,7 @@ jobs:
       - uses: ./.github/actions/build-postgres
         id: postgres-image
       - name: Current Rust PostgreSQL contract
-        timeout-minutes: 45
+        timeout-minutes: 85
         env:
           BABYLON_POSTGRES_LIVE_FOCUS: ${{ matrix.focus }}
           BABYLON_POSTGRES_IMAGE_ID: ${{ steps.postgres-image.outputs.image-id }}

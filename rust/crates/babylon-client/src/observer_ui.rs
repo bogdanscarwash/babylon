@@ -57,11 +57,56 @@ impl ObserverFrame {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum RoadLayer {
+    #[default]
+    EconomyNetwork,
+    SelectedPaths,
+    CapturedRoads,
+}
+
+/// Industry filters affect presentation only; neighboring supplier/buyer endpoints stay visible.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
+pub enum NetworkSector {
+    #[default]
+    All,
+    Agriculture,
+    Mining,
+    Manufacturing,
+    Wholesale,
+    Retail,
+    EndBuyers,
+}
+impl NetworkSector {
+    pub const GROUPS: [Self; 6] = [
+        Self::Agriculture,
+        Self::Mining,
+        Self::Manufacturing,
+        Self::Wholesale,
+        Self::Retail,
+        Self::EndBuyers,
+    ];
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::All => "All industries",
+            Self::Agriculture => "Agriculture / forestry",
+            Self::Mining => "Extraction",
+            Self::Manufacturing => "Manufacturing",
+            Self::Wholesale => "Wholesale",
+            Self::Retail => "Retail",
+            Self::EndBuyers => "End buyers",
+        }
+    }
+}
+
 // These are independent presentation preferences and disclosures, not transport phases.
 #[allow(clippy::struct_excessive_bools)]
 #[derive(Resource)]
 pub struct ObserverUiState {
     pub lens: MapLens,
+    pub road_layer: RoadLayer,
+    pub network_sector: NetworkSector,
     pub archive_open: bool,
     pub reduced_motion: bool,
     pub menu_open: bool,
@@ -76,7 +121,9 @@ pub struct ObserverUiState {
 impl Default for ObserverUiState {
     fn default() -> Self {
         Self {
-            lens: MapLens::default(),
+            lens: MapLens::Relationships,
+            road_layer: RoadLayer::default(),
+            network_sector: NetworkSector::default(),
             archive_open: false,
             reduced_motion: false,
             menu_open: true,
@@ -125,6 +172,7 @@ pub enum ObserverCommand {
     NextPeriod,
     Live,
     Lens(EconomyMetric),
+    Workforce(crate::map_economy_lens::WorkforceMetric),
     MaterialLens(MaterialLensKind),
     CycleGood(bool),
     Archive,
@@ -133,6 +181,11 @@ pub enum ObserverCommand {
     NewDelayedCampaign,
     NewSharedFreightAmpleCampaign,
     NewSharedFreightConstrainedCampaign,
+    NewStatewideBaselineCampaign,
+    NewStatewideFreightConstraintCampaign,
+    NewStatewidePackagingShortageCampaign,
+    NewStatewideBothCampaign,
+
     ReopenCampaign,
     Quit,
     UiScale,
@@ -146,6 +199,8 @@ pub enum ObserverCommand {
     Evidence,
     EconomicDetails,
     Relationships,
+    RoadLayer(RoadLayer),
+    NetworkSector(NetworkSector),
 }
 
 #[derive(Component, Clone, Copy)]
@@ -438,11 +493,11 @@ fn spawn_inspector(commands: &mut Commands) {
                 ObserverText::Production,
                 ObserverFocusTarget::reading(None),
             ));
-            crate::production::button(
-                panel,
-                "Follow its work [P]",
-                crate::production::ProductionCommand::Open,
-            );
+            panel.spawn((
+                context_column(),
+                crate::production::ProductionCountyCohorts,
+                DeclaredSurface::new(SurfaceId::ObserverProduction),
+            ));
             panel.spawn((
                 block_label("", 15.0, theme::GRAY),
                 ObserverText::Developments,
@@ -617,39 +672,102 @@ fn spawn_drawers(commands: &mut Commands) {
                         theme::GRAY,
                     ));
                 } else {
-                    button(panel, "Relationships", ObserverCommand::Relationships);
-                    panel.spawn(row()).with_children(|bar| {
-                        for (kind, title) in [
-                            (MaterialLensKind::ProducedThisPeriod, "Production [5]"),
-                            (MaterialLensKind::OnHand, "Inventory [6]"),
-                            (MaterialLensKind::InboundInTransit, "Inbound [7]"),
-                        ] {
-                            button(bar, title, ObserverCommand::MaterialLens(kind));
-                        }
-                    });
-                    panel.spawn(block_label(
-                        "Observed county context / BLS QCEW 2024",
-                        12.0,
-                        theme::GRAY,
-                    ));
-                    panel.spawn(row()).with_children(|bar| {
-                        for (metric, title) in EconomyMetric::ALL.into_iter().zip([
-                            "Jobs [1]",
-                            "Payroll [2]",
-                            "Weekly wage [3]",
-                            "Establishments [4]",
-                        ]) {
-                            button(bar, title, ObserverCommand::Lens(metric));
-                        }
-                    });
-                    panel.spawn(block_label(
-                        crate::observer_map3d::MAP_VIEW_HELP,
-                        12.0,
-                        theme::GRAY,
-                    ));
+                    spawn_lens_controls(panel);
                 }
             });
     }
+}
+
+fn spawn_lens_controls(panel: &mut ChildSpawnerCommands) {
+    panel.spawn(row()).with_children(|bar| {
+        button(
+            bar,
+            "Employed",
+            ObserverCommand::Workforce(crate::map_economy_lens::WorkforceMetric::Employed),
+        );
+        button(
+            bar,
+            "Reserve",
+            ObserverCommand::Workforce(crate::map_economy_lens::WorkforceMetric::Reserve),
+        );
+    });
+    panel.spawn(row()).with_children(|bar| {
+        button(
+            bar,
+            "Economy network",
+            ObserverCommand::RoadLayer(RoadLayer::EconomyNetwork),
+        );
+        button(bar, "Level geography", ObserverCommand::Relationships);
+    });
+    panel.spawn(block_label(
+        "Network / industry and its trading neighbors",
+        12.0,
+        theme::GRAY,
+    ));
+    for group in [
+        vec![
+            NetworkSector::All,
+            NetworkSector::Agriculture,
+            NetworkSector::Mining,
+        ],
+        vec![
+            NetworkSector::Manufacturing,
+            NetworkSector::Wholesale,
+            NetworkSector::Retail,
+        ],
+    ] {
+        panel.spawn(row()).with_children(|bar| {
+            for sector in group {
+                button(bar, sector.label(), ObserverCommand::NetworkSector(sector));
+            }
+        });
+    }
+    panel.spawn(block_label(
+        "Road layer / campaign physical route network",
+        12.0,
+        theme::GRAY,
+    ));
+    panel.spawn(row()).with_children(|bar| {
+        button(
+            bar,
+            "Selected paths",
+            ObserverCommand::RoadLayer(RoadLayer::SelectedPaths),
+        );
+        button(
+            bar,
+            "Captured roads",
+            ObserverCommand::RoadLayer(RoadLayer::CapturedRoads),
+        );
+    });
+    panel.spawn(row()).with_children(|bar| {
+        for (kind, title) in [
+            (MaterialLensKind::ProducedThisPeriod, "Production [5]"),
+            (MaterialLensKind::OnHand, "Inventory [6]"),
+            (MaterialLensKind::InboundInTransit, "Inbound [7]"),
+        ] {
+            button(bar, title, ObserverCommand::MaterialLens(kind));
+        }
+    });
+    panel.spawn(block_label(
+        "Observed county context / BLS QCEW 2024",
+        12.0,
+        theme::GRAY,
+    ));
+    panel.spawn(row()).with_children(|bar| {
+        for (metric, title) in EconomyMetric::ALL.into_iter().zip([
+            "Jobs [1]",
+            "Payroll [2]",
+            "Weekly wage [3]",
+            "Establishments [4]",
+        ]) {
+            button(bar, title, ObserverCommand::Lens(metric));
+        }
+    });
+    panel.spawn(block_label(
+        crate::observer_map3d::MAP_VIEW_HELP,
+        12.0,
+        theme::GRAY,
+    ));
 }
 
 fn spawn_menu(commands: &mut Commands) {
@@ -719,28 +837,50 @@ fn menu_column() -> Node {
 }
 
 fn menu_campaign(panel: &mut ChildSpawnerCommands) {
-    for (title, command) in [
-        ("Continue [C]", ObserverCommand::Menu),
-        (
-            "Reopen committed campaign [R]",
+    panel.spawn(row()).with_children(|bar| {
+        scoped_button(bar, "Continue [C]", ObserverCommand::Menu, true);
+        scoped_button(
+            bar,
+            "Reopen current [R]",
             ObserverCommand::ReopenCampaign,
-        ),
-        ("New Michigan campaign [N]", ObserverCommand::NewCampaign),
-        (
-            "New delivery-delay scenario [D]",
-            ObserverCommand::NewDelayedCampaign,
-        ),
-        (
-            "Shared freight — ample",
-            ObserverCommand::NewSharedFreightAmpleCampaign,
-        ),
-        (
-            "Shared freight — constrained",
-            ObserverCommand::NewSharedFreightConstrainedCampaign,
-        ),
-    ] {
-        scoped_button(panel, title, command, true);
-    }
+            true,
+        );
+    });
+    panel.spawn(block_label("Statewide Michigan", 14.0, theme::YELLOW));
+    preset_grid(
+        panel,
+        &[
+            ("Baseline", ObserverCommand::NewStatewideBaselineCampaign),
+            (
+                "Freight constrained",
+                ObserverCommand::NewStatewideFreightConstraintCampaign,
+            ),
+            (
+                "Packaging shortage",
+                ObserverCommand::NewStatewidePackagingShortageCampaign,
+            ),
+            (
+                "Both constraints",
+                ObserverCommand::NewStatewideBothCampaign,
+            ),
+        ],
+    );
+    panel.spawn(block_label("Regional proofs", 14.0, theme::YELLOW));
+    preset_grid(
+        panel,
+        &[
+            ("Standard [N]", ObserverCommand::NewCampaign),
+            ("Delayed [D]", ObserverCommand::NewDelayedCampaign),
+            (
+                "Shared freight — ample",
+                ObserverCommand::NewSharedFreightAmpleCampaign,
+            ),
+            (
+                "Shared freight — constrained",
+                ObserverCommand::NewSharedFreightConstrainedCampaign,
+            ),
+        ],
+    );
     panel.spawn(block_label(
         "A new campaign preserves your existing world.",
         12.0,
@@ -757,6 +897,24 @@ fn menu_campaign(panel: &mut ChildSpawnerCommands) {
         },
         ObserverCampaignCatalog,
     ));
+}
+
+fn preset_grid(panel: &mut ChildSpawnerCommands, presets: &[(&str, ObserverCommand)]) {
+    panel
+        .spawn(Node {
+            display: Display::Grid,
+            grid_template_columns: RepeatedGridTrack::flex(2, 1.0),
+            column_gap: px(8),
+            row_gap: px(8),
+            min_width: px(0),
+            flex_shrink: 0.0,
+            ..default()
+        })
+        .with_children(|grid| {
+            for (title, command) in presets {
+                scoped_button(grid, title, *command, true);
+            }
+        });
 }
 
 fn menu_settings(panel: &mut ChildSpawnerCommands) {
@@ -932,6 +1090,9 @@ fn button_visible(
             ui.disclosure == Some(ObserverDisclosure::Time)
         }
         ObserverCommand::Relationships
+        | ObserverCommand::RoadLayer(_)
+        | ObserverCommand::NetworkSector(_)
+        | ObserverCommand::Workforce(_)
         | ObserverCommand::Lens(_)
         | ObserverCommand::MaterialLens(_) => {
             map && ui.disclosure == Some(ObserverDisclosure::Lens)
@@ -1150,6 +1311,9 @@ fn paint_buttons(
         }
         let selected = match (button.command, &ui.lens) {
             (ObserverCommand::Relationships, MapLens::Relationships) => true,
+            (ObserverCommand::RoadLayer(layer), _) => layer == ui.road_layer,
+            (ObserverCommand::NetworkSector(sector), _) => sector == ui.network_sector,
+            (ObserverCommand::Workforce(metric), MapLens::Workforce(current)) => metric == *current,
             (ObserverCommand::EconomicDetails, _) => ui.economic_details_open,
             (ObserverCommand::Lens(metric), MapLens::Qcew(current)) => metric == *current,
             (ObserverCommand::MaterialLens(kind), MapLens::Material { kind: current, .. }) => {
@@ -1410,43 +1574,21 @@ pub fn format_lens_reading(reading: CountyLensReading, unit: &str) -> String {
     }
 }
 
-fn local_relationships(
-    snapshot: &babylon_persistence::ProductionSnapshotV1,
+fn county_circuit_intro(
+    snapshot: &babylon_persistence::ProductionSnapshotV2,
     county: Option<&str>,
 ) -> String {
     let Some(county) = county else {
         return "Select a county to follow its work and dependencies.".into();
     };
-    let mut sites: Vec<_> = snapshot
+    let available = snapshot
         .sites
         .iter()
-        .filter(|site| site.county_geoid == county)
-        .collect();
-    sites.sort_by(|a, b| a.id.cmp(&b.id));
-    if sites.is_empty() {
+        .any(|site| site.county_geoid == county);
+    if !available {
         return "No production relationships are modeled here yet. The Archive contains the observed county context.".into();
     }
-    let mut lines = Vec::new();
-    for site in sites {
-        let relations = crate::production_brief::dependency_sites(site, snapshot);
-        if relations.is_empty() {
-            lines.push(format!("{} / no disclosed supply relationships", site.name));
-        }
-        for (direction, other) in relations {
-            lines.push(match direction {
-                crate::production_brief::DependencyDirection::Upstream => {
-                    format!("{} depends on {}", site.name, other.name)
-                }
-                crate::production_brief::DependencyDirection::Downstream => {
-                    format!("{} supplies {}", site.name, other.name)
-                }
-            });
-        }
-    }
-    format!(
-        "SUPPLY RELATIONSHIPS\n{}\n\nDesigned county cohorts; schematic links.",
-        lines.join("\n\n")
-    )
+    "Choose a cohort to follow its commodities, freight and workers in Circuit.".into()
 }
 
 fn county_developments(snapshot: Option<&ObserverEconomySnapshotV1>, county: &str) -> String {
@@ -1472,7 +1614,10 @@ fn county_developments(snapshot: Option<&ObserverEconomySnapshotV1>, county: &st
                 })
         })
         .count();
-    format!("Period {}: {records} committed records for this county. Open History to inspect the evidence.", snapshot.resolve_tick)
+    format!(
+        "Period {}: {records} committed records for this county. Open History to inspect the evidence.",
+        snapshot.resolve_tick
+    )
 }
 
 #[derive(SystemParam)]
@@ -1591,7 +1736,7 @@ fn repaint(
             ObserverText::Status => turn.status.clone(),
             ObserverText::Legend => match &ui.lens {
                 MapLens::Relationships => String::new(),
-                MapLens::Qcew(_) => format!("0..{} {}", lens.maximum().map_or_else(|| "-".into(), grouped), lens.unit),
+                MapLens::Workforce(_) | MapLens::Qcew(_) => format!("0..{} {}", lens.maximum().map_or_else(|| "-".into(), grouped), lens.unit),
                 MapLens::Material {..} => lens.good_label.as_ref().map_or_else(|| "Material unavailable".into(), |good|format!("{good} ({})", lens.unit)),
             },
             ObserverText::County => county.as_ref().map_or_else(|| "Select a county".into(), |county| county.name.to_owned()),
@@ -1604,20 +1749,23 @@ fn repaint(
             ObserverText::Evidence => format!("Viewing period {} / Archive processed through {}\n{}", state.viewed_tick, state.archive_verified_tick, archive_detail),
             ObserverText::EvidenceDetails => installed.map_or_else(String::new, |snapshot| {
                 let mut evidence = format!("CAMPAIGN\n{}\n\nCOMMITTED EVIDENCE / PERIOD {}\n{}\n\nWORLD IDENTITY\n{}", wrapped_identity(&snapshot.campaign_id), snapshot.resolve_tick, wrapped_identity(snapshot.tick_content_hash.as_deref().unwrap_or(&snapshot.foundation_digest)), snapshot.nominal_world_hash.as_deref().map_or_else(|| "Unavailable in this observation".to_owned(), wrapped_identity));
-                if let Some(digest) = snapshot.production_evidence_digest() {
-                    let _ = write!(evidence, "\n\nPRODUCTION OBSERVATION\n{}", wrapped_identity(&digest.to_hex()));
+                match snapshot.production_evidence_digest() {
+                    Ok(Some(digest)) => { let _ = write!(evidence, "\n\nPRODUCTION OBSERVATION\n{}", wrapped_identity(&digest.to_hex())); }
+                    Ok(None) => {}
+                    Err(_) => evidence.push_str("\n\nPRODUCTION OBSERVATION INVALID\nProduction evidence could not be authenticated."),
                 }
                 evidence
             }),
             ObserverText::Source => match &ui.lens {
-                MapLens::Relationships => "County geography anchors aggregates. Supply links are schematic; they do not locate factories or physical routes.".into(),
+                MapLens::Workforce(_) => format!("{}\nPeople are counted once per owner workforce pool. Select a county, then a cohort to follow its circuit. Reference sectors have no modeled workforce account.", lens.evidence),
+                MapLens::Relationships => "County geography anchors aggregate owners. Solid lines follow captured physical roads; dashed lines identify schematic supply relations. County terminals do not locate factories.".into(),
                 MapLens::Qcew(_) => "OBSERVED | BLS QCEW | 2024 annual\nJobs are annual averages; weekly wages are means. Monetary values are dollars, not physical output.".into(),
-                MapLens::Material {kind, ..} => format!("{}\n{}\nZero is a measured account; unavailable and unmodeled counties have no numeric reading.", lens.evidence, match kind {MaterialLensKind::ProducedThisPeriod => "Output in the selected period; foundation has no production receipt.",MaterialLensKind::OnHand => "Stock held at the end of the selected period. Terminal goods remain unsold on hand.",MaterialLensKind::InboundInTransit => "Actual lots destined for this county, counted once. This is not traffic passing through the county."}),
+                MapLens::Material {kind, ..} => format!("{}\n{}\nZero is a measured account; unavailable and unmodeled counties have no numeric reading.", lens.evidence, match kind {MaterialLensKind::ProducedThisPeriod => "Output in the selected period; foundation has no production receipt.",MaterialLensKind::OnHand => "Stock held at the end of the selected period. Goods remain with the disclosed owner until transfer or final-demand fulfillment.",MaterialLensKind::InboundInTransit => "Actual lots destined for this county, counted once. This is not traffic passing through the county."}),
             },
             ObserverText::Developments => county.as_ref().map_or_else(String::new, |county| county_developments(installed, county.fips)),
             ObserverText::Production => installed.and_then(|snapshot| snapshot.production.as_ref())
                 .map_or_else(|| "Production relationships are unavailable in this observation.".into(), |production|
-                    local_relationships(production, county.as_ref().map(|county| county.fips))),
+                    county_circuit_intro(production, county.as_ref().map(|county| county.fips))),
         };
         text.set_if_neq(Text::new(value));
     }
@@ -2098,6 +2246,84 @@ mod tests {
         app.world_mut()
             .entity_mut(target)
             .insert(Interaction::Pressed);
+        app.update();
+        assert!(app
+            .world()
+            .resource::<Messages<ObserverCommand>>()
+            .is_empty());
+        assert!(
+            !app.world()
+                .get::<ObserverFocusTarget>(target)
+                .unwrap()
+                .available
+        );
+    }
+
+    #[test]
+    fn road_layer_controls_are_discoverable_and_keyboard_owned() {
+        use bevy::ecs::system::RunSystemOnce;
+        use bevy::input_focus::tab_navigation::TabIndex;
+        let (mut app, window, _) = focused_shell(false, ObserverCommand::Relationships);
+        app.world_mut()
+            .run_system_once(|mut commands: Commands| spawn_drawers(&mut commands))
+            .unwrap();
+        app.world_mut().resource_mut::<ObserverUiState>().disclosure =
+            Some(ObserverDisclosure::Lens);
+        // The minimal shell disables Paint. Run the real drawer painter so
+        // focus admission sees the same displayed ancestry as the native UI.
+        app.add_systems(Update, paint_view_controls);
+        app.update();
+        app.update(); // Register the newly displayed controls for Tab traversal.
+        assert_eq!(
+            app.world_mut()
+                .query::<(&ControlDrawer, &Node)>()
+                .iter(app.world())
+                .find(|(drawer, _)| drawer.0 == ObserverDisclosure::Lens)
+                .unwrap()
+                .1
+                .display,
+            Display::Flex
+        );
+        let targets: Vec<_> = app
+            .world_mut()
+            .query::<(&Text, &ChildOf)>()
+            .iter(app.world())
+            .filter(|(text, _)| matches!(text.0.as_str(), "Selected paths" | "Captured roads"))
+            .map(|(text, parent)| (text.0.clone(), parent.parent()))
+            .collect();
+        assert_eq!(
+            targets.len(),
+            2,
+            "both World road layers must be discoverable in the actual drawer"
+        );
+        let target = targets
+            .iter()
+            .find(|(label, _)| label == "Captured roads")
+            .unwrap()
+            .1;
+        let command = app.world().get::<ObserverButton>(target).unwrap().command;
+        assert!(app.world().get::<TabIndex>(target).is_some());
+        assert!(
+            app.world()
+                .get::<ObserverFocusTarget>(target)
+                .unwrap()
+                .available
+        );
+        app.world_mut().resource_mut::<InputFocus>().0 = Some(target);
+        focus_key(&mut app, window, KeyCode::Enter);
+        assert_eq!(
+            app.world_mut()
+                .resource_mut::<Messages<ObserverCommand>>()
+                .drain()
+                .collect::<Vec<_>>(),
+            [command]
+        );
+        assert_eq!(app.world().resource::<ObserverSession>().durable_tick, 0);
+        app.world_mut().resource_mut::<ObserverUiState>().disclosure = None;
+        app.world_mut().trigger(ObserverKeyboardActivate {
+            entity: target,
+            context: None,
+        });
         app.update();
         assert!(app
             .world()

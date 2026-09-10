@@ -1,22 +1,23 @@
 use babylon_material_circuit::{
-    advance_material_circuit_v1, material_circuit_state_v1_digest, BacklogRowV1, CapacityRowV1,
-    GoodIdV1, InputOutputCoefficientV1, InventoryRowV1, LaborCapacityRowV1, LaborCoefficientV1,
-    MaterialCircuitStateV1, OrderAccessModeV1, OrderIdV1, OrderRowV1, ProcessIdV1, ProcessOutputV1,
-    ProductionCommitmentV1, SiteIdV1, SupplierCandidateV1, UnitIdV1,
+    advance_material_circuit_v3, material_circuit_state_v3_digest, BacklogRowV1, CapacityRowV1,
+    FreightMassCoefficientV3, GoodIdV1, InputOutputCoefficientV1, InventoryRowV1,
+    LaborCapacityRowV1, LaborCoefficientV1, LogisticsNodeIdV2, MaterialCircuitStateV3,
+    OrderAccessModeV1, OrderIdV1, OrderRowV2, ProcessIdV1, ProcessOutputV1, ProductionCommitmentV1,
+    RouteIdV2, SiteIdV1, SiteLogisticsNodeV2, SupplierRouteV3, SupplierTransportV3, UnitIdV1,
 };
 
 fn id<const BYTE: u8>() -> [u8; 32] {
     [BYTE; 32]
 }
 
-fn allocation_state(available: u64, first: u64, second: u64) -> MaterialCircuitStateV1 {
+fn allocation_state(available: u64, first: u64, second: u64) -> MaterialCircuitStateV3 {
     let supplier = SiteIdV1::from_bytes(id::<1>());
     let buyer = SiteIdV1::from_bytes(id::<2>());
     let good = GoodIdV1::from_bytes(id::<3>());
     let unit = UnitIdV1::from_bytes(id::<4>());
     let orders = [(5, first), (6, second)]
         .into_iter()
-        .map(|(identity, ordered)| OrderRowV1 {
+        .map(|(identity, ordered)| OrderRowV2 {
             order_id: OrderIdV1::from_bytes([identity; 32]),
             access_mode: OrderAccessModeV1::CommoditySale,
             buyer_site_id: buyer,
@@ -25,21 +26,45 @@ fn allocation_state(available: u64, first: u64, second: u64) -> MaterialCircuitS
             unit_id: unit,
             ordered,
             shipped: 0,
+            lost: 0,
             delivered: 0,
             realized: 0,
         })
         .collect::<Vec<_>>();
-    MaterialCircuitStateV1 {
+    MaterialCircuitStateV3 {
         period: 1,
+        merchants: vec![],
+        handling_coefficients: vec![],
+        final_demand_principals: vec![],
+        final_demand_orders: vec![],
+        site_logistics_nodes: vec![
+            SiteLogisticsNodeV2 {
+                site_id: supplier,
+                node_id: LogisticsNodeIdV2::from_bytes([1; 32]),
+            },
+            SiteLogisticsNodeV2 {
+                site_id: buyer,
+                node_id: LogisticsNodeIdV2::from_bytes([2; 32]),
+            },
+        ],
+        freight_mass_coefficients: vec![FreightMassCoefficientV3 {
+            good_id: good,
+            unit_id: unit,
+            grams_per_unit: 1,
+        }],
+        route_stages: vec![],
+        route_stage_capacities: vec![],
+        corridor_capacities: vec![],
         process_outputs: Vec::new(),
         input_coefficients: Vec::new(),
         labor_coefficients: Vec::new(),
-        supplier_candidates: vec![SupplierCandidateV1 {
+        supplier_routes: vec![SupplierRouteV3 {
             buyer_site_id: buyer,
             supplier_site_id: supplier,
             good_id: good,
             unit_id: unit,
-            transit_delay_periods: 1,
+            transport_kind: SupplierTransportV3::Local,
+            route_id: RouteIdV2::from_bytes([7; 32]),
         }],
         inventory: vec![InventoryRowV1 {
             site_id: supplier,
@@ -55,7 +80,7 @@ fn allocation_state(available: u64, first: u64, second: u64) -> MaterialCircuitS
             })
             .collect(),
         orders,
-        transit: Vec::new(),
+        freight: Vec::new(),
         capacities: Vec::new(),
         labor: Vec::new(),
         production_commitments: Vec::new(),
@@ -68,7 +93,7 @@ fn proportional_allocation_exhaustively_conserves_small_stocks() {
         for first in 1_u64..=10 {
             for second in 1_u64..=10 {
                 let state = allocation_state(available, first, second);
-                let outcome = advance_material_circuit_v1(&state).expect("allocation must close");
+                let outcome = advance_material_circuit_v3(&state).expect("allocation must close");
                 let total_requested = first + second;
                 let shipped: u64 = outcome
                     .state
@@ -101,25 +126,34 @@ fn proportional_allocation_exhaustively_conserves_small_stocks() {
                 let mut reversed = state;
                 reversed.orders.reverse();
                 reversed.backlog.reverse();
-                let twin = advance_material_circuit_v1(&reversed).expect("twin must close");
+                let twin = advance_material_circuit_v3(&reversed).expect("twin must close");
                 assert_eq!(
-                    material_circuit_state_v1_digest(&outcome.state),
-                    material_circuit_state_v1_digest(&twin.state)
+                    material_circuit_state_v3_digest(&outcome.state),
+                    material_circuit_state_v3_digest(&twin.state)
                 );
             }
         }
     }
 }
 
-fn production_state(input: u64, labor: u64, capacity: u64) -> MaterialCircuitStateV1 {
+fn production_state(input: u64, labor: u64, capacity: u64) -> MaterialCircuitStateV3 {
     let site = SiteIdV1::from_bytes(id::<1>());
     let input_good = GoodIdV1::from_bytes(id::<2>());
     let output_good = GoodIdV1::from_bytes(id::<3>());
     let goods_unit = UnitIdV1::from_bytes(id::<4>());
     let labor_unit = UnitIdV1::from_bytes(id::<5>());
     let process = ProcessIdV1::from_bytes(id::<6>());
-    MaterialCircuitStateV1 {
+    MaterialCircuitStateV3 {
         period: 1,
+        merchants: vec![],
+        handling_coefficients: vec![],
+        final_demand_principals: vec![],
+        final_demand_orders: vec![],
+        site_logistics_nodes: vec![],
+        freight_mass_coefficients: vec![],
+        route_stages: vec![],
+        route_stage_capacities: vec![],
+        corridor_capacities: vec![],
         process_outputs: vec![ProcessOutputV1 {
             process_id: process,
             site_id: site,
@@ -138,7 +172,7 @@ fn production_state(input: u64, labor: u64, capacity: u64) -> MaterialCircuitSta
             unit_id: labor_unit,
             quantity_per_batch: 3,
         }],
-        supplier_candidates: Vec::new(),
+        supplier_routes: Vec::new(),
         inventory: vec![
             InventoryRowV1 {
                 site_id: site,
@@ -155,7 +189,7 @@ fn production_state(input: u64, labor: u64, capacity: u64) -> MaterialCircuitSta
         ],
         orders: Vec::new(),
         backlog: Vec::new(),
-        transit: Vec::new(),
+        freight: Vec::new(),
         capacities: vec![CapacityRowV1 {
             process_id: process,
             site_id: site,
@@ -183,7 +217,7 @@ fn leontief_minimum_exhaustively_bounds_small_production() {
         for labor in 0_u64..=12 {
             for capacity in 0_u64..=6 {
                 let outcome =
-                    advance_material_circuit_v1(&production_state(input, labor, capacity))
+                    advance_material_circuit_v3(&production_state(input, labor, capacity))
                         .expect("bounded production must close");
                 let expected = 10_u64.min(input / 2).min(labor / 3).min(capacity);
                 assert_eq!(outcome.production[0].produced_batches, expected);
@@ -232,13 +266,13 @@ fn shared_inputs_and_labor_allocate_without_process_order_priority() {
     let mut reversed = state.clone();
     reversed.production_commitments.reverse();
 
-    let outcome = advance_material_circuit_v1(&state).expect("shared allocation must close");
-    let twin = advance_material_circuit_v1(&reversed).expect("permuted allocation must close");
+    let outcome = advance_material_circuit_v3(&state).expect("shared allocation must close");
+    let twin = advance_material_circuit_v3(&reversed).expect("permuted allocation must close");
     assert_eq!(outcome.production[0].produced_batches, 3);
     assert_eq!(outcome.production[1].produced_batches, 3);
     assert_eq!(outcome.state.inventory[0].quantity, 0);
     assert_eq!(
-        material_circuit_state_v1_digest(&outcome.state),
-        material_circuit_state_v1_digest(&twin.state)
+        material_circuit_state_v3_digest(&outcome.state),
+        material_circuit_state_v3_digest(&twin.state)
     );
 }

@@ -16,11 +16,11 @@ use super::observe::{self, PeriodRow};
 
 pub const BASELINE: &str = include_str!("../../../../../content/scenarios/michigan/defines.toml");
 pub const PERIODS: u64 = 16;
-// Accepted numeric baseline, independent of TOML comments and table order.
-// ADR259 moves route fields to schema V2 and adds shared-preset capacities.
-// Standard/Delayed quantities and the four-case expected outcomes are unchanged.
-const ACCEPTED_DEFINES_SHA256: &str =
-    "e65cf3ced65e95fb42d61e00da0081003cac9df0c6b879e6bed02341b73130e1";
+// Current typed regional parameters, independent of comments and statewide tables.
+// ADR260 adds explicit gram coefficients while preserving regional native throughput.
+// The baseline ceremony records the schema-V3 regional parameter digest.
+const ACCEPTED_REGIONAL_PARAMETERS_SHA256: &str =
+    "325afb96f28932e24916e2bcfc3a19a1fdf03b331422eaf6a8adeb2ca8a935e8";
 
 #[derive(Clone, Copy)]
 pub struct CaseSpec {
@@ -70,11 +70,40 @@ pub fn digest_json(value: &impl Serialize) -> Result<String> {
     Ok(hex(&sha256_of(&serde_json::to_vec(value)?)))
 }
 
+fn regional_parameters(catalog: &MichiganMaterialCatalogV1) -> Result<Value> {
+    let capture: Value = serde_json::from_slice(catalog.defines_bytes())?;
+    let definitions = capture
+        .get("defines")
+        .and_then(Value::as_object)
+        .ok_or_else(|| contract("missing current captured numeric definitions"))?;
+    let parameters = [
+        "SCHEMA_VERSION",
+        "TICK_DURATION_DAYS",
+        "HORIZON_PERIODS",
+        "staffing",
+        "process",
+        "corridor",
+        "route",
+        "shared_freight",
+        "regional_mass",
+    ]
+    .into_iter()
+    .map(|key| {
+        definitions
+            .get(key)
+            .cloned()
+            .map(|value| (key.to_owned(), value))
+            .ok_or_else(|| contract(format!("missing regional parameter {key}")))
+    })
+    .collect::<Result<serde_json::Map<String, Value>>>()?;
+    Ok(Value::Object(parameters))
+}
+
 pub fn cases() -> Result<Vec<Case>> {
     let original = MichiganMaterialCatalogV1::from_defines_toml(BASELINE)
         .map_err(|error| contract(format!("baseline validation: {error}")))?;
-    let baseline: Value = serde_json::from_slice(original.defines_bytes())?;
-    if hex(&original.defines_hash()) != ACCEPTED_DEFINES_SHA256
+    let baseline = regional_parameters(&original)?;
+    if digest_json(&baseline)? != ACCEPTED_REGIONAL_PARAMETERS_SHA256
         || baseline["HORIZON_PERIODS"] != PERIODS
         || baseline["process"]["panel_forming"]["OPENING_INPUT_UNITS"] != 0
         || baseline["process"]["panel_forming"]["OPENING_PLANNED_BATCHES"] != 0
@@ -103,7 +132,7 @@ pub fn cases() -> Result<Vec<Case>> {
                 .map_err(|error| contract(format!("case TOML: {error}")))?;
             let catalog = MichiganMaterialCatalogV1::from_defines_toml(&text)
                 .map_err(|error| contract(format!("{} validation: {error}", spec.id)))?;
-            let mut resolved: Value = serde_json::from_slice(catalog.defines_bytes())?;
+            let mut resolved = regional_parameters(&catalog)?;
             resolved["process"]["panel_forming"]["OPENING_INPUT_UNITS"] = json!(0);
             if resolved != baseline {
                 return Err(contract(

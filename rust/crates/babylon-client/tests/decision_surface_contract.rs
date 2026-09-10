@@ -118,34 +118,53 @@ fn observer_app() -> App {
         ui.menu_open = false;
         ui.history_open = true;
     }
+    // World now waits for an explicit cohort choice before drawing shipments
+    // or production. Exercise that same command in the shipped composition.
+    let context = app.world().resource::<ObserverSession>().context();
+    app.world_mut()
+        .write_message(babylon_client::production::ProductionCommand::Select {
+            site_id: "source".into(),
+            context,
+        });
     app.update(); // Exercise committed event buttons without requesting history.
     app
 }
 
-fn production_observation() -> babylon_persistence::ProductionSnapshotV1 {
+fn production_observation() -> babylon_persistence::ProductionSnapshotV2 {
     use babylon_persistence::{
-        ProductionEventV1, ProductionFreightV1, ProductionRouteV1, ProductionSiteV1,
-        ProductionSnapshotV1,
+        ProductionEventV1, ProductionFreightV2, ProductionRouteV2, ProductionSiteV2,
+        ProductionSnapshotV2,
     };
-    let site = |id: &str| ProductionSiteV1 {
+    let site = |id: &str| ProductionSiteV2 {
         id: id.into(),
         county_geoid: "26163".into(),
         name: format!("Surface fixture {id}"),
         industry_code: "331".into(),
         observed_employment: None,
-        output_good_id: "a".repeat(64),
-        output_unit_id: "b".repeat(64),
-        output_good: "sheet".into(),
-        output_unit: "kg".into(),
-        output_per_batch: 1,
-        available_batches: 10,
-        planned_batches: Some(10),
-        produced_batches: Some(10),
         inventory: Vec::new(),
-        inputs: Vec::new(),
-        labor: Vec::new(),
+        role: babylon_persistence::ProductionSiteRoleV2::Production,
+        sector_code: "31-33".into(),
+        processes: vec![babylon_persistence::ProductionProcessV2 {
+            id: "fixture-process".into(),
+            name: "Fixture process".into(),
+            output_good_id: "a".repeat(64),
+            output_unit_id: "b".repeat(64),
+            output_good: "sheet".into(),
+            output_unit: "kg".into(),
+            output_per_batch: 1,
+            available_batches: 10,
+            planned_batches: Some(10),
+            produced_batches: Some(10),
+            inputs: Vec::new(),
+            labor: Vec::new(),
+        }],
     };
-    ProductionSnapshotV1 {
+    ProductionSnapshotV2 {
+        physical_edges: Vec::new(),
+        content_authority_sha256: "a".repeat(64),
+        road_source: None,
+        merchant_handling_accounts: Vec::new(),
+        final_demand_accounts: Vec::new(),
         freight_capacity_accounts: Vec::new(),
         material_balance: None,
         labor_accounts: Vec::new(),
@@ -153,8 +172,12 @@ fn production_observation() -> babylon_persistence::ProductionSnapshotV1 {
         scenario_label: "Read-only surface fixture".into(),
         horizon_period: 16,
         sites: vec![site("source"), site("destination")],
-        routes: vec![ProductionRouteV1 {
-            corridor_legs: Vec::new(),
+        routes: vec![ProductionRouteV2 {
+            physical_edge_ids: Vec::new(),
+            distance_mm: None,
+            transport_kind: babylon_persistence::ProductionRouteTransportV2::Staged,
+            grams_per_unit: 1000,
+            stages: Vec::new(),
             id: "route".into(),
             supplier_site_id: "source".into(),
             buyer_site_id: "destination".into(),
@@ -170,7 +193,10 @@ fn production_observation() -> babylon_persistence::ProductionSnapshotV1 {
             realized: 0,
             backlog: 0,
         }],
-        freight: vec![ProductionFreightV1 {
+        freight: vec![ProductionFreightV2 {
+            current_stage_index: 0,
+            grams_per_unit: 1000,
+            mass_grams: 1000,
             id: "lot".into(),
             route_id: "route".into(),
             source_site_id: "source".into(),

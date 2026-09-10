@@ -1,416 +1,224 @@
-//! Authored bundle capture and executable composition; no period adjudication here.
-
-use std::collections::{BTreeMap, BTreeSet};
-
-use babylon_material_circuit::{
-    BacklogRowV1, CapacityRowV1, CorridorCapacityV2, InputOutputCoefficientV1, InventoryRowV1,
-    LaborCapacityRowV1, LaborCoefficientV1, OrderAccessModeV1, OrderRowV2, ProcessOutputV1,
-    ProductionCommitmentV1, RouteLegV2, SiteLogisticsNodeV2, SupplierRouteV2,
-};
-
+//! The single compiler from captured normalized owners into V3 material rows.
 use super::{
-    decode_material_circuit_state_v2, encode_material_circuit_state_v2, sha256_of, validate,
-    MaterialCircuitStateV2, SectorBundleErrorV1, SectorBundleGoodV1, SectorBundleOwnerV1,
-    SectorBundleProcessV1, SectorBundleSourcesV1, SectorBundleV1, UnitIdV1,
+    sha256_of, validate, SectorBundleErrorV2, SectorBundleGoodV2, SectorBundleOwnerV2,
+    SectorBundleProcessV2, SectorBundleSourcesV2, SectorBundleV2,
+};
+use crate::michigan_cohorts::michigan_business_subject_for_owner_v2;
+use crate::michigan_material::{
+    MichiganDeliveryPresetV1, MichiganMaterialCatalogV1, MichiganMaterialCorridorV1,
+    MichiganMaterialPathV2, MichiganMaterialRouteV1, MichiganMaterialSiteV1, MichiganSiteRoleV2,
     MICHIGAN_MAX_HORIZON_PERIODS_V1,
 };
-use crate::michigan_cohorts::michigan_business_subject_v2;
-use crate::michigan_material::{
-    material_topology, MichiganDeliveryPresetV1, MichiganMaterialCatalogV1,
-    MichiganMaterialProcessV1, MichiganMaterialRouteV1, MICHIGAN_INDUSTRY_BASELINE_SHA256_V1,
+use babylon_material_circuit::{
+    decode_material_circuit_state_v3, encode_material_circuit_state_v3, BacklogRowV1,
+    CapacityRowV1, CorridorCapacityV3, FinalDemandOrderV3, FinalDemandPrincipalV3,
+    FreightMassCoefficientV3, GoodIdV1, InputOutputCoefficientV1, InventoryRowV1,
+    LaborCapacityRowV1, LaborCoefficientV1, MaterialCircuitStateV3, MerchantHandlingCoefficientV3,
+    MerchantHandlingV3, MerchantRoleV3, OrderAccessModeV1, OrderRowV2, ProcessOutputV1,
+    ProductionCommitmentV1, RouteStageCapacityV3, RouteStageV3, SiteIdV1, SiteLogisticsNodeV2,
+    SupplierRouteV3, SupplierTransportV3, UnitIdV1,
 };
-use crate::michigan_sectors::{
-    michigan_county_sectors_v1, MichiganCountySectorV1, QCEW_SECTORS_ARTIFACT_SHA256_V1,
-    QCEW_SECTORS_SEMANTIC_SHA256_V1,
-};
+use std::collections::{BTreeMap, BTreeSet};
 
-fn source(county: &str) -> Result<&'static MichiganCountySectorV1, SectorBundleErrorV1> {
-    michigan_county_sectors_v1()
-        .map_err(|_| SectorBundleErrorV1::Source)?
-        .rows()
-        .iter()
-        .find(|row| row.county_geoid() == county && row.sector_code().as_str() == "31-33")
-        .ok_or(SectorBundleErrorV1::Owner)
-}
-
-fn source_proof(
-    row: &MichiganCountySectorV1,
-    defines_hash: [u8; 32],
-) -> Result<SectorBundleSourcesV1, SectorBundleErrorV1> {
-    Ok(SectorBundleSourcesV1 {
-        county_source_file: row.source_file().to_owned(),
-        county_source_sha256: digest(row.source_sha256())?,
-        sector_artifact_sha256: digest(QCEW_SECTORS_ARTIFACT_SHA256_V1)?,
-        sector_semantic_sha256: digest(QCEW_SECTORS_SEMANTIC_SHA256_V1)?,
-        industry_artifact_sha256: digest(MICHIGAN_INDUSTRY_BASELINE_SHA256_V1)?,
-        designed_scenario_sha256: defines_hash,
-    })
-}
-
-fn digest(text: &str) -> Result<[u8; 32], SectorBundleErrorV1> {
+fn digest(text: &str) -> Result<[u8; 32], SectorBundleErrorV2> {
     if text.len() != 64
         || !text
             .bytes()
-            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
     {
-        return Err(SectorBundleErrorV1::Source);
+        return Err(SectorBundleErrorV2::Source);
     }
-    let mut bytes = [0; 32];
-    for (index, byte) in bytes.iter_mut().enumerate() {
+    let mut out = [0; 32];
+    for (index, byte) in out.iter_mut().enumerate() {
         *byte = u8::from_str_radix(&text[index * 2..index * 2 + 2], 16)
-            .map_err(|_| SectorBundleErrorV1::Source)?;
+            .map_err(|_| SectorBundleErrorV2::Source)?;
     }
-    Ok(bytes)
+    Ok(out)
 }
-
-pub(super) fn validate_sources(
-    owner: &SectorBundleOwnerV1,
-    evidence: &SectorBundleSourcesV1,
-) -> Result<(), SectorBundleErrorV1> {
-    if owner.sector_code != "31-33"
-        || !matches!(
-            owner.county_geoid.as_str(),
-            "26099" | "26125" | "26161" | "26163"
-        )
-    {
-        return Err(SectorBundleErrorV1::Owner);
-    }
-    let row = source(&owner.county_geoid)?;
-    if owner.subject != michigan_business_subject_v2(row) {
-        return Err(SectorBundleErrorV1::Owner);
-    }
-    if *evidence != source_proof(row, evidence.designed_scenario_sha256)? {
-        return Err(SectorBundleErrorV1::Source);
-    }
-    Ok(())
-}
-
-pub(super) fn validate_process_bindings(
-    bundle: &SectorBundleV1,
-) -> Result<(), SectorBundleErrorV1> {
-    let catalog = material_topology().map_err(|_| SectorBundleErrorV1::Source)?;
-    for good in &bundle.goods {
-        if !catalog
-            .goods()
-            .iter()
-            .any(|row| row.id() == good.good_id && row.unit_id() == good.unit_id)
-        {
-            return Err(SectorBundleErrorV1::GoodUnit);
-        }
-    }
-    if bundle.labor_unit
-        != UnitIdV1::from_bytes(sha256_of(b"babylon.michigan-material.v1\0unit\0labor-hour"))
-    {
-        return Err(SectorBundleErrorV1::Resource);
-    }
-    for binding in &bundle.processes {
-        let process = catalog
-            .processes()
-            .iter()
-            .find(|process| process.id() == binding.process_id)
-            .ok_or(SectorBundleErrorV1::ProcessOwnership)?;
-        let site = catalog
-            .site(&process.site_key)
-            .ok_or(SectorBundleErrorV1::ProcessOwnership)?;
-        let output = bundle
-            .rows
-            .process_outputs
-            .iter()
-            .find(|row| row.process_id == binding.process_id)
-            .ok_or(SectorBundleErrorV1::ProcessOwnership)?;
-        let industry = crate::michigan_material::MaterialTopology::industry_for_site(site)
-            .ok_or(SectorBundleErrorV1::Source)?;
-        let node = bundle
-            .rows
-            .site_logistics_nodes
-            .iter()
-            .find(|row| row.site_id == site.id())
-            .ok_or(SectorBundleErrorV1::ProcessOwnership)?;
-        if site.county_geoid != bundle.owner.county_geoid
-            || site.naics != binding.industry_code
-            || output.site_id != site.id()
-            || node.node_id != site.node_id()
-            || industry.source_file != bundle.sources.county_source_file
-            || digest(&industry.source_sha256)? != bundle.sources.county_source_sha256
-        {
-            return Err(SectorBundleErrorV1::ProcessOwnership);
-        }
-    }
-    Ok(())
-}
-
-/// Capture four nonempty bundles solely from the already admitted Designed content.
+/// Capture all admitted owners; an owner may have several processes or handle goods.
 /// # Errors
-/// Refuses observed source drift, ownership ambiguity or invalid material rows.
-pub fn michigan_sector_bundles_v1(
+/// Refuses missing sources, invalid native units or incompatible resource rows.
+pub fn michigan_sector_bundles_v2(
     catalog: &MichiganMaterialCatalogV1,
-) -> Result<Vec<SectorBundleV1>, SectorBundleErrorV1> {
-    let mut by_county = BTreeMap::<&str, Vec<&MichiganMaterialProcessV1>>::new();
-    for process in catalog.processes() {
-        let site = catalog
-            .site(&process.site_key)
-            .ok_or(SectorBundleErrorV1::Owner)?;
-        by_county
-            .entry(&site.county_geoid)
-            .or_default()
-            .push(process);
+) -> Result<Vec<SectorBundleV2>, SectorBundleErrorV2> {
+    let mut bundles = Vec::new();
+    for source in catalog.owners() {
+        let owner = SectorBundleOwnerV2 {
+            subject: michigan_business_subject_for_owner_v2(
+                &source.county_geoid,
+                &source.sector_code,
+            ),
+            county_geoid: source.county_geoid.clone(),
+            sector_code: source.sector_code.clone(),
+        };
+        let evidence = SectorBundleSourcesV2 {
+            county_source_file: source.county_source_file.clone(),
+            county_source_sha256: digest(&source.county_source_sha256)?,
+            sector_artifact_sha256: digest(&source.sector_artifact_sha256)?,
+            sector_semantic_sha256: digest(&source.sector_semantic_sha256)?,
+            industry_artifact_sha256: digest(&source.industry_artifact_sha256)?,
+            designed_scenario_sha256: catalog.defines_hash(),
+        };
+        let mut captured = OwnerRows::new();
+        for site in catalog.sites().iter().filter(|s| {
+            s.county_geoid == source.county_geoid && s.sector_code == source.sector_code
+        }) {
+            captured.append_site(catalog, site)?;
+        }
+        bundles.push(captured.finish(catalog, owner, evidence)?);
     }
-    if by_county.len() != 4 {
-        return Err(SectorBundleErrorV1::Coverage);
-    }
-    by_county
-        .into_iter()
-        .map(|(county, processes)| build_bundle(catalog, county, &processes))
-        .collect()
+    bundles.sort_by(|a, b| a.owner.subject.cmp(&b.owner.subject));
+    Ok(bundles)
 }
-
-fn build_bundle(
+fn county_bytes(county: &str) -> Result<[u8; 5], SectorBundleErrorV2> {
+    county
+        .as_bytes()
+        .try_into()
+        .map_err(|_| SectorBundleErrorV2::Owner)
+}
+fn corridor<'a>(
+    catalog: &'a MichiganMaterialCatalogV1,
+    key: &str,
+) -> Result<&'a MichiganMaterialCorridorV1, SectorBundleErrorV2> {
+    catalog
+        .corridors()
+        .iter()
+        .find(|c| c.key == key)
+        .ok_or(SectorBundleErrorV2::Resource)
+}
+/// Compile one selected captured model through the current material codec.
+/// # Errors
+/// Refuses incomplete or changed bundles and inconsistent selected presets.
+pub fn compile_sector_bundles_v2(
+    bundles: &[SectorBundleV2],
+    preset: MichiganDeliveryPresetV1,
     catalog: &MichiganMaterialCatalogV1,
-    county: &str,
-    processes: &[&MichiganMaterialProcessV1],
-) -> Result<SectorBundleV1, SectorBundleErrorV1> {
-    let row = source(county)?;
-    let owner = SectorBundleOwnerV1 {
-        subject: michigan_business_subject_v2(row),
-        county_geoid: county.to_owned(),
-        sector_code: row.sector_code().as_str().to_owned(),
-    };
-    let mut rows = empty_state();
-    let mut goods = BTreeSet::new();
-    let mut bindings = Vec::new();
-    // Preserve the original resource identity; no conversion from observed jobs.
-    let labor_unit =
-        UnitIdV1::from_bytes(sha256_of(b"babylon.michigan-material.v1\0unit\0labor-hour"));
-    for process in processes {
-        let site = catalog
-            .site(&process.site_key)
-            .ok_or(SectorBundleErrorV1::Owner)?;
-        rows.site_logistics_nodes.push(SiteLogisticsNodeV2 {
-            site_id: site.id(),
-            node_id: site.node_id(),
-        });
-        for key in [&process.input_good_key, &process.output_good_key] {
-            let good = catalog.good(key).ok_or(SectorBundleErrorV1::GoodUnit)?;
-            goods.insert(SectorBundleGoodV1 {
-                good_id: good.id(),
-                unit_id: good.unit_id(),
+) -> Result<MaterialCircuitStateV3, SectorBundleErrorV2> {
+    if catalog.preset() != preset {
+        return Err(SectorBundleErrorV2::Preset);
+    }
+    let mut ordered = bundles.to_vec();
+    ordered.sort_by(|a, b| a.owner.subject.cmp(&b.owner.subject));
+    if ordered != michigan_sector_bundles_v2(catalog)? {
+        return Err(SectorBundleErrorV2::Source);
+    }
+    let mut state = empty_state();
+    let mut mass = BTreeMap::new();
+    for bundle in &ordered {
+        validate::bundle(bundle)?;
+        let rows = &bundle.rows;
+        state
+            .site_logistics_nodes
+            .extend_from_slice(&rows.site_logistics_nodes);
+        state
+            .process_outputs
+            .extend_from_slice(&rows.process_outputs);
+        state
+            .input_coefficients
+            .extend_from_slice(&rows.input_coefficients);
+        state
+            .labor_coefficients
+            .extend_from_slice(&rows.labor_coefficients);
+        state.inventory.extend_from_slice(&rows.inventory);
+        state.capacities.extend_from_slice(&rows.capacities);
+        state.labor.extend_from_slice(&rows.labor);
+        state
+            .production_commitments
+            .extend_from_slice(&rows.production_commitments);
+        state.merchants.extend_from_slice(&rows.merchants);
+        state
+            .handling_coefficients
+            .extend_from_slice(&rows.handling_coefficients);
+        for row in &rows.freight_mass_coefficients {
+            if mass
+                .insert((row.good_id, row.unit_id), row.grams_per_unit)
+                .is_some_and(|n| n != row.grams_per_unit)
+            {
+                return Err(SectorBundleErrorV2::GoodUnit);
+            }
+        }
+    }
+    state.freight_mass_coefficients = mass
+        .into_iter()
+        .map(
+            |((good_id, unit_id), grams_per_unit)| FreightMassCoefficientV3 {
+                good_id,
+                unit_id,
+                grams_per_unit,
+            },
+        )
+        .collect();
+    for route in catalog.routes() {
+        append_route(&mut state, catalog, route)?;
+    }
+    append_final_demand(&mut state, catalog)?;
+    let active: BTreeSet<_> = state
+        .route_stage_capacities
+        .iter()
+        .map(|r| r.corridor_id)
+        .chain(state.merchants.iter().map(|m| m.capacity_id))
+        .collect();
+    for c in catalog
+        .corridors()
+        .iter()
+        .filter(|c| active.contains(&c.id()))
+    {
+        for period in 1..=MICHIGAN_MAX_HORIZON_PERIODS_V1 {
+            state.corridor_capacities.push(CorridorCapacityV3 {
+                corridor_id: c.id(),
+                period,
+                available_grams: c.capacity_grams_per_period,
             });
         }
-        bindings.push(SectorBundleProcessV1 {
-            process_id: process.id(),
-            industry_code: site.naics.clone(),
-        });
-        append_process(&mut rows, catalog, process, labor_unit)?;
     }
-    SectorBundleV1::from_parts(
-        owner,
-        source_proof(row, catalog.defines_hash())?,
-        goods.into_iter().collect(),
-        bindings,
-        labor_unit,
-        &rows,
-    )
+    decode_material_circuit_state_v3(&encode_material_circuit_state_v3(&state)?).map_err(Into::into)
 }
-
-fn append_process(
-    state: &mut MaterialCircuitStateV2,
-    catalog: &MichiganMaterialCatalogV1,
-    process: &MichiganMaterialProcessV1,
-    labor_unit: UnitIdV1,
-) -> Result<(), SectorBundleErrorV1> {
-    let input = catalog
-        .good(&process.input_good_key)
-        .ok_or(SectorBundleErrorV1::GoodUnit)?;
-    let output = catalog
-        .good(&process.output_good_key)
-        .ok_or(SectorBundleErrorV1::GoodUnit)?;
-    let site_id = process.site_id();
-    let process_id = process.id();
-    state.process_outputs.push(ProcessOutputV1 {
-        process_id,
-        site_id,
-        good_id: output.id(),
-        unit_id: output.unit_id(),
-        quantity_per_batch: process.output_quantity_per_batch,
-    });
-    state.input_coefficients.push(InputOutputCoefficientV1 {
-        process_id,
-        good_id: input.id(),
-        unit_id: input.unit_id(),
-        quantity_per_batch: process.input_quantity_per_batch,
-    });
-    state.labor_coefficients.push(LaborCoefficientV1 {
-        process_id,
-        unit_id: labor_unit,
-        quantity_per_batch: process.labor_hours_per_batch,
-    });
-    state.inventory.push(InventoryRowV1 {
-        site_id,
-        good_id: input.id(),
-        unit_id: input.unit_id(),
-        quantity: process.opening_input_quantity,
-    });
-    state.inventory.push(InventoryRowV1 {
-        site_id,
-        good_id: output.id(),
-        unit_id: output.unit_id(),
-        quantity: 0,
-    });
-    for period in 1..=MICHIGAN_MAX_HORIZON_PERIODS_V1 {
-        state.capacities.push(CapacityRowV1 {
-            process_id,
-            site_id,
-            period,
-            available_batches: process.capacity_batches_per_period,
-        });
-    }
-    state.labor.push(LaborCapacityRowV1 {
-        site_id,
-        unit_id: labor_unit,
-        period: 1,
-        available: process.labor_capacity_hours_per_period,
-    });
-    if process.opening_planned_batches > 0 {
-        state.production_commitments.push(ProductionCommitmentV1 {
-            process_id,
-            site_id,
-            period: 1,
-            planned_batches: process.opening_planned_batches,
-        });
-    }
-    Ok(())
-}
-
-/// Compile actual opening rows from all four bundles and the existing transfer design.
-///
-/// This is a content compiler, not admission: the future campaign factory must
-/// separately pin these bundle bytes. Reopening a save must use stored content.
-/// # Errors
-/// Refuses missing/duplicate ownership, mixed units or invalid V2 circuit rows.
-pub fn compile_sector_bundles_v1(
-    bundles: &[SectorBundleV1],
-    preset: MichiganDeliveryPresetV1,
-    catalog: &MichiganMaterialCatalogV1,
-) -> Result<MaterialCircuitStateV2, SectorBundleErrorV1> {
-    if bundles.len() != 4 {
-        return Err(SectorBundleErrorV1::Coverage);
-    }
-    let mut owners = BTreeSet::new();
-    let mut processes = BTreeSet::new();
-    let mut sites = BTreeSet::new();
-    let mut goods = BTreeMap::new();
-    let mut state = empty_state();
-    for bundle in bundles {
-        validate::bundle(bundle)?;
-        if !owners.insert(bundle.owner.county_geoid.as_str()) {
-            return Err(SectorBundleErrorV1::ProcessOwnership);
-        }
-        for output in &bundle.rows.process_outputs {
-            if !processes.insert(output.process_id) || !sites.insert(output.site_id) {
-                return Err(SectorBundleErrorV1::ProcessOwnership);
-            }
-        }
-        for good in &bundle.goods {
-            if goods
-                .insert(good.good_id, good.unit_id)
-                .is_some_and(|unit| unit != good.unit_id)
-            {
-                return Err(SectorBundleErrorV1::GoodUnit);
-            }
-        }
-        append_rows(&mut state, &bundle.rows);
-    }
-    if processes
-        != catalog
-            .processes()
-            .iter()
-            .map(MichiganMaterialProcessV1::id)
-            .collect()
-    {
-        return Err(SectorBundleErrorV1::Coverage);
-    }
-    for route in catalog.routes() {
-        append_route(&mut state, catalog, route, preset)?;
-    }
-    // Capacity belongs to the corridor, never to each of its participating routes.
-    let mut emitted = BTreeSet::new();
-    for route in catalog.routes() {
-        let corridor = catalog
-            .corridor_for_route(route, preset)
-            .ok_or(SectorBundleErrorV1::Owner)?;
-        let unit = catalog
-            .good(&route.good_key)
-            .ok_or(SectorBundleErrorV1::GoodUnit)?
-            .unit_id();
-        if emitted.insert((corridor.id(), unit)) {
-            for period in 1..=MICHIGAN_MAX_HORIZON_PERIODS_V1 {
-                state.corridor_capacities.push(CorridorCapacityV2 {
-                    corridor_id: corridor.id(),
-                    unit_id: unit,
-                    period,
-                    available: corridor.capacity_per_period(preset),
-                });
-            }
-        }
-    }
-    let bytes = encode_material_circuit_state_v2(&state)?;
-    decode_material_circuit_state_v2(&bytes).map_err(Into::into)
-}
-
-fn append_rows(state: &mut MaterialCircuitStateV2, rows: &MaterialCircuitStateV2) {
-    state
-        .site_logistics_nodes
-        .extend_from_slice(&rows.site_logistics_nodes);
-    state
-        .process_outputs
-        .extend_from_slice(&rows.process_outputs);
-    state
-        .input_coefficients
-        .extend_from_slice(&rows.input_coefficients);
-    state
-        .labor_coefficients
-        .extend_from_slice(&rows.labor_coefficients);
-    state.inventory.extend_from_slice(&rows.inventory);
-    state.capacities.extend_from_slice(&rows.capacities);
-    state.labor.extend_from_slice(&rows.labor);
-    state
-        .production_commitments
-        .extend_from_slice(&rows.production_commitments);
-}
-
 fn append_route(
-    state: &mut MaterialCircuitStateV2,
+    state: &mut MaterialCircuitStateV3,
     catalog: &MichiganMaterialCatalogV1,
     route: &MichiganMaterialRouteV1,
-    preset: MichiganDeliveryPresetV1,
-) -> Result<(), SectorBundleErrorV1> {
+) -> Result<(), SectorBundleErrorV2> {
     let supplier = catalog
         .site(&route.supplier_site_key)
-        .ok_or(SectorBundleErrorV1::Owner)?;
+        .ok_or(SectorBundleErrorV2::Owner)?;
     let buyer = catalog
         .site(&route.buyer_site_key)
-        .ok_or(SectorBundleErrorV1::Owner)?;
+        .ok_or(SectorBundleErrorV2::Owner)?;
     let good = catalog
         .good(&route.good_key)
-        .ok_or(SectorBundleErrorV1::GoodUnit)?;
-    state.supplier_routes.push(SupplierRouteV2 {
+        .ok_or(SectorBundleErrorV2::GoodUnit)?;
+    let transport_kind = match &route.path {
+        MichiganMaterialPathV2::Local => SupplierTransportV3::Local,
+        MichiganMaterialPathV2::Routed {
+            travel_periods,
+            capacity_keys,
+            ..
+        } => {
+            state.route_stages.push(RouteStageV3 {
+                route_id: route.id(),
+                stage_index: 0,
+                from_node_id: supplier.node_id(),
+                to_node_id: buyer.node_id(),
+                travel_periods: *travel_periods,
+                loss_ppm: 0,
+            });
+            for key in capacity_keys {
+                state.route_stage_capacities.push(RouteStageCapacityV3 {
+                    route_id: route.id(),
+                    stage_index: 0,
+                    corridor_id: corridor(catalog, key)?.id(),
+                });
+            }
+            SupplierTransportV3::Staged
+        }
+    };
+    state.supplier_routes.push(SupplierRouteV3 {
         buyer_site_id: buyer.id(),
         supplier_site_id: supplier.id(),
         good_id: good.id(),
         unit_id: good.unit_id(),
         route_id: route.id(),
-    });
-    state.route_legs.push(RouteLegV2 {
-        route_id: route.id(),
-        leg_index: 0,
-        corridor_id: catalog
-            .corridor_for_route(route, preset)
-            .ok_or(SectorBundleErrorV1::Owner)?
-            .id(),
-        from_node_id: supplier.node_id(),
-        to_node_id: buyer.node_id(),
-        travel_periods: catalog.travel_periods(route, preset),
-        loss_ppm: 0,
+        transport_kind,
     });
     state.orders.push(OrderRowV2 {
         order_id: route.order_id(),
@@ -431,16 +239,17 @@ fn append_route(
     });
     Ok(())
 }
-
-fn empty_state() -> MaterialCircuitStateV2 {
-    MaterialCircuitStateV2 {
+fn empty_state() -> MaterialCircuitStateV3 {
+    MaterialCircuitStateV3 {
         period: 1,
         site_logistics_nodes: Vec::new(),
         process_outputs: Vec::new(),
         input_coefficients: Vec::new(),
         labor_coefficients: Vec::new(),
+        freight_mass_coefficients: Vec::new(),
         supplier_routes: Vec::new(),
-        route_legs: Vec::new(),
+        route_stages: Vec::new(),
+        route_stage_capacities: Vec::new(),
         inventory: Vec::new(),
         orders: Vec::new(),
         backlog: Vec::new(),
@@ -449,5 +258,260 @@ fn empty_state() -> MaterialCircuitStateV2 {
         capacities: Vec::new(),
         labor: Vec::new(),
         production_commitments: Vec::new(),
+        merchants: Vec::new(),
+        handling_coefficients: Vec::new(),
+        final_demand_principals: Vec::new(),
+        final_demand_orders: Vec::new(),
     }
+}
+
+struct OwnerRows {
+    rows: MaterialCircuitStateV3,
+    goods: BTreeSet<SectorBundleGoodV2>,
+    processes: Vec<SectorBundleProcessV2>,
+    labor_unit: UnitIdV1,
+    inventory: BTreeMap<(SiteIdV1, GoodIdV1, UnitIdV1), u64>,
+}
+impl OwnerRows {
+    fn new() -> Self {
+        Self {
+            rows: empty_state(),
+            goods: BTreeSet::new(),
+            processes: Vec::new(),
+            labor_unit: UnitIdV1::from_bytes(sha256_of(
+                b"babylon.michigan-material.v1\0unit\0labor-hour",
+            )),
+            inventory: BTreeMap::new(),
+        }
+    }
+
+    fn append_site(
+        &mut self,
+        catalog: &MichiganMaterialCatalogV1,
+        site: &MichiganMaterialSiteV1,
+    ) -> Result<(), SectorBundleErrorV2> {
+        self.rows.site_logistics_nodes.push(SiteLogisticsNodeV2 {
+            site_id: site.id(),
+            node_id: site.node_id(),
+        });
+        let seed = catalog
+            .staffing()
+            .pools
+            .iter()
+            .find(|p| p.site_key == site.key)
+            .ok_or(SectorBundleErrorV2::Resource)?;
+        self.rows.labor.push(LaborCapacityRowV1 {
+            site_id: site.id(),
+            unit_id: self.labor_unit,
+            period: 1,
+            available: seed
+                .employed
+                .checked_mul(catalog.staffing().hours_per_worker_period)
+                .ok_or(SectorBundleErrorV2::Arithmetic)?,
+        });
+        let mut good_keys: BTreeSet<&str> = BTreeSet::new();
+        self.append_production(catalog, site, &mut good_keys)?;
+        self.append_merchants(catalog, site, &mut good_keys)?;
+        for r in catalog
+            .routes()
+            .iter()
+            .filter(|r| r.supplier_site_key == site.key || r.buyer_site_key == site.key)
+        {
+            good_keys.insert(&r.good_key);
+        }
+        for key in good_keys {
+            let good = catalog.good(key).ok_or(SectorBundleErrorV2::GoodUnit)?;
+            self.goods.insert(SectorBundleGoodV2 {
+                good_id: good.id(),
+                unit_id: good.unit_id(),
+            });
+            self.inventory
+                .entry((site.id(), good.id(), good.unit_id()))
+                .or_default();
+        }
+
+        Ok(())
+    }
+
+    fn append_production<'a>(
+        &mut self,
+        catalog: &'a MichiganMaterialCatalogV1,
+        site: &MichiganMaterialSiteV1,
+        good_keys: &mut BTreeSet<&'a str>,
+    ) -> Result<(), SectorBundleErrorV2> {
+        for process in catalog
+            .processes()
+            .iter()
+            .filter(|p| p.site_key == site.key)
+        {
+            self.processes.push(SectorBundleProcessV2 {
+                process_id: process.id(),
+                industry_code: process.industry_code.clone(),
+            });
+            let output = catalog
+                .good(&process.output_good_key)
+                .ok_or(SectorBundleErrorV2::GoodUnit)?;
+            good_keys.insert(&process.output_good_key);
+            self.rows.process_outputs.push(ProcessOutputV1 {
+                process_id: process.id(),
+                site_id: site.id(),
+                good_id: output.id(),
+                unit_id: output.unit_id(),
+                quantity_per_batch: process.output_quantity_per_batch,
+            });
+            self.inventory
+                .entry((site.id(), output.id(), output.unit_id()))
+                .or_default();
+            for input in &process.inputs {
+                let good = catalog
+                    .good(&input.good_key)
+                    .ok_or(SectorBundleErrorV2::GoodUnit)?;
+                good_keys.insert(&input.good_key);
+                self.rows.input_coefficients.push(InputOutputCoefficientV1 {
+                    process_id: process.id(),
+                    good_id: good.id(),
+                    unit_id: good.unit_id(),
+                    quantity_per_batch: input.quantity_per_batch,
+                });
+                let n = self
+                    .inventory
+                    .entry((site.id(), good.id(), good.unit_id()))
+                    .or_default();
+                *n = n
+                    .checked_add(input.opening_quantity)
+                    .ok_or(SectorBundleErrorV2::Arithmetic)?;
+            }
+            self.rows.labor_coefficients.push(LaborCoefficientV1 {
+                process_id: process.id(),
+                unit_id: self.labor_unit,
+                quantity_per_batch: process.labor_hours_per_batch,
+            });
+            for period in 1..=MICHIGAN_MAX_HORIZON_PERIODS_V1 {
+                self.rows.capacities.push(CapacityRowV1 {
+                    process_id: process.id(),
+                    site_id: site.id(),
+                    period,
+                    available_batches: process.capacity_batches_per_period,
+                });
+            }
+            if process.opening_planned_batches > 0 {
+                self.rows
+                    .production_commitments
+                    .push(ProductionCommitmentV1 {
+                        process_id: process.id(),
+                        site_id: site.id(),
+                        period: 1,
+                        planned_batches: process.opening_planned_batches,
+                    });
+            }
+        }
+
+        Ok(())
+    }
+
+    fn append_merchants<'a>(
+        &mut self,
+        catalog: &'a MichiganMaterialCatalogV1,
+        site: &MichiganMaterialSiteV1,
+        good_keys: &mut BTreeSet<&'a str>,
+    ) -> Result<(), SectorBundleErrorV2> {
+        if let Some(merchant) = catalog.merchants().iter().find(|m| m.site_key == site.key) {
+            self.rows.merchants.push(MerchantHandlingV3 {
+                site_id: site.id(),
+                county_geoid: county_bytes(&site.county_geoid)?,
+                role: match site.role {
+                    MichiganSiteRoleV2::Wholesale => MerchantRoleV3::Wholesale,
+                    MichiganSiteRoleV2::Retail => MerchantRoleV3::Retail,
+                    MichiganSiteRoleV2::Production => return Err(SectorBundleErrorV2::Owner),
+                },
+                capacity_id: corridor(catalog, &merchant.capacity_key)?.id(),
+                labor_unit_id: self.labor_unit,
+            });
+            for (key, hours) in &merchant.handling_hours_per_unit {
+                let good = catalog.good(key).ok_or(SectorBundleErrorV2::GoodUnit)?;
+                good_keys.insert(key);
+                self.rows
+                    .handling_coefficients
+                    .push(MerchantHandlingCoefficientV3 {
+                        site_id: site.id(),
+                        good_id: good.id(),
+                        unit_id: good.unit_id(),
+                        hours_per_unit: *hours,
+                    });
+            }
+        }
+
+        Ok(())
+    }
+
+    fn finish(
+        mut self,
+        catalog: &MichiganMaterialCatalogV1,
+        owner: SectorBundleOwnerV2,
+        evidence: SectorBundleSourcesV2,
+    ) -> Result<SectorBundleV2, SectorBundleErrorV2> {
+        self.rows.inventory = self
+            .inventory
+            .into_iter()
+            .map(|((site_id, good_id, unit_id), quantity)| InventoryRowV1 {
+                site_id,
+                good_id,
+                unit_id,
+                quantity,
+            })
+            .collect();
+        for good in &self.goods {
+            let definition = catalog
+                .goods()
+                .iter()
+                .find(|g| g.id() == good.good_id)
+                .ok_or(SectorBundleErrorV2::GoodUnit)?;
+            self.rows
+                .freight_mass_coefficients
+                .push(FreightMassCoefficientV3 {
+                    good_id: good.good_id,
+                    unit_id: good.unit_id,
+                    grams_per_unit: definition.grams_per_unit,
+                });
+        }
+        SectorBundleV2::from_parts(
+            owner,
+            evidence,
+            self.goods.into_iter().collect(),
+            self.processes,
+            self.labor_unit,
+            &self.rows,
+        )
+    }
+}
+
+fn append_final_demand(
+    state: &mut MaterialCircuitStateV3,
+    catalog: &MichiganMaterialCatalogV1,
+) -> Result<(), SectorBundleErrorV2> {
+    let mut principals = BTreeSet::new();
+    for demand in catalog.final_demands() {
+        let site = catalog
+            .site(&demand.retailer_site_key)
+            .ok_or(SectorBundleErrorV2::Owner)?;
+        let good = catalog
+            .good(&demand.good_key)
+            .ok_or(SectorBundleErrorV2::GoodUnit)?;
+        if principals.insert(demand.principal_id()) {
+            state.final_demand_principals.push(FinalDemandPrincipalV3 {
+                id: demand.principal_id(),
+                county_geoid: county_bytes(&demand.county_geoid)?,
+            });
+        }
+        state.final_demand_orders.push(FinalDemandOrderV3 {
+            order_id: demand.order_id(),
+            retailer_site_id: site.id(),
+            demand_principal_id: demand.principal_id(),
+            good_id: good.id(),
+            unit_id: good.unit_id(),
+            ordered: demand.ordered_quantity,
+            fulfilled: 0,
+        });
+    }
+    Ok(())
 }

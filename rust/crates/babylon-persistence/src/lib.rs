@@ -192,9 +192,9 @@ pub use territory_county_map::{
 };
 
 mod production_evidence;
-pub use production_evidence::ProductionEvidenceDigestV5;
+pub use production_evidence::ProductionEvidenceDigestV6;
 pub use production_projection::material_balance::{
-    CompletedMaterialBalanceV1, ProductionMaterialBalanceRowV1,
+    CompletedMaterialBalanceV2, ProductionMaterialBalanceRowV2,
 };
 pub mod production_observation;
 pub use production_observation::*;

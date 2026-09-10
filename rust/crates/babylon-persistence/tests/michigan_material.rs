@@ -1,14 +1,14 @@
 use babylon_bsl::structural_verbs::CollectingSink;
 use babylon_graph::hypergraph_store::HypergraphStore;
 use babylon_material_circuit::{
-    decode_material_circuit_state_v2, encode_material_circuit_state_v2, MaterialCircuitStateV2,
+    decode_material_circuit_state_v3, encode_material_circuit_state_v3, MaterialCircuitStateV3,
 };
 use babylon_persistence::michigan_content::MichiganContentPresetV1;
 use babylon_persistence::michigan_material::{MichiganDeliveryPresetV1, MichiganMaterialSiteV1};
 use babylon_practice_contract::ordered_action_v1::OrderedPracticeActionBatchV1;
 use babylon_tick::{
     material_replay::{MaterialReplaySessionV3, PreparedMaterialTickV3},
-    material_world::{decode_material_receipts_v3, MaterialTickReceiptsV3},
+    material_world::{decode_material_receipts_v4, MaterialTickReceiptsV4},
     replay_session::ReplayCommitDispositionV1,
 };
 
@@ -39,9 +39,9 @@ fn commit(session: &mut Session, candidate: PreparedMaterialTickV3<HypergraphSto
         .unwrap();
 }
 
-fn advance(session: &mut Session) -> MaterialTickReceiptsV3 {
+fn advance(session: &mut Session) -> MaterialTickReceiptsV4 {
     let candidate = prepare(session);
-    let receipts = decode_material_receipts_v3(candidate.material().receipt_bytes()).unwrap();
+    let receipts = decode_material_receipts_v4(candidate.material().receipt_bytes()).unwrap();
     commit(session, candidate);
     receipts
 }
@@ -49,9 +49,9 @@ fn advance(session: &mut Session) -> MaterialTickReceiptsV3 {
 #[test]
 fn shared_freight_capacity_changes_two_chains_through_the_authoritative_session() {
     for (name, sheet, meal, panels) in [
-        ("michigan-material-shared-freight-ample-v6", 320, 80, 32),
+        ("michigan-material-shared-freight-ample-v7", 320, 80, 32),
         (
-            "michigan-material-shared-freight-constrained-v6",
+            "michigan-material-shared-freight-constrained-v7",
             120,
             40,
             12,
@@ -134,14 +134,16 @@ fn shared_freight_has_one_capacity_principal_and_competing_order_demand() {
         .iter()
         .find(|r| r.key == "sheet-transfer")
         .unwrap();
-    let shared = catalog
-        .corridor_for_route(sheet, MichiganDeliveryPresetV1::SharedFreightAmple)
+    let shared = ample
+        .route_stage_capacities
+        .iter()
+        .find(|row| row.route_id == sheet.id())
         .unwrap()
-        .id();
+        .corridor_id;
     for row in &mut constrained.corridor_capacities {
         if row.corridor_id == shared {
-            assert_eq!(row.available, 160);
-            row.available = 800;
+            assert_eq!(row.available_grams, 160_000);
+            row.available_grams = 800_000;
         }
     }
     assert_eq!(
@@ -184,7 +186,7 @@ fn shared_freight_has_one_capacity_principal_and_competing_order_demand() {
     assert_material_conserved(session.material().state());
 }
 
-fn inventory(state: &MaterialCircuitStateV2, site: &str, good: &str) -> u64 {
+fn inventory(state: &MaterialCircuitStateV3, site: &str, good: &str) -> u64 {
     let catalog = crate::test_support::catalog();
     let site_id = catalog.site(site).unwrap().id();
     let good_id = catalog.good(good).unwrap().id();
@@ -195,7 +197,7 @@ fn inventory(state: &MaterialCircuitStateV2, site: &str, good: &str) -> u64 {
         .map_or(0, |row| row.quantity)
 }
 
-fn assert_material_conserved(state: &MaterialCircuitStateV2) {
+fn assert_material_conserved(state: &MaterialCircuitStateV3) {
     let catalog = crate::test_support::catalog();
     let mut metal = 0;
     let mut food = 0;
@@ -236,8 +238,8 @@ fn assert_material_conserved(state: &MaterialCircuitStateV2) {
 }
 
 fn assert_second_period_delivery_delay(
-    standard: &MaterialCircuitStateV2,
-    delayed: &MaterialCircuitStateV2,
+    standard: &MaterialCircuitStateV3,
+    delayed: &MaterialCircuitStateV3,
 ) {
     assert_eq!(inventory(standard, "macomb-fabricated-metal", "sheet"), 320);
     assert_eq!(inventory(delayed, "macomb-fabricated-metal", "sheet"), 0);
@@ -288,15 +290,15 @@ fn presets_share_exact_setup_except_the_single_declared_delay() {
         .find(|route| route.key == "sheet-transfer")
         .unwrap();
     let changed = delayed
-        .route_legs
+        .route_stages
         .iter_mut()
         .find(|row| row.route_id == route.id())
         .unwrap();
     assert_eq!(changed.travel_periods, 3);
     changed.travel_periods = 1;
     assert_eq!(
-        encode_material_circuit_state_v2(&standard).unwrap(),
-        encode_material_circuit_state_v2(&delayed).unwrap()
+        encode_material_circuit_state_v3(&standard).unwrap(),
+        encode_material_circuit_state_v3(&delayed).unwrap()
     );
     assert_eq!(standard.period, 1);
     assert_eq!(standard.capacities.len(), 5 * 16);
@@ -327,7 +329,7 @@ fn presets_share_exact_setup_except_the_single_declared_delay() {
             .staffing()
             .pools
             .iter()
-            .find(|pool| pool.process_key == key)
+            .find(|pool| pool.process_keys.iter().any(|process| process == key))
             .unwrap();
         assert_eq!(row.available, seed.employed * 160);
     }
@@ -342,10 +344,10 @@ fn presets_share_exact_setup_except_the_single_declared_delay() {
 }
 
 fn assert_food_disconnected(
-    standard: &MaterialCircuitStateV2,
-    a: &MaterialTickReceiptsV3,
-    delayed: &MaterialCircuitStateV2,
-    b: &MaterialTickReceiptsV3,
+    standard: &MaterialCircuitStateV3,
+    a: &MaterialTickReceiptsV4,
+    delayed: &MaterialCircuitStateV3,
+    b: &MaterialTickReceiptsV4,
 ) {
     let catalog = crate::test_support::catalog();
     let food_sites: Vec<_> = catalog
@@ -487,9 +489,9 @@ fn every_dispatch_transit_arrival_restart_reproduces_exact_continuation() {
                 )
                 .unwrap();
             let encoded =
-                encode_material_circuit_state_v2(candidate.material().register().state()).unwrap();
+                encode_material_circuit_state_v3(candidate.material().register().state()).unwrap();
             assert_eq!(
-                decode_material_circuit_state_v2(&encoded).unwrap(),
+                decode_material_circuit_state_v3(&encoded).unwrap(),
                 *restored.material().state()
             );
             commit(&mut uninterrupted, candidate);

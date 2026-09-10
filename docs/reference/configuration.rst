@@ -40,45 +40,54 @@ capabilities.
 The launcher accepts ``--campaign UUID``, ``--new``, ``--preset``,
 ``--defines PATH``, and ``--no-build``. Its ``--help`` output owns the exact
 combinations. A new campaign
-preserves existing worlds. V6 admission refuses V1 through V5 campaign content
+preserves existing worlds. V7 admission refuses older Michigan campaign content
 and retains those saves without rewriting them.
 
-New Campaign offers Standard, Delayed, Shared freight — ample, and Shared
-freight — constrained. The launcher accepts ``--preset standard``,
-``delayed``, ``shared-freight-ample``, or ``shared-freight-constrained``.
+Regional campaign selections remain Standard, Delayed, Shared freight — ample,
+and Shared freight — constrained. The launcher accepts ``--preset standard``,
+``delayed``, ``shared-freight-ample``, and ``shared-freight-constrained``, plus
+the four statewide labels described below. Accepted labels do not certify
+qualified statewide content.
 
 Authored campaign values
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-``content/scenarios/michigan/defines.toml`` contains 58 required numeric fields:
-The campaign has three fields and staffing has one. Each of five
-processes has eight fields. Each of three independent corridors has one field,
-each route has three, and the shared freight pool has two.
+``content/scenarios/michigan/defines.toml`` uses definitions schema V3.
+It contains the regional recipes and routes plus statewide commodity,
+template, transport, and merchant tables. Operating quantities have the
+``Designed`` evidence class. Observed QCEW establishments qualify participation.
+Observed jobs and wages do not supply physical quantities or modeled workers.
 
-All fields have the ``Designed`` evidence class.
-Observed QCEW jobs and wages do not supply these quantities. The parser rejects
-unknown or missing fields and tables, fractional or negative values, files over
-32,768 bytes, invalid resources, and arithmetic overflow.
+The parser rejects unknown or missing fields and tables, fractional or
+negative integers, files over 32,768 bytes, invalid units, and arithmetic
+overflow. ``--defines PATH`` selects the numeric source for New. Canonical
+numeric values ignore comments, whitespace, and table order. Source and
+qualification pins also contribute to a statewide campaign's identity.
 
-The launcher accepts ``--defines /absolute/path/to/defines.toml``. Each New
-request validates that file and stores canonical values in the campaign
-foundation. Comments, whitespace, and table order do not change their identity.
+``MichiganCapturedContentV2`` retains normalized owners, recipes, stocks,
+workforce, orders, explicit preset overrides, and observed source cells. It
+also retains the generated graph scenario and observed definitions. Statewide
+capture includes selected physical paths, deduplicated edge geometry, county
+terminal attachments, vehicle profile, and network source identity. It excludes
+the full routing matrix and unselected road graph.
 
-The stored envelope also captures observed definitions, sector bundles, and
-staffing. Open verifies and reconstructs this saved authority without reading
-the mutable TOML file. Even a value unused by the selected delivery preset
-remains part of the stored identity.
+``SectorBundleV2`` and ``StoredSectorBundleDefinesV4`` keep executable rows
+and staffing authority around that capture. The captured-content and total
+definitions limits are each 64 MiB. The generated graph source has a 1 MiB
+limit. These are admission ceilings, not measured full-state performance
+claims. Open reconstructs admitted saved authority without rereading changed
+TOML, QCEW, or road files and without rerouting. Admission refuses unsupported
+versions without deleting their stored data.
 
-The inventory below groups repeated fields. Process values follow source order:
-sheet rolling, panel forming, subassembly making, meal milling, meal packaging.
-Corridor and route values follow sheet transfer, panel transfer, food transfer.
-Each ``process.*`` row covers five fields. Each ``corridor.*`` or ``route.*``
-row covers three.
+Regional parameters
+^^^^^^^^^^^^^^^^^^^
 
-``Consequential`` denotes a live causal consumer within the supported horizon.
-It does not assert that every valid change changes output.
-``Dormant`` denotes a value that the selected run does not consume. No field
-is redundant across all supported campaigns according to the current audit.
+Process values below follow this order: sheet rolling, panel forming,
+subassembly making, meal milling, meal packaging. Corridor and route values
+follow sheet transfer, panel transfer, food transfer. ``Consequential`` means
+a parameter has a causal consumer. It does not promise that every valid
+change changes output. ``Dormant`` means the selected preset does not consume
+that value.
 
 .. list-table:: Michigan parameter inventory. Evidence class: Designed
    :header-rows: 1
@@ -89,8 +98,8 @@ is redundant across all supported campaigns according to the current audit.
      - Constraints and four-week conversion
      - Consumer and consequence
    * - ``SCHEMA_VERSION``
-     - ``2``. Format version
-     - Exactly ``2``
+     - ``3``. Format version
+     - Exactly ``3``
      - Canonical content admission. Fixed contract
    * - ``TICK_DURATION_DAYS``
      - ``28`` days
@@ -99,7 +108,7 @@ is redundant across all supported campaigns according to the current audit.
    * - ``HORIZON_PERIODS``
      - ``16`` four-week periods
      - Integer ``1..=16``. Unscaled
-     - Session stop, inventory bounds, Production horizon. Consequential
+     - Session stop, inventory bounds, Circuit horizon. Consequential
    * - ``staffing.WORK_HOURS_PER_PERSON_WEEK``
      - ``40`` hours/person/week
      - Integer ``1..=168``. Becomes ``160`` hours/person/period
@@ -146,15 +155,27 @@ is redundant across all supported campaigns according to the current audit.
    * - ``route.*.TRAVEL_PERIODS``
      - ``1, 1, 1`` four-week periods
      - Positive 16-bit unsigned integer. Unscaled
-     - Route legs for Standard and both shared presets. Dormant in Delayed
+     - Timed stages for Standard and both shared presets. Dormant in Delayed
    * - ``route.*.DELAYED_TRAVEL_PERIODS``
      - ``3, 1, 1`` four-week periods
      - 16-bit unsigned integer, at least normal travel. Unscaled
-     - Route legs for Delayed. Dormant in the other presets
+     - Timed stages for Delayed. Dormant in the other presets
    * - ``route.*.ORDERED_UNITS``
      - ``600 kg, 60 panels, 200 kg`` total
      - Positive. Unscaled. Joint buyer-inventory bound
      - Initial orders, backlog and shipment totals. Consequential
+   * - ``regional_mass.KILOGRAM_GRAMS_PER_UNIT``
+     - ``1000`` grams/kg
+     - Exactly ``1000``. ``EVIDENCE_CLASS = "Designed"``
+     - Converts kilogram freight to the shared gram principal
+   * - ``regional_mass.PANEL_GRAMS_PER_UNIT``
+     - ``10000`` grams/panel
+     - Positive exact integer. Designed item mass
+     - Converts panel freight while preserving its native throughput
+   * - ``regional_mass.SUBASSEMBLY_GRAMS_PER_UNIT``
+     - ``20000`` grams/subassembly
+     - Positive exact integer. Designed item mass
+     - Explicit mass for the native subassembly unit
    * - ``shared_freight.AMPLE_UNITS_PER_WEEK``
      - ``200 kg`` per week
      - Positive, at least constrained capacity. Becomes ``800 kg`` per period
@@ -164,47 +185,195 @@ is redundant across all supported campaigns according to the current audit.
      - Positive, no greater than ample capacity. Becomes ``160 kg`` per period
      - One shared sheet and meal budget in Shared freight — constrained
 
-Only weekly work hours, process throughput, and corridor throughput multiply
-by four. The authored stock, plans, people, recipes, travel periods, and order
-totals keep their units. ``michigan_defines`` owns typed validation.
-``michigan_material`` compiles the values. ``sector_bundle`` supplies the
-stored foundation and material rows. Rust material production, logistics,
-planning, and staffing produce the receipts consumed by the Production view.
+Weekly work hours and batch rates multiply by four once. Regional corridor
+rates also multiply by four, then by the good's grams per native unit. Stocks,
+plans, people, recipes, travel periods, and finite order totals keep their
+native units. ``michigan_defines`` validates the values.
+``michigan_material`` normalizes them. ``sector_bundle`` compiles the one
+current material representation.
 
-Opening plans must fit capacity, input stock, and employed labor together.
-Workforce totals, total available hours, and maximal staffing requests must fit
-the exact graph-integer bound, ``2^53``. Inventory checks bound opening stock,
-largest horizon output, and incoming order totals per site and good within
-``u64``. Travel can exceed the campaign horizon. Admission does not promise
-that goods will arrive before the stop.
+Regional opening plans must fit capacity, input stock, and employed labor
+together. Workforce totals, available hours, and maximal staffing requests
+must fit the exact graph-integer bound, ``2^53``. Inventory admission bounds
+opening stock, horizon output, and incoming orders per site and good within
+``u64``, including mass conversion. Travel can exceed the campaign horizon.
+Admission does not promise arrival before the stop.
 
-All five baseline labor budgets equal full-capacity labor demand:
-``3200, 640, 640, 160, 320`` hours/period. These constraints interact.
-Raising throughput alone need not raise production. Extra opening stock
-does not create a period-1 commitment when its opening plan remains zero.
+The five regional labor budgets remain ``3200, 640, 640, 160, 320`` hours per
+period. Extra opening stock does not create a period-1 commitment when its
+opening plan is zero. Standard and Delayed keep independent capacities.
+The shared presets keep one Designed sheet-and-meal service of 800 or
+160 kg per period, represented as 800,000 or 160,000 grams. Panel freight
+retains 32 panels per period, represented as 320,000 grams. The service does
+not identify a physical road or a Detroit–Windsor crossing.
 
-In Standard and Delayed, with other baseline values fixed, raising process or
-corridor capacity does not raise output. Milling can demand more labor while its one-person
-pool still limits production. Added reserves change the reserve account, but
-baseline requests never exceed the workforce already supplied. These are
-conditional results, not reasons to remove the underlying fields.
+``topology.json`` supplies regional identities and relationships. Numeric
+values remain in TOML. The compiler emits each active capacity principal and
+period budget once. Timed stages can share principals. The allocator floors
+proportional shares, dispatches the smallest allowed grant, debits actual movement,
+and leaves unused residuals. Capacity reservations remain distinct from
+physical arrivals.
 
-Equal panel and food travel values in Standard and Delayed do not make their fields
-redundant. The old Python ``defines.yaml`` catalog remains in Git history
-and is not a source for current play.
+See :doc:`/how-to/debug-simulation-outcomes` for the regional comparisons.
 
-``topology.json`` links route legs to capacity principals separately from
-their numeric orders and travel times. In both shared presets, sheet metal and
-milled meal compete for one kilogram pool. Panel freight has its own
-32-panel period budget. The regional service has the ``Designed`` evidence
-class. It does not identify a road or the Detroit–Windsor crossing. The compiler
-emits each corridor, unit, and period budget once, even when two routes use it.
+Statewide authoring
+^^^^^^^^^^^^^^^^^^^
 
-The allocator weights outstanding orders, floors each proportional share,
-and then limits dispatch by available supplier stock. It does not redistribute
-unused shares. A reservation consumes a capacity budget. The shipment arrives
-after its authored travel time. See :doc:`/how-to/debug-simulation-outcomes`
-for the shared-capacity and delivery-time comparisons.
+The pinned commodity roster qualifies 397 county-sector owners: 83 agriculture
+and forestry, 65 extractive mining, 83 manufacturing, 83 wholesale, and 83
+retail. The other county-sector cells remain observed reference context.
+The roster excludes support-only mining from executable production. Suppressed
+jobs and wage metrics remain absent. Positive establishments still qualify
+an eligible template.
+
+The current catalog has 23 goods and 16 productive templates. Upstream
+templates supply grain, animal products, logs, hydrocarbon feedstock, metal
+ore, and mineral feedstock. Other templates produce prepared food, packaged
+beverages, wood products, paper packaging, and industrial chemicals. Metal
+stock, metal parts, machinery, electrical goods, and household wares complete
+the catalog.
+
+Recipes consume finite opening resources without regeneration.
+Templates assigned to one owner share its inventory and workforce. Each
+recipe keeps its typed inputs.
+
+.. list-table:: Statewide table contracts. Evidence class: Designed
+   :header-rows: 1
+   :widths: 35 65
+
+   * - Table and fields
+     - Meaning and current authored values
+   * - ``statewide.FINITE_ORDER_PERIODS``
+     - ``4`` nominal production periods of finite orders. Integer
+       ``1..=HORIZON_PERIODS``. Orders do not recur
+   * - ``statewide.TERMINAL_ATTACHMENT_LIMIT_METERS``
+     - ``50000`` meters. Positive limit for a Designed county
+       terminal, not a factory location
+   * - ``transport.ROAD_TRAVEL_PERIODS``
+     - Exactly ``1`` period per road journey stage, regardless of the number
+       of physical edges in its captured path
+   * - ``transport.TRUCK_GROSS_WEIGHT_KG``, ``TRUCK_HEIGHT_MM``,
+       ``TRUCK_WIDTH_MM``, ``TRUCK_LENGTH_MM``
+     - ``40000`` kg, ``4000`` mm, ``2550`` mm, ``16500`` mm. Positive routing
+       profile values. They do not set economic capacity
+   * - ``transport.DEFAULT_MAXHEIGHT_MM``
+     - ``4000`` mm. Designed height bound for OSM ``maxheight=default``.
+       This bound does not measure physical clearance or economic capacity
+   * - ``transport.ROAD_CAPACITY_GRAMS_PER_PERIOD``
+     - ``100000000`` grams per shared capacity principal per period.
+       Capacity groups and interventions need physical qualification
+   * - ``transport.EXTRACTION_BUFFER_DEGREES_E7``
+     - ``100000``, or 0.01 angular degree. A clipping buffer, not meters
+   * - ``merchant.HANDLING_GRAMS_PER_PERIOD``
+     - ``5000000`` grams per merchant per period. Separate from road capacity
+   * - ``merchant.LABOR_HOURS_PER_KG``, ``LABOR_HOURS_PER_ITEM``
+     - ``1`` hour/kg and ``10`` hours/item. Positive handling coefficients
+   * - ``merchant.EMPLOYED_PEOPLE``, ``RESERVE_PEOPLE``
+     - ``20`` employed and ``4`` reserve. Nonnegative integers with a positive,
+       exactly representable total workforce
+   * - ``commodity.<good>.UNIT``, ``GRAMS_PER_UNIT``, ``DISPOSITION``
+     - Native ``kg`` or ``item``. Positive exact mass, with ``kg`` fixed at
+       1000 grams. Disposition ``finite_opening`` or ``traded``
+   * - ``template.<family>.OUTPUT_GOOD``, ``OUTPUT_UNITS_PER_BATCH``
+     - One traded output matching the family key, with a positive native-unit
+       quantity per batch
+   * - ``template.<family>.INPUT_UNITS_PER_BATCH``, ``OPENING_INPUT_UNITS``
+     - Maps keyed by the same 1 through 16 goods. Recipe coefficients are
+       positive. Finite opening stocks are nonnegative
+   * - ``template.<family>.BATCHES_PER_WEEK``, ``LABOR_HOURS_PER_BATCH``
+     - Positive batch and labor rates. Current templates use four batches
+       per week. Their recipes and labor coefficients remain per batch
+   * - ``template.<family>.EMPLOYED_PEOPLE``, ``RESERVE_PEOPLE``
+     - Current primary templates seed eight employed and four reserve people.
+       An added process uses the owner's existing pool
+
+``statewide``, ``transport``, ``merchant``, and ``regional_mass`` must declare
+``EVIDENCE_CLASS = "Designed"``. Goods keep their native identity through
+production, wholesale, retail, and final fulfillment. Merchant handling
+consumes labor and mass capacity without manufacturing a new good. Local
+inter-owner transfers have no road stage or transit lot. Local retail
+fulfillment completes a finite end-buyer order without creating household
+stock, consumption, payment, or revenue.
+
+The Designed road-admission policy models freight between county aggregates
+for the game. ``ROAD_CLASSES`` admits ``motorway``, ``trunk``, ``primary``,
+``secondary``, ``tertiary``, and their ``_link`` classes. It excludes
+``residential``, ``service``, ``living_street``, and ``unclassified`` roads.
+Admitted paths still follow original OSM node connectivity, direction, access,
+and turn restrictions.
+
+An OSM ``maxheight=default`` record uses the captured Designed default height
+bound. Explicit physical limits and access restrictions still apply. Other
+height values without numbers remain excluded. Both Mackinac Bridge carriageways
+and their toll-plaza approaches have original-source regression fixtures.
+
+County terminals and their attachments remain Designed. They do not identify
+factories or add physical road connections. Disconnected supply refuses
+qualification. ``contracts/michigan_road_network_v1.yaml`` defines this scope.
+The admission policy alone does not certify a qualified statewide network.
+
+``[statewide.EXPERIMENT]`` supplies the qualified comparison changes. Regional
+authoring can omit the table. Statewide New refuses it when absent, including
+for the baseline selection. The admitted Mackinac crossing uses a Designed
+shared freight service across both carriageways. Other selected road edges
+share a service within each connected component of an OSM route reference,
+road name, or unnamed way. These services do not claim observed traffic
+capacity.
+
+The baseline provides 100,000 kg per service per 28-day period. The freight
+intervention changes only ``mackinac-bridge-freight`` to 1,000 kg. The input
+intervention changes only the Mackinac manufacturing process
+``26097-31-33-prepared_food`` from 160 kg to 80 kg of opening paper packaging.
+The combined preset applies both changes.
+
+.. list-table:: Statewide experiment fields
+   :header-rows: 1
+   :widths: 40 60
+
+   * - Field
+     - Admission constraint
+   * - ``FREIGHT_CAPACITY_KEY``
+     - A captured freight capacity identity
+   * - ``CONSTRAINED_GRAMS_PER_PERIOD``
+     - Positive grams below ``transport.ROAD_CAPACITY_GRAMS_PER_PERIOD``
+   * - ``FOOD_PROCESS_KEY``
+     - The captured process whose opening packaging stock changes
+   * - ``PACKAGING_GOOD_KEY``
+     - Exactly ``paper_packaging``
+   * - ``SHORTAGE_OPENING_UNITS``
+     - Nonnegative native units below the prepared-food template's opening
+       paper-packaging stock
+
+Statewide New reads three files beside the selected ``defines.toml``:
+``statewide-sources.json``, ``statewide-qualification.json.gz``, and
+``statewide-physical.json.gz``. The source manifest uses schema
+``MichiganStatewideSourcesV1``. Its ``defines_sha256`` pins the raw TOML bytes,
+including formatting. ``qualification_sha256`` and ``physical_network_sha256``
+pin the compressed artifact bytes. The physical terminal source's
+``defines_sha256`` must match the same TOML digest.
+
+The manifest limit is 4096 bytes. Each compressed artifact and its decoded
+content must fit 64 MiB. Missing files, mismatched hashes, invalid content,
+or absent interventions refuse creation. Open uses the captured content and
+does not enter this source loader.
+
+The shipped physical artifact has a separate 2 MiB compressed publication
+limit. The current capture uses 1,176,826 compressed bytes and 6,253,472 decoded
+bytes. Its 1,245 transport services and 166 merchant handling services produce
+22,576 opening period budgets across the 16-period horizon. The material
+runtime permits at most 65,536 rows per family and a 64 MiB register. The
+initial statewide register uses 2,170,588 bytes. Read these as representation
+bounds, separate from Designed economic capacities.
+
+The four statewide protocol selections are ``statewide-baseline``,
+``statewide-freight-constraint``, ``statewide-packaging-shortage``, and
+``statewide-both``. Their content identifiers end in ``-v7``. These selections
+use the same qualified physical paths, finite orders and production parameters.
+The launcher accepts all eight labels. Statewide creation requires the pinned
+source siblings and explicit interventions. The source-backed engine experiment
+establishes the freight and packaging effects; PostgreSQL, hosted, native and
+Director acceptance require their separate evidence. ADR260 defines that
+acceptance boundary.
 
 Simulation Interval
 ~~~~~~~~~~~~~~~~~~~
@@ -229,7 +398,7 @@ are defined in ``babylon_kernel::clock`` and are not runtime overrides:
      - 13
      - Periods in a modeled 364-day year
 
-V6 Michigan content validates ``TICK_DURATION_DAYS = 28`` in its authored
+V7 Michigan content validates ``TICK_DURATION_DAYS = 28`` in its authored
 parameters and stores the duration in canonical foundation definitions.
 Admission refuses a different duration or
 an older weekly preset. Observed source units, including QCEW weekly wages,

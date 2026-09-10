@@ -1,0 +1,162 @@
+version: 1
+name: Michigan Road Network V1
+authority:
+  topology: pinned OpenStreetMap node references, ways, and turn restrictions
+  producer: tools/michigan_road_network_extract_v1.py
+  compiler_and_reference_router: tools/michigan_road_network_v1.py
+  economic_scope: Michigan commodity production and circulation
+  external_extent_role: transport only
+  road_admission: Designed regional freight network; motorway, trunk, primary, secondary, tertiary and their link
+    classes
+  local_roads: residential, service, living_street and unclassified roads remain outside this aggregate freight model
+  county_terminal_attachment: Designed county aggregate; never a factory location claim
+  capacity: absent; road distance, lanes, and vehicle dimensions do not establish throughput
+  license: ODbL-1.0; OpenStreetMap contributors
+extraction:
+  source_manifest_fields:
+    - pbf_sha256
+    - pbf_bytes
+    - pbf_url
+    - replication_timestamp
+    - footprint_sha256
+  footprint: pinned WGS84 GeoJSON Polygon, MultiPolygon, Feature, or FeatureCollection
+  expected_extent: Michigan, Wisconsin, Illinois, Indiana, Ohio, and Ontario clipping polygons
+  buffer: explicit nonnegative integer E7 degrees, maximum 1000000
+  selection: a road way must reference at least one node covered by the buffered footprint
+  boundary: preserve selected ways whole, including original nodes outside the clipping extent
+  relations: retain restriction relations touching selected ways
+  missing_restriction_way: conservatively exclude the relation's from ways with a diagnostic
+  missing_road_node: refuse extraction
+  stream_passes:
+    - footprint nodes into task-owned SQLite spool
+    - complete touching road ways and touching restriction relations
+    - missing original way nodes outside the footprint, only when needed
+  memory: fixed Bloom prefilters and SQLite cache; no North America node-location index
+  graph_compilation_memory: proportional to the extracted regional road records
+  native_preprocessing:
+    role: optional input reduction; exact Python footprint selection and the one road compiler still judge
+    executable: osmium-tool 1.18.0, exact binary SHA-256 and full version output retained
+    bbox: buffered footprint bounds rounded outward to E7 and extended by one E7 unit on every side
+    stages:
+      - extract with complete_ways, pbf output, copied replication timestamp and fsync
+      - tags-filter admitted w/highway classes plus r/type=restriction*, retaining referenced objects and their tags
+    relations: original member references remain; complete_ways does not complete arbitrary remote relation members
+    boundary_failure: same conservative missing-restriction-way exclusion as direct extraction
+    sidecar_schema: MichiganRoadNativePreprocessingV1
+    sidecar_encoding: canonical ASCII-safe JSON, sorted keys, compact separators and one trailing newline
+    sidecar_fields:
+      - schema
+      - source (complete original verified SourceIdentity; never the filtered PBF as source authority)
+      - original_path
+      - working_directory
+      - bounds_e7
+      - native (binary path, SHA-256 and full version output)
+      - commands (exact successful argv arrays, including verbosity flags)
+      - regional (path, SHA-256 and bytes)
+      - prepared (path, SHA-256 and bytes)
+    binding: append native-preparation-sha256=<canonical sidecar SHA-256> to extraction_version
+    prepared_input_validation: original manifest and footprint pins, exact command policy, filtered PBF
+      path/hash/bytes/header
+    completed_stage_api: record_native_preparation accepts the caller's already-verified original SourceIdentity
+      and actual successful argv
+    original_rehash: once for a fresh complete CLI run; completed-stage recording and prepared-input consumption do
+      not reread the continent PBF
+    failure: no preparation manifest or graph publication; exact task-owned partial intermediates remain recoverable
+wire:
+  media_type: application/json
+  encoding: ASCII-safe UTF-8, compact separators, sorted object keys, one trailing newline
+  sha256: external digest of the complete artifact bytes, including newline
+  top_level_keys:
+    - diagnostics
+    - edges
+    - license
+    - nodes
+    - profile
+    - routing_profile_version
+    - schema_version
+    - source
+    - turn_rules
+  schema_version: 1
+  routing_profile_version: michigan-freight-routing-v1; the current access, dimensions, direction, restriction and
+    deterministic path policy
+  source:
+    pbf_sha256: lowercase SHA-256
+    pbf_bytes: positive integer
+    pbf_url: dated source URL
+    replication_timestamp: exact PBF osmosis_replication_timestamp header value
+    footprint_sha256: SHA-256 of the exact unbuffered GeoJSON bytes
+    buffer_degrees_e7: explicit integer angular buffer
+    extraction_version: extraction policy, pyosmium, Shapely, and GEOS versions
+    distance_version: algorithm, pyproj, and PROJ versions
+  profile:
+    evidence_class: Designed
+    gross_weight_kg: positive integer
+    height_mm: positive integer
+    width_mm: positive integer
+    length_mm: positive integer
+    default_maxheight_mm: positive Designed height bound used only for maxheight=default; not measured clearance
+    axle_load_kg: positive integer or null; explicit axle restrictions exclude when null
+  node:
+    fields: [id, lon_e7, lat_e7, tags, version, timestamp]
+    id: positive signed-64-bit OSM node identity
+    coordinates: integer WGS84 longitude and latitude times 10000000
+    tags: original node tags as a string map
+    order: numeric OSM node ID ascending; only retained edge endpoints
+  edge:
+    fields: [id, way_id, from_node, to_node, distance_mm, shape_e7, tags, way_version, way_timestamp]
+    id: "w{way_id}:{zero_based_start_node_position}:{zero_based_end_node_position}:{f_or_r}"
+    order: ASCII edge ID ascending
+    shape_e7: ordered [longitude_e7, latitude_e7] pairs including every original shape node
+    distance_mm: sum of each WGS84 consecutive-node geodesic in metres times 1000, rounded half up
+    distance_bounds: positive u64
+    tags: original way tags as a string map, including bridge/tunnel/layer when supplied
+  turn_rule:
+    fields: [relation_id, kind, prefix_edge_ids, next_edge_ids]
+    kind: no or only
+    order: relation_id, kind, prefix_edge_ids, next_edge_ids
+    prefix: nonempty ordered sequence of directed edge IDs
+    next: sorted unique directed edge IDs
+    "no": prohibit a next edge when the traversed edge history ends with prefix
+    only: permit only the listed next edges when history ends with prefix; empty means no continuation
+  diagnostic:
+    fields: [code, osm_type, osm_id, detail]
+    order: code, osm_type, osm_id, detail
+    effect: explicit conservative exclusion, never permission or inferred connectivity
+topology:
+  intersections: shared OSM node identity only; coordinate crossings never join
+  contraction: retain way endpoints, shared node references, barriers, and restriction via nodes
+  direction: oneway yes/no/-1 and vehicle overrides; roundabout and motorway implied one-way
+  access: hgv over motor_vehicle over vehicle over access, with directional tags
+  through_access: yes, permissive, designated, official
+  lift_gate_access: explicit allowed access permits a lift gate subject to vehicle-specific overrides; unspecified
+    or conditional permission remains excluded
+  other_barriers: retain the existing requirement for explicit vehicle, motor_vehicle, or hgv permission outside
+    no, entrance, toll_booth, and border_control
+  dimension_units: implicit metres; explicit m, cm, mm, ft, or integer feet plus decimal inches in [0, 12) written
+    as 14'0"
+  limit_comparison: exact decimal base-unit values; never round a limit up before comparing the integer vehicle
+    parameter
+  excluded_modes: ferries, proposed/construction roads, non-road highway classes
+  restricted_data: unsupported conditional access, sizes, directions, or turns fail closed
+  mass_units: metric tonnes (t or implicit), short tons (st; exactly 907.18474 kg), kilograms (kg), pounds (lbs)
+  default_height: maxheight=default uses the captured positive default_maxheight_mm; other nonnumeric values remain
+    excluded and explicit physical limits still apply
+  unit_reference: https://wiki.openstreetmap.org/wiki/Map_features/Units
+  supported_turns: no_left_turn, no_right_turn, no_straight_on, no_u_turn, no_entry, no_exit, only_left_turn,
+    only_right_turn, only_straight_on, only_u_turn
+  via: single node or ordered ways; no geometry-based turn-angle inference
+  restriction_bound: at most 256 expanded movement paths and 512 edges per relation path
+routing:
+  python_api: RoadRouter(graph).shortest_path(start_node, destination_node)
+  county_matrix_api: RoadRouter(graph).shortest_paths(start_node, destination_nodes)
+  cost: summed distance_mm, checked u64 addition
+  equal_cost: lexicographically smallest complete directed edge ID sequence
+  state: current node plus longest suffix of prior edges that prefixes any turn rule
+  rules: all matching history-suffix rules apply; no rejects listed next, only rejects unlisted next
+  via_way_only: every intermediate prefix constrains continuation, including early exits
+  start: empty restriction history; start and destination must be retained graph nodes
+  unreachable: explicit absent route
+publication:
+  failure: existing artifact bytes unchanged
+  success: fsync complete temporary file, then atomic replace in destination directory
+  compatibility: one live compiler; no implicit latest refresh, alternate route engine, or save migration

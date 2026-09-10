@@ -1,0 +1,119 @@
+meta:
+  contract: MichiganCommodityCircuitV1
+  version: 1
+  issue: PER-29
+  parent: PER-10
+  delivery: finite-representative-circuit-qualification
+
+authority:
+  classification: Designed
+  source_eligibility: MichiganCommodityRosterV1
+  source_values: Observed
+  qualification_required_for_admission: true
+  excluded:
+    - tick-execution
+    - production-or-freight-allocation
+    - physical-realization
+    - transport-topology-generation
+    - local-transfer-timing
+    - money-or-payments
+    - recurring-orders
+    - new-economic-owners
+
+inputs:
+  roster:
+    path: src/babylon/data/reference/economy/michigan_commodity_roster_mi_2024.json.gz
+    schema: MichiganCommodityRosterV1
+    owner_identity: [county_geoid, sector_code]
+    source_identity: [source_file, source_sha256]
+  authored_definitions:
+    path: content/scenarios/michigan/defines.toml
+    schema_version: 3
+    tick_duration_days: 28
+    weeks_per_period: 4
+    horizon_periods_maximum: 16
+    finite_order_periods_field: statewide.FINITE_ORDER_PERIODS
+    goods_table: commodity
+    recipes_table: template
+    units: [kg, item]
+    quantity_type: exact-nonnegative-u64
+  county_paths:
+    schema: MichiganCountyPathMatrixV1
+    encoding: gzip-json
+    maximum_uncompressed_bytes: 536870912
+    root_fields: [schema, source_pins, policy, terminals, paths, diagnostics]
+    source_pins: [atlas_sha256, atlas_pin_sha256, graph_sha256, defines_sha256]
+    row_fields: [source_county_geoid, destination_county_geoid, path]
+    reachable_path_fields: [distance_mm, edge_ids]
+    edge_ids: ordered-nonempty-source-edge-identifiers-for-nonlocal-paths
+    direction: source-to-destination-never-inferred-from-reverse
+    coverage: every-ordered-owner-county-pair-exactly-once
+    disconnected: explicit-JSON-null
+    same_county: distance-zero-and-empty-edge-list
+    missing_pair: error
+    physical_qualification: supplied-upstream-not-reconstructed-here
+
+process_selection:
+  initial: one-primary-family-per-producer-owner
+  additional_owner_creation: forbidden
+  input_scope: traded-inputs-only-finite-opening-resources-need-no-supplier
+  output_identity: one-representative-family-per-traded-good
+  uncovered: enrolled-buyer-process-has-no-reachable-enrolled-supplier-for-input-good
+  closure_order: input-good-ascending-repeat-until-no-family-is-added
+  eligible_candidates: existing-producer-owners-with-qualified-alternative-family
+  candidate_rank:
+    - greatest-number-of-currently-uncovered-buyers-reachable
+    - least-summed-directed-distance-to-those-reachable-buyers
+    - county-geoid-ascending
+    - sector-code-ascending
+  disconnected_distance: never-zero-and-never-included-in-a-reachable-sum
+  completion_stop: monotone-enrollment-bounded-by-existing-owner-family-eligibility
+  absent_eligible_family: family_source_coverage-error
+  unreachable_eligible_family: disconnected_input-diagnostic
+  process_identity: [county_geoid, sector_code, family]
+  process_source_identity: [source_industry_code, source_file, source_sha256]
+
+order_selection:
+  producer_input_supplier_rank:
+    - least-directed-distance
+    - supplier-county-geoid-ascending
+    - supplier-sector-code-ascending
+    - supplier-family-ascending
+  producer_input_units: input-coefficient-times-batches-per-week-times-four-weeks-times-finite-order-periods
+  producer_merchant_units: output-units-per-batch-times-batches-per-week-times-four-weeks-times-finite-order-periods
+  producer_outbound: each-enrolled-process-orders-its-nominal-output-to-nearest-reachable-wholesaler
+  uncovered_wholesaler: nearest-reachable-producer-process-nominal-output-order
+  wholesale_retail_destination: nearest-reachable-retailer-then-county-sector-identity
+  wholesale_resale_units: finite-requested-purchases-of-each-good
+  uncovered_retailer: nearest-reachable-wholesaler-with-finite-purchase-assortment
+  local_preference: zero-distance-local-relationship-wins-before-remote-county-identity
+  local_relationship: local-true-distance-zero-empty-edge-list-no-runtime-timing-decision
+  physical_disconnection: diagnostic-without-an-order-or-invented-path
+  quantities: positive-native-units-not-grams-or-realized-output
+  capacity: requested-orders-may-compete-or-exceed-available-output-no-capacity-is-reserved-here
+  overflow: error
+  coalescing_identity:
+    - supplier_county_geoid
+    - supplier_sector_code
+    - buyer_county_geoid
+    - buyer_sector_code
+    - good
+    - unit
+  coalescing: sum-requested-units-retain-sorted-buyer-families-and-purposes
+  conflicting_path_for_same_relationship: error
+
+retail_final_demand:
+  identity: [county_geoid, sector_code, good, unit]
+  units: sum-finite-requested-retail-incoming-units
+  fields: [county_geoid, sector_code, good, unit, units]
+  destination: existing-retailer-county
+  physical_route_or_lot: absent
+  fulfillment: future-runtime-uses-available-local-retail-stock
+
+output:
+  schema: MichiganCommodityCircuitV1
+  ordering: stable-owner-process-and-relationship-identities
+  diagnostics: explicit-and-qualification-false-until-resolved
+  cli_source_pins: [defines_sha256, roster_sha256, paths_sha256]
+  cli_output: canonical-JSON-with-final-newline
+  cli_disconnected_exit: 1-with-diagnostic-report

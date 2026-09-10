@@ -1,0 +1,576 @@
+{
+  "extracted_spool_sha256": "cb5bbada3d09c571f0f1eb6d3657c16ac317d0a8fe9068310ce4d6f9f5ddf70b",
+  "license": "ODbL-1.0; OpenStreetMap contributors",
+  "nodes": [
+    {
+      "id": 184553570,
+      "lat_e7": 471231324,
+      "lon_e7": -885739164,
+      "tags": {
+        "access": "yes",
+        "barrier": "lift_gate"
+      },
+      "timestamp": "2023-12-25 11:16:14+00:00",
+      "version": 10
+    },
+    {
+      "id": 184553584,
+      "lat_e7": 471234580,
+      "lon_e7": -885739975,
+      "tags": {},
+      "timestamp": "2023-12-25 11:16:14+00:00",
+      "version": 10
+    },
+    {
+      "id": 184553587,
+      "lat_e7": 471246015,
+      "lon_e7": -885743684,
+      "tags": {
+        "access": "yes",
+        "barrier": "lift_gate"
+      },
+      "timestamp": "2023-12-25 11:16:14+00:00",
+      "version": 9
+    },
+    {
+      "id": 184563120,
+      "lat_e7": 471221224,
+      "lon_e7": -885736646,
+      "tags": {},
+      "timestamp": "2023-01-16 05:25:04+00:00",
+      "version": 5
+    },
+    {
+      "id": 2304478674,
+      "lat_e7": 471253964,
+      "lon_e7": -885744155,
+      "tags": {},
+      "timestamp": "2023-01-16 05:25:04+00:00",
+      "version": 2
+    },
+    {
+      "id": 2304478679,
+      "lat_e7": 471256568,
+      "lon_e7": -885744550,
+      "tags": {},
+      "timestamp": "2023-01-16 04:47:50+00:00",
+      "version": 4
+    },
+    {
+      "id": 2304478682,
+      "lat_e7": 471242619,
+      "lon_e7": -885741816,
+      "tags": {},
+      "timestamp": "2023-01-16 07:08:04+00:00",
+      "version": 6
+    },
+    {
+      "id": 2305812301,
+      "lat_e7": 471218061,
+      "lon_e7": -885737671,
+      "tags": {},
+      "timestamp": "2023-01-16 05:25:04+00:00",
+      "version": 2
+    },
+    {
+      "id": 2305812305,
+      "lat_e7": 471218968,
+      "lon_e7": -885737353,
+      "tags": {},
+      "timestamp": "2023-12-25 11:16:14+00:00",
+      "version": 3
+    },
+    {
+      "id": 2305812311,
+      "lat_e7": 471218429,
+      "lon_e7": -885737483,
+      "tags": {},
+      "timestamp": "2023-01-16 05:25:04+00:00",
+      "version": 2
+    },
+    {
+      "id": 2305812312,
+      "lat_e7": 471254312,
+      "lon_e7": -885745439,
+      "tags": {},
+      "timestamp": "2023-12-25 11:16:14+00:00",
+      "version": 2
+    },
+    {
+      "id": 2305812314,
+      "lat_e7": 471242500,
+      "lon_e7": -885742963,
+      "tags": {},
+      "timestamp": "2023-12-25 11:16:14+00:00",
+      "version": 6
+    },
+    {
+      "id": 2305812315,
+      "lat_e7": 471221094,
+      "lon_e7": -885737755,
+      "tags": {},
+      "timestamp": "2023-01-16 05:25:04+00:00",
+      "version": 3
+    },
+    {
+      "id": 2305812317,
+      "lat_e7": 471215881,
+      "lon_e7": -885742177,
+      "tags": {},
+      "timestamp": "2014-07-11 14:20:43+00:00",
+      "version": 3
+    },
+    {
+      "id": 2305812320,
+      "lat_e7": 471255709,
+      "lon_e7": -885746015,
+      "tags": {},
+      "timestamp": "2023-12-25 11:16:14+00:00",
+      "version": 2
+    },
+    {
+      "id": 2305812322,
+      "lat_e7": 471234480,
+      "lon_e7": -885741175,
+      "tags": {},
+      "timestamp": "2023-12-25 11:16:14+00:00",
+      "version": 6
+    },
+    {
+      "id": 2305812327,
+      "lat_e7": 471256388,
+      "lon_e7": -885746460,
+      "tags": {},
+      "timestamp": "2023-12-25 11:16:14+00:00",
+      "version": 4
+    },
+    {
+      "id": 2305812328,
+      "lat_e7": 471217581,
+      "lon_e7": -885738023,
+      "tags": {},
+      "timestamp": "2023-12-25 11:16:14+00:00",
+      "version": 4
+    },
+    {
+      "id": 2854081926,
+      "lat_e7": 471217188,
+      "lon_e7": -885738442,
+      "tags": {},
+      "timestamp": "2023-12-25 11:16:14+00:00",
+      "version": 3
+    },
+    {
+      "id": 2854081955,
+      "lat_e7": 471256059,
+      "lon_e7": -885746258,
+      "tags": {},
+      "timestamp": "2023-12-25 11:16:14+00:00",
+      "version": 2
+    },
+    {
+      "id": 2854081959,
+      "lat_e7": 471255244,
+      "lon_e7": -885745759,
+      "tags": {},
+      "timestamp": "2014-05-12 22:24:13+00:00",
+      "version": 1
+    },
+    {
+      "id": 2854081961,
+      "lat_e7": 471216655,
+      "lon_e7": -885739204,
+      "tags": {},
+      "timestamp": "2014-07-11 14:20:43+00:00",
+      "version": 2
+    },
+    {
+      "id": 2854081964,
+      "lat_e7": 471254802,
+      "lon_e7": -885745578,
+      "tags": {},
+      "timestamp": "2023-12-25 11:16:14+00:00",
+      "version": 2
+    },
+    {
+      "id": 2958618796,
+      "lat_e7": 471215975,
+      "lon_e7": -885741365,
+      "tags": {},
+      "timestamp": "2023-12-25 11:16:14+00:00",
+      "version": 3
+    },
+    {
+      "id": 2958618798,
+      "lat_e7": 471216153,
+      "lon_e7": -885740526,
+      "tags": {},
+      "timestamp": "2023-12-25 11:16:14+00:00",
+      "version": 3
+    },
+    {
+      "id": 2958618799,
+      "lat_e7": 471216372,
+      "lon_e7": -885739824,
+      "tags": {},
+      "timestamp": "2023-12-25 11:16:14+00:00",
+      "version": 3
+    },
+    {
+      "id": 10558719183,
+      "lat_e7": 471219656,
+      "lon_e7": -885737378,
+      "tags": {},
+      "timestamp": "2023-12-25 11:16:14+00:00",
+      "version": 2
+    },
+    {
+      "id": 11451952665,
+      "lat_e7": 471228683,
+      "lon_e7": -885738505,
+      "tags": {
+        "highway": "traffic_signals",
+        "traffic_signals": "traffic_lights"
+      },
+      "timestamp": "2023-12-25 11:16:14+00:00",
+      "version": 1
+    },
+    {
+      "id": 11451952666,
+      "lat_e7": 471248998,
+      "lon_e7": -885744315,
+      "tags": {
+        "highway": "traffic_signals",
+        "traffic_signals": "traffic_lights"
+      },
+      "timestamp": "2023-12-25 11:16:14+00:00",
+      "version": 1
+    },
+    {
+      "id": 11451952671,
+      "lat_e7": 471226588,
+      "lon_e7": -885739159,
+      "tags": {},
+      "timestamp": "2023-12-25 11:16:14+00:00",
+      "version": 1
+    }
+  ],
+  "profile": {
+    "axle_load_kg": null,
+    "default_maxheight_mm": 4000,
+    "evidence_class": "Designed",
+    "gross_weight_kg": 40000,
+    "height_mm": 4000,
+    "length_mm": 16500,
+    "width_mm": 2550
+  },
+  "selection": "All eight source ways naming the Houghton-Hancock Lift Bridge in name or TIGER tags, with every referenced original node. Two directed traversals stop at the captured bridge approach endpoints; this fixture makes no claim about routes beyond those endpoints.",
+  "source": {
+    "buffer_degrees_e7": 100000,
+    "distance_version": "WGS84-segment-mm-half-up;pyproj=3.7.2;PROJ=9.5.1",
+    "extraction_version": "michigan-road-extract-v2-regional-freight;osmium=4.3.1;shapely=2.1.2;GEOS=3.13.1;native-preparation-sha256=c89f1611c584ff407ab94575aa1b6dcd7cf5962d8153a7155f0cced6f49567a0",
+    "footprint_sha256": "74b7932b77bb96782026b281e638513d4debcf93928514e2ca7709b57506b7b9",
+    "pbf_bytes": 19349498972,
+    "pbf_sha256": "31abe79b95cab2836ac9c6924701dc5ed0e6001ff102c572581097573df1d094",
+    "pbf_url": "https://download.geofabrik.de/north-america-260908.osm.pbf",
+    "replication_timestamp": "2026-09-08T20:21:01Z"
+  },
+  "ways": [
+    {
+      "id": 17812636,
+      "node_ids": [
+        2304478682,
+        2304478674,
+        2304478679
+      ],
+      "tags": {
+        "bridge": "yes",
+        "check_date:cycleway": "2022-09-30",
+        "cycleway:right": "no",
+        "destination:lanes": "Hancock|Hancock;Lake Linden",
+        "destination:ref:lanes": "US 41|US 41;M 26",
+        "hgv": "designated",
+        "highway": "trunk",
+        "lanes": "2",
+        "layer": "1",
+        "maxspeed": "25 mph",
+        "name": "Houghton-Hancock Lift Bridge",
+        "oneway": "yes",
+        "ref": "US 41;M 26",
+        "sidewalk:left": "no",
+        "sidewalk:right": "separate",
+        "source:hgv": "https://www.michigan.gov/mdot/-/media/Project/Websites/MDOT/Travel/Map/Truck-Operators-Map/Truck-Operators-Map.pdf",
+        "surface": "asphalt",
+        "tiger:cfcc": "A21",
+        "tiger:county": "Houghton, MI",
+        "tiger:name_base": "Houghton-Hancock Lift Bridge",
+        "tiger:name_base_1": "US-41",
+        "tiger:name_base_2": "M-26",
+        "tiger:name_type": "Brg;St",
+        "tiger:zip_left": "49930",
+        "tiger:zip_right": "49930",
+        "turn:lanes": "through|through;slight_right"
+      },
+      "timestamp": "2026-03-20 07:04:29+00:00",
+      "version": 24
+    },
+    {
+      "id": 221424745,
+      "node_ids": [
+        2305812314,
+        2305812322
+      ],
+      "tags": {
+        "bridge": "movable",
+        "bridge:movable": "lift",
+        "destination:lanes": "Marquette|Ontonagon",
+        "destination:ref:lanes": "US 41|M 26",
+        "hgv": "designated",
+        "highway": "trunk",
+        "lanes": "2",
+        "layer": "1",
+        "maxheight": "14'0\"",
+        "maxspeed": "25 mph",
+        "name": "Houghton-Hancock Lift Bridge",
+        "oneway": "yes",
+        "ref": "US 41;M 26",
+        "sidewalk:left": "no",
+        "sidewalk:right": "separate",
+        "source:hgv": "https://www.michigan.gov/mdot/-/media/Project/Websites/MDOT/Travel/Map/Truck-Operators-Map/Truck-Operators-Map.pdf",
+        "surface": "asphalt",
+        "tiger:cfcc": "A21",
+        "tiger:county": "Houghton, MI",
+        "tiger:name_base": "Houghton-Hancock Lift Bridge",
+        "tiger:name_base_1": "M-26",
+        "tiger:name_base_2": "US-41",
+        "tiger:name_type": "Brg;St",
+        "tiger:zip_left": "49930",
+        "tiger:zip_right": "49930"
+      },
+      "timestamp": "2026-03-20 07:04:29+00:00",
+      "version": 13
+    },
+    {
+      "id": 221552316,
+      "node_ids": [
+        2305812315,
+        10558719183,
+        2305812305,
+        2305812311,
+        2305812301,
+        2305812328,
+        2854081926,
+        2854081961,
+        2958618799,
+        2958618798,
+        2958618796,
+        2305812317
+      ],
+      "tags": {
+        "destination:lanes": "Marquette|Ontonagon",
+        "destination:ref:lanes": "US 41|M 26",
+        "hgv": "designated",
+        "highway": "trunk",
+        "lanes": "2",
+        "maxspeed": "25 mph",
+        "oneway": "yes",
+        "parking:both": "no",
+        "ref": "US 41;M 26",
+        "source:hgv": "https://www.michigan.gov/mdot/-/media/Project/Websites/MDOT/Travel/Map/Truck-Operators-Map/Truck-Operators-Map.pdf",
+        "surface": "concrete",
+        "tiger:cfcc": "A21",
+        "tiger:county": "Houghton, MI",
+        "tiger:name_base": "Houghton-Hancock Lift Bridge",
+        "tiger:name_base_1": "US-41",
+        "tiger:name_base_2": "M-26",
+        "tiger:name_type": "Brg;St",
+        "tiger:zip_left": "49930",
+        "tiger:zip_right": "49930"
+      },
+      "timestamp": "2025-10-10 20:33:06+00:00",
+      "version": 13
+    },
+    {
+      "id": 221552319,
+      "node_ids": [
+        184563120,
+        11451952665,
+        184553570,
+        184553584
+      ],
+      "tags": {
+        "bridge": "yes",
+        "cycleway:right": "no",
+        "hgv": "designated",
+        "highway": "trunk",
+        "lanes": "2",
+        "layer": "1",
+        "maxspeed": "25 mph",
+        "name": "Houghton-Hancock Lift Bridge",
+        "oneway": "yes",
+        "parking:both": "no",
+        "ref": "US 41;M 26",
+        "sidewalk:left": "no",
+        "sidewalk:right": "separate",
+        "source:hgv": "https://www.michigan.gov/mdot/-/media/Project/Websites/MDOT/Travel/Map/Truck-Operators-Map/Truck-Operators-Map.pdf",
+        "surface": "asphalt",
+        "tiger:cfcc": "A21",
+        "tiger:county": "Houghton, MI",
+        "tiger:name_base": "Houghton-Hancock Lift Bridge",
+        "tiger:name_base_1": "US-41",
+        "tiger:name_base_2": "M-26",
+        "tiger:name_type": "Brg;St",
+        "tiger:zip_left": "49930",
+        "tiger:zip_right": "49930"
+      },
+      "timestamp": "2026-03-20 07:04:29+00:00",
+      "version": 13
+    },
+    {
+      "id": 221552320,
+      "node_ids": [
+        2305812327,
+        2854081955,
+        2305812320,
+        2854081959,
+        2854081964,
+        2305812312,
+        11451952666,
+        184553587,
+        2305812314
+      ],
+      "tags": {
+        "bridge": "yes",
+        "hgv": "designated",
+        "highway": "trunk",
+        "lanes": "2",
+        "layer": "1",
+        "maxspeed": "25 mph",
+        "name": "Houghton-Hancock Lift Bridge",
+        "oneway": "yes",
+        "ref": "US 41;M 26",
+        "sidewalk:left": "no",
+        "sidewalk:right": "separate",
+        "source:hgv": "https://www.michigan.gov/mdot/-/media/Project/Websites/MDOT/Travel/Map/Truck-Operators-Map/Truck-Operators-Map.pdf",
+        "surface": "asphalt",
+        "tiger:cfcc": "A21",
+        "tiger:county": "Houghton, MI",
+        "tiger:name_base": "Houghton-Hancock Lift Bridge",
+        "tiger:name_base_1": "M-26",
+        "tiger:name_base_2": "US-41",
+        "tiger:name_type": "St",
+        "tiger:reviewed": "no",
+        "tiger:zip_left": "49930",
+        "tiger:zip_right": "49930"
+      },
+      "timestamp": "2026-03-20 07:04:29+00:00",
+      "version": 11
+    },
+    {
+      "id": 348028891,
+      "node_ids": [
+        184553584,
+        2304478682
+      ],
+      "tags": {
+        "bridge": "movable",
+        "bridge:movable": "lift",
+        "destination:lanes": "Hancock|Hancock;Lake Linden",
+        "destination:ref:lanes": "US 41|US 41;M 26",
+        "hgv": "designated",
+        "highway": "trunk",
+        "lanes": "2",
+        "layer": "1",
+        "maxheight": "14'0\"",
+        "maxspeed": "25 mph",
+        "name": "Houghton-Hancock Lift Bridge",
+        "oneway": "yes",
+        "ref": "US 41;M 26",
+        "sidewalk:left": "no",
+        "sidewalk:right": "separate",
+        "source:hgv": "https://www.michigan.gov/mdot/-/media/Project/Websites/MDOT/Travel/Map/Truck-Operators-Map/Truck-Operators-Map.pdf",
+        "surface": "asphalt",
+        "tiger:cfcc": "A21",
+        "tiger:county": "Houghton, MI",
+        "tiger:name_base": "Houghton-Hancock Lift Bridge",
+        "tiger:name_base_1": "US-41",
+        "tiger:name_base_2": "M-26",
+        "tiger:name_type": "Brg;St",
+        "tiger:zip_left": "49930",
+        "tiger:zip_right": "49930",
+        "turn:lanes": "through|through;slight_right"
+      },
+      "timestamp": "2026-03-20 07:04:29+00:00",
+      "version": 10
+    },
+    {
+      "id": 348028892,
+      "node_ids": [
+        2305812322,
+        11451952671
+      ],
+      "tags": {
+        "bridge": "yes",
+        "destination:lanes": "Marquette|Ontonagon",
+        "destination:ref:lanes": "US 41|M 26",
+        "hgv": "designated",
+        "highway": "trunk",
+        "lanes": "2",
+        "layer": "1",
+        "maxspeed": "25 mph",
+        "name": "Houghton-Hancock Lift Bridge",
+        "oneway": "yes",
+        "ref": "US 41;M 26",
+        "sidewalk:left": "no",
+        "sidewalk:right": "separate",
+        "source:hgv": "https://www.michigan.gov/mdot/-/media/Project/Websites/MDOT/Travel/Map/Truck-Operators-Map/Truck-Operators-Map.pdf",
+        "surface": "asphalt",
+        "tiger:cfcc": "A21",
+        "tiger:county": "Houghton, MI",
+        "tiger:name_base": "Houghton-Hancock Lift Bridge",
+        "tiger:name_base_1": "M-26",
+        "tiger:name_base_2": "US-41",
+        "tiger:name_type": "Brg;St",
+        "tiger:zip_left": "49930",
+        "tiger:zip_right": "49930"
+      },
+      "timestamp": "2026-03-20 07:04:29+00:00",
+      "version": 9
+    },
+    {
+      "id": 1234013533,
+      "node_ids": [
+        11451952671,
+        2305812315
+      ],
+      "tags": {
+        "bridge": "yes",
+        "destination:lanes": "Marquette|Ontonagon",
+        "destination:ref:lanes": "US 41|M 26",
+        "hgv": "designated",
+        "highway": "trunk",
+        "lanes": "2",
+        "layer": "1",
+        "maxspeed": "20 mph",
+        "name": "Houghton-Hancock Lift Bridge",
+        "oneway": "yes",
+        "parking:both": "no",
+        "ref": "US 41;M 26",
+        "sidewalk:left": "no",
+        "sidewalk:right": "separate",
+        "source:hgv": "https://www.michigan.gov/mdot/-/media/Project/Websites/MDOT/Travel/Map/Truck-Operators-Map/Truck-Operators-Map.pdf",
+        "surface": "asphalt",
+        "tiger:cfcc": "A21",
+        "tiger:county": "Houghton, MI",
+        "tiger:name_base": "Houghton-Hancock Lift Bridge",
+        "tiger:name_base_1": "M-26",
+        "tiger:name_base_2": "US-41",
+        "tiger:name_type": "Brg;St",
+        "tiger:zip_left": "49930",
+        "tiger:zip_right": "49930"
+      },
+      "timestamp": "2026-03-20 07:04:29+00:00",
+      "version": 4
+    }
+  ]
+}

@@ -1,11 +1,11 @@
-use babylon_material_circuit::{LogisticsNodeIdV2, RouteLegV2};
-use babylon_tick::material_world::{decode_material_receipts_v3, MaterialWorldRegisterV2};
+use babylon_material_circuit::{LogisticsNodeIdV2, RouteStageCapacityV3, RouteStageV3};
+use babylon_tick::material_world::{decode_material_receipts_v4, MaterialWorldRegisterV3};
 
 use super::*;
 use crate::michigan_content::MichiganContentPresetV1;
 use crate::michigan_material::MichiganDeliveryPresetV1;
 
-fn shared_opening(meal_order: u64, capacity: u64) -> MaterialCircuitStateV2 {
+fn shared_opening(meal_order: u64, capacity: u64) -> MaterialCircuitStateV3 {
     let catalog = crate::test_support::catalog();
     let foundation = MichiganContentPresetV1::new_campaign(MichiganDeliveryPresetV1::Standard)
         .create_foundation(&catalog)
@@ -22,18 +22,18 @@ fn shared_opening(meal_order: u64, capacity: u64) -> MaterialCircuitStateV2 {
         .find(|route| route.good_key == "meal")
         .unwrap();
     let shared = state
-        .route_legs
+        .route_stage_capacities
         .iter()
         .find(|leg| leg.route_id == sheet.id())
         .unwrap()
         .corridor_id;
     let obsolete = state
-        .route_legs
+        .route_stage_capacities
         .iter()
         .find(|leg| leg.route_id == meal.id())
         .unwrap()
         .corridor_id;
-    for leg in &mut state.route_legs {
+    for leg in &mut state.route_stage_capacities {
         if leg.route_id == meal.id() {
             leg.corridor_id = shared;
         }
@@ -43,7 +43,7 @@ fn shared_opening(meal_order: u64, capacity: u64) -> MaterialCircuitStateV2 {
         .retain(|row| row.corridor_id != obsolete);
     for row in &mut state.corridor_capacities {
         if row.corridor_id == shared {
-            row.available = capacity;
+            row.available_grams = capacity * 1_000;
         }
     }
     state
@@ -62,18 +62,18 @@ fn shared_opening(meal_order: u64, capacity: u64) -> MaterialCircuitStateV2 {
 }
 
 fn committed_pair(
-    state: MaterialCircuitStateV2,
+    state: MaterialCircuitStateV3,
 ) -> (
-    MaterialCircuitStateV2,
-    MaterialCircuitStateV2,
-    MaterialTickReceiptsV3,
+    MaterialCircuitStateV3,
+    MaterialCircuitStateV3,
+    MaterialTickReceiptsV4,
 ) {
-    let opening = MaterialWorldRegisterV2::try_new(0, state).unwrap();
+    let opening = MaterialWorldRegisterV3::try_new(0, state).unwrap();
     let next = opening.prepare_next().unwrap();
     (
         opening.state().clone(),
         next.register().state().clone(),
-        decode_material_receipts_v3(next.receipt_bytes()).unwrap(),
+        decode_material_receipts_v4(next.receipt_bytes()).unwrap(),
     )
 }
 
@@ -108,12 +108,15 @@ fn shared_capacity_is_counted_once_with_exact_competing_dispatches_and_residual(
         assert_eq!(
             (
                 reservation.reservation_period,
-                reservation.opening_available,
-                reservation.remaining_available
+                reservation.opening_available_grams,
+                reservation.remaining_available_grams
             ),
-            (1, capacity, expected.2)
+            (1, capacity * 1_000, expected.2 * 1_000)
         );
-        assert_eq!(reservation.newly_reserved, expected.0 + expected.1);
+        assert_eq!(
+            reservation.newly_reserved_grams,
+            (expected.0 + expected.1) * 1_000
+        );
         assert_eq!(reservation.orders.len(), 2);
         let quantities: std::collections::BTreeSet<_> = reservation
             .orders
@@ -127,7 +130,8 @@ fn shared_capacity_is_counted_once_with_exact_competing_dispatches_and_residual(
             .all(|row| row.requested.checked_sub(row.dispatched) == Some(row.remaining_unshipped)));
         let mut permuted_opening = opening.clone();
         permuted_opening.orders.reverse();
-        permuted_opening.route_legs.reverse();
+        permuted_opening.route_stages.reverse();
+        permuted_opening.route_stage_capacities.reverse();
         permuted_opening.corridor_capacities.reverse();
         let mut permuted_receipt = receipt.clone();
         permuted_receipt.dispatches.reverse();
@@ -156,8 +160,8 @@ fn foundation_sharing_is_known_but_completed_zero_is_not_invented() {
             .iter()
             .find(|row| row.route_ids.len() == 2)
             .unwrap()
-            .next_opening_available,
-        160
+            .next_opening_available_grams,
+        160_000
     );
     let (opening, next, receipt) = committed_pair(shared_opening(200, 0));
     let accounts = project_freight_capacity_accounts(
@@ -174,7 +178,7 @@ fn foundation_sharing_is_known_but_completed_zero_is_not_invented() {
         .completed
         .as_ref()
         .unwrap();
-    assert_eq!(completed.reservations[0].newly_reserved, 0);
+    assert_eq!(completed.reservations[0].newly_reserved_grams, 0);
     assert!(completed.reservations[0]
         .orders
         .iter()
@@ -211,7 +215,7 @@ fn missing_duplicate_and_excess_receipts_or_capacity_refuse() {
         Err(ProductionProjectionErrorV1::State)
     );
     let mut wrong_next = next.clone();
-    wrong_next.corridor_capacities[0].available += 1;
+    wrong_next.corridor_capacities[0].available_grams += 1;
     assert_eq!(
         project_freight_capacity_accounts(&catalog, &wrong_next, Some(&opening), Some(&receipt)),
         Err(ProductionProjectionErrorV1::State)
@@ -228,23 +232,33 @@ fn reservations_for_later_legs_debit_the_future_period_without_claiming_arrival(
         .find(|route| route.good_key == "sheet")
         .unwrap();
     let first = state
-        .route_legs
+        .route_stages
         .iter_mut()
         .find(|leg| leg.route_id == sheet.id())
         .unwrap();
     let destination = first.to_node_id;
     let intermediate = LogisticsNodeIdV2::from_bytes([73; 32]);
     first.to_node_id = intermediate;
-    let second = RouteLegV2 {
+    let second = RouteStageV3 {
         route_id: first.route_id,
-        leg_index: 1,
-        corridor_id: first.corridor_id,
+        stage_index: 1,
         from_node_id: intermediate,
         to_node_id: destination,
         travel_periods: 1,
         loss_ppm: 0,
     };
-    state.route_legs.push(second);
+    let shared_id = state
+        .route_stage_capacities
+        .iter()
+        .find(|row| row.route_id == sheet.id())
+        .unwrap()
+        .corridor_id;
+    state.route_stage_capacities.push(RouteStageCapacityV3 {
+        route_id: sheet.id(),
+        stage_index: 1,
+        corridor_id: shared_id,
+    });
+    state.route_stages.push(second);
     let (opening, next, receipt) = committed_pair(state);
     let accounts =
         project_freight_capacity_accounts(&catalog, &next, Some(&opening), Some(&receipt)).unwrap();
@@ -253,8 +267,11 @@ fn reservations_for_later_legs_debit_the_future_period_without_claiming_arrival(
         .find(|row| row.route_ids.len() == 2)
         .unwrap();
     assert_eq!(
-        (shared.next_opening_period, shared.next_opening_available),
-        (2, 40)
+        (
+            shared.next_opening_period,
+            shared.next_opening_available_grams
+        ),
+        (2, 40_000)
     );
     let completed = shared.completed.as_ref().unwrap();
     assert_eq!(completed.period, 1);
@@ -264,19 +281,19 @@ fn reservations_for_later_legs_debit_the_future_period_without_claiming_arrival(
             .iter()
             .map(|row| (
                 row.reservation_period,
-                row.newly_reserved,
-                row.remaining_available
+                row.newly_reserved_grams,
+                row.remaining_available_grams
             ))
             .collect::<Vec<_>>(),
-        vec![(1, 160, 0), (2, 120, 40)]
+        vec![(1, 160_000, 0), (2, 120_000, 40_000)]
     );
     assert!(receipt.arrivals.is_empty());
-    let legs = project_route_legs(&next, sheet.id()).unwrap();
+    let legs = project_route_stages(&next, sheet.id()).unwrap();
     assert_eq!(
-        legs.iter().map(|leg| leg.leg_index).collect::<Vec<_>>(),
+        legs.iter().map(|leg| leg.stage_index).collect::<Vec<_>>(),
         [0, 1]
     );
-    assert_eq!(legs[0].corridor_id, legs[1].corridor_id);
+    assert_eq!(legs[0].capacity_ids, legs[1].capacity_ids);
     let mut mismatched = next.clone();
     let capacity = mismatched
         .corridor_capacities
@@ -285,7 +302,7 @@ fn reservations_for_later_legs_debit_the_future_period_without_claiming_arrival(
             row.period == 2 && digest_hex(&row.corridor_id.as_bytes()) == shared.corridor_id
         })
         .unwrap();
-    capacity.available += 1;
+    capacity.available_grams += 1;
     assert_eq!(
         project_freight_capacity_accounts(&catalog, &mismatched, Some(&opening), Some(&receipt)),
         Err(ProductionProjectionErrorV1::State)
