@@ -8,7 +8,7 @@ use super::{
     RoutedDispatchReceiptV2, RoutedFreightLotV3, SiteIdV1, SupplierKey, SupplyPath, UnitIdV1,
     MAX_MATERIAL_CIRCUIT_ROWS_V1,
 };
-use crate::transition::proportional_floor;
+use crate::production::proportional_floor;
 use crate::{
     LocalRetailFulfillmentReceiptV3, LocalTransferReceiptV3, MerchantHandlingReceiptV3,
     OutboundOrderIdV3, SupplierTransportV3, MAX_FREIGHT_RESOURCE_REQUESTS_V3,
@@ -286,6 +286,7 @@ fn apply_dispatches(
                 inventory,
                 (order.supplier_site_id, order.good_id, order.unit_id),
                 quantity,
+                MaterialCircuitErrorV3::FreightInvariant,
             )?;
             let updated = &mut state.orders[index];
             updated.shipped = updated
@@ -319,6 +320,7 @@ fn apply_dispatches(
             inventory,
             (order.supplier_site_id, order.good_id, order.unit_id),
             quantity,
+            MaterialCircuitErrorV3::FreightInvariant,
         )?;
         let grams = quantity
             .checked_mul(grams_per_unit(state, order.good_id, order.unit_id)?)
@@ -449,6 +451,7 @@ fn apply_local_fulfillments(
             inventory,
             (row.retailer_site_id, row.good_id, row.unit_id),
             *quantity,
+            MaterialCircuitErrorV3::FreightInvariant,
         )?;
         row.fulfilled = row
             .fulfilled

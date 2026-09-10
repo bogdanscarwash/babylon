@@ -6,28 +6,24 @@
 #![forbid(unsafe_code)]
 #![warn(clippy::pedantic)]
 
+mod inventory;
 mod model;
-mod model_v2;
-mod model_v3;
+mod production;
 mod staffing;
 mod transition;
-mod transition_v3;
-mod wire_common;
-mod wire_v3;
+mod wire;
 
 pub use model::*;
-pub use model_v2::*;
 pub use staffing::{
     advance_staffing_v2, StaffingErrorV2, StaffingPolicyV1, StaffingPoolBindingV2,
     StaffingPoolIdV1, StaffingPoolStateV2, StaffingReceiptV2, StaffingStateV2,
     StaffingTransitionV2, StaffingWorkRequestV2, StaffingWorkSourceV2,
 };
 
-pub use model_v3::*;
-pub use transition_v3::{
+pub use transition::{
     advance_material_circuit_v3, close_material_period_v3, ClosedMaterialPeriodV3,
 };
-pub use wire_v3::{
+pub use wire::{
     decode_material_circuit_state_v3, encode_material_circuit_state_v3,
     material_circuit_state_v3_digest, MATERIAL_CIRCUIT_STATE_V3_DOMAIN_BYTES,
     MATERIAL_CIRCUIT_V3_SOURCE_SHA256,
