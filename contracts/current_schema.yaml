@@ -1,0 +1,39 @@
+contract_id: babylon.current-schema.v1
+purpose: One atomic current Rust database schema and exact runtime admission.
+postgresql_server_major: 17
+admitted_database:
+  - Exact pinned fresh extension template with no Babylon objects.
+  - Exact current catalog and current schema identity.
+refusal:
+  - Old, partial, unknown, altered, or non-owned databases remain untouched.
+  - No migration, predecessor adoption, schema repair, or destructive cutover.
+identity:
+  relation: babylon_meta.current_schema
+  rows: Exactly one singleton true row.
+  digest_column: schema_sha256
+  digest_bytes: 32
+  algorithm: SHA-256
+  preimage:
+    - ASCII babylon.current-schema.v1 followed by NUL.
+    - Little-endian u64 length followed by exact current_schema.sql bytes.
+    - Little-endian u64 length followed by exact current_archive.sql bytes.
+    - Little-endian u64 length followed by exact current_views.sql bytes.
+installation:
+  - Validate local connection target, database ownership, and fresh full catalog.
+  - Hold the shared schema advisory lock.
+  - Construct core, Archive, and current projection views in one serializable transaction.
+  - Verify the full catalog, then insert the identity row last.
+  - Reverify identity and catalog before commit.
+  - Reconcile ambiguous commit on a new connection under the same advisory lock.
+  - A proven fresh rollback permits one retry; an exact current schema confirms commit.
+current_storage:
+  committed_envelope_layout: 3
+  material_marker_requires: A material tick row for the same campaign and resolve tick.
+  archive: Immutable current revisions and knowledge snapshots, with no retired tables.
+privileges:
+  - Core construction never creates cluster roles or grants reader access.
+  - All current views exist before explicit reader or observer role provisioning.
+  - Exact full catalog fixtures cover no grants, reader, observer, and both configurations.
+  - Optional babylon_intel is admitted only with its exact pinned role signature.
+  - Existing confined role attributes and effective privilege footprints are verified.
+  - Partial or excessive grants are refused without repair.

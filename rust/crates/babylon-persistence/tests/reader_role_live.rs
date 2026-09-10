@@ -2,11 +2,9 @@
 //! fog-safe committed-tick status view (ADR249 R8).
 //!
 //! Each test clones the validated Rust-active runtime template, commits real
-//! ticks through `DurableReplayRuntimeV2`, installs the additive Archive and
+//! ticks through `DurableReplayRuntimeV2`, verifies the current Archive and
 //! reader-role schemas, and then proves one privilege property against the
-//! live `PostgreSQL` privilege layer. No test runs `migrate_schema_epoch`
-//! after installing the role or view: both are additive, non-epoch objects
-//! and would fail the digest-pinned epoch census as unexpected extras.
+//! live `PostgreSQL` privilege layer on the one current schema.
 
 use std::str::FromStr;
 
@@ -31,16 +29,16 @@ use babylon_persistence::runtime_session::{
     RUNTIME_SESSION_PROTOCOL_VERSION_V3,
 };
 use babylon_persistence::{
-    install_observer_economy_schema_v1, michigan_observer_foundation_v1, ObserverEconomyErrorV1,
-    ObserverEconomyReaderV1, ObserverVisibilityV1,
-};
-use babylon_persistence::{
     install_reader_role_v1, michigan_dynamic_hex_foundation_v1, validate_connection_target,
     ArchiveCitationV1, ArchiveDirtyBatchV1, ArchiveKnowledgeGrantV1, ArchiveMaterializeModeV1,
     ArchivePageInputV1, ArchivePageRefV1, ArchiveSchemaDispositionV1, ArchiveSignalV1,
     ArchiveSubjectKindV1, ArchiveSubjectV1, CampaignId, DurableReplayRuntimeV2,
     FoundationContentBundleV1, ReaderRoleDispositionV1, SemanticArchiveReaderV1,
     SemanticArchiveStoreV1,
+};
+use babylon_persistence::{
+    michigan_observer_foundation_v1, provision_observer_role, ObserverEconomyErrorV1,
+    ObserverEconomyReaderV1, ObserverVisibilityV1,
 };
 use babylon_practice_contract::ordered_action_v1::OrderedPracticeActionBatchV1;
 use babylon_tick::material_replay::IdentifiedMaterialTickV3;
@@ -133,10 +131,7 @@ impl TestDatabase {
             .expect("runtime clone connection")
             .query_one(
                 "SELECT \
-                   (SELECT pg_catalog.string_agg(ordinal::pg_catalog.text || ':' || \
-                            state_tag::pg_catalog.text || ':' || schema_epoch::pg_catalog.text, \
-                            ',' ORDER BY ordinal) \
-                    FROM babylon_meta.persistence_authority_ledger), \
+                   (SELECT pg_catalog.encode(schema_sha256, 'hex') FROM babylon_meta.current_schema WHERE singleton), \
                    (SELECT pg_catalog.count(*) FROM babylon_meta.campaign)",
                 &[],
             )
@@ -144,8 +139,11 @@ impl TestDatabase {
         assert_eq!(
             observation
                 .try_get::<_, String>(0)
-                .expect("authority ledger decodes"),
-            "1:1:8,2:2:9"
+                .expect("current schema identity decodes"),
+            babylon_persistence::current_schema_sha256()
+                .iter()
+                .map(|byte| format!("{byte:02x}"))
+                .collect::<String>()
         );
         assert_eq!(
             observation
@@ -291,7 +289,7 @@ impl ReaderTarget {
         let config = database.config(&base);
         let store = SemanticArchiveStoreV1::new(&config);
         match store
-            .install_schema()
+            .verify_schema()
             .expect("Archive schema installs before foundation")
         {
             ArchiveSchemaDispositionV1::Installed | ArchiveSchemaDispositionV1::AlreadyCurrent => {}
@@ -468,14 +466,10 @@ fn assert_owner_side_privilege_matrix(client: &mut postgres::Client) {
                  ('babylon_meta.archive_receipt_consumption_v1'), \
                  ('babylon_meta.archive_atom_v1'), \
                  ('babylon_meta.archive_revision_atom_v2'), \
-                 ('babylon_meta.archive_revision_schema_v2'), \
-                 ('babylon_meta.archive_retention_v2'), \
                  ('babylon_meta.archive_revision_grant_v2'), \
-                 ('babylon_meta.archive_retention_seal_v2'), \
                  ('babylon_meta.archive_tick_knowledge_v2'), \
                  ('babylon_meta.archive_tick_knowledge_member_v2'), \
-                 ('babylon_meta.archive_page_retired_v1'), \
-                 ('babylon_meta.archive_page_atom_retired_v1')) AS tables(relation) \
+                 ('babylon_meta.current_schema')) AS tables(relation) \
              CROSS JOIN (VALUES \
                  ('SELECT'::pg_catalog.text), ('INSERT'), ('UPDATE'), ('DELETE'), \
                  ('TRUNCATE'), ('REFERENCES'), ('TRIGGER')) AS privileges(privilege) \
@@ -496,7 +490,6 @@ fn assert_owner_side_privilege_matrix(client: &mut postgres::Client) {
         "public.v_archive_revision_index_v2",
         "public.v_archive_revision_atom_v2",
         "public.v_archive_revision_grant_v2",
-        "public.v_archive_retention_v2",
         "public.v_archive_subject_grant_v2",
         "public.v_archive_tick_knowledge_v2",
         "public.v_archive_revision_scope_v2",
@@ -534,15 +527,11 @@ fn assert_owner_side_privilege_matrix(client: &mut postgres::Client) {
 /// `SET ROLE babylon_reader` on a superuser connection.
 fn assert_reader_query_refusals(client: &mut postgres::Client) {
     for relation in [
-        "archive_wakeup_schema_v1",
-        "archive_revision_schema_v2",
-        "archive_retention_v2",
         "archive_revision_grant_v2",
-        "archive_retention_seal_v2",
         "archive_tick_knowledge_v2",
         "archive_tick_knowledge_member_v2",
-        "archive_page_retired_v1",
-        "archive_page_atom_retired_v1",
+        "archive_atom_v1",
+        "current_schema",
     ] {
         assert!(
             client
@@ -1221,11 +1210,11 @@ fn live_observer_economics_reads_exact_foundation_commit_and_granted_preview() {
     let mut runtime = DurableReplayRuntimeV2::create(&config, campaign, session, bundle)
         .expect("observer campaign");
     SemanticArchiveStoreV1::new(&config)
-        .install_schema()
+        .verify_schema()
         .expect("Archive schema");
     install_reader_role_v1(&config).expect("reader role");
-    install_observer_economy_schema_v1(&config).expect("economic views and groups");
-    install_observer_economy_schema_v1(&config).expect("idempotent exact observer schema");
+    provision_observer_role(&config).expect("economic views and groups");
+    provision_observer_role(&config).expect("idempotent exact observer schema");
     let observer_login = ConfinedLogin::create_for_role(&base, "babylon_observer");
     let known_login = ConfinedLogin::create(&base);
     let mut observer_config = config.clone();
@@ -1572,7 +1561,7 @@ fn live_material_runtime_v3_atomic_restart_identity_and_observer_projection() {
     let digest = foundation.digest();
     let mut runtime = DurableMaterialRuntimeV3::create(&config, campaign, foundation).unwrap();
     install_reader_role_v1(&config).unwrap();
-    install_observer_economy_schema_v1(&config).unwrap();
+    provision_observer_role(&config).unwrap();
     let observer_login = ConfinedLogin::create_for_role(&base, "babylon_observer");
     let known_login = ConfinedLogin::create(&base);
     let mut observer_config = config.clone();

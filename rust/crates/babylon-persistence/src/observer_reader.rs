@@ -14,13 +14,6 @@ use crate::{
 
 pub const OBSERVER_DSN_ENV_V1: &str = "BABYLON_OBSERVER_DSN";
 pub const OBSERVER_ROLE_NAME_V1: &str = "babylon_observer";
-pub const OBSERVER_ECONOMY_SCHEMA_V1_SQL: &str =
-    include_str!("../migrations/observer_economy_v1.sql");
-const VIEW_NAMES: [&str; 3] = [
-    "v_observer_economy_foundation_v1",
-    "v_observer_county_economy_v1",
-    "v_known_county_economy_v1",
-];
 const SNAPSHOT_COLUMNS: &str = "campaign_id, resolve_tick, county_geoid, annual_avg_estabs_count, annual_avg_emplvl, total_annual_wages, annual_avg_wkly_wage, establishments_granted, employment_granted, annual_wages_granted, weekly_wage_granted";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -595,109 +588,86 @@ fn confine_authority(
     Ok(())
 }
 
-/// Install exact additive observer/preview views and group grants. No login secrets.
-/// The marker binds the migration bytes and original PostgreSQL-rendered view
-/// definitions; subsequent starts refuse drift rather than replacing views.
+/// Provision the confined observer group on an already verified current schema.
+///
 /// # Errors
-/// Refuses role attributes, partial installation, changed definitions or database failure.
-pub fn install_observer_economy_schema_v1(config: &Config) -> Result<(), ObserverEconomyErrorV1> {
+/// Refuses schema or privilege drift and roles with administrative attributes.
+pub fn provision_observer_role(config: &Config) -> Result<(), ObserverEconomyErrorV1> {
     validate_connection_target(config).map_err(|_| ObserverEconomyErrorV1::ConnectionTarget)?;
-    crate::install_territory_county_map_schema_v1(config)
-        .map_err(|_| ObserverEconomyErrorV1::Database)?;
-    let mut client = config
+    let mut client = crate::current_schema::bounded_config(config)
         .connect(NoTls)
         .map_err(|_| ObserverEconomyErrorV1::Database)?;
-    let mut transaction = client
+    let mut tx = client
         .build_transaction()
         .isolation_level(IsolationLevel::Serializable)
+        .read_only(false)
         .start()
         .map_err(|_| ObserverEconomyErrorV1::Database)?;
-    transaction
-        .query_one(
-            "SELECT pg_catalog.pg_advisory_xact_lock($1)",
-            &[&crate::SCHEMA_ADVISORY_LOCK_KEY],
-        )
-        .map_err(|_| ObserverEconomyErrorV1::Database)?;
-    let installed: bool = transaction
-        .query_one(
-            "SELECT pg_catalog.to_regclass('public.observer_economy_schema_v1') IS NOT NULL",
-            &[],
-        )
-        .map_err(|_| ObserverEconomyErrorV1::Database)?
-        .get(0);
-    let role = transaction.query_opt("SELECT rolsuper, rolcreatedb, rolcreaterole, rolcanlogin, rolreplication, rolbypassrls FROM pg_catalog.pg_roles WHERE rolname = 'babylon_observer'", &[]).map_err(|_| ObserverEconomyErrorV1::Database)?;
+    tx.query_one(
+        "SELECT pg_catalog.pg_advisory_xact_lock($1)",
+        &[&crate::SCHEMA_ADVISORY_LOCK_KEY],
+    )
+    .map_err(|_| ObserverEconomyErrorV1::Database)?;
+    crate::current_schema::require_current_schema(&mut tx)
+        .map_err(|_| ObserverEconomyErrorV1::SchemaDrift)?;
+    let role = tx.query_opt("SELECT rolsuper, rolcreatedb, rolcreaterole, rolcanlogin, rolreplication, rolbypassrls FROM pg_catalog.pg_roles WHERE rolname = 'babylon_observer'", &[]).map_err(|_| ObserverEconomyErrorV1::Database)?;
     if let Some(role) = role {
         for index in 0..6 {
             if role
                 .try_get::<_, bool>(index)
                 .map_err(|_| ObserverEconomyErrorV1::SchemaDrift)?
             {
-                return Err(ObserverEconomyErrorV1::SchemaDrift);
+                return Err(ObserverEconomyErrorV1::Authority);
             }
         }
-    } else if installed {
-        return Err(ObserverEconomyErrorV1::SchemaDrift);
     } else {
-        transaction.batch_execute("CREATE ROLE babylon_observer NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS").map_err(|_| ObserverEconomyErrorV1::Database)?;
+        tx.batch_execute("CREATE ROLE babylon_observer NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS").map_err(|_| ObserverEconomyErrorV1::Database)?;
     }
-    let migration_sha = digest_hex(&sha256_of(OBSERVER_ECONOMY_SCHEMA_V1_SQL.as_bytes()));
-    if installed {
-        let marker = transaction.query_one("SELECT migration_sha256, view_definitions FROM public.observer_economy_schema_v1 WHERE singleton", &[]).map_err(|_| ObserverEconomyErrorV1::SchemaDrift)?;
-        let stored_sha: String = marker
-            .try_get(0)
-            .map_err(|_| ObserverEconomyErrorV1::SchemaDrift)?;
-        let stored_definitions: Vec<String> = marker
-            .try_get(1)
-            .map_err(|_| ObserverEconomyErrorV1::SchemaDrift)?;
-        if stored_sha != migration_sha || stored_definitions != view_definitions(&mut transaction)?
-        {
-            return Err(ObserverEconomyErrorV1::SchemaDrift);
-        }
-    } else {
-        for name in VIEW_NAMES {
-            let full = format!("public.{name}");
-            let exists: bool = transaction
-                .query_one("SELECT pg_catalog.to_regclass($1) IS NOT NULL", &[&full])
-                .map_err(|_| ObserverEconomyErrorV1::Database)?
-                .get(0);
-            if exists {
-                return Err(ObserverEconomyErrorV1::SchemaDrift);
-            }
-        }
-        transaction
-            .batch_execute(OBSERVER_ECONOMY_SCHEMA_V1_SQL)
-            .map_err(|_| ObserverEconomyErrorV1::Database)?;
-        transaction.batch_execute("CREATE TABLE public.observer_economy_schema_v1 (singleton boolean PRIMARY KEY CHECK (singleton), migration_sha256 text NOT NULL, view_definitions text[] NOT NULL); REVOKE ALL ON public.observer_economy_schema_v1 FROM PUBLIC").map_err(|_| ObserverEconomyErrorV1::Database)?;
-        let definitions = view_definitions(&mut transaction)?;
-        transaction
-            .execute(
-                "INSERT INTO public.observer_economy_schema_v1 VALUES (true, $1, $2)",
-                &[&migration_sha, &definitions],
-            )
-            .map_err(|_| ObserverEconomyErrorV1::Database)?;
-    }
-    transaction
-        .commit()
-        .map_err(|_| ObserverEconomyErrorV1::Database)?;
-    crate::observer_material::install_observer_material_schema_v1(config)
-}
-fn view_definitions(
-    client: &mut impl postgres::GenericClient,
-) -> Result<Vec<String>, ObserverEconomyErrorV1> {
-    VIEW_NAMES
+    let mut expected = observer_role_views()
         .iter()
-        .map(|name| {
-            let full = format!("public.{name}");
-            client
-                .query_one(
-                    "SELECT pg_catalog.pg_get_viewdef($1::text::regclass, false)",
-                    &[&full],
-                )
-                .map_err(|_| ObserverEconomyErrorV1::SchemaDrift)?
-                .try_get(0)
-                .map_err(|_| ObserverEconomyErrorV1::SchemaDrift)
-        })
-        .collect()
+        .map(|view| format!("{view}:SELECT"))
+        .collect::<Vec<_>>();
+    expected.sort_unstable();
+    let held = crate::reader::census_role_privileges(
+        &mut tx,
+        OBSERVER_ROLE_NAME_V1,
+        "census observer role",
+    )
+    .map_err(|_| ObserverEconomyErrorV1::Authority)?;
+    if held.is_empty() {
+        let grants = format!(
+            "GRANT SELECT ON {} TO babylon_observer",
+            observer_role_views().join(", ")
+        );
+        tx.batch_execute(&grants)
+            .map_err(|_| ObserverEconomyErrorV1::Database)?;
+    } else if held != expected {
+        return Err(ObserverEconomyErrorV1::Authority);
+    }
+    crate::current_schema::require_current_schema(&mut tx)
+        .map_err(|_| ObserverEconomyErrorV1::SchemaDrift)?;
+    let observed = crate::reader::census_role_privileges(
+        &mut tx,
+        OBSERVER_ROLE_NAME_V1,
+        "verify observer role",
+    )
+    .map_err(|_| ObserverEconomyErrorV1::Authority)?;
+    if observed != expected {
+        return Err(ObserverEconomyErrorV1::Authority);
+    }
+    tx.commit().map_err(|_| ObserverEconomyErrorV1::Database)
+}
+
+fn observer_role_views() -> Vec<&'static str> {
+    let mut views = vec![
+        "public.v_observer_economy_foundation_v1",
+        "public.v_observer_county_economy_v1",
+        "public.v_committed_tick_status_v1",
+        "public.v_material_campaign_identity_v1",
+        "public.v_observer_material_state_v1",
+    ];
+    views.extend(crate::observer_tick_components::OBSERVER_TICK_COMPONENT_VIEWS_V1);
+    views
 }
 
 #[cfg(test)]

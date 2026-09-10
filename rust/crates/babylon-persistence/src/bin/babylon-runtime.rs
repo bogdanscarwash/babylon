@@ -24,7 +24,7 @@ use babylon_kernel::ContentDigest;
 #[cfg(test)]
 use babylon_persistence::michigan_dynamic_hex_foundation_v1;
 use babylon_persistence::{
-    activate_rust_persistence_v2, preflight_schema_epoch, representative_h3_reference_cohort_v1,
+    bootstrap_current_runtime, preflight_current_schema, representative_h3_reference_cohort_v1,
     ArchiveSchemaDispositionV1, CampaignFoundationV1, CampaignId, CommittedResolveTickV1,
     CommittedTickReceiptV2, CompositeArchiveDossierProducerV1, CountyDossierProducerV1,
     DurableReplayRuntimeV2, FoundationContentBundleV1, PlaceDossierProducerV1,
@@ -218,15 +218,21 @@ fn main() -> ExitCode {
 fn execute(command: Command, config: &Config) -> Result<(), String> {
     match command {
         Command::Preflight => {
-            preflight_schema_epoch(config).map_err(|error| error.to_string())?;
+            preflight_current_schema(config).map_err(|error| error.to_string())?;
             println!("Rust schema target and owner preflight complete.");
         }
         Command::Activate | Command::Bootstrap => {
-            let report = activate_rust_persistence_v2(config).map_err(|error| error.to_string())?;
+            let report = bootstrap_current_runtime(config).map_err(|error| error.to_string())?;
             println!(
-                "Rust persistence authority active (prepared_epoch={}, active_epoch={}).",
-                report.prepared_row().activation_epoch(),
-                report.active_row().activation_epoch(),
+                "Rust current schema ready ({:?}, sha256={}).",
+                report.schema.disposition,
+                report
+                    .schema
+                    .identity
+                    .schema_sha256()
+                    .iter()
+                    .map(|byte| format!("{byte:02x}"))
+                    .collect::<String>(),
             );
         }
         Command::Run {
@@ -243,7 +249,7 @@ fn execute(command: Command, config: &Config) -> Result<(), String> {
                 .as_deref()
                 .map(ChoiceReceiptJsonlWriter::create)
                 .transpose()?;
-            activate_rust_persistence_v2(config).map_err(|error| error.to_string())?;
+            bootstrap_current_runtime(config).map_err(|error| error.to_string())?;
             run_to_tick(
                 config,
                 campaign_id()?,
@@ -266,7 +272,7 @@ fn execute(command: Command, config: &Config) -> Result<(), String> {
                 .as_deref()
                 .map(ChoiceReceiptJsonlWriter::create)
                 .transpose()?;
-            activate_rust_persistence_v2(config).map_err(|error| error.to_string())?;
+            bootstrap_current_runtime(config).map_err(|error| error.to_string())?;
             run_to_tick(
                 config,
                 campaign_id()?,

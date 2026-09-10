@@ -7,10 +7,10 @@ use babylon_tick::{
         decode_material_receipts_v4, nominal_material_world_hash_v3, MaterialWorldRegisterV3,
     },
 };
-use postgres::{Config, GenericClient, NoTls};
+use postgres::GenericClient;
 
 use crate::{
-    material_runtime::{install_material_runtime_schema_v3, read_observer_material_tick_v3},
+    material_runtime::read_observer_material_tick_v3,
     michigan_content::{
         admit_michigan_content_v1, validate_michigan_header_v1, MichiganContentAdmissionV1,
         MichiganPhysicalProjectionV1,
@@ -20,12 +20,6 @@ use crate::{
     production_projection::project_material_observation_v1,
     CampaignId, ProductionSnapshotV2,
 };
-
-const SCHEMA: &str = include_str!("../migrations/observer_material_v1.sql");
-const VIEWS: [&str; 2] = [
-    "v_material_campaign_identity_v1",
-    "v_observer_material_state_v1",
-];
 
 pub(crate) struct MaterialObservationV1 {
     pub(crate) foundation_digest: String,
@@ -306,80 +300,4 @@ fn attribute_production(
     )
     .map_err(|_| ObserverEconomyErrorV1::InvalidProjection)?;
     Ok(production)
-}
-
-/// Exact additive migration: the original economic schema identity remains stable.
-pub(crate) fn install_observer_material_schema_v1(
-    config: &Config,
-) -> Result<(), ObserverEconomyErrorV1> {
-    install_material_runtime_schema_v3(config).map_err(|_| ObserverEconomyErrorV1::SchemaDrift)?;
-    let mut client = config
-        .connect(NoTls)
-        .map_err(|_| ObserverEconomyErrorV1::Database)?;
-    let mut tx = client
-        .transaction()
-        .map_err(|_| ObserverEconomyErrorV1::Database)?;
-    tx.query_one(
-        "SELECT pg_catalog.pg_advisory_xact_lock($1)",
-        &[&crate::SCHEMA_ADVISORY_LOCK_KEY],
-    )
-    .map_err(|_| ObserverEconomyErrorV1::Database)?;
-    let installed: bool = tx
-        .query_one(
-            "SELECT pg_catalog.to_regclass('public.observer_material_schema_v1') IS NOT NULL",
-            &[],
-        )
-        .map_err(|_| ObserverEconomyErrorV1::Database)?
-        .get(0);
-    let digest = digest_hex(&sha256_of(SCHEMA.as_bytes()));
-    if installed {
-        let marker = tx.query_one("SELECT migration_sha256, view_definitions FROM public.observer_material_schema_v1 WHERE singleton", &[]).map_err(|_| ObserverEconomyErrorV1::SchemaDrift)?;
-        let stored: String = marker
-            .try_get(0)
-            .map_err(|_| ObserverEconomyErrorV1::SchemaDrift)?;
-        let definitions: Vec<String> = marker
-            .try_get(1)
-            .map_err(|_| ObserverEconomyErrorV1::SchemaDrift)?;
-        if stored != digest || definitions != view_definitions(&mut tx)? {
-            return Err(ObserverEconomyErrorV1::SchemaDrift);
-        }
-    } else {
-        for view in VIEWS {
-            let name = format!("public.{view}");
-            let exists: bool = tx
-                .query_one("SELECT pg_catalog.to_regclass($1) IS NOT NULL", &[&name])
-                .map_err(|_| ObserverEconomyErrorV1::Database)?
-                .get(0);
-            if exists {
-                return Err(ObserverEconomyErrorV1::SchemaDrift);
-            }
-        }
-        tx.batch_execute(SCHEMA)
-            .map_err(|_| ObserverEconomyErrorV1::Database)?;
-        tx.batch_execute("CREATE TABLE public.observer_material_schema_v1 (singleton boolean PRIMARY KEY CHECK(singleton), migration_sha256 text NOT NULL, view_definitions text[] NOT NULL); REVOKE ALL ON public.observer_material_schema_v1 FROM PUBLIC").map_err(|_| ObserverEconomyErrorV1::Database)?;
-        let definitions = view_definitions(&mut tx)?;
-        tx.execute(
-            "INSERT INTO public.observer_material_schema_v1 VALUES (true,$1,$2)",
-            &[&digest, &definitions],
-        )
-        .map_err(|_| ObserverEconomyErrorV1::Database)?;
-    }
-    tx.commit().map_err(|_| ObserverEconomyErrorV1::Database)?;
-    crate::observer_tick_components::install_observer_tick_components_schema_v1(config)
-}
-
-fn view_definitions(tx: &mut impl GenericClient) -> Result<Vec<String>, ObserverEconomyErrorV1> {
-    VIEWS
-        .iter()
-        .map(|name| {
-            let name = format!("public.{name}");
-            tx.query_one(
-                "SELECT pg_catalog.pg_get_viewdef($1::text::regclass, false)",
-                &[&name],
-            )
-            .map_err(|_| ObserverEconomyErrorV1::SchemaDrift)?
-            .try_get(0)
-            .map_err(|_| ObserverEconomyErrorV1::SchemaDrift)
-        })
-        .collect()
 }

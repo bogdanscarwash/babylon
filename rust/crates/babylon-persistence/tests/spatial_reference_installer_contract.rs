@@ -3,13 +3,12 @@
 const SOURCE: &str = include_str!("../src/spatial_reference_installer.rs");
 
 #[test]
-fn installer_is_exact_epoch_locked_transactional_and_reconciled() {
+fn installer_is_current_schema_locked_transactional_and_reconciled() {
     for required in [
         "pub fn install_michigan_spatial_reference_products(",
         "validate_connection_target(config)",
         "acquire_lock(&mut client)",
-        "inspect_schema_epoch_under_lock(client)",
-        "actual == CURRENT_SCHEMA_EPOCH",
+        "require_current_schema(client)",
         ".isolation_level(IsolationLevel::Serializable)",
         "SET LOCAL search_path TO pg_catalog",
         "SET LOCAL synchronous_commit TO on",
@@ -51,7 +50,7 @@ fn installer_does_not_open_runtime_or_schema_authority() {
     for prohibited in [
         "RustWriterAuthority",
         "request_rust_writer_authority",
-        "migrate_schema_epoch(",
+        "install_current_schema(",
         "CREATE TABLE",
         "ALTER TABLE",
         "DROP TABLE",

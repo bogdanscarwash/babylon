@@ -572,7 +572,7 @@ fn refuse_authority_schemas(transaction: &mut Transaction<'_>) -> Result<(), Cat
 }
 
 pub(crate) fn read_census_rows(
-    transaction: &mut Transaction<'_>,
+    transaction: &mut impl postgres::GenericClient,
 ) -> Result<Vec<CatalogCensusEntry>, CatalogError> {
     let operation = CatalogOperation::Census;
     let row_limit = bounded_limit(MAX_CATALOG_CENSUS_ROWS, CatalogBoundedResource::CensusRows)?;

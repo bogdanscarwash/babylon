@@ -3,12 +3,11 @@
 use super::{assert_lock_released, database_user, ScratchDatabase};
 use babylon_kernel::tick_content_hash::RefDigestV1;
 use babylon_persistence::{
-    compiled_schema_migrations, install_michigan_h3_reference_bundle_v1,
-    michigan_dynamic_hex_foundation_v1, migrate_schema_epoch,
-    representative_h3_reference_cohort_v1, CatalogError, H3ReferenceCohort,
-    H3ReferenceInstallConflict, H3ReferenceInstallDisposition, H3ReferenceInstallError,
-    H3ReferenceInstallOperation, H3ReferenceInstallReport, SchemaEpochError, SchemaEpochOrigin,
-    SCHEMA_ADVISORY_LOCK_KEY,
+    install_current_schema, install_michigan_h3_reference_bundle_v1,
+    michigan_dynamic_hex_foundation_v1, representative_h3_reference_cohort_v1, CatalogError,
+    CurrentSchemaDisposition, CurrentSchemaError, H3ReferenceCohort, H3ReferenceInstallConflict,
+    H3ReferenceInstallDisposition, H3ReferenceInstallError, H3ReferenceInstallOperation,
+    H3ReferenceInstallReport, SCHEMA_ADVISORY_LOCK_KEY,
 };
 use postgres::{Config, NoTls};
 
@@ -120,18 +119,10 @@ fn verify_fresh_refusal(base: &Config, cohort: &H3ReferenceCohort) {
     let database = ScratchDatabase::empty(base, "h3_installer_fresh", database_user(base));
     let config = database.config(base);
     let before = babylon_catalog_snapshot(&config);
-    match install_reference_bundle(&config, cohort) {
-        Err(H3ReferenceInstallError::ExactSchemaEpochRequired {
-            expected,
-            actual,
-            origin,
-        }) => {
-            assert_eq!(expected, current_schema_epoch());
-            assert_eq!(actual, 0);
-            assert_eq!(origin, SchemaEpochOrigin::Fresh);
-        }
-        _ => panic!("fresh database must refuse without migration"),
-    }
+    assert!(matches!(
+        install_reference_bundle(&config, cohort),
+        Err(H3ReferenceInstallError::CurrentSchema(_))
+    ));
     assert_eq!(babylon_catalog_snapshot(&config), before);
     assert_lock_released(&config);
     database.cleanup();
@@ -176,15 +167,15 @@ fn verify_non_owner_refusal(
     let database = ScratchDatabase::empty(base, "h3_installer_non_owner", owner);
     let owner_config = database.config_as(base, owner, owner_password);
     let report =
-        migrate_schema_epoch(&owner_config).expect("database owner must establish current epoch");
-    assert_eq!(report.final_applied, current_schema_epoch());
+        install_current_schema(&owner_config).expect("database owner must establish current epoch");
+    assert_eq!(report.disposition, CurrentSchemaDisposition::Installed);
 
     let admin_config = database.config(base);
     let before = reference_snapshot(&admin_config);
     assert_eq!(
         install_reference_bundle(&admin_config, cohort),
-        Err(H3ReferenceInstallError::SchemaEpoch(
-            SchemaEpochError::CurrentUserIsNotDatabaseOwner,
+        Err(H3ReferenceInstallError::CurrentSchema(
+            CurrentSchemaError::CurrentUserIsNotDatabaseOwner,
         )),
         "non-owner installer call must refuse through the exact owner check"
     );
@@ -481,21 +472,9 @@ fn exact_epoch_database(base: &Config, label: &str) -> (ScratchDatabase, Config)
     let database = ScratchDatabase::empty(base, label, database_user(base));
     let config = database.config(base);
     let report =
-        migrate_schema_epoch(&config).expect("fresh database must reach the exact current epoch");
-    assert_eq!(report.origin, SchemaEpochOrigin::Fresh);
-    let current_epoch = current_schema_epoch();
-    assert_eq!(
-        (report.prior_applied, report.final_applied),
-        (0, current_epoch)
-    );
-    assert_eq!(report.applied_versions.len(), current_epoch);
+        install_current_schema(&config).expect("fresh database must reach the exact current epoch");
+    assert_eq!(report.disposition, CurrentSchemaDisposition::Installed);
     (database, config)
-}
-
-fn current_schema_epoch() -> usize {
-    compiled_schema_migrations()
-        .expect("compiled migration registry must validate")
-        .len()
 }
 
 fn seed_conflicting_artifact_identity(config: &Config) {

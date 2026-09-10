@@ -10,22 +10,18 @@ use babylon_kernel::{sha256_of, H3CellId, H3CellIdError};
 use babylon_tick::h3_runtime::{MichiganDynamicHexFoundationV1, MichiganH3R8ChildParentV1};
 use postgres::{Client, Config, GenericClient, IsolationLevel, NoTls, Row, Transaction};
 
+use crate::current_schema::{bounded_config, require_current_schema, CurrentSchemaError};
 use crate::h3_reference_cohort::MAX_H3_REFERENCE_CLOSURE_ROWS;
 use crate::postgres_catalog::{
     acquire_lock, release_lock, validate_connection_target, CatalogError,
 };
 use crate::postgres_diagnostic::PostgresDiagnosticV1;
-use crate::schema_epoch::{
-    bounded_config, inspect_schema_epoch_under_lock, SchemaEpochError, SchemaEpochOrigin,
-    CURRENT_SCHEMA_EPOCH,
-};
 use crate::{
     build_representative_h3_cohort_v1, H3ReferenceCellRow, H3ReferenceCohort,
     H3ReferenceCohortError, H3ReferenceCohortReceipt, H3ReferenceOrigin,
 };
 
 const H3_REFERENCE_COHORT_FORMAT_VERSION: i16 = 1;
-const H3_REFERENCE_INSTALLER_SCHEMA_EPOCH: usize = CURRENT_SCHEMA_EPOCH;
 const H3_REFERENCE_ARTIFACT_NAME: &str = "bridge_county_h3.parquet";
 const H3_REFERENCE_ARTIFACT_MANIFEST_VERSION: &str = "2.0.0";
 const H3_REFERENCE_SESSION_SETTINGS_SQL: &str = "SET statement_timeout TO '30000ms'";
@@ -248,13 +244,8 @@ pub enum H3ReferenceInstallError {
     /// The exact schema advisory lock could not be acquired.
     Lock(CatalogError),
     /// The existing schema epoch or owner contract failed inspection.
-    SchemaEpoch(SchemaEpochError),
+    CurrentSchema(CurrentSchemaError),
     /// Installation requires one of the exact verified cutover epochs.
-    ExactSchemaEpochRequired {
-        expected: usize,
-        actual: usize,
-        origin: SchemaEpochOrigin,
-    },
     /// A database operation failed with a credential-safe server diagnostic boundary.
     Database {
         operation: H3ReferenceInstallOperation,
@@ -409,7 +400,6 @@ impl H3ReferenceInstallReport {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum InstallPresence {
     Absent,
-    BaseOnly,
     Exact,
 }
 
@@ -632,7 +622,7 @@ where
         usize,
     ) -> Result<CommitAttempt, H3ReferenceInstallError>,
 {
-    require_exact_schema_epoch(session.client())?;
+    require_schema(session.client())?;
     prepare_installer_session(session.client())?;
     let initial = inspect_presence(
         session.client(),
@@ -787,7 +777,7 @@ where
         after_attempt: usize,
     ) -> Result<InstallPresence, H3ReferenceInstallError> {
         self.session.reconnect(self.config)?;
-        require_exact_schema_epoch(self.session.client())?;
+        require_schema(self.session.client())?;
         prepare_installer_session(self.session.client())?;
         inspect_presence(
             self.session.client(),
@@ -799,20 +789,10 @@ where
     }
 }
 
-fn require_exact_schema_epoch(client: &mut Client) -> Result<(), H3ReferenceInstallError> {
-    let (origin, actual) =
-        inspect_schema_epoch_under_lock(client).map_err(H3ReferenceInstallError::SchemaEpoch)?;
-    if origin == SchemaEpochOrigin::ExistingRustPrefix
-        && actual == H3_REFERENCE_INSTALLER_SCHEMA_EPOCH
-    {
-        Ok(())
-    } else {
-        Err(H3ReferenceInstallError::ExactSchemaEpochRequired {
-            expected: H3_REFERENCE_INSTALLER_SCHEMA_EPOCH,
-            actual,
-            origin,
-        })
-    }
+fn require_schema(client: &mut Client) -> Result<(), H3ReferenceInstallError> {
+    require_current_schema(client)
+        .map(|_| ())
+        .map_err(H3ReferenceInstallError::CurrentSchema)
 }
 
 fn prepare_installer_session(client: &mut Client) -> Result<(), H3ReferenceInstallError> {
@@ -905,10 +885,8 @@ fn inspect_presence<ClientType: GenericClient>(
     if read_r8_product(client, bundle, context)?.is_some() {
         verify_r8_cells(client, bundle, context)?;
         Ok(InstallPresence::Exact)
-    } else if any_r8_cells_present(client, bundle, context)? {
-        Err(conflict(H3ReferenceInstallConflict::R8ProductReceipt))
     } else {
-        Ok(InstallPresence::BaseOnly)
+        Err(conflict(H3ReferenceInstallConflict::R8ProductReceipt))
     }
 }
 
@@ -1019,20 +997,6 @@ fn read_r8_product<ClientType: GenericClient>(
     } else {
         Err(conflict(H3ReferenceInstallConflict::R8ProductReceipt))
     }
-}
-
-fn any_r8_cells_present<ClientType: GenericClient>(
-    client: &mut ClientType,
-    bundle: &MichiganH3ReferenceBundleV1<'_>,
-    context: H3ReferenceMembershipReadContext,
-) -> Result<bool, H3ReferenceInstallError> {
-    let operation = H3ReferenceInstallOperation::ReadR8CellRows { context };
-    for batch in bundle.r8_rows().chunks(H3_REFERENCE_INSTALL_BATCH_ROWS) {
-        if !read_r8_cell_batch(client, batch, operation)?.is_empty() {
-            return Ok(true);
-        }
-    }
-    Ok(false)
 }
 
 fn verify_r8_cells<ClientType: GenericClient>(
@@ -1479,9 +1443,7 @@ fn install_and_verify(
     insert_r8_product(transaction, bundle)?;
     match inspect_presence(transaction, bundle, context)? {
         InstallPresence::Exact => Ok(()),
-        InstallPresence::Absent | InstallPresence::BaseOnly => {
-            Err(conflict(H3ReferenceInstallConflict::R8ProductReceipt))
-        }
+        InstallPresence::Absent => Err(conflict(H3ReferenceInstallConflict::R8ProductReceipt)),
     }
 }
 
@@ -2014,8 +1976,7 @@ pub(crate) mod live_postgres_tests {
         assert_eq!(reference_counts(config), (0, 0, 0, 0));
         verify_membership_read_is_join_plan_independent(config, &cohort);
         assert_eq!(reference_counts(config), (0, 0, 0, 0));
-        install_base_only_prefix(config, &cohort);
-        assert_eq!(reference_counts(config), (59_849, 1, 59_849, 0));
+        assert_eq!(reference_counts(config), (0, 0, 0, 0));
         let forced_rollback_started = start_phase(H3AtomicityPhase::ForcedRollback, suite_started);
         let mut forced_failure = |client: &mut postgres::Client,
                                   bundle: &MichiganH3ReferenceBundleV1<'_>,
@@ -2036,7 +1997,7 @@ pub(crate) mod live_postgres_tests {
                 component: H3ReferenceInstallConflict::Membership
             })
         ));
-        assert_eq!(reference_counts(config), (59_849, 1, 59_849, 0));
+        assert_eq!(reference_counts(config), (0, 0, 0, 0));
         finish_phase(
             H3AtomicityPhase::ForcedRollback,
             forced_rollback_started,
@@ -2078,7 +2039,7 @@ pub(crate) mod live_postgres_tests {
     ) {
         let bounded = super::installer_config(config);
         let mut session = super::LockedInstallSession::connect(&bounded).unwrap();
-        super::require_exact_schema_epoch(session.client()).unwrap();
+        super::require_schema(session.client()).unwrap();
         super::prepare_installer_session(session.client()).unwrap();
         let mut transaction = session
             .client()
@@ -2108,32 +2069,6 @@ pub(crate) mod live_postgres_tests {
         )
         .unwrap();
         transaction.rollback().unwrap();
-        session.finish(Ok(())).unwrap();
-    }
-
-    fn install_base_only_prefix(config: &Config, cohort: &H3ReferenceCohort) {
-        let bounded = super::installer_config(config);
-        let mut session = super::LockedInstallSession::connect(&bounded).unwrap();
-        super::require_exact_schema_epoch(session.client()).unwrap();
-        super::prepare_installer_session(session.client()).unwrap();
-        let mut transaction = session
-            .client()
-            .build_transaction()
-            .isolation_level(postgres::IsolationLevel::Serializable)
-            .read_only(false)
-            .start()
-            .unwrap();
-        super::prepare_transaction(&mut transaction).unwrap();
-        super::insert_cells(&mut transaction, cohort.rows()).unwrap();
-        super::insert_header(&mut transaction, cohort.receipt()).unwrap();
-        super::insert_membership(&mut transaction, cohort).unwrap();
-        super::verify_membership(
-            &mut transaction,
-            cohort,
-            H3ReferenceMembershipReadContext::CommitAttempt { attempt: 1 },
-        )
-        .unwrap();
-        transaction.commit().unwrap();
         session.finish(Ok(())).unwrap();
     }
 
@@ -2183,7 +2118,7 @@ pub(crate) mod live_postgres_tests {
         let before = reference_counts(config);
         let bounded = super::installer_config(config);
         let mut session = super::LockedInstallSession::connect(&bounded).unwrap();
-        super::require_exact_schema_epoch(session.client()).unwrap();
+        super::require_schema(session.client()).unwrap();
         super::prepare_installer_session(session.client()).unwrap();
         let context = H3ReferenceMembershipReadContext::InitialInspection;
         super::verify_membership_cardinality(session.client(), cohort, context).unwrap();
@@ -2365,8 +2300,8 @@ pub(crate) mod live_postgres_tests {
 mod tests {
     use super::{
         database_error, drive_install, installer_config, preserve_rollback_result, CommitAttempt,
-        InstallDriver, InstallPresence, H3_REFERENCE_INSTALLER_SCHEMA_EPOCH,
-        H3_REFERENCE_SESSION_SETTINGS_SQL, MAX_H3_REFERENCE_INSTALL_COMMIT_ATTEMPTS,
+        InstallDriver, InstallPresence, H3_REFERENCE_SESSION_SETTINGS_SQL,
+        MAX_H3_REFERENCE_INSTALL_COMMIT_ATTEMPTS,
     };
     use crate::{
         H3ReferenceInstallConflict, H3ReferenceInstallDisposition, H3ReferenceInstallError,
@@ -2466,25 +2401,6 @@ mod tests {
     }
 
     #[test]
-    fn typed_epoch_refusal_names_the_current_installer_epoch() {
-        assert_eq!(H3_REFERENCE_INSTALLER_SCHEMA_EPOCH, 7);
-        let refusal = H3ReferenceInstallError::ExactSchemaEpochRequired {
-            expected: H3_REFERENCE_INSTALLER_SCHEMA_EPOCH,
-            actual: 2,
-            origin: crate::SchemaEpochOrigin::ExistingRustPrefix,
-        };
-
-        assert_eq!(
-            refusal,
-            H3ReferenceInstallError::ExactSchemaEpochRequired {
-                expected: 7,
-                actual: 2,
-                origin: crate::SchemaEpochOrigin::ExistingRustPrefix,
-            }
-        );
-    }
-
-    #[test]
     fn committed_install_reports_installed_after_one_attempt() {
         let mut driver = ScriptedDriver::new([Some(CommitAttempt::Committed), None], [None, None]);
         let resolution = drive_install(InstallPresence::Absent, &mut driver).unwrap();
@@ -2500,20 +2416,6 @@ mod tests {
             &driver.received_reconciliations[..driver.reconciliation_calls],
             &[] as &[usize]
         );
-    }
-
-    #[test]
-    fn exact_base_only_prefix_attempts_the_finite_r8_extension() {
-        let mut driver = ScriptedDriver::new([Some(CommitAttempt::Committed), None], [None, None]);
-        let resolution = drive_install(InstallPresence::BaseOnly, &mut driver).unwrap();
-
-        assert_eq!(
-            resolution.disposition,
-            H3ReferenceInstallDisposition::Installed
-        );
-        assert_eq!(resolution.commit_attempts, 1);
-        assert_eq!((driver.attempt_calls, driver.reconciliation_calls), (1, 0));
-        assert_eq!(&driver.received_attempts[..driver.attempt_calls], &[1]);
     }
 
     #[test]

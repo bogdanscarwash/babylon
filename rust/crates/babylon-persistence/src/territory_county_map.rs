@@ -13,28 +13,17 @@ use babylon_bsl::scenario::{load_scenario, load_scenario_with_prelude};
 use babylon_bsl::types::{BslType, FieldKind};
 use babylon_graph::hypergraph_store::HypergraphStore;
 use babylon_graph::substrate::GraphSubstrate;
-use postgres::{Config, GenericClient, IsolationLevel, NoTls};
+use postgres::GenericClient;
 
 use crate::identity::CampaignId;
-use crate::migration_manifest::SCHEMA_ADVISORY_LOCK_KEY;
-use crate::postgres_catalog::validate_connection_target;
 use crate::postgres_diagnostic::PostgresDiagnosticV1;
 
-/// Exact additive schema for the declared territory-county mapping.
-pub const TERRITORY_COUNTY_MAP_SCHEMA_V1_SQL: &str =
-    include_str!("../migrations/territory_county_map_v1.sql");
-/// Marker-row contract identity for the additive schema.
-pub const TERRITORY_COUNTY_MAP_SCHEMA_CONTRACT_ID: &str = "babylon.territory-county-map-schema.v1";
 /// Scenario field that declares a territory node's county FIPS mapping.
 pub const TERRITORY_COUNTY_MAP_FIELD_V1: &str = "territory/county-fips";
 /// Substrate node type string the scenario loader stamps for `NodeType/TERRITORY`.
 const TERRITORY_NODE_TYPE_V1: &str = "TERRITORY";
 /// Inclusive upper bound of the five-digit county FIPS domain.
 const COUNTY_FIPS_MAX_V1: f64 = 99_999.0;
-
-const SCHEMA_MARKERS_SQL_V1: &str = "SELECT \
-    pg_catalog.to_regclass('babylon_meta.territory_county_map_schema_v1') IS NOT NULL, \
-    pg_catalog.to_regclass('babylon_meta.territory_county_map_v1') IS NOT NULL";
 
 /// One immutable declared territory→county assignment.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -114,8 +103,6 @@ pub enum TerritoryCountyMapErrorV1 {
     InvalidTerritoryLocalName,
     /// A row carried a geoid outside the exact five-digit census domain.
     InvalidCountyGeoid,
-    /// The additive schema is partially installed or names another contract.
-    SchemaMismatch,
     /// Stored mapping rows diverge from the scenario-declared mapping. The
     /// durable rows are never overwritten; a human must reconcile.
     StoredMappingDiverged {
@@ -152,15 +139,6 @@ fn database(operation: &'static str, error: &postgres::Error) -> TerritoryCounty
         operation,
         diagnostic: Some(PostgresDiagnosticV1::capture(error)),
     }
-}
-
-/// Outcome of one additive schema installation attempt.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TerritoryCountyMapSchemaDispositionV1 {
-    /// The schema was installed by this call.
-    Installed,
-    /// The schema was already byte-current.
-    AlreadyCurrent,
 }
 
 /// Extract the declared territory→county mapping from one scenario source.
@@ -242,90 +220,6 @@ pub fn extract_declared_territory_county_map_v1(
     Ok(rows)
 }
 
-/// Install the additive schema idempotently under the shared schema lock.
-///
-/// # Errors
-/// Refuses a partial install, a wrong contract row, or a database failure.
-pub fn install_territory_county_map_schema_v1(
-    config: &Config,
-) -> Result<TerritoryCountyMapSchemaDispositionV1, TerritoryCountyMapErrorV1> {
-    validate_connection_target(config).map_err(|_| TerritoryCountyMapErrorV1::Database {
-        operation: "validate territory county map schema target",
-        diagnostic: None,
-    })?;
-    let mut client = config
-        .connect(NoTls)
-        .map_err(|error| database("connect territory county map schema installer", &error))?;
-    client
-        .query_one(
-            "SELECT pg_catalog.pg_advisory_lock($1)",
-            &[&SCHEMA_ADVISORY_LOCK_KEY],
-        )
-        .map_err(|error| database("lock territory county map schema installer", &error))?;
-    let result = install_schema_locked(&mut client);
-    let unlock = client
-        .query_one(
-            "SELECT pg_catalog.pg_advisory_unlock($1)",
-            &[&SCHEMA_ADVISORY_LOCK_KEY],
-        )
-        .and_then(|row| row.try_get::<_, bool>(0))
-        .map_err(|error| database("unlock territory county map schema installer", &error));
-    match (result, unlock) {
-        (Err(error), _) | (Ok(_), Err(error)) => Err(error),
-        (Ok(disposition), Ok(true)) => Ok(disposition),
-        (Ok(_), Ok(false)) => Err(TerritoryCountyMapErrorV1::SchemaMismatch),
-    }
-}
-
-fn install_schema_locked(
-    client: &mut postgres::Client,
-) -> Result<TerritoryCountyMapSchemaDispositionV1, TerritoryCountyMapErrorV1> {
-    let row = client
-        .query_one(SCHEMA_MARKERS_SQL_V1, &[])
-        .map_err(|error| database("inspect territory county map schema markers", &error))?;
-    let markers = [row.try_get::<_, bool>(0), row.try_get::<_, bool>(1)]
-        .into_iter()
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|error| database("decode territory county map schema markers", &error))?;
-    if markers == [false; 2] {
-        let mut transaction = client
-            .build_transaction()
-            .isolation_level(IsolationLevel::Serializable)
-            .start()
-            .map_err(|error| database("begin territory county map schema install", &error))?;
-        transaction
-            .batch_execute(
-                "SET LOCAL search_path TO pg_catalog; SET LOCAL synchronous_commit TO on",
-            )
-            .map_err(|error| {
-                database("set territory county map schema install settings", &error)
-            })?;
-        transaction
-            .batch_execute(TERRITORY_COUNTY_MAP_SCHEMA_V1_SQL)
-            .map_err(|error| database("install territory county map schema", &error))?;
-        transaction
-            .commit()
-            .map_err(|error| database("commit territory county map schema", &error))?;
-        Ok(TerritoryCountyMapSchemaDispositionV1::Installed)
-    } else if markers == [true; 2] {
-        let row = client
-            .query_one(
-                "SELECT contract_id FROM babylon_meta.territory_county_map_schema_v1",
-                &[],
-            )
-            .map_err(|error| database("read territory county map schema contract", &error))?;
-        let contract_id: String = row
-            .try_get(0)
-            .map_err(|error| database("decode territory county map schema contract", &error))?;
-        if contract_id != TERRITORY_COUNTY_MAP_SCHEMA_CONTRACT_ID {
-            return Err(TerritoryCountyMapErrorV1::SchemaMismatch);
-        }
-        Ok(TerritoryCountyMapSchemaDispositionV1::AlreadyCurrent)
-    } else {
-        Err(TerritoryCountyMapErrorV1::SchemaMismatch)
-    }
-}
-
 /// Persist one campaign's declared mapping rows once, at foundation time.
 ///
 /// Exact retries reconcile through the primary key; the rows are written only
@@ -394,16 +288,13 @@ fn read_territory_county_map_rows_v1(
 /// Returns [`TerritoryCountyMapErrorV1`] for extraction, missing schema, divergent
 /// stored rows, or a database failure.
 pub(crate) fn verify_territory_county_map_v1(
-    config: &Config,
+    client: &mut impl GenericClient,
     campaign_id: CampaignId,
     scenario_source: &str,
     prelude_source: Option<&str>,
 ) -> Result<(), TerritoryCountyMapErrorV1> {
     let mut declared = extract_declared_territory_county_map_v1(scenario_source, prelude_source)?;
-    let mut client = config
-        .connect(NoTls)
-        .map_err(|error| database("connect territory county map verifier", &error))?;
-    let stored = read_territory_county_map_rows_v1(&mut client, campaign_id)?;
+    let stored = read_territory_county_map_rows_v1(client, campaign_id)?;
     declared.sort_by(|left, right| {
         left.territory_local_name
             .cmp(&right.territory_local_name)

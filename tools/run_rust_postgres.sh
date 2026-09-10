@@ -165,14 +165,13 @@ runtime_observation() {
       PGPASSWORD=test PGCONNECT_TIMEOUT=2 PGSSLMODE=disable \
     psql -X -w -qAt -h 127.0.0.1 -p "$PORT" -U test -d "$1" \
       -v ON_ERROR_STOP=1 -c "SELECT \
-        (SELECT pg_catalog.string_agg(ordinal::pg_catalog.text || ':' || state_tag::pg_catalog.text || ':' || schema_epoch::pg_catalog.text, ',' ORDER BY ordinal) FROM babylon_meta.persistence_authority_ledger) \
-        || '|' || (SELECT pg_catalog.string_agg(ordinal::pg_catalog.text || ':' || state_tag::pg_catalog.text || ':' || activation_epoch::pg_catalog.text, ',' ORDER BY ordinal) FROM babylon_meta.committed_tick_v2_authority_ledger) \
+        (SELECT (pg_catalog.count(*) = 1 AND pg_catalog.bool_and(singleton AND pg_catalog.octet_length(schema_sha256) = 32))::pg_catalog.text FROM babylon_meta.current_schema) \
         || '|' || (SELECT pg_catalog.count(*)::pg_catalog.text FROM babylon_meta.campaign) \
         || '|' || (pg_catalog.to_regclass('public.hex_spatial_map') IS NULL)::pg_catalog.text \
         || '|' || (pg_catalog.to_regclass('babylon_state.campaign_foundation') IS NOT NULL)::pg_catalog.text"
 }
 
-readonly CLEAN_RUNTIME="1:1:8,2:2:9|1:1:10,2:2:11|0|true|true"
+readonly CLEAN_RUNTIME="true|0|true|true"
 
 create_runtime_template() {
   local observation
@@ -366,7 +365,7 @@ if [ "$status" -eq 0 ]; then
       ;;
     reference_integrity)
       run_phase reference_integrity 900 cargo test -p babylon-persistence --lib \
-        schema_epoch::live_rollback_tests:: --locked -- --nocapture --ignored --test-threads=1 || status=$?
+        current_schema::live_tests:: --locked -- --nocapture --ignored --test-threads=1 || status=$?
       if [ "$status" -eq 0 ]; then
         run_phase reference_catalog 600 cargo test -p babylon-persistence --test reference_integrity \
           --locked -- --nocapture --ignored --test-threads=1 || status=$?

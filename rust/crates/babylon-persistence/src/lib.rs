@@ -13,6 +13,7 @@ mod bootstrap;
 mod checkpoint;
 pub mod committed_tick_envelope;
 mod county_producer;
+mod current_schema;
 mod cutover_vectors;
 pub mod error;
 mod foundation;
@@ -27,7 +28,6 @@ pub mod material_runtime;
 mod metadata;
 mod michigan_dynamic_hex_foundation;
 pub mod michigan_economy;
-pub mod migration_manifest;
 pub(crate) mod observer_material;
 pub mod observer_reader;
 mod observer_tick_components;
@@ -38,8 +38,6 @@ pub(crate) mod production_projection;
 mod reader;
 mod runtime;
 pub mod runtime_session;
-pub mod schema_epoch;
-pub mod schema_migration;
 pub mod sector_bundle;
 #[allow(
     dead_code,
@@ -73,7 +71,7 @@ pub use babylon_markdown::{
     FOG_CHIP_SEPARATOR_V1,
 };
 pub use bootstrap::{
-    bootstrap_h3_reader_epoch_v1, H3ReaderBootstrapErrorV1, H3ReaderBootstrapReportV1,
+    bootstrap_current_runtime, CurrentRuntimeBootstrapError, CurrentRuntimeBootstrapReport,
 };
 pub use checkpoint::{
     ArchiveDirtyReceiptV1, CheckpointCompletenessV1, CheckpointRowsV1,
@@ -126,9 +124,11 @@ pub use michigan_dynamic_hex_foundation::{
     michigan_dynamic_hex_foundation_v1, MichiganDynamicHexFoundationDecodeErrorV1,
 };
 pub use michigan_economy::*;
-pub use migration_manifest::{
-    ManifestError, MigrationManifest, MAX_MANIFEST_BYTES, MAX_MANIFEST_CHUNKS,
-    SCHEMA_ADVISORY_LOCK_KEY,
+
+pub use current_schema::{
+    current_schema_sha256, install_current_schema, preflight_current_schema,
+    CurrentSchemaDisposition, CurrentSchemaError, CurrentSchemaIdentity, CurrentSchemaOperation,
+    CurrentSchemaReport, CURRENT_SCHEMA_SQL, SCHEMA_ADVISORY_LOCK_KEY,
 };
 pub use observer_reader::*;
 pub use place_producer::{
@@ -156,23 +156,10 @@ pub use postgres_diagnostic::{
 };
 pub use reader::*;
 pub use runtime::{
-    activate_rust_persistence_v2, hydrate_campaign_foundation_v1, prepare_committed_tick_v2,
-    ActivationReportV2, CommittedTickAuthorityLedgerRowV2, CommittedTickAuthorityStateV2,
-    CommittedTickReceiptV2, DurableReplayRuntimeV2, PreActivationIncompatibleRelationV2,
-    PreparedCommittedTickV2, RustPersistenceActivationErrorV2, RustPersistenceRuntimeErrorV2,
+    hydrate_campaign_foundation_v1, prepare_committed_tick_v2, CommittedTickReceiptV2,
+    DurableReplayRuntimeV2, PreparedCommittedTickV2, RustPersistenceRuntimeErrorV2,
 };
 pub use runtime_session::*;
-pub use schema_epoch::{
-    compiled_committed_tick_v2_activation_migrations, compiled_schema_migrations,
-    migrate_schema_epoch, preflight_schema_epoch, validate_migration_prefix, PersistedMigration,
-    SchemaEpochError, SchemaEpochObservation, SchemaEpochOperation, SchemaEpochOrigin,
-    SchemaEpochRelation, SchemaEpochReport, SchemaEpochSchemas, MAX_COMMIT_ATTEMPTS_PER_VERSION,
-    MAX_SCHEMA_MIGRATIONS,
-};
-pub use schema_migration::{
-    MigrationChecksum, MigrationVersion, SchemaMigration, SchemaMigrationError,
-    MAX_SCHEMA_MIGRATION_SQL_BYTES, MIGRATION_CHECKSUM_BYTES,
-};
 pub use semantic_batches::{StableGraphRowsEmptyProofV1, SuccessfulEventBatchEmptyProofV2};
 pub use spatial_reference_installer::{
     install_michigan_spatial_reference_products, SpatialReferenceInstallDisposition,
@@ -185,10 +172,8 @@ pub use spatial_reference_products::{
     ReferenceProductEvidenceClass, SpatialReferenceProducts, SpatialReferenceProductsError,
 };
 pub use territory_county_map::{
-    extract_declared_territory_county_map_v1, install_territory_county_map_schema_v1,
-    TerritoryCountyMapErrorV1, TerritoryCountyMapRowV1, TerritoryCountyMapSchemaDispositionV1,
-    TERRITORY_COUNTY_MAP_FIELD_V1, TERRITORY_COUNTY_MAP_SCHEMA_CONTRACT_ID,
-    TERRITORY_COUNTY_MAP_SCHEMA_V1_SQL,
+    extract_declared_territory_county_map_v1, TerritoryCountyMapErrorV1, TerritoryCountyMapRowV1,
+    TERRITORY_COUNTY_MAP_FIELD_V1,
 };
 
 mod production_evidence;

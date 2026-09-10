@@ -11,10 +11,7 @@ use std::net::{IpAddr, Ipv4Addr};
 const ZERO_DIGEST: &str = "0000000000000000000000000000000000000000000000000000000000000000";
 
 fn expected_census() -> CatalogCensus {
-    parse_catalog_census(include_str!(
-        "../src/fixtures/fresh_schema_epoch_census_v2.txt"
-    ))
-    .unwrap()
+    parse_catalog_census(include_str!("../src/fixtures/fresh_schema_census.txt")).unwrap()
 }
 
 #[test]

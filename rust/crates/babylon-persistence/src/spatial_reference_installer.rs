@@ -4,14 +4,11 @@ use babylon_kernel::tick_content_hash::RefDigestV1;
 use babylon_kernel::H3CellId;
 use postgres::{Client, Config, GenericClient, IsolationLevel, NoTls, Row, Transaction};
 
+use crate::current_schema::{bounded_config, require_current_schema, CurrentSchemaError};
 use crate::postgres_catalog::{
     acquire_lock, release_lock, validate_connection_target, CatalogError,
 };
 use crate::postgres_diagnostic::PostgresDiagnosticV1;
-use crate::schema_epoch::{
-    bounded_config, inspect_schema_epoch_under_lock, SchemaEpochError, SchemaEpochOrigin,
-    CURRENT_SCHEMA_EPOCH,
-};
 use crate::{
     michigan_spatial_reference_products_v1, CountyH3LandAreaRow, CountyIdentityRow,
     CountyPlaceH3LandAreaRow, H3CountRow, H3LandFractionRow, H3ReferenceCohort, PlaceIdentityRow,
@@ -178,12 +175,7 @@ pub enum SpatialReferenceInstallError {
     Bundle(SpatialReferenceProductsError),
     ConnectionTarget(CatalogError),
     Lock(CatalogError),
-    SchemaEpoch(SchemaEpochError),
-    ExactSchemaEpochRequired {
-        expected: usize,
-        actual: usize,
-        origin: SchemaEpochOrigin,
-    },
+    CurrentSchema(CurrentSchemaError),
     Database {
         operation: SpatialReferenceInstallOperation,
         diagnostic: Option<PostgresDiagnosticV1>,
@@ -329,7 +321,7 @@ where
         &SpatialReferenceProducts,
     ) -> Result<CommitAttempt, SpatialReferenceInstallError>,
 {
-    require_exact_schema_epoch(session.client())?;
+    require_schema(session.client())?;
     prepare_session(session.client())?;
     if inspect_presence(session.client(), bundle)? == InstallPresence::Exact {
         return Ok(report(
@@ -389,7 +381,7 @@ fn reconcile(
     bundle: &SpatialReferenceProducts,
 ) -> Result<InstallPresence, SpatialReferenceInstallError> {
     session.reconnect(config)?;
-    require_exact_schema_epoch(session.client())?;
+    require_schema(session.client())?;
     prepare_session(session.client())?;
     inspect_presence(session.client(), bundle)
 }
@@ -442,18 +434,10 @@ impl LockedInstallSession {
     }
 }
 
-fn require_exact_schema_epoch(client: &mut Client) -> Result<(), SpatialReferenceInstallError> {
-    let (origin, actual) = inspect_schema_epoch_under_lock(client)
-        .map_err(SpatialReferenceInstallError::SchemaEpoch)?;
-    if origin == SchemaEpochOrigin::ExistingRustPrefix && actual == CURRENT_SCHEMA_EPOCH {
-        Ok(())
-    } else {
-        Err(SpatialReferenceInstallError::ExactSchemaEpochRequired {
-            expected: CURRENT_SCHEMA_EPOCH,
-            actual,
-            origin,
-        })
-    }
+fn require_schema(client: &mut Client) -> Result<(), SpatialReferenceInstallError> {
+    require_current_schema(client)
+        .map(|_| ())
+        .map_err(SpatialReferenceInstallError::CurrentSchema)
 }
 
 fn prepare_session(client: &mut Client) -> Result<(), SpatialReferenceInstallError> {

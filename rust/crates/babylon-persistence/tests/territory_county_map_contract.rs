@@ -1,7 +1,6 @@
 use babylon_persistence::{
     extract_declared_territory_county_map_v1, TerritoryCountyMapErrorV1, TerritoryCountyMapRowV1,
-    TERRITORY_COUNTY_MAP_FIELD_V1, TERRITORY_COUNTY_MAP_SCHEMA_CONTRACT_ID,
-    TERRITORY_COUNTY_MAP_SCHEMA_V1_SQL,
+    TERRITORY_COUNTY_MAP_FIELD_V1,
 };
 
 const DECLARED_SCENARIO: &str = r"
@@ -21,31 +20,6 @@ const PRELUDE_DECLARED_SCENARIO: &str = r"
 const COUNTY_FIPS_PRELUDE: &str = r"
 (deffield territory/county-fips int extensive)
 ";
-
-#[test]
-fn schema_contract_keeps_declared_mapping_out_of_material_state() {
-    assert!(TERRITORY_COUNTY_MAP_SCHEMA_V1_SQL
-        .contains("CREATE TABLE babylon_meta.territory_county_map_v1"));
-    assert!(TERRITORY_COUNTY_MAP_SCHEMA_V1_SQL
-        .contains("PRIMARY KEY (campaign_id, territory_local_name)"));
-    assert!(TERRITORY_COUNTY_MAP_SCHEMA_V1_SQL
-        .contains("REFERENCES babylon_meta.campaign(campaign_id) ON DELETE CASCADE"));
-    assert!(TERRITORY_COUNTY_MAP_SCHEMA_V1_SQL.contains("county_geoid ~ '^[0-9]{5}$'"));
-    assert!(TERRITORY_COUNTY_MAP_SCHEMA_V1_SQL
-        .contains("REVOKE ALL ON TABLE babylon_meta.territory_county_map_v1 FROM PUBLIC"));
-    assert!(!TERRITORY_COUNTY_MAP_SCHEMA_V1_SQL.contains("IF NOT EXISTS"));
-    assert!(!TERRITORY_COUNTY_MAP_SCHEMA_V1_SQL.contains("CREATE TABLE babylon_state."));
-    // The declared mapping is reference data: it must not point into the
-    // tick-authority schema or the spatial-product rows that a separate
-    // governed installer may not have installed yet.
-    assert!(!TERRITORY_COUNTY_MAP_SCHEMA_V1_SQL.contains("babylon_state."));
-    assert!(!TERRITORY_COUNTY_MAP_SCHEMA_V1_SQL.contains("county_identity"));
-    assert!(TERRITORY_COUNTY_MAP_SCHEMA_CONTRACT_ID.len() <= 256);
-    assert_eq!(
-        TERRITORY_COUNTY_MAP_SCHEMA_CONTRACT_ID,
-        "babylon.territory-county-map-schema.v1"
-    );
-}
 
 #[test]
 fn declared_int_field_seeds_as_county_map_rows_with_zero_padded_geoids() {
