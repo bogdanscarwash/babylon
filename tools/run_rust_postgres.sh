@@ -382,9 +382,22 @@ if [ "$status" -eq 0 ]; then
       fi
       ;;
     archive)
-      run_phase archive 600 cargo test -p babylon-persistence \
-        --test archive_worker_live --test place_producer_live --test county_producer_live \
-        --locked -- --nocapture --ignored --test-threads=1 || status=$?
+      # Current material fixtures commit real ticks. Bound each independent
+      # acceptance group so one slow group cannot hide an unfinished later one.
+      run_phase archive_worker 600 cargo test -p babylon-persistence --lib \
+        archive_revision::worker::live_tests:: --locked -- --nocapture --ignored \
+        --skip ::bounds:: --skip ::revisions:: --skip ::wakeup:: --test-threads=1 || status=$?
+      for archive_group in bounds revisions wakeup; do
+        [ "$status" -eq 0 ] || break
+        run_phase "archive_$archive_group" 600 cargo test -p babylon-persistence --lib \
+          "archive_revision::worker::live_tests::$archive_group::" \
+          --locked -- --nocapture --ignored --test-threads=1 || status=$?
+      done
+      for archive_producer in place_producer_live county_producer_live; do
+        [ "$status" -eq 0 ] || break
+        run_phase "$archive_producer" 600 cargo test -p babylon-persistence \
+          --test "$archive_producer" --locked -- --nocapture --ignored --test-threads=1 || status=$?
+      done
       ;;
     reader)
       for reader_suite in reader_role_live observer_material_live; do

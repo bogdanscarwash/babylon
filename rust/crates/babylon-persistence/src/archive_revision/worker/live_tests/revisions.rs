@@ -1,7 +1,7 @@
 //! Ordered immutable publication proofs over real committed ticks.
 use super::*;
-use babylon_persistence::archive_revision::{ArchiveDossierPending, ArchiveSearchState};
-use babylon_persistence::ArchiveMaterializeMode;
+use crate::archive_revision::{ArchiveDossierPending, ArchiveSearchState};
+use crate::ArchiveMaterializeMode;
 
 fn stable_input(receipt: &PendingArchiveReceipt, question: &str) -> ArchivePageInput {
     let original = stub_page_input(

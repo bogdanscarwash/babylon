@@ -1621,7 +1621,7 @@ mod live_tests {
     #[test]
     #[ignore = "requires the task-owned disposable PostgreSQL runtime"]
     fn live_material_commit_loss_reconciles_only_the_complete_persisted_candidate() {
-        use crate::material_runtime::{CommitLoss, DurableMaterialRuntime, COMMIT_LOSS};
+        use crate::material_runtime::{CommitFault, DurableMaterialRuntime, COMMIT_FAULT};
         let base = validated_base_config();
         let database = TestDatabase::create_from_template(
             &base,
@@ -1648,7 +1648,7 @@ mod live_tests {
             1,
         )
         .unwrap();
-        COMMIT_LOSS.with(|slot| slot.set(Some(CommitLoss::BeforeCommit)));
+        COMMIT_FAULT.with(|slot| slot.set(Some(CommitFault::BeforeCommit)));
         assert!(runtime.advance_and_commit(&mut sink, &actions).is_err());
         assert_eq!(runtime.session().completed_tick(), 0);
         assert_eq!(runtime.session().material().canonical_bytes(), before);
@@ -1671,7 +1671,7 @@ mod live_tests {
             2,
         )
         .unwrap();
-        COMMIT_LOSS.with(|slot| slot.set(Some(CommitLoss::AfterCommit)));
+        COMMIT_FAULT.with(|slot| slot.set(Some(CommitFault::AfterCommit)));
         let identity = runtime.advance_and_commit(&mut sink, &actions).unwrap();
         assert_eq!(
             runtime.diagnostic_receipt().unwrap().commit_disposition(),

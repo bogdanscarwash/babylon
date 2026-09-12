@@ -579,27 +579,26 @@ impl DurableMaterialRuntime {
             tick_sql - 1,
             tick_sql,
         )?;
-        let config = &self.config;
-        let campaign = self.campaign;
         let scope = candidate
             .graph_report()
             .result_stable_graph()
             .scenario_scope()
             .to_owned();
         let components = MaterialComponentIdentity::from_session(self.session.graph_session());
-        let (ack,disposition)=self.session.commit_prepared_and_publish(sink,candidate,|_|{
-            // The marker is the final durable statement. Publication capacity is already reserved.
-            tx.execute("INSERT INTO babylon_state.tick_commit (campaign_id,resolve_tick,envelope_layout_version,tick_content_hash,envelope_digest) VALUES ($1::uuid,$2,3,$3,$4)",&[campaign.as_uuid(),&tick_sql,&&identity.tick_content_hash().as_bytes()[..],&&envelope.digest()[..]])?;
-            match commit_material_transaction(tx) {Ok(())=>Ok(ReplayCommitDisposition::Committed),Err(error)=>{
-                let mut retry_client=config.connect(NoTls)?;
-                let mut retry=retry_client.transaction()?;
-                verify_runtime_schema_client(&mut retry)?;
-                if !marker_matches(&mut retry,StoredTickReadSource::Runtime,campaign,&identity,&envelope)? {return Err(error);}
-                let stored=read_authenticated_material_tick(&mut retry,StoredTickReadSource::Runtime,campaign,identity.resolve_tick(),&scope,identity.foundation_digest(),&components)?;
-                if stored.identity!=identity || stored.envelope.canonical_bytes()!=envelope.canonical_bytes(){return Err(MaterialRuntimeError::TailConflict);}
-                Ok(ReplayCommitDisposition::ReconciledAfterAmbiguousCommit)
-            }}
-        }).map_err(commit_error)?;
+        let (ack, disposition) = self
+            .session
+            .commit_prepared_and_publish(sink, candidate, |_| {
+                commit_material_envelope(
+                    tx,
+                    &self.config,
+                    self.campaign,
+                    &identity,
+                    &envelope,
+                    &scope,
+                    &components,
+                )
+            })
+            .map_err(commit_error)?;
         self.tail = Some(ack);
         diagnostic.acknowledge(disposition);
         self.last_receipt = Some(diagnostic);
@@ -609,33 +608,118 @@ impl DurableMaterialRuntime {
     }
 }
 
+// Commit the marker last, then reconcile an ambiguous acknowledgement against
+// the complete authenticated candidate before permitting live publication.
+fn commit_material_envelope(
+    mut tx: postgres::Transaction<'_>,
+    config: &Config,
+    campaign: CampaignId,
+    identity: &IdentifiedMaterialTick,
+    envelope: &CommittedMaterialTickEnvelope,
+    scope: &str,
+    components: &MaterialComponentIdentity,
+) -> Result<ReplayCommitDisposition, MaterialRuntimeError> {
+    let tick = i64::try_from(identity.resolve_tick()).map_err(|_| MaterialRuntimeError::Bounds)?;
+    #[cfg(test)]
+    inject_marker_trigger_failure(&mut tx)?;
+    tx.execute(
+        "INSERT INTO babylon_state.tick_commit \
+         (campaign_id,resolve_tick,envelope_layout_version,tick_content_hash,envelope_digest) \
+         VALUES ($1::uuid,$2,3,$3,$4)",
+        &[
+            campaign.as_uuid(),
+            &tick,
+            &&identity.tick_content_hash().as_bytes()[..],
+            &&envelope.digest()[..],
+        ],
+    )?;
+    match commit_material_transaction(tx) {
+        Ok(()) => Ok(ReplayCommitDisposition::Committed),
+        Err(error) => {
+            let mut retry_client = config.connect(NoTls)?;
+            let mut retry = retry_client.transaction()?;
+            verify_runtime_schema_client(&mut retry)?;
+            if !marker_matches(
+                &mut retry,
+                StoredTickReadSource::Runtime,
+                campaign,
+                identity,
+                envelope,
+            )? {
+                return Err(error);
+            }
+            let stored = read_authenticated_material_tick(
+                &mut retry,
+                StoredTickReadSource::Runtime,
+                campaign,
+                identity.resolve_tick(),
+                scope,
+                identity.foundation_digest(),
+                components,
+            )?;
+            if stored.identity != *identity
+                || stored.envelope.canonical_bytes() != envelope.canonical_bytes()
+            {
+                return Err(MaterialRuntimeError::TailConflict);
+            }
+            Ok(ReplayCommitDisposition::ReconciledAfterAmbiguousCommit)
+        }
+    }
+}
+
+// Inject only after exact schema admission and all candidate rows are prepared.
+// The replacement and its marker-trigger failure share the candidate transaction,
+// so PostgreSQL rollback restores the original function without external repair.
+#[cfg(test)]
+fn inject_marker_trigger_failure(
+    tx: &mut postgres::Transaction<'_>,
+) -> Result<(), MaterialRuntimeError> {
+    let armed = COMMIT_FAULT.with(|slot| {
+        if slot.get() == Some(CommitFault::MarkerTrigger) {
+            slot.set(None);
+            true
+        } else {
+            false
+        }
+    });
+    if armed {
+        tx.batch_execute(
+            "CREATE OR REPLACE FUNCTION babylon_meta.archive_wakeup_v1() RETURNS trigger \
+             LANGUAGE plpgsql SET search_path = pg_catalog AS $fault$ BEGIN \
+             RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='test-owned Archive wakeup failure'; END $fault$",
+        )?;
+    }
+    Ok(())
+}
+
 // Keep commit acknowledgement loss inside the same reconciliation boundary as
 // transport failure: only the persisted complete candidate can authorize publication.
 fn commit_material_transaction(tx: postgres::Transaction<'_>) -> Result<(), MaterialRuntimeError> {
     #[cfg(test)]
-    let fault = COMMIT_LOSS.with(|slot| slot.replace(None));
+    let fault = COMMIT_FAULT.with(|slot| slot.replace(None));
     #[cfg(test)]
-    if fault == Some(CommitLoss::BeforeCommit) {
+    if fault == Some(CommitFault::BeforeCommit) {
         tx.rollback()?;
         return Err(MaterialRuntimeError::InjectedCommitLoss);
     }
     tx.commit()?;
     #[cfg(test)]
-    if fault == Some(CommitLoss::AfterCommit) {
+    if fault == Some(CommitFault::AfterCommit) {
         return Err(MaterialRuntimeError::InjectedCommitLoss);
     }
     Ok(())
 }
 
 #[cfg(test)]
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub(crate) enum CommitLoss {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum CommitFault {
     BeforeCommit,
     AfterCommit,
+    MarkerTrigger,
 }
 #[cfg(test)]
 thread_local! {
-    pub(crate) static COMMIT_LOSS: std::cell::Cell<Option<CommitLoss>> = const { std::cell::Cell::new(None) };
+    pub(crate) static COMMIT_FAULT: std::cell::Cell<Option<CommitFault>> = const { std::cell::Cell::new(None) };
 }
 
 // Operator diagnostics only: clocks never enter state, hashes, receipts or the

@@ -8,6 +8,7 @@
 
 #[path = "support/current_material.rs"]
 mod current_material;
+use babylon_persistence::{material_runtime, michigan_content, michigan_material};
 
 use std::str::FromStr;
 

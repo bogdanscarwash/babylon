@@ -1,8 +1,8 @@
 //! Real commit-bound hints, cancellable publication, and listener catch-up.
 use super::*;
-use babylon_persistence::archive_driver::{ArchiveDriver, ArchiveDriverEvent};
-use babylon_persistence::{
-    material_runtime::{DurableMaterialRuntime, MaterialRuntimeError},
+use crate::archive_driver::{ArchiveDriver, ArchiveDriverEvent};
+use crate::{
+    material_runtime::{CommitFault, DurableMaterialRuntime, MaterialRuntimeError, COMMIT_FAULT},
     michigan_content::MichiganContentPreset,
     michigan_material::MichiganDeliveryPreset,
     ArchiveWorkerCancellation, ARCHIVE_WAKEUP_CHANNEL,
@@ -113,7 +113,7 @@ impl ArchiveDossierProducer for CancelAfterProduce {
         &self,
         campaign: Uuid,
         receipt: &PendingArchiveReceipt,
-        knowledge: &babylon_persistence::ArchiveKnowledge,
+        knowledge: &crate::ArchiveKnowledge,
         page_budget: usize,
     ) -> Result<ArchiveProducerOutcome, SemanticArchiveError> {
         let result = StubPageProducer.produce(campaign, receipt, knowledge, page_budget);
@@ -382,18 +382,26 @@ fn assert_marker_fault_rolls_back(
     let exact_function: String = writer.query_one(
         "SELECT pg_catalog.pg_get_functiondef('babylon_meta.archive_wakeup_v1()'::regprocedure)", &[],
     ).expect("retain exact wakeup function").get(0);
-    writer.batch_execute("CREATE OR REPLACE FUNCTION babylon_meta.archive_wakeup_v1() RETURNS trigger \
-        LANGUAGE plpgsql SET search_path = pg_catalog AS $fault$ BEGIN \
-        RAISE EXCEPTION USING ERRCODE='P0001',MESSAGE='test-owned Archive wakeup failure'; END $fault$")
-        .expect("install test-owned marker trigger failure");
+    assert_eq!(
+        COMMIT_FAULT.with(|slot| slot.replace(Some(CommitFault::MarkerTrigger))),
+        None,
+        "this test owns one unused material commit fault slot"
+    );
     let mut sink = CollectingSink::default();
     let actions = material_actions(runtime, 2);
     let refused = runtime.advance_and_commit(&mut sink, &actions);
-    // Restore before assertions, so even a failed assertion leaves the exact
-    // installed function rather than a persistent fault in this scratch target.
-    writer
-        .batch_execute(&exact_function)
-        .expect("restore exact wakeup function");
+    assert_eq!(
+        COMMIT_FAULT.with(|slot| slot.replace(None)),
+        None,
+        "the failure must reach the marker boundary after schema admission"
+    );
+    let restored_function: String = writer.query_one(
+        "SELECT pg_catalog.pg_get_functiondef('babylon_meta.archive_wakeup_v1()'::regprocedure)", &[],
+    ).expect("read automatically restored wakeup function").get(0);
+    assert_eq!(
+        restored_function, exact_function,
+        "candidate rollback restores the original trigger function without repair"
+    );
     let Err(MaterialRuntimeError::Database(error)) = refused else {
         panic!("notification failure must refuse the commit acknowledgement");
     };

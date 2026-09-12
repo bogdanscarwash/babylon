@@ -1,7 +1,6 @@
 //! Confined reader credentials for callers that already validated the disposable canary.
 
-use babylon_persistence::archive_revision::ArchiveReadScope;
-use babylon_persistence::{identity::CampaignId, install_reader_role, SemanticArchiveReader};
+use super::{install_reader_role, ArchiveReadScope, CampaignId, SemanticArchiveReader};
 use postgres::{Config, NoTls};
 
 pub fn with_reader<T>(config: &Config, operation: impl FnOnce(&SemanticArchiveReader) -> T) -> T {

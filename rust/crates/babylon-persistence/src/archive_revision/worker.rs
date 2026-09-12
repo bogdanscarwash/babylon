@@ -18,7 +18,13 @@ pub(crate) fn sweep(
     cancellation.check()?;
     let mut client = store.connect("connect ordered Archive worker")?;
     publication::with_campaign_lock(&mut client, campaign, |client| {
-        sweep_locked(client, campaign, producer, cancellation)
+        sweep_locked(
+            client,
+            campaign,
+            producer,
+            cancellation,
+            crate::ARCHIVE_SWEEP_MAX_RECEIPTS,
+        )
     })
 }
 
@@ -27,9 +33,10 @@ fn sweep_locked(
     campaign: CampaignId,
     producer: &dyn ArchiveDossierProducer,
     cancellation: &ArchiveWorkerCancellation,
+    receipt_budget: i64,
 ) -> Result<ArchiveWorkerSweepReport, SemanticArchiveError> {
     let mut dispositions = Vec::new();
-    for _ in 0..crate::ARCHIVE_SWEEP_MAX_RECEIPTS {
+    for _ in 0..receipt_budget {
         cancellation.check()?;
         let mut tx = client
             .build_transaction()
@@ -110,3 +117,6 @@ fn read_progress(
         .map_err(|error| database("finish coherent Archive progress", &error))?;
     Ok(report)
 }
+
+#[cfg(test)]
+mod live_tests;

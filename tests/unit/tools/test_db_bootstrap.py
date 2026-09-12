@@ -270,7 +270,9 @@ def test_fresh_runtime_focuses_cover_current_live_consumers() -> None:
         "current_schema::live_tests::",
         "--test reference_integrity",
         "runtime::live_tests::live_",
-        "--test archive_worker_live --test place_producer_live --test county_producer_live",
+        "archive_revision::worker::live_tests::",
+        "for archive_group in bounds revisions wakeup",
+        "for archive_producer in place_producer_live county_producer_live",
         "reader_role_live observer_material_live",
         "--test dossier_cli_live",
     ):
@@ -342,7 +344,9 @@ def test_heavy_children_and_enclosing_ci_have_truthful_deadlines() -> None:
         "run_phase reference_catalog 600 cargo test",
         "run_phase runtime 600 cargo test",
         'run_phase material_writer_bounds 180 env BABYLON_RUNTIME_DSN="$BOOTSTRAP_DSN"',
-        "run_phase archive 600 cargo test",
+        "run_phase archive_worker 600 cargo test",
+        'run_phase "archive_$archive_group" 600 cargo test',
+        'run_phase "$archive_producer" 600 cargo test',
         'run_phase "$reader_suite" 600 cargo test',
         "run_phase client 900 cargo test",
     ):
@@ -358,8 +362,15 @@ def test_heavy_children_and_enclosing_ci_have_truthful_deadlines() -> None:
         step = next(
             step for step in job["steps"] if step.get("run") == "tools/run_rust_postgres.sh"
         )
-        assert step["timeout-minutes"] * 60 >= 600 + 180 + contract_seconds + 600
-        assert job["timeout-minutes"] >= step["timeout-minutes"] + 10
+        if job_name == "pg-integration-shards":
+            assert step["timeout-minutes"] == "${{ matrix.focus == 'archive' && 85 || 45 }}"
+            assert job["timeout-minutes"] == "${{ matrix.focus == 'archive' && 95 || 55 }}"
+            assert 600 + 180 + contract_seconds + 600 <= 45 * 60
+            # Six serial Archive groups retain separate ten-minute ceilings.
+            assert 85 * 60 >= 600 + 180 + 6 * 600 + 600
+        else:
+            assert step["timeout-minutes"] * 60 >= 600 + 180 + contract_seconds + 600
+            assert job["timeout-minutes"] >= step["timeout-minutes"] + 10
 
 
 def test_disposable_pg_runner_keeps_bounded_logs_phase_timings_and_runtime_identity() -> None:

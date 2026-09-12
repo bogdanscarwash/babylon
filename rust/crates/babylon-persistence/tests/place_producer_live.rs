@@ -10,6 +10,7 @@
 
 #[path = "support/current_material.rs"]
 mod current_material;
+use babylon_persistence::{material_runtime, michigan_content, michigan_material};
 
 use std::str::FromStr;
 
@@ -248,7 +249,7 @@ fn place_page_rows(config: &Config, campaign_id: CampaignId) -> Vec<(String, i64
         .expect("place page rows connection")
         .query(
             "SELECT DISTINCT ON(subject_id) subject_id, source_tick, markdown FROM babylon_meta.archive_page_revision_v2 \
-             WHERE campaign_id = $1::uuid AND subject_kind = 'place' ORDER BY subject_id,effective_tick DESC,origin DESC",
+             WHERE campaign_id = $1::uuid AND subject_kind = 'place' ORDER BY subject_id,effective_tick DESC",
             &[campaign_id.as_uuid()],
         )
         .expect("place page rows query")
@@ -426,24 +427,25 @@ fn live_place_producer_pages_the_bootstrap_drain_across_sweeps() {
 #[test]
 #[ignore = "requires the task-owned disposable PostgreSQL runtime and committed ticks"]
 fn live_composite_producer_drains_the_backlog_county_first() {
+    const COUNTY_COUNT: i64 = 83;
     let target = LivePlaceTarget::create("compdrain", 0x2200_0000_0000_0000_0000_0000_0000_00c2, 1);
 
-    // The place conformance scenario declares no `territory/county-fips`
-    // geography, so scenario reconciliation leaves the declared county mapping
-    // empty. Seed the two mapping rows directly — the exact rows a declaring
-    // scenario would extract — so the county dossier has a deterministic dirty
-    // set to thread ahead of the place head.
-    target
+    // The current material foundation declares all Michigan counties. Verify
+    // those canonical mappings before exercising the shared page budget.
+    let mapping = target
         .config
         .connect(NoTls)
-        .expect("county map seed connection")
-        .execute(
-            "INSERT INTO babylon_meta.territory_county_map_v1 \
-             (campaign_id, territory_local_name, county_geoid) \
-             VALUES ($1::uuid, 'wayne', '26163'), ($1::uuid, 'oakland', '26125')",
+        .expect("current county map connection")
+        .query_one(
+            "SELECT count(*), count(DISTINCT county_geoid), \
+             bool_and(territory_local_name = 'county-' || county_geoid) \
+             FROM babylon_meta.territory_county_map_v1 WHERE campaign_id = $1::uuid",
             &[target.campaign_id.as_uuid()],
         )
-        .expect("county map rows seed");
+        .expect("current county mapping census");
+    assert_eq!(mapping.get::<_, i64>(0), COUNTY_COUNT);
+    assert_eq!(mapping.get::<_, i64>(1), COUNTY_COUNT);
+    assert!(mapping.get::<_, bool>(2));
 
     let county = CountyDossierProducer::try_new(&target.config).expect("county products load");
     let place = PlaceDossierProducer::try_new(&target.config).expect("place products load");
@@ -466,8 +468,8 @@ fn live_composite_producer_drains_the_backlog_county_first() {
     let staged_county = archive_page_count(&target.config, target.campaign_id, "county");
     let staged_place = place_page_count(&target.config, target.campaign_id);
     assert_eq!(
-        staged_county, 2,
-        "both declared counties publish in the first batch"
+        staged_county, COUNTY_COUNT,
+        "all declared counties publish in the first batch"
     );
     assert_eq!(
         staged_county + staged_place,

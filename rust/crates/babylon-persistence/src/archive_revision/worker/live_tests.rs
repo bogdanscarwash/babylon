@@ -1,32 +1,38 @@
 //! Live Archive worker proofs against the task-owned disposable `PostgreSQL` runtime.
 //!
-//! Each test clones the validated Rust-active runtime template, commits real
-//! ticks through `DurableMaterialRuntimeV3`, and then proves one worker
+//! Each test clones the validated current runtime template, commits real
+//! ticks through `DurableMaterialRuntime`, and then proves one worker
 //! acceptance property against the committed dirty receipts.
 
-#[path = "support/current_material.rs"]
+#[path = "../../../tests/support/current_material.rs"]
 mod current_material;
 
+use crate::archive_revision::ArchiveReadScope;
+use crate::{install_reader_role, SemanticArchiveReader};
+use crate::{material_runtime, michigan_content, michigan_material};
 use std::str::FromStr;
 
-#[path = "support/archive_reader.rs"]
-mod archive_reader;
-#[path = "archive_worker_live/revisions.rs"]
-mod revisions;
-#[path = "archive_worker_live/wakeup.rs"]
-mod wakeup;
-use archive_reader::{scope_at, with_reader};
-use babylon_persistence::archive_revision::{ArchiveDossierBounds, ArchiveDossierState};
+#[path = "live_tests/bounds.rs"]
+mod bounds;
 
-use babylon_bsl::structural_verbs::CollectingSink;
-use babylon_persistence::material_runtime::DurableMaterialRuntime;
-use babylon_persistence::{
+#[path = "../../../tests/support/archive_reader.rs"]
+mod archive_reader;
+#[path = "live_tests/revisions.rs"]
+mod revisions;
+#[path = "live_tests/wakeup.rs"]
+mod wakeup;
+use crate::archive_revision::{ArchiveDossierBounds, ArchiveDossierState};
+use archive_reader::{scope_at, with_reader};
+
+use crate::material_runtime::DurableMaterialRuntime;
+use crate::{
     identity::CampaignId, postgres_catalog::validate_connection_target, seed_foundation_grants,
     ArchiveCitation, ArchiveDirtyBatch, ArchiveDossierProducer, ArchiveKnowledgeGrant,
     ArchivePageInput, ArchivePageRef, ArchiveProducerOutcome, ArchiveReceiptDisposition,
     ArchiveSignal, ArchiveSubject, ArchiveSubjectKind, ArchiveWorker, FoundationGrantsError,
     NullArchiveDossierProducer, PendingArchiveReceipt, SemanticArchiveError, SemanticArchiveStore,
 };
+use babylon_bsl::structural_verbs::CollectingSink;
 use babylon_practice_contract::OrderedPracticeActionBatch;
 use postgres::{Config, NoTls};
 use uuid::Uuid;
@@ -104,7 +110,7 @@ impl ArchiveDossierProducer for StubPageProducer {
         &self,
         _campaign_id: Uuid,
         receipt: &PendingArchiveReceipt,
-        _knowledge: &babylon_persistence::ArchiveKnowledge,
+        _knowledge: &crate::ArchiveKnowledge,
         _page_budget: usize,
     ) -> Result<ArchiveProducerOutcome, SemanticArchiveError> {
         let batch = ArchiveDirtyBatch::try_new(
@@ -126,7 +132,7 @@ impl ArchiveDossierProducer for FailAtTickProducer {
         &self,
         campaign_id: Uuid,
         receipt: &PendingArchiveReceipt,
-        knowledge: &babylon_persistence::ArchiveKnowledge,
+        knowledge: &crate::ArchiveKnowledge,
         page_budget: usize,
     ) -> Result<ArchiveProducerOutcome, SemanticArchiveError> {
         if receipt.resolve_tick() == self.fail_at_tick {
@@ -150,7 +156,7 @@ impl ArchiveDossierProducer for QuietExceptProducer {
         &self,
         campaign_id: Uuid,
         receipt: &PendingArchiveReceipt,
-        knowledge: &babylon_persistence::ArchiveKnowledge,
+        knowledge: &crate::ArchiveKnowledge,
         page_budget: usize,
     ) -> Result<ArchiveProducerOutcome, SemanticArchiveError> {
         if receipt.resolve_tick() == self.materialize_tick {
@@ -176,7 +182,7 @@ impl ArchiveDossierProducer for ChangedExceptProducer {
         &self,
         campaign_id: Uuid,
         receipt: &PendingArchiveReceipt,
-        knowledge: &babylon_persistence::ArchiveKnowledge,
+        knowledge: &crate::ArchiveKnowledge,
         page_budget: usize,
     ) -> Result<ArchiveProducerOutcome, SemanticArchiveError> {
         if receipt.resolve_tick() == self.quiet_tick {
@@ -197,7 +203,7 @@ impl ArchiveDossierProducer for WrongTickProducer {
         &self,
         _campaign_id: Uuid,
         receipt: &PendingArchiveReceipt,
-        _knowledge: &babylon_persistence::ArchiveKnowledge,
+        _knowledge: &crate::ArchiveKnowledge,
         _page_budget: usize,
     ) -> Result<ArchiveProducerOutcome, SemanticArchiveError> {
         let wrong = PendingArchiveReceipt::try_new(
@@ -221,7 +227,7 @@ impl ArchiveDossierProducer for UndrainedProducer {
         &self,
         _campaign_id: Uuid,
         receipt: &PendingArchiveReceipt,
-        _knowledge: &babylon_persistence::ArchiveKnowledge,
+        _knowledge: &crate::ArchiveKnowledge,
         _page_budget: usize,
     ) -> Result<ArchiveProducerOutcome, SemanticArchiveError> {
         Ok(ArchiveProducerOutcome::new(
@@ -256,47 +262,6 @@ fn insert_orphan_dirty_receipt(
             ],
         )
         .expect("orphan dirty receipt inserts without a marker");
-}
-
-/// Insert marker-backed dirty receipts directly for a tick range, mirroring
-/// what a committed tick writes without paying the per-tick runtime cost.
-fn insert_marker_backed_dirty_receipts(
-    config: &Config,
-    campaign_id: CampaignId,
-    ticks: std::ops::RangeInclusive<u64>,
-) {
-    let mut client = config.connect(NoTls).expect("marker insert connection");
-    for tick in ticks {
-        let resolve_tick = i64::try_from(tick).expect("bounded test tick");
-        let mut tick_content_hash = [0u8; 32];
-        tick_content_hash[..8].copy_from_slice(&tick.to_be_bytes());
-        let envelope_digest = [0xEEu8; 32];
-        client
-            .execute(
-                "INSERT INTO babylon_state.tick_commit (\
-                     campaign_id, resolve_tick, envelope_layout_version, \
-                     tick_content_hash, envelope_digest\
-                 ) VALUES ($1::uuid, $2, 2, $3, $4)",
-                &[
-                    campaign_id.as_uuid(),
-                    &resolve_tick,
-                    &&tick_content_hash[..],
-                    &&envelope_digest[..],
-                ],
-            )
-            .expect("marker row inserts");
-        client
-            .execute(
-                "INSERT INTO babylon_state.archive_dirty_receipt_v1 \
-                 (campaign_id, resolve_tick, tick_content_hash) VALUES ($1::uuid, $2, $3)",
-                &[
-                    campaign_id.as_uuid(),
-                    &resolve_tick,
-                    &&tick_content_hash[..],
-                ],
-            )
-            .expect("dirty receipt row inserts");
-    }
 }
 
 fn dirty_receipt_count(config: &Config, campaign_id: CampaignId) -> i64 {
@@ -378,9 +343,9 @@ impl TestDatabase {
             admin,
             active: true,
         };
-        babylon_persistence::preflight_current_schema(&database.config(base))
+        crate::preflight_current_schema(&database.config(base))
             .expect("runtime clone has the exact current catalog and role grants");
-        let expected_schema_digest = babylon_persistence::current_schema_sha256();
+        let expected_schema_digest = crate::current_schema_sha256();
         let observation = database
             .config(base)
             .connect(NoTls)
@@ -753,100 +718,6 @@ fn live_worker_crash_between_receipts_resumes_exactly() {
 
 #[test]
 #[ignore = "requires the task-owned disposable PostgreSQL runtime and committed ticks"]
-fn live_worker_quiet_backlog_respects_the_bound_and_reaches_later_changed_content() {
-    const TICKS: u64 = 300;
-    let target = LiveWorkerTarget::create_with_grants(
-        "archiveworkersweeppage",
-        0x2200_0000_0000_0000_0000_0000_0000_00a7,
-        1,
-        &[1, TICKS],
-    );
-    insert_marker_backed_dirty_receipts(&target.config, target.campaign_id, 2..=TICKS);
-    let producer = QuietExceptProducer {
-        materialize_tick: TICKS,
-    };
-    let mut worker = ArchiveWorker::new(&target.config);
-    let first = worker
-        .sweep_once(target.campaign_id, &producer)
-        .expect("bounded quiet prefix");
-    assert_eq!(first.applied_count(), 256);
-    assert_eq!(first.verified_tick(), 256);
-    assert_eq!(archive_page_count(&target.config, target.campaign_id), 0);
-    let second = worker
-        .sweep_once(target.campaign_id, &producer)
-        .expect("remaining prefix");
-    assert_eq!(second.applied_count(), 44);
-    assert_eq!(second.verified_tick(), TICKS);
-    assert_eq!(archive_page_count(&target.config, target.campaign_id), 1);
-    assert_eq!(
-        receipt_consumption_count(&target.config, target.campaign_id),
-        300
-    );
-    target.finish();
-}
-
-#[test]
-#[ignore = "requires the task-owned disposable PostgreSQL runtime and committed ticks"]
-fn live_worker_stops_at_the_consume_cap_and_leaves_the_remainder_pending() {
-    // One real committed tick establishes the campaign; the remaining
-    // marker-backed dirty receipts insert directly, as the quiet-backlog
-    // proof already does. Tick 256 consumes empty and fills the sweep cap.
-    const TICKS: u64 = 300;
-    let target = LiveWorkerTarget::create_with_grants(
-        "archiveworkercap",
-        0x2200_0000_0000_0000_0000_0000_0000_00a9,
-        1,
-        &[1, 2, 3],
-    );
-    insert_marker_backed_dirty_receipts(&target.config, target.campaign_id, 2..=TICKS);
-
-    let mut worker = ArchiveWorker::new(&target.config);
-    let report = worker
-        .sweep_once(
-            target.campaign_id,
-            &ChangedExceptProducer { quiet_tick: 256 },
-        )
-        .expect("one sweep stops at the consume cap");
-
-    assert_eq!(
-        report.applied_count(),
-        256,
-        "255 changed receipts plus the quiet receipt at tick 256"
-    );
-    assert_eq!(report.paged_count(), 0);
-    assert_eq!(report.already_consumed_count(), 0);
-    assert_eq!(report.dispositions().len(), 256);
-    let last = report
-        .dispositions()
-        .last()
-        .expect("the final receipt in the bounded prefix settles");
-    assert_eq!(*last, (256, ArchiveReceiptDisposition::Applied));
-    assert_eq!(
-        receipt_consumption_count(&target.config, target.campaign_id),
-        256,
-        "the consume cap is a hard per-sweep stop, whatever the page composition"
-    );
-    assert_eq!(
-        report.verified_tick(),
-        256,
-        "the quiet tick 256 settles within the same bounded prefix"
-    );
-
-    let mut resumed = ArchiveWorker::new(&target.config);
-    let second = resumed
-        .sweep_once(target.campaign_id, &StubPageProducer)
-        .expect("the remainder stays pending for the next invocation");
-    assert_eq!(second.applied_count(), 44, "ticks 257..=300");
-    assert_eq!(second.paged_count(), 0);
-    assert_eq!(
-        receipt_consumption_count(&target.config, target.campaign_id),
-        i64::try_from(TICKS).expect("bounded tick count")
-    );
-    target.finish();
-}
-
-#[test]
-#[ignore = "requires the task-owned disposable PostgreSQL runtime and committed ticks"]
 fn live_worker_consumes_empty_batches_once_without_publishing_content() {
     let target = LiveWorkerTarget::create(
         "archiveworkerquiet",
@@ -974,7 +845,7 @@ fn live_search_refuses_tampered_page_content() {
             .expect("stored markdown tampers");
         assert_eq!(
             reader.search_as_of(&scope, "728576", 10),
-            Err(babylon_persistence::SemanticArchiveReaderError::Archive(
+            Err(crate::SemanticArchiveReaderError::Archive(
                 SemanticArchiveError::StoredPageMismatch
             )),
             "bytes that disagree with their digest refuse the canonical read"
@@ -1167,6 +1038,3 @@ fn live_foundation_grants_seed_at_campaign_foundation_and_reconcile_exactly() {
     );
     target.finish();
 }
-
-#[path = "support/material_config.rs"]
-mod test_support;
