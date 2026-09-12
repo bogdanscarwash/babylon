@@ -1007,9 +1007,33 @@ fn live_reader_handle_reads_through_confined_login_and_refuses_writer_authority(
     target.finish();
 }
 
+fn reader_installation_catalog(client: &mut postgres::Client) -> Vec<(String, String)> {
+    client
+        .query(
+            "SELECT namespace.nspname || '.' || relation.relname, \
+                    pg_catalog.jsonb_build_object(\
+                        'kind', relation.relkind, 'owner', relation.relowner, \
+                        'acl', relation.relacl, \
+                        'view', CASE WHEN relation.relkind = 'v' \
+                            THEN pg_catalog.pg_get_viewdef(relation.oid, true) \
+                            ELSE '' END)::text \
+             FROM pg_catalog.pg_class AS relation \
+             JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = relation.relnamespace \
+             WHERE namespace.nspname IN ('babylon_ref', 'babylon_state', 'babylon_meta', 'public') \
+             ORDER BY namespace.nspname, relation.relname",
+            &[],
+        )
+        .expect("reader provisioning catalog snapshot")
+        .into_iter()
+        .map(|row| (row.get(0), row.get(1)))
+        .collect()
+}
+
 #[test]
 #[ignore = "requires the task-owned disposable PostgreSQL runtime and committed ticks"]
 fn live_reader_installer_refuses_privilege_drift_and_view_identity_mismatch() {
+    use babylon_persistence::{CurrentSchemaError, SemanticArchiveReaderError};
+
     let target = ReaderTarget::create(
         "readerroledrift",
         0x2300_0000_0000_0000_0000_0000_0000_00a3,
@@ -1019,71 +1043,57 @@ fn live_reader_installer_refuses_privilege_drift_and_view_identity_mismatch() {
         .config
         .connect(NoTls)
         .expect("drift probe connection");
-
-    // Drift: one extra effective privilege outside the exact footprint. The
-    // installer must census and refuse, never silently re-grant.
-    client
-        .batch_execute("GRANT SELECT ON babylon_meta.archive_page_revision_v2 TO babylon_reader")
-        .expect("drift grant applies");
-    let drift = install_reader_role(&target.config).map(|_| ());
-    match drift {
-        Err(babylon_persistence::SemanticArchiveReaderError::PrivilegeDrift(held)) => assert!(
-            held.contains(&"babylon_meta.archive_page_revision_v2:SELECT".to_owned()),
-            "the drift census names the offending entry, held={held:?}"
-        ),
-        other => panic!("privilege drift must refuse loudly, got {other:?}"),
+    let refusal = Err(SemanticArchiveReaderError::CurrentSchema(
+        CurrentSchemaError::CurrentCensusMismatch,
+    ));
+    for relation in ["archive_page_revision_v2", "archive_atom_v1"] {
+        client
+            .batch_execute(&format!(
+                "GRANT SELECT ON babylon_meta.{relation} TO babylon_reader"
+            ))
+            .expect("extra base-table grant applies");
+        let before = reader_installation_catalog(&mut client);
+        assert_eq!(install_reader_role(&target.config).map(|_| ()), refusal);
+        assert_eq!(
+            reader_installation_catalog(&mut client),
+            before,
+            "schema refusal must leave the excessive grant and every catalog relation unchanged"
+        );
+        client
+            .batch_execute(&format!(
+                "REVOKE SELECT ON babylon_meta.{relation} FROM babylon_reader"
+            ))
+            .expect("test restores the exact grant footprint");
+        assert_eq!(
+            install_reader_role(&target.config),
+            Ok(ReaderRoleDisposition::AlreadyCurrent),
+            "restoring the exact footprint permits idempotent provisioning"
+        );
     }
-    client
-        .batch_execute("REVOKE SELECT ON babylon_meta.archive_page_revision_v2 FROM babylon_reader")
-        .expect("drift revoke applies");
-    assert_eq!(
-        install_reader_role(&target.config).map(|_| ()),
-        Ok(()),
-        "the census reconciles to AlreadyCurrent once the drift is revoked"
-    );
 
-    // Atom-schema drift: a base atom-table grant is privilege drift too.
-    client
-        .batch_execute("GRANT SELECT ON babylon_meta.archive_atom_v1 TO babylon_reader")
-        .expect("atom drift grant applies");
-    let atom_drift = install_reader_role(&target.config).map(|_| ());
-    match atom_drift {
-        Err(babylon_persistence::SemanticArchiveReaderError::PrivilegeDrift(held)) => assert!(
-            held.contains(&"babylon_meta.archive_atom_v1:SELECT".to_owned()),
-            "the drift census names the atom-table entry, held={held:?}"
-        ),
-        other => panic!("atom-table privilege drift must refuse loudly, got {other:?}"),
-    }
-    client
-        .batch_execute("REVOKE SELECT ON babylon_meta.archive_atom_v1 FROM babylon_reader")
-        .expect("atom drift revoke applies");
-    assert_eq!(
-        install_reader_role(&target.config).map(|_| ()),
-        Ok(()),
-        "the census reconciles once the atom-table drift is revoked"
-    );
-
-    // Identity: a same-named base table is not the pinned view.
     client
         .batch_execute(
             "DROP VIEW public.v_committed_tick_status_v1; \
              CREATE TABLE public.v_committed_tick_status_v1(id bigint)",
         )
         .expect("impostor table replaces the view");
+    let impostor = reader_installation_catalog(&mut client);
+    assert_eq!(install_reader_role(&target.config).map(|_| ()), refusal);
     assert_eq!(
-        install_reader_role(&target.config).map(|_| ()),
-        Err(babylon_persistence::SemanticArchiveReaderError::ViewMismatch),
-        "a non-view relation with the pinned name must refuse"
+        reader_installation_catalog(&mut client),
+        impostor,
+        "a same-named table is refused without replacement or grant changes"
     );
     client
         .batch_execute("DROP TABLE public.v_committed_tick_status_v1")
-        .expect("impostor table drops");
+        .expect("test removes the impostor table");
+    let absent = reader_installation_catalog(&mut client);
+    assert_eq!(install_reader_role(&target.config).map(|_| ()), refusal);
     assert_eq!(
-        install_reader_role(&target.config),
-        Ok(ReaderRoleDisposition::Installed),
-        "removal of the view reinstalls it transactionally"
+        reader_installation_catalog(&mut client),
+        absent,
+        "a missing mandatory view is refused without schema repair"
     );
-
     target.finish();
 }
 
@@ -1196,10 +1206,29 @@ fn live_observer_economics_reads_exact_foundation_commit_and_granted_preview() {
     let other = CampaignId::from_uuid(Uuid::from_u128(0x3190_0000_0000_0000_0000_0000_0000_0002));
     let foundation = current_material::foundation();
     let other_runtime = DurableMaterialRuntime::create(&config, other, foundation)
-        .expect("distinct other scenario");
+        .expect("distinct campaign with the same admitted foundation");
+    let other_snapshot = observer
+        .snapshot(other, 0)
+        .expect("second current campaign has its own foundation scope");
+    assert_eq!(other_snapshot.campaign_id, other.as_uuid().to_string());
+    assert_eq!(other_snapshot.resolve_tick, 0);
+    assert_eq!(other_snapshot.tick_content_hash, None);
+    assert_eq!(other_runtime.tail(), None);
+    assert_eq!(other_snapshot.counties, committed.counties);
     assert_eq!(
-        observer.snapshot(other, 0),
-        Err(ObserverEconomyError::ScenarioMismatch)
+        preview.snapshot(other, 0).unwrap().counties,
+        other_snapshot.counties,
+        "the first campaign's withheld grant cannot hide the second campaign's foundation field"
+    );
+    assert_eq!(
+        observer.snapshot(other, 1),
+        Err(ObserverEconomyError::TickAbsent),
+        "the first campaign's committed tick cannot satisfy the second campaign's scope"
+    );
+    assert_eq!(
+        observer.snapshot(campaign, 1).unwrap(),
+        committed,
+        "creating another campaign preserves the first campaign's exact committed observation"
     );
     drop(other_runtime);
     drop(runtime);
