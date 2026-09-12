@@ -9,24 +9,24 @@ mod source;
 mod statewide;
 mod validate;
 
-use crate::michigan_defines::{MichiganDefinesErrorV1, MichiganDefinesV3};
+use crate::michigan_defines::{MichiganDefines, MichiganDefinesError};
 use babylon_bsl::causal_contract::EvidenceClass;
-use babylon_kernel::sha256_of;
-use babylon_material_circuit::{CorridorIdV2, MaterialCircuitErrorV3};
+use babylon_kernel::content_digest::sha256_of;
+use babylon_material_circuit::{CorridorId, MaterialCircuitError};
 pub use model::*;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
-pub const MICHIGAN_INDUSTRY_BASELINE_SHA256_V1: &str =
+pub const MICHIGAN_INDUSTRY_BASELINE_SHA256: &str =
     "eb486d7e11b8b63fc58c53ab918eff84b341b293a66faf422ddb9304fb2b553e";
-pub const MICHIGAN_MAX_HORIZON_PERIODS_V1: u64 = 16;
-pub const MAX_MICHIGAN_CAPTURED_CONTENT_BYTES_V2: usize = 64 * 1024 * 1024;
+pub const MICHIGAN_MAX_HORIZON_PERIODS: u64 = 16;
+pub const MAX_MICHIGAN_CAPTURED_CONTENT_BYTES: usize = 64 * 1024 * 1024;
 const SOURCE_URL: &str = "https://data.bls.gov/cew/data/files/2024/csv/2024_annual_by_area.zip";
 const ID_DOMAIN: &str = "babylon.michigan-material.v1";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum MichiganDeliveryPresetV1 {
+pub enum MichiganDeliveryPreset {
     Standard,
     Delayed,
     SharedFreightAmple,
@@ -36,7 +36,7 @@ pub enum MichiganDeliveryPresetV1 {
     StatewidePackagingShortage,
     StatewideBoth,
 }
-impl MichiganDeliveryPresetV1 {
+impl MichiganDeliveryPreset {
     #[must_use]
     pub const fn is_statewide(self) -> bool {
         matches!(
@@ -77,7 +77,7 @@ impl MichiganDeliveryPresetV1 {
     }
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum MichiganMaterialErrorV1 {
+pub enum MichiganMaterialError {
     ArtifactDigest,
     ArtifactDecode,
     ArtifactShape,
@@ -88,45 +88,45 @@ pub enum MichiganMaterialErrorV1 {
     PhysicalPath,
     Preset,
     Bound,
-    Circuit(MaterialCircuitErrorV3),
+    Circuit(MaterialCircuitError),
 }
-impl std::fmt::Display for MichiganMaterialErrorV1 {
+impl std::fmt::Display for MichiganMaterialError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Michigan material content refused: {self:?}")
     }
 }
-impl std::error::Error for MichiganMaterialErrorV1 {}
+impl std::error::Error for MichiganMaterialError {}
 fn identity(kind: &str, key: &str) -> [u8; 32] {
     sha256_of(format!("{ID_DOMAIN}\0{kind}\0{key}").as_bytes())
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-struct MichiganCapturedContentV2 {
+struct MichiganCapturedContent {
     schema: String,
     graph_scenario_source: String,
     observed_defines: Vec<u8>,
-    defines: MichiganDefinesV3,
-    base_preset: MichiganDeliveryPresetV1,
-    selected_preset: MichiganDeliveryPresetV1,
-    normalized: MichiganNormalizedContentV2,
-    interventions: Vec<MichiganInterventionV2>,
+    defines: MichiganDefines,
+    base_preset: MichiganDeliveryPreset,
+    selected_preset: MichiganDeliveryPreset,
+    normalized: MichiganNormalizedContent,
+    interventions: Vec<MichiganIntervention>,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct MichiganMaterialCatalogV1 {
-    capture: MichiganCapturedContentV2,
-    scenario: MichiganNormalizedContentV2,
+pub struct MichiganMaterialCatalog {
+    capture: MichiganCapturedContent,
+    scenario: MichiganNormalizedContent,
     defines_bytes: Vec<u8>,
     defines_digest: [u8; 32],
 }
-impl MichiganMaterialCatalogV1 {
+impl MichiganMaterialCatalog {
     /// Load the authored sources required by a fresh campaign's geographic scope.
     /// # Errors
     /// Refuses missing or changed qualification artifacts and unfrozen interventions.
     pub fn load_for_preset(
         path: &Path,
-        preset: MichiganDeliveryPresetV1,
-    ) -> Result<Self, MichiganDefinesErrorV1> {
+        preset: MichiganDeliveryPreset,
+    ) -> Result<Self, MichiganDefinesError> {
         if preset.is_statewide() {
             source::load_statewide(path)
         } else {
@@ -136,13 +136,13 @@ impl MichiganMaterialCatalogV1 {
     /// Read parameters once for a fresh regional campaign.
     /// # Errors
     /// Refuses unknown, missing, malformed or out-of-bound authored values.
-    pub fn load_defines(path: &Path) -> Result<Self, MichiganDefinesErrorV1> {
-        regional::compile(MichiganDefinesV3::load(path)?)
+    pub fn load_defines(path: &Path) -> Result<Self, MichiganDefinesError> {
+        regional::compile(MichiganDefines::load(path)?)
     }
     /// # Errors
     /// Refuses malformed authored content.
-    pub fn from_defines_toml(text: &str) -> Result<Self, MichiganDefinesErrorV1> {
-        regional::compile(MichiganDefinesV3::parse(text)?)
+    pub fn from_defines_toml(text: &str) -> Result<Self, MichiganDefinesError> {
+        regional::compile(MichiganDefines::parse(text)?)
     }
     /// Capture prequalified physical paths and source-supported statewide relationships.
     /// # Errors
@@ -150,42 +150,38 @@ impl MichiganMaterialCatalogV1 {
     pub fn from_statewide_qualification(
         defines_toml: &str,
         qualification: &[u8],
-        physical: MichiganPhysicalNetworkV2,
-        interventions: Vec<MichiganInterventionV2>,
-    ) -> Result<Self, MichiganDefinesErrorV1> {
+        physical: MichiganPhysicalNetwork,
+        interventions: Vec<MichiganIntervention>,
+    ) -> Result<Self, MichiganDefinesError> {
         statewide::compile(defines_toml, qualification, physical, interventions)
     }
-    pub(crate) fn from_stored_defines(bytes: &[u8]) -> Result<Self, MichiganDefinesErrorV1> {
-        if bytes.len() > MAX_MICHIGAN_CAPTURED_CONTENT_BYTES_V2 {
-            return Err(MichiganDefinesErrorV1::Material(
-                MichiganMaterialErrorV1::Bound,
-            ));
+    pub(crate) fn from_stored_defines(bytes: &[u8]) -> Result<Self, MichiganDefinesError> {
+        if bytes.len() > MAX_MICHIGAN_CAPTURED_CONTENT_BYTES {
+            return Err(MichiganDefinesError::Material(MichiganMaterialError::Bound));
         }
-        let capture: MichiganCapturedContentV2 =
-            serde_json::from_slice(bytes).map_err(|_| MichiganDefinesErrorV1::Canonical)?;
+        let capture: MichiganCapturedContent =
+            serde_json::from_slice(bytes).map_err(|_| MichiganDefinesError::Canonical)?;
         // Numeric constraints remain separately bounded and checked; no source file is reopened.
-        MichiganDefinesV3::decode(&capture.defines.encode()?)?;
+        MichiganDefines::decode(&capture.defines.encode()?)?;
         let result = Self::capture(capture)?;
         if result.defines_bytes != bytes {
-            return Err(MichiganDefinesErrorV1::Canonical);
+            return Err(MichiganDefinesError::Canonical);
         }
         Ok(result)
     }
     pub(super) fn from_normalized(
-        defines: MichiganDefinesV3,
-        mut normalized: MichiganNormalizedContentV2,
-        base_preset: MichiganDeliveryPresetV1,
-        mut interventions: Vec<MichiganInterventionV2>,
-    ) -> Result<Self, MichiganDefinesErrorV1> {
+        defines: MichiganDefines,
+        mut normalized: MichiganNormalizedContent,
+        base_preset: MichiganDeliveryPreset,
+        mut interventions: Vec<MichiganIntervention>,
+    ) -> Result<Self, MichiganDefinesError> {
         validate::canonicalize(&mut normalized, &mut interventions);
-        let observed = crate::michigan_cohorts::michigan_cohorts_v2()
-            .map_err(|_| MichiganDefinesErrorV1::Material(MichiganMaterialErrorV1::SourceValue))?;
+        let observed = crate::michigan_cohorts::michigan_cohorts()
+            .map_err(|_| MichiganDefinesError::Material(MichiganMaterialError::SourceValue))?;
         let graph_scenario_source =
-            crate::michigan_cohorts::michigan_staffed_scenario_v1(&normalized.staffing.pools)
-                .map_err(|_| {
-                    MichiganDefinesErrorV1::Material(MichiganMaterialErrorV1::ContentValue)
-                })?;
-        Self::capture(MichiganCapturedContentV2 {
+            crate::michigan_cohorts::michigan_staffed_scenario(&normalized.staffing.pools)
+                .map_err(|_| MichiganDefinesError::Material(MichiganMaterialError::ContentValue))?;
+        Self::capture(MichiganCapturedContent {
             schema: "MichiganCapturedContentV2".to_owned(),
             graph_scenario_source,
             observed_defines: observed.defines_bytes().to_vec(),
@@ -196,17 +192,17 @@ impl MichiganMaterialCatalogV1 {
             interventions,
         })
     }
-    fn capture(mut capture: MichiganCapturedContentV2) -> Result<Self, MichiganDefinesErrorV1> {
-        use MichiganDefinesErrorV1::Material;
+    fn capture(mut capture: MichiganCapturedContent) -> Result<Self, MichiganDefinesError> {
+        use MichiganDefinesError::Material;
         if capture.graph_scenario_source.is_empty()
             || capture.graph_scenario_source.len() > 1_048_576
             || capture.observed_defines.is_empty()
             || capture.observed_defines.len() > 65_536
         {
-            return Err(Material(MichiganMaterialErrorV1::Bound));
+            return Err(Material(MichiganMaterialError::Bound));
         }
         if capture.schema != "MichiganCapturedContentV2" {
-            return Err(MichiganDefinesErrorV1::Canonical);
+            return Err(MichiganDefinesError::Canonical);
         }
         validate::canonicalize(&mut capture.normalized, &mut capture.interventions);
         validate::content(&capture.normalized).map_err(Material)?;
@@ -222,14 +218,14 @@ impl MichiganMaterialCatalogV1 {
                 .interventions
                 .iter()
                 .find(|row| row.preset == capture.selected_preset)
-                .ok_or(Material(MichiganMaterialErrorV1::Preset))?;
+                .ok_or(Material(MichiganMaterialError::Preset))?;
             validate::apply(&mut scenario, intervention).map_err(Material)?;
             validate::content(&scenario).map_err(Material)?;
         }
         let defines_bytes =
-            serde_json::to_vec(&capture).map_err(|_| MichiganDefinesErrorV1::Canonical)?;
-        if defines_bytes.len() > MAX_MICHIGAN_CAPTURED_CONTENT_BYTES_V2 {
-            return Err(Material(MichiganMaterialErrorV1::Bound));
+            serde_json::to_vec(&capture).map_err(|_| MichiganDefinesError::Canonical)?;
+        if defines_bytes.len() > MAX_MICHIGAN_CAPTURED_CONTENT_BYTES {
+            return Err(Material(MichiganMaterialError::Bound));
         }
         Ok(Self {
             capture,
@@ -243,8 +239,8 @@ impl MichiganMaterialCatalogV1 {
     /// Refuses a preset absent from the captured authority.
     pub fn with_preset(
         &self,
-        preset: MichiganDeliveryPresetV1,
-    ) -> Result<Self, MichiganDefinesErrorV1> {
+        preset: MichiganDeliveryPreset,
+    ) -> Result<Self, MichiganDefinesError> {
         if self.preset() == preset {
             return Ok(self.clone());
         }
@@ -253,7 +249,7 @@ impl MichiganMaterialCatalogV1 {
         Self::capture(capture)
     }
     #[must_use]
-    pub const fn preset(&self) -> MichiganDeliveryPresetV1 {
+    pub const fn preset(&self) -> MichiganDeliveryPreset {
         self.capture.selected_preset
     }
     #[must_use]
@@ -277,49 +273,49 @@ impl MichiganMaterialCatalogV1 {
         self.scenario.horizon_ticks
     }
     #[must_use]
-    pub fn staffing(&self) -> &MichiganStaffingDesignV1 {
+    pub fn staffing(&self) -> &MichiganStaffingDesign {
         &self.scenario.staffing
     }
     #[must_use]
-    pub fn sites(&self) -> &[MichiganMaterialSiteV1] {
+    pub fn sites(&self) -> &[MichiganMaterialSite] {
         &self.scenario.sites
     }
     #[must_use]
-    pub fn goods(&self) -> &[MichiganMaterialGoodV1] {
+    pub fn goods(&self) -> &[MichiganMaterialGood] {
         &self.scenario.goods
     }
     #[must_use]
-    pub fn processes(&self) -> &[MichiganMaterialProcessV1] {
+    pub fn processes(&self) -> &[MichiganMaterialProcess] {
         &self.scenario.processes
     }
     #[must_use]
-    pub fn routes(&self) -> &[MichiganMaterialRouteV1] {
+    pub fn routes(&self) -> &[MichiganMaterialRoute] {
         &self.scenario.routes
     }
     #[must_use]
-    pub fn corridors(&self) -> &[MichiganMaterialCorridorV1] {
+    pub fn corridors(&self) -> &[MichiganMaterialCorridor] {
         &self.scenario.corridors
     }
     #[must_use]
-    pub fn merchants(&self) -> &[MichiganMerchantV2] {
+    pub fn merchants(&self) -> &[MichiganMerchant] {
         &self.scenario.merchants
     }
     #[must_use]
-    pub fn final_demands(&self) -> &[MichiganFinalDemandV2] {
+    pub fn final_demands(&self) -> &[MichiganFinalDemand] {
         &self.scenario.final_demands
     }
     #[must_use]
-    pub fn owners(&self) -> &[MichiganOwnerSourceV2] {
+    pub fn owners(&self) -> &[MichiganOwnerSource] {
         &self.scenario.owners
     }
     #[must_use]
-    pub fn owner_source(&self, county: &str, sector: &str) -> Option<&MichiganOwnerSourceV2> {
+    pub fn owner_source(&self, county: &str, sector: &str) -> Option<&MichiganOwnerSource> {
         self.owners()
             .iter()
             .find(|o| o.county_geoid == county && o.sector_code == sector)
     }
     #[must_use]
-    pub fn physical_network(&self) -> Option<&MichiganPhysicalNetworkV2> {
+    pub fn physical_network(&self) -> Option<&MichiganPhysicalNetwork> {
         self.scenario.physical_network.as_ref()
     }
     #[must_use]
@@ -349,23 +345,23 @@ impl MichiganMaterialCatalogV1 {
     #[must_use]
     pub fn industry_for_site(
         &self,
-        site: &MichiganMaterialSiteV1,
-    ) -> Option<&MichiganIndustryBaselineRowV1> {
+        site: &MichiganMaterialSite,
+    ) -> Option<&MichiganIndustryBaselineRow> {
         self.scenario
             .industry
             .iter()
             .find(|row| row.area_fips == site.county_geoid && row.industry_code == site.naics)
     }
     #[must_use]
-    pub fn site(&self, key: &str) -> Option<&MichiganMaterialSiteV1> {
+    pub fn site(&self, key: &str) -> Option<&MichiganMaterialSite> {
         self.sites().iter().find(|row| row.key == key)
     }
     #[must_use]
-    pub fn good(&self, key: &str) -> Option<&MichiganMaterialGoodV1> {
+    pub fn good(&self, key: &str) -> Option<&MichiganMaterialGood> {
         self.goods().iter().find(|row| row.key == key)
     }
     #[must_use]
-    pub fn corridor_label(&self, id: CorridorIdV2) -> Option<&str> {
+    pub fn corridor_label(&self, id: CorridorId) -> Option<&str> {
         self.corridors()
             .iter()
             .find(|row| row.id() == id)

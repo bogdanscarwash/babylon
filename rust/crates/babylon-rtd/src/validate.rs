@@ -1,13 +1,12 @@
 use crate::{
-    AudienceV1, DurabilityV1, DyadKindV1, DyadV1, EvidenceClassV1, FacetV1, FlowKindV1,
-    GapReasonV1, MembershipKindV1, MetricRepresentationV1, ReferenceFlowV1, RelationPayloadModeV1,
-    RtdCollectionKindV1, RtdDossierDraftV1, RtdMetricRegistryRowV1,
-    RtdRelationBindingRegistryRowV1, StatusV1, TypedIdentityLiteralV1, TypedIdentityV1,
-    ValueKindV1, RTD_MAX_COORDINATES, RTD_MAX_DECISION_SURFACE_REFS, RTD_MAX_DYADS, RTD_MAX_FACETS,
-    RTD_MAX_FLOWS, RTD_MAX_FOCUS, RTD_MAX_GAPS, RTD_MAX_HYPEREDGES, RTD_MAX_HYPEREDGE_MEMBERS,
-    RTD_MAX_PAYLOAD_FACETS, RTD_MAX_PROVENANCE, RTD_MAX_PROVENANCE_REFS, RTD_MAX_REFERENCE_DIGESTS,
-    RTD_MAX_SCALE_MEMBERSHIPS, RTD_V1_ERROR_REGISTRY, RTD_V1_METRIC_REGISTRY,
-    RTD_V1_RELATION_BINDING_REGISTRY, RTD_V1_SCHEMA_ID,
+    Audience, Durability, Dyad, DyadKind, EvidenceClass, Facet, FlowKind, GapReason,
+    MembershipKind, MetricRepresentation, ReferenceFlow, RelationPayloadMode, RtdCollectionKind,
+    RtdDossierDraft, RtdMetricRegistryRow, RtdRelationBindingRegistryRow, Status, TypedIdentity,
+    TypedIdentityLiteral, ValueKind, RTD_ERROR_REGISTRY, RTD_MAX_COORDINATES,
+    RTD_MAX_DECISION_SURFACE_REFS, RTD_MAX_DYADS, RTD_MAX_FACETS, RTD_MAX_FLOWS, RTD_MAX_FOCUS,
+    RTD_MAX_GAPS, RTD_MAX_HYPEREDGES, RTD_MAX_HYPEREDGE_MEMBERS, RTD_MAX_PAYLOAD_FACETS,
+    RTD_MAX_PROVENANCE, RTD_MAX_PROVENANCE_REFS, RTD_MAX_REFERENCE_DIGESTS,
+    RTD_MAX_SCALE_MEMBERSHIPS, RTD_METRIC_REGISTRY, RTD_RELATION_BINDING_REGISTRY, RTD_SCHEMA_ID,
 };
 use serde::de::{Error as DeError, MapAccess, SeqAccess, Visitor};
 use serde::Deserialize;
@@ -68,7 +67,7 @@ pub enum RtdError {
 
 impl RtdError {
     fn code(self) -> &'static str {
-        RTD_V1_ERROR_REGISTRY[self.registry_index()]
+        RTD_ERROR_REGISTRY[self.registry_index()]
     }
 
     const fn registry_index(self) -> usize {
@@ -197,7 +196,7 @@ impl<'de> Visitor<'de> for UniqueValueVisitor {
 ///
 /// Returns the exact closed RTD refusal for malformed structure, exceeded
 /// bounds, or invalid dossier semantics.
-pub fn parse_draft_json(payload: &[u8]) -> Result<RtdDossierDraftV1, RtdError> {
+pub fn parse_draft_json(payload: &[u8]) -> Result<RtdDossierDraft, RtdError> {
     if payload.len() > MAX_JSON_BYTES {
         return Err(RtdError::CanonicalSize);
     }
@@ -207,7 +206,7 @@ pub fn parse_draft_json(payload: &[u8]) -> Result<RtdDossierDraftV1, RtdError> {
         .0;
     preflight_schema_version(&value)?;
     preflight_enum_shapes(&value)?;
-    let mut draft = serde_json::from_value::<RtdDossierDraftV1>(value)
+    let mut draft = serde_json::from_value::<RtdDossierDraft>(value)
         .map_err(|error| classify_structural_error(&error))?;
     preflight_limits(&draft)?;
     normalize_negative_zero(&mut draft);
@@ -222,7 +221,7 @@ fn preflight_schema_version(value: &Value) -> Result<(), RtdError> {
     let Some(schema) = object.get("schema") else {
         return Ok(());
     };
-    if schema.as_str() != Some(RTD_V1_SCHEMA_ID) {
+    if schema.as_str() != Some(RTD_SCHEMA_ID) {
         return Err(RtdError::SchemaVersion);
     }
     let Some(schema_version) = object.get("schema_version") else {
@@ -386,13 +385,13 @@ fn scan_json_depth(payload: &[u8]) -> Result<(), RtdError> {
     Err(RtdError::CanonicalSize)
 }
 
-fn normalize_negative_zero(draft: &mut RtdDossierDraftV1) {
+fn normalize_negative_zero(draft: &mut RtdDossierDraft) {
     for index in 0..MAX_FACETS {
         if index == draft.facets.len() {
             break;
         }
         let facet = &mut draft.facets[index];
-        if facet.value_kind == ValueKindV1::Float64Bits
+        if facet.value_kind == ValueKind::Float64Bits
             && facet.value_bits_or_null.as_deref() == Some("8000000000000000")
         {
             facet.value_bits_or_null = Some("0000000000000000".to_owned());
@@ -418,7 +417,7 @@ fn normalize_negative_zero(draft: &mut RtdDossierDraftV1) {
 pub fn append_bounded<T: Clone>(
     items: &[T],
     item: T,
-    kind: RtdCollectionKindV1,
+    kind: RtdCollectionKind,
 ) -> Result<Vec<T>, RtdError> {
     let length = u64::try_from(items.len()).map_err(|_| RtdError::LimitExceeded)?;
     if length >= collection_limit(kind) {
@@ -436,22 +435,22 @@ pub fn append_bounded<T: Clone>(
     Ok(output)
 }
 
-const fn collection_limit(kind: RtdCollectionKindV1) -> u64 {
+const fn collection_limit(kind: RtdCollectionKind) -> u64 {
     match kind {
-        RtdCollectionKindV1::Focus => RTD_MAX_FOCUS,
-        RtdCollectionKindV1::ReferenceDigests => RTD_MAX_REFERENCE_DIGESTS,
-        RtdCollectionKindV1::ScaleMemberships => RTD_MAX_SCALE_MEMBERSHIPS,
-        RtdCollectionKindV1::Facets => RTD_MAX_FACETS,
-        RtdCollectionKindV1::Dyads => RTD_MAX_DYADS,
-        RtdCollectionKindV1::Hyperedges => RTD_MAX_HYPEREDGES,
-        RtdCollectionKindV1::Flows => RTD_MAX_FLOWS,
-        RtdCollectionKindV1::Gaps => RTD_MAX_GAPS,
-        RtdCollectionKindV1::Provenance => RTD_MAX_PROVENANCE,
-        RtdCollectionKindV1::Coordinates => RTD_MAX_COORDINATES,
-        RtdCollectionKindV1::MemberRefs => RTD_MAX_HYPEREDGE_MEMBERS,
-        RtdCollectionKindV1::PayloadFacets => RTD_MAX_PAYLOAD_FACETS,
-        RtdCollectionKindV1::DisplayRefs => RTD_MAX_DECISION_SURFACE_REFS,
-        RtdCollectionKindV1::ProvenanceRefs => RTD_MAX_PROVENANCE_REFS,
+        RtdCollectionKind::Focus => RTD_MAX_FOCUS,
+        RtdCollectionKind::ReferenceDigests => RTD_MAX_REFERENCE_DIGESTS,
+        RtdCollectionKind::ScaleMemberships => RTD_MAX_SCALE_MEMBERSHIPS,
+        RtdCollectionKind::Facets => RTD_MAX_FACETS,
+        RtdCollectionKind::Dyads => RTD_MAX_DYADS,
+        RtdCollectionKind::Hyperedges => RTD_MAX_HYPEREDGES,
+        RtdCollectionKind::Flows => RTD_MAX_FLOWS,
+        RtdCollectionKind::Gaps => RTD_MAX_GAPS,
+        RtdCollectionKind::Provenance => RTD_MAX_PROVENANCE,
+        RtdCollectionKind::Coordinates => RTD_MAX_COORDINATES,
+        RtdCollectionKind::MemberRefs => RTD_MAX_HYPEREDGE_MEMBERS,
+        RtdCollectionKind::PayloadFacets => RTD_MAX_PAYLOAD_FACETS,
+        RtdCollectionKind::DisplayRefs => RTD_MAX_DECISION_SURFACE_REFS,
+        RtdCollectionKind::ProvenanceRefs => RTD_MAX_PROVENANCE_REFS,
     }
 }
 
@@ -460,7 +459,7 @@ const fn collection_limit(kind: RtdCollectionKindV1) -> u64 {
 /// # Errors
 ///
 /// Returns the first exact closed RTD semantic refusal.
-pub fn validate_draft(draft: &RtdDossierDraftV1) -> Result<(), RtdError> {
+pub fn validate_draft(draft: &RtdDossierDraft) -> Result<(), RtdError> {
     preflight_limits(draft)?;
     validate_scalar_fields(draft)?;
     validate_all_identities(draft)?;
@@ -473,13 +472,13 @@ pub fn validate_draft(draft: &RtdDossierDraftV1) -> Result<(), RtdError> {
     validate_relations(draft)
 }
 
-fn validate_canadian_flows(draft: &RtdDossierDraftV1) -> Result<(), RtdError> {
+fn validate_canadian_flows(draft: &RtdDossierDraft) -> Result<(), RtdError> {
     for index in 0..MAX_FLOWS {
         if index == draft.flows.len() {
             return Ok(());
         }
         let flow = &draft.flows[index];
-        if flow.flow_kind == FlowKindV1::CommuterJobs
+        if flow.flow_kind == FlowKind::CommuterJobs
             && (is_canada_endpoint(&flow.origin_ref) || is_canada_endpoint(&flow.destination_ref))
         {
             return Err(RtdError::CanadaControl);
@@ -488,7 +487,7 @@ fn validate_canadian_flows(draft: &RtdDossierDraftV1) -> Result<(), RtdError> {
     Ok(())
 }
 
-fn preflight_limits(draft: &RtdDossierDraftV1) -> Result<(), RtdError> {
+fn preflight_limits(draft: &RtdDossierDraft) -> Result<(), RtdError> {
     check_len(draft.focus.len(), MAX_FOCUS)?;
     check_len(draft.reference_digests.len(), MAX_REFERENCE_DIGESTS)?;
     check_len(draft.scale_memberships.len(), MAX_SCALE_MEMBERSHIPS)?;
@@ -514,7 +513,7 @@ const fn check_len(length: usize, limit: usize) -> Result<(), RtdError> {
     }
 }
 
-fn validate_nested_limits(draft: &RtdDossierDraftV1) -> Result<(), RtdError> {
+fn validate_nested_limits(draft: &RtdDossierDraft) -> Result<(), RtdError> {
     for index in 0..MAX_FACETS {
         if index == draft.facets.len() {
             break;
@@ -557,7 +556,7 @@ fn validate_nested_limits(draft: &RtdDossierDraftV1) -> Result<(), RtdError> {
     validate_nested_provenance_limits(draft)
 }
 
-fn validate_nested_provenance_limits(draft: &RtdDossierDraftV1) -> Result<(), RtdError> {
+fn validate_nested_provenance_limits(draft: &RtdDossierDraft) -> Result<(), RtdError> {
     for index in 0..MAX_SCALE_MEMBERSHIPS {
         if index == draft.scale_memberships.len() {
             break;
@@ -576,11 +575,8 @@ fn validate_nested_provenance_limits(draft: &RtdDossierDraftV1) -> Result<(), Rt
     Ok(())
 }
 
-fn validate_scalar_fields(draft: &RtdDossierDraftV1) -> Result<(), RtdError> {
-    if draft.schema != RTD_V1_SCHEMA_ID
-        || draft.schema_version != 1
-        || draft.projection_version != 1
-    {
+fn validate_scalar_fields(draft: &RtdDossierDraft) -> Result<(), RtdError> {
+    if draft.schema != RTD_SCHEMA_ID || draft.schema_version != 1 || draft.projection_version != 1 {
         return Err(RtdError::SchemaVersion);
     }
     validate_digest(&draft.graph_state_hash)?;
@@ -597,7 +593,7 @@ fn validate_scalar_fields(draft: &RtdDossierDraftV1) -> Result<(), RtdError> {
     validate_record_scalars(draft)
 }
 
-fn validate_reference_scalars(draft: &RtdDossierDraftV1) -> Result<(), RtdError> {
+fn validate_reference_scalars(draft: &RtdDossierDraft) -> Result<(), RtdError> {
     for index in 0..MAX_REFERENCE_DIGESTS {
         if index == draft.reference_digests.len() {
             break;
@@ -609,7 +605,7 @@ fn validate_reference_scalars(draft: &RtdDossierDraftV1) -> Result<(), RtdError>
     Ok(())
 }
 
-fn validate_record_scalars(draft: &RtdDossierDraftV1) -> Result<(), RtdError> {
+fn validate_record_scalars(draft: &RtdDossierDraft) -> Result<(), RtdError> {
     for index in 0..MAX_FACETS {
         if index == draft.facets.len() {
             break;
@@ -630,13 +626,13 @@ fn validate_record_scalars(draft: &RtdDossierDraftV1) -> Result<(), RtdError> {
         validate_status_value(
             row.weight_status,
             row.weight_bits_or_null.as_deref(),
-            ValueKindV1::Float64Bits,
+            ValueKind::Float64Bits,
         )?;
     }
     validate_gap_and_provenance_scalars(draft)
 }
 
-fn validate_gap_and_provenance_scalars(draft: &RtdDossierDraftV1) -> Result<(), RtdError> {
+fn validate_gap_and_provenance_scalars(draft: &RtdDossierDraft) -> Result<(), RtdError> {
     for index in 0..MAX_GAPS {
         if index == draft.gaps.len() {
             break;
@@ -710,11 +706,11 @@ fn validate_producer(value: &str) -> Result<(), RtdError> {
 }
 
 fn validate_status_value(
-    status: StatusV1,
+    status: Status,
     value: Option<&str>,
-    kind: ValueKindV1,
+    kind: ValueKind,
 ) -> Result<(), RtdError> {
-    if status == StatusV1::Present {
+    if status == Status::Present {
         validate_bits(value.ok_or(RtdError::StatusValue)?, kind)
     } else if value.is_some() {
         Err(RtdError::StatusValue)
@@ -723,7 +719,7 @@ fn validate_status_value(
     }
 }
 
-fn validate_bits(value: &str, kind: ValueKindV1) -> Result<(), RtdError> {
+fn validate_bits(value: &str, kind: ValueKind) -> Result<(), RtdError> {
     if value.len() != 16 {
         return Err(RtdError::StatusValue);
     }
@@ -734,14 +730,14 @@ fn validate_bits(value: &str, kind: ValueKindV1) -> Result<(), RtdError> {
         }
     }
     let raw = u64::from_str_radix(value, 16).map_err(|_| RtdError::StatusValue)?;
-    if kind == ValueKindV1::Float64Bits && ((raw >> 52) & 0x7ff) == 0x7ff {
+    if kind == ValueKind::Float64Bits && ((raw >> 52) & 0x7ff) == 0x7ff {
         Err(RtdError::StatusValue)
     } else {
         Ok(())
     }
 }
 
-fn identity_key(identity: &TypedIdentityV1) -> IdentityKey {
+fn identity_key(identity: &TypedIdentity) -> IdentityKey {
     (
         identity.domain.clone(),
         identity.authority.clone(),
@@ -749,7 +745,7 @@ fn identity_key(identity: &TypedIdentityV1) -> IdentityKey {
     )
 }
 
-fn validate_identity(identity: &TypedIdentityV1) -> Result<(), RtdError> {
+fn validate_identity(identity: &TypedIdentity) -> Result<(), RtdError> {
     validate_identity_component(&identity.domain)?;
     validate_identity_component(&identity.authority)?;
     validate_identity_component(&identity.local_id)?;
@@ -774,7 +770,7 @@ fn validate_identity_component(value: &str) -> Result<(), RtdError> {
     }
 }
 
-fn is_h3_identity(identity: &TypedIdentityV1) -> bool {
+fn is_h3_identity(identity: &TypedIdentity) -> bool {
     let domain = identity.domain.to_lowercase();
     let local_id = identity.local_id.to_lowercase();
     domain == "h3"
@@ -782,7 +778,7 @@ fn is_h3_identity(identity: &TypedIdentityV1) -> bool {
         || ((domain == "dimension" || domain == "native-scale") && local_id.starts_with("h3-"))
 }
 
-fn is_canadian_geography(identity: &TypedIdentityV1) -> bool {
+fn is_canadian_geography(identity: &TypedIdentity) -> bool {
     let domain = identity.domain.to_lowercase();
     if domain == "external" {
         return false;
@@ -798,7 +794,7 @@ fn is_canadian_geography(identity: &TypedIdentityV1) -> bool {
     text.contains("canada") || text.contains("windsor") || text.contains("essex")
 }
 
-fn validate_identity_list(items: &[TypedIdentityV1]) -> Result<(), RtdError> {
+fn validate_identity_list(items: &[TypedIdentity]) -> Result<(), RtdError> {
     let mut seen = BTreeSet::new();
     for index in 0..MAX_COLLECTION_ITEMS {
         if index == items.len() {
@@ -812,7 +808,7 @@ fn validate_identity_list(items: &[TypedIdentityV1]) -> Result<(), RtdError> {
     Err(RtdError::LimitExceeded)
 }
 
-fn validate_identity_sequence(items: &[TypedIdentityV1]) -> Result<(), RtdError> {
+fn validate_identity_sequence(items: &[TypedIdentity]) -> Result<(), RtdError> {
     for index in 0..MAX_COLLECTION_ITEMS {
         if index == items.len() {
             return Ok(());
@@ -822,7 +818,7 @@ fn validate_identity_sequence(items: &[TypedIdentityV1]) -> Result<(), RtdError>
     Err(RtdError::LimitExceeded)
 }
 
-fn validate_all_identities(draft: &RtdDossierDraftV1) -> Result<(), RtdError> {
+fn validate_all_identities(draft: &RtdDossierDraft) -> Result<(), RtdError> {
     validate_identity_list(&draft.focus)?;
     if let Some(actor) = &draft.actor {
         validate_identity(actor)?;
@@ -839,7 +835,7 @@ fn validate_all_identities(draft: &RtdDossierDraftV1) -> Result<(), RtdError> {
     validate_other_identities(draft)
 }
 
-fn validate_reference_identities(draft: &RtdDossierDraftV1) -> Result<(), RtdError> {
+fn validate_reference_identities(draft: &RtdDossierDraft) -> Result<(), RtdError> {
     for index in 0..MAX_REFERENCE_DIGESTS {
         if index == draft.reference_digests.len() {
             break;
@@ -853,7 +849,7 @@ fn validate_reference_identities(draft: &RtdDossierDraftV1) -> Result<(), RtdErr
     Ok(())
 }
 
-fn validate_membership_identities(draft: &RtdDossierDraftV1) -> Result<(), RtdError> {
+fn validate_membership_identities(draft: &RtdDossierDraft) -> Result<(), RtdError> {
     for index in 0..MAX_SCALE_MEMBERSHIPS {
         if index == draft.scale_memberships.len() {
             break;
@@ -867,7 +863,7 @@ fn validate_membership_identities(draft: &RtdDossierDraftV1) -> Result<(), RtdEr
     Ok(())
 }
 
-fn validate_facet_identities(draft: &RtdDossierDraftV1) -> Result<(), RtdError> {
+fn validate_facet_identities(draft: &RtdDossierDraft) -> Result<(), RtdError> {
     for index in 0..MAX_FACETS {
         if index == draft.facets.len() {
             break;
@@ -895,7 +891,7 @@ fn validate_facet_identities(draft: &RtdDossierDraftV1) -> Result<(), RtdError> 
     Ok(())
 }
 
-fn validate_relation_identities(draft: &RtdDossierDraftV1) -> Result<(), RtdError> {
+fn validate_relation_identities(draft: &RtdDossierDraft) -> Result<(), RtdError> {
     for index in 0..MAX_DYADS {
         if index == draft.dyads.len() {
             break;
@@ -914,7 +910,7 @@ fn validate_relation_identities(draft: &RtdDossierDraftV1) -> Result<(), RtdErro
     validate_flow_identities(draft)
 }
 
-fn validate_flow_identities(draft: &RtdDossierDraftV1) -> Result<(), RtdError> {
+fn validate_flow_identities(draft: &RtdDossierDraft) -> Result<(), RtdError> {
     for index in 0..MAX_FLOWS {
         if index == draft.flows.len() {
             break;
@@ -930,7 +926,7 @@ fn validate_flow_identities(draft: &RtdDossierDraftV1) -> Result<(), RtdError> {
     Ok(())
 }
 
-fn validate_other_identities(draft: &RtdDossierDraftV1) -> Result<(), RtdError> {
+fn validate_other_identities(draft: &RtdDossierDraft) -> Result<(), RtdError> {
     for index in 0..MAX_HYPEREDGES {
         if index == draft.hyperedges.len() {
             break;
@@ -960,7 +956,7 @@ fn validate_other_identities(draft: &RtdDossierDraftV1) -> Result<(), RtdError> 
     Ok(())
 }
 
-fn validate_unique_records(draft: &RtdDossierDraftV1) -> Result<(), RtdError> {
+fn validate_unique_records(draft: &RtdDossierDraft) -> Result<(), RtdError> {
     let mut references = BTreeSet::new();
     for index in 0..MAX_REFERENCE_DIGESTS {
         if index == draft.reference_digests.len() {
@@ -1018,7 +1014,7 @@ fn validate_unique_records(draft: &RtdDossierDraftV1) -> Result<(), RtdError> {
 
 fn insert_unique(
     records: &mut BTreeSet<IdentityKey>,
-    identity: &TypedIdentityV1,
+    identity: &TypedIdentity,
 ) -> Result<(), RtdError> {
     if records.insert(identity_key(identity)) {
         Ok(())
@@ -1027,7 +1023,7 @@ fn insert_unique(
     }
 }
 
-fn validate_reference_closure(draft: &RtdDossierDraftV1) -> Result<(), RtdError> {
+fn validate_reference_closure(draft: &RtdDossierDraft) -> Result<(), RtdError> {
     let mut provenance = BTreeSet::new();
     for index in 0..MAX_PROVENANCE {
         if index == draft.provenance.len() {
@@ -1074,7 +1070,7 @@ fn validate_reference_closure(draft: &RtdDossierDraftV1) -> Result<(), RtdError>
     validate_payload_and_signal_closure(draft)
 }
 
-fn check_refs(refs: &[TypedIdentityV1], declared: &BTreeSet<IdentityKey>) -> Result<(), RtdError> {
+fn check_refs(refs: &[TypedIdentity], declared: &BTreeSet<IdentityKey>) -> Result<(), RtdError> {
     for index in 0..MAX_COLLECTION_ITEMS {
         if index == refs.len() {
             return Ok(());
@@ -1086,7 +1082,7 @@ fn check_refs(refs: &[TypedIdentityV1], declared: &BTreeSet<IdentityKey>) -> Res
     Err(RtdError::LimitExceeded)
 }
 
-fn validate_payload_and_signal_closure(draft: &RtdDossierDraftV1) -> Result<(), RtdError> {
+fn validate_payload_and_signal_closure(draft: &RtdDossierDraft) -> Result<(), RtdError> {
     let mut facets = BTreeSet::new();
     for index in 0..MAX_FACETS {
         if index == draft.facets.len() {
@@ -1118,7 +1114,7 @@ fn validate_payload_and_signal_closure(draft: &RtdDossierDraftV1) -> Result<(), 
     )
 }
 
-fn display_subjects(draft: &RtdDossierDraftV1) -> BTreeSet<IdentityKey> {
+fn display_subjects(draft: &RtdDossierDraft) -> BTreeSet<IdentityKey> {
     let mut keys = BTreeSet::new();
     for index in 0..MAX_FOCUS {
         if index == draft.focus.len() {
@@ -1171,17 +1167,17 @@ fn display_subjects(draft: &RtdDossierDraftV1) -> BTreeSet<IdentityKey> {
     keys
 }
 
-fn validate_memberships_and_gaps(draft: &RtdDossierDraftV1) -> Result<(), RtdError> {
+fn validate_memberships_and_gaps(draft: &RtdDossierDraft) -> Result<(), RtdError> {
     for index in 0..MAX_SCALE_MEMBERSHIPS {
         if index == draft.scale_memberships.len() {
             break;
         }
         match draft.scale_memberships[index].membership_kind {
-            MembershipKindV1::WeightedOverlap => return Err(RtdError::UnsupportedDownscale),
-            MembershipKindV1::Metropolitan => return Err(RtdError::MsaEvidence),
-            MembershipKindV1::Administrative
-            | MembershipKindV1::National
-            | MembershipKindV1::CommutingZone => {}
+            MembershipKind::WeightedOverlap => return Err(RtdError::UnsupportedDownscale),
+            MembershipKind::Metropolitan => return Err(RtdError::MsaEvidence),
+            MembershipKind::Administrative
+            | MembershipKind::National
+            | MembershipKind::CommutingZone => {}
         }
     }
     for index in 0..MAX_GAPS {
@@ -1190,8 +1186,8 @@ fn validate_memberships_and_gaps(draft: &RtdDossierDraftV1) -> Result<(), RtdErr
         }
         let gap = &draft.gaps[index];
         if is_registered_h3_metric(&gap.requested_metric_or_relation)
-            && (gap.status != StatusV1::NotComputed
-                || gap.reason_code != GapReasonV1::IdentityContractPending
+            && (gap.status != Status::NotComputed
+                || gap.reason_code != GapReason::IdentityContractPending
                 || gap.required_producer_or_null.as_deref() != Some("PER-21"))
         {
             return Err(RtdError::H3BeforePer21);
@@ -1200,10 +1196,10 @@ fn validate_memberships_and_gaps(draft: &RtdDossierDraftV1) -> Result<(), RtdErr
     Ok(())
 }
 
-fn validate_admin_boundary(draft: &RtdDossierDraftV1) -> Result<(), RtdError> {
+fn validate_admin_boundary(draft: &RtdDossierDraft) -> Result<(), RtdError> {
     let surface = &draft.decision_surface;
-    if draft.audience != AudienceV1::AdminMaterial
-        || draft.durability != DurabilityV1::InMemory
+    if draft.audience != Audience::AdminMaterial
+        || draft.durability != Durability::InMemory
         || draft.fog_policy_digest.is_some()
         || draft.knowledge_context_digest.is_some()
         || draft.actor.is_some()
@@ -1219,9 +1215,9 @@ fn validate_admin_boundary(draft: &RtdDossierDraftV1) -> Result<(), RtdError> {
 
 // The contract requires a statically bounded indexed registry traversal.
 #[allow(clippy::needless_range_loop)]
-fn metric_row(identity: &TypedIdentityV1) -> Result<&'static RtdMetricRegistryRowV1, RtdError> {
+fn metric_row(identity: &TypedIdentity) -> Result<&'static RtdMetricRegistryRow, RtdError> {
     for index in 0..METRIC_ROWS {
-        let row = &RTD_V1_METRIC_REGISTRY[index];
+        let row = &RTD_METRIC_REGISTRY[index];
         if literal_matches(&row.metric, identity) {
             return Ok(row);
         }
@@ -1229,7 +1225,7 @@ fn metric_row(identity: &TypedIdentityV1) -> Result<&'static RtdMetricRegistryRo
     Err(RtdError::NativeGrain)
 }
 
-fn literal_matches(literal: &TypedIdentityLiteralV1, identity: &TypedIdentityV1) -> bool {
+fn literal_matches(literal: &TypedIdentityLiteral, identity: &TypedIdentity) -> bool {
     literal.domain == identity.domain
         && literal.authority == identity.authority
         && literal.local_id == identity.local_id
@@ -1237,9 +1233,9 @@ fn literal_matches(literal: &TypedIdentityLiteralV1, identity: &TypedIdentityV1)
 
 // The contract requires a statically bounded indexed registry traversal.
 #[allow(clippy::needless_range_loop)]
-fn is_registered_h3_metric(identity: &TypedIdentityV1) -> bool {
+fn is_registered_h3_metric(identity: &TypedIdentity) -> bool {
     for index in 0..METRIC_ROWS {
-        let row = &RTD_V1_METRIC_REGISTRY[index];
+        let row = &RTD_METRIC_REGISTRY[index];
         if literal_matches(&row.metric, identity)
             && matches!(
                 row.metric.local_id,
@@ -1254,7 +1250,7 @@ fn is_registered_h3_metric(identity: &TypedIdentityV1) -> bool {
     false
 }
 
-fn validate_facets(draft: &RtdDossierDraftV1) -> Result<(), RtdError> {
+fn validate_facets(draft: &RtdDossierDraft) -> Result<(), RtdError> {
     for index in 0..MAX_FACETS {
         if index == draft.facets.len() {
             break;
@@ -1282,7 +1278,7 @@ fn validate_facets(draft: &RtdDossierDraftV1) -> Result<(), RtdError> {
     Ok(())
 }
 
-fn coordinate_contract_matches(facet: &FacetV1, row: &RtdMetricRegistryRowV1) -> bool {
+fn coordinate_contract_matches(facet: &Facet, row: &RtdMetricRegistryRow) -> bool {
     if facet.coordinates.len() != row.coordinates.len() {
         return false;
     }
@@ -1308,7 +1304,7 @@ fn coordinate_contract_matches(facet: &FacetV1, row: &RtdMetricRegistryRowV1) ->
     supplied == required
 }
 
-fn evidence_allowed(evidence: EvidenceClassV1, allowed: &[EvidenceClassV1]) -> bool {
+fn evidence_allowed(evidence: EvidenceClass, allowed: &[EvidenceClass]) -> bool {
     for index in 0..4 {
         if index == allowed.len() {
             return false;
@@ -1321,8 +1317,8 @@ fn evidence_allowed(evidence: EvidenceClassV1, allowed: &[EvidenceClassV1]) -> b
 }
 
 fn validate_required_digest(
-    draft: &RtdDossierDraftV1,
-    row: &RtdMetricRegistryRowV1,
+    draft: &RtdDossierDraft,
+    row: &RtdMetricRegistryRow,
 ) -> Result<(), RtdError> {
     let (Some(reference), Some(digest)) = (row.reference_artifact, row.reference_digest) else {
         return Ok(());
@@ -1345,9 +1341,9 @@ fn validate_required_digest(
 
 // The contract requires a statically bounded indexed registry traversal.
 #[allow(clippy::needless_range_loop)]
-fn binding(family: &str, kind: &str) -> Result<&'static RtdRelationBindingRegistryRowV1, RtdError> {
+fn binding(family: &str, kind: &str) -> Result<&'static RtdRelationBindingRegistryRow, RtdError> {
     for index in 0..BINDING_ROWS {
-        let row = &RTD_V1_RELATION_BINDING_REGISTRY[index];
+        let row = &RTD_RELATION_BINDING_REGISTRY[index];
         if row.record_family == family && row.kind == kind {
             return Ok(row);
         }
@@ -1355,23 +1351,23 @@ fn binding(family: &str, kind: &str) -> Result<&'static RtdRelationBindingRegist
     Err(RtdError::NativeGrain)
 }
 
-const fn dyad_kind(kind: DyadKindV1) -> &'static str {
+const fn dyad_kind(kind: DyadKind) -> &'static str {
     match kind {
-        DyadKindV1::Presence => "PRESENCE",
-        DyadKindV1::Membership => "MEMBERSHIP",
-        DyadKindV1::Solidarity => "SOLIDARITY",
-        DyadKindV1::Command => "COMMAND",
+        DyadKind::Presence => "PRESENCE",
+        DyadKind::Membership => "MEMBERSHIP",
+        DyadKind::Solidarity => "SOLIDARITY",
+        DyadKind::Command => "COMMAND",
     }
 }
 
-const fn flow_kind(kind: FlowKindV1) -> &'static str {
+const fn flow_kind(kind: FlowKind) -> &'static str {
     match kind {
-        FlowKindV1::CommuterJobs => "COMMUTER_JOBS",
-        FlowKindV1::BorderSynthesis => "BORDER_SYNTHESIS",
+        FlowKind::CommuterJobs => "COMMUTER_JOBS",
+        FlowKind::BorderSynthesis => "BORDER_SYNTHESIS",
     }
 }
 
-fn validate_relations(draft: &RtdDossierDraftV1) -> Result<(), RtdError> {
+fn validate_relations(draft: &RtdDossierDraft) -> Result<(), RtdError> {
     for index in 0..MAX_DYADS {
         if index == draft.dyads.len() {
             break;
@@ -1397,7 +1393,7 @@ fn validate_relations(draft: &RtdDossierDraftV1) -> Result<(), RtdError> {
             break;
         }
         let row = metric_row(&draft.facets[index].metric_id)?;
-        if row.representation == MetricRepresentationV1::ReferenceFlow
+        if row.representation == MetricRepresentation::ReferenceFlow
             && !used.contains(&identity_key(&draft.facets[index].facet_id))
         {
             return Err(RtdError::DanglingReference);
@@ -1406,11 +1402,11 @@ fn validate_relations(draft: &RtdDossierDraftV1) -> Result<(), RtdError> {
     Ok(())
 }
 
-fn validate_dyad(dyad: &DyadV1) -> Result<(), RtdError> {
+fn validate_dyad(dyad: &Dyad) -> Result<(), RtdError> {
     let row = binding("DYAD", dyad_kind(dyad.relation_kind))?;
     if matches!(
         row.payload_mode,
-        RelationPayloadModeV1::Empty | RelationPayloadModeV1::ImplicitRelation
+        RelationPayloadMode::Empty | RelationPayloadMode::ImplicitRelation
     ) && !dyad.payload_facets.is_empty()
     {
         return Err(RtdError::NativeGrain);
@@ -1419,7 +1415,7 @@ fn validate_dyad(dyad: &DyadV1) -> Result<(), RtdError> {
         return Ok(());
     };
     let metric = metric_from_literal(&metric_literal)?;
-    if metric.representation != MetricRepresentationV1::Dyad
+    if metric.representation != MetricRepresentation::Dyad
         || !literal_matches(&metric.native_scale, &dyad.native_scale)
         || !evidence_allowed(dyad.evidence_class, metric.evidence_classes)
     {
@@ -1432,10 +1428,10 @@ fn validate_dyad(dyad: &DyadV1) -> Result<(), RtdError> {
 // The contract requires a statically bounded indexed registry traversal.
 #[allow(clippy::needless_range_loop)]
 fn metric_from_literal(
-    literal: &TypedIdentityLiteralV1,
-) -> Result<&'static RtdMetricRegistryRowV1, RtdError> {
+    literal: &TypedIdentityLiteral,
+) -> Result<&'static RtdMetricRegistryRow, RtdError> {
     for index in 0..METRIC_ROWS {
-        let row = &RTD_V1_METRIC_REGISTRY[index];
+        let row = &RTD_METRIC_REGISTRY[index];
         if row.metric == *literal {
             return Ok(row);
         }
@@ -1444,18 +1440,18 @@ fn metric_from_literal(
 }
 
 fn validate_flow(
-    flow: &ReferenceFlowV1,
-    draft: &RtdDossierDraftV1,
+    flow: &ReferenceFlow,
+    draft: &RtdDossierDraft,
     facets: &BTreeMap<IdentityKey, usize>,
     used: &mut BTreeSet<IdentityKey>,
 ) -> Result<(), RtdError> {
-    if flow.flow_kind == FlowKindV1::CommuterJobs
+    if flow.flow_kind == FlowKind::CommuterJobs
         && (is_canada_endpoint(&flow.origin_ref) || is_canada_endpoint(&flow.destination_ref))
     {
         return Err(RtdError::CanadaControl);
     }
     let row = binding("REFERENCE_FLOW", flow_kind(flow.flow_kind))?;
-    if row.payload_mode == RelationPayloadModeV1::Empty {
+    if row.payload_mode == RelationPayloadMode::Empty {
         return if flow.payload_facets.is_empty() {
             Ok(())
         } else {
@@ -1474,15 +1470,15 @@ fn validate_flow(
 }
 
 fn validate_flow_facet(
-    flow: &ReferenceFlowV1,
-    facet: &FacetV1,
-    row: &RtdRelationBindingRegistryRowV1,
+    flow: &ReferenceFlow,
+    facet: &Facet,
+    row: &RtdRelationBindingRegistryRow,
 ) -> Result<(), RtdError> {
     let metric_literal = row.metric.ok_or(RtdError::NativeGrain)?;
     let metric = metric_from_literal(&metric_literal)?;
     if identity_key(&facet.subject_ref) != identity_key(&flow.flow_id)
         || !literal_matches(&metric_literal, &facet.metric_id)
-        || metric.representation != MetricRepresentationV1::ReferenceFlow
+        || metric.representation != MetricRepresentation::ReferenceFlow
         || !literal_matches(&metric.native_scale, &flow.native_scale)
         || !evidence_allowed(flow.evidence_class, metric.evidence_classes)
     {
@@ -1501,9 +1497,9 @@ fn validate_flow_facet(
 }
 
 fn coordinate_member<'a>(
-    facet: &'a FacetV1,
-    dimension: &TypedIdentityLiteralV1,
-) -> Option<&'a TypedIdentityV1> {
+    facet: &'a Facet,
+    dimension: &TypedIdentityLiteral,
+) -> Option<&'a TypedIdentity> {
     for index in 0..MAX_COORDINATES {
         if index == facet.coordinates.len() {
             return None;
@@ -1515,7 +1511,7 @@ fn coordinate_member<'a>(
     None
 }
 
-fn is_canada_endpoint(identity: &TypedIdentityV1) -> bool {
+fn is_canada_endpoint(identity: &TypedIdentity) -> bool {
     let text = format!(
         "{}/{}/{}",
         identity.domain, identity.authority, identity.local_id

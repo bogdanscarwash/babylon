@@ -11,8 +11,8 @@ use crate::intrinsic_host::IntrinsicHost;
 use crate::reader::{Atom, FormPath, SExpr, ScaledKind};
 use crate::typecheck::TypeEnv;
 use crate::types::{BslType, EnumRegistry, EnumTypeId};
-use babylon_graph::stable_element::StableElementKeyV1;
-use babylon_kernel::sha256_of;
+use babylon_graph::stable_element::StableElementKey;
+use babylon_kernel::content_digest::sha256_of;
 
 /// The fixed decimal scale of a BSL `m` literal.
 pub const MASS_NANOUNITS_PER_UNIT: u64 = 1_000_000_000;
@@ -141,7 +141,7 @@ impl Mass {
 
 /// One enum-ordered half-open interval in the exact ticket allocation.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TicketIntervalV1 {
+pub struct TicketInterval {
     /// Inclusive ticket start.
     pub start: u128,
     /// Exclusive ticket end.
@@ -152,7 +152,7 @@ pub struct TicketIntervalV1 {
 
 /// One exact Mass literal and its source path.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MassLiteralFactV1 {
+pub struct MassLiteralFact {
     /// Path directly consumable by `SpanTable`.
     pub form_path: FormPath,
     /// Canonical exact value.
@@ -161,7 +161,7 @@ pub struct MassLiteralFactV1 {
 
 /// One compiled branch of a finite material transition kernel.
 #[derive(Debug, Clone, PartialEq)]
-pub struct KernelBranchV1 {
+pub struct KernelBranch {
     /// The common branch enum type's written name.
     pub enum_type: String,
     /// The outcome member, in declaration order.
@@ -179,7 +179,7 @@ pub struct KernelBranchV1 {
     /// Path of the branch's `:mass` expression.
     pub mass_path: FormPath,
     /// Mass literal token paths within the mass expression.
-    pub mass_literals: Vec<MassLiteralFactV1>,
+    pub mass_literals: Vec<MassLiteralFact>,
     /// `quantize-mass` head-token paths within the mass expression.
     pub quantize_mass_paths: Vec<FormPath>,
     /// Exact load-time Mass when the static analyzer can fold the expression.
@@ -188,7 +188,7 @@ pub struct KernelBranchV1 {
 
 /// Typed IR for one direct finite-kernel choice.
 #[derive(Debug, Clone, PartialEq)]
-pub struct FiniteKernelV1 {
+pub struct FiniteKernel {
     /// Content-set-unique stable sample identity.
     pub sample: String,
     /// Path of the sample `QName` token.
@@ -202,7 +202,7 @@ pub struct FiniteKernelV1 {
     /// Written common enum type name.
     pub enum_type_name: String,
     /// Branches in the enum's declaration order.
-    pub branches: Vec<KernelBranchV1>,
+    pub branches: Vec<KernelBranch>,
     /// Path of the `(choose ...)` form within the rule AST.
     pub form_path: FormPath,
     /// Path of the `choose` head token.
@@ -211,7 +211,7 @@ pub struct FiniteKernelV1 {
 
 /// Typed IR for one exact subject-local recognizer projection.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct FiniteProjectionV1 {
+pub struct FiniteProjection {
     /// Stable sample identity of the immediately preceding kernel.
     pub sample: String,
     /// Path of the rule-level `:projects-kernel` keyword.
@@ -227,18 +227,18 @@ pub struct FiniteProjectionV1 {
 
 /// Enum-ordered allocation facts retained by a realization.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RealizedBranchV1 {
+pub struct RealizedBranch {
     /// Outcome member.
     pub member: String,
     /// Exact evaluated Mass.
     pub mass: Mass,
     /// Exact ticket interval.
-    pub tickets: TicketIntervalV1,
+    pub tickets: TicketInterval,
 }
 
 /// Replay-keyed stable carrier identity for one choice instance.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KernelInstanceIdentityV1 {
+pub struct KernelInstanceIdentity {
     /// Exact checked replay-session bytes.
     pub replay_session: Vec<u8>,
     /// Canonical signed replay-seed bytes.
@@ -248,9 +248,9 @@ pub struct KernelInstanceIdentityV1 {
     /// Firing rule identity.
     pub rule_id: String,
     /// Stable subject identity.
-    pub subject: StableElementKeyV1,
+    pub subject: StableElementKey,
     /// Ordered active-element stable identities.
-    pub active_elements: Vec<StableElementKeyV1>,
+    pub active_elements: Vec<StableElementKey>,
 }
 
 /// Engine-neutral result of realizing one compiled choice.
@@ -259,7 +259,7 @@ pub struct KernelInstanceIdentityV1 {
 /// owns its durable receipt type. This record supplies the complete exact
 /// material from which that receipt is constructed.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KernelRealizationV1 {
+pub struct KernelRealization {
     /// Firing rule identity.
     pub rule_id: String,
     /// Stable sample identity.
@@ -269,11 +269,11 @@ pub struct KernelRealizationV1 {
     /// Common outcome enum type.
     pub enum_type: String,
     /// Stable subject identity.
-    pub subject: StableElementKeyV1,
+    pub subject: StableElementKey,
     /// Ordered active-element stable identities.
-    pub active_elements: Vec<StableElementKeyV1>,
+    pub active_elements: Vec<StableElementKey>,
     /// Enum-ordered masses and ticket intervals.
-    pub branches: Vec<RealizedBranchV1>,
+    pub branches: Vec<RealizedBranch>,
     /// The one private integer draw.
     pub draw: u64,
     /// Selected outcome member.
@@ -286,7 +286,7 @@ pub struct KernelRealizationV1 {
 
 /// Authoring-relevant typed probability node retained by loader analysis.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ProbabilityAnalysisNodeKindV1 {
+pub enum ProbabilityAnalysisNodeKind {
     /// `choose` head token.
     Choose,
     /// `branch` head token.
@@ -305,9 +305,9 @@ pub enum ProbabilityAnalysisNodeKindV1 {
 
 /// One typed probability node and its parser-stable source path.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ProbabilityAnalysisNodeV1 {
+pub struct ProbabilityAnalysisNode {
     /// Semantic node kind.
-    pub kind: ProbabilityAnalysisNodeKindV1,
+    pub kind: ProbabilityAnalysisNodeKind,
     /// Path directly consumable by the parser's `SpanTable`.
     pub form_path: FormPath,
 }
@@ -318,7 +318,7 @@ pub struct ProbabilityAnalysisNodeV1 {
 /// refusal becomes active only when an adjacent recognizer asks the finite
 /// projection boundary to enumerate that kernel exactly.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum KernelProjectionLocalityV1 {
+pub enum KernelProjectionLocality {
     /// Every material effect in the kernel rule is local to its firing subject.
     CarrierLocal,
     /// Exact V1 projection cannot enumerate a material effect over another or
@@ -337,41 +337,41 @@ pub enum KernelProjectionLocalityV1 {
 /// content analysis and the LSP consume this typed record and never walk the
 /// rule's `SExpr` again.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct CompiledProbabilityFactsV1 {
+pub struct CompiledProbabilityFacts {
     /// Typed probability token/form nodes in source order.
-    pub nodes: Vec<ProbabilityAnalysisNodeV1>,
+    pub nodes: Vec<ProbabilityAnalysisNode>,
     /// Every exact Mass literal in the rule, including Mass bindings.
-    pub mass_literals: Vec<MassLiteralFactV1>,
+    pub mass_literals: Vec<MassLiteralFact>,
     /// Whole-rule kernel locality, when this rule compiled a finite kernel.
-    pub kernel_projection_locality: Option<KernelProjectionLocalityV1>,
+    pub kernel_projection_locality: Option<KernelProjectionLocality>,
 }
 
 /// Complete probability product of compiling one loaded rule.
 #[derive(Debug, Clone, Default, PartialEq)]
-pub struct CompiledRuleProbabilityV1 {
+pub struct CompiledRuleProbability {
     /// Typed finite kernel, when the rule declares `choose`.
-    pub kernel: Option<FiniteKernelV1>,
+    pub kernel: Option<FiniteKernel>,
     /// Typed deterministic projection, when the rule declares
     /// `:projects-kernel`.
-    pub projection: Option<FiniteProjectionV1>,
+    pub projection: Option<FiniteProjection>,
     /// Loader-retained authoring facts from the same compilation.
-    pub facts: CompiledProbabilityFactsV1,
+    pub facts: CompiledProbabilityFacts,
 }
 
 /// Exact static allocation available without a world state.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ExactKernelAllocationV1 {
+pub struct ExactKernelAllocation {
     /// Enum-ordered exact masses.
     pub masses: Vec<Mass>,
     /// Enum-ordered half-open ticket intervals.
-    pub intervals: Vec<TicketIntervalV1>,
+    pub intervals: Vec<TicketInterval>,
 }
 
 /// Whether exact allocation is available during content analysis.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum AllocationAnalysisV1 {
+pub enum AllocationAnalysis {
     /// Every Mass was state-independent and allocation is exact.
-    Exact(ExactKernelAllocationV1),
+    Exact(ExactKernelAllocation),
     /// At least one Mass was not determined by load-time static analysis.
     Unavailable {
         /// Stable author-facing explanation.
@@ -381,26 +381,26 @@ pub enum AllocationAnalysisV1 {
 
 /// Per-loaded-rule probability facts from the one typed loader path.
 #[derive(Debug, Clone, PartialEq)]
-pub struct RuleProbabilityAnalysisV1 {
+pub struct RuleProbabilityAnalysis {
     /// Source identity retained by `LoadedRule`.
     pub source_id: String,
     /// Governed rule `QName`.
     pub rule_id: String,
     /// Typed kernel IR, when this rule declares one.
-    pub kernel: Option<FiniteKernelV1>,
+    pub kernel: Option<FiniteKernel>,
     /// Typed projection IR, when this rule declares one.
-    pub projection: Option<FiniteProjectionV1>,
+    pub projection: Option<FiniteProjection>,
     /// Token/form nodes for diagnostics, hover, and semantic tokens.
-    pub nodes: Vec<ProbabilityAnalysisNodeV1>,
+    pub nodes: Vec<ProbabilityAnalysisNode>,
     /// Every exact Mass literal in this loaded rule, including Mass bindings.
-    pub mass_literals: Vec<MassLiteralFactV1>,
+    pub mass_literals: Vec<MassLiteralFact>,
     /// Static allocation facts for a kernel rule.
-    pub allocation: Option<AllocationAnalysisV1>,
+    pub allocation: Option<AllocationAnalysis>,
 }
 
 /// One loader-confirmed Mass constant literal from a scenario or prelude.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MassDeclarationAnalysisV1 {
+pub struct MassDeclarationAnalysis {
     /// Caller-owned source identity used by authoring tools.
     pub source_id: String,
     /// Declared constant `QName`.
@@ -413,9 +413,9 @@ pub struct MassDeclarationAnalysisV1 {
 
 /// Why analysis cannot publish an exact projected event likelihood yet.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum LikelihoodAnalysisV1 {
+pub enum LikelihoodAnalysis {
     /// Exact bounded detached-state likelihoods for a paired scenario.
-    Exact(Vec<EventLikelihoodV1>),
+    Exact(Vec<EventLikelihood>),
     /// A bounded state clone and deterministic projection are still required.
     StateDependent {
         /// Stable author-facing explanation.
@@ -425,7 +425,7 @@ pub enum LikelihoodAnalysisV1 {
 
 /// One validated adjacent kernel/projection relationship.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KernelProjectionLinkV1 {
+pub struct KernelProjectionLink {
     /// Shared stable sample `QName`.
     pub sample: String,
     /// Mechanic rule `QName`.
@@ -433,24 +433,24 @@ pub struct KernelProjectionLinkV1 {
     /// Adjacent recognizer rule `QName`.
     pub projection_rule_id: String,
     /// Content-only likelihood availability.
-    pub likelihood: LikelihoodAnalysisV1,
+    pub likelihood: LikelihoodAnalysis,
 }
 
 /// Typed analysis for one already resolved content-set schedule.
 #[derive(Debug, Clone, PartialEq)]
-pub struct ContentSetAnalysisV1 {
+pub struct ContentSetAnalysis {
     /// Loader-confirmed scenario/prelude Mass constants, populated by the
     /// source-level content orchestrator.
-    pub mass_declarations: Vec<MassDeclarationAnalysisV1>,
+    pub mass_declarations: Vec<MassDeclarationAnalysis>,
     /// Rules in resolved schedule order.
-    pub rules: Vec<RuleProbabilityAnalysisV1>,
+    pub rules: Vec<RuleProbabilityAnalysis>,
     /// Validated adjacent links in projection encounter order.
-    pub links: Vec<KernelProjectionLinkV1>,
+    pub links: Vec<KernelProjectionLink>,
 }
 
 /// Deterministic recognizer result for one enum-ordered branch forecast.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct BranchProjectionV1 {
+pub struct BranchProjection {
     /// Outcome member, used to validate enum order and prevent cross-kernel joins.
     pub outcome: String,
     /// Event types emitted after applying this branch to a cloned pre-choice state.
@@ -459,7 +459,7 @@ pub struct BranchProjectionV1 {
 
 /// Exact finite preimage measure of one projected event type.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EventLikelihoodV1 {
+pub struct EventLikelihood {
     /// Projected event enum reference/name.
     pub event_type: String,
     /// Favorable kernel outcomes in enum declaration order.
@@ -475,7 +475,7 @@ pub struct EventLikelihoodV1 {
 /// Boxed inside [`ProbabilityError`] so this authoring-rich refusal does not
 /// enlarge every unrelated probability result on the stack.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SubjectCarrierMismatchV1 {
+pub struct SubjectCarrierMismatch {
     /// Shared sample `QName`.
     pub sample: String,
     /// Mechanic rule declaring the kernel.
@@ -535,7 +535,7 @@ pub enum ProbabilityError {
         form_path: FormPath,
     },
     /// An adjacent projection would observe a different subject population.
-    SubjectCarrierMismatch(Box<SubjectCarrierMismatchV1>),
+    SubjectCarrierMismatch(Box<SubjectCarrierMismatch>),
 }
 
 impl ProbabilityError {
@@ -1290,11 +1290,11 @@ fn static_mass_expression(
 fn collect_mass_analysis_paths(
     expr: &SExpr,
     path: &[u32],
-    literals: &mut Vec<MassLiteralFactV1>,
+    literals: &mut Vec<MassLiteralFact>,
     quantize: &mut Vec<FormPath>,
 ) -> Result<(), ProbabilityError> {
     match expr {
-        SExpr::Atom(Atom::Mass(mass)) => literals.push(MassLiteralFactV1 {
+        SExpr::Atom(Atom::Mass(mass)) => literals.push(MassLiteralFact {
             form_path: path.to_vec(),
             mass: *mass,
         }),
@@ -1417,7 +1417,7 @@ fn projection_is_subject_local(rule: &SExpr, root_path: &[u32]) -> Result<bool, 
 fn classify_kernel_projection_locality(
     rule: &SExpr,
     root_path: &[u32],
-) -> Result<KernelProjectionLocalityV1, ProbabilityError> {
+) -> Result<KernelProjectionLocality, ProbabilityError> {
     const SHARED_MATERIAL_EFFECTS: [&str; 9] = [
         "update-edge",
         "update-hyperedge",
@@ -1438,13 +1438,13 @@ fn classify_kernel_projection_locality(
             if form == "update-node"
                 && !matches!(items.get(1), Some(SExpr::Atom(Atom::Symbol(target))) if target == "self")
             {
-                return Ok(KernelProjectionLocalityV1::RequiresJointCarrier {
+                return Ok(KernelProjectionLocality::RequiresJointCarrier {
                     message: "finite-projection kernel material effects must be carrier-local; update-node target must be literal `self`".to_owned(),
                     form_path: child_path(&path, 1)?,
                 });
             }
             if SHARED_MATERIAL_EFFECTS.contains(&form.as_str()) {
-                return Ok(KernelProjectionLocalityV1::RequiresJointCarrier {
+                return Ok(KernelProjectionLocality::RequiresJointCarrier {
                     message: "finite-projection kernel material effects must be carrier-local; shared or graph-shape writes require one joint kernel over that carrier and are not exactly enumerable in V1".to_owned(),
                     form_path: child_path(&path, 0)?,
                 });
@@ -1456,7 +1456,7 @@ fn classify_kernel_projection_locality(
                 .rev(),
         );
     }
-    Ok(KernelProjectionLocalityV1::CarrierLocal)
+    Ok(KernelProjectionLocality::CarrierLocal)
 }
 
 fn path_is_within(path: &[u32], root: &[u32]) -> bool {
@@ -1466,7 +1466,7 @@ fn path_is_within(path: &[u32], root: &[u32]) -> bool {
 fn validate_mass_usage(
     rule: &SExpr,
     root_path: &[u32],
-    kernel: Option<&FiniteKernelV1>,
+    kernel: Option<&FiniteKernel>,
     types: &TypeEnv,
     bindings: &[BindingDecl],
     consts: &std::collections::HashMap<String, Value>,
@@ -1576,7 +1576,7 @@ fn parse_branch(
     types: &TypeEnv,
     bindings: &[BindingDecl],
     consts: &std::collections::HashMap<String, Value>,
-) -> Result<(EnumTypeId, KernelBranchV1), ProbabilityError> {
+) -> Result<(EnumTypeId, KernelBranch), ProbabilityError> {
     let SExpr::List(items) = expr else {
         return Err(invalid(
             &path,
@@ -1633,7 +1633,7 @@ fn parse_branch(
     let static_mass = static_mass_expression(mass, bindings, consts, &mut Vec::new())?;
     Ok((
         enum_id,
-        KernelBranchV1 {
+        KernelBranch {
             enum_type: enum_type.clone(),
             member: member.clone(),
             ordinal,
@@ -1656,7 +1656,7 @@ fn parse_choose(
     types: &TypeEnv,
     bindings: &[BindingDecl],
     consts: &std::collections::HashMap<String, Value>,
-) -> Result<FiniteKernelV1, ProbabilityError> {
+) -> Result<FiniteKernel, ProbabilityError> {
     let SExpr::List(items) = expr else {
         return Err(invalid(&path, "choose must be a list form"));
     };
@@ -1719,7 +1719,7 @@ fn parse_choose(
             ),
         ));
     }
-    Ok(FiniteKernelV1 {
+    Ok(FiniteKernel {
         sample: sample.clone(),
         sample_path: child_path(&path, 2)?,
         slot,
@@ -1752,7 +1752,7 @@ pub fn compile_rule_probability(
     bindings: &[BindingDecl],
     consts: &std::collections::HashMap<String, Value>,
     probability_consts: &std::collections::HashSet<String>,
-) -> Result<CompiledRuleProbabilityV1, ProbabilityError> {
+) -> Result<CompiledRuleProbability, ProbabilityError> {
     let SExpr::List(rule_items) = rule else {
         return Err(invalid(
             root_path,
@@ -1781,7 +1781,7 @@ pub fn compile_rule_probability(
                     ":projects-kernel takes one sample qname",
                 ));
             };
-            projection = Some(FiniteProjectionV1 {
+            projection = Some(FiniteProjection {
                 sample: sample.clone(),
                 form_path: child_path(&root, index)?,
                 sample_path: child_path(&root, index + 1)?,
@@ -1935,52 +1935,48 @@ pub fn compile_rule_probability(
     }
     let mut nodes = Vec::new();
     if let Some(kernel) = &kernel {
-        nodes.push(ProbabilityAnalysisNodeV1 {
-            kind: ProbabilityAnalysisNodeKindV1::Choose,
+        nodes.push(ProbabilityAnalysisNode {
+            kind: ProbabilityAnalysisNodeKind::Choose,
             form_path: kernel.head_path.clone(),
         });
         for branch in &kernel.branches {
-            nodes.push(ProbabilityAnalysisNodeV1 {
-                kind: ProbabilityAnalysisNodeKindV1::Branch,
+            nodes.push(ProbabilityAnalysisNode {
+                kind: ProbabilityAnalysisNodeKind::Branch,
                 form_path: branch.head_path.clone(),
             });
-            nodes.push(ProbabilityAnalysisNodeV1 {
-                kind: ProbabilityAnalysisNodeKindV1::BranchMass,
+            nodes.push(ProbabilityAnalysisNode {
+                kind: ProbabilityAnalysisNodeKind::BranchMass,
                 form_path: branch.mass_path.clone(),
             });
         }
     }
     if let Some(projection) = &projection {
-        nodes.push(ProbabilityAnalysisNodeV1 {
-            kind: ProbabilityAnalysisNodeKindV1::ProjectionKeyword,
+        nodes.push(ProbabilityAnalysisNode {
+            kind: ProbabilityAnalysisNodeKind::ProjectionKeyword,
             form_path: projection.form_path.clone(),
         });
-        nodes.push(ProbabilityAnalysisNodeV1 {
-            kind: ProbabilityAnalysisNodeKindV1::ProjectionSample,
+        nodes.push(ProbabilityAnalysisNode {
+            kind: ProbabilityAnalysisNodeKind::ProjectionSample,
             form_path: projection.sample_path.clone(),
         });
     }
-    nodes.extend(
-        mass_literals
-            .iter()
-            .map(|literal| ProbabilityAnalysisNodeV1 {
-                kind: ProbabilityAnalysisNodeKindV1::MassLiteral,
-                form_path: literal.form_path.clone(),
-            }),
-    );
+    nodes.extend(mass_literals.iter().map(|literal| ProbabilityAnalysisNode {
+        kind: ProbabilityAnalysisNodeKind::MassLiteral,
+        form_path: literal.form_path.clone(),
+    }));
     nodes.extend(
         quantize_mass_paths
             .into_iter()
-            .map(|form_path| ProbabilityAnalysisNodeV1 {
-                kind: ProbabilityAnalysisNodeKindV1::QuantizeMass,
+            .map(|form_path| ProbabilityAnalysisNode {
+                kind: ProbabilityAnalysisNodeKind::QuantizeMass,
                 form_path,
             }),
     );
     nodes.sort_by(|left, right| left.form_path.cmp(&right.form_path));
-    Ok(CompiledRuleProbabilityV1 {
+    Ok(CompiledRuleProbability {
         kernel,
         projection,
-        facts: CompiledProbabilityFactsV1 {
+        facts: CompiledProbabilityFacts {
             nodes,
             mass_literals,
             kernel_projection_locality,
@@ -2052,7 +2048,7 @@ pub fn validate_probability_content_set(
                 })?;
         if kernel_carrier != projection_carrier {
             return Err(ProbabilityError::SubjectCarrierMismatch(Box::new(
-                SubjectCarrierMismatchV1 {
+                SubjectCarrierMismatch {
                     sample: projection.sample.clone(),
                     kernel_rule_id: kernel_rule.contract.rule_id.clone(),
                     projection_rule_id: projection_rule.contract.rule_id.clone(),
@@ -2072,7 +2068,7 @@ pub fn validate_probability_content_set(
                     "compiled finite kernel has no retained projection-locality result",
                 )
             })?;
-        if let KernelProjectionLocalityV1::RequiresJointCarrier { message, form_path } = locality {
+        if let KernelProjectionLocality::RequiresJointCarrier { message, form_path } = locality {
             return Err(invalid(form_path, message.clone()));
         }
     }
@@ -2090,7 +2086,7 @@ pub fn validate_probability_content_set(
 /// Returns [`EvalError`] when a Mass expression exhausts fuel, cannot be
 /// evaluated, or violates the compiled Mass type invariant.
 pub fn evaluate_kernel_masses(
-    kernel: &FiniteKernelV1,
+    kernel: &FiniteKernel,
     env: &EvalEnv<'_>,
     host: &dyn IntrinsicHost,
     fuel: &mut u64,
@@ -2121,7 +2117,7 @@ pub fn evaluate_kernel_masses(
 #[allow(clippy::too_many_lines)]
 pub fn analyze_content_set(
     rules: &[crate::rule_pipeline::LoadedRule],
-) -> Result<ContentSetAnalysisV1, ProbabilityError> {
+) -> Result<ContentSetAnalysis, ProbabilityError> {
     validate_probability_content_set(rules)?;
 
     let mut analyzed = Vec::with_capacity(rules.len());
@@ -2136,9 +2132,9 @@ pub fn analyze_content_set(
             Some(match masses {
                 Some(masses) => {
                     let intervals = allocate_tickets(&masses)?;
-                    AllocationAnalysisV1::Exact(ExactKernelAllocationV1 { masses, intervals })
+                    AllocationAnalysis::Exact(ExactKernelAllocation { masses, intervals })
                 }
-                None => AllocationAnalysisV1::Unavailable {
+                None => AllocationAnalysis::Unavailable {
                     reason: "one or more masses depend on runtime state or calendar, or use a source expression outside the load-time static evaluator"
                         .to_owned(),
                 },
@@ -2146,7 +2142,7 @@ pub fn analyze_content_set(
         } else {
             None
         };
-        analyzed.push(RuleProbabilityAnalysisV1 {
+        analyzed.push(RuleProbabilityAnalysis {
             source_id: rule.source_id.clone(),
             rule_id: rule.contract.rule_id.clone(),
             kernel: rule.kernel.clone(),
@@ -2167,18 +2163,18 @@ pub fn analyze_content_set(
             continue;
         };
         if kernel.sample == projection.sample {
-            links.push(KernelProjectionLinkV1 {
+            links.push(KernelProjectionLink {
                 sample: kernel.sample.clone(),
                 kernel_rule_id: kernel_rule.contract.rule_id.clone(),
                 projection_rule_id: projection_rule.contract.rule_id.clone(),
-                likelihood: LikelihoodAnalysisV1::StateDependent {
+                likelihood: LikelihoodAnalysis::StateDependent {
                     reason: "exact event likelihood requires the bounded pre-choice state"
                         .to_owned(),
                 },
             });
         }
     }
-    Ok(ContentSetAnalysisV1 {
+    Ok(ContentSetAnalysis {
         mass_declarations: Vec::new(),
         rules: analyzed,
         links,
@@ -2194,11 +2190,11 @@ pub fn analyze_content_set(
 /// Returns [`ProbabilityError`] when samples, branch order, projected events,
 /// or the exact ticket allocation do not match the compiled pair.
 pub fn forecast_event_likelihoods(
-    kernel: &FiniteKernelV1,
-    projection: &FiniteProjectionV1,
+    kernel: &FiniteKernel,
+    projection: &FiniteProjection,
     masses: &[Mass],
-    projections: &[BranchProjectionV1],
-) -> Result<Vec<EventLikelihoodV1>, ProbabilityError> {
+    projections: &[BranchProjection],
+) -> Result<Vec<EventLikelihood>, ProbabilityError> {
     if projection.sample != kernel.sample {
         return Err(invalid(
             &projection.sample_path,
@@ -2250,7 +2246,7 @@ pub fn forecast_event_likelihoods(
     Ok(favorable
         .into_iter()
         .map(
-            |(event_type, (favorable_outcomes, numerator))| EventLikelihoodV1 {
+            |(event_type, (favorable_outcomes, numerator))| EventLikelihood {
                 event_type,
                 favorable_outcomes,
                 numerator,
@@ -2266,7 +2262,7 @@ pub fn forecast_event_likelihoods(
 ///
 /// Returns [`ProbabilityError`] for zero total mass, arithmetic overflow, or
 /// a positive branch that cannot receive a ticket.
-pub fn allocate_tickets(masses: &[Mass]) -> Result<Vec<TicketIntervalV1>, ProbabilityError> {
+pub fn allocate_tickets(masses: &[Mass]) -> Result<Vec<TicketInterval>, ProbabilityError> {
     let total = checked_allocation_total(masses.iter().map(|mass| u128::from(mass.nanounits())))?;
     if total == 0 {
         return Err(ProbabilityError::ZeroTotalMass);
@@ -2313,7 +2309,7 @@ pub fn allocate_tickets(masses: &[Mass]) -> Result<Vec<TicketIntervalV1>, Probab
         let end = cursor
             .checked_add(count)
             .ok_or(ProbabilityError::TotalMassOverflow)?;
-        intervals.push(TicketIntervalV1 {
+        intervals.push(TicketInterval {
             start: cursor,
             end,
             count,
@@ -2342,7 +2338,7 @@ fn checked_allocation_total(
 /// Returns [`ProbabilityError::TicketNotCovered`] when the supplied
 /// allocation does not cover the draw.
 pub fn selected_branch(
-    allocation: &[TicketIntervalV1],
+    allocation: &[TicketInterval],
     draw: u64,
 ) -> Result<usize, ProbabilityError> {
     let ticket = u128::from(draw);
@@ -2368,7 +2364,7 @@ fn push_bytes_len_prefixed(bytes: &mut Vec<u8>, value: &[u8]) -> Result<(), Prob
 
 fn push_stable_identity(
     bytes: &mut Vec<u8>,
-    value: &StableElementKeyV1,
+    value: &StableElementKey,
 ) -> Result<(), ProbabilityError> {
     let encoded = value.canonical_bytes().map_err(|error| {
         invalid(
@@ -2387,11 +2383,11 @@ fn push_stable_identity(
 /// kernel, cannot be allocated exactly, or stable identity encoding fails.
 #[allow(clippy::too_many_arguments)]
 pub fn realize_kernel(
-    identity: &KernelInstanceIdentityV1,
-    kernel: &FiniteKernelV1,
+    identity: &KernelInstanceIdentity,
+    kernel: &FiniteKernel,
     masses: &[Mass],
     draw: u64,
-) -> Result<KernelRealizationV1, ProbabilityError> {
+) -> Result<KernelRealization, ProbabilityError> {
     if masses.len() != kernel.branches.len() {
         return Err(ProbabilityError::InvalidForm {
             message: "evaluated mass count does not match compiled branch count".to_owned(),
@@ -2399,12 +2395,12 @@ pub fn realize_kernel(
         });
     }
     let intervals = allocate_tickets(masses)?;
-    let branches: Vec<RealizedBranchV1> = kernel
+    let branches: Vec<RealizedBranch> = kernel
         .branches
         .iter()
         .zip(masses)
         .zip(intervals)
-        .map(|((branch, mass), tickets)| RealizedBranchV1 {
+        .map(|((branch, mass), tickets)| RealizedBranch {
             member: branch.member.clone(),
             mass: *mass,
             tickets,
@@ -2415,11 +2411,11 @@ pub fn realize_kernel(
 }
 
 fn compose_realization(
-    identity: &KernelInstanceIdentityV1,
-    kernel: &FiniteKernelV1,
-    branches: Vec<RealizedBranchV1>,
+    identity: &KernelInstanceIdentity,
+    kernel: &FiniteKernel,
+    branches: Vec<RealizedBranch>,
     draw: u64,
-) -> Result<KernelRealizationV1, ProbabilityError> {
+) -> Result<KernelRealization, ProbabilityError> {
     let selected = selected_branch(
         &branches
             .iter()
@@ -2461,7 +2457,7 @@ fn compose_realization(
     instance_bytes.extend_from_slice(&allocation_digest);
     let instance_digest = sha256_of(&instance_bytes);
 
-    Ok(KernelRealizationV1 {
+    Ok(KernelRealization {
         rule_id: identity.rule_id.clone(),
         sample: kernel.sample.clone(),
         slot: kernel.slot,
@@ -2484,13 +2480,13 @@ fn compose_realization(
 /// Returns [`ProbabilityError`] when any stored mass, interval, outcome,
 /// identity field, or digest fails exact recomposition.
 pub fn validate_kernel_realization(
-    realization: &KernelRealizationV1,
-    identity: &KernelInstanceIdentityV1,
+    realization: &KernelRealization,
+    identity: &KernelInstanceIdentity,
 ) -> Result<(), ProbabilityError> {
     let enum_type = EnumTypeId(0);
     let mut branches = Vec::with_capacity(realization.branches.len());
     for (ordinal, branch) in realization.branches.iter().enumerate() {
-        branches.push(KernelBranchV1 {
+        branches.push(KernelBranch {
             enum_type: realization.enum_type.clone(),
             member: branch.member.clone(),
             ordinal: u32::try_from(ordinal).map_err(|_| {
@@ -2509,7 +2505,7 @@ pub fn validate_kernel_realization(
             form_path: Vec::new(),
         });
     }
-    let kernel = FiniteKernelV1 {
+    let kernel = FiniteKernel {
         sample: realization.sample.clone(),
         sample_path: Vec::new(),
         slot: realization.slot,
@@ -2644,12 +2640,12 @@ mod tests {
         )
         .unwrap();
         let kernel = compiled.kernel.unwrap();
-        let identity = KernelInstanceIdentityV1 {
+        let identity = KernelInstanceIdentity {
             replay_session: b"demo/replay".to_vec(),
             replay_seed: 7_i64.to_be_bytes(),
             tick: 1,
             rule_id: "demo/kernel".to_owned(),
-            subject: StableElementKeyV1::Node {
+            subject: StableElementKey::Node {
                 scenario: "demo/world".to_owned(),
                 local_name: "subject".to_owned(),
             },

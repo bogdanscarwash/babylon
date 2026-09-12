@@ -58,7 +58,7 @@ fn row_from_vector(data: &Value) -> PracticeInputAuthority {
 #[test]
 fn authority_contract_schema_and_vectors_drive_the_rust_boundary() {
     assert_eq!(
-        babylon_kernel::sha256_of(SCHEMA),
+        babylon_kernel::content_digest::sha256_of(SCHEMA),
         PRACTICE_INPUT_AUTHORITY_SOURCE_SHA256
     );
     assert!(VECTORS.len() <= 65_536);

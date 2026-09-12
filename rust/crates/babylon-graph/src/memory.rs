@@ -37,7 +37,7 @@ use crate::allocator_state::{AllocatorCursors, AllocatorState};
 use crate::state_hash::CanonicalState;
 use crate::substrate::{Direction, GraphError, GraphSubstrate, HyperedgeId, NodeId};
 use crate::working_copy::DetachedCopy;
-use babylon_kernel::Currency;
+use babylon_kernel::currency::Currency;
 use std::collections::HashMap;
 
 /// The in-memory substrate. See the module documentation.
@@ -846,7 +846,7 @@ mod tests {
         // T3 #491, OQ-J: the i128 lane round-trips exactly, PARALLEL to the
         // f64 lane above — the same field name in both maps would be two
         // different rows, but this test only exercises one lane.
-        use babylon_kernel::Currency;
+        use babylon_kernel::currency::Currency;
         let mut graph = MemoryGraph::new();
         let node = graph.add_node("social_class").unwrap();
         graph
@@ -871,7 +871,7 @@ mod tests {
         // internal map may hold a key naming a dead node, the SAME
         // invariant `removal_takes_the_nodes_attributes_with_it` proves for
         // the f64 lane.
-        use babylon_kernel::Currency;
+        use babylon_kernel::currency::Currency;
         let mut graph = MemoryGraph::new();
         let doomed = graph.add_node("social_class").unwrap();
         let survivor = graph.add_node("social_class").unwrap();

@@ -17,7 +17,7 @@ authority:
     fixture_values: Designed
   invariants:
     - Campaign identity and replay identity remain separate typed concepts.
-    - Persistence uses the kernel-owned TickContentHashV1 without an alias or re-hash.
+    - Persistence uses the kernel-owned TickContentHash without an alias or re-hash.
     - Equal typed fields produce equal canonical claim bytes.
     - A same-key different-content retry refuses loudly.
     - The claim does not assert whole-envelope payload equality.
@@ -43,7 +43,7 @@ layouts:
     canonical_value: exact 16 UUID bytes in network order
     engine_physics: excluded
   tick_content_link_v1:
-    owning_type: babylon_kernel::tick_content_hash::TickContentHashV1
+    owning_type: babylon_kernel::tick_content_hash::TickContentHash
     fields: [tick_content_layout_u32_1, exact_digest32]
     persistence_alias: prohibited
   tick_commit_claim_v1:

@@ -2,9 +2,10 @@ use std::collections::{BTreeSet, HashMap};
 use std::fmt::Write as _;
 
 use babylon_bsl::{
-    canonical_bytes, read, validate_sfs_rule_profile, CardinalityCeilings, ClosedVocabulary,
-    EnumKind, GovernedComparisonSite, IntrinsicCosts, SExpr, SfsAuditPolicy, SfsComparisonContext,
-    SfsRuleAuditResult,
+    canonical_ast::canonical_bytes, fuel::CardinalityCeilings, fuel::IntrinsicCosts, reader::read,
+    reader::SExpr, sfs_profile::validate_sfs_rule_profile, sfs_profile::GovernedComparisonSite,
+    sfs_profile::SfsAuditPolicy, sfs_profile::SfsComparisonContext,
+    sfs_profile::SfsRuleAuditResult, vocabulary::ClosedVocabulary, vocabulary::EnumKind,
 };
 use babylon_evidence::{
     bind_synthetic_driver, canonical_envelope, component_profile_from_bsl, decode_envelope,
@@ -17,7 +18,7 @@ use babylon_evidence::{
     SfsComponentProofProfile, SfsPreregistration, SfsProofProfile, SfsSample, SfsTrace,
     SfsValidationError, SyntheticDriverError, T3Record,
 };
-use babylon_kernel::{sha256_of, SessionId};
+use babylon_kernel::{clock::SessionId, content_digest::sha256_of};
 use babylon_practice_contract::{
     fixed_practice_target_digest, practice_intent_digest, practice_parameter_bytes_digest,
     ActorOrganizationId, InputAuthorityId, PracticeId, PracticeIntent, PracticeParameter,
@@ -311,7 +312,7 @@ fn proof_header_pins_forbidden_audit_source_and_semantics_independently() {
     );
     assert_eq!(
         audit_source.to_hex(),
-        "91cfca31b605e3297db7e440db4007b0d15f228ce24461afdde6cb3859ce8487"
+        "a08c5c355d2f6b326860839e4c54a171331137fee3c032804e8b1913683413a9"
     );
     let envelope = canonical_envelope(&proof_profile()).unwrap();
     let payload = SfsProofProfile::DOMAIN.len() + 7;

@@ -2,31 +2,24 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use babylon_bsl::identity_codec::StableBslValueV1;
-use babylon_graph::stable_element::StableElementKeyV1;
+use babylon_bsl::identity_codec::StableBslValue;
+use babylon_graph::stable_element::StableElementKey;
 use serde_json::{Map, Value};
 use uuid::Uuid;
 
-use crate::semantic_codec::{self, SemanticCodecErrorV1, SemanticRefusalCodeV1};
+use crate::semantic_codec::{self, SemanticCodecError, SemanticRefusalCode};
 
 const MAX_VECTOR_BYTES: usize = 262_144;
 const MAX_VECTOR_ROWS: usize = 128;
 const MAX_VECTOR_LINE_BYTES: usize = 65_536;
-const GOVERNED_VECTOR_ROWS: usize = 56;
+const GOVERNED_VECTOR_ROWS: usize = 54;
 const GOVERNED_VECTOR_SHA256: [u8; 32] = [
-    0xeb, 0x7e, 0x50, 0xf8, 0x87, 0xe3, 0x9a, 0x30, 0xd4, 0x8e, 0x08, 0x5b, 0x2d, 0x9b, 0x00, 0x1b,
-    0xb3, 0xab, 0xd8, 0x23, 0x08, 0x9d, 0x7b, 0xd6, 0xdf, 0x7c, 0x7a, 0x06, 0x6e, 0x68, 0xff, 0x94,
+    0xf7, 0x1c, 0x94, 0xc0, 0x87, 0xdb, 0xeb, 0x3b, 0xc5, 0xc0, 0x2d, 0x77, 0x97, 0x7a, 0x9c, 0xf6,
+    0x39, 0xfd, 0x03, 0x6e, 0xd3, 0x5d, 0xac, 0xc9, 0x10, 0x31, 0x30, 0xa3, 0xa4, 0xce, 0xf2, 0x93,
 ];
-const AUTHORITY_LEDGER_DOMAIN: &[u8] = b"babylon.persistence-authority-ledger-row.v1\0";
-const AUTHORITY_LEDGER_LAYOUT: u32 = 1;
-const PREPARED_AUTHORITY_ROW_SHA256: [u8; 32] = [
-    0x7d, 0x9d, 0x13, 0x78, 0x2b, 0x60, 0x34, 0x86, 0xb3, 0xc0, 0x3f, 0x1a, 0x90, 0xd7, 0x3a, 0x7d,
-    0xa0, 0x52, 0x43, 0xd7, 0x58, 0x18, 0xce, 0x32, 0xfc, 0x00, 0xbf, 0x56, 0x8a, 0x23, 0x24, 0x40,
-];
-
-/// One bounded cutover-vector verification failure.
+/// One bounded semantic-vector verification failure.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum RustPersistenceVectorErrorV1 {
+pub enum RustPersistenceVectorError {
     /// Corpus or row bytes exceeded a governed bound.
     Bound {
         field: &'static str,
@@ -41,13 +34,13 @@ pub enum RustPersistenceVectorErrorV1 {
 
 /// One independently executed vector row.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RustPersistenceVectorOutcomeV1 {
+pub struct RustPersistenceVectorOutcome {
     id: Box<str>,
     kind: Box<str>,
     row_codec: Option<Box<str>>,
 }
 
-impl RustPersistenceVectorOutcomeV1 {
+impl RustPersistenceVectorOutcome {
     /// Borrow the untrusted diagnostic row identifier after successful execution.
     #[must_use]
     pub fn id(&self) -> &str {
@@ -63,13 +56,13 @@ impl RustPersistenceVectorOutcomeV1 {
 
 /// Aggregate execution counts for the exact governed corpus.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RustPersistenceVectorReportV1 {
+pub struct RustPersistenceVectorReport {
     row_count: usize,
     kind_counts: BTreeMap<Box<str>, usize>,
     valid_row_codec_counts: BTreeMap<Box<str>, usize>,
 }
 
-impl RustPersistenceVectorReportV1 {
+impl RustPersistenceVectorReport {
     /// Return the executed row count.
     #[must_use]
     pub const fn row_count(&self) -> usize {
@@ -96,40 +89,40 @@ impl RustPersistenceVectorReportV1 {
 ///
 /// # Errors
 /// Returns a bound, closed-shape, typed semantic, exact-byte, or digest mismatch.
-pub fn verify_rust_persistence_cutover_vector_row_v1(
+pub fn verify_persistence_semantic_vector_row(
     row: &[u8],
-) -> Result<RustPersistenceVectorOutcomeV1, RustPersistenceVectorErrorV1> {
+) -> Result<RustPersistenceVectorOutcome, RustPersistenceVectorError> {
     if row.len() > MAX_VECTOR_LINE_BYTES {
-        return Err(RustPersistenceVectorErrorV1::Bound {
+        return Err(RustPersistenceVectorError::Bound {
             field: "vector row bytes",
             actual: row.len(),
             maximum: MAX_VECTOR_LINE_BYTES,
         });
     }
     let value: Value =
-        serde_json::from_slice(row).map_err(|_| RustPersistenceVectorErrorV1::Shape {
+        serde_json::from_slice(row).map_err(|_| RustPersistenceVectorError::Shape {
             field: "vector JSON",
         })?;
     execute_row(&value)
 }
 
-/// Execute the exact governed 56-row vector corpus.
+/// Execute the exact governed 54-row vector corpus.
 ///
 /// # Errors
 /// Returns before a report if corpus identity, bounds, shape, or any owned
 /// typed semantic rule differs.
-pub fn verify_rust_persistence_cutover_vectors_v1(
+pub fn verify_persistence_semantic_vectors(
     vectors: &[u8],
-) -> Result<RustPersistenceVectorReportV1, RustPersistenceVectorErrorV1> {
+) -> Result<RustPersistenceVectorReport, RustPersistenceVectorError> {
     if vectors.len() > MAX_VECTOR_BYTES {
-        return Err(RustPersistenceVectorErrorV1::Bound {
+        return Err(RustPersistenceVectorError::Bound {
             field: "vector corpus bytes",
             actual: vectors.len(),
             maximum: MAX_VECTOR_BYTES,
         });
     }
     if semantic_codec::digest(vectors) != GOVERNED_VECTOR_SHA256 {
-        return Err(RustPersistenceVectorErrorV1::Shape {
+        return Err(RustPersistenceVectorError::Shape {
             field: "vector corpus digest",
         });
     }
@@ -141,7 +134,7 @@ pub fn verify_rust_persistence_cutover_vectors_v1(
         || lines.len() > MAX_VECTOR_ROWS
         || lines.iter().any(|line| line.is_empty())
     {
-        return Err(RustPersistenceVectorErrorV1::Shape {
+        return Err(RustPersistenceVectorError::Shape {
             field: "vector corpus rows",
         });
     }
@@ -149,9 +142,9 @@ pub fn verify_rust_persistence_cutover_vectors_v1(
     let mut kind_counts = BTreeMap::new();
     let mut valid_row_codec_counts = BTreeMap::new();
     for line in &lines {
-        let outcome = verify_rust_persistence_cutover_vector_row_v1(line)?;
+        let outcome = verify_persistence_semantic_vector_row(line)?;
         if !ids.insert(outcome.id.clone()) {
-            return Err(RustPersistenceVectorErrorV1::Shape {
+            return Err(RustPersistenceVectorError::Shape {
                 field: "vector row id",
             });
         }
@@ -160,20 +153,18 @@ pub fn verify_rust_persistence_cutover_vectors_v1(
             *valid_row_codec_counts.entry(codec).or_insert(0) += 1;
         }
     }
-    Ok(RustPersistenceVectorReportV1 {
+    Ok(RustPersistenceVectorReport {
         row_count: lines.len(),
         kind_counts,
         valid_row_codec_counts,
     })
 }
 
-fn execute_row(
-    value: &Value,
-) -> Result<RustPersistenceVectorOutcomeV1, RustPersistenceVectorErrorV1> {
+fn execute_row(value: &Value) -> Result<RustPersistenceVectorOutcome, RustPersistenceVectorError> {
     let object = as_object(value, "vector row")?;
     let id = string(object, "id")?;
     if id.is_empty() {
-        return Err(RustPersistenceVectorErrorV1::Shape {
+        return Err(RustPersistenceVectorError::Shape {
             field: "vector row id",
         });
     }
@@ -231,21 +222,13 @@ fn execute_row(
             execute_empty_proof(id, object)?;
             None
         }
-        "valid_authority_ledger" => {
-            exact_keys(
-                object,
-                &["id", "kind", "data", "expected_hex", "expected_sha256"],
-            )?;
-            execute_authority_ledger(id, object)?;
-            None
-        }
         "refusal" => {
             execute_refusal(id, object)?;
             None
         }
         _ => return semantic(id, "vector kind"),
     };
-    Ok(RustPersistenceVectorOutcomeV1 {
+    Ok(RustPersistenceVectorOutcome {
         id: id.into(),
         kind: kind.into(),
         row_codec,
@@ -255,7 +238,7 @@ fn execute_row(
 fn execute_valid_scalar(
     id: &str,
     object: &Map<String, Value>,
-) -> Result<(), RustPersistenceVectorErrorV1> {
+) -> Result<(), RustPersistenceVectorError> {
     let codec = string(object, "codec")?;
     let input = field(object, "input")?;
     let encoded = match codec {
@@ -302,7 +285,7 @@ fn execute_valid_scalar(
 fn execute_valid_row<'a>(
     id: &str,
     object: &'a Map<String, Value>,
-) -> Result<&'a str, RustPersistenceVectorErrorV1> {
+) -> Result<&'a str, RustPersistenceVectorError> {
     let codec = string(object, "codec")?;
     let data = as_object(field(object, "data")?, "valid row data")?;
     let row = match codec {
@@ -412,7 +395,7 @@ fn execute_valid_row<'a>(
             let refs = stable_refs(&values);
             semantic_result(
                 id,
-                semantic_codec::encode_historical_successful_event_v1_vector(
+                semantic_codec::encode_historical_successful_event_vector(
                     integer_u32(field(data, "ordinal")?, "event ordinal")?,
                     string(data, "event_type")?,
                     &refs,
@@ -472,7 +455,7 @@ fn execute_valid_row<'a>(
 fn execute_dynamic_hex(
     id: &str,
     data: &Map<String, Value>,
-) -> Result<crate::committed_tick_envelope::CommittedTickRowV2, RustPersistenceVectorErrorV1> {
+) -> Result<crate::committed_tick_envelope::CommittedTickRow, RustPersistenceVectorError> {
     exact_keys(
         data,
         &[
@@ -504,7 +487,7 @@ fn execute_dynamic_hex(
     .collect::<Result<Vec<_>, _>>()?;
     let values: [f64; 9] = values
         .try_into()
-        .map_err(|_| RustPersistenceVectorErrorV1::Shape {
+        .map_err(|_| RustPersistenceVectorError::Shape {
             field: "dynamic hex values",
         })?;
     semantic_result(
@@ -519,7 +502,7 @@ fn execute_dynamic_hex(
 fn execute_organization(
     id: &str,
     data: &Map<String, Value>,
-) -> Result<crate::committed_tick_envelope::CommittedTickRowV2, RustPersistenceVectorErrorV1> {
+) -> Result<crate::committed_tick_envelope::CommittedTickRow, RustPersistenceVectorError> {
     exact_keys(
         data,
         &[
@@ -554,7 +537,7 @@ fn execute_organization(
 fn execute_foundation(
     id: &str,
     object: &Map<String, Value>,
-) -> Result<(), RustPersistenceVectorErrorV1> {
+) -> Result<(), RustPersistenceVectorError> {
     let data = as_object(field(object, "data")?, "foundation data")?;
     exact_keys(
         data,
@@ -584,7 +567,7 @@ fn execute_foundation(
             "reference_bundle_manifest_hex",
         ],
     )?;
-    if integer_u32(field(bundle, "layout")?, "content bundle layout")? != 1 {
+    if integer_u32(field(bundle, "layout")?, "content bundle layout")? != 2 {
         return semantic(id, "content bundle layout");
     }
     let defines = hex_bytes(string(bundle, "defines_hex")?, "defines")?;
@@ -645,7 +628,7 @@ fn execute_foundation(
 fn execute_checkpoint(
     id: &str,
     object: &Map<String, Value>,
-) -> Result<(), RustPersistenceVectorErrorV1> {
+) -> Result<(), RustPersistenceVectorError> {
     let data = as_object(field(object, "data")?, "checkpoint data")?;
     exact_keys(
         data,
@@ -663,7 +646,7 @@ fn execute_checkpoint(
         return semantic(id, "checkpoint header");
     }
     let uuid = Uuid::parse_str(string(data, "campaign_id")?).map_err(|_| {
-        RustPersistenceVectorErrorV1::Shape {
+        RustPersistenceVectorError::Shape {
             field: "campaign id",
         }
     })?;
@@ -678,7 +661,7 @@ fn execute_checkpoint(
                 digest32(string(section, "sha256")?)?,
             ))
         })
-        .collect::<Result<Vec<_>, RustPersistenceVectorErrorV1>>()?;
+        .collect::<Result<Vec<_>, RustPersistenceVectorError>>()?;
     let campaign = crate::identity::CampaignId::from_uuid(uuid);
     let encoded = semantic_result(
         id,
@@ -700,7 +683,7 @@ fn execute_checkpoint(
 fn execute_empty_proof(
     id: &str,
     object: &Map<String, Value>,
-) -> Result<(), RustPersistenceVectorErrorV1> {
+) -> Result<(), RustPersistenceVectorError> {
     let data = as_object(field(object, "data")?, "empty proof data")?;
     exact_keys(
         data,
@@ -734,82 +717,11 @@ fn execute_empty_proof(
     compare_digest(id, &encoded, string(object, "expected_sha256")?)
 }
 
-fn execute_authority_ledger(
-    id: &str,
-    object: &Map<String, Value>,
-) -> Result<(), RustPersistenceVectorErrorV1> {
-    let data = as_object(field(object, "data")?, "authority ledger data")?;
-    exact_keys(
-        data,
-        &[
-            "ordinal",
-            "state",
-            "state_tag",
-            "schema_epoch",
-            "contract_sha256",
-            "reader_contract_sha256",
-            "predecessor_sha256",
-        ],
-    )?;
-    let ordinal = integer_u16(field(data, "ordinal")?, "authority ledger ordinal")?;
-    let state = string(data, "state")?;
-    let state_tag = integer_u8(field(data, "state_tag")?, "authority ledger state tag")?;
-    let schema_epoch = integer_u16(
-        field(data, "schema_epoch")?,
-        "authority ledger schema epoch",
-    )?;
-    let predecessor = match field(data, "predecessor_sha256")? {
-        Value::Null => None,
-        value => Some(digest32(value.as_str().ok_or(
-            RustPersistenceVectorErrorV1::Shape {
-                field: "authority ledger predecessor",
-            },
-        )?)?),
-    };
-    match state {
-        "prepared" if (ordinal, state_tag, schema_epoch, predecessor) == (1, 1, 8, None) => {}
-        "rust_active"
-            if (ordinal, state_tag, schema_epoch, predecessor)
-                == (2, 2, 9, Some(PREPARED_AUTHORITY_ROW_SHA256)) => {}
-        _ => return semantic(id, "authority ledger state identity"),
-    }
-
-    let contract_sha256 = digest32(string(data, "contract_sha256")?)?;
-    let reader_contract_sha256 = digest32(string(data, "reader_contract_sha256")?)?;
-    let mut encoded = Vec::with_capacity(
-        AUTHORITY_LEDGER_DOMAIN.len() + 4 + 2 + 1 + 2 + 32 + 32 + 1 + predecessor.map_or(0, |_| 32),
-    );
-    encoded.extend_from_slice(AUTHORITY_LEDGER_DOMAIN);
-    encoded.extend_from_slice(&AUTHORITY_LEDGER_LAYOUT.to_be_bytes());
-    encoded.extend_from_slice(&ordinal.to_be_bytes());
-    encoded.push(state_tag);
-    encoded.extend_from_slice(&schema_epoch.to_be_bytes());
-    encoded.extend_from_slice(&contract_sha256);
-    encoded.extend_from_slice(&reader_contract_sha256);
-    match predecessor {
-        None => encoded.push(0),
-        Some(digest) => {
-            encoded.push(1);
-            encoded.extend_from_slice(&digest);
-        }
-    }
-    if state == "prepared" && semantic_codec::digest(&encoded) != PREPARED_AUTHORITY_ROW_SHA256 {
-        return semantic(id, "prepared authority row SHA-256");
-    }
-    compare_hex(
-        id,
-        &encoded,
-        string(object, "expected_hex")?,
-        "authority ledger bytes",
-    )?;
-    compare_digest(id, &encoded, string(object, "expected_sha256")?)
-}
-
 #[allow(clippy::too_many_lines)]
 fn execute_refusal(
     id: &str,
     object: &Map<String, Value>,
-) -> Result<(), RustPersistenceVectorErrorV1> {
+) -> Result<(), RustPersistenceVectorError> {
     let operation = string(object, "operation")?;
     let input = field(object, "input")?;
     let actual = match operation {
@@ -877,9 +789,9 @@ fn execute_refusal(
             exact_keys(value, &["ordered_fields"])?;
             let fields = parse_named_stable(field(value, "ordered_fields")?)?;
             let refs = stable_refs(&fields);
-            capture_refusal(
-                semantic_codec::encode_historical_successful_event_v1_vector(0, "vector", &refs),
-            )
+            capture_refusal(semantic_codec::encode_historical_successful_event_vector(
+                0, "vector", &refs,
+            ))
         }
         "compose_family" => {
             if object.contains_key("producer") {
@@ -1014,49 +926,49 @@ fn execute_refusal(
 }
 
 fn capture_refusal<T>(
-    result: Result<T, SemanticCodecErrorV1>,
-) -> Result<SemanticRefusalCodeV1, RustPersistenceVectorErrorV1> {
+    result: Result<T, SemanticCodecError>,
+) -> Result<SemanticRefusalCode, RustPersistenceVectorError> {
     match result {
-        Err(SemanticCodecErrorV1::Refusal(code)) => Ok(code),
-        Err(_) => Err(RustPersistenceVectorErrorV1::Shape {
+        Err(SemanticCodecError::Refusal(code)) => Ok(code),
+        Err(_) => Err(RustPersistenceVectorError::Shape {
             field: "semantic refusal",
         }),
         Ok(value) => {
             drop(value);
-            Err(RustPersistenceVectorErrorV1::Shape {
+            Err(RustPersistenceVectorError::Shape {
                 field: "semantic refusal",
             })
         }
     }
 }
 
-fn parse_stable_bsl(value: &Value) -> Result<StableBslValueV1, RustPersistenceVectorErrorV1> {
+fn parse_stable_bsl(value: &Value) -> Result<StableBslValue, RustPersistenceVectorError> {
     let object = as_object(value, "stable BSL input")?;
     let tag = string(object, "tag")?;
     match tag {
         "int_i64" => {
             exact_keys(object, &["tag", "value"])?;
-            Ok(StableBslValueV1::Int(decimal_i64(
+            Ok(StableBslValue::Int(decimal_i64(
                 field(object, "value")?,
                 "BSL int",
             )?))
         }
         "currency_i128" => {
             exact_keys(object, &["tag", "micro_units"])?;
-            Ok(StableBslValueV1::CurrencyMicroUnits(decimal_i128(
+            Ok(StableBslValue::CurrencyMicroUnits(decimal_i128(
                 field(object, "micro_units")?,
                 "BSL currency",
             )?))
         }
         "real_f64_bits" => {
             exact_keys(object, &["tag", "value"])?;
-            Ok(StableBslValueV1::RealBits(
+            Ok(StableBslValue::RealBits(
                 vector_f64(field(object, "value")?)?.to_bits(),
             ))
         }
         "ratio_f64_bits_with_optional_bounds" => {
             exact_keys(object, &["tag", "value", "floor", "cap"])?;
-            Ok(StableBslValueV1::RatioBits {
+            Ok(StableBslValue::RatioBits {
                 value: vector_f64(field(object, "value")?)?.to_bits(),
                 floor: optional_f64(field(object, "floor")?)?.map(f64::to_bits),
                 cap: optional_f64(field(object, "cap")?)?.map(f64::to_bits),
@@ -1064,28 +976,28 @@ fn parse_stable_bsl(value: &Value) -> Result<StableBslValueV1, RustPersistenceVe
         }
         "bool" => {
             exact_keys(object, &["tag", "value"])?;
-            Ok(StableBslValueV1::Bool(boolean_value(
+            Ok(StableBslValue::Bool(boolean_value(
                 field(object, "value")?,
                 "BSL bool",
             )?))
         }
         "enum_type_and_member" => {
             exact_keys(object, &["tag", "enum_type", "member"])?;
-            Ok(StableBslValueV1::Enum {
+            Ok(StableBslValue::Enum {
                 enum_type: string(object, "enum_type")?.to_owned(),
                 member: string(object, "member")?.to_owned(),
             })
         }
         "stable_node_key" => {
             exact_keys(object, &["tag", "scenario", "local_name"])?;
-            Ok(StableBslValueV1::Node(StableElementKeyV1::Node {
+            Ok(StableBslValue::Node(StableElementKey::Node {
                 scenario: string(object, "scenario")?.to_owned(),
                 local_name: string(object, "local_name")?.to_owned(),
             }))
         }
         "stable_hyperedge_key" => {
             exact_keys(object, &["tag", "scenario", "local_name"])?;
-            Ok(StableBslValueV1::Hyperedge(StableElementKeyV1::Hyperedge {
+            Ok(StableBslValue::Hyperedge(StableElementKey::Hyperedge {
                 scenario: string(object, "scenario")?.to_owned(),
                 local_name: string(object, "local_name")?.to_owned(),
             }))
@@ -1101,25 +1013,25 @@ fn parse_stable_bsl(value: &Value) -> Result<StableBslValueV1, RustPersistenceVe
                     "target_local_name",
                 ],
             )?;
-            Ok(StableBslValueV1::Edge(StableElementKeyV1::Edge {
+            Ok(StableBslValue::Edge(StableElementKey::Edge {
                 scenario: string(object, "scenario")?.to_owned(),
                 edge_type: string(object, "edge_type")?.to_owned(),
                 source_local_name: string(object, "source_local_name")?.to_owned(),
                 target_local_name: string(object, "target_local_name")?.to_owned(),
             }))
         }
-        _ => Err(RustPersistenceVectorErrorV1::Shape {
+        _ => Err(RustPersistenceVectorError::Shape {
             field: "stable BSL tag",
         }),
     }
 }
 
-fn parse_stable_key(value: &Value) -> Result<StableElementKeyV1, RustPersistenceVectorErrorV1> {
+fn parse_stable_key(value: &Value) -> Result<StableElementKey, RustPersistenceVectorError> {
     match parse_stable_bsl(value)? {
-        StableBslValueV1::Node(key)
-        | StableBslValueV1::Hyperedge(key)
-        | StableBslValueV1::Edge(key) => Ok(key),
-        _ => Err(RustPersistenceVectorErrorV1::Shape {
+        StableBslValue::Node(key) | StableBslValue::Hyperedge(key) | StableBslValue::Edge(key) => {
+            Ok(key)
+        }
+        _ => Err(RustPersistenceVectorError::Shape {
             field: "stable element key",
         }),
     }
@@ -1127,7 +1039,7 @@ fn parse_stable_key(value: &Value) -> Result<StableElementKeyV1, RustPersistence
 
 fn parse_named_stable(
     value: &Value,
-) -> Result<Vec<(String, StableBslValueV1)>, RustPersistenceVectorErrorV1> {
+) -> Result<Vec<(String, StableBslValue)>, RustPersistenceVectorError> {
     array(value, "named stable fields")?
         .iter()
         .map(|item| {
@@ -1141,7 +1053,7 @@ fn parse_named_stable(
         .collect()
 }
 
-fn stable_refs(values: &[(String, StableBslValueV1)]) -> Vec<(&str, &StableBslValueV1)> {
+fn stable_refs(values: &[(String, StableBslValue)]) -> Vec<(&str, &StableBslValue)> {
     values
         .iter()
         .map(|(name, value)| (name.as_str(), value))
@@ -1151,41 +1063,41 @@ fn stable_refs(values: &[(String, StableBslValueV1)]) -> Vec<(&str, &StableBslVa
 fn as_object<'a>(
     value: &'a Value,
     field: &'static str,
-) -> Result<&'a Map<String, Value>, RustPersistenceVectorErrorV1> {
+) -> Result<&'a Map<String, Value>, RustPersistenceVectorError> {
     value
         .as_object()
-        .ok_or(RustPersistenceVectorErrorV1::Shape { field })
+        .ok_or(RustPersistenceVectorError::Shape { field })
 }
 
 fn array<'a>(
     value: &'a Value,
     field: &'static str,
-) -> Result<&'a [Value], RustPersistenceVectorErrorV1> {
+) -> Result<&'a [Value], RustPersistenceVectorError> {
     value
         .as_array()
         .map(Vec::as_slice)
-        .ok_or(RustPersistenceVectorErrorV1::Shape { field })
+        .ok_or(RustPersistenceVectorError::Shape { field })
 }
 
 fn ensure_empty_array(
     value: &Value,
     field_name: &'static str,
-) -> Result<(), RustPersistenceVectorErrorV1> {
+) -> Result<(), RustPersistenceVectorError> {
     if array(value, field_name)?.is_empty() {
         Ok(())
     } else {
-        Err(RustPersistenceVectorErrorV1::Shape { field: field_name })
+        Err(RustPersistenceVectorError::Shape { field: field_name })
     }
 }
 
 fn exact_keys(
     object: &Map<String, Value>,
     expected: &[&str],
-) -> Result<(), RustPersistenceVectorErrorV1> {
+) -> Result<(), RustPersistenceVectorError> {
     if object.len() == expected.len() && expected.iter().all(|key| object.contains_key(*key)) {
         Ok(())
     } else {
-        Err(RustPersistenceVectorErrorV1::Shape {
+        Err(RustPersistenceVectorError::Shape {
             field: "exact object keys",
         })
     }
@@ -1194,112 +1106,92 @@ fn exact_keys(
 fn field<'a>(
     object: &'a Map<String, Value>,
     name: &'static str,
-) -> Result<&'a Value, RustPersistenceVectorErrorV1> {
+) -> Result<&'a Value, RustPersistenceVectorError> {
     object
         .get(name)
-        .ok_or(RustPersistenceVectorErrorV1::Shape { field: name })
+        .ok_or(RustPersistenceVectorError::Shape { field: name })
 }
 
 fn string<'a>(
     object: &'a Map<String, Value>,
     name: &'static str,
-) -> Result<&'a str, RustPersistenceVectorErrorV1> {
+) -> Result<&'a str, RustPersistenceVectorError> {
     field(object, name)?
         .as_str()
-        .ok_or(RustPersistenceVectorErrorV1::Shape { field: name })
+        .ok_or(RustPersistenceVectorError::Shape { field: name })
 }
 
 fn optional_string<'a>(
     value: &'a Value,
     field_name: &'static str,
-) -> Result<Option<&'a str>, RustPersistenceVectorErrorV1> {
+) -> Result<Option<&'a str>, RustPersistenceVectorError> {
     if value.is_null() {
         Ok(None)
     } else {
         value
             .as_str()
             .map(Some)
-            .ok_or(RustPersistenceVectorErrorV1::Shape { field: field_name })
+            .ok_or(RustPersistenceVectorError::Shape { field: field_name })
     }
 }
 
 fn boolean_value(
     value: &Value,
     field_name: &'static str,
-) -> Result<bool, RustPersistenceVectorErrorV1> {
+) -> Result<bool, RustPersistenceVectorError> {
     value
         .as_bool()
-        .ok_or(RustPersistenceVectorErrorV1::Shape { field: field_name })
+        .ok_or(RustPersistenceVectorError::Shape { field: field_name })
 }
 
-fn integer_u64(
-    value: &Value,
-    field_name: &'static str,
-) -> Result<u64, RustPersistenceVectorErrorV1> {
+fn integer_u64(value: &Value, field_name: &'static str) -> Result<u64, RustPersistenceVectorError> {
     value
         .as_u64()
-        .ok_or(RustPersistenceVectorErrorV1::Shape { field: field_name })
+        .ok_or(RustPersistenceVectorError::Shape { field: field_name })
 }
 
 fn integer_usize(
     value: &Value,
     field_name: &'static str,
-) -> Result<usize, RustPersistenceVectorErrorV1> {
+) -> Result<usize, RustPersistenceVectorError> {
     usize::try_from(integer_u64(value, field_name)?)
-        .map_err(|_| RustPersistenceVectorErrorV1::Shape { field: field_name })
+        .map_err(|_| RustPersistenceVectorError::Shape { field: field_name })
 }
 
-fn integer_u8(value: &Value, field_name: &'static str) -> Result<u8, RustPersistenceVectorErrorV1> {
+fn integer_u8(value: &Value, field_name: &'static str) -> Result<u8, RustPersistenceVectorError> {
     u8::try_from(integer_u64(value, field_name)?)
-        .map_err(|_| RustPersistenceVectorErrorV1::Shape { field: field_name })
+        .map_err(|_| RustPersistenceVectorError::Shape { field: field_name })
 }
 
-fn integer_u16(
-    value: &Value,
-    field_name: &'static str,
-) -> Result<u16, RustPersistenceVectorErrorV1> {
-    u16::try_from(integer_u64(value, field_name)?)
-        .map_err(|_| RustPersistenceVectorErrorV1::Shape { field: field_name })
-}
-
-fn integer_u32(
-    value: &Value,
-    field_name: &'static str,
-) -> Result<u32, RustPersistenceVectorErrorV1> {
+fn integer_u32(value: &Value, field_name: &'static str) -> Result<u32, RustPersistenceVectorError> {
     u32::try_from(integer_u64(value, field_name)?)
-        .map_err(|_| RustPersistenceVectorErrorV1::Shape { field: field_name })
+        .map_err(|_| RustPersistenceVectorError::Shape { field: field_name })
 }
 
-fn decimal_u64(
-    value: &Value,
-    field_name: &'static str,
-) -> Result<u64, RustPersistenceVectorErrorV1> {
+fn decimal_u64(value: &Value, field_name: &'static str) -> Result<u64, RustPersistenceVectorError> {
     if let Some(value) = value.as_u64() {
         return Ok(value);
     }
     value
         .as_str()
         .and_then(|value| value.parse().ok())
-        .ok_or(RustPersistenceVectorErrorV1::Shape { field: field_name })
+        .ok_or(RustPersistenceVectorError::Shape { field: field_name })
 }
 
-fn decimal_i64(
-    value: &Value,
-    field_name: &'static str,
-) -> Result<i64, RustPersistenceVectorErrorV1> {
+fn decimal_i64(value: &Value, field_name: &'static str) -> Result<i64, RustPersistenceVectorError> {
     if let Some(value) = value.as_i64() {
         return Ok(value);
     }
     value
         .as_str()
         .and_then(|value| value.parse().ok())
-        .ok_or(RustPersistenceVectorErrorV1::Shape { field: field_name })
+        .ok_or(RustPersistenceVectorError::Shape { field: field_name })
 }
 
 fn decimal_i128(
     value: &Value,
     field_name: &'static str,
-) -> Result<i128, RustPersistenceVectorErrorV1> {
+) -> Result<i128, RustPersistenceVectorError> {
     if let Some(value) = value.as_i64() {
         return Ok(i128::from(value));
     }
@@ -1309,11 +1201,11 @@ fn decimal_i128(
     value
         .as_str()
         .and_then(|value| value.parse().ok())
-        .ok_or(RustPersistenceVectorErrorV1::Shape { field: field_name })
+        .ok_or(RustPersistenceVectorError::Shape { field: field_name })
 }
 
-fn vector_f64(value: &Value) -> Result<f64, RustPersistenceVectorErrorV1> {
-    let value = value.as_str().ok_or(RustPersistenceVectorErrorV1::Shape {
+fn vector_f64(value: &Value) -> Result<f64, RustPersistenceVectorError> {
+    let value = value.as_str().ok_or(RustPersistenceVectorError::Shape {
         field: "binary64 value",
     })?;
     match value {
@@ -1323,13 +1215,13 @@ fn vector_f64(value: &Value) -> Result<f64, RustPersistenceVectorErrorV1> {
         "negative_infinity" => Ok(f64::NEG_INFINITY),
         value => value
             .parse()
-            .map_err(|_| RustPersistenceVectorErrorV1::Shape {
+            .map_err(|_| RustPersistenceVectorError::Shape {
                 field: "binary64 value",
             }),
     }
 }
 
-fn optional_f64(value: &Value) -> Result<Option<f64>, RustPersistenceVectorErrorV1> {
+fn optional_f64(value: &Value) -> Result<Option<f64>, RustPersistenceVectorError> {
     if value.is_null() {
         Ok(None)
     } else {
@@ -1340,36 +1232,33 @@ fn optional_f64(value: &Value) -> Result<Option<f64>, RustPersistenceVectorError
 fn string_array(
     value: &Value,
     field_name: &'static str,
-) -> Result<Vec<String>, RustPersistenceVectorErrorV1> {
+) -> Result<Vec<String>, RustPersistenceVectorError> {
     array(value, field_name)?
         .iter()
         .map(|item| {
             item.as_str()
                 .map(str::to_owned)
-                .ok_or(RustPersistenceVectorErrorV1::Shape { field: field_name })
+                .ok_or(RustPersistenceVectorError::Shape { field: field_name })
         })
         .collect()
 }
 
-fn hex_bytes(
-    value: &str,
-    field_name: &'static str,
-) -> Result<Vec<u8>, RustPersistenceVectorErrorV1> {
+fn hex_bytes(value: &str, field_name: &'static str) -> Result<Vec<u8>, RustPersistenceVectorError> {
     if !value.len().is_multiple_of(2)
         || value
             .bytes()
             .any(|byte| !byte.is_ascii_hexdigit() || byte.is_ascii_uppercase())
     {
-        return Err(RustPersistenceVectorErrorV1::Shape { field: field_name });
+        return Err(RustPersistenceVectorError::Shape { field: field_name });
     }
     value
         .as_bytes()
         .chunks_exact(2)
         .map(|pair| {
             let high = hex_nibble(pair[0])
-                .ok_or(RustPersistenceVectorErrorV1::Shape { field: field_name })?;
+                .ok_or(RustPersistenceVectorError::Shape { field: field_name })?;
             let low = hex_nibble(pair[1])
-                .ok_or(RustPersistenceVectorErrorV1::Shape { field: field_name })?;
+                .ok_or(RustPersistenceVectorError::Shape { field: field_name })?;
             Ok(high << 4 | low)
         })
         .collect()
@@ -1383,10 +1272,10 @@ fn hex_nibble(value: u8) -> Option<u8> {
     }
 }
 
-fn digest32(value: &str) -> Result<[u8; 32], RustPersistenceVectorErrorV1> {
+fn digest32(value: &str) -> Result<[u8; 32], RustPersistenceVectorError> {
     hex_bytes(value, "SHA-256")?
         .try_into()
-        .map_err(|_| RustPersistenceVectorErrorV1::Shape { field: "SHA-256" })
+        .map_err(|_| RustPersistenceVectorError::Shape { field: "SHA-256" })
 }
 
 fn compare_hex(
@@ -1394,7 +1283,7 @@ fn compare_hex(
     actual: &[u8],
     expected: &str,
     field_name: &'static str,
-) -> Result<(), RustPersistenceVectorErrorV1> {
+) -> Result<(), RustPersistenceVectorError> {
     if actual == hex_bytes(expected, field_name)? {
         Ok(())
     } else {
@@ -1406,7 +1295,7 @@ fn compare_digest(
     id: &str,
     bytes: &[u8],
     expected: &str,
-) -> Result<(), RustPersistenceVectorErrorV1> {
+) -> Result<(), RustPersistenceVectorError> {
     if semantic_codec::digest(bytes) == digest32(expected)? {
         Ok(())
     } else {
@@ -1416,31 +1305,29 @@ fn compare_digest(
 
 fn semantic_result<T>(
     id: &str,
-    result: Result<T, SemanticCodecErrorV1>,
-) -> Result<T, RustPersistenceVectorErrorV1> {
+    result: Result<T, SemanticCodecError>,
+) -> Result<T, RustPersistenceVectorError> {
     result.map_err(|error| match error {
-        SemanticCodecErrorV1::Refusal(_) => RustPersistenceVectorErrorV1::Semantic {
+        SemanticCodecError::Refusal(_) => RustPersistenceVectorError::Semantic {
             id: id.into(),
             field: "unexpected semantic refusal",
         },
-        SemanticCodecErrorV1::Invalid(field_name) => RustPersistenceVectorErrorV1::Semantic {
+        SemanticCodecError::Invalid(field_name) => RustPersistenceVectorError::Semantic {
             id: id.into(),
             field: field_name,
         },
-        SemanticCodecErrorV1::CapacityOverflow { field }
-        | SemanticCodecErrorV1::IntegerConversion { field, .. }
-        | SemanticCodecErrorV1::ByteLimit { field, .. }
-        | SemanticCodecErrorV1::Allocation { field, .. } => {
-            RustPersistenceVectorErrorV1::Semantic {
-                id: id.into(),
-                field,
-            }
-        }
+        SemanticCodecError::CapacityOverflow { field }
+        | SemanticCodecError::IntegerConversion { field, .. }
+        | SemanticCodecError::ByteLimit { field, .. }
+        | SemanticCodecError::Allocation { field, .. } => RustPersistenceVectorError::Semantic {
+            id: id.into(),
+            field,
+        },
     })
 }
 
-fn semantic<T>(id: &str, field_name: &'static str) -> Result<T, RustPersistenceVectorErrorV1> {
-    Err(RustPersistenceVectorErrorV1::Semantic {
+fn semantic<T>(id: &str, field_name: &'static str) -> Result<T, RustPersistenceVectorError> {
+    Err(RustPersistenceVectorError::Semantic {
         id: id.into(),
         field: field_name,
     })

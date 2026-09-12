@@ -1,4 +1,4 @@
-use babylon_kernel::replay::ReplaySessionIdV1;
+use babylon_kernel::replay::ReplaySessionId;
 use babylon_practice_contract::ActorOrganizationId;
 use babylon_practice_contract::{
     encode_practice_action_id_preimage, practice_action_id, OrderedPracticeActionBatch,
@@ -16,8 +16,8 @@ fn actor_id(value: u64) -> ActorOrganizationId {
     ActorOrganizationId::from_bytes(value.to_be_bytes())
 }
 
-fn session(value: &str) -> ReplaySessionIdV1 {
-    ReplaySessionIdV1::try_from(value).expect("session fixture is valid")
+fn session(value: &str) -> ReplaySessionId {
+    ReplaySessionId::try_from(value).expect("session fixture is valid")
 }
 
 fn hex_bytes(value: &str) -> Vec<u8> {

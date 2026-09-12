@@ -1,14 +1,17 @@
 //! Pure contracts for the bounded PER-278 reference-product bundle.
 
 use babylon_persistence::{
-    michigan_spatial_reference_products_v1, representative_h3_reference_cohort_v1,
-    CountyH3LandAreaRow, CountyPlaceH3LandAreaRow, H3CountRow, ReferenceProduct,
+    h3_reference_cohort::representative_h3_reference_cohort,
+    spatial_reference_products::michigan_spatial_reference_products,
+    spatial_reference_products::CountyH3LandAreaRow,
+    spatial_reference_products::CountyPlaceH3LandAreaRow, spatial_reference_products::H3CountRow,
+    spatial_reference_products::ReferenceProduct,
 };
 
 #[test]
 fn checked_bundle_has_exact_governed_products_and_counts() {
     let cohort = cohort();
-    let bundle = michigan_spatial_reference_products_v1(&cohort)
+    let bundle = michigan_spatial_reference_products(&cohort)
         .expect("checked PER-278 fixture must validate");
 
     assert_eq!(bundle.ref_digest(), cohort.receipt().ref_digest());
@@ -43,7 +46,7 @@ fn checked_bundle_has_exact_governed_products_and_counts() {
 #[test]
 fn checked_bundle_preserves_measure_and_absence_law() {
     let cohort = cohort();
-    let bundle = michigan_spatial_reference_products_v1(&cohort).unwrap();
+    let bundle = michigan_spatial_reference_products(&cohort).unwrap();
 
     assert_eq!(
         bundle
@@ -85,8 +88,8 @@ fn checked_bundle_preserves_measure_and_absence_law() {
     assert!(bundle.workplace_counts().iter().all(|row| row.count() > 0));
 }
 
-fn cohort() -> babylon_persistence::H3ReferenceCohort {
-    representative_h3_reference_cohort_v1()
+fn cohort() -> babylon_persistence::h3_reference_cohort::H3ReferenceCohort {
+    representative_h3_reference_cohort()
         .expect("the sole checked-in source fixture must validate")
         .clone()
 }

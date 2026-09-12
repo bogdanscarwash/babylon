@@ -1,6 +1,8 @@
 //! Observer navigation, scoped command admission, and production selection.
 
-use babylon_persistence::{ProductionSiteV2, ProductionSnapshotV2};
+use babylon_persistence::{
+    production_observation::ProductionSite, production_observation::ProductionSnapshot,
+};
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 
@@ -21,7 +23,7 @@ impl ProductionNavigation {
     pub(super) fn open_county(
         &mut self,
         county_geoid: &str,
-        snapshot: Option<&ProductionSnapshotV2>,
+        snapshot: Option<&ProductionSnapshot>,
     ) {
         self.county_geoid = Some(county_geoid.to_owned());
         let resume = snapshot.is_some_and(|snapshot| {
@@ -56,8 +58,8 @@ impl ProductionNavigation {
 
     pub(crate) fn process<'a>(
         &self,
-        site: &'a ProductionSiteV2,
-    ) -> Option<&'a babylon_persistence::ProductionProcessV2> {
+        site: &'a ProductionSite,
+    ) -> Option<&'a babylon_persistence::production_observation::ProductionProcess> {
         site.processes
             .iter()
             .find(|process| self.selected_process.as_ref() == Some(&process.id))
@@ -74,7 +76,7 @@ pub(super) struct ProductionControlAvailability {
 
 impl ProductionControlAvailability {
     pub(super) fn for_snapshot(
-        snapshot: Option<&ProductionSnapshotV2>,
+        snapshot: Option<&ProductionSnapshot>,
         navigation: &ProductionNavigation,
     ) -> Self {
         Self {
@@ -110,7 +112,7 @@ impl ProductionControlAvailability {
     pub(super) fn refusal(
         &self,
         command: &ProductionCommand,
-        snapshot: Option<&ProductionSnapshotV2>,
+        snapshot: Option<&ProductionSnapshot>,
         navigation: &ProductionNavigation,
         state: &ObserverSession,
     ) -> Option<&'static str> {
@@ -201,7 +203,7 @@ pub(crate) fn readings_panel_visible(
     view: PrimaryView,
     navigation: &ProductionNavigation,
     ui: &ObserverUiState,
-    snapshot: Option<&ProductionSnapshotV2>,
+    snapshot: Option<&ProductionSnapshot>,
 ) -> bool {
     view == PrimaryView::Production
         && navigation.details_open
@@ -330,7 +332,7 @@ pub(super) fn navigate(
 
 pub(super) fn sync_selected_county(
     navigation: &ProductionNavigation,
-    snapshot: Option<&ProductionSnapshotV2>,
+    snapshot: Option<&ProductionSnapshot>,
     atlas: &CountyAtlas,
     selected: &mut SelectedCounty,
 ) {
@@ -376,7 +378,7 @@ pub(super) fn invalidate_navigation(
     mut navigation: ResMut<ProductionNavigation>,
     mut scope: Local<
         Option<(
-            babylon_persistence::CampaignId,
+            babylon_persistence::identity::CampaignId,
             crate::observer::Perspective,
             Option<u64>,
         )>,

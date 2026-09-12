@@ -32,23 +32,23 @@
 
 use crate::evaluator::{EvalCode, EvalError, Value};
 use babylon_graph::stable_element::{
-    StableElementKeyV1, StableElementResolverV1, MAX_STABLE_CARRIER_ACTIVE_ELEMENTS_V2,
+    StableElementKey, StableElementResolver, MAX_STABLE_CARRIER_ACTIVE_ELEMENTS,
 };
-use babylon_kernel::replay::{ReplaySeed, ReplaySessionIdV1, RngDomainV2};
-use babylon_kernel::KernelRng;
+use babylon_kernel::replay::{ReplaySeed, ReplaySessionId, RngDomain};
+use babylon_kernel::rng::KernelRng;
 
 /// The typed identity inputs for one engine-private deterministic draw.
 pub struct DrawIdentityContext<'a> {
     /// Checked replay session identity.
-    pub session: &'a ReplaySessionIdV1,
+    pub session: &'a ReplaySessionId,
     /// Explicit replay seed.
     pub seed: ReplaySeed,
     /// Checked firing-rule qname.
-    pub domain: RngDomainV2,
+    pub domain: RngDomain,
     /// Resolver that sealed every accepted graph identity.
-    pub resolver: &'a StableElementResolverV1,
+    pub resolver: &'a StableElementResolver,
     /// Resolver-produced subject identity.
-    pub subject: StableElementKeyV1,
+    pub subject: StableElementKey,
 }
 
 /// Private draw identity and tick supplied by the engine, never author operands.
@@ -64,7 +64,7 @@ pub struct IntrinsicCallCtx<'a> {
     /// Absent for pure-expression callers.
     pub draw_context: Option<&'a DrawContext<'a>>,
     /// Sealed graph keys, outermost-first.
-    pub active_elements: Vec<StableElementKeyV1>,
+    pub active_elements: Vec<StableElementKey>,
 }
 
 impl IntrinsicCallCtx<'_> {
@@ -183,11 +183,11 @@ pub(crate) fn draw_finite_kernel_ticket(
         resolver,
         subject,
     } = &draw_context.identity;
-    if ctx.active_elements.len() > MAX_STABLE_CARRIER_ACTIVE_ELEMENTS_V2 {
+    if ctx.active_elements.len() > MAX_STABLE_CARRIER_ACTIVE_ELEMENTS {
         return Err(EvalError::plain(format!(
             "finite-kernel active-element count {} exceeds {}",
             ctx.active_elements.len(),
-            MAX_STABLE_CARRIER_ACTIVE_ELEMENTS_V2
+            MAX_STABLE_CARRIER_ACTIVE_ELEMENTS
         )));
     }
     let carrier = resolver
@@ -1316,9 +1316,9 @@ mod tests {
     #[allow(clippy::items_after_statements, clippy::too_many_lines)]
     fn private_finite_draw_is_keyed_by_every_aj_identity_component_and_has_no_call_order_state() {
         use babylon_graph::memory::MemoryGraph;
-        use babylon_graph::stable_element::{StableElementKeyV1, StableElementResolverV1};
+        use babylon_graph::stable_element::{StableElementKey, StableElementResolver};
         use babylon_graph::substrate::GraphSubstrate as _;
-        use babylon_kernel::replay::{ReplaySeed, ReplaySessionIdV1, RngDomainV2};
+        use babylon_kernel::replay::{ReplaySeed, ReplaySessionId, RngDomain};
         use std::collections::HashMap;
 
         let mut graph = MemoryGraph::new();
@@ -1326,7 +1326,7 @@ mod tests {
         let subject_b = graph.add_node("class").unwrap();
         let active_a = graph.add_node("organization").unwrap();
         let active_b = graph.add_node("organization").unwrap();
-        let resolver = StableElementResolverV1::seal(
+        let resolver = StableElementResolver::seal(
             &graph,
             "demo/world",
             &HashMap::from([
@@ -1344,26 +1344,26 @@ mod tests {
         let active_b = resolver.node_key(active_b).unwrap().clone();
         let ordered_active = vec![active_a.clone(), active_b.clone()];
         let reversed_active = vec![active_b, active_a];
-        let session_a = ReplaySessionIdV1::try_from("demo/session-a").unwrap();
-        let session_b = ReplaySessionIdV1::try_from("demo/session-b").unwrap();
+        let session_a = ReplaySessionId::try_from("demo/session-a").unwrap();
+        let session_b = ReplaySessionId::try_from("demo/session-b").unwrap();
 
         #[derive(Clone, Copy)]
         struct Key<'a> {
-            session: &'a ReplaySessionIdV1,
+            session: &'a ReplaySessionId,
             seed: ReplaySeed,
             tick: u64,
             domain: &'a str,
             sample: &'a str,
             slot: u32,
-            subject: &'a StableElementKeyV1,
-            active: &'a [StableElementKeyV1],
+            subject: &'a StableElementKey,
+            active: &'a [StableElementKey],
         }
         let draw = |key: Key<'_>| {
             let draw_context = DrawContext {
                 identity: DrawIdentityContext {
                     session: key.session,
                     seed: key.seed,
-                    domain: RngDomainV2::try_from(key.domain).unwrap(),
+                    domain: RngDomain::try_from(key.domain).unwrap(),
                     resolver: &resolver,
                     subject: key.subject.clone(),
                 },

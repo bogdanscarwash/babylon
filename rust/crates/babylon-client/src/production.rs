@@ -1,7 +1,9 @@
 //! A read-only production scene: exact receipts, cohort columns and actual lots.
 //! County aggregates have no invented geographic placement.
 
-use babylon_persistence::{ProductionSiteV2, ProductionSnapshotV2};
+use babylon_persistence::{
+    production_observation::ProductionSite, production_observation::ProductionSnapshot,
+};
 use bevy::camera::{visibility::RenderLayers, ScalingMode, Viewport};
 use bevy::ecs::system::SystemParam;
 use bevy::input_focus::tab_navigation::TabGroup;
@@ -729,7 +731,7 @@ type InspectorScrolls<'w, 's> = Query<
 
 #[derive(PartialEq, Eq)]
 struct InspectorScrollScope {
-    campaign: babylon_persistence::CampaignId,
+    campaign: babylon_persistence::identity::CampaignId,
     perspective: crate::observer::Perspective,
     site: Option<String>,
     section: ProductionReadingSection,
@@ -865,7 +867,7 @@ fn spawn_sites(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
     materials: &mut Assets<StandardMaterial>,
-    snapshot: &ProductionSnapshotV2,
+    snapshot: &ProductionSnapshot,
     navigation: &ProductionNavigation,
     context: &ObservationContext,
     layout: &ProductionLayout,
@@ -923,7 +925,7 @@ fn spawn_sites(
 
 fn spawn_site_label(
     commands: &mut Commands,
-    site: &ProductionSiteV2,
+    site: &ProductionSite,
     context: &ObservationContext,
     anchor: Vec3,
     selected: bool,
@@ -1063,7 +1065,7 @@ fn rail(
 // travel motion or geographic progress between committed observations.
 #[allow(clippy::cast_precision_loss)]
 fn freight_markers(
-    snapshot: &ProductionSnapshotV2,
+    snapshot: &ProductionSnapshot,
     layout: &ProductionLayout,
     viewed_tick: u64,
 ) -> Vec<Vec3> {
@@ -1112,7 +1114,7 @@ fn spawn_freight(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
     materials: &mut Assets<StandardMaterial>,
-    snapshot: &ProductionSnapshotV2,
+    snapshot: &ProductionSnapshot,
     layout: &ProductionLayout,
     viewed_tick: u64,
 ) {
@@ -1169,7 +1171,7 @@ fn page_controls(
 
 fn spawn_county_cohorts(
     panel: &mut ChildSpawnerCommands,
-    snapshot: &ProductionSnapshotV2,
+    snapshot: &ProductionSnapshot,
     navigation: &ProductionNavigation,
     context: &ObservationContext,
 ) {
@@ -1231,8 +1233,8 @@ fn spawn_county_cohorts(
 
 fn spawn_freight_participants(
     panel: &mut ChildSpawnerCommands,
-    site: &ProductionSiteV2,
-    snapshot: &ProductionSnapshotV2,
+    site: &ProductionSite,
+    snapshot: &ProductionSnapshot,
     navigation: &ProductionNavigation,
     context: &ObservationContext,
 ) {

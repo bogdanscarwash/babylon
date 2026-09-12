@@ -355,30 +355,6 @@ def provision_readers(runtime_dsn: str) -> ReaderCredentials:
     return ReaderCredentials(dsns[0], dsns[1])
 
 
-def bootstrap_required(runtime_dsn: str) -> bool:
-    """Distinguish initial activation from an already active observer database.
-
-    Rust validates the full ledger when opening a session. Re-running the
-    pre-activation catalog census after installing observer views is invalid.
-    """
-    _target_parameters(runtime_dsn)
-    try:
-        with psycopg.connect(runtime_dsn, connect_timeout=10, options="") as connection:
-            connection.execute("SET TRANSACTION READ ONLY")
-            relation = connection.execute(
-                "SELECT pg_catalog.to_regclass('babylon_meta.committed_tick_v2_authority_ledger')"
-            ).fetchone()
-            if relation is None or relation[0] is None:
-                return True
-            active = connection.execute(
-                "SELECT 1 FROM babylon_meta.committed_tick_v2_authority_ledger "
-                "WHERE ordinal = 2 AND state_tag = 2 AND activation_epoch = 11"
-            ).fetchone()
-            return active is None
-    except psycopg.Error as error:
-        raise ObserverLaunchError("cannot inspect local Rust activation status") from error
-
-
 def _run(args: list[str], root: Path, environment: Mapping[str, str], label: str) -> None:
     try:
         subprocess.run(args, cwd=root, env=dict(environment), check=True)
@@ -441,9 +417,10 @@ def prepare(
             "observer build",
         )
     writer = {**common, "BABYLON_RUNTIME_DSN": runtime_dsn}
-    if bootstrap_required(runtime_dsn):
-        _run([str(runtime), "bootstrap"], root, writer, "Rust database bootstrap")
-    _run([str(runtime), "observer-schema"], root, writer, "observer schema installation")
+    # Rust classifies and verifies the exact fresh/current schema before any
+    # schema, reference, or role mutation. An incompatible database refuses.
+    _run([str(runtime), "bootstrap"], root, writer, "Rust current schema bootstrap")
+    _run([str(runtime), "provision-readers"], root, writer, "reader role provisioning")
     return runtime, client, provision_readers(runtime_dsn)
 
 

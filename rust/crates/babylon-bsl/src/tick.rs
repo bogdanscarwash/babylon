@@ -80,8 +80,8 @@ use crate::intrinsic_host::{
     draw_finite_kernel_ticket, DrawContext, DrawIdentityContext, IntrinsicCallCtx, IntrinsicHost,
 };
 use crate::probability::{
-    evaluate_kernel_masses, forecast_event_likelihoods as exact_pushforward, BranchProjectionV1,
-    EventLikelihoodV1, KernelInstanceIdentityV1, KernelRealizationV1, FINITE_KERNEL_DRAW_BASE,
+    evaluate_kernel_masses, forecast_event_likelihoods as exact_pushforward, BranchProjection,
+    EventLikelihood, KernelInstanceIdentity, KernelRealization, FINITE_KERNEL_DRAW_BASE,
 };
 use crate::reader::{Atom, SExpr};
 use crate::rule_pipeline::LoadedRule;
@@ -89,11 +89,11 @@ use crate::structural_verbs::{EffectExecutor, EventSink};
 use crate::typecheck::TypeEnv;
 use crate::types::{BslType, EnumRegistry};
 use crate::write_log::WriteObserver;
-use babylon_graph::stable_element::{StableElementKeyV1, StableElementResolverV1};
+use babylon_graph::stable_element::{StableElementKey, StableElementResolver};
 use babylon_graph::state_hash::CanonicalState;
 use babylon_graph::substrate::{GraphSubstrate, NodeId};
 use babylon_graph::working_copy::DetachedCopy;
-use babylon_kernel::replay::{RngDomainV2, RngSeedContext};
+use babylon_kernel::replay::{RngDomain, RngSeedContext};
 use std::collections::HashMap;
 
 /// Why a tick would not run.
@@ -135,20 +135,20 @@ pub struct TickOutcome {
     /// How many passed the guard and had their effects executed.
     pub fired: usize,
     /// Successful choices in subject encounter order.
-    pub kernel_realizations: Vec<KernelRealizationV1>,
+    pub kernel_realizations: Vec<KernelRealization>,
     /// Stable subject provenance aligned one-for-one with emitted events.
-    pub event_provenance: Vec<EmittedEventProvenanceV1>,
+    pub event_provenance: Vec<EmittedEventProvenance>,
 }
 
 /// Stable carrier provenance for one emitted event.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EmittedEventProvenanceV1 {
+pub struct EmittedEventProvenance {
     /// Graph-owned stable subject identity; never inferred from payload.
-    pub subject: StableElementKeyV1,
+    pub subject: StableElementKey,
 }
 
 /// Read-only dependencies for one bounded detached-state forecast.
-pub struct ForecastContextV1<'a> {
+pub struct ForecastContext<'a> {
     /// Declared field types.
     pub types: &'a TypeEnv,
     /// Closed enum declarations.
@@ -663,7 +663,7 @@ pub fn run_tick<G: GraphSubstrate + CanonicalState>(
     defines: &DefinesEnv,
     tick: i64,
     rng_seed: RngSeedContext<'_>,
-    stable_resolver: &StableElementResolverV1,
+    stable_resolver: &StableElementResolver,
     // The scenario's closed vocabulary, when one was declared — the D29
     // owner-kind filter `subject_type_of` applies (Community port train,
     // Task 6). `None` is the registry-free unit-test lane, where the
@@ -712,7 +712,7 @@ pub fn run_tick_observed<G>(
     defines: &DefinesEnv,
     tick: i64,
     rng_seed: RngSeedContext<'_>,
-    stable_resolver: &StableElementResolverV1,
+    stable_resolver: &StableElementResolver,
     vocabulary: Option<&crate::vocabulary::ClosedVocabulary>,
     observer: &mut dyn WriteObserver,
 ) -> Result<TickOutcome, TickError>
@@ -751,7 +751,7 @@ fn run_tick_with_observer(
     defines: &DefinesEnv,
     tick: i64,
     rng_seed: RngSeedContext<'_>,
-    stable_resolver: &StableElementResolverV1,
+    stable_resolver: &StableElementResolver,
     vocabulary: Option<&crate::vocabulary::ClosedVocabulary>,
     observer: Option<&mut dyn WriteObserver>,
 ) -> Result<TickOutcome, TickError> {
@@ -843,7 +843,6 @@ fn run_tick_with_observer(
 /// [`TickError`] if a rule reads a coefficient `defines` does not hold, a
 /// required field was never written, the guard does not evaluate to a
 /// `Bool`, or collection fails.
-
 #[allow(
     clippy::too_many_arguments,
     clippy::implicit_hasher,
@@ -866,13 +865,13 @@ fn collect_pass(
     // The rule's domain and explicit replay inputs are fixed across subjects.
     // The sealed resolver identifies each subject and active query element.
     rng_seed: RngSeedContext<'_>,
-    stable_resolver: &StableElementResolverV1,
+    stable_resolver: &StableElementResolver,
 ) -> Result<
     (
         Vec<crate::structural_verbs::PendingWrite>,
         usize,
-        Vec<KernelRealizationV1>,
-        Vec<EmittedEventProvenanceV1>,
+        Vec<KernelRealization>,
+        Vec<EmittedEventProvenance>,
     ),
     TickError,
 > {
@@ -891,7 +890,7 @@ fn collect_pass(
              non-negative tick, and III.7/III.11 forbid silently wrapping it"
         ))
     })?;
-    let domain = RngDomainV2::try_from(loaded.contract.rule_id.as_str())
+    let domain = RngDomain::try_from(loaded.contract.rule_id.as_str())
         .map_err(|error| err(format!("firing-rule domain refused: {error:?}")))?;
 
     for subject in subjects {
@@ -1010,7 +1009,7 @@ fn collect_pass(
             };
             let draw = draw_finite_kernel_ticket(&kernel.sample, kernel.slot, &call_context)?;
             let RngSeedContext { session, seed } = rng_seed;
-            let instance = KernelInstanceIdentityV1 {
+            let instance = KernelInstanceIdentity {
                 replay_session: session.as_bytes().to_vec(),
                 replay_seed: seed.to_be_bytes(),
                 tick,
@@ -1041,7 +1040,7 @@ fn collect_pass(
             executor.collect_effects(effects, &env, host, &mut collected_events, &mut fuel)?
         };
         for _ in events_before..collected_events.events.len() {
-            event_provenance.push(EmittedEventProvenanceV1 {
+            event_provenance.push(EmittedEventProvenance {
                 subject: stable_subject.clone(),
             });
         }
@@ -1059,7 +1058,7 @@ fn collect_pass(
 fn collect_selected_kernel_effects(
     executor: &mut EffectExecutor<'_>,
     effects: &[SExpr],
-    kernel: &crate::probability::FiniteKernelV1,
+    kernel: &crate::probability::FiniteKernel,
     selected: usize,
     env: &EvalEnv<'_>,
     host: &dyn IntrinsicHost,
@@ -1113,8 +1112,8 @@ pub fn forecast_event_likelihoods<G>(
     kernel_index: usize,
     pre_choice: &G,
     subject: NodeId,
-    context: &ForecastContextV1<'_>,
-) -> Result<Vec<EventLikelihoodV1>, TickError>
+    context: &ForecastContext<'_>,
+) -> Result<Vec<EventLikelihood>, TickError>
 where
     G: GraphSubstrate + DetachedCopy,
 {
@@ -1279,7 +1278,7 @@ where
                 ));
             }
         }
-        branch_projections.push(BranchProjectionV1 {
+        branch_projections.push(BranchProjection {
             outcome: branch.member.clone(),
             event_types: event_sink
                 .events
@@ -1296,7 +1295,7 @@ where
 pub(crate) fn fixture_resolver<G: CanonicalState + GraphSubstrate>(
     graph: &G,
     names: Option<&HashMap<NodeId, String>>,
-) -> StableElementResolverV1 {
+) -> StableElementResolver {
     let nodes = names.cloned().unwrap_or_else(|| {
         graph
             .all_nodes()
@@ -1309,7 +1308,7 @@ pub(crate) fn fixture_resolver<G: CanonicalState + GraphSubstrate>(
         .into_iter()
         .map(|(id, _, _)| (id, format!("hyperedge-{}", id.0)))
         .collect();
-    StableElementResolverV1::seal(graph, "fixture/rule", &nodes, &hyperedges)
+    StableElementResolver::seal(graph, "fixture/rule", &nodes, &hyperedges)
         .expect("explicit fixture identities seal")
 }
 
@@ -1326,7 +1325,7 @@ pub(crate) fn run_fixture_rule<G: GraphSubstrate + CanonicalState>(
     defines: &DefinesEnv,
     tick: i64,
     names: Option<&HashMap<NodeId, String>>,
-    session: &babylon_kernel::replay::ReplaySessionIdV1,
+    session: &babylon_kernel::replay::ReplaySessionId,
     vocabulary: Option<&crate::vocabulary::ClosedVocabulary>,
 ) -> Result<TickOutcome, TickError> {
     let resolver = fixture_resolver(graph, names);
@@ -1363,8 +1362,8 @@ mod tests {
     use std::collections::HashMap;
 
     /// Explicit deterministic identity for these sealed fixtures.
-    fn test_session() -> babylon_kernel::replay::ReplaySessionIdV1 {
-        babylon_kernel::replay::ReplaySessionIdV1::try_from("tick-test-session")
+    fn test_session() -> babylon_kernel::replay::ReplaySessionId {
+        babylon_kernel::replay::ReplaySessionId::try_from("tick-test-session")
             .expect("literal is non-empty")
     }
 

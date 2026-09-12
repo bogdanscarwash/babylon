@@ -717,7 +717,9 @@ mod tests {
     use super::*;
     use crate::observer::Perspective;
     use crate::observer_focus::{ObserverFocusPlugin, ObserverFocusTarget, ObserverFocusWorld};
-    use babylon_persistence::{ObserverEconomySnapshotV1, ObserverVisibilityV1};
+    use babylon_persistence::{
+        observer_reader::ObserverEconomySnapshot, observer_reader::ObserverVisibility,
+    };
     use bevy::ecs::system::RunSystemOnce;
     use bevy::input::keyboard::{Key, KeyboardInput, NativeKey};
     use bevy::input::{ButtonState, InputPlugin};
@@ -994,17 +996,17 @@ mod tests {
 
     #[test]
     fn stale_campaign_tick_and_visibility_never_feed_geographic_heights() {
-        let campaign = babylon_persistence::CampaignId::from_uuid(uuid::Uuid::nil());
+        let campaign = babylon_persistence::identity::CampaignId::from_uuid(uuid::Uuid::nil());
         let mut session = ObserverSession::new(campaign);
         session.ready(4, Some("a".repeat(64)));
-        let mut snapshot = ObserverEconomySnapshotV1 {
+        let mut snapshot = ObserverEconomySnapshot {
             campaign_id: campaign.as_uuid().to_string(),
             resolve_tick: 4,
             foundation_digest: "f".repeat(64),
             tick_content_hash: Some("a".repeat(64)),
             nominal_world_hash: None,
             envelope_digest: None,
-            visibility: ObserverVisibilityV1::FullObserver,
+            visibility: ObserverVisibility::FullObserver,
             counties: Vec::new(),
             production: None,
         };
@@ -1016,7 +1018,7 @@ mod tests {
             .for_session(&session)
             .is_none());
         snapshot.resolve_tick = 4;
-        snapshot.visibility = ObserverVisibilityV1::KnownPreview;
+        snapshot.visibility = ObserverVisibility::KnownPreview;
         assert!(ObserverFrame(Some(snapshot.clone()))
             .for_session(&session)
             .is_none());
@@ -1179,7 +1181,7 @@ mod tests {
         let mut app = App::new();
         app.add_plugins((MinimalPlugins, bevy::asset::AssetPlugin::default()));
         app.insert_resource(ObserverSession::new(
-            babylon_persistence::CampaignId::from_uuid(uuid::Uuid::nil()),
+            babylon_persistence::identity::CampaignId::from_uuid(uuid::Uuid::nil()),
         ));
         app.add_plugins(crate::map::MapPlugin);
         app.update();

@@ -161,10 +161,10 @@
 //!   state — LIBERAL — and loud absence survives only for the genuinely
 //!   unread (class-unpositioned, employer).
 
-use babylon_bsl::compose_declaration_preludes;
+use babylon_bsl::scenario::compose_declaration_preludes;
 use babylon_graph::hypergraph_store::HypergraphStore;
 use babylon_graph::substrate::{GraphSubstrate, NodeId};
-use babylon_kernel::replay::ReplaySessionIdV1;
+use babylon_kernel::replay::ReplaySessionId;
 use babylon_tick::run_once_into_with_prelude;
 
 const SCENARIO: &str = include_str!("../content/scenarios/consciousness-ternary-conformance.bscn");
@@ -747,12 +747,12 @@ fn measured_update_law_matches_the_dual_implementation_exactly() {
 /// material loss now drives the routing.
 #[test]
 fn tick_two_accumulation_witness() {
-    let mut session = babylon_tick::RuleDiagnosticSession::new(
+    let mut session = babylon_tick::diagnostic::RuleDiagnosticSession::new(
         SCENARIO,
         Some(&practice_worldview_prelude()),
         CONSCIOUSNESS_RULES,
         HypergraphStore::new(),
-        ReplaySessionIdV1::try_from("consciousness-ternary-conformance-test")
+        ReplaySessionId::try_from("consciousness-ternary-conformance-test")
             .expect("literal is non-empty"),
         babylon_kernel::replay::ReplaySeed::new(0),
     )

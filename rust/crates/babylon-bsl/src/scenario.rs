@@ -92,16 +92,16 @@
 
 use crate::error_identity::{decl_identity, vocabulary_identity, ErrorIdentity};
 use crate::evaluator::Value;
-use crate::probability::MassDeclarationAnalysisV1;
+use crate::probability::MassDeclarationAnalysis;
 use crate::reader::{
     read_all, Atom, FormPath, LexCode, ReadError, ReadErrorKind, SExpr, ScaledKind,
 };
 use crate::types::{BslType, EnumRegistry, EnumTypeId, FieldDecl, FieldKind};
 use crate::vocabulary::{ClosedVocabulary, EnumKind, VocabularyError};
 use babylon_graph::substrate::{GraphError, GraphSubstrate, HyperedgeId, NodeId};
-use babylon_kernel::{Currency, Ratio};
+use babylon_kernel::{currency::Currency, scalars::Ratio};
 use babylon_practice_contract::{
-    PracticeContractError, PracticeTargetDomainV1, PracticeTopologyLoadCounter,
+    PracticeContractError, PracticeTargetDomain, PracticeTopologyLoadCounter,
 };
 use std::collections::{HashMap, HashSet};
 
@@ -402,7 +402,7 @@ pub struct LoadedScenario {
     /// semantic pass that admits each `defconst`; authoring tools therefore
     /// never reparse scenario or prelude source to rediscover them. Facts are
     /// ordered scenario-first, followed by preludes in caller order.
-    pub mass_declarations: Vec<MassDeclarationAnalysisV1>,
+    pub mass_declarations: Vec<MassDeclarationAnalysis>,
     /// **§2.13 addendum (D101, Organization spec §1 Q12).** Every
     /// `defenum` type the scenario declared — the registry `enum`-typed
     /// `deffield`s resolve against, and the read path (`tick.rs::
@@ -444,7 +444,7 @@ pub struct LoadedScenario {
 /// mechanics, and exists so retained [`FormPath`] values resolve against the
 /// correct source buffer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct NamedDeclarationPreludeV1<'a> {
+pub struct NamedDeclarationPrelude<'a> {
     /// Caller-owned stable source identity.
     pub source_id: &'a str,
     /// Exact decoded source text.
@@ -480,7 +480,7 @@ struct PreludeRegistries {
     /// Mass declarations admitted while loading named preludes, retained in
     /// caller source order until the scenario load publishes them after its
     /// own declarations.
-    mass_declarations: Vec<MassDeclarationAnalysisV1>,
+    mass_declarations: Vec<MassDeclarationAnalysis>,
     /// §2.13 (D101): every `defenum` type declared so far, top to bottom —
     /// a `deffield ... enum <Type>` resolves against this AS IT IS AT THAT
     /// POINT, the same "declaration must precede use" discipline
@@ -792,7 +792,7 @@ fn preflight_practice_edges(
         counter
             .observe_solidarity_edge(
                 source.ordinal,
-                PracticeTargetDomainV1::SocialClass,
+                PracticeTargetDomain::SocialClass,
                 target.ordinal,
             )
             .map_err(map_practice_load_error)?;
@@ -897,7 +897,7 @@ pub fn load_scenario_with_prelude(
 pub fn load_scenario_with_named_preludes(
     scenario_source_id: &str,
     scenario_src: &str,
-    prelude_sources: &[NamedDeclarationPreludeV1<'_>],
+    prelude_sources: &[NamedDeclarationPrelude<'_>],
     graph: &mut dyn GraphSubstrate,
 ) -> Result<LoadedScenario, ScenarioError> {
     let registries = load_named_preludes(prelude_sources)?;
@@ -985,7 +985,7 @@ fn load_prelude(source_id: &str, prelude_src: &str) -> Result<PreludeRegistries,
 }
 
 fn load_named_preludes(
-    sources: &[NamedDeclarationPreludeV1<'_>],
+    sources: &[NamedDeclarationPrelude<'_>],
 ) -> Result<PreludeRegistries, ScenarioError> {
     let source_texts = sources
         .iter()
@@ -1078,12 +1078,12 @@ fn retain_mass_declaration(
     source_id: &str,
     parts: &[SExpr],
     literal_path: FormPath,
-    declarations: &mut Vec<MassDeclarationAnalysisV1>,
+    declarations: &mut Vec<MassDeclarationAnalysis>,
 ) {
     let [_, SExpr::Atom(Atom::QName(qname)), SExpr::Atom(Atom::Mass(mass)), ..] = parts else {
         return;
     };
-    declarations.push(MassDeclarationAnalysisV1 {
+    declarations.push(MassDeclarationAnalysis {
         source_id: source_id.to_owned(),
         qname: qname.clone(),
         form_path: literal_path,
@@ -2832,7 +2832,7 @@ mod tests {
     use super::{
         invert_content_ids, load_scenario, load_scenario_with_named_preludes,
         load_scenario_with_prelude, BslType, EnumKind, EnumRegistry, ErrorIdentity, FieldDecl,
-        FieldKind, NamedDeclarationPreludeV1,
+        FieldKind, NamedDeclarationPrelude,
     };
     use crate::bindings::BindingVocabulary;
     use crate::fuel::{CardinalityCeilings, IntrinsicCosts};
@@ -2845,8 +2845,8 @@ mod tests {
     use babylon_graph::memory::MemoryGraph;
     use babylon_graph::state_hash::{CanonicalState, StateEncoder};
     use babylon_graph::substrate::{Direction, GraphSubstrate, HyperedgeId, NodeId};
-    use babylon_kernel::replay::ReplaySessionIdV1;
-    use babylon_kernel::Currency;
+    use babylon_kernel::currency::Currency;
+    use babylon_kernel::replay::ReplaySessionId;
     use std::collections::{HashMap, HashSet};
 
     const TWO_CLASSES: &str = r"
@@ -3350,7 +3350,7 @@ mod tests {
                 &DefinesEnv::new(),
                 1,
                 Some(&loaded_scenario.node_content_ids),
-                &ReplaySessionIdV1::try_from("scenario-bit-equality-test")
+                &ReplaySessionId::try_from("scenario-bit-equality-test")
                     .expect("literal is non-empty"),
                 None,
             )
@@ -3462,7 +3462,7 @@ mod tests {
                 &DefinesEnv::new(),
                 1,
                 Some(&loaded_scenario.node_content_ids),
-                &ReplaySessionIdV1::try_from("scenario-currency-bit-equality-test")
+                &ReplaySessionId::try_from("scenario-currency-bit-equality-test")
                     .expect("non-empty"),
                 None,
             )
@@ -5506,11 +5506,11 @@ mod tests {
         let prelude_a = "(defenum Mood (CALM ANGRY))\n(defconst demo/prelude-a-mass 2m)\n";
         let prelude_b = "(defconst demo/prelude-b-mass 4m)\n";
         let preludes = [
-            NamedDeclarationPreludeV1 {
+            NamedDeclarationPrelude {
                 source_id: "content/a.bsl",
                 source: prelude_a,
             },
-            NamedDeclarationPreludeV1 {
+            NamedDeclarationPrelude {
                 source_id: "content/b.bsl",
                 source: prelude_b,
             },
@@ -5550,11 +5550,11 @@ mod tests {
     #[test]
     fn named_preludes_share_one_registry_in_manifest_order() {
         let preludes = [
-            NamedDeclarationPreludeV1 {
+            NamedDeclarationPrelude {
                 source_id: "content/types.bsl",
                 source: "(defenum Mood (CALM ANGRY))\n",
             },
-            NamedDeclarationPreludeV1 {
+            NamedDeclarationPrelude {
                 source_id: "content/fields.bsl",
                 source: "(deffield social-class/mood enum Mood)\n",
             },
@@ -5578,11 +5578,11 @@ mod tests {
     #[test]
     fn named_prelude_duplicate_and_composition_refusals_remain_loud() {
         let duplicate = [
-            NamedDeclarationPreludeV1 {
+            NamedDeclarationPrelude {
                 source_id: "content/first.bsl",
                 source: "(defconst demo/mass 1m)\n",
             },
-            NamedDeclarationPreludeV1 {
+            NamedDeclarationPrelude {
                 source_id: "content/second.bsl",
                 source: "(defconst demo/mass 1m)\n",
             },
@@ -5597,7 +5597,7 @@ mod tests {
         .unwrap_err();
         assert!(error.message.contains("duplicate defconst"), "{error}");
 
-        let too_many = [NamedDeclarationPreludeV1 {
+        let too_many = [NamedDeclarationPrelude {
             source_id: "content/repeated.bsl",
             source: "(defconst demo/mass 1m)\n",
         }; 17];
@@ -5617,7 +5617,7 @@ mod tests {
 
     #[test]
     fn named_prelude_bom_behavior_matches_the_historical_composed_stream() {
-        let first_bom = [NamedDeclarationPreludeV1 {
+        let first_bom = [NamedDeclarationPrelude {
             source_id: "content/first.bsl",
             source: "\u{feff}(defconst demo/mass 1m)\n",
         }];
@@ -5632,11 +5632,11 @@ mod tests {
         assert_eq!(loaded.mass_declarations[0].source_id, "content/first.bsl");
 
         let second_bom = [
-            NamedDeclarationPreludeV1 {
+            NamedDeclarationPrelude {
                 source_id: "content/first.bsl",
                 source: "(defconst demo/first 1m)\n",
             },
-            NamedDeclarationPreludeV1 {
+            NamedDeclarationPrelude {
                 source_id: "content/second.bsl",
                 source: "\u{feff}(defconst demo/second 2m)\n",
             },

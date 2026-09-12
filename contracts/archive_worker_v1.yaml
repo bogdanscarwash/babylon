@@ -8,8 +8,8 @@ production_decoder: prohibited
 
 authority:
   owner: Rust persistence boundary
-  purpose: Archive worker sweep selection, bounded consumption, batch-identity
-    refusal, and contiguous watermark derivation
+  purpose: Ordered Archive receipt publication, bounded producer evaluation,
+    batch-identity refusal, and contiguous watermark derivation
   classifications:
     sweep_sql_identity: Designed
     sweep_receipt_bound: Designed
@@ -24,10 +24,13 @@ authority:
   invariants:
     - The sweep selects only marker-backed unconsumed receipts in ascending
       resolve_tick order.
-    - The sweep pages by keyset cursor strictly after the last scanned tick,
-      so each bounded pass preserves receipt order.
-    - One sweep consumes at most ARCHIVE_SWEEP_MAX_RECEIPTS_V1 receipts and
-      scans at most ARCHIVE_SWEEP_MAX_SCAN_V1 pending receipts.
+    - A campaign advisory lock serializes publication. Each serializable receipt
+      transaction verifies the current schema and selects the earliest unsettled
+      committed marker; a missing or mismatched dirty receipt refuses.
+    - One sweep evaluates at most ARCHIVE_SWEEP_MAX_RECEIPTS receipts, including
+      successful quiet receipts. A staged receipt stops the sweep before any later
+      receipt is evaluated. The retained query-helper scan bound is not a second
+      limit on this ordered production loop.
     - An empty producer batch with no remaining dirty pages consumes the
       receipt; a batch with an undrained tail (empty head, nonzero remaining) stages without
       consuming, so nothing drops across sweeps.
@@ -41,11 +44,22 @@ authority:
       canonical encoding normalizes negative zero to positive zero.
     - Atoms are immutable content-addressed rows, so a re-mint of identical
       bytes yields the identical atom_id and never mutates stored bytes.
-    - Composition join rows for a superseded page are replaced only inside the
-      monotonic-guarded upsert window; atom rows never mutate.
+    - Page revisions and their atom memberships retain immutable history. A new
+      content revision leaves earlier revision bytes and captured grants intact.
     - A search hit carries the position-ordered atom composition without any
       raw-ledger join, so one hit stays self-contained.
 
+current_runtime:
+  source_path: rust/crates/babylon-persistence/src/archive_revision/worker.rs
+  publication_path: rust/crates/babylon-persistence/src/archive_revision/publication.rs
+  receipt_selector: next_receipt
+  producer_input: Tick-scoped knowledge pinned in the publication transaction.
+  transaction: Publish revision data and receipt consumption atomically before commit.
+  retry: Verify the persisted receipt, batch, worker-contract and knowledge identities.
+  stop: Refuse on the first error or cancellation; stop after a committed Stage outcome.
+
+# These identities retain the independent pure query-helper/vector contract.
+# The current ordered runtime above does not execute the keyset scan helper.
 constants:
   source_path: rust/crates/babylon-persistence/src/archive_worker.rs
   pending_receipts_sql_sha256: e475c0c9c8148e60102a592f22c6749f686704a7a6911cd545257c59e50be13e
@@ -90,11 +104,11 @@ layouts:
   sweep_step_v1:
     one_of:
       - "batch: paged_batch_ref_v1"
-      - "error: SemanticArchiveErrorV1 variant name"
+      - "error: SemanticArchiveError variant name"
   sweep_output_v1:
     one_of:
       - "expected: ordered receipt plans"
-      - "expected_error: SemanticArchiveErrorV1 variant name"
+      - "expected_error: SemanticArchiveError variant name"
 
 vector_kinds:
   required: [watermark, match, plan, sweep, identity]
@@ -114,6 +128,7 @@ amendments:
       Reader processing status derives the contiguous marker-backed consumed
       prefix independently from page content provenance.
 
+# The language-neutral vectors do not replace live database qualification.
 excluded_authority:
   - PostgreSQL execution, transactions, or receipt consumption
   - Producer content derivation or page rendering

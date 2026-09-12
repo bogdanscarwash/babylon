@@ -81,7 +81,7 @@ fn intent_from_vector(data: &Value) -> PracticeIntent {
 #[test]
 fn intent_schema_and_vectors_drive_the_rust_boundary() {
     assert_eq!(
-        babylon_kernel::sha256_of(SCHEMA),
+        babylon_kernel::content_digest::sha256_of(SCHEMA),
         PRACTICE_INTENT_SOURCE_SHA256
     );
     let cases: Vec<Value> = VECTORS

@@ -1,9 +1,9 @@
 use crate::{
-    validate_draft, AudienceV1, CoverageV1, DecisionSurfaceV1, DimensionCoordinateV1, DurabilityV1,
-    DyadKindV1, DyadV1, EvidenceClassV1, FacetFamilyV1, FacetV1, FlowKindV1, GapReasonV1, GapV1,
-    HyperedgeKindV1, HyperedgeV1, MembershipKindV1, ProvenanceV1, ReferenceDigestV1,
-    ReferenceFlowV1, RelationalTerritoryDossierV1, RtdDossierDraftV1, RtdError, ScaleMembershipV1,
-    StatusV1, TypedIdentityV1, ValueKindV1, RTD_MAX_CANONICAL_BYTES,
+    validate_draft, Audience, Coverage, DecisionSurface, DimensionCoordinate, Durability, Dyad,
+    DyadKind, EvidenceClass, Facet, FacetFamily, FlowKind, Gap, GapReason, Hyperedge,
+    HyperedgeKind, MembershipKind, Provenance, ReferenceDigest, ReferenceFlow,
+    RelationalTerritoryDossier, RtdDossierDraft, RtdError, ScaleMembership, Status, TypedIdentity,
+    ValueKind, RTD_MAX_CANONICAL_BYTES,
 };
 use serde::de::{Error as DeError, MapAccess, SeqAccess, Visitor};
 use serde::Deserialize;
@@ -25,7 +25,7 @@ const HASH_DOMAIN: &[u8] = b"babylon.relational-territory-dossier.v1";
 
 /// One closed line from the shared RTD V1 conformance corpus.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum RtdVectorCaseV1 {
+pub enum RtdVectorCase {
     /// A valid draft with exact canonical bytes and projection hash.
     Valid {
         /// Stable NFC case identity.
@@ -140,7 +140,7 @@ impl<'de> Visitor<'de> for UniqueVectorValueVisitor {
 ///
 /// Returns the stable vector, JSON, duplicate-key, NFC, or unknown-field
 /// refusal before exposing a partial case collection.
-pub fn parse_vector_corpus(payload: &[u8]) -> Result<Vec<RtdVectorCaseV1>, RtdError> {
+pub fn parse_vector_corpus(payload: &[u8]) -> Result<Vec<RtdVectorCase>, RtdError> {
     if payload.len() > MAX_VECTOR_BYTES {
         return Err(RtdError::VectorLimit);
     }
@@ -170,15 +170,13 @@ pub fn parse_vector_corpus(payload: &[u8]) -> Result<Vec<RtdVectorCaseV1>, RtdEr
     Ok(output)
 }
 
-fn vector_case_id(case: &RtdVectorCaseV1) -> &str {
+fn vector_case_id(case: &RtdVectorCase) -> &str {
     match case {
-        RtdVectorCaseV1::Valid { case_id, .. } | RtdVectorCaseV1::Invalid { case_id, .. } => {
-            case_id
-        }
+        RtdVectorCase::Valid { case_id, .. } | RtdVectorCase::Invalid { case_id, .. } => case_id,
     }
 }
 
-fn parse_vector_line(line: &[u8]) -> Result<RtdVectorCaseV1, RtdError> {
+fn parse_vector_line(line: &[u8]) -> Result<RtdVectorCase, RtdError> {
     if line.len() > MAX_VECTOR_LINE_BYTES {
         return Err(RtdError::VectorLimit);
     }
@@ -211,7 +209,7 @@ fn parse_vector_line(line: &[u8]) -> Result<RtdVectorCaseV1, RtdError> {
 fn parse_valid_vector(
     mut object: Map<String, Value>,
     case_id: String,
-) -> Result<RtdVectorCaseV1, RtdError> {
+) -> Result<RtdVectorCase, RtdError> {
     if object.len() != 3 {
         return Err(RtdError::UnknownField);
     }
@@ -226,7 +224,7 @@ fn parse_valid_vector(
     {
         return Err(RtdError::Json);
     }
-    Ok(RtdVectorCaseV1::Valid {
+    Ok(RtdVectorCase::Valid {
         case_id,
         draft_json,
         canonical_utf8_hex,
@@ -237,7 +235,7 @@ fn parse_valid_vector(
 fn parse_invalid_vector(
     mut object: Map<String, Value>,
     case_id: String,
-) -> Result<RtdVectorCaseV1, RtdError> {
+) -> Result<RtdVectorCase, RtdError> {
     if object.len() != 2 {
         return Err(RtdError::UnknownField);
     }
@@ -246,7 +244,7 @@ fn parse_invalid_vector(
     if !object.is_empty() || !is_registered_error(&error) {
         return Err(RtdError::Enum);
     }
-    Ok(RtdVectorCaseV1::Invalid {
+    Ok(RtdVectorCase::Invalid {
         case_id,
         draft_json,
         error,
@@ -290,7 +288,7 @@ fn classify_vector_json_error(error: &serde_json::Error) -> RtdError {
 
 fn is_registered_error(error: &str) -> bool {
     for index in 0..ERROR_REGISTRY_ITEMS {
-        if crate::RTD_V1_ERROR_REGISTRY[index] == error {
+        if crate::RTD_ERROR_REGISTRY[index] == error {
             return true;
         }
     }
@@ -426,7 +424,7 @@ fn write_optional_string(
 // The repository's fixed-loop rule requires the literal three-component bound;
 // an iterator rewrite would hide that proof from the static source check.
 #[allow(clippy::needless_range_loop)]
-fn identity_key(identity: &TypedIdentityV1) -> Vec<u8> {
+fn identity_key(identity: &TypedIdentity) -> Vec<u8> {
     let mut output = Vec::new();
     let components = [&identity.domain, &identity.authority, &identity.local_id];
     for index in 0..IDENTITY_COMPONENTS {
@@ -438,10 +436,7 @@ fn identity_key(identity: &TypedIdentityV1) -> Vec<u8> {
     output
 }
 
-fn write_identity(
-    writer: &mut CanonicalWriter,
-    identity: &TypedIdentityV1,
-) -> Result<(), RtdError> {
+fn write_identity(writer: &mut CanonicalWriter, identity: &TypedIdentity) -> Result<(), RtdError> {
     writer.write(b"{")?;
     let first = write_field(writer, "authority", true)?;
     write_string(writer, &identity.authority)?;
@@ -454,7 +449,7 @@ fn write_identity(
 
 fn write_optional_identity(
     writer: &mut CanonicalWriter,
-    identity: Option<&TypedIdentityV1>,
+    identity: Option<&TypedIdentity>,
 ) -> Result<(), RtdError> {
     if let Some(value) = identity {
         write_identity(writer, value)
@@ -488,7 +483,7 @@ fn write_array<T: Clone>(
 
 fn write_identity_array(
     writer: &mut CanonicalWriter,
-    items: &[TypedIdentityV1],
+    items: &[TypedIdentity],
     preserve_order: bool,
 ) -> Result<(), RtdError> {
     write_array(
@@ -517,24 +512,24 @@ macro_rules! canonical_enum {
     };
 }
 
-canonical_enum!(AudienceV1, {AudienceV1::AdminMaterial => "ADMIN_MATERIAL", AudienceV1::PlayerKnowledge => "PLAYER_KNOWLEDGE"});
-canonical_enum!(DurabilityV1, {DurabilityV1::InMemory => "IN_MEMORY", DurabilityV1::Committed => "COMMITTED"});
-canonical_enum!(EvidenceClassV1, {EvidenceClassV1::Observed => "Observed", EvidenceClassV1::Derived => "Derived", EvidenceClassV1::Calibrated => "Calibrated", EvidenceClassV1::Designed => "Designed"});
-canonical_enum!(StatusV1, {StatusV1::Present => "PRESENT", StatusV1::Absent => "ABSENT", StatusV1::Unknown => "UNKNOWN", StatusV1::NotComputed => "NOT_COMPUTED", StatusV1::Redacted => "REDACTED"});
-canonical_enum!(ValueKindV1, {ValueKindV1::Uint64Bits => "UINT64_BITS", ValueKindV1::Float64Bits => "FLOAT64_BITS"});
-canonical_enum!(CoverageV1, {CoverageV1::Complete => "COMPLETE", CoverageV1::Partial => "PARTIAL", CoverageV1::NotApplicable => "NOT_APPLICABLE", CoverageV1::Unknown => "UNKNOWN"});
-canonical_enum!(MembershipKindV1, {MembershipKindV1::Administrative => "ADMINISTRATIVE", MembershipKindV1::National => "NATIONAL", MembershipKindV1::CommutingZone => "COMMUTING_ZONE", MembershipKindV1::Metropolitan => "METROPOLITAN", MembershipKindV1::WeightedOverlap => "WEIGHTED_OVERLAP"});
-canonical_enum!(FacetFamilyV1, {FacetFamilyV1::CommandAdministration => "COMMAND_ADMINISTRATION", FacetFamilyV1::ProductionCirculation => "PRODUCTION_CIRCULATION", FacetFamilyV1::ReproductionSettlementAccess => "REPRODUCTION_SETTLEMENT_ACCESS", FacetFamilyV1::ExtractionAbandonmentCarceral => "EXTRACTION_ABANDONMENT_CARCERAL", FacetFamilyV1::EcologyCare => "ECOLOGY_CARE", FacetFamilyV1::OrganizationRootedness => "ORGANIZATION_ROOTEDNESS"});
-canonical_enum!(DyadKindV1, {DyadKindV1::Presence => "PRESENCE", DyadKindV1::Membership => "MEMBERSHIP", DyadKindV1::Solidarity => "SOLIDARITY", DyadKindV1::Command => "COMMAND"});
-canonical_enum!(HyperedgeKindV1, {HyperedgeKindV1::PublicRelation => "PUBLIC_RELATION"});
-canonical_enum!(FlowKindV1, {FlowKindV1::CommuterJobs => "COMMUTER_JOBS", FlowKindV1::BorderSynthesis => "BORDER_SYNTHESIS"});
-canonical_enum!(GapReasonV1, {GapReasonV1::MissingGovernedOmbDelineation => "MISSING_GOVERNED_OMB_DELINEATION", GapReasonV1::IdentityContractPending => "IDENTITY_CONTRACT_PENDING", GapReasonV1::MissingGovernedProducer => "MISSING_GOVERNED_PRODUCER", GapReasonV1::ReferenceCoverageUnavailable => "REFERENCE_COVERAGE_UNAVAILABLE", GapReasonV1::PlayerBoundaryUnavailable => "PLAYER_BOUNDARY_UNAVAILABLE", GapReasonV1::ProvenanceCoordinateConflict => "PROVENANCE_COORDINATE_CONFLICT"});
+canonical_enum!(Audience, {Audience::AdminMaterial => "ADMIN_MATERIAL", Audience::PlayerKnowledge => "PLAYER_KNOWLEDGE"});
+canonical_enum!(Durability, {Durability::InMemory => "IN_MEMORY", Durability::Committed => "COMMITTED"});
+canonical_enum!(EvidenceClass, {EvidenceClass::Observed => "Observed", EvidenceClass::Derived => "Derived", EvidenceClass::Calibrated => "Calibrated", EvidenceClass::Designed => "Designed"});
+canonical_enum!(Status, {Status::Present => "PRESENT", Status::Absent => "ABSENT", Status::Unknown => "UNKNOWN", Status::NotComputed => "NOT_COMPUTED", Status::Redacted => "REDACTED"});
+canonical_enum!(ValueKind, {ValueKind::Uint64Bits => "UINT64_BITS", ValueKind::Float64Bits => "FLOAT64_BITS"});
+canonical_enum!(Coverage, {Coverage::Complete => "COMPLETE", Coverage::Partial => "PARTIAL", Coverage::NotApplicable => "NOT_APPLICABLE", Coverage::Unknown => "UNKNOWN"});
+canonical_enum!(MembershipKind, {MembershipKind::Administrative => "ADMINISTRATIVE", MembershipKind::National => "NATIONAL", MembershipKind::CommutingZone => "COMMUTING_ZONE", MembershipKind::Metropolitan => "METROPOLITAN", MembershipKind::WeightedOverlap => "WEIGHTED_OVERLAP"});
+canonical_enum!(FacetFamily, {FacetFamily::CommandAdministration => "COMMAND_ADMINISTRATION", FacetFamily::ProductionCirculation => "PRODUCTION_CIRCULATION", FacetFamily::ReproductionSettlementAccess => "REPRODUCTION_SETTLEMENT_ACCESS", FacetFamily::ExtractionAbandonmentCarceral => "EXTRACTION_ABANDONMENT_CARCERAL", FacetFamily::EcologyCare => "ECOLOGY_CARE", FacetFamily::OrganizationRootedness => "ORGANIZATION_ROOTEDNESS"});
+canonical_enum!(DyadKind, {DyadKind::Presence => "PRESENCE", DyadKind::Membership => "MEMBERSHIP", DyadKind::Solidarity => "SOLIDARITY", DyadKind::Command => "COMMAND"});
+canonical_enum!(HyperedgeKind, {HyperedgeKind::PublicRelation => "PUBLIC_RELATION"});
+canonical_enum!(FlowKind, {FlowKind::CommuterJobs => "COMMUTER_JOBS", FlowKind::BorderSynthesis => "BORDER_SYNTHESIS"});
+canonical_enum!(GapReason, {GapReason::MissingGovernedOmbDelineation => "MISSING_GOVERNED_OMB_DELINEATION", GapReason::IdentityContractPending => "IDENTITY_CONTRACT_PENDING", GapReason::MissingGovernedProducer => "MISSING_GOVERNED_PRODUCER", GapReason::ReferenceCoverageUnavailable => "REFERENCE_COVERAGE_UNAVAILABLE", GapReason::PlayerBoundaryUnavailable => "PLAYER_BOUNDARY_UNAVAILABLE", GapReason::ProvenanceCoordinateConflict => "PROVENANCE_COORDINATE_CONFLICT"});
 
 fn write_enum<T: CanonicalEnum>(writer: &mut CanonicalWriter, value: &T) -> Result<(), RtdError> {
     write_string(writer, value.literal())
 }
 
-fn write_reference(writer: &mut CanonicalWriter, row: &ReferenceDigestV1) -> Result<(), RtdError> {
+fn write_reference(writer: &mut CanonicalWriter, row: &ReferenceDigest) -> Result<(), RtdError> {
     writer.write(b"{")?;
     let first = write_field(writer, "artifact_schema_id_or_null", true)?;
     write_optional_identity(writer, row.artifact_schema_id_or_null.as_ref())?;
@@ -549,37 +544,37 @@ fn write_reference(writer: &mut CanonicalWriter, row: &ReferenceDigestV1) -> Res
     writer.write(b"}")
 }
 
-fn reference_key(row: &ReferenceDigestV1) -> Vec<u8> {
+fn reference_key(row: &ReferenceDigest) -> Vec<u8> {
     identity_key(&row.reference_id)
 }
-fn membership_key(row: &ScaleMembershipV1) -> Vec<u8> {
+fn membership_key(row: &ScaleMembership) -> Vec<u8> {
     identity_key(&row.membership_id)
 }
-fn facet_key(row: &FacetV1) -> Vec<u8> {
+fn facet_key(row: &Facet) -> Vec<u8> {
     identity_key(&row.facet_id)
 }
-fn dyad_key(row: &DyadV1) -> Vec<u8> {
+fn dyad_key(row: &Dyad) -> Vec<u8> {
     identity_key(&row.relation_id)
 }
-fn hyperedge_key(row: &HyperedgeV1) -> Vec<u8> {
+fn hyperedge_key(row: &Hyperedge) -> Vec<u8> {
     identity_key(&row.hyperedge_id)
 }
-fn flow_key(row: &ReferenceFlowV1) -> Vec<u8> {
+fn flow_key(row: &ReferenceFlow) -> Vec<u8> {
     identity_key(&row.flow_id)
 }
-fn gap_key(row: &GapV1) -> Vec<u8> {
+fn gap_key(row: &Gap) -> Vec<u8> {
     identity_key(&row.gap_id)
 }
-fn provenance_key(row: &ProvenanceV1) -> Vec<u8> {
+fn provenance_key(row: &Provenance) -> Vec<u8> {
     identity_key(&row.provenance_id)
 }
-fn coordinate_key(row: &DimensionCoordinateV1) -> Vec<u8> {
+fn coordinate_key(row: &DimensionCoordinate) -> Vec<u8> {
     identity_key(&row.dimension_ref)
 }
 
 fn write_coordinate(
     writer: &mut CanonicalWriter,
-    row: &DimensionCoordinateV1,
+    row: &DimensionCoordinate,
 ) -> Result<(), RtdError> {
     writer.write(b"{")?;
     let first = write_field(writer, "dimension_ref", true)?;
@@ -589,7 +584,7 @@ fn write_coordinate(
     writer.write(b"}")
 }
 
-fn write_membership(writer: &mut CanonicalWriter, row: &ScaleMembershipV1) -> Result<(), RtdError> {
+fn write_membership(writer: &mut CanonicalWriter, row: &ScaleMembership) -> Result<(), RtdError> {
     writer.write(b"{")?;
     let first = write_field(writer, "coverage", true)?;
     write_enum(writer, &row.coverage)?;
@@ -614,7 +609,7 @@ fn write_membership(writer: &mut CanonicalWriter, row: &ScaleMembershipV1) -> Re
     writer.write(b"}")
 }
 
-fn write_facet(writer: &mut CanonicalWriter, row: &FacetV1) -> Result<(), RtdError> {
+fn write_facet(writer: &mut CanonicalWriter, row: &Facet) -> Result<(), RtdError> {
     writer.write(b"{")?;
     let first = write_field(writer, "coordinates", true)?;
     write_array(
@@ -652,7 +647,7 @@ fn write_facet(writer: &mut CanonicalWriter, row: &FacetV1) -> Result<(), RtdErr
     writer.write(b"}")
 }
 
-fn write_dyad(writer: &mut CanonicalWriter, row: &DyadV1) -> Result<(), RtdError> {
+fn write_dyad(writer: &mut CanonicalWriter, row: &Dyad) -> Result<(), RtdError> {
     writer.write(b"{")?;
     let first = write_field(writer, "coverage", true)?;
     write_enum(writer, &row.coverage)?;
@@ -677,7 +672,7 @@ fn write_dyad(writer: &mut CanonicalWriter, row: &DyadV1) -> Result<(), RtdError
     writer.write(b"}")
 }
 
-fn write_hyperedge(writer: &mut CanonicalWriter, row: &HyperedgeV1) -> Result<(), RtdError> {
+fn write_hyperedge(writer: &mut CanonicalWriter, row: &Hyperedge) -> Result<(), RtdError> {
     writer.write(b"{")?;
     let first = write_field(writer, "coverage", true)?;
     write_enum(writer, &row.coverage)?;
@@ -700,7 +695,7 @@ fn write_hyperedge(writer: &mut CanonicalWriter, row: &HyperedgeV1) -> Result<()
     writer.write(b"}")
 }
 
-fn write_flow(writer: &mut CanonicalWriter, row: &ReferenceFlowV1) -> Result<(), RtdError> {
+fn write_flow(writer: &mut CanonicalWriter, row: &ReferenceFlow) -> Result<(), RtdError> {
     writer.write(b"{")?;
     let first = write_field(writer, "coverage", true)?;
     write_enum(writer, &row.coverage)?;
@@ -725,7 +720,7 @@ fn write_flow(writer: &mut CanonicalWriter, row: &ReferenceFlowV1) -> Result<(),
     writer.write(b"}")
 }
 
-fn write_gap(writer: &mut CanonicalWriter, row: &GapV1) -> Result<(), RtdError> {
+fn write_gap(writer: &mut CanonicalWriter, row: &Gap) -> Result<(), RtdError> {
     writer.write(b"{")?;
     let first = write_field(writer, "gap_id", true)?;
     write_identity(writer, &row.gap_id)?;
@@ -742,7 +737,7 @@ fn write_gap(writer: &mut CanonicalWriter, row: &GapV1) -> Result<(), RtdError> 
     writer.write(b"}")
 }
 
-fn write_provenance(writer: &mut CanonicalWriter, row: &ProvenanceV1) -> Result<(), RtdError> {
+fn write_provenance(writer: &mut CanonicalWriter, row: &Provenance) -> Result<(), RtdError> {
     writer.write(b"{")?;
     let first = write_field(writer, "artifact_digest", true)?;
     write_string(writer, &row.artifact_digest)?;
@@ -761,7 +756,7 @@ fn write_provenance(writer: &mut CanonicalWriter, row: &ProvenanceV1) -> Result<
 
 fn write_decision_surface(
     writer: &mut CanonicalWriter,
-    row: &DecisionSurfaceV1,
+    row: &DecisionSurface,
 ) -> Result<(), RtdError> {
     writer.write(b"{")?;
     let first = write_field(writer, "action_refs", true)?;
@@ -777,7 +772,7 @@ fn write_decision_surface(
     writer.write(b"}")
 }
 
-fn write_draft(writer: &mut CanonicalWriter, draft: &RtdDossierDraftV1) -> Result<(), RtdError> {
+fn write_draft(writer: &mut CanonicalWriter, draft: &RtdDossierDraft) -> Result<(), RtdError> {
     writer.write(b"{")?;
     let first = write_field(writer, "actor", true)?;
     write_optional_identity(writer, draft.actor.as_ref())?;
@@ -848,13 +843,13 @@ fn write_draft(writer: &mut CanonicalWriter, draft: &RtdDossierDraftV1) -> Resul
     writer.write(b"}")
 }
 
-fn normalize_negative_zero(draft: &mut RtdDossierDraftV1) {
+fn normalize_negative_zero(draft: &mut RtdDossierDraft) {
     for index in 0..MAX_COLLECTION_ITEMS {
         if index == draft.facets.len() {
             break;
         }
         let facet = &mut draft.facets[index];
-        if facet.value_kind == ValueKindV1::Float64Bits
+        if facet.value_kind == ValueKind::Float64Bits
             && facet.value_bits_or_null.as_deref() == Some("8000000000000000")
         {
             facet.value_bits_or_null = Some("0000000000000000".to_owned());
@@ -881,7 +876,7 @@ fn normalize_negative_zero(draft: &mut RtdDossierDraftV1) {
 ///
 /// Returns the exact semantic or canonical-size refusal without exposing
 /// partial bytes.
-pub fn canonical_draft_bytes(draft: &RtdDossierDraftV1) -> Result<Vec<u8>, RtdError> {
+pub fn canonical_draft_bytes(draft: &RtdDossierDraft) -> Result<Vec<u8>, RtdError> {
     let mut normalized = draft.clone();
     normalize_negative_zero(&mut normalized);
     validate_draft(&normalized)?;
@@ -895,7 +890,7 @@ pub fn canonical_draft_bytes(draft: &RtdDossierDraftV1) -> Result<Vec<u8>, RtdEr
 /// # Errors
 ///
 /// Returns the first validation or canonical-size refusal before hashing.
-pub fn projection_hash(draft: &RtdDossierDraftV1) -> Result<[u8; 32], RtdError> {
+pub fn projection_hash(draft: &RtdDossierDraft) -> Result<[u8; 32], RtdError> {
     let canonical = canonical_draft_bytes(draft)?;
     let capacity = HASH_DOMAIN
         .len()
@@ -906,7 +901,7 @@ pub fn projection_hash(draft: &RtdDossierDraftV1) -> Result<[u8; 32], RtdError> 
     input.extend_from_slice(HASH_DOMAIN);
     input.push(0);
     input.extend_from_slice(&canonical);
-    Ok(babylon_kernel::sha256_of(&input))
+    Ok(babylon_kernel::content_digest::sha256_of(&input))
 }
 
 // Keep the SHA-256 width visible as a fixed source-level loop bound.
@@ -925,10 +920,10 @@ fn digest_hex(digest: &[u8; 32]) -> String {
 /// # Errors
 ///
 /// Returns the first validation or canonical-size refusal and no sealed value.
-pub fn seal_draft(mut draft: RtdDossierDraftV1) -> Result<RelationalTerritoryDossierV1, RtdError> {
+pub fn seal_draft(mut draft: RtdDossierDraft) -> Result<RelationalTerritoryDossier, RtdError> {
     normalize_negative_zero(&mut draft);
     let digest = projection_hash(&draft)?;
-    Ok(RelationalTerritoryDossierV1 {
+    Ok(RelationalTerritoryDossier {
         schema: draft.schema,
         schema_version: draft.schema_version,
         projection_version: draft.projection_version,

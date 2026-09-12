@@ -2,42 +2,42 @@
 
 use std::collections::TryReserveError;
 
+use babylon_bsl::canonical_ast::rules_hash_of;
 use babylon_bsl::causal_contract::AuditReceipt;
-use babylon_bsl::identity_codec::{IdentityCodecError, MAX_IDENTITY_SECTION_BYTES_V1};
+use babylon_bsl::identity_codec::{IdentityCodecError, MAX_IDENTITY_SECTION_BYTES};
 use babylon_bsl::identity_sections::{
-    encode_prepared_bsl_sections_v1, encode_tick_payload_sections_v1,
-    MAX_PREPARED_AGGREGATE_ROWS_V1, MAX_PREPARED_ROWS_V1,
+    encode_prepared_bsl_sections, encode_tick_payload_sections, MAX_PREPARED_AGGREGATE_ROWS,
+    MAX_PREPARED_ROWS,
 };
-use babylon_bsl::rules_hash_of;
-use babylon_graph::stable_element::{StableElementResolverV1, StableIdentityError};
-use babylon_graph::stable_state::{StableGraphStateV1, STABLE_GRAPH_STATE_LAYOUT_VERSION_V1};
+use babylon_graph::stable_element::{StableElementResolver, StableIdentityError};
+use babylon_graph::stable_state::{StableGraphState, STABLE_GRAPH_STATE_LAYOUT_VERSION};
 use babylon_kernel::tick_content_hash::{
-    PreparedEnvironmentDigestV1, StableWorldDigestV1, TickPayloadDigestV1,
+    PreparedEnvironmentDigest, StableWorldDigest, TickPayloadDigest,
 };
-use babylon_kernel::{sha256_of, ContentDigest};
+use babylon_kernel::{content_digest::sha256_of, content_digest::ContentDigest};
 
-use crate::choice_receipt::{validate_choice_receipt_order, ChoiceReceiptV1};
-use crate::committed_event::CommittedEventV2;
+use crate::choice_receipt::{validate_choice_receipt_order, ChoiceReceipt};
+use crate::committed_event::CommittedEvent;
 use crate::{phase_order, PreparedRules};
 
 /// Prepared-environment layout version.
-pub const PREPARED_ENVIRONMENT_LAYOUT_VERSION_V1: u32 = 1;
+pub const PREPARED_ENVIRONMENT_LAYOUT_VERSION: u32 = 1;
 
 /// World-register manifest layout version.
-pub const WORLD_REGISTER_MANIFEST_LAYOUT_VERSION_V1: u32 = 1;
+pub const WORLD_REGISTER_MANIFEST_LAYOUT_VERSION: u32 = 1;
 /// World-register set layout version.
-pub const WORLD_REGISTER_SET_LAYOUT_VERSION_V1: u32 = 1;
+pub const WORLD_REGISTER_SET_LAYOUT_VERSION: u32 = 1;
 /// Completed-tick register payload layout version.
-pub const COMPLETED_TICK_REGISTER_LAYOUT_VERSION_V1: u32 = 1;
+pub const COMPLETED_TICK_REGISTER_LAYOUT_VERSION: u32 = 1;
 /// Stable-world layout version.
-pub const STABLE_WORLD_LAYOUT_VERSION_V1: u32 = 1;
+pub const STABLE_WORLD_LAYOUT_VERSION: u32 = 1;
 /// Tick-payload layout version.
-pub const TICK_PAYLOAD_LAYOUT_VERSION_V2: u32 = 2;
+pub const TICK_PAYLOAD_LAYOUT_VERSION: u32 = 2;
 
 const WORLD_REGISTER_MANIFEST_DOMAIN: &[u8] = b"babylon.world-register-manifest\0";
 const WORLD_REGISTER_SET_DOMAIN: &[u8] = b"babylon.world-register-set\0";
 const STABLE_WORLD_DOMAIN: &[u8] = b"babylon.stable-world\0";
-const TICK_PAYLOAD_DOMAIN_V2: &[u8] = b"babylon.tick-payload.v2\0";
+const TICK_PAYLOAD_DOMAIN: &[u8] = b"babylon.tick-payload.v2\0";
 const PREPARED_ENVIRONMENT_DOMAIN: &[u8] = b"babylon.prepared-environment\0";
 const COMPLETED_TICK_REGISTER: &str = "world/completed-tick";
 
@@ -151,12 +151,12 @@ impl From<StableIdentityError> for ReplayTickIdentityError {
 
 /// Exact canonical identity of the loaded replay mechanics environment.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PreparedEnvironmentV1 {
+pub struct PreparedEnvironment {
     canonical_bytes: Vec<u8>,
-    digest: PreparedEnvironmentDigestV1,
+    digest: PreparedEnvironmentDigest,
 }
 
-impl PreparedEnvironmentV1 {
+impl PreparedEnvironment {
     /// Borrow the exact canonical bytes.
     #[must_use]
     pub fn canonical_bytes(&self) -> &[u8] {
@@ -165,19 +165,19 @@ impl PreparedEnvironmentV1 {
 
     /// Return SHA-256 of the exact canonical bytes.
     #[must_use]
-    pub const fn digest(&self) -> PreparedEnvironmentDigestV1 {
+    pub const fn digest(&self) -> PreparedEnvironmentDigest {
         self.digest
     }
 }
 
 /// Exact canonical world-register manifest.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct WorldRegisterManifestV1 {
+pub struct WorldRegisterManifest {
     canonical_bytes: Vec<u8>,
     digest: [u8; 32],
 }
 
-impl WorldRegisterManifestV1 {
+impl WorldRegisterManifest {
     /// Borrow the exact canonical bytes.
     #[must_use]
     pub fn canonical_bytes(&self) -> &[u8] {
@@ -193,13 +193,13 @@ impl WorldRegisterManifestV1 {
 
 /// Exact canonical values of the governed world-register manifest.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct WorldRegisterSetV1 {
+pub struct WorldRegisterSet {
     canonical_bytes: Vec<u8>,
     digest: [u8; 32],
     completed_tick: i64,
 }
 
-impl WorldRegisterSetV1 {
+impl WorldRegisterSet {
     /// Borrow the exact canonical bytes.
     #[must_use]
     pub fn canonical_bytes(&self) -> &[u8] {
@@ -221,12 +221,12 @@ impl WorldRegisterSetV1 {
 
 /// Exact stable graph plus world-register identity.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct StableWorldV1 {
+pub struct StableWorld {
     canonical_bytes: Vec<u8>,
-    digest: StableWorldDigestV1,
+    digest: StableWorldDigest,
 }
 
-impl StableWorldV1 {
+impl StableWorld {
     /// Borrow the exact canonical bytes.
     #[must_use]
     pub fn canonical_bytes(&self) -> &[u8] {
@@ -235,21 +235,21 @@ impl StableWorldV1 {
 
     /// Return SHA-256 of the exact canonical bytes.
     #[must_use]
-    pub const fn digest(&self) -> StableWorldDigestV1 {
+    pub const fn digest(&self) -> StableWorldDigest {
         self.digest
     }
 }
 
 /// Exact governed tick observations.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TickPayloadV2 {
+pub struct TickPayload {
     canonical_bytes: Vec<u8>,
-    digest: TickPayloadDigestV1,
+    digest: TickPayloadDigest,
     event_section_digest: [u8; 32],
     choice_receipt_section_digest: [u8; 32],
 }
 
-impl TickPayloadV2 {
+impl TickPayload {
     /// Borrow the exact canonical bytes.
     #[must_use]
     pub fn canonical_bytes(&self) -> &[u8] {
@@ -258,7 +258,7 @@ impl TickPayloadV2 {
 
     /// Return SHA-256 of the exact canonical bytes.
     #[must_use]
-    pub const fn digest(&self) -> TickPayloadDigestV1 {
+    pub const fn digest(&self) -> TickPayloadDigest {
         self.digest
     }
 
@@ -276,12 +276,12 @@ impl TickPayloadV2 {
 /// # Errors
 /// Returns when the loaded rule forms disagree with the declared content,
 /// any nested identity refuses, or a governed row/byte bound is exceeded.
-pub(crate) fn encode_prepared_environment_v1(
+pub(crate) fn encode_prepared_environment(
     content: &ContentDigest,
     prepared: &PreparedRules,
-    resolver: &StableElementResolverV1,
-    registers: &WorldRegisterManifestV1,
-) -> Result<PreparedEnvironmentV1, ReplayTickIdentityError> {
+    resolver: &StableElementResolver,
+    registers: &WorldRegisterManifest,
+) -> Result<PreparedEnvironment, ReplayTickIdentityError> {
     let computed = rules_hash_of(&prepared.rule_forms).map_err(|error| {
         ReplayTickIdentityError::CanonicalRules {
             message: error.message,
@@ -294,7 +294,7 @@ pub(crate) fn encode_prepared_environment_v1(
         });
     }
     validate_prepared_rows(prepared)?;
-    let bsl = encode_prepared_bsl_sections_v1(
+    let bsl = encode_prepared_bsl_sections(
         &prepared.types,
         &prepared.intrinsics,
         &prepared.consts,
@@ -302,24 +302,23 @@ pub(crate) fn encode_prepared_environment_v1(
         prepared.vocabulary.as_ref(),
     )?;
     validate_prepared_aggregate(prepared, bsl.aggregate_rows())?;
-    let schedule = phase_order::phase_schedule_v1().map_err(|error| {
-        ReplayTickIdentityError::PhaseSchedule {
+    let schedule =
+        phase_order::phase_schedule().map_err(|error| ReplayTickIdentityError::PhaseSchedule {
             message: error.to_string(),
-        }
-    })?;
+        })?;
     debug_assert_eq!(sha256_of(schedule.canonical_bytes()), schedule.digest());
 
     let mut writer = Writer::new("prepared environment");
     writer.extend(PREPARED_ENVIRONMENT_DOMAIN)?;
-    writer.u32(PREPARED_ENVIRONMENT_LAYOUT_VERSION_V1)?;
+    writer.u32(PREPARED_ENVIRONMENT_LAYOUT_VERSION)?;
     writer.push(0x01)?;
     writer.extend(&computed)?;
     writer.push(0x02)?;
-    writer.u32(phase_order::PhaseScheduleV1::layout_version())?;
+    writer.u32(phase_order::PhaseSchedule::layout_version())?;
     writer.extend(&schedule.digest())?;
     writer.push(0x03)?;
     writer.count32("prepared rule count", prepared.rules.len())?;
-    for (rule_id, _) in prepared.rules.iter().take(MAX_PREPARED_ROWS_V1 + 1) {
+    for (rule_id, _) in prepared.rules.iter().take(MAX_PREPARED_ROWS + 1) {
         writer.str32(rule_id)?;
     }
     for (tag, section) in [
@@ -333,22 +332,21 @@ pub(crate) fn encode_prepared_environment_v1(
         writer.extend(section)?;
     }
     writer.push(0x09)?;
-    writer
-        .u32(babylon_graph::stable_element::STABLE_ELEMENT_RESOLVER_MANIFEST_LAYOUT_VERSION_V1)?;
+    writer.u32(babylon_graph::stable_element::STABLE_ELEMENT_RESOLVER_MANIFEST_LAYOUT_VERSION)?;
     writer.extend(&resolver.manifest().digest())?;
     writer.push(0x0a)?;
-    writer.u32(WORLD_REGISTER_MANIFEST_LAYOUT_VERSION_V1)?;
+    writer.u32(WORLD_REGISTER_MANIFEST_LAYOUT_VERSION)?;
     writer.extend(&registers.digest())?;
     let canonical_bytes = writer.finish();
-    let digest = PreparedEnvironmentDigestV1::from_bytes(sha256_of(&canonical_bytes));
-    Ok(PreparedEnvironmentV1 {
+    let digest = PreparedEnvironmentDigest::from_bytes(sha256_of(&canonical_bytes));
+    Ok(PreparedEnvironment {
         canonical_bytes,
         digest,
     })
 }
 
 fn validate_prepared_rows(prepared: &PreparedRules) -> Result<(), ReplayTickIdentityError> {
-    validate_row_limit("prepared rules", prepared.rules.len(), MAX_PREPARED_ROWS_V1)?;
+    validate_row_limit("prepared rules", prepared.rules.len(), MAX_PREPARED_ROWS)?;
     let resolver_rows = prepared
         .node_content_ids
         .len()
@@ -356,7 +354,7 @@ fn validate_prepared_rows(prepared: &PreparedRules) -> Result<(), ReplayTickIden
         .ok_or(ReplayTickIdentityError::CapacityOverflow {
             field: "stable resolver rows",
         })?;
-    validate_row_limit("stable resolver rows", resolver_rows, MAX_PREPARED_ROWS_V1)
+    validate_row_limit("stable resolver rows", resolver_rows, MAX_PREPARED_ROWS)
 }
 
 fn validate_prepared_aggregate(
@@ -379,10 +377,10 @@ fn validate_prepared_aggregate(
         .ok_or(ReplayTickIdentityError::CapacityOverflow {
             field: "prepared aggregate rows",
         })?;
-    if total > MAX_PREPARED_AGGREGATE_ROWS_V1 {
+    if total > MAX_PREPARED_AGGREGATE_ROWS {
         return Err(ReplayTickIdentityError::AggregateRowLimit {
             actual: total,
-            maximum: MAX_PREPARED_AGGREGATE_ROWS_V1,
+            maximum: MAX_PREPARED_AGGREGATE_ROWS,
         });
     }
     Ok(())
@@ -407,16 +405,16 @@ fn validate_row_limit(
 ///
 /// # Errors
 /// Returns a checked arithmetic, byte-ceiling, conversion, or allocation error.
-pub fn world_register_manifest_v1() -> Result<WorldRegisterManifestV1, ReplayTickIdentityError> {
+pub fn world_register_manifest() -> Result<WorldRegisterManifest, ReplayTickIdentityError> {
     let mut writer = Writer::new("world register manifest");
     writer.extend(WORLD_REGISTER_MANIFEST_DOMAIN)?;
-    writer.u32(WORLD_REGISTER_MANIFEST_LAYOUT_VERSION_V1)?;
+    writer.u32(WORLD_REGISTER_MANIFEST_LAYOUT_VERSION)?;
     writer.u32(1)?;
     writer.str32(COMPLETED_TICK_REGISTER)?;
-    writer.u32(COMPLETED_TICK_REGISTER_LAYOUT_VERSION_V1)?;
+    writer.u32(COMPLETED_TICK_REGISTER_LAYOUT_VERSION)?;
     let canonical_bytes = writer.finish();
     let digest = sha256_of(&canonical_bytes);
-    Ok(WorldRegisterManifestV1 {
+    Ok(WorldRegisterManifest {
         canonical_bytes,
         digest,
     })
@@ -426,10 +424,10 @@ pub fn world_register_manifest_v1() -> Result<WorldRegisterManifestV1, ReplayTic
 ///
 /// # Errors
 /// Returns a completed-tick domain or checked codec error.
-pub fn encode_world_register_set_v1(
-    manifest: &WorldRegisterManifestV1,
+pub fn encode_world_register_set(
+    manifest: &WorldRegisterManifest,
     completed_tick: i64,
-) -> Result<WorldRegisterSetV1, ReplayTickIdentityError> {
+) -> Result<WorldRegisterSet, ReplayTickIdentityError> {
     if completed_tick < 0 {
         return Err(ReplayTickIdentityError::NegativeCompletedTick {
             value: completed_tick,
@@ -437,19 +435,19 @@ pub fn encode_world_register_set_v1(
     }
     let mut writer = Writer::new("world register set");
     writer.extend(WORLD_REGISTER_SET_DOMAIN)?;
-    writer.u32(WORLD_REGISTER_SET_LAYOUT_VERSION_V1)?;
+    writer.u32(WORLD_REGISTER_SET_LAYOUT_VERSION)?;
     writer.push(0x01)?;
-    writer.u32(WORLD_REGISTER_MANIFEST_LAYOUT_VERSION_V1)?;
+    writer.u32(WORLD_REGISTER_MANIFEST_LAYOUT_VERSION)?;
     writer.extend(&manifest.digest())?;
     writer.push(0x02)?;
     writer.u32(1)?;
     writer.str32(COMPLETED_TICK_REGISTER)?;
-    writer.u32(COMPLETED_TICK_REGISTER_LAYOUT_VERSION_V1)?;
+    writer.u32(COMPLETED_TICK_REGISTER_LAYOUT_VERSION)?;
     writer.u32(8)?;
     writer.extend(&completed_tick.to_be_bytes())?;
     let canonical_bytes = writer.finish();
     let digest = sha256_of(&canonical_bytes);
-    Ok(WorldRegisterSetV1 {
+    Ok(WorldRegisterSet {
         canonical_bytes,
         digest,
         completed_tick,
@@ -460,22 +458,22 @@ pub fn encode_world_register_set_v1(
 ///
 /// # Errors
 /// Returns a checked codec error.
-pub fn encode_stable_world_v1(
-    graph: &StableGraphStateV1,
-    registers: &WorldRegisterSetV1,
-) -> Result<StableWorldV1, ReplayTickIdentityError> {
+pub fn encode_stable_world(
+    graph: &StableGraphState,
+    registers: &WorldRegisterSet,
+) -> Result<StableWorld, ReplayTickIdentityError> {
     let mut writer = Writer::new("stable world");
     writer.extend(STABLE_WORLD_DOMAIN)?;
-    writer.u32(STABLE_WORLD_LAYOUT_VERSION_V1)?;
+    writer.u32(STABLE_WORLD_LAYOUT_VERSION)?;
     writer.push(0x01)?;
-    writer.u32(STABLE_GRAPH_STATE_LAYOUT_VERSION_V1)?;
+    writer.u32(STABLE_GRAPH_STATE_LAYOUT_VERSION)?;
     writer.extend(graph.digest().as_bytes())?;
     writer.push(0x02)?;
-    writer.u32(WORLD_REGISTER_SET_LAYOUT_VERSION_V1)?;
+    writer.u32(WORLD_REGISTER_SET_LAYOUT_VERSION)?;
     writer.extend(&registers.digest())?;
     let canonical_bytes = writer.finish();
-    let digest = StableWorldDigestV1::from_bytes(sha256_of(&canonical_bytes));
-    Ok(StableWorldV1 {
+    let digest = StableWorldDigest::from_bytes(sha256_of(&canonical_bytes));
+    Ok(StableWorld {
         canonical_bytes,
         digest,
     })
@@ -485,15 +483,15 @@ pub fn encode_stable_world_v1(
 ///
 /// # Errors
 /// Returns a rule-order, fired-total, nested BSL, or checked codec error.
-pub fn encode_tick_payload_v2(
+pub fn encode_tick_payload(
     expected_rule_order: &[String],
     outcomes: &[(String, usize)],
     reported_fired: usize,
-    committed_events: &[CommittedEventV2],
-    choice_receipts: &[ChoiceReceiptV1],
+    committed_events: &[CommittedEvent],
+    choice_receipts: &[ChoiceReceipt],
     audit_receipts: &[AuditReceipt],
-    resolver: &StableElementResolverV1,
-) -> Result<TickPayloadV2, ReplayTickIdentityError> {
+    resolver: &StableElementResolver,
+) -> Result<TickPayload, ReplayTickIdentityError> {
     encode_tick_payload_with_order(
         expected_rule_order.len(),
         expected_rule_order.iter().map(String::as_str),
@@ -508,15 +506,15 @@ pub fn encode_tick_payload_v2(
     )
 }
 
-pub(crate) fn encode_tick_payload_for_prepared_v2(
+pub(crate) fn encode_tick_payload_for_prepared(
     prepared: &PreparedRules,
     outcomes: &[(String, usize)],
     reported_fired: usize,
-    committed_events: &[CommittedEventV2],
-    choice_receipts: &[ChoiceReceiptV1],
+    committed_events: &[CommittedEvent],
+    choice_receipts: &[ChoiceReceipt],
     audit_receipts: &[AuditReceipt],
-    resolver: &StableElementResolverV1,
-) -> Result<TickPayloadV2, ReplayTickIdentityError> {
+    resolver: &StableElementResolver,
+) -> Result<TickPayload, ReplayTickIdentityError> {
     encode_tick_payload_with_order(
         prepared.rules.len(),
         prepared.rules.iter().map(|(rule_id, _)| rule_id.as_str()),
@@ -534,17 +532,17 @@ pub(crate) fn encode_tick_payload_for_prepared_v2(
 struct TickPayloadEvidence<'a> {
     outcomes: &'a [(String, usize)],
     reported_fired: usize,
-    committed_events: &'a [CommittedEventV2],
-    choice_receipts: &'a [ChoiceReceiptV1],
+    committed_events: &'a [CommittedEvent],
+    choice_receipts: &'a [ChoiceReceipt],
     audit_receipts: &'a [AuditReceipt],
-    resolver: &'a StableElementResolverV1,
+    resolver: &'a StableElementResolver,
 }
 
 fn encode_tick_payload_with_order<'a>(
     expected_len: usize,
     expected_rule_order: impl Iterator<Item = &'a str>,
     evidence: TickPayloadEvidence<'_>,
-) -> Result<TickPayloadV2, ReplayTickIdentityError> {
+) -> Result<TickPayload, ReplayTickIdentityError> {
     let TickPayloadEvidence {
         outcomes,
         reported_fired,
@@ -575,17 +573,16 @@ fn encode_tick_payload_with_order<'a>(
         .map_err(|actual| ReplayTickIdentityError::ChoiceReceiptOrder { actual })?;
     let sink_events = committed_events
         .iter()
-        .map(CommittedEventV2::sink_record)
+        .map(CommittedEvent::sink_record)
         .collect::<Vec<_>>();
-    let sections =
-        encode_tick_payload_sections_v1(outcomes, &sink_events, audit_receipts, resolver)?;
-    let event_section = encode_committed_event_section_v2(committed_events, sections.events())?;
-    let choice_receipt_section = encode_choice_receipt_section_v1(choice_receipts)?;
+    let sections = encode_tick_payload_sections(outcomes, &sink_events, audit_receipts, resolver)?;
+    let event_section = encode_committed_event_section(committed_events, sections.events())?;
+    let choice_receipt_section = encode_choice_receipt_section(choice_receipts)?;
     let event_section_digest = sha256_of(&event_section);
     let choice_receipt_section_digest = sha256_of(&choice_receipt_section);
     let mut writer = Writer::new("tick payload");
-    writer.extend(TICK_PAYLOAD_DOMAIN_V2)?;
-    writer.u32(TICK_PAYLOAD_LAYOUT_VERSION_V2)?;
+    writer.extend(TICK_PAYLOAD_DOMAIN)?;
+    writer.u32(TICK_PAYLOAD_LAYOUT_VERSION)?;
     for (tag, section) in [
         (0x01, sections.rule_outcomes()),
         (0x02, event_section.as_slice()),
@@ -597,8 +594,8 @@ fn encode_tick_payload_with_order<'a>(
         writer.extend(section)?;
     }
     let canonical_bytes = writer.finish();
-    let digest = TickPayloadDigestV1::from_bytes(sha256_of(&canonical_bytes));
-    Ok(TickPayloadV2 {
+    let digest = TickPayloadDigest::from_bytes(sha256_of(&canonical_bytes));
+    Ok(TickPayload {
         canonical_bytes,
         digest,
         event_section_digest,
@@ -606,9 +603,9 @@ fn encode_tick_payload_with_order<'a>(
     })
 }
 
-fn encode_committed_event_section_v2(
-    events: &[CommittedEventV2],
-    sink_section_v1: &[u8],
+fn encode_committed_event_section(
+    events: &[CommittedEvent],
+    sink_section: &[u8],
 ) -> Result<Vec<u8>, ReplayTickIdentityError> {
     let mut writer = Writer::new("committed event section");
     writer.count32("committed event count", events.len())?;
@@ -622,12 +619,12 @@ fn encode_committed_event_section_v2(
             }
         }
     }
-    writer.bytes32(sink_section_v1)?;
+    writer.bytes32(sink_section)?;
     Ok(writer.finish())
 }
 
-fn encode_choice_receipt_section_v1(
-    receipts: &[ChoiceReceiptV1],
+fn encode_choice_receipt_section(
+    receipts: &[ChoiceReceipt],
 ) -> Result<Vec<u8>, ReplayTickIdentityError> {
     let mut writer = Writer::new("choice receipt section");
     writer.count32("choice receipt count", receipts.len())?;
@@ -726,11 +723,11 @@ impl Writer {
             .len()
             .checked_add(value.len())
             .ok_or(ReplayTickIdentityError::CapacityOverflow { field: self.field })?;
-        if requested > MAX_IDENTITY_SECTION_BYTES_V1 {
+        if requested > MAX_IDENTITY_SECTION_BYTES {
             return Err(ReplayTickIdentityError::ByteLimit {
                 field: self.field,
                 actual: requested,
-                maximum: MAX_IDENTITY_SECTION_BYTES_V1,
+                maximum: MAX_IDENTITY_SECTION_BYTES,
             });
         }
         self.bytes
@@ -750,17 +747,17 @@ impl Writer {
 
 #[cfg(test)]
 mod tests {
-    use babylon_bsl::identity_sections::encode_prepared_bsl_sections_v1;
-    use babylon_bsl::rules_hash_of;
+    use babylon_bsl::canonical_ast::rules_hash_of;
+    use babylon_bsl::identity_sections::encode_prepared_bsl_sections;
     use babylon_graph::hypergraph_store::HypergraphStore;
     use babylon_graph::stable_element::{
-        StableElementResolverV1, STABLE_ELEMENT_RESOLVER_MANIFEST_LAYOUT_VERSION_V1,
+        StableElementResolver, STABLE_ELEMENT_RESOLVER_MANIFEST_LAYOUT_VERSION,
     };
-    use babylon_kernel::ContentDigest;
+    use babylon_kernel::content_digest::ContentDigest;
 
     use super::{
-        encode_prepared_environment_v1, world_register_manifest_v1, ReplayTickIdentityError,
-        PREPARED_ENVIRONMENT_LAYOUT_VERSION_V1, WORLD_REGISTER_MANIFEST_LAYOUT_VERSION_V1,
+        encode_prepared_environment, world_register_manifest, ReplayTickIdentityError,
+        PREPARED_ENVIRONMENT_LAYOUT_VERSION, WORLD_REGISTER_MANIFEST_LAYOUT_VERSION,
     };
     use crate::{phase_order, prepare_rules};
 
@@ -781,7 +778,7 @@ mod tests {
     fn prepared_environment_is_exact_and_recomputes_loaded_rules_hash() {
         let mut graph = HypergraphStore::new();
         let mut prepared = prepare_rules(SCENARIO, None, RULES, &mut graph).unwrap();
-        let resolver = StableElementResolverV1::seal(
+        let resolver = StableElementResolver::seal(
             &graph,
             &prepared.scenario_scope,
             &prepared.node_content_ids,
@@ -793,12 +790,12 @@ mod tests {
             defines_hash: [0x5a; 32],
             rules_hash,
         };
-        let registers = world_register_manifest_v1().unwrap();
+        let registers = world_register_manifest().unwrap();
         let environment =
-            encode_prepared_environment_v1(&content, &prepared, &resolver, &registers).unwrap();
+            encode_prepared_environment(&content, &prepared, &resolver, &registers).unwrap();
 
-        let schedule = phase_order::phase_schedule_v1().unwrap();
-        let bsl = encode_prepared_bsl_sections_v1(
+        let schedule = phase_order::phase_schedule().unwrap();
+        let bsl = encode_prepared_bsl_sections(
             &prepared.types,
             &prepared.intrinsics,
             &prepared.consts,
@@ -808,11 +805,11 @@ mod tests {
         .unwrap();
         let mut expected = Vec::new();
         expected.extend_from_slice(b"babylon.prepared-environment\0");
-        expected.extend_from_slice(&PREPARED_ENVIRONMENT_LAYOUT_VERSION_V1.to_be_bytes());
+        expected.extend_from_slice(&PREPARED_ENVIRONMENT_LAYOUT_VERSION.to_be_bytes());
         expected.push(0x01);
         expected.extend_from_slice(&rules_hash);
         expected.push(0x02);
-        expected.extend_from_slice(&phase_order::PhaseScheduleV1::layout_version().to_be_bytes());
+        expected.extend_from_slice(&phase_order::PhaseSchedule::layout_version().to_be_bytes());
         expected.extend_from_slice(&schedule.digest());
         expected.push(0x03);
         expected.extend_from_slice(&u32::try_from(prepared.rules.len()).unwrap().to_be_bytes());
@@ -830,18 +827,17 @@ mod tests {
             expected.extend_from_slice(section);
         }
         expected.push(0x09);
-        expected
-            .extend_from_slice(&STABLE_ELEMENT_RESOLVER_MANIFEST_LAYOUT_VERSION_V1.to_be_bytes());
+        expected.extend_from_slice(&STABLE_ELEMENT_RESOLVER_MANIFEST_LAYOUT_VERSION.to_be_bytes());
         expected.extend_from_slice(&resolver.manifest().digest());
         expected.push(0x0a);
-        expected.extend_from_slice(&WORLD_REGISTER_MANIFEST_LAYOUT_VERSION_V1.to_be_bytes());
+        expected.extend_from_slice(&WORLD_REGISTER_MANIFEST_LAYOUT_VERSION.to_be_bytes());
         expected.extend_from_slice(&registers.digest());
         assert_eq!(environment.canonical_bytes(), expected);
 
         let original = environment.digest();
         prepared.rules.reverse();
         let reordered =
-            encode_prepared_environment_v1(&content, &prepared, &resolver, &registers).unwrap();
+            encode_prepared_environment(&content, &prepared, &resolver, &registers).unwrap();
         assert_ne!(original, reordered.digest());
 
         let mismatch = ContentDigest {
@@ -849,7 +845,7 @@ mod tests {
             rules_hash: [0xa5; 32],
         };
         assert!(matches!(
-            encode_prepared_environment_v1(&mismatch, &prepared, &resolver, &registers),
+            encode_prepared_environment(&mismatch, &prepared, &resolver, &registers),
             Err(ReplayTickIdentityError::RulesHashMismatch { .. })
         ));
     }

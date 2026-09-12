@@ -1,7 +1,9 @@
 //! Authored input suppliers and route declarations in their captured order.
 //! Consumers retain their own endpoint visibility, aggregation, and labeling rules.
 
-use babylon_persistence::{ProductionRouteV2, ProductionSnapshotV2};
+use babylon_persistence::{
+    production_observation::ProductionRoute, production_observation::ProductionSnapshot,
+};
 
 pub(crate) struct MaterialRelationDeclaration<'a> {
     pub(crate) supplier: &'a str,
@@ -10,11 +12,11 @@ pub(crate) struct MaterialRelationDeclaration<'a> {
     pub(crate) unit_id: &'a str,
     pub(crate) good: &'a str,
     pub(crate) unit: &'a str,
-    pub(crate) route: Option<&'a ProductionRouteV2>,
+    pub(crate) route: Option<&'a ProductionRoute>,
 }
 
 pub(crate) fn declared_material_relations(
-    snapshot: &ProductionSnapshotV2,
+    snapshot: &ProductionSnapshot,
 ) -> impl Iterator<Item = MaterialRelationDeclaration<'_>> {
     let requirements = snapshot.sites.iter().flat_map(|buyer| {
         buyer.processes.iter().flat_map(move |process| {

@@ -1,13 +1,13 @@
 //! Ordered immutable publication proofs over real committed ticks.
 use super::*;
-use babylon_persistence::archive_revision::{ArchiveDossierPendingV2, ArchiveSearchStateV2};
-use babylon_persistence::ArchiveMaterializeModeV1;
+use babylon_persistence::archive_revision::{ArchiveDossierPending, ArchiveSearchState};
+use babylon_persistence::ArchiveMaterializeMode;
 
-fn stable_input(receipt: &PendingArchiveReceiptV1, question: &str) -> ArchivePageInputV1 {
+fn stable_input(receipt: &PendingArchiveReceipt, question: &str) -> ArchivePageInput {
     let original = stub_page_input(
-        &PendingArchiveReceiptV1::try_new(1, *receipt.tick_content_hash()).expect("stub identity"),
+        &PendingArchiveReceipt::try_new(1, *receipt.tick_content_hash()).expect("stub identity"),
     );
-    ArchivePageInputV1::try_new(
+    ArchivePageInput::try_new(
         original.subject().clone(),
         receipt.resolve_tick(),
         *receipt.tick_content_hash(),
@@ -17,12 +17,12 @@ fn stable_input(receipt: &PendingArchiveReceiptV1, question: &str) -> ArchivePag
     )
     .expect("exact stable subject emission")
 }
-fn batch_at(target: &LiveWorkerTarget, tick: u64, question: &str) -> ArchiveDirtyBatchV1 {
+fn batch_at(target: &LiveWorkerTarget, tick: u64, question: &str) -> ArchiveDirtyBatch {
     let scope = scope_at(&target.config, target.campaign_id, tick);
     let receipt =
-        PendingArchiveReceiptV1::try_new(tick, scope.tick_content_hash().expect("committed hash"))
+        PendingArchiveReceipt::try_new(tick, scope.tick_content_hash().expect("committed hash"))
             .expect("receipt");
-    ArchiveDirtyBatchV1::try_new(
+    ArchiveDirtyBatch::try_new(
         tick,
         *receipt.tick_content_hash(),
         vec![stable_input(&receipt, question)],
@@ -38,25 +38,17 @@ fn live_revision_refuses_later_tick_and_conflicting_stage_without_partial_public
         0x2200_0000_0000_0000_0000_0000_0000_00d1,
         2,
     );
-    let store = SemanticArchiveStoreV1::new(&target.config);
+    let store = SemanticArchiveStore::new(&target.config);
     let second = batch_at(&target, 2, "A");
     assert_eq!(
-        store.materialize_receipt(
-            target.campaign_id,
-            &second,
-            ArchiveMaterializeModeV1::Consume
-        ),
-        Err(SemanticArchiveErrorV1::ArchiveOrderViolation)
+        store.materialize_receipt(target.campaign_id, &second, ArchiveMaterializeMode::Consume),
+        Err(SemanticArchiveError::ArchiveOrderViolation)
     );
     let wrong =
-        ArchiveDirtyBatchV1::try_new(1, [0x71; 32], Vec::new()).expect("well formed wrong hash");
+        ArchiveDirtyBatch::try_new(1, [0x71; 32], Vec::new()).expect("well formed wrong hash");
     assert_eq!(
-        store.materialize_receipt(
-            target.campaign_id,
-            &wrong,
-            ArchiveMaterializeModeV1::Consume
-        ),
-        Err(SemanticArchiveErrorV1::ReceiptMismatch)
+        store.materialize_receipt(target.campaign_id, &wrong, ArchiveMaterializeMode::Consume),
+        Err(SemanticArchiveError::ReceiptMismatch)
     );
     assert_eq!(archive_page_count(&target.config, target.campaign_id), 0);
     let pins: i64 = target
@@ -75,15 +67,15 @@ fn live_revision_refuses_later_tick_and_conflicting_stage_without_partial_public
     );
     let first = batch_at(&target, 1, "A");
     store
-        .materialize_receipt(target.campaign_id, &first, ArchiveMaterializeModeV1::Stage)
+        .materialize_receipt(target.campaign_id, &first, ArchiveMaterializeMode::Stage)
         .expect("stage first page");
     assert_eq!(
         store.materialize_receipt(
             target.campaign_id,
             &batch_at(&target, 1, "B"),
-            ArchiveMaterializeModeV1::Stage
+            ArchiveMaterializeMode::Stage
         ),
-        Err(SemanticArchiveErrorV1::ReceiptConflict)
+        Err(SemanticArchiveError::ReceiptConflict)
     );
     assert_eq!(archive_page_count(&target.config, target.campaign_id), 1);
     assert_eq!(
@@ -91,18 +83,10 @@ fn live_revision_refuses_later_tick_and_conflicting_stage_without_partial_public
         0
     );
     store
-        .materialize_receipt(
-            target.campaign_id,
-            &first,
-            ArchiveMaterializeModeV1::Consume,
-        )
+        .materialize_receipt(target.campaign_id, &first, ArchiveMaterializeMode::Consume)
         .expect("exact retry consumes");
     store
-        .materialize_receipt(
-            target.campaign_id,
-            &second,
-            ArchiveMaterializeModeV1::Consume,
-        )
+        .materialize_receipt(target.campaign_id, &second, ArchiveMaterializeMode::Consume)
         .expect("later publication now eligible");
     assert_eq!(
         archive_page_count(&target.config, target.campaign_id),
@@ -113,14 +97,14 @@ fn live_revision_refuses_later_tick_and_conflicting_stage_without_partial_public
 }
 
 fn grant_subject_only(target: &LiveWorkerTarget) {
-    SemanticArchiveStoreV1::new(&target.config)
+    SemanticArchiveStore::new(&target.config)
         .grant_knowledge(
             target.campaign_id,
-            &ArchiveKnowledgeGrantV1::try_new(
+            &ArchiveKnowledgeGrant::try_new(
                 stub_subject_spec(1).page_ref,
                 "subject".to_owned(),
                 1,
-                ArchiveCitationV1::try_new("late-grant-proof".to_owned(), "subject".to_owned())
+                ArchiveCitation::try_new("late-grant-proof".to_owned(), "subject".to_owned())
                     .expect("citation"),
             )
             .expect("grant"),
@@ -134,12 +118,12 @@ fn assert_late_grant_pending(target: &LiveWorkerTarget) {
             .dossier_as_of(
                 &scope,
                 &stub_subject_spec(1).page_ref,
-                &ArchiveDossierBoundsV2::default(),
+                &ArchiveDossierBounds::default(),
             )
             .expect("late grant scoped read");
-        let ArchiveDossierStateV2::Pending {
+        let ArchiveDossierState::Pending {
             page: Some(page),
-            reason: ArchiveDossierPendingV2::KnowledgeRefresh,
+            reason: ArchiveDossierPending::KnowledgeRefresh,
         } = read.state
         else {
             panic!("tail knowledge refresh stays pending");
@@ -151,7 +135,7 @@ fn assert_late_grant_pending(target: &LiveWorkerTarget) {
             .expect("late grant search");
         assert_eq!(
             search.state,
-            ArchiveSearchStateV2::Pending(ArchiveDossierPendingV2::KnowledgeRefresh)
+            ArchiveSearchState::Pending(ArchiveDossierPending::KnowledgeRefresh)
         );
         assert!(search.hits.is_empty());
     });
@@ -166,37 +150,36 @@ fn live_late_grant_stays_pending_at_tail_and_never_rewrites_old_tick() {
         &[],
     );
     grant_subject_only(&target);
-    let store = SemanticArchiveStoreV1::new(&target.config);
+    let store = SemanticArchiveStore::new(&target.config);
     let first = batch_at(&target, 1, "Which work should be examined?");
     store
-        .materialize_receipt(target.campaign_id, &first, ArchiveMaterializeModeV1::Stage)
+        .materialize_receipt(target.campaign_id, &first, ArchiveMaterializeMode::Stage)
         .expect("first pin with no field grant");
     store
         .grant_knowledge(
             target.campaign_id,
-            &ArchiveKnowledgeGrantV1::try_new(
+            &ArchiveKnowledgeGrant::try_new(
                 stub_subject_spec(1).page_ref,
                 "employment".to_owned(),
                 1,
-                ArchiveCitationV1::try_new("late-grant-proof".to_owned(), "field".to_owned())
+                ArchiveCitation::try_new("late-grant-proof".to_owned(), "field".to_owned())
                     .expect("citation"),
             )
             .expect("grant"),
         )
         .expect("late field arrives");
     store
-        .materialize_receipt(
-            target.campaign_id,
-            &first,
-            ArchiveMaterializeModeV1::Consume,
-        )
+        .materialize_receipt(target.campaign_id, &first, ArchiveMaterializeMode::Consume)
         .expect("same pinned emission consumes");
     assert_late_grant_pending(&target);
-    let mut runtime =
-        DurableReplayRuntimeV2::<HypergraphStore>::open(&target.config, target.campaign_id)
-            .expect("resume actual runtime");
-    let actions = OrderedPracticeActionBatchV1::empty(
-        runtime.foundation().replay_session_identity().clone(),
+    let mut runtime = DurableMaterialRuntime::open(
+        &target.config,
+        target.campaign_id,
+        current_material::foundation().digest(),
+    )
+    .expect("resume actual runtime");
+    let actions = OrderedPracticeActionBatch::empty(
+        runtime.session().graph_session().session_identity().clone(),
         2,
     )
     .expect("next exact action batch");
@@ -208,7 +191,7 @@ fn live_late_grant_stays_pending_at_tail_and_never_rewrites_old_tick() {
         .materialize_receipt(
             target.campaign_id,
             &batch_at(&target, 2, "Which work should be examined?"),
-            ArchiveMaterializeModeV1::Consume,
+            ArchiveMaterializeMode::Consume,
         )
         .expect("next eligible receipt admits field");
     with_reader(&target.config, |reader| {
@@ -217,10 +200,10 @@ fn live_late_grant_stays_pending_at_tail_and_never_rewrites_old_tick() {
             .dossier_as_of(
                 &scope_at(&target.config, target.campaign_id, 1),
                 &subject,
-                &ArchiveDossierBoundsV2::default(),
+                &ArchiveDossierBounds::default(),
             )
             .expect("historical pinned observation");
-        let ArchiveDossierStateV2::Ready { page: old, .. } = older.state else {
+        let ArchiveDossierState::Ready { page: old, .. } = older.state else {
             panic!("old tick does not remain invalidated by later grant");
         };
         assert!(old.signals.is_empty());
@@ -229,10 +212,10 @@ fn live_late_grant_stays_pending_at_tail_and_never_rewrites_old_tick() {
             .dossier_as_of(
                 &scope_at(&target.config, target.campaign_id, 2),
                 &subject,
-                &ArchiveDossierBoundsV2::default(),
+                &ArchiveDossierBounds::default(),
             )
             .expect("new pinned observation");
-        let ArchiveDossierStateV2::Ready { page: new, .. } = current.state else {
+        let ArchiveDossierState::Ready { page: new, .. } = current.state else {
             panic!("new tick ready");
         };
         assert_eq!(new.signals.len(), 1);
@@ -260,8 +243,8 @@ fn live_archive_verifier_refuses_missing_current_schema_without_repair() {
         .batch_execute("DROP TABLE babylon_meta.current_schema")
         .expect("remove only the owned scratch current schema marker");
     assert!(matches!(
-        SemanticArchiveStoreV1::new(&target.config).verify_schema(),
-        Err(SemanticArchiveErrorV1::CurrentSchema(_))
+        SemanticArchiveStore::new(&target.config).verify_schema(),
+        Err(SemanticArchiveError::CurrentSchema(_))
     ));
     assert_eq!(scope_at(&target.config, target.campaign_id, 1), scope);
     let absent: bool = admin

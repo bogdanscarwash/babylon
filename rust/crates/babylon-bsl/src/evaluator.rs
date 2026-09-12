@@ -20,7 +20,7 @@
 //! - **§4.3**: binary64 ops are the IEEE-754 basic set; `Int` overflow is
 //!   `E-EVAL-011`; binary64 division by zero is `E-EVAL-012`; a non-finite
 //!   result is `E-EVAL-014` — never representable. Currency follows the
-//!   §3.2 operator table via `babylon_kernel::Currency`'s pinned operators
+//!   §3.2 operator table via `babylon_kernel::currency::Currency`'s pinned operators
 //!   (the panic preconditions checked here first, so a rule failure is a
 //!   structured tick-abort, not a process abort).
 //! - **§4.5**: each AST node charges its **base** cost when it is evaluated
@@ -43,9 +43,9 @@ use crate::query::{EdgeKey, Element};
 use crate::reader::{Atom, SExpr, ScaledKind};
 use crate::typecheck::TypeEnv;
 use crate::types::{BslType, EnumRegistry};
-use babylon_graph::stable_element::{StableElementKeyV1, StableElementResolverV1};
+use babylon_graph::stable_element::{StableElementKey, StableElementResolver};
 use babylon_graph::substrate::GraphSubstrate;
-use babylon_kernel::{Coefficient, Currency, Ratio};
+use babylon_kernel::{currency::Currency, scalars::Coefficient, scalars::Ratio};
 use std::collections::HashMap;
 
 /// A runtime BSL value. The static type system (§3.1) is finer than this —
@@ -1709,8 +1709,8 @@ fn build_intrinsic_call_ctx<'a>(env: &EvalEnv<'a>) -> Result<IntrinsicCallCtx<'a
 
 fn stable_element_key(
     element: &Element,
-    resolver: &StableElementResolverV1,
-) -> Result<StableElementKeyV1, EvalError> {
+    resolver: &StableElementResolver,
+) -> Result<StableElementKey, EvalError> {
     let result = match element {
         Element::Node(node) => resolver.node_key(*node).cloned(),
         Element::Hyperedge(hyperedge) => resolver.hyperedge_key(*hyperedge).cloned(),

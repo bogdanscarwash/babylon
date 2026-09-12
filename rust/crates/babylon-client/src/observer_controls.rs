@@ -307,7 +307,7 @@ pub(crate) fn turn_presentation(state: &ObserverSession) -> TurnPresentation {
 mod tests {
     use super::*;
     use crate::observer::Perspective;
-    use babylon_persistence::CampaignId;
+    use babylon_persistence::identity::CampaignId;
 
     fn ready(tick: u64) -> ObserverSession {
         let mut state = ObserverSession::new(CampaignId::from_uuid(uuid::Uuid::from_u128(1)));

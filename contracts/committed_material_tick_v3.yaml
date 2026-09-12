@@ -57,7 +57,7 @@ receipts:
       meaning: local_internal_transfer
   ordering:
     families: Tags 1 through 9 appear exactly once in declared order, including empty families.
-    original_families: Preserve deterministic encounter order from advance_material_circuit_v3.
+    original_families: Preserve deterministic encounter order from babylon_material_circuit::advance_material_circuit.
     handling: Strict increasing unique site_id_and_tagged_outbound_order.
     local_fulfillment: Strict increasing unique order_id.
     local_transfer: Strict increasing unique order_id.

@@ -7,16 +7,16 @@ use crate::inventory::{
     InventoryLedger,
 };
 use crate::transition::has_duplicate;
-use crate::MaterialCircuitStateV3;
+use crate::MaterialCircuitState;
 use crate::{
-    MaterialCircuitErrorV3, ProcessIdV1, ProductionReceiptV1, SiteIdV1, UnitIdV1,
-    MAX_MATERIAL_CIRCUIT_ROWS_V1, MAX_PRODUCTION_RESOURCE_GROUPS_V1,
+    MaterialCircuitError, ProcessId, ProductionReceipt, SiteId, UnitId, MAX_MATERIAL_CIRCUIT_ROWS,
+    MAX_PRODUCTION_RESOURCE_GROUPS,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 enum ProductionResourceKey {
     Input(InventoryKey),
-    Labor(SiteIdV1, UnitIdV1),
+    Labor(SiteId, UnitId),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -34,16 +34,16 @@ enum ProductionResources {
 
 /// Complete process demand before labor capacity constrains next-period planning.
 pub(crate) struct ProcessLaborRequest {
-    pub(crate) process_id: ProcessIdV1,
-    pub(crate) site_id: SiteIdV1,
-    pub(crate) unit_id: UnitIdV1,
+    pub(crate) process_id: ProcessId,
+    pub(crate) site_id: SiteId,
+    pub(crate) unit_id: UnitId,
     pub(crate) hours: u64,
 }
 
 fn process_output(
-    state: &MaterialCircuitStateV3,
-    process: ProcessIdV1,
-) -> Option<&crate::ProcessOutputV1> {
+    state: &MaterialCircuitState,
+    process: ProcessId,
+) -> Option<&crate::ProcessOutput> {
     state
         .process_outputs
         .binary_search_by_key(&process, |row| row.process_id)
@@ -52,9 +52,9 @@ fn process_output(
 }
 
 fn labor_coefficient(
-    state: &MaterialCircuitStateV3,
-    process: ProcessIdV1,
-) -> Option<&crate::LaborCoefficientV1> {
+    state: &MaterialCircuitState,
+    process: ProcessId,
+) -> Option<&crate::LaborCoefficient> {
     state
         .labor_coefficients
         .binary_search_by_key(&process, |row| row.process_id)
@@ -63,9 +63,9 @@ fn labor_coefficient(
 }
 
 fn input_coefficients(
-    state: &MaterialCircuitStateV3,
-    process: ProcessIdV1,
-) -> &[crate::InputOutputCoefficientV1] {
+    state: &MaterialCircuitState,
+    process: ProcessId,
+) -> &[crate::InputOutputCoefficient] {
     let start = state
         .input_coefficients
         .partition_point(|row| row.process_id < process);
@@ -76,8 +76,8 @@ fn input_coefficients(
 }
 
 pub(crate) fn validate_unique_rows(
-    state: &MaterialCircuitStateV3,
-) -> Result<(), MaterialCircuitErrorV3> {
+    state: &MaterialCircuitState,
+) -> Result<(), MaterialCircuitError> {
     let duplicate = has_duplicate(&state.process_outputs, |row| row.process_id)
         || has_duplicate(&state.input_coefficients, |row| {
             (row.process_id, row.good_id, row.unit_id)
@@ -94,102 +94,94 @@ pub(crate) fn validate_unique_rows(
             (row.period, row.site_id, row.process_id)
         });
     if duplicate {
-        return Err(MaterialCircuitErrorV3::DuplicateRow);
+        return Err(MaterialCircuitError::DuplicateRow);
     }
     Ok(())
 }
 
-pub(crate) fn validate_processes(
-    state: &MaterialCircuitStateV3,
-) -> Result<(), MaterialCircuitErrorV3> {
+pub(crate) fn validate_processes(state: &MaterialCircuitState) -> Result<(), MaterialCircuitError> {
     let process_ids: BTreeSet<_> = state
         .process_outputs
         .iter()
-        .take(MAX_MATERIAL_CIRCUIT_ROWS_V1 + 1)
+        .take(MAX_MATERIAL_CIRCUIT_ROWS + 1)
         .map(|row| row.process_id)
         .collect();
     for row in state
         .process_outputs
         .iter()
-        .take(MAX_MATERIAL_CIRCUIT_ROWS_V1 + 1)
+        .take(MAX_MATERIAL_CIRCUIT_ROWS + 1)
     {
         if row.quantity_per_batch == 0 {
-            return Err(MaterialCircuitErrorV3::ZeroQuantity);
+            return Err(MaterialCircuitError::ZeroQuantity);
         }
     }
     for row in state
         .input_coefficients
         .iter()
-        .take(MAX_MATERIAL_CIRCUIT_ROWS_V1 + 1)
+        .take(MAX_MATERIAL_CIRCUIT_ROWS + 1)
     {
         if row.quantity_per_batch == 0 || !process_ids.contains(&row.process_id) {
-            return Err(MaterialCircuitErrorV3::ProcessInvariant);
+            return Err(MaterialCircuitError::ProcessInvariant);
         }
     }
     for row in state
         .labor_coefficients
         .iter()
-        .take(MAX_MATERIAL_CIRCUIT_ROWS_V1 + 1)
+        .take(MAX_MATERIAL_CIRCUIT_ROWS + 1)
     {
         if row.quantity_per_batch == 0 || !process_ids.contains(&row.process_id) {
-            return Err(MaterialCircuitErrorV3::ProcessInvariant);
+            return Err(MaterialCircuitError::ProcessInvariant);
         }
     }
     if state.process_outputs.len() != state.labor_coefficients.len() {
-        return Err(MaterialCircuitErrorV3::ProcessInvariant);
+        return Err(MaterialCircuitError::ProcessInvariant);
     }
-    for row in state
-        .capacities
-        .iter()
-        .take(MAX_MATERIAL_CIRCUIT_ROWS_V1 + 1)
-    {
+    for row in state.capacities.iter().take(MAX_MATERIAL_CIRCUIT_ROWS + 1) {
         let output = process_output(state, row.process_id);
         if output.is_none_or(|output| output.site_id != row.site_id) {
-            return Err(MaterialCircuitErrorV3::ProcessInvariant);
+            return Err(MaterialCircuitError::ProcessInvariant);
         }
     }
     for row in state
         .production_commitments
         .iter()
-        .take(MAX_MATERIAL_CIRCUIT_ROWS_V1 + 1)
+        .take(MAX_MATERIAL_CIRCUIT_ROWS + 1)
     {
         let output = process_output(state, row.process_id);
         if output.is_none_or(|output| output.site_id != row.site_id) {
-            return Err(MaterialCircuitErrorV3::ProcessInvariant);
+            return Err(MaterialCircuitError::ProcessInvariant);
         }
     }
     Ok(())
 }
 
-pub(crate) fn validate_periods(
-    state: &MaterialCircuitStateV3,
-) -> Result<(), MaterialCircuitErrorV3> {
+pub(crate) fn validate_periods(state: &MaterialCircuitState) -> Result<(), MaterialCircuitError> {
     if state.period == 0
         || state
             .production_commitments
             .iter()
-            .take(MAX_MATERIAL_CIRCUIT_ROWS_V1 + 1)
+            .take(MAX_MATERIAL_CIRCUIT_ROWS + 1)
             .any(|row| row.period != state.period || row.planned_batches == 0)
         || state
             .capacities
             .iter()
-            .take(MAX_MATERIAL_CIRCUIT_ROWS_V1 + 1)
+            .take(MAX_MATERIAL_CIRCUIT_ROWS + 1)
             .any(|row| row.period < state.period)
         || state
             .labor
             .iter()
-            .take(MAX_MATERIAL_CIRCUIT_ROWS_V1 + 1)
+            .take(MAX_MATERIAL_CIRCUIT_ROWS + 1)
             .any(|row| row.period < state.period)
     {
-        return Err(MaterialCircuitErrorV3::PeriodInvariant);
+        return Err(MaterialCircuitError::PeriodInvariant);
     }
     Ok(())
 }
 
 fn process_capacity(
-    state: &MaterialCircuitStateV3,
-    process: ProcessIdV1,
-    site: SiteIdV1,
+    state: &MaterialCircuitState,
+    process: ProcessId,
+    site: SiteId,
     period: u64,
 ) -> u64 {
     state
@@ -202,9 +194,9 @@ fn process_capacity(
 }
 
 fn labor_capacity_index(
-    state: &MaterialCircuitStateV3,
-    site: SiteIdV1,
-    unit: UnitIdV1,
+    state: &MaterialCircuitState,
+    site: SiteId,
+    unit: UnitId,
     period: u64,
 ) -> Option<usize> {
     state
@@ -216,16 +208,16 @@ fn labor_capacity_index(
 }
 
 fn initial_production_allocations(
-    state: &MaterialCircuitStateV3,
-    commitments: &[crate::ProductionCommitmentV1],
+    state: &MaterialCircuitState,
+    commitments: &[crate::ProductionCommitment],
     period: u64,
-) -> Result<Vec<u64>, MaterialCircuitErrorV3> {
+) -> Result<Vec<u64>, MaterialCircuitError> {
     let mut allocations = Vec::with_capacity(commitments.len());
-    for commitment in commitments.iter().take(MAX_MATERIAL_CIRCUIT_ROWS_V1 + 1) {
+    for commitment in commitments.iter().take(MAX_MATERIAL_CIRCUIT_ROWS + 1) {
         let output = process_output(state, commitment.process_id)
-            .ok_or(MaterialCircuitErrorV3::ProcessInvariant)?;
+            .ok_or(MaterialCircuitError::ProcessInvariant)?;
         if output.site_id != commitment.site_id || commitment.period != period {
-            return Err(MaterialCircuitErrorV3::ProcessInvariant);
+            return Err(MaterialCircuitError::ProcessInvariant);
         }
         allocations.push(commitment.planned_batches.min(process_capacity(
             state,
@@ -243,10 +235,10 @@ fn add_production_request(
     commitment_index: usize,
     quantity_per_batch: u64,
     batches: u64,
-) -> Result<(), MaterialCircuitErrorV3> {
+) -> Result<(), MaterialCircuitError> {
     let requested = u128::from(quantity_per_batch)
         .checked_mul(u128::from(batches))
-        .ok_or(MaterialCircuitErrorV3::Arithmetic)?;
+        .ok_or(MaterialCircuitError::Arithmetic)?;
     groups
         .entry(key)
         .or_default()
@@ -259,20 +251,19 @@ fn add_production_request(
 }
 
 fn production_resource_groups(
-    state: &MaterialCircuitStateV3,
-    commitments: &[crate::ProductionCommitmentV1],
+    state: &MaterialCircuitState,
+    commitments: &[crate::ProductionCommitment],
     allocations: &[u64],
     resources: ProductionResources,
-) -> Result<BTreeMap<ProductionResourceKey, Vec<ProductionResourceRequest>>, MaterialCircuitErrorV3>
-{
+) -> Result<BTreeMap<ProductionResourceKey, Vec<ProductionResourceRequest>>, MaterialCircuitError> {
     let mut groups = BTreeMap::new();
     for (index, commitment) in commitments
         .iter()
         .enumerate()
-        .take(MAX_MATERIAL_CIRCUIT_ROWS_V1 + 1)
+        .take(MAX_MATERIAL_CIRCUIT_ROWS + 1)
     {
         let labor = labor_coefficient(state, commitment.process_id)
-            .ok_or(MaterialCircuitErrorV3::ProcessInvariant)?;
+            .ok_or(MaterialCircuitError::ProcessInvariant)?;
         if matches!(resources, ProductionResources::InputsAndLabor) {
             add_production_request(
                 &mut groups,
@@ -284,7 +275,7 @@ fn production_resource_groups(
         }
         for input in input_coefficients(state, commitment.process_id)
             .iter()
-            .take(MAX_MATERIAL_CIRCUIT_ROWS_V1 + 1)
+            .take(MAX_MATERIAL_CIRCUIT_ROWS + 1)
         {
             add_production_request(
                 &mut groups,
@@ -299,7 +290,7 @@ fn production_resource_groups(
 }
 
 fn production_resource_available(
-    state: &MaterialCircuitStateV3,
+    state: &MaterialCircuitState,
     inventory: &InventoryLedger,
     key: ProductionResourceKey,
     period: u64,
@@ -332,9 +323,9 @@ pub(crate) fn proportional_floor(
     available: u64,
     requested: u128,
     total: u128,
-) -> Result<u64, MaterialCircuitErrorV3> {
+) -> Result<u64, MaterialCircuitError> {
     if total == 0 || requested > total {
-        return Err(MaterialCircuitErrorV3::Arithmetic);
+        return Err(MaterialCircuitError::Arithmetic);
     }
     let target = wide_product(available, requested);
     let mut quotient = 0_u64;
@@ -348,25 +339,25 @@ pub(crate) fn proportional_floor(
 }
 
 fn apply_production_resource_limits(
-    state: &MaterialCircuitStateV3,
+    state: &MaterialCircuitState,
     inventory: &InventoryLedger,
     period: u64,
     groups: &BTreeMap<ProductionResourceKey, Vec<ProductionResourceRequest>>,
     allocations: &mut [u64],
-) -> Result<(), MaterialCircuitErrorV3> {
-    if groups.len() > MAX_PRODUCTION_RESOURCE_GROUPS_V1 {
-        return Err(MaterialCircuitErrorV3::RowLimit);
+) -> Result<(), MaterialCircuitError> {
+    if groups.len() > MAX_PRODUCTION_RESOURCE_GROUPS {
+        return Err(MaterialCircuitError::RowLimit);
     }
-    for (key, requests) in groups.iter().take(MAX_PRODUCTION_RESOURCE_GROUPS_V1) {
+    for (key, requests) in groups.iter().take(MAX_PRODUCTION_RESOURCE_GROUPS) {
         let total = requests
             .iter()
-            .take(MAX_MATERIAL_CIRCUIT_ROWS_V1 + 1)
+            .take(MAX_MATERIAL_CIRCUIT_ROWS + 1)
             .try_fold(0_u128, |sum, request| {
                 sum.checked_add(request.requested)
-                    .ok_or(MaterialCircuitErrorV3::Arithmetic)
+                    .ok_or(MaterialCircuitError::Arithmetic)
             })?;
         let available = production_resource_available(state, inventory, *key, period);
-        for request in requests.iter().take(MAX_MATERIAL_CIRCUIT_ROWS_V1 + 1) {
+        for request in requests.iter().take(MAX_MATERIAL_CIRCUIT_ROWS + 1) {
             let granted_units = if u128::from(available) >= total {
                 request.requested
             } else {
@@ -374,7 +365,7 @@ fn apply_production_resource_limits(
             };
             let granted_batches = granted_units / u128::from(request.quantity_per_batch);
             let granted_batches =
-                u64::try_from(granted_batches).map_err(|_| MaterialCircuitErrorV3::Arithmetic)?;
+                u64::try_from(granted_batches).map_err(|_| MaterialCircuitError::Arithmetic)?;
             allocations[request.commitment_index] =
                 allocations[request.commitment_index].min(granted_batches);
         }
@@ -383,12 +374,12 @@ fn apply_production_resource_limits(
 }
 
 fn allocate_production_batches(
-    state: &MaterialCircuitStateV3,
+    state: &MaterialCircuitState,
     inventory: &InventoryLedger,
-    commitments: &[crate::ProductionCommitmentV1],
+    commitments: &[crate::ProductionCommitment],
     period: u64,
     resources: ProductionResources,
-) -> Result<Vec<u64>, MaterialCircuitErrorV3> {
+) -> Result<Vec<u64>, MaterialCircuitError> {
     let mut allocations = initial_production_allocations(state, commitments, period)?;
     let groups = production_resource_groups(state, commitments, &allocations, resources)?;
     apply_production_resource_limits(state, inventory, period, &groups, &mut allocations)?;
@@ -396,10 +387,10 @@ fn allocate_production_batches(
 }
 
 fn execute_production(
-    state: &mut MaterialCircuitStateV3,
+    state: &mut MaterialCircuitState,
     inventory: &mut InventoryLedger,
-    receipts: &mut Vec<ProductionReceiptV1>,
-) -> Result<(), MaterialCircuitErrorV3> {
+    receipts: &mut Vec<ProductionReceipt>,
+) -> Result<(), MaterialCircuitError> {
     let commitments = std::mem::take(&mut state.production_commitments);
     let allocations = allocate_production_batches(
         state,
@@ -412,9 +403,9 @@ fn execute_production(
     credit_production_allocations(state, inventory, commitments, &allocations, receipts)
 }
 
-pub(crate) fn execute_shared_production_v1(
-    state: &mut MaterialCircuitStateV3,
-) -> Result<Vec<ProductionReceiptV1>, MaterialCircuitErrorV3> {
+pub(crate) fn execute_shared_production(
+    state: &mut MaterialCircuitState,
+) -> Result<Vec<ProductionReceipt>, MaterialCircuitError> {
     let mut inventory = take_inventory(state);
     let mut receipts = Vec::new();
     execute_production(state, &mut inventory, &mut receipts)?;
@@ -423,15 +414,15 @@ pub(crate) fn execute_shared_production_v1(
 }
 
 fn debit_production_allocations(
-    state: &mut MaterialCircuitStateV3,
+    state: &mut MaterialCircuitState,
     inventory: &mut InventoryLedger,
-    commitments: &[crate::ProductionCommitmentV1],
+    commitments: &[crate::ProductionCommitment],
     allocations: &[u64],
-) -> Result<(), MaterialCircuitErrorV3> {
+) -> Result<(), MaterialCircuitError> {
     for (index, commitment) in commitments
         .iter()
         .enumerate()
-        .take(MAX_MATERIAL_CIRCUIT_ROWS_V1 + 1)
+        .take(MAX_MATERIAL_CIRCUIT_ROWS + 1)
     {
         consume_production_inputs(
             state,
@@ -445,31 +436,31 @@ fn debit_production_allocations(
 }
 
 fn credit_production_allocations(
-    state: &mut MaterialCircuitStateV3,
+    state: &mut MaterialCircuitState,
     inventory: &mut InventoryLedger,
-    commitments: Vec<crate::ProductionCommitmentV1>,
+    commitments: Vec<crate::ProductionCommitment>,
     allocations: &[u64],
-    receipts: &mut Vec<ProductionReceiptV1>,
-) -> Result<(), MaterialCircuitErrorV3> {
+    receipts: &mut Vec<ProductionReceipt>,
+) -> Result<(), MaterialCircuitError> {
     for (index, commitment) in commitments
         .into_iter()
         .enumerate()
-        .take(MAX_MATERIAL_CIRCUIT_ROWS_V1 + 1)
+        .take(MAX_MATERIAL_CIRCUIT_ROWS + 1)
     {
         let output = process_output(state, commitment.process_id)
             .cloned()
-            .ok_or(MaterialCircuitErrorV3::ProcessInvariant)?;
+            .ok_or(MaterialCircuitError::ProcessInvariant)?;
         let batches = allocations[index];
         let produced = output
             .quantity_per_batch
             .checked_mul(batches)
-            .ok_or(MaterialCircuitErrorV3::Arithmetic)?;
+            .ok_or(MaterialCircuitError::Arithmetic)?;
         credit_inventory(
             inventory,
             (output.site_id, output.good_id, output.unit_id),
             produced,
         )?;
-        receipts.push(ProductionReceiptV1 {
+        receipts.push(ProductionReceipt {
             process_id: commitment.process_id,
             site_id: commitment.site_id,
             planned_batches: commitment.planned_batches,
@@ -480,58 +471,56 @@ fn credit_production_allocations(
 }
 
 fn consume_production_inputs(
-    state: &mut MaterialCircuitStateV3,
+    state: &mut MaterialCircuitState,
     inventory: &mut InventoryLedger,
-    process: ProcessIdV1,
-    site: SiteIdV1,
+    process: ProcessId,
+    site: SiteId,
     batches: u64,
-) -> Result<(), MaterialCircuitErrorV3> {
+) -> Result<(), MaterialCircuitError> {
     if batches == 0 {
         return Ok(());
     }
     let inputs: Vec<_> = input_coefficients(state, process)
         .iter()
-        .take(MAX_MATERIAL_CIRCUIT_ROWS_V1 + 1)
+        .take(MAX_MATERIAL_CIRCUIT_ROWS + 1)
         .map(|row| (row.good_id, row.unit_id, row.quantity_per_batch))
         .collect();
-    for (good, unit, quantity_per_batch) in
-        inputs.into_iter().take(MAX_MATERIAL_CIRCUIT_ROWS_V1 + 1)
-    {
+    for (good, unit, quantity_per_batch) in inputs.into_iter().take(MAX_MATERIAL_CIRCUIT_ROWS + 1) {
         let quantity = quantity_per_batch
             .checked_mul(batches)
-            .ok_or(MaterialCircuitErrorV3::Arithmetic)?;
+            .ok_or(MaterialCircuitError::Arithmetic)?;
         debit_inventory(
             inventory,
             (site, good, unit),
             quantity,
-            MaterialCircuitErrorV3::ProcessInvariant,
+            MaterialCircuitError::ProcessInvariant,
         )?;
     }
     let labor = labor_coefficient(state, process)
         .cloned()
-        .ok_or(MaterialCircuitErrorV3::ProcessInvariant)?;
+        .ok_or(MaterialCircuitError::ProcessInvariant)?;
     let labor_used = labor
         .quantity_per_batch
         .checked_mul(batches)
-        .ok_or(MaterialCircuitErrorV3::Arithmetic)?;
+        .ok_or(MaterialCircuitError::Arithmetic)?;
     let index = labor_capacity_index(state, site, labor.unit_id, state.period)
-        .ok_or(MaterialCircuitErrorV3::ProcessInvariant)?;
+        .ok_or(MaterialCircuitError::ProcessInvariant)?;
     state.labor[index].available = state.labor[index]
         .available
         .checked_sub(labor_used)
-        .ok_or(MaterialCircuitErrorV3::Arithmetic)?;
+        .ok_or(MaterialCircuitError::Arithmetic)?;
     Ok(())
 }
 
 fn next_period_candidates(
-    state: &MaterialCircuitStateV3,
+    state: &MaterialCircuitState,
     next_period: u64,
-) -> Vec<crate::ProductionCommitmentV1> {
+) -> Vec<crate::ProductionCommitment> {
     state
         .process_outputs
         .iter()
-        .take(MAX_MATERIAL_CIRCUIT_ROWS_V1 + 1)
-        .map(|output| crate::ProductionCommitmentV1 {
+        .take(MAX_MATERIAL_CIRCUIT_ROWS + 1)
+        .map(|output| crate::ProductionCommitment {
             process_id: output.process_id,
             site_id: output.site_id,
             period: next_period,
@@ -546,10 +535,10 @@ fn next_period_candidates(
 }
 
 fn derive_next_period_production(
-    state: &mut MaterialCircuitStateV3,
+    state: &mut MaterialCircuitState,
     inventory: &InventoryLedger,
     next_period: u64,
-) -> Result<(), MaterialCircuitErrorV3> {
+) -> Result<(), MaterialCircuitError> {
     let candidates = next_period_candidates(state, next_period);
     let allocations = allocate_production_batches(
         state,
@@ -561,13 +550,13 @@ fn derive_next_period_production(
     for (index, candidate) in candidates
         .into_iter()
         .enumerate()
-        .take(MAX_MATERIAL_CIRCUIT_ROWS_V1 + 1)
+        .take(MAX_MATERIAL_CIRCUIT_ROWS + 1)
     {
         let batches = allocations[index];
         if batches > 0 {
             state
                 .production_commitments
-                .push(crate::ProductionCommitmentV1 {
+                .push(crate::ProductionCommitment {
                     process_id: candidate.process_id,
                     site_id: candidate.site_id,
                     period: next_period,
@@ -580,10 +569,10 @@ fn derive_next_period_production(
 
 /// Uses the same simultaneous shared-input allocation without a labor resource group.
 /// This reads the closed inventory and returns zeros too; it does not publish plans.
-pub(crate) fn derive_shared_labor_requests_v1(
-    state: &MaterialCircuitStateV3,
+pub(crate) fn derive_shared_labor_requests(
+    state: &MaterialCircuitState,
     next_period: u64,
-) -> Result<Vec<ProcessLaborRequest>, MaterialCircuitErrorV3> {
+) -> Result<Vec<ProcessLaborRequest>, MaterialCircuitError> {
     let inventory = state
         .inventory
         .iter()
@@ -602,23 +591,23 @@ pub(crate) fn derive_shared_labor_requests_v1(
         .zip(allocations)
         .map(|(candidate, batches)| {
             let coefficient = labor_coefficient(state, candidate.process_id)
-                .ok_or(MaterialCircuitErrorV3::ProcessInvariant)?;
+                .ok_or(MaterialCircuitError::ProcessInvariant)?;
             Ok(ProcessLaborRequest {
                 process_id: candidate.process_id,
                 site_id: candidate.site_id,
                 unit_id: coefficient.unit_id,
                 hours: batches
                     .checked_mul(coefficient.quantity_per_batch)
-                    .ok_or(MaterialCircuitErrorV3::Arithmetic)?,
+                    .ok_or(MaterialCircuitError::Arithmetic)?,
             })
         })
         .collect()
 }
 
-pub(crate) fn derive_shared_production_v1(
-    state: &mut MaterialCircuitStateV3,
+pub(crate) fn derive_shared_production(
+    state: &mut MaterialCircuitState,
     next_period: u64,
-) -> Result<(), MaterialCircuitErrorV3> {
+) -> Result<(), MaterialCircuitError> {
     let inventory = take_inventory(state);
     derive_next_period_production(state, &inventory, next_period)?;
     prune_consumed_capacity(state, next_period);
@@ -626,15 +615,15 @@ pub(crate) fn derive_shared_production_v1(
     Ok(())
 }
 
-fn prune_consumed_capacity(state: &mut MaterialCircuitStateV3, next_period: u64) {
+fn prune_consumed_capacity(state: &mut MaterialCircuitState, next_period: u64) {
     state.capacities = std::mem::take(&mut state.capacities)
         .into_iter()
-        .take(MAX_MATERIAL_CIRCUIT_ROWS_V1 + 1)
+        .take(MAX_MATERIAL_CIRCUIT_ROWS + 1)
         .filter(|row| row.period >= next_period)
         .collect();
     state.labor = std::mem::take(&mut state.labor)
         .into_iter()
-        .take(MAX_MATERIAL_CIRCUIT_ROWS_V1 + 1)
+        .take(MAX_MATERIAL_CIRCUIT_ROWS + 1)
         .filter(|row| row.period >= next_period)
         .collect();
 }
@@ -642,7 +631,7 @@ fn prune_consumed_capacity(state: &mut MaterialCircuitStateV3, next_period: u64)
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::GoodIdV1;
+    use crate::GoodId;
 
     fn numbered_identity(index: usize) -> [u8; 32] {
         let mut bytes = [0_u8; 32];
@@ -651,8 +640,8 @@ mod tests {
         bytes
     }
 
-    fn empty_state() -> MaterialCircuitStateV3 {
-        MaterialCircuitStateV3 {
+    fn empty_state() -> MaterialCircuitState {
+        MaterialCircuitState {
             period: 1,
             site_logistics_nodes: Vec::new(),
             process_outputs: Vec::new(),
@@ -679,14 +668,14 @@ mod tests {
 
     #[test]
     fn resource_group_bound_covers_both_families_and_refuses_plus_one() {
-        let site = SiteIdV1::from_bytes([1; 32]);
-        let unit = UnitIdV1::from_bytes([2; 32]);
+        let site = SiteId::from_bytes([1; 32]);
+        let unit = UnitId::from_bytes([2; 32]);
         let mut groups = BTreeMap::new();
-        for index in 0..MAX_PRODUCTION_RESOURCE_GROUPS_V1 {
+        for index in 0..MAX_PRODUCTION_RESOURCE_GROUPS {
             groups.insert(
                 ProductionResourceKey::Input((
                     site,
-                    GoodIdV1::from_bytes(numbered_identity(index)),
+                    GoodId::from_bytes(numbered_identity(index)),
                     unit,
                 )),
                 Vec::new(),
@@ -694,7 +683,7 @@ mod tests {
         }
         let last_key = ProductionResourceKey::Input((
             site,
-            GoodIdV1::from_bytes(numbered_identity(MAX_PRODUCTION_RESOURCE_GROUPS_V1 - 1)),
+            GoodId::from_bytes(numbered_identity(MAX_PRODUCTION_RESOURCE_GROUPS - 1)),
             unit,
         ));
         groups.insert(
@@ -721,7 +710,7 @@ mod tests {
         groups.insert(
             ProductionResourceKey::Input((
                 site,
-                GoodIdV1::from_bytes(numbered_identity(MAX_PRODUCTION_RESOURCE_GROUPS_V1)),
+                GoodId::from_bytes(numbered_identity(MAX_PRODUCTION_RESOURCE_GROUPS)),
                 unit,
             )),
             Vec::new(),
@@ -734,7 +723,7 @@ mod tests {
                 &groups,
                 &mut allocations,
             ),
-            Err(MaterialCircuitErrorV3::RowLimit)
+            Err(MaterialCircuitError::RowLimit)
         );
     }
 

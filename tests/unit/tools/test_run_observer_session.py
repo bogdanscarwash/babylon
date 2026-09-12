@@ -20,7 +20,6 @@ def test_packaged_preparation_uses_only_the_bundled_binaries(
 ) -> None:
     calls: list[list[str]] = []
     monkeypatch.setattr(launcher, "database_reachable", lambda _: True)
-    monkeypatch.setattr(launcher, "bootstrap_required", lambda _: True)
     monkeypatch.setattr(launcher, "_run", lambda args, *_: calls.append(args))
     monkeypatch.setattr(
         launcher, "provision_readers", lambda _: launcher.ReaderCredentials("observer", "known")
@@ -30,7 +29,7 @@ def test_packaged_preparation_uses_only_the_bundled_binaries(
     )
     assert runtime == tmp_path / "bin/babylon-runtime"
     assert client == tmp_path / "bin/babylon-client"
-    assert calls == [[str(runtime), "bootstrap"], [str(runtime), "observer-schema"]]
+    assert calls == [[str(runtime), "bootstrap"], [str(runtime), "provision-readers"]]
 
 
 def test_missing_packaged_database_cannot_start_the_developer_service(
@@ -521,9 +520,8 @@ def test_child_shutdown_has_a_deadline_even_after_kill() -> None:
     ]
 
 
-@pytest.mark.parametrize("fresh", [True, False])
-def test_preparation_orders_bootstrap_schema_and_restricted_logins_without_ticks(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, fresh: bool
+def test_preparation_verifies_current_schema_before_restricted_logins_without_ticks(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     calls: list[str] = []
 
@@ -541,15 +539,12 @@ def test_preparation_orders_bootstrap_schema_and_restricted_logins_without_ticks
         return launcher.ReaderCredentials("observer", "known")
 
     monkeypatch.setattr(launcher, "_run", run)
-    monkeypatch.setattr(launcher, "bootstrap_required", lambda _: fresh)
     monkeypatch.setattr(launcher, "database_reachable", lambda _: True, raising=False)
     monkeypatch.setattr(launcher, "provision_readers", provision)
     runtime, client, credentials = launcher.prepare(
         tmp_path, {"PGOPTIONS": "unsafe"}, no_build=True
     )
-    assert calls == (
-        ["bootstrap", "observer-schema", "provision"] if fresh else ["observer-schema", "provision"]
-    )
+    assert calls == ["bootstrap", "provision-readers", "provision"]
     assert runtime == tmp_path / "rust/target/debug/babylon-runtime"
     assert client == tmp_path / "rust/target/debug/babylon-client"
     assert credentials.known_dsn == "known"
@@ -601,41 +596,6 @@ def test_provisioning_grants_only_distinct_reader_memberships(
     assert observer["user"] == "babylon_observer_game"
     assert known["user"] == "babylon_preview_game"
     assert observer["dbname"] == known["dbname"] == "babylon_test"
-
-
-@pytest.mark.parametrize(
-    ("exists", "active", "required"),
-    [(False, False, True), (True, False, True), (True, True, False)],
-)
-def test_bootstrap_probe_is_read_only_and_requires_active_marker(
-    monkeypatch: pytest.MonkeyPatch,
-    exists: bool,
-    active: bool,
-    required: bool,
-) -> None:
-    statements: list[str] = []
-
-    class Connection:
-        def __enter__(self) -> Connection:
-            return self
-
-        def __exit__(self, *args: Any) -> None:
-            return None
-
-        def execute(self, query: str) -> Connection:
-            statements.append(query)
-            return self
-
-        def fetchone(self) -> tuple[Any, ...] | None:
-            if "to_regclass" in statements[-1]:
-                return ("authority" if exists else None,)
-            assert "ordinal = 2 AND state_tag = 2 AND activation_epoch = 11" in statements[-1]
-            return (1,) if active else None
-
-    monkeypatch.setattr(launcher.psycopg, "connect", lambda *_args, **_kwargs: Connection())
-    assert launcher.bootstrap_required(launcher.DEFAULT_RUNTIME_DSN) is required
-    assert statements[0] == "SET TRANSACTION READ ONLY"
-    assert all(statement.startswith("SELECT") for statement in statements[1:])
 
 
 @pytest.mark.parametrize(
@@ -692,13 +652,12 @@ def test_only_unavailable_default_target_starts_compose_and_rechecks(
     calls: list[str] = []
     monkeypatch.setattr(launcher, "database_reachable", lambda _: next(probes))
     monkeypatch.setattr(launcher, "_run", lambda args, *_: calls.append(args[-1]))
-    monkeypatch.setattr(launcher, "bootstrap_required", lambda _: False)
     monkeypatch.setattr(
         launcher, "provision_readers", lambda _: launcher.ReaderCredentials("observer", "known")
     )
     if available_after_start:
         launcher.prepare(tmp_path, {}, no_build=True)
-        assert calls == ["db:up", "observer-schema"]
+        assert calls == ["db:up", "bootstrap", "provision-readers"]
     else:
         with pytest.raises(launcher.ObserverLaunchError, match="still unavailable"):
             launcher.prepare(tmp_path, {}, no_build=True)
@@ -749,7 +708,6 @@ def test_prepare_builds_with_native_rustup_from_the_pinned_workspace(
 ) -> None:
     calls: list[tuple[list[str], Path, dict[str, str]]] = []
     monkeypatch.setattr(launcher, "database_reachable", lambda _: True)
-    monkeypatch.setattr(launcher, "bootstrap_required", lambda _: False)
     monkeypatch.setattr(
         launcher, "provision_readers", lambda _: launcher.ReaderCredentials("observer", "known")
     )
@@ -916,3 +874,34 @@ def test_smoke_request_rejects_existing_campaign_before_preparing_services(
     assert launcher.main(["--smoke", "--campaign", str(CAMPAIGN)]) == 1
     assert not calls
     assert "--smoke creates a new campaign and cannot use --campaign" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("refused_phase", ["bootstrap", "provision-readers"])
+def test_preparation_refuses_database_before_reader_mutations(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    refused_phase: str,
+) -> None:
+    calls: list[str] = []
+    monkeypatch.setattr(launcher, "database_reachable", lambda _: True)
+
+    def no_python_schema_admission(*_args: Any, **_kwargs: Any) -> None:
+        raise AssertionError("schema admission belongs to the Rust verifier")
+
+    def run(args: list[str], *_args: Any) -> None:
+        calls.append(args[-1])
+        if args[-1] == refused_phase:
+            raise launcher.ObserverLaunchError(f"refused {refused_phase}")
+
+    def provision(_dsn: str) -> launcher.ReaderCredentials:
+        calls.append("login-mutation")
+        return launcher.ReaderCredentials("observer", "known")
+
+    monkeypatch.setattr(launcher.psycopg, "connect", no_python_schema_admission)
+    monkeypatch.setattr(launcher, "_run", run)
+    monkeypatch.setattr(launcher, "provision_readers", provision)
+    with pytest.raises(launcher.ObserverLaunchError, match=f"refused {refused_phase}"):
+        launcher.prepare(tmp_path, {}, no_build=True)
+    assert calls == (
+        ["bootstrap"] if refused_phase == "bootstrap" else ["bootstrap", "provision-readers"]
+    )

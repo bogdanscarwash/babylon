@@ -2,21 +2,21 @@
 
 use super::tests::{quit_app, snapshot_with_event};
 use super::*;
-use babylon_persistence::{CampaignId, RuntimeSessionErrorCodeV3};
+use babylon_persistence::{identity::CampaignId, runtime_session::RuntimeSessionErrorCode};
 
-type Replies = mpsc::Sender<Result<RuntimeSessionResponseV3, String>>;
+type Replies = mpsc::Sender<Result<RuntimeSessionResponse, String>>;
 
 fn campaign(number: u128) -> CampaignId {
     CampaignId::from_uuid(uuid::Uuid::from_u128(number))
 }
 
-fn open(number: u128) -> RuntimeSessionTargetV3 {
-    RuntimeSessionTargetV3::Open {
+fn open(number: u128) -> RuntimeSessionTarget {
+    RuntimeSessionTarget::Open {
         campaign_id: campaign(number).as_uuid().to_string(),
     }
 }
 
-fn enqueue(app: &mut App, target: RuntimeSessionTargetV3) {
+fn enqueue(app: &mut App, target: RuntimeSessionTarget) {
     app.world_mut()
         .resource_mut::<ObserverSession>()
         .queue_campaign(target)
@@ -26,12 +26,12 @@ fn enqueue(app: &mut App, target: RuntimeSessionTargetV3) {
 
 struct Switch {
     request_id: u64,
-    previous: RuntimeSessionScopeV3,
-    scope: RuntimeSessionScopeV3,
+    previous: RuntimeSessionScope,
+    scope: RuntimeSessionScope,
 }
 
-fn take_switch(requests: &mpsc::Receiver<RuntimeSessionRequestV3>) -> Switch {
-    let RuntimeSessionRequestV3::Switch {
+fn take_switch(requests: &mpsc::Receiver<RuntimeSessionRequest>) -> Switch {
+    let RuntimeSessionRequest::Switch {
         request_id,
         scope: previous,
         target,
@@ -40,11 +40,11 @@ fn take_switch(requests: &mpsc::Receiver<RuntimeSessionRequestV3>) -> Switch {
     else {
         panic!("expected one campaign switch");
     };
-    let (RuntimeSessionTargetV3::New { campaign_id, .. }
-    | RuntimeSessionTargetV3::Open { campaign_id }) = target;
+    let (RuntimeSessionTarget::New { campaign_id, .. }
+    | RuntimeSessionTarget::Open { campaign_id }) = target;
     Switch {
         request_id,
-        scope: RuntimeSessionScopeV3 {
+        scope: RuntimeSessionScope {
             epoch: previous.epoch + 1,
             campaign_id: Some(campaign_id),
         },
@@ -54,7 +54,7 @@ fn take_switch(requests: &mpsc::Receiver<RuntimeSessionRequestV3>) -> Switch {
 
 fn switching(app: &mut App, responses: &Replies, switch: &Switch) {
     responses
-        .send(Ok(RuntimeSessionResponseV3::Switching {
+        .send(Ok(RuntimeSessionResponse::Switching {
             request_id: switch.request_id,
             previous_scope: switch.previous.clone(),
             scope: switch.scope.clone(),
@@ -65,11 +65,11 @@ fn switching(app: &mut App, responses: &Replies, switch: &Switch) {
 
 fn admitted(app: &mut App, responses: &Replies, switch: &Switch, period: u64) {
     responses
-        .send(Ok(RuntimeSessionResponseV3::Ready {
+        .send(Ok(RuntimeSessionResponse::Ready {
             request_id: switch.request_id,
             scope: switch.scope.clone(),
             foundation_digest: "foundation".into(),
-            tail: RuntimeSessionTailV3 {
+            tail: RuntimeSessionTail {
                 resolve_tick: period,
                 tick_content_hash: None,
             },
@@ -80,10 +80,10 @@ fn admitted(app: &mut App, responses: &Replies, switch: &Switch, period: u64) {
 
 fn refused(app: &mut App, responses: &Replies, switch: &Switch) {
     responses
-        .send(Ok(RuntimeSessionResponseV3::Error {
+        .send(Ok(RuntimeSessionResponse::Error {
             request_id: Some(switch.request_id),
             scope: switch.scope.clone(),
-            code: RuntimeSessionErrorCodeV3::CampaignAbsent,
+            code: RuntimeSessionErrorCode::CampaignAbsent,
             tail: None,
         }))
         .unwrap();
@@ -97,7 +97,7 @@ fn command(app: &mut App, command: ObserverCommand) {
     app.update();
 }
 
-fn initial() -> (App, mpsc::Receiver<RuntimeSessionRequestV3>, Replies) {
+fn initial() -> (App, mpsc::Receiver<RuntimeSessionRequest>, Replies) {
     let (mut app, requests, responses) = quit_app();
     app.insert_resource(ObserverSession::with_initial_target(open(1)).unwrap())
         .insert_resource(DossierCampaignId(campaign(1)))
@@ -110,9 +110,9 @@ fn initial() -> (App, mpsc::Receiver<RuntimeSessionRequestV3>, Replies) {
 
 fn hello(app: &mut App, responses: &Replies) {
     responses
-        .send(Ok(RuntimeSessionResponseV3::Hello {
-            protocol_version: RUNTIME_SESSION_PROTOCOL_VERSION_V3,
-            scope: RuntimeSessionScopeV3::default(),
+        .send(Ok(RuntimeSessionResponse::Hello {
+            protocol_version: RUNTIME_SESSION_PROTOCOL_VERSION,
+            scope: RuntimeSessionScope::default(),
         }))
         .unwrap();
     app.update();
@@ -177,16 +177,16 @@ fn lifecycle_quit_before_hello_cancels_initial_switch_and_stops_at_epoch_zero() 
     command(&mut app, ObserverCommand::Quit);
     assert!(requests.try_recv().is_err());
     hello(&mut app, &responses);
-    let RuntimeSessionRequestV3::Stop {
+    let RuntimeSessionRequest::Stop {
         request_id, scope, ..
     } = requests.try_recv().unwrap()
     else {
         panic!("Quit must replace initial Switch");
     };
     assert_eq!(request_id, 1);
-    assert_eq!(scope, RuntimeSessionScopeV3::default());
+    assert_eq!(scope, RuntimeSessionScope::default());
     responses
-        .send(Ok(RuntimeSessionResponseV3::Stopped { request_id, scope }))
+        .send(Ok(RuntimeSessionResponse::Stopped { request_id, scope }))
         .unwrap();
     app.update();
     assert!(requests.try_recv().is_err());
@@ -209,7 +209,7 @@ fn lifecycle_quit_during_admission_retains_latest_scope_and_discards_queued_targ
         } else {
             admitted(&mut app, &responses, &switch, 0);
         }
-        let RuntimeSessionRequestV3::Stop {
+        let RuntimeSessionRequest::Stop {
             request_id, scope, ..
         } = requests.try_recv().unwrap()
         else {
@@ -219,7 +219,7 @@ fn lifecycle_quit_during_admission_retains_latest_scope_and_discards_queued_targ
         assert_eq!(scope, switch.scope);
         assert!(app.world().resource::<Messages<AppExit>>().is_empty());
         responses
-            .send(Ok(RuntimeSessionResponseV3::Stopped { request_id, scope }))
+            .send(Ok(RuntimeSessionResponse::Stopped { request_id, scope }))
             .unwrap();
         app.update();
         assert_eq!(app.world().resource::<Messages<AppExit>>().len(), 1);
@@ -238,7 +238,7 @@ fn lifecycle_switch_waits_for_commit_ack_then_clears_scoped_observations() {
         .init_resource::<ActiveCountyDossier>()
         .init_resource::<DossierFetchState>();
     command(&mut app, ObserverCommand::Step);
-    let RuntimeSessionRequestV3::Advance {
+    let RuntimeSessionRequest::Advance {
         request_id, scope, ..
     } = requests.try_recv().unwrap()
     else {
@@ -248,10 +248,10 @@ fn lifecycle_switch_waits_for_commit_ack_then_clears_scoped_observations() {
     assert!(requests.try_recv().is_err());
     assert_eq!(app.world().resource::<ObserverSession>().durable_tick, 3);
     responses
-        .send(Ok(RuntimeSessionResponseV3::Committed {
+        .send(Ok(RuntimeSessionResponse::Committed {
             request_id,
             scope,
-            tail: RuntimeSessionTailV3 {
+            tail: RuntimeSessionTail {
                 resolve_tick: 4,
                 tick_content_hash: None,
             },
@@ -318,27 +318,26 @@ fn return_to_a_rejects_stale_results(failed_b: bool) {
     assert_eq!(current.tick, old_context.tick);
     assert!(current.generation > old_context.generation);
     for stale in [
-        RuntimeSessionResponseV3::Ready {
+        RuntimeSessionResponse::Ready {
             request_id: 0,
             scope: old_scope.clone(),
             foundation_digest: "stale".into(),
-            tail: RuntimeSessionTailV3 {
+            tail: RuntimeSessionTail {
                 resolve_tick: 99,
                 tick_content_hash: None,
             },
         },
-        RuntimeSessionResponseV3::Error {
+        RuntimeSessionResponse::Error {
             request_id: None,
             scope: old_scope.clone(),
-            code: RuntimeSessionErrorCodeV3::StorageRefused,
+            code: RuntimeSessionErrorCode::StorageRefused,
             tail: None,
         },
-        RuntimeSessionResponseV3::ArchiveProgress {
+        RuntimeSessionResponse::ArchiveProgress {
             request_id: None,
             scope: old_scope,
             durable_tick: 3,
             verified_tick: 3,
-            retention_ready: true,
         },
     ] {
         responses.send(Ok(stale)).unwrap();
@@ -426,7 +425,7 @@ fn lifecycle_request_ids_remain_unique_across_switch_advance_and_stop() {
         assert!(state.installed(&context));
     }
     command(&mut app, ObserverCommand::Step);
-    let RuntimeSessionRequestV3::Advance {
+    let RuntimeSessionRequest::Advance {
         request_id,
         scope,
         expected_tail,
@@ -439,10 +438,10 @@ fn lifecycle_request_ids_remain_unique_across_switch_advance_and_stop() {
     assert_eq!(scope, switch.scope);
     assert_eq!(expected_tail.resolve_tick, 0);
     responses
-        .send(Ok(RuntimeSessionResponseV3::Committed {
+        .send(Ok(RuntimeSessionResponse::Committed {
             request_id,
             scope: scope.clone(),
-            tail: RuntimeSessionTailV3 {
+            tail: RuntimeSessionTail {
                 resolve_tick: 1,
                 tick_content_hash: Some("1".repeat(64)),
             },
@@ -450,7 +449,7 @@ fn lifecycle_request_ids_remain_unique_across_switch_advance_and_stop() {
         .unwrap();
     app.update();
     command(&mut app, ObserverCommand::Quit);
-    let RuntimeSessionRequestV3::Stop {
+    let RuntimeSessionRequest::Stop {
         request_id: stop_id,
         scope: stop_scope,
         ..
@@ -461,7 +460,7 @@ fn lifecycle_request_ids_remain_unique_across_switch_advance_and_stop() {
     assert_eq!(stop_id, request_id + 1);
     assert_eq!(stop_scope, scope);
     responses
-        .send(Ok(RuntimeSessionResponseV3::Stopped {
+        .send(Ok(RuntimeSessionResponse::Stopped {
             request_id: stop_id,
             scope: stop_scope,
         }))
@@ -477,9 +476,9 @@ fn lifecycle_pipe_death_retains_sent_new_identity_without_resend_or_fact_adoptio
     let target = campaign(99).as_uuid().to_string();
     enqueue(
         &mut app,
-        RuntimeSessionTargetV3::New {
+        RuntimeSessionTarget::New {
             campaign_id: target.clone(),
-            preset: RuntimeSessionPresetV3::Standard,
+            preset: RuntimeSessionPreset::Standard,
         },
     );
     let switch = take_switch(&requests);
@@ -509,11 +508,11 @@ fn lifecycle_pipe_death_retains_sent_new_identity_without_resend_or_fact_adoptio
 fn lifecycle_admission_refusals_explain_the_available_campaign_choice() {
     for (code, expected) in [
         (
-            RuntimeSessionErrorCodeV3::CampaignAbsent,
+            RuntimeSessionErrorCode::CampaignAbsent,
             "The selected campaign was not found. Choose another campaign or create New.",
         ),
         (
-            RuntimeSessionErrorCodeV3::CampaignAlreadyExists,
+            RuntimeSessionErrorCode::CampaignAlreadyExists,
             "That campaign already exists. Choose Open to continue it.",
         ),
     ] {
@@ -522,7 +521,7 @@ fn lifecycle_admission_refusals_explain_the_available_campaign_choice() {
         let switch = take_switch(&requests);
         switching(&mut app, &responses, &switch);
         responses
-            .send(Ok(RuntimeSessionResponseV3::Error {
+            .send(Ok(RuntimeSessionResponse::Error {
                 request_id: Some(switch.request_id),
                 scope: switch.scope,
                 code,

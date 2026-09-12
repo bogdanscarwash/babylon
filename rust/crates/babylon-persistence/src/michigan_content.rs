@@ -3,78 +3,74 @@
 //! A stored revision selects its own immutable identity. Creation uses the newest
 //! admitted graph revision; reopening reconstructs stored bytes after admission.
 
-use babylon_graph::stable_state::StableGraphStateV1;
-use babylon_kernel::sha256_of;
-use babylon_tick::material_world::MaterialWorldRegisterV3;
-use babylon_tick::{material_replay::MaterialLaborV1, material_staffing::StaffingCompositionV1};
+use babylon_graph::stable_state::StableGraphState;
+use babylon_kernel::content_digest::sha256_of;
+use babylon_tick::material_staffing::StaffingComposition;
+use babylon_tick::material_world::MaterialWorldRegister;
 
 use crate::{
-    material_runtime::{MaterialComponentIdentityV1, MaterialRuntimeFoundationV2},
-    michigan_cohorts::MICHIGAN_COHORT_SCENARIO_V2,
-    michigan_material::{MichiganDeliveryPresetV1, MichiganMaterialCatalogV1},
+    material_runtime::{MaterialComponentIdentity, MaterialRuntimeFoundation},
+    michigan_cohorts::MICHIGAN_COHORT_SCENARIO,
+    michigan_material::{MichiganDeliveryPreset, MichiganMaterialCatalog},
 };
 
 /// Graph content revisions are separate from the logical delivery choice.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum MichiganContentPresetV1 {
-    FourWeekStandardV7,
-    FourWeekDelayedV7,
-    SharedFreightAmpleV7,
-    SharedFreightConstrainedV7,
-    StatewideBaselineV7,
-    StatewideFreightConstraintV7,
-    StatewidePackagingShortageV7,
-    StatewideBothV7,
+pub enum MichiganContentPreset {
+    FourWeekStandard,
+    FourWeekDelayed,
+    SharedFreightAmple,
+    SharedFreightConstrained,
+    StatewideBaseline,
+    StatewideFreightConstraint,
+    StatewidePackagingShortage,
+    StatewideBoth,
 }
 
 /// All admitted presets use the same normalized physical projection.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum MichiganPhysicalProjectionV1 {
-    NormalizedV2,
+pub enum MichiganPhysicalProjection {
+    Normalized,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum MichiganContentErrorV1 {
+pub enum MichiganContentError {
     UnknownPreset,
     ObservedSource,
     MaterialSource,
     Foundation,
     IdentityMismatch,
 }
-impl std::fmt::Display for MichiganContentErrorV1 {
+impl std::fmt::Display for MichiganContentError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Michigan content admission refused: {self:?}")
     }
 }
-impl std::error::Error for MichiganContentErrorV1 {}
+impl std::error::Error for MichiganContentError {}
 
-pub const MICHIGAN_CONTENT_PRESETS_V1: [MichiganContentPresetV1; 8] = [
-    MichiganContentPresetV1::FourWeekStandardV7,
-    MichiganContentPresetV1::FourWeekDelayedV7,
-    MichiganContentPresetV1::SharedFreightAmpleV7,
-    MichiganContentPresetV1::SharedFreightConstrainedV7,
-    MichiganContentPresetV1::StatewideBaselineV7,
-    MichiganContentPresetV1::StatewideFreightConstraintV7,
-    MichiganContentPresetV1::StatewidePackagingShortageV7,
-    MichiganContentPresetV1::StatewideBothV7,
+pub const MICHIGAN_CONTENT_PRESETS: [MichiganContentPreset; 8] = [
+    MichiganContentPreset::FourWeekStandard,
+    MichiganContentPreset::FourWeekDelayed,
+    MichiganContentPreset::SharedFreightAmple,
+    MichiganContentPreset::SharedFreightConstrained,
+    MichiganContentPreset::StatewideBaseline,
+    MichiganContentPreset::StatewideFreightConstraint,
+    MichiganContentPreset::StatewidePackagingShortage,
+    MichiganContentPreset::StatewideBoth,
 ];
 
-impl MichiganContentPresetV1 {
+impl MichiganContentPreset {
     #[must_use]
-    pub const fn new_campaign(delivery: MichiganDeliveryPresetV1) -> Self {
+    pub const fn new_campaign(delivery: MichiganDeliveryPreset) -> Self {
         match delivery {
-            MichiganDeliveryPresetV1::Standard => Self::FourWeekStandardV7,
-            MichiganDeliveryPresetV1::Delayed => Self::FourWeekDelayedV7,
-            MichiganDeliveryPresetV1::SharedFreightAmple => Self::SharedFreightAmpleV7,
-            MichiganDeliveryPresetV1::SharedFreightConstrained => Self::SharedFreightConstrainedV7,
-            MichiganDeliveryPresetV1::StatewideBaseline => Self::StatewideBaselineV7,
-            MichiganDeliveryPresetV1::StatewideFreightConstraint => {
-                Self::StatewideFreightConstraintV7
-            }
-            MichiganDeliveryPresetV1::StatewidePackagingShortage => {
-                Self::StatewidePackagingShortageV7
-            }
-            MichiganDeliveryPresetV1::StatewideBoth => Self::StatewideBothV7,
+            MichiganDeliveryPreset::Standard => Self::FourWeekStandard,
+            MichiganDeliveryPreset::Delayed => Self::FourWeekDelayed,
+            MichiganDeliveryPreset::SharedFreightAmple => Self::SharedFreightAmple,
+            MichiganDeliveryPreset::SharedFreightConstrained => Self::SharedFreightConstrained,
+            MichiganDeliveryPreset::StatewideBaseline => Self::StatewideBaseline,
+            MichiganDeliveryPreset::StatewideFreightConstraint => Self::StatewideFreightConstraint,
+            MichiganDeliveryPreset::StatewidePackagingShortage => Self::StatewidePackagingShortage,
+            MichiganDeliveryPreset::StatewideBoth => Self::StatewideBoth,
         }
     }
     #[must_use]
@@ -83,50 +79,46 @@ impl MichiganContentPresetV1 {
     }
     #[must_use]
     pub fn from_id(id: &str) -> Option<Self> {
-        MICHIGAN_CONTENT_PRESETS_V1
+        MICHIGAN_CONTENT_PRESETS
             .into_iter()
             .find(|preset| preset.id() == id)
     }
     #[must_use]
-    pub const fn delivery(self) -> MichiganDeliveryPresetV1 {
+    pub const fn delivery(self) -> MichiganDeliveryPreset {
         match self {
-            Self::FourWeekStandardV7 => MichiganDeliveryPresetV1::Standard,
-            Self::FourWeekDelayedV7 => MichiganDeliveryPresetV1::Delayed,
-            Self::SharedFreightAmpleV7 => MichiganDeliveryPresetV1::SharedFreightAmple,
-            Self::SharedFreightConstrainedV7 => MichiganDeliveryPresetV1::SharedFreightConstrained,
-            Self::StatewideBaselineV7 => MichiganDeliveryPresetV1::StatewideBaseline,
-            Self::StatewideFreightConstraintV7 => {
-                MichiganDeliveryPresetV1::StatewideFreightConstraint
-            }
-            Self::StatewidePackagingShortageV7 => {
-                MichiganDeliveryPresetV1::StatewidePackagingShortage
-            }
-            Self::StatewideBothV7 => MichiganDeliveryPresetV1::StatewideBoth,
+            Self::FourWeekStandard => MichiganDeliveryPreset::Standard,
+            Self::FourWeekDelayed => MichiganDeliveryPreset::Delayed,
+            Self::SharedFreightAmple => MichiganDeliveryPreset::SharedFreightAmple,
+            Self::SharedFreightConstrained => MichiganDeliveryPreset::SharedFreightConstrained,
+            Self::StatewideBaseline => MichiganDeliveryPreset::StatewideBaseline,
+            Self::StatewideFreightConstraint => MichiganDeliveryPreset::StatewideFreightConstraint,
+            Self::StatewidePackagingShortage => MichiganDeliveryPreset::StatewidePackagingShortage,
+            Self::StatewideBoth => MichiganDeliveryPreset::StatewideBoth,
         }
     }
     #[must_use]
     pub const fn scenario(self) -> &'static str {
-        MICHIGAN_COHORT_SCENARIO_V2
+        MICHIGAN_COHORT_SCENARIO
     }
     #[must_use]
     pub const fn label(self) -> &'static str {
         match self {
-            Self::FourWeekStandardV7 => "Michigan: standard delivery (four active cohorts)",
-            Self::FourWeekDelayedV7 => "Michigan: delayed delivery (four active cohorts)",
-            Self::SharedFreightAmpleV7 => "Shared freight — ample",
-            Self::SharedFreightConstrainedV7 => "Shared freight — constrained",
-            Self::StatewideBaselineV7 => "Statewide Michigan — baseline",
-            Self::StatewideFreightConstraintV7 => "Statewide Michigan — freight constraint",
-            Self::StatewidePackagingShortageV7 => "Statewide Michigan — packaging shortage",
-            Self::StatewideBothV7 => "Statewide Michigan — both constraints",
+            Self::FourWeekStandard => "Michigan: standard delivery (four active cohorts)",
+            Self::FourWeekDelayed => "Michigan: delayed delivery (four active cohorts)",
+            Self::SharedFreightAmple => "Shared freight — ample",
+            Self::SharedFreightConstrained => "Shared freight — constrained",
+            Self::StatewideBaseline => "Statewide Michigan — baseline",
+            Self::StatewideFreightConstraint => "Statewide Michigan — freight constraint",
+            Self::StatewidePackagingShortage => "Statewide Michigan — packaging shortage",
+            Self::StatewideBoth => "Statewide Michigan — both constraints",
         }
     }
     /// # Errors
     /// Refuses any changed source or foundation construction failure.
     pub fn admitted(
         self,
-        catalog: &MichiganMaterialCatalogV1,
-    ) -> Result<MichiganContentAdmissionV1, MichiganContentErrorV1> {
+        catalog: &MichiganMaterialCatalog,
+    ) -> Result<MichiganContentAdmission, MichiganContentError> {
         self.capture_admission(catalog)
     }
     /// Create a campaign from explicit, already validated numeric parameters.
@@ -134,36 +126,34 @@ impl MichiganContentPresetV1 {
     /// Refuses invalid material composition or observed source drift.
     pub fn create_foundation(
         self,
-        catalog: &MichiganMaterialCatalogV1,
-    ) -> Result<MaterialRuntimeFoundationV2, MichiganContentErrorV1> {
+        catalog: &MichiganMaterialCatalog,
+    ) -> Result<MaterialRuntimeFoundation, MichiganContentError> {
         self.build_foundation(catalog)
     }
     fn build_foundation(
         self,
-        catalog: &MichiganMaterialCatalogV1,
-    ) -> Result<MaterialRuntimeFoundationV2, MichiganContentErrorV1> {
-        crate::sector_bundle::foundation::create_bundle_foundation_v7(
+        catalog: &MichiganMaterialCatalog,
+    ) -> Result<MaterialRuntimeFoundation, MichiganContentError> {
+        crate::sector_bundle::foundation::create_bundle_foundation(
             self.id(),
             self.delivery(),
             catalog,
         )
-        .map_err(|_| MichiganContentErrorV1::Foundation)
+        .map_err(|_| MichiganContentError::Foundation)
     }
     fn capture_admission(
         self,
-        catalog: &MichiganMaterialCatalogV1,
-    ) -> Result<MichiganContentAdmissionV1, MichiganContentErrorV1> {
+        catalog: &MichiganMaterialCatalog,
+    ) -> Result<MichiganContentAdmission, MichiganContentError> {
         let catalog = catalog
             .with_preset(self.delivery())
-            .map_err(|_| MichiganContentErrorV1::MaterialSource)?;
+            .map_err(|_| MichiganContentError::MaterialSource)?;
         let foundation = self.build_foundation(&catalog)?;
         let graph = foundation.graph_foundation();
-        let component_identity = MaterialComponentIdentityV1::from_foundation(graph);
+        let component_identity = MaterialComponentIdentity::from_foundation(graph);
         let graph_digest = sha256_of(graph.canonical_bytes());
         let scenario_digest = sha256_of(graph.content_bundle().scenario_source_bytes());
-        let MaterialLaborV1::Staffed(staffing) = foundation.labor().clone() else {
-            return Err(MichiganContentErrorV1::Foundation);
-        };
+        let staffing = foundation.labor().clone();
         let horizon_ticks = foundation.spec().horizon_ticks;
         let content_digest = foundation.spec().content_digest;
         let digest = foundation.digest();
@@ -171,11 +161,11 @@ impl MichiganContentPresetV1 {
         let register = foundation.initial_register().clone();
         let foundation_graph = foundation
             .into_session()
-            .map_err(|_| MichiganContentErrorV1::Foundation)?
+            .map_err(|_| MichiganContentError::Foundation)?
             .graph_session()
             .stable_graph_state()
-            .map_err(|_| MichiganContentErrorV1::Foundation)?;
-        Ok(MichiganContentAdmissionV1 {
+            .map_err(|_| MichiganContentError::Foundation)?;
+        Ok(MichiganContentAdmission {
             preset: self,
             catalog: catalog.clone(),
             horizon_ticks,
@@ -188,30 +178,30 @@ impl MichiganContentPresetV1 {
             foundation_graph,
             staffing,
             component_identity,
-            physical_projection: MichiganPhysicalProjectionV1::NormalizedV2,
+            physical_projection: MichiganPhysicalProjection::Normalized,
         })
     }
 }
 
 /// Immutable admission evidence, shared by the writer and both read capabilities.
-pub struct MichiganContentAdmissionV1 {
-    pub(crate) preset: MichiganContentPresetV1,
-    pub(crate) catalog: MichiganMaterialCatalogV1,
+pub struct MichiganContentAdmission {
+    pub(crate) preset: MichiganContentPreset,
+    pub(crate) catalog: MichiganMaterialCatalog,
     pub(crate) horizon_ticks: u64,
     pub(crate) content_digest: [u8; 32],
     pub(crate) digest: [u8; 32],
     pub(crate) graph_digest: [u8; 32],
     pub(crate) scenario_digest: [u8; 32],
     pub(crate) canonical_bytes: Vec<u8>,
-    pub(crate) register: MaterialWorldRegisterV3,
-    pub(crate) foundation_graph: StableGraphStateV1,
-    pub(crate) staffing: StaffingCompositionV1,
-    pub(crate) component_identity: MaterialComponentIdentityV1,
-    pub(crate) physical_projection: MichiganPhysicalProjectionV1,
+    pub(crate) register: MaterialWorldRegister,
+    pub(crate) foundation_graph: StableGraphState,
+    pub(crate) staffing: StaffingComposition,
+    pub(crate) component_identity: MaterialComponentIdentity,
+    pub(crate) physical_projection: MichiganPhysicalProjection,
 }
-impl MichiganContentAdmissionV1 {
+impl MichiganContentAdmission {
     #[must_use]
-    pub const fn preset(&self) -> MichiganContentPresetV1 {
+    pub const fn preset(&self) -> MichiganContentPreset {
         self.preset
     }
     #[must_use]
@@ -227,13 +217,13 @@ impl MichiganContentAdmissionV1 {
         content: &[u8],
         foundation: &[u8],
         tick: u64,
-    ) -> Result<(), MichiganContentErrorV1> {
+    ) -> Result<(), MichiganContentError> {
         if u64::try_from(horizon).ok() != Some(self.horizon_ticks)
             || tick > self.horizon_ticks
             || content != self.content_digest
             || foundation != self.digest
         {
-            return Err(MichiganContentErrorV1::IdentityMismatch);
+            return Err(MichiganContentError::IdentityMismatch);
         }
         Ok(())
     }
@@ -243,9 +233,9 @@ impl MichiganContentAdmissionV1 {
         &self,
         foundation: &[u8],
         scenario: &[u8],
-    ) -> Result<(), MichiganContentErrorV1> {
+    ) -> Result<(), MichiganContentError> {
         if foundation != self.graph_digest || scenario != self.scenario_digest {
-            return Err(MichiganContentErrorV1::IdentityMismatch);
+            return Err(MichiganContentError::IdentityMismatch);
         }
         Ok(())
     }
@@ -254,41 +244,39 @@ impl MichiganContentAdmissionV1 {
 /// Admit only an exact versioned identity from the closed catalog.
 /// # Errors
 /// Refuses unknown presets, source failure or mismatched stored metadata.
-pub fn admit_michigan_content_v1(
+pub fn admit_michigan_content(
     preset_id: &str,
     horizon: i64,
     content: &[u8],
     foundation: &[u8],
     tick: u64,
     foundation_bytes: &[u8],
-) -> Result<MichiganContentAdmissionV1, MichiganContentErrorV1> {
-    let preset = validate_michigan_header_v1(preset_id, horizon, content, foundation, tick)?;
+) -> Result<MichiganContentAdmission, MichiganContentError> {
+    let preset = validate_michigan_header(preset_id, horizon, content, foundation, tick)?;
     let wrapped = stored_defines_from_material_foundation(foundation_bytes)?;
-    let decoded = crate::sector_bundle::foundation::decode_stored_bundle_defines_v4(
-        wrapped,
-        sha256_of(wrapped),
-    )
-    .map_err(|_| MichiganContentErrorV1::MaterialSource)?;
+    let decoded =
+        crate::sector_bundle::foundation::decode_stored_bundle_defines(wrapped, sha256_of(wrapped))
+            .map_err(|_| MichiganContentError::MaterialSource)?;
     let expected = preset.admitted(decoded.catalog())?;
     expected.validate_header(horizon, content, foundation, tick)?;
     if expected.canonical_bytes != foundation_bytes {
-        return Err(MichiganContentErrorV1::IdentityMismatch);
+        return Err(MichiganContentError::IdentityMismatch);
     }
     Ok(expected)
 }
 
 /// Check only public header shape. This does not authenticate opaque material values.
 /// `KnownPreview` reads grants and observed fields without material-read capability.
-pub(crate) fn validate_michigan_header_v1(
+pub(crate) fn validate_michigan_header(
     preset_id: &str,
     horizon: i64,
     content: &[u8],
     foundation: &[u8],
     tick: u64,
-) -> Result<MichiganContentPresetV1, MichiganContentErrorV1> {
+) -> Result<MichiganContentPreset, MichiganContentError> {
     let preset =
-        MichiganContentPresetV1::from_id(preset_id).ok_or(MichiganContentErrorV1::UnknownPreset)?;
-    if !(1..=crate::michigan_material::MICHIGAN_MAX_HORIZON_PERIODS_V1)
+        MichiganContentPreset::from_id(preset_id).ok_or(MichiganContentError::UnknownPreset)?;
+    if !(1..=crate::michigan_material::MICHIGAN_MAX_HORIZON_PERIODS)
         .contains(&u64::try_from(horizon).unwrap_or(0))
         || tick > u64::try_from(horizon).unwrap_or(0)
         || content.len() != 32
@@ -296,7 +284,7 @@ pub(crate) fn validate_michigan_header_v1(
         || content.iter().all(|b| *b == 0)
         || foundation.iter().all(|b| *b == 0)
     {
-        return Err(MichiganContentErrorV1::IdentityMismatch);
+        return Err(MichiganContentError::IdentityMismatch);
     }
     Ok(preset)
 }
@@ -304,18 +292,18 @@ pub(crate) fn validate_michigan_header_v1(
 /// Locate numeric authority inside the current canonical material/graph/content
 /// nesting. Full reconstruction above subsequently compares every byte, including
 /// all fields skipped here; locating a self-reported digest never admits content.
-fn stored_defines_from_material_foundation(bytes: &[u8]) -> Result<&[u8], MichiganContentErrorV1> {
-    use MichiganContentErrorV1::Foundation;
-    fn take<'a>(input: &mut &'a [u8], n: usize) -> Result<&'a [u8], MichiganContentErrorV1> {
+fn stored_defines_from_material_foundation(bytes: &[u8]) -> Result<&[u8], MichiganContentError> {
+    use MichiganContentError::Foundation;
+    fn take<'a>(input: &mut &'a [u8], n: usize) -> Result<&'a [u8], MichiganContentError> {
         let value = input.get(..n).ok_or(Foundation)?;
         *input = &input[n..];
         Ok(value)
     }
-    fn field32<'a>(input: &mut &'a [u8]) -> Result<&'a [u8], MichiganContentErrorV1> {
+    fn field32<'a>(input: &mut &'a [u8]) -> Result<&'a [u8], MichiganContentError> {
         let length = u32::from_be_bytes(take(input, 4)?.try_into().map_err(|_| Foundation)?);
         take(input, usize::try_from(length).map_err(|_| Foundation)?)
     }
-    fn field64<'a>(input: &mut &'a [u8]) -> Result<&'a [u8], MichiganContentErrorV1> {
+    fn field64<'a>(input: &mut &'a [u8]) -> Result<&'a [u8], MichiganContentError> {
         let length = u64::from_be_bytes(take(input, 8)?.try_into().map_err(|_| Foundation)?);
         take(input, usize::try_from(length).map_err(|_| Foundation)?)
     }

@@ -23,10 +23,11 @@ use std::collections::{HashMap, HashSet};
 use babylon_bsl::rule_pipeline::{load_rule, LoadContext, LoadError};
 use babylon_bsl::scenario::load_scenario;
 use babylon_bsl::{
-    BindingVocabulary, CardinalityCeilings, DeclError, EnumRegistry, IntrinsicCosts, TypeEnv, Value,
+    bindings::BindingVocabulary, declarations::DeclError, evaluator::Value,
+    fuel::CardinalityCeilings, fuel::IntrinsicCosts, typecheck::TypeEnv, types::EnumRegistry,
 };
 use babylon_graph::hypergraph_store::HypergraphStore;
-use babylon_tick::diagnose_content_set;
+use babylon_tick::{diagnose_content_set_sources, ContentRuleSource};
 use lsp_types::{DiagnosticSeverity, NumberOrString, Uri};
 
 use babylon_ls::content_manifest::ContentSetManifest;
@@ -142,7 +143,8 @@ fn row_1_empty_when_is_one_e_parse_020_file_tier_diagnostic() {
 #[test]
 fn row_2_a_lexical_error_is_exact_tier_over_the_offending_token() {
     let source = "(~= agitation 0.5p)";
-    let read_err = babylon_bsl::read(source).expect_err("~= is not a valid comparison operator");
+    let read_err =
+        babylon_bsl::reader::read(source).expect_err("~= is not a valid comparison operator");
     let located = Located::from_load_error(&LoadError::Read(read_err));
     let line_index = LineIndex::new(source);
     let diags = diagnostics_for_file(&uri("x.bsl"), source, &line_index, &[located]);
@@ -278,7 +280,7 @@ fn row_5_a_bsl_with_no_manifest_row_gets_the_information_notice() {
 
 /// **Determinism row** (§5.3): diagnosing one content set twice — and
 /// again with its rule sources in reverse order — produces byte-identical
-/// serialized diagnostic arrays. `diagnose_content_set` loads each rule
+/// serialized diagnostic arrays. `diagnose_content_set_sources` loads each rule
 /// form independently and appends failures in `rule_srcs`' own order
 /// (its own doc); [`diagnostics_for_file`]'s declared total order
 /// (`(range, code, message)`) is what neutralizes that input-order
@@ -345,22 +347,29 @@ note = "determinism row fixture"
     );
 }
 
-/// Sanity: `diagnose_content_set`'s own duplicate-intrinsic construction
+/// Sanity: `diagnose_content_set_sources`'s own duplicate-intrinsic construction
 /// path (`DeclError::Duplicate`) is reachable through `babylon-tick`
 /// directly too, not only through the `pass`-layer fixture above — cheap
 /// insurance against the two call paths drifting.
 #[test]
 fn diagnose_content_set_duplicate_intrinsic_carries_e_load_001() {
     let rule_source = format!("{FLOOR_INTRINSIC} {FLOOR_INTRINSIC} {PROBE_RULE}");
-    let errors = diagnose_content_set(PROBE_SCENARIO, None, &[&rule_source]);
+    let errors = diagnose_content_set_sources(
+        PROBE_SCENARIO,
+        None,
+        &[ContentRuleSource {
+            source_id: "rules/duplicate-intrinsic.bsl",
+            source: &rule_source,
+        }],
+    );
     assert_eq!(errors.len(), 1, "{errors:?}");
-    assert_eq!(errors[0].spec_code(), Some("E-LOAD-001"));
-    let located = Located::from_prepare_error(&errors[0]);
+    assert_eq!(errors[0].error.spec_code(), Some("E-LOAD-001"));
+    let located = Located::from_prepare_error(&errors[0].error);
     assert_eq!(located.code, Some("E-LOAD-001"));
     assert_eq!(located.family, "E-LOAD");
     assert!(matches!(
         located.identity,
-        Some(babylon_bsl::ErrorIdentity::Name(ref n)) if n == "floor"
+        Some(babylon_bsl::error_identity::ErrorIdentity::Name(ref n)) if n == "floor"
     ));
     // Confirms the `DeclError` variant this row exercises really is the
     // one `error_identity.rs`'s roster names for `E-LOAD-001` (`Name` from
@@ -374,15 +383,28 @@ fn diagnose_content_set_duplicate_intrinsic_carries_e_load_001() {
 
 #[test]
 fn diagnose_content_set_duplicate_rule_carries_typed_location_data() {
-    let errors = diagnose_content_set(PROBE_SCENARIO, None, &[PROBE_RULE, PROBE_RULE]);
+    let errors = diagnose_content_set_sources(
+        PROBE_SCENARIO,
+        None,
+        &[
+            ContentRuleSource {
+                source_id: "rules/probe.bsl",
+                source: PROBE_RULE,
+            },
+            ContentRuleSource {
+                source_id: "rules/duplicate-probe.bsl",
+                source: PROBE_RULE,
+            },
+        ],
+    );
     assert_eq!(errors.len(), 1, "{errors:?}");
-    assert_eq!(errors[0].spec_code(), Some("E-LOAD-001"));
+    assert_eq!(errors[0].error.spec_code(), Some("E-LOAD-001"));
 
-    let located = Located::from_prepare_error(&errors[0]);
+    let located = Located::from_prepare_error(&errors[0].error);
     assert_eq!(located.code, Some("E-LOAD-001"));
     assert_eq!(located.family, "E-LOAD");
     assert!(matches!(
         located.identity,
-        Some(babylon_bsl::ErrorIdentity::RuleId(ref id)) if id == "vitality/probe"
+        Some(babylon_bsl::error_identity::ErrorIdentity::RuleId(ref id)) if id == "vitality/probe"
     ));
 }

@@ -1,5 +1,5 @@
 use babylon_persistence::michigan_material::{
-    MichiganMaterialPathV2, MichiganRoadSourceV2, MichiganSiteRoleV2,
+    MichiganMaterialPath, MichiganRoadSource, MichiganSiteRole,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -24,7 +24,7 @@ pub struct Report {
     pub baseline_packaging_opening: u64,
     pub input_sha256: BTreeMap<&'static str, String>,
     pub qualification_source_pins: QualificationSourcePins,
-    pub road_source: MichiganRoadSourceV2,
+    pub road_source: MichiganRoadSource,
     pub terminal_source_pins: BTreeMap<String, String>,
     pub owners: BTreeMap<String, OwnerIdentity>,
     pub processes: BTreeMap<String, ProcessIdentity>,
@@ -36,7 +36,7 @@ pub struct Report {
 pub struct OwnerIdentity {
     pub county_geoid: String,
     pub sector_code: String,
-    pub role: MichiganSiteRoleV2,
+    pub role: MichiganSiteRole,
 }
 #[derive(Serialize)]
 pub struct ProcessIdentity {
@@ -51,7 +51,7 @@ pub struct RouteIdentity {
     pub good: String,
     pub unit: String,
     pub grams_per_unit: u64,
-    pub path: MichiganMaterialPathV2,
+    pub path: MichiganMaterialPath,
 }
 #[derive(Serialize)]
 pub struct Case {

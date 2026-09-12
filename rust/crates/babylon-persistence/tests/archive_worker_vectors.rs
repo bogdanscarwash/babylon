@@ -1,11 +1,11 @@
 //! Shared language-neutral vectors for the pinned Archive worker behavior.
 
 use babylon_persistence::{
-    archive_batch_matches_receipt_v1, archive_contiguous_watermark_v1, classify_archive_receipt_v1,
-    classify_archive_sweep_v1, ArchiveDirtyBatchV1, ArchivePageInputV1, ArchiveProducerOutcomeV1,
-    ArchiveReceiptDispositionV1, ArchiveReceiptPlanV1, ArchiveSubjectKindV1, ArchiveSubjectV1,
-    PendingArchiveReceiptV1, SemanticArchiveErrorV1, ARCHIVE_PENDING_RECEIPTS_SQL_V1,
-    ARCHIVE_SWEEP_MAX_RECEIPTS_V1, ARCHIVE_SWEEP_MAX_SCAN_V1, ARCHIVE_SWEEP_WATERMARK_SQL_V1,
+    archive_batch_matches_receipt, archive_contiguous_watermark, classify_archive_receipt,
+    classify_archive_sweep, ArchiveDirtyBatch, ArchivePageInput, ArchiveProducerOutcome,
+    ArchiveReceiptDisposition, ArchiveReceiptPlan, ArchiveSubject, ArchiveSubjectKind,
+    PendingArchiveReceipt, SemanticArchiveError, ARCHIVE_PENDING_RECEIPTS_SQL,
+    ARCHIVE_SWEEP_MAX_RECEIPTS, ARCHIVE_SWEEP_MAX_SCAN, ARCHIVE_SWEEP_WATERMARK_SQL,
 };
 use serde_json::{json, Value};
 use sha2::{Digest as _, Sha256};
@@ -77,10 +77,10 @@ fn paged_batch_ref_json(
     })
 }
 
-fn page_input(resolve_tick: u64, index: u64) -> ArchivePageInputV1 {
-    ArchivePageInputV1::try_new(
-        ArchiveSubjectV1::try_new(
-            ArchiveSubjectKindV1::County,
+fn page_input(resolve_tick: u64, index: u64) -> ArchivePageInput {
+    ArchivePageInput::try_new(
+        ArchiveSubject::try_new(
+            ArchiveSubjectKind::County,
             format!("26{index:03}"),
             "Wayne County".to_owned(),
         )
@@ -94,7 +94,7 @@ fn page_input(resolve_tick: u64, index: u64) -> ArchivePageInputV1 {
     .expect("valid page input")
 }
 
-fn batch_from_ref(data: &Value) -> ArchiveDirtyBatchV1 {
+fn batch_from_ref(data: &Value) -> ArchiveDirtyBatch {
     let resolve_tick = data["resolve_tick"].as_u64().expect("u64 resolve tick");
     let page_count =
         usize::try_from(data["page_count"].as_u64().expect("u64 page count")).expect("page count");
@@ -102,7 +102,7 @@ fn batch_from_ref(data: &Value) -> ArchiveDirtyBatchV1 {
     for index in 0..page_count {
         pages.push(page_input(resolve_tick, index as u64));
     }
-    ArchiveDirtyBatchV1::try_new(
+    ArchiveDirtyBatch::try_new(
         resolve_tick,
         tick_hash(data["tick_content_hash_hex"].as_str().expect("hash hex")),
         pages,
@@ -110,34 +110,34 @@ fn batch_from_ref(data: &Value) -> ArchiveDirtyBatchV1 {
     .expect("valid dirty batch")
 }
 
-fn receipt_from_ref(data: &Value) -> PendingArchiveReceiptV1 {
-    PendingArchiveReceiptV1::try_new(
+fn receipt_from_ref(data: &Value) -> PendingArchiveReceipt {
+    PendingArchiveReceipt::try_new(
         data["resolve_tick"].as_u64().expect("u64 resolve tick"),
         tick_hash(data["tick_content_hash_hex"].as_str().expect("hash hex")),
     )
     .expect("valid pending receipt")
 }
 
-fn error_name(error: &SemanticArchiveErrorV1) -> &'static str {
+fn error_name(error: &SemanticArchiveError) -> &'static str {
     match error {
-        SemanticArchiveErrorV1::InvalidVerifiedTick => "InvalidVerifiedTick",
-        SemanticArchiveErrorV1::ReceiptMismatch => "ReceiptMismatch",
-        SemanticArchiveErrorV1::StoredPageMismatch => "StoredPageMismatch",
+        SemanticArchiveError::InvalidVerifiedTick => "InvalidVerifiedTick",
+        SemanticArchiveError::ReceiptMismatch => "ReceiptMismatch",
+        SemanticArchiveError::StoredPageMismatch => "StoredPageMismatch",
         other => panic!("unexpected vector error variant: {other:?}"),
     }
 }
 
-fn plan_name(plan: ArchiveReceiptPlanV1) -> &'static str {
+fn plan_name(plan: ArchiveReceiptPlan) -> &'static str {
     match plan {
-        ArchiveReceiptPlanV1::Stage => "Stage",
-        ArchiveReceiptPlanV1::Consume => "Consume",
+        ArchiveReceiptPlan::Stage => "Stage",
+        ArchiveReceiptPlan::Consume => "Consume",
     }
 }
 
-fn sweep_step(value: &Value) -> Result<ArchiveProducerOutcomeV1, SemanticArchiveErrorV1> {
+fn sweep_step(value: &Value) -> Result<ArchiveProducerOutcome, SemanticArchiveError> {
     if let Some(error) = value.get("error") {
         assert_eq!(error.as_str(), Some("ReceiptMismatch"));
-        return Err(SemanticArchiveErrorV1::ReceiptMismatch);
+        return Err(SemanticArchiveError::ReceiptMismatch);
     }
     let batch = batch_from_ref(&value["batch"]);
     let remaining = usize::try_from(
@@ -146,7 +146,7 @@ fn sweep_step(value: &Value) -> Result<ArchiveProducerOutcomeV1, SemanticArchive
             .expect("u64 remaining count"),
     )
     .expect("remaining count");
-    Ok(ArchiveProducerOutcomeV1::new(batch, remaining))
+    Ok(ArchiveProducerOutcome::new(batch, remaining))
 }
 
 fn rows() -> Vec<Value> {
@@ -239,8 +239,8 @@ fn plan_rows() -> Vec<Value> {
             "kind": "plan",
             "data": {
                 "batch": paged_batch_ref_json(42, TICK_CONTENT_HASH_HEX, page_count, remaining),
-                "expected": plan_name(classify_archive_receipt_v1(
-                    &ArchiveProducerOutcomeV1::new(
+                "expected": plan_name(classify_archive_receipt(
+                    &ArchiveProducerOutcome::new(
                         batch_from_ref(&batch_ref_json(42, TICK_CONTENT_HASH_HEX, page_count)),
                         remaining,
                     ),
@@ -335,23 +335,23 @@ fn sweep_rows() -> Vec<Value> {
     .collect()
 }
 
-fn disposition_name(disposition: ArchiveReceiptDispositionV1) -> &'static str {
+fn disposition_name(disposition: ArchiveReceiptDisposition) -> &'static str {
     match disposition {
-        ArchiveReceiptDispositionV1::Applied => "Applied",
-        ArchiveReceiptDispositionV1::AlreadyConsumed => "AlreadyConsumed",
-        ArchiveReceiptDispositionV1::Paged => "Paged",
+        ArchiveReceiptDisposition::Applied => "Applied",
+        ArchiveReceiptDisposition::AlreadyConsumed => "AlreadyConsumed",
+        ArchiveReceiptDisposition::Paged => "Paged",
     }
 }
 
 fn identity_row() -> Value {
-    let plan_names: Vec<&str> = [ArchiveReceiptPlanV1::Consume, ArchiveReceiptPlanV1::Stage]
+    let plan_names: Vec<&str> = [ArchiveReceiptPlan::Consume, ArchiveReceiptPlan::Stage]
         .into_iter()
         .map(plan_name)
         .collect();
     let disposition_names: Vec<&str> = [
-        ArchiveReceiptDispositionV1::Applied,
-        ArchiveReceiptDispositionV1::AlreadyConsumed,
-        ArchiveReceiptDispositionV1::Paged,
+        ArchiveReceiptDisposition::Applied,
+        ArchiveReceiptDisposition::AlreadyConsumed,
+        ArchiveReceiptDisposition::Paged,
     ]
     .into_iter()
     .map(disposition_name)
@@ -361,10 +361,10 @@ fn identity_row() -> Value {
         "kind": "identity",
         "data": {
             "source_path": SOURCE_PATH,
-            "pending_receipts_sql_sha256_hex": sha256_hex(ARCHIVE_PENDING_RECEIPTS_SQL_V1.as_bytes()),
-            "watermark_sql_sha256_hex": sha256_hex(ARCHIVE_SWEEP_WATERMARK_SQL_V1.as_bytes()),
-            "max_receipts_per_sweep": ARCHIVE_SWEEP_MAX_RECEIPTS_V1,
-            "max_scan_per_sweep": ARCHIVE_SWEEP_MAX_SCAN_V1,
+            "pending_receipts_sql_sha256_hex": sha256_hex(ARCHIVE_PENDING_RECEIPTS_SQL.as_bytes()),
+            "watermark_sql_sha256_hex": sha256_hex(ARCHIVE_SWEEP_WATERMARK_SQL.as_bytes()),
+            "max_receipts_per_sweep": ARCHIVE_SWEEP_MAX_RECEIPTS,
+            "max_scan_per_sweep": ARCHIVE_SWEEP_MAX_SCAN,
             "plans": plan_names,
             "dispositions": disposition_names,
             "error_variants": ERROR_VARIANTS_USED,
@@ -405,7 +405,7 @@ fn shared_watermark_vectors_match_the_contiguous_derivation() {
         let data = &row["data"];
         let first_pending = data["first_pending_tick"].as_u64();
         let max_receipt_tick = data["max_receipt_tick"].as_u64().expect("u64 max receipt");
-        let actual = archive_contiguous_watermark_v1(first_pending, max_receipt_tick);
+        let actual = archive_contiguous_watermark(first_pending, max_receipt_tick);
         assert_eq!(
             actual,
             data["expected"].as_u64().expect("u64 expected watermark"),
@@ -424,13 +424,13 @@ fn shared_match_vectors_match_the_batch_identity_refusal() {
         let data = &row["data"];
         let batch = batch_from_ref(&data["batch"]);
         let receipt = receipt_from_ref(&data["receipt"]);
-        let result = archive_batch_matches_receipt_v1(&batch, &receipt);
+        let result = archive_batch_matches_receipt(&batch, &receipt);
         if data.get("expected").and_then(Value::as_str) == Some("ok") {
             assert_eq!(result, Ok(()), "{}", row["id"]);
         } else {
             assert_eq!(
                 result,
-                Err(SemanticArchiveErrorV1::ReceiptMismatch),
+                Err(SemanticArchiveError::ReceiptMismatch),
                 "{}",
                 row["id"]
             );
@@ -453,7 +453,7 @@ fn shared_plan_vectors_match_the_receipt_classification() {
         let data = &row["data"];
         let produced = sweep_step(&json!({"batch": data["batch"]})).expect("plan outcome");
         assert_eq!(
-            plan_name(classify_archive_receipt_v1(&produced)),
+            plan_name(classify_archive_receipt(&produced)),
             data["expected"].as_str().expect("expected plan"),
             "{}",
             row["id"]
@@ -468,13 +468,13 @@ fn shared_sweep_vectors_match_the_stop_on_first_error_planner() {
     assert_eq!(sweep_rows.len(), 8);
     for row in sweep_rows {
         let data = &row["data"];
-        let steps: Vec<Result<ArchiveProducerOutcomeV1, SemanticArchiveErrorV1>> = data["steps"]
+        let steps: Vec<Result<ArchiveProducerOutcome, SemanticArchiveError>> = data["steps"]
             .as_array()
             .expect("steps array")
             .iter()
             .map(sweep_step)
             .collect();
-        let result = classify_archive_sweep_v1(steps);
+        let result = classify_archive_sweep(steps);
         if let Some(expected_error) = data.get("expected_error").and_then(Value::as_str) {
             let error = result.expect_err("sweep vector must stop with an error");
             assert_eq!(error_name(&error), expected_error, "{}", row["id"]);
@@ -502,19 +502,19 @@ fn shared_identity_vectors_match_the_pinned_sql_and_taxonomy() {
     let data = &identity_rows[0]["data"];
     assert_eq!(
         data["pending_receipts_sql_sha256_hex"].as_str(),
-        Some(sha256_hex(ARCHIVE_PENDING_RECEIPTS_SQL_V1.as_bytes()).as_str())
+        Some(sha256_hex(ARCHIVE_PENDING_RECEIPTS_SQL.as_bytes()).as_str())
     );
     assert_eq!(
         data["watermark_sql_sha256_hex"].as_str(),
-        Some(sha256_hex(ARCHIVE_SWEEP_WATERMARK_SQL_V1.as_bytes()).as_str())
+        Some(sha256_hex(ARCHIVE_SWEEP_WATERMARK_SQL.as_bytes()).as_str())
     );
     assert_eq!(
         data["max_receipts_per_sweep"].as_i64(),
-        Some(ARCHIVE_SWEEP_MAX_RECEIPTS_V1)
+        Some(ARCHIVE_SWEEP_MAX_RECEIPTS)
     );
     assert_eq!(
         data["max_scan_per_sweep"].as_i64(),
-        Some(ARCHIVE_SWEEP_MAX_SCAN_V1)
+        Some(ARCHIVE_SWEEP_MAX_SCAN)
     );
     assert!(
         data["max_scan_per_sweep"].as_i64().expect("scan bound")

@@ -2,14 +2,11 @@
 
 use super::{grams_per_unit, has_duplicate, site_node, BTreeSet};
 use crate::{
-    GoodIdV1, MaterialCircuitErrorV3, MaterialCircuitStateV3, MerchantHandlingV3, MerchantRoleV3,
-    SiteIdV1, UnitIdV1,
+    GoodId, MaterialCircuitError, MaterialCircuitState, MerchantHandling, MerchantRole, SiteId,
+    UnitId,
 };
 
-pub(super) fn merchant(
-    state: &MaterialCircuitStateV3,
-    site: SiteIdV1,
-) -> Option<&MerchantHandlingV3> {
+pub(super) fn merchant(state: &MaterialCircuitState, site: SiteId) -> Option<&MerchantHandling> {
     state
         .merchants
         .binary_search_by_key(&site, |row| row.site_id)
@@ -18,11 +15,11 @@ pub(super) fn merchant(
 }
 
 pub(super) fn hours_per_unit(
-    state: &MaterialCircuitStateV3,
-    site: SiteIdV1,
-    good: GoodIdV1,
-    unit: UnitIdV1,
-) -> Result<u64, MaterialCircuitErrorV3> {
+    state: &MaterialCircuitState,
+    site: SiteId,
+    good: GoodId,
+    unit: UnitId,
+) -> Result<u64, MaterialCircuitError> {
     state
         .handling_coefficients
         .binary_search_by_key(&(site, good, unit), |row| {
@@ -31,12 +28,10 @@ pub(super) fn hours_per_unit(
         .ok()
         .map(|index| state.handling_coefficients[index].hours_per_unit)
         .filter(|hours| *hours > 0)
-        .ok_or(MaterialCircuitErrorV3::MerchantInvariant)
+        .ok_or(MaterialCircuitError::MerchantInvariant)
 }
 
-pub(super) fn validate_merchants(
-    state: &MaterialCircuitStateV3,
-) -> Result<(), MaterialCircuitErrorV3> {
+pub(super) fn validate_merchants(state: &MaterialCircuitState) -> Result<(), MaterialCircuitError> {
     if has_duplicate(&state.merchants, |row| row.site_id)
         || has_duplicate(&state.handling_coefficients, |row| {
             (row.site_id, row.good_id, row.unit_id)
@@ -44,7 +39,7 @@ pub(super) fn validate_merchants(
         || has_duplicate(&state.final_demand_principals, |row| row.id)
         || has_duplicate(&state.final_demand_orders, |row| row.order_id)
     {
-        return Err(MaterialCircuitErrorV3::DuplicateRow);
+        return Err(MaterialCircuitError::DuplicateRow);
     }
     let production_sites: BTreeSet<_> = state
         .process_outputs
@@ -63,15 +58,15 @@ pub(super) fn validate_merchants(
             || production_sites.contains(&row.site_id)
             || road_principals.contains(&row.capacity_id)
         {
-            return Err(MaterialCircuitErrorV3::MerchantInvariant);
+            return Err(MaterialCircuitError::MerchantInvariant);
         }
         if !handling_principals.insert(row.capacity_id) {
-            return Err(MaterialCircuitErrorV3::DuplicateRow);
+            return Err(MaterialCircuitError::DuplicateRow);
         }
     }
     for row in &state.handling_coefficients {
         if merchant(state, row.site_id).is_none() || row.hours_per_unit == 0 {
-            return Err(MaterialCircuitErrorV3::MerchantInvariant);
+            return Err(MaterialCircuitError::MerchantInvariant);
         }
         grams_per_unit(state, row.good_id, row.unit_id)?;
     }
@@ -83,27 +78,27 @@ pub(super) fn validate_merchants(
     let mut counties = BTreeSet::new();
     for row in &state.final_demand_principals {
         if !row.county_geoid.iter().all(u8::is_ascii_digit) {
-            return Err(MaterialCircuitErrorV3::FinalDemandInvariant);
+            return Err(MaterialCircuitError::FinalDemandInvariant);
         }
         if !counties.insert(row.county_geoid) {
-            return Err(MaterialCircuitErrorV3::DuplicateRow);
+            return Err(MaterialCircuitError::DuplicateRow);
         }
     }
     for row in &state.final_demand_orders {
         let retailer = merchant(state, row.retailer_site_id)
-            .ok_or(MaterialCircuitErrorV3::FinalDemandInvariant)?;
+            .ok_or(MaterialCircuitError::FinalDemandInvariant)?;
         let principal = state
             .final_demand_principals
             .binary_search_by_key(&row.demand_principal_id, |row| row.id)
             .ok()
             .map(|index| &state.final_demand_principals[index])
-            .ok_or(MaterialCircuitErrorV3::FinalDemandInvariant)?;
-        if retailer.role != MerchantRoleV3::Retail
+            .ok_or(MaterialCircuitError::FinalDemandInvariant)?;
+        if retailer.role != MerchantRole::Retail
             || retailer.county_geoid != principal.county_geoid
             || row.ordered == 0
             || row.fulfilled > row.ordered
         {
-            return Err(MaterialCircuitErrorV3::FinalDemandInvariant);
+            return Err(MaterialCircuitError::FinalDemandInvariant);
         }
         hours_per_unit(state, row.retailer_site_id, row.good_id, row.unit_id)?;
         grams_per_unit(state, row.good_id, row.unit_id)?;

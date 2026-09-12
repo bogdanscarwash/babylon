@@ -1,11 +1,10 @@
 //! Shared language-neutral vectors for the pinned fog-safe Archive page renderer.
 
 use babylon_persistence::{
-    archive_worker_contract_sha256_v1, ArchiveCitationV1, ArchiveDirtyBatchV1,
-    ArchiveKnowledgeGrantV1, ArchiveKnowledgeV1, ArchiveLinkV1, ArchivePageInputV1,
-    ArchivePageRefV1, ArchiveSignalV1, ArchiveSubjectKindV1, ArchiveSubjectV1,
-    FogSafeArchiveRendererV1, SemanticArchiveErrorV1, ARCHIVE_PAGE_TEMPLATE_SHA256_V1,
-    CURRENT_ARCHIVE_SCHEMA_SQL,
+    archive_worker_contract_sha256, ArchiveCitation, ArchiveDirtyBatch, ArchiveKnowledge,
+    ArchiveKnowledgeGrant, ArchiveLink, ArchivePageInput, ArchivePageRef, ArchiveSignal,
+    ArchiveSubject, ArchiveSubjectKind, FogSafeArchiveRenderer, SemanticArchiveError,
+    ARCHIVE_PAGE_TEMPLATE_SHA256, CURRENT_ARCHIVE_SCHEMA_SQL,
 };
 use serde_json::{json, Value};
 
@@ -112,24 +111,24 @@ fn unknown_subject_knowledge_json() -> Value {
     json!([subject_grant_json(&detroit_ref_json(), "place/2622000")])
 }
 
-fn parse_kind(value: &str) -> ArchiveSubjectKindV1 {
+fn parse_kind(value: &str) -> ArchiveSubjectKind {
     match value {
-        "county" => ArchiveSubjectKindV1::County,
-        "place" => ArchiveSubjectKindV1::Place,
+        "county" => ArchiveSubjectKind::County,
+        "place" => ArchiveSubjectKind::Place,
         other => panic!("unknown subject kind: {other}"),
     }
 }
 
-fn parse_ref(value: &Value) -> ArchivePageRefV1 {
-    ArchivePageRefV1::try_new(
+fn parse_ref(value: &Value) -> ArchivePageRef {
+    ArchivePageRef::try_new(
         parse_kind(value["kind"].as_str().expect("kind text")),
         value["id"].as_str().expect("id text").to_owned(),
     )
     .expect("valid page reference")
 }
 
-fn parse_citation(value: &Value) -> ArchiveCitationV1 {
-    ArchiveCitationV1::try_new(
+fn parse_citation(value: &Value) -> ArchiveCitation {
+    ArchiveCitation::try_new(
         value["source_id"]
             .as_str()
             .expect("source id text")
@@ -139,14 +138,14 @@ fn parse_citation(value: &Value) -> ArchiveCitationV1 {
     .expect("valid citation")
 }
 
-fn parse_page_input(value: &Value) -> ArchivePageInputV1 {
+fn parse_page_input(value: &Value) -> ArchivePageInput {
     let subject = value["subject"].as_object().expect("subject object");
     let signals = value["signals"]
         .as_array()
         .expect("signals array")
         .iter()
         .map(|signal| {
-            ArchiveSignalV1::try_new(
+            ArchiveSignal::try_new(
                 signal["grant_key"]
                     .as_str()
                     .expect("grant key text")
@@ -163,15 +162,15 @@ fn parse_page_input(value: &Value) -> ArchivePageInputV1 {
         .expect("links array")
         .iter()
         .map(|link| {
-            ArchiveLinkV1::try_new(
+            ArchiveLink::try_new(
                 parse_ref(&link["target"]),
                 link["known_label"].as_str().expect("label text").to_owned(),
             )
             .expect("valid link")
         })
         .collect();
-    ArchivePageInputV1::try_new(
-        ArchiveSubjectV1::try_new(
+    ArchivePageInput::try_new(
+        ArchiveSubject::try_new(
             parse_kind(subject["kind"].as_str().expect("kind text")),
             subject["id"].as_str().expect("id text").to_owned(),
             subject["title"].as_str().expect("title text").to_owned(),
@@ -191,13 +190,13 @@ fn parse_page_input(value: &Value) -> ArchivePageInputV1 {
     .expect("valid page input")
 }
 
-fn parse_knowledge(value: &Value) -> ArchiveKnowledgeV1 {
+fn parse_knowledge(value: &Value) -> ArchiveKnowledge {
     let grants = value
         .as_array()
         .expect("knowledge array")
         .iter()
         .map(|grant| {
-            ArchiveKnowledgeGrantV1::try_new(
+            ArchiveKnowledgeGrant::try_new(
                 parse_ref(&grant["page_ref"]),
                 grant["grant_key"]
                     .as_str()
@@ -209,7 +208,7 @@ fn parse_knowledge(value: &Value) -> ArchiveKnowledgeV1 {
             .expect("valid knowledge grant")
         })
         .collect();
-    ArchiveKnowledgeV1::try_new(grants).expect("valid knowledge snapshot")
+    ArchiveKnowledge::try_new(grants).expect("valid knowledge snapshot")
 }
 
 fn rows() -> Vec<Value> {
@@ -234,7 +233,7 @@ fn rows_of_kind<'a>(rows: &'a [Value], kind: &'a str) -> impl Iterator<Item = &'
 }
 
 fn generate_vectors() -> String {
-    let renderer = FogSafeArchiveRendererV1::new().expect("pinned template compiles");
+    let renderer = FogSafeArchiveRenderer::new().expect("pinned template compiles");
     let mut lines = Vec::new();
     for (id, knowledge_json) in [
         ("render-known-county", full_knowledge_json()),
@@ -275,7 +274,7 @@ fn generate_vectors() -> String {
     ] {
         let parsed_pages = pages.iter().map(parse_page_input).collect();
         let batch =
-            ArchiveDirtyBatchV1::try_new(42, [0x11; 32], parsed_pages).expect("valid dirty batch");
+            ArchiveDirtyBatch::try_new(42, [0x11; 32], parsed_pages).expect("valid dirty batch");
         lines.push(json!({
             "id": id,
             "kind": "batch",
@@ -292,10 +291,10 @@ fn generate_vectors() -> String {
         "kind": "identity",
         "data": {
             "template_path": "rust/crates/babylon-persistence/src/archive_page_v1.md.j2",
-            "template_sha256_hex": hex_encode(&ARCHIVE_PAGE_TEMPLATE_SHA256_V1),
+            "template_sha256_hex": hex_encode(&ARCHIVE_PAGE_TEMPLATE_SHA256),
             "schema_path": "rust/crates/babylon-persistence/migrations/current_archive.sql",
             "worker_domain_ascii_nul": "babylon.semantic-archive-worker.v1",
-            "worker_contract_sha256_hex": hex_encode(&archive_worker_contract_sha256_v1()),
+            "worker_contract_sha256_hex": hex_encode(&archive_worker_contract_sha256()),
         },
     }));
     let mut output = String::new();
@@ -319,7 +318,7 @@ fn generate_shared_vectors_from_the_pinned_renderer() {
 #[test]
 fn shared_vectors_reproduce_exact_renderer_bytes() {
     let rows = rows();
-    let renderer = FogSafeArchiveRendererV1::new().expect("pinned template compiles");
+    let renderer = FogSafeArchiveRenderer::new().expect("pinned template compiles");
     let render_rows: Vec<&Value> = rows_of_kind(&rows, "render").collect();
     assert_eq!(render_rows.len(), 2);
     for row in &render_rows {
@@ -386,7 +385,7 @@ fn shared_vectors_reproduce_exact_renderer_bytes() {
 #[test]
 fn shared_refusal_vectors_match_the_closed_renderer_refusal() {
     let rows = rows();
-    let renderer = FogSafeArchiveRendererV1::new().expect("pinned template compiles");
+    let renderer = FogSafeArchiveRenderer::new().expect("pinned template compiles");
     let refusal_rows: Vec<&Value> = rows_of_kind(&rows, "refusal").collect();
     assert_eq!(refusal_rows.len(), 1);
     for row in refusal_rows {
@@ -398,7 +397,7 @@ fn shared_refusal_vectors_match_the_closed_renderer_refusal() {
         );
         assert_eq!(
             result,
-            Err(SemanticArchiveErrorV1::UnknownSubject),
+            Err(SemanticArchiveError::UnknownSubject),
             "{}",
             row["id"]
         );
@@ -419,7 +418,7 @@ fn shared_batch_vectors_match_the_exact_batch_identity() {
             .iter()
             .map(parse_page_input)
             .collect();
-        let batch = ArchiveDirtyBatchV1::try_new(
+        let batch = ArchiveDirtyBatch::try_new(
             data["resolve_tick"].as_u64().expect("u64 resolve tick"),
             hex_decode(data["tick_content_hash_hex"].as_str().expect("hash hex"))
                 .try_into()
@@ -444,11 +443,11 @@ fn shared_identity_vectors_match_the_pinned_template_and_worker_contract() {
     let data = &identity_rows[0]["data"];
     assert_eq!(
         data["template_sha256_hex"].as_str(),
-        Some(hex_encode(&ARCHIVE_PAGE_TEMPLATE_SHA256_V1).as_str())
+        Some(hex_encode(&ARCHIVE_PAGE_TEMPLATE_SHA256).as_str())
     );
     assert_eq!(
         data["worker_contract_sha256_hex"].as_str(),
-        Some(hex_encode(&archive_worker_contract_sha256_v1()).as_str())
+        Some(hex_encode(&archive_worker_contract_sha256()).as_str())
     );
     assert!(CURRENT_ARCHIVE_SCHEMA_SQL.contains("archive_page_revision_v2"));
 }

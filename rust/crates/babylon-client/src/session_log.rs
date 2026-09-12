@@ -367,7 +367,6 @@ struct DossierSnapshot {
     subject: Option<String>,
     content_tick: Option<u64>,
     verified_tick: Option<u64>,
-    history_floor_tick: Option<u64>,
     status: &'static str,
     page: &'static str,
 }
@@ -415,11 +414,9 @@ fn log_dossier(
     });
     let status = match (&*fetch, card) {
         (DossierFetchState::Idle, Some(read)) => match &read.state {
-            babylon_persistence::archive_revision::ArchiveDossierStateV2::Ready { .. } => "ready",
-            babylon_persistence::archive_revision::ArchiveDossierStateV2::Pending { .. } => {
-                "pending"
-            }
-            babylon_persistence::archive_revision::ArchiveDossierStateV2::Unavailable(_) => {
+            babylon_persistence::archive_revision::ArchiveDossierState::Ready { .. } => "ready",
+            babylon_persistence::archive_revision::ArchiveDossierState::Pending { .. } => "pending",
+            babylon_persistence::archive_revision::ArchiveDossierState::Unavailable(_) => {
                 "unavailable"
             }
         },
@@ -446,7 +443,6 @@ fn log_dossier(
             .and_then(crate::dossier::retained_page)
             .map(|page| page.content_source.tick()),
         verified_tick: card.and_then(crate::dossier::verified_tick),
-        history_floor_tick: card.map(|read| read.history_floor_tick),
         status,
         page: if view
             .as_deref()
@@ -466,7 +462,6 @@ fn log_dossier(
         subject = next.subject.as_deref().unwrap_or("none"),
         content_tick = next.content_tick,
         verified_tick = next.verified_tick,
-        history_floor_tick = next.history_floor_tick,
         status = next.status,
         page = next.page,
         "observer archive applied"
@@ -590,8 +585,9 @@ fn log_camera(
 mod tests {
     use super::*;
     use babylon_persistence::{
-        CampaignId, ObserverEconomySnapshotV1, ObserverVisibilityV1, ProductionSiteV2,
-        ProductionSnapshotV2,
+        identity::CampaignId, observer_reader::ObserverEconomySnapshot,
+        observer_reader::ObserverVisibility, production_observation::ProductionSite,
+        production_observation::ProductionSnapshot,
     };
     use bevy::log::tracing_subscriber::layer::SubscriberExt as _;
     use std::time::Duration;
@@ -599,17 +595,17 @@ mod tests {
     const HIDDEN_SITE: &str = "undisclosed-production-id";
     const HIDDEN_LABEL: &str = "Undisclosed factory label";
 
-    fn snapshot(session: &ObserverSession) -> ObserverEconomySnapshotV1 {
-        ObserverEconomySnapshotV1 {
+    fn snapshot(session: &ObserverSession) -> ObserverEconomySnapshot {
+        ObserverEconomySnapshot {
             campaign_id: session.campaign.as_uuid().to_string(),
             resolve_tick: session.viewed_tick,
             foundation_digest: "foundation".into(),
             nominal_world_hash: None,
             tick_content_hash: session.content_hash.clone(),
             envelope_digest: None,
-            visibility: ObserverVisibilityV1::FullObserver,
+            visibility: ObserverVisibility::FullObserver,
             counties: Vec::new(),
-            production: Some(ProductionSnapshotV2 {
+            production: Some(ProductionSnapshot {
                 content_authority_sha256: "a".repeat(64),
                 road_source: None,
                 physical_edges: Vec::new(),
@@ -621,29 +617,32 @@ mod tests {
                 staffing_accounts: Vec::new(),
                 scenario_label: "Designed telemetry fixture".into(),
                 horizon_period: 16,
-                sites: vec![ProductionSiteV2 {
+                sites: vec![ProductionSite {
                     id: HIDDEN_SITE.into(),
                     name: HIDDEN_LABEL.into(),
                     county_geoid: "26163".into(),
                     industry_code: "331".into(),
                     observed_employment: None,
                     inventory: Vec::new(),
-                    role: babylon_persistence::ProductionSiteRoleV2::Production,
+                    role:
+                        babylon_persistence::production_observation::ProductionSiteRole::Production,
                     sector_code: "31-33".into(),
-                    processes: vec![babylon_persistence::ProductionProcessV2 {
-                        id: "fixture-process".into(),
-                        name: "Fixture process".into(),
-                        output_good_id: "hidden-good-id".into(),
-                        output_unit_id: "hidden-unit-id".into(),
-                        output_good: "hidden-good-name".into(),
-                        output_unit: "kg".into(),
-                        output_per_batch: 1,
-                        available_batches: 1,
-                        planned_batches: None,
-                        produced_batches: None,
-                        inputs: Vec::new(),
-                        labor: Vec::new(),
-                    }],
+                    processes: vec![
+                        babylon_persistence::production_observation::ProductionProcess {
+                            id: "fixture-process".into(),
+                            name: "Fixture process".into(),
+                            output_good_id: "hidden-good-id".into(),
+                            output_unit_id: "hidden-unit-id".into(),
+                            output_good: "hidden-good-name".into(),
+                            output_unit: "kg".into(),
+                            output_per_batch: 1,
+                            available_batches: 1,
+                            planned_batches: None,
+                            produced_batches: None,
+                            inputs: Vec::new(),
+                            labor: Vec::new(),
+                        },
+                    ],
                 }],
                 routes: Vec::new(),
                 freight: Vec::new(),
@@ -709,10 +708,9 @@ mod tests {
     fn a_scoped_undisclosed_archive_response_does_not_log_the_requested_identity() {
         use crate::ui::dossier_card::{DossierRequestScope, InstalledDossier};
         use babylon_persistence::archive_revision::{
-            ArchiveDossierReadV2, ArchiveDossierStateV2, ArchiveDossierUnavailableV2,
-            ArchiveReadScopeV2,
+            ArchiveDossierRead, ArchiveDossierState, ArchiveDossierUnavailable, ArchiveReadScope,
         };
-        use babylon_persistence::{ArchivePageRefV1, ArchiveSubjectKindV1};
+        use babylon_persistence::{ArchivePageRef, ArchiveSubjectKind};
 
         let log = captured(|app| {
             {
@@ -731,9 +729,9 @@ mod tests {
             )))
             .unwrap();
             let wayne = atlas.index_of_fips("26163").unwrap();
-            let scope = ArchiveReadScopeV2::committed(campaign, 1, [1; 32]).unwrap();
+            let scope = ArchiveReadScope::committed(campaign, 1, [1; 32]).unwrap();
             let subject =
-                ArchivePageRefV1::try_new(ArchiveSubjectKindV1::Place, "2674900".into()).unwrap();
+                ArchivePageRef::try_new(ArchiveSubjectKind::Place, "2674900".into()).unwrap();
             app.insert_resource(atlas)
                 .insert_resource(SelectedCounty(Some(wayne)))
                 .insert_resource(DossierCampaignId(campaign))
@@ -748,14 +746,13 @@ mod tests {
                         read_scope: scope.clone(),
                         subject: subject.clone(),
                     },
-                    read: ArchiveDossierReadV2 {
+                    read: ArchiveDossierRead {
                         scope,
                         subject,
                         durable_tick: 1,
                         processed_tick: 1,
-                        history_floor_tick: 0,
-                        state: ArchiveDossierStateV2::Unavailable(
-                            ArchiveDossierUnavailableV2::SubjectNotDisclosed,
+                        state: ArchiveDossierState::Unavailable(
+                            ArchiveDossierUnavailable::SubjectNotDisclosed,
                         ),
                     },
                 })));

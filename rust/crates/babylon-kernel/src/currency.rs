@@ -176,8 +176,7 @@ impl Currency {
 
 /// Half-even (banker's) rounding integer division — the `round_half_even`
 /// kernel intrinsic (spec §6.2), pinned here for `Currency`'s own operators;
-/// re-exported at crate root for BSL's numeric-annex use once Phase 2 wires
-/// it as a callable intrinsic.
+/// available through this module for BSL numeric operations.
 ///
 /// # Panics
 /// Panics if `denominator` is zero, or on the (unreachable-for-`MICRO`)

@@ -361,7 +361,7 @@ fn path_child(path: &[u32], index: u32) -> Vec<u32> {
     child
 }
 
-fn byte_span(spans: &babylon_bsl::SpanTable, path: &[u32]) -> Option<ByteSpan> {
+fn byte_span(spans: &babylon_bsl::reader::SpanTable, path: &[u32]) -> Option<ByteSpan> {
     spans.span_of(path).map(|span| ByteSpan {
         start: span.start,
         end: span.end,
@@ -369,7 +369,7 @@ fn byte_span(spans: &babylon_bsl::SpanTable, path: &[u32]) -> Option<ByteSpan> {
 }
 
 fn fact(
-    spans: &babylon_bsl::SpanTable,
+    spans: &babylon_bsl::reader::SpanTable,
     token_path: &[u32],
     form_path: &[u32],
     kind: AuthoringKind,
@@ -382,7 +382,7 @@ fn fact(
 }
 
 fn argument_spans(
-    spans: &babylon_bsl::SpanTable,
+    spans: &babylon_bsl::reader::SpanTable,
     paths: impl IntoIterator<Item = Vec<u32>>,
 ) -> Vec<ByteSpan> {
     paths
@@ -392,28 +392,26 @@ fn argument_spans(
 }
 
 fn allocation_fact(
-    kernel: &babylon_bsl::probability::FiniteKernelV1,
-    allocation: Option<&babylon_bsl::probability::AllocationAnalysisV1>,
+    kernel: &babylon_bsl::probability::FiniteKernel,
+    allocation: Option<&babylon_bsl::probability::AllocationAnalysis>,
 ) -> Option<AllocationFact> {
     match allocation? {
-        babylon_bsl::probability::AllocationAnalysisV1::Exact(exact) => {
-            Some(AllocationFact::Exact(
-                kernel
-                    .branches
-                    .iter()
-                    .zip(&exact.masses)
-                    .zip(&exact.intervals)
-                    .map(|((branch, mass), interval)| BranchAllocationFact {
-                        outcome: branch.member.clone(),
-                        mass_nanounits: mass.nanounits(),
-                        ticket_start: interval.start,
-                        ticket_end: interval.end,
-                        ticket_count: interval.count,
-                    })
-                    .collect(),
-            ))
-        }
-        babylon_bsl::probability::AllocationAnalysisV1::Unavailable { reason } => {
+        babylon_bsl::probability::AllocationAnalysis::Exact(exact) => Some(AllocationFact::Exact(
+            kernel
+                .branches
+                .iter()
+                .zip(&exact.masses)
+                .zip(&exact.intervals)
+                .map(|((branch, mass), interval)| BranchAllocationFact {
+                    outcome: branch.member.clone(),
+                    mass_nanounits: mass.nanounits(),
+                    ticket_start: interval.start,
+                    ticket_end: interval.end,
+                    ticket_count: interval.count,
+                })
+                .collect(),
+        )),
+        babylon_bsl::probability::AllocationAnalysis::Unavailable { reason } => {
             Some(AllocationFact::Unavailable {
                 reason: reason.clone(),
             })
@@ -422,8 +420,8 @@ fn allocation_fact(
 }
 
 fn branch_facts(
-    spans: &babylon_bsl::SpanTable,
-    branch: &babylon_bsl::probability::KernelBranchV1,
+    spans: &babylon_bsl::reader::SpanTable,
+    branch: &babylon_bsl::probability::KernelBranch,
     allocation: Option<&AllocationFact>,
 ) -> Vec<AuthoringFact> {
     let mut facts = Vec::new();
@@ -451,7 +449,9 @@ fn branch_facts(
         &branch.form_path,
         AuthoringKind::Branch {
             outcome: branch.member.clone(),
-            mass_nanounits: branch.static_mass.map(babylon_bsl::Mass::nanounits),
+            mass_nanounits: branch
+                .static_mass
+                .map(babylon_bsl::probability::Mass::nanounits),
             tickets,
             allocation_ambiguity: None,
             argument_spans: arguments,
@@ -494,8 +494,8 @@ fn branch_facts(
 }
 
 fn kernel_facts(
-    spans: &babylon_bsl::SpanTable,
-    kernel: &babylon_bsl::probability::FiniteKernelV1,
+    spans: &babylon_bsl::reader::SpanTable,
+    kernel: &babylon_bsl::probability::FiniteKernel,
     allocation: Option<&AllocationFact>,
     linkage: Option<KernelProjectionFact>,
 ) -> Vec<AuthoringFact> {
@@ -545,11 +545,11 @@ fn kernel_facts(
 #[must_use]
 pub fn snapshot_from_rule_analysis(
     source: &str,
-    analysis: &babylon_bsl::probability::RuleProbabilityAnalysisV1,
+    analysis: &babylon_bsl::probability::RuleProbabilityAnalysis,
     linkage: Option<KernelProjectionFact>,
     projection_likelihood: Option<EventLikelihoodAnalysisFact>,
 ) -> AuthoringSnapshot {
-    let Ok((_, spans)) = babylon_bsl::read_all_spanned(source.as_bytes()) else {
+    let Ok((_, spans)) = babylon_bsl::reader::read_all_spanned(source.as_bytes()) else {
         return AuthoringSnapshot::default();
     };
     let mut facts = analysis.kernel.as_ref().map_or_else(Vec::new, |kernel| {
@@ -597,7 +597,7 @@ pub fn snapshot_from_rule_analysis(
         }
     }
     for node in &analysis.nodes {
-        if node.kind != babylon_bsl::probability::ProbabilityAnalysisNodeKindV1::QuantizeMass {
+        if node.kind != babylon_bsl::probability::ProbabilityAnalysisNodeKind::QuantizeMass {
             continue;
         }
         let head_path = &node.form_path;
@@ -626,11 +626,11 @@ pub fn snapshot_from_rule_analysis(
 pub fn snapshot_from_content_analysis(
     source_id: &str,
     source: &str,
-    analysis: &babylon_bsl::probability::ContentSetAnalysisV1,
+    analysis: &babylon_bsl::probability::ContentSetAnalysis,
     likelihood_overrides: &[(String, EventLikelihoodAnalysisFact)],
 ) -> AuthoringSnapshot {
     let mut facts = Vec::new();
-    if let Ok((_, spans)) = babylon_bsl::read_all_spanned(source.as_bytes()) {
+    if let Ok((_, spans)) = babylon_bsl::reader::read_all_spanned(source.as_bytes()) {
         for declaration in analysis
             .mass_declarations
             .iter()
@@ -666,7 +666,7 @@ pub fn snapshot_from_content_analysis(
             .map(|(_, likelihood)| likelihood.clone())
             .or_else(|| {
                 link.map(|link| match &link.likelihood {
-                    babylon_bsl::probability::LikelihoodAnalysisV1::Exact(rows) => {
+                    babylon_bsl::probability::LikelihoodAnalysis::Exact(rows) => {
                         EventLikelihoodAnalysisFact::Exact(
                             rows.iter()
                                 .map(|row| EventLikelihoodFact {
@@ -678,7 +678,7 @@ pub fn snapshot_from_content_analysis(
                                 .collect(),
                         )
                     }
-                    babylon_bsl::probability::LikelihoodAnalysisV1::StateDependent { reason } => {
+                    babylon_bsl::probability::LikelihoodAnalysis::StateDependent { reason } => {
                         EventLikelihoodAnalysisFact::StateDependent {
                             reason: reason.clone(),
                         }
@@ -693,8 +693,8 @@ pub fn snapshot_from_content_analysis(
 /// Canonical fixed-nine-decimal rendering of an exact Mass nanounit value.
 #[must_use]
 pub fn canonical_mass(nanounits: u64) -> String {
-    let units = nanounits / babylon_bsl::MASS_NANOUNITS_PER_UNIT;
-    let fractional = nanounits % babylon_bsl::MASS_NANOUNITS_PER_UNIT;
+    let units = nanounits / babylon_bsl::probability::MASS_NANOUNITS_PER_UNIT;
+    let fractional = nanounits % babylon_bsl::probability::MASS_NANOUNITS_PER_UNIT;
     format!("{units}.{fractional:09}m")
 }
 
@@ -1037,7 +1037,7 @@ fn allocation_markdown(
     };
     let mut value = format!(
         "**Finite material kernel** `{sample}`{linked}\n\nExecutable allocation over `{}` tickets:",
-        babylon_bsl::TICKET_DENOMINATOR
+        babylon_bsl::probability::TICKET_DENOMINATOR
     );
     for branch in allocation {
         let _ = write!(
@@ -1425,7 +1425,7 @@ mod tests {
     }
 
     fn kernel_snapshot(first_ticket_count: u128) -> AuthoringSnapshot {
-        let denominator = babylon_bsl::TICKET_DENOMINATOR;
+        let denominator = babylon_bsl::probability::TICKET_DENOMINATOR;
         let second_ticket_count = denominator - first_ticket_count;
         let allocation = vec![
             BranchAllocationFact {
@@ -1493,8 +1493,8 @@ mod tests {
 
     #[test]
     fn conflicting_kernel_facts_are_manifest_order_independent() {
-        let quarter = kernel_snapshot(babylon_bsl::TICKET_DENOMINATOR / 4);
-        let half = kernel_snapshot(babylon_bsl::TICKET_DENOMINATOR / 2);
+        let quarter = kernel_snapshot(babylon_bsl::probability::TICKET_DENOMINATOR / 4);
+        let half = kernel_snapshot(babylon_bsl::probability::TICKET_DENOMINATOR / 2);
         let normal = merge_content_set_snapshots([
             ("probe/quarter".to_owned(), quarter.clone()),
             ("probe/half".to_owned(), half.clone()),
@@ -1542,11 +1542,11 @@ mod tests {
         let identical = merge_content_set_snapshots([
             (
                 "probe/quarter".to_owned(),
-                kernel_snapshot(babylon_bsl::TICKET_DENOMINATOR / 4),
+                kernel_snapshot(babylon_bsl::probability::TICKET_DENOMINATOR / 4),
             ),
             (
                 "probe/same-quarter".to_owned(),
-                kernel_snapshot(babylon_bsl::TICKET_DENOMINATOR / 4),
+                kernel_snapshot(babylon_bsl::probability::TICKET_DENOMINATOR / 4),
             ),
         ]);
         assert_eq!(identical.facts.len(), 3, "identical facts must deduplicate");
@@ -1574,7 +1574,9 @@ mod tests {
         use babylon_bsl::causal_contract::{EvidenceClass, RuleContract, RuleRole};
         use babylon_bsl::probability::{analyze_content_set, compile_rule_probability};
         use babylon_bsl::typecheck::TypeEnv;
-        use babylon_bsl::{parse_bindings, read, EnumRegistry, LoadedRule};
+        use babylon_bsl::{
+            bindings::parse_bindings, reader::read, rule_pipeline::LoadedRule, types::EnumRegistry,
+        };
         use std::collections::HashMap;
 
         let source = "(rule demo/spark :role mechanic :evidence designed \

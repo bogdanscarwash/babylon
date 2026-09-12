@@ -21,7 +21,7 @@ pub enum AppMode {
     /// The persistent observer with one initial lifecycle destination.
     Windowed {
         /// Explicit New or existing-only Open, submitted after runtime Hello.
-        initial_target: babylon_persistence::RuntimeSessionTargetV3,
+        initial_target: babylon_persistence::runtime_session::RuntimeSessionTarget,
     },
     /// One headless dossier command: JSONL on stdout, logs on stderr,
     /// process exit after the first update.
@@ -29,7 +29,7 @@ pub enum AppMode {
         /// The parsed dossier command.
         command: CliCommand,
         /// The canonical campaign identity.
-        campaign_id: babylon_persistence::CampaignId,
+        campaign_id: babylon_persistence::identity::CampaignId,
     },
 }
 
@@ -119,7 +119,7 @@ mod tests {
     #[test]
     fn invalid_initial_target_refuses_before_window_construction() {
         let result = build_app(AppMode::Windowed {
-            initial_target: babylon_persistence::RuntimeSessionTargetV3::Open {
+            initial_target: babylon_persistence::runtime_session::RuntimeSessionTarget::Open {
                 campaign_id: "not-a-campaign".into(),
             },
         });
@@ -132,11 +132,11 @@ mod tests {
         // make the command succeed and defeat the exit-code assertion. The
         // guard serializes against other env-mutating tests and restores
         // the ambient value on drop.
-        let env = crate::test_support::EnvVarGuard::lock(babylon_persistence::READER_DSN_ENV_V1);
+        let env = crate::test_support::EnvVarGuard::lock(babylon_persistence::READER_DSN_ENV);
         env.remove();
         let mut app = build_app(AppMode::Headless {
             command: CliCommand::TickStatus,
-            campaign_id: babylon_persistence::CampaignId::from_uuid(Uuid::nil()),
+            campaign_id: babylon_persistence::identity::CampaignId::from_uuid(Uuid::nil()),
         })
         .expect("headless mode needs no initial lifecycle target");
         assert!(!app.is_plugin_added::<ObserverFocusPlugin>());

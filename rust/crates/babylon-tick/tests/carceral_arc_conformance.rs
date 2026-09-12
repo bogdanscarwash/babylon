@@ -88,12 +88,12 @@ use babylon_bsl::evaluator::Value;
 use babylon_bsl::structural_verbs::CollectingSink;
 use babylon_graph::hypergraph_store::HypergraphStore;
 use babylon_graph::substrate::{GraphSubstrate, NodeId};
-use babylon_kernel::replay::ReplaySessionIdV1;
-use babylon_tick::RuleDiagnosticSession;
+use babylon_kernel::replay::ReplaySessionId;
+use babylon_tick::diagnostic::RuleDiagnosticSession;
 
 /// The one-shot driver identity (D179): deterministic, never a UUID or clock.
-fn run_once_session() -> ReplaySessionIdV1 {
-    ReplaySessionIdV1::try_from("run-once").expect("literal is non-empty")
+fn run_once_session() -> ReplaySessionId {
+    ReplaySessionId::try_from("run-once").expect("literal is non-empty")
 }
 
 const ARC_SCENARIO: &str = include_str!("../content/scenarios/carceral-arc-conformance.bscn");

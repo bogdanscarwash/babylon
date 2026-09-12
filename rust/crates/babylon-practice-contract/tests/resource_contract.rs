@@ -45,7 +45,7 @@ fn case<'a>(cases: &'a [Value], case_id: &str) -> &'a Value {
 #[test]
 fn language_neutral_resource_vectors_drive_every_rust_digest() {
     assert_eq!(
-        babylon_kernel::sha256_of(SCHEMA),
+        babylon_kernel::content_digest::sha256_of(SCHEMA),
         PRACTICE_RESOURCE_ALLOCATION_SOURCE_SHA256
     );
     let cases = cases();
@@ -107,7 +107,7 @@ fn language_neutral_resource_vectors_drive_every_rust_digest() {
     let outcome_case = case(&cases, "outcome-pro-rata");
     let outcome_bytes = hex_bytes(outcome_case["data"]["canonical_hex"].as_str().unwrap());
     assert_eq!(
-        babylon_kernel::sha256_of(&outcome_bytes).to_vec(),
+        babylon_kernel::content_digest::sha256_of(&outcome_bytes).to_vec(),
         hex_bytes(outcome_case["data"]["digest_hex"].as_str().unwrap())
     );
 }

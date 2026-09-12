@@ -16,40 +16,40 @@ use babylon_graph::substrate::GraphSubstrate;
 use postgres::GenericClient;
 
 use crate::identity::CampaignId;
-use crate::postgres_diagnostic::PostgresDiagnosticV1;
+use crate::postgres_diagnostic::PostgresDiagnostic;
 
 /// Scenario field that declares a territory node's county FIPS mapping.
-pub const TERRITORY_COUNTY_MAP_FIELD_V1: &str = "territory/county-fips";
+pub const TERRITORY_COUNTY_MAP_FIELD: &str = "territory/county-fips";
 /// Substrate node type string the scenario loader stamps for `NodeType/TERRITORY`.
-const TERRITORY_NODE_TYPE_V1: &str = "TERRITORY";
+const TERRITORY_NODE_TYPE: &str = "TERRITORY";
 /// Inclusive upper bound of the five-digit county FIPS domain.
-const COUNTY_FIPS_MAX_V1: f64 = 99_999.0;
+const COUNTY_FIPS_MAX: f64 = 99_999.0;
 
 /// One immutable declared territory→county assignment.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TerritoryCountyMapRowV1 {
+pub struct TerritoryCountyMapRow {
     territory_local_name: String,
     county_geoid: String,
 }
 
-impl TerritoryCountyMapRowV1 {
+impl TerritoryCountyMapRow {
     /// Validate one declared assignment.
     ///
     /// # Errors
-    /// Returns [`TerritoryCountyMapErrorV1`] for an empty local name or a geoid
+    /// Returns [`TerritoryCountyMapError`] for an empty local name or a geoid
     /// outside the exact five-digit census domain.
     pub fn try_new(
         territory_local_name: String,
         county_geoid: String,
-    ) -> Result<Self, TerritoryCountyMapErrorV1> {
+    ) -> Result<Self, TerritoryCountyMapError> {
         if territory_local_name.is_empty() {
-            return Err(TerritoryCountyMapErrorV1::InvalidTerritoryLocalName);
+            return Err(TerritoryCountyMapError::InvalidTerritoryLocalName);
         }
         if !county_geoid.bytes().all(|byte| byte.is_ascii_digit())
             || county_geoid.len() != 5
             || !county_geoid.is_ascii()
         {
-            return Err(TerritoryCountyMapErrorV1::InvalidCountyGeoid);
+            return Err(TerritoryCountyMapError::InvalidCountyGeoid);
         }
         Ok(Self {
             territory_local_name,
@@ -72,7 +72,7 @@ impl TerritoryCountyMapRowV1 {
 
 /// Closed failure boundary for the declared territory-county mapping.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum TerritoryCountyMapErrorV1 {
+pub enum TerritoryCountyMapError {
     /// The scenario source could not be re-read for extraction.
     ScenarioLoad,
     /// The scenario declared the mapping field with anything but an `int`
@@ -116,28 +116,28 @@ pub enum TerritoryCountyMapErrorV1 {
         /// Stable operation name without caller-supplied text.
         operation: &'static str,
         /// Bounded secret-safe driver diagnostic, when the failure came from `PostgreSQL`.
-        diagnostic: Option<PostgresDiagnosticV1>,
+        diagnostic: Option<PostgresDiagnostic>,
     },
 }
 
-impl std::fmt::Display for TerritoryCountyMapErrorV1 {
+impl std::fmt::Display for TerritoryCountyMapError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(formatter, "territory county map refused: {self:?}")
     }
 }
 
-impl std::error::Error for TerritoryCountyMapErrorV1 {}
+impl std::error::Error for TerritoryCountyMapError {}
 
-impl From<postgres::Error> for TerritoryCountyMapErrorV1 {
+impl From<postgres::Error> for TerritoryCountyMapError {
     fn from(error: postgres::Error) -> Self {
         database("territory county map operation", &error)
     }
 }
 
-fn database(operation: &'static str, error: &postgres::Error) -> TerritoryCountyMapErrorV1 {
-    TerritoryCountyMapErrorV1::Database {
+fn database(operation: &'static str, error: &postgres::Error) -> TerritoryCountyMapError {
+    TerritoryCountyMapError::Database {
         operation,
-        diagnostic: Some(PostgresDiagnosticV1::capture(error)),
+        diagnostic: Some(PostgresDiagnostic::capture(error)),
     }
 }
 
@@ -147,7 +147,7 @@ fn database(operation: &'static str, error: &postgres::Error) -> TerritoryCounty
 /// declaration prelude when one exists, exactly as session hydration does —
 /// into a disposable graph, so the extraction observes exactly the seeded
 /// content identity the campaign foundation persists. A scenario that does
-/// not declare [`TERRITORY_COUNTY_MAP_FIELD_V1`] extracts no rows and is
+/// not declare [`TERRITORY_COUNTY_MAP_FIELD`] extracts no rows and is
 /// never refused; once declared, the declaration must be `int` AND
 /// `extensive`, and every `TERRITORY` node must seed an integer in
 /// `0..=99999`. No two territory nodes may share a county GEOID.
@@ -157,39 +157,39 @@ fn database(operation: &'static str, error: &postgres::Error) -> TerritoryCounty
 /// persisting (see `CampaignFoundationV1::capture`'s scenario bind).
 ///
 /// # Errors
-/// Returns [`TerritoryCountyMapErrorV1`] for a load failure, a refused
+/// Returns [`TerritoryCountyMapError`] for a load failure, a refused
 /// field declaration (anything but `int` + `extensive`), a missing seed,
 /// an out-of-range seed, or a duplicate GEOID.
-pub fn extract_declared_territory_county_map_v1(
+pub fn extract_declared_territory_county_map(
     scenario_source: &str,
     prelude_source: Option<&str>,
-) -> Result<Vec<TerritoryCountyMapRowV1>, TerritoryCountyMapErrorV1> {
+) -> Result<Vec<TerritoryCountyMapRow>, TerritoryCountyMapError> {
     let mut graph = HypergraphStore::new();
     let loaded = match prelude_source {
         Some(prelude) => load_scenario_with_prelude(prelude, scenario_source, &mut graph),
         None => load_scenario(scenario_source, &mut graph),
     }
-    .map_err(|_| TerritoryCountyMapErrorV1::ScenarioLoad)?;
-    let Some(declaration) = loaded.fields.get(TERRITORY_COUNTY_MAP_FIELD_V1) else {
+    .map_err(|_| TerritoryCountyMapError::ScenarioLoad)?;
+    let Some(declaration) = loaded.fields.get(TERRITORY_COUNTY_MAP_FIELD) else {
         return Ok(Vec::new());
     };
     if declaration.ty != BslType::Int || declaration.kind != FieldKind::Extensive {
-        return Err(TerritoryCountyMapErrorV1::FieldDeclRefused);
+        return Err(TerritoryCountyMapError::FieldDeclRefused);
     }
     let mut geoid_owner: BTreeMap<String, String> = BTreeMap::new();
-    for node_id in graph.nodes(TERRITORY_NODE_TYPE_V1) {
+    for node_id in graph.nodes(TERRITORY_NODE_TYPE) {
         let local = loaded
             .node_content_ids
             .get(&node_id)
             .cloned()
-            .ok_or(TerritoryCountyMapErrorV1::ScenarioLoad)?;
+            .ok_or(TerritoryCountyMapError::ScenarioLoad)?;
         let raw = graph
-            .node_attribute(node_id, TERRITORY_COUNTY_MAP_FIELD_V1)
-            .map_err(|_| TerritoryCountyMapErrorV1::MissingCountyFips {
+            .node_attribute(node_id, TERRITORY_COUNTY_MAP_FIELD)
+            .map_err(|_| TerritoryCountyMapError::MissingCountyFips {
                 node: local.clone(),
             })?;
-        if !raw.is_finite() || raw.fract() != 0.0 || !(0.0..=COUNTY_FIPS_MAX_V1).contains(&raw) {
-            return Err(TerritoryCountyMapErrorV1::CountyFipsOutOfRange {
+        if !raw.is_finite() || raw.fract() != 0.0 || !(0.0..=COUNTY_FIPS_MAX).contains(&raw) {
+            return Err(TerritoryCountyMapError::CountyFipsOutOfRange {
                 node: local,
                 value: raw.to_string(),
             });
@@ -201,7 +201,7 @@ pub fn extract_declared_territory_county_map_v1(
         let value = raw as i64;
         let geoid = format!("{value:05}");
         if let Some(first_node) = geoid_owner.insert(geoid.clone(), local.clone()) {
-            return Err(TerritoryCountyMapErrorV1::DuplicateCountyGeoid {
+            return Err(TerritoryCountyMapError::DuplicateCountyGeoid {
                 geoid,
                 first_node,
                 second_node: local,
@@ -211,7 +211,7 @@ pub fn extract_declared_territory_county_map_v1(
     let rows = geoid_owner
         .into_iter()
         .map(
-            |(county_geoid, territory_local_name)| TerritoryCountyMapRowV1 {
+            |(county_geoid, territory_local_name)| TerritoryCountyMapRow {
                 territory_local_name,
                 county_geoid,
             },
@@ -226,12 +226,12 @@ pub fn extract_declared_territory_county_map_v1(
 /// in the campaign-foundation transaction and never per tick.
 ///
 /// # Errors
-/// Returns [`TerritoryCountyMapErrorV1`] for a database failure.
-pub(crate) fn insert_territory_county_map_rows_v1(
+/// Returns [`TerritoryCountyMapError`] for a database failure.
+pub(crate) fn insert_territory_county_map_rows(
     client: &mut impl GenericClient,
     campaign_id: CampaignId,
-    rows: &[TerritoryCountyMapRowV1],
-) -> Result<(), TerritoryCountyMapErrorV1> {
+    rows: &[TerritoryCountyMapRow],
+) -> Result<(), TerritoryCountyMapError> {
     for row in rows {
         client
             .execute(
@@ -252,12 +252,12 @@ pub(crate) fn insert_territory_county_map_rows_v1(
 /// Read one campaign's stored mapping rows in a deterministic order.
 ///
 /// # Errors
-/// Returns [`TerritoryCountyMapErrorV1`] for a database failure or a stored
+/// Returns [`TerritoryCountyMapError`] for a database failure or a stored
 /// row that violates the row shape the schema pins.
-fn read_territory_county_map_rows_v1(
+fn read_territory_county_map_rows(
     client: &mut impl GenericClient,
     campaign_id: CampaignId,
-) -> Result<Vec<TerritoryCountyMapRowV1>, TerritoryCountyMapErrorV1> {
+) -> Result<Vec<TerritoryCountyMapRow>, TerritoryCountyMapError> {
     let rows = client
         .query(
             "SELECT territory_local_name, county_geoid \
@@ -274,7 +274,7 @@ fn read_territory_county_map_rows_v1(
             let geoid: String = row
                 .try_get(1)
                 .map_err(|error| database("decode territory county map geoid", &error))?;
-            TerritoryCountyMapRowV1::try_new(local, geoid)
+            TerritoryCountyMapRow::try_new(local, geoid)
         })
         .collect()
 }
@@ -285,23 +285,23 @@ fn read_territory_county_map_rows_v1(
 /// owns those writes; incomplete development saves must be recreated.
 ///
 /// # Errors
-/// Returns [`TerritoryCountyMapErrorV1`] for extraction, missing schema, divergent
+/// Returns [`TerritoryCountyMapError`] for extraction, missing schema, divergent
 /// stored rows, or a database failure.
-pub(crate) fn verify_territory_county_map_v1(
+pub(crate) fn verify_territory_county_map(
     client: &mut impl GenericClient,
     campaign_id: CampaignId,
     scenario_source: &str,
     prelude_source: Option<&str>,
-) -> Result<(), TerritoryCountyMapErrorV1> {
-    let mut declared = extract_declared_territory_county_map_v1(scenario_source, prelude_source)?;
-    let stored = read_territory_county_map_rows_v1(client, campaign_id)?;
+) -> Result<(), TerritoryCountyMapError> {
+    let mut declared = extract_declared_territory_county_map(scenario_source, prelude_source)?;
+    let stored = read_territory_county_map_rows(client, campaign_id)?;
     declared.sort_by(|left, right| {
         left.territory_local_name
             .cmp(&right.territory_local_name)
             .then_with(|| left.county_geoid.cmp(&right.county_geoid))
     });
     if stored != declared {
-        return Err(TerritoryCountyMapErrorV1::StoredMappingDiverged {
+        return Err(TerritoryCountyMapError::StoredMappingDiverged {
             stored_rows: stored.len(),
             declared_rows: declared.len(),
         });

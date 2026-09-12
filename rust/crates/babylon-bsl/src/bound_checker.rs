@@ -858,7 +858,7 @@ fn replace_at_path(expr: &mut SExpr, path: &[u32]) -> Result<(), BoundError> {
 /// kernel expression exceeds or violates the configured static bounds.
 pub fn check_rule_with_kernel(
     rule: &SExpr,
-    kernel: Option<&crate::probability::FiniteKernelV1>,
+    kernel: Option<&crate::probability::FiniteKernel>,
     ceilings: &CardinalityCeilings,
     intrinsics: &IntrinsicCosts,
 ) -> Result<u64, BoundError> {

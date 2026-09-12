@@ -4,7 +4,7 @@ use super::{
     report::{Candidate, Report},
     run, synthetic, witness,
 };
-use babylon_kernel::sha256_of;
+use babylon_kernel::content_digest::sha256_of;
 use std::collections::BTreeMap;
 
 fn input() -> (Inputs, Candidate) {

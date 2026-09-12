@@ -6,24 +6,24 @@
 
 use babylon_bsl::evaluator::Value;
 
-use crate::choice_receipt::ChoiceReceiptRefV1;
+use crate::choice_receipt::ChoiceReceiptRef;
 
 /// One successful event plus engine-owned causal provenance.
 #[derive(Debug, Clone, PartialEq)]
-pub struct CommittedEventV2 {
+pub struct CommittedEvent {
     emitting_rule: String,
-    choice_receipt: Option<ChoiceReceiptRefV1>,
+    choice_receipt: Option<ChoiceReceiptRef>,
     event_type: String,
     payload: Vec<(String, Value)>,
 }
 
-impl CommittedEventV2 {
+impl CommittedEvent {
     /// Own one event observation. The tick linker supplies receipt provenance;
     /// authored payload fields are never inspected to manufacture it.
     #[must_use]
     pub fn new(
         emitting_rule: String,
-        choice_receipt: Option<ChoiceReceiptRefV1>,
+        choice_receipt: Option<ChoiceReceiptRef>,
         event_type: String,
         payload: Vec<(String, Value)>,
     ) -> Self {
@@ -43,7 +43,7 @@ impl CommittedEventV2 {
 
     /// Return the adjacent finite-choice reference, when this is a projection.
     #[must_use]
-    pub const fn choice_receipt(&self) -> Option<ChoiceReceiptRefV1> {
+    pub const fn choice_receipt(&self) -> Option<ChoiceReceiptRef> {
         self.choice_receipt
     }
 
@@ -59,7 +59,7 @@ impl CommittedEventV2 {
         &self.payload
     }
 
-    /// Convert to the legacy sink-shaped observation after durable metadata
+    /// Project the event type and payload for observation after durable metadata
     /// has already been retained in the tick report.
     #[must_use]
     pub fn sink_record(&self) -> (String, Vec<(String, Value)>) {
@@ -73,9 +73,9 @@ mod tests {
 
     #[test]
     fn provenance_is_engine_owned_and_payload_remains_unchanged() {
-        let event = CommittedEventV2::new(
+        let event = CommittedEvent::new(
             "struggle/spark-recognizer".to_owned(),
-            Some(ChoiceReceiptRefV1::new(3)),
+            Some(ChoiceReceiptRef::new(3)),
             "EXCESSIVE_FORCE".to_owned(),
             vec![("incident-tick".to_owned(), Value::Int(7))],
         );
@@ -83,7 +83,7 @@ mod tests {
         assert_eq!(
             event
                 .choice_receipt()
-                .map(ChoiceReceiptRefV1::encounter_ordinal),
+                .map(ChoiceReceiptRef::encounter_ordinal),
             Some(3)
         );
         assert_eq!(

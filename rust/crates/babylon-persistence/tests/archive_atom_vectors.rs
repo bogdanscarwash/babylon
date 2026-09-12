@@ -1,12 +1,11 @@
 //! Shared language-neutral vectors for the pinned `ArchiveAtomV1` behavior.
 
 use babylon_persistence::{
-    archive_atom_visible_v1, ArchiveAtomSubjectKindV1, ArchiveAtomSubjectV1, ArchiveAtomV1,
-    ArchiveAtomValueV1, ArchiveCitationV1, ArchiveEvidenceClassV1, CampaignId,
-    SemanticArchiveErrorV1,
+    archive_atom_visible, identity::CampaignId, ArchiveAtom, ArchiveAtomSubject,
+    ArchiveAtomSubjectKind, ArchiveAtomValue, ArchiveCitation, ArchiveEvidenceClass,
+    SemanticArchiveError,
 };
 use serde_json::{json, Value};
-use sha2::{Digest as _, Sha256};
 
 const VECTORS: &str = include_str!("../../../../contracts/archive_atom_v1_vectors.jsonl");
 const MAX_ROWS: usize = 32;
@@ -32,12 +31,6 @@ fn hex_encode(bytes: &[u8]) -> String {
     output
 }
 
-fn sha256_hex(bytes: &[u8]) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(bytes);
-    hex_encode(&hasher.finalize())
-}
-
 fn rows() -> Vec<Value> {
     let mut rows = Vec::new();
     for line in VECTORS.lines() {
@@ -60,27 +53,27 @@ fn campaign_id() -> CampaignId {
     CampaignId::from_uuid(CAMPAIGN_UUID.parse().expect("fixed campaign UUID"))
 }
 
-fn atom_from_data(data: &Value) -> ArchiveAtomV1 {
+fn atom_from_data(data: &Value) -> ArchiveAtom {
     let kind = match data["subject_kind"].as_str().expect("subject kind") {
-        "county" => ArchiveAtomSubjectKindV1::County,
-        "place" => ArchiveAtomSubjectKindV1::Place,
-        "concept" => ArchiveAtomSubjectKindV1::Concept,
+        "county" => ArchiveAtomSubjectKind::County,
+        "place" => ArchiveAtomSubjectKind::Place,
+        "concept" => ArchiveAtomSubjectKind::Concept,
         other => panic!("unknown subject kind {other}"),
     };
-    let subject = ArchiveAtomSubjectV1::try_new(
+    let subject = ArchiveAtomSubject::try_new(
         kind,
         data["subject_id"].as_str().expect("subject id").to_owned(),
     )
     .expect("valid atom subject");
     let evidence_class = match data["evidence_class"].as_str().expect("evidence class") {
-        "Observed" => ArchiveEvidenceClassV1::Observed,
-        "Derived" => ArchiveEvidenceClassV1::Derived,
-        "Calibrated" => ArchiveEvidenceClassV1::Calibrated,
-        "Designed" => ArchiveEvidenceClassV1::Designed,
+        "Observed" => ArchiveEvidenceClass::Observed,
+        "Derived" => ArchiveEvidenceClass::Derived,
+        "Calibrated" => ArchiveEvidenceClass::Calibrated,
+        "Designed" => ArchiveEvidenceClass::Designed,
         other => panic!("unknown evidence class {other}"),
     };
     let value = match data["value"]["kind"].as_str().expect("value kind") {
-        "text" => ArchiveAtomValueV1::Text(
+        "text" => ArchiveAtomValue::Text(
             data["value"]["text"]
                 .as_str()
                 .expect("text value")
@@ -90,20 +83,20 @@ fn atom_from_data(data: &Value) -> ArchiveAtomV1 {
             let bits =
                 u64::from_str_radix(data["value"]["bits_hex"].as_str().expect("bits hex"), 16)
                     .expect("f64 bits");
-            ArchiveAtomValueV1::F64(f64::from_bits(bits))
+            ArchiveAtomValue::F64(f64::from_bits(bits))
         }
-        "u64" => ArchiveAtomValueV1::U64(data["value"]["number"].as_u64().expect("u64 value")),
-        "bool" => ArchiveAtomValueV1::Bool(data["value"]["flag"].as_bool().expect("bool value")),
+        "u64" => ArchiveAtomValue::U64(data["value"]["number"].as_u64().expect("u64 value")),
+        "bool" => ArchiveAtomValue::Bool(data["value"]["flag"].as_bool().expect("bool value")),
         other => panic!("unknown value kind {other}"),
     };
-    ArchiveAtomV1::try_new(
+    ArchiveAtom::try_new(
         campaign_id(),
         subject,
         data["signal_key"].as_str().expect("signal key").to_owned(),
         data["grant_key"].as_str().expect("grant key").to_owned(),
         evidence_class,
         &value,
-        ArchiveCitationV1::try_new(
+        ArchiveCitation::try_new(
             data["citation"]["source_id"]
                 .as_str()
                 .expect("citation source")
@@ -365,18 +358,18 @@ fn shared_atom_vectors_match_the_pinned_atom_identity() {
         )
         .expect("f64 bits");
         assert!(!f64::from_bits(bits).is_finite(), "{}", row["id"]);
-        let atom = ArchiveAtomV1::try_new(
+        let atom = ArchiveAtom::try_new(
             campaign_id(),
-            ArchiveAtomSubjectV1::try_new(
-                ArchiveAtomSubjectKindV1::Place,
+            ArchiveAtomSubject::try_new(
+                ArchiveAtomSubjectKind::Place,
                 row["data"]["subject_id"].as_str().expect("id").to_owned(),
             )
             .expect("subject"),
             row["data"]["signal_key"].as_str().expect("key").to_owned(),
             row["data"]["grant_key"].as_str().expect("key").to_owned(),
-            ArchiveEvidenceClassV1::Derived,
-            &ArchiveAtomValueV1::F64(f64::from_bits(bits)),
-            ArchiveCitationV1::try_new(
+            ArchiveEvidenceClass::Derived,
+            &ArchiveAtomValue::F64(f64::from_bits(bits)),
+            ArchiveCitation::try_new(
                 row["data"]["citation"]["source_id"]
                     .as_str()
                     .expect("source")
@@ -391,7 +384,7 @@ fn shared_atom_vectors_match_the_pinned_atom_identity() {
         );
         assert_eq!(
             atom,
-            Err(SemanticArchiveErrorV1::NonFiniteValue),
+            Err(SemanticArchiveError::NonFiniteValue),
             "{}",
             row["id"]
         );
@@ -409,7 +402,7 @@ fn shared_atom_vectors_cover_neg_zero_canonicalization() {
     pos_data["value"] = f64_value("0000000000000000");
     let pos_atom = atom_from_data(&pos_data);
     assert_eq!(neg_atom.atom_id(), pos_atom.atom_id());
-    assert_eq!(pos_atom.value(), &ArchiveAtomValueV1::F64(0.0));
+    assert_eq!(pos_atom.value(), &ArchiveAtomValue::F64(0.0));
 }
 
 #[test]
@@ -423,7 +416,7 @@ fn shared_visibility_vectors_match_the_pure_fog_predicate() {
         let horizon_tick = row["data"]["horizon_tick"].as_u64().expect("horizon");
         let expected = row["data"]["expected_visible"].as_bool().expect("visible");
         assert_eq!(
-            archive_atom_visible_v1(&atom, granted_tick, horizon_tick),
+            archive_atom_visible(&atom, granted_tick, horizon_tick),
             expected,
             "{}",
             row["id"]

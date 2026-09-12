@@ -1,6 +1,8 @@
 //! Exact textual readings from one disclosed production snapshot.
 
-use babylon_persistence::{ProductionSiteV2, ProductionSnapshotV2};
+use babylon_persistence::{
+    production_observation::ProductionSite, production_observation::ProductionSnapshot,
+};
 use std::fmt::Write as _;
 
 use super::ProductionReadingSection;
@@ -9,8 +11,8 @@ use crate::production_brief::committed_plan_status;
 use crate::production_freight::{account_reading, format_freight_mass, shared_accounts};
 
 pub(super) fn describe(
-    site: &ProductionSiteV2,
-    snapshot: &ProductionSnapshotV2,
+    site: &ProductionSite,
+    snapshot: &ProductionSnapshot,
     section: ProductionReadingSection,
 ) -> String {
     match section {
@@ -22,8 +24,8 @@ pub(super) fn describe(
 }
 
 pub(super) fn reading_headline(
-    site: &ProductionSiteV2,
-    snapshot: &ProductionSnapshotV2,
+    site: &ProductionSite,
+    snapshot: &ProductionSnapshot,
     period: u64,
 ) -> String {
     let mut value = if period == 0 {
@@ -90,7 +92,7 @@ pub(super) fn reading_headline(
     value.trim_end().to_owned()
 }
 
-pub(super) fn describe_flow(site: &ProductionSiteV2, snapshot: &ProductionSnapshotV2) -> String {
+pub(super) fn describe_flow(site: &ProductionSite, snapshot: &ProductionSnapshot) -> String {
     let mut value = String::new();
     for process in &site.processes {
         writeln!(
@@ -156,7 +158,7 @@ pub(super) fn describe_flow(site: &ProductionSiteV2, snapshot: &ProductionSnapsh
     value
 }
 
-pub(super) fn describe_freight(site: &ProductionSiteV2, snapshot: &ProductionSnapshotV2) -> String {
+pub(super) fn describe_freight(site: &ProductionSite, snapshot: &ProductionSnapshot) -> String {
     let mut value = String::new();
     let accounts = shared_accounts(snapshot, Some(&site.id));
     if accounts.is_empty() {
@@ -190,9 +192,9 @@ pub(super) fn describe_freight(site: &ProductionSiteV2, snapshot: &ProductionSna
             "{} | {}\n{} / {} {} delivered | {} unshipped\n",
             name,
             match route.transport_kind {
-                babylon_persistence::ProductionRouteTransportV2::Local =>
+                babylon_persistence::production_observation::ProductionRouteTransport::Local =>
                     "Local inter-owner transfer".into(),
-                babylon_persistence::ProductionRouteTransportV2::Staged =>
+                babylon_persistence::production_observation::ProductionRouteTransport::Staged =>
                     format!("{} periods travel", route.travel_periods),
             },
             grouped(route.delivered),
@@ -209,7 +211,7 @@ pub(super) fn describe_freight(site: &ProductionSiteV2, snapshot: &ProductionSna
     value
 }
 
-pub(super) fn describe_work(site: &ProductionSiteV2, snapshot: &ProductionSnapshotV2) -> String {
+pub(super) fn describe_work(site: &ProductionSite, snapshot: &ProductionSnapshot) -> String {
     let mut value = String::new();
     describe_staffing_accounts(&mut value, site, snapshot);
     describe_labor_accounts(&mut value, site, snapshot);
@@ -248,7 +250,7 @@ pub(super) fn describe_work(site: &ProductionSiteV2, snapshot: &ProductionSnapsh
     value.trim_start().to_owned()
 }
 
-fn describe_sources(site: &ProductionSiteV2, snapshot: &ProductionSnapshotV2) -> String {
+fn describe_sources(site: &ProductionSite, snapshot: &ProductionSnapshot) -> String {
     let mut value = format!(
         "COUNTY-SECTOR OWNER / NAICS {}\nSector {} · {:?}\n",
         site.industry_code, site.sector_code, site.role
@@ -301,8 +303,8 @@ fn describe_sources(site: &ProductionSiteV2, snapshot: &ProductionSnapshotV2) ->
 
 pub(super) fn describe_material_balance(
     value: &mut String,
-    site: &ProductionSiteV2,
-    snapshot: &ProductionSnapshotV2,
+    site: &ProductionSite,
+    snapshot: &ProductionSnapshot,
 ) {
     let Some(balance) = &snapshot.material_balance else {
         value.push_str("\nNo completed stock-movement account at this point.\n");
@@ -342,8 +344,8 @@ pub(super) fn describe_material_balance(
 
 fn describe_sector_context(
     value: &mut String,
-    site: &ProductionSiteV2,
-    snapshot: &ProductionSnapshotV2,
+    site: &ProductionSite,
+    snapshot: &ProductionSnapshot,
 ) {
     let subjects: std::collections::BTreeSet<_> = snapshot
         .process_attributions
@@ -415,8 +417,8 @@ fn describe_sector_context(
 
 fn describe_staffing_accounts(
     value: &mut String,
-    site: &ProductionSiteV2,
-    snapshot: &ProductionSnapshotV2,
+    site: &ProductionSite,
+    snapshot: &ProductionSnapshot,
 ) {
     let mut disclosed = false;
     for account in snapshot
@@ -467,8 +469,8 @@ fn describe_staffing_accounts(
 
 fn describe_labor_accounts(
     value: &mut String,
-    site: &ProductionSiteV2,
-    snapshot: &ProductionSnapshotV2,
+    site: &ProductionSite,
+    snapshot: &ProductionSnapshot,
 ) {
     for account in snapshot
         .labor_accounts

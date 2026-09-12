@@ -6,32 +6,26 @@ use babylon_bsl::evaluator::Value as BslValue;
 use babylon_bsl::exemptions::IntensiveAggregationExemption;
 use babylon_bsl::fuel::IntrinsicCosts;
 use babylon_bsl::identity_codec::IdentityCodecError;
-use babylon_bsl::identity_sections::{
-    encode_prepared_bsl_sections_v1, encode_tick_payload_sections_v1,
-};
+use babylon_bsl::identity_sections::{encode_prepared_bsl_sections, encode_tick_payload_sections};
 use babylon_bsl::typecheck::TypeEnv;
 use babylon_bsl::types::EnumRegistry;
 use babylon_bsl::vocabulary::{ClosedVocabulary, EnumKind};
 use babylon_graph::memory::MemoryGraph;
-use babylon_graph::stable_element::{
-    StableElementKeyV1, StableElementResolverV1, StableIdentityError,
-};
-use babylon_graph::stable_state::encode_stable_graph_state_v1;
+use babylon_graph::stable_element::{StableElementKey, StableElementResolver, StableIdentityError};
+use babylon_graph::stable_state::encode_stable_graph_state;
 use babylon_graph::state_hash::CanonicalState;
 use babylon_graph::substrate::{GraphSubstrate, HyperedgeId, NodeId};
-use babylon_kernel::replay::{ReplayIdentityError, ReplaySessionIdV1, RngDomainV2};
-use babylon_kernel::Currency;
-use babylon_practice_contract::actor_v2::ActorOrganizationIdV2;
-use babylon_practice_contract::ordered_action_v1::{
-    OrderedPracticeActionBatchV1, OrderedPracticeActionError,
-};
+use babylon_kernel::currency::Currency;
+use babylon_kernel::replay::{ReplayIdentityError, ReplaySessionId, RngDomain};
+use babylon_practice_contract::ActorOrganizationId;
 use babylon_practice_contract::{
-    input_authority_ledger_v2_digest, CampaignIdV2, InputAuthorityIdV2, PracticeAuthorityKindV2,
-    PracticeBatchV2Error, PracticeIdV2, PracticeInputAuthorityLedgerV2, PracticeInputAuthorityV2,
-    PracticeIntentV2, PracticeTargetIdentityV2, PracticeTargetTagV2, ProposalNonceV2,
-    ResolvedPracticeBatchItemV2, ResolvedPracticeBatchV2, ResolvedPracticeBatchV2Error,
-    TaggedPracticeTargetV2,
+    input_authority_ledger_digest, CampaignId, InputAuthorityId, PracticeAuthorityKind,
+    PracticeBatchError, PracticeId, PracticeInputAuthority, PracticeInputAuthorityLedger,
+    PracticeIntent, PracticeTargetIdentity, PracticeTargetTag, ProposalNonce,
+    ResolvedPracticeBatch, ResolvedPracticeBatchError, ResolvedPracticeBatchItem,
+    TaggedPracticeTarget,
 };
+use babylon_practice_contract::{OrderedPracticeActionBatch, OrderedPracticeActionError};
 use serde_json::Value;
 
 pub(super) fn execute(name: &str, recipe: &Value) -> Result<(), &'static str> {
@@ -88,12 +82,12 @@ fn repeated_segments(recipe: &Value) -> String {
 fn execute_text(name: &str, recipe: &Value) -> Result<(), &'static str> {
     match name {
         "replay_session_bytes" => {
-            ReplaySessionIdV1::try_from("s".repeat(count(recipe, "session_bytes")).as_str())
+            ReplaySessionId::try_from("s".repeat(count(recipe, "session_bytes")).as_str())
                 .and_then(|session| session.canonical_bytes().map(|_| ()))
                 .map_err(|error| replay_text_error(name, error))
         }
         "rng_domain_bytes" | "rng_domain_segments" => {
-            RngDomainV2::try_from(repeated_segments(recipe).as_str())
+            RngDomain::try_from(repeated_segments(recipe).as_str())
                 .map(|_| ())
                 .map_err(|error| replay_text_error(name, error))
         }
@@ -123,7 +117,7 @@ fn execute_text(name: &str, recipe: &Value) -> Result<(), &'static str> {
 
 fn execute_symbol(symbol: String) -> Result<(), IdentityCodecError> {
     let events = vec![("EventType/A".to_owned(), vec![(symbol, BslValue::Int(0))])];
-    encode_tick_payload_sections_v1(&[], &events, &[], &empty_resolver()).map(|_| ())
+    encode_tick_payload_sections(&[], &events, &[], &empty_resolver()).map(|_| ())
 }
 
 fn execute_qname(qname: String) -> Result<(), IdentityCodecError> {
@@ -138,7 +132,7 @@ fn execute_qname(qname: String) -> Result<(), IdentityCodecError> {
 }
 
 fn execute_structural_type(structural_type: String) -> Result<(), StableIdentityError> {
-    StableElementKeyV1::Edge {
+    StableElementKey::Edge {
         scenario: "s".to_owned(),
         edge_type: structural_type,
         source_local_name: "a".to_owned(),
@@ -341,7 +335,7 @@ fn resolver_nodes(recipe: &Value) -> Result<(), StableIdentityError> {
         text(recipe, "node_type"),
         text(recipe, "node_name_pattern"),
     );
-    StableElementResolverV1::seal(&graph, "s", &names, &HashMap::new()).map(|_| ())
+    StableElementResolver::seal(&graph, "s", &names, &HashMap::new()).map(|_| ())
 }
 
 fn resolver_edges(recipe: &Value) -> Result<(), StableIdentityError> {
@@ -365,7 +359,7 @@ fn resolver_edges(recipe: &Value) -> Result<(), StableIdentityError> {
             )
             .expect("bounded synthetic edge");
     }
-    StableElementResolverV1::seal(&graph, "s", &names, &HashMap::new()).map(|_| ())
+    StableElementResolver::seal(&graph, "s", &names, &HashMap::new()).map(|_| ())
 }
 
 fn resolver_single_hyperedge(recipe: &Value) -> Result<(), StableIdentityError> {
@@ -385,7 +379,7 @@ fn resolver_single_hyperedge(recipe: &Value) -> Result<(), StableIdentityError> 
         .add_hyperedge(text(recipe, "hyperedge_type"), &members)
         .expect("bounded synthetic hyperedge");
     let hyperedge_names = HashMap::from([(hyperedge, text(recipe, "hyperedge_name").to_owned())]);
-    StableElementResolverV1::seal(&graph, "s", &names, &hyperedge_names).map(|_| ())
+    StableElementResolver::seal(&graph, "s", &names, &hyperedge_names).map(|_| ())
 }
 
 fn resolver_fact_units(recipe: &Value) -> Result<(), StableIdentityError> {
@@ -415,7 +409,7 @@ fn resolver_fact_units(recipe: &Value) -> Result<(), StableIdentityError> {
             patterned_symbol(text(recipe, "hyperedge_name_pattern"), index),
         );
     }
-    StableElementResolverV1::seal(&graph, "s", &names, &hyperedge_names).map(|_| ())
+    StableElementResolver::seal(&graph, "s", &names, &hyperedge_names).map(|_| ())
 }
 
 fn resolver_manifest_nodes(recipe: &Value) -> Result<(), StableIdentityError> {
@@ -437,7 +431,7 @@ fn resolver_manifest_nodes(recipe: &Value) -> Result<(), StableIdentityError> {
         final_node,
         fixed_symbol('z', full_count, count(recipe, "final_node_name_bytes")),
     );
-    StableElementResolverV1::seal(&graph, text(recipe, "scenario"), &names, &HashMap::new())
+    StableElementResolver::seal(&graph, text(recipe, "scenario"), &names, &HashMap::new())
         .map(|_| ())
 }
 
@@ -453,7 +447,7 @@ fn carrier_active_stack(recipe: &Value) -> Result<(), StableIdentityError> {
     let mut graph = MemoryGraph::new();
     let node = graph.add_node("n").expect("carrier node");
     let names = HashMap::from([(node, "n".to_owned())]);
-    let resolver = StableElementResolverV1::seal(&graph, "s", &names, &HashMap::new())?;
+    let resolver = StableElementResolver::seal(&graph, "s", &names, &HashMap::new())?;
     let key = resolver.node_key(node)?.clone();
     let active = vec![key.clone(); count(recipe, "active_element_count")];
     resolver.carrier_key(&key, &active, 0).map(|_| ())
@@ -484,7 +478,7 @@ fn carrier_byte_boundary(recipe: &Value) -> Result<(), StableIdentityError> {
             fixed_symbol('b', 0, count(recipe, "active_endpoint_name_bytes")),
         ),
     ]);
-    let resolver = StableElementResolverV1::seal(&graph, &scenario, &names, &HashMap::new())?;
+    let resolver = StableElementResolver::seal(&graph, &scenario, &names, &HashMap::new())?;
     let subject_key = resolver.node_key(subject)?.clone();
     let edge_key = resolver.edge_key(&edge_type, source, target)?;
     let active = vec![edge_key; count(recipe, "active_element_count")];
@@ -596,10 +590,10 @@ impl CanonicalState for GeneratedState {
     }
 }
 
-fn one_node_resolver(name: &str) -> StableElementResolverV1 {
+fn one_node_resolver(name: &str) -> StableElementResolver {
     let mut graph = MemoryGraph::new();
     let node = graph.add_node("n").expect("stable graph node");
-    StableElementResolverV1::seal(
+    StableElementResolver::seal(
         &graph,
         "s",
         &HashMap::from([(node, name.to_owned())]),
@@ -627,7 +621,7 @@ fn stable_graph_nodes(recipe: &Value) -> Result<(), StableIdentityError> {
         text(recipe, "node_type"),
         text(recipe, "node_name_pattern"),
     );
-    let resolver = StableElementResolverV1::seal(&graph, "s", &names, &HashMap::new())?;
+    let resolver = StableElementResolver::seal(&graph, "s", &names, &HashMap::new())?;
     let state = GeneratedState {
         node_count: count(recipe, "state_node_rows"),
         node_type: "n".to_owned(),
@@ -635,7 +629,7 @@ fn stable_graph_nodes(recipe: &Value) -> Result<(), StableIdentityError> {
         node_currency: AttributeRecipe::None,
         hyperedge_members: None,
     };
-    encode_stable_graph_state_v1(&state, &resolver).map(|_| ())
+    encode_stable_graph_state(&state, &resolver).map(|_| ())
 }
 
 fn stable_graph_attributes(recipe: &Value) -> Result<(), StableIdentityError> {
@@ -650,7 +644,7 @@ fn stable_graph_attributes(recipe: &Value) -> Result<(), StableIdentityError> {
         node_currency: AttributeRecipe::None,
         hyperedge_members: None,
     };
-    encode_stable_graph_state_v1(&state, &resolver).map(|_| ())
+    encode_stable_graph_state(&state, &resolver).map(|_| ())
 }
 
 fn stable_graph_hyperedge(recipe: &Value) -> Result<(), StableIdentityError> {
@@ -664,7 +658,7 @@ fn stable_graph_hyperedge(recipe: &Value) -> Result<(), StableIdentityError> {
     let hyperedge = graph
         .add_hyperedge("h", &members)
         .expect("stable hyperedge");
-    let resolver = StableElementResolverV1::seal(
+    let resolver = StableElementResolver::seal(
         &graph,
         "s",
         &names,
@@ -677,7 +671,7 @@ fn stable_graph_hyperedge(recipe: &Value) -> Result<(), StableIdentityError> {
         node_currency: AttributeRecipe::None,
         hyperedge_members: Some(count(recipe, "state_member_rows")),
     };
-    encode_stable_graph_state_v1(&state, &resolver).map(|_| ())
+    encode_stable_graph_state(&state, &resolver).map(|_| ())
 }
 
 fn stable_graph_facts(recipe: &Value) -> Result<(), StableIdentityError> {
@@ -695,7 +689,7 @@ fn stable_graph_facts(recipe: &Value) -> Result<(), StableIdentityError> {
         },
         hyperedge_members: None,
     };
-    encode_stable_graph_state_v1(&state, &resolver).map(|_| ())
+    encode_stable_graph_state(&state, &resolver).map(|_| ())
 }
 
 fn stable_graph_bytes(recipe: &Value) -> Result<(), StableIdentityError> {
@@ -711,7 +705,7 @@ fn stable_graph_bytes(recipe: &Value) -> Result<(), StableIdentityError> {
         node_currency: AttributeRecipe::None,
         hyperedge_members: None,
     };
-    encode_stable_graph_state_v1(&state, &resolver).map(|_| ())
+    encode_stable_graph_state(&state, &resolver).map(|_| ())
 }
 
 fn execute_prepared(recipe: &Value) -> Result<(), IdentityCodecError> {
@@ -740,7 +734,7 @@ fn encode_prepared(
     enums: &EnumRegistry,
     vocabulary: Option<&ClosedVocabulary>,
 ) -> Result<(), IdentityCodecError> {
-    encode_prepared_bsl_sections_v1(types, intrinsics, constants, enums, vocabulary).map(|_| ())
+    encode_prepared_bsl_sections(types, intrinsics, constants, enums, vocabulary).map(|_| ())
 }
 
 fn prepared_constants(recipe: &Value) -> Result<(), IdentityCodecError> {
@@ -902,8 +896,8 @@ fn prepared_exemption_bytes(recipe: &Value) -> Result<(), IdentityCodecError> {
     )
 }
 
-fn empty_resolver() -> StableElementResolverV1 {
-    StableElementResolverV1::seal(&MemoryGraph::new(), "s", &HashMap::new(), &HashMap::new())
+fn empty_resolver() -> StableElementResolver {
+    StableElementResolver::seal(&MemoryGraph::new(), "s", &HashMap::new(), &HashMap::new())
         .expect("empty stable resolver")
 }
 
@@ -926,7 +920,7 @@ fn execute_tick(recipe: &Value) -> Result<(), IdentityCodecError> {
         "tick_payload_byte_boundary" => (Vec::new(), tick_byte_event(recipe)),
         _ => panic!("unknown tick bound fixture {fixture}"),
     };
-    encode_tick_payload_sections_v1(&outcomes, &events, &[], &resolver).map(|_| ())
+    encode_tick_payload_sections(&outcomes, &events, &[], &resolver).map(|_| ())
 }
 
 fn tick_outcomes(count: usize, pattern: &str) -> Vec<(String, usize)> {
@@ -983,42 +977,42 @@ fn execute_ordered_actions(recipe: &Value) -> Result<(), OrderedPracticeActionEr
         .take(item_count)
         .map(|index| action_item(index, evidence_count))
         .collect();
-    let source = ResolvedPracticeBatchV2 {
+    let source = ResolvedPracticeBatch {
         schema_version: 2,
-        campaign_id: CampaignIdV2::from_bytes([0x10; 16]),
+        campaign_id: CampaignId::from_bytes([0x10; 16]),
         resolve_tick: 11,
-        authority_ledger_digest: input_authority_ledger_v2_digest(&ledger)
+        authority_ledger_digest: input_authority_ledger_digest(&ledger)
             .expect("bounded action ledger digest"),
         resource_allocation_contract_digest: [0x40; 32],
         content_digest: [0x30; 32],
         items,
     };
-    let session = ReplaySessionIdV1::try_from("s".repeat(count(recipe, "session_bytes")).as_str())
+    let session = ReplaySessionId::try_from("s".repeat(count(recipe, "session_bytes")).as_str())
         .expect("bounded replay session");
-    OrderedPracticeActionBatchV1::project(session, &source, &ledger).map(|_| ())
+    OrderedPracticeActionBatch::project(session, &source, &ledger).map(|_| ())
 }
 
-fn action_authority() -> PracticeInputAuthorityV2 {
-    PracticeInputAuthorityV2 {
+fn action_authority() -> PracticeInputAuthority {
+    PracticeInputAuthority {
         schema_version: 2,
-        campaign_id: CampaignIdV2::from_bytes([0x10; 16]),
-        authority_kind: PracticeAuthorityKindV2::PlayerSeat,
-        input_authority_id: InputAuthorityIdV2::from_bytes([0x20; 16]),
-        actor_org_id: ActorOrganizationIdV2::from_bytes(7_u64.to_be_bytes()),
+        campaign_id: CampaignId::from_bytes([0x10; 16]),
+        authority_kind: PracticeAuthorityKind::PlayerSeat,
+        input_authority_id: InputAuthorityId::from_bytes([0x20; 16]),
+        actor_org_id: ActorOrganizationId::from_bytes(7_u64.to_be_bytes()),
         effective_from_tick: 10,
         effective_through_tick_exclusive: 20,
         decision_content_digest: [0x30; 32],
     }
 }
 
-fn action_ledger() -> PracticeInputAuthorityLedgerV2 {
-    PracticeInputAuthorityLedgerV2 {
+fn action_ledger() -> PracticeInputAuthorityLedger {
+    PracticeInputAuthorityLedger {
         schema_version: 2,
         rows: vec![action_authority()],
     }
 }
 
-fn action_item(index: usize, evidence_count: usize) -> ResolvedPracticeBatchItemV2 {
+fn action_item(index: usize, evidence_count: usize) -> ResolvedPracticeBatchItem {
     let mut nonce = [0_u8; 16];
     nonce[8..].copy_from_slice(&(index as u64).to_be_bytes());
     let evidence_digests = (0_u8..64)
@@ -1029,20 +1023,20 @@ fn action_item(index: usize, evidence_count: usize) -> ResolvedPracticeBatchItem
             digest
         })
         .collect();
-    ResolvedPracticeBatchItemV2 {
+    ResolvedPracticeBatchItem {
         authority: action_authority(),
-        intent: PracticeIntentV2 {
+        intent: PracticeIntent {
             schema_version: 2,
             submit_after_tick: 10,
             resolve_tick: 11,
-            input_authority_id: InputAuthorityIdV2::from_bytes([0x20; 16]),
-            actor_org_id: ActorOrganizationIdV2::from_bytes(7_u64.to_be_bytes()),
-            practice_id: PracticeIdV2::Strike,
-            target: TaggedPracticeTargetV2 {
-                tag: PracticeTargetTagV2::LaborProcess,
-                identity: PracticeTargetIdentityV2::from_bytes([0x50; 32]),
+            input_authority_id: InputAuthorityId::from_bytes([0x20; 16]),
+            actor_org_id: ActorOrganizationId::from_bytes(7_u64.to_be_bytes()),
+            practice_id: PracticeId::Strike,
+            target: TaggedPracticeTarget {
+                tag: PracticeTargetTag::LaborProcess,
+                identity: PracticeTargetIdentity::from_bytes([0x50; 32]),
             },
-            proposal_nonce: ProposalNonceV2::from_bytes(nonce),
+            proposal_nonce: ProposalNonce::from_bytes(nonce),
             quoted_content_digest: [0x30; 32],
             quoted_resource_contract_digest: [0x40; 32],
             parameters: Vec::new(),
@@ -1086,8 +1080,8 @@ fn bsl_error(error: IdentityCodecError) -> &'static str {
 
 fn action_error(error: OrderedPracticeActionError) -> &'static str {
     match error {
-        OrderedPracticeActionError::Source(ResolvedPracticeBatchV2Error::Batch(
-            PracticeBatchV2Error::BatchItemLimit,
+        OrderedPracticeActionError::Source(ResolvedPracticeBatchError::Batch(
+            PracticeBatchError::BatchItemLimit,
         )) => "row_limit",
         OrderedPracticeActionError::BatchLength { .. } => "byte_limit",
         other => panic!("unexpected ordered-action bound error: {other:?}"),

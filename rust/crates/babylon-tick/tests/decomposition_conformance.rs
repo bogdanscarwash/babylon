@@ -233,13 +233,13 @@ use babylon_bsl::scenario::load_scenario;
 use babylon_bsl::structural_verbs::CollectingSink;
 use babylon_graph::hypergraph_store::HypergraphStore;
 use babylon_graph::substrate::{GraphSubstrate, NodeId};
-use babylon_kernel::replay::ReplaySessionIdV1;
-use babylon_tick::{run_once_into, RuleDiagnosticSession};
+use babylon_kernel::replay::ReplaySessionId;
+use babylon_tick::{diagnostic::RuleDiagnosticSession, run_once_into};
 
 /// Fixed deterministic V1 namespace for this file's non-kernel
 /// `RuleDiagnosticSession` fixtures.
-fn test_session() -> ReplaySessionIdV1 {
-    ReplaySessionIdV1::try_from("decomposition-conformance-test").expect("literal is non-empty")
+fn test_session() -> ReplaySessionId {
+    ReplaySessionId::try_from("decomposition-conformance-test").expect("literal is non-empty")
 }
 
 const SCENARIO: &str = include_str!("../content/scenarios/decomposition-conformance.bscn");

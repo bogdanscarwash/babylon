@@ -4,12 +4,12 @@ use std::io::Write;
 use std::num::NonZero;
 
 use babylon_persistence::archive_revision::{
-    ArchiveAtomChangeV2, ArchiveDossierBoundsV2, ArchiveDossierPageV2, ArchiveDossierPendingV2,
-    ArchiveDossierReadV2, ArchiveDossierStateV2, ArchiveDossierUnavailableV2,
-    ArchiveLinkedPageStateV2, ArchiveReadScopeV2, ArchiveSearchStateV2,
+    ArchiveAtomChange, ArchiveDossierBounds, ArchiveDossierPage, ArchiveDossierPending,
+    ArchiveDossierRead, ArchiveDossierState, ArchiveDossierUnavailable, ArchiveLinkedPageState,
+    ArchiveReadScope, ArchiveSearchState,
 };
 use babylon_persistence::{
-    ArchiveAtomV1, ArchivePageRefV1, ArchiveSubjectKindV1, CampaignId, SemanticArchiveReaderV1,
+    identity::CampaignId, ArchiveAtom, ArchivePageRef, ArchiveSubjectKind, SemanticArchiveReader,
 };
 use bevy::app::AppExit;
 use bevy::prelude::{MessageWriter, Res, Resource};
@@ -19,22 +19,23 @@ use crate::cli::CliCommand;
 
 /// The retained page is readable while pending, but that is not verification.
 #[must_use]
-pub fn retained_page(read: &ArchiveDossierReadV2) -> Option<&ArchiveDossierPageV2> {
+pub fn retained_page(read: &ArchiveDossierRead) -> Option<&ArchiveDossierPage> {
     match &read.state {
-        ArchiveDossierStateV2::Ready { page, .. }
-        | ArchiveDossierStateV2::Pending {
+        ArchiveDossierState::Ready { page, .. }
+        | ArchiveDossierState::Pending {
             page: Some(page), ..
         } => Some(page),
-        ArchiveDossierStateV2::Pending { page: None, .. }
-        | ArchiveDossierStateV2::Unavailable(_) => None,
+        ArchiveDossierState::Pending { page: None, .. } | ArchiveDossierState::Unavailable(_) => {
+            None
+        }
     }
 }
 
 /// Only the reader's exact selected-page result certifies this observation.
 #[must_use]
-pub const fn verified_tick(read: &ArchiveDossierReadV2) -> Option<u64> {
+pub const fn verified_tick(read: &ArchiveDossierRead) -> Option<u64> {
     match &read.state {
-        ArchiveDossierStateV2::Ready {
+        ArchiveDossierState::Ready {
             verified_through_tick,
             ..
         } => Some(*verified_through_tick),
@@ -44,52 +45,43 @@ pub const fn verified_tick(read: &ArchiveDossierReadV2) -> Option<u64> {
 
 /// Static availability wording shared by the card and CLI.
 #[must_use]
-pub const fn availability_label(read: &ArchiveDossierReadV2) -> &'static str {
+pub const fn availability_label(read: &ArchiveDossierRead) -> &'static str {
     match &read.state {
-        ArchiveDossierStateV2::Ready { .. } => "Verified for this viewed period",
-        ArchiveDossierStateV2::Pending { reason, .. } => pending_label(*reason),
-        ArchiveDossierStateV2::Unavailable(reason) => unavailable_label(*reason),
+        ArchiveDossierState::Ready { .. } => "Verified for this viewed period",
+        ArchiveDossierState::Pending { reason, .. } => pending_label(*reason),
+        ArchiveDossierState::Unavailable(reason) => unavailable_label(*reason),
     }
 }
 
-pub(crate) const fn pending_label(reason: ArchiveDossierPendingV2) -> &'static str {
+pub(crate) const fn pending_label(reason: ArchiveDossierPending) -> &'static str {
     match reason {
-        ArchiveDossierPendingV2::EmissionWitnessRequired => {
-            "Retained content awaits a complete publication record"
-        }
-        ArchiveDossierPendingV2::CutoverValidation => "Retained content awaits Archive validation",
-        ArchiveDossierPendingV2::ReceiptProcessing => {
-            "Archive is still processing this observation"
-        }
-        ArchiveDossierPendingV2::KnowledgeRefresh => {
+        ArchiveDossierPending::ReceiptProcessing => "Archive is still processing this observation",
+        ArchiveDossierPending::KnowledgeRefresh => {
             "Newly learned information awaits Archive publication"
         }
     }
 }
 
-pub(crate) const fn unavailable_label(reason: ArchiveDossierUnavailableV2) -> &'static str {
+pub(crate) const fn unavailable_label(reason: ArchiveDossierUnavailable) -> &'static str {
     match reason {
-        ArchiveDossierUnavailableV2::FoundationHasNoPage => {
+        ArchiveDossierUnavailable::FoundationHasNoPage => {
             "The campaign foundation has no published Archive page"
         }
-        ArchiveDossierUnavailableV2::HistoryNotRetained => {
-            "This period predates retained Archive history"
-        }
-        ArchiveDossierUnavailableV2::SubjectNotDisclosed => {
+        ArchiveDossierUnavailable::SubjectNotDisclosed => {
             "This subject is not disclosed in this observation"
         }
-        ArchiveDossierUnavailableV2::PageNotMaterialized => {
+        ArchiveDossierUnavailable::PageNotMaterialized => {
             "No Archive page has been published for this subject at this period"
         }
     }
 }
 
-pub(crate) const fn link_state_label(state: ArchiveLinkedPageStateV2) -> &'static str {
+pub(crate) const fn link_state_label(state: ArchiveLinkedPageState) -> &'static str {
     match state {
-        ArchiveLinkedPageStateV2::Unknown => "unknown",
-        ArchiveLinkedPageStateV2::KnownUnavailable => "unavailable",
-        ArchiveLinkedPageStateV2::KnownPending => "pending",
-        ArchiveLinkedPageStateV2::KnownReady => "ready",
+        ArchiveLinkedPageState::Unknown => "unknown",
+        ArchiveLinkedPageState::KnownUnavailable => "unavailable",
+        ArchiveLinkedPageState::KnownPending => "pending",
+        ArchiveLinkedPageState::KnownReady => "ready",
     }
 }
 
@@ -101,10 +93,10 @@ pub fn observation_scope(
     campaign: CampaignId,
     tick: u64,
     hash: Option<&str>,
-) -> Result<ArchiveReadScopeV2, String> {
+) -> Result<ArchiveReadScope, String> {
     if tick == 0 {
         return if hash.is_none() {
-            Ok(ArchiveReadScopeV2::foundation(campaign))
+            Ok(ArchiveReadScope::foundation(campaign))
         } else {
             Err("Foundation cannot carry a committed tick hash".into())
         };
@@ -122,7 +114,7 @@ pub fn observation_scope(
         *byte = u8::from_str_radix(&hash[index * 2..index * 2 + 2], 16)
             .map_err(|_| "The installed observation has an invalid committed identity")?;
     }
-    ArchiveReadScopeV2::committed(campaign, tick, bytes).map_err(|error| error.to_string())
+    ArchiveReadScope::committed(campaign, tick, bytes).map_err(|error| error.to_string())
 }
 
 /// One CLI invocation; live commands pin a marker once before their scoped reads.
@@ -155,16 +147,16 @@ pub fn run_headless(invocation: &HeadlessInvocation) -> u8 {
 }
 
 pub(crate) fn pinned_scope(
-    reader: &SemanticArchiveReaderV1,
+    reader: &SemanticArchiveReader,
     campaign: CampaignId,
-) -> Result<ArchiveReadScopeV2, String> {
+) -> Result<ArchiveReadScope, String> {
     reader
         .committed_tick_status(campaign)
         .map_err(|error| error.to_string())?
         .map_or_else(
-            || Ok(ArchiveReadScopeV2::foundation(campaign)),
+            || Ok(ArchiveReadScope::foundation(campaign)),
             |status| {
-                ArchiveReadScopeV2::committed(
+                ArchiveReadScope::committed(
                     campaign,
                     status.resolve_tick(),
                     *status.tick_content_hash(),
@@ -174,13 +166,13 @@ pub(crate) fn pinned_scope(
         )
 }
 
-fn county_subject(geoid: &str) -> Result<ArchivePageRefV1, String> {
-    ArchivePageRefV1::try_new(ArchiveSubjectKindV1::County, geoid.into())
+fn county_subject(geoid: &str) -> Result<ArchivePageRef, String> {
+    ArchivePageRef::try_new(ArchiveSubjectKind::County, geoid.into())
         .map_err(|error| error.to_string())
 }
 
 fn execute(invocation: &HeadlessInvocation) -> Result<(), String> {
-    let reader = SemanticArchiveReaderV1::from_env().map_err(|error| error.to_string())?;
+    let reader = SemanticArchiveReader::from_env().map_err(|error| error.to_string())?;
     let mut out = std::io::stdout().lock();
     if invocation.command == CliCommand::TickStatus {
         write_jsonl(&mut out, &tick_status_row(&reader, invocation.campaign_id)?)?;
@@ -192,7 +184,7 @@ fn execute(invocation: &HeadlessInvocation) -> Result<(), String> {
                     .dossier_as_of(
                         &scope,
                         &county_subject(geoid)?,
-                        &ArchiveDossierBoundsV2::default(),
+                        &ArchiveDossierBounds::default(),
                     )
                     .map_err(|error| error.to_string())?;
                 write_jsonl(&mut out, &dossier_json(&read))?;
@@ -209,25 +201,23 @@ fn execute(invocation: &HeadlessInvocation) -> Result<(), String> {
 
 fn write_search(
     out: &mut impl Write,
-    reader: &SemanticArchiveReaderV1,
-    scope: &ArchiveReadScopeV2,
+    reader: &SemanticArchiveReader,
+    scope: &ArchiveReadScope,
     query: &str,
 ) -> Result<(), String> {
     let read = reader
         .search_as_of(scope, query, 50)
         .map_err(|error| error.to_string())?;
     let (state, reason) = match read.state {
-        ArchiveSearchStateV2::Ready => ("ready", None),
-        ArchiveSearchStateV2::Pending(reason) => ("pending", Some(pending_label(reason))),
-        ArchiveSearchStateV2::Unavailable(reason) => {
-            ("unavailable", Some(unavailable_label(reason)))
-        }
+        ArchiveSearchState::Ready => ("ready", None),
+        ArchiveSearchState::Pending(reason) => ("pending", Some(pending_label(reason))),
+        ArchiveSearchState::Unavailable(reason) => ("unavailable", Some(unavailable_label(reason))),
     };
     write_jsonl(
         out,
         &json!({"record":"archive-search-status", "scope":scope_json(&read.scope),
         "state":state,"reason":reason,"durable_tick":read.durable_tick,"processed_tick":read.processed_tick,
-        "history_floor_tick":read.history_floor_tick,"truncated":read.truncated}),
+        "truncated":read.truncated}),
     )?;
     for hit in read.hits {
         write_jsonl(
@@ -242,21 +232,21 @@ fn write_search(
 
 fn write_changes(
     out: &mut impl Write,
-    reader: &SemanticArchiveReaderV1,
-    scope: &ArchiveReadScopeV2,
-    subject: &ArchivePageRefV1,
+    reader: &SemanticArchiveReader,
+    scope: &ArchiveReadScope,
+    subject: &ArchivePageRef,
 ) -> Result<(), String> {
     let mut cursor = None;
     loop {
-        let bounds = ArchiveDossierBoundsV2::try_new(32, cursor.clone())
-            .map_err(|error| error.to_string())?;
+        let bounds =
+            ArchiveDossierBounds::try_new(32, cursor.clone()).map_err(|error| error.to_string())?;
         let read = reader
             .dossier_as_of(scope, subject, &bounds)
             .map_err(|error| error.to_string())?;
         write_jsonl(
             out,
             &json!({"record":"archive-changes-page","scope":scope_json(&read.scope),
-            "subject":read.subject,"availability":availability_label(&read),"history_floor_tick":read.history_floor_tick,
+            "subject":read.subject,"availability":availability_label(&read),
             "coverage_from_tick":retained_page(&read).map(|page|page.changes.coverage_from_tick),
             "has_more":retained_page(&read).is_some_and(|page|page.changes.next_cursor.is_some())}),
         )?;
@@ -285,26 +275,24 @@ pub fn run_headless_command(invocation: Res<HeadlessInvocation>, mut exit: Messa
     });
 }
 
-pub(crate) fn scope_json(scope: &ArchiveReadScopeV2) -> Value {
+pub(crate) fn scope_json(scope: &ArchiveReadScope) -> Value {
     json!({"campaign_id":scope.campaign_id().as_uuid().to_string(),"tick":scope.tick(),
         "tick_content_hash":scope.tick_content_hash().map(hex_bytes)})
 }
 
-pub(crate) fn dossier_json(read: &ArchiveDossierReadV2) -> Value {
+pub(crate) fn dossier_json(read: &ArchiveDossierRead) -> Value {
     let page = retained_page(read);
     let state = match read.state {
-        ArchiveDossierStateV2::Ready { .. } => "ready",
-        ArchiveDossierStateV2::Pending { .. } => "pending",
-        ArchiveDossierStateV2::Unavailable(_) => "unavailable",
+        ArchiveDossierState::Ready { .. } => "ready",
+        ArchiveDossierState::Pending { .. } => "pending",
+        ArchiveDossierState::Unavailable(_) => "unavailable",
     };
     json!({"record":"county-dossier","schema_version":2,"scope":scope_json(&read.scope),"subject":read.subject,
         "geoid":read.subject.id(),"state":state,"availability":availability_label(read),
         "durable_tick":read.durable_tick,"processed_tick":read.processed_tick,"verified_tick":verified_tick(read),
-        "history_floor_tick":read.history_floor_tick,
         "page":page.map(|page| json!({"title":page.title,"question":page.question,
             "revision_id":hex_bytes(page.revision_id),"content_source":scope_json(&page.content_source),
             "content_sha256":hex_bytes(page.content_sha256),"effective_tick":page.effective_tick,"markdown":page.markdown,
-            "origin":match page.origin { babylon_persistence::archive_revision::ArchivePublicationOriginV2::AdoptedHead => "adopted_head", babylon_persistence::archive_revision::ArchivePublicationOriginV2::Materialized => "materialized" },
             "citations":page.citations.iter().map(|citation|json!({"source_id":citation.source_id(),"locator":citation.locator()})).collect::<Vec<_>>(),
             "signals":page.signals.iter().map(|signal|json!({"grant_key":signal.grant_key(),"label":signal.label(),
                 "value":signal.value(),"citation":{"source_id":signal.citation().source_id(),"locator":signal.citation().locator()}})).collect::<Vec<_>>(),
@@ -316,25 +304,25 @@ pub(crate) fn dossier_json(read: &ArchiveDossierReadV2) -> Value {
             "has_more_changes":page.changes.next_cursor.is_some()}))})
 }
 
-pub(crate) fn change_json(change: &ArchiveAtomChangeV2) -> Value {
+pub(crate) fn change_json(change: &ArchiveAtomChange) -> Value {
     json!({"record":"changelog-row","publication_tick":change.publication_tick,"signal_key":change.signal_key,
         "before":change.before.as_ref().map(atom_json),"after":change.after.as_ref().map(atom_json)})
 }
 
-fn atom_json(atom: &ArchiveAtomV1) -> Value {
+fn atom_json(atom: &ArchiveAtom) -> Value {
     json!({"signal_key":atom.signal_key(),"grant_key":atom.grant_key(),"evidence_class":atom.evidence_class().as_str(),
         "value":atom_value_json(atom.value()),"valid_tick":atom.valid_tick(),"atom_id":hex_bytes(atom.atom_id()),
         "citation":{"source_id":atom.citation().source_id(),"locator":atom.citation().locator()}})
 }
 
-pub(crate) fn atom_value_json(value: &babylon_persistence::ArchiveAtomValueV1) -> Value {
+pub(crate) fn atom_value_json(value: &babylon_persistence::ArchiveAtomValue) -> Value {
     match value {
-        babylon_persistence::ArchiveAtomValueV1::Text(text) => Value::String(text.clone()),
-        babylon_persistence::ArchiveAtomValueV1::F64(number) => {
+        babylon_persistence::ArchiveAtomValue::Text(text) => Value::String(text.clone()),
+        babylon_persistence::ArchiveAtomValue::F64(number) => {
             serde_json::Number::from_f64(*number).map_or(Value::Null, Value::Number)
         }
-        babylon_persistence::ArchiveAtomValueV1::U64(number) => Value::from(*number),
-        babylon_persistence::ArchiveAtomValueV1::Bool(flag) => Value::from(*flag),
+        babylon_persistence::ArchiveAtomValue::U64(number) => Value::from(*number),
+        babylon_persistence::ArchiveAtomValue::Bool(flag) => Value::from(*flag),
     }
 }
 
@@ -352,7 +340,7 @@ fn write_jsonl(out: &mut impl Write, value: &Value) -> Result<(), String> {
 }
 
 fn tick_status_row(
-    reader: &SemanticArchiveReaderV1,
+    reader: &SemanticArchiveReader,
     campaign_id: CampaignId,
 ) -> Result<Value, String> {
     let status = reader
@@ -387,36 +375,33 @@ fn tick_status_row(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use babylon_persistence::archive_revision::{ArchiveChangePageV2, ArchivePublicationOriginV2};
+    use babylon_persistence::archive_revision::ArchiveChangePage;
     use babylon_persistence::{
-        ArchiveAtomSubjectKindV1, ArchiveAtomSubjectV1, ArchiveAtomValueV1, ArchiveCitationV1,
-        ArchiveEvidenceClassV1, ArchiveSignalV1,
+        ArchiveAtomSubject, ArchiveAtomSubjectKind, ArchiveAtomValue, ArchiveCitation,
+        ArchiveEvidenceClass, ArchiveSignal,
     };
 
-    fn read(state: ArchiveDossierStateV2) -> ArchiveDossierReadV2 {
+    fn read(state: ArchiveDossierState) -> ArchiveDossierRead {
         let campaign = CampaignId::from_uuid(uuid::Uuid::nil());
-        ArchiveDossierReadV2 {
-            scope: ArchiveReadScopeV2::committed(campaign, 3, [0xab; 32]).unwrap(),
+        ArchiveDossierRead {
+            scope: ArchiveReadScope::committed(campaign, 3, [0xab; 32]).unwrap(),
             subject: county_subject("26163").unwrap(),
             durable_tick: 8,
             processed_tick: 8,
-            history_floor_tick: 2,
             state,
         }
     }
-    fn page() -> ArchiveDossierPageV2 {
+    fn page() -> ArchiveDossierPage {
         let campaign = CampaignId::from_uuid(uuid::Uuid::nil());
         let citation =
-            ArchiveCitationV1::try_new("original-source".into(), "original/locator".into())
-                .unwrap();
-        ArchiveDossierPageV2 {
+            ArchiveCitation::try_new("original-source".into(), "original/locator".into()).unwrap();
+        ArchiveDossierPage {
             revision_id: [1; 32],
             effective_tick: 2,
-            origin: ArchivePublicationOriginV2::AdoptedHead,
-            content_source: ArchiveReadScopeV2::committed(campaign, 1, [0xaa; 32]).unwrap(),
+            content_source: ArchiveReadScope::committed(campaign, 1, [0xaa; 32]).unwrap(),
             title: "Retained title".into(),
             question: "Original question?".into(),
-            signals: vec![ArchiveSignalV1::try_new(
+            signals: vec![ArchiveSignal::try_new(
                 "observed-key".into(),
                 "Original label".into(),
                 "Original display value".into(),
@@ -428,7 +413,7 @@ mod tests {
             citations: vec![citation],
             atoms: vec![],
             links: vec![],
-            changes: ArchiveChangePageV2 {
+            changes: ArchiveChangePage {
                 coverage_from_tick: 2,
                 changes: vec![],
                 next_cursor: None,
@@ -437,9 +422,9 @@ mod tests {
     }
     #[test]
     fn pending_retained_content_never_inherits_global_progress_verification() {
-        let read = read(ArchiveDossierStateV2::Pending {
+        let read = read(ArchiveDossierState::Pending {
             page: Some(page()),
-            reason: ArchiveDossierPendingV2::KnowledgeRefresh,
+            reason: ArchiveDossierPending::KnowledgeRefresh,
         });
         assert!(retained_page(&read).is_some());
         assert_eq!(verified_tick(&read), None);
@@ -455,18 +440,17 @@ mod tests {
     }
     #[test]
     fn ready_uses_exact_selected_page_verification_and_absence_stays_typed() {
-        let ready = read(ArchiveDossierStateV2::Ready {
+        let ready = read(ArchiveDossierState::Ready {
             page: page(),
             verified_through_tick: 3,
         });
         assert_eq!(verified_tick(&ready), Some(3));
         for reason in [
-            ArchiveDossierUnavailableV2::FoundationHasNoPage,
-            ArchiveDossierUnavailableV2::HistoryNotRetained,
-            ArchiveDossierUnavailableV2::SubjectNotDisclosed,
-            ArchiveDossierUnavailableV2::PageNotMaterialized,
+            ArchiveDossierUnavailable::FoundationHasNoPage,
+            ArchiveDossierUnavailable::SubjectNotDisclosed,
+            ArchiveDossierUnavailable::PageNotMaterialized,
         ] {
-            let read = read(ArchiveDossierStateV2::Unavailable(reason));
+            let read = read(ArchiveDossierState::Unavailable(reason));
             assert!(retained_page(&read).is_none());
             assert_eq!(verified_tick(&read), None);
             let json = dossier_json(&read);
@@ -499,19 +483,18 @@ mod tests {
     }
     #[test]
     fn removal_and_numeric_zero_have_different_json_evidence() {
-        let atom = ArchiveAtomV1::try_new(
+        let atom = ArchiveAtom::try_new(
             CampaignId::from_uuid(uuid::Uuid::nil()),
-            ArchiveAtomSubjectV1::try_new(ArchiveAtomSubjectKindV1::County, "26163".into())
-                .unwrap(),
+            ArchiveAtomSubject::try_new(ArchiveAtomSubjectKind::County, "26163".into()).unwrap(),
             "jobs".into(),
             "jobs".into(),
-            ArchiveEvidenceClassV1::Observed,
-            &ArchiveAtomValueV1::U64(0),
-            ArchiveCitationV1::try_new("source".into(), "locator".into()).unwrap(),
+            ArchiveEvidenceClass::Observed,
+            &ArchiveAtomValue::U64(0),
+            ArchiveCitation::try_new("source".into(), "locator".into()).unwrap(),
             2,
         )
         .unwrap();
-        let mut change = ArchiveAtomChangeV2 {
+        let mut change = ArchiveAtomChange {
             publication_tick: 3,
             signal_key: "jobs".into(),
             before: None,

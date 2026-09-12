@@ -49,7 +49,7 @@
 use babylon_bsl::scenario::load_scenario;
 use babylon_graph::hypergraph_store::HypergraphStore;
 use babylon_graph::substrate::{GraphSubstrate, NodeId};
-use babylon_kernel::replay::ReplaySessionIdV1;
+use babylon_kernel::replay::ReplaySessionId;
 use babylon_tick::run_once_into;
 
 const SCENARIO: &str = include_str!("../content/scenarios/production-conformance.bscn");
@@ -516,12 +516,12 @@ fn p0_and_p4_fire_on_every_territory() {
 #[test]
 fn p0_reset_keeps_extraction_intensity_stable_across_two_ticks() {
     let mut sink = babylon_bsl::structural_verbs::CollectingSink::default();
-    let mut session = babylon_tick::RuleDiagnosticSession::new(
+    let mut session = babylon_tick::diagnostic::RuleDiagnosticSession::new(
         SCENARIO,
         None,
         PRODUCTION_RULE,
         HypergraphStore::new(),
-        ReplaySessionIdV1::try_from("production-conformance-test").expect("literal is non-empty"),
+        ReplaySessionId::try_from("production-conformance-test").expect("literal is non-empty"),
         babylon_kernel::replay::ReplaySeed::new(0),
     )
     .expect("the pack must load into a session");

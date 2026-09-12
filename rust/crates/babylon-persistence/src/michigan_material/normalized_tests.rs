@@ -3,7 +3,7 @@
 #[test]
 fn captured_authority_contains_normalized_content_instead_of_only_numeric_defines() {
     let source = include_str!("../../../../../content/scenarios/michigan/defines.toml");
-    let catalog = MichiganMaterialCatalogV1::from_defines_toml(source).unwrap();
+    let catalog = MichiganMaterialCatalog::from_defines_toml(source).unwrap();
     let stored: serde_json::Value = serde_json::from_slice(catalog.defines_bytes()).unwrap();
     assert_eq!(stored["schema"], "MichiganCapturedContentV2");
     assert_eq!(stored["normalized"]["sites"].as_array().unwrap().len(), 5);
@@ -18,7 +18,7 @@ use std::collections::BTreeMap;
 
 #[test]
 fn normalized_permutations_and_preset_round_trips_preserve_complete_authority() {
-    let original = MichiganMaterialCatalogV1::from_defines_toml(include_str!(
+    let original = MichiganMaterialCatalog::from_defines_toml(include_str!(
         "../../../../../content/scenarios/michigan/defines.toml"
     ))
     .unwrap();
@@ -30,13 +30,13 @@ fn normalized_permutations_and_preset_round_trips_preserve_complete_authority() 
     capture.normalized.industry.reverse();
     capture.normalized.staffing.pools.reverse();
     capture.interventions.reverse();
-    let reordered = MichiganMaterialCatalogV1::capture(capture).unwrap();
+    let reordered = MichiganMaterialCatalog::capture(capture).unwrap();
     assert_eq!(original.defines_bytes(), reordered.defines_bytes());
     let constrained = original
-        .with_preset(MichiganDeliveryPresetV1::SharedFreightConstrained)
+        .with_preset(MichiganDeliveryPreset::SharedFreightConstrained)
         .unwrap();
     let restored =
-        MichiganMaterialCatalogV1::from_stored_defines(constrained.defines_bytes()).unwrap();
+        MichiganMaterialCatalog::from_stored_defines(constrained.defines_bytes()).unwrap();
     for catalog in [&original, &reordered, &constrained, &restored] {
         assert_eq!(catalog.defines_hash(), sha256_of(catalog.defines_bytes()));
     }
@@ -49,7 +49,7 @@ fn normalized_permutations_and_preset_round_trips_preserve_complete_authority() 
     assert_eq!(
         original,
         constrained
-            .with_preset(MichiganDeliveryPresetV1::Standard)
+            .with_preset(MichiganDeliveryPreset::Standard)
             .unwrap()
     );
     assert!(!restored.observed_defines().is_empty());
@@ -57,12 +57,12 @@ fn normalized_permutations_and_preset_round_trips_preserve_complete_authority() 
         .graph_scenario_source()
         .contains("business-26163-31-33"));
     assert!(restored
-        .with_preset(MichiganDeliveryPresetV1::StatewideBoth)
+        .with_preset(MichiganDeliveryPreset::StatewideBoth)
         .is_err());
 }
 
-fn merchant_fixture() -> MichiganMaterialCatalogV1 {
-    let original = MichiganMaterialCatalogV1::from_defines_toml(include_str!(
+fn merchant_fixture() -> MichiganMaterialCatalog {
+    let original = MichiganMaterialCatalog::from_defines_toml(include_str!(
         "../../../../../content/scenarios/michigan/defines.toml"
     ))
     .unwrap();
@@ -74,7 +74,7 @@ fn merchant_fixture() -> MichiganMaterialCatalogV1 {
         .unwrap()
         .clone();
     second.key = "second-panel-process".to_owned();
-    second.inputs.push(MichiganMaterialInputV2 {
+    second.inputs.push(MichiganMaterialInput {
         good_key: "meal".to_owned(),
         quantity_per_batch: 1,
         opening_quantity: 5,
@@ -103,26 +103,26 @@ fn merchant_fixture() -> MichiganMaterialCatalogV1 {
             "fixture-44-45".to_owned(),
         ),
     ] {
-        c.routes.push(MichiganMaterialRouteV1 {
+        c.routes.push(MichiganMaterialRoute {
             key: key.to_owned(),
             supplier_site_key: supplier,
             buyer_site_key: buyer,
             good_key: "sheet".to_owned(),
             ordered_quantity: 20,
-            path: MichiganMaterialPathV2::Local,
+            path: MichiganMaterialPath::Local,
         });
     }
-    c.final_demands.push(MichiganFinalDemandV2 {
+    c.final_demands.push(MichiganFinalDemand {
         key: "fixture-final".to_owned(),
         retailer_site_key: "fixture-44-45".to_owned(),
         county_geoid: "26163".to_owned(),
         good_key: "sheet".to_owned(),
         ordered_quantity: 20,
     });
-    MichiganMaterialCatalogV1::from_normalized(
+    MichiganMaterialCatalog::from_normalized(
         original.capture.defines,
         c,
-        MichiganDeliveryPresetV1::Standard,
+        MichiganDeliveryPreset::Standard,
         Vec::new(),
     )
     .unwrap()
@@ -130,9 +130,9 @@ fn merchant_fixture() -> MichiganMaterialCatalogV1 {
 #[test]
 fn normalized_multi_input_owners_share_inventory_and_labor_and_merchants_have_no_fake_road() {
     let c = merchant_fixture();
-    let bundles = crate::sector_bundle::michigan_sector_bundles_v2(&c).unwrap();
+    let bundles = crate::sector_bundle::michigan_sector_bundles(&c).unwrap();
     assert_eq!(bundles.len(), 6);
-    let state = crate::sector_bundle::compile_sector_bundles_v2(&bundles, c.preset(), &c).unwrap();
+    let state = crate::sector_bundle::compile_sector_bundles(&bundles, c.preset(), &c).unwrap();
     let p = c
         .processes()
         .iter()
@@ -170,14 +170,14 @@ fn normalized_multi_input_owners_share_inventory_and_labor_and_merchants_have_no
     for route in state
         .supplier_routes
         .iter()
-        .filter(|r| r.transport_kind == babylon_material_circuit::SupplierTransportV3::Local)
+        .filter(|r| r.transport_kind == babylon_material_circuit::SupplierTransport::Local)
     {
         assert!(!state
             .route_stages
             .iter()
             .any(|s| s.route_id == route.route_id));
     }
-    let restored = MichiganMaterialCatalogV1::from_stored_defines(c.defines_bytes()).unwrap();
+    let restored = MichiganMaterialCatalog::from_stored_defines(c.defines_bytes()).unwrap();
     assert_eq!(restored, c);
 }
 #[test]
@@ -193,18 +193,18 @@ fn observed_suppression_remains_absent_and_zero_employment_can_recover_from_rese
     pool.employed = 0;
     pool.reserve = 5;
     pool.previous_unretained_hours = 0;
-    let accepted = MichiganMaterialCatalogV1::capture(capture.clone()).unwrap();
+    let accepted = MichiganMaterialCatalog::capture(capture.clone()).unwrap();
     assert_eq!(
         accepted.capture.normalized.industry[0].annual_avg_emplvl,
         None
     );
     capture.normalized.industry[0].annual_avg_emplvl = Some(0);
-    assert!(MichiganMaterialCatalogV1::capture(capture).is_err());
+    assert!(MichiganMaterialCatalog::capture(capture).is_err());
 }
 #[test]
 fn complete_statewide_workforce_graph_stays_inside_the_source_bound() {
     let seeds = (0..397)
-        .map(|n| MichiganWorkforceSeedV1 {
+        .map(|n| MichiganWorkforceSeed {
             key: format!("owner-{:05}-31-33", 26001 + n),
             site_key: format!("owner-{n}"),
             process_keys: Vec::new(),
@@ -214,20 +214,20 @@ fn complete_statewide_workforce_graph_stays_inside_the_source_bound() {
             previous_unretained_hours: 3200,
         })
         .collect::<Vec<_>>();
-    let source = crate::michigan_cohorts::michigan_staffed_scenario_v1(&seeds).unwrap();
+    let source = crate::michigan_cohorts::michigan_staffed_scenario(&seeds).unwrap();
     assert!(source.len() < 1_048_576);
     eprintln!("397-pool observed graph source: {} bytes", source.len());
 }
 
-fn append_fixture_merchants(c: &mut MichiganNormalizedContentV2) {
+fn append_fixture_merchants(c: &mut MichiganNormalizedContent) {
     for (sector, role) in [
-        ("42", MichiganSiteRoleV2::Wholesale),
-        ("44-45", MichiganSiteRoleV2::Retail),
+        ("42", MichiganSiteRole::Wholesale),
+        ("44-45", MichiganSiteRole::Retail),
     ] {
         let source =
-            regional::owner_source("26163", sector, MICHIGAN_INDUSTRY_BASELINE_SHA256_V1).unwrap();
+            regional::owner_source("26163", sector, MICHIGAN_INDUSTRY_BASELINE_SHA256).unwrap();
         let key = format!("fixture-{sector}");
-        c.industry.push(MichiganIndustryBaselineRowV1 {
+        c.industry.push(MichiganIndustryBaselineRow {
             area_fips: "26163".to_owned(),
             area_title: "Wayne County, Michigan".to_owned(),
             industry_code: sector.to_owned(),
@@ -243,7 +243,7 @@ fn append_fixture_merchants(c: &mut MichiganNormalizedContentV2) {
             source_sha256: source.county_source_sha256.clone(),
         });
         c.owners.push(source);
-        c.sites.push(MichiganMaterialSiteV1 {
+        c.sites.push(MichiganMaterialSite {
             key: key.clone(),
             label: format!("Synthetic local {sector} fixture"),
             county_geoid: "26163".to_owned(),
@@ -251,7 +251,7 @@ fn append_fixture_merchants(c: &mut MichiganNormalizedContentV2) {
             sector_code: sector.to_owned(),
             role,
         });
-        c.staffing.pools.push(MichiganWorkforceSeedV1 {
+        c.staffing.pools.push(MichiganWorkforceSeed {
             key: key.clone(),
             site_key: key.clone(),
             process_keys: Vec::new(),
@@ -261,12 +261,12 @@ fn append_fixture_merchants(c: &mut MichiganNormalizedContentV2) {
             previous_unretained_hours: 160,
         });
         let capacity_key = format!("handling-{sector}");
-        c.corridors.push(MichiganMaterialCorridorV1 {
+        c.corridors.push(MichiganMaterialCorridor {
             key: capacity_key.clone(),
             label: format!("Synthetic {sector} handling"),
             capacity_grams_per_period: 1_000_000,
         });
-        c.merchants.push(MichiganMerchantV2 {
+        c.merchants.push(MichiganMerchant {
             site_key: key,
             capacity_key,
             handling_hours_per_unit: BTreeMap::from([("sheet".to_owned(), 1)]),

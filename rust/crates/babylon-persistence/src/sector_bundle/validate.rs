@@ -1,13 +1,13 @@
 //! Structural owner and resource checks; captured catalog equality supplies authority.
 use super::{
-    SectorBundleErrorV2, SectorBundleV2, MAX_BUNDLE_GOODS, MAX_BUNDLE_PROCESSES,
-    MICHIGAN_MAX_HORIZON_PERIODS_V1,
+    SectorBundle, SectorBundleError, MAX_BUNDLE_GOODS, MAX_BUNDLE_PROCESSES,
+    MICHIGAN_MAX_HORIZON_PERIODS,
 };
-use crate::michigan_cohorts::michigan_business_subject_for_owner_v2;
+use crate::michigan_cohorts::michigan_business_subject_for_owner;
 use std::collections::{BTreeMap, BTreeSet};
-pub(super) fn bundle(value: &SectorBundleV2) -> Result<(), SectorBundleErrorV2> {
+pub(super) fn bundle(value: &SectorBundle) -> Result<(), SectorBundleError> {
     let expected =
-        michigan_business_subject_for_owner_v2(&value.owner.county_geoid, &value.owner.sector_code);
+        michigan_business_subject_for_owner(&value.owner.county_geoid, &value.owner.sector_code);
     if value.owner.subject != expected
         || value.owner.county_geoid.len() != 5
         || !value.owner.county_geoid.starts_with("26")
@@ -17,7 +17,7 @@ pub(super) fn bundle(value: &SectorBundleV2) -> Result<(), SectorBundleErrorV2> 
             "11" | "21" | "31-33" | "42" | "44-45"
         )
     {
-        return Err(SectorBundleErrorV2::Owner);
+        return Err(SectorBundleError::Owner);
     }
     if value.sources.county_source_file.is_empty()
         || [
@@ -29,7 +29,7 @@ pub(super) fn bundle(value: &SectorBundleV2) -> Result<(), SectorBundleErrorV2> 
         ]
         .contains(&[0; 32])
     {
-        return Err(SectorBundleErrorV2::Source);
+        return Err(SectorBundleError::Source);
     }
     let rows = &value.rows;
     if rows.period != 1
@@ -47,18 +47,18 @@ pub(super) fn bundle(value: &SectorBundleV2) -> Result<(), SectorBundleErrorV2> 
         || value.goods.len() > MAX_BUNDLE_GOODS
         || (value.processes.is_empty() && rows.merchants.is_empty())
     {
-        return Err(SectorBundleErrorV2::Bound);
+        return Err(SectorBundleError::Bound);
     }
     goods(value)?;
     ownership_and_resources(value)?;
     Ok(())
 }
 
-fn goods(value: &SectorBundleV2) -> Result<(), SectorBundleErrorV2> {
+fn goods(value: &SectorBundle) -> Result<(), SectorBundleError> {
     let rows = &value.rows;
     let goods: BTreeMap<_, _> = value.goods.iter().map(|g| (g.good_id, g.unit_id)).collect();
     if goods.len() != value.goods.len() || goods.values().any(|unit| *unit == value.labor_unit) {
-        return Err(SectorBundleErrorV2::GoodUnit);
+        return Err(SectorBundleError::GoodUnit);
     }
     let used: BTreeSet<_> = rows
         .inventory
@@ -66,7 +66,7 @@ fn goods(value: &SectorBundleV2) -> Result<(), SectorBundleErrorV2> {
         .map(|r| (r.good_id, r.unit_id))
         .collect();
     if used != goods.iter().map(|(g, u)| (*g, *u)).collect() {
-        return Err(SectorBundleErrorV2::GoodUnit);
+        return Err(SectorBundleError::GoodUnit);
     }
     if rows
         .process_outputs
@@ -81,19 +81,19 @@ fn goods(value: &SectorBundleV2) -> Result<(), SectorBundleErrorV2> {
             .iter()
             .any(|r| goods.get(&r.good_id) != Some(&r.unit_id))
     {
-        return Err(SectorBundleErrorV2::GoodUnit);
+        return Err(SectorBundleError::GoodUnit);
     }
 
     Ok(())
 }
 
-fn ownership_and_resources(value: &SectorBundleV2) -> Result<(), SectorBundleErrorV2> {
+fn ownership_and_resources(value: &SectorBundle) -> Result<(), SectorBundleError> {
     let rows = &value.rows;
     let processes: BTreeSet<_> = value.processes.iter().map(|p| p.process_id).collect();
     if processes.len() != value.processes.len()
         || processes != rows.process_outputs.iter().map(|r| r.process_id).collect()
     {
-        return Err(SectorBundleErrorV2::ProcessOwnership);
+        return Err(SectorBundleError::ProcessOwnership);
     }
     let sites: BTreeSet<_> = rows
         .process_outputs
@@ -110,7 +110,7 @@ fn ownership_and_resources(value: &SectorBundleV2) -> Result<(), SectorBundleErr
         || sites.len() != rows.site_logistics_nodes.len()
         || rows.inventory.iter().any(|r| !sites.contains(&r.site_id))
     {
-        return Err(SectorBundleErrorV2::ProcessOwnership);
+        return Err(SectorBundleError::ProcessOwnership);
     }
     let expected_labor: BTreeSet<_> = sites.iter().map(|s| (*s, value.labor_unit, 1)).collect();
     if expected_labor
@@ -121,7 +121,7 @@ fn ownership_and_resources(value: &SectorBundleV2) -> Result<(), SectorBundleErr
             .collect()
         || expected_labor.len() != rows.labor.len()
     {
-        return Err(SectorBundleErrorV2::Resource);
+        return Err(SectorBundleError::Resource);
     }
     let mut expected_capacity = BTreeSet::new();
     for output in &rows.process_outputs {
@@ -131,9 +131,9 @@ fn ownership_and_resources(value: &SectorBundleV2) -> Result<(), SectorBundleErr
             .filter(|r| r.process_id == output.process_id)
             .collect();
         if labor.len() != 1 || labor[0].unit_id != value.labor_unit {
-            return Err(SectorBundleErrorV2::Resource);
+            return Err(SectorBundleError::Resource);
         }
-        for period in 1..=MICHIGAN_MAX_HORIZON_PERIODS_V1 {
+        for period in 1..=MICHIGAN_MAX_HORIZON_PERIODS {
             expected_capacity.insert((output.process_id, output.site_id, period));
         }
     }
@@ -145,16 +145,16 @@ fn ownership_and_resources(value: &SectorBundleV2) -> Result<(), SectorBundleErr
             .collect()
         || expected_capacity.len() != rows.capacities.len()
     {
-        return Err(SectorBundleErrorV2::Resource);
+        return Err(SectorBundleError::Resource);
     }
     for commitment in &rows.production_commitments {
         let capacity = rows
             .capacities
             .iter()
             .find(|r| r.process_id == commitment.process_id && r.period == 1)
-            .ok_or(SectorBundleErrorV2::Resource)?;
+            .ok_or(SectorBundleError::Resource)?;
         if commitment.period != 1 || commitment.planned_batches > capacity.available_batches {
-            return Err(SectorBundleErrorV2::Resource);
+            return Err(SectorBundleError::Resource);
         }
     }
 

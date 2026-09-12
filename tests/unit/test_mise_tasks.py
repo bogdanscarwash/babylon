@@ -24,7 +24,6 @@ DEVTOOLS_TASKS_TOML = REPOSITORY_ROOT / ".mise" / "tasks" / "devtools.toml"
 HOSTED_STATIC_TASKS = [
     "check:hygiene",
     "check:dynamic-linking-fence",
-    "check:rust-persistence-cutover",
     "lint:check",
     "format:check",
     "typecheck",

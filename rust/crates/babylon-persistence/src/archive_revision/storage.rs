@@ -3,9 +3,9 @@
 use postgres::{GenericClient, Row};
 
 use super::record::{GrantDependency, RevisionRecord};
-use super::ArchiveReadScopeV2;
+use super::ArchiveReadScope;
 use crate::archive::{database, decode, decode_digest, decode_stored_atom, decode_subject_kind};
-use crate::{ArchiveCitationV1, ArchivePageRefV1, CampaignId, SemanticArchiveErrorV1};
+use crate::{identity::CampaignId, ArchiveCitation, ArchivePageRef, SemanticArchiveError};
 
 pub(super) const COLUMNS: &str = "campaign_id, subject_kind, subject_id, effective_tick, \
     source_tick, source_content_hash, template_sha256, content_sha256, revision_sha256, \
@@ -45,7 +45,7 @@ pub(super) fn load(
     client: &mut impl GenericClient,
     record: &RevisionRecord,
     authority: ReadAuthority,
-) -> Result<Option<RevisionRecord>, SemanticArchiveErrorV1> {
+) -> Result<Option<RevisionRecord>, SemanticArchiveError> {
     let campaign = record.source.campaign_id();
     let tick = signed(record.effective_tick)?;
     let row = client
@@ -71,14 +71,14 @@ pub(super) fn decode_record(
     client: &mut impl GenericClient,
     row: &Row,
     authority: ReadAuthority,
-) -> Result<RevisionRecord, SemanticArchiveErrorV1> {
+) -> Result<RevisionRecord, SemanticArchiveError> {
     let campaign = CampaignId::from_uuid(decode(row, 0)?);
-    let subject = ArchivePageRefV1::try_new(
+    let subject = ArchivePageRef::try_new(
         decode_subject_kind(&decode::<String>(row, 1)?)?,
         decode(row, 2)?,
     )?;
     let mut record = RevisionRecord {
-        source: ArchiveReadScopeV2::committed(
+        source: ArchiveReadScope::committed(
             campaign,
             unsigned(decode(row, 4)?)?,
             decode_digest(row, 5)?,
@@ -93,20 +93,20 @@ pub(super) fn decode_record(
         provenance_json: decode(row, 12)?,
         atoms: Vec::new(),
         grants: Vec::new(),
-        emission: super::emission::ArchiveEmissionManifestV2::decode(&decode::<String>(row, 15)?)?,
+        emission: super::emission::ArchiveEmissionManifest::decode(&decode::<String>(row, 15)?)?,
     };
     let counts = (decode::<i32>(row, 13)?, decode::<i32>(row, 14)?);
     if !(1..=513).contains(&counts.0) || !(1..=513).contains(&counts.1) {
-        return Err(SemanticArchiveErrorV1::StoredPageMismatch);
+        return Err(SemanticArchiveError::StoredPageMismatch);
     }
     read_membership(client, &mut record, authority)?;
     if record.atoms.len()
-        != usize::try_from(counts.0).map_err(|_| SemanticArchiveErrorV1::CollectionBound)?
+        != usize::try_from(counts.0).map_err(|_| SemanticArchiveError::CollectionBound)?
         || record.grants.len()
-            != usize::try_from(counts.1).map_err(|_| SemanticArchiveErrorV1::CollectionBound)?
+            != usize::try_from(counts.1).map_err(|_| SemanticArchiveError::CollectionBound)?
         || record.digest()? != decode_digest(row, 8)?
     {
-        return Err(SemanticArchiveErrorV1::StoredPageMismatch);
+        return Err(SemanticArchiveError::StoredPageMismatch);
     }
     Ok(record)
 }
@@ -115,7 +115,7 @@ fn read_membership(
     client: &mut impl GenericClient,
     record: &mut RevisionRecord,
     authority: ReadAuthority,
-) -> Result<(), SemanticArchiveErrorV1> {
+) -> Result<(), SemanticArchiveError> {
     let campaign = record.source.campaign_id();
     let tick = signed(record.effective_tick)?;
     let atom_query = match authority {
@@ -137,9 +137,9 @@ fn read_membership(
         .map_err(|error| database("read retained Archive membership", &error))?;
     for (position, row) in atoms.iter().enumerate() {
         if decode::<i32>(row, 15)?
-            != i32::try_from(position).map_err(|_| SemanticArchiveErrorV1::CollectionBound)?
+            != i32::try_from(position).map_err(|_| SemanticArchiveError::CollectionBound)?
         {
-            return Err(SemanticArchiveErrorV1::StoredPageMismatch);
+            return Err(SemanticArchiveError::StoredPageMismatch);
         }
         record.atoms.push(decode_stored_atom(row)?);
     }
@@ -156,18 +156,18 @@ fn read_membership(
         .map_err(|error| database("read retained Archive grant dependencies", &error))?;
     for (position, row) in grants.iter().enumerate() {
         if decode::<i32>(row, 6)?
-            != i32::try_from(position).map_err(|_| SemanticArchiveErrorV1::CollectionBound)?
+            != i32::try_from(position).map_err(|_| SemanticArchiveError::CollectionBound)?
         {
-            return Err(SemanticArchiveErrorV1::StoredPageMismatch);
+            return Err(SemanticArchiveError::StoredPageMismatch);
         }
         record.grants.push(GrantDependency {
-            subject: ArchivePageRefV1::try_new(
+            subject: ArchivePageRef::try_new(
                 decode_subject_kind(&decode::<String>(row, 0)?)?,
                 decode(row, 1)?,
             )?,
             key: decode(row, 2)?,
             granted_tick: unsigned(decode(row, 3)?)?,
-            citation: ArchiveCitationV1::try_new(decode(row, 4)?, decode(row, 5)?)?,
+            citation: ArchiveCitation::try_new(decode(row, 4)?, decode(row, 5)?)?,
         });
     }
     Ok(())
@@ -176,7 +176,7 @@ fn read_membership(
 pub(super) fn insert(
     client: &mut impl GenericClient,
     record: &RevisionRecord,
-) -> Result<bool, SemanticArchiveErrorV1> {
+) -> Result<bool, SemanticArchiveError> {
     let digest = record.digest()?;
     let campaign = record.source.campaign_id();
     let effective = signed(record.effective_tick)?;
@@ -184,11 +184,11 @@ pub(super) fn insert(
     let source_hash = record
         .source
         .tick_content_hash()
-        .ok_or(SemanticArchiveErrorV1::InvalidVerifiedTick)?;
+        .ok_or(SemanticArchiveError::InvalidVerifiedTick)?;
     let atoms =
-        i32::try_from(record.atoms.len()).map_err(|_| SemanticArchiveErrorV1::CollectionBound)?;
+        i32::try_from(record.atoms.len()).map_err(|_| SemanticArchiveError::CollectionBound)?;
     let grants =
-        i32::try_from(record.grants.len()).map_err(|_| SemanticArchiveErrorV1::CollectionBound)?;
+        i32::try_from(record.grants.len()).map_err(|_| SemanticArchiveError::CollectionBound)?;
     let emission = record.emission.encode()?;
     let inserted = client
         .execute(
@@ -222,7 +222,7 @@ pub(super) fn insert(
         insert_membership(client, record)?;
     }
     if load(client, record, ReadAuthority::Writer)?.as_ref() != Some(record) {
-        return Err(SemanticArchiveErrorV1::ReceiptConflict);
+        return Err(SemanticArchiveError::ReceiptConflict);
     }
     Ok(inserted)
 }
@@ -230,12 +230,12 @@ pub(super) fn insert(
 fn insert_membership(
     client: &mut impl GenericClient,
     record: &RevisionRecord,
-) -> Result<(), SemanticArchiveErrorV1> {
+) -> Result<(), SemanticArchiveError> {
     let campaign = record.source.campaign_id();
     let effective = signed(record.effective_tick)?;
     for (position, atom) in record.atoms.iter().enumerate() {
         let position =
-            i32::try_from(position).map_err(|_| SemanticArchiveErrorV1::CollectionBound)?;
+            i32::try_from(position).map_err(|_| SemanticArchiveError::CollectionBound)?;
         client
             .execute(
                 "INSERT INTO babylon_meta.archive_revision_atom_v2 \
@@ -254,7 +254,7 @@ fn insert_membership(
     }
     for (position, grant) in record.grants.iter().enumerate() {
         let position =
-            i32::try_from(position).map_err(|_| SemanticArchiveErrorV1::CollectionBound)?;
+            i32::try_from(position).map_err(|_| SemanticArchiveError::CollectionBound)?;
         let granted = signed(grant.granted_tick)?;
         client
             .execute(
@@ -281,10 +281,10 @@ fn insert_membership(
     Ok(())
 }
 
-pub(super) fn unsigned(value: i64) -> Result<u64, SemanticArchiveErrorV1> {
-    u64::try_from(value).map_err(|_| SemanticArchiveErrorV1::StoredPageMismatch)
+pub(super) fn unsigned(value: i64) -> Result<u64, SemanticArchiveError> {
+    u64::try_from(value).map_err(|_| SemanticArchiveError::StoredPageMismatch)
 }
 
-pub(super) fn signed(value: u64) -> Result<i64, SemanticArchiveErrorV1> {
-    i64::try_from(value).map_err(|_| SemanticArchiveErrorV1::InvalidVerifiedTick)
+pub(super) fn signed(value: u64) -> Result<i64, SemanticArchiveError> {
+    i64::try_from(value).map_err(|_| SemanticArchiveError::InvalidVerifiedTick)
 }

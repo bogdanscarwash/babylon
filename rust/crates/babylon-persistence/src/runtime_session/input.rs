@@ -5,12 +5,12 @@ use std::sync::mpsc::{self, Receiver, SyncSender};
 use std::thread::{self, JoinHandle};
 
 use super::coordinator::SessionEvent;
-use super::{RuntimeSessionErrorCodeV3, RUNTIME_SESSION_MAX_LINE_BYTES_V3};
+use super::{RuntimeSessionErrorCode, RUNTIME_SESSION_MAX_LINE_BYTES};
 
 #[derive(Debug)]
 pub(super) enum InputEvent {
     Frame(Vec<u8>),
-    Refused(RuntimeSessionErrorCodeV3),
+    Refused(RuntimeSessionErrorCode),
     Eof,
 }
 
@@ -23,37 +23,37 @@ impl SessionInput {
     pub(super) fn start(
         input: impl BufRead + Send + 'static,
         events: SyncSender<SessionEvent>,
-    ) -> Result<Self, RuntimeSessionErrorCodeV3> {
+    ) -> Result<Self, RuntimeSessionErrorCode> {
         let (permit, next) = mpsc::sync_channel(1);
         let handle = thread::Builder::new()
             .name("runtime-control-input".into())
             .spawn(move || pump(input, &events, &next))
-            .map_err(|_| RuntimeSessionErrorCodeV3::PipeFailure)?;
+            .map_err(|_| RuntimeSessionErrorCode::PipeFailure)?;
         Ok(Self {
             permit: Some(permit),
             handle: Some(handle),
         })
     }
 
-    pub(super) fn next(&self) -> Result<(), RuntimeSessionErrorCodeV3> {
+    pub(super) fn next(&self) -> Result<(), RuntimeSessionErrorCode> {
         self.permit
             .as_ref()
-            .ok_or(RuntimeSessionErrorCodeV3::PipeFailure)?
+            .ok_or(RuntimeSessionErrorCode::PipeFailure)?
             .try_send(())
-            .map_err(|_| RuntimeSessionErrorCodeV3::PipeFailure)
+            .map_err(|_| RuntimeSessionErrorCode::PipeFailure)
     }
 
     pub(super) fn stop(&mut self) {
         self.permit = None;
     }
 
-    pub(super) fn join_if_finished(&mut self) -> Result<(), RuntimeSessionErrorCodeV3> {
+    pub(super) fn join_if_finished(&mut self) -> Result<(), RuntimeSessionErrorCode> {
         if self.handle.as_ref().is_some_and(JoinHandle::is_finished) {
             self.handle
                 .take()
                 .expect("finished input handle exists")
                 .join()
-                .map_err(|_| RuntimeSessionErrorCodeV3::PipeFailure)?;
+                .map_err(|_| RuntimeSessionErrorCode::PipeFailure)?;
         }
         Ok(())
     }
@@ -82,15 +82,15 @@ fn pump(mut input: impl BufRead, events: &SyncSender<SessionEvent>, next: &Recei
 fn read_frame(input: &mut impl BufRead) -> InputEvent {
     let mut line = Vec::new();
     match input
-        .take((RUNTIME_SESSION_MAX_LINE_BYTES_V3 + 1) as u64)
+        .take((RUNTIME_SESSION_MAX_LINE_BYTES + 1) as u64)
         .read_until(b'\n', &mut line)
     {
         Ok(0) => InputEvent::Eof,
-        Ok(size) if size <= RUNTIME_SESSION_MAX_LINE_BYTES_V3 && line.ends_with(b"\n") => {
+        Ok(size) if size <= RUNTIME_SESSION_MAX_LINE_BYTES && line.ends_with(b"\n") => {
             InputEvent::Frame(line)
         }
-        Ok(_) => InputEvent::Refused(RuntimeSessionErrorCodeV3::InvalidRequest),
-        Err(_) => InputEvent::Refused(RuntimeSessionErrorCodeV3::PipeFailure),
+        Ok(_) => InputEvent::Refused(RuntimeSessionErrorCode::InvalidRequest),
+        Err(_) => InputEvent::Refused(RuntimeSessionErrorCode::PipeFailure),
     }
 }
 
@@ -125,8 +125,8 @@ mod tests {
         for (bytes, expected) in [
             (Vec::new(), None),
             (
-                vec![b' '; RUNTIME_SESSION_MAX_LINE_BYTES_V3 + 1],
-                Some(RuntimeSessionErrorCodeV3::InvalidRequest),
+                vec![b' '; RUNTIME_SESSION_MAX_LINE_BYTES + 1],
+                Some(RuntimeSessionErrorCode::InvalidRequest),
             ),
         ] {
             let (events, received) = mpsc::sync_channel(2);

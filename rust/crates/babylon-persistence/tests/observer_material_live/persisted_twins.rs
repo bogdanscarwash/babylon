@@ -3,14 +3,16 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use super::{
-    advance_material_period, assert_material_accounts, identity_hex,
-    install_observer_economy_schema_v1, install_reader_role_v1, CampaignId, DisposableTarget,
-    DurableMaterialRuntimeV3, MichiganContentPresetV1, MichiganDeliveryPresetV1, NoTls,
-    ObserverEconomyReaderV1, ObserverVisibilityV1, Uuid,
+    advance_material_period, assert_material_accounts, identity_hex, install_reader_role,
+    provision_observer_role, CampaignId, DisposableTarget, DurableMaterialRuntime,
+    MichiganContentPreset, MichiganDeliveryPreset, NoTls, ObserverEconomyReader,
+    ObserverVisibility, Uuid,
 };
-use babylon_kernel::sha256_of;
-use babylon_persistence::{ObserverEconomySnapshotV1, ProductionSnapshotV2};
-use babylon_tick::material_world::{decode_material_receipts_v4, MaterialTickReceiptsV4};
+use babylon_kernel::content_digest::sha256_of;
+use babylon_persistence::{
+    observer_reader::ObserverEconomySnapshot, production_observation::ProductionSnapshot,
+};
+use babylon_tick::material_world::{decode_material_receipts, MaterialTickReceipts};
 use postgres::Client;
 
 // Both downstream onset periods and their following continuation are inside this
@@ -18,30 +20,30 @@ use postgres::Client;
 const PROOF_PERIODS: u64 = 8;
 
 struct RunPair {
-    preset: MichiganDeliveryPresetV1,
-    uninterrupted: DurableMaterialRuntimeV3,
-    restarted: DurableMaterialRuntimeV3,
+    preset: MichiganDeliveryPreset,
+    uninterrupted: DurableMaterialRuntime,
+    restarted: DurableMaterialRuntime,
     foundation_digest: [u8; 32],
-    history: Vec<[ObserverEconomySnapshotV1; 2]>,
+    history: Vec<[ObserverEconomySnapshot; 2]>,
     restart_periods: Vec<u64>,
 }
 
 impl RunPair {
-    fn create(target: &DisposableTarget, preset: MichiganDeliveryPresetV1, id: u128) -> Self {
-        let foundation = MichiganContentPresetV1::new_campaign(preset)
+    fn create(target: &DisposableTarget, preset: MichiganDeliveryPreset, id: u128) -> Self {
+        let foundation = MichiganContentPreset::new_campaign(preset)
             .create_foundation(&crate::test_support::catalog())
             .unwrap();
         let foundation_digest = foundation.digest();
-        let uninterrupted = DurableMaterialRuntimeV3::create(
+        let uninterrupted = DurableMaterialRuntime::create(
             &target.writer,
             CampaignId::from_uuid(Uuid::from_u128(id)),
             foundation,
         )
         .unwrap();
-        let restarted = DurableMaterialRuntimeV3::create(
+        let restarted = DurableMaterialRuntime::create(
             &target.writer,
             CampaignId::from_uuid(Uuid::from_u128(id + 1)),
-            MichiganContentPresetV1::new_campaign(preset)
+            MichiganContentPreset::new_campaign(preset)
                 .create_foundation(&crate::test_support::catalog())
                 .unwrap(),
         )
@@ -56,7 +58,7 @@ impl RunPair {
         }
     }
 
-    fn snapshots(&self, observer: &ObserverEconomyReaderV1) -> [ObserverEconomySnapshotV1; 2] {
+    fn snapshots(&self, observer: &ObserverEconomyReader) -> [ObserverEconomySnapshot; 2] {
         [&self.uninterrupted, &self.restarted].map(|runtime| {
             observer
                 .snapshot(runtime.campaign_id(), runtime.session().completed_tick())
@@ -67,7 +69,7 @@ impl RunPair {
     fn advance(
         &mut self,
         target: &DisposableTarget,
-        observer: &ObserverEconomyReaderV1,
+        observer: &ObserverEconomyReader,
         connection: &mut Client,
     ) {
         advance_material_period(&mut self.uninterrupted);
@@ -90,7 +92,7 @@ impl RunPair {
         }
         let tick = current[0].resolve_tick;
         if is_restart_boundary(self.preset, tick, &current[1], &receipts) {
-            self.restarted = DurableMaterialRuntimeV3::open(
+            self.restarted = DurableMaterialRuntime::open(
                 &target.writer,
                 self.restarted.campaign_id(),
                 self.foundation_digest,
@@ -115,7 +117,7 @@ impl RunPair {
         );
     }
 
-    fn assert_held_history(&self, observer: &ObserverEconomyReaderV1) {
+    fn assert_held_history(&self, observer: &ObserverEconomyReader) {
         for tick in [0, 1, 2, 4, 5, 7, 8] {
             for (runtime, held) in [&self.uninterrupted, &self.restarted]
                 .into_iter()
@@ -134,9 +136,9 @@ impl RunPair {
 
 fn authenticated_receipts(
     connection: &mut Client,
-    runtime: &DurableMaterialRuntimeV3,
-    snapshot: &ObserverEconomySnapshotV1,
-) -> MaterialTickReceiptsV4 {
+    runtime: &DurableMaterialRuntime,
+    snapshot: &ObserverEconomySnapshot,
+) -> MaterialTickReceipts {
     let tail = runtime.tail().unwrap();
     let tick = i64::try_from(tail.resolve_tick()).unwrap();
     let bytes: Vec<u8> = connection
@@ -167,16 +169,16 @@ fn authenticated_receipts(
     );
     assert!(snapshot.envelope_digest.is_some());
     assert!(snapshot.production_evidence_digest().unwrap().is_some());
-    let receipts = decode_material_receipts_v4(&bytes).unwrap();
+    let receipts = decode_material_receipts(&bytes).unwrap();
     assert_eq!(receipts.resolve_tick, snapshot.resolve_tick);
     receipts
 }
 
-fn production(snapshot: &ObserverEconomySnapshotV1) -> &ProductionSnapshotV2 {
+fn production(snapshot: &ObserverEconomySnapshot) -> &ProductionSnapshot {
     snapshot.production.as_ref().unwrap()
 }
 
-fn stock(rows: &ProductionSnapshotV2, site: &str, good: &str, unit: &str) -> u64 {
+fn stock(rows: &ProductionSnapshot, site: &str, good: &str, unit: &str) -> u64 {
     rows.sites
         .iter()
         .find(|row| row.id == site)
@@ -188,9 +190,9 @@ fn stock(rows: &ProductionSnapshotV2, site: &str, good: &str, unit: &str) -> u64
 }
 
 fn assert_reconciled(
-    prior: &ObserverEconomySnapshotV1,
-    current: &ObserverEconomySnapshotV1,
-    receipts: &MaterialTickReceiptsV4,
+    prior: &ObserverEconomySnapshot,
+    current: &ObserverEconomySnapshot,
+    receipts: &MaterialTickReceipts,
 ) {
     assert_material_accounts(current);
     assert_eq!(prior.resolve_tick + 1, current.resolve_tick);
@@ -202,9 +204,9 @@ fn assert_reconciled(
 }
 
 fn assert_inventory(
-    before: &ProductionSnapshotV2,
-    after: &ProductionSnapshotV2,
-    receipts: &MaterialTickReceiptsV4,
+    before: &ProductionSnapshot,
+    after: &ProductionSnapshot,
+    receipts: &MaterialTickReceipts,
 ) {
     let catalog = crate::test_support::catalog();
     let stock_key = |site_key: &str, good_key: &str| {
@@ -306,7 +308,7 @@ fn assert_inventory(
     }
 }
 
-fn assert_labor(before: &ProductionSnapshotV2, after: &ProductionSnapshotV2, tick: u64) {
+fn assert_labor(before: &ProductionSnapshot, after: &ProductionSnapshot, tick: u64) {
     for labor in &after.labor_accounts {
         let completed = labor.completed.as_ref().unwrap();
         let previous = before
@@ -348,9 +350,9 @@ fn assert_labor(before: &ProductionSnapshotV2, after: &ProductionSnapshotV2, tic
 }
 
 fn assert_freight(
-    before: &ProductionSnapshotV2,
-    after: &ProductionSnapshotV2,
-    receipts: &MaterialTickReceiptsV4,
+    before: &ProductionSnapshot,
+    after: &ProductionSnapshot,
+    receipts: &MaterialTickReceipts,
 ) {
     let mut lots = BTreeSet::new();
     assert!(after.freight.iter().all(|lot| lots.insert(&lot.id)));
@@ -399,10 +401,10 @@ fn assert_freight(
 }
 
 fn is_restart_boundary(
-    preset: MichiganDeliveryPresetV1,
+    preset: MichiganDeliveryPreset,
     tick: u64,
-    snapshot: &ObserverEconomySnapshotV1,
-    receipts: &MaterialTickReceiptsV4,
+    snapshot: &ObserverEconomySnapshot,
+    receipts: &MaterialTickReceipts,
 ) -> bool {
     let catalog = crate::test_support::catalog();
     let sheet = catalog
@@ -410,7 +412,7 @@ fn is_restart_boundary(
         .iter()
         .find(|route| route.key == "sheet-transfer")
         .unwrap();
-    let arrival = if preset == MichiganDeliveryPresetV1::Delayed {
+    let arrival = if preset == MichiganDeliveryPreset::Delayed {
         4
     } else {
         2
@@ -432,7 +434,7 @@ fn is_restart_boundary(
             .iter()
             .any(|row| row.order_id == sheet.order_id() && row.quantity > 0));
     } else if tick == 2 {
-        assert_eq!(preset, MichiganDeliveryPresetV1::Delayed);
+        assert_eq!(preset, MichiganDeliveryPreset::Delayed);
         assert!(production(snapshot)
             .freight
             .iter()
@@ -445,7 +447,7 @@ fn is_restart_boundary(
     true
 }
 
-fn assert_food_disconnected(standard: &ProductionSnapshotV2, delayed: &ProductionSnapshotV2) {
+fn assert_food_disconnected(standard: &ProductionSnapshot, delayed: &ProductionSnapshot) {
     let food: BTreeSet<_> = standard
         .sites
         .iter()
@@ -515,7 +517,7 @@ fn assert_food_disconnected(standard: &ProductionSnapshotV2, delayed: &Productio
     );
 }
 
-fn subassembly_stock(snapshot: &ObserverEconomySnapshotV1) -> u64 {
+fn subassembly_stock(snapshot: &ObserverEconomySnapshot) -> u64 {
     let catalog = crate::test_support::catalog();
     stock(
         production(snapshot),
@@ -529,8 +531,8 @@ fn subassembly_stock(snapshot: &ObserverEconomySnapshotV1) -> u64 {
 #[ignore = "requires the task-owned disposable PostgreSQL harness; serial persisted twin proof"]
 fn persisted_delivery_twins_reconcile_and_restart_at_dispatch_transit_and_arrival() {
     let mut target = DisposableTarget::create();
-    let mut standard = RunPair::create(&target, MichiganDeliveryPresetV1::Standard, 325_001);
-    let mut delayed = RunPair::create(&target, MichiganDeliveryPresetV1::Delayed, 325_003);
+    let mut standard = RunPair::create(&target, MichiganDeliveryPreset::Standard, 325_001);
+    let mut delayed = RunPair::create(&target, MichiganDeliveryPreset::Delayed, 325_003);
     let initial = standard.uninterrupted.session().material().state();
     let mut normalized = delayed.uninterrupted.session().material().state().clone();
     let catalog = crate::test_support::catalog();
@@ -552,12 +554,11 @@ fn persisted_delivery_twins_reconcile_and_restart_at_dispatch_transit_and_arriva
         initial.labor.iter().map(|row| row.available).sum::<u64>(),
         4960
     );
-    install_reader_role_v1(&target.writer).unwrap();
-    install_observer_economy_schema_v1(&target.writer).unwrap();
+    install_reader_role(&target.writer).unwrap();
+    provision_observer_role(&target.writer).unwrap();
     let observer_config = target.login("babylon_observer", "persistedtwins");
     let observer =
-        ObserverEconomyReaderV1::connect(&observer_config, ObserverVisibilityV1::FullObserver)
-            .unwrap();
+        ObserverEconomyReader::connect(&observer_config, ObserverVisibility::FullObserver).unwrap();
     let mut connection = observer_config.connect(NoTls).unwrap();
     for pair in [&mut standard, &mut delayed] {
         pair.history.push(pair.snapshots(&observer));
@@ -598,7 +599,7 @@ fn persisted_delivery_twins_reconcile_and_restart_at_dispatch_transit_and_arriva
         eprintln!(
             "PER-325 {:?}: first downstream output period {}, restart periods {:?}, final world {}",
             pair.preset,
-            first[usize::from(pair.preset == MichiganDeliveryPresetV1::Delayed)].unwrap(),
+            first[usize::from(pair.preset == MichiganDeliveryPreset::Delayed)].unwrap(),
             pair.restart_periods,
             pair.history.last().unwrap()[0]
                 .nominal_world_hash
@@ -618,25 +619,20 @@ fn persisted_delivery_twins_reconcile_and_restart_at_dispatch_transit_and_arriva
 #[ignore = "requires the task-owned disposable PostgreSQL harness; independent clone ownership"]
 fn shared_freight_competition_is_committed_restart_safe_and_scope_confined() {
     let mut target = DisposableTarget::create();
-    let mut ample = RunPair::create(
-        &target,
-        MichiganDeliveryPresetV1::SharedFreightAmple,
-        331_001,
-    );
+    let mut ample = RunPair::create(&target, MichiganDeliveryPreset::SharedFreightAmple, 331_001);
     let mut constrained = RunPair::create(
         &target,
-        MichiganDeliveryPresetV1::SharedFreightConstrained,
+        MichiganDeliveryPreset::SharedFreightConstrained,
         331_003,
     );
-    install_reader_role_v1(&target.writer).unwrap();
-    install_observer_economy_schema_v1(&target.writer).unwrap();
+    install_reader_role(&target.writer).unwrap();
+    provision_observer_role(&target.writer).unwrap();
     let observer_config = target.login("babylon_observer", "sharedfreight");
     let observer =
-        ObserverEconomyReaderV1::connect(&observer_config, ObserverVisibilityV1::FullObserver)
-            .unwrap();
-    let preview = ObserverEconomyReaderV1::connect(
+        ObserverEconomyReader::connect(&observer_config, ObserverVisibility::FullObserver).unwrap();
+    let preview = ObserverEconomyReader::connect(
         &target.login("babylon_reader", "sharedpreview"),
-        ObserverVisibilityV1::KnownPreview,
+        ObserverVisibility::KnownPreview,
     )
     .unwrap();
     let mut connection = observer_config.connect(NoTls).unwrap();
@@ -714,8 +710,8 @@ fn shared_freight_competition_is_committed_restart_safe_and_scope_confined() {
 }
 
 fn assert_shared_reservations(
-    snapshot: &ObserverEconomySnapshotV1,
-    preset: MichiganDeliveryPresetV1,
+    snapshot: &ObserverEconomySnapshot,
+    preset: MichiganDeliveryPreset,
     tick: u64,
 ) {
     let accounts = &production(snapshot).freight_capacity_accounts;
@@ -746,7 +742,7 @@ fn assert_shared_reservations(
     if tick == 1 {
         let shared = accounts.iter().find(|a| a.route_ids.len() == 2).unwrap();
         let reservation = &shared.completed.as_ref().unwrap().reservations[0];
-        let expected = if preset == MichiganDeliveryPresetV1::SharedFreightAmple {
+        let expected = if preset == MichiganDeliveryPreset::SharedFreightAmple {
             (800_000, 400_000)
         } else {
             (160_000, 160_000)

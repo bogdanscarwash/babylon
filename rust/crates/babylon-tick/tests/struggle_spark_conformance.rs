@@ -1,19 +1,19 @@
 use babylon_bsl::probability::TICKET_DENOMINATOR;
-use babylon_graph::stable_element::StableElementKeyV1;
-use babylon_tick::{analyze_content_set_sources, forecast_event_likelihoods, ContentRuleSourceV1};
+use babylon_graph::stable_element::StableElementKey;
+use babylon_tick::{analyze_content_set_sources, forecast_event_likelihoods, ContentRuleSource};
 
 const SCENARIO: &str = include_str!("../content/scenarios/struggle-spark-conformance.bscn");
 const RULES: &str = include_str!("../content/rules/struggle-spark.bsl");
 
-fn sources() -> [ContentRuleSourceV1<'static>; 1] {
-    [ContentRuleSourceV1 {
+fn sources() -> [ContentRuleSource<'static>; 1] {
+    [ContentRuleSource {
         source_id: "rules/struggle-spark.bsl",
         source: RULES,
     }]
 }
 
-fn scenario() -> ContentRuleSourceV1<'static> {
-    ContentRuleSourceV1 {
+fn scenario() -> ContentRuleSource<'static> {
+    ContentRuleSource {
         source_id: "scenarios/struggle-spark-conformance.bscn",
         source: SCENARIO,
     }
@@ -36,7 +36,7 @@ fn pilot_likelihood_is_the_exact_recognizer_preimage_not_authored_payload() {
         None,
         &sources(),
         "struggle/spark",
-        &StableElementKeyV1::Node {
+        &StableElementKey::Node {
             scenario: "struggle/spark-conformance".to_owned(),
             local_name: "workers".to_owned(),
         },

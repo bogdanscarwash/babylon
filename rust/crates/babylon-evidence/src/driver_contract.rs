@@ -1,6 +1,6 @@
 //! Exact source-bound contract for the fixture-only synthetic driver.
 
-use babylon_kernel::sha256_of;
+use babylon_kernel::content_digest::sha256_of;
 use babylon_practice_contract::PracticeIntent;
 
 use crate::driver;

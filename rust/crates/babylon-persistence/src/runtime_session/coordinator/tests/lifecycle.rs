@@ -2,8 +2,8 @@ use super::*;
 use std::cell::RefCell;
 use std::collections::VecDeque;
 
-fn stop_at(scope: RuntimeSessionScopeV3) -> RuntimeSessionRequestV3 {
-    RuntimeSessionRequestV3::Stop {
+fn stop_at(scope: RuntimeSessionScope) -> RuntimeSessionRequest {
+    RuntimeSessionRequest::Stop {
         protocol_version: 3,
         request_id: 99,
         scope,
@@ -11,9 +11,9 @@ fn stop_at(scope: RuntimeSessionScopeV3) -> RuntimeSessionRequestV3 {
 }
 
 fn lifecycle(
-    requests: &[RuntimeSessionRequestV3],
-    admissions: Vec<Result<Backend, RuntimeSessionErrorCodeV3>>,
-) -> Vec<RuntimeSessionResponseV3> {
+    requests: &[RuntimeSessionRequest],
+    admissions: Vec<Result<Backend, RuntimeSessionErrorCode>>,
+) -> Vec<RuntimeSessionResponse> {
     let mut admissions: VecDeque<_> = admissions.into();
     let current: RefCell<Option<Arc<DriverState>>> = RefCell::new(None);
     let mut output = Vec::new();
@@ -46,17 +46,17 @@ fn lifecycle(
 
 #[test]
 fn hello_and_initial_stop_need_no_campaign_or_database_admission() {
-    let rows = lifecycle(&[stop_at(RuntimeSessionScopeV3::default())], vec![]);
+    let rows = lifecycle(&[stop_at(RuntimeSessionScope::default())], vec![]);
     assert_eq!(
         rows,
         [
-            RuntimeSessionResponseV3::Hello {
+            RuntimeSessionResponse::Hello {
                 protocol_version: 3,
-                scope: RuntimeSessionScopeV3::default(),
+                scope: RuntimeSessionScope::default(),
             },
-            RuntimeSessionResponseV3::Stopped {
+            RuntimeSessionResponse::Stopped {
                 request_id: 99,
-                scope: RuntimeSessionScopeV3::default(),
+                scope: RuntimeSessionScope::default(),
             },
         ]
     );
@@ -80,25 +80,25 @@ fn hello_and_switching_are_written_before_fallible_target_admission() {
     let observed = output.clone();
     serve(
         Cursor::new(wire(&[
-            switching(RuntimeSessionScopeV3::default(), A, 1),
+            switching(RuntimeSessionScope::default(), A, 1),
             stop_at(scope(1, A)),
         ])),
         &mut output,
-        |_| -> Result<(Backend, String), RuntimeSessionErrorCodeV3> {
+        |_| -> Result<(Backend, String), RuntimeSessionErrorCode> {
             let bytes = observed.0.lock().unwrap();
             assert!(matches!(
                 wire_responses(&bytes).as_slice(),
                 [
-                    RuntimeSessionResponseV3::Hello {
+                    RuntimeSessionResponse::Hello {
                         protocol_version: 3,
                         ..
                     },
-                    RuntimeSessionResponseV3::Switching { request_id: 1, .. },
+                    RuntimeSessionResponse::Switching { request_id: 1, .. },
                 ]
             ));
-            Err(RuntimeSessionErrorCodeV3::StorageRefused)
+            Err(RuntimeSessionErrorCode::StorageRefused)
         },
-        |_, _| -> Result<Driver, RuntimeSessionErrorCodeV3> {
+        |_, _| -> Result<Driver, RuntimeSessionErrorCode> {
             panic!("failed admission cannot start an Archive driver")
         },
     )
@@ -106,14 +106,14 @@ fn hello_and_switching_are_written_before_fallible_target_admission() {
     assert!(matches!(
         wire_responses(&output.0.lock().unwrap()).as_slice(),
         [
-            RuntimeSessionResponseV3::Hello { .. },
-            RuntimeSessionResponseV3::Switching { .. },
-            RuntimeSessionResponseV3::Error {
-                code: RuntimeSessionErrorCodeV3::StorageRefused,
+            RuntimeSessionResponse::Hello { .. },
+            RuntimeSessionResponse::Switching { .. },
+            RuntimeSessionResponse::Error {
+                code: RuntimeSessionErrorCode::StorageRefused,
                 tail: None,
                 ..
             },
-            RuntimeSessionResponseV3::Stopped { .. },
+            RuntimeSessionResponse::Stopped { .. },
         ]
     ));
 }
@@ -122,23 +122,23 @@ fn hello_and_switching_are_written_before_fallible_target_admission() {
 fn missing_initial_open_remains_recoverable_and_failed_target_has_no_old_tail() {
     let rows = lifecycle(
         &[
-            switching(RuntimeSessionScopeV3::default(), A, 1),
+            switching(RuntimeSessionScope::default(), A, 1),
             switching(scope(1, A), B, 2),
             switching(scope(2, B), A, 3),
             switching(scope(3, A), B, 4),
             stop_at(scope(4, B)),
         ],
         vec![
-            Err(RuntimeSessionErrorCodeV3::CampaignAbsent),
+            Err(RuntimeSessionErrorCode::CampaignAbsent),
             Ok(backend()),
-            Err(RuntimeSessionErrorCodeV3::StorageRefused),
+            Err(RuntimeSessionErrorCode::StorageRefused),
             Ok(backend()),
         ],
     );
     let errors: Vec<_> = rows
         .iter()
         .filter_map(|row| match row {
-            RuntimeSessionResponseV3::Error {
+            RuntimeSessionResponse::Error {
                 scope, code, tail, ..
             } => Some((scope, code, tail)),
             _ => None,
@@ -149,12 +149,12 @@ fn missing_initial_open_remains_recoverable_and_failed_target_has_no_old_tail() 
         [
             (
                 &scope(1, A),
-                &RuntimeSessionErrorCodeV3::CampaignAbsent,
+                &RuntimeSessionErrorCode::CampaignAbsent,
                 &None
             ),
             (
                 &scope(3, A),
-                &RuntimeSessionErrorCodeV3::StorageRefused,
+                &RuntimeSessionErrorCode::StorageRefused,
                 &None
             ),
         ]
@@ -162,7 +162,7 @@ fn missing_initial_open_remains_recoverable_and_failed_target_has_no_old_tail() 
     let ready: Vec<_> = rows
         .iter()
         .filter_map(|row| match row {
-            RuntimeSessionResponseV3::Ready { scope, .. } => Some(scope.clone()),
+            RuntimeSessionResponse::Ready { scope, .. } => Some(scope.clone()),
             _ => None,
         })
         .collect();
@@ -175,7 +175,7 @@ fn repeated_campaign_epochs_retire_each_driver_and_refuse_old_commands() {
     let initial_state = Arc::clone(&initial.state);
     let rows = lifecycle(
         &[
-            switching(RuntimeSessionScopeV3::default(), A, 1),
+            switching(RuntimeSessionScope::default(), A, 1),
             advance(),
             switching(scope(1, A), B, 3),
             advance(),
@@ -190,7 +190,7 @@ fn repeated_campaign_epochs_retire_each_driver_and_refuse_old_commands() {
     let switches: Vec<_> = rows
         .iter()
         .filter_map(|row| match row {
-            RuntimeSessionResponseV3::Switching {
+            RuntimeSessionResponse::Switching {
                 previous_scope,
                 scope,
                 ..
@@ -201,7 +201,7 @@ fn repeated_campaign_epochs_retire_each_driver_and_refuse_old_commands() {
     assert_eq!(
         switches,
         [
-            (RuntimeSessionScopeV3::default(), scope(1, A)),
+            (RuntimeSessionScope::default(), scope(1, A)),
             (scope(1, A), scope(2, B)),
             (scope(2, B), scope(3, A)),
         ]
@@ -210,7 +210,7 @@ fn repeated_campaign_epochs_retire_each_driver_and_refuse_old_commands() {
     let committed: Vec<_> = rows
         .iter()
         .filter_map(|row| match row {
-            RuntimeSessionResponseV3::Committed { scope, tail, .. } => {
+            RuntimeSessionResponse::Committed { scope, tail, .. } => {
                 Some((scope, tail.resolve_tick))
             }
             _ => None,
@@ -221,8 +221,8 @@ fn repeated_campaign_epochs_retire_each_driver_and_refuse_old_commands() {
         rows.iter()
             .filter(|row| matches!(
                 row,
-                RuntimeSessionResponseV3::Error {
-                    code: RuntimeSessionErrorCodeV3::SessionMismatch,
+                RuntimeSessionResponse::Error {
+                    code: RuntimeSessionErrorCode::SessionMismatch,
                     ..
                 }
             ))
@@ -231,20 +231,15 @@ fn repeated_campaign_epochs_retire_each_driver_and_refuse_old_commands() {
     );
     let ack = rows
         .iter()
-        .position(|row| matches!(row, RuntimeSessionResponseV3::Committed { .. }))
+        .position(|row| matches!(row, RuntimeSessionResponse::Committed { .. }))
         .unwrap();
     let next = rows
         .iter()
-        .position(|row| {
-            matches!(
-                row,
-                RuntimeSessionResponseV3::Switching { request_id: 3, .. }
-            )
-        })
+        .position(|row| matches!(row, RuntimeSessionResponse::Switching { request_id: 3, .. }))
         .unwrap();
     assert!(ack < next);
     assert!(
-        matches!(rows.last().unwrap(), RuntimeSessionResponseV3::Stopped { scope: actual, .. } if *actual == scope(3, A))
+        matches!(rows.last().unwrap(), RuntimeSessionResponse::Stopped { scope: actual, .. } if *actual == scope(3, A))
     );
 }
 
@@ -261,15 +256,15 @@ fn late_archive_events_cannot_enter_a_reopened_campaign_epoch() {
                 .archive_event(&old, &progress(Some(8), 0, 0))
                 .unwrap();
             coordinator
-                .archive_event(&old, &ArchiveDriverEventV1::Stopped)
+                .archive_event(&old, &ArchiveDriverEvent::Stopped)
                 .unwrap();
             coordinator
                 .archive_event(
                     &old,
-                    &ArchiveDriverEventV1::Failure {
+                    &ArchiveDriverEvent::Failure {
                         request_id: None,
-                        failure: crate::archive_driver::ArchiveDriverFailureV1::Refused(
-                            crate::SemanticArchiveErrorV1::StoredPageMismatch,
+                        failure: crate::archive_driver::ArchiveDriverFailure::Refused(
+                            crate::SemanticArchiveError::StoredPageMismatch,
                         ),
                         retrying: false,
                     },
@@ -281,7 +276,7 @@ fn late_archive_events_cannot_enter_a_reopened_campaign_epoch() {
             .unwrap();
     }
     assert!(matches!(wire_responses(&output).as_slice(), [
-        RuntimeSessionResponseV3::ArchiveProgress { scope: actual, .. }
+        RuntimeSessionResponse::ArchiveProgress { scope: actual, .. }
     ] if *actual == scope(3, A)));
 }
 
@@ -289,12 +284,12 @@ fn late_archive_events_cannot_enter_a_reopened_campaign_epoch() {
 fn invalid_targets_and_exhausted_epochs_refuse_without_admission() {
     for (current, target) in [
         (
-            RuntimeSessionScopeV3::default(),
+            RuntimeSessionScope::default(),
             uuid::Uuid::nil().to_string(),
         ),
-        (RuntimeSessionScopeV3::default(), "invalid".into()),
+        (RuntimeSessionScope::default(), "invalid".into()),
         (
-            RuntimeSessionScopeV3::default(),
+            RuntimeSessionScope::default(),
             "00000000-0000-0000-0000-00000000000A".into(),
         ),
         (scope(u64::MAX, A), B.into()),
@@ -306,8 +301,8 @@ fn invalid_targets_and_exhausted_epochs_refuse_without_admission() {
                 Coordinator::new(&mut output);
             coordinator.scope = current.clone();
             let mut factories = Factories {
-                backend: |_: &RuntimeSessionTargetV3| -> Result<(Backend, String), RuntimeSessionErrorCodeV3> { panic!("invalid switch reached admission") },
-                archive: |_, _: ArchiveEventSink| -> Result<Driver, RuntimeSessionErrorCodeV3> { panic!("invalid switch started worker") },
+                backend: |_: &RuntimeSessionTarget| -> Result<(Backend, String), RuntimeSessionErrorCode> { panic!("invalid switch reached admission") },
+                archive: |_, _: ArchiveEventSink| -> Result<Driver, RuntimeSessionErrorCode> { panic!("invalid switch started worker") },
             };
             coordinator
                 .request(
@@ -321,7 +316,7 @@ fn invalid_targets_and_exhausted_epochs_refuse_without_admission() {
             assert!(coordinator.active.is_none());
         }
         assert!(matches!(wire_responses(&output).as_slice(), [
-            RuntimeSessionResponseV3::Error { code: RuntimeSessionErrorCodeV3::InvalidRequest, tail: None, scope, .. }
+            RuntimeSessionResponse::Error { code: RuntimeSessionErrorCode::InvalidRequest, tail: None, scope, .. }
         ] if *scope == current));
     }
 }
@@ -329,17 +324,17 @@ fn invalid_targets_and_exhausted_epochs_refuse_without_admission() {
 #[test]
 fn wire_targets_are_explicit_and_closed() {
     for target in [
-        RuntimeSessionTargetV3::New {
+        RuntimeSessionTarget::New {
             campaign_id: A.into(),
-            preset: super::super::super::RuntimeSessionPresetV3::Delayed,
+            preset: super::super::super::RuntimeSessionPreset::Delayed,
         },
-        RuntimeSessionTargetV3::Open {
+        RuntimeSessionTarget::Open {
             campaign_id: A.into(),
         },
     ] {
         let bytes = serde_json::to_vec(&target).unwrap();
         assert_eq!(
-            serde_json::from_slice::<RuntimeSessionTargetV3>(&bytes).unwrap(),
+            serde_json::from_slice::<RuntimeSessionTarget>(&bytes).unwrap(),
             target
         );
         assert_eq!(target.campaign().unwrap().as_uuid().to_string(), A);
@@ -349,52 +344,52 @@ fn wire_targets_are_explicit_and_closed() {
         r#"{"type":"new","campaign_id":"00000000-0000-0000-0000-000000000001","preset":"invented"}"#,
         r#"{"type":"open","campaign_id":"00000000-0000-0000-0000-000000000001","preset":"standard"}"#,
     ] {
-        assert!(serde_json::from_str::<RuntimeSessionTargetV3>(json).is_err());
+        assert!(serde_json::from_str::<RuntimeSessionTarget>(json).is_err());
     }
     let mut request = serde_json::to_value(advance()).unwrap();
     request
         .as_object_mut()
         .unwrap()
         .insert("actions".into(), serde_json::json!([1]));
-    assert!(serde_json::from_value::<RuntimeSessionRequestV3>(request).is_err());
+    assert!(serde_json::from_value::<RuntimeSessionRequest>(request).is_err());
 }
 
 #[test]
 fn zero_request_ids_cannot_switch_or_stop_before_initial_admission() {
-    let mut zero_stop = stop_at(RuntimeSessionScopeV3::default());
-    if let RuntimeSessionRequestV3::Stop { request_id, .. } = &mut zero_stop {
+    let mut zero_stop = stop_at(RuntimeSessionScope::default());
+    if let RuntimeSessionRequest::Stop { request_id, .. } = &mut zero_stop {
         *request_id = 0;
     }
     let rows = lifecycle(
         &[
-            switching(RuntimeSessionScopeV3::default(), A, 0),
+            switching(RuntimeSessionScope::default(), A, 0),
             zero_stop,
-            switching(RuntimeSessionScopeV3::default(), A, 1),
+            switching(RuntimeSessionScope::default(), A, 1),
             stop_at(scope(1, A)),
         ],
         vec![Ok(backend())],
     );
     assert!(matches!(rows.as_slice(), [
-        RuntimeSessionResponseV3::Hello { .. },
-        RuntimeSessionResponseV3::Error {
-            request_id: Some(0), code: RuntimeSessionErrorCodeV3::InvalidRequest,
+        RuntimeSessionResponse::Hello { .. },
+        RuntimeSessionResponse::Error {
+            request_id: Some(0), code: RuntimeSessionErrorCode::InvalidRequest,
             scope: refused, tail: None,
         },
-        RuntimeSessionResponseV3::Error {
-            request_id: Some(0), code: RuntimeSessionErrorCodeV3::InvalidRequest,
+        RuntimeSessionResponse::Error {
+            request_id: Some(0), code: RuntimeSessionErrorCode::InvalidRequest,
             scope: stop_scope, tail: None,
         },
-        RuntimeSessionResponseV3::Switching { request_id: 1, .. },
-        RuntimeSessionResponseV3::Ready { request_id: 1, .. },
-        RuntimeSessionResponseV3::Stopped { request_id: 99, .. },
-    ] if *refused == RuntimeSessionScopeV3::default() && *stop_scope == RuntimeSessionScopeV3::default()));
+        RuntimeSessionResponse::Switching { request_id: 1, .. },
+        RuntimeSessionResponse::Ready { request_id: 1, .. },
+        RuntimeSessionResponse::Stopped { request_id: 99, .. },
+    ] if *refused == RuntimeSessionScope::default() && *stop_scope == RuntimeSessionScope::default()));
 }
 
 #[test]
 fn request_ids_remain_consumed_after_failed_admission_and_across_campaign_epochs() {
     let rows = lifecycle(
         &[
-            switching(RuntimeSessionScopeV3::default(), A, 10),
+            switching(RuntimeSessionScope::default(), A, 10),
             switching(scope(1, A), B, 10),
             switching(scope(1, A), B, 11),
             switching(scope(1, A), A, u64::MAX),
@@ -403,7 +398,7 @@ fn request_ids_remain_consumed_after_failed_admission_and_across_campaign_epochs
             stop_at(scope(3, A)),
         ],
         vec![
-            Err(RuntimeSessionErrorCodeV3::CampaignAbsent),
+            Err(RuntimeSessionErrorCode::CampaignAbsent),
             Ok(backend()),
             Ok(backend()),
         ],
@@ -411,7 +406,7 @@ fn request_ids_remain_consumed_after_failed_admission_and_across_campaign_epochs
     let errors: Vec<_> = rows
         .iter()
         .filter_map(|row| match row {
-            RuntimeSessionResponseV3::Error {
+            RuntimeSessionResponse::Error {
                 request_id,
                 scope,
                 code,
@@ -426,25 +421,25 @@ fn request_ids_remain_consumed_after_failed_admission_and_across_campaign_epochs
             (
                 Some(10),
                 scope(1, A),
-                RuntimeSessionErrorCodeV3::CampaignAbsent,
+                RuntimeSessionErrorCode::CampaignAbsent,
                 false
             ),
             (
                 Some(10),
                 scope(1, A),
-                RuntimeSessionErrorCodeV3::InvalidRequest,
+                RuntimeSessionErrorCode::InvalidRequest,
                 false
             ),
             (
                 Some(u64::MAX),
                 scope(2, B),
-                RuntimeSessionErrorCodeV3::SessionMismatch,
+                RuntimeSessionErrorCode::SessionMismatch,
                 true
             ),
             (
                 Some(11),
                 scope(2, B),
-                RuntimeSessionErrorCodeV3::InvalidRequest,
+                RuntimeSessionErrorCode::InvalidRequest,
                 true
             ),
         ]
@@ -452,7 +447,7 @@ fn request_ids_remain_consumed_after_failed_admission_and_across_campaign_epochs
     let accepted: Vec<_> = rows
         .iter()
         .filter_map(|row| match row {
-            RuntimeSessionResponseV3::Switching {
+            RuntimeSessionResponse::Switching {
                 request_id, scope, ..
             } => Some((*request_id, scope.clone())),
             _ => None,
@@ -463,7 +458,7 @@ fn request_ids_remain_consumed_after_failed_admission_and_across_campaign_epochs
         [(10, scope(1, A)), (11, scope(2, B)), (12, scope(3, A))]
     );
     assert!(
-        matches!(rows.last(), Some(RuntimeSessionResponseV3::Stopped { request_id: 99, scope: final_scope }) if *final_scope == scope(3, A))
+        matches!(rows.last(), Some(RuntimeSessionResponse::Stopped { request_id: 99, scope: final_scope }) if *final_scope == scope(3, A))
     );
 }
 
@@ -471,34 +466,34 @@ fn request_ids_remain_consumed_after_failed_admission_and_across_campaign_epochs
 fn reused_or_lower_ids_cannot_advance_refresh_or_stop_a_current_scope() {
     let backend = backend();
     let state = Arc::clone(&backend.state);
-    let advanced_tail = RuntimeSessionTailV3 {
+    let advanced_tail = RuntimeSessionTail {
         resolve_tick: 1,
         tick_content_hash: Some(format!("{:064x}", 1)),
     };
     let rows = lifecycle(
         &[
-            switching(RuntimeSessionScopeV3::default(), A, 1),
-            RuntimeSessionRequestV3::Advance {
+            switching(RuntimeSessionScope::default(), A, 1),
+            RuntimeSessionRequest::Advance {
                 protocol_version: 3,
                 scope: scope(1, A),
                 request_id: 2,
-                expected_tail: RuntimeSessionTailV3 {
+                expected_tail: RuntimeSessionTail {
                     resolve_tick: 0,
                     tick_content_hash: None,
                 },
             },
-            RuntimeSessionRequestV3::Advance {
+            RuntimeSessionRequest::Advance {
                 protocol_version: 3,
                 scope: scope(1, A),
                 request_id: 2,
                 expected_tail: advanced_tail.clone(),
             },
-            RuntimeSessionRequestV3::RefreshArchive {
+            RuntimeSessionRequest::RefreshArchive {
                 protocol_version: 3,
                 scope: scope(1, A),
                 request_id: 1,
             },
-            RuntimeSessionRequestV3::Stop {
+            RuntimeSessionRequest::Stop {
                 protocol_version: 3,
                 scope: scope(1, A),
                 request_id: 2,
@@ -512,7 +507,7 @@ fn reused_or_lower_ids_cannot_advance_refresh_or_stop_a_current_scope() {
     let errors: Vec<_> = rows
         .iter()
         .filter_map(|row| match row {
-            RuntimeSessionResponseV3::Error {
+            RuntimeSessionResponse::Error {
                 request_id,
                 scope,
                 code,
@@ -526,12 +521,12 @@ fn reused_or_lower_ids_cannot_advance_refresh_or_stop_a_current_scope() {
         [2, 1, 2].map(|id| (
             Some(id),
             scope(1, A),
-            RuntimeSessionErrorCodeV3::InvalidRequest,
+            RuntimeSessionErrorCode::InvalidRequest,
             Some(advanced_tail.clone())
         ))
     );
     assert!(matches!(
         rows.last(),
-        Some(RuntimeSessionResponseV3::Stopped { request_id: 99, .. })
+        Some(RuntimeSessionResponse::Stopped { request_id: 99, .. })
     ));
 }

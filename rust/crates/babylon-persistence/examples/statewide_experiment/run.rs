@@ -5,16 +5,16 @@ use super::{
     witness, Result,
 };
 use babylon_bsl::structural_verbs::CollectingSink;
-use babylon_kernel::sha256_of;
+use babylon_kernel::content_digest::sha256_of;
 use babylon_persistence::{
-    michigan_content::MichiganContentPresetV1,
+    michigan_content::MichiganContentPreset,
     michigan_material::{
-        MichiganCapacityOverrideV2, MichiganDeliveryPresetV1, MichiganInterventionV2,
-        MichiganMaterialCatalogV1, MichiganOpeningStockOverrideV2,
+        MichiganCapacityOverride, MichiganDeliveryPreset, MichiganIntervention,
+        MichiganMaterialCatalog, MichiganOpeningStockOverride,
     },
 };
-use babylon_practice_contract::ordered_action_v1::OrderedPracticeActionBatchV1;
-use babylon_tick::replay_session::ReplayCommitDispositionV1;
+use babylon_practice_contract::OrderedPracticeActionBatch;
+use babylon_tick::replay_session::ReplayCommitDisposition;
 use std::{collections::BTreeMap, time::Instant};
 
 pub const BASELINE: &str = "baseline";
@@ -23,10 +23,7 @@ pub const PACKAGING: &str = "packaging_shortage";
 pub const BOTH: &str = "both";
 pub const PERIODS: u64 = 16;
 
-fn catalog(
-    inputs: &Inputs,
-    candidate: &Candidate,
-) -> Result<(MichiganMaterialCatalogV1, u64, u64)> {
+fn catalog(inputs: &Inputs, candidate: &Candidate) -> Result<(MichiganMaterialCatalog, u64, u64)> {
     if inputs.physical.terminal_source_pins.get("defines_sha256")
         != Some(&hex(&sha256_of(inputs.defines.as_bytes())))
     {
@@ -34,7 +31,7 @@ fn catalog(
             "physical terminal authority uses different defines bytes",
         ));
     }
-    let base = MichiganMaterialCatalogV1::from_statewide_qualification(
+    let base = MichiganMaterialCatalog::from_statewide_qualification(
         &inputs.defines,
         &inputs.qualification,
         inputs.physical.clone(),
@@ -85,36 +82,36 @@ fn catalog(
             "candidate must have the current sixteen-period horizon",
         ));
     }
-    let freight = MichiganCapacityOverrideV2 {
+    let freight = MichiganCapacityOverride {
         capacity_key: candidate.capacity_key.clone(),
         grams_per_period: candidate.constrained_grams,
     };
-    let packaging = MichiganOpeningStockOverrideV2 {
+    let packaging = MichiganOpeningStockOverride {
         process_key: candidate.food_process.clone(),
         good_key: "paper_packaging".to_owned(),
         quantity: candidate.shortage_opening,
     };
     let interventions = vec![
-        MichiganInterventionV2 {
-            preset: MichiganDeliveryPresetV1::StatewideFreightConstraint,
+        MichiganIntervention {
+            preset: MichiganDeliveryPreset::StatewideFreightConstraint,
             capacities: vec![freight.clone()],
             opening_stocks: vec![],
             routes: vec![],
         },
-        MichiganInterventionV2 {
-            preset: MichiganDeliveryPresetV1::StatewidePackagingShortage,
+        MichiganIntervention {
+            preset: MichiganDeliveryPreset::StatewidePackagingShortage,
             capacities: vec![],
             opening_stocks: vec![packaging.clone()],
             routes: vec![],
         },
-        MichiganInterventionV2 {
-            preset: MichiganDeliveryPresetV1::StatewideBoth,
+        MichiganIntervention {
+            preset: MichiganDeliveryPreset::StatewideBoth,
             capacities: vec![freight],
             opening_stocks: vec![packaging],
             routes: vec![],
         },
     ];
-    let catalog = MichiganMaterialCatalogV1::from_statewide_qualification(
+    let catalog = MichiganMaterialCatalog::from_statewide_qualification(
         &inputs.defines,
         &inputs.qualification,
         inputs.physical.clone(),
@@ -123,13 +120,13 @@ fn catalog(
     Ok((catalog, capacity, opening))
 }
 fn run_case(
-    catalog: &MichiganMaterialCatalogV1,
-    delivery: MichiganDeliveryPresetV1,
+    catalog: &MichiganMaterialCatalog,
+    delivery: MichiganDeliveryPreset,
     selected_capacity: &str,
 ) -> Result<Case> {
     let begin = Instant::now();
     let selected = catalog.with_preset(delivery)?;
-    let preset = MichiganContentPresetV1::new_campaign(delivery);
+    let preset = MichiganContentPreset::new_campaign(delivery);
     let foundation = preset.create_foundation(catalog)?;
     let foundation_hash = hex(&foundation.digest());
     let foundation_bytes = foundation.canonical_bytes().len();
@@ -149,7 +146,7 @@ fn run_case(
     let advancing = Instant::now();
     let mut periods = Vec::with_capacity(16);
     for period in 1..=PERIODS {
-        let actions = OrderedPracticeActionBatchV1::empty(
+        let actions = OrderedPracticeActionBatch::empty(
             session.graph_session().session_identity().clone(),
             period,
         )
@@ -173,7 +170,7 @@ fn run_case(
         )?;
         session
             .commit_prepared_and_publish(&mut CollectingSink::default(), prepared, |_| {
-                Ok::<_, ()>(ReplayCommitDispositionV1::Committed)
+                Ok::<_, ()>(ReplayCommitDisposition::Committed)
             })
             .map_err(|error| {
                 refused(format!(
@@ -201,16 +198,13 @@ pub fn experiment(inputs: &Inputs, candidate: &Candidate) -> Result<Report> {
     let (catalog, baseline_capacity, baseline_opening) = catalog(inputs, candidate)?;
     let mut cases = BTreeMap::new();
     for (name, preset) in [
-        (BASELINE, MichiganDeliveryPresetV1::StatewideBaseline),
-        (
-            FREIGHT,
-            MichiganDeliveryPresetV1::StatewideFreightConstraint,
-        ),
+        (BASELINE, MichiganDeliveryPreset::StatewideBaseline),
+        (FREIGHT, MichiganDeliveryPreset::StatewideFreightConstraint),
         (
             PACKAGING,
-            MichiganDeliveryPresetV1::StatewidePackagingShortage,
+            MichiganDeliveryPreset::StatewidePackagingShortage,
         ),
-        (BOTH, MichiganDeliveryPresetV1::StatewideBoth),
+        (BOTH, MichiganDeliveryPreset::StatewideBoth),
     ] {
         eprintln!("Running {name}: {PERIODS} periods");
         cases.insert(name, run_case(&catalog, preset, &candidate.capacity_key)?);

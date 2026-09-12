@@ -2,9 +2,7 @@
 
 use std::collections::TryReserveError;
 
-use babylon_graph::stable_element::{
-    StableElementKeyV1, StableElementResolverV1, StableIdentityError,
-};
+use babylon_graph::stable_element::{StableElementKey, StableElementResolver, StableIdentityError};
 
 use crate::causal_contract::{
     canonical_event_type, EffectSignature, EvidenceClass, RuleRole, ShapeVerb,
@@ -14,11 +12,11 @@ use crate::types::{BslType, EnumRegistry, EnumTypeId, FieldDecl, FieldKind};
 use crate::vocabulary::EnumKind;
 
 /// Maximum bytes one BSL-owned identity section may contain.
-pub const MAX_IDENTITY_SECTION_BYTES_V1: usize = 67_108_864;
+pub const MAX_IDENTITY_SECTION_BYTES: usize = 67_108_864;
 /// Maximum exact UTF-8 bytes in one governance string without a narrower grammar.
-pub const MAX_GOVERNANCE_UTF8_BYTES_V1: usize = 4_194_304;
+pub const MAX_GOVERNANCE_UTF8_BYTES: usize = 4_194_304;
 /// Maximum bytes in one intrinsic identity shared by fuel and replay identity.
-pub(crate) const MAX_INTRINSIC_IDENTITY_BYTES_V1: usize = 96;
+pub(crate) const MAX_INTRINSIC_IDENTITY_BYTES: usize = 96;
 const MAX_EXACT_BINARY64_INTEGER: f64 = 9_007_199_254_740_992.0;
 
 /// One grammar violation in the shared intrinsic identity validator.
@@ -35,16 +33,12 @@ pub(crate) fn validate_intrinsic_identity(value: &str) -> Result<(), IntrinsicId
     if value.is_empty() {
         return Err(IntrinsicIdentityViolation::Empty);
     }
-    if value.len() > MAX_INTRINSIC_IDENTITY_BYTES_V1 {
+    if value.len() > MAX_INTRINSIC_IDENTITY_BYTES {
         return Err(IntrinsicIdentityViolation::TooLong {
             actual: value.len(),
         });
     }
-    for (index, byte) in value
-        .bytes()
-        .enumerate()
-        .take(MAX_INTRINSIC_IDENTITY_BYTES_V1)
-    {
+    for (index, byte) in value.bytes().enumerate().take(MAX_INTRINSIC_IDENTITY_BYTES) {
         if !byte.is_ascii() {
             return Err(IntrinsicIdentityViolation::NonAscii { index });
         }
@@ -162,10 +156,10 @@ pub enum IdentityCodecError {
 /// A BSL value projected onto stable, persistence-safe identities.
 ///
 /// Numeric values carry their canonical scalar representation, and graph
-/// references carry sealed [`StableElementKeyV1`] values rather than runtime
+/// references carry sealed [`StableElementKey`] values rather than runtime
 /// allocation handles.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum StableBslValueV1 {
+pub enum StableBslValue {
     /// Signed integer.
     Int(i64),
     /// Currency micro-units.
@@ -191,28 +185,28 @@ pub enum StableBslValueV1 {
         member: String,
     },
     /// Stable node identity.
-    Node(StableElementKeyV1),
+    Node(StableElementKey),
     /// Stable hyperedge identity.
-    Hyperedge(StableElementKeyV1),
+    Hyperedge(StableElementKey),
     /// Stable dyadic-edge identity.
-    Edge(StableElementKeyV1),
+    Edge(StableElementKey),
 }
 
 /// Project one runtime BSL value through the sealed stable-element resolver.
 ///
 /// # Errors
 /// Returns the same numeric or stable-reference refusal used by
-/// [`encode_value_v1`].
-pub fn project_stable_value_v1(
+/// [`encode_runtime_value`].
+pub fn project_stable_value(
     value: &Value,
-    resolver: &StableElementResolverV1,
-) -> Result<StableBslValueV1, IdentityCodecError> {
+    resolver: &StableElementResolver,
+) -> Result<StableBslValue, IdentityCodecError> {
     Ok(match value {
         Value::Mass(_) => return Err(IdentityCodecError::InvalidConstantKind),
-        Value::Int(value) => StableBslValueV1::Int(*value),
-        Value::Currency(value) => StableBslValueV1::CurrencyMicroUnits(value.micro_units()),
-        Value::Real(value) => StableBslValueV1::RealBits(canonical_f64_bits(*value)?),
-        Value::Ratio { value, floor, cap } => StableBslValueV1::RatioBits {
+        Value::Int(value) => StableBslValue::Int(*value),
+        Value::Currency(value) => StableBslValue::CurrencyMicroUnits(value.micro_units()),
+        Value::Real(value) => StableBslValue::RealBits(canonical_f64_bits(*value)?),
+        Value::Ratio { value, floor, cap } => StableBslValue::RatioBits {
             value: canonical_f64_bits(value.get())?,
             floor: floor
                 .map(|bound| canonical_f64_bits(bound.get()))
@@ -221,21 +215,21 @@ pub fn project_stable_value_v1(
                 .map(|bound| canonical_f64_bits(bound.get()))
                 .transpose()?,
         },
-        Value::Bool(value) => StableBslValueV1::Bool(*value),
+        Value::Bool(value) => StableBslValue::Bool(*value),
         Value::Enum { enum_type, member } => {
             validate_enum_type("ValueV1 enum type", enum_type)?;
             validate_enum_member("ValueV1 enum member", member)?;
-            StableBslValueV1::Enum {
+            StableBslValue::Enum {
                 enum_type: copy_identity_string("stable enum type", enum_type)?,
                 member: copy_identity_string("stable enum member", member)?,
             }
         }
-        Value::NodeRef(node) => StableBslValueV1::Node(resolver.node_key(*node)?.try_owned()?),
+        Value::NodeRef(node) => StableBslValue::Node(resolver.node_key(*node)?.try_owned()?),
         Value::HyperedgeRef(hyperedge) => {
-            StableBslValueV1::Hyperedge(resolver.hyperedge_key(*hyperedge)?.try_owned()?)
+            StableBslValue::Hyperedge(resolver.hyperedge_key(*hyperedge)?.try_owned()?)
         }
         Value::EdgeRef(edge) => {
-            StableBslValueV1::Edge(resolver.edge_key(&edge.edge_type, edge.source, edge.target)?)
+            StableBslValue::Edge(resolver.edge_key(&edge.edge_type, edge.source, edge.target)?)
         }
     })
 }
@@ -252,23 +246,23 @@ pub fn project_stable_value_v1(
 /// # Errors
 /// Returns a lane, numeric-domain, enum-registry, or checked-allocation
 /// refusal without producing a partial stable value.
-pub fn project_stored_field_value_v1(
+pub fn project_stored_field_value(
     declaration: &FieldDecl,
     binary64_bits: Option<u64>,
     currency_micro_units: Option<i128>,
     enums: &EnumRegistry,
-) -> Result<StableBslValueV1, IdentityCodecError> {
+) -> Result<StableBslValue, IdentityCodecError> {
     match (&declaration.ty, binary64_bits, currency_micro_units) {
         (BslType::Mass, _, _) => Err(IdentityCodecError::UnsupportedStoredFieldType),
-        (BslType::Currency, None, Some(value)) => Ok(StableBslValueV1::CurrencyMicroUnits(value)),
+        (BslType::Currency, None, Some(value)) => Ok(StableBslValue::CurrencyMicroUnits(value)),
         (BslType::Probability | BslType::Intensity | BslType::Coefficient, Some(bits), None) => {
             let value = f64::from_bits(canonical_f64_bits(f64::from_bits(bits))?);
             if !(0.0..=1.0).contains(&value) {
                 return Err(IdentityCodecError::StoredUnitInterval { bits });
             }
-            Ok(StableBslValueV1::RealBits(value.to_bits()))
+            Ok(StableBslValue::RealBits(value.to_bits()))
         }
-        (BslType::Real, Some(bits), None) => Ok(StableBslValueV1::RealBits(canonical_f64_bits(
+        (BslType::Real, Some(bits), None) => Ok(StableBslValue::RealBits(canonical_f64_bits(
             f64::from_bits(bits),
         )?)),
         (BslType::Int, Some(bits), None) => {
@@ -281,7 +275,7 @@ pub fn project_stored_field_value_v1(
             }
             #[allow(clippy::cast_possible_truncation)]
             let value = value as i64;
-            Ok(StableBslValueV1::Int(value))
+            Ok(StableBslValue::Int(value))
         }
         (BslType::Enum(enum_type), Some(bits), None) => {
             let value = f64::from_bits(bits);
@@ -303,7 +297,7 @@ pub fn project_stored_field_value_v1(
                 .members
                 .get(ordinal_index)
                 .ok_or(IdentityCodecError::InvalidStoredEnumOrdinal { bits })?;
-            Ok(StableBslValueV1::Enum {
+            Ok(StableBslValue::Enum {
                 enum_type: copy_identity_string("stable enum type", &declaration.name)?,
                 member: copy_identity_string("stable enum member", member)?,
             })
@@ -332,47 +326,47 @@ pub fn project_stored_field_value_v1(
 ///
 /// This is the sole deep-copy boundary for detached persistence-facing BSL
 /// values. It preserves the governed scalar semantics and recursively copies
-/// graph identities through [`StableElementKeyV1::try_owned`].
+/// graph identities through [`StableElementKey::try_owned`].
 ///
 /// # Errors
 /// Returns the same numeric, enum, stable-key, or allocation refusal used by
 /// the canonical stable-value encoder before exposing a partial value.
-pub fn try_owned_stable_bsl_value_v1(
-    value: &StableBslValueV1,
-) -> Result<StableBslValueV1, IdentityCodecError> {
+pub fn try_owned_stable_bsl_value(
+    value: &StableBslValue,
+) -> Result<StableBslValue, IdentityCodecError> {
     Ok(match value {
-        StableBslValueV1::Int(value) => StableBslValueV1::Int(*value),
-        StableBslValueV1::CurrencyMicroUnits(value) => StableBslValueV1::CurrencyMicroUnits(*value),
-        StableBslValueV1::RealBits(value) => {
-            StableBslValueV1::RealBits(canonical_f64_bits(f64::from_bits(*value))?)
+        StableBslValue::Int(value) => StableBslValue::Int(*value),
+        StableBslValue::CurrencyMicroUnits(value) => StableBslValue::CurrencyMicroUnits(*value),
+        StableBslValue::RealBits(value) => {
+            StableBslValue::RealBits(canonical_f64_bits(f64::from_bits(*value))?)
         }
-        StableBslValueV1::RatioBits { value, floor, cap } => {
+        StableBslValue::RatioBits { value, floor, cap } => {
             validate_stable_ratio(*value, *floor, *cap)?;
-            StableBslValueV1::RatioBits {
+            StableBslValue::RatioBits {
                 value: *value,
                 floor: *floor,
                 cap: *cap,
             }
         }
-        StableBslValueV1::Bool(value) => StableBslValueV1::Bool(*value),
-        StableBslValueV1::Enum { enum_type, member } => {
+        StableBslValue::Bool(value) => StableBslValue::Bool(*value),
+        StableBslValue::Enum { enum_type, member } => {
             validate_enum_type("StableBslValueV1 enum type", enum_type)?;
             validate_enum_member("StableBslValueV1 enum member", member)?;
-            StableBslValueV1::Enum {
+            StableBslValue::Enum {
                 enum_type: copy_identity_string("stable enum type", enum_type)?,
                 member: copy_identity_string("stable enum member", member)?,
             }
         }
-        StableBslValueV1::Node(key @ StableElementKeyV1::Node { .. }) => {
-            StableBslValueV1::Node(key.try_owned()?)
+        StableBslValue::Node(key @ StableElementKey::Node { .. }) => {
+            StableBslValue::Node(key.try_owned()?)
         }
-        StableBslValueV1::Hyperedge(key @ StableElementKeyV1::Hyperedge { .. }) => {
-            StableBslValueV1::Hyperedge(key.try_owned()?)
+        StableBslValue::Hyperedge(key @ StableElementKey::Hyperedge { .. }) => {
+            StableBslValue::Hyperedge(key.try_owned()?)
         }
-        StableBslValueV1::Edge(key @ StableElementKeyV1::Edge { .. }) => {
-            StableBslValueV1::Edge(key.try_owned()?)
+        StableBslValue::Edge(key @ StableElementKey::Edge { .. }) => {
+            StableBslValue::Edge(key.try_owned()?)
         }
-        StableBslValueV1::Node(_) | StableBslValueV1::Hyperedge(_) | StableBslValueV1::Edge(_) => {
+        StableBslValue::Node(_) | StableBslValue::Hyperedge(_) | StableBslValue::Edge(_) => {
             return Err(IdentityCodecError::StableKeyKindMismatch)
         }
     })
@@ -416,11 +410,11 @@ impl IdentityWriter {
 
     pub(crate) fn extend(&mut self, value: &[u8]) -> Result<(), IdentityCodecError> {
         let requested = checked_add(self.field, self.bytes.len(), value.len())?;
-        if requested > MAX_IDENTITY_SECTION_BYTES_V1 {
+        if requested > MAX_IDENTITY_SECTION_BYTES {
             return Err(IdentityCodecError::ByteLimit {
                 field: self.field,
                 actual: requested,
-                maximum: MAX_IDENTITY_SECTION_BYTES_V1,
+                maximum: MAX_IDENTITY_SECTION_BYTES,
             });
         }
         self.bytes
@@ -452,9 +446,9 @@ impl IdentityWriter {
 /// # Errors
 /// Returns a semantic, stable-reference, numeric, arithmetic, byte-limit,
 /// conversion, or allocation error without modifying `output`.
-pub fn encode_value_v1(
+pub fn encode_runtime_value(
     value: &Value,
-    resolver: &StableElementResolverV1,
+    resolver: &StableElementResolver,
     output: &mut Vec<u8>,
 ) -> Result<(), IdentityCodecError> {
     let mut writer = IdentityWriter::new("ValueV1");
@@ -467,43 +461,43 @@ pub fn encode_value_v1(
 /// # Errors
 /// Returns a semantic, stable-key-kind, numeric, arithmetic, byte-limit, or
 /// allocation error without modifying `output`.
-pub fn encode_stable_bsl_value_v1(
-    value: &StableBslValueV1,
+pub fn encode_stable_bsl_value(
+    value: &StableBslValue,
     output: &mut Vec<u8>,
 ) -> Result<(), IdentityCodecError> {
     let mut writer = IdentityWriter::new("StableBslValueV1");
     match value {
-        StableBslValueV1::Int(value) => encode_int(*value, &mut writer)?,
-        StableBslValueV1::CurrencyMicroUnits(value) => encode_currency(*value, &mut writer)?,
-        StableBslValueV1::RealBits(value) => encode_real(f64::from_bits(*value), &mut writer)?,
-        StableBslValueV1::RatioBits { value, floor, cap } => {
+        StableBslValue::Int(value) => encode_int(*value, &mut writer)?,
+        StableBslValue::CurrencyMicroUnits(value) => encode_currency(*value, &mut writer)?,
+        StableBslValue::RealBits(value) => encode_real(f64::from_bits(*value), &mut writer)?,
+        StableBslValue::RatioBits { value, floor, cap } => {
             let (value, floor, cap) = validate_stable_ratio(*value, *floor, *cap)?;
             writer.push(0x04)?;
             writer.extend(&value.get().to_bits().to_be_bytes())?;
             encode_ratio_option(floor, &mut writer)?;
             encode_ratio_option(cap, &mut writer)?;
         }
-        StableBslValueV1::Bool(value) => {
+        StableBslValue::Bool(value) => {
             writer.push(0x05)?;
             writer.push(u8::from(*value))?;
         }
-        StableBslValueV1::Enum { enum_type, member } => {
+        StableBslValue::Enum { enum_type, member } => {
             validate_enum_type("ValueV1 enum type", enum_type)?;
             validate_enum_member("ValueV1 enum member", member)?;
             writer.push(0x06)?;
             writer.str32("ValueV1 enum type", enum_type)?;
             writer.str32("ValueV1 enum member", member)?;
         }
-        StableBslValueV1::Node(key @ StableElementKeyV1::Node { .. }) => {
+        StableBslValue::Node(key @ StableElementKey::Node { .. }) => {
             append_stable_key(0x07, key, &mut writer)?;
         }
-        StableBslValueV1::Hyperedge(key @ StableElementKeyV1::Hyperedge { .. }) => {
+        StableBslValue::Hyperedge(key @ StableElementKey::Hyperedge { .. }) => {
             append_stable_key(0x08, key, &mut writer)?;
         }
-        StableBslValueV1::Edge(key @ StableElementKeyV1::Edge { .. }) => {
+        StableBslValue::Edge(key @ StableElementKey::Edge { .. }) => {
             append_stable_key(0x09, key, &mut writer)?;
         }
-        StableBslValueV1::Node(_) | StableBslValueV1::Hyperedge(_) | StableBslValueV1::Edge(_) => {
+        StableBslValue::Node(_) | StableBslValue::Hyperedge(_) | StableBslValue::Edge(_) => {
             return Err(IdentityCodecError::StableKeyKindMismatch)
         }
     }
@@ -512,7 +506,7 @@ pub fn encode_stable_bsl_value_v1(
 
 fn encode_value(
     value: &Value,
-    resolver: &StableElementResolverV1,
+    resolver: &StableElementResolver,
     output: &mut IdentityWriter,
 ) -> Result<(), IdentityCodecError> {
     match value {
@@ -568,7 +562,7 @@ fn encode_real(value: f64, output: &mut IdentityWriter) -> Result<(), IdentityCo
 }
 
 fn encode_ratio_option(
-    value: Option<babylon_kernel::Ratio>,
+    value: Option<babylon_kernel::scalars::Ratio>,
     output: &mut IdentityWriter,
 ) -> Result<(), IdentityCodecError> {
     match value {
@@ -586,9 +580,9 @@ fn validate_stable_ratio(
     cap: Option<u64>,
 ) -> Result<
     (
-        babylon_kernel::Ratio,
-        Option<babylon_kernel::Ratio>,
-        Option<babylon_kernel::Ratio>,
+        babylon_kernel::scalars::Ratio,
+        Option<babylon_kernel::scalars::Ratio>,
+        Option<babylon_kernel::scalars::Ratio>,
     ),
     IdentityCodecError,
 > {
@@ -604,14 +598,16 @@ fn validate_stable_ratio(
     Ok((value, floor, cap))
 }
 
-fn stable_ratio_component(value: u64) -> Result<babylon_kernel::Ratio, IdentityCodecError> {
+fn stable_ratio_component(
+    value: u64,
+) -> Result<babylon_kernel::scalars::Ratio, IdentityCodecError> {
     let raw = f64::from_bits(value);
     canonical_f64_bits(raw)?;
     if raw <= 0.0 {
         return Err(IdentityCodecError::NonPositiveRatio);
     }
-    let ratio =
-        babylon_kernel::Ratio::new(raw).map_err(|_| IdentityCodecError::NonCanonicalRatio)?;
+    let ratio = babylon_kernel::scalars::Ratio::new(raw)
+        .map_err(|_| IdentityCodecError::NonCanonicalRatio)?;
     if ratio.get().to_bits() != value {
         return Err(IdentityCodecError::NonCanonicalRatio);
     }
@@ -620,7 +616,7 @@ fn stable_ratio_component(value: u64) -> Result<babylon_kernel::Ratio, IdentityC
 
 fn append_stable_key(
     tag: u8,
-    key: &StableElementKeyV1,
+    key: &StableElementKey,
     output: &mut IdentityWriter,
 ) -> Result<(), IdentityCodecError> {
     output.push(tag)?;
@@ -632,10 +628,7 @@ fn append_stable_key(
 /// # Errors
 /// Returns [`IdentityCodecError::InvalidConstantKind`] for enum or graph
 /// references, or the applicable scalar codec failure.
-pub fn encode_const_value_v1(
-    value: &Value,
-    output: &mut Vec<u8>,
-) -> Result<(), IdentityCodecError> {
+pub fn encode_const_value(value: &Value, output: &mut Vec<u8>) -> Result<(), IdentityCodecError> {
     let mut writer = IdentityWriter::new("ConstValueV1");
     match value {
         Value::Mass(value) => {
@@ -666,7 +659,7 @@ pub fn encode_const_value_v1(
 ///
 /// # Errors
 /// Returns an unknown-enum, semantic-string, conversion, byte, or allocation error.
-pub fn encode_bsl_type_v1(
+pub fn encode_bsl_type(
     value: &BslType,
     enums: &EnumRegistry,
     output: &mut Vec<u8>,
@@ -705,7 +698,7 @@ pub fn encode_bsl_type_v1(
 
 /// Return the governed `FieldKindV1` tag.
 #[must_use]
-pub const fn encode_field_kind_v1(value: FieldKind) -> u8 {
+pub const fn encode_field_kind(value: FieldKind) -> u8 {
     match value {
         FieldKind::Intensive => 0x01,
         FieldKind::Extensive => 0x02,
@@ -715,7 +708,7 @@ pub const fn encode_field_kind_v1(value: FieldKind) -> u8 {
 
 /// Return the governed `RuleRoleV1` tag.
 #[must_use]
-pub const fn encode_rule_role_v1(value: RuleRole) -> u8 {
+pub const fn encode_rule_role(value: RuleRole) -> u8 {
     match value {
         RuleRole::Mechanic => 0x01,
         RuleRole::Recognizer => 0x02,
@@ -726,7 +719,7 @@ pub const fn encode_rule_role_v1(value: RuleRole) -> u8 {
 
 /// Return the governed `EvidenceClassV1` tag.
 #[must_use]
-pub const fn encode_evidence_class_v1(value: EvidenceClass) -> u8 {
+pub const fn encode_evidence_class(value: EvidenceClass) -> u8 {
     match value {
         EvidenceClass::Observed => 0x01,
         EvidenceClass::Derived => 0x02,
@@ -737,7 +730,7 @@ pub const fn encode_evidence_class_v1(value: EvidenceClass) -> u8 {
 
 /// Return the governed `ShapeVerbV1` tag.
 #[must_use]
-pub const fn encode_shape_verb_v1(value: ShapeVerb) -> u8 {
+pub const fn encode_shape_verb(value: ShapeVerb) -> u8 {
     match value {
         ShapeVerb::AddNode => 0x01,
         ShapeVerb::RemoveNode => 0x02,
@@ -750,7 +743,7 @@ pub const fn encode_shape_verb_v1(value: ShapeVerb) -> u8 {
 
 /// Return the governed `EnumKindV1` tag.
 #[must_use]
-pub const fn encode_enum_kind_v1(value: EnumKind) -> u8 {
+pub const fn encode_enum_kind(value: EnumKind) -> u8 {
     match value {
         EnumKind::NodeType => 0x01,
         EnumKind::EdgeType => 0x02,
@@ -763,7 +756,7 @@ pub const fn encode_enum_kind_v1(value: EnumKind) -> u8 {
 ///
 /// # Errors
 /// Returns a semantic-string, conversion, byte, or allocation error.
-pub fn encode_effect_signature_v1(
+pub fn encode_effect_signature(
     value: &EffectSignature,
     output: &mut Vec<u8>,
 ) -> Result<(), IdentityCodecError> {
@@ -773,13 +766,13 @@ pub fn encode_effect_signature_v1(
         EffectSignature::EdgeField(qname) => encode_effect_field(0x02, qname, &mut writer)?,
         EffectSignature::HyperedgeField(qname) => encode_effect_field(0x03, qname, &mut writer)?,
         EffectSignature::Event(event) => {
-            let canonical = canonical_event_name_v1(event)?;
+            let canonical = canonical_event_name(event)?;
             writer.push(0x04)?;
             writer.str32("effect event", &canonical)?;
         }
         EffectSignature::Shape(verb) => {
             writer.push(0x05)?;
-            writer.push(encode_shape_verb_v1(*verb))?;
+            writer.push(encode_shape_verb(*verb))?;
         }
     }
     append_checked(output, "EffectSignatureV1 output", &writer.finish())
@@ -799,7 +792,7 @@ fn encode_effect_field(
 ///
 /// # Errors
 /// Returns a semantic-string error for malformed event identities.
-pub fn canonical_event_name_v1(value: &str) -> Result<String, IdentityCodecError> {
+pub fn canonical_event_name(value: &str) -> Result<String, IdentityCodecError> {
     let canonical = canonical_event_type(value).map_err(|_| IdentityCodecError::InvalidString {
         field: "event name",
         index: value.len(),
@@ -818,7 +811,7 @@ pub fn canonical_event_name_v1(value: &str) -> Result<String, IdentityCodecError
 ///
 /// # Errors
 /// Returns [`IdentityCodecError::InvalidOptionByte`] unless `value` is 0 or 1.
-pub const fn decode_option_presence_v1(value: u8) -> Result<bool, IdentityCodecError> {
+pub const fn decode_option_presence(value: u8) -> Result<bool, IdentityCodecError> {
     match value {
         0 => Ok(false),
         1 => Ok(true),
@@ -834,7 +827,7 @@ pub(crate) fn validate_governance_text(
     field: &'static str,
     value: &str,
 ) -> Result<(), IdentityCodecError> {
-    if value.len() <= MAX_GOVERNANCE_UTF8_BYTES_V1 {
+    if value.len() <= MAX_GOVERNANCE_UTF8_BYTES {
         Ok(())
     } else {
         Err(IdentityCodecError::InvalidString {
@@ -955,11 +948,11 @@ fn append_checked(
     value: &[u8],
 ) -> Result<(), IdentityCodecError> {
     let requested = checked_add(field, output.len(), value.len())?;
-    if requested > MAX_IDENTITY_SECTION_BYTES_V1 {
+    if requested > MAX_IDENTITY_SECTION_BYTES {
         return Err(IdentityCodecError::ByteLimit {
             field,
             actual: requested,
-            maximum: MAX_IDENTITY_SECTION_BYTES_V1,
+            maximum: MAX_IDENTITY_SECTION_BYTES,
         });
     }
     output
@@ -974,19 +967,19 @@ mod tests {
     use std::collections::HashMap;
 
     use babylon_graph::memory::MemoryGraph;
-    use babylon_graph::stable_element::StableElementResolverV1;
+    use babylon_graph::stable_element::StableElementResolver;
 
-    use babylon_graph::stable_element::StableElementKeyV1;
+    use babylon_graph::stable_element::StableElementKey;
 
     use super::{
-        encode_stable_bsl_value_v1, project_stable_value_v1, project_stored_field_value_v1,
-        IdentityCodecError, StableBslValueV1,
+        encode_stable_bsl_value, project_stable_value, project_stored_field_value,
+        IdentityCodecError, StableBslValue,
     };
     use crate::evaluator::Value;
     use crate::types::{BslType, EnumRegistry, EnumTypeId, FieldDecl, FieldKind};
 
-    fn empty_resolver() -> StableElementResolverV1 {
-        StableElementResolverV1::seal(
+    fn empty_resolver() -> StableElementResolver {
+        StableElementResolver::seal(
             &MemoryGraph::new(),
             "test/identity-codec",
             &HashMap::new(),
@@ -1008,14 +1001,14 @@ mod tests {
         };
 
         assert_eq!(
-            project_stable_value_v1(&invalid_type, &resolver),
+            project_stable_value(&invalid_type, &resolver),
             Err(IdentityCodecError::InvalidString {
                 field: "ValueV1 enum type",
                 index: 0,
             })
         );
         assert_eq!(
-            project_stable_value_v1(&invalid_member, &resolver),
+            project_stable_value(&invalid_member, &resolver),
             Err(IdentityCodecError::InvalidString {
                 field: "ValueV1 enum member",
                 index: 0,
@@ -1026,22 +1019,22 @@ mod tests {
     #[test]
     fn stable_encoder_closes_scalar_and_key_invariants_without_partial_output() {
         let mut real = Vec::new();
-        encode_stable_bsl_value_v1(&StableBslValueV1::RealBits((-0.0_f64).to_bits()), &mut real)
+        encode_stable_bsl_value(&StableBslValue::RealBits((-0.0_f64).to_bits()), &mut real)
             .expect("negative zero canonicalizes");
         assert_eq!(real, [vec![0x03], 0_u64.to_be_bytes().to_vec()].concat());
 
-        let valid_ratio = StableBslValueV1::RatioBits {
+        let valid_ratio = StableBslValue::RatioBits {
             value: 0.5_f64.to_bits(),
             floor: Some(0.25_f64.to_bits()),
             cap: Some(1.0_f64.to_bits()),
         };
         let mut ratio = Vec::new();
-        encode_stable_bsl_value_v1(&valid_ratio, &mut ratio).expect("positive ratios encode");
+        encode_stable_bsl_value(&valid_ratio, &mut ratio).expect("positive ratios encode");
         assert_eq!(ratio[0], 0x04);
 
         for (invalid, expected) in [
             (
-                StableBslValueV1::RatioBits {
+                StableBslValue::RatioBits {
                     value: 0.0_f64.to_bits(),
                     floor: None,
                     cap: None,
@@ -1049,7 +1042,7 @@ mod tests {
                 IdentityCodecError::NonPositiveRatio,
             ),
             (
-                StableBslValueV1::RatioBits {
+                StableBslValue::RatioBits {
                     value: f64::NAN.to_bits(),
                     floor: None,
                     cap: None,
@@ -1057,7 +1050,7 @@ mod tests {
                 IdentityCodecError::NonFiniteValue,
             ),
             (
-                StableBslValueV1::RatioBits {
+                StableBslValue::RatioBits {
                     value: 0.123_456_789_f64.to_bits(),
                     floor: None,
                     cap: None,
@@ -1065,7 +1058,7 @@ mod tests {
                 IdentityCodecError::NonCanonicalRatio,
             ),
             (
-                StableBslValueV1::RatioBits {
+                StableBslValue::RatioBits {
                     value: 0.5_f64.to_bits(),
                     floor: Some(0.5_f64.to_bits()),
                     cap: Some(1.0_f64.to_bits()),
@@ -1073,7 +1066,7 @@ mod tests {
                 IdentityCodecError::InvalidRatioBounds,
             ),
             (
-                StableBslValueV1::RatioBits {
+                StableBslValue::RatioBits {
                     value: 0.5_f64.to_bits(),
                     floor: Some(0.25_f64.to_bits()),
                     cap: Some(0.25_f64.to_bits()),
@@ -1081,7 +1074,7 @@ mod tests {
                 IdentityCodecError::InvalidRatioBounds,
             ),
             (
-                StableBslValueV1::RatioBits {
+                StableBslValue::RatioBits {
                     value: 1.0_f64.to_bits(),
                     floor: Some(0.25_f64.to_bits()),
                     cap: Some(0.5_f64.to_bits()),
@@ -1089,7 +1082,7 @@ mod tests {
                 IdentityCodecError::InvalidRatioBounds,
             ),
             (
-                StableBslValueV1::Node(StableElementKeyV1::Hyperedge {
+                StableBslValue::Node(StableElementKey::Hyperedge {
                     scenario: "test/identity-codec".to_owned(),
                     local_name: "group".to_owned(),
                 }),
@@ -1098,19 +1091,19 @@ mod tests {
         ] {
             let mut output = vec![0xaa];
             assert_eq!(
-                encode_stable_bsl_value_v1(&invalid, &mut output),
+                encode_stable_bsl_value(&invalid, &mut output),
                 Err(expected)
             );
             assert_eq!(output, vec![0xaa]);
         }
 
-        let invalid_enum = StableBslValueV1::Enum {
+        let invalid_enum = StableBslValue::Enum {
             enum_type: "bad type".to_owned(),
             member: "VALID".to_owned(),
         };
         let mut output = vec![0xbb];
         assert_eq!(
-            encode_stable_bsl_value_v1(&invalid_enum, &mut output),
+            encode_stable_bsl_value(&invalid_enum, &mut output),
             Err(IdentityCodecError::InvalidString {
                 field: "ValueV1 enum type",
                 index: 0,
@@ -1138,30 +1131,30 @@ mod tests {
             (9_007_199_254_740_992.0, 9_007_199_254_740_992),
         ] {
             assert_eq!(
-                project_stored_field_value_v1(&int, Some(exact.to_bits()), None, &enums),
-                Ok(StableBslValueV1::Int(expected))
+                project_stored_field_value(&int, Some(exact.to_bits()), None, &enums),
+                Ok(StableBslValue::Int(expected))
             );
         }
         for refused in [1.5_f64, 9_007_199_254_740_994.0, -9_007_199_254_740_994.0] {
             assert_eq!(
-                project_stored_field_value_v1(&int, Some(refused.to_bits()), None, &enums),
+                project_stored_field_value(&int, Some(refused.to_bits()), None, &enums),
                 Err(IdentityCodecError::NonCanonicalStoredInt {
                     bits: refused.to_bits()
                 })
             );
         }
         assert_eq!(
-            project_stored_field_value_v1(&int, None, Some(1), &enums),
+            project_stored_field_value(&int, None, Some(1), &enums),
             Err(IdentityCodecError::StoredLaneMismatch)
         );
 
         let unit = field(BslType::Intensity);
         assert_eq!(
-            project_stored_field_value_v1(&unit, Some((-0.0_f64).to_bits()), None, &enums),
-            Ok(StableBslValueV1::RealBits(0.0_f64.to_bits()))
+            project_stored_field_value(&unit, Some((-0.0_f64).to_bits()), None, &enums),
+            Ok(StableBslValue::RealBits(0.0_f64.to_bits()))
         );
         assert_eq!(
-            project_stored_field_value_v1(&unit, Some(1.25_f64.to_bits()), None, &enums),
+            project_stored_field_value(&unit, Some(1.25_f64.to_bits()), None, &enums),
             Err(IdentityCodecError::StoredUnitInterval {
                 bits: 1.25_f64.to_bits()
             })
@@ -1169,16 +1162,16 @@ mod tests {
 
         let real = field(BslType::Real);
         assert_eq!(
-            project_stored_field_value_v1(&real, Some((-0.0_f64).to_bits()), None, &enums),
-            Ok(StableBslValueV1::RealBits(0.0_f64.to_bits()))
+            project_stored_field_value(&real, Some((-0.0_f64).to_bits()), None, &enums),
+            Ok(StableBslValue::RealBits(0.0_f64.to_bits()))
         );
         let currency = field(BslType::Currency);
         assert_eq!(
-            project_stored_field_value_v1(&currency, None, Some(7), &enums),
-            Ok(StableBslValueV1::CurrencyMicroUnits(7))
+            project_stored_field_value(&currency, None, Some(7), &enums),
+            Ok(StableBslValue::CurrencyMicroUnits(7))
         );
         assert_eq!(
-            project_stored_field_value_v1(&currency, Some(7.0_f64.to_bits()), None, &enums),
+            project_stored_field_value(&currency, Some(7.0_f64.to_bits()), None, &enums),
             Err(IdentityCodecError::StoredLaneMismatch)
         );
 
@@ -1188,7 +1181,7 @@ mod tests {
             BslType::EdgeSet("PRESENCE"),
         ] {
             assert_eq!(
-                project_stored_field_value_v1(
+                project_stored_field_value(
                     &field(unsupported),
                     Some(0.0_f64.to_bits()),
                     None,
@@ -1210,22 +1203,22 @@ mod tests {
             .unwrap();
         let declared = field(BslType::Enum(territory_type));
         assert_eq!(
-            project_stored_field_value_v1(&declared, Some(1.0_f64.to_bits()), None, &enums,),
-            Ok(StableBslValueV1::Enum {
+            project_stored_field_value(&declared, Some(1.0_f64.to_bits()), None, &enums,),
+            Ok(StableBslValue::Enum {
                 enum_type: "TerritoryType".to_owned(),
                 member: "PERIPHERY".to_owned(),
             })
         );
         for invalid in [-1.0_f64, 0.5, 2.0] {
             assert_eq!(
-                project_stored_field_value_v1(&declared, Some(invalid.to_bits()), None, &enums,),
+                project_stored_field_value(&declared, Some(invalid.to_bits()), None, &enums,),
                 Err(IdentityCodecError::InvalidStoredEnumOrdinal {
                     bits: invalid.to_bits()
                 })
             );
         }
         assert_eq!(
-            project_stored_field_value_v1(
+            project_stored_field_value(
                 &field(BslType::Enum(EnumTypeId(99))),
                 Some(0.0_f64.to_bits()),
                 None,

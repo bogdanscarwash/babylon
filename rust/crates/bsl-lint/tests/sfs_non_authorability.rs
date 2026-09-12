@@ -726,12 +726,12 @@ fn reader_nesting_plus_one_is_a_typed_refusal() {
 fn reader_nesting_exact_max_passes_before_semantic_preflight() {
     let source = format!("{}x{}\n", "(".repeat(512), ")".repeat(512));
     assert!(
-        babylon_bsl::read_all(source.as_bytes()).is_ok(),
+        babylon_bsl::reader::read_all(source.as_bytes()).is_ok(),
         "reader depth 512 must remain admitted"
     );
     let overflow = format!("{}x{}\n", "(".repeat(513), ")".repeat(513));
     assert!(
-        babylon_bsl::read_all(overflow.as_bytes()).is_err(),
+        babylon_bsl::reader::read_all(overflow.as_bytes()).is_err(),
         "reader depth 513 must remain refused"
     );
 }
@@ -829,7 +829,7 @@ fn only_the_exact_digest_pinned_registry_declaration_is_exempt() {
     ];
     let literals = rows.map(|row| format!("\"{row}\"")).join(", ");
     let valid =
-        format!("pub const FORBIDDEN_AUTHORITATIVE_IDENTIFIERS_V1: [&str; 10] = [{literals}];\n");
+        format!("pub const FORBIDDEN_AUTHORITATIVE_IDENTIFIERS: [&str; 10] = [{literals}];\n");
     write_file(&registry_path, valid.as_bytes());
     let (code, report) = run_root(&scratch.0);
     assert_eq!(code, 0, "exact registry must be exempt:\n{report}");
@@ -861,7 +861,7 @@ fn registry_exemption_covers_only_declaration_token_spans() {
     write_minimal_workspace(&scratch.0, &["babylon-bsl", "babylon-evidence"]);
     let registry_path = scratch.0.join("crates/babylon-bsl/src/sfs_profile.rs");
     let valid = concat!(
-        "pub const FORBIDDEN_AUTHORITATIVE_IDENTIFIERS_V1: [&str; 10] = [",
+        "pub const FORBIDDEN_AUTHORITATIVE_IDENTIFIERS: [&str; 10] = [",
         "\"SfsAggregate\", \"SfsClassification\", \"SfsHinterlandClass\", ",
         "\"SfsPoliticalSubjectivity\", \"SfsWaveStage\", \"sfs/aggregate\", ",
         "\"sfs/classification\", \"sfs/hinterland-class\", ",
@@ -883,7 +883,7 @@ fn registry_digest_is_independent_of_the_reserved_token_table() {
     write_minimal_workspace(&scratch.0, &["babylon-bsl", "babylon-evidence"]);
     let registry_path = scratch.0.join("crates/babylon-bsl/src/sfs_profile.rs");
     let mutated = concat!(
-        "pub const FORBIDDEN_AUTHORITATIVE_IDENTIFIERS_V1: [&str; 10] = [",
+        "pub const FORBIDDEN_AUTHORITATIVE_IDENTIFIERS: [&str; 10] = [",
         "\"SfsAggregate\", \"SfsClassification\", \"SfsHinterlandClass\", ",
         "\"SfsPoliticalSubjectivity\", \"SfsWaveStage\", \"sfs/aggregate\", ",
         "\"sfs/classification\", \"sfs/hinterland-class\", ",

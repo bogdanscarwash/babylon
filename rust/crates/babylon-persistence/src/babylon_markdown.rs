@@ -13,20 +13,20 @@
 //! kind and id alone, carrying zero label bytes.
 
 /// Stable profile identity pinned in `contracts/babylon_markdown_v1.yaml`.
-pub const BABYLON_MARKDOWN_PROFILE_ID_V1: &str = "babylon-markdown.v1";
+pub const BABYLON_MARKDOWN_PROFILE_ID: &str = "babylon-markdown.v1";
 /// Pinned citation-line shape: `- **{label}:** {value} — {source_id}; {locator}`.
-pub const CITATION_LINE_REGEX_V1: &str =
+pub const CITATION_LINE_REGEX: &str =
     r"^- \*\*(?P<label>[^*]+):\*\* (?P<value>.+) — (?P<source_id>[^;]+); (?P<locator>.+)$";
 /// Separator between the fog-chip kind word and the public subject id.
-pub const FOG_CHIP_SEPARATOR_V1: &str = " · ";
+pub const FOG_CHIP_SEPARATOR: &str = " · ";
 const SUBJECT_SCHEME_PREFIX: &str = "subject:";
 const PENDING_MARK: &str = "~~";
-const CITATION_SEPARATOR_V1: &str = " — ";
-const MAX_MARKDOWN_BYTES_V1: usize = 1_048_576;
+const CITATION_SEPARATOR: &str = " — ";
+const MAX_MARKDOWN_BYTES: usize = 1_048_576;
 
 /// One typed profile refusal.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum BabylonMarkdownErrorV1 {
+pub enum BabylonMarkdownError {
     /// Markdown bytes were not exact UTF-8.
     NotUtf8,
     /// A CR byte appeared; the profile pins LF endings.
@@ -43,7 +43,7 @@ pub enum BabylonMarkdownErrorV1 {
     TooLarge,
 }
 
-impl BabylonMarkdownErrorV1 {
+impl BabylonMarkdownError {
     /// Stable refusal code pinned in the shared vector corpus.
     #[must_use]
     pub const fn code(&self) -> &'static str {
@@ -59,13 +59,13 @@ impl BabylonMarkdownErrorV1 {
     }
 }
 
-impl std::fmt::Display for BabylonMarkdownErrorV1 {
+impl std::fmt::Display for BabylonMarkdownError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(formatter, "babylon markdown refusal: {self:?}")
     }
 }
 
-impl std::error::Error for BabylonMarkdownErrorV1 {}
+impl std::error::Error for BabylonMarkdownError {}
 
 fn subject_id_width(kind: &str) -> Option<usize> {
     match kind {
@@ -77,21 +77,21 @@ fn subject_id_width(kind: &str) -> Option<usize> {
 
 fn validate_subject_destination(
     destination: &str,
-) -> Result<(String, String), BabylonMarkdownErrorV1> {
+) -> Result<(String, String), BabylonMarkdownError> {
     let Some(rest) = destination.strip_prefix(SUBJECT_SCHEME_PREFIX) else {
-        return Err(BabylonMarkdownErrorV1::DisallowedLinkScheme(
+        return Err(BabylonMarkdownError::DisallowedLinkScheme(
             destination.to_owned(),
         ));
     };
     let Some((kind, id)) = rest.split_once('/') else {
-        return Err(BabylonMarkdownErrorV1::MalformedSubjectLink(
+        return Err(BabylonMarkdownError::MalformedSubjectLink(
             destination.to_owned(),
         ));
     };
     let width = subject_id_width(kind)
-        .ok_or_else(|| BabylonMarkdownErrorV1::MalformedSubjectLink(destination.to_owned()))?;
+        .ok_or_else(|| BabylonMarkdownError::MalformedSubjectLink(destination.to_owned()))?;
     if id.len() != width || !id.bytes().all(|byte| byte.is_ascii_digit()) {
-        return Err(BabylonMarkdownErrorV1::MalformedSubjectLink(
+        return Err(BabylonMarkdownError::MalformedSubjectLink(
             destination.to_owned(),
         ));
     }
@@ -104,25 +104,25 @@ fn validate_subject_destination(
 fn parse_link_token(
     text: &str,
     start: usize,
-) -> Result<(String, String, String, usize), BabylonMarkdownErrorV1> {
+) -> Result<(String, String, String, usize), BabylonMarkdownError> {
     let bytes = text.as_bytes();
     debug_assert_eq!(bytes.get(start), Some(&b'['));
     let mut cursor = start + 1;
     while cursor < bytes.len() && bytes[cursor] != b']' {
         if bytes[cursor] == b'[' {
-            return Err(BabylonMarkdownErrorV1::MalformedSubjectLink(
+            return Err(BabylonMarkdownError::MalformedSubjectLink(
                 "nested open bracket".to_owned(),
             ));
         }
         cursor += 1;
     }
     let Some(destination_start) = cursor.checked_add(1) else {
-        return Err(BabylonMarkdownErrorV1::MalformedSubjectLink(
+        return Err(BabylonMarkdownError::MalformedSubjectLink(
             "unterminated label".to_owned(),
         ));
     };
     if destination_start >= bytes.len() || bytes[cursor + 1] != b'(' {
-        return Err(BabylonMarkdownErrorV1::MalformedSubjectLink(
+        return Err(BabylonMarkdownError::MalformedSubjectLink(
             "label without link destination".to_owned(),
         ));
     }
@@ -131,13 +131,13 @@ fn parse_link_token(
         end += 1;
     }
     if end >= bytes.len() {
-        return Err(BabylonMarkdownErrorV1::MalformedSubjectLink(
+        return Err(BabylonMarkdownError::MalformedSubjectLink(
             "unterminated destination".to_owned(),
         ));
     }
     let label = &text[start + 1..cursor];
     if label.contains('[') || label.contains(']') {
-        return Err(BabylonMarkdownErrorV1::MalformedSubjectLink(
+        return Err(BabylonMarkdownError::MalformedSubjectLink(
             "label bracket bytes".to_owned(),
         ));
     }
@@ -152,16 +152,16 @@ fn parse_link_token(
 /// Refuses the first profile violation: non-UTF-8 bytes, a CR byte, a '<'
 /// byte, a non-`subject:` link scheme, a malformed subject link, or a `~~`
 /// marker pair that does not wrap exactly one subject link token.
-pub fn validate_babylon_markdown_v1(markdown: &[u8]) -> Result<(), BabylonMarkdownErrorV1> {
-    if markdown.len() > MAX_MARKDOWN_BYTES_V1 {
-        return Err(BabylonMarkdownErrorV1::TooLarge);
+pub fn validate_babylon_markdown(markdown: &[u8]) -> Result<(), BabylonMarkdownError> {
+    if markdown.len() > MAX_MARKDOWN_BYTES {
+        return Err(BabylonMarkdownError::TooLarge);
     }
-    let text = std::str::from_utf8(markdown).map_err(|_| BabylonMarkdownErrorV1::NotUtf8)?;
+    let text = std::str::from_utf8(markdown).map_err(|_| BabylonMarkdownError::NotUtf8)?;
     if text.contains('\r') {
-        return Err(BabylonMarkdownErrorV1::CrlfEnding);
+        return Err(BabylonMarkdownError::CrlfEnding);
     }
     if text.contains('<') {
-        return Err(BabylonMarkdownErrorV1::RawHtml);
+        return Err(BabylonMarkdownError::RawHtml);
     }
     let bytes = text.as_bytes();
     let mut cursor = 0;
@@ -174,11 +174,11 @@ pub fn validate_babylon_markdown_v1(markdown: &[u8]) -> Result<(), BabylonMarkdo
         if text[cursor..].starts_with(PENDING_MARK) {
             let link_start = cursor + PENDING_MARK.len();
             if bytes.get(link_start) != Some(&b'[') {
-                return Err(BabylonMarkdownErrorV1::StrikethroughWithoutLink);
+                return Err(BabylonMarkdownError::StrikethroughWithoutLink);
             }
             let (_, _, _, end) = parse_link_token(text, link_start)?;
             if !text[end..].starts_with(PENDING_MARK) {
-                return Err(BabylonMarkdownErrorV1::StrikethroughWithoutLink);
+                return Err(BabylonMarkdownError::StrikethroughWithoutLink);
             }
             cursor = end + PENDING_MARK.len();
             continue;
@@ -196,20 +196,20 @@ pub fn validate_babylon_markdown_v1(markdown: &[u8]) -> Result<(), BabylonMarkdo
 /// The chip carries zero label bytes: only the subject kind word, the pinned
 /// separator, and the public subject id (ADR249 R5).
 #[must_use]
-pub fn fog_chip_v1(subject_kind: &str, subject_id: &str) -> String {
-    format!("unknown {subject_kind}{FOG_CHIP_SEPARATOR_V1}{subject_id}")
+pub fn fog_chip(subject_kind: &str, subject_id: &str) -> String {
+    format!("unknown {subject_kind}{FOG_CHIP_SEPARATOR}{subject_id}")
 }
 
 /// Return whether one line matches the pinned citation-line format
 /// `- **{label}:** {value} — {source_id}; {locator}`.
 ///
-/// The detection accepts exactly the language of [`CITATION_LINE_REGEX_V1`]:
+/// The detection accepts exactly the language of [`CITATION_LINE_REGEX`]:
 /// the label is one or more non-`*` bytes ending at the pinned `:** `
 /// boundary, the value is one or more bytes greedily ending at the last
 /// ` — ` that leaves a `[^;]+`; ` ` tail, and the locator is one or more
 /// bytes to the end.
 #[must_use]
-pub fn is_citation_line_v1(line: &str) -> bool {
+pub fn is_citation_line(line: &str) -> bool {
     let Some(rest) = line.strip_prefix("- **") else {
         return false;
     };
@@ -220,14 +220,13 @@ pub fn is_citation_line_v1(line: &str) -> bool {
         return false;
     }
     let mut end = rest.len();
-    while let Some(position) = rest[..end].rfind(CITATION_SEPARATOR_V1) {
+    while let Some(position) = rest[..end].rfind(CITATION_SEPARATOR) {
         let (value, tail) = rest.split_at(position);
         end = position;
         if value.is_empty() {
             continue;
         }
-        let Some((source_id, locator)) = tail[CITATION_SEPARATOR_V1.len()..].split_once("; ")
-        else {
+        let Some((source_id, locator)) = tail[CITATION_SEPARATOR.len()..].split_once("; ") else {
             continue;
         };
         if !source_id.is_empty() && !source_id.contains(';') && !locator.is_empty() {
@@ -245,10 +244,10 @@ fn push_export_token(
     output: &mut String,
     text: &str,
     start: usize,
-) -> Result<usize, BabylonMarkdownErrorV1> {
+) -> Result<usize, BabylonMarkdownError> {
     let (label, kind, id, end) = parse_link_token(text, start)?;
     if label.is_empty() {
-        output.push_str(&fog_chip_v1(&kind, &id));
+        output.push_str(&fog_chip(&kind, &id));
     } else {
         output.push('[');
         output.push_str(&label);
@@ -264,9 +263,9 @@ fn push_export_token(
 /// Validate and rewrite Markdown bytes into the Git export form (ADR249 R5).
 ///
 /// # Errors
-/// Propagates the first [`BabylonMarkdownErrorV1`] profile refusal.
-pub fn git_export_markdown_v1(markdown: &str) -> Result<String, BabylonMarkdownErrorV1> {
-    validate_babylon_markdown_v1(markdown.as_bytes())?;
+/// Propagates the first [`BabylonMarkdownError`] profile refusal.
+pub fn git_export_markdown(markdown: &str) -> Result<String, BabylonMarkdownError> {
+    validate_babylon_markdown(markdown.as_bytes())?;
     let mut output = String::with_capacity(markdown.len());
     let bytes = markdown.as_bytes();
     let mut cursor = 0;

@@ -1,8 +1,9 @@
 //! Current H3 and reference-bundle integrity against an explicitly owned disposable runtime.
 
 use babylon_persistence::{
-    validate_connection_target, CATALOG_CONNECT_TIMEOUT, CATALOG_STARTUP_OPTIONS,
-    CATALOG_TCP_USER_TIMEOUT, SCHEMA_ADVISORY_LOCK_KEY,
+    postgres_catalog::validate_connection_target, postgres_catalog::CATALOG_CONNECT_TIMEOUT,
+    postgres_catalog::CATALOG_STARTUP_OPTIONS, postgres_catalog::CATALOG_TCP_USER_TIMEOUT,
+    SCHEMA_ADVISORY_LOCK_KEY,
 };
 use postgres::config::Host;
 use postgres::{Config, NoTls};

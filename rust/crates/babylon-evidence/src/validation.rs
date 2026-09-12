@@ -2,8 +2,8 @@
 
 use std::collections::BTreeSet;
 
-use babylon_bsl::{canonical_bytes, SExpr, SfsRuleAuditResult};
-use babylon_kernel::sha256_of;
+use babylon_bsl::{canonical_ast::canonical_bytes, reader::SExpr, sfs_profile::SfsRuleAuditResult};
+use babylon_kernel::content_digest::sha256_of;
 use unicode_normalization::is_nfc;
 
 use crate::{

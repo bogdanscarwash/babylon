@@ -1,6 +1,6 @@
 //! Tick-owned material-state sources and detached canonical report rows.
 //!
-//! Material state is deliberately outside [`crate::replay_identity::StableWorldV1`],
+//! Material state is deliberately outside [`crate::replay_identity::StableWorld`],
 //! tick payload, and tick-content identity. The replay session owns one explicit
 //! checked dynamic-H3 source and publishes separately owned graph-derived and
 //! dynamic canonical projections only after every identity and allocation check succeeds.
@@ -8,42 +8,40 @@
 use std::collections::TryReserveError;
 
 use babylon_bsl::identity_codec::{
-    encode_stable_bsl_value_v1, project_stored_field_value_v1, IdentityCodecError, StableBslValueV1,
+    encode_stable_bsl_value, project_stored_field_value, IdentityCodecError, StableBslValue,
 };
 use babylon_bsl::typecheck::TypeEnv;
 use babylon_bsl::types::EnumRegistry;
-use babylon_graph::stable_element::{
-    StableElementKeyV1, StableElementResolverV1, StableIdentityError,
-};
-use babylon_graph::stable_state::{StableGraphEdgeRowV1, StableGraphStateV1};
-use babylon_kernel::{sha256_of, H3CellId};
+use babylon_graph::stable_element::{StableElementKey, StableElementResolver, StableIdentityError};
+use babylon_graph::stable_state::{StableGraphEdgeRow, StableGraphState};
+use babylon_kernel::{content_digest::sha256_of, H3CellId};
 
 use crate::h3_runtime::{
-    MichiganDynamicHexFoundationErrorV1, MichiganDynamicHexFoundationV1,
-    MichiganDynamicHexValueBitsV1, MichiganDynamicHexValuesV1,
+    MichiganDynamicHexFoundation, MichiganDynamicHexFoundationError, MichiganDynamicHexValueBits,
+    MichiganDynamicHexValues,
 };
 #[cfg(test)]
 use crate::h3_runtime::{
-    MICHIGAN_DYNAMIC_HEX_FOUNDATION_ARTIFACT_SHA256_V1,
-    MICHIGAN_DYNAMIC_HEX_REFERENCE_BUNDLE_DIGEST_V1, MICHIGAN_DYNAMIC_HEX_SOURCE_R7_DIGEST_V1,
+    MICHIGAN_DYNAMIC_HEX_FOUNDATION_ARTIFACT_SHA256, MICHIGAN_DYNAMIC_HEX_REFERENCE_BUNDLE_DIGEST,
+    MICHIGAN_DYNAMIC_HEX_SOURCE_R7_DIGEST,
 };
 
 const MATERIAL_ROW_DOMAIN: &[u8] = b"babylon.material-state-row\0";
 const MATERIAL_SOURCE_DOMAIN: &[u8] = b"babylon.material-state-source\0";
 const MATERIAL_ROWS_DOMAIN: &[u8] = b"babylon.material-state-rows\0";
-const MATERIAL_LAYOUT_VERSION_V1: u32 = 1;
-const MAX_MATERIAL_BYTES_V1: usize = 64 * 1024 * 1024;
+const MATERIAL_LAYOUT_VERSION: u32 = 1;
+const MAX_MATERIAL_BYTES: usize = 64 * 1024 * 1024;
 
 /// A typed material-state construction or projection refusal.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum MaterialStateErrorV1 {
+pub enum MaterialStateError {
     /// The replay reference differs from the checked dynamic-H3 foundation.
     ReferenceBundleMismatch {
         expected: [u8; 32],
         actual: [u8; 32],
     },
     /// A test-only dynamic-H3 source value violated the foundation domains.
-    DynamicFoundation(MichiganDynamicHexFoundationErrorV1),
+    DynamicFoundation(MichiganDynamicHexFoundationError),
     /// One territory identity was malformed or absent from the sealed graph.
     TerritoryIdentity(StableIdentityError),
     /// One organization identity was malformed or absent from the sealed graph.
@@ -91,13 +89,13 @@ pub enum MaterialStateErrorV1 {
     },
 }
 
-impl std::fmt::Display for MaterialStateErrorV1 {
+impl std::fmt::Display for MaterialStateError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(formatter, "material state refused: {self:?}")
     }
 }
 
-impl std::error::Error for MaterialStateErrorV1 {}
+impl std::error::Error for MaterialStateError {}
 
 /// Testable pre-reservation boundary used by every detached material copy.
 pub(crate) trait MaterialAllocationGate {
@@ -105,27 +103,27 @@ pub(crate) trait MaterialAllocationGate {
         &self,
         field: &'static str,
         requested: usize,
-    ) -> Result<(), MaterialStateErrorV1>;
+    ) -> Result<(), MaterialStateError>;
 }
 
 pub(crate) struct ProductionMaterialAllocationGate;
 
-pub(crate) struct MaterialProjectionContextV1<'a> {
-    stable_graph: &'a StableGraphStateV1,
+pub(crate) struct MaterialProjectionContext<'a> {
+    stable_graph: &'a StableGraphState,
     scenario_scope: &'a str,
     types: &'a TypeEnv,
     enums: &'a EnumRegistry,
-    resolver: &'a StableElementResolverV1,
+    resolver: &'a StableElementResolver,
     gate: &'a dyn MaterialAllocationGate,
 }
 
-impl<'a> MaterialProjectionContextV1<'a> {
+impl<'a> MaterialProjectionContext<'a> {
     pub(crate) fn new(
-        stable_graph: &'a StableGraphStateV1,
+        stable_graph: &'a StableGraphState,
         scenario_scope: &'a str,
         types: &'a TypeEnv,
         enums: &'a EnumRegistry,
-        resolver: &'a StableElementResolverV1,
+        resolver: &'a StableElementResolver,
         gate: &'a dyn MaterialAllocationGate,
     ) -> Self {
         Self {
@@ -144,14 +142,14 @@ impl MaterialAllocationGate for ProductionMaterialAllocationGate {
         &self,
         _field: &'static str,
         _requested: usize,
-    ) -> Result<(), MaterialStateErrorV1> {
+    ) -> Result<(), MaterialStateError> {
         Ok(())
     }
 }
 
 /// One session-owned dynamic-H3 runtime row without report bytes.
 #[derive(Debug, PartialEq, Eq)]
-struct DynamicHexRuntimeRowV1 {
+struct DynamicHexRuntimeRow {
     cell_id: H3CellId,
     value_bits: [u64; 9],
 }
@@ -161,21 +159,21 @@ struct DynamicHexRuntimeRowV1 {
 /// This holds only source values and the three identities proved by the
 /// checked foundation. Canonical report rows are a later fallible projection.
 #[derive(Debug, PartialEq, Eq)]
-struct DynamicHexRuntimeV1 {
-    rows: Vec<DynamicHexRuntimeRowV1>,
+struct DynamicHexRuntime {
+    rows: Vec<DynamicHexRuntimeRow>,
     source_r7_digest: [u8; 32],
     reference_bundle_digest: [u8; 32],
     artifact_sha256: [u8; 32],
 }
 
-impl DynamicHexRuntimeV1 {
+impl DynamicHexRuntime {
     fn try_from_foundation(
-        foundation: &MichiganDynamicHexFoundationV1,
+        foundation: &MichiganDynamicHexFoundation,
         gate: &dyn MaterialAllocationGate,
-    ) -> Result<Self, MaterialStateErrorV1> {
+    ) -> Result<Self, MaterialStateError> {
         let mut rows = reserve_vec("material dynamic rows", foundation.rows().len(), gate)?;
         for source in foundation.rows() {
-            rows.push(DynamicHexRuntimeRowV1 {
+            rows.push(DynamicHexRuntimeRow {
                 cell_id: source.cell_id(),
                 value_bits: source.value_bits(),
             });
@@ -188,13 +186,10 @@ impl DynamicHexRuntimeV1 {
         })
     }
 
-    fn try_detached(
-        &self,
-        gate: &dyn MaterialAllocationGate,
-    ) -> Result<Self, MaterialStateErrorV1> {
+    fn try_detached(&self, gate: &dyn MaterialAllocationGate) -> Result<Self, MaterialStateError> {
         let mut rows = reserve_vec("material dynamic rows", self.rows.len(), gate)?;
         for row in &self.rows {
-            rows.push(DynamicHexRuntimeRowV1 {
+            rows.push(DynamicHexRuntimeRow {
                 cell_id: row.cell_id,
                 value_bits: row.value_bits,
             });
@@ -209,16 +204,16 @@ impl DynamicHexRuntimeV1 {
 
     fn try_restore_from_rows(
         &self,
-        stored: &[DynamicHexStateRowV1],
+        stored: &[DynamicHexStateRow],
         gate: &dyn MaterialAllocationGate,
-    ) -> Result<Self, MaterialStateErrorV1> {
+    ) -> Result<Self, MaterialStateError> {
         if stored.len() != self.rows.len()
             || stored
                 .iter()
                 .zip(&self.rows)
                 .any(|(left, right)| left.cell_id() != right.cell_id)
         {
-            return Err(MaterialStateErrorV1::SourceRowOrder {
+            return Err(MaterialStateError::SourceRowOrder {
                 family: "dynamic hex checkpoint identity",
             });
         }
@@ -231,30 +226,30 @@ impl DynamicHexRuntimeV1 {
 
     #[cfg(test)]
     fn try_fixture(
-        rows: Vec<(H3CellId, MichiganDynamicHexValueBitsV1)>,
-    ) -> Result<Self, MaterialStateErrorV1> {
+        rows: Vec<(H3CellId, MichiganDynamicHexValueBits)>,
+    ) -> Result<Self, MaterialStateError> {
         let mut runtime_rows = reserve_vec(
             "material dynamic rows",
             rows.len(),
             &ProductionMaterialAllocationGate,
         )?;
         for (cell_id, value_bits) in rows {
-            let values = MichiganDynamicHexValuesV1::try_new(value_bits)
-                .map_err(MaterialStateErrorV1::DynamicFoundation)?;
-            runtime_rows.push(DynamicHexRuntimeRowV1 {
+            let values = MichiganDynamicHexValues::try_new(value_bits)
+                .map_err(MaterialStateError::DynamicFoundation)?;
+            runtime_rows.push(DynamicHexRuntimeRow {
                 cell_id,
                 value_bits: values.value_bits(),
             });
         }
         Ok(Self {
             rows: runtime_rows,
-            source_r7_digest: MICHIGAN_DYNAMIC_HEX_SOURCE_R7_DIGEST_V1,
-            reference_bundle_digest: MICHIGAN_DYNAMIC_HEX_REFERENCE_BUNDLE_DIGEST_V1,
-            artifact_sha256: MICHIGAN_DYNAMIC_HEX_FOUNDATION_ARTIFACT_SHA256_V1,
+            source_r7_digest: MICHIGAN_DYNAMIC_HEX_SOURCE_R7_DIGEST,
+            reference_bundle_digest: MICHIGAN_DYNAMIC_HEX_REFERENCE_BUNDLE_DIGEST,
+            artifact_sha256: MICHIGAN_DYNAMIC_HEX_FOUNDATION_ARTIFACT_SHA256,
         })
     }
 
-    fn rows(&self) -> &[DynamicHexRuntimeRowV1] {
+    fn rows(&self) -> &[DynamicHexRuntimeRow] {
         &self.rows
     }
 
@@ -278,23 +273,23 @@ impl<'a> MaterialWriter<'a> {
         }
     }
 
-    fn push(&mut self, value: u8) -> Result<(), MaterialStateErrorV1> {
+    fn push(&mut self, value: u8) -> Result<(), MaterialStateError> {
         self.extend(&[value])
     }
 
-    fn extend(&mut self, value: &[u8]) -> Result<(), MaterialStateErrorV1> {
+    fn extend(&mut self, value: &[u8]) -> Result<(), MaterialStateError> {
         let requested = checked_add(self.field, self.bytes.len(), value.len())?;
-        if requested > MAX_MATERIAL_BYTES_V1 {
-            return Err(MaterialStateErrorV1::ByteLimit {
+        if requested > MAX_MATERIAL_BYTES {
+            return Err(MaterialStateError::ByteLimit {
                 field: self.field,
                 actual: requested,
-                maximum: MAX_MATERIAL_BYTES_V1,
+                maximum: MAX_MATERIAL_BYTES,
             });
         }
         self.gate.before_reserve(self.field, value.len())?;
         self.bytes
             .try_reserve_exact(value.len())
-            .map_err(|_: TryReserveError| MaterialStateErrorV1::Allocation {
+            .map_err(|_: TryReserveError| MaterialStateError::Allocation {
                 field: self.field,
                 requested: value.len(),
             })?;
@@ -302,7 +297,7 @@ impl<'a> MaterialWriter<'a> {
         Ok(())
     }
 
-    fn str32(&mut self, value: &str) -> Result<(), MaterialStateErrorV1> {
+    fn str32(&mut self, value: &str) -> Result<(), MaterialStateError> {
         self.extend(&checked_u32(self.field, value.len())?.to_be_bytes())?;
         self.extend(value.as_bytes())
     }
@@ -314,30 +309,30 @@ impl<'a> MaterialWriter<'a> {
 
 /// One derived world-register material row.
 #[derive(Debug, PartialEq, Eq)]
-pub struct WorldRegisterRowV1 {
+pub struct WorldRegisterRow {
     qname: String,
-    value: StableBslValueV1,
+    value: StableBslValue,
     canonical_bytes: Vec<u8>,
 }
 
-impl WorldRegisterRowV1 {
+impl WorldRegisterRow {
     /// Construct the exact derived material register row.
     ///
     /// # Errors
     /// Returns a world-register, stable-value, or allocation refusal.
-    pub fn try_new(qname: String, value: StableBslValueV1) -> Result<Self, MaterialStateErrorV1> {
+    pub fn try_new(qname: String, value: StableBslValue) -> Result<Self, MaterialStateError> {
         Self::try_new_with_gate(qname, value, &ProductionMaterialAllocationGate)
     }
 
     fn try_new_with_gate(
         qname: String,
-        value: StableBslValueV1,
+        value: StableBslValue,
         gate: &dyn MaterialAllocationGate,
-    ) -> Result<Self, MaterialStateErrorV1> {
+    ) -> Result<Self, MaterialStateError> {
         if qname != "world/completed-tick"
-            || !matches!(value, StableBslValueV1::Int(completed_tick) if completed_tick >= 0)
+            || !matches!(value, StableBslValue::Int(completed_tick) if completed_tick >= 0)
         {
-            return Err(MaterialStateErrorV1::WorldRegister);
+            return Err(MaterialStateError::WorldRegister);
         }
         let canonical_bytes = encode_world_register(&qname, &value, gate)?;
         Ok(Self {
@@ -361,30 +356,30 @@ impl WorldRegisterRowV1 {
 
     /// Borrow the exact stable register value.
     #[must_use]
-    pub const fn value(&self) -> &StableBslValueV1 {
+    pub const fn value(&self) -> &StableBslValue {
         &self.value
     }
 }
 
 /// One stable territory material row.
 #[derive(Debug, PartialEq, Eq)]
-pub struct TerritoryStateRowV1 {
-    territory_id: StableElementKeyV1,
-    ordered_fields: Vec<(String, StableBslValueV1)>,
+pub struct TerritoryStateRow {
+    territory_id: StableElementKey,
+    ordered_fields: Vec<(String, StableBslValue)>,
     primary_key: Vec<u8>,
     canonical_bytes: Vec<u8>,
 }
 
-impl TerritoryStateRowV1 {
+impl TerritoryStateRow {
     /// Construct one exact externally loaded territory row.
     ///
     /// # Errors
     /// Returns the first stable identity, field-order, value, or allocation
     /// refusal.
     pub fn try_new(
-        territory_id: StableElementKeyV1,
-        ordered_fields: Vec<(String, StableBslValueV1)>,
-    ) -> Result<Self, MaterialStateErrorV1> {
+        territory_id: StableElementKey,
+        ordered_fields: Vec<(String, StableBslValue)>,
+    ) -> Result<Self, MaterialStateError> {
         Self::try_from_projection(
             territory_id,
             ordered_fields,
@@ -393,12 +388,12 @@ impl TerritoryStateRowV1 {
     }
 
     fn try_from_projection(
-        territory_id: StableElementKeyV1,
-        ordered_fields: Vec<(String, StableBslValueV1)>,
+        territory_id: StableElementKey,
+        ordered_fields: Vec<(String, StableBslValue)>,
         gate: &dyn MaterialAllocationGate,
-    ) -> Result<Self, MaterialStateErrorV1> {
-        if !matches!(territory_id, StableElementKeyV1::Node { .. }) {
-            return Err(MaterialStateErrorV1::TerritoryIdentity(
+    ) -> Result<Self, MaterialStateError> {
+        if !matches!(territory_id, StableElementKey::Node { .. }) {
+            return Err(MaterialStateError::TerritoryIdentity(
                 StableIdentityError::ElementNotSealed,
             ));
         }
@@ -422,13 +417,13 @@ impl TerritoryStateRowV1 {
 
     /// Borrow the exact stable territory identity.
     #[must_use]
-    pub const fn territory_id(&self) -> &StableElementKeyV1 {
+    pub const fn territory_id(&self) -> &StableElementKey {
         &self.territory_id
     }
 
     /// Borrow the strict UTF-8 field-name ordered stable values.
     #[must_use]
-    pub fn ordered_fields(&self) -> &[(String, StableBslValueV1)] {
+    pub fn ordered_fields(&self) -> &[(String, StableBslValue)] {
         &self.ordered_fields
     }
 
@@ -441,7 +436,7 @@ impl TerritoryStateRowV1 {
 
 /// One mutable dynamic-H3 material row.
 #[derive(Debug, PartialEq, Eq)]
-pub struct DynamicHexStateRowV1 {
+pub struct DynamicHexStateRow {
     cell_id: H3CellId,
     c: u64,
     v: u64,
@@ -455,17 +450,17 @@ pub struct DynamicHexStateRowV1 {
     canonical_bytes: Vec<u8>,
 }
 
-impl DynamicHexStateRowV1 {
+impl DynamicHexStateRow {
     /// Construct one exact externally loaded dynamic-H3 row.
     ///
     /// # Errors
     /// Returns a cell-domain, value-domain, or allocation refusal.
     pub fn try_new(
         cell_id: H3CellId,
-        value_bits: MichiganDynamicHexValueBitsV1,
-    ) -> Result<Self, MaterialStateErrorV1> {
-        let values = MichiganDynamicHexValuesV1::try_new(value_bits)
-            .map_err(MaterialStateErrorV1::DynamicFoundation)?;
+        value_bits: MichiganDynamicHexValueBits,
+    ) -> Result<Self, MaterialStateError> {
+        let values = MichiganDynamicHexValues::try_new(value_bits)
+            .map_err(MaterialStateError::DynamicFoundation)?;
         Self::try_from_validated(
             cell_id,
             values.value_bits(),
@@ -474,9 +469,9 @@ impl DynamicHexStateRowV1 {
     }
 
     fn try_from_runtime(
-        source: &DynamicHexRuntimeRowV1,
+        source: &DynamicHexRuntimeRow,
         gate: &dyn MaterialAllocationGate,
-    ) -> Result<Self, MaterialStateErrorV1> {
+    ) -> Result<Self, MaterialStateError> {
         Self::try_from_validated(source.cell_id, source.value_bits, gate)
     }
 
@@ -484,7 +479,7 @@ impl DynamicHexStateRowV1 {
         cell_id: H3CellId,
         value_bits: [u64; 9],
         gate: &dyn MaterialAllocationGate,
-    ) -> Result<Self, MaterialStateErrorV1> {
+    ) -> Result<Self, MaterialStateError> {
         gate.before_reserve("material dynamic row", 1)?;
         let [c, v, s, k, biocapacity_stock, energy_stock, raw_material_stock, internet_access_pct, surveillance_coupling] =
             value_bits;
@@ -549,27 +544,27 @@ impl DynamicHexStateRowV1 {
 
 /// One mutable organization row with stable territory PRESENCE identities.
 #[derive(Debug, PartialEq, Eq)]
-pub struct OrganizationStateRowV1 {
-    organization_id: StableElementKeyV1,
-    organization_kind: StableBslValueV1,
-    ordered_territory_ids: Vec<StableElementKeyV1>,
-    ordered_fields: Vec<(String, StableBslValueV1)>,
+pub struct OrganizationStateRow {
+    organization_id: StableElementKey,
+    organization_kind: StableBslValue,
+    ordered_territory_ids: Vec<StableElementKey>,
+    ordered_fields: Vec<(String, StableBslValue)>,
     primary_key: Vec<u8>,
     canonical_bytes: Vec<u8>,
 }
 
-impl OrganizationStateRowV1 {
+impl OrganizationStateRow {
     /// Construct one exact externally loaded organization row.
     ///
     /// # Errors
     /// Returns the first stable identity, organization-kind, ordering, value,
     /// or allocation refusal.
     pub fn try_new(
-        organization_id: StableElementKeyV1,
-        organization_kind: StableBslValueV1,
-        ordered_territory_ids: Vec<StableElementKeyV1>,
-        ordered_fields: Vec<(String, StableBslValueV1)>,
-    ) -> Result<Self, MaterialStateErrorV1> {
+        organization_id: StableElementKey,
+        organization_kind: StableBslValue,
+        ordered_territory_ids: Vec<StableElementKey>,
+        ordered_fields: Vec<(String, StableBslValue)>,
+    ) -> Result<Self, MaterialStateError> {
         Self::try_from_projection(
             organization_id,
             organization_kind,
@@ -580,18 +575,18 @@ impl OrganizationStateRowV1 {
     }
 
     fn try_from_projection(
-        organization_id: StableElementKeyV1,
-        organization_kind: StableBslValueV1,
-        ordered_territory_ids: Vec<StableElementKeyV1>,
-        ordered_fields: Vec<(String, StableBslValueV1)>,
+        organization_id: StableElementKey,
+        organization_kind: StableBslValue,
+        ordered_territory_ids: Vec<StableElementKey>,
+        ordered_fields: Vec<(String, StableBslValue)>,
         gate: &dyn MaterialAllocationGate,
-    ) -> Result<Self, MaterialStateErrorV1> {
+    ) -> Result<Self, MaterialStateError> {
         require_node_key(&organization_id, MaterialIdentityRole::Organization)?;
         if !matches!(
             &organization_kind,
-            StableBslValueV1::Enum { enum_type, .. } if enum_type == "OrgKind"
+            StableBslValue::Enum { enum_type, .. } if enum_type == "OrgKind"
         ) {
-            return Err(MaterialStateErrorV1::OrganizationKind);
+            return Err(MaterialStateError::OrganizationKind);
         }
         for territory in &ordered_territory_ids {
             require_node_key(territory, MaterialIdentityRole::Territory)?;
@@ -624,25 +619,25 @@ impl OrganizationStateRowV1 {
 
     /// Borrow the exact stable organization identity.
     #[must_use]
-    pub const fn organization_id(&self) -> &StableElementKeyV1 {
+    pub const fn organization_id(&self) -> &StableElementKey {
         &self.organization_id
     }
 
     /// Borrow the exact declared `OrgKind` stable value.
     #[must_use]
-    pub const fn organization_kind(&self) -> &StableBslValueV1 {
+    pub const fn organization_kind(&self) -> &StableBslValue {
         &self.organization_kind
     }
 
     /// Borrow outgoing PRESENCE territories in framed canonical-key order.
     #[must_use]
-    pub fn ordered_territory_ids(&self) -> &[StableElementKeyV1] {
+    pub fn ordered_territory_ids(&self) -> &[StableElementKey] {
         &self.ordered_territory_ids
     }
 
     /// Borrow the strict UTF-8 field-name ordered stable values.
     #[must_use]
-    pub fn ordered_fields(&self) -> &[(String, StableBslValueV1)] {
+    pub fn ordered_fields(&self) -> &[(String, StableBslValue)] {
         &self.ordered_fields
     }
 
@@ -655,14 +650,14 @@ impl OrganizationStateRowV1 {
 
 /// One borrowed closed material-state row in contract order.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum MaterialStateRowRefV1<'a> {
-    WorldRegister(&'a WorldRegisterRowV1),
-    Territory(&'a TerritoryStateRowV1),
-    DynamicHex(&'a DynamicHexStateRowV1),
-    Organization(&'a OrganizationStateRowV1),
+pub enum MaterialStateRowRef<'a> {
+    WorldRegister(&'a WorldRegisterRow),
+    Territory(&'a TerritoryStateRow),
+    DynamicHex(&'a DynamicHexStateRow),
+    Organization(&'a OrganizationStateRow),
 }
 
-impl MaterialStateRowRefV1<'_> {
+impl MaterialStateRowRef<'_> {
     /// Borrow exact canonical row bytes.
     #[must_use]
     pub fn canonical_bytes(&self) -> &[u8] {
@@ -677,32 +672,28 @@ impl MaterialStateRowRefV1<'_> {
 
 /// The session-owned exact dynamic-H3 runtime.
 #[derive(Debug, PartialEq, Eq)]
-pub struct MaterialStateV1 {
-    dynamic_hexes: DynamicHexRuntimeV1,
+pub struct MaterialState {
+    dynamic_hexes: DynamicHexRuntime,
 }
 
-impl MaterialStateV1 {
+impl MaterialState {
     /// Construct the sole checked dynamic-H3 runtime.
     ///
     /// # Errors
     /// Returns the first dynamic-runtime allocation or ordering refusal.
-    pub fn try_new(
-        foundation: &MichiganDynamicHexFoundationV1,
-    ) -> Result<Self, MaterialStateErrorV1> {
-        let dynamic_hexes = DynamicHexRuntimeV1::try_from_foundation(
-            foundation,
-            &ProductionMaterialAllocationGate,
-        )?;
+    pub fn try_new(foundation: &MichiganDynamicHexFoundation) -> Result<Self, MaterialStateError> {
+        let dynamic_hexes =
+            DynamicHexRuntime::try_from_foundation(foundation, &ProductionMaterialAllocationGate)?;
         Self::try_from_runtime(dynamic_hexes)
     }
 
-    fn try_from_runtime(dynamic_hexes: DynamicHexRuntimeV1) -> Result<Self, MaterialStateErrorV1> {
+    fn try_from_runtime(dynamic_hexes: DynamicHexRuntime) -> Result<Self, MaterialStateError> {
         if dynamic_hexes
             .rows()
             .windows(2)
             .any(|rows| rows[0].cell_id.as_u64() >= rows[1].cell_id.as_u64())
         {
-            return Err(MaterialStateErrorV1::SourceRowOrder {
+            return Err(MaterialStateError::SourceRowOrder {
                 family: "dynamic hex",
             });
         }
@@ -715,15 +706,15 @@ impl MaterialStateV1 {
 
     #[cfg(test)]
     pub(crate) fn try_dynamic_runtime_fixture_for_test(
-        rows: Vec<(H3CellId, MichiganDynamicHexValueBitsV1)>,
-    ) -> Result<Self, MaterialStateErrorV1> {
-        Self::try_from_runtime(DynamicHexRuntimeV1::try_fixture(rows)?)
+        rows: Vec<(H3CellId, MichiganDynamicHexValueBits)>,
+    ) -> Result<Self, MaterialStateError> {
+        Self::try_from_runtime(DynamicHexRuntime::try_fixture(rows)?)
     }
 
     pub(crate) fn try_detached(
         &self,
         gate: &dyn MaterialAllocationGate,
-    ) -> Result<Self, MaterialStateErrorV1> {
+    ) -> Result<Self, MaterialStateError> {
         Ok(Self {
             dynamic_hexes: self.dynamic_hexes.try_detached(gate)?,
         })
@@ -731,8 +722,8 @@ impl MaterialStateV1 {
 
     pub(crate) fn try_restore_from_rows(
         &self,
-        rows: &MaterialStateRowsV1,
-    ) -> Result<Self, MaterialStateErrorV1> {
+        rows: &MaterialStateRows,
+    ) -> Result<Self, MaterialStateError> {
         Self::try_from_runtime(self.dynamic_hexes.try_restore_from_rows(
             rows.dynamic_hexes().rows(),
             &ProductionMaterialAllocationGate,
@@ -742,19 +733,19 @@ impl MaterialStateV1 {
     pub(crate) fn project_rows(
         &self,
         resolve_tick: i64,
-        context: &MaterialProjectionContextV1<'_>,
-    ) -> Result<MaterialStateRowsV1, MaterialStateErrorV1> {
-        MaterialStateRowsV1::compose(self, resolve_tick, context)
+        context: &MaterialProjectionContext<'_>,
+    ) -> Result<MaterialStateRows, MaterialStateError> {
+        MaterialStateRows::compose(self, resolve_tick, context)
     }
 }
 
 fn project_dynamic_rows(
-    source: &DynamicHexRuntimeV1,
+    source: &DynamicHexRuntime,
     gate: &dyn MaterialAllocationGate,
-) -> Result<Vec<DynamicHexStateRowV1>, MaterialStateErrorV1> {
+) -> Result<Vec<DynamicHexStateRow>, MaterialStateError> {
     let mut rows = reserve_vec("material dynamic rows", source.rows().len(), gate)?;
     for row in source.rows() {
-        rows.push(DynamicHexStateRowV1::try_from_runtime(row, gate)?);
+        rows.push(DynamicHexStateRow::try_from_runtime(row, gate)?);
     }
     Ok(rows)
 }
@@ -773,7 +764,7 @@ macro_rules! material_batch {
             fn compose(
                 rows: Vec<$row>,
                 gate: &dyn MaterialAllocationGate,
-            ) -> Result<Self, MaterialStateErrorV1> {
+            ) -> Result<Self, MaterialStateError> {
                 let canonical_bytes = encode_source_batch(
                     $tag,
                     rows.iter().map(|row| row.canonical_bytes()),
@@ -815,18 +806,18 @@ macro_rules! material_batch {
     };
 }
 
-material_batch!(WorldRegisterRowsV1, WorldRegisterRowV1, 0x01);
-material_batch!(TerritoryStateRowsV1, TerritoryStateRowV1, 0x02);
-material_batch!(DynamicHexStateRowsV1, DynamicHexStateRowV1, 0x03);
-material_batch!(OrganizationStateRowsV1, OrganizationStateRowV1, 0x08);
+material_batch!(WorldRegisterRows, WorldRegisterRow, 0x01);
+material_batch!(TerritoryStateRows, TerritoryStateRow, 0x02);
+material_batch!(DynamicHexStateRows, DynamicHexStateRow, 0x03);
+material_batch!(OrganizationStateRows, OrganizationStateRow, 0x08);
 
 /// One independently owned material projection from a completed replay tick.
 #[derive(Debug, PartialEq, Eq)]
-pub struct MaterialStateRowsV1 {
-    world_registers: WorldRegisterRowsV1,
-    territories: TerritoryStateRowsV1,
-    dynamic_hexes: DynamicHexStateRowsV1,
-    organizations: OrganizationStateRowsV1,
+pub struct MaterialStateRows {
+    world_registers: WorldRegisterRows,
+    territories: TerritoryStateRows,
+    dynamic_hexes: DynamicHexStateRows,
+    organizations: OrganizationStateRows,
     canonical_bytes: Vec<u8>,
     source_digest: [u8; 32],
     source_count: usize,
@@ -834,23 +825,23 @@ pub struct MaterialStateRowsV1 {
 
 /// Owned typed material rows loaded from an external durable store.
 #[derive(Debug)]
-pub struct MaterialStateRowsInputV1 {
+pub struct MaterialStateRowsInput {
     /// Exact world-register rows.
-    pub world_registers: Vec<WorldRegisterRowV1>,
+    pub world_registers: Vec<WorldRegisterRow>,
     /// Exact territory rows.
-    pub territories: Vec<TerritoryStateRowV1>,
+    pub territories: Vec<TerritoryStateRow>,
     /// Exact dynamic-H3 rows.
-    pub dynamic_hexes: Vec<DynamicHexStateRowV1>,
+    pub dynamic_hexes: Vec<DynamicHexStateRow>,
     /// Exact organization rows.
-    pub organizations: Vec<OrganizationStateRowV1>,
+    pub organizations: Vec<OrganizationStateRow>,
 }
 
-impl MaterialStateRowsV1 {
+impl MaterialStateRows {
     /// Compose the canonical material checkpoint section from typed stored rows.
     ///
     /// # Errors
     /// Returns the first row-order, bound, arithmetic, or allocation refusal.
-    pub fn try_from_rows(input: MaterialStateRowsInputV1) -> Result<Self, MaterialStateErrorV1> {
+    pub fn try_from_rows(input: MaterialStateRowsInput) -> Result<Self, MaterialStateError> {
         validate_source_order(&input.world_registers, "world register", |row| {
             row.qname().as_bytes()
         })?;
@@ -860,16 +851,16 @@ impl MaterialStateRowsV1 {
             .windows(2)
             .any(|pair| pair[0].cell_id().as_u64() >= pair[1].cell_id().as_u64())
         {
-            return Err(MaterialStateErrorV1::SourceRowOrder {
+            return Err(MaterialStateError::SourceRowOrder {
                 family: "dynamic hex",
             });
         }
         validate_source_order(&input.organizations, "organization", |row| &row.primary_key)?;
         let gate = &ProductionMaterialAllocationGate;
-        let world_registers = WorldRegisterRowsV1::compose(input.world_registers, gate)?;
-        let territories = TerritoryStateRowsV1::compose(input.territories, gate)?;
-        let dynamic_hexes = DynamicHexStateRowsV1::compose(input.dynamic_hexes, gate)?;
-        let organizations = OrganizationStateRowsV1::compose(input.organizations, gate)?;
+        let world_registers = WorldRegisterRows::compose(input.world_registers, gate)?;
+        let territories = TerritoryStateRows::compose(input.territories, gate)?;
+        let dynamic_hexes = DynamicHexStateRows::compose(input.dynamic_hexes, gate)?;
+        let organizations = OrganizationStateRows::compose(input.organizations, gate)?;
         let source_count = checked_sum(
             "material row count",
             [
@@ -899,22 +890,22 @@ impl MaterialStateRowsV1 {
     }
 
     fn compose(
-        source: &MaterialStateV1,
+        source: &MaterialState,
         resolve_tick: i64,
-        context: &MaterialProjectionContextV1<'_>,
-    ) -> Result<Self, MaterialStateErrorV1> {
+        context: &MaterialProjectionContext<'_>,
+    ) -> Result<Self, MaterialStateError> {
         let gate = context.gate;
         let mut world_rows = reserve_vec("material world register rows", 1, gate)?;
-        world_rows.push(WorldRegisterRowV1::try_new_with_gate(
+        world_rows.push(WorldRegisterRow::try_new_with_gate(
             copy_string(
                 "material world register qname",
                 "world/completed-tick",
                 gate,
             )?,
-            StableBslValueV1::Int(resolve_tick),
+            StableBslValue::Int(resolve_tick),
             gate,
         )?);
-        let world_registers = WorldRegisterRowsV1::compose(world_rows, gate)?;
+        let world_registers = WorldRegisterRows::compose(world_rows, gate)?;
         let territory_rows = derive_territory_rows(
             context.stable_graph,
             context.scenario_scope,
@@ -923,11 +914,9 @@ impl MaterialStateRowsV1 {
             context.resolver,
             gate,
         )?;
-        let territories = TerritoryStateRowsV1::compose(territory_rows, gate)?;
-        let dynamic_hexes = DynamicHexStateRowsV1::compose(
-            project_dynamic_rows(&source.dynamic_hexes, gate)?,
-            gate,
-        )?;
+        let territories = TerritoryStateRows::compose(territory_rows, gate)?;
+        let dynamic_hexes =
+            DynamicHexStateRows::compose(project_dynamic_rows(&source.dynamic_hexes, gate)?, gate)?;
         let organization_rows = derive_organization_rows(
             context.stable_graph,
             context.scenario_scope,
@@ -936,7 +925,7 @@ impl MaterialStateRowsV1 {
             context.resolver,
             gate,
         )?;
-        let organizations = OrganizationStateRowsV1::compose(organization_rows, gate)?;
+        let organizations = OrganizationStateRows::compose(organization_rows, gate)?;
         let source_count = checked_sum(
             "material row count",
             [
@@ -968,8 +957,8 @@ impl MaterialStateRowsV1 {
 
     /// Iterate all rows in exact family-tag/key order without allocation.
     #[must_use]
-    pub fn rows(&self) -> impl ExactSizeIterator<Item = MaterialStateRowRefV1<'_>> + '_ {
-        MaterialStateRowsIterV1 {
+    pub fn rows(&self) -> impl ExactSizeIterator<Item = MaterialStateRowRef<'_>> + '_ {
+        MaterialStateRowsIter {
             rows: self,
             family: 0,
             index: 0,
@@ -993,35 +982,35 @@ impl MaterialStateRowsV1 {
     }
     /// Borrow the derived world-register batch.
     #[must_use]
-    pub const fn world_registers(&self) -> &WorldRegisterRowsV1 {
+    pub const fn world_registers(&self) -> &WorldRegisterRows {
         &self.world_registers
     }
     /// Borrow the territory batch.
     #[must_use]
-    pub const fn territories(&self) -> &TerritoryStateRowsV1 {
+    pub const fn territories(&self) -> &TerritoryStateRows {
         &self.territories
     }
     /// Borrow the dynamic-H3 batch.
     #[must_use]
-    pub const fn dynamic_hexes(&self) -> &DynamicHexStateRowsV1 {
+    pub const fn dynamic_hexes(&self) -> &DynamicHexStateRows {
         &self.dynamic_hexes
     }
     /// Borrow the organization batch.
     #[must_use]
-    pub const fn organizations(&self) -> &OrganizationStateRowsV1 {
+    pub const fn organizations(&self) -> &OrganizationStateRows {
         &self.organizations
     }
 }
 
-struct MaterialStateRowsIterV1<'a> {
-    rows: &'a MaterialStateRowsV1,
+struct MaterialStateRowsIter<'a> {
+    rows: &'a MaterialStateRows,
     family: u8,
     index: usize,
     remaining: usize,
 }
 
-impl<'a> Iterator for MaterialStateRowsIterV1<'a> {
-    type Item = MaterialStateRowRefV1<'a>;
+impl<'a> Iterator for MaterialStateRowsIter<'a> {
+    type Item = MaterialStateRowRef<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
@@ -1031,25 +1020,25 @@ impl<'a> Iterator for MaterialStateRowsIterV1<'a> {
                     .world_registers
                     .rows()
                     .get(self.index)
-                    .map(MaterialStateRowRefV1::WorldRegister),
+                    .map(MaterialStateRowRef::WorldRegister),
                 1 => self
                     .rows
                     .territories
                     .rows()
                     .get(self.index)
-                    .map(MaterialStateRowRefV1::Territory),
+                    .map(MaterialStateRowRef::Territory),
                 2 => self
                     .rows
                     .dynamic_hexes
                     .rows()
                     .get(self.index)
-                    .map(MaterialStateRowRefV1::DynamicHex),
+                    .map(MaterialStateRowRef::DynamicHex),
                 3 => self
                     .rows
                     .organizations
                     .rows()
                     .get(self.index)
-                    .map(MaterialStateRowRefV1::Organization),
+                    .map(MaterialStateRowRef::Organization),
                 _ => return None,
             };
             if let Some(row) = next {
@@ -1067,21 +1056,21 @@ impl<'a> Iterator for MaterialStateRowsIterV1<'a> {
     }
 }
 
-impl ExactSizeIterator for MaterialStateRowsIterV1<'_> {
+impl ExactSizeIterator for MaterialStateRowsIter<'_> {
     fn len(&self) -> usize {
         self.remaining
     }
 }
-impl std::iter::FusedIterator for MaterialStateRowsIterV1<'_> {}
+impl std::iter::FusedIterator for MaterialStateRowsIter<'_> {}
 
 fn derive_territory_rows(
-    stable_graph: &StableGraphStateV1,
+    stable_graph: &StableGraphState,
     scenario_scope: &str,
     types: &TypeEnv,
     enums: &EnumRegistry,
-    resolver: &StableElementResolverV1,
+    resolver: &StableElementResolver,
     gate: &dyn MaterialAllocationGate,
-) -> Result<Vec<TerritoryStateRowV1>, MaterialStateErrorV1> {
+) -> Result<Vec<TerritoryStateRow>, MaterialStateError> {
     let stable_rows = stable_graph.rows();
     let territory_count = stable_rows
         .nodes()
@@ -1095,7 +1084,7 @@ fn derive_territory_rows(
         if node_type != "TERRITORY" {
             continue;
         }
-        let key = StableElementKeyV1::Node {
+        let key = StableElementKey::Node {
             scenario: copy_string("material territory key", scenario_scope, gate)?,
             local_name: copy_string("material territory key", local_name, gate)?,
         };
@@ -1148,23 +1137,19 @@ fn derive_territory_rows(
             let suffix = qname
                 .strip_prefix("territory/")
                 .filter(|suffix| !suffix.is_empty())
-                .ok_or(MaterialStateErrorV1::TerritoryFieldOwner)?;
+                .ok_or(MaterialStateError::TerritoryFieldOwner)?;
             let declaration = types
                 .fields
                 .get(qname)
-                .ok_or(MaterialStateErrorV1::TerritoryFieldUndeclared)?;
+                .ok_or(MaterialStateError::TerritoryFieldUndeclared)?;
             let name = copy_string("material territory field name", suffix, gate)?;
             gate.before_reserve("material territory field value", 1)?;
-            let value = project_stored_field_value_v1(
-                declaration,
-                binary64_bits,
-                currency_micro_units,
-                enums,
-            )
-            .map_err(map_stable_value)?;
+            let value =
+                project_stored_field_value(declaration, binary64_bits, currency_micro_units, enums)
+                    .map_err(map_stable_value)?;
             fields.push((name, value));
         }
-        output.push(TerritoryStateRowV1::try_from_projection(key, fields, gate)?);
+        output.push(TerritoryStateRow::try_from_projection(key, fields, gate)?);
     }
     output.sort_unstable_by(|left, right| left.primary_key.cmp(&right.primary_key));
     validate_source_order(&output, "territory", |row| &row.primary_key)?;
@@ -1176,13 +1161,13 @@ fn derive_territory_rows(
     reason = "one ordered merge must advance the field and presence cursors together"
 )]
 fn derive_organization_rows(
-    stable_graph: &StableGraphStateV1,
+    stable_graph: &StableGraphState,
     scenario_scope: &str,
     types: &TypeEnv,
     enums: &EnumRegistry,
-    resolver: &StableElementResolverV1,
+    resolver: &StableElementResolver,
     gate: &dyn MaterialAllocationGate,
-) -> Result<Vec<OrganizationStateRowV1>, MaterialStateErrorV1> {
+) -> Result<Vec<OrganizationStateRow>, MaterialStateError> {
     let stable_rows = stable_graph.rows();
     let organizations = stable_rows
         .nodes()
@@ -1198,7 +1183,7 @@ fn derive_organization_rows(
         if node_type != "ORGANIZATION" {
             continue;
         }
-        let key = StableElementKeyV1::Node {
+        let key = StableElementKey::Node {
             scenario: copy_string("material organization identity", scenario_scope, gate)?,
             local_name: copy_string("material organization identity", local_name, gate)?,
         };
@@ -1252,22 +1237,18 @@ fn derive_organization_rows(
             let suffix = qname
                 .strip_prefix("organization/")
                 .filter(|suffix| !suffix.is_empty())
-                .ok_or(MaterialStateErrorV1::OrganizationFieldOwner)?;
+                .ok_or(MaterialStateError::OrganizationFieldOwner)?;
             let declaration = types
                 .fields
                 .get(qname)
-                .ok_or(MaterialStateErrorV1::OrganizationFieldUndeclared)?;
+                .ok_or(MaterialStateError::OrganizationFieldUndeclared)?;
             gate.before_reserve("material organization field value", 1)?;
-            let value = project_stored_field_value_v1(
-                declaration,
-                binary64_bits,
-                currency_micro_units,
-                enums,
-            )
-            .map_err(map_stable_value)?;
+            let value =
+                project_stored_field_value(declaration, binary64_bits, currency_micro_units, enums)
+                    .map_err(map_stable_value)?;
             if suffix == "kind" {
                 if organization_kind.replace(value).is_some() {
-                    return Err(MaterialStateErrorV1::OrganizationKind);
+                    return Err(MaterialStateError::OrganizationKind);
                 }
             } else {
                 fields.push((
@@ -1276,12 +1257,12 @@ fn derive_organization_rows(
                 ));
             }
         }
-        let organization_kind = organization_kind.ok_or(MaterialStateErrorV1::OrganizationKind)?;
+        let organization_kind = organization_kind.ok_or(MaterialStateError::OrganizationKind)?;
         if !matches!(
             &organization_kind,
-            StableBslValueV1::Enum { enum_type, .. } if enum_type == "OrgKind"
+            StableBslValue::Enum { enum_type, .. } if enum_type == "OrgKind"
         ) {
-            return Err(MaterialStateErrorV1::OrganizationKind);
+            return Err(MaterialStateError::OrganizationKind);
         }
 
         while presence_edges
@@ -1304,7 +1285,7 @@ fn derive_organization_rows(
             gate,
         )?;
         for (_, _, target, _) in organization_presence {
-            let territory = StableElementKeyV1::Node {
+            let territory = StableElementKey::Node {
                 scenario: copy_string(
                     "material organization territory identity",
                     scenario_scope,
@@ -1325,7 +1306,7 @@ fn derive_organization_rows(
         territory_keys.sort_unstable_by(|left, right| left.0.cmp(&right.0));
         for pair in territory_keys.windows(2) {
             if pair[0].0 == pair[1].0 {
-                return Err(MaterialStateErrorV1::SourceRowOrder {
+                return Err(MaterialStateError::SourceRowOrder {
                     family: "organization territories",
                 });
             }
@@ -1338,7 +1319,7 @@ fn derive_organization_rows(
         for (_, territory) in territory_keys {
             territory_ids.push(territory);
         }
-        output.push(OrganizationStateRowV1::try_from_projection(
+        output.push(OrganizationStateRow::try_from_projection(
             key,
             organization_kind,
             territory_ids,
@@ -1352,9 +1333,9 @@ fn derive_organization_rows(
 }
 
 fn validate_presence_topology<'a>(
-    stable_graph: &'a StableGraphStateV1,
+    stable_graph: &'a StableGraphState,
     gate: &dyn MaterialAllocationGate,
-) -> Result<Vec<&'a StableGraphEdgeRowV1>, MaterialStateErrorV1> {
+) -> Result<Vec<&'a StableGraphEdgeRow>, MaterialStateError> {
     let stable_rows = stable_graph.rows();
     let presence_count = stable_rows
         .edges()
@@ -1371,11 +1352,11 @@ fn validate_presence_topology<'a>(
             continue;
         }
         let source_type = stable_node_type(stable_rows.nodes(), source)
-            .ok_or(MaterialStateErrorV1::OrganizationTerritoryPresence)?;
+            .ok_or(MaterialStateError::OrganizationTerritoryPresence)?;
         let target_type = stable_node_type(stable_rows.nodes(), target)
-            .ok_or(MaterialStateErrorV1::OrganizationTerritoryPresence)?;
+            .ok_or(MaterialStateError::OrganizationTerritoryPresence)?;
         if source_type != "ORGANIZATION" || target_type != "TERRITORY" {
-            return Err(MaterialStateErrorV1::OrganizationTerritoryPresence);
+            return Err(MaterialStateError::OrganizationTerritoryPresence);
         }
         presence_edges.push(edge);
     }
@@ -1436,37 +1417,34 @@ fn begin_row<'a>(
     tag: u8,
     key: &[u8],
     gate: &'a dyn MaterialAllocationGate,
-) -> Result<MaterialWriter<'a>, MaterialStateErrorV1> {
+) -> Result<MaterialWriter<'a>, MaterialStateError> {
     let mut writer = MaterialWriter::new("material row", gate);
     writer.extend(MATERIAL_ROW_DOMAIN)?;
-    writer.extend(&MATERIAL_LAYOUT_VERSION_V1.to_be_bytes())?;
+    writer.extend(&MATERIAL_LAYOUT_VERSION.to_be_bytes())?;
     writer.push(tag)?;
     append_bytes32(&mut writer, key)?;
     Ok(writer)
 }
 
-fn append_bytes32(
-    writer: &mut MaterialWriter<'_>,
-    value: &[u8],
-) -> Result<(), MaterialStateErrorV1> {
+fn append_bytes32(writer: &mut MaterialWriter<'_>, value: &[u8]) -> Result<(), MaterialStateError> {
     writer.extend(&checked_u32(writer.field, value.len())?.to_be_bytes())?;
     writer.extend(value)
 }
 
 fn append_stable_value(
     writer: &mut MaterialWriter<'_>,
-    value: &StableBslValueV1,
-) -> Result<(), MaterialStateErrorV1> {
+    value: &StableBslValue,
+) -> Result<(), MaterialStateError> {
     let mut bytes = Vec::new();
-    encode_stable_bsl_value_v1(value, &mut bytes).map_err(map_stable_value)?;
+    encode_stable_bsl_value(value, &mut bytes).map_err(map_stable_value)?;
     append_bytes32(writer, &bytes)
 }
 
 fn append_stable_key(
     writer: &mut MaterialWriter<'_>,
-    key: &StableElementKeyV1,
+    key: &StableElementKey,
     role: MaterialIdentityRole,
-) -> Result<(), MaterialStateErrorV1> {
+) -> Result<(), MaterialStateError> {
     let bytes = key.canonical_bytes().map_err(|error| match role {
         MaterialIdentityRole::Territory => map_territory_identity(error),
         MaterialIdentityRole::Organization => map_organization_identity(error),
@@ -1476,8 +1454,8 @@ fn append_stable_key(
 
 fn append_named_stable_values(
     writer: &mut MaterialWriter<'_>,
-    values: &[(String, StableBslValueV1)],
-) -> Result<(), MaterialStateErrorV1> {
+    values: &[(String, StableBslValue)],
+) -> Result<(), MaterialStateError> {
     writer.extend(&checked_u32(writer.field, values.len())?.to_be_bytes())?;
     for (name, value) in values {
         writer.str32(name)?;
@@ -1488,9 +1466,9 @@ fn append_named_stable_values(
 
 fn encode_world_register(
     qname: &str,
-    value: &StableBslValueV1,
+    value: &StableBslValue,
     gate: &dyn MaterialAllocationGate,
-) -> Result<Vec<u8>, MaterialStateErrorV1> {
+) -> Result<Vec<u8>, MaterialStateError> {
     let mut writer = begin_row(0x01, qname.as_bytes(), gate)?;
     writer.str32("qname")?;
     writer.str32(qname)?;
@@ -1500,10 +1478,10 @@ fn encode_world_register(
 }
 
 fn encode_territory(
-    territory_id: &StableElementKeyV1,
-    ordered_fields: &[(String, StableBslValueV1)],
+    territory_id: &StableElementKey,
+    ordered_fields: &[(String, StableBslValue)],
     gate: &dyn MaterialAllocationGate,
-) -> Result<Vec<u8>, MaterialStateErrorV1> {
+) -> Result<Vec<u8>, MaterialStateError> {
     let key = territory_id
         .canonical_bytes()
         .map_err(map_territory_identity)?;
@@ -1519,7 +1497,7 @@ fn encode_dynamic_hex(
     cell_id: H3CellId,
     values: [u64; 9],
     gate: &dyn MaterialAllocationGate,
-) -> Result<Vec<u8>, MaterialStateErrorV1> {
+) -> Result<Vec<u8>, MaterialStateError> {
     let mut writer = begin_row(0x03, &cell_id.to_be_bytes(), gate)?;
     writer.str32("cell_id")?;
     writer.extend(&cell_id.to_be_bytes())?;
@@ -1544,12 +1522,12 @@ fn encode_dynamic_hex(
 }
 
 fn encode_organization(
-    organization_id: &StableElementKeyV1,
-    organization_kind: &StableBslValueV1,
-    ordered_territory_ids: &[StableElementKeyV1],
-    ordered_fields: &[(String, StableBslValueV1)],
+    organization_id: &StableElementKey,
+    organization_kind: &StableBslValue,
+    ordered_territory_ids: &[StableElementKey],
+    ordered_fields: &[(String, StableBslValue)],
     gate: &dyn MaterialAllocationGate,
-) -> Result<Vec<u8>, MaterialStateErrorV1> {
+) -> Result<Vec<u8>, MaterialStateError> {
     let key = organization_id
         .canonical_bytes()
         .map_err(map_organization_identity)?;
@@ -1577,10 +1555,10 @@ fn encode_source_batch<'a>(
     rows: impl Iterator<Item = &'a [u8]>,
     row_count: usize,
     gate: &dyn MaterialAllocationGate,
-) -> Result<Vec<u8>, MaterialStateErrorV1> {
+) -> Result<Vec<u8>, MaterialStateError> {
     let mut writer = MaterialWriter::new("material source batch", gate);
     writer.extend(MATERIAL_SOURCE_DOMAIN)?;
-    writer.extend(&MATERIAL_LAYOUT_VERSION_V1.to_be_bytes())?;
+    writer.extend(&MATERIAL_LAYOUT_VERSION.to_be_bytes())?;
     writer.push(family_tag)?;
     writer.extend(&checked_u32(writer.field, row_count)?.to_be_bytes())?;
     for row in rows {
@@ -1590,12 +1568,12 @@ fn encode_source_batch<'a>(
 }
 
 fn encode_material_batches(
-    world_registers: &WorldRegisterRowsV1,
-    territories: &TerritoryStateRowsV1,
-    dynamic_hexes: &DynamicHexStateRowsV1,
-    organizations: &OrganizationStateRowsV1,
+    world_registers: &WorldRegisterRows,
+    territories: &TerritoryStateRows,
+    dynamic_hexes: &DynamicHexStateRows,
+    organizations: &OrganizationStateRows,
     gate: &dyn MaterialAllocationGate,
-) -> Result<Vec<u8>, MaterialStateErrorV1> {
+) -> Result<Vec<u8>, MaterialStateError> {
     let total = checked_sum(
         "material row count",
         [
@@ -1607,29 +1585,29 @@ fn encode_material_batches(
     )?;
     let mut writer = MaterialWriter::new("material state rows", gate);
     writer.extend(MATERIAL_ROWS_DOMAIN)?;
-    writer.extend(&MATERIAL_LAYOUT_VERSION_V1.to_be_bytes())?;
+    writer.extend(&MATERIAL_LAYOUT_VERSION.to_be_bytes())?;
     writer.extend(&checked_u32(writer.field, total)?.to_be_bytes())?;
     for row in world_registers
         .rows()
         .iter()
-        .map(WorldRegisterRowV1::canonical_bytes)
+        .map(WorldRegisterRow::canonical_bytes)
         .chain(
             territories
                 .rows()
                 .iter()
-                .map(TerritoryStateRowV1::canonical_bytes),
+                .map(TerritoryStateRow::canonical_bytes),
         )
         .chain(
             dynamic_hexes
                 .rows()
                 .iter()
-                .map(DynamicHexStateRowV1::canonical_bytes),
+                .map(DynamicHexStateRow::canonical_bytes),
         )
         .chain(
             organizations
                 .rows()
                 .iter()
-                .map(OrganizationStateRowV1::canonical_bytes),
+                .map(OrganizationStateRow::canonical_bytes),
         )
     {
         append_bytes32(&mut writer, row)?;
@@ -1644,16 +1622,16 @@ enum MaterialIdentityRole {
 }
 
 fn require_node_key(
-    key: &StableElementKeyV1,
+    key: &StableElementKey,
     role: MaterialIdentityRole,
-) -> Result<(), MaterialStateErrorV1> {
-    if !matches!(key, StableElementKeyV1::Node { .. }) {
+) -> Result<(), MaterialStateError> {
+    if !matches!(key, StableElementKey::Node { .. }) {
         return Err(match role {
             MaterialIdentityRole::Territory => {
-                MaterialStateErrorV1::TerritoryIdentity(StableIdentityError::ElementNotSealed)
+                MaterialStateError::TerritoryIdentity(StableIdentityError::ElementNotSealed)
             }
             MaterialIdentityRole::Organization => {
-                MaterialStateErrorV1::OrganizationIdentity(StableIdentityError::ElementNotSealed)
+                MaterialStateError::OrganizationIdentity(StableIdentityError::ElementNotSealed)
             }
         });
     }
@@ -1664,23 +1642,23 @@ fn require_node_key(
 }
 
 fn validate_territory(
-    resolver: &StableElementResolverV1,
-    key: &StableElementKeyV1,
-) -> Result<(), MaterialStateErrorV1> {
+    resolver: &StableElementResolver,
+    key: &StableElementKey,
+) -> Result<(), MaterialStateError> {
     match resolver.sealed_node_has_type(key, "TERRITORY") {
         Ok(true) => Ok(()),
-        Ok(false) => Err(MaterialStateErrorV1::TerritoryNodeType),
+        Ok(false) => Err(MaterialStateError::TerritoryNodeType),
         Err(error) => Err(map_territory_identity(error)),
     }
 }
 
 fn validate_organization(
-    resolver: &StableElementResolverV1,
-    key: &StableElementKeyV1,
-) -> Result<(), MaterialStateErrorV1> {
+    resolver: &StableElementResolver,
+    key: &StableElementKey,
+) -> Result<(), MaterialStateError> {
     match resolver.sealed_node_has_type(key, "ORGANIZATION") {
         Ok(true) => Ok(()),
-        Ok(false) => Err(MaterialStateErrorV1::OrganizationNodeType),
+        Ok(false) => Err(MaterialStateError::OrganizationNodeType),
         Err(error) => Err(map_organization_identity(error)),
     }
 }
@@ -1688,12 +1666,12 @@ fn validate_organization(
 fn validate_name_order<'a>(
     family: &'static str,
     names: impl Iterator<Item = &'a str>,
-) -> Result<(), MaterialStateErrorV1> {
+) -> Result<(), MaterialStateError> {
     let mut prior: Option<&str> = None;
     for name in names {
         validate_nonempty_ascii("material field name", name)?;
         if prior.is_some_and(|prior| prior.as_bytes() >= name.as_bytes()) {
-            return Err(MaterialStateErrorV1::NamedFieldOrder { family });
+            return Err(MaterialStateError::NamedFieldOrder { family });
         }
         prior = Some(name);
     }
@@ -1704,19 +1682,19 @@ fn validate_source_order<T>(
     rows: &[T],
     family: &'static str,
     bytes: impl Fn(&T) -> &[u8],
-) -> Result<(), MaterialStateErrorV1> {
+) -> Result<(), MaterialStateError> {
     if rows
         .windows(2)
         .any(|pair| bytes(&pair[0]) >= bytes(&pair[1]))
     {
-        return Err(MaterialStateErrorV1::SourceRowOrder { family });
+        return Err(MaterialStateError::SourceRowOrder { family });
     }
     Ok(())
 }
 
-fn validate_nonempty_ascii(field: &'static str, value: &str) -> Result<(), MaterialStateErrorV1> {
+fn validate_nonempty_ascii(field: &'static str, value: &str) -> Result<(), MaterialStateError> {
     if value.is_empty() || value.len() > 128 || !value.bytes().all(|byte| byte.is_ascii_graphic()) {
-        return Err(MaterialStateErrorV1::StableValue(
+        return Err(MaterialStateError::StableValue(
             IdentityCodecError::InvalidString {
                 field,
                 index: value.len(),
@@ -1730,50 +1708,50 @@ fn checked_add(
     field: &'static str,
     left: usize,
     right: usize,
-) -> Result<usize, MaterialStateErrorV1> {
+) -> Result<usize, MaterialStateError> {
     left.checked_add(right)
-        .ok_or(MaterialStateErrorV1::CapacityOverflow { field })
+        .ok_or(MaterialStateError::CapacityOverflow { field })
 }
 
 fn checked_sum<const N: usize>(
     field: &'static str,
     values: [usize; N],
-) -> Result<usize, MaterialStateErrorV1> {
+) -> Result<usize, MaterialStateError> {
     values
         .into_iter()
         .try_fold(0_usize, |total, value| checked_add(field, total, value))
 }
 
-fn checked_u32(field: &'static str, value: usize) -> Result<u32, MaterialStateErrorV1> {
-    u32::try_from(value).map_err(|_| MaterialStateErrorV1::IntegerConversion { field, value })
+fn checked_u32(field: &'static str, value: usize) -> Result<u32, MaterialStateError> {
+    u32::try_from(value).map_err(|_| MaterialStateError::IntegerConversion { field, value })
 }
 
-fn map_territory_identity(error: StableIdentityError) -> MaterialStateErrorV1 {
+fn map_territory_identity(error: StableIdentityError) -> MaterialStateError {
     match error {
         StableIdentityError::Allocation { field, requested } => {
-            MaterialStateErrorV1::Allocation { field, requested }
+            MaterialStateError::Allocation { field, requested }
         }
-        other => MaterialStateErrorV1::TerritoryIdentity(other),
+        other => MaterialStateError::TerritoryIdentity(other),
     }
 }
 
-fn map_organization_identity(error: StableIdentityError) -> MaterialStateErrorV1 {
+fn map_organization_identity(error: StableIdentityError) -> MaterialStateError {
     match error {
         StableIdentityError::Allocation { field, requested } => {
-            MaterialStateErrorV1::Allocation { field, requested }
+            MaterialStateError::Allocation { field, requested }
         }
-        other => MaterialStateErrorV1::OrganizationIdentity(other),
+        other => MaterialStateError::OrganizationIdentity(other),
     }
 }
 
-fn map_stable_value(error: IdentityCodecError) -> MaterialStateErrorV1 {
+fn map_stable_value(error: IdentityCodecError) -> MaterialStateError {
     match error {
         IdentityCodecError::Allocation { field, requested }
         | IdentityCodecError::StableIdentity(StableIdentityError::Allocation {
             field,
             requested,
-        }) => MaterialStateErrorV1::Allocation { field, requested },
-        other => MaterialStateErrorV1::StableValue(other),
+        }) => MaterialStateError::Allocation { field, requested },
+        other => MaterialStateError::StableValue(other),
     }
 }
 
@@ -1781,12 +1759,12 @@ fn copy_string(
     field: &'static str,
     source: &str,
     gate: &dyn MaterialAllocationGate,
-) -> Result<String, MaterialStateErrorV1> {
+) -> Result<String, MaterialStateError> {
     gate.before_reserve(field, source.len())?;
     let mut output = String::new();
     output
         .try_reserve_exact(source.len())
-        .map_err(|_: TryReserveError| MaterialStateErrorV1::Allocation {
+        .map_err(|_: TryReserveError| MaterialStateError::Allocation {
             field,
             requested: source.len(),
         })?;
@@ -1798,11 +1776,11 @@ fn reserve_vec<T>(
     field: &'static str,
     requested: usize,
     gate: &dyn MaterialAllocationGate,
-) -> Result<Vec<T>, MaterialStateErrorV1> {
+) -> Result<Vec<T>, MaterialStateError> {
     gate.before_reserve(field, requested)?;
     let mut output = Vec::new();
     output
         .try_reserve_exact(requested)
-        .map_err(|_: TryReserveError| MaterialStateErrorV1::Allocation { field, requested })?;
+        .map_err(|_: TryReserveError| MaterialStateError::Allocation { field, requested })?;
     Ok(output)
 }

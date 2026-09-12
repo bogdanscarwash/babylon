@@ -5,8 +5,10 @@
 use std::collections::BTreeMap;
 
 use babylon_persistence::{
-    ProductionDeliveryEvidenceV1, ProductionDeliveryStageV1, ProductionEventV1, ProductionRouteV2,
-    ProductionSiteV2, ProductionSnapshotV2,
+    production_observation::ProductionDeliveryEvidence,
+    production_observation::ProductionDeliveryStage, production_observation::ProductionEvent,
+    production_observation::ProductionRoute, production_observation::ProductionSite,
+    production_observation::ProductionSnapshot,
 };
 
 /// Wrap this key in the current `ObservationContext` before storing expansion.
@@ -22,7 +24,7 @@ pub(super) struct DeliveryGroupKey {
 }
 
 impl DeliveryGroupKey {
-    fn new(event: &ProductionEventV1, evidence: &ProductionDeliveryEvidenceV1) -> Self {
+    fn new(event: &ProductionEvent, evidence: &ProductionDeliveryEvidence) -> Self {
         Self {
             period: event.period,
             receipt_digest: event.receipt_digest.clone(),
@@ -45,10 +47,10 @@ pub(super) struct DeliveryStageTotal {
 #[derive(Debug)]
 pub(super) struct DeliveryGroup<'a> {
     pub key: DeliveryGroupKey,
-    pub route: &'a ProductionRouteV2,
-    pub supplier: &'a ProductionSiteV2,
-    pub buyer: &'a ProductionSiteV2,
-    pub events: Vec<&'a ProductionEventV1>,
+    pub route: &'a ProductionRoute,
+    pub supplier: &'a ProductionSite,
+    pub buyer: &'a ProductionSite,
+    pub events: Vec<&'a ProductionEvent>,
     pub arrivals: Option<DeliveryStageTotal>,
     pub deliveries: Option<DeliveryStageTotal>,
     pub realizations: Option<DeliveryStageTotal>,
@@ -70,13 +72,13 @@ impl<'a> DeliveryGroup<'a> {
 
     fn push(
         &mut self,
-        event: &'a ProductionEventV1,
-        evidence: &ProductionDeliveryEvidenceV1,
+        event: &'a ProductionEvent,
+        evidence: &ProductionDeliveryEvidence,
     ) -> Result<(), DeliveryGroupingError> {
         let total = match evidence.stage {
-            ProductionDeliveryStageV1::Arrival => &mut self.arrivals,
-            ProductionDeliveryStageV1::Delivery => &mut self.deliveries,
-            ProductionDeliveryStageV1::QuantityRealization => &mut self.realizations,
+            ProductionDeliveryStage::Arrival => &mut self.arrivals,
+            ProductionDeliveryStage::Delivery => &mut self.deliveries,
+            ProductionDeliveryStage::QuantityRealization => &mut self.realizations,
         };
         let prior = total.unwrap_or(DeliveryStageTotal {
             quantity: 0,
@@ -131,7 +133,7 @@ impl<'a> DeliveryGroup<'a> {
 
 #[derive(Debug)]
 pub(super) enum DeliveryLogEntry<'a> {
-    Event(&'a ProductionEventV1),
+    Event(&'a ProductionEvent),
     Delivery(Box<DeliveryGroup<'a>>),
 }
 
@@ -180,9 +182,9 @@ impl std::fmt::Display for DeliveryGroupingError {
 }
 
 struct DisclosedRoute<'a> {
-    route: &'a ProductionRouteV2,
-    supplier: &'a ProductionSiteV2,
-    buyer: &'a ProductionSiteV2,
+    route: &'a ProductionRoute,
+    supplier: &'a ProductionSite,
+    buyer: &'a ProductionSite,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -210,8 +212,8 @@ struct OrderBindings<'a> {
 impl<'a> OrderBindings<'a> {
     fn record(
         &mut self,
-        event: &'a ProductionEventV1,
-        evidence: &'a ProductionDeliveryEvidenceV1,
+        event: &'a ProductionEvent,
+        evidence: &'a ProductionDeliveryEvidence,
         disclosed: &DisclosedRoute<'a>,
     ) -> Result<(), DeliveryGroupingError> {
         let key = OrderReceiptKey {
@@ -234,12 +236,12 @@ impl<'a> OrderBindings<'a> {
 }
 
 struct DisclosedRoutes<'a> {
-    routes: BTreeMap<&'a str, &'a ProductionRouteV2>,
-    sites: BTreeMap<&'a str, &'a ProductionSiteV2>,
+    routes: BTreeMap<&'a str, &'a ProductionRoute>,
+    sites: BTreeMap<&'a str, &'a ProductionSite>,
 }
 
 impl<'a> DisclosedRoutes<'a> {
-    fn new(snapshot: &'a ProductionSnapshotV2) -> Result<Self, DeliveryGroupingError> {
+    fn new(snapshot: &'a ProductionSnapshot) -> Result<Self, DeliveryGroupingError> {
         let mut routes = BTreeMap::new();
         for route in &snapshot.routes {
             if routes.insert(route.id.as_str(), route).is_some() {
@@ -257,8 +259,8 @@ impl<'a> DisclosedRoutes<'a> {
 
     fn resolve(
         &self,
-        event: &ProductionEventV1,
-        evidence: &ProductionDeliveryEvidenceV1,
+        event: &ProductionEvent,
+        evidence: &ProductionDeliveryEvidence,
     ) -> Result<DisclosedRoute<'a>, DeliveryGroupingError> {
         if evidence.quantity == 0 {
             return Err(DeliveryGroupingError::QuantityRange);
@@ -306,7 +308,7 @@ impl<'a> DisclosedRoutes<'a> {
 /// No endpoint, total, or label comes from a cache or another observation.
 /// Stage metadata, not descriptions or labels, determines membership.
 pub(super) fn delivery_log_entries(
-    snapshot: &ProductionSnapshotV2,
+    snapshot: &ProductionSnapshot,
     limit: usize,
 ) -> Result<DeliveryLog<'_>, DeliveryGroupingError> {
     let routes = DisclosedRoutes::new(snapshot)?;
@@ -346,35 +348,37 @@ pub(super) fn delivery_log_entries(
 mod tests {
     use super::*;
 
-    fn site(id: &str, name: &str) -> ProductionSiteV2 {
-        ProductionSiteV2 {
+    fn site(id: &str, name: &str) -> ProductionSite {
+        ProductionSite {
             id: id.into(),
             county_geoid: "26163".into(),
             name: name.into(),
             industry_code: "331".into(),
             observed_employment: None,
             inventory: vec![],
-            role: babylon_persistence::ProductionSiteRoleV2::Production,
+            role: babylon_persistence::production_observation::ProductionSiteRole::Production,
             sector_code: "31-33".into(),
-            processes: vec![babylon_persistence::ProductionProcessV2 {
-                id: "fixture-process".into(),
-                name: "Fixture process".into(),
-                output_good_id: "sheet".into(),
-                output_unit_id: "tonnes".into(),
-                output_good: "Sheet metal".into(),
-                output_unit: "tonnes".into(),
-                output_per_batch: 1,
-                available_batches: 1,
-                planned_batches: None,
-                produced_batches: None,
-                inputs: vec![],
-                labor: vec![],
-            }],
+            processes: vec![
+                babylon_persistence::production_observation::ProductionProcess {
+                    id: "fixture-process".into(),
+                    name: "Fixture process".into(),
+                    output_good_id: "sheet".into(),
+                    output_unit_id: "tonnes".into(),
+                    output_good: "Sheet metal".into(),
+                    output_unit: "tonnes".into(),
+                    output_per_batch: 1,
+                    available_batches: 1,
+                    planned_batches: None,
+                    produced_batches: None,
+                    inputs: vec![],
+                    labor: vec![],
+                },
+            ],
         }
     }
 
-    fn snapshot() -> ProductionSnapshotV2 {
-        ProductionSnapshotV2 {
+    fn snapshot() -> ProductionSnapshot {
+        ProductionSnapshot {
             content_authority_sha256: "a".repeat(64),
             road_source: None,
             physical_edges: Vec::new(),
@@ -387,10 +391,11 @@ mod tests {
                 site("supplier", "Wayne metal"),
                 site("buyer", "Macomb parts"),
             ],
-            routes: vec![ProductionRouteV2 {
+            routes: vec![ProductionRoute {
                 physical_edge_ids: Vec::new(),
                 distance_mm: None,
-                transport_kind: babylon_persistence::ProductionRouteTransportV2::Staged,
+                transport_kind:
+                    babylon_persistence::production_observation::ProductionRouteTransport::Staged,
                 grams_per_unit: 1000,
                 stages: Vec::new(),
                 id: "route".into(),
@@ -421,19 +426,19 @@ mod tests {
 
     fn event(
         id: &str,
-        stage: ProductionDeliveryStageV1,
+        stage: ProductionDeliveryStage,
         quantity: u64,
         order: &str,
         period: u64,
-    ) -> ProductionEventV1 {
-        ProductionEventV1 {
+    ) -> ProductionEvent {
+        ProductionEvent {
             id: id.into(),
             period,
             subject_site_ids: vec!["supplier".into(), "buyer".into()],
             kind: "Display text is not an identity".into(),
             description: "Preserve this original committed description.".into(),
             receipt_digest: format!("receipt-{period}"),
-            delivery_evidence: Some(ProductionDeliveryEvidenceV1 {
+            delivery_evidence: Some(ProductionDeliveryEvidence {
                 stage,
                 order_id: order.into(),
                 route_id: "route".into(),
@@ -444,11 +449,11 @@ mod tests {
         }
     }
 
-    fn triplet(order: &str, period: u64, quantity: u64) -> Vec<ProductionEventV1> {
+    fn triplet(order: &str, period: u64, quantity: u64) -> Vec<ProductionEvent> {
         [
-            ProductionDeliveryStageV1::Arrival,
-            ProductionDeliveryStageV1::Delivery,
-            ProductionDeliveryStageV1::QuantityRealization,
+            ProductionDeliveryStage::Arrival,
+            ProductionDeliveryStage::Delivery,
+            ProductionDeliveryStage::QuantityRealization,
         ]
         .into_iter()
         .enumerate()
@@ -529,11 +534,11 @@ mod tests {
     fn missing_stages_are_unknown_and_never_promoted_to_delivery() {
         let cases = [
             (
-                ProductionDeliveryStageV1::Arrival,
+                ProductionDeliveryStage::Arrival,
                 "Sheet metal arrived at Macomb parts",
             ),
             (
-                ProductionDeliveryStageV1::QuantityRealization,
+                ProductionDeliveryStage::QuantityRealization,
                 "Quantity realization recorded for Sheet metal at Macomb parts",
             ),
         ];
@@ -555,13 +560,7 @@ mod tests {
         let log = delivery_log_entries(&snapshot, 160).unwrap();
         assert!(log.entries.is_empty());
         assert_eq!((log.total_entries, log.evidence_entries), (0, 0));
-        let mut standalone = event(
-            "dispatch",
-            ProductionDeliveryStageV1::Delivery,
-            4,
-            "order",
-            1,
-        );
+        let mut standalone = event("dispatch", ProductionDeliveryStage::Delivery, 4, "order", 1);
         standalone.delivery_evidence = None;
         snapshot.events.push(standalone);
         let log = delivery_log_entries(&snapshot, 160).unwrap();
@@ -587,7 +586,7 @@ mod tests {
         ];
         let mut last = event(
             "production",
-            ProductionDeliveryStageV1::Delivery,
+            ProductionDeliveryStage::Delivery,
             4,
             "unused",
             3,
@@ -776,7 +775,7 @@ mod tests {
         assert_eq!(group(&log, 0).deliveries.unwrap().quantity, u64::MAX);
         snapshot.events.push(event(
             "overflow",
-            ProductionDeliveryStageV1::Delivery,
+            ProductionDeliveryStage::Delivery,
             1,
             "order",
             2,

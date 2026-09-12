@@ -154,7 +154,7 @@ laws:
   - STRIKE targets only LABOR_PROCESS
   - a strike parameter cannot name participation or withholding
   - acceptance grants no material eligibility and changes no game state
-  - current and current decoders refuse the other domain
+  - unsupported schema versions or domains refuse
 
 error_codes:
   intent_domain: 1

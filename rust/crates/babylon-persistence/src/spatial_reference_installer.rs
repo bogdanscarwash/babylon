@@ -1,6 +1,6 @@
 //! Transactional installation of the exact PER-278 spatial reference bundle.
 
-use babylon_kernel::tick_content_hash::RefDigestV1;
+use babylon_kernel::tick_content_hash::RefDigest;
 use babylon_kernel::H3CellId;
 use postgres::{Client, Config, GenericClient, IsolationLevel, NoTls, Row, Transaction};
 
@@ -8,11 +8,16 @@ use crate::current_schema::{bounded_config, require_current_schema, CurrentSchem
 use crate::postgres_catalog::{
     acquire_lock, release_lock, validate_connection_target, CatalogError,
 };
-use crate::postgres_diagnostic::PostgresDiagnosticV1;
+use crate::postgres_diagnostic::PostgresDiagnostic;
 use crate::{
-    michigan_spatial_reference_products_v1, CountyH3LandAreaRow, CountyIdentityRow,
-    CountyPlaceH3LandAreaRow, H3CountRow, H3LandFractionRow, H3ReferenceCohort, PlaceIdentityRow,
-    ReferenceProduct, SpatialReferenceProducts, SpatialReferenceProductsError,
+    h3_reference_cohort::H3ReferenceCohort,
+    spatial_reference_products::michigan_spatial_reference_products,
+    spatial_reference_products::CountyH3LandAreaRow, spatial_reference_products::CountyIdentityRow,
+    spatial_reference_products::CountyPlaceH3LandAreaRow, spatial_reference_products::H3CountRow,
+    spatial_reference_products::H3LandFractionRow, spatial_reference_products::PlaceIdentityRow,
+    spatial_reference_products::ReferenceProduct,
+    spatial_reference_products::SpatialReferenceProducts,
+    spatial_reference_products::SpatialReferenceProductsError,
 };
 
 const INSTALL_BATCH_ROWS: usize = 1_024;
@@ -178,7 +183,7 @@ pub enum SpatialReferenceInstallError {
     CurrentSchema(CurrentSchemaError),
     Database {
         operation: SpatialReferenceInstallOperation,
-        diagnostic: Option<PostgresDiagnosticV1>,
+        diagnostic: Option<PostgresDiagnostic>,
     },
     Decode {
         operation: SpatialReferenceInstallOperation,
@@ -228,7 +233,7 @@ impl std::error::Error for SpatialReferenceInstallError {}
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SpatialReferenceInstallReport {
     disposition: SpatialReferenceInstallDisposition,
-    ref_digest: RefDigestV1,
+    ref_digest: RefDigest,
     product_count: usize,
     data_row_count: usize,
     commit_attempts: usize,
@@ -241,7 +246,7 @@ impl SpatialReferenceInstallReport {
     }
 
     #[must_use]
-    pub const fn ref_digest(&self) -> RefDigestV1 {
+    pub const fn ref_digest(&self) -> RefDigest {
         self.ref_digest
     }
 
@@ -300,7 +305,7 @@ where
         &SpatialReferenceProducts,
     ) -> Result<CommitAttempt, SpatialReferenceInstallError>,
 {
-    let bundle = michigan_spatial_reference_products_v1(cohort)
+    let bundle = michigan_spatial_reference_products(cohort)
         .map_err(SpatialReferenceInstallError::Bundle)?;
     validate_connection_target(config).map_err(SpatialReferenceInstallError::ConnectionTarget)?;
     let bounded = bounded_config(config);
@@ -1179,7 +1184,7 @@ fn postgres_database_error(
 ) -> SpatialReferenceInstallError {
     SpatialReferenceInstallError::Database {
         operation,
-        diagnostic: Some(PostgresDiagnosticV1::capture(error)),
+        diagnostic: Some(PostgresDiagnostic::capture(error)),
     }
 }
 

@@ -1,5 +1,5 @@
-use babylon_kernel::replay::{ReplaySeed, ReplaySessionIdV1, RngDomainV2};
-use babylon_kernel::{seed_for, KernelRng};
+use babylon_kernel::replay::{ReplaySeed, ReplaySessionId, RngDomain};
+use babylon_kernel::{rng::seed_for, rng::KernelRng};
 use sha2::{Digest, Sha256};
 
 const VECTOR_SEED: i64 = -72_623_859_790_382_856;
@@ -23,10 +23,10 @@ const EXPECTED_DRAWS: [u64; 9] = [
 ];
 
 #[test]
-fn v2_preimage_key_and_stream_match_the_language_neutral_vector() {
-    let session = ReplaySessionIdV1::try_from("per60-replay/A9!").unwrap();
+fn preimage_key_and_stream_match_the_language_neutral_vector() {
+    let session = ReplaySessionId::try_from("per60-replay/A9!").unwrap();
     let seed = ReplaySeed::new(VECTOR_SEED);
-    let domain = RngDomainV2::try_from("vitality/per60-vector").unwrap();
+    let domain = RngDomain::try_from("vitality/per60-vector").unwrap();
 
     let independent_preimage = [
         b"babylon.rng-stream\0".as_slice(),
@@ -65,12 +65,12 @@ fn v2_preimage_key_and_stream_match_the_language_neutral_vector() {
 }
 
 #[test]
-fn v2_seed_derivation_changes_when_any_identity_component_changes() {
-    let session = ReplaySessionIdV1::try_from("per60-replay/A9!").unwrap();
-    let other_session = ReplaySessionIdV1::try_from("per60-replay/A9?").unwrap();
+fn seed_derivation_changes_when_any_identity_component_changes() {
+    let session = ReplaySessionId::try_from("per60-replay/A9!").unwrap();
+    let other_session = ReplaySessionId::try_from("per60-replay/A9?").unwrap();
     let seed = ReplaySeed::new(VECTOR_SEED);
-    let domain = RngDomainV2::try_from("vitality/per60-vector").unwrap();
-    let other_domain = RngDomainV2::try_from("vitality/per60-vectos").unwrap();
+    let domain = RngDomain::try_from("vitality/per60-vector").unwrap();
+    let other_domain = RngDomain::try_from("vitality/per60-vectos").unwrap();
     let original = seed_for(&session, seed, VECTOR_TICK, &domain, VECTOR_CARRIER).unwrap();
 
     assert_ne!(

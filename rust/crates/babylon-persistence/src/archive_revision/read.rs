@@ -5,24 +5,23 @@ use postgres::{GenericClient, IsolationLevel};
 use super::record::RevisionRecord;
 use super::storage::{self, signed, unsigned, ReadAuthority};
 use super::{
-    ArchiveDossierBoundsV2, ArchiveDossierLinkV2, ArchiveDossierPageV2, ArchiveDossierPendingV2,
-    ArchiveDossierReadV2, ArchiveDossierStateV2, ArchiveDossierUnavailableV2,
-    ArchiveLinkedPageStateV2, ArchiveReadScopeV2, ArchiveSearchHitV2, ArchiveSearchReadV2,
-    ArchiveSearchStateV2,
+    ArchiveDossierBounds, ArchiveDossierLink, ArchiveDossierPage, ArchiveDossierPending,
+    ArchiveDossierRead, ArchiveDossierState, ArchiveDossierUnavailable, ArchiveLinkedPageState,
+    ArchiveReadScope, ArchiveSearchHit, ArchiveSearchRead, ArchiveSearchState,
 };
 use crate::archive::{database, decode, decode_digest, decode_subject_kind, validate_text};
 use crate::{
-    ArchivePageRefV1, SemanticArchiveErrorV1, SemanticArchiveReaderErrorV1, SemanticArchiveReaderV1,
+    ArchivePageRef, SemanticArchiveError, SemanticArchiveReader, SemanticArchiveReaderError,
 };
 
 #[derive(Clone, Debug)]
 pub(super) struct ReadStatus {
     pub durable: u64,
     pub processed: u64,
-    pub pending: Option<ArchiveDossierPendingV2>,
+    pub pending: Option<ArchiveDossierPending>,
 }
 
-impl SemanticArchiveReaderV1 {
+impl SemanticArchiveReader {
     /// Read one exact retained dossier through the sole confined revision path.
     ///
     /// # Errors
@@ -30,10 +29,10 @@ impl SemanticArchiveReaderV1 {
     /// cursors, reader privilege drift, and database failures.
     pub fn dossier_as_of(
         &self,
-        scope: &ArchiveReadScopeV2,
-        subject: &ArchivePageRefV1,
-        bounds: &ArchiveDossierBoundsV2,
-    ) -> Result<ArchiveDossierReadV2, SemanticArchiveReaderErrorV1> {
+        scope: &ArchiveReadScope,
+        subject: &ArchivePageRef,
+        bounds: &ArchiveDossierBounds,
+    ) -> Result<ArchiveDossierRead, SemanticArchiveReaderError> {
         let mut client = self.connect("connect scoped Archive dossier")?;
         let mut tx = client
             .build_transaction()
@@ -45,7 +44,7 @@ impl SemanticArchiveReaderV1 {
         let state = dossier_state(&mut tx, scope, subject, bounds, &status).map_err(boundary)?;
         tx.commit()
             .map_err(|error| boundary(database("commit scoped Archive dossier read", &error)))?;
-        Ok(ArchiveDossierReadV2 {
+        Ok(ArchiveDossierRead {
             scope: scope.clone(),
             subject: subject.clone(),
             durable_tick: status.durable,
@@ -61,15 +60,15 @@ impl SemanticArchiveReaderV1 {
     /// and database failures. Pending results never claim complete coverage.
     pub fn search_as_of(
         &self,
-        scope: &ArchiveReadScopeV2,
+        scope: &ArchiveReadScope,
         query: &str,
         limit: u32,
-    ) -> Result<ArchiveSearchReadV2, SemanticArchiveReaderErrorV1> {
+    ) -> Result<ArchiveSearchRead, SemanticArchiveReaderError> {
         if !(1..=100).contains(&limit) {
-            return Err(boundary(SemanticArchiveErrorV1::CollectionBound));
+            return Err(boundary(SemanticArchiveError::CollectionBound));
         }
         if query.trim().is_empty() {
-            return Err(boundary(SemanticArchiveErrorV1::InvalidText));
+            return Err(boundary(SemanticArchiveError::InvalidText));
         }
         validate_text(query).map_err(boundary)?;
         let mut client = self.connect("connect scoped Archive search")?;
@@ -80,7 +79,7 @@ impl SemanticArchiveReaderV1 {
             .start()
             .map_err(|error| boundary(database("begin scoped Archive search", &error)))?;
         let status = read_status(&mut tx, scope).map_err(boundary)?;
-        let mut result = ArchiveSearchReadV2 {
+        let mut result = ArchiveSearchRead {
             scope: scope.clone(),
             durable_tick: status.durable,
             processed_tick: status.processed,
@@ -88,7 +87,7 @@ impl SemanticArchiveReaderV1 {
             hits: Vec::new(),
             truncated: false,
         };
-        if !matches!(result.state, ArchiveSearchStateV2::Unavailable(_)) {
+        if !matches!(result.state, ArchiveSearchState::Unavailable(_)) {
             search_hits(&mut tx, scope, query, limit, &mut result).map_err(boundary)?;
         }
         tx.commit()
@@ -97,14 +96,14 @@ impl SemanticArchiveReaderV1 {
     }
 }
 
-fn boundary(error: SemanticArchiveErrorV1) -> SemanticArchiveReaderErrorV1 {
-    SemanticArchiveReaderErrorV1::Archive(error)
+fn boundary(error: SemanticArchiveError) -> SemanticArchiveReaderError {
+    SemanticArchiveReaderError::Archive(error)
 }
 
 pub(super) fn read_status(
     client: &mut impl GenericClient,
-    scope: &ArchiveReadScopeV2,
-) -> Result<ReadStatus, SemanticArchiveErrorV1> {
+    scope: &ArchiveReadScope,
+) -> Result<ReadStatus, SemanticArchiveError> {
     let campaign = scope.campaign_id();
     verify_marker(client, scope)?;
     let row = client
@@ -114,13 +113,13 @@ pub(super) fn read_status(
             &[campaign.as_uuid()],
         )
         .map_err(|error| database("read scoped Archive progress", &error))?
-        .ok_or(SemanticArchiveErrorV1::StoredPageMismatch)?;
+        .ok_or(SemanticArchiveError::StoredPageMismatch)?;
     let durable = unsigned(decode(&row, 0)?)?;
     let processed = unsigned(decode(&row, 1)?)?;
     if processed > durable || scope.tick() > durable {
-        return Err(SemanticArchiveErrorV1::StoredPageMismatch);
+        return Err(SemanticArchiveError::StoredPageMismatch);
     }
-    let pending = (processed < scope.tick()).then_some(ArchiveDossierPendingV2::ReceiptProcessing);
+    let pending = (processed < scope.tick()).then_some(ArchiveDossierPending::ReceiptProcessing);
     let mut status = ReadStatus {
         durable,
         processed,
@@ -137,15 +136,15 @@ pub(super) fn read_status(
         if let Some(pin) = pin {
             if Some(decode_digest(&pin, 0)?) != scope.tick_content_hash()
                 || !decode::<bool>(&pin, 1)?
-                || decode_digest(&pin, 3)? != crate::archive_worker_contract_sha256_v1()
+                || decode_digest(&pin, 3)? != crate::archive_worker_contract_sha256()
             {
-                return Err(SemanticArchiveErrorV1::StoredPageMismatch);
+                return Err(SemanticArchiveError::StoredPageMismatch);
             }
             if status.pending.is_none() && scope.tick() == durable && decode::<bool>(&pin, 2)? {
-                status.pending = Some(ArchiveDossierPendingV2::KnowledgeRefresh);
+                status.pending = Some(ArchiveDossierPending::KnowledgeRefresh);
             }
         } else if status.pending.is_none() {
-            return Err(SemanticArchiveErrorV1::StoredPageMismatch);
+            return Err(SemanticArchiveError::StoredPageMismatch);
         }
     }
     Ok(status)
@@ -153,8 +152,8 @@ pub(super) fn read_status(
 
 fn verify_marker(
     client: &mut impl GenericClient,
-    scope: &ArchiveReadScopeV2,
-) -> Result<(), SemanticArchiveErrorV1> {
+    scope: &ArchiveReadScope,
+) -> Result<(), SemanticArchiveError> {
     if scope.tick() == 0 {
         return Ok(());
     }
@@ -166,61 +165,61 @@ fn verify_marker(
             &[campaign.as_uuid(), &signed(scope.tick())?],
         )
         .map_err(|error| database("verify exact Archive read marker", &error))?
-        .ok_or(SemanticArchiveErrorV1::MissingCommittedReceipt)?;
+        .ok_or(SemanticArchiveError::MissingCommittedReceipt)?;
     if Some(decode_digest(&row, 0)?) != scope.tick_content_hash() {
-        return Err(SemanticArchiveErrorV1::ReceiptMismatch);
+        return Err(SemanticArchiveError::ReceiptMismatch);
     }
     Ok(())
 }
 
-fn unavailable(scope: &ArchiveReadScopeV2) -> Option<ArchiveDossierUnavailableV2> {
+fn unavailable(scope: &ArchiveReadScope) -> Option<ArchiveDossierUnavailable> {
     if scope.tick() == 0 {
-        Some(ArchiveDossierUnavailableV2::FoundationHasNoPage)
+        Some(ArchiveDossierUnavailable::FoundationHasNoPage)
     } else {
         None
     }
 }
 
-fn base_search_state(scope: &ArchiveReadScopeV2, status: &ReadStatus) -> ArchiveSearchStateV2 {
+fn base_search_state(scope: &ArchiveReadScope, status: &ReadStatus) -> ArchiveSearchState {
     if let Some(reason) = unavailable(scope) {
-        ArchiveSearchStateV2::Unavailable(reason)
+        ArchiveSearchState::Unavailable(reason)
     } else if let Some(reason) = status.pending {
-        ArchiveSearchStateV2::Pending(reason)
+        ArchiveSearchState::Pending(reason)
     } else {
-        ArchiveSearchStateV2::Ready
+        ArchiveSearchState::Ready
     }
 }
 
 fn dossier_state(
     client: &mut impl GenericClient,
-    scope: &ArchiveReadScopeV2,
-    subject: &ArchivePageRefV1,
-    bounds: &ArchiveDossierBoundsV2,
+    scope: &ArchiveReadScope,
+    subject: &ArchivePageRef,
+    bounds: &ArchiveDossierBounds,
     status: &ReadStatus,
-) -> Result<ArchiveDossierStateV2, SemanticArchiveErrorV1> {
+) -> Result<ArchiveDossierState, SemanticArchiveError> {
     if let Some(reason) = unavailable(scope) {
-        return Ok(ArchiveDossierStateV2::Unavailable(reason));
+        return Ok(ArchiveDossierState::Unavailable(reason));
     }
     if !subject_granted(client, scope, subject)? {
-        return Ok(ArchiveDossierStateV2::Unavailable(
-            ArchiveDossierUnavailableV2::SubjectNotDisclosed,
+        return Ok(ArchiveDossierState::Unavailable(
+            ArchiveDossierUnavailable::SubjectNotDisclosed,
         ));
     }
     let Some(candidate) = candidate(client, scope, subject)? else {
         return Ok(status.pending.map_or(
-            ArchiveDossierStateV2::Unavailable(ArchiveDossierUnavailableV2::PageNotMaterialized),
-            |reason| ArchiveDossierStateV2::Pending { page: None, reason },
+            ArchiveDossierState::Unavailable(ArchiveDossierUnavailable::PageNotMaterialized),
+            |reason| ArchiveDossierState::Pending { page: None, reason },
         ));
     };
     let record = load_candidate(client, scope, subject, &candidate)?;
     let page = page(client, scope, &record, bounds, status)?;
     Ok(if let Some(reason) = status.pending {
-        ArchiveDossierStateV2::Pending {
+        ArchiveDossierState::Pending {
             page: Some(page),
             reason,
         }
     } else {
-        ArchiveDossierStateV2::Ready {
+        ArchiveDossierState::Ready {
             page,
             verified_through_tick: scope.tick(),
         }
@@ -229,9 +228,9 @@ fn dossier_state(
 
 pub(super) fn subject_granted(
     client: &mut impl GenericClient,
-    scope: &ArchiveReadScopeV2,
-    subject: &ArchivePageRefV1,
-) -> Result<bool, SemanticArchiveErrorV1> {
+    scope: &ArchiveReadScope,
+    subject: &ArchivePageRef,
+) -> Result<bool, SemanticArchiveError> {
     let campaign = scope.campaign_id();
     let row = client
         .query_one(
@@ -260,9 +259,9 @@ pub(super) struct Candidate {
 
 pub(super) fn candidate(
     client: &mut impl GenericClient,
-    scope: &ArchiveReadScopeV2,
-    subject: &ArchivePageRefV1,
-) -> Result<Option<Candidate>, SemanticArchiveErrorV1> {
+    scope: &ArchiveReadScope,
+    subject: &ArchivePageRef,
+) -> Result<Option<Candidate>, SemanticArchiveError> {
     let campaign = scope.campaign_id();
     client
         .query_opt(
@@ -288,10 +287,10 @@ pub(super) fn candidate(
 
 pub(super) fn load_candidate(
     client: &mut impl GenericClient,
-    scope: &ArchiveReadScopeV2,
-    subject: &ArchivePageRefV1,
+    scope: &ArchiveReadScope,
+    subject: &ArchivePageRef,
     candidate: &Candidate,
-) -> Result<RevisionRecord, SemanticArchiveErrorV1> {
+) -> Result<RevisionRecord, SemanticArchiveError> {
     let campaign = scope.campaign_id();
     let row=client.query_opt(&format!("SELECT {} FROM public.v_archive_revision_known_v2 \
         WHERE campaign_id=$1 AND subject_kind=$2 AND subject_id=$3 AND effective_tick=$4 AND EXISTS(SELECT 1 FROM public.v_archive_revision_scope_v2 admitted \
@@ -299,40 +298,40 @@ pub(super) fn load_candidate(
             AND admitted.effective_tick=$4 AND admitted.observation_tick=$5)",storage::COLUMNS),
         &[campaign.as_uuid(),&subject.kind().as_str(),&subject.id(),&signed(candidate.tick)?,&signed(scope.tick())?])
         .map_err(|error| database("read exact known Archive publication",&error))?
-        .ok_or(SemanticArchiveErrorV1::StoredPageMismatch)?;
+        .ok_or(SemanticArchiveError::StoredPageMismatch)?;
     let record = storage::decode_record(client, &row, ReadAuthority::Confined)?;
     if record.digest()? != candidate.digest
         || record.source.campaign_id() != campaign
         || &record.subject != subject
         || record.effective_tick > scope.tick()
     {
-        return Err(SemanticArchiveErrorV1::StoredPageMismatch);
+        return Err(SemanticArchiveError::StoredPageMismatch);
     }
     Ok(record)
 }
 
 fn page(
     client: &mut impl GenericClient,
-    scope: &ArchiveReadScopeV2,
+    scope: &ArchiveReadScope,
     record: &RevisionRecord,
-    bounds: &ArchiveDossierBoundsV2,
+    bounds: &ArchiveDossierBounds,
     status: &ReadStatus,
-) -> Result<ArchiveDossierPageV2, SemanticArchiveErrorV1> {
+) -> Result<ArchiveDossierPage, SemanticArchiveError> {
     let manifest = &record.emission;
     let links = manifest
         .links()
         .iter()
         .map(|link| {
             let target_state = link_state(client, scope, link.target(), status)?;
-            Ok(ArchiveDossierLinkV2 {
+            Ok(ArchiveDossierLink {
                 target: link.target().clone(),
                 retained_label: link.known_label().map(str::to_owned),
                 target_state,
             })
         })
-        .collect::<Result<Vec<_>, SemanticArchiveErrorV1>>()?;
+        .collect::<Result<Vec<_>, SemanticArchiveError>>()?;
     let changes = super::read_history::read(client, scope, record, bounds, status)?;
-    Ok(ArchiveDossierPageV2 {
+    Ok(ArchiveDossierPage {
         revision_id: record.digest()?,
         effective_tick: record.effective_tick,
         content_source: record.source.clone(),
@@ -350,35 +349,35 @@ fn page(
 
 fn link_state(
     client: &mut impl GenericClient,
-    scope: &ArchiveReadScopeV2,
-    subject: &ArchivePageRefV1,
+    scope: &ArchiveReadScope,
+    subject: &ArchivePageRef,
     status: &ReadStatus,
-) -> Result<ArchiveLinkedPageStateV2, SemanticArchiveErrorV1> {
+) -> Result<ArchiveLinkedPageState, SemanticArchiveError> {
     if !subject_granted(client, scope, subject)? {
-        return Ok(ArchiveLinkedPageStateV2::Unknown);
+        return Ok(ArchiveLinkedPageState::Unknown);
     }
     let Some(candidate) = candidate(client, scope, subject)? else {
         return Ok(if status.pending.is_some() {
-            ArchiveLinkedPageStateV2::KnownPending
+            ArchiveLinkedPageState::KnownPending
         } else {
-            ArchiveLinkedPageStateV2::KnownUnavailable
+            ArchiveLinkedPageState::KnownUnavailable
         });
     };
     load_candidate(client, scope, subject, &candidate)?;
     Ok(if status.pending.is_some() {
-        ArchiveLinkedPageStateV2::KnownPending
+        ArchiveLinkedPageState::KnownPending
     } else {
-        ArchiveLinkedPageStateV2::KnownReady
+        ArchiveLinkedPageState::KnownReady
     })
 }
 
 fn search_hits(
     client: &mut impl GenericClient,
-    scope: &ArchiveReadScopeV2,
+    scope: &ArchiveReadScope,
     query: &str,
     limit: u32,
-    result: &mut ArchiveSearchReadV2,
-) -> Result<(), SemanticArchiveErrorV1> {
+    result: &mut ArchiveSearchRead,
+) -> Result<(), SemanticArchiveError> {
     let campaign = scope.campaign_id();
     // Latest identity is chosen before payload eligibility or text matching.
     let latest="SELECT DISTINCT ON(subject_kind,subject_id) * FROM public.v_archive_revision_index_v2 \
@@ -409,7 +408,7 @@ fn search_hits(
         )
         .map_err(|error| database("validate scoped Archive search eligibility", &error))?;
     if decode::<bool>(&integrity, 0)? {
-        return Err(SemanticArchiveErrorV1::StoredPageMismatch);
+        return Err(SemanticArchiveError::StoredPageMismatch);
     }
     let rows = client
         .query(
@@ -429,12 +428,12 @@ fn search_hits(
         )
         .map_err(|error| database("search scoped retained Archive text", &error))?;
     result.truncated =
-        rows.len() > usize::try_from(limit).map_err(|_| SemanticArchiveErrorV1::CollectionBound)?;
+        rows.len() > usize::try_from(limit).map_err(|_| SemanticArchiveError::CollectionBound)?;
     for row in rows
         .into_iter()
-        .take(usize::try_from(limit).map_err(|_| SemanticArchiveErrorV1::CollectionBound)?)
+        .take(usize::try_from(limit).map_err(|_| SemanticArchiveError::CollectionBound)?)
     {
-        let subject = ArchivePageRefV1::try_new(
+        let subject = ArchivePageRef::try_new(
             decode_subject_kind(&decode::<String>(&row, 0)?)?,
             decode(&row, 1)?,
         )?;
@@ -443,7 +442,7 @@ fn search_hits(
             digest: decode_digest(&row, 3)?,
         };
         let record = load_candidate(client, scope, &subject, &candidate)?;
-        result.hits.push(ArchiveSearchHitV2 {
+        result.hits.push(ArchiveSearchHit {
             subject,
             revision_id: candidate.digest,
             title: record.title,

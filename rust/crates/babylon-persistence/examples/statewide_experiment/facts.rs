@@ -4,27 +4,27 @@ use super::{
     report::{CompletedPeriod, FinalDemand, NativeQuantity, Owner, Production, Route},
     Result,
 };
-use babylon_bsl::identity_codec::StableBslValueV1;
-use babylon_graph::{hypergraph_store::HypergraphStore, stable_element::StableElementKeyV1};
-use babylon_material_circuit::{MaterialCircuitStateV3, OrderIdV1};
-use babylon_persistence::michigan_material::MichiganMaterialCatalogV1;
+use babylon_bsl::identity_codec::StableBslValue;
+use babylon_graph::{hypergraph_store::HypergraphStore, stable_element::StableElementKey};
+use babylon_material_circuit::{MaterialCircuitState, OrderId};
+use babylon_persistence::michigan_material::MichiganMaterialCatalog;
 use babylon_tick::{
-    material_replay::PreparedMaterialTickV3,
-    material_staffing::STAFFING_COMPOSITION_ID_V1,
-    material_world::{decode_material_receipts_v4, MaterialTickReceiptsV4},
-    replay_session::SuccessfulEventV2,
+    material_replay::PreparedMaterialTick,
+    material_staffing::STAFFING_COMPOSITION_ID,
+    material_world::{decode_material_receipts, MaterialTickReceipts},
+    replay_session::SuccessfulEvent,
 };
 use std::collections::BTreeMap;
 
 pub fn period(
-    catalog: &MichiganMaterialCatalogV1,
-    opening: &MaterialCircuitStateV3,
-    candidate: &PreparedMaterialTickV3<HypergraphStore>,
+    catalog: &MichiganMaterialCatalog,
+    opening: &MaterialCircuitState,
+    candidate: &PreparedMaterialTick<HypergraphStore>,
     capacity_key: &str,
 ) -> Result<CompletedPeriod> {
     let register = candidate.material().register();
     let closing = register.state();
-    let receipts = decode_material_receipts_v4(candidate.material().receipt_bytes())?;
+    let receipts = decode_material_receipts(candidate.material().receipt_bytes())?;
     if receipts.resolve_tick != opening.period
         || Some(closing.period) != opening.period.checked_add(1)
     {
@@ -83,9 +83,9 @@ pub fn period(
     })
 }
 fn processes(
-    catalog: &MichiganMaterialCatalogV1,
-    opening: &MaterialCircuitStateV3,
-    receipts: &MaterialTickReceiptsV4,
+    catalog: &MichiganMaterialCatalog,
+    opening: &MaterialCircuitState,
+    receipts: &MaterialTickReceipts,
 ) -> Result<BTreeMap<String, Production>> {
     catalog
         .processes()
@@ -140,12 +140,9 @@ fn processes(
         })
         .collect()
 }
-fn staffing_event(
-    event: &SuccessfulEventV2,
-    period: u64,
-) -> Result<(String, BTreeMap<String, u64>)> {
+fn staffing_event(event: &SuccessfulEvent, period: u64) -> Result<(String, BTreeMap<String, u64>)> {
     if event.event_type() != "WORKFORCE_STAFFING"
-        || event.emitting_rule() != STAFFING_COMPOSITION_ID_V1
+        || event.emitting_rule() != STAFFING_COMPOSITION_ID
         || event.choice_receipt().is_some()
         || event.fields().len() != 13
     {
@@ -155,12 +152,12 @@ fn staffing_event(
     let mut numbers = BTreeMap::new();
     for (name, value) in event.fields() {
         if name == "subject" {
-            let StableBslValueV1::Node(StableElementKeyV1::Node { local_name, .. }) = value else {
+            let StableBslValue::Node(StableElementKey::Node { local_name, .. }) = value else {
                 return Err(refused("staffing subject is not a stable node"));
             };
             subject = Some(local_name.clone());
         } else {
-            let StableBslValueV1::Int(value) = value else {
+            let StableBslValue::Int(value) = value else {
                 return Err(refused("staffing quantity is not an integer"));
             };
             if numbers
@@ -180,15 +177,15 @@ fn staffing_event(
     ))
 }
 fn owners(
-    catalog: &MichiganMaterialCatalogV1,
-    closing: &MaterialCircuitStateV3,
-    receipts: &MaterialTickReceiptsV4,
-    candidate: &PreparedMaterialTickV3<HypergraphStore>,
+    catalog: &MichiganMaterialCatalog,
+    closing: &MaterialCircuitState,
+    receipts: &MaterialTickReceipts,
+    candidate: &PreparedMaterialTick<HypergraphStore>,
 ) -> Result<BTreeMap<String, Owner>> {
     let mut workforce = BTreeMap::new();
     for event in candidate.graph_report().successful_event_batch().events() {
         if event.event_type() == "WORKFORCE_STAFFING"
-            || event.emitting_rule() == STAFFING_COMPOSITION_ID_V1
+            || event.emitting_rule() == STAFFING_COMPOSITION_ID
         {
             let (key, fields) = staffing_event(event, receipts.resolve_tick)?;
             if workforce.insert(key, fields).is_some() {
@@ -258,13 +255,13 @@ fn owners(
     }
     Ok(result)
 }
-fn movement(receipts: impl Iterator<Item = (OrderIdV1, u64)>, order: OrderIdV1) -> Result<u64> {
+fn movement(receipts: impl Iterator<Item = (OrderId, u64)>, order: OrderId) -> Result<u64> {
     checked_sum(receipts.filter_map(|(id, quantity)| (id == order).then_some(quantity)))
 }
 fn routes(
-    catalog: &MichiganMaterialCatalogV1,
-    closing: &MaterialCircuitStateV3,
-    receipts: &MaterialTickReceiptsV4,
+    catalog: &MichiganMaterialCatalog,
+    closing: &MaterialCircuitState,
+    receipts: &MaterialTickReceipts,
 ) -> Result<BTreeMap<String, Route>> {
     catalog
         .routes()
@@ -319,9 +316,9 @@ fn routes(
         .collect()
 }
 fn final_demand(
-    catalog: &MichiganMaterialCatalogV1,
-    closing: &MaterialCircuitStateV3,
-    receipts: &MaterialTickReceiptsV4,
+    catalog: &MichiganMaterialCatalog,
+    closing: &MaterialCircuitState,
+    receipts: &MaterialTickReceipts,
 ) -> Result<BTreeMap<String, FinalDemand>> {
     catalog
         .final_demands()
@@ -360,7 +357,7 @@ fn final_demand(
         })
         .collect()
 }
-fn maximum_rows(state: &MaterialCircuitStateV3) -> usize {
+fn maximum_rows(state: &MaterialCircuitState) -> usize {
     [
         state.site_logistics_nodes.len(),
         state.process_outputs.len(),

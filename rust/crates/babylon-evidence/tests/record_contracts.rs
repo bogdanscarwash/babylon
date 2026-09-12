@@ -6,7 +6,7 @@ use babylon_evidence::{
     PracticeDisposition, RunIdentity, RunIdentityField, SfsPreregistration, SfsRecordError,
     SfsSample, SfsTrace, SfsWireError, T3Record,
 };
-use babylon_kernel::{sha256_of, SessionId};
+use babylon_kernel::{clock::SessionId, content_digest::sha256_of};
 use babylon_practice_contract::PracticeId;
 
 fn digest(tag: u8) -> Digest32 {
@@ -845,7 +845,7 @@ fn row_count_maximum_succeeds_and_plus_one_refuses_before_sorting() {
 #[test]
 fn current_preregistration_schema_bytes_are_exact() {
     assert_eq!(
-        babylon_kernel::sha256_of(include_bytes!(
+        babylon_kernel::content_digest::sha256_of(include_bytes!(
             "../../../../contracts/sfs_preregistration.yaml"
         )),
         [

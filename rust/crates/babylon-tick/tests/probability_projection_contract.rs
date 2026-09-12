@@ -1,10 +1,10 @@
 use babylon_bsl::probability::{ProbabilityError, TICKET_DENOMINATOR};
-use babylon_graph::stable_element::StableElementKeyV1;
+use babylon_graph::stable_element::StableElementKey;
 use babylon_tick::{
     analyze_content_set_sources, forecast_event_likelihoods,
     forecast_scenario_determined_event_likelihoods,
     forecast_scenario_determined_event_likelihoods_with_kernel_slots,
-    kernel_slot::KernelSlotReservationV1, ContentRuleSourceV1, ForecastErrorV1, PrepareError,
+    kernel_slot::KernelSlotReservationRef, ContentRuleSource, ForecastError, PrepareError,
 };
 
 const SCENARIO: &str = r#"
@@ -127,14 +127,14 @@ const PROJECTION: &str = r#"
       (incident-tick last-incident))))
 "#;
 
-const CROSS_SAMPLE_SLOTS: [KernelSlotReservationV1<'static>; 2] = [
-    KernelSlotReservationV1 {
+const CROSS_SAMPLE_SLOTS: [KernelSlotReservationRef<'static>; 2] = [
+    KernelSlotReservationRef {
         ordinal: 0,
         rule: "struggle/spark-mechanic",
         sample: "struggle/spark",
         slot: 0,
     },
-    KernelSlotReservationV1 {
+    KernelSlotReservationRef {
         ordinal: 1,
         rule: "struggle/earlier-a-kernel",
         sample: "struggle/earlier",
@@ -142,28 +142,28 @@ const CROSS_SAMPLE_SLOTS: [KernelSlotReservationV1<'static>; 2] = [
     },
 ];
 
-fn sources() -> [ContentRuleSourceV1<'static>; 2] {
+fn sources() -> [ContentRuleSource<'static>; 2] {
     [
-        ContentRuleSourceV1 {
+        ContentRuleSource {
             source_id: "rules/struggle-spark-mechanic.bsl",
             source: MECHANIC,
         },
-        ContentRuleSourceV1 {
+        ContentRuleSource {
             source_id: "rules/struggle-spark-recognizer.bsl",
             source: PROJECTION,
         },
     ]
 }
 
-fn scenario(source: &'static str) -> ContentRuleSourceV1<'static> {
-    ContentRuleSourceV1 {
+fn scenario(source: &'static str) -> ContentRuleSource<'static> {
+    ContentRuleSource {
         source_id: "scenarios/struggle-spark-projection-contract.bscn",
         source,
     }
 }
 
-fn source<'a>(source_id: &'a str, source: &'a str) -> ContentRuleSourceV1<'a> {
-    ContentRuleSourceV1 { source_id, source }
+fn source<'a>(source_id: &'a str, source: &'a str) -> ContentRuleSource<'a> {
+    ContentRuleSource { source_id, source }
 }
 
 #[test]
@@ -227,7 +227,7 @@ fn paired_scenario_forecast_refuses_to_guess_between_multiple_carriers() {
     )
     .unwrap_err();
     assert!(
-        matches!(error, ForecastErrorV1::NotExactlyEnumerable { .. }),
+        matches!(error, ForecastError::NotExactlyEnumerable { .. }),
         "{error:?}"
     );
     assert!(error.to_string().contains("not exactly one"), "{error}");
@@ -240,7 +240,7 @@ fn named_forecast_refuses_a_stable_node_outside_the_mechanic_subject_population(
         None,
         &sources(),
         "struggle/spark",
-        &StableElementKeyV1::Node {
+        &StableElementKey::Node {
             scenario: "struggle/spark-projection-contract".to_owned(),
             local_name: "outsider".to_owned(),
         },
@@ -249,7 +249,7 @@ fn named_forecast_refuses_a_stable_node_outside_the_mechanic_subject_population(
     .expect_err("an institution is not a social-class mechanic carrier");
 
     assert!(
-        matches!(error, ForecastErrorV1::NotExactlyEnumerable { .. }),
+        matches!(error, ForecastError::NotExactlyEnumerable { .. }),
         "{error:?}"
     );
     assert!(error.to_string().contains("INSTITUTION"), "{error}");
@@ -284,10 +284,7 @@ fn scenario_determined_forecast_refuses_a_calendar_dependent_prefix() {
     let error =
         forecast_scenario_determined_event_likelihoods(SCENARIO, None, &prefixed, "struggle/spark")
             .unwrap_err();
-    assert!(matches!(
-        error,
-        ForecastErrorV1::NotExactlyEnumerable { .. }
-    ));
+    assert!(matches!(error, ForecastError::NotExactlyEnumerable { .. }));
     assert!(error.to_string().contains("forecast prefix"), "{error}");
     assert!(error.to_string().contains("forecast tick"), "{error}");
 }
@@ -308,7 +305,7 @@ fn forecast_refuses_cross_sample_enumeration_after_an_earlier_finite_kernel() {
     )
     .unwrap_err();
     assert!(
-        matches!(error, ForecastErrorV1::NotExactlyEnumerable { .. }),
+        matches!(error, ForecastError::NotExactlyEnumerable { .. }),
         "{error:?}"
     );
     assert!(error.to_string().contains("cross-sample"), "{error}");
@@ -317,7 +314,7 @@ fn forecast_refuses_cross_sample_enumeration_after_an_earlier_finite_kernel() {
 
 #[test]
 fn resolved_nonadjacency_is_a_typed_rule_owned_probability_refusal() {
-    let obstruction = ContentRuleSourceV1 {
+    let obstruction = ContentRuleSource {
         source_id: "rules/struggle-spark-obstruction.bsl",
         source: r#"
 (rule struggle/spark-obstruction

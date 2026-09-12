@@ -1,13 +1,13 @@
 //! Nominal replay digests and the fixed `TickContentHashV1` outer codec.
 
-use crate::replay::{ReplaySeed, ReplaySessionIdV1};
-use crate::{sha256_of, ContentDigest};
+use crate::replay::{ReplaySeed, ReplaySessionId};
+use crate::{content_digest::sha256_of, content_digest::ContentDigest};
 use std::collections::TryReserveError;
 
 const TICK_CONTENT_DOMAIN: &[u8] = b"babylon.tick-content\0";
 const TICK_CONTENT_FIXED_BYTES: usize = 349;
-const LAYOUT_V1: u32 = 1;
-const RNG_LAYOUT_V2: u32 = 2;
+const LAYOUT: u32 = 1;
+const RNG_LAYOUT: u32 = 2;
 
 macro_rules! digest_type {
     ($(#[$meta:meta])* $name:ident) => {
@@ -46,34 +46,34 @@ macro_rules! digest_type {
 
 digest_type!(
     /// Identity of one immutable reference-data cohort.
-    RefDigestV1
+    RefDigest
 );
 digest_type!(
     /// SHA-256 identity of one checked prepared mechanics environment.
-    PreparedEnvironmentDigestV1
+    PreparedEnvironmentDigest
 );
 digest_type!(
     /// SHA-256 identity of one stable graph plus governed world registers.
-    StableWorldDigestV1
+    StableWorldDigest
 );
 digest_type!(
     /// SHA-256 identity of one ordered accepted Practice action batch.
-    OrderedPracticeActionBatchDigestV1
+    OrderedPracticeActionBatchDigest
 );
 digest_type!(
     /// SHA-256 identity of one exact governed tick payload.
-    TickPayloadDigestV1
+    TickPayloadDigest
 );
 digest_type!(
     /// SHA-256 identity of the fixed replay tick-content preimage.
-    TickContentHashV1
+    TickContentHash
 );
 
 /// Inputs to the fixed ten-section tick-content outer codec.
 #[derive(Debug)]
-pub struct TickContentPartsV1<'a> {
+pub struct TickContentParts<'a> {
     /// Checked material replay-session identity.
-    pub session: &'a ReplaySessionIdV1,
+    pub session: &'a ReplaySessionId,
     /// One-based tick being resolved.
     pub resolve_tick: u64,
     /// Explicit replay seed.
@@ -81,17 +81,17 @@ pub struct TickContentPartsV1<'a> {
     /// Immutable mechanics content identity.
     pub content: &'a ContentDigest,
     /// Immutable reference-data identity.
-    pub reference: RefDigestV1,
+    pub reference: RefDigest,
     /// Prepared mechanics environment identity.
-    pub prepared: PreparedEnvironmentDigestV1,
+    pub prepared: PreparedEnvironmentDigest,
     /// Stable world before adjudication.
-    pub prior_world: StableWorldDigestV1,
+    pub prior_world: StableWorldDigest,
     /// Ordered accepted Practice action identity.
-    pub actions: OrderedPracticeActionBatchDigestV1,
+    pub actions: OrderedPracticeActionBatchDigest,
     /// Stable world after adjudication.
-    pub result_world: StableWorldDigestV1,
+    pub result_world: StableWorldDigest,
     /// Exact governed output payload identity.
-    pub payload: TickPayloadDigestV1,
+    pub payload: TickPayloadDigest,
 }
 
 /// A checked outer-codec failure.
@@ -120,15 +120,15 @@ pub enum TickContentHashError {
 
 /// Exact canonical outer bytes before SHA-256.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TickContentPreimageV1(Vec<u8>);
+pub struct TickContentPreimage(Vec<u8>);
 
-impl TickContentPreimageV1 {
+impl TickContentPreimage {
     /// Compose the mandatory ten sections in their governed order.
     ///
     /// # Errors
     /// Returns [`TickContentHashError`] if checked capacity arithmetic,
     /// session-length conversion, or bounded allocation fails.
-    pub fn compose(parts: &TickContentPartsV1<'_>) -> Result<Self, TickContentHashError> {
+    pub fn compose(parts: &TickContentParts<'_>) -> Result<Self, TickContentHashError> {
         let session_length = u16::try_from(parts.session.as_bytes().len()).map_err(|_| {
             TickContentHashError::IntegerConversion {
                 field: "tick-content replay session length",
@@ -163,8 +163,8 @@ impl TickContentPreimageV1 {
 
     /// Hash the exact canonical preimage.
     #[must_use]
-    pub fn digest(&self) -> TickContentHashV1 {
-        TickContentHashV1::from_bytes(sha256_of(&self.0))
+    pub fn digest(&self) -> TickContentHash {
+        TickContentHash::from_bytes(sha256_of(&self.0))
     }
 }
 
@@ -181,35 +181,35 @@ fn reserve_preimage(capacity: usize) -> Result<Vec<u8>, TickContentHashError> {
 
 fn append_prefix_and_session(
     output: &mut Vec<u8>,
-    parts: &TickContentPartsV1<'_>,
+    parts: &TickContentParts<'_>,
     session_length: u16,
 ) {
     output.extend_from_slice(TICK_CONTENT_DOMAIN);
-    output.extend_from_slice(&LAYOUT_V1.to_be_bytes());
+    output.extend_from_slice(&LAYOUT.to_be_bytes());
     output.push(0x01);
-    output.extend_from_slice(&LAYOUT_V1.to_be_bytes());
+    output.extend_from_slice(&LAYOUT.to_be_bytes());
     output.extend_from_slice(&session_length.to_be_bytes());
     output.extend_from_slice(parts.session.as_bytes());
 }
 
-fn append_tick_and_seed(output: &mut Vec<u8>, parts: &TickContentPartsV1<'_>) {
+fn append_tick_and_seed(output: &mut Vec<u8>, parts: &TickContentParts<'_>) {
     output.push(0x02);
     output.extend_from_slice(&parts.resolve_tick.to_be_bytes());
     output.push(0x03);
-    output.extend_from_slice(&LAYOUT_V1.to_be_bytes());
-    output.extend_from_slice(&RNG_LAYOUT_V2.to_be_bytes());
+    output.extend_from_slice(&LAYOUT.to_be_bytes());
+    output.extend_from_slice(&RNG_LAYOUT.to_be_bytes());
     output.extend_from_slice(&parts.seed.to_be_bytes());
 }
 
 fn append_content(output: &mut Vec<u8>, content: &ContentDigest) {
     output.push(0x04);
-    output.extend_from_slice(&LAYOUT_V1.to_be_bytes());
+    output.extend_from_slice(&LAYOUT.to_be_bytes());
     output.extend_from_slice(&content.defines_hash);
     output.extend_from_slice(&content.rules_hash);
 }
 
 fn append_digest_section(output: &mut Vec<u8>, tag: u8, digest: &[u8; 32]) {
     output.push(tag);
-    output.extend_from_slice(&LAYOUT_V1.to_be_bytes());
+    output.extend_from_slice(&LAYOUT.to_be_bytes());
     output.extend_from_slice(digest);
 }

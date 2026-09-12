@@ -4,20 +4,20 @@
 use crate::{prepare_rules, run_prepared_tick_with, PreparedRules, TickReport};
 use babylon_bsl::structural_verbs::CollectingSink;
 use babylon_graph::allocator_state::AllocatorState;
-use babylon_graph::stable_element::StableElementResolverV1;
+use babylon_graph::stable_element::StableElementResolver;
 use babylon_graph::state_hash::CanonicalState;
 use babylon_graph::substrate::GraphSubstrate;
 use babylon_graph::working_copy::DetachedCopy;
-use babylon_kernel::replay::{ReplaySeed, ReplaySessionIdV1, RngSeedContext};
+use babylon_kernel::replay::{ReplaySeed, ReplaySessionId, RngSeedContext};
 
 /// A loaded scenario/rule diagnostic with explicit reproducible inputs.
 pub struct RuleDiagnosticSession<G> {
     graph: G,
     prepared: PreparedRules,
     tick: i64,
-    session: ReplaySessionIdV1,
+    session: ReplaySessionId,
     seed: ReplaySeed,
-    resolver: StableElementResolverV1,
+    resolver: StableElementResolver,
 }
 
 impl<G: GraphSubstrate + CanonicalState + AllocatorState + DetachedCopy> RuleDiagnosticSession<G> {
@@ -30,12 +30,12 @@ impl<G: GraphSubstrate + CanonicalState + AllocatorState + DetachedCopy> RuleDia
         prelude: Option<&str>,
         rules: &str,
         mut graph: G,
-        session: ReplaySessionIdV1,
+        session: ReplaySessionId,
         seed: ReplaySeed,
     ) -> Result<Self, String> {
         let prepared =
             prepare_rules(scenario, prelude, rules, &mut graph).map_err(|e| e.to_string())?;
-        let resolver = StableElementResolverV1::seal(
+        let resolver = StableElementResolver::seal(
             &graph,
             &prepared.scenario_scope,
             &prepared.node_content_ids,
@@ -101,12 +101,12 @@ mod tests {
     use babylon_graph::allocator_state::AllocatorState;
     use babylon_graph::hypergraph_store::HypergraphStore;
     use babylon_graph::memory::MemoryGraph;
-    use babylon_graph::stable_element::StableElementResolverV1;
+    use babylon_graph::stable_element::StableElementResolver;
     use babylon_graph::state_hash::{CanonicalState, StateEncoder};
     use babylon_graph::substrate::{GraphError, GraphSubstrate, NodeId};
     use babylon_graph::working_copy::DetachedCopy;
-    use babylon_kernel::replay::{ReplaySeed, ReplaySessionIdV1, RngSeedContext};
-    use babylon_kernel::Currency;
+    use babylon_kernel::currency::Currency;
+    use babylon_kernel::replay::{ReplaySeed, ReplaySessionId, RngSeedContext};
     use std::fmt::Write as _;
     use std::process::Command;
 
@@ -257,8 +257,8 @@ mod tests {
     }
 
     /// Fixed replay namespace for reproducible diagnostic fixtures.
-    fn test_session() -> ReplaySessionIdV1 {
-        ReplaySessionIdV1::try_from("tick-session-test").expect("literal is non-empty")
+    fn test_session() -> ReplaySessionId {
+        ReplaySessionId::try_from("tick-session-test").expect("literal is non-empty")
     }
 
     #[derive(Default)]
@@ -311,7 +311,7 @@ mod tests {
             babylon_kernel::replay::ReplaySeed::new(0),
         )
         .expect("the governed Struggle spark pilot loads");
-        let resolver = StableElementResolverV1::seal(
+        let resolver = StableElementResolver::seal(
             &session.graph,
             &session.prepared.scenario_scope,
             &session.prepared.node_content_ids,
@@ -319,7 +319,7 @@ mod tests {
         )
         .expect("the pilot topology has stable replay identities");
         let replay_session =
-            ReplaySessionIdV1::try_from("per281/runtime-live").expect("fixed replay identity");
+            ReplaySessionId::try_from("per281/runtime-live").expect("fixed replay identity");
         let report = run_prepared_tick_with(
             &session.prepared,
             &mut session.graph,
@@ -360,7 +360,7 @@ mod tests {
         assert_eq!(
             event
                 .choice_receipt()
-                .map(crate::choice_receipt::ChoiceReceiptRefV1::encounter_ordinal),
+                .map(crate::choice_receipt::ChoiceReceiptRef::encounter_ordinal),
             Some(0)
         );
         assert_eq!(
@@ -464,7 +464,7 @@ mod tests {
         .expect("the governed Struggle spark pilot loads");
         let before = session.graph.encode_state().unwrap().as_bytes().to_vec();
         let cursors = session.graph.allocator_cursors();
-        let resolver = StableElementResolverV1::seal(
+        let resolver = StableElementResolver::seal(
             &session.graph,
             &session.prepared.scenario_scope,
             &session.prepared.node_content_ids,
@@ -472,7 +472,7 @@ mod tests {
         )
         .expect("the pilot topology has stable replay identities");
         let replay_session =
-            ReplaySessionIdV1::try_from("per281/runtime-live").expect("fixed replay identity");
+            ReplaySessionId::try_from("per281/runtime-live").expect("fixed replay identity");
         let mut publisher = RejectingBatchSink::default();
 
         let error = run_prepared_tick_with(
@@ -545,13 +545,13 @@ mod tests {
             babylon_kernel::replay::ReplaySeed::new(0),
         )
         .unwrap();
-        let replay_session = ReplaySessionIdV1::try_from("replay/session").unwrap();
+        let replay_session = ReplaySessionId::try_from("replay/session").unwrap();
         let seed_context = RngSeedContext {
             session: &replay_session,
             seed: ReplaySeed::new(7),
         };
         let mut sink = CollectingSink::default();
-        let resolver = StableElementResolverV1::seal(
+        let resolver = StableElementResolver::seal(
             &session.graph,
             &session.prepared.scenario_scope,
             &session.prepared.node_content_ids,
@@ -758,7 +758,7 @@ mod tests {
         bytes.extend_from_slice(&canonical.to_bits().to_be_bytes());
     }
 
-    fn push_optional_ratio(bytes: &mut Vec<u8>, value: Option<babylon_kernel::Ratio>) {
+    fn push_optional_ratio(bytes: &mut Vec<u8>, value: Option<babylon_kernel::scalars::Ratio>) {
         match value {
             Some(ratio) => {
                 bytes.push(1);
@@ -881,7 +881,7 @@ mod tests {
             babylon_graph::substrate::HyperedgeId(0),
             "presence-group".to_owned(),
         )]);
-        let resolver = StableElementResolverV1::seal(
+        let resolver = StableElementResolver::seal(
             &graph,
             &prepared.scenario_scope,
             &prepared.node_content_ids,
@@ -892,7 +892,7 @@ mod tests {
             graph,
             prepared,
             tick: 0,
-            session: ReplaySessionIdV1::try_from("per18-envelope").unwrap(),
+            session: ReplaySessionId::try_from("per18-envelope").unwrap(),
             seed: ReplaySeed::new(0),
             resolver,
         };
@@ -1163,7 +1163,7 @@ mod tests {
             None,
             &rule_src(),
             HypergraphStore::new(),
-            ReplaySessionIdV1::try_from("diagnostic/other-identity").unwrap(),
+            ReplaySessionId::try_from("diagnostic/other-identity").unwrap(),
             ReplaySeed::new(-57),
         )
         .unwrap();

@@ -4,7 +4,9 @@
 use super::*;
 use crate::observer_ui::NetworkSector;
 use crate::production::ProductionCommand;
-use babylon_persistence::{ProductionSiteRoleV2, ProductionSiteV2};
+use babylon_persistence::{
+    production_observation::ProductionSite, production_observation::ProductionSiteRole,
+};
 use bevy::picking::pointer::PointerButton;
 use std::fmt::Write as _;
 
@@ -41,11 +43,11 @@ struct NetworkProjection {
     available: bool,
 }
 
-fn site_sector(site: &ProductionSiteV2) -> NetworkSector {
+fn site_sector(site: &ProductionSite) -> NetworkSector {
     match site.role {
-        ProductionSiteRoleV2::Wholesale => NetworkSector::Wholesale,
-        ProductionSiteRoleV2::Retail => NetworkSector::Retail,
-        ProductionSiteRoleV2::Production => match site.sector_code.as_str() {
+        ProductionSiteRole::Wholesale => NetworkSector::Wholesale,
+        ProductionSiteRole::Retail => NetworkSector::Retail,
+        ProductionSiteRole::Production => match site.sector_code.as_str() {
             "11" => NetworkSector::Agriculture,
             "21" => NetworkSector::Mining,
             _ => NetworkSector::Manufacturing,
@@ -53,7 +55,7 @@ fn site_sector(site: &ProductionSiteV2) -> NetworkSector {
     }
 }
 
-fn node_caption(site: &ProductionSiteV2, snapshot: &ProductionSnapshotV2) -> String {
+fn node_caption(site: &ProductionSite, snapshot: &ProductionSnapshot) -> String {
     let mut text = format!(
         "{}\n{} · NAICS {}",
         site.name,
@@ -170,7 +172,7 @@ fn project_network(
 }
 
 fn project_final_demand(
-    snapshot: &ProductionSnapshotV2,
+    snapshot: &ProductionSnapshot,
     anchors: &CountyAnchors,
     county_ranks: &BTreeMap<&str, usize>,
     result: &mut NetworkProjection,
@@ -688,11 +690,10 @@ mod tests {
     fn network_keeps_isolated_cohorts_all_goods_and_retail_endpoints_without_inventing_routes() {
         let (session, mut frame, anchors) = fixture();
         let snapshot = frame.0.as_mut().unwrap().production.as_mut().unwrap();
-        snapshot.sites[1].role = ProductionSiteRoleV2::Retail;
+        snapshot.sites[1].role = ProductionSiteRole::Retail;
         snapshot.sites[1].sector_code = "44-45".into();
-        snapshot
-            .final_demand_accounts
-            .push(babylon_persistence::ProductionFinalDemandAccountV2 {
+        snapshot.final_demand_accounts.push(
+            babylon_persistence::production_observation::ProductionFinalDemandAccount {
                 demand_principal_id: "demand".into(),
                 county_geoid: "26099".into(),
                 good_id: "steel".into(),
@@ -704,15 +705,18 @@ mod tests {
                 outstanding: 7,
                 retail_stock_on_hand: 2,
                 retailer_site_ids: vec!["b".into()],
-                orders: vec![babylon_persistence::ProductionFinalDemandOrderV2 {
-                    order_id: "final".into(),
-                    retailer_site_id: "b".into(),
-                    ordered: 10,
-                    fulfilled: 3,
-                    outstanding: 7,
-                }],
+                orders: vec![
+                    babylon_persistence::production_observation::ProductionFinalDemandOrder {
+                        order_id: "final".into(),
+                        retailer_site_id: "b".into(),
+                        ordered: 10,
+                        fulfilled: 3,
+                        outstanding: 7,
+                    },
+                ],
                 completed: None,
-            });
+            },
+        );
         let full = project_network(&frame, &session, &anchors, NetworkSector::All, None);
         assert_eq!(full.total_cohorts, 3);
         assert_eq!(full.nodes.len(), 4);
@@ -786,7 +790,7 @@ mod tests {
                 "preview" => {
                     session.set_perspective(crate::observer::Perspective::PlayerKnowledge);
                     frame.0.as_mut().unwrap().visibility =
-                        babylon_persistence::ObserverVisibilityV1::KnownPreview;
+                        babylon_persistence::observer_reader::ObserverVisibility::KnownPreview;
                 }
                 _ => unreachable!(),
             }

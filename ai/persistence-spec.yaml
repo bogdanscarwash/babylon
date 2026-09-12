@@ -14,7 +14,7 @@ meta:
   priority: "LOW"
   authority_note: |
     This file records the retired Python save and H3-cache design. The live
-    persistence authority is Rust. Use contracts/rust_persistence_cutover_v2.yaml,
+    persistence authority is Rust. Use contracts/current_schema.yaml,
     contracts/h3_estate_contract_v1.yaml, and docs/reference/persistence.rst.
 
 # =============================================================================

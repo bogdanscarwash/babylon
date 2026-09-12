@@ -35,7 +35,7 @@
 //! storage, node-scoped only (no edge/hyperedge Currency lane in this
 //! train).
 
-use babylon_kernel::Currency;
+use babylon_kernel::currency::Currency;
 
 /// Opaque node identity — a newtype so no caller depends on it being an
 /// integer index vs. a UUID vs. anything else the concrete shape picks.

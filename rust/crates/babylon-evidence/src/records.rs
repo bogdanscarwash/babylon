@@ -2,7 +2,7 @@
 
 use std::cmp::Ordering;
 
-use babylon_kernel::{sha256_of, SessionId};
+use babylon_kernel::{clock::SessionId, content_digest::sha256_of};
 use babylon_practice_contract::PracticeId;
 
 use crate::classifier::{classify_sfs, SfsClass, SfsClassError};

@@ -52,7 +52,7 @@ fn authority_ledger() -> PracticeInputAuthorityLedger {
 #[test]
 fn resolved_batch_schema_and_vectors_drive_the_rust_boundary() {
     assert_eq!(
-        babylon_kernel::sha256_of(SCHEMA),
+        babylon_kernel::content_digest::sha256_of(SCHEMA),
         RESOLVED_PRACTICE_BATCH_SOURCE_SHA256
     );
     let cases = parse_cases(VECTORS);
@@ -109,6 +109,9 @@ fn resolved_batch_digest_is_derived_and_absent_from_its_preimage() {
     let digest = hex_bytes(valid["data"]["digest_hex"].as_str().unwrap());
 
     assert_eq!(digest.len(), 32);
-    assert_eq!(babylon_kernel::sha256_of(&canonical).to_vec(), digest);
+    assert_eq!(
+        babylon_kernel::content_digest::sha256_of(&canonical).to_vec(),
+        digest
+    );
     assert!(!RESOLVED_PRACTICE_BATCH_FIELD_ORDER.contains(&"batch_digest"));
 }

@@ -1,8 +1,10 @@
-use babylon_persistence::{michigan_economy_v1, michigan_observer_foundation_v1};
+use babylon_persistence::{
+    michigan_economy::michigan_economy, michigan_economy::michigan_observer_foundation,
+};
 
 #[test]
 fn michigan_observer_foundation_seeds_all_83_exact_county_baselines() {
-    let economy = michigan_economy_v1().expect("pinned QCEW baseline");
+    let economy = michigan_economy().expect("pinned QCEW baseline");
     assert_eq!(economy.counties().len(), 83);
     let wayne = economy
         .counties()
@@ -12,7 +14,7 @@ fn michigan_observer_foundation_seeds_all_83_exact_county_baselines() {
     assert_eq!(wayne.annual_avg_emplvl, 725_504);
     assert_eq!(wayne.total_annual_wages, 55_436_615_328);
     assert_eq!(wayne.annual_avg_wkly_wage, 1469);
-    let (session, bundle) = michigan_observer_foundation_v1().expect("observer foundation");
+    let (session, bundle) = michigan_observer_foundation().expect("observer foundation");
     assert_eq!(session.completed_tick(), 0);
     let source = std::str::from_utf8(bundle.scenario_source_bytes()).unwrap();
     assert_eq!(source.matches("(node county-").count(), 83);
@@ -24,14 +26,13 @@ fn michigan_observer_foundation_seeds_all_83_exact_county_baselines() {
 
 #[test]
 fn empty_economy_program_commits_a_quiet_period_without_material_changes() {
-    use babylon_bsl::identity_codec::StableBslValueV1;
+    use babylon_bsl::identity_codec::StableBslValue;
     use babylon_bsl::structural_verbs::CollectingSink;
-    use babylon_graph::stable_element::StableElementKeyV1;
-    use babylon_practice_contract::ordered_action_v1::OrderedPracticeActionBatchV1;
-    let (mut session, _) = michigan_observer_foundation_v1().unwrap();
+    use babylon_graph::stable_element::StableElementKey;
+    use babylon_practice_contract::OrderedPracticeActionBatch;
+    let (mut session, _) = michigan_observer_foundation().unwrap();
     let before = session.stable_graph_state().unwrap();
-    let actions =
-        OrderedPracticeActionBatchV1::empty(session.session_identity().clone(), 1).unwrap();
+    let actions = OrderedPracticeActionBatch::empty(session.session_identity().clone(), 1).unwrap();
     let mut sink = CollectingSink::default();
     let report = session
         .advance(&mut sink, &actions)
@@ -46,11 +47,11 @@ fn empty_economy_program_commits_a_quiet_period_without_material_changes() {
         session.stable_graph_state().unwrap().digest()
     );
 
-    let counties = michigan_economy_v1().unwrap().counties();
+    let counties = michigan_economy().unwrap().counties();
     let territory_rows = report.material_state_rows().territories().rows();
     assert_eq!(territory_rows.len(), 83);
     for (territory, county) in territory_rows.iter().zip(counties) {
-        let StableElementKeyV1::Node { local_name, .. } = territory.territory_id() else {
+        let StableElementKey::Node { local_name, .. } = territory.territory_id() else {
             panic!("county projection lost its node identity");
         };
         assert_eq!(*local_name, format!("county-{}", county.county_geoid));
@@ -64,7 +65,7 @@ fn empty_economy_program_commits_a_quiet_period_without_material_changes() {
         .map(|(key, value)| {
             (
                 key.to_owned(),
-                StableBslValueV1::Int(i64::try_from(value).unwrap()),
+                StableBslValue::Int(i64::try_from(value).unwrap()),
             )
         });
         assert_eq!(territory.ordered_fields(), &expected);

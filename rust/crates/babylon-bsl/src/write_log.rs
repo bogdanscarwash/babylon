@@ -31,7 +31,7 @@
 //!    violated, and a determinism divergence with it.
 
 use babylon_graph::substrate::{HyperedgeId, NodeId};
-use babylon_kernel::Currency;
+use babylon_kernel::currency::Currency;
 
 /// One mutation, as it crossed the store boundary.
 ///

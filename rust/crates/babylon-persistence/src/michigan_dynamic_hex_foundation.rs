@@ -2,14 +2,14 @@
 
 use std::sync::OnceLock;
 
-use babylon_kernel::{sha256_of, H3CellId, H3CellIdError};
+use babylon_kernel::{content_digest::sha256_of, H3CellId, H3CellIdError};
 use babylon_tick::h3_runtime::{
-    MichiganDynamicHexFoundationErrorV1, MichiganDynamicHexFoundationRowV1,
-    MichiganDynamicHexFoundationV1, MichiganDynamicHexValueBitsV1, MichiganDynamicHexValuesV1,
-    MichiganH3R8ChildParentV1, MICHIGAN_DYNAMIC_HEX_FOUNDATION_ARTIFACT_SHA256_V1,
-    MICHIGAN_DYNAMIC_HEX_FOUNDATION_BYTES_V1, MICHIGAN_DYNAMIC_HEX_FOUNDATION_DOMAIN_V1,
-    MICHIGAN_DYNAMIC_HEX_FOUNDATION_LAYOUT_V1, MICHIGAN_DYNAMIC_HEX_FOUNDATION_ROWS_V1,
-    MICHIGAN_DYNAMIC_HEX_R8_CHILD_PARENT_DOMAIN_V1, MICHIGAN_DYNAMIC_HEX_R8_CHILD_ROWS_V1,
+    MichiganDynamicHexFoundation, MichiganDynamicHexFoundationError,
+    MichiganDynamicHexFoundationRow, MichiganDynamicHexValueBits, MichiganDynamicHexValues,
+    MichiganH3R8ChildParent, MICHIGAN_DYNAMIC_HEX_FOUNDATION_ARTIFACT_SHA256,
+    MICHIGAN_DYNAMIC_HEX_FOUNDATION_BYTES, MICHIGAN_DYNAMIC_HEX_FOUNDATION_DOMAIN,
+    MICHIGAN_DYNAMIC_HEX_FOUNDATION_LAYOUT, MICHIGAN_DYNAMIC_HEX_FOUNDATION_ROWS,
+    MICHIGAN_DYNAMIC_HEX_R8_CHILD_PARENT_DOMAIN, MICHIGAN_DYNAMIC_HEX_R8_CHILD_ROWS,
 };
 
 const FIXTURE_PARTS: [&[u8]; 9] = [
@@ -24,12 +24,12 @@ const FIXTURE_PARTS: [&[u8]; 9] = [
     include_bytes!("fixtures/michigan_dynamic_hex_foundation_v1.part-08.bin"),
 ];
 static FOUNDATION: OnceLock<
-    Result<MichiganDynamicHexFoundationV1, MichiganDynamicHexFoundationDecodeErrorV1>,
+    Result<MichiganDynamicHexFoundation, MichiganDynamicHexFoundationDecodeError>,
 > = OnceLock::new();
 
 /// Closed decoding failures for the immutable Michigan foundation artifact.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum MichiganDynamicHexFoundationDecodeErrorV1 {
+pub enum MichiganDynamicHexFoundationDecodeError {
     /// The supplied byte sequence is shorter than the one governed artifact.
     Truncated,
     /// The supplied byte sequence carries bytes after the one governed artifact.
@@ -45,22 +45,22 @@ pub enum MichiganDynamicHexFoundationDecodeErrorV1 {
     /// A raw cell is not a valid H3 identity.
     H3Identity(H3CellIdError),
     /// The tick-owned checked value refused the decoded structure.
-    Foundation(MichiganDynamicHexFoundationErrorV1),
+    Foundation(MichiganDynamicHexFoundationError),
     /// Fixture joining allocation refused.
     Allocation,
 }
 
-impl std::fmt::Display for MichiganDynamicHexFoundationDecodeErrorV1 {
+impl std::fmt::Display for MichiganDynamicHexFoundationDecodeError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(formatter, "invalid Michigan dynamic-H3 fixture: {self:?}")
     }
 }
 
-impl std::error::Error for MichiganDynamicHexFoundationDecodeErrorV1 {}
+impl std::error::Error for MichiganDynamicHexFoundationDecodeError {}
 
 /// Return the nine exact bounded plain-Git fixture parts.
 #[must_use]
-pub const fn michigan_dynamic_hex_foundation_fixture_parts_v1() -> [&'static [u8]; 9] {
+pub const fn michigan_dynamic_hex_foundation_fixture_parts() -> [&'static [u8]; 9] {
     FIXTURE_PARTS
 }
 
@@ -69,51 +69,51 @@ pub const fn michigan_dynamic_hex_foundation_fixture_parts_v1() -> [&'static [u8
 /// # Errors
 /// Returns a closed refusal for length, digest, structured identity, or
 /// tick-owned foundation violations.
-pub fn decode_michigan_dynamic_hex_foundation_v1(
+pub fn decode_michigan_dynamic_hex_foundation(
     bytes: &[u8],
-) -> Result<MichiganDynamicHexFoundationV1, MichiganDynamicHexFoundationDecodeErrorV1> {
-    if bytes.len() < MICHIGAN_DYNAMIC_HEX_FOUNDATION_BYTES_V1 {
-        return Err(MichiganDynamicHexFoundationDecodeErrorV1::Truncated);
+) -> Result<MichiganDynamicHexFoundation, MichiganDynamicHexFoundationDecodeError> {
+    if bytes.len() < MICHIGAN_DYNAMIC_HEX_FOUNDATION_BYTES {
+        return Err(MichiganDynamicHexFoundationDecodeError::Truncated);
     }
-    if bytes.len() > MICHIGAN_DYNAMIC_HEX_FOUNDATION_BYTES_V1 {
-        return Err(MichiganDynamicHexFoundationDecodeErrorV1::TrailingBytes);
+    if bytes.len() > MICHIGAN_DYNAMIC_HEX_FOUNDATION_BYTES {
+        return Err(MichiganDynamicHexFoundationDecodeError::TrailingBytes);
     }
-    if sha256_of(bytes) != MICHIGAN_DYNAMIC_HEX_FOUNDATION_ARTIFACT_SHA256_V1 {
-        return Err(MichiganDynamicHexFoundationDecodeErrorV1::ArtifactDigest);
+    if sha256_of(bytes) != MICHIGAN_DYNAMIC_HEX_FOUNDATION_ARTIFACT_SHA256 {
+        return Err(MichiganDynamicHexFoundationDecodeError::ArtifactDigest);
     }
 
     let mut cursor = Cursor::new(bytes);
-    if cursor.take(MICHIGAN_DYNAMIC_HEX_FOUNDATION_DOMAIN_V1.len())
-        != MICHIGAN_DYNAMIC_HEX_FOUNDATION_DOMAIN_V1
+    if cursor.take(MICHIGAN_DYNAMIC_HEX_FOUNDATION_DOMAIN.len())
+        != MICHIGAN_DYNAMIC_HEX_FOUNDATION_DOMAIN
     {
-        return Err(MichiganDynamicHexFoundationDecodeErrorV1::Domain);
+        return Err(MichiganDynamicHexFoundationDecodeError::Domain);
     }
-    if cursor.u32() != MICHIGAN_DYNAMIC_HEX_FOUNDATION_LAYOUT_V1 {
-        return Err(MichiganDynamicHexFoundationDecodeErrorV1::Layout);
+    if cursor.u32() != MICHIGAN_DYNAMIC_HEX_FOUNDATION_LAYOUT {
+        return Err(MichiganDynamicHexFoundationDecodeError::Layout);
     }
     let source_r7_digest = cursor.digest();
     let base_reference_cohort_digest = cursor.digest();
     let r8_section_digest = cursor.digest();
     let reference_bundle_digest = cursor.digest();
     let row_count = usize::try_from(cursor.u64())
-        .map_err(|_| MichiganDynamicHexFoundationDecodeErrorV1::Truncated)?;
-    if row_count != MICHIGAN_DYNAMIC_HEX_FOUNDATION_ROWS_V1 {
-        return Err(MichiganDynamicHexFoundationDecodeErrorV1::Foundation(
-            MichiganDynamicHexFoundationErrorV1::RowCount { actual: row_count },
+        .map_err(|_| MichiganDynamicHexFoundationDecodeError::Truncated)?;
+    if row_count != MICHIGAN_DYNAMIC_HEX_FOUNDATION_ROWS {
+        return Err(MichiganDynamicHexFoundationDecodeError::Foundation(
+            MichiganDynamicHexFoundationError::RowCount { actual: row_count },
         ));
     }
 
     let mut rows = Vec::new();
     rows.try_reserve_exact(row_count)
-        .map_err(|_| MichiganDynamicHexFoundationDecodeErrorV1::Allocation)?;
+        .map_err(|_| MichiganDynamicHexFoundationDecodeError::Allocation)?;
     for _ in 0..row_count {
         let cell = H3CellId::try_from(cursor.u64())
-            .map_err(MichiganDynamicHexFoundationDecodeErrorV1::H3Identity)?;
+            .map_err(MichiganDynamicHexFoundationDecodeError::H3Identity)?;
         let mut value_bits = [0_u64; 9];
         for bits in &mut value_bits {
             *bits = cursor.u64();
         }
-        let values = MichiganDynamicHexValuesV1::try_new(MichiganDynamicHexValueBitsV1 {
+        let values = MichiganDynamicHexValues::try_new(MichiganDynamicHexValueBits {
             c: value_bits[0],
             v: value_bits[1],
             s: value_bits[2],
@@ -124,22 +124,22 @@ pub fn decode_michigan_dynamic_hex_foundation_v1(
             internet_access_pct: value_bits[7],
             surveillance_coupling: value_bits[8],
         })
-        .map_err(MichiganDynamicHexFoundationDecodeErrorV1::Foundation)?;
+        .map_err(MichiganDynamicHexFoundationDecodeError::Foundation)?;
         rows.push(
-            MichiganDynamicHexFoundationRowV1::try_new(cell, values)
-                .map_err(MichiganDynamicHexFoundationDecodeErrorV1::Foundation)?,
+            MichiganDynamicHexFoundationRow::try_new(cell, values)
+                .map_err(MichiganDynamicHexFoundationDecodeError::Foundation)?,
         );
     }
-    if cursor.take(MICHIGAN_DYNAMIC_HEX_R8_CHILD_PARENT_DOMAIN_V1.len())
-        != MICHIGAN_DYNAMIC_HEX_R8_CHILD_PARENT_DOMAIN_V1
+    if cursor.take(MICHIGAN_DYNAMIC_HEX_R8_CHILD_PARENT_DOMAIN.len())
+        != MICHIGAN_DYNAMIC_HEX_R8_CHILD_PARENT_DOMAIN
     {
-        return Err(MichiganDynamicHexFoundationDecodeErrorV1::R8SectionDomain);
+        return Err(MichiganDynamicHexFoundationDecodeError::R8SectionDomain);
     }
     let r8_row_count = usize::try_from(cursor.u64())
-        .map_err(|_| MichiganDynamicHexFoundationDecodeErrorV1::Truncated)?;
-    if r8_row_count != MICHIGAN_DYNAMIC_HEX_R8_CHILD_ROWS_V1 {
-        return Err(MichiganDynamicHexFoundationDecodeErrorV1::Foundation(
-            MichiganDynamicHexFoundationErrorV1::R8RowCount {
+        .map_err(|_| MichiganDynamicHexFoundationDecodeError::Truncated)?;
+    if r8_row_count != MICHIGAN_DYNAMIC_HEX_R8_CHILD_ROWS {
+        return Err(MichiganDynamicHexFoundationDecodeError::Foundation(
+            MichiganDynamicHexFoundationError::R8RowCount {
                 actual: r8_row_count,
             },
         ));
@@ -147,29 +147,29 @@ pub fn decode_michigan_dynamic_hex_foundation_v1(
     let mut r8_child_parent_rows = Vec::new();
     r8_child_parent_rows
         .try_reserve_exact(r8_row_count)
-        .map_err(|_| MichiganDynamicHexFoundationDecodeErrorV1::Allocation)?;
+        .map_err(|_| MichiganDynamicHexFoundationDecodeError::Allocation)?;
     for _ in 0..r8_row_count {
         let child = H3CellId::try_from(cursor.u64())
-            .map_err(MichiganDynamicHexFoundationDecodeErrorV1::H3Identity)?;
+            .map_err(MichiganDynamicHexFoundationDecodeError::H3Identity)?;
         let parent = H3CellId::try_from(cursor.u64())
-            .map_err(MichiganDynamicHexFoundationDecodeErrorV1::H3Identity)?;
+            .map_err(MichiganDynamicHexFoundationDecodeError::H3Identity)?;
         r8_child_parent_rows.push(
-            MichiganH3R8ChildParentV1::try_new(child, parent)
-                .map_err(MichiganDynamicHexFoundationDecodeErrorV1::Foundation)?,
+            MichiganH3R8ChildParent::try_new(child, parent)
+                .map_err(MichiganDynamicHexFoundationDecodeError::Foundation)?,
         );
     }
     if cursor.remaining() != 0 {
-        return Err(MichiganDynamicHexFoundationDecodeErrorV1::TrailingBytes);
+        return Err(MichiganDynamicHexFoundationDecodeError::TrailingBytes);
     }
-    let foundation = MichiganDynamicHexFoundationV1::try_new(rows, r8_child_parent_rows)
-        .map_err(MichiganDynamicHexFoundationDecodeErrorV1::Foundation)?;
+    let foundation = MichiganDynamicHexFoundation::try_new(rows, r8_child_parent_rows)
+        .map_err(MichiganDynamicHexFoundationDecodeError::Foundation)?;
     if foundation.source_r7_digest() != source_r7_digest
         || foundation.base_reference_cohort_digest() != base_reference_cohort_digest
         || foundation.r8_section_digest() != r8_section_digest
         || foundation.reference_bundle_digest() != reference_bundle_digest
         || foundation.canonical_bytes() != bytes
     {
-        return Err(MichiganDynamicHexFoundationDecodeErrorV1::ArtifactDigest);
+        return Err(MichiganDynamicHexFoundationDecodeError::ArtifactDigest);
     }
     Ok(foundation)
 }
@@ -179,17 +179,17 @@ pub fn decode_michigan_dynamic_hex_foundation_v1(
 /// # Errors
 /// Returns the cached exact decoding refusal if the checked-in fixture is not
 /// the governed artifact.
-pub fn michigan_dynamic_hex_foundation_v1(
-) -> Result<&'static MichiganDynamicHexFoundationV1, MichiganDynamicHexFoundationDecodeErrorV1> {
+pub fn michigan_dynamic_hex_foundation(
+) -> Result<&'static MichiganDynamicHexFoundation, MichiganDynamicHexFoundationDecodeError> {
     match FOUNDATION.get_or_init(|| {
         let mut joined = Vec::new();
         joined
-            .try_reserve_exact(MICHIGAN_DYNAMIC_HEX_FOUNDATION_BYTES_V1)
-            .map_err(|_| MichiganDynamicHexFoundationDecodeErrorV1::Allocation)?;
+            .try_reserve_exact(MICHIGAN_DYNAMIC_HEX_FOUNDATION_BYTES)
+            .map_err(|_| MichiganDynamicHexFoundationDecodeError::Allocation)?;
         for part in FIXTURE_PARTS {
             joined.extend_from_slice(part);
         }
-        decode_michigan_dynamic_hex_foundation_v1(&joined)
+        decode_michigan_dynamic_hex_foundation(&joined)
     }) {
         Ok(foundation) => Ok(foundation),
         Err(error) => Err(error.clone()),

@@ -176,8 +176,8 @@ elif name == "psql":
     query = args[-1]
     if query.startswith("SELECT 1,"):
         print("1|" + state["canary"])
-    elif "committed_tick_v2_authority_ledger" in query:
-        print("1:1:8,2:2:9|1:1:10|0|true|true" if fault == "partial_activation" else "1:1:8,2:2:9|1:1:10,2:2:11|0|true|true")
+    elif "babylon_meta.current_schema" in query:
+        print("false|0|true|true" if fault == "invalid_schema_marker" else "true|0|true|true")
     elif "pg_catalog.pg_database" in query:
         print("0")
     elif "pg_catalog.pg_class" in query:
@@ -276,7 +276,7 @@ def test_current_runtime_focuses_finish_with_checked_owned_cleanup(
     [
         "wildcard_port",
         "wrong_version",
-        "partial_activation",
+        "invalid_schema_marker",
         "bootstrap_failure",
         "cleanup_failure",
         "volume_survives",

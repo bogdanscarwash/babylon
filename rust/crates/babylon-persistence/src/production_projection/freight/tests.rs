@@ -1,13 +1,13 @@
-use babylon_material_circuit::{LogisticsNodeIdV2, RouteStageCapacityV3, RouteStageV3};
-use babylon_tick::material_world::{decode_material_receipts_v4, MaterialWorldRegisterV3};
+use babylon_material_circuit::{LogisticsNodeId, RouteStage, RouteStageCapacity};
+use babylon_tick::material_world::{decode_material_receipts, MaterialWorldRegister};
 
 use super::*;
-use crate::michigan_content::MichiganContentPresetV1;
-use crate::michigan_material::MichiganDeliveryPresetV1;
+use crate::michigan_content::MichiganContentPreset;
+use crate::michigan_material::MichiganDeliveryPreset;
 
-fn shared_opening(meal_order: u64, capacity: u64) -> MaterialCircuitStateV3 {
+fn shared_opening(meal_order: u64, capacity: u64) -> MaterialCircuitState {
     let catalog = crate::test_support::catalog();
-    let foundation = MichiganContentPresetV1::new_campaign(MichiganDeliveryPresetV1::Standard)
+    let foundation = MichiganContentPreset::new_campaign(MichiganDeliveryPreset::Standard)
         .create_foundation(&catalog)
         .unwrap();
     let mut state = foundation.initial_register().state().clone();
@@ -62,18 +62,18 @@ fn shared_opening(meal_order: u64, capacity: u64) -> MaterialCircuitStateV3 {
 }
 
 fn committed_pair(
-    state: MaterialCircuitStateV3,
+    state: MaterialCircuitState,
 ) -> (
-    MaterialCircuitStateV3,
-    MaterialCircuitStateV3,
-    MaterialTickReceiptsV4,
+    MaterialCircuitState,
+    MaterialCircuitState,
+    MaterialTickReceipts,
 ) {
-    let opening = MaterialWorldRegisterV3::try_new(0, state).unwrap();
+    let opening = MaterialWorldRegister::try_new(0, state).unwrap();
     let next = opening.prepare_next().unwrap();
     (
         opening.state().clone(),
         next.register().state().clone(),
-        decode_material_receipts_v4(next.receipt_bytes()).unwrap(),
+        decode_material_receipts(next.receipt_bytes()).unwrap(),
     )
 }
 
@@ -193,13 +193,13 @@ fn missing_duplicate_and_excess_receipts_or_capacity_refuse() {
     missing.dispatches.pop();
     assert_eq!(
         project_freight_capacity_accounts(&catalog, &next, Some(&opening), Some(&missing)),
-        Err(ProductionProjectionErrorV1::State)
+        Err(ProductionProjectionError::State)
     );
     let mut duplicate = receipt.clone();
     duplicate.dispatches.push(receipt.dispatches[0].clone());
     assert_eq!(
         project_freight_capacity_accounts(&catalog, &next, Some(&opening), Some(&duplicate)),
-        Err(ProductionProjectionErrorV1::State)
+        Err(ProductionProjectionError::State)
     );
     let mut duplicated_capacity = opening.clone();
     duplicated_capacity
@@ -212,13 +212,13 @@ fn missing_duplicate_and_excess_receipts_or_capacity_refuse() {
             Some(&duplicated_capacity),
             Some(&receipt)
         ),
-        Err(ProductionProjectionErrorV1::State)
+        Err(ProductionProjectionError::State)
     );
     let mut wrong_next = next.clone();
     wrong_next.corridor_capacities[0].available_grams += 1;
     assert_eq!(
         project_freight_capacity_accounts(&catalog, &wrong_next, Some(&opening), Some(&receipt)),
-        Err(ProductionProjectionErrorV1::State)
+        Err(ProductionProjectionError::State)
     );
 }
 
@@ -237,9 +237,9 @@ fn reservations_for_later_legs_debit_the_future_period_without_claiming_arrival(
         .find(|leg| leg.route_id == sheet.id())
         .unwrap();
     let destination = first.to_node_id;
-    let intermediate = LogisticsNodeIdV2::from_bytes([73; 32]);
+    let intermediate = LogisticsNodeId::from_bytes([73; 32]);
     first.to_node_id = intermediate;
-    let second = RouteStageV3 {
+    let second = RouteStage {
         route_id: first.route_id,
         stage_index: 1,
         from_node_id: intermediate,
@@ -253,7 +253,7 @@ fn reservations_for_later_legs_debit_the_future_period_without_claiming_arrival(
         .find(|row| row.route_id == sheet.id())
         .unwrap()
         .corridor_id;
-    state.route_stage_capacities.push(RouteStageCapacityV3 {
+    state.route_stage_capacities.push(RouteStageCapacity {
         route_id: sheet.id(),
         stage_index: 1,
         corridor_id: shared_id,
@@ -305,6 +305,6 @@ fn reservations_for_later_legs_debit_the_future_period_without_claiming_arrival(
     capacity.available_grams += 1;
     assert_eq!(
         project_freight_capacity_accounts(&catalog, &mismatched, Some(&opening), Some(&receipt)),
-        Err(ProductionProjectionErrorV1::State)
+        Err(ProductionProjectionError::State)
     );
 }

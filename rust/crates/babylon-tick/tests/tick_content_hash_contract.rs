@@ -2,26 +2,27 @@ use std::collections::{BTreeSet, HashMap};
 
 use babylon_bsl::evaluator::Value as BslValue;
 use babylon_bsl::identity_codec::{
-    encode_stable_bsl_value_v1, encode_value_v1, project_stable_value_v1, StableBslValueV1,
+    encode_runtime_value, encode_stable_bsl_value, project_stable_value, StableBslValue,
 };
 use babylon_bsl::query::EdgeKey;
 use babylon_graph::memory::MemoryGraph;
-use babylon_graph::stable_element::{StableElementKeyV1, StableElementResolverV1};
-use babylon_graph::stable_state::encode_stable_graph_state_v1;
+use babylon_graph::stable_element::{StableElementKey, StableElementResolver};
+use babylon_graph::stable_state::encode_stable_graph_state;
 use babylon_graph::substrate::{GraphSubstrate, HyperedgeId, NodeId};
-use babylon_kernel::replay::{ReplaySeed, ReplaySessionIdV1, RngDomainV2};
+use babylon_kernel::replay::{ReplaySeed, ReplaySessionId, RngDomain};
 use babylon_kernel::tick_content_hash::{
-    OrderedPracticeActionBatchDigestV1, PreparedEnvironmentDigestV1, RefDigestV1,
-    StableWorldDigestV1, TickContentPartsV1, TickContentPreimageV1, TickPayloadDigestV1,
+    OrderedPracticeActionBatchDigest, PreparedEnvironmentDigest, RefDigest, StableWorldDigest,
+    TickContentParts, TickContentPreimage, TickPayloadDigest,
 };
 use babylon_kernel::{
-    seed_for, sha256_of, ContentDigest, Currency, H3CellId, H3CellIdError, KernelRng, Ratio,
+    content_digest::sha256_of, content_digest::ContentDigest, currency::Currency, rng::seed_for,
+    rng::KernelRng, scalars::Ratio, H3CellId, H3CellIdError,
 };
-use babylon_practice_contract::ordered_action_v1::OrderedPracticeActionBatchV1;
+use babylon_practice_contract::OrderedPracticeActionBatch;
 use serde::Deserialize;
 use serde_json::Value;
 
-#[path = "support/tick_content_hash_v1_vectors.rs"]
+#[path = "support/tick_content_hash_vectors.rs"]
 mod contract_support;
 
 const VECTORS: &str = include_str!("../../../../contracts/tick_content_hash_v1_vectors.jsonl");
@@ -360,14 +361,14 @@ fn production_stable_graph_matches_cross_allocation_vectors() {
     let vectors = rows();
     for shift_handles in [false, true] {
         let (mut graph, node_names, hyperedge_names) = corpus_graph(shift_handles);
-        let resolver = StableElementResolverV1::seal(
+        let resolver = StableElementResolver::seal(
             &graph,
             "demo/cross-allocation",
             &node_names,
             &hyperedge_names,
         )
         .unwrap();
-        let prior = encode_stable_graph_state_v1(&graph, &resolver).unwrap();
+        let prior = encode_stable_graph_state(&graph, &resolver).unwrap();
         assert_eq!(
             prior.canonical_bytes(),
             hex_bytes(text(
@@ -383,7 +384,7 @@ fn production_stable_graph_matches_cross_allocation_vectors() {
         graph
             .update_node(workers, "social-class/active", 2.5)
             .unwrap();
-        let result = encode_stable_graph_state_v1(&graph, &resolver).unwrap();
+        let result = encode_stable_graph_state(&graph, &resolver).unwrap();
         assert_eq!(
             result.canonical_bytes(),
             hex_bytes(text(
@@ -398,7 +399,7 @@ fn production_stable_graph_matches_cross_allocation_vectors() {
 fn stable_bsl_projection_reuses_the_governed_stable_element_bytes() {
     let vectors = rows();
     let (graph, node_names, hyperedge_names) = corpus_graph(false);
-    let resolver = StableElementResolverV1::seal(
+    let resolver = StableElementResolver::seal(
         &graph,
         "demo/cross-allocation",
         &node_names,
@@ -456,12 +457,12 @@ fn stable_bsl_projection_reuses_the_governed_stable_element_bytes() {
     ];
 
     for (tick_id, runtime_value) in cases {
-        let projected = project_stable_value_v1(&runtime_value, &resolver)
+        let projected = project_stable_value(&runtime_value, &resolver)
             .expect("runtime reference projects through the sealed resolver");
         let mut projected_bytes = Vec::new();
-        encode_stable_bsl_value_v1(&projected, &mut projected_bytes).expect("stable value encodes");
+        encode_stable_bsl_value(&projected, &mut projected_bytes).expect("stable value encodes");
         let mut runtime_bytes = Vec::new();
-        encode_value_v1(&runtime_value, &resolver, &mut runtime_bytes)
+        encode_runtime_value(&runtime_value, &resolver, &mut runtime_bytes)
             .expect("runtime value encodes");
         let tick_bytes = hex_bytes(text(&row_by_id(&vectors, tick_id).data, "canonical_hex"));
 
@@ -470,8 +471,8 @@ fn stable_bsl_projection_reuses_the_governed_stable_element_bytes() {
     }
 
     let mut other_scenario_bytes = Vec::new();
-    encode_stable_bsl_value_v1(
-        &StableBslValueV1::Node(StableElementKeyV1::Node {
+    encode_stable_bsl_value(
+        &StableBslValue::Node(StableElementKey::Node {
             scenario: "demo/other-scenario".to_owned(),
             local_name: "workers".to_owned(),
         }),
@@ -491,9 +492,9 @@ fn stable_bsl_projection_reuses_the_governed_stable_element_bytes() {
 fn production_rng_matches_the_language_neutral_vector() {
     let vectors = rows();
     let v2 = &row(&vectors, "rng_v2").data;
-    let replay = ReplaySessionIdV1::try_from(text(v2, "session")).expect("replay session");
+    let replay = ReplaySessionId::try_from(text(v2, "session")).expect("replay session");
     let seed = ReplaySeed::new(integer(v2, "seed"));
-    let domain = RngDomainV2::try_from(text(v2, "domain")).expect("RNG domain");
+    let domain = RngDomain::try_from(text(v2, "domain")).expect("RNG domain");
     let carrier_row = row_by_id(&vectors, text(v2, "carrier_id"));
     assert_eq!(carrier_row.kind, "stable_carrier_key");
     assert_eq!(
@@ -505,7 +506,7 @@ fn production_rng_matches_the_language_neutral_vector() {
         "cross-allocation-stable-graph"
     );
     let (graph, node_names, hyperedge_names) = corpus_graph(false);
-    let resolver = StableElementResolverV1::seal(
+    let resolver = StableElementResolver::seal(
         &graph,
         "demo/cross-allocation",
         &node_names,
@@ -577,13 +578,13 @@ fn production_rng_matches_the_language_neutral_vector() {
 fn production_primitives_and_outer_preimage_match_shared_corpus() {
     let vectors = rows();
     let replay_row = &row(&vectors, "replay_session").data;
-    let replay = ReplaySessionIdV1::try_from(text(replay_row, "session")).expect("replay session");
+    let replay = ReplaySessionId::try_from(text(replay_row, "session")).expect("replay session");
     assert_eq!(
         replay.canonical_bytes().expect("session bytes"),
         hex_bytes(text(replay_row, "canonical_hex"))
     );
     let element_row = &row(&vectors, "stable_element").data;
-    let element = StableElementKeyV1::Node {
+    let element = StableElementKey::Node {
         scenario: text(element_row, "scenario").to_owned(),
         local_name: text(element_row, "local_name").to_owned(),
     };
@@ -602,9 +603,9 @@ fn production_primitives_and_outer_preimage_match_shared_corpus() {
     );
     let action_row = &row(&vectors, "ordered_action_batch").data;
     let action_session =
-        ReplaySessionIdV1::try_from(text(action_row, "session")).expect("action session");
+        ReplaySessionId::try_from(text(action_row, "session")).expect("action session");
     let actions =
-        OrderedPracticeActionBatchV1::empty(action_session, unsigned(action_row, "resolve_tick"))
+        OrderedPracticeActionBatch::empty(action_session, unsigned(action_row, "resolve_tick"))
             .expect("empty actions");
     assert_eq!(
         actions.canonical_bytes(),
@@ -619,7 +620,7 @@ fn production_primitives_and_outer_preimage_match_shared_corpus() {
 
 fn verify_outer_vector(vectors: &[VectorRow]) {
     let data = &row(vectors, "tick_content_hash").data;
-    let session = ReplaySessionIdV1::try_from(text(data, "session")).expect("outer session");
+    let session = ReplaySessionId::try_from(text(data, "session")).expect("outer session");
     let action_row = row_by_id(vectors, text(data, "actions_id"));
     assert_eq!(action_row.kind, "ordered_action_batch");
     assert!(action_row.data["items"]
@@ -632,7 +633,7 @@ fn verify_outer_vector(vectors: &[VectorRow]) {
         unsigned(data, "resolve_tick")
     );
     let action_batch =
-        OrderedPracticeActionBatchV1::empty(session.clone(), unsigned(data, "resolve_tick"))
+        OrderedPracticeActionBatch::empty(session.clone(), unsigned(data, "resolve_tick"))
             .expect("exact empty runtime action batch");
     assert_eq!(
         action_batch.digest().as_bytes(),
@@ -642,21 +643,21 @@ fn verify_outer_vector(vectors: &[VectorRow]) {
         defines_hash: hex32(text(data, "defines_digest_hex")),
         rules_hash: hex32(text(data, "rules_digest_hex")),
     };
-    let parts = TickContentPartsV1 {
+    let parts = TickContentParts {
         session: &session,
         resolve_tick: unsigned(data, "resolve_tick"),
         seed: ReplaySeed::new(integer(data, "seed")),
         content: &content,
-        reference: RefDigestV1::from_bytes(hex32(text(data, "reference_digest_hex"))),
-        prepared: PreparedEnvironmentDigestV1::from_bytes(linked_digest(vectors, data, "prepared")),
-        prior_world: StableWorldDigestV1::from_bytes(linked_digest(vectors, data, "prior_world")),
-        actions: OrderedPracticeActionBatchDigestV1::from_bytes(linked_digest(
+        reference: RefDigest::from_bytes(hex32(text(data, "reference_digest_hex"))),
+        prepared: PreparedEnvironmentDigest::from_bytes(linked_digest(vectors, data, "prepared")),
+        prior_world: StableWorldDigest::from_bytes(linked_digest(vectors, data, "prior_world")),
+        actions: OrderedPracticeActionBatchDigest::from_bytes(linked_digest(
             vectors, data, "actions",
         )),
-        result_world: StableWorldDigestV1::from_bytes(linked_digest(vectors, data, "result_world")),
-        payload: TickPayloadDigestV1::from_bytes(linked_digest(vectors, data, "payload")),
+        result_world: StableWorldDigest::from_bytes(linked_digest(vectors, data, "result_world")),
+        payload: TickPayloadDigest::from_bytes(linked_digest(vectors, data, "payload")),
     };
-    let preimage = TickContentPreimageV1::compose(&parts).expect("outer preimage");
+    let preimage = TickContentPreimage::compose(&parts).expect("outer preimage");
     assert_eq!(preimage.as_bytes(), hex_bytes(text(data, "canonical_hex")));
     assert_eq!(
         preimage.digest().as_bytes(),

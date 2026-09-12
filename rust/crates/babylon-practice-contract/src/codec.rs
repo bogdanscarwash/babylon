@@ -3,7 +3,7 @@ use crate::{
     OrganizationBudgetDelta, PracticeContractError, ORGANIZATION_BUDGET_DELTA_DOMAIN_BYTES,
     PRACTICE_WIRE_DOMAIN_TERMINATOR_BYTES,
 };
-use babylon_kernel::sha256_of;
+use babylon_kernel::content_digest::sha256_of;
 const SCHEMA_VERSION: u16 = 1;
 fn append_domain(output: &mut Vec<u8>, domain: &[u8]) {
     output.extend_from_slice(domain);

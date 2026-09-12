@@ -1,4 +1,4 @@
-"""Contracts for the PER-287 clean-bootstrap Rust epoch handoff."""
+"""Current Rust bootstrap, reference-input, and disposable-host contracts."""
 
 from __future__ import annotations
 
@@ -39,12 +39,12 @@ def _mise_task(name: str) -> str:
     raise AssertionError(f"missing Mise task: {name}")
 
 
-def test_db_bootstrap_has_one_rust_owned_activation_root() -> None:
+def test_db_bootstrap_has_one_rust_owned_construction_root() -> None:
     task = _mise_task("db:bootstrap")
 
     build = task.index("cargo build -p babylon-persistence --bin babylon-runtime --locked")
-    activation = task.index("babylon-runtime bootstrap")
-    assert build < activation
+    bootstrap = task.index("babylon-runtime bootstrap")
+    assert build < bootstrap
     assert task.count("babylon-runtime bootstrap") == 1
     assert "BABYLON_RUNTIME_DSN" in task
     assert "host=127.0.0.1" in task
@@ -67,8 +67,8 @@ def test_db_bootstrap_clears_inherited_libpq_targets_before_any_database_access(
     assert unset_lines == [f"unset {' '.join(LIBPQ_TARGET_ENV)}"]
     sanitization = task.index(unset_lines[0])
     build = task.index("cargo build -p babylon-persistence --bin babylon-runtime --locked")
-    activation = task.index("babylon-runtime bootstrap")
-    assert sanitization < build < activation
+    bootstrap = task.index("babylon-runtime bootstrap")
+    assert sanitization < build < bootstrap
 
 
 def test_repository_cargo_concurrency_matches_the_host_contract() -> None:
@@ -141,7 +141,7 @@ def test_local_bootstrap_callers_expose_the_single_rust_authority_root() -> None
         assert "requires [Nix]" not in guide
 
 
-def test_runtime_cli_has_one_exact_connecting_schema_preflight_mode() -> None:
+def test_runtime_cli_uses_current_preflight_and_bootstrap() -> None:
     source = (ROOT / "rust/crates/babylon-persistence/src/bin/babylon-runtime.rs").read_text(
         encoding="utf-8"
     )
@@ -149,81 +149,28 @@ def test_runtime_cli_has_one_exact_connecting_schema_preflight_mode() -> None:
     assert 'const DSN_ENV: &str = "BABYLON_RUNTIME_DSN";' in source
     assert "std::env::args_os().skip(1)" in source
     assert "Command::Preflight =>" in source
-    assert "preflight_schema_epoch(config)" in source
-    assert "Command::Activate | Command::Bootstrap =>" in source
-    assert "activate_rust_persistence_v2(config)" in source
-    assert "DurableReplayRuntimeV2" in source
-    assert "activate_rust_persistence_v1" not in source
-    assert "DurableReplayRuntimeV1" not in source
-    assert "babylon-schema-epoch" not in source
-    assert "BABYLON_SCHEMA_EPOCH_DSN" not in source
+    assert "preflight_current_schema(config)" in source
+    assert "Command::Bootstrap" in source
+    assert "bootstrap_current_runtime(config)" in source
 
 
-def test_runtime_cli_owns_one_restart_safe_activation_sequence() -> None:
+def test_bootstrap_validates_exact_reference_inputs_before_database_construction() -> None:
     persistence = ROOT / "rust/crates/babylon-persistence"
-    cli = (persistence / "src/bin/babylon-runtime.rs").read_text(encoding="utf-8")
-    lib = (persistence / "src/lib.rs").read_text(encoding="utf-8")
     bootstrap = (persistence / "src/bootstrap.rs").read_text(encoding="utf-8")
-    runtime = (persistence / "src/runtime.rs").read_text(encoding="utf-8")
-    cohort = (persistence / "src/h3_reference_cohort.rs").read_text(encoding="utf-8")
-
-    assert "activate_rust_persistence_v2(config)" in cli
-    assert "activate_rust_persistence_v1" not in cli
-    activation = runtime.split("pub fn activate_rust_persistence_v2", maxsplit=1)[1].split(
-        "\nfn activate_v2_under_lock", maxsplit=1
-    )[0]
-    assert (
-        activation.index("preflight_v2_activation_before_mutation(config)")
-        < activation.index("establish_predecessor_authority_v2(config)")
-        < activation.index("acquire_lock(&mut client)")
-        < activation.index("activate_v2_under_lock(&mut client)")
-    )
-
-    predecessor = runtime.split("fn establish_predecessor_authority_v2", maxsplit=1)[1].split(
-        "\nconst SERIALIZABLE_ACTIVATION_SETTINGS_V2", maxsplit=1
-    )[0]
-    assert (
-        predecessor.index("bootstrap_h3_reader_epoch_v1(config)")
-        < predecessor.index("MIGRATION_0008_SQL")
-        < predecessor.index("MIGRATION_0009_SQL")
-    )
-
-    v2_activation = runtime.split("fn activate_v2_under_lock", maxsplit=1)[1].split(
-        "\nfn execute_v2_activation_migration", maxsplit=1
-    )[0]
-    assert v2_activation.count("execute_v2_activation_migration(") == 2
-    assert (
-        v2_activation.index("compiled_committed_tick_v2_activation_migrations()")
-        < v2_activation.index("migrations[0]")
-        < v2_activation.index("migrations[1]")
-    )
-
-    for call in (
-        "representative_h3_reference_cohort_v1()",
-        "michigan_dynamic_hex_foundation_v1()",
-        "migrate_schema_epoch(config)",
-        "install_michigan_h3_reference_bundle_v1(config, cohort, foundation)",
-    ):
-        assert call in bootstrap
-    source_validation = bootstrap.index("representative_h3_reference_cohort_v1()")
-    foundation_validation = bootstrap.index("michigan_dynamic_hex_foundation_v1()")
-    construction = bootstrap.index("migrate_schema_epoch(config)")
-    install = bootstrap.index("install_michigan_h3_reference_bundle_v1(config, cohort, foundation)")
+    source_validation = bootstrap.index("representative_h3_reference_cohort()")
+    foundation_validation = bootstrap.index("michigan_dynamic_hex_foundation()")
+    construction = bootstrap.index("install_current_schema(config)")
+    install = bootstrap.index("install_michigan_h3_reference_bundle(config, cohort, foundation)")
     assert source_validation < foundation_validation < construction < install
-    assert "CURRENT_SCHEMA_EPOCH" in bootstrap[construction:install]
-    assert "backfill_legacy_h3_shadow_keys" not in bootstrap
-    assert "migrate_schema_epoch_to_h3_handoff" not in bootstrap
-    assert "install_representative_h3_cohort" not in bootstrap
-    assert "pub fn bootstrap_h3_reader_epoch_v1" in bootstrap
-    assert "mod bootstrap;" in lib
-    assert "pub mod bootstrap;" not in lib
-    assert "bootstrap_h3_reader_epoch_v1" in lib
+    assert bootstrap.count("install_current_schema(config)") == 1
 
+
+def test_h3_source_fixture_has_one_production_owner() -> None:
+    persistence = ROOT / "rust/crates/babylon-persistence"
     source_fixture = persistence / "src/fixtures/h3_reference_source_v1.bin"
     retired_test_fixture = persistence / "tests/fixtures/h3_reference_source_v1.bin"
     assert source_fixture.is_file()
     assert not retired_test_fixture.exists()
-    assert 'include_bytes!("fixtures/h3_reference_source_v1.bin")' in cohort
 
     include_sites = []
     for path in persistence.rglob("*.rs"):
@@ -320,7 +267,7 @@ def _postgres_runner() -> str:
 def test_fresh_runtime_focuses_cover_current_live_consumers() -> None:
     runner = _postgres_runner()
     for target in (
-        "schema_epoch::live_rollback_tests::",
+        "current_schema::live_tests::",
         "--test reference_integrity",
         "runtime::live_tests::live_",
         "--test archive_worker_live --test place_producer_live --test county_producer_live",
@@ -342,7 +289,7 @@ def test_fresh_runtime_focuses_cover_current_live_consumers() -> None:
         assert retired not in runner
 
 
-def test_disposable_pg_runner_proves_fresh_activation_and_michigan_smoke() -> None:
+def test_disposable_pg_runner_proves_fresh_schema_and_michigan_smoke() -> None:
     runner = _postgres_runner()
     before = runner.index('before="$(fresh_relation_count)"')
     hostile = runner.index("run_phase hostile_dsn 30", before)
@@ -356,9 +303,12 @@ def test_disposable_pg_runner_proves_fresh_activation_and_michigan_smoke() -> No
     assert "mise run qa:michigan-rollover-smoke" in runner[smoke:]
     for field in LIBPQ_TARGET_ENV:
         assert field in runner[bootstrap:smoke]
-    assert "1:1:8,2:2:9|1:1:10,2:2:11|0|true|true" in runner
-    assert "babylon_meta.committed_tick_v2_authority_ledger" in runner
-    assert "activation_epoch::pg_catalog.text" in runner
+    assert 'readonly CLEAN_RUNTIME="true|0|true|true"' in runner
+    assert "FROM babylon_meta.current_schema" in runner
+    assert "pg_catalog.count(*) = 1" in runner
+    assert (
+        "pg_catalog.bool_and(singleton AND pg_catalog.octet_length(schema_sha256) = 32)" in runner
+    )
     assert "pg_catalog.to_regclass('public.hex_spatial_map') IS NULL" in runner
     assert "pg_catalog.to_regclass('babylon_state.campaign_foundation') IS NOT NULL" in runner
 
@@ -381,7 +331,6 @@ def test_runtime_contracts_clone_one_pristine_current_authority_template() -> No
     runtime = (ROOT / "rust/crates/babylon-persistence/src/runtime.rs").read_text(encoding="utf-8")
     assert 'const TEMPLATE_DB_ENV: &str = "BABYLON_RUNTIME_TEMPLATE_DB";' in runtime
     assert "TestDatabase::create_from_template" in runtime
-    assert "verify_frozen_python_estate_activation" not in runtime
 
 
 def test_heavy_children_and_enclosing_ci_have_truthful_deadlines() -> None:

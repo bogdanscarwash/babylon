@@ -41,9 +41,9 @@ DEV_INTEGRATION_TARGETS: Final = {
         "probability_projection_contract",
     ),
     "babylon-persistence": (
-        "committed_tick_envelope_v2_contract",
-        "material_runtime_v3",
-        "foundation_content_v2",
+        "persistence_semantic_vectors",
+        "material_runtime",
+        "foundation_content",
         "runtime_foundation_checkpoint_contract",
         "postgres_catalog_contract",
         "reader_role_contract",

@@ -1,19 +1,19 @@
 use babylon_material_circuit::{
-    CapacityRowV1, GoodIdV1, LaborCapacityRowV1, LaborCoefficientV1, LogisticsNodeIdV2,
-    ProcessOutputV1, ProductionCommitmentV1, SiteLogisticsNodeV2,
+    CapacityRow, GoodId, LaborCapacityRow, LaborCoefficient, LogisticsNodeId, ProcessOutput,
+    ProductionCommitment, SiteLogisticsNode,
 };
-use babylon_tick::material_world::{decode_material_receipts_v4, MaterialWorldRegisterV3};
+use babylon_tick::material_world::{decode_material_receipts, MaterialWorldRegister};
 
 use super::*;
 
-fn shared_opening() -> MaterialCircuitStateV3 {
-    let site = SiteIdV1::from_bytes([1; 32]);
-    let labor_unit = UnitIdV1::from_bytes([2; 32]);
-    let mut state = MaterialCircuitStateV3 {
+fn shared_opening() -> MaterialCircuitState {
+    let site = SiteId::from_bytes([1; 32]);
+    let labor_unit = UnitId::from_bytes([2; 32]);
+    let mut state = MaterialCircuitState {
         period: 1,
-        site_logistics_nodes: vec![SiteLogisticsNodeV2 {
+        site_logistics_nodes: vec![SiteLogisticsNode {
             site_id: site,
-            node_id: LogisticsNodeIdV2::from_bytes([3; 32]),
+            node_id: LogisticsNodeId::from_bytes([3; 32]),
         }],
         process_outputs: vec![],
         input_coefficients: vec![],
@@ -36,26 +36,26 @@ fn shared_opening() -> MaterialCircuitStateV3 {
         production_commitments: vec![],
     };
     for (id, quantity) in [(4, 2), (5, 3)] {
-        let process = ProcessIdV1::from_bytes([id; 32]);
-        state.process_outputs.push(ProcessOutputV1 {
+        let process = ProcessId::from_bytes([id; 32]);
+        state.process_outputs.push(ProcessOutput {
             process_id: process,
             site_id: site,
-            good_id: GoodIdV1::from_bytes([id; 32]),
-            unit_id: UnitIdV1::from_bytes([6; 32]),
+            good_id: GoodId::from_bytes([id; 32]),
+            unit_id: UnitId::from_bytes([6; 32]),
             quantity_per_batch: 1,
         });
-        state.labor_coefficients.push(LaborCoefficientV1 {
+        state.labor_coefficients.push(LaborCoefficient {
             process_id: process,
             unit_id: labor_unit,
             quantity_per_batch: quantity,
         });
-        state.capacities.push(CapacityRowV1 {
+        state.capacities.push(CapacityRow {
             process_id: process,
             site_id: site,
             period: 1,
             available_batches: quantity,
         });
-        state.production_commitments.push(ProductionCommitmentV1 {
+        state.production_commitments.push(ProductionCommitment {
             process_id: process,
             site_id: site,
             period: 1,
@@ -63,7 +63,7 @@ fn shared_opening() -> MaterialCircuitStateV3 {
         });
     }
     for (period, available) in [(1, 12), (2, 30)] {
-        state.labor.push(LaborCapacityRowV1 {
+        state.labor.push(LaborCapacityRow {
             site_id: site,
             unit_id: labor_unit,
             period,
@@ -74,18 +74,18 @@ fn shared_opening() -> MaterialCircuitStateV3 {
 }
 
 fn committed_pair(
-    state: MaterialCircuitStateV3,
+    state: MaterialCircuitState,
 ) -> (
-    MaterialCircuitStateV3,
-    MaterialCircuitStateV3,
-    MaterialTickReceiptsV4,
+    MaterialCircuitState,
+    MaterialCircuitState,
+    MaterialTickReceipts,
 ) {
-    let opening = MaterialWorldRegisterV3::try_new(0, state).unwrap();
+    let opening = MaterialWorldRegister::try_new(0, state).unwrap();
     let next = opening.prepare_next().unwrap();
     (
         opening.state().clone(),
         next.register().state().clone(),
-        decode_material_receipts_v4(next.receipt_bytes()).unwrap(),
+        decode_material_receipts(next.receipt_bytes()).unwrap(),
     )
 }
 
@@ -98,7 +98,7 @@ fn shared_principal_is_counted_once_and_time_closes_from_actual_receipts() {
     assert_eq!(rows[0].next_opening_available, 30);
     assert_eq!(
         rows[0].completed,
-        Some(CompletedProductionLaborV2 {
+        Some(CompletedProductionLabor {
             period: 1,
             opening: 12,
             planned: 13,
@@ -123,7 +123,7 @@ fn shared_principal_is_counted_once_and_time_closes_from_actual_receipts() {
 #[test]
 fn exact_unit_principals_remain_separate_at_the_same_site() {
     let mut state = shared_opening();
-    let other_unit = UnitIdV1::from_bytes([7; 32]);
+    let other_unit = UnitId::from_bytes([7; 32]);
     state.labor_coefficients[1].unit_id = other_unit;
     let mut budget = state.labor[0].clone();
     budget.unit_id = other_unit;
@@ -159,7 +159,7 @@ fn multiplication_and_shared_sum_overflow_refuse_without_mutating_inputs() {
     let before = opening.clone();
     assert!(matches!(
         completed_totals(&opening, &receipt),
-        Err(ProductionProjectionErrorV1::Arithmetic)
+        Err(ProductionProjectionError::Arithmetic)
     ));
     assert_eq!(opening, before);
     for coefficient in &mut opening.labor_coefficients {
@@ -174,7 +174,7 @@ fn multiplication_and_shared_sum_overflow_refuse_without_mutating_inputs() {
     }
     assert!(matches!(
         completed_totals(&opening, &receipt),
-        Err(ProductionProjectionErrorV1::Arithmetic)
+        Err(ProductionProjectionError::Arithmetic)
     ));
 }
 
@@ -185,28 +185,28 @@ fn inconsistent_accounts_refuse_instead_of_publishing_negative_or_unattributed_t
     insufficient.labor[0].available = 7;
     assert_eq!(
         project_labor_accounts(&next, Some(&insufficient), Some(&receipt)),
-        Err(ProductionProjectionErrorV1::State)
+        Err(ProductionProjectionError::State)
     );
     let mut duplicate = receipt.clone();
     duplicate.production.push(receipt.production[0].clone());
     assert_eq!(
         project_labor_accounts(&next, Some(&opening), Some(&duplicate)),
-        Err(ProductionProjectionErrorV1::State)
+        Err(ProductionProjectionError::State)
     );
     let mut missing = receipt.clone();
     missing.production.pop();
     assert_eq!(
         project_labor_accounts(&next, Some(&opening), Some(&missing)),
-        Err(ProductionProjectionErrorV1::State)
+        Err(ProductionProjectionError::State)
     );
     assert_eq!(
         project_labor_accounts(&next, None, Some(&receipt)),
-        Err(ProductionProjectionErrorV1::History)
+        Err(ProductionProjectionError::History)
     );
     let mut duplicate_budget = opening.clone();
     duplicate_budget.labor.push(opening.labor[0].clone());
     assert_eq!(
         budgets(&duplicate_budget),
-        Err(ProductionProjectionErrorV1::State)
+        Err(ProductionProjectionError::State)
     );
 }

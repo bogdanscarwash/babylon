@@ -4,9 +4,9 @@ use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use babylon_graph::memory::MemoryGraph;
-use babylon_graph::stable_element::{StableElementResolverV1, StableIdentityError};
+use babylon_graph::stable_element::{StableElementResolver, StableIdentityError};
 use babylon_graph::substrate::GraphSubstrate;
-use babylon_kernel::sha256_of;
+use babylon_kernel::content_digest::sha256_of;
 use serde_json::Value;
 
 use super::{
@@ -14,7 +14,7 @@ use super::{
     MAX_ROWS,
 };
 
-#[path = "tick_content_hash_v1_bound_operations.rs"]
+#[path = "tick_content_hash_bound_operations.rs"]
 mod bound_operations;
 
 pub(super) fn canonical(row: &VectorRow, rows: &[VectorRow]) -> Option<Vec<u8>> {
@@ -1119,7 +1119,7 @@ fn verify_resolver_refusal(data: &Value) {
             .expect("resolver refusal hyperedge");
         hyperedge_names.insert(handle, text(hyperedge, "local_name").to_owned());
     }
-    let result = StableElementResolverV1::seal(
+    let result = StableElementResolver::seal(
         &graph,
         text(manifest, "scenario"),
         &node_names,

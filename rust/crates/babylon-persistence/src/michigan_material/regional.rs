@@ -1,16 +1,15 @@
 //! Regional authoring translates to the same normalized rows as statewide content.
 use super::{
-    sha256_of, MichiganCapacityOverrideV2, MichiganDefinesErrorV1, MichiganDefinesV3,
-    MichiganDeliveryPresetV1, MichiganIndustryBaselineRowV1, MichiganInterventionV2,
-    MichiganMaterialCatalogV1, MichiganMaterialCorridorV1, MichiganMaterialErrorV1,
-    MichiganMaterialGoodV1, MichiganMaterialInputV2, MichiganMaterialPathV2,
-    MichiganMaterialProcessV1, MichiganMaterialRouteV1, MichiganMaterialSiteV1,
-    MichiganNormalizedContentV2, MichiganOwnerSourceV2, MichiganRouteOverrideV2,
-    MichiganSiteRoleV2, MichiganStaffingDesignV1, MichiganWorkforceSeedV1,
-    MICHIGAN_INDUSTRY_BASELINE_SHA256_V1, SOURCE_URL,
+    sha256_of, MichiganCapacityOverride, MichiganDefines, MichiganDefinesError,
+    MichiganDeliveryPreset, MichiganIndustryBaselineRow, MichiganIntervention,
+    MichiganMaterialCatalog, MichiganMaterialCorridor, MichiganMaterialError, MichiganMaterialGood,
+    MichiganMaterialInput, MichiganMaterialPath, MichiganMaterialProcess, MichiganMaterialRoute,
+    MichiganMaterialSite, MichiganNormalizedContent, MichiganOwnerSource, MichiganRouteOverride,
+    MichiganSiteRole, MichiganStaffingDesign, MichiganWorkforceSeed,
+    MICHIGAN_INDUSTRY_BASELINE_SHA256, SOURCE_URL,
 };
 use crate::michigan_sectors::{
-    michigan_county_sectors_v1, QCEW_SECTORS_ARTIFACT_SHA256_V1, QCEW_SECTORS_SEMANTIC_SHA256_V1,
+    michigan_county_sectors, QCEW_SECTORS_ARTIFACT_SHA256, QCEW_SECTORS_SEMANTIC_SHA256,
 };
 use serde::Deserialize;
 use std::collections::BTreeSet;
@@ -25,7 +24,7 @@ struct Industry {
     evidence_class: String,
     source_url: String,
     documentation_url: String,
-    rows: Vec<MichiganIndustryBaselineRowV1>,
+    rows: Vec<MichiganIndustryBaselineRow>,
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -77,8 +76,8 @@ struct Corridor {
     unit_key: String,
 }
 
-pub(super) fn blank(defines: &MichiganDefinesV3) -> MichiganNormalizedContentV2 {
-    MichiganNormalizedContentV2 {
+pub(super) fn blank(defines: &MichiganDefines) -> MichiganNormalizedContent {
+    MichiganNormalizedContent {
         schema: "MichiganNormalizedContentV2".to_owned(),
         evidence_class: "Designed".to_owned(),
         horizon_ticks: defines.horizon_periods,
@@ -95,7 +94,7 @@ pub(super) fn blank(defines: &MichiganDefinesV3) -> MichiganNormalizedContentV2 
         owners: Vec::new(),
         industry: Vec::new(),
         physical_network: None,
-        staffing: MichiganStaffingDesignV1 {
+        staffing: MichiganStaffingDesign {
             composition_id: "g4-workforce-staffing".to_owned(),
             role: "Mechanic".to_owned(),
             evidence_class: "Designed".to_owned(),
@@ -110,17 +109,17 @@ pub(super) fn owner_source(
     county: &str,
     sector: &str,
     industry_hash: &str,
-) -> Result<MichiganOwnerSourceV2, MichiganDefinesErrorV1> {
-    let source = michigan_county_sectors_v1()
-        .map_err(|_| MichiganDefinesErrorV1::Material(MichiganMaterialErrorV1::SourceValue))?;
+) -> Result<MichiganOwnerSource, MichiganDefinesError> {
+    let source = michigan_county_sectors()
+        .map_err(|_| MichiganDefinesError::Material(MichiganMaterialError::SourceValue))?;
     let row = source
         .rows()
         .iter()
         .find(|row| row.county_geoid() == county && row.sector_code().as_str() == sector)
-        .ok_or(MichiganDefinesErrorV1::Material(
-            MichiganMaterialErrorV1::ContentReference,
+        .ok_or(MichiganDefinesError::Material(
+            MichiganMaterialError::ContentReference,
         ))?;
-    Ok(MichiganOwnerSourceV2 {
+    Ok(MichiganOwnerSource {
         county_geoid: county.to_owned(),
         sector_code: sector.to_owned(),
         county_source_file: row.source_file().to_owned(),
@@ -132,32 +131,32 @@ pub(super) fn owner_source(
         annual_avg_emplvl: row.annual_avg_emplvl(),
         total_annual_wages: row.total_annual_wages(),
         annual_avg_wkly_wage: row.annual_avg_wkly_wage(),
-        sector_artifact_sha256: QCEW_SECTORS_ARTIFACT_SHA256_V1.to_owned(),
-        sector_semantic_sha256: QCEW_SECTORS_SEMANTIC_SHA256_V1.to_owned(),
+        sector_artifact_sha256: QCEW_SECTORS_ARTIFACT_SHA256.to_owned(),
+        sector_semantic_sha256: QCEW_SECTORS_SEMANTIC_SHA256.to_owned(),
         industry_artifact_sha256: industry_hash.to_owned(),
     })
 }
-fn mass(defines: &MichiganDefinesV3, unit: &str) -> Result<u64, MichiganDefinesErrorV1> {
+fn mass(defines: &MichiganDefines, unit: &str) -> Result<u64, MichiganDefinesError> {
     match unit {
         "kg" => Ok(defines.regional_mass.kilogram_grams_per_unit),
         "panel" => Ok(defines.regional_mass.panel_grams_per_unit),
         "subassembly" => Ok(defines.regional_mass.subassembly_grams_per_unit),
-        _ => Err(MichiganDefinesErrorV1::Material(
-            MichiganMaterialErrorV1::ContentReference,
+        _ => Err(MichiganDefinesError::Material(
+            MichiganMaterialError::ContentReference,
         )),
     }
 }
 pub(super) fn compile(
-    defines: MichiganDefinesV3,
-) -> Result<MichiganMaterialCatalogV1, MichiganDefinesErrorV1> {
-    use MichiganDefinesErrorV1::Material;
+    defines: MichiganDefines,
+) -> Result<MichiganMaterialCatalog, MichiganDefinesError> {
+    use MichiganDefinesError::Material;
     if crate::michigan_economy::digest_hex(&sha256_of(INDUSTRY))
-        != MICHIGAN_INDUSTRY_BASELINE_SHA256_V1
+        != MICHIGAN_INDUSTRY_BASELINE_SHA256
     {
-        return Err(Material(MichiganMaterialErrorV1::ArtifactDigest));
+        return Err(Material(MichiganMaterialError::ArtifactDigest));
     }
     let source: Industry = serde_json::from_slice(INDUSTRY)
-        .map_err(|_| Material(MichiganMaterialErrorV1::ArtifactDecode))?;
+        .map_err(|_| Material(MichiganMaterialError::ArtifactDecode))?;
     if source.schema != "MichiganIndustryBaselineV1"
         || source.vintage != 2024
         || source.evidence_class != "Observed"
@@ -165,22 +164,22 @@ pub(super) fn compile(
         || source.documentation_url != "https://www.bls.gov/cew/downloadable-data-files.htm"
         || source.rows.len() != 5
     {
-        return Err(Material(MichiganMaterialErrorV1::ArtifactShape));
+        return Err(Material(MichiganMaterialError::ArtifactShape));
     }
     let topology: Topology = serde_json::from_slice(TOPOLOGY)
-        .map_err(|_| Material(MichiganMaterialErrorV1::ArtifactDecode))?;
+        .map_err(|_| Material(MichiganMaterialError::ArtifactDecode))?;
     let mut normalized = blank(&defines);
     normalized.industry = source.rows;
     normalized.sites = topology
         .sites
         .into_iter()
-        .map(|s| MichiganMaterialSiteV1 {
+        .map(|s| MichiganMaterialSite {
             key: s.key,
             label: s.label,
             county_geoid: s.county_geoid,
             naics: s.naics,
             sector_code: "31-33".to_owned(),
-            role: MichiganSiteRoleV2::Production,
+            role: MichiganSiteRole::Production,
         })
         .collect();
     for county in normalized
@@ -192,11 +191,11 @@ pub(super) fn compile(
         normalized.owners.push(owner_source(
             county,
             "31-33",
-            MICHIGAN_INDUSTRY_BASELINE_SHA256_V1,
+            MICHIGAN_INDUSTRY_BASELINE_SHA256,
         )?);
     }
     for good in topology.goods {
-        normalized.goods.push(MichiganMaterialGoodV1 {
+        normalized.goods.push(MichiganMaterialGood {
             grams_per_unit: mass(&defines, &good.unit_key)?,
             key: good.key,
             label: good.label,
@@ -210,31 +209,31 @@ pub(super) fn compile(
         topology.routes,
         topology.corridors,
     )?;
-    MichiganMaterialCatalogV1::from_normalized(
+    MichiganMaterialCatalog::from_normalized(
         defines,
         normalized,
-        MichiganDeliveryPresetV1::Standard,
+        MichiganDeliveryPreset::Standard,
         interventions,
     )
 }
 
 fn append_processes(
-    normalized: &mut MichiganNormalizedContentV2,
-    defines: &MichiganDefinesV3,
+    normalized: &mut MichiganNormalizedContent,
+    defines: &MichiganDefines,
     processes: Vec<Process>,
-) -> Result<(), MichiganDefinesErrorV1> {
-    use MichiganDefinesErrorV1::Material;
+) -> Result<(), MichiganDefinesError> {
+    use MichiganDefinesError::Material;
     for process in processes {
         let value = defines
             .process
             .get(&process.key.replace('-', "_"))
-            .ok_or(Material(MichiganMaterialErrorV1::ContentReference))?;
+            .ok_or(Material(MichiganMaterialError::ContentReference))?;
         let site = normalized
             .sites
             .iter()
             .find(|site| site.key == process.site_key)
-            .ok_or(Material(MichiganMaterialErrorV1::ContentReference))?;
-        normalized.staffing.pools.push(MichiganWorkforceSeedV1 {
+            .ok_or(Material(MichiganMaterialError::ContentReference))?;
+        normalized.staffing.pools.push(MichiganWorkforceSeed {
             key: process.key.clone(),
             site_key: site.key.clone(),
             process_keys: vec![process.key.clone()],
@@ -244,13 +243,13 @@ fn append_processes(
             previous_unretained_hours: value
                 .employed_people
                 .checked_mul(defines.hours_per_period())
-                .ok_or(Material(MichiganMaterialErrorV1::ContentValue))?,
+                .ok_or(Material(MichiganMaterialError::ContentValue))?,
         });
-        normalized.processes.push(MichiganMaterialProcessV1 {
+        normalized.processes.push(MichiganMaterialProcess {
             key: process.key,
             site_key: site.key.clone(),
             industry_code: site.naics.clone(),
-            inputs: vec![MichiganMaterialInputV2 {
+            inputs: vec![MichiganMaterialInput {
                 good_key: process.input_good_key,
                 quantity_per_batch: value.input_units_per_batch,
                 opening_quantity: value.opening_input_units,
@@ -268,20 +267,20 @@ fn append_processes(
 }
 
 fn append_transport(
-    normalized: &mut MichiganNormalizedContentV2,
-    defines: &MichiganDefinesV3,
+    normalized: &mut MichiganNormalizedContent,
+    defines: &MichiganDefines,
     routes: Vec<Route>,
     corridors: Vec<Corridor>,
-) -> Result<Vec<MichiganInterventionV2>, MichiganDefinesErrorV1> {
-    use MichiganDefinesErrorV1::Material;
-    let mut delayed = MichiganInterventionV2 {
-        preset: MichiganDeliveryPresetV1::Delayed,
+) -> Result<Vec<MichiganIntervention>, MichiganDefinesError> {
+    use MichiganDefinesError::Material;
+    let mut delayed = MichiganIntervention {
+        preset: MichiganDeliveryPreset::Delayed,
         capacities: Vec::new(),
         opening_stocks: Vec::new(),
         routes: Vec::new(),
     };
-    let mut ample = MichiganInterventionV2 {
-        preset: MichiganDeliveryPresetV1::SharedFreightAmple,
+    let mut ample = MichiganIntervention {
+        preset: MichiganDeliveryPreset::SharedFreightAmple,
         capacities: Vec::new(),
         opening_stocks: Vec::new(),
         routes: Vec::new(),
@@ -290,22 +289,22 @@ fn append_transport(
         let value = defines
             .route
             .get(&route.key.replace('-', "_"))
-            .ok_or(Material(MichiganMaterialErrorV1::ContentReference))?;
-        let path = |periods, key: String| MichiganMaterialPathV2::Routed {
+            .ok_or(Material(MichiganMaterialError::ContentReference))?;
+        let path = |periods, key: String| MichiganMaterialPath::Routed {
             travel_periods: periods,
             capacity_keys: vec![key],
             physical_edge_keys: Vec::new(),
             distance_mm: None,
         };
-        delayed.routes.push(MichiganRouteOverrideV2 {
+        delayed.routes.push(MichiganRouteOverride {
             route_key: route.key.clone(),
             path: path(value.delayed_travel_periods, route.corridor_key.clone()),
         });
-        ample.routes.push(MichiganRouteOverrideV2 {
+        ample.routes.push(MichiganRouteOverride {
             route_key: route.key.clone(),
             path: path(value.travel_periods, route.shared_corridor_key),
         });
-        normalized.routes.push(MichiganMaterialRouteV1 {
+        normalized.routes.push(MichiganMaterialRoute {
             key: route.key,
             supplier_site_key: route.supplier_site_key,
             buyer_site_key: route.buyer_site_key,
@@ -321,28 +320,28 @@ fn append_transport(
             defines
                 .corridor
                 .get(&corridor.key.replace('-', "_"))
-                .ok_or(Material(MichiganMaterialErrorV1::ContentReference))?
+                .ok_or(Material(MichiganMaterialError::ContentReference))?
                 .units_per_week
         };
-        normalized.corridors.push(MichiganMaterialCorridorV1 {
+        normalized.corridors.push(MichiganMaterialCorridor {
             key: corridor.key,
             label: corridor.label,
             capacity_grams_per_period: rate
                 .checked_mul(babylon_kernel::clock::WEEKS_PER_TICK)
                 .and_then(|v| v.checked_mul(mass(defines, &corridor.unit_key).ok()?))
-                .ok_or(Material(MichiganMaterialErrorV1::ContentValue))?,
+                .ok_or(Material(MichiganMaterialError::ContentValue))?,
         });
     }
     let mut constrained = ample.clone();
-    constrained.preset = MichiganDeliveryPresetV1::SharedFreightConstrained;
-    constrained.capacities.push(MichiganCapacityOverrideV2 {
+    constrained.preset = MichiganDeliveryPreset::SharedFreightConstrained;
+    constrained.capacities.push(MichiganCapacityOverride {
         capacity_key: "shared-freight".to_owned(),
         grams_per_period: defines
             .shared_freight
             .constrained_units_per_week
             .checked_mul(babylon_kernel::clock::WEEKS_PER_TICK)
             .and_then(|v| v.checked_mul(defines.regional_mass.kilogram_grams_per_unit))
-            .ok_or(Material(MichiganMaterialErrorV1::ContentValue))?,
+            .ok_or(Material(MichiganMaterialError::ContentValue))?,
     });
 
     Ok(vec![delayed, ample, constrained])

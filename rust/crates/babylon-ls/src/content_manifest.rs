@@ -17,16 +17,16 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-pub use babylon_tick::kernel_slot::KernelSlotLedgerErrorV1 as KernelSlotLedgerError;
+use babylon_tick::kernel_slot::KernelSlotLedgerError;
 use babylon_tick::kernel_slot::{
-    match_kernel_slot_reservation_v1, validate_kernel_slot_ledger_v1, KernelSlotReservationV1,
+    match_kernel_slot_reservation, validate_kernel_slot_ledger, KernelSlotReservationRef,
 };
 use serde::Deserialize;
 
-pub(crate) use babylon_tick::kernel_slot::KernelSlotReservationMatchV1 as KernelSlotReservationMatch;
+use babylon_tick::kernel_slot::KernelSlotReservationMatch;
 
 /// The sole accepted `content-sets.toml` schema.
-pub const CONTENT_SET_MANIFEST_SCHEMA_V2: u32 = 2;
+pub const CONTENT_SET_MANIFEST_SCHEMA: u32 = 2;
 
 /// The whole manifest: `content-sets.toml`'s top-level shape (plan §4.1).
 #[derive(Debug, Clone, Deserialize)]
@@ -212,10 +212,10 @@ impl ContentSetManifest {
     }
 
     fn validate(&self, path: &Path) -> Result<(), ContentManifestError> {
-        if self.schema != CONTENT_SET_MANIFEST_SCHEMA_V2 {
+        if self.schema != CONTENT_SET_MANIFEST_SCHEMA {
             return Err(ContentManifestError::UnsupportedSchema {
                 path: path.to_path_buf(),
-                expected: CONTENT_SET_MANIFEST_SCHEMA_V2,
+                expected: CONTENT_SET_MANIFEST_SCHEMA,
                 actual: self.schema,
             });
         }
@@ -227,7 +227,7 @@ impl ContentSetManifest {
     }
 
     fn validate_kernel_slots(&self) -> Result<(), KernelSlotLedgerError> {
-        validate_kernel_slot_ledger_v1(&self.borrowed_kernel_slots())
+        validate_kernel_slot_ledger(&self.borrowed_kernel_slots())
     }
 
     #[must_use]
@@ -237,13 +237,13 @@ impl ContentSetManifest {
         sample: &str,
         slot: u32,
     ) -> KernelSlotReservationMatch<'_> {
-        match_kernel_slot_reservation_v1(&self.borrowed_kernel_slots(), rule, sample, slot)
+        match_kernel_slot_reservation(&self.borrowed_kernel_slots(), rule, sample, slot)
     }
 
-    pub(crate) fn borrowed_kernel_slots(&self) -> Vec<KernelSlotReservationV1<'_>> {
+    pub(crate) fn borrowed_kernel_slots(&self) -> Vec<KernelSlotReservationRef<'_>> {
         self.kernel_slots
             .iter()
-            .map(|reservation| KernelSlotReservationV1 {
+            .map(|reservation| KernelSlotReservationRef {
                 ordinal: reservation.ordinal,
                 rule: &reservation.rule,
                 sample: &reservation.sample,
@@ -258,7 +258,7 @@ mod tests {
     use super::{
         ContentManifestError, ContentSetManifest, KernelSlotLedgerError, KernelSlotReservationMatch,
     };
-    use babylon_tick::kernel_slot::BUNDLED_KERNEL_SLOT_RESERVATIONS_V1;
+    use babylon_tick::kernel_slot::BUNDLED_KERNEL_SLOT_RESERVATIONS;
     use std::path::Path;
 
     fn manifest_path() -> &'static Path {
@@ -296,7 +296,7 @@ slot = 0
         let manifest = ContentSetManifest::load(&path).expect("checked-in content manifest");
         let observed = manifest.borrowed_kernel_slots();
 
-        assert_eq!(observed, BUNDLED_KERNEL_SLOT_RESERVATIONS_V1);
+        assert_eq!(observed, BUNDLED_KERNEL_SLOT_RESERVATIONS);
     }
 
     #[test]

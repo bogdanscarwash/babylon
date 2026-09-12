@@ -1,31 +1,31 @@
 use super::*;
-use crate::michigan_material::{MichiganDeliveryPresetV1, MichiganMaterialCatalogV1};
+use crate::michigan_material::{MichiganDeliveryPreset, MichiganMaterialCatalog};
 use babylon_material_circuit::{
-    advance_staffing_v2, close_material_period_v3, MaterialCircuitTransitionV3,
-    StaffingPoolStateV2, StaffingStateV2,
+    advance_staffing, close_material_period, MaterialCircuitTransition, StaffingPoolState,
+    StaffingState,
 };
-fn selected(preset: MichiganDeliveryPresetV1) -> MichiganMaterialCatalogV1 {
+fn selected(preset: MichiganDeliveryPreset) -> MichiganMaterialCatalog {
     crate::test_support::catalog().with_preset(preset).unwrap()
 }
-fn state(c: &MichiganMaterialCatalogV1) -> MaterialCircuitStateV3 {
-    compile_sector_bundles_v2(&michigan_sector_bundles_v2(c).unwrap(), c.preset(), c).unwrap()
+fn state(c: &MichiganMaterialCatalog) -> MaterialCircuitState {
+    compile_sector_bundles(&michigan_sector_bundles(c).unwrap(), c.preset(), c).unwrap()
 }
-fn trace(c: &MichiganMaterialCatalogV1, periods: usize) -> Vec<MaterialCircuitTransitionV3> {
+fn trace(c: &MichiganMaterialCatalog, periods: usize) -> Vec<MaterialCircuitTransition> {
     let mut state = state(c);
-    let authority = staffing::StoredStaffingV2::authored(c).unwrap();
+    let authority = staffing::StoredStaffing::authored(c).unwrap();
     let composition = authority.composition().unwrap();
     let bindings: Vec<_> = composition
         .bindings()
         .iter()
         .map(|b| b.pool().clone())
         .collect();
-    let pools=composition.bindings().iter().map(|b|{let seed=authority.design().pools.iter().find(|s|matches!(b.subject(),StableElementKeyV1::Node{local_name,..} if *local_name==s.local_name())).unwrap();StaffingPoolStateV2::try_new(b.pool().clone(),seed.employed,seed.reserve,seed.previous_unretained_hours).unwrap()}).collect();
-    let mut staffing = StaffingStateV2::try_new(1, pools).unwrap();
+    let pools=composition.bindings().iter().map(|b|{let seed=authority.design().pools.iter().find(|s|matches!(b.subject(),StableElementKey::Node{local_name,..} if *local_name==s.local_name())).unwrap();StaffingPoolState::try_new(b.pool().clone(),seed.employed,seed.reserve,seed.previous_unretained_hours).unwrap()}).collect();
+    let mut staffing = StaffingState::try_new(1, pools).unwrap();
     (0..periods)
         .map(|_| {
-            let closed = close_material_period_v3(&state).unwrap();
+            let closed = close_material_period(&state).unwrap();
             let requests = closed.staffing_requests(&bindings).unwrap();
-            let staffed = advance_staffing_v2(&staffing, &requests).unwrap();
+            let staffed = advance_staffing(&staffing, &requests).unwrap();
             let result = closed
                 .finish_with_labor(staffed.next_labor().to_vec())
                 .unwrap();
@@ -37,8 +37,8 @@ fn trace(c: &MichiganMaterialCatalogV1, periods: usize) -> Vec<MaterialCircuitTr
 }
 #[test]
 fn regional_owners_preserve_five_sites_and_separate_wayne_resources() {
-    let c = selected(MichiganDeliveryPresetV1::Standard);
-    let bundles = michigan_sector_bundles_v2(&c).unwrap();
+    let c = selected(MichiganDeliveryPreset::Standard);
+    let bundles = michigan_sector_bundles(&c).unwrap();
     assert_eq!(bundles.len(), 4);
     assert_eq!(bundles.iter().map(|b| b.processes.len()).sum::<usize>(), 5);
     let wayne = bundles
@@ -58,7 +58,7 @@ fn regional_owners_preserve_five_sites_and_separate_wayne_resources() {
     );
     for b in bundles {
         assert_eq!(
-            SectorBundleV2::decode(b.canonical_bytes(), b.sha256()).unwrap(),
+            SectorBundle::decode(b.canonical_bytes(), b.sha256()).unwrap(),
             b
         );
     }
@@ -66,15 +66,9 @@ fn regional_owners_preserve_five_sites_and_separate_wayne_resources() {
 #[test]
 fn regional_shared_freight_preserves_dispatch_and_period_three_production() {
     for (preset, sheet, meal, panels, packaged) in [
+        (MichiganDeliveryPreset::SharedFreightAmple, 320, 80, 32, 80),
         (
-            MichiganDeliveryPresetV1::SharedFreightAmple,
-            320,
-            80,
-            32,
-            80,
-        ),
-        (
-            MichiganDeliveryPresetV1::SharedFreightConstrained,
+            MichiganDeliveryPreset::SharedFreightConstrained,
             120,
             40,
             12,
@@ -121,9 +115,9 @@ fn regional_shared_freight_preserves_dispatch_and_period_three_production() {
 fn shared_competition_retains_proportional_flooring_and_unused_gram_capacity() {
     let text = include_str!("../../../../../content/scenarios/michigan/defines.toml")
         .replace("ORDERED_UNITS = 200", "ORDERED_UNITS = 80");
-    let c = MichiganMaterialCatalogV1::from_defines_toml(&text)
+    let c = MichiganMaterialCatalog::from_defines_toml(&text)
         .unwrap()
-        .with_preset(MichiganDeliveryPresetV1::SharedFreightConstrained)
+        .with_preset(MichiganDeliveryPreset::SharedFreightConstrained)
         .unwrap();
     let history = trace(&c, 1);
     for (key, quantity) in [("sheet-transfer", 141), ("food-transfer", 18)] {
@@ -147,8 +141,8 @@ fn shared_competition_retains_proportional_flooring_and_unused_gram_capacity() {
 }
 #[test]
 fn delayed_regression_changes_only_timed_stages() {
-    let standard = selected(MichiganDeliveryPresetV1::Standard);
-    let delayed = selected(MichiganDeliveryPresetV1::Delayed);
+    let standard = selected(MichiganDeliveryPreset::Standard);
+    let delayed = selected(MichiganDeliveryPreset::Delayed);
     let a = state(&standard);
     let mut b = state(&delayed);
     b.route_stages.clone_from(&a.route_stages);
@@ -161,7 +155,7 @@ fn delayed_regression_changes_only_timed_stages() {
         .find(|p| p.key == "panel-forming")
         .unwrap()
         .id();
-    let batches = |t: &MaterialCircuitTransitionV3| {
+    let batches = |t: &MaterialCircuitTransition| {
         t.production
             .iter()
             .find(|r| r.process_id == panel)
@@ -173,8 +167,8 @@ fn delayed_regression_changes_only_timed_stages() {
 }
 #[test]
 fn bundle_and_row_permutations_preserve_identity_and_changed_authority_refuses() {
-    let c = selected(MichiganDeliveryPresetV1::Standard);
-    let original = michigan_sector_bundles_v2(&c).unwrap();
+    let c = selected(MichiganDeliveryPreset::Standard);
+    let original = michigan_sector_bundles(&c).unwrap();
     let mut changed = original.clone();
     for b in &mut changed {
         let mut rows = b.rows.clone();
@@ -185,7 +179,7 @@ fn bundle_and_row_permutations_preserve_identity_and_changed_authority_refuses()
         rows.freight_mass_coefficients.reverse();
         let mut goods = b.goods.clone();
         goods.reverse();
-        let rebuilt = SectorBundleV2::from_parts(
+        let rebuilt = SectorBundle::from_parts(
             b.owner.clone(),
             b.sources.clone(),
             goods,
@@ -198,46 +192,46 @@ fn bundle_and_row_permutations_preserve_identity_and_changed_authority_refuses()
     }
     changed.reverse();
     assert_eq!(
-        compile_sector_bundles_v2(&original, c.preset(), &c).unwrap(),
-        compile_sector_bundles_v2(&changed, c.preset(), &c).unwrap()
+        compile_sector_bundles(&original, c.preset(), &c).unwrap(),
+        compile_sector_bundles(&changed, c.preset(), &c).unwrap()
     );
     changed[0].sources.county_source_sha256[0] ^= 1;
     assert_eq!(
-        compile_sector_bundles_v2(&changed, c.preset(), &c),
-        Err(SectorBundleErrorV2::Source)
+        compile_sector_bundles(&changed, c.preset(), &c),
+        Err(SectorBundleError::Source)
     );
-    assert!(compile_sector_bundles_v2(&original[..3], c.preset(), &c).is_err());
+    assert!(compile_sector_bundles(&original[..3], c.preset(), &c).is_err());
 }
 #[test]
 fn current_bundle_codec_refuses_version_digest_truncation_and_extra_bytes() {
-    let c = selected(MichiganDeliveryPresetV1::Standard);
-    let b = michigan_sector_bundles_v2(&c).unwrap().remove(0);
+    let c = selected(MichiganDeliveryPreset::Standard);
+    let b = michigan_sector_bundles(&c).unwrap().remove(0);
     let original = b.canonical_bytes();
     assert_eq!(
         &original[..BUNDLE_DOMAIN.len()],
         b"babylon.sector-bundle.v2\0"
     );
     assert_eq!(
-        SectorBundleV2::decode(original, [0; 32]),
-        Err(SectorBundleErrorV2::Digest)
+        SectorBundle::decode(original, [0; 32]),
+        Err(SectorBundleError::Digest)
     );
     let mut changed = original.to_vec();
     changed[BUNDLE_DOMAIN.len() + 1] = 1;
     assert_eq!(
-        SectorBundleV2::decode(&changed, sha256_of(&changed)),
-        Err(SectorBundleErrorV2::WireVersion)
+        SectorBundle::decode(&changed, sha256_of(&changed)),
+        Err(SectorBundleError::WireVersion)
     );
     for n in [0, BUNDLE_DOMAIN.len(), original.len() - 1] {
         let short = &original[..n];
         assert_eq!(
-            SectorBundleV2::decode(short, sha256_of(short)),
-            Err(SectorBundleErrorV2::WireTruncated)
+            SectorBundle::decode(short, sha256_of(short)),
+            Err(SectorBundleError::WireTruncated)
         );
     }
     let mut changed = original.to_vec();
     changed.push(0);
     assert_eq!(
-        SectorBundleV2::decode(&changed, sha256_of(&changed)),
-        Err(SectorBundleErrorV2::WireTrailing)
+        SectorBundle::decode(&changed, sha256_of(&changed)),
+        Err(SectorBundleError::WireTrailing)
     );
 }

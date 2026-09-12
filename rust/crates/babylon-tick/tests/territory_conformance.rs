@@ -34,7 +34,7 @@
 use babylon_bsl::scenario::load_scenario;
 use babylon_graph::hypergraph_store::HypergraphStore;
 use babylon_graph::substrate::{GraphSubstrate, NodeId};
-use babylon_kernel::replay::ReplaySessionIdV1;
+use babylon_kernel::replay::ReplaySessionId;
 use babylon_tick::run_once_into;
 
 const SCENARIO: &str = include_str!("../content/scenarios/territory-conformance.bscn");
@@ -391,12 +391,12 @@ fn p2_sub_threshold_territory_is_untouched() {
 #[test]
 fn p2_already_latched_territory_compounds_rent_across_two_ticks() {
     let mut sink = babylon_bsl::structural_verbs::CollectingSink::default();
-    let mut session = babylon_tick::RuleDiagnosticSession::new(
+    let mut session = babylon_tick::diagnostic::RuleDiagnosticSession::new(
         SCENARIO,
         None,
         TERRITORY_RULES,
         HypergraphStore::new(),
-        ReplaySessionIdV1::try_from("territory-conformance-test").expect("literal is non-empty"),
+        ReplaySessionId::try_from("territory-conformance-test").expect("literal is non-empty"),
         babylon_kernel::replay::ReplaySeed::new(0),
     )
     .expect("the pack must load into a session");

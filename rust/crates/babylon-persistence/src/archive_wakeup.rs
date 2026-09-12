@@ -3,10 +3,10 @@
 use postgres::GenericClient;
 
 use crate::archive::{database, decode};
-use crate::SemanticArchiveErrorV1;
+use crate::SemanticArchiveError;
 
 /// The sole Archive transport channel. Its payload is always empty.
-pub const ARCHIVE_WAKEUP_CHANNEL_V1: &str = "babylon_archive_wakeup_v1";
+pub const ARCHIVE_WAKEUP_CHANNEL: &str = "babylon_archive_wakeup_v1";
 const FUNCTION_BODY: &str = "\nBEGIN\n    PERFORM pg_catalog.pg_notify('babylon_archive_wakeup_v1', '');\n    RETURN NULL;\nEND\n";
 const TRIGGERS: [(&str, &str, &str, i16); 2] = [
     (
@@ -18,7 +18,7 @@ const TRIGGERS: [(&str, &str, &str, i16); 2] = [
     ("archive_wakeup_tick_v1", "babylon_state", "tick_commit", 4),
 ];
 
-pub(crate) fn validate(client: &mut impl GenericClient) -> Result<(), SemanticArchiveErrorV1> {
+pub(crate) fn validate(client: &mut impl GenericClient) -> Result<(), SemanticArchiveError> {
     validate_function(client)?;
     let rows = client.query("SELECT t.tgname,n.nspname,c.relname,t.tgtype,t.tgenabled::text,t.tgnargs,t.tgqual IS NULL,t.tgoldtable IS NULL AND t.tgnewtable IS NULL,t.tgattr::text='',NOT t.tgisinternal \
         FROM pg_catalog.pg_trigger t JOIN pg_catalog.pg_class c ON c.oid=t.tgrelid \
@@ -26,7 +26,7 @@ pub(crate) fn validate(client: &mut impl GenericClient) -> Result<(), SemanticAr
         WHERE t.tgfoid='babylon_meta.archive_wakeup_v1()'::regprocedure ORDER BY t.tgname", &[])
         .map_err(|e| database("read Archive wakeup triggers", &e))?;
     if rows.len() != TRIGGERS.len() {
-        return Err(SemanticArchiveErrorV1::SchemaMismatch);
+        return Err(SemanticArchiveError::SchemaMismatch);
     }
     for (row, (name, schema, table, kind)) in rows.iter().zip(TRIGGERS) {
         if decode::<String>(row, 0)? != name
@@ -40,13 +40,13 @@ pub(crate) fn validate(client: &mut impl GenericClient) -> Result<(), SemanticAr
             || !decode::<bool>(row, 8)?
             || !decode::<bool>(row, 9)?
         {
-            return Err(SemanticArchiveErrorV1::SchemaMismatch);
+            return Err(SemanticArchiveError::SchemaMismatch);
         }
     }
     Ok(())
 }
 
-fn validate_function(client: &mut impl GenericClient) -> Result<(), SemanticArchiveErrorV1> {
+fn validate_function(client: &mut impl GenericClient) -> Result<(), SemanticArchiveError> {
     let rows = client.query("SELECT p.prosrc,p.prosecdef,p.proconfig,p.prorettype='pg_catalog.trigger'::regtype,l.lanname,p.provolatile::text, \
         NOT EXISTS (SELECT 1 FROM pg_catalog.aclexplode(COALESCE(p.proacl,pg_catalog.acldefault('f',p.proowner))) privilege \
         WHERE privilege.grantee<>p.proowner) \
@@ -54,7 +54,7 @@ fn validate_function(client: &mut impl GenericClient) -> Result<(), SemanticArch
         WHERE p.oid=pg_catalog.to_regprocedure('babylon_meta.archive_wakeup_v1()')", &[])
         .map_err(|e| database("read Archive wakeup function", &e))?;
     if rows.len() != 1 {
-        return Err(SemanticArchiveErrorV1::SchemaMismatch);
+        return Err(SemanticArchiveError::SchemaMismatch);
     }
     let row = &rows[0];
     if decode::<String>(row, 0)? != FUNCTION_BODY
@@ -65,7 +65,7 @@ fn validate_function(client: &mut impl GenericClient) -> Result<(), SemanticArch
         || decode::<String>(row, 5)? != "v"
         || !decode::<bool>(row, 6)?
     {
-        return Err(SemanticArchiveErrorV1::SchemaMismatch);
+        return Err(SemanticArchiveError::SchemaMismatch);
     }
     Ok(())
 }

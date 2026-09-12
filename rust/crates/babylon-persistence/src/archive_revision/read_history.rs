@@ -6,29 +6,27 @@ use sha2::{Digest as _, Sha256};
 use super::read::{Candidate, ReadStatus};
 use super::record::RevisionRecord;
 use super::storage::{signed, unsigned};
-use super::{
-    ArchiveChangeCursorV2, ArchiveChangePageV2, ArchiveDossierBoundsV2, ArchiveReadScopeV2,
-};
+use super::{ArchiveChangeCursor, ArchiveChangePage, ArchiveDossierBounds, ArchiveReadScope};
 use crate::archive::{database, decode, decode_digest};
-use crate::SemanticArchiveErrorV1;
+use crate::SemanticArchiveError;
 
 const SCAN_LIMIT: i64 = 16;
 
 pub(super) fn read(
     client: &mut impl GenericClient,
-    scope: &ArchiveReadScopeV2,
+    scope: &ArchiveReadScope,
     head: &RevisionRecord,
-    bounds: &ArchiveDossierBoundsV2,
+    bounds: &ArchiveDossierBounds,
     status: &ReadStatus,
-) -> Result<ArchiveChangePageV2, SemanticArchiveErrorV1> {
-    let mut result = ArchiveChangePageV2 {
+) -> Result<ArchiveChangePage, SemanticArchiveError> {
+    let mut result = ArchiveChangePage {
         coverage_from_tick: 0,
         changes: Vec::new(),
         next_cursor: None,
     };
     if status.pending.is_some() {
         if bounds.change_cursor.is_some() {
-            return Err(SemanticArchiveErrorV1::ArchiveCursorMismatch);
+            return Err(SemanticArchiveError::ArchiveCursorMismatch);
         }
         return Ok(result);
     }
@@ -44,10 +42,10 @@ pub(super) fn read(
             (
                 cursor.publication_tick,
                 usize::try_from(cursor.change_offset)
-                    .map_err(|_| SemanticArchiveErrorV1::ArchiveCursorMismatch)?,
+                    .map_err(|_| SemanticArchiveError::ArchiveCursorMismatch)?,
             )
         }
-        Some(_) => return Err(SemanticArchiveErrorV1::ArchiveCursorMismatch),
+        Some(_) => return Err(SemanticArchiveError::ArchiveCursorMismatch),
     };
     let campaign = scope.campaign_id();
     let params: &[&(dyn postgres::types::ToSql + Sync)] = &[
@@ -76,7 +74,7 @@ pub(super) fn read(
     for (index, row) in rows.iter().enumerate() {
         let candidate = decode_candidate(row)?;
         if index
-            >= usize::try_from(SCAN_LIMIT).map_err(|_| SemanticArchiveErrorV1::CollectionBound)?
+            >= usize::try_from(SCAN_LIMIT).map_err(|_| SemanticArchiveError::CollectionBound)?
         {
             result.next_cursor = Some(cursor(scope, head, digest, &candidate, 0)?);
             break;
@@ -84,12 +82,12 @@ pub(super) fn read(
         let current = super::read::load_candidate(client, scope, &head.subject, &candidate)?;
         let changes = super::changes::between(previous.as_ref(), &current)?;
         if offset > changes.len() {
-            return Err(SemanticArchiveErrorV1::ArchiveCursorMismatch);
+            return Err(SemanticArchiveError::ArchiveCursorMismatch);
         }
         let available = usize::try_from(bounds.change_limit)
-            .map_err(|_| SemanticArchiveErrorV1::CollectionBound)?
+            .map_err(|_| SemanticArchiveError::CollectionBound)?
             .checked_sub(result.changes.len())
-            .ok_or(SemanticArchiveErrorV1::CollectionBound)?;
+            .ok_or(SemanticArchiveError::CollectionBound)?;
         let taken = available.min(changes.len() - offset);
         result
             .changes
@@ -104,7 +102,7 @@ pub(super) fn read(
     Ok(result)
 }
 
-fn decode_candidate(row: &postgres::Row) -> Result<Candidate, SemanticArchiveErrorV1> {
+fn decode_candidate(row: &postgres::Row) -> Result<Candidate, SemanticArchiveError> {
     Ok(Candidate {
         tick: unsigned(decode(row, 0)?)?,
         digest: decode_digest(row, 1)?,
@@ -112,28 +110,27 @@ fn decode_candidate(row: &postgres::Row) -> Result<Candidate, SemanticArchiveErr
 }
 
 fn cursor(
-    scope: &ArchiveReadScopeV2,
+    scope: &ArchiveReadScope,
     head: &RevisionRecord,
     digest: [u8; 32],
     candidate: &Candidate,
     offset: usize,
-) -> Result<ArchiveChangeCursorV2, SemanticArchiveErrorV1> {
-    Ok(ArchiveChangeCursorV2 {
+) -> Result<ArchiveChangeCursor, SemanticArchiveError> {
+    Ok(ArchiveChangeCursor {
         scope: scope.clone(),
         subject: head.subject.clone(),
         history_digest: digest,
         publication_tick: candidate.tick,
-        change_offset: u32::try_from(offset)
-            .map_err(|_| SemanticArchiveErrorV1::CollectionBound)?,
+        change_offset: u32::try_from(offset).map_err(|_| SemanticArchiveError::CollectionBound)?,
     })
 }
 
 // Once ordered processing covers T, the native publication prefix <=T is closed.
 // The complete head identity binds this cursor; pending prefixes never yield one.
 fn history_identity(
-    scope: &ArchiveReadScopeV2,
+    scope: &ArchiveReadScope,
     head: &RevisionRecord,
-) -> Result<[u8; 32], SemanticArchiveErrorV1> {
+) -> Result<[u8; 32], SemanticArchiveError> {
     let mut digest = Sha256::new();
     digest.update(b"babylon.archive-retained-history.v2\0");
     digest.update(scope.campaign_id().canonical_bytes());
@@ -141,7 +138,7 @@ fn history_identity(
     digest.update(
         scope
             .tick_content_hash()
-            .ok_or(SemanticArchiveErrorV1::InvalidVerifiedTick)?,
+            .ok_or(SemanticArchiveError::InvalidVerifiedTick)?,
     );
     digest.update(head.digest()?);
     Ok(digest.finalize().into())

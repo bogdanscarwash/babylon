@@ -3,47 +3,50 @@ use super::*;
 use crate::atlas::CountyAtlas;
 use crate::map::SelectedCounty;
 use babylon_persistence::{
-    CampaignId, ObserverEconomySnapshotV1, ObserverVisibilityV1, ProductionInputV1,
-    ProductionRouteV2,
+    identity::CampaignId, observer_reader::ObserverEconomySnapshot,
+    observer_reader::ObserverVisibility, production_observation::ProductionInput,
+    production_observation::ProductionRoute,
 };
 
-fn site(id: &str, suppliers: &[&str]) -> ProductionSiteV2 {
-    ProductionSiteV2 {
+fn site(id: &str, suppliers: &[&str]) -> ProductionSite {
+    ProductionSite {
         id: id.into(),
         county_geoid: "26163".into(),
         name: format!("Cohort {id}"),
         industry_code: "331".into(),
         observed_employment: Some(20),
         inventory: Vec::new(),
-        role: babylon_persistence::ProductionSiteRoleV2::Production,
+        role: babylon_persistence::production_observation::ProductionSiteRole::Production,
         sector_code: "31-33".into(),
-        processes: vec![babylon_persistence::ProductionProcessV2 {
-            id: "fixture-process".into(),
-            name: "Fixture process".into(),
-            output_good_id: "a".repeat(64),
-            output_unit_id: "b".repeat(64),
-            output_good: "steel".into(),
-            output_unit: "kg".into(),
-            output_per_batch: 10,
-            available_batches: 8,
-            planned_batches: Some(8),
-            produced_batches: Some(7),
-            labor: Vec::new(),
-            inputs: vec![ProductionInputV1 {
-                good_id: "a".repeat(64),
-                unit_id: "b".repeat(64),
-                good: "input".into(),
-                unit: "kg".into(),
-                quantity_per_batch: 1,
-                on_hand: 20,
-                supplier_site_ids: suppliers.iter().map(|id| (*id).into()).collect(),
-            }],
-        }],
+        processes: vec![
+            babylon_persistence::production_observation::ProductionProcess {
+                id: "fixture-process".into(),
+                name: "Fixture process".into(),
+                output_good_id: "a".repeat(64),
+                output_unit_id: "b".repeat(64),
+                output_good: "steel".into(),
+                output_unit: "kg".into(),
+                output_per_batch: 10,
+                available_batches: 8,
+                planned_batches: Some(8),
+                produced_batches: Some(7),
+                labor: Vec::new(),
+                inputs: vec![ProductionInput {
+                    good_id: "a".repeat(64),
+                    unit_id: "b".repeat(64),
+                    good: "input".into(),
+                    unit: "kg".into(),
+                    quantity_per_batch: 1,
+                    on_hand: 20,
+                    supplier_site_ids: suppliers.iter().map(|id| (*id).into()).collect(),
+                }],
+            },
+        ],
     }
 }
 
-fn snapshot() -> ProductionSnapshotV2 {
-    ProductionSnapshotV2 {
+fn snapshot() -> ProductionSnapshot {
+    ProductionSnapshot {
         content_authority_sha256: "a".repeat(64),
         road_source: None,
         physical_edges: Vec::new(),
@@ -62,10 +65,11 @@ fn snapshot() -> ProductionSnapshotV2 {
             site("b", &["a", "withheld"]),
             site("c", &["b"]),
         ],
-        routes: vec![ProductionRouteV2 {
+        routes: vec![ProductionRoute {
             physical_edge_ids: Vec::new(),
             distance_mm: None,
-            transport_kind: babylon_persistence::ProductionRouteTransportV2::Staged,
+            transport_kind:
+                babylon_persistence::production_observation::ProductionRouteTransport::Staged,
             grams_per_unit: 1000,
             stages: Vec::new(),
             id: "a-b".into(),
@@ -124,7 +128,7 @@ fn focused_circuit_pages_six_incident_groups_and_keeps_unrelated_owners_out() {
 
 #[test]
 fn reading_headline_uses_exact_output_identity_and_keeps_absence_distinct_from_zero() {
-    use babylon_persistence::{CompletedMaterialBalanceV2, ProductionMaterialBalanceRowV2};
+    use babylon_persistence::{CompletedMaterialBalance, ProductionMaterialBalanceRow};
     let mut snapshot = snapshot();
     let mut selected = snapshot.sites[0].clone();
     selected.processes[0].planned_batches = None;
@@ -134,9 +138,9 @@ fn reading_headline_uses_exact_output_identity_and_keeps_absence_distinct_from_z
     assert!(foundation.contains("no committed production"));
     assert!(foundation.contains("Modeled workforce not disclosed"));
     assert!(!foundation.contains("0 employed"));
-    snapshot.material_balance = Some(CompletedMaterialBalanceV2 {
+    snapshot.material_balance = Some(CompletedMaterialBalance {
         period: 5,
-        rows: vec![ProductionMaterialBalanceRowV2 {
+        rows: vec![ProductionMaterialBalanceRow {
             local_received: 0,
             local_transferred: 0,
             final_demand_fulfilled: 0,
@@ -174,7 +178,7 @@ fn reading_headline_uses_exact_output_identity_and_keeps_absence_distinct_from_z
 
 #[test]
 fn stock_readings_keep_units_and_subjects_separate_and_do_not_invent_foundation_flows() {
-    use babylon_persistence::{CompletedMaterialBalanceV2, ProductionMaterialBalanceRowV2};
+    use babylon_persistence::{CompletedMaterialBalance, ProductionMaterialBalanceRow};
 
     let mut snapshot = snapshot();
     let selected = snapshot.sites[0].clone();
@@ -182,7 +186,7 @@ fn stock_readings_keep_units_and_subjects_separate_and_do_not_invent_foundation_
     describe_material_balance(&mut value, &selected, &snapshot);
     assert!(value.contains("No completed stock-movement account"));
     assert!(!value.contains("Opened 0"));
-    let kilograms = ProductionMaterialBalanceRowV2 {
+    let kilograms = ProductionMaterialBalanceRow {
         local_received: 0,
         local_transferred: 0,
         final_demand_fulfilled: 0,
@@ -198,7 +202,7 @@ fn stock_readings_keep_units_and_subjects_separate_and_do_not_invent_foundation_
         dispatched: 6,
         closing: 10,
     };
-    let tonnes = ProductionMaterialBalanceRowV2 {
+    let tonnes = ProductionMaterialBalanceRow {
         unit_id: "tonne".into(),
         unit: "tonne".into(),
         opening: 1,
@@ -209,7 +213,7 @@ fn stock_readings_keep_units_and_subjects_separate_and_do_not_invent_foundation_
         closing: 3,
         ..kilograms.clone()
     };
-    let unrelated = ProductionMaterialBalanceRowV2 {
+    let unrelated = ProductionMaterialBalanceRow {
         local_received: 0,
         local_transferred: 0,
         final_demand_fulfilled: 0,
@@ -217,7 +221,7 @@ fn stock_readings_keep_units_and_subjects_separate_and_do_not_invent_foundation_
         good: "Unrelated stock".into(),
         ..kilograms.clone()
     };
-    snapshot.material_balance = Some(CompletedMaterialBalanceV2 {
+    snapshot.material_balance = Some(CompletedMaterialBalance {
         period: 5,
         rows: vec![kilograms, tonnes, unrelated],
     });
@@ -240,18 +244,19 @@ fn stock_readings_keep_units_and_subjects_separate_and_do_not_invent_foundation_
 #[test]
 fn merchant_reading_has_no_fake_production_and_separates_local_goods_from_arrivals() {
     use babylon_persistence::{
-        CompletedMaterialBalanceV2, ProductionMaterialBalanceRowV2, ProductionRouteTransportV2,
-        ProductionSiteRoleV2,
+        production_observation::ProductionRouteTransport,
+        production_observation::ProductionSiteRole, CompletedMaterialBalance,
+        ProductionMaterialBalanceRow,
     };
     let mut snapshot = snapshot();
     let merchant = &mut snapshot.sites[1];
-    merchant.role = ProductionSiteRoleV2::Retail;
+    merchant.role = ProductionSiteRole::Retail;
     merchant.processes.clear();
-    snapshot.routes[0].transport_kind = ProductionRouteTransportV2::Local;
+    snapshot.routes[0].transport_kind = ProductionRouteTransport::Local;
     snapshot.routes[0].travel_periods = 0;
-    snapshot.material_balance = Some(CompletedMaterialBalanceV2 {
+    snapshot.material_balance = Some(CompletedMaterialBalance {
         period: 1,
-        rows: vec![ProductionMaterialBalanceRowV2 {
+        rows: vec![ProductionMaterialBalanceRow {
             site_id: "b".into(),
             good_id: "meal".into(),
             unit_id: "kg".into(),
@@ -281,18 +286,19 @@ fn merchant_reading_has_no_fake_production_and_separates_local_goods_from_arriva
 #[test]
 fn merchant_handling_reading_uses_exact_kilograms_without_changing_work_hours() {
     use babylon_persistence::{
-        CompletedProductionMerchantHandlingV2, ProductionMerchantHandlingAccountV2,
-        ProductionSiteRoleV2,
+        production_observation::CompletedProductionMerchantHandling,
+        production_observation::ProductionMerchantHandlingAccount,
+        production_observation::ProductionSiteRole,
     };
     let mut snapshot = snapshot();
-    snapshot.sites[1].role = ProductionSiteRoleV2::Retail;
+    snapshot.sites[1].role = ProductionSiteRole::Retail;
     snapshot.sites[1].processes.clear();
-    snapshot.merchant_handling_accounts = vec![ProductionMerchantHandlingAccountV2 {
+    snapshot.merchant_handling_accounts = vec![ProductionMerchantHandlingAccount {
         site_id: "b".into(),
         capacity_id: "merchant-handling".into(),
         labor_unit_id: "hours".into(),
         coefficients: Vec::new(),
-        completed: Some(CompletedProductionMerchantHandlingV2 {
+        completed: Some(CompletedProductionMerchantHandling {
             period: 1,
             needed_hours: 8,
             used_hours: 3,
@@ -310,17 +316,20 @@ fn merchant_handling_reading_uses_exact_kilograms_without_changing_work_hours() 
 
 #[test]
 fn inspector_separates_committed_work_time_from_next_opening_and_other_sites() {
-    use babylon_persistence::{CompletedProductionLaborV2, ProductionLaborAccountV2};
+    use babylon_persistence::{
+        production_observation::CompletedProductionLabor,
+        production_observation::ProductionLaborAccount,
+    };
 
     let mut snapshot = snapshot();
     snapshot.labor_accounts = vec![
-        ProductionLaborAccountV2 {
+        ProductionLaborAccount {
             site_id: "a".into(),
             unit_id: "hours".into(),
             unit: "labor-hours".into(),
             next_opening_period: 6,
             next_opening_available: 160,
-            completed: Some(CompletedProductionLaborV2 {
+            completed: Some(CompletedProductionLabor {
                 handling_needed: 0,
                 handling_used: 0,
                 period: 5,
@@ -330,7 +339,7 @@ fn inspector_separates_committed_work_time_from_next_opening_and_other_sites() {
                 unused: 40,
             }),
         },
-        ProductionLaborAccountV2 {
+        ProductionLaborAccount {
             site_id: "b".into(),
             unit_id: "other-hours".into(),
             unit: "other site's private work time".into(),
@@ -355,10 +364,10 @@ fn inspector_separates_committed_work_time_from_next_opening_and_other_sites() {
 
 #[test]
 fn foundation_labor_account_does_not_invent_a_completed_work_period() {
-    use babylon_persistence::ProductionLaborAccountV2;
+    use babylon_persistence::production_observation::ProductionLaborAccount;
 
     let mut snapshot = snapshot();
-    snapshot.labor_accounts = vec![ProductionLaborAccountV2 {
+    snapshot.labor_accounts = vec![ProductionLaborAccount {
         site_id: "a".into(),
         unit_id: "hours".into(),
         unit: "labor-hours".into(),
@@ -375,15 +384,19 @@ fn foundation_labor_account_does_not_invent_a_completed_work_period() {
     assert!(text.contains("Next opening (period 1): 120 labor-hours (Derived)"));
 }
 
-fn staffing_account(site_id: &str) -> babylon_persistence::ProductionStaffingAccountV1 {
+fn staffing_account(
+    site_id: &str,
+) -> babylon_persistence::production_observation::ProductionStaffingAccount {
     use babylon_persistence::{
-        CompletedProductionStaffingV1, ProductionStaffingAccountV1, ProductionStaffingSubjectV1,
+        production_observation::CompletedProductionStaffing,
+        production_observation::ProductionStaffingAccount,
+        production_observation::ProductionStaffingSubject,
     };
-    ProductionStaffingAccountV1 {
+    ProductionStaffingAccount {
         pool_id: format!("pool-{site_id}"),
         site_id: site_id.into(),
         unit_id: "labor-hours".into(),
-        subject: ProductionStaffingSubjectV1 {
+        subject: ProductionStaffingSubject {
             scenario: "fixture".into(),
             local_name: format!("workers-{site_id}"),
         },
@@ -394,7 +407,7 @@ fn staffing_account(site_id: &str) -> babylon_persistence::ProductionStaffingAcc
         previous_unretained_hours: 40,
         next_opening_period: 6,
         next_opening_hours: 80,
-        completed: Some(CompletedProductionStaffingV1 {
+        completed: Some(CompletedProductionStaffing {
             period: 5,
             opening_employed: 4,
             opening_reserve: 0,
@@ -414,24 +427,26 @@ fn workforce_readings_use_exact_people_and_retention_for_only_the_selected_site(
     let mut unrelated = staffing_account("b");
     unrelated.employed = 987;
     snapshot.staffing_accounts = vec![staffing_account("a"), unrelated];
-    snapshot
-        .labor_accounts
-        .push(babylon_persistence::ProductionLaborAccountV2 {
+    snapshot.labor_accounts.push(
+        babylon_persistence::production_observation::ProductionLaborAccount {
             site_id: "a".into(),
             unit_id: "labor-hours".into(),
             unit: "labor-hours".into(),
             next_opening_period: 6,
             next_opening_available: 80,
-            completed: Some(babylon_persistence::CompletedProductionLaborV2 {
-                handling_needed: 0,
-                handling_used: 0,
-                period: 5,
-                opening: 160,
-                planned: 40,
-                used: 40,
-                unused: 120,
-            }),
-        });
+            completed: Some(
+                babylon_persistence::production_observation::CompletedProductionLabor {
+                    handling_needed: 0,
+                    handling_used: 0,
+                    period: 5,
+                    opening: 160,
+                    planned: 40,
+                    used: 40,
+                    unused: 120,
+                },
+            ),
+        },
+    );
     let text = describe(
         &snapshot.sites[0],
         &snapshot,
@@ -459,16 +474,16 @@ fn workforce_foundation_absence_and_zero_completed_flows_remain_distinct() {
     account.next_opening_period = 1;
     account.completed = None;
     snapshot.staffing_accounts.push(account);
-    snapshot
-        .labor_accounts
-        .push(babylon_persistence::ProductionLaborAccountV2 {
+    snapshot.labor_accounts.push(
+        babylon_persistence::production_observation::ProductionLaborAccount {
             site_id: "a".into(),
             unit_id: "labor-hours".into(),
             unit: "labor-hours".into(),
             next_opening_period: 1,
             next_opening_available: 80,
             completed: None,
-        });
+        },
+    );
     let foundation = describe(
         &snapshot.sites[0],
         &snapshot,
@@ -489,25 +504,28 @@ fn workforce_foundation_absence_and_zero_completed_flows_remain_distinct() {
     assert!(missing.contains("No workforce account disclosed for this subject."));
     assert!(!missing.contains("0 employed"));
     let completed = staffing_account("a").completed.unwrap();
-    snapshot.staffing_accounts[0].completed =
-        Some(babylon_persistence::CompletedProductionStaffingV1 {
+    snapshot.staffing_accounts[0].completed = Some(
+        babylon_persistence::production_observation::CompletedProductionStaffing {
             opening_employed: 2,
             opening_reserve: 2,
             hires: 0,
             separations: 0,
             ..completed
-        });
+        },
+    );
     snapshot.staffing_accounts[0].next_opening_period = 6;
     snapshot.labor_accounts[0].next_opening_period = 6;
-    snapshot.labor_accounts[0].completed = Some(babylon_persistence::CompletedProductionLaborV2 {
-        handling_needed: 0,
-        handling_used: 0,
-        period: 5,
-        opening: 80,
-        planned: 40,
-        used: 40,
-        unused: 40,
-    });
+    snapshot.labor_accounts[0].completed = Some(
+        babylon_persistence::production_observation::CompletedProductionLabor {
+            handling_needed: 0,
+            handling_used: 0,
+            period: 5,
+            opening: 80,
+            planned: 40,
+            used: 40,
+            unused: 40,
+        },
+    );
     let quiet = describe(
         &snapshot.sites[0],
         &snapshot,
@@ -519,17 +537,18 @@ fn workforce_foundation_absence_and_zero_completed_flows_remain_distinct() {
     assert_eq!(quiet.matches("Next opening").count(), 1);
 }
 
-fn attributed_snapshot() -> ProductionSnapshotV2 {
+fn attributed_snapshot() -> ProductionSnapshot {
     use babylon_persistence::{
-        ArchiveEvidenceClassV1, DesignedProcessAttributionV1, ObservedSectorContextV2,
-        ProductionBusinessSubjectV1,
+        production_observation::DesignedProcessAttribution,
+        production_observation::ObservedSectorContext,
+        production_observation::ProductionBusinessSubject, ArchiveEvidenceClass,
     };
     let mut snapshot = snapshot();
-    let subject = ProductionBusinessSubjectV1 {
+    let subject = ProductionBusinessSubject {
         scenario: "observed-fixture".into(),
         local_name: "business-26163-31-33".into(),
     };
-    snapshot.observed_contexts.push(ObservedSectorContextV2 {
+    snapshot.observed_contexts.push(ObservedSectorContext {
         subject: subject.clone(),
         county_geoid: "26163".into(),
         sector_code: "31-33".into(),
@@ -543,19 +562,19 @@ fn attributed_snapshot() -> ProductionSnapshotV2 {
         source_file: "county-source.csv".into(),
         source_sha256: "a".repeat(64),
         artifact_sha256: "b".repeat(64),
-        evidence_class: ArchiveEvidenceClassV1::Observed,
+        evidence_class: ArchiveEvidenceClass::Observed,
     });
     for site in &snapshot.sites[..2] {
         snapshot
             .process_attributions
-            .push(DesignedProcessAttributionV1 {
+            .push(DesignedProcessAttribution {
                 process_id: format!("process-{}", site.id),
                 site_id: site.id.clone(),
                 industry_code: site.industry_code.clone(),
                 cohort_subject: subject.clone(),
                 scenario_artifact_sha256: "c".repeat(64),
                 industry_artifact_sha256: "d".repeat(64),
-                evidence_class: ArchiveEvidenceClassV1::Designed,
+                evidence_class: ArchiveEvidenceClass::Designed,
             });
     }
     snapshot
@@ -884,14 +903,14 @@ fn map_and_flat_controls_preserve_the_county_selected_on_geography() {
     let mut app = App::new();
     app.add_plugins(MinimalPlugins)
         .insert_resource(state)
-        .insert_resource(ObserverFrame(Some(ObserverEconomySnapshotV1 {
+        .insert_resource(ObserverFrame(Some(ObserverEconomySnapshot {
             campaign_id: campaign.as_uuid().to_string(),
             resolve_tick: 1,
             foundation_digest: "f".repeat(64),
             tick_content_hash: Some("a".repeat(64)),
             nominal_world_hash: None,
             envelope_digest: None,
-            visibility: ObserverVisibilityV1::FullObserver,
+            visibility: ObserverVisibility::FullObserver,
             counties: Vec::new(),
             production: Some(production),
         })))
@@ -953,14 +972,14 @@ fn opening_focus_uses_current_capability_and_preserves_selection() {
     let campaign = CampaignId::from_uuid(uuid::Uuid::nil());
     let mut state = ObserverSession::new(campaign);
     state.ready(1, Some("a".repeat(64)));
-    let frame = ObserverFrame(Some(ObserverEconomySnapshotV1 {
+    let frame = ObserverFrame(Some(ObserverEconomySnapshot {
         campaign_id: campaign.as_uuid().to_string(),
         resolve_tick: 1,
         foundation_digest: "b".repeat(64),
         nominal_world_hash: None,
         tick_content_hash: Some("a".repeat(64)),
         envelope_digest: None,
-        visibility: ObserverVisibilityV1::FullObserver,
+        visibility: ObserverVisibility::FullObserver,
         counties: Vec::new(),
         production: Some(snapshot()),
     }));
@@ -1105,14 +1124,14 @@ fn unstarted_dependency_navigation_app() -> App {
     let campaign = CampaignId::from_uuid(uuid::Uuid::nil());
     let mut state = ObserverSession::new(campaign);
     state.ready(1, Some("a".repeat(64)));
-    let frame = ObserverFrame(Some(ObserverEconomySnapshotV1 {
+    let frame = ObserverFrame(Some(ObserverEconomySnapshot {
         campaign_id: campaign.as_uuid().to_string(),
         resolve_tick: 1,
         foundation_digest: "f".repeat(64),
         tick_content_hash: Some("a".repeat(64)),
         nominal_world_hash: None,
         envelope_digest: None,
-        visibility: ObserverVisibilityV1::FullObserver,
+        visibility: ObserverVisibility::FullObserver,
         counties: Vec::new(),
         production: Some(snapshot()),
     }));
@@ -1372,7 +1391,7 @@ fn undisclosed_scene_hides_controls_and_explains_keyboard_refusals() {
             0 => {}
             1 => {
                 perspective = crate::observer::Perspective::PlayerKnowledge;
-                frame.visibility = ObserverVisibilityV1::KnownPreview;
+                frame.visibility = ObserverVisibility::KnownPreview;
                 frame.production = None;
             }
             2 => frame.production.as_mut().unwrap().sites.clear(),
@@ -2514,7 +2533,7 @@ fn topology_uses_disclosed_endpoints_and_survives_input_reordering() {
 
 #[test]
 fn only_actual_visible_in_transit_lots_get_static_markers() {
-    use babylon_persistence::ProductionFreightV2;
+    use babylon_persistence::production_observation::ProductionFreight;
 
     let mut snapshot = snapshot();
     let layout = ProductionLayout::focused(&snapshot, Some("b"), 0);
@@ -2522,7 +2541,7 @@ fn only_actual_visible_in_transit_lots_get_static_markers() {
         freight_markers(&snapshot, &layout, 1).is_empty(),
         "orders and deliveries alone must not generate freight"
     );
-    let lot = ProductionFreightV2 {
+    let lot = ProductionFreight {
         current_stage_index: 0,
         grams_per_unit: 1000,
         mass_grams: 1000,

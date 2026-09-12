@@ -1,7 +1,7 @@
 use babylon_rtd::{
     canonical_draft_bytes, parse_draft_json, parse_vector_corpus, projection_hash, seal_draft,
-    validate_draft, EvidenceClassV1, ProvenanceV1, RtdDossierDraftV1, RtdError, RtdVectorCaseV1,
-    TypedIdentityV1, RTD_V1_ERROR_REGISTRY,
+    validate_draft, EvidenceClass, Provenance, RtdDossierDraft, RtdError, RtdVectorCase,
+    TypedIdentity, RTD_ERROR_REGISTRY,
 };
 
 const CORPUS: &str =
@@ -21,9 +21,9 @@ fn invalid_vector_line(case_id: &str, ending: &str) -> Vec<u8> {
     .into_bytes()
 }
 
-fn provenance_row(row_index: usize, locator: String) -> ProvenanceV1 {
-    ProvenanceV1 {
-        provenance_id: TypedIdentityV1 {
+fn provenance_row(row_index: usize, locator: String) -> Provenance {
+    Provenance {
+        provenance_id: TypedIdentity {
             domain: "provenance".to_owned(),
             authority: "size".to_owned(),
             local_id: format!("{row_index:05x}"),
@@ -31,19 +31,19 @@ fn provenance_row(row_index: usize, locator: String) -> ProvenanceV1 {
         artifact_digest: "55".repeat(32),
         locator,
         vintage: "v".to_owned(),
-        evidence_class: EvidenceClassV1::Derived,
+        evidence_class: EvidenceClass::Derived,
         transformation_digest_or_null: None,
     }
 }
 
-fn canonical_size_witness(one_extra_x: bool) -> RtdDossierDraftV1 {
+fn canonical_size_witness(one_extra_x: bool) -> RtdDossierDraft {
     let cases = parse_vector_corpus(CORPUS.as_bytes()).expect("checked corpus parses");
     let mut draft = None;
     for case_index in 0..256_usize {
         if case_index == cases.len() {
             break;
         }
-        if let RtdVectorCaseV1::Valid {
+        if let RtdVectorCase::Valid {
             case_id,
             draft_json,
             ..
@@ -91,7 +91,7 @@ fn shared_valid_vectors_pin_bytes_and_hashes() {
             break;
         }
         let case = &cases[case_index];
-        if let RtdVectorCaseV1::Valid {
+        if let RtdVectorCase::Valid {
             case_id,
             draft_json,
             canonical_utf8_hex,
@@ -134,12 +134,12 @@ fn shared_semantic_invalid_vectors_pin_refusals() {
         if case_index == cases.len() {
             break;
         }
-        if let RtdVectorCaseV1::Invalid {
+        if let RtdVectorCase::Invalid {
             draft_json, error, ..
         } = &cases[case_index]
         {
             for error_index in 0..20_usize {
-                if RTD_V1_ERROR_REGISTRY[error_index] == error {
+                if RTD_ERROR_REGISTRY[error_index] == error {
                     seen[error_index] = true;
                     break;
                 }
@@ -296,7 +296,7 @@ fn direct_draft_negative_zero_is_normalized_before_sealing() {
         if case_index == cases.len() {
             break;
         }
-        if let RtdVectorCaseV1::Valid {
+        if let RtdVectorCase::Valid {
             case_id,
             draft_json,
             projection_hash: expected,
@@ -306,7 +306,7 @@ fn direct_draft_negative_zero_is_normalized_before_sealing() {
             if case_id != "negative-zero-normalizes" {
                 continue;
             }
-            let raw = serde_json::from_slice::<RtdDossierDraftV1>(draft_json)
+            let raw = serde_json::from_slice::<RtdDossierDraft>(draft_json)
                 .expect("decoded draft structure");
             assert_eq!(
                 raw.scale_memberships[0].weight_bits_or_null.as_deref(),

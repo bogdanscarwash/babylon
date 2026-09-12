@@ -5,29 +5,28 @@ mod outbound;
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use babylon_kernel::sha256_of;
+use babylon_kernel::content_digest::sha256_of;
 
 use crate::production::{
-    derive_shared_labor_requests_v1, derive_shared_production_v1, execute_shared_production_v1,
+    derive_shared_labor_requests, derive_shared_production, execute_shared_production,
 };
 use crate::{
-    ArrivalReceiptV1, BacklogRowV1, CorridorIdV2, DeliveryReceiptV1, FreightLossReceiptV3,
-    FreightLotIdV2, GoodIdV1, InventoryRowV1, LaborCapacityRowV1, MaterialCircuitErrorV3,
-    MaterialCircuitStateV3, MaterialCircuitTransitionV3, OrderIdV1, RealizationReceiptV1,
-    RouteIdV2, RouteStageV3, RoutedDispatchReceiptV2, RoutedFreightLotV3, SiteIdV1,
-    StaffingPoolBindingV2, StaffingWorkRequestV2, UnitIdV1, FREIGHT_LOSS_PARTS_PER_MILLION_V2,
-    MAX_MATERIAL_CIRCUIT_ROWS_V1, MAX_ROUTE_STAGES_PER_ROUTE_V3,
+    ArrivalReceipt, BacklogRow, CorridorId, DeliveryReceipt, FreightLossReceipt, FreightLotId,
+    GoodId, InventoryRow, LaborCapacityRow, MaterialCircuitError, MaterialCircuitState,
+    MaterialCircuitTransition, OrderId, RealizationReceipt, RouteId, RouteStage,
+    RoutedDispatchReceipt, RoutedFreightLot, SiteId, StaffingPoolBinding, StaffingWorkRequest,
+    UnitId, FREIGHT_LOSS_PARTS_PER_MILLION, MAX_MATERIAL_CIRCUIT_ROWS, MAX_ROUTE_STAGES_PER_ROUTE,
 };
 
 use crate::inventory::{
     credit_inventory, debit_inventory, publish_inventory, take_inventory, InventoryKey,
     InventoryLedger,
 };
-type SupplierKey = (SiteIdV1, SiteIdV1, GoodIdV1, UnitIdV1);
-type SupplyPath = (RouteIdV2, crate::SupplierTransportV3);
-type CapacityKey = (u64, CorridorIdV2);
+type SupplierKey = (SiteId, SiteId, GoodId, UnitId);
+type SupplyPath = (RouteId, crate::SupplierTransport);
+type CapacityKey = (u64, CorridorId);
 
-fn check_row_limits(state: &MaterialCircuitStateV3) -> Result<(), MaterialCircuitErrorV3> {
+fn check_row_limits(state: &MaterialCircuitState) -> Result<(), MaterialCircuitError> {
     let lengths = [
         state.site_logistics_nodes.len(),
         state.process_outputs.len(),
@@ -53,18 +52,18 @@ fn check_row_limits(state: &MaterialCircuitStateV3) -> Result<(), MaterialCircui
             .orders
             .len()
             .checked_add(state.final_demand_orders.len())
-            .ok_or(MaterialCircuitErrorV3::Arithmetic)?,
+            .ok_or(MaterialCircuitError::Arithmetic)?,
     ];
     if lengths
         .into_iter()
-        .any(|length| length > MAX_MATERIAL_CIRCUIT_ROWS_V1)
+        .any(|length| length > MAX_MATERIAL_CIRCUIT_ROWS)
     {
-        return Err(MaterialCircuitErrorV3::RowLimit);
+        return Err(MaterialCircuitError::RowLimit);
     }
     Ok(())
 }
 
-fn canonicalize_rows(state: &mut MaterialCircuitStateV3) {
+fn canonicalize_rows(state: &mut MaterialCircuitState) {
     state.merchants.sort();
     state.handling_coefficients.sort();
     state.final_demand_principals.sort();
@@ -99,21 +98,21 @@ fn canonicalize_rows(state: &mut MaterialCircuitStateV3) {
 
 pub(crate) fn has_duplicate<T, K: PartialEq>(rows: &[T], key: impl Fn(&T) -> K) -> bool {
     rows.windows(2)
-        .take(MAX_MATERIAL_CIRCUIT_ROWS_V1)
+        .take(MAX_MATERIAL_CIRCUIT_ROWS)
         .any(|pair| key(&pair[0]) == key(&pair[1]))
 }
 
-fn validate_unique_rows(state: &MaterialCircuitStateV3) -> Result<(), MaterialCircuitErrorV3> {
+fn validate_unique_rows(state: &MaterialCircuitState) -> Result<(), MaterialCircuitError> {
     let node_ids: BTreeSet<_> = state
         .site_logistics_nodes
         .iter()
-        .take(MAX_MATERIAL_CIRCUIT_ROWS_V1 + 1)
+        .take(MAX_MATERIAL_CIRCUIT_ROWS + 1)
         .map(|row| row.node_id)
         .collect();
     let dispatch_ids: BTreeSet<_> = state
         .freight
         .iter()
-        .take(MAX_MATERIAL_CIRCUIT_ROWS_V1 + 1)
+        .take(MAX_MATERIAL_CIRCUIT_ROWS + 1)
         .map(|row| (row.order_id, row.dispatch_period))
         .collect();
     let duplicate = has_duplicate(&state.freight_mass_coefficients, |row| {
@@ -142,12 +141,12 @@ fn validate_unique_rows(state: &MaterialCircuitStateV3) -> Result<(), MaterialCi
             (row.period, row.corridor_id)
         });
     if duplicate {
-        return Err(MaterialCircuitErrorV3::DuplicateRow);
+        return Err(MaterialCircuitError::DuplicateRow);
     }
     Ok(())
 }
 
-fn route_stages(state: &MaterialCircuitStateV3, route: RouteIdV2) -> &[RouteStageV3] {
+fn route_stages(state: &MaterialCircuitState, route: RouteId) -> &[RouteStage] {
     let start = state
         .route_stages
         .partition_point(|row| row.route_id < route);
@@ -157,7 +156,7 @@ fn route_stages(state: &MaterialCircuitStateV3, route: RouteIdV2) -> &[RouteStag
     &state.route_stages[start..end]
 }
 
-fn site_node(state: &MaterialCircuitStateV3, site: SiteIdV1) -> Option<crate::LogisticsNodeIdV2> {
+fn site_node(state: &MaterialCircuitState, site: SiteId) -> Option<crate::LogisticsNodeId> {
     state
         .site_logistics_nodes
         .binary_search_by_key(&site, |row| row.site_id)
@@ -165,33 +164,29 @@ fn site_node(state: &MaterialCircuitStateV3, site: SiteIdV1) -> Option<crate::Lo
         .map(|index| state.site_logistics_nodes[index].node_id)
 }
 
-fn validate_route_stages(legs: &[RouteStageV3]) -> Result<(), MaterialCircuitErrorV3> {
-    if legs.is_empty() || legs.len() > MAX_ROUTE_STAGES_PER_ROUTE_V3 {
-        return Err(MaterialCircuitErrorV3::RouteInvariant);
+fn validate_route_stages(legs: &[RouteStage]) -> Result<(), MaterialCircuitError> {
+    if legs.is_empty() || legs.len() > MAX_ROUTE_STAGES_PER_ROUTE {
+        return Err(MaterialCircuitError::RouteInvariant);
     }
-    for (index, leg) in legs
-        .iter()
-        .enumerate()
-        .take(MAX_ROUTE_STAGES_PER_ROUTE_V3 + 1)
-    {
+    for (index, leg) in legs.iter().enumerate().take(MAX_ROUTE_STAGES_PER_ROUTE + 1) {
         if usize::from(leg.stage_index) != index
             || leg.travel_periods == 0
-            || leg.loss_ppm > FREIGHT_LOSS_PARTS_PER_MILLION_V2
+            || leg.loss_ppm > FREIGHT_LOSS_PARTS_PER_MILLION
         {
-            return Err(MaterialCircuitErrorV3::RouteInvariant);
+            return Err(MaterialCircuitError::RouteInvariant);
         }
         if index > 0 && legs[index - 1].to_node_id != leg.from_node_id {
-            return Err(MaterialCircuitErrorV3::RouteInvariant);
+            return Err(MaterialCircuitError::RouteInvariant);
         }
     }
     Ok(())
 }
 
 fn stage_capacities(
-    state: &MaterialCircuitStateV3,
-    route: RouteIdV2,
+    state: &MaterialCircuitState,
+    route: RouteId,
     ordinal: u16,
-) -> &[crate::RouteStageCapacityV3] {
+) -> &[crate::RouteStageCapacity] {
     let start = state
         .route_stage_capacities
         .partition_point(|row| (row.route_id, row.stage_index) < (route, ordinal));
@@ -202,20 +197,20 @@ fn stage_capacities(
 }
 
 fn grams_per_unit(
-    state: &MaterialCircuitStateV3,
-    good: GoodIdV1,
-    unit: UnitIdV1,
-) -> Result<u64, MaterialCircuitErrorV3> {
+    state: &MaterialCircuitState,
+    good: GoodId,
+    unit: UnitId,
+) -> Result<u64, MaterialCircuitError> {
     state
         .freight_mass_coefficients
         .binary_search_by_key(&(good, unit), |row| (row.good_id, row.unit_id))
         .ok()
         .map(|index| state.freight_mass_coefficients[index].grams_per_unit)
         .filter(|grams| *grams > 0)
-        .ok_or(MaterialCircuitErrorV3::MassInvariant)
+        .ok_or(MaterialCircuitError::MassInvariant)
 }
 
-fn validate_routes(state: &MaterialCircuitStateV3) -> Result<(), MaterialCircuitErrorV3> {
+fn validate_routes(state: &MaterialCircuitState) -> Result<(), MaterialCircuitError> {
     let route_ids: BTreeSet<_> = state.route_stages.iter().map(|row| row.route_id).collect();
     let stage_ids: BTreeSet<_> = state
         .route_stages
@@ -240,7 +235,7 @@ fn validate_routes(state: &MaterialCircuitStateV3) -> Result<(), MaterialCircuit
             .iter()
             .any(|row| stage_capacities(state, row.route_id, row.stage_index).is_empty())
     {
-        return Err(MaterialCircuitErrorV3::RouteInvariant);
+        return Err(MaterialCircuitError::RouteInvariant);
     }
     let mut modes = BTreeMap::new();
     for supplier in &state.supplier_routes {
@@ -248,26 +243,26 @@ fn validate_routes(state: &MaterialCircuitStateV3) -> Result<(), MaterialCircuit
             .insert(supplier.route_id, supplier.transport_kind)
             .is_some_and(|previous| previous != supplier.transport_kind)
         {
-            return Err(MaterialCircuitErrorV3::RouteInvariant);
+            return Err(MaterialCircuitError::RouteInvariant);
         }
         let stages = route_stages(state, supplier.route_id);
         match supplier.transport_kind {
-            crate::SupplierTransportV3::Local => {
+            crate::SupplierTransport::Local => {
                 if !stages.is_empty()
                     || supplier.supplier_site_id == supplier.buyer_site_id
                     || site_node(state, supplier.supplier_site_id).is_none()
                     || site_node(state, supplier.buyer_site_id).is_none()
                 {
-                    return Err(MaterialCircuitErrorV3::RouteInvariant);
+                    return Err(MaterialCircuitError::RouteInvariant);
                 }
             }
-            crate::SupplierTransportV3::Staged => {
+            crate::SupplierTransport::Staged => {
                 validate_route_stages(stages)?;
                 if site_node(state, supplier.supplier_site_id) != Some(stages[0].from_node_id)
                     || site_node(state, supplier.buyer_site_id)
                         != Some(stages[stages.len() - 1].to_node_id)
                 {
-                    return Err(MaterialCircuitErrorV3::RouteInvariant);
+                    return Err(MaterialCircuitError::RouteInvariant);
                 }
             }
         }
@@ -278,14 +273,14 @@ fn validate_routes(state: &MaterialCircuitStateV3) -> Result<(), MaterialCircuit
         .iter()
         .any(|row| !corridors.contains(&row.corridor_id))
     {
-        return Err(MaterialCircuitErrorV3::CapacityInvariant);
+        return Err(MaterialCircuitError::CapacityInvariant);
     }
     if state
         .freight_mass_coefficients
         .iter()
         .any(|row| row.grams_per_unit == 0)
     {
-        return Err(MaterialCircuitErrorV3::MassInvariant);
+        return Err(MaterialCircuitError::MassInvariant);
     }
     for order in &state.orders {
         grams_per_unit(state, order.good_id, order.unit_id)?;
@@ -293,18 +288,18 @@ fn validate_routes(state: &MaterialCircuitStateV3) -> Result<(), MaterialCircuit
     Ok(())
 }
 
-fn order_index(state: &MaterialCircuitStateV3, order: OrderIdV1) -> Option<usize> {
+fn order_index(state: &MaterialCircuitState, order: OrderId) -> Option<usize> {
     state
         .orders
         .binary_search_by_key(&order, |row| row.order_id)
         .ok()
 }
 
-fn supplier_routes(state: &MaterialCircuitStateV3) -> BTreeMap<SupplierKey, SupplyPath> {
+fn supplier_routes(state: &MaterialCircuitState) -> BTreeMap<SupplierKey, SupplyPath> {
     state
         .supplier_routes
         .iter()
-        .take(MAX_MATERIAL_CIRCUIT_ROWS_V1 + 1)
+        .take(MAX_MATERIAL_CIRCUIT_ROWS + 1)
         .map(|row| {
             (
                 (
@@ -320,29 +315,27 @@ fn supplier_routes(state: &MaterialCircuitStateV3) -> BTreeMap<SupplierKey, Supp
 }
 
 fn expected_stage_arrival(
-    lot: &RoutedFreightLotV3,
-    legs: &[RouteStageV3],
-) -> Result<u64, MaterialCircuitErrorV3> {
+    lot: &RoutedFreightLot,
+    legs: &[RouteStage],
+) -> Result<u64, MaterialCircuitError> {
     legs.iter()
         .take(usize::from(lot.current_stage_index) + 1)
         .try_fold(lot.dispatch_period, |period, leg| {
             period
                 .checked_add(u64::from(leg.travel_periods))
-                .ok_or(MaterialCircuitErrorV3::Arithmetic)
+                .ok_or(MaterialCircuitError::Arithmetic)
         })
 }
 
-fn validate_orders_and_freight(
-    state: &MaterialCircuitStateV3,
-) -> Result<(), MaterialCircuitErrorV3> {
+fn validate_orders_and_freight(state: &MaterialCircuitState) -> Result<(), MaterialCircuitError> {
     if state.orders.len() != state.backlog.len() {
-        return Err(MaterialCircuitErrorV3::BacklogInvariant);
+        return Err(MaterialCircuitError::BacklogInvariant);
     }
     let routes = supplier_routes(state);
-    let mut in_transit = BTreeMap::<OrderIdV1, u128>::new();
-    for lot in state.freight.iter().take(MAX_MATERIAL_CIRCUIT_ROWS_V1 + 1) {
+    let mut in_transit = BTreeMap::<OrderId, u128>::new();
+    for lot in state.freight.iter().take(MAX_MATERIAL_CIRCUIT_ROWS + 1) {
         let Some(index) = order_index(state, lot.order_id) else {
-            return Err(MaterialCircuitErrorV3::FreightInvariant);
+            return Err(MaterialCircuitError::FreightInvariant);
         };
         let order = &state.orders[index];
         let supplier_key = (
@@ -357,36 +350,35 @@ fn validate_orders_and_freight(
             || lot.dispatch_period >= state.period
             || lot.stage_arrival_period < state.period
             || usize::from(lot.current_stage_index) >= legs.len()
-            || routes.get(&supplier_key)
-                != Some(&(lot.route_id, crate::SupplierTransportV3::Staged))
+            || routes.get(&supplier_key) != Some(&(lot.route_id, crate::SupplierTransport::Staged))
             || lot.source_site_id != order.supplier_site_id
             || lot.destination_site_id != order.buyer_site_id
             || lot.good_id != order.good_id
             || lot.unit_id != order.unit_id
         {
-            return Err(MaterialCircuitErrorV3::FreightInvariant);
+            return Err(MaterialCircuitError::FreightInvariant);
         }
         if expected_stage_arrival(lot, legs)? != lot.stage_arrival_period {
-            return Err(MaterialCircuitErrorV3::FreightInvariant);
+            return Err(MaterialCircuitError::FreightInvariant);
         }
         let total = in_transit.entry(lot.order_id).or_default();
         *total = total
             .checked_add(u128::from(lot.quantity))
-            .ok_or(MaterialCircuitErrorV3::Arithmetic)?;
+            .ok_or(MaterialCircuitError::Arithmetic)?;
     }
     for (order, backlog) in state
         .orders
         .iter()
         .zip(&state.backlog)
-        .take(MAX_MATERIAL_CIRCUIT_ROWS_V1 + 1)
+        .take(MAX_MATERIAL_CIRCUIT_ROWS + 1)
     {
         if order.ordered == 0 {
-            return Err(MaterialCircuitErrorV3::ZeroQuantity);
+            return Err(MaterialCircuitError::ZeroQuantity);
         }
         let accounted = order
             .delivered
             .checked_add(order.lost)
-            .ok_or(MaterialCircuitErrorV3::Arithmetic)?;
+            .ok_or(MaterialCircuitError::Arithmetic)?;
         let local = routes
             .get(&(
                 order.buyer_site_id,
@@ -394,7 +386,7 @@ fn validate_orders_and_freight(
                 order.good_id,
                 order.unit_id,
             ))
-            .is_some_and(|(_, mode)| *mode == crate::SupplierTransportV3::Local);
+            .is_some_and(|(_, mode)| *mode == crate::SupplierTransport::Local);
         if (local
             && (order.lost != 0
                 || order.shipped != order.delivered
@@ -403,23 +395,23 @@ fn validate_orders_and_freight(
             || accounted > order.shipped
             || order.shipped > order.ordered
         {
-            return Err(MaterialCircuitErrorV3::OrderInvariant);
+            return Err(MaterialCircuitError::OrderInvariant);
         }
         if backlog.order_id != order.order_id || backlog.quantity != order.ordered - order.shipped {
-            return Err(MaterialCircuitErrorV3::BacklogInvariant);
+            return Err(MaterialCircuitError::BacklogInvariant);
         }
         if in_transit.get(&order.order_id).copied().unwrap_or(0)
             != u128::from(order.shipped - accounted)
         {
-            return Err(MaterialCircuitErrorV3::FreightInvariant);
+            return Err(MaterialCircuitError::FreightInvariant);
         }
     }
     Ok(())
 }
 
-pub(crate) fn canonical_state_v3(
-    state: &MaterialCircuitStateV3,
-) -> Result<MaterialCircuitStateV3, MaterialCircuitErrorV3> {
+pub(crate) fn canonical_state(
+    state: &MaterialCircuitState,
+) -> Result<MaterialCircuitState, MaterialCircuitError> {
     check_row_limits(state)?;
     let mut canonical = state.clone();
     canonicalize_rows(&mut canonical);
@@ -434,33 +426,33 @@ pub(crate) fn canonical_state_v3(
         || canonical
             .corridor_capacities
             .iter()
-            .take(MAX_MATERIAL_CIRCUIT_ROWS_V1 + 1)
+            .take(MAX_MATERIAL_CIRCUIT_ROWS + 1)
             .any(|row| row.period < canonical.period)
     {
-        return Err(MaterialCircuitErrorV3::PeriodInvariant);
+        return Err(MaterialCircuitError::PeriodInvariant);
     }
     Ok(canonical)
 }
 
-fn loss_quantity(quantity: u64, loss_ppm: u32) -> Result<u64, MaterialCircuitErrorV3> {
+fn loss_quantity(quantity: u64, loss_ppm: u32) -> Result<u64, MaterialCircuitError> {
     let loss = u128::from(quantity)
         .checked_mul(u128::from(loss_ppm))
-        .ok_or(MaterialCircuitErrorV3::Arithmetic)?
-        / u128::from(FREIGHT_LOSS_PARTS_PER_MILLION_V2);
-    u64::try_from(loss).map_err(|_| MaterialCircuitErrorV3::Arithmetic)
+        .ok_or(MaterialCircuitError::Arithmetic)?
+        / u128::from(FREIGHT_LOSS_PARTS_PER_MILLION);
+    u64::try_from(loss).map_err(|_| MaterialCircuitError::Arithmetic)
 }
 
 fn process_due_freight(
-    state: &mut MaterialCircuitStateV3,
+    state: &mut MaterialCircuitState,
     inventory: &mut InventoryLedger,
-    losses: &mut Vec<FreightLossReceiptV3>,
-    arrivals: &mut Vec<ArrivalReceiptV1>,
-    deliveries: &mut Vec<DeliveryReceiptV1>,
-    realizations: &mut Vec<RealizationReceiptV1>,
-) -> Result<(), MaterialCircuitErrorV3> {
+    losses: &mut Vec<FreightLossReceipt>,
+    arrivals: &mut Vec<ArrivalReceipt>,
+    deliveries: &mut Vec<DeliveryReceipt>,
+    realizations: &mut Vec<RealizationReceipt>,
+) -> Result<(), MaterialCircuitError> {
     let opening = std::mem::take(&mut state.freight);
     let mut remaining = Vec::with_capacity(opening.len());
-    for mut lot in opening.into_iter().take(MAX_MATERIAL_CIRCUIT_ROWS_V1 + 1) {
+    for mut lot in opening.into_iter().take(MAX_MATERIAL_CIRCUIT_ROWS + 1) {
         if lot.stage_arrival_period != state.period {
             remaining.push(lot);
             continue;
@@ -478,15 +470,15 @@ fn process_due_freight(
         let retained = lot
             .quantity
             .checked_sub(lost)
-            .ok_or(MaterialCircuitErrorV3::Arithmetic)?;
+            .ok_or(MaterialCircuitError::Arithmetic)?;
         let order_index =
-            order_index(state, lot.order_id).ok_or(MaterialCircuitErrorV3::FreightInvariant)?;
+            order_index(state, lot.order_id).ok_or(MaterialCircuitError::FreightInvariant)?;
         state.orders[order_index].lost = state.orders[order_index]
             .lost
             .checked_add(lost)
-            .ok_or(MaterialCircuitErrorV3::Arithmetic)?;
+            .ok_or(MaterialCircuitError::Arithmetic)?;
         if lost > 0 {
-            losses.push(FreightLossReceiptV3 {
+            losses.push(FreightLossReceipt {
                 lot_id: lot.lot_id,
                 order_id: lot.order_id,
                 route_id: lot.route_id,
@@ -499,7 +491,7 @@ fn process_due_freight(
             lot.stage_arrival_period = state
                 .period
                 .checked_add(u64::from(next_travel_periods))
-                .ok_or(MaterialCircuitErrorV3::Arithmetic)?;
+                .ok_or(MaterialCircuitError::Arithmetic)?;
             lot.quantity = retained;
             remaining.push(lot);
             continue;
@@ -514,20 +506,20 @@ fn process_due_freight(
             order.delivered = order
                 .delivered
                 .checked_add(retained)
-                .ok_or(MaterialCircuitErrorV3::Arithmetic)?;
+                .ok_or(MaterialCircuitError::Arithmetic)?;
             order.realized = order
                 .realized
                 .checked_add(retained)
-                .ok_or(MaterialCircuitErrorV3::Arithmetic)?;
-            arrivals.push(ArrivalReceiptV1 {
+                .ok_or(MaterialCircuitError::Arithmetic)?;
+            arrivals.push(ArrivalReceipt {
                 order_id: lot.order_id,
                 quantity: retained,
             });
-            deliveries.push(DeliveryReceiptV1 {
+            deliveries.push(DeliveryReceipt {
                 order_id: lot.order_id,
                 quantity: retained,
             });
-            realizations.push(RealizationReceiptV1 {
+            realizations.push(RealizationReceipt {
                 order_id: lot.order_id,
                 quantity: retained,
             });
@@ -537,36 +529,36 @@ fn process_due_freight(
     Ok(())
 }
 
-fn capacity_index(state: &MaterialCircuitStateV3, key: CapacityKey) -> Option<usize> {
+fn capacity_index(state: &MaterialCircuitState, key: CapacityKey) -> Option<usize> {
     state
         .corridor_capacities
         .binary_search_by_key(&key, |row| (row.period, row.corridor_id))
         .ok()
 }
 
-fn freight_lot_id(order: OrderIdV1, period: u64) -> FreightLotIdV2 {
+fn freight_lot_id(order: OrderId, period: u64) -> FreightLotId {
     let mut bytes = b"babylon.freight-lot.v2\0".to_vec();
     bytes.extend_from_slice(&order.as_bytes());
     bytes.extend_from_slice(&period.to_be_bytes());
-    FreightLotIdV2::from_bytes(sha256_of(&bytes))
+    FreightLotId::from_bytes(sha256_of(&bytes))
 }
 
-fn rebuild_backlog(state: &mut MaterialCircuitStateV3) {
+fn rebuild_backlog(state: &mut MaterialCircuitState) {
     state.backlog = state
         .orders
         .iter()
-        .take(MAX_MATERIAL_CIRCUIT_ROWS_V1 + 1)
-        .map(|order| BacklogRowV1 {
+        .take(MAX_MATERIAL_CIRCUIT_ROWS + 1)
+        .map(|order| BacklogRow {
             order_id: order.order_id,
             quantity: order.ordered - order.shipped,
         })
         .collect();
 }
 
-fn prune_corridor_capacity(state: &mut MaterialCircuitStateV3, next_period: u64) {
+fn prune_corridor_capacity(state: &mut MaterialCircuitState, next_period: u64) {
     state.corridor_capacities = std::mem::take(&mut state.corridor_capacities)
         .into_iter()
-        .take(MAX_MATERIAL_CIRCUIT_ROWS_V1 + 1)
+        .take(MAX_MATERIAL_CIRCUIT_ROWS + 1)
         .filter(|row| row.period >= next_period)
         .collect();
 }
@@ -577,12 +569,12 @@ fn prune_corridor_capacity(state: &mut MaterialCircuitStateV3, next_period: u64)
 /// shares its closing period. Only successful final planning yields a successor.
 /// Private fields prevent callers from replacing closed inventory or receipts.
 #[derive(Debug)]
-pub struct ClosedMaterialPeriodV3 {
-    transition: MaterialCircuitTransitionV3,
+pub struct ClosedMaterialPeriod {
+    transition: MaterialCircuitTransition,
     next_period: u64,
 }
 
-impl ClosedMaterialPeriodV3 {
+impl ClosedMaterialPeriod {
     /// The interval whose arrivals, production and dispatch have completed.
     #[must_use]
     pub const fn closing_period(&self) -> u64 {
@@ -597,7 +589,7 @@ impl ClosedMaterialPeriodV3 {
 
     /// Exact closing stock after dispatch, without a second inventory owner.
     #[must_use]
-    pub fn inventory(&self) -> &[InventoryRowV1] {
+    pub fn inventory(&self) -> &[InventoryRow] {
         &self.transition.state.inventory
     }
 
@@ -613,48 +605,48 @@ impl ClosedMaterialPeriodV3 {
     /// hours that cannot be represented exactly as `u64`.
     pub fn staffing_requests(
         &self,
-        bindings: &[StaffingPoolBindingV2],
-    ) -> Result<Vec<StaffingWorkRequestV2>, MaterialCircuitErrorV3> {
+        bindings: &[StaffingPoolBinding],
+    ) -> Result<Vec<StaffingWorkRequest>, MaterialCircuitError> {
         let state = &self.transition.state;
         let owners = staffing_work_owners(bindings)?;
-        let production = derive_shared_labor_requests_v1(state, self.next_period)?;
+        let production = derive_shared_labor_requests(state, self.next_period)?;
         let mut requests = Vec::new();
         for request in production {
             requests.push((
-                crate::StaffingWorkSourceV2::Production(request.process_id),
+                crate::StaffingWorkSource::Production(request.process_id),
                 request.site_id,
                 request.unit_id,
                 request.hours,
             ));
         }
-        let mut needed = BTreeMap::<SiteIdV1, u64>::new();
+        let mut needed = BTreeMap::<SiteId, u64>::new();
         for receipt in &self.transition.handling {
             let hours = needed.entry(receipt.site_id).or_default();
             *hours = hours
                 .checked_add(receipt.needed_hours)
-                .ok_or(MaterialCircuitErrorV3::Arithmetic)?;
+                .ok_or(MaterialCircuitError::Arithmetic)?;
         }
         for merchant in &state.merchants {
             requests.push((
-                crate::StaffingWorkSourceV2::MerchantHandling(merchant.site_id),
+                crate::StaffingWorkSource::MerchantHandling(merchant.site_id),
                 merchant.site_id,
                 merchant.labor_unit_id,
                 needed.get(&merchant.site_id).copied().unwrap_or(0),
             ));
         }
         if owners.len() != requests.len() {
-            return Err(MaterialCircuitErrorV3::ProcessInvariant);
+            return Err(MaterialCircuitError::ProcessInvariant);
         }
         requests
             .into_iter()
             .map(|(source, site, unit, hours)| {
                 let binding = owners
                     .get(&source)
-                    .ok_or(MaterialCircuitErrorV3::ProcessInvariant)?;
+                    .ok_or(MaterialCircuitError::ProcessInvariant)?;
                 if binding.site_id() != site || binding.unit_id() != unit {
-                    return Err(MaterialCircuitErrorV3::ProcessInvariant);
+                    return Err(MaterialCircuitError::ProcessInvariant);
                 }
-                Ok(StaffingWorkRequestV2::new(
+                Ok(StaffingWorkRequest::new(
                     self.closing_period(),
                     binding.pool_id(),
                     source,
@@ -677,8 +669,8 @@ impl ClosedMaterialPeriodV3 {
     /// arithmetic and any invalid final circuit. No partial successor escapes.
     pub fn finish_with_labor(
         mut self,
-        mut next_labor: Vec<LaborCapacityRowV1>,
-    ) -> Result<MaterialCircuitTransitionV3, MaterialCircuitErrorV3> {
+        mut next_labor: Vec<LaborCapacityRow>,
+    ) -> Result<MaterialCircuitTransition, MaterialCircuitError> {
         validate_next_labor(&self.transition.state, self.next_period, &next_labor)?;
         // The allocator performs binary searches before final canonicalization.
         next_labor.sort_unstable_by_key(|row| (row.period, row.site_id, row.unit_id));
@@ -686,21 +678,21 @@ impl ClosedMaterialPeriodV3 {
         self.finish()
     }
 
-    fn finish(mut self) -> Result<MaterialCircuitTransitionV3, MaterialCircuitErrorV3> {
+    fn finish(mut self) -> Result<MaterialCircuitTransition, MaterialCircuitError> {
         let state = &mut self.transition.state;
-        derive_shared_production_v1(state, self.next_period)?;
+        derive_shared_production(state, self.next_period)?;
         prune_corridor_capacity(state, self.next_period);
         state.period = self.next_period;
-        *state = canonical_state_v3(state)?;
+        *state = canonical_state(state)?;
         Ok(self.transition)
     }
 }
 
 fn staffing_work_owners(
-    bindings: &[StaffingPoolBindingV2],
-) -> Result<BTreeMap<crate::StaffingWorkSourceV2, &StaffingPoolBindingV2>, MaterialCircuitErrorV3> {
-    if bindings.len() > MAX_MATERIAL_CIRCUIT_ROWS_V1 {
-        return Err(MaterialCircuitErrorV3::RowLimit);
+    bindings: &[StaffingPoolBinding],
+) -> Result<BTreeMap<crate::StaffingWorkSource, &StaffingPoolBinding>, MaterialCircuitError> {
+    if bindings.len() > MAX_MATERIAL_CIRCUIT_ROWS {
+        return Err(MaterialCircuitError::RowLimit);
     }
     let mut owners = BTreeMap::new();
     let mut pools = BTreeSet::new();
@@ -709,14 +701,14 @@ fn staffing_work_owners(
         if !pools.insert(binding.pool_id())
             || !principals.insert((binding.site_id(), binding.unit_id()))
         {
-            return Err(MaterialCircuitErrorV3::DuplicateRow);
+            return Err(MaterialCircuitError::DuplicateRow);
         }
         for process in binding.work_sources() {
             if owners.insert(*process, binding).is_some() {
-                return Err(MaterialCircuitErrorV3::DuplicateRow);
+                return Err(MaterialCircuitError::DuplicateRow);
             }
-            if owners.len() > MAX_MATERIAL_CIRCUIT_ROWS_V1 {
-                return Err(MaterialCircuitErrorV3::RowLimit);
+            if owners.len() > MAX_MATERIAL_CIRCUIT_ROWS {
+                return Err(MaterialCircuitError::RowLimit);
             }
         }
     }
@@ -724,12 +716,12 @@ fn staffing_work_owners(
 }
 
 fn validate_next_labor(
-    state: &MaterialCircuitStateV3,
+    state: &MaterialCircuitState,
     next_period: u64,
-    rows: &[LaborCapacityRowV1],
-) -> Result<(), MaterialCircuitErrorV3> {
-    if rows.len() > MAX_MATERIAL_CIRCUIT_ROWS_V1 {
-        return Err(MaterialCircuitErrorV3::RowLimit);
+    rows: &[LaborCapacityRow],
+) -> Result<(), MaterialCircuitError> {
+    if rows.len() > MAX_MATERIAL_CIRCUIT_ROWS {
+        return Err(MaterialCircuitError::RowLimit);
     }
     // The detached close preserves the checked, process-sorted recipe roster.
     let mut expected: BTreeSet<_> = state
@@ -747,14 +739,14 @@ fn validate_next_labor(
     let mut actual = BTreeSet::new();
     for row in rows {
         if row.period != next_period {
-            return Err(MaterialCircuitErrorV3::PeriodInvariant);
+            return Err(MaterialCircuitError::PeriodInvariant);
         }
         if !actual.insert((row.site_id, row.unit_id)) {
-            return Err(MaterialCircuitErrorV3::DuplicateRow);
+            return Err(MaterialCircuitError::DuplicateRow);
         }
     }
     if actual != expected {
-        return Err(MaterialCircuitErrorV3::CapacityInvariant);
+        return Err(MaterialCircuitError::CapacityInvariant);
     }
     Ok(())
 }
@@ -763,10 +755,10 @@ fn validate_next_labor(
 ///
 /// # Errors
 /// Returns the first exact schema, route, conservation, bound, or arithmetic refusal.
-pub fn advance_material_circuit_v3(
-    opening: &MaterialCircuitStateV3,
-) -> Result<MaterialCircuitTransitionV3, MaterialCircuitErrorV3> {
-    close_material_period_v3(opening)?.finish()
+pub fn advance_material_circuit(
+    opening: &MaterialCircuitState,
+) -> Result<MaterialCircuitTransition, MaterialCircuitError> {
+    close_material_period(opening)?.finish()
 }
 
 /// Execute due freight, prior production commitments and dispatch exactly once.
@@ -777,10 +769,10 @@ pub fn advance_material_circuit_v3(
 /// # Errors
 /// Returns the same schema, route, conservation, bound or arithmetic refusals
 /// as the one-shot transition, leaving the opening state unchanged.
-pub fn close_material_period_v3(
-    opening: &MaterialCircuitStateV3,
-) -> Result<ClosedMaterialPeriodV3, MaterialCircuitErrorV3> {
-    let mut state = canonical_state_v3(opening)?;
+pub fn close_material_period(
+    opening: &MaterialCircuitState,
+) -> Result<ClosedMaterialPeriod, MaterialCircuitError> {
+    let mut state = canonical_state(opening)?;
     let mut inventory = take_inventory(&mut state);
     let mut losses = Vec::new();
     let mut arrivals = Vec::new();
@@ -796,7 +788,7 @@ pub fn close_material_period_v3(
         &mut realizations,
     )?;
     publish_inventory(&mut state, inventory);
-    let production = execute_shared_production_v1(&mut state)?;
+    let production = execute_shared_production(&mut state)?;
     let mut inventory = take_inventory(&mut state);
     let outbound = outbound::dispatch_orders(&mut state, &mut inventory, &mut dispatches)?;
     rebuild_backlog(&mut state);
@@ -804,10 +796,10 @@ pub fn close_material_period_v3(
     let next_period = state
         .period
         .checked_add(1)
-        .ok_or(MaterialCircuitErrorV3::Arithmetic)?;
-    Ok(ClosedMaterialPeriodV3 {
+        .ok_or(MaterialCircuitError::Arithmetic)?;
+    Ok(ClosedMaterialPeriod {
         next_period,
-        transition: MaterialCircuitTransitionV3 {
+        transition: MaterialCircuitTransition {
             state,
             production,
             dispatches,
@@ -825,17 +817,17 @@ pub fn close_material_period_v3(
 #[cfg(test)]
 mod tests {
     use super::outbound::ensure_resource_group_count;
-    use crate::{MaterialCircuitErrorV3, MAX_FREIGHT_RESOURCE_REQUESTS_V3};
+    use crate::{MaterialCircuitError, MAX_FREIGHT_RESOURCE_REQUESTS};
 
     #[test]
     fn resource_group_ceiling_accepts_maximum_and_refuses_plus_one() {
         assert_eq!(
-            ensure_resource_group_count(MAX_FREIGHT_RESOURCE_REQUESTS_V3),
+            ensure_resource_group_count(MAX_FREIGHT_RESOURCE_REQUESTS),
             Ok(())
         );
         assert_eq!(
-            ensure_resource_group_count(MAX_FREIGHT_RESOURCE_REQUESTS_V3 + 1),
-            Err(MaterialCircuitErrorV3::RowLimit)
+            ensure_resource_group_count(MAX_FREIGHT_RESOURCE_REQUESTS + 1),
+            Err(MaterialCircuitError::RowLimit)
         );
     }
 }

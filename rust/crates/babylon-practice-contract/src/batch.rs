@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use babylon_kernel::sha256_of;
+use babylon_kernel::content_digest::sha256_of;
 
 use crate::actor::ActorOrganizationId;
 use crate::authority::validate_input_authority_row;

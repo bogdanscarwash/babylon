@@ -8,7 +8,7 @@ use babylon_evidence::{
     RunIdentity, SfsComponentProofProfile, SfsPreregistration, SfsProofProfile, SfsSample,
     SfsTrace, T3Record,
 };
-use babylon_kernel::SessionId;
+use babylon_kernel::clock::SessionId;
 use babylon_practice_contract::PracticeId;
 
 const MAX_VECTOR_BYTES: usize = 16_777_216;

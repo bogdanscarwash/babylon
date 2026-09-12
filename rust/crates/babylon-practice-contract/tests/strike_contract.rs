@@ -108,7 +108,7 @@ fn authoritative_context(
 #[test]
 fn language_neutral_strike_vectors_drive_every_rust_digest() {
     assert_eq!(
-        babylon_kernel::sha256_of(SCHEMA),
+        babylon_kernel::content_digest::sha256_of(SCHEMA),
         STRIKE_PROPOSAL_SOURCE_SHA256
     );
     let cases = cases();

@@ -3,7 +3,7 @@
 use std::time::Duration;
 
 use babylon_persistence::{
-    PostgresDiagnosticV1, PostgresFailureClassV1, MAX_POSTGRES_DIAGNOSTIC_MESSAGE_BYTES,
+    PostgresDiagnostic, PostgresFailureClass, MAX_POSTGRES_DIAGNOSTIC_MESSAGE_BYTES,
 };
 use postgres::{Config, NoTls};
 
@@ -24,12 +24,12 @@ fn unreachable_target_is_classified_without_connection_material() {
     let Err(error) = config.connect(NoTls) else {
         panic!("the reserved local endpoint must refuse the test connection");
     };
-    let diagnostic = PostgresDiagnosticV1::capture(&error);
+    let diagnostic = PostgresDiagnostic::capture(&error);
     let rendered = format!("{diagnostic:?}");
 
     assert_eq!(
         diagnostic.classification(),
-        PostgresFailureClassV1::Reachability
+        PostgresFailureClass::Reachability
     );
     assert_eq!(diagnostic.sqlstate(), None);
     assert!(diagnostic
@@ -42,7 +42,7 @@ fn unreachable_target_is_classified_without_connection_material() {
 
 #[test]
 fn maintenance_probe_surfaces_the_bounded_diagnostic_instead_of_erasing_it() {
-    assert!(RUNTIME_SOURCE.contains("PostgresDiagnosticV1::capture(error)"));
+    assert!(RUNTIME_SOURCE.contains("PostgresDiagnostic::capture(error)"));
     assert!(RUNTIME_SOURCE.contains("database probe connection"));
     assert!(RUNTIME_SOURCE.contains("Archive probe connection"));
     assert!(!RUNTIME_SOURCE.contains("map_err(|_| \"database probe connection failed\""));

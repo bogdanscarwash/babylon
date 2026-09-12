@@ -1,11 +1,11 @@
 //! Behavioral proof for situated organizational practice over relational territory.
 
-use babylon_bsl::compose_declaration_preludes;
+use babylon_bsl::scenario::compose_declaration_preludes;
 use babylon_bsl::structural_verbs::CollectingSink;
 use babylon_graph::hypergraph_store::HypergraphStore;
 use babylon_graph::substrate::{GraphSubstrate, NodeId};
-use babylon_kernel::replay::ReplaySessionIdV1;
-use babylon_tick::RuleDiagnosticSession;
+use babylon_kernel::replay::ReplaySessionId;
+use babylon_tick::diagnostic::RuleDiagnosticSession;
 
 const SCENARIO: &str = include_str!("../content/scenarios/organization-foundation.bscn");
 const PACK: &str = include_str!("../content/rules/organization.bsl");
@@ -73,8 +73,7 @@ fn rooted_practice_requires_a_shared_presence_and_tenancy_territory() {
         Some(&practice_prelude()),
         PACK,
         HypergraphStore::new(),
-        ReplaySessionIdV1::try_from("organization-local-social-base")
-            .expect("literal is non-empty"),
+        ReplaySessionId::try_from("organization-local-social-base").expect("literal is non-empty"),
         babylon_kernel::replay::ReplaySeed::new(0),
     )
     .expect("the local-base world loads");
@@ -83,8 +82,7 @@ fn rooted_practice_requires_a_shared_presence_and_tenancy_territory() {
         Some(&practice_prelude()),
         PACK,
         HypergraphStore::new(),
-        ReplaySessionIdV1::try_from("organization-remote-social-base")
-            .expect("literal is non-empty"),
+        ReplaySessionId::try_from("organization-remote-social-base").expect("literal is non-empty"),
         babylon_kernel::replay::ReplaySeed::new(0),
     )
     .expect("the remote-base world loads");
@@ -115,7 +113,7 @@ fn a_nonparticipating_presence_does_not_dilute_rooted_work() {
         Some(&practice_prelude()),
         PACK,
         HypergraphStore::new(),
-        ReplaySessionIdV1::try_from("organization-local-mean").expect("literal is non-empty"),
+        ReplaySessionId::try_from("organization-local-mean").expect("literal is non-empty"),
         babylon_kernel::replay::ReplaySeed::new(0),
     )
     .expect("the local-only world loads");
@@ -124,7 +122,7 @@ fn a_nonparticipating_presence_does_not_dilute_rooted_work() {
         Some(&practice_prelude()),
         PACK,
         HypergraphStore::new(),
-        ReplaySessionIdV1::try_from("organization-local-mean-with-remote")
+        ReplaySessionId::try_from("organization-local-mean-with-remote")
             .expect("literal is non-empty"),
         babylon_kernel::replay::ReplaySeed::new(0),
     )
@@ -169,7 +167,7 @@ fn rooted_capacity_does_not_self_replicate_without_fresh_practice() {
         Some(&practice_prelude()),
         PACK,
         HypergraphStore::new(),
-        ReplaySessionIdV1::try_from("organization-practice-conformance")
+        ReplaySessionId::try_from("organization-practice-conformance")
             .expect("literal is non-empty"),
         babylon_kernel::replay::ReplaySeed::new(0),
     )
@@ -206,7 +204,7 @@ fn unique_low_buffer_corridor_relays_more_capacity_than_reroutable_corridor() {
         Some(&practice_prelude()),
         PACK,
         HypergraphStore::new(),
-        ReplaySessionIdV1::try_from("organization-circulation-bottleneck")
+        ReplaySessionId::try_from("organization-circulation-bottleneck")
             .expect("literal is non-empty"),
         babylon_kernel::replay::ReplaySeed::new(0),
     )
@@ -233,7 +231,7 @@ fn one_seeded_action_is_divided_across_the_organizations_branches() {
         Some(&practice_prelude()),
         PACK,
         HypergraphStore::new(),
-        ReplaySessionIdV1::try_from("organization-one-branch").expect("literal is non-empty"),
+        ReplaySessionId::try_from("organization-one-branch").expect("literal is non-empty"),
         babylon_kernel::replay::ReplaySeed::new(0),
     )
     .expect("the one-branch organization world loads");
@@ -253,7 +251,7 @@ fn one_seeded_action_is_divided_across_the_organizations_branches() {
         Some(&practice_prelude()),
         PACK,
         HypergraphStore::new(),
-        ReplaySessionIdV1::try_from("organization-two-branches").expect("literal is non-empty"),
+        ReplaySessionId::try_from("organization-two-branches").expect("literal is non-empty"),
         babylon_kernel::replay::ReplaySeed::new(0),
     )
     .expect("the two-branch organization world loads");
@@ -299,7 +297,7 @@ fn practice_requires_presence_with_the_matching_material_embedding() {
         Some(&practice_prelude()),
         PACK,
         HypergraphStore::new(),
-        ReplaySessionIdV1::try_from("organization-mismatched-embedding")
+        ReplaySessionId::try_from("organization-mismatched-embedding")
             .expect("literal is non-empty"),
         babylon_kernel::replay::ReplaySeed::new(0),
     )
@@ -309,8 +307,7 @@ fn practice_requires_presence_with_the_matching_material_embedding() {
         Some(&practice_prelude()),
         PACK,
         HypergraphStore::new(),
-        ReplaySessionIdV1::try_from("organization-matched-embedding")
-            .expect("literal is non-empty"),
+        ReplaySessionId::try_from("organization-matched-embedding").expect("literal is non-empty"),
         babylon_kernel::replay::ReplaySeed::new(0),
     )
     .expect("the matched-embedding world loads");
@@ -347,8 +344,7 @@ fn situated_practice_builds_capacity_without_direct_membership_or_care() {
         Some(&practice_prelude()),
         PACK,
         HypergraphStore::new(),
-        ReplaySessionIdV1::try_from("organization-situated-practice")
-            .expect("literal is non-empty"),
+        ReplaySessionId::try_from("organization-situated-practice").expect("literal is non-empty"),
         babylon_kernel::replay::ReplaySeed::new(0),
     )
     .expect("the organization practice world loads");

@@ -1,8 +1,10 @@
 //! Client scheduling for the one persistent runtime control connection.
 
 use babylon_persistence::{
-    CampaignId, RuntimeSessionErrorCodeV3, RuntimeSessionRequestV3, RuntimeSessionScopeV3,
-    RuntimeSessionTailV3, RuntimeSessionTargetV3, RUNTIME_SESSION_PROTOCOL_VERSION_V3,
+    identity::CampaignId, runtime_session::RuntimeSessionErrorCode,
+    runtime_session::RuntimeSessionRequest, runtime_session::RuntimeSessionScope,
+    runtime_session::RuntimeSessionTail, runtime_session::RuntimeSessionTarget,
+    runtime_session::RUNTIME_SESSION_PROTOCOL_VERSION,
 };
 
 use super::{ObserverSession, SessionPhase};
@@ -10,20 +12,20 @@ use super::{ObserverSession, SessionPhase};
 #[derive(Debug)]
 struct PendingSwitch {
     request_id: u64,
-    previous: RuntimeSessionScopeV3,
-    target: RuntimeSessionTargetV3,
+    previous: RuntimeSessionScope,
+    target: RuntimeSessionTarget,
     sent: bool,
     accepted: bool,
 }
 
 #[derive(Debug)]
 pub(crate) struct LifecycleState {
-    scope: Option<RuntimeSessionScopeV3>,
-    queued: Option<RuntimeSessionTargetV3>,
+    scope: Option<RuntimeSessionScope>,
+    queued: Option<RuntimeSessionTarget>,
     switching: Option<PendingSwitch>,
     stop: Option<(u64, bool)>,
     disconnected: bool,
-    last_error: Option<RuntimeSessionErrorCodeV3>,
+    last_error: Option<RuntimeSessionErrorCode>,
 }
 
 impl LifecycleState {
@@ -39,9 +41,9 @@ impl LifecycleState {
     }
 }
 
-fn target_campaign(target: &RuntimeSessionTargetV3) -> Result<CampaignId, String> {
-    let (RuntimeSessionTargetV3::New { campaign_id, .. }
-    | RuntimeSessionTargetV3::Open { campaign_id }) = target;
+fn target_campaign(target: &RuntimeSessionTarget) -> Result<CampaignId, String> {
+    let (RuntimeSessionTarget::New { campaign_id, .. }
+    | RuntimeSessionTarget::Open { campaign_id }) = target;
     let uuid = uuid::Uuid::parse_str(campaign_id).map_err(|_| "Invalid campaign identity")?;
     if uuid.is_nil() || uuid.to_string() != *campaign_id {
         return Err("Invalid campaign identity".into());
@@ -54,13 +56,13 @@ impl ObserverSession {
     ///
     /// # Errors
     /// Refuses a noncanonical or nil campaign UUID.
-    pub fn with_initial_target(target: RuntimeSessionTargetV3) -> Result<Self, String> {
+    pub fn with_initial_target(target: RuntimeSessionTarget) -> Result<Self, String> {
         let mut session = Self::new(target_campaign(&target)?);
         session.queue_campaign(target)?;
         Ok(session)
     }
 
-    pub(crate) fn queue_campaign(&mut self, target: RuntimeSessionTargetV3) -> Result<(), String> {
+    pub(crate) fn queue_campaign(&mut self, target: RuntimeSessionTarget) -> Result<(), String> {
         target_campaign(&target)?;
         if self.quit_requested || self.lifecycle.disconnected {
             return Err("Runtime connection unavailable; close and relaunch Babylon.".into());
@@ -98,7 +100,7 @@ impl ObserverSession {
         self.lifecycle.scope.as_ref().map(|scope| scope.epoch)
     }
 
-    pub(crate) fn runtime_scope(&self) -> Option<&RuntimeSessionScopeV3> {
+    pub(crate) fn runtime_scope(&self) -> Option<&RuntimeSessionScope> {
         self.lifecycle.scope.as_ref()
     }
 
@@ -115,7 +117,7 @@ impl ObserverSession {
         Some(request)
     }
 
-    pub(crate) fn hello(&mut self, scope: RuntimeSessionScopeV3) -> Result<(), String> {
+    pub(crate) fn hello(&mut self, scope: RuntimeSessionScope) -> Result<(), String> {
         if self.lifecycle.scope.is_some() || scope.epoch != 0 || scope.campaign_id.is_some() {
             return Err("Unexpected runtime Hello scope".into());
         }
@@ -123,7 +125,7 @@ impl ObserverSession {
         Ok(())
     }
 
-    pub(crate) fn pending_switch_request(&mut self) -> Option<RuntimeSessionRequestV3> {
+    pub(crate) fn pending_switch_request(&mut self) -> Option<RuntimeSessionRequest> {
         if self.quit_requested || self.advance_pending() || self.lifecycle.disconnected {
             return None;
         }
@@ -144,8 +146,8 @@ impl ObserverSession {
         if pending.sent {
             return None;
         }
-        Some(RuntimeSessionRequestV3::Switch {
-            protocol_version: RUNTIME_SESSION_PROTOCOL_VERSION_V3,
+        Some(RuntimeSessionRequest::Switch {
+            protocol_version: RUNTIME_SESSION_PROTOCOL_VERSION,
             request_id: pending.request_id,
             scope: pending.previous.clone(),
             target: pending.target.clone(),
@@ -161,8 +163,8 @@ impl ObserverSession {
     pub(crate) fn switching(
         &mut self,
         request_id: u64,
-        previous: &RuntimeSessionScopeV3,
-        scope: RuntimeSessionScopeV3,
+        previous: &RuntimeSessionScope,
+        scope: RuntimeSessionScope,
     ) -> Result<(), String> {
         let pending = self
             .lifecycle
@@ -209,7 +211,7 @@ impl ObserverSession {
         &mut self,
         request_id: u64,
         foundation_digest: String,
-        tail: RuntimeSessionTailV3,
+        tail: RuntimeSessionTail,
     ) -> Result<(), String> {
         let pending = self
             .lifecycle
@@ -231,7 +233,7 @@ impl ObserverSession {
     pub(crate) fn refuse_request(
         &mut self,
         request_id: Option<u64>,
-        code: RuntimeSessionErrorCodeV3,
+        code: RuntimeSessionErrorCode,
     ) -> bool {
         if self
             .lifecycle
@@ -255,10 +257,10 @@ impl ObserverSession {
 
     pub(crate) fn admission_notice(&self) -> Option<&'static str> {
         match self.lifecycle.last_error {
-            Some(RuntimeSessionErrorCodeV3::CampaignAbsent) => {
+            Some(RuntimeSessionErrorCode::CampaignAbsent) => {
                 Some("The selected campaign was not found. Choose another campaign or create New.")
             }
-            Some(RuntimeSessionErrorCodeV3::CampaignAlreadyExists) => {
+            Some(RuntimeSessionErrorCode::CampaignAlreadyExists) => {
                 Some("That campaign already exists. Choose Open to continue it.")
             }
             _ => None,
@@ -271,8 +273,8 @@ impl ObserverSession {
             .switching
             .as_ref()
             .filter(|pending| pending.sent)?;
-        let (RuntimeSessionTargetV3::New { campaign_id, .. }
-        | RuntimeSessionTargetV3::Open { campaign_id }) = &pending.target;
+        let (RuntimeSessionTarget::New { campaign_id, .. }
+        | RuntimeSessionTarget::Open { campaign_id }) = &pending.target;
         Some(campaign_id)
     }
 
@@ -294,7 +296,7 @@ impl ObserverSession {
         self.fail(error);
     }
 
-    pub(crate) fn pending_stop_request(&mut self) -> Option<RuntimeSessionRequestV3> {
+    pub(crate) fn pending_stop_request(&mut self) -> Option<RuntimeSessionRequest> {
         self.lifecycle.queued = None;
         if self
             .lifecycle
@@ -318,8 +320,8 @@ impl ObserverSession {
         if sent {
             return None;
         }
-        Some(RuntimeSessionRequestV3::Stop {
-            protocol_version: RUNTIME_SESSION_PROTOCOL_VERSION_V3,
+        Some(RuntimeSessionRequest::Stop {
+            protocol_version: RUNTIME_SESSION_PROTOCOL_VERSION,
             request_id,
             scope,
         })
@@ -349,7 +351,7 @@ impl ObserverSession {
 
     #[cfg(test)]
     pub(crate) fn connected_fixture(&mut self) {
-        self.lifecycle.scope = Some(RuntimeSessionScopeV3 {
+        self.lifecycle.scope = Some(RuntimeSessionScope {
             epoch: 1,
             campaign_id: Some(self.campaign.as_uuid().to_string()),
         });
@@ -373,18 +375,18 @@ mod tests {
             }
             let original = state.context();
             state
-                .queue_campaign(RuntimeSessionTargetV3::Open {
+                .queue_campaign(RuntimeSessionTarget::Open {
                     campaign_id: campaign.as_uuid().to_string(),
                 })
                 .unwrap();
-            let RuntimeSessionRequestV3::Switch {
+            let RuntimeSessionRequest::Switch {
                 request_id, scope, ..
             } = state.pending_switch_request().unwrap()
             else {
                 panic!("switch request");
             };
             state.switch_sent();
-            let next = RuntimeSessionScopeV3 {
+            let next = RuntimeSessionScope {
                 epoch: if exhausted_epoch { 0 } else { 2 },
                 campaign_id: scope.campaign_id.clone(),
             };
@@ -400,7 +402,7 @@ mod tests {
         state.connected_fixture();
         state.next_request = u64::MAX;
         state
-            .queue_campaign(RuntimeSessionTargetV3::Open {
+            .queue_campaign(RuntimeSessionTarget::Open {
                 campaign_id: state.campaign.as_uuid().to_string(),
             })
             .unwrap();

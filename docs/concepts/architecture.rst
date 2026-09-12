@@ -2,8 +2,8 @@ Architecture Boundary
 =====================
 
 ``CONSTITUTION.md`` v4.2.0 governs the architecture. ``NORTH_STAR.md`` gives
-the game direction and gate order. This page describes the live boundary after
-the one-way PostgreSQL authority cutover.
+the game direction and gate order. This page describes the current Rust
+implementation and persistence boundary.
 
 System Boundary
 ---------------
@@ -22,11 +22,11 @@ Babylon has these primary boundaries:
 
 One tick judges one fixed 28-day interval and produces one durable commit.
 There are 13 periods in a modeled year; this is a 364-day simulation calendar,
-not variable-length Gregorian months. V7 Michigan campaigns bind the interval
+not variable-length Gregorian months. Current Michigan campaigns bind the interval
 in their canonical content. Their authored TOML defines the work schedule,
 recipes, workforce, stocks, orders, throughput, route durations, and a stop
 horizon of 1 through 16 periods. The supplied values yield 160 Designed labor
-hours per person per period and 16 periods (64 weeks). Definitions V3
+hours per person per period and 16 periods (64 weeks). Definitions
 normalize regional and statewide authoring into one current content model.
 New captures that model, the generated graph scenario, observed source cells,
 and observed definitions. Statewide capture also retains resolved physical
@@ -114,72 +114,44 @@ Each four-week tick runs on detached state and buffers its events. The tick beco
 observable only after all rule, hash, and persistence boundaries succeed.
 ``GraphStateHash`` identifies graph bytes only. ``NominalWorldHash`` also binds
 completed time, allocator cursors, and the governed phase-schedule digest.
-``TickContentHashV1`` binds the identified replay result.
-``ReplayTickSession`` publishes ``TickContentHashV1`` atomically. Replay
+``TickContentHash`` binds the identified replay result.
+``ReplayTickSession`` publishes ``TickContentHash`` atomically. Replay
 identity and campaign durability identity are separate typed inputs.
 
 A finite kernel distributes exact ``Mass`` over one enum-ordered family of
 bounded material effect bundles. It consumes one replay-keyed integer ticket
 draw and applies only the selected bundle. The choice produces a separate
-``ChoiceReceiptV1`` even when the selected bundle changes no material state.
+``ChoiceReceipt`` even when the selected bundle changes no material state.
 Deterministic mechanics are the one-outcome case. Events own no authored
 probability. The language assumes no independence between choices.
 
 Authoritative Persistence
 -------------------------
 
-``babylon-runtime`` is the sole production composition root. It activates the
-Rust schema and serves the live observer session through
-``DurableMaterialRuntimeV3``. That runtime admits a V7 Michigan foundation,
-judges one period, and commits ``CommittedMaterialTickEnvelopeV3`` containing
-both graph and material evidence. Callers cannot submit a pre-judged report or
-construct a second writer authority.
+``babylon-runtime`` is the production composition root. It verifies the current
+schema and serves the observer through ``DurableMaterialRuntime``. That runtime
+captures one current Michigan foundation, judges one period, and commits graph
+and material evidence together. Callers cannot submit a pre-judged report.
 
-The normalized content and executable sector bundles use V2. Material state
-and registers use V3. ``MaterialTickReceiptsV4`` includes local-transfer,
-merchant-handling, and local-retail-fulfillment accounts alongside production
-and routed movement. Staffing binds tagged production or merchant work
-sources to a single conserved pool.
+Production, freight, merchant handling, local transfers, retail fulfillment,
+and staffing share one material state. Production updates that state's fields
+through the common checked inventory operations. Staffing binds production or
+merchant work to a conserved pool. ``ProductionEvidenceDigest`` binds the
+complete authorized projection, sorting unordered rows while preserving event,
+geometry, and physical path order.
 
-``ProductionEvidenceDigestV6`` binds the
-complete authorized typed projection. It sorts unordered rows for hashing.
-Event order, geometry vertices, and each physical path's edge order keep
-their meaning.
+Practice has one typed contract for actors, stable targets, authority, intents,
+resource quotes, resolved batches, and ordered actions. The evidence driver
+uses that contract directly. Seeded replay and sealed carrier keys govern BSL
+and tick execution. Scenario and rule diagnostics use an explicit deterministic
+identity and the production collect-and-apply adjudicator.
 
-Material campaigns retain the V2 graph replay and schema-authority contracts
-inside their V3 material envelope. Graph-only diagnostic campaigns exercise
-``DurableReplayRuntimeV2`` separately. The observer session refuses those
-campaigns and older material content. Refusal leaves stored data intact.
-
-The epoch 8/9 predecessor ledger is append-only historical cutover evidence:
-
-.. list-table::
-   :header-rows: 1
-   :widths: 20 25 55
-
-   * - Ordinal
-     - State
-     - Meaning
-   * - 1
-     - ``prepared`` at epoch 8
-     - Additive Rust schema and reference preparation completed.
-   * - 2
-     - ``rust_active`` at epoch 9
-     - Legacy Python-managed relations were migrated or proved empty and
-       retired. This row is the predecessor for the V2 authority transition.
-
-The active authority ledger is
-``babylon_meta.committed_tick_v2_authority_ledger``. Its only legal history is
-``Prepared`` at epoch 10 followed by ``Active`` at epoch 11. Both rows bind the
-active V2 cutover contract and epoch 11 reader migration. The active row also
-binds the prepared-row digest, and the prepared row binds the epoch 9
-predecessor-row digest.
-
-The epoch 11 ``Active`` row is the final activation statement before
-``COMMIT``. Activation is forward-only and idempotent. Runtime authority
-reacquisition requires the exact two-row V2 ledger and its bound contract,
-reader migration, and predecessor digests. The epoch 9 ``rust_active`` row
-alone cannot reopen the writer.
+Fresh initialization constructs the complete current schema in one transaction,
+under the advisory lock. Its schema identity is the final initialization write.
+Admission verifies the exact schema, ownership, and permitted role grants.
+Reference-data installation and reader-role provisioning have separate duties.
+Both use the current schema. The runtime refuses incompatible databases before
+mutation and preserves their data.
 
 .. Vale: these paragraphs preserve literal persistence and schema identifiers.
 .. vale ste.UnapprovedWords = NO
@@ -209,23 +181,22 @@ The runtime acknowledges the tick only after ``COMMIT`` or exact
 ambiguous-commit reconciliation. Retry and restart must reproduce the same
 material envelope bytes. Material campaign markers record
 ``envelope_layout_version = 3``; material readers require that layout.
-Graph-only diagnostic markers retain layout 2.
 
 .. vale ste.NounClusters = YES
 .. vale ste.UnapprovedWords = YES
 
-Restart loads the campaign foundation or latest complete full checkpoint, then
-replays a contiguous marker tail. A delta checkpoint is never a restore root.
+Restart reconstructs the captured foundation and loads the latest complete
+material checkpoint bound to the committed tail. A delta checkpoint is never a restore root.
 Missing, duplicate, out-of-order, or digest-mismatched sections refuse before
 the runtime resumes.
 
 H3 Reader Boundary
 ------------------
 
-Epoch 7 captured and proved the legacy H3 reader parity corpus. Epoch 9 has no
-Python game-state reader edge and no compatibility projection. Rust installs
-the exact reference cohort and Michigan dynamic foundation, then reads typed
-relations directly.
+Rust installs the exact reference cohort and Michigan dynamic foundation, then
+reads typed relations directly. Python has no game-state reader or compatibility
+projection. The consuming Rust paths check reference transport, hierarchy,
+ordering, and current restricted readers.
 
 Reference Data and Operator Tools
 ---------------------------------
@@ -280,12 +251,12 @@ requested committed period, retained publication, and disclosed links together.
 Global Archive progress cannot certify a selected page.
 
 The runtime owns one Archive listener and worker. Empty Postgres notifications
-signal committed tick markers and campaign enrollment. The listener registers
+signal committed tick markers and campaign creation. The listener registers
 before reading durable work at startup and after reconnect. It drains retained
 work through the existing worker. An idle notification timeout performs no
 maintenance query. Notifications carry no world state or player intent.
 
-One coordinator owns the V3 session control pipe and tick acknowledgements.
+One coordinator owns the session control pipe and tick acknowledgements.
 It flushes ``Committed`` before handling the resulting Archive progress. Bevy accepts
 progress only for its acknowledged campaign and durable period, then refreshes
 its scoped read. It does not poll for Archive maintenance.
@@ -297,7 +268,7 @@ ADR254 records this scheduling boundary. G5 adds player actions separately.
 
 Event payloads contain observed or derived material facts, never probability.
 Committed event metadata records the emitting rule and can carry an
-automatically derived reference to the ``ChoiceReceiptV1`` that a finite
+automatically derived reference to the ``ChoiceReceipt`` that a finite
 projection observed. Removing an event sink cannot change a material
 trajectory.
 
@@ -317,10 +288,10 @@ Dashed arrows are later gate work.
        DEFINES["Saved authored parameters"] --> TICK
        MATERIAL["Production, circulation, staffing"] --> TICK
        EMPTY["Exact empty action batch"] --> TICK
-       TICK --> IDENTIFIED["IdentifiedMaterialTickV3"]
-       IDENTIFIED --> RUNTIME["DurableMaterialRuntimeV3"]
+       TICK --> IDENTIFIED["IdentifiedMaterialTick"]
+       IDENTIFIED --> RUNTIME["DurableMaterialRuntime"]
        RUNTIME --> STATE["babylon_state typed rows"]
-       STATE --> RECEIPT["ChoiceReceiptV1 rows"]
+       STATE --> RECEIPT["ChoiceReceipt rows"]
        STATE --> MARKER["tick_commit"]
        STATE --> DIRTY["archive_dirty_receipt_v1"]
        MARKER --> VIEW["Bevy administrative viewer"]

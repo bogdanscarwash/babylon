@@ -298,7 +298,7 @@ fn contract_register_and_admission_round_trip_exact_bytes() {
             &admission,
         )
         .unwrap(),
-        babylon_kernel::sha256_of(&admission_bytes)
+        babylon_kernel::content_digest::sha256_of(&admission_bytes)
     );
 }
 
@@ -319,7 +319,7 @@ fn contract_bytes_have_an_independent_literal_layout() {
     );
     assert_eq!(
         strike_proposal_contract_digest(&contract).unwrap(),
-        babylon_kernel::sha256_of(&expected)
+        babylon_kernel::content_digest::sha256_of(&expected)
     );
 }
 

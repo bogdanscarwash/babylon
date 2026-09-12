@@ -1,8 +1,11 @@
 //! Live Archive worker proofs against the task-owned disposable `PostgreSQL` runtime.
 //!
 //! Each test clones the validated Rust-active runtime template, commits real
-//! ticks through `DurableReplayRuntimeV2`, and then proves one worker
+//! ticks through `DurableMaterialRuntimeV3`, and then proves one worker
 //! acceptance property against the committed dirty receipts.
+
+#[path = "support/current_material.rs"]
+mod current_material;
 
 use std::str::FromStr;
 
@@ -13,28 +16,18 @@ mod revisions;
 #[path = "archive_worker_live/wakeup.rs"]
 mod wakeup;
 use archive_reader::{scope_at, with_reader};
-use babylon_persistence::archive_revision::{ArchiveDossierBoundsV2, ArchiveDossierStateV2};
+use babylon_persistence::archive_revision::{ArchiveDossierBounds, ArchiveDossierState};
 
-use babylon_bsl::rule_pipeline::split_content;
-use babylon_bsl::rules_hash_of;
 use babylon_bsl::structural_verbs::CollectingSink;
-use babylon_graph::hypergraph_store::HypergraphStore;
-use babylon_kernel::replay::{ReplaySeed, ReplaySessionIdV1};
-use babylon_kernel::sha256_of;
-use babylon_kernel::tick_content_hash::RefDigestV1;
-use babylon_kernel::ContentDigest;
+use babylon_persistence::material_runtime::DurableMaterialRuntime;
 use babylon_persistence::{
-    michigan_dynamic_hex_foundation_v1, seed_foundation_grants_v1, validate_connection_target,
-    ArchiveCitationV1, ArchiveDirtyBatchV1, ArchiveDossierProducerV1, ArchiveKnowledgeGrantV1,
-    ArchivePageInputV1, ArchivePageRefV1, ArchiveProducerOutcomeV1, ArchiveReceiptDispositionV1,
-    ArchiveSchemaDispositionV1, ArchiveSignalV1, ArchiveSubjectKindV1, ArchiveSubjectV1,
-    ArchiveWorkerV1, CampaignId, DurableReplayRuntimeV2, FoundationContentBundleV1,
-    FoundationGrantsErrorV1, NullArchiveDossierProducerV1, PendingArchiveReceiptV1,
-    SemanticArchiveErrorV1, SemanticArchiveStoreV1,
+    identity::CampaignId, postgres_catalog::validate_connection_target, seed_foundation_grants,
+    ArchiveCitation, ArchiveDirtyBatch, ArchiveDossierProducer, ArchiveKnowledgeGrant,
+    ArchivePageInput, ArchivePageRef, ArchiveProducerOutcome, ArchiveReceiptDisposition,
+    ArchiveSignal, ArchiveSubject, ArchiveSubjectKind, ArchiveWorker, FoundationGrantsError,
+    NullArchiveDossierProducer, PendingArchiveReceipt, SemanticArchiveError, SemanticArchiveStore,
 };
-use babylon_practice_contract::ordered_action_v1::OrderedPracticeActionBatchV1;
-use babylon_tick::material_state::MaterialStateV1;
-use babylon_tick::replay_session::ReplayTickSession;
+use babylon_practice_contract::OrderedPracticeActionBatch;
 use postgres::{Config, NoTls};
 use uuid::Uuid;
 
@@ -43,12 +36,6 @@ const ACK_ENV: &str = "BABYLON_POSTGRES_DISPOSABLE_ACK";
 const ACK: &str = "I_UNDERSTAND_THIS_DISPOSABLE_RUNTIME_DROPS_ITS_SCRATCH_DATABASES_AND_ROLES";
 const CANARY_ENV: &str = "BABYLON_POSTGRES_DISPOSABLE_CANARY";
 const TEMPLATE_DB_ENV: &str = "BABYLON_RUNTIME_TEMPLATE_DB";
-const DEFINES: &[u8] = br#"{"alpha":1}"#;
-const REFERENCE_BUNDLE_DOMAIN: &[u8] = b"babylon.h3.reference-bundle-composite.v1\0";
-const SCENARIO: &str =
-    include_str!("../../babylon-tick/content/scenarios/struggle-spark-conformance.bscn");
-const RULE: &str = include_str!("../../babylon-tick/content/rules/struggle-spark.bsl");
-const WORKER_SEED: i64 = 2;
 
 /// One distinct stub subject per receipt tick, because the Archive keeps one
 /// latest page per subject while preserving each immutable revision. The ids
@@ -56,36 +43,36 @@ const WORKER_SEED: i64 = 2;
 /// county and place, and an explicit grant for a seeded subject refuses
 /// `GrantConflict` instead of shadowing the seeded row.
 struct StubSubjectSpec {
-    page_ref: ArchivePageRefV1,
+    page_ref: ArchivePageRef,
     title: &'static str,
 }
 
 fn stub_subject_spec(tick: u64) -> StubSubjectSpec {
     let (kind, id, title) = match tick % 3 {
-        1 => (ArchiveSubjectKindV1::County, "99963", "Stub County One"),
-        2 => (ArchiveSubjectKindV1::Place, "9990001", "Stub Place"),
-        _ => (ArchiveSubjectKindV1::County, "99925", "Stub County Two"),
+        1 => (ArchiveSubjectKind::County, "99963", "Stub County One"),
+        2 => (ArchiveSubjectKind::Place, "9990001", "Stub Place"),
+        _ => (ArchiveSubjectKind::County, "99925", "Stub County Two"),
     };
     StubSubjectSpec {
-        page_ref: ArchivePageRefV1::try_new(kind, id.to_owned()).expect("stub subject ref"),
+        page_ref: ArchivePageRef::try_new(kind, id.to_owned()).expect("stub subject ref"),
         title,
     }
 }
 
-fn stub_place_page_ref() -> ArchivePageRefV1 {
-    ArchivePageRefV1::try_new(ArchiveSubjectKindV1::Place, "9990001".to_owned())
+fn stub_place_page_ref() -> ArchivePageRef {
+    ArchivePageRef::try_new(ArchiveSubjectKind::Place, "9990001".to_owned())
         .expect("stub place ref")
 }
 
-fn stub_page_input(receipt: &PendingArchiveReceiptV1) -> ArchivePageInputV1 {
+fn stub_page_input(receipt: &PendingArchiveReceipt) -> ArchivePageInput {
     let spec = stub_subject_spec(receipt.resolve_tick());
-    let subject = ArchiveSubjectV1::try_new(
+    let subject = ArchiveSubject::try_new(
         spec.page_ref.kind(),
         spec.page_ref.id().to_owned(),
         spec.title.to_owned(),
     )
     .expect("stub subject");
-    ArchivePageInputV1::try_new(
+    ArchivePageInput::try_new(
         subject,
         receipt.resolve_tick(),
         *receipt.tick_content_hash(),
@@ -93,11 +80,11 @@ fn stub_page_input(receipt: &PendingArchiveReceiptV1) -> ArchivePageInputV1 {
             "Which neighboring place should organizers investigate at tick {}?",
             receipt.resolve_tick()
         ),
-        vec![ArchiveSignalV1::try_new(
+        vec![ArchiveSignal::try_new(
             "employment".to_owned(),
             "Employment".to_owned(),
             "728576 jobs".to_owned(),
-            ArchiveCitationV1::try_new(
+            ArchiveCitation::try_new(
                 "qcew-2024".to_owned(),
                 "fact_qcew_county_rollup county_fips=26163".to_owned(),
             )
@@ -112,20 +99,20 @@ fn stub_page_input(receipt: &PendingArchiveReceiptV1) -> ArchivePageInputV1 {
 /// Stub producer that materializes one valid page per receipt.
 struct StubPageProducer;
 
-impl ArchiveDossierProducerV1 for StubPageProducer {
+impl ArchiveDossierProducer for StubPageProducer {
     fn produce(
         &self,
         _campaign_id: Uuid,
-        receipt: &PendingArchiveReceiptV1,
-        _knowledge: &babylon_persistence::ArchiveKnowledgeV1,
+        receipt: &PendingArchiveReceipt,
+        _knowledge: &babylon_persistence::ArchiveKnowledge,
         _page_budget: usize,
-    ) -> Result<ArchiveProducerOutcomeV1, SemanticArchiveErrorV1> {
-        let batch = ArchiveDirtyBatchV1::try_new(
+    ) -> Result<ArchiveProducerOutcome, SemanticArchiveError> {
+        let batch = ArchiveDirtyBatch::try_new(
             receipt.resolve_tick(),
             *receipt.tick_content_hash(),
             vec![stub_page_input(receipt)],
         )?;
-        Ok(ArchiveProducerOutcomeV1::new(batch, 0))
+        Ok(ArchiveProducerOutcome::new(batch, 0))
     }
 }
 
@@ -134,16 +121,16 @@ struct FailAtTickProducer {
     fail_at_tick: u64,
 }
 
-impl ArchiveDossierProducerV1 for FailAtTickProducer {
+impl ArchiveDossierProducer for FailAtTickProducer {
     fn produce(
         &self,
         campaign_id: Uuid,
-        receipt: &PendingArchiveReceiptV1,
-        knowledge: &babylon_persistence::ArchiveKnowledgeV1,
+        receipt: &PendingArchiveReceipt,
+        knowledge: &babylon_persistence::ArchiveKnowledge,
         page_budget: usize,
-    ) -> Result<ArchiveProducerOutcomeV1, SemanticArchiveErrorV1> {
+    ) -> Result<ArchiveProducerOutcome, SemanticArchiveError> {
         if receipt.resolve_tick() == self.fail_at_tick {
-            return Err(SemanticArchiveErrorV1::InvalidText);
+            return Err(SemanticArchiveError::InvalidText);
         }
         StubPageProducer.produce(campaign_id, receipt, knowledge, page_budget)
     }
@@ -158,23 +145,23 @@ struct QuietExceptProducer {
     materialize_tick: u64,
 }
 
-impl ArchiveDossierProducerV1 for QuietExceptProducer {
+impl ArchiveDossierProducer for QuietExceptProducer {
     fn produce(
         &self,
         campaign_id: Uuid,
-        receipt: &PendingArchiveReceiptV1,
-        knowledge: &babylon_persistence::ArchiveKnowledgeV1,
+        receipt: &PendingArchiveReceipt,
+        knowledge: &babylon_persistence::ArchiveKnowledge,
         page_budget: usize,
-    ) -> Result<ArchiveProducerOutcomeV1, SemanticArchiveErrorV1> {
+    ) -> Result<ArchiveProducerOutcome, SemanticArchiveError> {
         if receipt.resolve_tick() == self.materialize_tick {
             StubPageProducer.produce(campaign_id, receipt, knowledge, page_budget)
         } else {
-            let batch = ArchiveDirtyBatchV1::try_new(
+            let batch = ArchiveDirtyBatch::try_new(
                 receipt.resolve_tick(),
                 *receipt.tick_content_hash(),
                 Vec::new(),
             )?;
-            Ok(ArchiveProducerOutcomeV1::new(batch, 0))
+            Ok(ArchiveProducerOutcome::new(batch, 0))
         }
     }
 }
@@ -184,61 +171,61 @@ struct ChangedExceptProducer {
     quiet_tick: u64,
 }
 
-impl ArchiveDossierProducerV1 for ChangedExceptProducer {
+impl ArchiveDossierProducer for ChangedExceptProducer {
     fn produce(
         &self,
         campaign_id: Uuid,
-        receipt: &PendingArchiveReceiptV1,
-        knowledge: &babylon_persistence::ArchiveKnowledgeV1,
+        receipt: &PendingArchiveReceipt,
+        knowledge: &babylon_persistence::ArchiveKnowledge,
         page_budget: usize,
-    ) -> Result<ArchiveProducerOutcomeV1, SemanticArchiveErrorV1> {
+    ) -> Result<ArchiveProducerOutcome, SemanticArchiveError> {
         if receipt.resolve_tick() == self.quiet_tick {
-            let batch = ArchiveDirtyBatchV1::try_new(
+            let batch = ArchiveDirtyBatch::try_new(
                 receipt.resolve_tick(),
                 *receipt.tick_content_hash(),
                 Vec::new(),
             )?;
-            Ok(ArchiveProducerOutcomeV1::new(batch, 0))
+            Ok(ArchiveProducerOutcome::new(batch, 0))
         } else {
             StubPageProducer.produce(campaign_id, receipt, knowledge, page_budget)
         }
     }
 }
 
-impl ArchiveDossierProducerV1 for WrongTickProducer {
+impl ArchiveDossierProducer for WrongTickProducer {
     fn produce(
         &self,
         _campaign_id: Uuid,
-        receipt: &PendingArchiveReceiptV1,
-        _knowledge: &babylon_persistence::ArchiveKnowledgeV1,
+        receipt: &PendingArchiveReceipt,
+        _knowledge: &babylon_persistence::ArchiveKnowledge,
         _page_budget: usize,
-    ) -> Result<ArchiveProducerOutcomeV1, SemanticArchiveErrorV1> {
-        let wrong = PendingArchiveReceiptV1::try_new(
+    ) -> Result<ArchiveProducerOutcome, SemanticArchiveError> {
+        let wrong = PendingArchiveReceipt::try_new(
             receipt.resolve_tick() + 1,
             *receipt.tick_content_hash(),
         )
         .expect("wrong-tick receipt boundary");
-        let batch = ArchiveDirtyBatchV1::try_new(
+        let batch = ArchiveDirtyBatch::try_new(
             wrong.resolve_tick(),
             *wrong.tick_content_hash(),
             vec![stub_page_input(&wrong)],
         )?;
-        Ok(ArchiveProducerOutcomeV1::new(batch, 0))
+        Ok(ArchiveProducerOutcome::new(batch, 0))
     }
 }
 
 struct UndrainedProducer;
 
-impl ArchiveDossierProducerV1 for UndrainedProducer {
+impl ArchiveDossierProducer for UndrainedProducer {
     fn produce(
         &self,
         _campaign_id: Uuid,
-        receipt: &PendingArchiveReceiptV1,
-        _knowledge: &babylon_persistence::ArchiveKnowledgeV1,
+        receipt: &PendingArchiveReceipt,
+        _knowledge: &babylon_persistence::ArchiveKnowledge,
         _page_budget: usize,
-    ) -> Result<ArchiveProducerOutcomeV1, SemanticArchiveErrorV1> {
-        Ok(ArchiveProducerOutcomeV1::new(
-            ArchiveDirtyBatchV1::try_new(
+    ) -> Result<ArchiveProducerOutcome, SemanticArchiveError> {
+        Ok(ArchiveProducerOutcome::new(
+            ArchiveDirtyBatch::try_new(
                 receipt.resolve_tick(),
                 *receipt.tick_content_hash(),
                 Vec::new(),
@@ -391,26 +378,25 @@ impl TestDatabase {
             admin,
             active: true,
         };
+        babylon_persistence::preflight_current_schema(&database.config(base))
+            .expect("runtime clone has the exact current catalog and role grants");
+        let expected_schema_digest = babylon_persistence::current_schema_sha256();
         let observation = database
             .config(base)
             .connect(NoTls)
             .expect("runtime clone connection")
             .query_one(
                 "SELECT \
-                   (SELECT pg_catalog.string_agg(ordinal::pg_catalog.text || ':' || \
-                            state_tag::pg_catalog.text || ':' || schema_epoch::pg_catalog.text, \
-                            ',' ORDER BY ordinal) \
-                    FROM babylon_meta.persistence_authority_ledger), \
+                   (SELECT pg_catalog.count(*) = 1 AND \
+                           pg_catalog.bool_and(singleton AND schema_sha256 = $1) \
+                    FROM babylon_meta.current_schema), \
                    (SELECT pg_catalog.count(*) FROM babylon_meta.campaign)",
-                &[],
+                &[&expected_schema_digest.as_slice()],
             )
             .expect("runtime clone observation");
-        assert_eq!(
-            observation
-                .try_get::<_, String>(0)
-                .expect("authority ledger decodes"),
-            "1:1:8,2:2:9"
-        );
+        assert!(observation
+            .try_get::<_, bool>(0)
+            .expect("current schema identity decodes"));
         assert_eq!(
             observation
                 .try_get::<_, i64>(1)
@@ -457,60 +443,21 @@ impl Drop for TestDatabase {
     }
 }
 
-fn runtime_fixture_with_seed(
-    seed: i64,
-) -> (
-    ReplayTickSession<HypergraphStore>,
-    FoundationContentBundleV1,
-) {
-    let (_, rules) = split_content(RULE).expect("live rule parses");
-    let forms = rules.into_iter().map(|rule| rule.form).collect::<Vec<_>>();
-    let content = ContentDigest {
-        defines_hash: sha256_of(DEFINES),
-        rules_hash: rules_hash_of(&forms).expect("live rule hashes"),
-    };
-    let foundation = michigan_dynamic_hex_foundation_v1().expect("foundation decodes");
-    let mut reference_manifest = REFERENCE_BUNDLE_DOMAIN.to_vec();
-    reference_manifest.extend_from_slice(&foundation.base_reference_cohort_digest());
-    reference_manifest.extend_from_slice(&foundation.r8_section_digest());
-    assert_eq!(
-        sha256_of(&reference_manifest),
-        foundation.reference_bundle_digest()
-    );
-    let reference = RefDigestV1::from_bytes(foundation.reference_bundle_digest());
-    let session = ReplayTickSession::new(
-        SCENARIO,
-        None,
-        RULE,
-        HypergraphStore::new(),
-        ReplaySessionIdV1::try_from("per22/archive-worker-live").expect("session id"),
-        ReplaySeed::new(seed),
-        content,
-        reference,
-        MaterialStateV1::try_new(foundation).expect("material state"),
-    )
-    .expect("tick-zero session prepares");
-    let bundle =
-        FoundationContentBundleV1::try_new(SCENARIO, None, RULE, DEFINES, &reference_manifest)
-            .expect("content bundle");
-    (session, bundle)
-}
-
-fn commit_ticks(runtime: &mut DurableReplayRuntimeV2<HypergraphStore>, count: u64) {
+fn commit_ticks(runtime: &mut DurableMaterialRuntime, count: u64) {
     for tick in 1..=count {
-        let actions = OrderedPracticeActionBatchV1::empty(
-            runtime.foundation().replay_session_identity().clone(),
+        let actions = OrderedPracticeActionBatch::empty(
+            runtime.session().graph_session().session_identity().clone(),
             tick,
         )
         .expect("empty action batch");
         let receipt = runtime
             .advance_and_commit(&mut CollectingSink::default(), &actions)
             .expect("tick commits");
-        assert_eq!(receipt.resolve_tick().get(), tick);
+        assert_eq!(receipt.resolve_tick(), tick);
     }
 }
 
-fn grant_stub_knowledge(store: &SemanticArchiveStoreV1, campaign_id: CampaignId, ticks: &[u64]) {
+fn grant_stub_knowledge(store: &SemanticArchiveStore, campaign_id: CampaignId, ticks: &[u64]) {
     for tick in ticks {
         let spec = stub_subject_spec(*tick);
         for (grant_key, source_id) in [
@@ -520,11 +467,11 @@ fn grant_stub_knowledge(store: &SemanticArchiveStoreV1, campaign_id: CampaignId,
             store
                 .grant_knowledge(
                     campaign_id,
-                    &ArchiveKnowledgeGrantV1::try_new(
+                    &ArchiveKnowledgeGrant::try_new(
                         spec.page_ref.clone(),
                         grant_key.to_owned(),
                         1,
-                        ArchiveCitationV1::try_new(
+                        ArchiveCitation::try_new(
                             source_id.to_owned(),
                             format!("{grant_key}@tick-1"),
                         )
@@ -579,12 +526,10 @@ impl LiveWorkerTarget {
         let database = TestDatabase::create_from_template(&base, &template, label);
         let config = database.config(&base);
         let campaign_id = CampaignId::from_uuid(Uuid::from_u128(campaign_uuid));
-        let store = SemanticArchiveStoreV1::new(&config);
-        match store.install_schema().expect("Archive schema installs") {
-            ArchiveSchemaDispositionV1::Installed | ArchiveSchemaDispositionV1::AlreadyCurrent => {}
-        }
-        let (session, bundle) = runtime_fixture_with_seed(WORKER_SEED);
-        let mut runtime = DurableReplayRuntimeV2::create(&config, campaign_id, session, bundle)
+        let store = SemanticArchiveStore::new(&config);
+        store.verify_schema().expect("Archive schema installs");
+        let foundation = current_material::foundation();
+        let mut runtime = DurableMaterialRuntime::create(&config, campaign_id, foundation)
             .expect("runtime constructs after activation");
         commit_ticks(&mut runtime, tick_count);
         drop(runtime);
@@ -610,12 +555,10 @@ impl LiveWorkerTarget {
         let database = TestDatabase::create_from_template(&base, &template, label);
         let config = database.config(&base);
         let campaign_id = CampaignId::from_uuid(Uuid::from_u128(campaign_uuid));
-        let store = SemanticArchiveStoreV1::new(&config);
-        match store.install_schema().expect("Archive schema installs") {
-            ArchiveSchemaDispositionV1::Installed | ArchiveSchemaDispositionV1::AlreadyCurrent => {}
-        }
-        let (session, bundle) = runtime_fixture_with_seed(WORKER_SEED);
-        let mut runtime = DurableReplayRuntimeV2::create(&config, campaign_id, session, bundle)
+        let store = SemanticArchiveStore::new(&config);
+        store.verify_schema().expect("Archive schema installs");
+        let foundation = current_material::foundation();
+        let mut runtime = DurableMaterialRuntime::create(&config, campaign_id, foundation)
             .expect("runtime constructs after activation");
         commit_ticks(&mut runtime, tick_count);
         drop(runtime);
@@ -641,7 +584,7 @@ fn live_worker_consumes_pending_receipts_in_tick_order() {
         3,
     );
 
-    let mut worker = ArchiveWorkerV1::new(&target.config);
+    let mut worker = ArchiveWorker::new(&target.config);
     let report = worker
         .sweep_once(target.campaign_id, &StubPageProducer)
         .expect("sweep applies every pending receipt");
@@ -654,9 +597,9 @@ fn live_worker_consumes_pending_receipts_in_tick_order() {
     assert_eq!(
         applied,
         vec![
-            (1, ArchiveReceiptDispositionV1::Applied),
-            (2, ArchiveReceiptDispositionV1::Applied),
-            (3, ArchiveReceiptDispositionV1::Applied),
+            (1, ArchiveReceiptDisposition::Applied),
+            (2, ArchiveReceiptDisposition::Applied),
+            (3, ArchiveReceiptDisposition::Applied),
         ]
     );
     assert!(dispositions.windows(2).all(|pair| pair[0].0 < pair[1].0));
@@ -682,10 +625,10 @@ fn live_worker_consumes_pending_receipts_in_tick_order() {
             .dossier_as_of(
                 &scope,
                 &stub_place_page_ref(),
-                &ArchiveDossierBoundsV2::default(),
+                &ArchiveDossierBounds::default(),
             )
             .expect("exact retained dossier");
-        let ArchiveDossierStateV2::Ready {
+        let ArchiveDossierState::Ready {
             page,
             verified_through_tick: 3,
         } = dossier.state
@@ -714,7 +657,7 @@ fn live_worker_rerun_reconciles_without_duplicate_publication() {
         2,
     );
 
-    let mut worker = ArchiveWorkerV1::new(&target.config);
+    let mut worker = ArchiveWorker::new(&target.config);
     let first = worker
         .sweep_once(target.campaign_id, &StubPageProducer)
         .expect("first sweep applies");
@@ -750,16 +693,16 @@ fn live_worker_crash_between_receipts_resumes_exactly() {
         3,
     );
 
-    let mut failing = ArchiveWorkerV1::new(&target.config);
+    let mut failing = ArchiveWorker::new(&target.config);
     let failure = failing.sweep_once(target.campaign_id, &FailAtTickProducer { fail_at_tick: 2 });
-    assert_eq!(failure, Err(SemanticArchiveErrorV1::InvalidText));
+    assert_eq!(failure, Err(SemanticArchiveError::InvalidText));
     assert_eq!(
         receipt_consumption_count(&target.config, target.campaign_id),
         1
     );
     assert_eq!(archive_page_count(&target.config, target.campaign_id), 1);
 
-    let mut probe = ArchiveWorkerV1::new(&target.config);
+    let mut probe = ArchiveWorker::new(&target.config);
     let pending = probe
         .sweep_once(target.campaign_id, &UndrainedProducer)
         .expect("probe sweep stages the surviving receipts");
@@ -770,7 +713,7 @@ fn live_worker_crash_between_receipts_resumes_exactly() {
         .collect::<Vec<_>>();
     assert_eq!(
         pending_dispositions,
-        vec![(2, ArchiveReceiptDispositionV1::Paged)],
+        vec![(2, ArchiveReceiptDisposition::Paged)],
         "an undrained receipt prevents every later producer evaluation"
     );
     assert_eq!(
@@ -783,7 +726,7 @@ fn live_worker_crash_between_receipts_resumes_exactly() {
         1
     );
 
-    let mut resumed = ArchiveWorkerV1::new(&target.config);
+    let mut resumed = ArchiveWorker::new(&target.config);
     let resume = resumed
         .sweep_once(target.campaign_id, &StubPageProducer)
         .expect("resumed sweep completes");
@@ -795,8 +738,8 @@ fn live_worker_crash_between_receipts_resumes_exactly() {
     assert_eq!(
         resumed_dispositions,
         vec![
-            (2, ArchiveReceiptDispositionV1::Applied),
-            (3, ArchiveReceiptDispositionV1::Applied),
+            (2, ArchiveReceiptDisposition::Applied),
+            (3, ArchiveReceiptDisposition::Applied),
         ]
     );
     assert_eq!(resume.verified_tick(), 3);
@@ -822,7 +765,7 @@ fn live_worker_quiet_backlog_respects_the_bound_and_reaches_later_changed_conten
     let producer = QuietExceptProducer {
         materialize_tick: TICKS,
     };
-    let mut worker = ArchiveWorkerV1::new(&target.config);
+    let mut worker = ArchiveWorker::new(&target.config);
     let first = worker
         .sweep_once(target.campaign_id, &producer)
         .expect("bounded quiet prefix");
@@ -857,7 +800,7 @@ fn live_worker_stops_at_the_consume_cap_and_leaves_the_remainder_pending() {
     );
     insert_marker_backed_dirty_receipts(&target.config, target.campaign_id, 2..=TICKS);
 
-    let mut worker = ArchiveWorkerV1::new(&target.config);
+    let mut worker = ArchiveWorker::new(&target.config);
     let report = worker
         .sweep_once(
             target.campaign_id,
@@ -877,7 +820,7 @@ fn live_worker_stops_at_the_consume_cap_and_leaves_the_remainder_pending() {
         .dispositions()
         .last()
         .expect("the final receipt in the bounded prefix settles");
-    assert_eq!(*last, (256, ArchiveReceiptDispositionV1::Applied));
+    assert_eq!(*last, (256, ArchiveReceiptDisposition::Applied));
     assert_eq!(
         receipt_consumption_count(&target.config, target.campaign_id),
         256,
@@ -889,7 +832,7 @@ fn live_worker_stops_at_the_consume_cap_and_leaves_the_remainder_pending() {
         "the quiet tick 256 settles within the same bounded prefix"
     );
 
-    let mut resumed = ArchiveWorkerV1::new(&target.config);
+    let mut resumed = ArchiveWorker::new(&target.config);
     let second = resumed
         .sweep_once(target.campaign_id, &StubPageProducer)
         .expect("the remainder stays pending for the next invocation");
@@ -910,9 +853,9 @@ fn live_worker_consumes_empty_batches_once_without_publishing_content() {
         0x2200_0000_0000_0000_0000_0000_0000_00a4,
         2,
     );
-    let mut worker = ArchiveWorkerV1::new(&target.config);
+    let mut worker = ArchiveWorker::new(&target.config);
     let settled = worker
-        .sweep_once(target.campaign_id, &NullArchiveDossierProducerV1::new())
+        .sweep_once(target.campaign_id, &NullArchiveDossierProducer::new())
         .expect("evaluated quiet receipts settle");
     assert_eq!(settled.applied_count(), 2);
     assert_eq!(settled.verified_tick(), 2);
@@ -921,9 +864,9 @@ fn live_worker_consumes_empty_batches_once_without_publishing_content() {
         2
     );
     assert_eq!(archive_page_count(&target.config, target.campaign_id), 0);
-    let mut restarted = ArchiveWorkerV1::new(&target.config);
+    let mut restarted = ArchiveWorker::new(&target.config);
     let rerun = restarted
-        .sweep_once(target.campaign_id, &NullArchiveDossierProducerV1::new())
+        .sweep_once(target.campaign_id, &NullArchiveDossierProducer::new())
         .expect("restarted worker reads settled prefix");
     assert!(rerun.dispositions().is_empty());
     assert_eq!(rerun.verified_tick(), 2);
@@ -944,11 +887,11 @@ fn live_worker_refuses_batch_identity_mismatch_without_consuming() {
         2,
     );
 
-    let mut worker = ArchiveWorkerV1::new(&target.config);
+    let mut worker = ArchiveWorker::new(&target.config);
     let failure = worker.sweep_once(target.campaign_id, &WrongTickProducer);
     assert_eq!(
         failure,
-        Err(SemanticArchiveErrorV1::ReceiptMismatch),
+        Err(SemanticArchiveError::ReceiptMismatch),
         "a batch bound to another tick must stop the sweep before any consumption"
     );
     assert_eq!(
@@ -969,7 +912,7 @@ fn live_worker_skips_orphan_dirty_receipt_without_marker() {
     );
     insert_orphan_dirty_receipt(&target.config, target.campaign_id, 3, [0xee; 32]);
 
-    let mut worker = ArchiveWorkerV1::new(&target.config);
+    let mut worker = ArchiveWorker::new(&target.config);
     let report = worker
         .sweep_once(target.campaign_id, &StubPageProducer)
         .expect("orphan rows never reach the producer or stop the ordered sweep");
@@ -981,8 +924,8 @@ fn live_worker_skips_orphan_dirty_receipt_without_marker() {
     assert_eq!(
         applied,
         vec![
-            (1, ArchiveReceiptDispositionV1::Applied),
-            (2, ArchiveReceiptDispositionV1::Applied),
+            (1, ArchiveReceiptDisposition::Applied),
+            (2, ArchiveReceiptDisposition::Applied),
         ]
     );
     assert_eq!(report.verified_tick(), 2);
@@ -1008,7 +951,7 @@ fn live_search_refuses_tampered_page_content() {
         1,
     );
 
-    let mut worker = ArchiveWorkerV1::new(&target.config);
+    let mut worker = ArchiveWorker::new(&target.config);
     worker
         .sweep_once(target.campaign_id, &StubPageProducer)
         .expect("sweep materializes the page");
@@ -1031,8 +974,8 @@ fn live_search_refuses_tampered_page_content() {
             .expect("stored markdown tampers");
         assert_eq!(
             reader.search_as_of(&scope, "728576", 10),
-            Err(babylon_persistence::SemanticArchiveReaderErrorV1::Archive(
-                SemanticArchiveErrorV1::StoredPageMismatch
+            Err(babylon_persistence::SemanticArchiveReaderError::Archive(
+                SemanticArchiveError::StoredPageMismatch
             )),
             "bytes that disagree with their digest refuse the canonical read"
         );
@@ -1046,7 +989,7 @@ fn live_search_bounds_results_to_the_requested_limit() {
     let target =
         LiveWorkerTarget::create("archivelimit", 0x2200_0000_0000_0000_0000_0000_0000_00a8, 2);
 
-    let mut worker = ArchiveWorkerV1::new(&target.config);
+    let mut worker = ArchiveWorker::new(&target.config);
     worker
         .sweep_once(target.campaign_id, &StubPageProducer)
         .expect("sweep materializes both pages");
@@ -1173,8 +1116,16 @@ fn live_foundation_grants_seed_at_campaign_foundation_and_reconcile_exactly() {
     assert_foundation_grant_census(&mut client, target.campaign_id);
 
     // Exact retry: insert-if-absent reconciles every row to the same census.
-    let report = seed_foundation_grants_v1(&mut client, target.campaign_id)
-        .expect("the exact foundation retry reconciles");
+    let report = {
+        let mut transaction = client.transaction().unwrap();
+        transaction
+            .batch_execute("SET LOCAL search_path=pg_catalog; SET LOCAL quote_all_identifiers=off")
+            .unwrap();
+        let report = seed_foundation_grants(&mut transaction, target.campaign_id)
+            .expect("the exact foundation retry reconciles");
+        transaction.commit().unwrap();
+        report
+    };
     assert_eq!(report.counties(), 83);
     assert_eq!(report.places(), 745);
     assert_eq!(report.concepts(), 8);
@@ -1200,11 +1151,19 @@ fn live_foundation_grants_seed_at_campaign_foundation_and_reconcile_exactly() {
             &[target.campaign_id.as_uuid()],
         )
         .expect("divergence update applies");
-    let refusal = seed_foundation_grants_v1(&mut client, target.campaign_id)
-        .expect_err("a drifted grant row must refuse the foundation retry");
+    let refusal = {
+        let mut transaction = client.transaction().unwrap();
+        transaction
+            .batch_execute("SET LOCAL search_path=pg_catalog; SET LOCAL quote_all_identifiers=off")
+            .unwrap();
+        let refusal = seed_foundation_grants(&mut transaction, target.campaign_id)
+            .expect_err("a drifted grant row must refuse the foundation retry");
+        transaction.commit().unwrap();
+        refusal
+    };
     assert_eq!(
         refusal,
-        FoundationGrantsErrorV1::Archive(SemanticArchiveErrorV1::GrantConflict)
+        FoundationGrantsError::Archive(SemanticArchiveError::GrantConflict)
     );
     target.finish();
 }

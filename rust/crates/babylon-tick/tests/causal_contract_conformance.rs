@@ -7,12 +7,12 @@ use babylon_bsl::causal_contract::{
     GOVERNED_RULE_ATTRIBUTIONS,
 };
 use babylon_bsl::structural_verbs::CollectingSink;
-use babylon_bsl::{read_all, Atom, SExpr};
+use babylon_bsl::{reader::read_all, reader::Atom, reader::SExpr};
 use babylon_graph::hypergraph_store::HypergraphStore;
 use babylon_graph::state_hash::CanonicalState;
 use babylon_graph::substrate::{GraphSubstrate, NodeId};
-use babylon_tick::material_staffing::STAFFING_COMPOSITION_ID_V1;
-use babylon_tick::run_once_into;
+use babylon_tick::material_staffing::STAFFING_COMPOSITION_ID;
+use babylon_tick::{diagnose_content_set_sources, run_once_into, ContentRuleSource};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
@@ -237,11 +237,18 @@ fn assert_aggregate_refusal(rule_source: &str, code: &str) {
     assert_eq!(graph.state_hash().expect("refused graph hashes"), before);
     assert!(sink.events.is_empty());
 
-    let diagnostics = babylon_tick::diagnose_content_set(ORDERING_SCENARIO, None, &[rule_source]);
+    let diagnostics = diagnose_content_set_sources(
+        ORDERING_SCENARIO,
+        None,
+        &[ContentRuleSource {
+            source_id: "rules/aggregate-refusal.bsl",
+            source: rule_source,
+        }],
+    );
     assert!(
         diagnostics
             .iter()
-            .any(|diagnostic| diagnostic.to_string().contains(code)),
+            .any(|diagnostic| diagnostic.error.to_string().contains(code)),
         "diagnostic path did not report {code}: {diagnostics:?}"
     );
 }
@@ -359,10 +366,15 @@ fn aggregate_loader_refuses_a_rank_aware_stale_default_before_publication() {
 #[test]
 fn aggregate_loader_accepts_the_phase_rank_clean_inverse() {
     assert!("consciousness/a-reader" < "solidarity/z-writer");
-    assert!(
-        babylon_tick::diagnose_content_set(ORDERING_SCENARIO, None, &[RANK_CLEAN_INVERSE])
-            .is_empty()
-    );
+    assert!(diagnose_content_set_sources(
+        ORDERING_SCENARIO,
+        None,
+        &[ContentRuleSource {
+            source_id: "rules/rank-clean-inverse.bsl",
+            source: RANK_CLEAN_INVERSE
+        }]
+    )
+    .is_empty());
     let (report, graph) = run(ORDERING_SCENARIO, RANK_CLEAN_INVERSE);
     assert_eq!(report.fired, 2);
     assert_eq!(
@@ -459,7 +471,7 @@ fn every_production_rule_identity_is_governed_independently_of_its_content() {
         "duplicate production rule ID"
     );
     assert!(
-        production_ids.insert(STAFFING_COMPOSITION_ID_V1.to_owned()),
+        production_ids.insert(STAFFING_COMPOSITION_ID.to_owned()),
         "native staffing composition duplicates a production BSL rule ID"
     );
     assert_eq!(production_ids, governed_ids);

@@ -154,92 +154,84 @@ const EXPECTED_DIGESTS: [Option<&str>; 18] = [
     None,
 ];
 
-const EXPECTED_REPRESENTATIONS: [MetricRepresentationV1; 18] = [
-    MetricRepresentationV1::Facet,
-    MetricRepresentationV1::Facet,
-    MetricRepresentationV1::Facet,
-    MetricRepresentationV1::Facet,
-    MetricRepresentationV1::Facet,
-    MetricRepresentationV1::Facet,
-    MetricRepresentationV1::Facet,
-    MetricRepresentationV1::ReferenceFlow,
-    MetricRepresentationV1::Facet,
-    MetricRepresentationV1::Facet,
-    MetricRepresentationV1::Facet,
-    MetricRepresentationV1::Facet,
-    MetricRepresentationV1::Facet,
-    MetricRepresentationV1::Facet,
-    MetricRepresentationV1::Facet,
-    MetricRepresentationV1::Dyad,
-    MetricRepresentationV1::Dyad,
-    MetricRepresentationV1::Dyad,
+const EXPECTED_REPRESENTATIONS: [MetricRepresentation; 18] = [
+    MetricRepresentation::Facet,
+    MetricRepresentation::Facet,
+    MetricRepresentation::Facet,
+    MetricRepresentation::Facet,
+    MetricRepresentation::Facet,
+    MetricRepresentation::Facet,
+    MetricRepresentation::Facet,
+    MetricRepresentation::ReferenceFlow,
+    MetricRepresentation::Facet,
+    MetricRepresentation::Facet,
+    MetricRepresentation::Facet,
+    MetricRepresentation::Facet,
+    MetricRepresentation::Facet,
+    MetricRepresentation::Facet,
+    MetricRepresentation::Facet,
+    MetricRepresentation::Dyad,
+    MetricRepresentation::Dyad,
+    MetricRepresentation::Dyad,
 ];
 
-const EXPECTED_VALUE_KINDS: [Option<ValueKindV1>; 18] = [
-    Some(ValueKindV1::Uint64Bits),
-    Some(ValueKindV1::Uint64Bits),
-    Some(ValueKindV1::Float64Bits),
-    Some(ValueKindV1::Float64Bits),
-    Some(ValueKindV1::Uint64Bits),
-    Some(ValueKindV1::Uint64Bits),
-    Some(ValueKindV1::Float64Bits),
-    Some(ValueKindV1::Uint64Bits),
-    Some(ValueKindV1::Uint64Bits),
-    Some(ValueKindV1::Float64Bits),
-    Some(ValueKindV1::Uint64Bits),
-    Some(ValueKindV1::Uint64Bits),
-    Some(ValueKindV1::Uint64Bits),
-    Some(ValueKindV1::Uint64Bits),
-    Some(ValueKindV1::Float64Bits),
+const EXPECTED_VALUE_KINDS: [Option<ValueKind>; 18] = [
+    Some(ValueKind::Uint64Bits),
+    Some(ValueKind::Uint64Bits),
+    Some(ValueKind::Float64Bits),
+    Some(ValueKind::Float64Bits),
+    Some(ValueKind::Uint64Bits),
+    Some(ValueKind::Uint64Bits),
+    Some(ValueKind::Float64Bits),
+    Some(ValueKind::Uint64Bits),
+    Some(ValueKind::Uint64Bits),
+    Some(ValueKind::Float64Bits),
+    Some(ValueKind::Uint64Bits),
+    Some(ValueKind::Uint64Bits),
+    Some(ValueKind::Uint64Bits),
+    Some(ValueKind::Uint64Bits),
+    Some(ValueKind::Float64Bits),
     None,
     None,
     None,
 ];
 
-const EXPECTED_AGGREGATIONS: [AggregationRuleV1; 18] = [
-    AggregationRuleV1::None,
-    AggregationRuleV1::None,
-    AggregationRuleV1::None,
-    AggregationRuleV1::None,
-    AggregationRuleV1::PublishedRollup,
-    AggregationRuleV1::PublishedRollup,
-    AggregationRuleV1::PublishedRollup,
-    AggregationRuleV1::LoadTimeSum,
-    AggregationRuleV1::None,
-    AggregationRuleV1::None,
-    AggregationRuleV1::None,
-    AggregationRuleV1::BlockInternalPointAssignment,
-    AggregationRuleV1::BlockCoordinateAssignment,
-    AggregationRuleV1::None,
-    AggregationRuleV1::EqualAreaWaterIntersection,
-    AggregationRuleV1::TypedRelationProjection,
-    AggregationRuleV1::TypedRelationProjection,
-    AggregationRuleV1::TypedRelationProjection,
+const EXPECTED_AGGREGATIONS: [AggregationRule; 18] = [
+    AggregationRule::None,
+    AggregationRule::None,
+    AggregationRule::None,
+    AggregationRule::None,
+    AggregationRule::PublishedRollup,
+    AggregationRule::PublishedRollup,
+    AggregationRule::PublishedRollup,
+    AggregationRule::LoadTimeSum,
+    AggregationRule::None,
+    AggregationRule::None,
+    AggregationRule::None,
+    AggregationRule::BlockInternalPointAssignment,
+    AggregationRule::BlockCoordinateAssignment,
+    AggregationRule::None,
+    AggregationRule::EqualAreaWaterIntersection,
+    AggregationRule::TypedRelationProjection,
+    AggregationRule::TypedRelationProjection,
+    AggregationRule::TypedRelationProjection,
 ];
 
-const EXPECTED_BINDINGS: [(&str, &str, RelationPayloadModeV1); 6] = [
+const EXPECTED_BINDINGS: [(&str, &str, RelationPayloadMode); 6] = [
     (
         "REFERENCE_FLOW",
         "COMMUTER_JOBS",
-        RelationPayloadModeV1::SingleMetricFacet,
+        RelationPayloadMode::SingleMetricFacet,
     ),
     (
         "REFERENCE_FLOW",
         "BORDER_SYNTHESIS",
-        RelationPayloadModeV1::Empty,
+        RelationPayloadMode::Empty,
     ),
-    ("DYAD", "PRESENCE", RelationPayloadModeV1::ImplicitRelation),
-    (
-        "DYAD",
-        "MEMBERSHIP",
-        RelationPayloadModeV1::ImplicitRelation,
-    ),
-    (
-        "DYAD",
-        "SOLIDARITY",
-        RelationPayloadModeV1::ImplicitRelation,
-    ),
-    ("DYAD", "COMMAND", RelationPayloadModeV1::Empty),
+    ("DYAD", "PRESENCE", RelationPayloadMode::ImplicitRelation),
+    ("DYAD", "MEMBERSHIP", RelationPayloadMode::ImplicitRelation),
+    ("DYAD", "SOLIDARITY", RelationPayloadMode::ImplicitRelation),
+    ("DYAD", "COMMAND", RelationPayloadMode::Empty),
 ];
 
 const EXPECTED_BINDING_METRICS: [Option<&str>; 6] = [
@@ -270,7 +262,7 @@ fn assert_identity_group<const N: usize>(
     expected: [(&str, &str, &str); N],
 ) {
     for index in 0..N {
-        let row = RTD_V1_IDENTITY_REGISTRY[start + index];
+        let row = RTD_IDENTITY_REGISTRY[start + index];
         let (symbolic_name, authority, local_id) = expected[index];
         assert_eq!(row.category, category);
         assert_eq!(row.symbolic_name, symbolic_name);
@@ -280,7 +272,7 @@ fn assert_identity_group<const N: usize>(
     }
 }
 
-fn coordinate_signature(row: &RtdMetricRegistryRowV1) -> String {
+fn coordinate_signature(row: &RtdMetricRegistryRow) -> String {
     let mut output = String::new();
     for index in 0..32 {
         if index == row.coordinates.len() {
@@ -296,7 +288,7 @@ fn coordinate_signature(row: &RtdMetricRegistryRowV1) -> String {
 
 #[test]
 fn schema_limits_and_error_registry_are_exact() {
-    assert_eq!(RTD_V1_SCHEMA_ID, "babylon.relational-territory-dossier");
+    assert_eq!(RTD_SCHEMA_ID, "babylon.relational-territory-dossier");
     assert_eq!(RTD_MAX_FOCUS, 64);
     assert_eq!(RTD_MAX_REFERENCE_DIGESTS, 4_096);
     assert_eq!(RTD_MAX_COLLECTION_ITEMS, 65_535);
@@ -306,16 +298,16 @@ fn schema_limits_and_error_registry_are_exact() {
     assert_eq!(RTD_MAX_DECISION_SURFACE_REFS, 256);
     assert_eq!(RTD_MAX_PROVENANCE_REFS, 8_192);
     assert_eq!(RTD_MAX_CANONICAL_BYTES, 67_108_864);
-    assert_eq!(RTD_V1_ERROR_REGISTRY, EXPECTED_ERRORS);
+    assert_eq!(RTD_ERROR_REGISTRY, EXPECTED_ERRORS);
 }
 
 #[test]
 #[allow(clippy::needless_range_loop)] // The identity registry has a fixed 69-row bound.
 fn identity_registry_has_exact_unique_rows() {
-    assert_eq!(RTD_V1_IDENTITY_REGISTRY.len(), 69);
+    assert_eq!(RTD_IDENTITY_REGISTRY.len(), 69);
     let mut identities = BTreeSet::new();
     for index in 0..69 {
-        let row = RTD_V1_IDENTITY_REGISTRY[index];
+        let row = RTD_IDENTITY_REGISTRY[index];
         assert!(identities.insert((
             row.identity.domain,
             row.identity.authority,
@@ -524,13 +516,13 @@ fn reference_identities_are_exact() {
     );
 }
 
-fn expected_evidence_classes(index: usize) -> &'static [EvidenceClassV1] {
+fn expected_evidence_classes(index: usize) -> &'static [EvidenceClass] {
     if index < 7 {
-        &[EvidenceClassV1::Observed, EvidenceClassV1::Derived]
+        &[EvidenceClass::Observed, EvidenceClass::Derived]
     } else if matches!(index, 8 | 9 | 10 | 13) {
-        &[EvidenceClassV1::Observed]
+        &[EvidenceClass::Observed]
     } else {
-        &[EvidenceClassV1::Derived]
+        &[EvidenceClass::Derived]
     }
 }
 
@@ -542,7 +534,7 @@ fn expected_producer_authority(index: usize) -> &'static str {
     }
 }
 
-fn assert_reference_artifact(index: usize, row: &RtdMetricRegistryRowV1) {
+fn assert_reference_artifact(index: usize, row: &RtdMetricRegistryRow) {
     if index < 15 {
         let reference = row
             .reference_artifact
@@ -556,10 +548,10 @@ fn assert_reference_artifact(index: usize, row: &RtdMetricRegistryRowV1) {
 }
 
 fn assert_metric_registry_row(index: usize) {
-    let row = RTD_V1_METRIC_REGISTRY[index];
+    let row = RTD_METRIC_REGISTRY[index];
     assert_eq!(
         row.metric,
-        TypedIdentityLiteralV1 {
+        TypedIdentityLiteral {
             domain: "metric",
             authority: "babylon.rtd.v1",
             local_id: EXPECTED_METRICS[index],
@@ -586,7 +578,7 @@ fn assert_metric_registry_row(index: usize) {
 #[test]
 #[allow(clippy::needless_range_loop)] // The metric registry has a fixed 18-row bound.
 fn metric_registry_rows_are_exact() {
-    assert_eq!(RTD_V1_METRIC_REGISTRY.len(), 18);
+    assert_eq!(RTD_METRIC_REGISTRY.len(), 18);
     for index in 0..18 {
         assert_metric_registry_row(index);
     }
@@ -596,7 +588,7 @@ fn metric_registry_rows_are_exact() {
 #[allow(clippy::needless_range_loop)] // The relation registry has a fixed six-row bound.
 fn relation_binding_registry_rows_are_exact() {
     for index in 0..6 {
-        let row = RTD_V1_RELATION_BINDING_REGISTRY[index];
+        let row = RTD_RELATION_BINDING_REGISTRY[index];
         assert_eq!(
             (row.record_family, row.kind, row.payload_mode),
             EXPECTED_BINDINGS[index]
@@ -614,12 +606,12 @@ fn relation_binding_registry_rows_are_exact() {
 
 #[test]
 fn schema_metadata_mutations_do_not_match_the_registry_contract() {
-    let expected = RTD_V1_METRIC_REGISTRY[4];
+    let expected = RTD_METRIC_REGISTRY[4];
     let mut aggregation_mutation = expected;
-    aggregation_mutation.aggregation_rule = AggregationRuleV1::None;
+    aggregation_mutation.aggregation_rule = AggregationRule::None;
     assert_ne!(aggregation_mutation, expected);
     let mut producer_mutation = expected;
-    producer_mutation.producer = TypedIdentityLiteralV1 {
+    producer_mutation.producer = TypedIdentityLiteral {
         domain: "producer",
         authority: "test",
         local_id: "wrong",
@@ -653,28 +645,28 @@ fn rust_error_display_matches_the_schema_registry_exactly() {
         RtdError::CanonicalSize,
     ];
     for index in 0..20 {
-        assert_eq!(errors[index].to_string(), RTD_V1_ERROR_REGISTRY[index]);
+        assert_eq!(errors[index].to_string(), RTD_ERROR_REGISTRY[index]);
     }
 }
 
 #[test]
 fn every_schema_enum_rejects_an_unknown_discriminant() {
-    rejects_unknown::<AudienceV1>();
-    rejects_unknown::<DurabilityV1>();
-    rejects_unknown::<EvidenceClassV1>();
-    rejects_unknown::<StatusV1>();
-    rejects_unknown::<ValueKindV1>();
-    rejects_unknown::<CoverageV1>();
-    rejects_unknown::<MembershipKindV1>();
-    rejects_unknown::<FacetFamilyV1>();
-    rejects_unknown::<DyadKindV1>();
-    rejects_unknown::<HyperedgeKindV1>();
-    rejects_unknown::<FlowKindV1>();
-    rejects_unknown::<RelationPayloadModeV1>();
-    rejects_unknown::<GapReasonV1>();
-    rejects_unknown::<MetricRepresentationV1>();
-    rejects_unknown::<AggregationRuleV1>();
-    rejects_unknown::<RtdCollectionKindV1>();
+    rejects_unknown::<Audience>();
+    rejects_unknown::<Durability>();
+    rejects_unknown::<EvidenceClass>();
+    rejects_unknown::<Status>();
+    rejects_unknown::<ValueKind>();
+    rejects_unknown::<Coverage>();
+    rejects_unknown::<MembershipKind>();
+    rejects_unknown::<FacetFamily>();
+    rejects_unknown::<DyadKind>();
+    rejects_unknown::<HyperedgeKind>();
+    rejects_unknown::<FlowKind>();
+    rejects_unknown::<RelationPayloadMode>();
+    rejects_unknown::<GapReason>();
+    rejects_unknown::<MetricRepresentation>();
+    rejects_unknown::<AggregationRule>();
+    rejects_unknown::<RtdCollectionKind>();
 }
 
 #[test]
@@ -686,29 +678,29 @@ fn schema_records_deny_unknown_fields_and_require_nullable_keys() {
         "vintage":"2023",
         "evidence_class":"Observed"
     }"#;
-    requires_field::<ReferenceDigestV1>(
+    requires_field::<ReferenceDigest>(
         explicit_null,
         "\n        \"artifact_schema_id_or_null\":null,",
     );
     let unknown = r#"{"domain":"entity","authority":"test","local_id":"x","extra":1}"#;
-    assert!(serde_json::from_str::<TypedIdentityV1>(unknown).is_err());
+    assert!(serde_json::from_str::<TypedIdentity>(unknown).is_err());
 
     let membership = r#"{"membership_id":{"domain":"membership","authority":"test","local_id":"m"},"member_ref":{"domain":"county","authority":"census","local_id":"1"},"scale_ref":{"domain":"state","authority":"census","local_id":"2"},"membership_kind":"ADMINISTRATIVE","status":"PRESENT","weight_status":"ABSENT","weight_bits_or_null":null,"coverage":"COMPLETE","evidence_class":"Observed","provenance_refs":[]}"#;
-    requires_field::<ScaleMembershipV1>(membership, r#""weight_bits_or_null":null,"#);
+    requires_field::<ScaleMembership>(membership, r#""weight_bits_or_null":null,"#);
     let facet = r#"{"facet_id":{"domain":"facet","authority":"test","local_id":"f"},"family":"PRODUCTION_CIRCULATION","subject_ref":{"domain":"county","authority":"census","local_id":"1"},"metric_id":{"domain":"metric","authority":"test","local_id":"m"},"unit_id":{"domain":"unit","authority":"test","local_id":"u"},"native_scale":{"domain":"native-scale","authority":"test","local_id":"n"},"coordinates":[],"vintage":"2023","status":"UNKNOWN","value_kind":"UINT64_BITS","value_bits_or_null":null,"coverage":"UNKNOWN","evidence_class":"Observed","provenance_refs":[]}"#;
-    requires_field::<FacetV1>(facet, r#""value_bits_or_null":null,"#);
+    requires_field::<Facet>(facet, r#""value_bits_or_null":null,"#);
     let gap = r#"{"gap_id":{"domain":"gap","authority":"test","local_id":"g"},"requested_metric_or_relation":{"domain":"metric","authority":"test","local_id":"m"},"status":"UNKNOWN","reason_code":"MISSING_GOVERNED_PRODUCER","required_producer_or_null":null,"provenance_refs":[]}"#;
-    requires_field::<GapV1>(gap, r#""required_producer_or_null":null,"#);
+    requires_field::<Gap>(gap, r#""required_producer_or_null":null,"#);
     let provenance = format!(
         r#"{{"provenance_id":{{"domain":"provenance","authority":"test","local_id":"p"}},"artifact_digest":"{}","locator":"","vintage":"2023","evidence_class":"Observed","transformation_digest_or_null":null}}"#,
         "0".repeat(64)
     );
-    requires_field::<ProvenanceV1>(&provenance, r#","transformation_digest_or_null":null"#);
+    requires_field::<Provenance>(&provenance, r#","transformation_digest_or_null":null"#);
 
     let draft = minimal_draft_json();
-    requires_field::<RtdDossierDraftV1>(&draft, r#""fog_policy_digest":null,"#);
-    requires_field::<RtdDossierDraftV1>(&draft, r#""knowledge_context_digest":null,"#);
-    requires_field::<RtdDossierDraftV1>(&draft, r#""actor":null,"#);
+    requires_field::<RtdDossierDraft>(&draft, r#""fog_policy_digest":null,"#);
+    requires_field::<RtdDossierDraft>(&draft, r#""knowledge_context_digest":null,"#);
+    requires_field::<RtdDossierDraft>(&draft, r#""actor":null,"#);
 }
 
 fn minimal_draft_json() -> String {
@@ -721,7 +713,7 @@ fn minimal_draft_json() -> String {
 #[test]
 fn language_neutral_schema_bytes_are_bound_to_rust() {
     assert_eq!(
-        babylon_kernel::sha256_of(RTD_SCHEMA),
+        babylon_kernel::content_digest::sha256_of(RTD_SCHEMA),
         RTD_CONTRACT_SOURCE_SHA256
     );
 }

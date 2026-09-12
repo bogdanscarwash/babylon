@@ -49,7 +49,7 @@ use crate::grammar::{
 use crate::material_basis::{check_rule_surface, SurfaceError};
 use crate::mod_anchors::{check_anchor, AnchorDecl, AnchorError};
 use crate::probability::{
-    compile_rule_probability, CompiledProbabilityFactsV1, FiniteKernelV1, FiniteProjectionV1,
+    compile_rule_probability, CompiledProbabilityFacts, FiniteKernel, FiniteProjection,
     ProbabilityError,
 };
 use crate::reader::{read, read_all, Atom, FormPath, ReadError, SExpr};
@@ -113,11 +113,11 @@ pub struct LoadedRule {
     /// The rule's governed causal role and constitutional evidence class.
     pub contract: RuleContract,
     /// The rule's one compiled finite material kernel, when present.
-    pub kernel: Option<FiniteKernelV1>,
+    pub kernel: Option<FiniteKernel>,
     /// The rule's exact finite recognizer projection, when declared.
-    pub projection: Option<FiniteProjectionV1>,
+    pub projection: Option<FiniteProjection>,
     /// Probability authoring facts retained by the one loader compilation.
-    pub probability_facts: CompiledProbabilityFactsV1,
+    pub probability_facts: CompiledProbabilityFacts,
     /// Runtime-resolved subject population for a kernel or projection.
     /// Retained so schedule linkage cannot drift from tick execution.
     pub probability_carrier: Option<String>,
@@ -297,8 +297,8 @@ pub fn load_rule(source: &str, ctx: &LoadContext<'_>) -> Result<LoadedRule, Load
 }
 
 fn resolve_probability_carrier(
-    kernel: Option<&FiniteKernelV1>,
-    projection: Option<&FiniteProjectionV1>,
+    kernel: Option<&FiniteKernel>,
+    projection: Option<&FiniteProjection>,
     bindings: &[BindingDecl],
     vocabulary: Option<&crate::vocabulary::ClosedVocabulary>,
 ) -> Result<Option<String>, LoadError> {
@@ -483,7 +483,7 @@ pub fn load_rule_form(
 /// remains the canonical coordinate space for loader diagnostics and typed
 /// authoring analysis over the source's [`crate::reader::SpanTable`].
 #[derive(Debug, Clone, PartialEq)]
-pub struct SplitRuleFormV1 {
+pub struct SplitRuleForm {
     /// Declared rule id.
     pub rule_id: String,
     /// Parsed rule form.
@@ -524,7 +524,7 @@ pub struct SplitRuleFormV1 {
 /// when a nonempty source contains zero `(rule …)` top-forms; or
 /// [`LoadError::DuplicateRuleId`] (`E-LOAD-001`) when two rule forms share
 /// the same id.
-pub fn split_content(source: &str) -> Result<(Vec<SExpr>, Vec<SplitRuleFormV1>), LoadError> {
+pub fn split_content(source: &str) -> Result<(Vec<SExpr>, Vec<SplitRuleForm>), LoadError> {
     split_content_unchecked(source)
 }
 
@@ -541,7 +541,7 @@ pub fn split_content(source: &str) -> Result<(Vec<SExpr>, Vec<SplitRuleFormV1>),
 /// [`LoadError::SameTickOrder`] because it has no execution ranks.
 pub(crate) fn split_content_unchecked(
     source: &str,
-) -> Result<(Vec<SExpr>, Vec<SplitRuleFormV1>), LoadError> {
+) -> Result<(Vec<SExpr>, Vec<SplitRuleForm>), LoadError> {
     let forms = read_all(source.as_bytes()).map_err(LoadError::Read)?;
     // An empty parsed program is an explicit zero-rule transition. Comments
     // and whitespace carry no content; intrinsic-only programs still refuse.
@@ -562,7 +562,7 @@ pub(crate) fn split_content_unchecked(
                     "a content source has more top-forms than FormPath can address".to_owned(),
                 )
             })?;
-            rule_forms.push(SplitRuleFormV1 {
+            rule_forms.push(SplitRuleForm {
                 rule_id,
                 form,
                 root_path: vec![root_index],
@@ -1863,7 +1863,7 @@ mod kind_mixing_wiring_tests {
 #[cfg(test)]
 mod empty_program_tests {
     use super::split_content;
-    use crate::rules_hash_of;
+    use crate::canonical_ast::rules_hash_of;
 
     #[test]
     fn empty_program_spelling_has_one_empty_rule_hash() {

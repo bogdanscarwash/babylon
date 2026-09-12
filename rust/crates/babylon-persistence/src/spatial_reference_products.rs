@@ -3,10 +3,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::OnceLock;
 
-use babylon_kernel::tick_content_hash::RefDigestV1;
-use babylon_kernel::{sha256_of, H3CellId};
+use babylon_kernel::tick_content_hash::RefDigest;
+use babylon_kernel::{content_digest::sha256_of, H3CellId};
 
-use crate::{H3ReferenceCohort, H3ReferenceOrigin};
+use crate::{h3_reference_cohort::H3ReferenceCohort, h3_reference_cohort::H3ReferenceOrigin};
 
 const FIXTURE_PARTS: [&[u8]; 3] = [
     include_bytes!("fixtures/spatial_reference_products_v1.part-00.bin"),
@@ -47,8 +47,8 @@ impl ReferenceProductEvidenceClass {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ReferenceProduct {
     code: &'static str,
-    artifact_sha256: RefDigestV1,
-    semantic_sha256: Option<RefDigestV1>,
+    artifact_sha256: RefDigest,
+    semantic_sha256: Option<RefDigest>,
     row_count: u64,
     evidence_class: ReferenceProductEvidenceClass,
     measure_unit: &'static str,
@@ -64,13 +64,13 @@ impl ReferenceProduct {
 
     /// SHA-256 of the exact source artifact bytes.
     #[must_use]
-    pub const fn artifact_sha256(&self) -> RefDigestV1 {
+    pub const fn artifact_sha256(&self) -> RefDigest {
         self.artifact_sha256
     }
 
     /// Container-independent digest when the predecessor published one.
     #[must_use]
-    pub const fn semantic_sha256(&self) -> Option<RefDigestV1> {
+    pub const fn semantic_sha256(&self) -> Option<RefDigest> {
         self.semantic_sha256
     }
 
@@ -290,7 +290,7 @@ impl CountyPlaceH3LandAreaRow {
 /// One checked immutable bundle ready for an exact-epoch installer.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SpatialReferenceProducts {
-    ref_digest: RefDigestV1,
+    ref_digest: RefDigest,
     products: Box<[ReferenceProduct]>,
     counties: Box<[CountyIdentityRow]>,
     places: Box<[PlaceIdentityRow]>,
@@ -303,7 +303,7 @@ pub struct SpatialReferenceProducts {
 
 impl SpatialReferenceProducts {
     #[must_use]
-    pub const fn ref_digest(&self) -> RefDigestV1 {
+    pub const fn ref_digest(&self) -> RefDigest {
         self.ref_digest
     }
 
@@ -406,7 +406,7 @@ impl std::error::Error for SpatialReferenceProductsError {}
 /// # Errors
 /// Refuses byte drift, malformed framing, unknown H3 identities, subject drift,
 /// measure drift, or conservation failure before returning any publishable rows.
-pub fn michigan_spatial_reference_products_v1(
+pub fn michigan_spatial_reference_products(
     cohort: &H3ReferenceCohort,
 ) -> Result<SpatialReferenceProducts, SpatialReferenceProductsError> {
     let fixture = fixture_bytes();
@@ -421,7 +421,7 @@ pub fn michigan_spatial_reference_products_v1(
     if version != FIXTURE_VERSION {
         return Err(SpatialReferenceProductsError::FixtureVersion { actual: version });
     }
-    let ref_digest = RefDigestV1::from_bytes(reader.array::<32>("ref_digest")?);
+    let ref_digest = RefDigest::from_bytes(reader.array::<32>("ref_digest")?);
     if ref_digest != cohort.receipt().ref_digest() {
         return Err(SpatialReferenceProductsError::FixtureRefDigest);
     }
@@ -527,7 +527,7 @@ fn direct_resolution_seven_cells(cohort: &H3ReferenceCohort) -> BTreeSet<H3CellI
         .rows()
         .iter()
         .filter(|row| row.resolution() == 7 && row.origin() == H3ReferenceOrigin::Direct)
-        .map(crate::H3ReferenceCellRow::cell_id)
+        .map(crate::h3_reference_cohort::H3ReferenceCellRow::cell_id)
         .collect()
 }
 
@@ -873,8 +873,8 @@ fn product(
 ) -> ReferenceProduct {
     ReferenceProduct {
         code,
-        artifact_sha256: RefDigestV1::from_bytes(hex_digest(artifact_sha256)),
-        semantic_sha256: semantic_sha256.map(|value| RefDigestV1::from_bytes(hex_digest(value))),
+        artifact_sha256: RefDigest::from_bytes(hex_digest(artifact_sha256)),
+        semantic_sha256: semantic_sha256.map(|value| RefDigest::from_bytes(hex_digest(value))),
         row_count,
         evidence_class,
         measure_unit,

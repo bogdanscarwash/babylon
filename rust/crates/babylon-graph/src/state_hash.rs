@@ -1,7 +1,7 @@
 //! The graph STATE hash — Constitution III.7's "every tick produces a
 //! deterministic hash", for the substrate half.
 //!
-//! [`babylon_kernel::ContentDigest`] fingerprints what the engine was *told*
+//! [`babylon_kernel::content_digest::ContentDigest`] fingerprints what the engine was *told*
 //! (defines + rules). This fingerprints what the engine *did*: the graph
 //! after a tick. Two runs of the same content over the same starting state
 //! must produce the same bytes here, and any real change to the world must
@@ -134,7 +134,7 @@
 //! no rounding, no locale.
 
 use crate::substrate::{GraphError, HyperedgeId, NodeId};
-use babylon_kernel::{sha256_of, Currency};
+use babylon_kernel::{content_digest::sha256_of, currency::Currency};
 
 const TAG_NODES: u8 = 0x01;
 const TAG_ATTRIBUTES: u8 = 0x02;
@@ -571,7 +571,7 @@ pub trait CanonicalState {
 mod tests {
     use super::{CanonicalState, StateEncoder};
     use crate::substrate::{HyperedgeId, NodeId};
-    use babylon_kernel::Currency;
+    use babylon_kernel::currency::Currency;
     use std::fmt::Write as _;
 
     /// A hand-built fixture implementing only the six listings, so

@@ -14,7 +14,7 @@ use crate::typecheck::TypeEnv;
 use crate::types::{BslType, EnumRegistry, EnumTypeId};
 use crate::write_log::{Write, WriteObserver, WriteRecord};
 use babylon_graph::substrate::{GraphError, GraphSubstrate, HyperedgeId, NodeId};
-use babylon_kernel::Currency;
+use babylon_kernel::currency::Currency;
 
 /// Where `emit` lands (§2.8): an event sink the engine wires to the kernel
 /// event bus (Phase 3). Payload values are already evaluated.

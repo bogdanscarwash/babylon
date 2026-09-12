@@ -1,6 +1,6 @@
 //! Atomic installation and exact admission of the one supported database schema.
 
-use babylon_kernel::sha256_of;
+use babylon_kernel::content_digest::sha256_of;
 use postgres::{Client, Config, GenericClient, IsolationLevel, NoTls, Transaction};
 
 use crate::postgres_catalog::{
@@ -8,7 +8,7 @@ use crate::postgres_catalog::{
     validate_connection_target, CatalogCensusEntry, CatalogCensusParseError, CatalogError,
     CATALOG_CONNECT_TIMEOUT, CATALOG_STARTUP_OPTIONS, CATALOG_TCP_USER_TIMEOUT,
 };
-use crate::PostgresDiagnosticV1;
+use crate::PostgresDiagnostic;
 
 /// One lock shared by schema construction, reference installation and role provisioning.
 pub const SCHEMA_ADVISORY_LOCK_KEY: i64 = 0xBAB1_0537;
@@ -103,7 +103,7 @@ pub enum CurrentSchemaError {
     Unlock(CatalogError),
     Database {
         operation: CurrentSchemaOperation,
-        diagnostic: Option<PostgresDiagnosticV1>,
+        diagnostic: Option<PostgresDiagnostic>,
     },
     CurrentUserIsNotDatabaseOwner,
     UnsupportedServerMajor {
@@ -136,7 +136,7 @@ impl std::error::Error for CurrentSchemaError {}
 fn database(operation: CurrentSchemaOperation, error: &postgres::Error) -> CurrentSchemaError {
     CurrentSchemaError::Database {
         operation,
-        diagnostic: Some(PostgresDiagnosticV1::capture(error)),
+        diagnostic: Some(PostgresDiagnostic::capture(error)),
     }
 }
 fn decode(operation: CurrentSchemaOperation) -> CurrentSchemaError {
@@ -147,6 +147,9 @@ fn decode(operation: CurrentSchemaOperation) -> CurrentSchemaError {
 }
 
 /// SHA-256 of a domain tag followed by little-endian `u64` byte lengths and SQL bytes.
+///
+/// # Panics
+/// Panics if an embedded SQL source exceeds the `u64` length range.
 #[must_use]
 pub fn current_schema_sha256() -> [u8; 32] {
     let mut bytes = b"babylon.current-schema.v1\0".to_vec();
@@ -544,22 +547,23 @@ mod tests {
             assert!(differences
                 .iter()
                 .all(|(entry, _)| entry.key().schema() == "public"
-                    && entry.key().kind() == crate::CatalogObjectKind::View));
+                    && entry.key().kind() == crate::postgres_catalog::CatalogObjectKind::View));
         }
     }
 
     #[test]
     fn current_census_provenance_matches_exact_constructed_sources() {
+        use std::fmt::Write as _;
         for (name, source) in [
             ("current_schema.sql", CURRENT_SCHEMA_SQL),
             ("current_archive.sql", CURRENT_ARCHIVE_SQL),
             ("current_views.sql", CURRENT_VIEWS_SQL),
             ("postgres_catalog.sql", include_str!("postgres_catalog.sql")),
         ] {
-            let digest = sha256_of(source.as_bytes())
-                .iter()
-                .map(|byte| format!("{byte:02x}"))
-                .collect::<String>();
+            let mut digest = String::with_capacity(64);
+            for byte in sha256_of(source.as_bytes()) {
+                write!(&mut digest, "{byte:02x}").unwrap();
+            }
             let expected = format!("# source|{name}|{digest}");
             for fixture in CURRENT_CENSUSES {
                 assert!(
@@ -610,12 +614,12 @@ mod live_tests {
             CurrentSchemaDisposition::AlreadyCurrent
         );
         assert_eq!(installed.identity.schema_sha256(), &current_schema_sha256());
-        crate::install_reader_role_v1(&config).unwrap();
+        crate::install_reader_role(&config).unwrap();
         assert_eq!(
             install_current_schema(&config).unwrap().identity,
             installed.identity
         );
-        crate::provision_observer_role(&config).unwrap();
+        crate::observer_reader::provision_observer_role(&config).unwrap();
         assert_eq!(
             install_current_schema(&config).unwrap().identity,
             installed.identity
@@ -623,7 +627,7 @@ mod live_tests {
         let observer_db = TestDatabase::create(&base, "observer");
         let observer_config = observer_db.config(&base);
         install_current_schema(&observer_config).unwrap();
-        crate::provision_observer_role(&observer_config).unwrap();
+        crate::observer_reader::provision_observer_role(&observer_config).unwrap();
         assert_eq!(
             install_current_schema(&observer_config).unwrap().identity,
             installed.identity
@@ -780,6 +784,62 @@ mod live_tests {
             assert_eq!(installed.identity, second.identity);
             db.cleanup();
         }
+    }
+
+    #[test]
+    #[ignore = "requires the task-owned disposable PostgreSQL runtime"]
+    fn live_h3_reference_rollback_and_killed_retry_preserve_atomicity() {
+        let base = validated_base_config();
+        let db = TestDatabase::create(&base, "hexrollback");
+        let config = db.config(&base);
+        install_current_schema(&config).unwrap();
+        crate::h3_reference_installer::live_postgres_tests::verify_rollback_and_killed_retry(
+            &config,
+            &base,
+            std::time::Instant::now(),
+        );
+        db.cleanup();
+    }
+
+    #[test]
+    #[ignore = "requires the task-owned disposable PostgreSQL runtime"]
+    fn live_h3_reference_lost_acknowledgement_reconciles_committed_rows() {
+        let base = validated_base_config();
+        let db = TestDatabase::create(&base, "hexlostack");
+        let config = db.config(&base);
+        install_current_schema(&config).unwrap();
+        crate::h3_reference_installer::live_postgres_tests::verify_committed_reconciliation(
+            &config,
+            &base,
+            std::time::Instant::now(),
+        );
+        db.cleanup();
+    }
+
+    #[test]
+    #[ignore = "requires the task-owned disposable PostgreSQL runtime"]
+    fn live_h3_reference_membership_cardinality_refuses_excess_rows() {
+        let base = validated_base_config();
+        let db = TestDatabase::create(&base, "hexcardinality");
+        let config = db.config(&base);
+        install_current_schema(&config).unwrap();
+        crate::h3_reference_installer::live_postgres_tests::verify_membership_cardinality_bound(
+            &config,
+        );
+        db.cleanup();
+    }
+
+    #[test]
+    #[ignore = "requires the task-owned disposable PostgreSQL runtime"]
+    fn live_spatial_reference_commit_protocol_refuses_product_drift() {
+        let base = validated_base_config();
+        let db = TestDatabase::create(&base, "spatial");
+        let config = db.config(&base);
+        install_current_schema(&config).unwrap();
+        crate::spatial_reference_installer::live_postgres_tests::verify_commit_protocol(
+            &config, &base,
+        );
+        db.cleanup();
     }
 
     fn validated_base_config() -> Config {

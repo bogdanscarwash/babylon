@@ -11,7 +11,7 @@ where
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
-pub enum AudienceV1 {
+pub enum Audience {
     #[serde(rename = "ADMIN_MATERIAL")]
     AdminMaterial,
     #[serde(rename = "PLAYER_KNOWLEDGE")]
@@ -19,7 +19,7 @@ pub enum AudienceV1 {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
-pub enum DurabilityV1 {
+pub enum Durability {
     #[serde(rename = "IN_MEMORY")]
     InMemory,
     #[serde(rename = "COMMITTED")]
@@ -27,7 +27,7 @@ pub enum DurabilityV1 {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
-pub enum EvidenceClassV1 {
+pub enum EvidenceClass {
     #[serde(rename = "Observed")]
     Observed,
     #[serde(rename = "Derived")]
@@ -39,7 +39,7 @@ pub enum EvidenceClassV1 {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
-pub enum StatusV1 {
+pub enum Status {
     #[serde(rename = "PRESENT")]
     Present,
     #[serde(rename = "ABSENT")]
@@ -53,7 +53,7 @@ pub enum StatusV1 {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
-pub enum ValueKindV1 {
+pub enum ValueKind {
     #[serde(rename = "UINT64_BITS")]
     Uint64Bits,
     #[serde(rename = "FLOAT64_BITS")]
@@ -61,7 +61,7 @@ pub enum ValueKindV1 {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
-pub enum CoverageV1 {
+pub enum Coverage {
     #[serde(rename = "COMPLETE")]
     Complete,
     #[serde(rename = "PARTIAL")]
@@ -73,7 +73,7 @@ pub enum CoverageV1 {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
-pub enum MembershipKindV1 {
+pub enum MembershipKind {
     #[serde(rename = "ADMINISTRATIVE")]
     Administrative,
     #[serde(rename = "NATIONAL")]
@@ -87,7 +87,7 @@ pub enum MembershipKindV1 {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
-pub enum FacetFamilyV1 {
+pub enum FacetFamily {
     #[serde(rename = "COMMAND_ADMINISTRATION")]
     CommandAdministration,
     #[serde(rename = "PRODUCTION_CIRCULATION")]
@@ -103,7 +103,7 @@ pub enum FacetFamilyV1 {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
-pub enum DyadKindV1 {
+pub enum DyadKind {
     #[serde(rename = "PRESENCE")]
     Presence,
     #[serde(rename = "MEMBERSHIP")]
@@ -115,13 +115,13 @@ pub enum DyadKindV1 {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
-pub enum HyperedgeKindV1 {
+pub enum HyperedgeKind {
     #[serde(rename = "PUBLIC_RELATION")]
     PublicRelation,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
-pub enum FlowKindV1 {
+pub enum FlowKind {
     #[serde(rename = "COMMUTER_JOBS")]
     CommuterJobs,
     #[serde(rename = "BORDER_SYNTHESIS")]
@@ -129,7 +129,7 @@ pub enum FlowKindV1 {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
-pub enum RelationPayloadModeV1 {
+pub enum RelationPayloadMode {
     #[serde(rename = "EMPTY")]
     Empty,
     #[serde(rename = "SINGLE_METRIC_FACET")]
@@ -139,7 +139,7 @@ pub enum RelationPayloadModeV1 {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
-pub enum GapReasonV1 {
+pub enum GapReason {
     #[serde(rename = "MISSING_GOVERNED_OMB_DELINEATION")]
     MissingGovernedOmbDelineation,
     #[serde(rename = "IDENTITY_CONTRACT_PENDING")]
@@ -155,7 +155,7 @@ pub enum GapReasonV1 {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
-pub enum MetricRepresentationV1 {
+pub enum MetricRepresentation {
     #[serde(rename = "FACET")]
     Facet,
     #[serde(rename = "REFERENCE_FLOW")]
@@ -165,7 +165,7 @@ pub enum MetricRepresentationV1 {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
-pub enum AggregationRuleV1 {
+pub enum AggregationRule {
     #[serde(rename = "NONE")]
     None,
     #[serde(rename = "PUBLISHED_ROLLUP")]
@@ -183,7 +183,7 @@ pub enum AggregationRuleV1 {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
-pub enum RtdCollectionKindV1 {
+pub enum RtdCollectionKind {
     #[serde(rename = "FOCUS")]
     Focus,
     #[serde(rename = "REFERENCE_DIGESTS")]
@@ -216,7 +216,7 @@ pub enum RtdCollectionKindV1 {
 
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct TypedIdentityV1 {
+pub struct TypedIdentity {
     pub domain: String,
     pub authority: String,
     pub local_id: String,
@@ -224,148 +224,148 @@ pub struct TypedIdentityV1 {
 
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct ReferenceDigestV1 {
-    pub reference_id: TypedIdentityV1,
+pub struct ReferenceDigest {
+    pub reference_id: TypedIdentity,
     pub sha256_hex: String,
     #[serde(deserialize_with = "deserialize_required_option")]
-    pub artifact_schema_id_or_null: Option<TypedIdentityV1>,
+    pub artifact_schema_id_or_null: Option<TypedIdentity>,
     pub vintage: String,
-    pub evidence_class: EvidenceClassV1,
+    pub evidence_class: EvidenceClass,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct DimensionCoordinateV1 {
-    pub dimension_ref: TypedIdentityV1,
-    pub member_ref: TypedIdentityV1,
+pub struct DimensionCoordinate {
+    pub dimension_ref: TypedIdentity,
+    pub member_ref: TypedIdentity,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct ScaleMembershipV1 {
-    pub membership_id: TypedIdentityV1,
-    pub member_ref: TypedIdentityV1,
-    pub scale_ref: TypedIdentityV1,
-    pub membership_kind: MembershipKindV1,
-    pub status: StatusV1,
-    pub weight_status: StatusV1,
+pub struct ScaleMembership {
+    pub membership_id: TypedIdentity,
+    pub member_ref: TypedIdentity,
+    pub scale_ref: TypedIdentity,
+    pub membership_kind: MembershipKind,
+    pub status: Status,
+    pub weight_status: Status,
     #[serde(deserialize_with = "deserialize_required_option")]
     pub weight_bits_or_null: Option<String>,
-    pub coverage: CoverageV1,
-    pub evidence_class: EvidenceClassV1,
-    pub provenance_refs: Vec<TypedIdentityV1>,
+    pub coverage: Coverage,
+    pub evidence_class: EvidenceClass,
+    pub provenance_refs: Vec<TypedIdentity>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct FacetV1 {
-    pub facet_id: TypedIdentityV1,
-    pub family: FacetFamilyV1,
-    pub subject_ref: TypedIdentityV1,
-    pub metric_id: TypedIdentityV1,
-    pub unit_id: TypedIdentityV1,
-    pub native_scale: TypedIdentityV1,
-    pub coordinates: Vec<DimensionCoordinateV1>,
+pub struct Facet {
+    pub facet_id: TypedIdentity,
+    pub family: FacetFamily,
+    pub subject_ref: TypedIdentity,
+    pub metric_id: TypedIdentity,
+    pub unit_id: TypedIdentity,
+    pub native_scale: TypedIdentity,
+    pub coordinates: Vec<DimensionCoordinate>,
     pub vintage: String,
-    pub status: StatusV1,
-    pub value_kind: ValueKindV1,
+    pub status: Status,
+    pub value_kind: ValueKind,
     #[serde(deserialize_with = "deserialize_required_option")]
     pub value_bits_or_null: Option<String>,
-    pub coverage: CoverageV1,
-    pub evidence_class: EvidenceClassV1,
-    pub provenance_refs: Vec<TypedIdentityV1>,
+    pub coverage: Coverage,
+    pub evidence_class: EvidenceClass,
+    pub provenance_refs: Vec<TypedIdentity>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct DyadV1 {
-    pub relation_id: TypedIdentityV1,
-    pub relation_kind: DyadKindV1,
-    pub from_ref: TypedIdentityV1,
-    pub to_ref: TypedIdentityV1,
-    pub native_scale: TypedIdentityV1,
-    pub status: StatusV1,
-    pub coverage: CoverageV1,
-    pub payload_facets: Vec<TypedIdentityV1>,
-    pub evidence_class: EvidenceClassV1,
-    pub provenance_refs: Vec<TypedIdentityV1>,
+pub struct Dyad {
+    pub relation_id: TypedIdentity,
+    pub relation_kind: DyadKind,
+    pub from_ref: TypedIdentity,
+    pub to_ref: TypedIdentity,
+    pub native_scale: TypedIdentity,
+    pub status: Status,
+    pub coverage: Coverage,
+    pub payload_facets: Vec<TypedIdentity>,
+    pub evidence_class: EvidenceClass,
+    pub provenance_refs: Vec<TypedIdentity>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct HyperedgeV1 {
-    pub hyperedge_id: TypedIdentityV1,
-    pub hyperedge_kind: HyperedgeKindV1,
-    pub member_refs: Vec<TypedIdentityV1>,
-    pub native_scale: TypedIdentityV1,
-    pub status: StatusV1,
-    pub coverage: CoverageV1,
-    pub payload_facets: Vec<TypedIdentityV1>,
-    pub evidence_class: EvidenceClassV1,
-    pub provenance_refs: Vec<TypedIdentityV1>,
+pub struct Hyperedge {
+    pub hyperedge_id: TypedIdentity,
+    pub hyperedge_kind: HyperedgeKind,
+    pub member_refs: Vec<TypedIdentity>,
+    pub native_scale: TypedIdentity,
+    pub status: Status,
+    pub coverage: Coverage,
+    pub payload_facets: Vec<TypedIdentity>,
+    pub evidence_class: EvidenceClass,
+    pub provenance_refs: Vec<TypedIdentity>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct ReferenceFlowV1 {
-    pub flow_id: TypedIdentityV1,
-    pub flow_kind: FlowKindV1,
-    pub origin_ref: TypedIdentityV1,
-    pub destination_ref: TypedIdentityV1,
-    pub payload_facets: Vec<TypedIdentityV1>,
-    pub native_scale: TypedIdentityV1,
-    pub status: StatusV1,
-    pub coverage: CoverageV1,
-    pub evidence_class: EvidenceClassV1,
-    pub provenance_refs: Vec<TypedIdentityV1>,
+pub struct ReferenceFlow {
+    pub flow_id: TypedIdentity,
+    pub flow_kind: FlowKind,
+    pub origin_ref: TypedIdentity,
+    pub destination_ref: TypedIdentity,
+    pub payload_facets: Vec<TypedIdentity>,
+    pub native_scale: TypedIdentity,
+    pub status: Status,
+    pub coverage: Coverage,
+    pub evidence_class: EvidenceClass,
+    pub provenance_refs: Vec<TypedIdentity>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct GapV1 {
-    pub gap_id: TypedIdentityV1,
-    pub requested_metric_or_relation: TypedIdentityV1,
-    pub status: StatusV1,
-    pub reason_code: GapReasonV1,
+pub struct Gap {
+    pub gap_id: TypedIdentity,
+    pub requested_metric_or_relation: TypedIdentity,
+    pub status: Status,
+    pub reason_code: GapReason,
     #[serde(deserialize_with = "deserialize_required_option")]
     pub required_producer_or_null: Option<String>,
-    pub provenance_refs: Vec<TypedIdentityV1>,
+    pub provenance_refs: Vec<TypedIdentity>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct ProvenanceV1 {
-    pub provenance_id: TypedIdentityV1,
+pub struct Provenance {
+    pub provenance_id: TypedIdentity,
     pub artifact_digest: String,
     pub locator: String,
     pub vintage: String,
-    pub evidence_class: EvidenceClassV1,
+    pub evidence_class: EvidenceClass,
     #[serde(deserialize_with = "deserialize_required_option")]
     pub transformation_digest_or_null: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct DecisionSurfaceV1 {
-    pub question_id: TypedIdentityV1,
-    pub signal_refs: Vec<TypedIdentityV1>,
-    pub action_refs: Vec<TypedIdentityV1>,
-    pub receipt_refs: Vec<TypedIdentityV1>,
-    pub archive_subject_refs: Vec<TypedIdentityV1>,
+pub struct DecisionSurface {
+    pub question_id: TypedIdentity,
+    pub signal_refs: Vec<TypedIdentity>,
+    pub action_refs: Vec<TypedIdentity>,
+    pub receipt_refs: Vec<TypedIdentity>,
+    pub archive_subject_refs: Vec<TypedIdentity>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct RtdDossierDraftV1 {
+pub struct RtdDossierDraft {
     pub schema: String,
     pub schema_version: u16,
     pub projection_version: u16,
-    pub audience: AudienceV1,
-    pub durability: DurabilityV1,
+    pub audience: Audience,
+    pub durability: Durability,
     pub verified_tick: u64,
     pub graph_state_hash: String,
     pub nominal_world_hash: String,
-    pub reference_digests: Vec<ReferenceDigestV1>,
+    pub reference_digests: Vec<ReferenceDigest>,
     pub definitions_digest: String,
     pub template_digest: String,
     #[serde(deserialize_with = "deserialize_required_option")]
@@ -373,30 +373,30 @@ pub struct RtdDossierDraftV1 {
     #[serde(deserialize_with = "deserialize_required_option")]
     pub knowledge_context_digest: Option<String>,
     #[serde(deserialize_with = "deserialize_required_option")]
-    pub actor: Option<TypedIdentityV1>,
-    pub focus: Vec<TypedIdentityV1>,
-    pub scale_memberships: Vec<ScaleMembershipV1>,
-    pub facets: Vec<FacetV1>,
-    pub dyads: Vec<DyadV1>,
-    pub hyperedges: Vec<HyperedgeV1>,
-    pub flows: Vec<ReferenceFlowV1>,
-    pub gaps: Vec<GapV1>,
-    pub provenance: Vec<ProvenanceV1>,
-    pub decision_surface: DecisionSurfaceV1,
+    pub actor: Option<TypedIdentity>,
+    pub focus: Vec<TypedIdentity>,
+    pub scale_memberships: Vec<ScaleMembership>,
+    pub facets: Vec<Facet>,
+    pub dyads: Vec<Dyad>,
+    pub hyperedges: Vec<Hyperedge>,
+    pub flows: Vec<ReferenceFlow>,
+    pub gaps: Vec<Gap>,
+    pub provenance: Vec<Provenance>,
+    pub decision_surface: DecisionSurface,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct RelationalTerritoryDossierV1 {
+pub struct RelationalTerritoryDossier {
     pub schema: String,
     pub schema_version: u16,
     pub projection_version: u16,
-    pub audience: AudienceV1,
-    pub durability: DurabilityV1,
+    pub audience: Audience,
+    pub durability: Durability,
     pub verified_tick: u64,
     pub graph_state_hash: String,
     pub nominal_world_hash: String,
-    pub reference_digests: Vec<ReferenceDigestV1>,
+    pub reference_digests: Vec<ReferenceDigest>,
     pub definitions_digest: String,
     pub template_digest: String,
     #[serde(deserialize_with = "deserialize_required_option")]
@@ -404,57 +404,57 @@ pub struct RelationalTerritoryDossierV1 {
     #[serde(deserialize_with = "deserialize_required_option")]
     pub knowledge_context_digest: Option<String>,
     #[serde(deserialize_with = "deserialize_required_option")]
-    pub actor: Option<TypedIdentityV1>,
-    pub focus: Vec<TypedIdentityV1>,
-    pub scale_memberships: Vec<ScaleMembershipV1>,
-    pub facets: Vec<FacetV1>,
-    pub dyads: Vec<DyadV1>,
-    pub hyperedges: Vec<HyperedgeV1>,
-    pub flows: Vec<ReferenceFlowV1>,
-    pub gaps: Vec<GapV1>,
-    pub provenance: Vec<ProvenanceV1>,
-    pub decision_surface: DecisionSurfaceV1,
+    pub actor: Option<TypedIdentity>,
+    pub focus: Vec<TypedIdentity>,
+    pub scale_memberships: Vec<ScaleMembership>,
+    pub facets: Vec<Facet>,
+    pub dyads: Vec<Dyad>,
+    pub hyperedges: Vec<Hyperedge>,
+    pub flows: Vec<ReferenceFlow>,
+    pub gaps: Vec<Gap>,
+    pub provenance: Vec<Provenance>,
+    pub decision_surface: DecisionSurface,
     pub projection_hash: String,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct TypedIdentityLiteralV1 {
+pub struct TypedIdentityLiteral {
     pub domain: &'static str,
     pub authority: &'static str,
     pub local_id: &'static str,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct RtdIdentityRegistryRowV1 {
+pub struct RtdIdentityRegistryRow {
     pub category: &'static str,
     pub symbolic_name: &'static str,
-    pub identity: TypedIdentityLiteralV1,
+    pub identity: TypedIdentityLiteral,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct RtdMetricRegistryRowV1 {
-    pub metric: TypedIdentityLiteralV1,
-    pub representation: MetricRepresentationV1,
-    pub unit: TypedIdentityLiteralV1,
-    pub value_kind: Option<ValueKindV1>,
-    pub native_scale: TypedIdentityLiteralV1,
-    pub coordinates: &'static [TypedIdentityLiteralV1],
-    pub evidence_classes: &'static [EvidenceClassV1],
-    pub aggregation_rule: AggregationRuleV1,
-    pub producer: TypedIdentityLiteralV1,
-    pub reference_artifact: Option<TypedIdentityLiteralV1>,
+pub struct RtdMetricRegistryRow {
+    pub metric: TypedIdentityLiteral,
+    pub representation: MetricRepresentation,
+    pub unit: TypedIdentityLiteral,
+    pub value_kind: Option<ValueKind>,
+    pub native_scale: TypedIdentityLiteral,
+    pub coordinates: &'static [TypedIdentityLiteral],
+    pub evidence_classes: &'static [EvidenceClass],
+    pub aggregation_rule: AggregationRule,
+    pub producer: TypedIdentityLiteral,
+    pub reference_artifact: Option<TypedIdentityLiteral>,
     pub reference_digest: Option<&'static str>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct RtdRelationBindingRegistryRowV1 {
+pub struct RtdRelationBindingRegistryRow {
     pub record_family: &'static str,
     pub kind: &'static str,
-    pub metric: Option<TypedIdentityLiteralV1>,
-    pub payload_mode: RelationPayloadModeV1,
+    pub metric: Option<TypedIdentityLiteral>,
+    pub payload_mode: RelationPayloadMode,
 }
 
-pub const RTD_V1_SCHEMA_ID: &str = "babylon.relational-territory-dossier";
+pub const RTD_SCHEMA_ID: &str = "babylon.relational-territory-dossier";
 pub const RTD_MAX_COLLECTION_ITEMS: u64 = 65535;
 pub const RTD_MAX_FOCUS: u64 = 64;
 pub const RTD_MAX_REFERENCE_DIGESTS: u64 = 4096;
@@ -476,7 +476,7 @@ pub const RTD_MAX_PROVENANCE_LOCATOR_BYTES: u64 = 1024;
 pub const RTD_MAX_REQUIRED_PRODUCER_BYTES: u64 = 64;
 pub const RTD_MAX_CANONICAL_BYTES: u64 = 67108864;
 
-pub const RTD_V1_LIMITS: &[(&str, u64)] = &[
+pub const RTD_LIMITS: &[(&str, u64)] = &[
     ("max_collection_items", RTD_MAX_COLLECTION_ITEMS),
     ("max_focus", RTD_MAX_FOCUS),
     ("max_reference_digests", RTD_MAX_REFERENCE_DIGESTS),
@@ -508,7 +508,7 @@ pub const RTD_V1_LIMITS: &[(&str, u64)] = &[
     ("max_canonical_bytes", RTD_MAX_CANONICAL_BYTES),
 ];
 
-pub const RTD_V1_ERROR_REGISTRY: &[&str] = &[
+pub const RTD_ERROR_REGISTRY: &[&str] = &[
     "RTD_JSON",
     "RTD_JSON_DEPTH",
     "RTD_SCHEMA_VERSION",
@@ -531,623 +531,623 @@ pub const RTD_V1_ERROR_REGISTRY: &[&str] = &[
     "RTD_CANONICAL_SIZE",
 ];
 
-pub const RTD_V1_IDENTITY_REGISTRY: &[RtdIdentityRegistryRowV1] = &[
-    RtdIdentityRegistryRowV1 {
+pub const RTD_IDENTITY_REGISTRY: &[RtdIdentityRegistryRow] = &[
+    RtdIdentityRegistryRow {
         category: "metrics",
         symbolic_name: "production/qcew-leaf-employment",
-        identity: TypedIdentityLiteralV1 {
+        identity: TypedIdentityLiteral {
             domain: "metric",
             authority: "babylon.rtd.v1",
             local_id: "production/qcew-leaf-employment",
         },
     },
-    RtdIdentityRegistryRowV1 {
+    RtdIdentityRegistryRow {
         category: "metrics",
         symbolic_name: "production/qcew-leaf-establishments",
-        identity: TypedIdentityLiteralV1 {
+        identity: TypedIdentityLiteral {
             domain: "metric",
             authority: "babylon.rtd.v1",
             local_id: "production/qcew-leaf-establishments",
         },
     },
-    RtdIdentityRegistryRowV1 {
+    RtdIdentityRegistryRow {
         category: "metrics",
         symbolic_name: "production/qcew-leaf-total-wages-usd",
-        identity: TypedIdentityLiteralV1 {
+        identity: TypedIdentityLiteral {
             domain: "metric",
             authority: "babylon.rtd.v1",
             local_id: "production/qcew-leaf-total-wages-usd",
         },
     },
-    RtdIdentityRegistryRowV1 {
+    RtdIdentityRegistryRow {
         category: "metrics",
         symbolic_name: "production/qcew-leaf-average-annual-pay-usd",
-        identity: TypedIdentityLiteralV1 {
+        identity: TypedIdentityLiteral {
             domain: "metric",
             authority: "babylon.rtd.v1",
             local_id: "production/qcew-leaf-average-annual-pay-usd",
         },
     },
-    RtdIdentityRegistryRowV1 {
+    RtdIdentityRegistryRow {
         category: "metrics",
         symbolic_name: "production/qcew-county-employment",
-        identity: TypedIdentityLiteralV1 {
+        identity: TypedIdentityLiteral {
             domain: "metric",
             authority: "babylon.rtd.v1",
             local_id: "production/qcew-county-employment",
         },
     },
-    RtdIdentityRegistryRowV1 {
+    RtdIdentityRegistryRow {
         category: "metrics",
         symbolic_name: "production/qcew-county-establishments",
-        identity: TypedIdentityLiteralV1 {
+        identity: TypedIdentityLiteral {
             domain: "metric",
             authority: "babylon.rtd.v1",
             local_id: "production/qcew-county-establishments",
         },
     },
-    RtdIdentityRegistryRowV1 {
+    RtdIdentityRegistryRow {
         category: "metrics",
         symbolic_name: "production/qcew-county-total-wages-usd",
-        identity: TypedIdentityLiteralV1 {
+        identity: TypedIdentityLiteral {
             domain: "metric",
             authority: "babylon.rtd.v1",
             local_id: "production/qcew-county-total-wages-usd",
         },
     },
-    RtdIdentityRegistryRowV1 {
+    RtdIdentityRegistryRow {
         category: "metrics",
         symbolic_name: "circulation/lodes-county-commuter-total-jobs",
-        identity: TypedIdentityLiteralV1 {
+        identity: TypedIdentityLiteral {
             domain: "metric",
             authority: "babylon.rtd.v1",
             local_id: "circulation/lodes-county-commuter-total-jobs",
         },
     },
-    RtdIdentityRegistryRowV1 {
+    RtdIdentityRegistryRow {
         category: "metrics",
         symbolic_name: "reproduction/census-housing-households",
-        identity: TypedIdentityLiteralV1 {
+        identity: TypedIdentityLiteral {
             domain: "metric",
             authority: "babylon.rtd.v1",
             local_id: "reproduction/census-housing-households",
         },
     },
-    RtdIdentityRegistryRowV1 {
+    RtdIdentityRegistryRow {
         category: "metrics",
         symbolic_name: "reproduction/census-median-rent-usd",
-        identity: TypedIdentityLiteralV1 {
+        identity: TypedIdentityLiteral {
             domain: "metric",
             authority: "babylon.rtd.v1",
             local_id: "reproduction/census-median-rent-usd",
         },
     },
-    RtdIdentityRegistryRowV1 {
+    RtdIdentityRegistryRow {
         category: "metrics",
         symbolic_name: "reproduction/census-rent-burden-households",
-        identity: TypedIdentityLiteralV1 {
+        identity: TypedIdentityLiteral {
             domain: "metric",
             authority: "babylon.rtd.v1",
             local_id: "reproduction/census-rent-burden-households",
         },
     },
-    RtdIdentityRegistryRowV1 {
+    RtdIdentityRegistryRow {
         category: "metrics",
         symbolic_name: "reproduction/h3-population-persons",
-        identity: TypedIdentityLiteralV1 {
+        identity: TypedIdentityLiteral {
             domain: "metric",
             authority: "babylon.rtd.v1",
             local_id: "reproduction/h3-population-persons",
         },
     },
-    RtdIdentityRegistryRowV1 {
+    RtdIdentityRegistryRow {
         category: "metrics",
         symbolic_name: "production/h3-workplace-jobs",
-        identity: TypedIdentityLiteralV1 {
+        identity: TypedIdentityLiteral {
             domain: "metric",
             authority: "babylon.rtd.v1",
             local_id: "production/h3-workplace-jobs",
         },
     },
-    RtdIdentityRegistryRowV1 {
+    RtdIdentityRegistryRow {
         category: "metrics",
         symbolic_name: "carceral/facility-count",
-        identity: TypedIdentityLiteralV1 {
+        identity: TypedIdentityLiteral {
             domain: "metric",
             authority: "babylon.rtd.v1",
             local_id: "carceral/facility-count",
         },
     },
-    RtdIdentityRegistryRowV1 {
+    RtdIdentityRegistryRow {
         category: "metrics",
         symbolic_name: "ecology/h3-land-fraction",
-        identity: TypedIdentityLiteralV1 {
+        identity: TypedIdentityLiteral {
             domain: "metric",
             authority: "babylon.rtd.v1",
             local_id: "ecology/h3-land-fraction",
         },
     },
-    RtdIdentityRegistryRowV1 {
+    RtdIdentityRegistryRow {
         category: "metrics",
         symbolic_name: "rootedness/presence",
-        identity: TypedIdentityLiteralV1 {
+        identity: TypedIdentityLiteral {
             domain: "metric",
             authority: "babylon.rtd.v1",
             local_id: "rootedness/presence",
         },
     },
-    RtdIdentityRegistryRowV1 {
+    RtdIdentityRegistryRow {
         category: "metrics",
         symbolic_name: "rootedness/solidarity",
-        identity: TypedIdentityLiteralV1 {
+        identity: TypedIdentityLiteral {
             domain: "metric",
             authority: "babylon.rtd.v1",
             local_id: "rootedness/solidarity",
         },
     },
-    RtdIdentityRegistryRowV1 {
+    RtdIdentityRegistryRow {
         category: "metrics",
         symbolic_name: "rootedness/membership",
-        identity: TypedIdentityLiteralV1 {
+        identity: TypedIdentityLiteral {
             domain: "metric",
             authority: "babylon.rtd.v1",
             local_id: "rootedness/membership",
         },
     },
-    RtdIdentityRegistryRowV1 {
+    RtdIdentityRegistryRow {
         category: "units",
         symbolic_name: "JOBS",
-        identity: TypedIdentityLiteralV1 {
+        identity: TypedIdentityLiteral {
             domain: "unit",
             authority: "babylon.rtd.v1",
             local_id: "jobs",
         },
     },
-    RtdIdentityRegistryRowV1 {
+    RtdIdentityRegistryRow {
         category: "units",
         symbolic_name: "ESTABLISHMENTS",
-        identity: TypedIdentityLiteralV1 {
+        identity: TypedIdentityLiteral {
             domain: "unit",
             authority: "babylon.rtd.v1",
             local_id: "establishments",
         },
     },
-    RtdIdentityRegistryRowV1 {
+    RtdIdentityRegistryRow {
         category: "units",
         symbolic_name: "USD_CURRENT",
-        identity: TypedIdentityLiteralV1 {
+        identity: TypedIdentityLiteral {
             domain: "unit",
             authority: "babylon.rtd.v1",
             local_id: "usd-current",
         },
     },
-    RtdIdentityRegistryRowV1 {
+    RtdIdentityRegistryRow {
         category: "units",
         symbolic_name: "HOUSEHOLDS",
-        identity: TypedIdentityLiteralV1 {
+        identity: TypedIdentityLiteral {
             domain: "unit",
             authority: "babylon.rtd.v1",
             local_id: "households",
         },
     },
-    RtdIdentityRegistryRowV1 {
+    RtdIdentityRegistryRow {
         category: "units",
         symbolic_name: "PERSONS",
-        identity: TypedIdentityLiteralV1 {
+        identity: TypedIdentityLiteral {
             domain: "unit",
             authority: "babylon.rtd.v1",
             local_id: "persons",
         },
     },
-    RtdIdentityRegistryRowV1 {
+    RtdIdentityRegistryRow {
         category: "units",
         symbolic_name: "FACILITIES",
-        identity: TypedIdentityLiteralV1 {
+        identity: TypedIdentityLiteral {
             domain: "unit",
             authority: "babylon.rtd.v1",
             local_id: "facilities",
         },
     },
-    RtdIdentityRegistryRowV1 {
+    RtdIdentityRegistryRow {
         category: "units",
         symbolic_name: "FRACTION",
-        identity: TypedIdentityLiteralV1 {
+        identity: TypedIdentityLiteral {
             domain: "unit",
             authority: "babylon.rtd.v1",
             local_id: "fraction",
         },
     },
-    RtdIdentityRegistryRowV1 {
+    RtdIdentityRegistryRow {
         category: "units",
         symbolic_name: "TYPED_RELATION",
-        identity: TypedIdentityLiteralV1 {
+        identity: TypedIdentityLiteral {
             domain: "unit",
             authority: "babylon.rtd.v1",
             local_id: "typed-relation",
         },
     },
-    RtdIdentityRegistryRowV1 {
+    RtdIdentityRegistryRow {
         category: "coordinates",
         symbolic_name: "county",
-        identity: TypedIdentityLiteralV1 {
+        identity: TypedIdentityLiteral {
             domain: "dimension",
             authority: "babylon.rtd.v1",
             local_id: "county",
         },
     },
-    RtdIdentityRegistryRowV1 {
+    RtdIdentityRegistryRow {
         category: "coordinates",
         symbolic_name: "naics6",
-        identity: TypedIdentityLiteralV1 {
+        identity: TypedIdentityLiteral {
             domain: "dimension",
             authority: "babylon.rtd.v1",
             local_id: "naics6",
         },
     },
-    RtdIdentityRegistryRowV1 {
+    RtdIdentityRegistryRow {
         category: "coordinates",
         symbolic_name: "ownership",
-        identity: TypedIdentityLiteralV1 {
+        identity: TypedIdentityLiteral {
             domain: "dimension",
             authority: "babylon.rtd.v1",
             local_id: "ownership",
         },
     },
-    RtdIdentityRegistryRowV1 {
+    RtdIdentityRegistryRow {
         category: "coordinates",
         symbolic_name: "home_county",
-        identity: TypedIdentityLiteralV1 {
+        identity: TypedIdentityLiteral {
             domain: "dimension",
             authority: "babylon.rtd.v1",
             local_id: "home-county",
         },
     },
-    RtdIdentityRegistryRowV1 {
+    RtdIdentityRegistryRow {
         category: "coordinates",
         symbolic_name: "work_county",
-        identity: TypedIdentityLiteralV1 {
+        identity: TypedIdentityLiteral {
             domain: "dimension",
             authority: "babylon.rtd.v1",
             local_id: "work-county",
         },
     },
-    RtdIdentityRegistryRowV1 {
+    RtdIdentityRegistryRow {
         category: "coordinates",
         symbolic_name: "source",
-        identity: TypedIdentityLiteralV1 {
+        identity: TypedIdentityLiteral {
             domain: "dimension",
             authority: "babylon.rtd.v1",
             local_id: "source",
         },
     },
-    RtdIdentityRegistryRowV1 {
+    RtdIdentityRegistryRow {
         category: "coordinates",
         symbolic_name: "tenure",
-        identity: TypedIdentityLiteralV1 {
+        identity: TypedIdentityLiteral {
             domain: "dimension",
             authority: "babylon.rtd.v1",
             local_id: "tenure",
         },
     },
-    RtdIdentityRegistryRowV1 {
+    RtdIdentityRegistryRow {
         category: "coordinates",
         symbolic_name: "race",
-        identity: TypedIdentityLiteralV1 {
+        identity: TypedIdentityLiteral {
             domain: "dimension",
             authority: "babylon.rtd.v1",
             local_id: "race",
         },
     },
-    RtdIdentityRegistryRowV1 {
+    RtdIdentityRegistryRow {
         category: "coordinates",
         symbolic_name: "burden",
-        identity: TypedIdentityLiteralV1 {
+        identity: TypedIdentityLiteral {
             domain: "dimension",
             authority: "babylon.rtd.v1",
             local_id: "burden",
         },
     },
-    RtdIdentityRegistryRowV1 {
+    RtdIdentityRegistryRow {
         category: "coordinates",
         symbolic_name: "h3_cell",
-        identity: TypedIdentityLiteralV1 {
+        identity: TypedIdentityLiteral {
             domain: "dimension",
             authority: "babylon.rtd.v1",
             local_id: "h3-cell",
         },
     },
-    RtdIdentityRegistryRowV1 {
+    RtdIdentityRegistryRow {
         category: "coordinates",
         symbolic_name: "coercive_type",
-        identity: TypedIdentityLiteralV1 {
+        identity: TypedIdentityLiteral {
             domain: "dimension",
             authority: "babylon.rtd.v1",
             local_id: "coercive-type",
         },
     },
-    RtdIdentityRegistryRowV1 {
+    RtdIdentityRegistryRow {
         category: "coordinates",
         symbolic_name: "actor",
-        identity: TypedIdentityLiteralV1 {
+        identity: TypedIdentityLiteral {
             domain: "dimension",
             authority: "babylon.rtd.v1",
             local_id: "actor",
         },
     },
-    RtdIdentityRegistryRowV1 {
+    RtdIdentityRegistryRow {
         category: "coordinates",
         symbolic_name: "node",
-        identity: TypedIdentityLiteralV1 {
+        identity: TypedIdentityLiteral {
             domain: "dimension",
             authority: "babylon.rtd.v1",
             local_id: "node",
         },
     },
-    RtdIdentityRegistryRowV1 {
+    RtdIdentityRegistryRow {
         category: "native_scales",
         symbolic_name: "COUNTY_NAICS6_OWNERSHIP_YEAR",
-        identity: TypedIdentityLiteralV1 {
+        identity: TypedIdentityLiteral {
             domain: "native-scale",
             authority: "babylon.rtd.v1",
             local_id: "county-naics6-ownership-year",
         },
     },
-    RtdIdentityRegistryRowV1 {
+    RtdIdentityRegistryRow {
         category: "native_scales",
         symbolic_name: "COUNTY_OWNERSHIP_YEAR",
-        identity: TypedIdentityLiteralV1 {
+        identity: TypedIdentityLiteral {
             domain: "native-scale",
             authority: "babylon.rtd.v1",
             local_id: "county-ownership-year",
         },
     },
-    RtdIdentityRegistryRowV1 {
+    RtdIdentityRegistryRow {
         category: "native_scales",
         symbolic_name: "HOME_COUNTY_WORK_COUNTY_YEAR",
-        identity: TypedIdentityLiteralV1 {
+        identity: TypedIdentityLiteral {
             domain: "native-scale",
             authority: "babylon.rtd.v1",
             local_id: "home-county-work-county-year",
         },
     },
-    RtdIdentityRegistryRowV1 {
+    RtdIdentityRegistryRow {
         category: "native_scales",
         symbolic_name: "COUNTY_SOURCE_TENURE_TIME_RACE",
-        identity: TypedIdentityLiteralV1 {
+        identity: TypedIdentityLiteral {
             domain: "native-scale",
             authority: "babylon.rtd.v1",
             local_id: "county-source-tenure-time-race",
         },
     },
-    RtdIdentityRegistryRowV1 {
+    RtdIdentityRegistryRow {
         category: "native_scales",
         symbolic_name: "COUNTY_SOURCE_TIME_RACE",
-        identity: TypedIdentityLiteralV1 {
+        identity: TypedIdentityLiteral {
             domain: "native-scale",
             authority: "babylon.rtd.v1",
             local_id: "county-source-time-race",
         },
     },
-    RtdIdentityRegistryRowV1 {
+    RtdIdentityRegistryRow {
         category: "native_scales",
         symbolic_name: "COUNTY_SOURCE_BURDEN_TIME_RACE",
-        identity: TypedIdentityLiteralV1 {
+        identity: TypedIdentityLiteral {
             domain: "native-scale",
             authority: "babylon.rtd.v1",
             local_id: "county-source-burden-time-race",
         },
     },
-    RtdIdentityRegistryRowV1 {
+    RtdIdentityRegistryRow {
         category: "native_scales",
         symbolic_name: "H3_R7_VINTAGE",
-        identity: TypedIdentityLiteralV1 {
+        identity: TypedIdentityLiteral {
             domain: "native-scale",
             authority: "babylon.rtd.v1",
             local_id: "h3-r7-vintage",
         },
     },
-    RtdIdentityRegistryRowV1 {
+    RtdIdentityRegistryRow {
         category: "native_scales",
         symbolic_name: "COUNTY_COERCIVE_TYPE_SOURCE",
-        identity: TypedIdentityLiteralV1 {
+        identity: TypedIdentityLiteral {
             domain: "native-scale",
             authority: "babylon.rtd.v1",
             local_id: "county-coercive-type-source",
         },
     },
-    RtdIdentityRegistryRowV1 {
+    RtdIdentityRegistryRow {
         category: "native_scales",
         symbolic_name: "ACTOR_NODE_VERIFIED_TICK",
-        identity: TypedIdentityLiteralV1 {
+        identity: TypedIdentityLiteral {
             domain: "native-scale",
             authority: "babylon.rtd.v1",
             local_id: "actor-node-verified-tick",
         },
     },
-    RtdIdentityRegistryRowV1 {
+    RtdIdentityRegistryRow {
         category: "producers",
         symbolic_name: "fact_qcew_annual",
-        identity: TypedIdentityLiteralV1 {
+        identity: TypedIdentityLiteral {
             domain: "producer",
             authority: "babylon.data.v7",
             local_id: "fact_qcew_annual",
         },
     },
-    RtdIdentityRegistryRowV1 {
+    RtdIdentityRegistryRow {
         category: "producers",
         symbolic_name: "fact_qcew_county_rollup",
-        identity: TypedIdentityLiteralV1 {
+        identity: TypedIdentityLiteral {
             domain: "producer",
             authority: "babylon.data.v7",
             local_id: "fact_qcew_county_rollup",
         },
     },
-    RtdIdentityRegistryRowV1 {
+    RtdIdentityRegistryRow {
         category: "producers",
         symbolic_name: "fact_lodes_commuter_flow",
-        identity: TypedIdentityLiteralV1 {
+        identity: TypedIdentityLiteral {
             domain: "producer",
             authority: "babylon.data.v7",
             local_id: "fact_lodes_commuter_flow",
         },
     },
-    RtdIdentityRegistryRowV1 {
+    RtdIdentityRegistryRow {
         category: "producers",
         symbolic_name: "fact_census_housing",
-        identity: TypedIdentityLiteralV1 {
+        identity: TypedIdentityLiteral {
             domain: "producer",
             authority: "babylon.data.v7",
             local_id: "fact_census_housing",
         },
     },
-    RtdIdentityRegistryRowV1 {
+    RtdIdentityRegistryRow {
         category: "producers",
         symbolic_name: "fact_census_rent",
-        identity: TypedIdentityLiteralV1 {
+        identity: TypedIdentityLiteral {
             domain: "producer",
             authority: "babylon.data.v7",
             local_id: "fact_census_rent",
         },
     },
-    RtdIdentityRegistryRowV1 {
+    RtdIdentityRegistryRow {
         category: "producers",
         symbolic_name: "fact_census_rent_burden",
-        identity: TypedIdentityLiteralV1 {
+        identity: TypedIdentityLiteral {
             domain: "producer",
             authority: "babylon.data.v7",
             local_id: "fact_census_rent_burden",
         },
     },
-    RtdIdentityRegistryRowV1 {
+    RtdIdentityRegistryRow {
         category: "producers",
         symbolic_name: "h3_res7_population",
-        identity: TypedIdentityLiteralV1 {
+        identity: TypedIdentityLiteral {
             domain: "producer",
             authority: "babylon.data.v7",
             local_id: "h3_res7_population",
         },
     },
-    RtdIdentityRegistryRowV1 {
+    RtdIdentityRegistryRow {
         category: "producers",
         symbolic_name: "h3_res7_workplace",
-        identity: TypedIdentityLiteralV1 {
+        identity: TypedIdentityLiteral {
             domain: "producer",
             authority: "babylon.data.v7",
             local_id: "h3_res7_workplace",
         },
     },
-    RtdIdentityRegistryRowV1 {
+    RtdIdentityRegistryRow {
         category: "producers",
         symbolic_name: "fact_coercive_infrastructure",
-        identity: TypedIdentityLiteralV1 {
+        identity: TypedIdentityLiteral {
             domain: "producer",
             authority: "babylon.data.v7",
             local_id: "fact_coercive_infrastructure",
         },
     },
-    RtdIdentityRegistryRowV1 {
+    RtdIdentityRegistryRow {
         category: "producers",
         symbolic_name: "h3_res7_land_mask",
-        identity: TypedIdentityLiteralV1 {
+        identity: TypedIdentityLiteral {
             domain: "producer",
             authority: "babylon.data.v7",
             local_id: "h3_res7_land_mask",
         },
     },
-    RtdIdentityRegistryRowV1 {
+    RtdIdentityRegistryRow {
         category: "producers",
         symbolic_name: "committed typed graph",
-        identity: TypedIdentityLiteralV1 {
+        identity: TypedIdentityLiteral {
             domain: "producer",
             authority: "babylon.engine",
             local_id: "typed-graph-relations-at-verified-tick",
         },
     },
-    RtdIdentityRegistryRowV1 {
+    RtdIdentityRegistryRow {
         category: "references",
         symbolic_name: "fact_qcew_annual",
-        identity: TypedIdentityLiteralV1 {
+        identity: TypedIdentityLiteral {
             domain: "reference-artifact",
             authority: "babylon.data.v7",
             local_id: "fact_qcew_annual",
         },
     },
-    RtdIdentityRegistryRowV1 {
+    RtdIdentityRegistryRow {
         category: "references",
         symbolic_name: "fact_qcew_county_rollup",
-        identity: TypedIdentityLiteralV1 {
+        identity: TypedIdentityLiteral {
             domain: "reference-artifact",
             authority: "babylon.data.v7",
             local_id: "fact_qcew_county_rollup",
         },
     },
-    RtdIdentityRegistryRowV1 {
+    RtdIdentityRegistryRow {
         category: "references",
         symbolic_name: "fact_lodes_commuter_flow",
-        identity: TypedIdentityLiteralV1 {
+        identity: TypedIdentityLiteral {
             domain: "reference-artifact",
             authority: "babylon.data.v7",
             local_id: "fact_lodes_commuter_flow",
         },
     },
-    RtdIdentityRegistryRowV1 {
+    RtdIdentityRegistryRow {
         category: "references",
         symbolic_name: "fact_census_housing",
-        identity: TypedIdentityLiteralV1 {
+        identity: TypedIdentityLiteral {
             domain: "reference-artifact",
             authority: "babylon.data.v7",
             local_id: "fact_census_housing",
         },
     },
-    RtdIdentityRegistryRowV1 {
+    RtdIdentityRegistryRow {
         category: "references",
         symbolic_name: "fact_census_rent",
-        identity: TypedIdentityLiteralV1 {
+        identity: TypedIdentityLiteral {
             domain: "reference-artifact",
             authority: "babylon.data.v7",
             local_id: "fact_census_rent",
         },
     },
-    RtdIdentityRegistryRowV1 {
+    RtdIdentityRegistryRow {
         category: "references",
         symbolic_name: "fact_census_rent_burden",
-        identity: TypedIdentityLiteralV1 {
+        identity: TypedIdentityLiteral {
             domain: "reference-artifact",
             authority: "babylon.data.v7",
             local_id: "fact_census_rent_burden",
         },
     },
-    RtdIdentityRegistryRowV1 {
+    RtdIdentityRegistryRow {
         category: "references",
         symbolic_name: "h3_res7_population",
-        identity: TypedIdentityLiteralV1 {
+        identity: TypedIdentityLiteral {
             domain: "reference-artifact",
             authority: "babylon.data.v7",
             local_id: "h3_res7_population",
         },
     },
-    RtdIdentityRegistryRowV1 {
+    RtdIdentityRegistryRow {
         category: "references",
         symbolic_name: "h3_res7_workplace",
-        identity: TypedIdentityLiteralV1 {
+        identity: TypedIdentityLiteral {
             domain: "reference-artifact",
             authority: "babylon.data.v7",
             local_id: "h3_res7_workplace",
         },
     },
-    RtdIdentityRegistryRowV1 {
+    RtdIdentityRegistryRow {
         category: "references",
         symbolic_name: "fact_coercive_infrastructure",
-        identity: TypedIdentityLiteralV1 {
+        identity: TypedIdentityLiteral {
             domain: "reference-artifact",
             authority: "babylon.data.v7",
             local_id: "fact_coercive_infrastructure",
         },
     },
-    RtdIdentityRegistryRowV1 {
+    RtdIdentityRegistryRow {
         category: "references",
         symbolic_name: "h3_res7_land_mask",
-        identity: TypedIdentityLiteralV1 {
+        identity: TypedIdentityLiteral {
             domain: "reference-artifact",
             authority: "babylon.data.v7",
             local_id: "h3_res7_land_mask",
@@ -1155,729 +1155,729 @@ pub const RTD_V1_IDENTITY_REGISTRY: &[RtdIdentityRegistryRowV1] = &[
     },
 ];
 
-pub const RTD_V1_METRIC_REGISTRY: &[RtdMetricRegistryRowV1] = &[
-    RtdMetricRegistryRowV1 {
-        metric: TypedIdentityLiteralV1 {
+pub const RTD_METRIC_REGISTRY: &[RtdMetricRegistryRow] = &[
+    RtdMetricRegistryRow {
+        metric: TypedIdentityLiteral {
             domain: "metric",
             authority: "babylon.rtd.v1",
             local_id: "production/qcew-leaf-employment",
         },
-        representation: MetricRepresentationV1::Facet,
-        unit: TypedIdentityLiteralV1 {
+        representation: MetricRepresentation::Facet,
+        unit: TypedIdentityLiteral {
             domain: "unit",
             authority: "babylon.rtd.v1",
             local_id: "jobs",
         },
-        value_kind: Some(ValueKindV1::Uint64Bits),
-        native_scale: TypedIdentityLiteralV1 {
+        value_kind: Some(ValueKind::Uint64Bits),
+        native_scale: TypedIdentityLiteral {
             domain: "native-scale",
             authority: "babylon.rtd.v1",
             local_id: "county-naics6-ownership-year",
         },
         coordinates: &[
-            TypedIdentityLiteralV1 {
+            TypedIdentityLiteral {
                 domain: "dimension",
                 authority: "babylon.rtd.v1",
                 local_id: "county",
             },
-            TypedIdentityLiteralV1 {
+            TypedIdentityLiteral {
                 domain: "dimension",
                 authority: "babylon.rtd.v1",
                 local_id: "naics6",
             },
-            TypedIdentityLiteralV1 {
+            TypedIdentityLiteral {
                 domain: "dimension",
                 authority: "babylon.rtd.v1",
                 local_id: "ownership",
             },
         ],
-        evidence_classes: &[EvidenceClassV1::Observed, EvidenceClassV1::Derived],
-        aggregation_rule: AggregationRuleV1::None,
-        producer: TypedIdentityLiteralV1 {
+        evidence_classes: &[EvidenceClass::Observed, EvidenceClass::Derived],
+        aggregation_rule: AggregationRule::None,
+        producer: TypedIdentityLiteral {
             domain: "producer",
             authority: "babylon.data.v7",
             local_id: "fact_qcew_annual",
         },
-        reference_artifact: Some(TypedIdentityLiteralV1 {
+        reference_artifact: Some(TypedIdentityLiteral {
             domain: "reference-artifact",
             authority: "babylon.data.v7",
             local_id: "fact_qcew_annual",
         }),
         reference_digest: Some("ca3825a3d60831479313632073b7fc9a941d57dcf9b8940181c4713b6d442248"),
     },
-    RtdMetricRegistryRowV1 {
-        metric: TypedIdentityLiteralV1 {
+    RtdMetricRegistryRow {
+        metric: TypedIdentityLiteral {
             domain: "metric",
             authority: "babylon.rtd.v1",
             local_id: "production/qcew-leaf-establishments",
         },
-        representation: MetricRepresentationV1::Facet,
-        unit: TypedIdentityLiteralV1 {
+        representation: MetricRepresentation::Facet,
+        unit: TypedIdentityLiteral {
             domain: "unit",
             authority: "babylon.rtd.v1",
             local_id: "establishments",
         },
-        value_kind: Some(ValueKindV1::Uint64Bits),
-        native_scale: TypedIdentityLiteralV1 {
+        value_kind: Some(ValueKind::Uint64Bits),
+        native_scale: TypedIdentityLiteral {
             domain: "native-scale",
             authority: "babylon.rtd.v1",
             local_id: "county-naics6-ownership-year",
         },
         coordinates: &[
-            TypedIdentityLiteralV1 {
+            TypedIdentityLiteral {
                 domain: "dimension",
                 authority: "babylon.rtd.v1",
                 local_id: "county",
             },
-            TypedIdentityLiteralV1 {
+            TypedIdentityLiteral {
                 domain: "dimension",
                 authority: "babylon.rtd.v1",
                 local_id: "naics6",
             },
-            TypedIdentityLiteralV1 {
+            TypedIdentityLiteral {
                 domain: "dimension",
                 authority: "babylon.rtd.v1",
                 local_id: "ownership",
             },
         ],
-        evidence_classes: &[EvidenceClassV1::Observed, EvidenceClassV1::Derived],
-        aggregation_rule: AggregationRuleV1::None,
-        producer: TypedIdentityLiteralV1 {
+        evidence_classes: &[EvidenceClass::Observed, EvidenceClass::Derived],
+        aggregation_rule: AggregationRule::None,
+        producer: TypedIdentityLiteral {
             domain: "producer",
             authority: "babylon.data.v7",
             local_id: "fact_qcew_annual",
         },
-        reference_artifact: Some(TypedIdentityLiteralV1 {
+        reference_artifact: Some(TypedIdentityLiteral {
             domain: "reference-artifact",
             authority: "babylon.data.v7",
             local_id: "fact_qcew_annual",
         }),
         reference_digest: Some("ca3825a3d60831479313632073b7fc9a941d57dcf9b8940181c4713b6d442248"),
     },
-    RtdMetricRegistryRowV1 {
-        metric: TypedIdentityLiteralV1 {
+    RtdMetricRegistryRow {
+        metric: TypedIdentityLiteral {
             domain: "metric",
             authority: "babylon.rtd.v1",
             local_id: "production/qcew-leaf-total-wages-usd",
         },
-        representation: MetricRepresentationV1::Facet,
-        unit: TypedIdentityLiteralV1 {
+        representation: MetricRepresentation::Facet,
+        unit: TypedIdentityLiteral {
             domain: "unit",
             authority: "babylon.rtd.v1",
             local_id: "usd-current",
         },
-        value_kind: Some(ValueKindV1::Float64Bits),
-        native_scale: TypedIdentityLiteralV1 {
+        value_kind: Some(ValueKind::Float64Bits),
+        native_scale: TypedIdentityLiteral {
             domain: "native-scale",
             authority: "babylon.rtd.v1",
             local_id: "county-naics6-ownership-year",
         },
         coordinates: &[
-            TypedIdentityLiteralV1 {
+            TypedIdentityLiteral {
                 domain: "dimension",
                 authority: "babylon.rtd.v1",
                 local_id: "county",
             },
-            TypedIdentityLiteralV1 {
+            TypedIdentityLiteral {
                 domain: "dimension",
                 authority: "babylon.rtd.v1",
                 local_id: "naics6",
             },
-            TypedIdentityLiteralV1 {
+            TypedIdentityLiteral {
                 domain: "dimension",
                 authority: "babylon.rtd.v1",
                 local_id: "ownership",
             },
         ],
-        evidence_classes: &[EvidenceClassV1::Observed, EvidenceClassV1::Derived],
-        aggregation_rule: AggregationRuleV1::None,
-        producer: TypedIdentityLiteralV1 {
+        evidence_classes: &[EvidenceClass::Observed, EvidenceClass::Derived],
+        aggregation_rule: AggregationRule::None,
+        producer: TypedIdentityLiteral {
             domain: "producer",
             authority: "babylon.data.v7",
             local_id: "fact_qcew_annual",
         },
-        reference_artifact: Some(TypedIdentityLiteralV1 {
+        reference_artifact: Some(TypedIdentityLiteral {
             domain: "reference-artifact",
             authority: "babylon.data.v7",
             local_id: "fact_qcew_annual",
         }),
         reference_digest: Some("ca3825a3d60831479313632073b7fc9a941d57dcf9b8940181c4713b6d442248"),
     },
-    RtdMetricRegistryRowV1 {
-        metric: TypedIdentityLiteralV1 {
+    RtdMetricRegistryRow {
+        metric: TypedIdentityLiteral {
             domain: "metric",
             authority: "babylon.rtd.v1",
             local_id: "production/qcew-leaf-average-annual-pay-usd",
         },
-        representation: MetricRepresentationV1::Facet,
-        unit: TypedIdentityLiteralV1 {
+        representation: MetricRepresentation::Facet,
+        unit: TypedIdentityLiteral {
             domain: "unit",
             authority: "babylon.rtd.v1",
             local_id: "usd-current",
         },
-        value_kind: Some(ValueKindV1::Float64Bits),
-        native_scale: TypedIdentityLiteralV1 {
+        value_kind: Some(ValueKind::Float64Bits),
+        native_scale: TypedIdentityLiteral {
             domain: "native-scale",
             authority: "babylon.rtd.v1",
             local_id: "county-naics6-ownership-year",
         },
         coordinates: &[
-            TypedIdentityLiteralV1 {
+            TypedIdentityLiteral {
                 domain: "dimension",
                 authority: "babylon.rtd.v1",
                 local_id: "county",
             },
-            TypedIdentityLiteralV1 {
+            TypedIdentityLiteral {
                 domain: "dimension",
                 authority: "babylon.rtd.v1",
                 local_id: "naics6",
             },
-            TypedIdentityLiteralV1 {
+            TypedIdentityLiteral {
                 domain: "dimension",
                 authority: "babylon.rtd.v1",
                 local_id: "ownership",
             },
         ],
-        evidence_classes: &[EvidenceClassV1::Observed, EvidenceClassV1::Derived],
-        aggregation_rule: AggregationRuleV1::None,
-        producer: TypedIdentityLiteralV1 {
+        evidence_classes: &[EvidenceClass::Observed, EvidenceClass::Derived],
+        aggregation_rule: AggregationRule::None,
+        producer: TypedIdentityLiteral {
             domain: "producer",
             authority: "babylon.data.v7",
             local_id: "fact_qcew_annual",
         },
-        reference_artifact: Some(TypedIdentityLiteralV1 {
+        reference_artifact: Some(TypedIdentityLiteral {
             domain: "reference-artifact",
             authority: "babylon.data.v7",
             local_id: "fact_qcew_annual",
         }),
         reference_digest: Some("ca3825a3d60831479313632073b7fc9a941d57dcf9b8940181c4713b6d442248"),
     },
-    RtdMetricRegistryRowV1 {
-        metric: TypedIdentityLiteralV1 {
+    RtdMetricRegistryRow {
+        metric: TypedIdentityLiteral {
             domain: "metric",
             authority: "babylon.rtd.v1",
             local_id: "production/qcew-county-employment",
         },
-        representation: MetricRepresentationV1::Facet,
-        unit: TypedIdentityLiteralV1 {
+        representation: MetricRepresentation::Facet,
+        unit: TypedIdentityLiteral {
             domain: "unit",
             authority: "babylon.rtd.v1",
             local_id: "jobs",
         },
-        value_kind: Some(ValueKindV1::Uint64Bits),
-        native_scale: TypedIdentityLiteralV1 {
+        value_kind: Some(ValueKind::Uint64Bits),
+        native_scale: TypedIdentityLiteral {
             domain: "native-scale",
             authority: "babylon.rtd.v1",
             local_id: "county-ownership-year",
         },
         coordinates: &[
-            TypedIdentityLiteralV1 {
+            TypedIdentityLiteral {
                 domain: "dimension",
                 authority: "babylon.rtd.v1",
                 local_id: "county",
             },
-            TypedIdentityLiteralV1 {
+            TypedIdentityLiteral {
                 domain: "dimension",
                 authority: "babylon.rtd.v1",
                 local_id: "ownership",
             },
         ],
-        evidence_classes: &[EvidenceClassV1::Observed, EvidenceClassV1::Derived],
-        aggregation_rule: AggregationRuleV1::PublishedRollup,
-        producer: TypedIdentityLiteralV1 {
+        evidence_classes: &[EvidenceClass::Observed, EvidenceClass::Derived],
+        aggregation_rule: AggregationRule::PublishedRollup,
+        producer: TypedIdentityLiteral {
             domain: "producer",
             authority: "babylon.data.v7",
             local_id: "fact_qcew_county_rollup",
         },
-        reference_artifact: Some(TypedIdentityLiteralV1 {
+        reference_artifact: Some(TypedIdentityLiteral {
             domain: "reference-artifact",
             authority: "babylon.data.v7",
             local_id: "fact_qcew_county_rollup",
         }),
         reference_digest: Some("34c2bbb935f79b3c8076a97092b004b14cca120e8272b93c35b3ac9dc2721d13"),
     },
-    RtdMetricRegistryRowV1 {
-        metric: TypedIdentityLiteralV1 {
+    RtdMetricRegistryRow {
+        metric: TypedIdentityLiteral {
             domain: "metric",
             authority: "babylon.rtd.v1",
             local_id: "production/qcew-county-establishments",
         },
-        representation: MetricRepresentationV1::Facet,
-        unit: TypedIdentityLiteralV1 {
+        representation: MetricRepresentation::Facet,
+        unit: TypedIdentityLiteral {
             domain: "unit",
             authority: "babylon.rtd.v1",
             local_id: "establishments",
         },
-        value_kind: Some(ValueKindV1::Uint64Bits),
-        native_scale: TypedIdentityLiteralV1 {
+        value_kind: Some(ValueKind::Uint64Bits),
+        native_scale: TypedIdentityLiteral {
             domain: "native-scale",
             authority: "babylon.rtd.v1",
             local_id: "county-ownership-year",
         },
         coordinates: &[
-            TypedIdentityLiteralV1 {
+            TypedIdentityLiteral {
                 domain: "dimension",
                 authority: "babylon.rtd.v1",
                 local_id: "county",
             },
-            TypedIdentityLiteralV1 {
+            TypedIdentityLiteral {
                 domain: "dimension",
                 authority: "babylon.rtd.v1",
                 local_id: "ownership",
             },
         ],
-        evidence_classes: &[EvidenceClassV1::Observed, EvidenceClassV1::Derived],
-        aggregation_rule: AggregationRuleV1::PublishedRollup,
-        producer: TypedIdentityLiteralV1 {
+        evidence_classes: &[EvidenceClass::Observed, EvidenceClass::Derived],
+        aggregation_rule: AggregationRule::PublishedRollup,
+        producer: TypedIdentityLiteral {
             domain: "producer",
             authority: "babylon.data.v7",
             local_id: "fact_qcew_county_rollup",
         },
-        reference_artifact: Some(TypedIdentityLiteralV1 {
+        reference_artifact: Some(TypedIdentityLiteral {
             domain: "reference-artifact",
             authority: "babylon.data.v7",
             local_id: "fact_qcew_county_rollup",
         }),
         reference_digest: Some("34c2bbb935f79b3c8076a97092b004b14cca120e8272b93c35b3ac9dc2721d13"),
     },
-    RtdMetricRegistryRowV1 {
-        metric: TypedIdentityLiteralV1 {
+    RtdMetricRegistryRow {
+        metric: TypedIdentityLiteral {
             domain: "metric",
             authority: "babylon.rtd.v1",
             local_id: "production/qcew-county-total-wages-usd",
         },
-        representation: MetricRepresentationV1::Facet,
-        unit: TypedIdentityLiteralV1 {
+        representation: MetricRepresentation::Facet,
+        unit: TypedIdentityLiteral {
             domain: "unit",
             authority: "babylon.rtd.v1",
             local_id: "usd-current",
         },
-        value_kind: Some(ValueKindV1::Float64Bits),
-        native_scale: TypedIdentityLiteralV1 {
+        value_kind: Some(ValueKind::Float64Bits),
+        native_scale: TypedIdentityLiteral {
             domain: "native-scale",
             authority: "babylon.rtd.v1",
             local_id: "county-ownership-year",
         },
         coordinates: &[
-            TypedIdentityLiteralV1 {
+            TypedIdentityLiteral {
                 domain: "dimension",
                 authority: "babylon.rtd.v1",
                 local_id: "county",
             },
-            TypedIdentityLiteralV1 {
+            TypedIdentityLiteral {
                 domain: "dimension",
                 authority: "babylon.rtd.v1",
                 local_id: "ownership",
             },
         ],
-        evidence_classes: &[EvidenceClassV1::Observed, EvidenceClassV1::Derived],
-        aggregation_rule: AggregationRuleV1::PublishedRollup,
-        producer: TypedIdentityLiteralV1 {
+        evidence_classes: &[EvidenceClass::Observed, EvidenceClass::Derived],
+        aggregation_rule: AggregationRule::PublishedRollup,
+        producer: TypedIdentityLiteral {
             domain: "producer",
             authority: "babylon.data.v7",
             local_id: "fact_qcew_county_rollup",
         },
-        reference_artifact: Some(TypedIdentityLiteralV1 {
+        reference_artifact: Some(TypedIdentityLiteral {
             domain: "reference-artifact",
             authority: "babylon.data.v7",
             local_id: "fact_qcew_county_rollup",
         }),
         reference_digest: Some("34c2bbb935f79b3c8076a97092b004b14cca120e8272b93c35b3ac9dc2721d13"),
     },
-    RtdMetricRegistryRowV1 {
-        metric: TypedIdentityLiteralV1 {
+    RtdMetricRegistryRow {
+        metric: TypedIdentityLiteral {
             domain: "metric",
             authority: "babylon.rtd.v1",
             local_id: "circulation/lodes-county-commuter-total-jobs",
         },
-        representation: MetricRepresentationV1::ReferenceFlow,
-        unit: TypedIdentityLiteralV1 {
+        representation: MetricRepresentation::ReferenceFlow,
+        unit: TypedIdentityLiteral {
             domain: "unit",
             authority: "babylon.rtd.v1",
             local_id: "jobs",
         },
-        value_kind: Some(ValueKindV1::Uint64Bits),
-        native_scale: TypedIdentityLiteralV1 {
+        value_kind: Some(ValueKind::Uint64Bits),
+        native_scale: TypedIdentityLiteral {
             domain: "native-scale",
             authority: "babylon.rtd.v1",
             local_id: "home-county-work-county-year",
         },
         coordinates: &[
-            TypedIdentityLiteralV1 {
+            TypedIdentityLiteral {
                 domain: "dimension",
                 authority: "babylon.rtd.v1",
                 local_id: "home-county",
             },
-            TypedIdentityLiteralV1 {
+            TypedIdentityLiteral {
                 domain: "dimension",
                 authority: "babylon.rtd.v1",
                 local_id: "work-county",
             },
         ],
-        evidence_classes: &[EvidenceClassV1::Derived],
-        aggregation_rule: AggregationRuleV1::LoadTimeSum,
-        producer: TypedIdentityLiteralV1 {
+        evidence_classes: &[EvidenceClass::Derived],
+        aggregation_rule: AggregationRule::LoadTimeSum,
+        producer: TypedIdentityLiteral {
             domain: "producer",
             authority: "babylon.data.v7",
             local_id: "fact_lodes_commuter_flow",
         },
-        reference_artifact: Some(TypedIdentityLiteralV1 {
+        reference_artifact: Some(TypedIdentityLiteral {
             domain: "reference-artifact",
             authority: "babylon.data.v7",
             local_id: "fact_lodes_commuter_flow",
         }),
         reference_digest: Some("d3745f8def09cd8c7a38e1870e6ec2c1853e210b777d8e8358cfce36665bd64d"),
     },
-    RtdMetricRegistryRowV1 {
-        metric: TypedIdentityLiteralV1 {
+    RtdMetricRegistryRow {
+        metric: TypedIdentityLiteral {
             domain: "metric",
             authority: "babylon.rtd.v1",
             local_id: "reproduction/census-housing-households",
         },
-        representation: MetricRepresentationV1::Facet,
-        unit: TypedIdentityLiteralV1 {
+        representation: MetricRepresentation::Facet,
+        unit: TypedIdentityLiteral {
             domain: "unit",
             authority: "babylon.rtd.v1",
             local_id: "households",
         },
-        value_kind: Some(ValueKindV1::Uint64Bits),
-        native_scale: TypedIdentityLiteralV1 {
+        value_kind: Some(ValueKind::Uint64Bits),
+        native_scale: TypedIdentityLiteral {
             domain: "native-scale",
             authority: "babylon.rtd.v1",
             local_id: "county-source-tenure-time-race",
         },
         coordinates: &[
-            TypedIdentityLiteralV1 {
+            TypedIdentityLiteral {
                 domain: "dimension",
                 authority: "babylon.rtd.v1",
                 local_id: "county",
             },
-            TypedIdentityLiteralV1 {
+            TypedIdentityLiteral {
                 domain: "dimension",
                 authority: "babylon.rtd.v1",
                 local_id: "source",
             },
-            TypedIdentityLiteralV1 {
+            TypedIdentityLiteral {
                 domain: "dimension",
                 authority: "babylon.rtd.v1",
                 local_id: "tenure",
             },
-            TypedIdentityLiteralV1 {
+            TypedIdentityLiteral {
                 domain: "dimension",
                 authority: "babylon.rtd.v1",
                 local_id: "race",
             },
         ],
-        evidence_classes: &[EvidenceClassV1::Observed],
-        aggregation_rule: AggregationRuleV1::None,
-        producer: TypedIdentityLiteralV1 {
+        evidence_classes: &[EvidenceClass::Observed],
+        aggregation_rule: AggregationRule::None,
+        producer: TypedIdentityLiteral {
             domain: "producer",
             authority: "babylon.data.v7",
             local_id: "fact_census_housing",
         },
-        reference_artifact: Some(TypedIdentityLiteralV1 {
+        reference_artifact: Some(TypedIdentityLiteral {
             domain: "reference-artifact",
             authority: "babylon.data.v7",
             local_id: "fact_census_housing",
         }),
         reference_digest: Some("09ff2d9666b3f5ef267b65cbc77c14e99384f0157b6a4c898ac37df2e67ca59f"),
     },
-    RtdMetricRegistryRowV1 {
-        metric: TypedIdentityLiteralV1 {
+    RtdMetricRegistryRow {
+        metric: TypedIdentityLiteral {
             domain: "metric",
             authority: "babylon.rtd.v1",
             local_id: "reproduction/census-median-rent-usd",
         },
-        representation: MetricRepresentationV1::Facet,
-        unit: TypedIdentityLiteralV1 {
+        representation: MetricRepresentation::Facet,
+        unit: TypedIdentityLiteral {
             domain: "unit",
             authority: "babylon.rtd.v1",
             local_id: "usd-current",
         },
-        value_kind: Some(ValueKindV1::Float64Bits),
-        native_scale: TypedIdentityLiteralV1 {
+        value_kind: Some(ValueKind::Float64Bits),
+        native_scale: TypedIdentityLiteral {
             domain: "native-scale",
             authority: "babylon.rtd.v1",
             local_id: "county-source-time-race",
         },
         coordinates: &[
-            TypedIdentityLiteralV1 {
+            TypedIdentityLiteral {
                 domain: "dimension",
                 authority: "babylon.rtd.v1",
                 local_id: "county",
             },
-            TypedIdentityLiteralV1 {
+            TypedIdentityLiteral {
                 domain: "dimension",
                 authority: "babylon.rtd.v1",
                 local_id: "source",
             },
-            TypedIdentityLiteralV1 {
+            TypedIdentityLiteral {
                 domain: "dimension",
                 authority: "babylon.rtd.v1",
                 local_id: "race",
             },
         ],
-        evidence_classes: &[EvidenceClassV1::Observed],
-        aggregation_rule: AggregationRuleV1::None,
-        producer: TypedIdentityLiteralV1 {
+        evidence_classes: &[EvidenceClass::Observed],
+        aggregation_rule: AggregationRule::None,
+        producer: TypedIdentityLiteral {
             domain: "producer",
             authority: "babylon.data.v7",
             local_id: "fact_census_rent",
         },
-        reference_artifact: Some(TypedIdentityLiteralV1 {
+        reference_artifact: Some(TypedIdentityLiteral {
             domain: "reference-artifact",
             authority: "babylon.data.v7",
             local_id: "fact_census_rent",
         }),
         reference_digest: Some("4c8cc134ec490ca75961d83485fc97c6bf240b32128e9d0517e00e62d578a99e"),
     },
-    RtdMetricRegistryRowV1 {
-        metric: TypedIdentityLiteralV1 {
+    RtdMetricRegistryRow {
+        metric: TypedIdentityLiteral {
             domain: "metric",
             authority: "babylon.rtd.v1",
             local_id: "reproduction/census-rent-burden-households",
         },
-        representation: MetricRepresentationV1::Facet,
-        unit: TypedIdentityLiteralV1 {
+        representation: MetricRepresentation::Facet,
+        unit: TypedIdentityLiteral {
             domain: "unit",
             authority: "babylon.rtd.v1",
             local_id: "households",
         },
-        value_kind: Some(ValueKindV1::Uint64Bits),
-        native_scale: TypedIdentityLiteralV1 {
+        value_kind: Some(ValueKind::Uint64Bits),
+        native_scale: TypedIdentityLiteral {
             domain: "native-scale",
             authority: "babylon.rtd.v1",
             local_id: "county-source-burden-time-race",
         },
         coordinates: &[
-            TypedIdentityLiteralV1 {
+            TypedIdentityLiteral {
                 domain: "dimension",
                 authority: "babylon.rtd.v1",
                 local_id: "county",
             },
-            TypedIdentityLiteralV1 {
+            TypedIdentityLiteral {
                 domain: "dimension",
                 authority: "babylon.rtd.v1",
                 local_id: "source",
             },
-            TypedIdentityLiteralV1 {
+            TypedIdentityLiteral {
                 domain: "dimension",
                 authority: "babylon.rtd.v1",
                 local_id: "burden",
             },
-            TypedIdentityLiteralV1 {
+            TypedIdentityLiteral {
                 domain: "dimension",
                 authority: "babylon.rtd.v1",
                 local_id: "race",
             },
         ],
-        evidence_classes: &[EvidenceClassV1::Observed],
-        aggregation_rule: AggregationRuleV1::None,
-        producer: TypedIdentityLiteralV1 {
+        evidence_classes: &[EvidenceClass::Observed],
+        aggregation_rule: AggregationRule::None,
+        producer: TypedIdentityLiteral {
             domain: "producer",
             authority: "babylon.data.v7",
             local_id: "fact_census_rent_burden",
         },
-        reference_artifact: Some(TypedIdentityLiteralV1 {
+        reference_artifact: Some(TypedIdentityLiteral {
             domain: "reference-artifact",
             authority: "babylon.data.v7",
             local_id: "fact_census_rent_burden",
         }),
         reference_digest: Some("8a42a51c17bf3ebee09f0b0b5145d5c8253c7e3446eec8c75714f9951b20df12"),
     },
-    RtdMetricRegistryRowV1 {
-        metric: TypedIdentityLiteralV1 {
+    RtdMetricRegistryRow {
+        metric: TypedIdentityLiteral {
             domain: "metric",
             authority: "babylon.rtd.v1",
             local_id: "reproduction/h3-population-persons",
         },
-        representation: MetricRepresentationV1::Facet,
-        unit: TypedIdentityLiteralV1 {
+        representation: MetricRepresentation::Facet,
+        unit: TypedIdentityLiteral {
             domain: "unit",
             authority: "babylon.rtd.v1",
             local_id: "persons",
         },
-        value_kind: Some(ValueKindV1::Uint64Bits),
-        native_scale: TypedIdentityLiteralV1 {
+        value_kind: Some(ValueKind::Uint64Bits),
+        native_scale: TypedIdentityLiteral {
             domain: "native-scale",
             authority: "babylon.rtd.v1",
             local_id: "h3-r7-vintage",
         },
-        coordinates: &[TypedIdentityLiteralV1 {
+        coordinates: &[TypedIdentityLiteral {
             domain: "dimension",
             authority: "babylon.rtd.v1",
             local_id: "h3-cell",
         }],
-        evidence_classes: &[EvidenceClassV1::Derived],
-        aggregation_rule: AggregationRuleV1::BlockInternalPointAssignment,
-        producer: TypedIdentityLiteralV1 {
+        evidence_classes: &[EvidenceClass::Derived],
+        aggregation_rule: AggregationRule::BlockInternalPointAssignment,
+        producer: TypedIdentityLiteral {
             domain: "producer",
             authority: "babylon.data.v7",
             local_id: "h3_res7_population",
         },
-        reference_artifact: Some(TypedIdentityLiteralV1 {
+        reference_artifact: Some(TypedIdentityLiteral {
             domain: "reference-artifact",
             authority: "babylon.data.v7",
             local_id: "h3_res7_population",
         }),
         reference_digest: Some("b096a5891284f0ca55bedae9d1a9092eb8ea9e9e32d32b6ace430a9833b53afc"),
     },
-    RtdMetricRegistryRowV1 {
-        metric: TypedIdentityLiteralV1 {
+    RtdMetricRegistryRow {
+        metric: TypedIdentityLiteral {
             domain: "metric",
             authority: "babylon.rtd.v1",
             local_id: "production/h3-workplace-jobs",
         },
-        representation: MetricRepresentationV1::Facet,
-        unit: TypedIdentityLiteralV1 {
+        representation: MetricRepresentation::Facet,
+        unit: TypedIdentityLiteral {
             domain: "unit",
             authority: "babylon.rtd.v1",
             local_id: "jobs",
         },
-        value_kind: Some(ValueKindV1::Uint64Bits),
-        native_scale: TypedIdentityLiteralV1 {
+        value_kind: Some(ValueKind::Uint64Bits),
+        native_scale: TypedIdentityLiteral {
             domain: "native-scale",
             authority: "babylon.rtd.v1",
             local_id: "h3-r7-vintage",
         },
-        coordinates: &[TypedIdentityLiteralV1 {
+        coordinates: &[TypedIdentityLiteral {
             domain: "dimension",
             authority: "babylon.rtd.v1",
             local_id: "h3-cell",
         }],
-        evidence_classes: &[EvidenceClassV1::Derived],
-        aggregation_rule: AggregationRuleV1::BlockCoordinateAssignment,
-        producer: TypedIdentityLiteralV1 {
+        evidence_classes: &[EvidenceClass::Derived],
+        aggregation_rule: AggregationRule::BlockCoordinateAssignment,
+        producer: TypedIdentityLiteral {
             domain: "producer",
             authority: "babylon.data.v7",
             local_id: "h3_res7_workplace",
         },
-        reference_artifact: Some(TypedIdentityLiteralV1 {
+        reference_artifact: Some(TypedIdentityLiteral {
             domain: "reference-artifact",
             authority: "babylon.data.v7",
             local_id: "h3_res7_workplace",
         }),
         reference_digest: Some("ea2ce1508f4fe51f1e879b9f4a1daf579c4b00349388b12a85f884a8f49eabb6"),
     },
-    RtdMetricRegistryRowV1 {
-        metric: TypedIdentityLiteralV1 {
+    RtdMetricRegistryRow {
+        metric: TypedIdentityLiteral {
             domain: "metric",
             authority: "babylon.rtd.v1",
             local_id: "carceral/facility-count",
         },
-        representation: MetricRepresentationV1::Facet,
-        unit: TypedIdentityLiteralV1 {
+        representation: MetricRepresentation::Facet,
+        unit: TypedIdentityLiteral {
             domain: "unit",
             authority: "babylon.rtd.v1",
             local_id: "facilities",
         },
-        value_kind: Some(ValueKindV1::Uint64Bits),
-        native_scale: TypedIdentityLiteralV1 {
+        value_kind: Some(ValueKind::Uint64Bits),
+        native_scale: TypedIdentityLiteral {
             domain: "native-scale",
             authority: "babylon.rtd.v1",
             local_id: "county-coercive-type-source",
         },
         coordinates: &[
-            TypedIdentityLiteralV1 {
+            TypedIdentityLiteral {
                 domain: "dimension",
                 authority: "babylon.rtd.v1",
                 local_id: "county",
             },
-            TypedIdentityLiteralV1 {
+            TypedIdentityLiteral {
                 domain: "dimension",
                 authority: "babylon.rtd.v1",
                 local_id: "coercive-type",
             },
-            TypedIdentityLiteralV1 {
+            TypedIdentityLiteral {
                 domain: "dimension",
                 authority: "babylon.rtd.v1",
                 local_id: "source",
             },
         ],
-        evidence_classes: &[EvidenceClassV1::Observed],
-        aggregation_rule: AggregationRuleV1::None,
-        producer: TypedIdentityLiteralV1 {
+        evidence_classes: &[EvidenceClass::Observed],
+        aggregation_rule: AggregationRule::None,
+        producer: TypedIdentityLiteral {
             domain: "producer",
             authority: "babylon.data.v7",
             local_id: "fact_coercive_infrastructure",
         },
-        reference_artifact: Some(TypedIdentityLiteralV1 {
+        reference_artifact: Some(TypedIdentityLiteral {
             domain: "reference-artifact",
             authority: "babylon.data.v7",
             local_id: "fact_coercive_infrastructure",
         }),
         reference_digest: Some("33e6558d2b438e7aea672021f0e15f743f1ea331ab82407c0805a428b29cf808"),
     },
-    RtdMetricRegistryRowV1 {
-        metric: TypedIdentityLiteralV1 {
+    RtdMetricRegistryRow {
+        metric: TypedIdentityLiteral {
             domain: "metric",
             authority: "babylon.rtd.v1",
             local_id: "ecology/h3-land-fraction",
         },
-        representation: MetricRepresentationV1::Facet,
-        unit: TypedIdentityLiteralV1 {
+        representation: MetricRepresentation::Facet,
+        unit: TypedIdentityLiteral {
             domain: "unit",
             authority: "babylon.rtd.v1",
             local_id: "fraction",
         },
-        value_kind: Some(ValueKindV1::Float64Bits),
-        native_scale: TypedIdentityLiteralV1 {
+        value_kind: Some(ValueKind::Float64Bits),
+        native_scale: TypedIdentityLiteral {
             domain: "native-scale",
             authority: "babylon.rtd.v1",
             local_id: "h3-r7-vintage",
         },
-        coordinates: &[TypedIdentityLiteralV1 {
+        coordinates: &[TypedIdentityLiteral {
             domain: "dimension",
             authority: "babylon.rtd.v1",
             local_id: "h3-cell",
         }],
-        evidence_classes: &[EvidenceClassV1::Derived],
-        aggregation_rule: AggregationRuleV1::EqualAreaWaterIntersection,
-        producer: TypedIdentityLiteralV1 {
+        evidence_classes: &[EvidenceClass::Derived],
+        aggregation_rule: AggregationRule::EqualAreaWaterIntersection,
+        producer: TypedIdentityLiteral {
             domain: "producer",
             authority: "babylon.data.v7",
             local_id: "h3_res7_land_mask",
         },
-        reference_artifact: Some(TypedIdentityLiteralV1 {
+        reference_artifact: Some(TypedIdentityLiteral {
             domain: "reference-artifact",
             authority: "babylon.data.v7",
             local_id: "h3_res7_land_mask",
         }),
         reference_digest: Some("4e6caba297f0111a9ec93d948a83543bb9f7179361fe5dd318bb8a98a5be5194"),
     },
-    RtdMetricRegistryRowV1 {
-        metric: TypedIdentityLiteralV1 {
+    RtdMetricRegistryRow {
+        metric: TypedIdentityLiteral {
             domain: "metric",
             authority: "babylon.rtd.v1",
             local_id: "rootedness/presence",
         },
-        representation: MetricRepresentationV1::Dyad,
-        unit: TypedIdentityLiteralV1 {
+        representation: MetricRepresentation::Dyad,
+        unit: TypedIdentityLiteral {
             domain: "unit",
             authority: "babylon.rtd.v1",
             local_id: "typed-relation",
         },
         value_kind: None,
-        native_scale: TypedIdentityLiteralV1 {
+        native_scale: TypedIdentityLiteral {
             domain: "native-scale",
             authority: "babylon.rtd.v1",
             local_id: "actor-node-verified-tick",
         },
         coordinates: &[
-            TypedIdentityLiteralV1 {
+            TypedIdentityLiteral {
                 domain: "dimension",
                 authority: "babylon.rtd.v1",
                 local_id: "actor",
             },
-            TypedIdentityLiteralV1 {
+            TypedIdentityLiteral {
                 domain: "dimension",
                 authority: "babylon.rtd.v1",
                 local_id: "node",
             },
         ],
-        evidence_classes: &[EvidenceClassV1::Derived],
-        aggregation_rule: AggregationRuleV1::TypedRelationProjection,
-        producer: TypedIdentityLiteralV1 {
+        evidence_classes: &[EvidenceClass::Derived],
+        aggregation_rule: AggregationRule::TypedRelationProjection,
+        producer: TypedIdentityLiteral {
             domain: "producer",
             authority: "babylon.engine",
             local_id: "typed-graph-relations-at-verified-tick",
@@ -1885,39 +1885,39 @@ pub const RTD_V1_METRIC_REGISTRY: &[RtdMetricRegistryRowV1] = &[
         reference_artifact: None,
         reference_digest: None,
     },
-    RtdMetricRegistryRowV1 {
-        metric: TypedIdentityLiteralV1 {
+    RtdMetricRegistryRow {
+        metric: TypedIdentityLiteral {
             domain: "metric",
             authority: "babylon.rtd.v1",
             local_id: "rootedness/solidarity",
         },
-        representation: MetricRepresentationV1::Dyad,
-        unit: TypedIdentityLiteralV1 {
+        representation: MetricRepresentation::Dyad,
+        unit: TypedIdentityLiteral {
             domain: "unit",
             authority: "babylon.rtd.v1",
             local_id: "typed-relation",
         },
         value_kind: None,
-        native_scale: TypedIdentityLiteralV1 {
+        native_scale: TypedIdentityLiteral {
             domain: "native-scale",
             authority: "babylon.rtd.v1",
             local_id: "actor-node-verified-tick",
         },
         coordinates: &[
-            TypedIdentityLiteralV1 {
+            TypedIdentityLiteral {
                 domain: "dimension",
                 authority: "babylon.rtd.v1",
                 local_id: "actor",
             },
-            TypedIdentityLiteralV1 {
+            TypedIdentityLiteral {
                 domain: "dimension",
                 authority: "babylon.rtd.v1",
                 local_id: "node",
             },
         ],
-        evidence_classes: &[EvidenceClassV1::Derived],
-        aggregation_rule: AggregationRuleV1::TypedRelationProjection,
-        producer: TypedIdentityLiteralV1 {
+        evidence_classes: &[EvidenceClass::Derived],
+        aggregation_rule: AggregationRule::TypedRelationProjection,
+        producer: TypedIdentityLiteral {
             domain: "producer",
             authority: "babylon.engine",
             local_id: "typed-graph-relations-at-verified-tick",
@@ -1925,39 +1925,39 @@ pub const RTD_V1_METRIC_REGISTRY: &[RtdMetricRegistryRowV1] = &[
         reference_artifact: None,
         reference_digest: None,
     },
-    RtdMetricRegistryRowV1 {
-        metric: TypedIdentityLiteralV1 {
+    RtdMetricRegistryRow {
+        metric: TypedIdentityLiteral {
             domain: "metric",
             authority: "babylon.rtd.v1",
             local_id: "rootedness/membership",
         },
-        representation: MetricRepresentationV1::Dyad,
-        unit: TypedIdentityLiteralV1 {
+        representation: MetricRepresentation::Dyad,
+        unit: TypedIdentityLiteral {
             domain: "unit",
             authority: "babylon.rtd.v1",
             local_id: "typed-relation",
         },
         value_kind: None,
-        native_scale: TypedIdentityLiteralV1 {
+        native_scale: TypedIdentityLiteral {
             domain: "native-scale",
             authority: "babylon.rtd.v1",
             local_id: "actor-node-verified-tick",
         },
         coordinates: &[
-            TypedIdentityLiteralV1 {
+            TypedIdentityLiteral {
                 domain: "dimension",
                 authority: "babylon.rtd.v1",
                 local_id: "actor",
             },
-            TypedIdentityLiteralV1 {
+            TypedIdentityLiteral {
                 domain: "dimension",
                 authority: "babylon.rtd.v1",
                 local_id: "node",
             },
         ],
-        evidence_classes: &[EvidenceClassV1::Derived],
-        aggregation_rule: AggregationRuleV1::TypedRelationProjection,
-        producer: TypedIdentityLiteralV1 {
+        evidence_classes: &[EvidenceClass::Derived],
+        aggregation_rule: AggregationRule::TypedRelationProjection,
+        producer: TypedIdentityLiteral {
             domain: "producer",
             authority: "babylon.engine",
             local_id: "typed-graph-relations-at-verified-tick",
@@ -1967,57 +1967,57 @@ pub const RTD_V1_METRIC_REGISTRY: &[RtdMetricRegistryRowV1] = &[
     },
 ];
 
-pub const RTD_V1_RELATION_BINDING_REGISTRY: &[RtdRelationBindingRegistryRowV1] = &[
-    RtdRelationBindingRegistryRowV1 {
+pub const RTD_RELATION_BINDING_REGISTRY: &[RtdRelationBindingRegistryRow] = &[
+    RtdRelationBindingRegistryRow {
         record_family: "REFERENCE_FLOW",
         kind: "COMMUTER_JOBS",
-        metric: Some(TypedIdentityLiteralV1 {
+        metric: Some(TypedIdentityLiteral {
             domain: "metric",
             authority: "babylon.rtd.v1",
             local_id: "circulation/lodes-county-commuter-total-jobs",
         }),
-        payload_mode: RelationPayloadModeV1::SingleMetricFacet,
+        payload_mode: RelationPayloadMode::SingleMetricFacet,
     },
-    RtdRelationBindingRegistryRowV1 {
+    RtdRelationBindingRegistryRow {
         record_family: "REFERENCE_FLOW",
         kind: "BORDER_SYNTHESIS",
         metric: None,
-        payload_mode: RelationPayloadModeV1::Empty,
+        payload_mode: RelationPayloadMode::Empty,
     },
-    RtdRelationBindingRegistryRowV1 {
+    RtdRelationBindingRegistryRow {
         record_family: "DYAD",
         kind: "PRESENCE",
-        metric: Some(TypedIdentityLiteralV1 {
+        metric: Some(TypedIdentityLiteral {
             domain: "metric",
             authority: "babylon.rtd.v1",
             local_id: "rootedness/presence",
         }),
-        payload_mode: RelationPayloadModeV1::ImplicitRelation,
+        payload_mode: RelationPayloadMode::ImplicitRelation,
     },
-    RtdRelationBindingRegistryRowV1 {
+    RtdRelationBindingRegistryRow {
         record_family: "DYAD",
         kind: "MEMBERSHIP",
-        metric: Some(TypedIdentityLiteralV1 {
+        metric: Some(TypedIdentityLiteral {
             domain: "metric",
             authority: "babylon.rtd.v1",
             local_id: "rootedness/membership",
         }),
-        payload_mode: RelationPayloadModeV1::ImplicitRelation,
+        payload_mode: RelationPayloadMode::ImplicitRelation,
     },
-    RtdRelationBindingRegistryRowV1 {
+    RtdRelationBindingRegistryRow {
         record_family: "DYAD",
         kind: "SOLIDARITY",
-        metric: Some(TypedIdentityLiteralV1 {
+        metric: Some(TypedIdentityLiteral {
             domain: "metric",
             authority: "babylon.rtd.v1",
             local_id: "rootedness/solidarity",
         }),
-        payload_mode: RelationPayloadModeV1::ImplicitRelation,
+        payload_mode: RelationPayloadMode::ImplicitRelation,
     },
-    RtdRelationBindingRegistryRowV1 {
+    RtdRelationBindingRegistryRow {
         record_family: "DYAD",
         kind: "COMMAND",
         metric: None,
-        payload_mode: RelationPayloadModeV1::Empty,
+        payload_mode: RelationPayloadMode::Empty,
     },
 ];

@@ -1,9 +1,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use babylon_kernel::tick_content_hash::TickContentHashV1;
+use babylon_kernel::tick_content_hash::TickContentHash;
 use babylon_persistence::identity::CampaignId;
 use babylon_persistence::tick_commit_claim::{
-    TickCommitClaimConflictV1, TickCommitClaimRetryV1, TickCommitClaimV1,
+    TickCommitClaim, TickCommitClaimConflict, TickCommitClaimRetry,
 };
 use serde::Deserialize;
 use serde_json::Value;
@@ -59,16 +59,16 @@ fn hex_bytes(value: &str) -> Vec<u8> {
         .collect()
 }
 
-fn claim(data: &Value) -> TickCommitClaimV1 {
+fn claim(data: &Value) -> TickCommitClaim {
     let campaign = CampaignId::from_uuid(
         Uuid::parse_str(text(data, "campaign_id")).expect("canonical campaign UUID"),
     );
     let resolve_tick = data["resolve_tick"].as_u64().expect("u64 resolve tick");
-    let content = TickContentHashV1::from_bytes(hex32(text(data, "tick_content_hash_hex")));
-    TickCommitClaimV1::compose(campaign, resolve_tick, content)
+    let content = TickContentHash::from_bytes(hex32(text(data, "tick_content_hash_hex")));
+    TickCommitClaim::compose(campaign, resolve_tick, content)
 }
 
-fn claims(rows: &[VectorRow]) -> BTreeMap<&str, TickCommitClaimV1> {
+fn claims(rows: &[VectorRow]) -> BTreeMap<&str, TickCommitClaim> {
     rows.iter()
         .take(MAX_ROWS)
         .filter(|row| row.kind == "claim")
@@ -129,14 +129,14 @@ fn production_retry_classification_matches_the_shared_contract() {
         let existing = claims[text(&row.data, "existing_id")];
         let result = requested.classify_retry_against(&existing);
         match text(&row.data, "expected") {
-            "idempotent" => assert_eq!(result, Ok(TickCommitClaimRetryV1::Idempotent)),
+            "idempotent" => assert_eq!(result, Ok(TickCommitClaimRetry::Idempotent)),
             "key_mismatch" => assert!(matches!(
                 result,
-                Err(TickCommitClaimConflictV1::KeyMismatch { .. })
+                Err(TickCommitClaimConflict::KeyMismatch { .. })
             )),
             "content_identity_mismatch" => assert!(matches!(
                 result,
-                Err(TickCommitClaimConflictV1::ContentIdentityMismatch { .. })
+                Err(TickCommitClaimConflict::ContentIdentityMismatch { .. })
             )),
             unexpected => panic!("unknown expected retry result: {unexpected}"),
         }

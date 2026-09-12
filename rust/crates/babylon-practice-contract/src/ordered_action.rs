@@ -2,9 +2,9 @@
 
 use std::collections::TryReserveError;
 
-use babylon_kernel::replay::{ReplayIdentityError, ReplaySessionIdV1};
-use babylon_kernel::sha256_of;
-use babylon_kernel::tick_content_hash::OrderedPracticeActionBatchDigestV1;
+use babylon_kernel::content_digest::sha256_of;
+use babylon_kernel::replay::{ReplayIdentityError, ReplaySessionId};
+use babylon_kernel::tick_content_hash::OrderedPracticeActionBatchDigest;
 
 use crate::{
     encode_practice_intent, practice_intent_digest, validate_resolved_practice_batch,
@@ -55,7 +55,7 @@ impl PracticeActionId {
 ///
 /// Callers cannot supply an ordinal or identity:
 ///
-/// ```compile_fail
+/// ```compile_fail,E0451
 /// use babylon_practice_contract::{
 ///     OrderedPracticeAction, PracticeActionId, PracticeIntent,
 /// };
@@ -98,11 +98,11 @@ impl OrderedPracticeAction {
 /// One checked ordered accepted-action batch.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OrderedPracticeActionBatch {
-    session: ReplaySessionIdV1,
+    session: ReplaySessionId,
     resolve_tick: u64,
     items: Vec<OrderedPracticeAction>,
     canonical_bytes: Vec<u8>,
-    digest: OrderedPracticeActionBatchDigestV1,
+    digest: OrderedPracticeActionBatchDigest,
 }
 
 /// Checked ordered-action projection or encoding failure.
@@ -170,7 +170,7 @@ impl From<PracticeIntentError> for OrderedPracticeActionError {
 /// # Errors
 /// Returns a checked replay-session, intent, arithmetic, or allocation error.
 pub fn encode_practice_action_id_preimage(
-    session: &ReplaySessionIdV1,
+    session: &ReplaySessionId,
     intent: &PracticeIntent,
 ) -> Result<Vec<u8>, OrderedPracticeActionError> {
     let session_bytes = session.canonical_bytes()?;
@@ -195,7 +195,7 @@ pub fn encode_practice_action_id_preimage(
 /// # Errors
 /// Returns the first checked preimage encoding error.
 pub fn practice_action_id(
-    session: &ReplaySessionIdV1,
+    session: &ReplaySessionId,
     intent: &PracticeIntent,
 ) -> Result<PracticeActionId, OrderedPracticeActionError> {
     let preimage = encode_practice_action_id_preimage(session, intent)?;
@@ -208,7 +208,7 @@ impl OrderedPracticeActionBatch {
     /// # Errors
     /// Returns a checked replay-session, arithmetic, or allocation error.
     pub fn empty(
-        session: ReplaySessionIdV1,
+        session: ReplaySessionId,
         resolve_tick: u64,
     ) -> Result<Self, OrderedPracticeActionError> {
         build_batch(session, resolve_tick, &[])
@@ -223,7 +223,7 @@ impl OrderedPracticeActionBatch {
     /// Returns the first source-validation, nested encoding, bound, or
     /// allocation error.
     pub fn project(
-        session: ReplaySessionIdV1,
+        session: ReplaySessionId,
         source: &ResolvedPracticeBatch,
         trusted_ledger: &PracticeInputAuthorityLedger,
     ) -> Result<Self, OrderedPracticeActionError> {
@@ -233,7 +233,7 @@ impl OrderedPracticeActionBatch {
 
     /// Borrow the checked replay-session identity.
     #[must_use]
-    pub const fn session(&self) -> &ReplaySessionIdV1 {
+    pub const fn session(&self) -> &ReplaySessionId {
         &self.session
     }
 
@@ -263,13 +263,13 @@ impl OrderedPracticeActionBatch {
 
     /// Return the SHA-256 identity of the exact canonical bytes.
     #[must_use]
-    pub const fn digest(&self) -> OrderedPracticeActionBatchDigestV1 {
+    pub const fn digest(&self) -> OrderedPracticeActionBatchDigest {
         self.digest
     }
 }
 
 fn build_batch(
-    session: ReplaySessionIdV1,
+    session: ReplaySessionId,
     resolve_tick: u64,
     source_items: &[crate::ResolvedPracticeBatchItem],
 ) -> Result<OrderedPracticeActionBatch, OrderedPracticeActionError> {
@@ -302,7 +302,7 @@ fn build_batch(
 }
 
 fn encode_batch(
-    session: ReplaySessionIdV1,
+    session: ReplaySessionId,
     resolve_tick: u64,
     items: Vec<OrderedPracticeAction>,
     capacity: usize,
@@ -322,7 +322,7 @@ fn encode_batch(
     canonical_bytes.extend_from_slice(&item_count.to_be_bytes());
     append_ordered_items(&mut canonical_bytes, &items)?;
     debug_assert_eq!(canonical_bytes.len(), capacity);
-    let digest = OrderedPracticeActionBatchDigestV1::from_bytes(sha256_of(&canonical_bytes));
+    let digest = OrderedPracticeActionBatchDigest::from_bytes(sha256_of(&canonical_bytes));
     Ok(OrderedPracticeActionBatch {
         session,
         resolve_tick,

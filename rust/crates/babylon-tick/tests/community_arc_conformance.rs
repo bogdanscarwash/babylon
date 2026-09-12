@@ -23,8 +23,8 @@ use babylon_bsl::scenario::{compose_declaration_preludes, load_scenario_with_pre
 use babylon_bsl::structural_verbs::CollectingSink;
 use babylon_graph::hypergraph_store::HypergraphStore;
 use babylon_graph::substrate::{GraphSubstrate, HyperedgeId, NodeId};
-use babylon_kernel::replay::ReplaySessionIdV1;
-use babylon_tick::RuleDiagnosticSession;
+use babylon_kernel::replay::ReplaySessionId;
+use babylon_tick::diagnostic::RuleDiagnosticSession;
 
 const SCENARIO: &str = include_str!("../content/scenarios/community-decay-arc-conformance.bscn");
 const PACK: &str = include_str!("../content/rules/community.bsl");
@@ -37,8 +37,8 @@ fn practice_prelude() -> String {
 }
 
 /// The session id — `ReplaySessionIdV1::new`'s deterministic-identity law (D179).
-fn arc_session() -> ReplaySessionIdV1 {
-    ReplaySessionIdV1::try_from("community-decay-arc").expect("literal is non-empty")
+fn arc_session() -> ReplaySessionId {
+    ReplaySessionId::try_from("community-decay-arc").expect("literal is non-empty")
 }
 
 /// Drive three ticks, returning the session (the graph lives in it).

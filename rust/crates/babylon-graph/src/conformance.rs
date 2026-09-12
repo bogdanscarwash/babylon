@@ -19,7 +19,7 @@
 
 use crate::state_hash::CanonicalState;
 use crate::substrate::{Direction, GraphSubstrate, HyperedgeId, NodeId};
-use babylon_kernel::Currency;
+use babylon_kernel::currency::Currency;
 
 #[cfg(test)]
 use crate::allocator_state::{AllocatorCursors, AllocatorState, AllocatorTestControl};

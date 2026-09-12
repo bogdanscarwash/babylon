@@ -2,75 +2,46 @@
 
 use std::collections::TryReserveError;
 
+use babylon_bsl::canonical_ast::rules_hash_of;
 use babylon_bsl::rule_pipeline::split_content;
-use babylon_bsl::rules_hash_of;
 use babylon_bsl::scenario::{load_scenario, load_scenario_with_prelude};
 use babylon_graph::hypergraph_store::HypergraphStore;
-use babylon_graph::stable_element::StableElementResolverV1;
-use babylon_graph::stable_state::encode_stable_graph_state_v1;
-use babylon_kernel::replay::{ReplaySeed, ReplaySessionIdV1};
-use babylon_kernel::sha256_of;
-use babylon_kernel::tick_content_hash::RefDigestV1;
-use babylon_kernel::ContentDigest;
+use babylon_graph::stable_element::StableElementResolver;
+use babylon_graph::stable_state::encode_stable_graph_state;
+use babylon_kernel::content_digest::sha256_of;
+use babylon_kernel::content_digest::ContentDigest;
+use babylon_kernel::replay::{ReplaySeed, ReplaySessionId};
+use babylon_kernel::tick_content_hash::RefDigest;
 use babylon_tick::replay_session::ReplayTickSession;
 
-use crate::runtime::RustPersistenceRuntimeErrorV2;
+use crate::runtime::RustPersistenceRuntimeError;
 use crate::semantic_codec;
 
-/// Persisted, closed content encoding selection. It never depends on source size.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum FoundationContentLayout {
-    /// Frozen 65,535-byte source fields.
-    V1,
-    /// Explicit successor with 1 MiB source fields.
-    V2,
-}
-
-impl FoundationContentLayout {
-    /// Return the exact on-disk layout tag.
-    #[must_use]
-    pub const fn version(self) -> i16 {
-        match self {
-            Self::V1 => 1,
-            Self::V2 => 2,
-        }
-    }
-
-    pub(crate) fn from_persisted(value: i16) -> Result<Self, RustPersistenceRuntimeErrorV2> {
-        match value {
-            1 => Ok(Self::V1),
-            2 => Ok(Self::V2),
-            _ => Err(RustPersistenceRuntimeErrorV2::ReplaySource),
-        }
-    }
-}
-
 #[derive(Debug, PartialEq, Eq)]
-struct FoundationContentData {
+pub struct FoundationContentBundle {
     scenario_source_bytes: Vec<u8>,
     prelude_source_bytes: Option<Vec<u8>>,
     rule_source_bytes: Vec<u8>,
     defines_bytes: Vec<u8>,
     reference_bundle_manifest_bytes: Vec<u8>,
     content_digest: ContentDigest,
-    reference_digest: RefDigestV1,
+    reference_digest: RefDigest,
     canonical_bytes: Vec<u8>,
 }
 
-impl FoundationContentData {
-    fn try_new(
-        layout: FoundationContentLayout,
+impl FoundationContentBundle {
+    /// Capture bounded current content and its exact rule, defines, and reference identities.
+    ///
+    /// # Errors
+    /// Refuses oversized content, invalid rule syntax, or content identity encoding errors.
+    pub fn try_new(
         scenario_source: &str,
         prelude_source: Option<&str>,
         rule_source: &str,
         defines: &[u8],
         reference_manifest: &[u8],
-    ) -> Result<Self, RustPersistenceRuntimeErrorV2> {
-        let encode = match layout {
-            FoundationContentLayout::V1 => semantic_codec::encode_foundation_content,
-            FoundationContentLayout::V2 => semantic_codec::encode_foundation_content_v2,
-        };
-        let canonical_bytes = encode(
+    ) -> Result<Self, RustPersistenceRuntimeError> {
+        let canonical_bytes = semantic_codec::encode_foundation_content(
             scenario_source,
             prelude_source,
             rule_source,
@@ -78,14 +49,14 @@ impl FoundationContentData {
             reference_manifest,
         )?;
         let (_, rules) =
-            split_content(rule_source).map_err(|_| RustPersistenceRuntimeErrorV2::ReplaySource)?;
+            split_content(rule_source).map_err(|_| RustPersistenceRuntimeError::ReplaySource)?;
         let rule_forms = rules.into_iter().map(|rule| rule.form).collect::<Vec<_>>();
         let content_digest = ContentDigest {
             defines_hash: sha256_of(defines),
             rules_hash: rules_hash_of(&rule_forms)
-                .map_err(|_| RustPersistenceRuntimeErrorV2::ReplaySource)?,
+                .map_err(|_| RustPersistenceRuntimeError::ReplaySource)?,
         };
-        let reference_digest = RefDigestV1::from_bytes(sha256_of(reference_manifest));
+        let reference_digest = RefDigest::from_bytes(sha256_of(reference_manifest));
         let scenario_source_bytes = copy_bytes(
             "foundation scenario source bytes",
             scenario_source.as_bytes(),
@@ -110,210 +81,90 @@ impl FoundationContentData {
     }
 }
 
-/// Frozen exact mechanics and reference bytes with V1 source bounds.
-#[derive(Debug, PartialEq, Eq)]
-pub struct FoundationContentBundleV1(FoundationContentData);
-
-/// Exact mechanics and reference bytes with explicit V2 source bounds.
-#[derive(Debug, PartialEq, Eq)]
-pub struct FoundationContentBundleV2(FoundationContentData);
-
-/// Closed content representation retained by the unchanged outer foundation.
-#[derive(Debug, PartialEq, Eq)]
-pub enum FoundationContentBundle {
-    /// The frozen V1 encoding, including its original field limits.
-    V1(FoundationContentBundleV1),
-    /// The explicitly selected V2 encoding.
-    V2(FoundationContentBundleV2),
-}
-
-macro_rules! impl_bundle_constructor {
-    ($ty:ident, $layout:ident) => {
-        impl $ty {
-            /// Copy and validate exact sources using this type's encoding only.
-            /// # Errors
-            /// Refuses invalid rule source, NUL, field/aggregate bounds or allocation.
-            pub fn try_new(
-                scenario_source: &str,
-                prelude_source: Option<&str>,
-                rule_source: &str,
-                defines: &[u8],
-                reference_manifest: &[u8],
-            ) -> Result<Self, RustPersistenceRuntimeErrorV2> {
-                FoundationContentData::try_new(
-                    FoundationContentLayout::$layout,
-                    scenario_source,
-                    prelude_source,
-                    rule_source,
-                    defines,
-                    reference_manifest,
-                )
-                .map(Self)
-            }
-            const fn data(&self) -> &FoundationContentData {
-                &self.0
-            }
-        }
-    };
-}
-impl_bundle_constructor!(FoundationContentBundleV1, V1);
-impl_bundle_constructor!(FoundationContentBundleV2, V2);
-
 impl FoundationContentBundle {
-    /// Return the explicitly selected encoding.
+    /// Borrow the exact scenario source bytes.
     #[must_use]
-    pub const fn layout(&self) -> FoundationContentLayout {
-        match self {
-            Self::V1(_) => FoundationContentLayout::V1,
-            Self::V2(_) => FoundationContentLayout::V2,
-        }
+    pub fn scenario_source_bytes(&self) -> &[u8] {
+        &self.scenario_source_bytes
     }
-    const fn data(&self) -> &FoundationContentData {
-        match self {
-            Self::V1(bundle) => bundle.data(),
-            Self::V2(bundle) => bundle.data(),
-        }
+
+    /// Borrow the exact optional prelude source bytes.
+    #[must_use]
+    pub fn prelude_source_bytes(&self) -> Option<&[u8]> {
+        self.prelude_source_bytes.as_deref()
     }
-    pub(crate) fn try_new(
-        layout: FoundationContentLayout,
-        scenario_source: &str,
-        prelude_source: Option<&str>,
-        rule_source: &str,
-        defines: &[u8],
-        reference_manifest: &[u8],
-    ) -> Result<Self, RustPersistenceRuntimeErrorV2> {
-        match layout {
-            FoundationContentLayout::V1 => FoundationContentBundleV1::try_new(
-                scenario_source,
-                prelude_source,
-                rule_source,
-                defines,
-                reference_manifest,
-            )
-            .map(Self::V1),
-            FoundationContentLayout::V2 => FoundationContentBundleV2::try_new(
-                scenario_source,
-                prelude_source,
-                rule_source,
-                defines,
-                reference_manifest,
-            )
-            .map(Self::V2),
-        }
+
+    /// Borrow the exact rule source bytes.
+    #[must_use]
+    pub fn rule_source_bytes(&self) -> &[u8] {
+        &self.rule_source_bytes
+    }
+
+    /// Borrow the exact defines artifact bytes.
+    #[must_use]
+    pub fn defines_bytes(&self) -> &[u8] {
+        &self.defines_bytes
+    }
+
+    /// Borrow the exact reference-bundle manifest bytes.
+    #[must_use]
+    pub fn reference_bundle_manifest_bytes(&self) -> &[u8] {
+        &self.reference_bundle_manifest_bytes
+    }
+
+    /// Borrow the exact mechanics identity derived from the retained artifacts.
+    #[must_use]
+    pub const fn content_digest(&self) -> &ContentDigest {
+        &self.content_digest
+    }
+
+    /// Return the exact retained reference-manifest identity.
+    #[must_use]
+    pub const fn reference_digest(&self) -> RefDigest {
+        self.reference_digest
+    }
+
+    /// Borrow the canonical tagged content-bundle bytes.
+    #[must_use]
+    pub fn canonical_bytes(&self) -> &[u8] {
+        &self.canonical_bytes
     }
 }
-
-macro_rules! impl_bundle_accessors {
-    ($ty:ident) => {
-        impl $ty {
-            /// Borrow the exact scenario source bytes.
-            #[must_use]
-            pub fn scenario_source_bytes(&self) -> &[u8] {
-                &self.data().scenario_source_bytes
-            }
-
-            /// Borrow the exact optional prelude source bytes.
-            #[must_use]
-            pub fn prelude_source_bytes(&self) -> Option<&[u8]> {
-                self.data().prelude_source_bytes.as_deref()
-            }
-
-            /// Borrow the exact rule source bytes.
-            #[must_use]
-            pub fn rule_source_bytes(&self) -> &[u8] {
-                &self.data().rule_source_bytes
-            }
-
-            /// Borrow the exact defines artifact bytes.
-            #[must_use]
-            pub fn defines_bytes(&self) -> &[u8] {
-                &self.data().defines_bytes
-            }
-
-            /// Borrow the exact reference-bundle manifest bytes.
-            #[must_use]
-            pub fn reference_bundle_manifest_bytes(&self) -> &[u8] {
-                &self.data().reference_bundle_manifest_bytes
-            }
-
-            /// Borrow the exact mechanics identity derived from the retained artifacts.
-            #[must_use]
-            pub const fn content_digest(&self) -> &ContentDigest {
-                &self.data().content_digest
-            }
-
-            /// Return the exact retained reference-manifest identity.
-            #[must_use]
-            pub const fn reference_digest(&self) -> RefDigestV1 {
-                self.data().reference_digest
-            }
-
-            /// Borrow the canonical tagged content-bundle bytes.
-            #[must_use]
-            pub fn canonical_bytes(&self) -> &[u8] {
-                &self.data().canonical_bytes
-            }
-        }
-    };
-}
-impl_bundle_accessors!(FoundationContentBundleV1);
-impl_bundle_accessors!(FoundationContentBundleV2);
-impl_bundle_accessors!(FoundationContentBundle);
 
 /// Exact tick-zero sources from which one replay campaign can be reconstructed.
 #[derive(Debug, PartialEq, Eq)]
-pub struct CampaignFoundationV1 {
+pub struct CampaignFoundation {
     stable_graph_bytes: Vec<u8>,
     world_register_bytes: Vec<u8>,
     resolver_manifest_bytes: Vec<u8>,
     prepared_environment_bytes: Vec<u8>,
-    replay_session_identity: ReplaySessionIdV1,
+    replay_session_identity: ReplaySessionId,
     rng_seed: ReplaySeed,
     content_digest: ContentDigest,
-    reference_digest: RefDigestV1,
+    reference_digest: RefDigest,
     content_bundle: FoundationContentBundle,
     canonical_bytes: Vec<u8>,
 }
 
-impl CampaignFoundationV1 {
-    /// Capture all exact reconstruction sources from one prepared tick-zero session.
-    ///
+impl CampaignFoundation {
+    /// Capture the exact sources of a prepared tick-zero session.
     /// # Errors
-    /// Refuses a session after its first executed tick or the first stable
-    /// identity, byte-bound, capacity, integer, or allocation failure. This
-    /// operation never parses rules or executes a tick.
+    /// Refuses a nonzero tick, mismatched content or invalid canonical sources.
     pub fn capture(
         session: &ReplayTickSession<HypergraphStore>,
-        content_bundle: FoundationContentBundleV1,
-    ) -> Result<Self, RustPersistenceRuntimeErrorV2> {
-        Self::capture_content(session, FoundationContentBundle::V1(content_bundle))
-    }
-
-    /// Capture a tick-zero foundation with explicitly selected V2 content.
-    /// # Errors
-    /// Refuses the same graph, identity and aggregate-bound errors as `capture`.
-    pub fn capture_v2(
-        session: &ReplayTickSession<HypergraphStore>,
-        content_bundle: FoundationContentBundleV2,
-    ) -> Result<Self, RustPersistenceRuntimeErrorV2> {
-        Self::capture_content(session, FoundationContentBundle::V2(content_bundle))
-    }
-
-    pub(crate) fn capture_content(
-        session: &ReplayTickSession<HypergraphStore>,
         content_bundle: FoundationContentBundle,
-    ) -> Result<Self, RustPersistenceRuntimeErrorV2> {
+    ) -> Result<Self, RustPersistenceRuntimeError> {
         if session.completed_tick() != 0 {
-            return Err(RustPersistenceRuntimeErrorV2::FoundationAfterTickZero {
+            return Err(RustPersistenceRuntimeError::FoundationAfterTickZero {
                 actual: session.completed_tick(),
             });
         }
         let stable_graph = session
             .stable_graph_state()
-            .map_err(|_| RustPersistenceRuntimeErrorV2::ReplaySource)?;
+            .map_err(|_| RustPersistenceRuntimeError::ReplaySource)?;
         let world_registers = session
             .world_registers()
-            .map_err(|_| RustPersistenceRuntimeErrorV2::ReplaySource)?;
+            .map_err(|_| RustPersistenceRuntimeError::ReplaySource)?;
         let stable_graph_bytes = copy_bytes(
             "campaign foundation stable graph bytes",
             stable_graph.canonical_bytes(),
@@ -331,19 +182,19 @@ impl CampaignFoundationV1 {
             session.prepared_environment_bytes(),
         )?;
         let replay_session_identity =
-            ReplaySessionIdV1::try_from(session.session_identity().as_bytes())
-                .map_err(|_| RustPersistenceRuntimeErrorV2::ReplaySource)?;
+            ReplaySessionId::try_from(session.session_identity().as_bytes())
+                .map_err(|_| RustPersistenceRuntimeError::ReplaySource)?;
         let rng_seed = session.rng_seed();
         let content_digest = session.content_digest().clone();
         let reference_digest = session.reference_digest();
         if content_bundle.content_digest() != &content_digest
             || content_bundle.reference_digest() != reference_digest
         {
-            return Err(RustPersistenceRuntimeErrorV2::ReplaySource);
+            return Err(RustPersistenceRuntimeError::ReplaySource);
         }
         Self::verify_bundle_scenario_reproduces_session_graph(session, &content_bundle)?;
         let replay_session_text = std::str::from_utf8(replay_session_identity.as_bytes())
-            .map_err(|_| RustPersistenceRuntimeErrorV2::ReplaySource)?;
+            .map_err(|_| RustPersistenceRuntimeError::ReplaySource)?;
         let canonical_bytes = semantic_codec::encode_foundation(
             &stable_graph_bytes,
             &world_register_bytes,
@@ -385,34 +236,34 @@ impl CampaignFoundationV1 {
     fn verify_bundle_scenario_reproduces_session_graph(
         session: &ReplayTickSession<HypergraphStore>,
         content_bundle: &FoundationContentBundle,
-    ) -> Result<(), RustPersistenceRuntimeErrorV2> {
+    ) -> Result<(), RustPersistenceRuntimeError> {
         let scenario = std::str::from_utf8(content_bundle.scenario_source_bytes())
-            .map_err(|_| RustPersistenceRuntimeErrorV2::ReplaySource)?;
+            .map_err(|_| RustPersistenceRuntimeError::ReplaySource)?;
         let prelude = content_bundle
             .prelude_source_bytes()
             .map(std::str::from_utf8)
             .transpose()
-            .map_err(|_| RustPersistenceRuntimeErrorV2::ReplaySource)?;
+            .map_err(|_| RustPersistenceRuntimeError::ReplaySource)?;
         let mut graph = HypergraphStore::new();
         let loaded = match prelude {
             Some(prelude) => load_scenario_with_prelude(prelude, scenario, &mut graph),
             None => load_scenario(scenario, &mut graph),
         }
-        .map_err(|_| RustPersistenceRuntimeErrorV2::ReplaySource)?;
-        let resolver = StableElementResolverV1::seal(
+        .map_err(|_| RustPersistenceRuntimeError::ReplaySource)?;
+        let resolver = StableElementResolver::seal(
             &graph,
             &loaded.id,
             &loaded.node_content_ids,
             &loaded.hyperedge_content_ids,
         )
-        .map_err(|_| RustPersistenceRuntimeErrorV2::ReplaySource)?;
-        let reloaded = encode_stable_graph_state_v1(&graph, &resolver)
-            .map_err(|_| RustPersistenceRuntimeErrorV2::ReplaySource)?;
+        .map_err(|_| RustPersistenceRuntimeError::ReplaySource)?;
+        let reloaded = encode_stable_graph_state(&graph, &resolver)
+            .map_err(|_| RustPersistenceRuntimeError::ReplaySource)?;
         let captured = session
             .stable_graph_state()
-            .map_err(|_| RustPersistenceRuntimeErrorV2::ReplaySource)?;
+            .map_err(|_| RustPersistenceRuntimeError::ReplaySource)?;
         if reloaded.canonical_bytes() != captured.canonical_bytes() {
-            return Err(RustPersistenceRuntimeErrorV2::FoundationScenarioMismatch);
+            return Err(RustPersistenceRuntimeError::FoundationScenarioMismatch);
         }
         Ok(())
     }
@@ -437,10 +288,8 @@ impl CampaignFoundationV1 {
         defines_bytes: &[u8],
         reference_manifest: &[u8],
         expected_foundation_sha256: [u8; 32],
-        content_layout: FoundationContentLayout,
-    ) -> Result<Self, RustPersistenceRuntimeErrorV2> {
+    ) -> Result<Self, RustPersistenceRuntimeError> {
         let content_bundle = FoundationContentBundle::try_new(
-            content_layout,
             scenario_source,
             prelude_source,
             rule_source,
@@ -451,21 +300,21 @@ impl CampaignFoundationV1 {
             defines_hash,
             rules_hash,
         };
-        let reference_digest = RefDigestV1::from_bytes(reference_digest);
+        let reference_digest = RefDigest::from_bytes(reference_digest);
         if content_bundle.content_digest() != &content_digest
             || content_bundle.reference_digest() != reference_digest
         {
-            return Err(RustPersistenceRuntimeErrorV2::ReplaySource);
+            return Err(RustPersistenceRuntimeError::ReplaySource);
         }
-        let replay_session_identity = ReplaySessionIdV1::try_from(replay_session_identity)
-            .map_err(|_| RustPersistenceRuntimeErrorV2::ReplaySource)?;
+        let replay_session_identity = ReplaySessionId::try_from(replay_session_identity)
+            .map_err(|_| RustPersistenceRuntimeError::ReplaySource)?;
         let canonical_bytes = semantic_codec::encode_foundation(
             &stable_graph_bytes,
             &world_register_bytes,
             &resolver_manifest_bytes,
             &prepared_environment_bytes,
             std::str::from_utf8(replay_session_identity.as_bytes())
-                .map_err(|_| RustPersistenceRuntimeErrorV2::ReplaySource)?,
+                .map_err(|_| RustPersistenceRuntimeError::ReplaySource)?,
             rng_seed,
             &content_digest.defines_hash,
             &content_digest.rules_hash,
@@ -473,7 +322,7 @@ impl CampaignFoundationV1 {
             content_bundle.canonical_bytes(),
         )?;
         if sha256_of(&canonical_bytes) != expected_foundation_sha256 {
-            return Err(RustPersistenceRuntimeErrorV2::ReplaySource);
+            return Err(RustPersistenceRuntimeError::ReplaySource);
         }
         Ok(Self {
             stable_graph_bytes,
@@ -515,7 +364,7 @@ impl CampaignFoundationV1 {
 
     /// Borrow the exact replay-session namespace.
     #[must_use]
-    pub const fn replay_session_identity(&self) -> &ReplaySessionIdV1 {
+    pub const fn replay_session_identity(&self) -> &ReplaySessionId {
         &self.replay_session_identity
     }
 
@@ -533,7 +382,7 @@ impl CampaignFoundationV1 {
 
     /// Return the exact reference-data identity.
     #[must_use]
-    pub const fn reference_digest(&self) -> RefDigestV1 {
+    pub const fn reference_digest(&self) -> RefDigest {
         self.reference_digest
     }
 
@@ -550,15 +399,12 @@ impl CampaignFoundationV1 {
     }
 }
 
-fn copy_bytes(
-    field: &'static str,
-    source: &[u8],
-) -> Result<Vec<u8>, RustPersistenceRuntimeErrorV2> {
+fn copy_bytes(field: &'static str, source: &[u8]) -> Result<Vec<u8>, RustPersistenceRuntimeError> {
     let mut bytes = Vec::new();
     bytes
         .try_reserve_exact(source.len())
         .map_err(
-            |_: TryReserveError| RustPersistenceRuntimeErrorV2::Allocation {
+            |_: TryReserveError| RustPersistenceRuntimeError::Allocation {
                 field,
                 requested: source.len(),
             },

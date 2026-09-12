@@ -3,14 +3,14 @@ use std::collections::HashMap;
 use babylon_graph::hypergraph_store::HypergraphStore;
 use babylon_graph::memory::MemoryGraph;
 use babylon_graph::stable_element::{
-    StableElementKeyV1, StableElementResolverV1, StableIdentityError,
-    MAX_STABLE_CARRIER_ACTIVE_ELEMENTS_V2, MAX_STABLE_CARRIER_BYTES_V2,
-    MAX_STABLE_RESOLVER_MANIFEST_BYTES_V1, MAX_STABLE_RESOLVER_ROWS_V1,
+    StableElementKey, StableElementResolver, StableIdentityError,
+    MAX_STABLE_CARRIER_ACTIVE_ELEMENTS, MAX_STABLE_CARRIER_BYTES,
+    MAX_STABLE_RESOLVER_MANIFEST_BYTES, MAX_STABLE_RESOLVER_ROWS,
 };
-use babylon_graph::stable_state::{encode_stable_graph_state_v1, StableGraphStateV1};
+use babylon_graph::stable_state::{encode_stable_graph_state, StableGraphState};
 use babylon_graph::state_hash::CanonicalState;
 use babylon_graph::substrate::{GraphSubstrate, HyperedgeId, NodeId};
-use babylon_kernel::Currency;
+use babylon_kernel::currency::Currency;
 
 struct StableFixture {
     graph: MemoryGraph,
@@ -52,8 +52,8 @@ fn fixture() -> StableFixture {
     }
 }
 
-fn resolver(value: &StableFixture) -> StableElementResolverV1 {
-    StableElementResolverV1::seal(
+fn resolver(value: &StableFixture) -> StableElementResolver {
+    StableElementResolver::seal(
         &value.graph,
         "demo/world",
         &value.node_names,
@@ -156,16 +156,16 @@ fn carrier_accepts_256_active_elements_and_refuses_257_before_allocation() {
     let value = fixture();
     let resolver = resolver(&value);
     let subject = resolver.node_key(value.workers).unwrap().clone();
-    let active = vec![subject.clone(); MAX_STABLE_CARRIER_ACTIVE_ELEMENTS_V2];
+    let active = vec![subject.clone(); MAX_STABLE_CARRIER_ACTIVE_ELEMENTS];
     let maximum = resolver.carrier_key(&subject, &active, i64::MAX).unwrap();
-    assert!(maximum.validated_bytes().len() <= MAX_STABLE_CARRIER_BYTES_V2);
+    assert!(maximum.validated_bytes().len() <= MAX_STABLE_CARRIER_BYTES);
 
-    let too_many = vec![subject.clone(); MAX_STABLE_CARRIER_ACTIVE_ELEMENTS_V2 + 1];
+    let too_many = vec![subject.clone(); MAX_STABLE_CARRIER_ACTIVE_ELEMENTS + 1];
     assert_eq!(
         resolver.carrier_key(&subject, &too_many, 0),
         Err(StableIdentityError::ActiveElementLimit {
-            actual: MAX_STABLE_CARRIER_ACTIVE_ELEMENTS_V2 + 1,
-            maximum: MAX_STABLE_CARRIER_ACTIVE_ELEMENTS_V2,
+            actual: MAX_STABLE_CARRIER_ACTIVE_ELEMENTS + 1,
+            maximum: MAX_STABLE_CARRIER_ACTIVE_ELEMENTS,
         })
     );
 }
@@ -207,7 +207,7 @@ fn resolver_manifest_is_exact_sorted_and_parallel_hyperedges_stay_distinct() {
         resolver.hyperedge_key(value.coalition_a).unwrap(),
         resolver.hyperedge_key(value.coalition_b).unwrap()
     );
-    assert!(resolver.manifest().canonical_bytes().len() <= MAX_STABLE_RESOLVER_MANIFEST_BYTES_V1);
+    assert!(resolver.manifest().canonical_bytes().len() <= MAX_STABLE_RESOLVER_MANIFEST_BYTES);
 }
 
 #[test]
@@ -216,7 +216,7 @@ fn resolver_seal_requires_exact_bijections_and_strict_ascii_names() {
     let mut missing = value.node_names.clone();
     missing.remove(&value.workers);
     assert_eq!(
-        StableElementResolverV1::seal(&value.graph, "demo/world", &missing, &value.hyperedge_names,),
+        StableElementResolver::seal(&value.graph, "demo/world", &missing, &value.hyperedge_names,),
         Err(StableIdentityError::MissingNodeName {
             node: value.workers,
         })
@@ -225,7 +225,7 @@ fn resolver_seal_requires_exact_bijections_and_strict_ascii_names() {
     let mut duplicate = value.node_names.clone();
     duplicate.insert(value.workers, "owners".to_owned());
     assert_eq!(
-        StableElementResolverV1::seal(
+        StableElementResolver::seal(
             &value.graph,
             "demo/world",
             &duplicate,
@@ -239,14 +239,14 @@ fn resolver_seal_requires_exact_bijections_and_strict_ascii_names() {
     let mut extra = value.node_names.clone();
     extra.insert(NodeId(999), "ghost".to_owned());
     assert_eq!(
-        StableElementResolverV1::seal(&value.graph, "demo/world", &extra, &value.hyperedge_names,),
+        StableElementResolver::seal(&value.graph, "demo/world", &extra, &value.hyperedge_names,),
         Err(StableIdentityError::ExtraNodeName { node: NodeId(999) })
     );
 
     let mut non_ascii = value.node_names.clone();
     non_ascii.insert(value.workers, "wörkers".to_owned());
     assert!(matches!(
-        StableElementResolverV1::seal(
+        StableElementResolver::seal(
             &value.graph,
             "demo/world",
             &non_ascii,
@@ -261,7 +261,7 @@ fn resolver_seal_requires_exact_bijections_and_strict_ascii_names() {
     let mut missing_hyperedge = value.hyperedge_names.clone();
     missing_hyperedge.remove(&value.coalition_a);
     assert_eq!(
-        StableElementResolverV1::seal(
+        StableElementResolver::seal(
             &value.graph,
             "demo/world",
             &value.node_names,
@@ -275,7 +275,7 @@ fn resolver_seal_requires_exact_bijections_and_strict_ascii_names() {
     let mut duplicate_hyperedge = value.hyperedge_names.clone();
     duplicate_hyperedge.insert(value.coalition_b, "coalition-a".to_owned());
     assert_eq!(
-        StableElementResolverV1::seal(
+        StableElementResolver::seal(
             &value.graph,
             "demo/world",
             &value.node_names,
@@ -289,7 +289,7 @@ fn resolver_seal_requires_exact_bijections_and_strict_ascii_names() {
     let mut extra_hyperedge = value.hyperedge_names.clone();
     extra_hyperedge.insert(HyperedgeId(999), "ghost-group".to_owned());
     assert_eq!(
-        StableElementResolverV1::seal(
+        StableElementResolver::seal(
             &value.graph,
             "demo/world",
             &value.node_names,
@@ -322,7 +322,7 @@ fn resolver_refuses_dangling_edges_and_never_falls_back_to_runtime_ids() {
     dangling_names.remove(&value.owners);
     dangling_names.insert(NodeId(999), "owners".to_owned());
     assert_eq!(
-        StableElementResolverV1::seal(
+        StableElementResolver::seal(
             &value.graph,
             "demo/world",
             &dangling_names,
@@ -378,21 +378,21 @@ fn sealed_resolver_detects_every_topology_mutation() {
 fn resolver_accepts_65536_rows_and_refuses_65537_before_manifest_allocation() {
     let mut graph = MemoryGraph::new();
     let mut names = HashMap::new();
-    for index in 0..MAX_STABLE_RESOLVER_ROWS_V1 {
+    for index in 0..MAX_STABLE_RESOLVER_ROWS {
         let node = graph.add_node("class").unwrap();
         names.insert(node, format!("n{index}"));
     }
     let maximum =
-        StableElementResolverV1::seal(&graph, "demo/world", &names, &HashMap::new()).unwrap();
-    assert!(maximum.manifest().canonical_bytes().len() <= MAX_STABLE_RESOLVER_MANIFEST_BYTES_V1);
+        StableElementResolver::seal(&graph, "demo/world", &names, &HashMap::new()).unwrap();
+    assert!(maximum.manifest().canonical_bytes().len() <= MAX_STABLE_RESOLVER_MANIFEST_BYTES);
 
     let extra = graph.add_node("class").unwrap();
     names.insert(extra, "overflow".to_owned());
     assert_eq!(
-        StableElementResolverV1::seal(&graph, "demo/world", &names, &HashMap::new(),),
+        StableElementResolver::seal(&graph, "demo/world", &names, &HashMap::new(),),
         Err(StableIdentityError::ResolverRowLimit {
-            actual: MAX_STABLE_RESOLVER_ROWS_V1 + 1,
-            maximum: MAX_STABLE_RESOLVER_ROWS_V1,
+            actual: MAX_STABLE_RESOLVER_ROWS + 1,
+            maximum: MAX_STABLE_RESOLVER_ROWS,
         })
     );
 }
@@ -401,7 +401,7 @@ fn resolver_accepts_65536_rows_and_refuses_65537_before_manifest_allocation() {
 fn forged_stable_element_cannot_enter_a_resolver_owned_carrier() {
     let value = fixture();
     let resolver = resolver(&value);
-    let forged = StableElementKeyV1::Node {
+    let forged = StableElementKey::Node {
         scenario: "demo/world".to_owned(),
         local_name: "ghost".to_owned(),
     };
@@ -516,15 +516,15 @@ fn state_fixture<G: GraphSubstrate + Default>(shift_handles: bool) -> StateFixtu
     }
 }
 
-fn stable_state<G: GraphSubstrate + CanonicalState>(value: &StateFixture<G>) -> StableGraphStateV1 {
-    let resolver = StableElementResolverV1::seal(
+fn stable_state<G: GraphSubstrate + CanonicalState>(value: &StateFixture<G>) -> StableGraphState {
+    let resolver = StableElementResolver::seal(
         &value.graph,
         "demo/world",
         &value.node_names,
         &value.hyperedge_names,
     )
     .unwrap();
-    encode_stable_graph_state_v1(&value.graph, &resolver).unwrap()
+    encode_stable_graph_state(&value.graph, &resolver).unwrap()
 }
 
 #[test]
@@ -589,14 +589,14 @@ fn stable_graph_state_eight_sections_and_scalar_bytes_are_exact() {
 fn stable_graph_state_writes_every_empty_section() {
     let mut graph = MemoryGraph::new();
     let node = graph.add_node("class").unwrap();
-    let resolver = StableElementResolverV1::seal(
+    let resolver = StableElementResolver::seal(
         &graph,
         "demo/world",
         &HashMap::from([(node, "workers".to_owned())]),
         &HashMap::new(),
     )
     .unwrap();
-    let state = encode_stable_graph_state_v1(&graph, &resolver).unwrap();
+    let state = encode_stable_graph_state(&graph, &resolver).unwrap();
     let expected = [
         b"babylon.stable-graph\0".as_slice(),
         &1_u32.to_be_bytes(),
@@ -644,7 +644,7 @@ fn stable_graph_state_ignores_substrate_and_runtime_handle_allocation() {
 #[test]
 fn stable_graph_state_refuses_topology_and_fact_ambiguity() {
     let value = state_fixture::<MemoryGraph>(false);
-    let resolver = StableElementResolverV1::seal(
+    let resolver = StableElementResolver::seal(
         &value.graph,
         "demo/world",
         &value.node_names,
@@ -660,7 +660,7 @@ fn stable_graph_state_refuses_topology_and_fact_ambiguity() {
     let mut changed = value.graph.clone();
     changed.add_node("class").unwrap();
     assert_eq!(
-        encode_stable_graph_state_v1(&changed, &resolver),
+        encode_stable_graph_state(&changed, &resolver),
         Err(StableIdentityError::TopologyChanged)
     );
 
@@ -669,14 +669,14 @@ fn stable_graph_state_refuses_topology_and_fact_ambiguity() {
         .update_node_currency(owners, "class/power", Currency::from_micro_units(1))
         .unwrap();
     assert!(matches!(
-        encode_stable_graph_state_v1(&collision, &resolver),
+        encode_stable_graph_state(&collision, &resolver),
         Err(StableIdentityError::NumericLaneCollision { .. })
     ));
 
     let mut duplicate = StateFacts::from_graph(&value.graph);
     duplicate.node_f64.push(duplicate.node_f64[0].clone());
     assert_eq!(
-        encode_stable_graph_state_v1(&duplicate, &resolver),
+        encode_stable_graph_state(&duplicate, &resolver),
         Err(StableIdentityError::DuplicateFact {
             section: "node f64 attributes",
         })
@@ -687,7 +687,7 @@ fn stable_graph_state_refuses_topology_and_fact_ambiguity() {
         .node_f64
         .push((NodeId(999), "class/ghost".to_owned(), 1.0));
     assert_eq!(
-        encode_stable_graph_state_v1(&unknown_owner, &resolver),
+        encode_stable_graph_state(&unknown_owner, &resolver),
         Err(StableIdentityError::UnknownNode { node: NodeId(999) })
     );
 
@@ -700,14 +700,14 @@ fn stable_graph_state_refuses_topology_and_fact_ambiguity() {
         1.0,
     ));
     assert!(matches!(
-        encode_stable_graph_state_v1(&absent_edge, &resolver),
+        encode_stable_graph_state(&absent_edge, &resolver),
         Err(StableIdentityError::UnknownEdge { .. })
     ));
 
     let mut duplicate_member = StateFacts::from_graph(&value.graph);
     duplicate_member.hyperedges[0].2.push(owners);
     assert_eq!(
-        encode_stable_graph_state_v1(&duplicate_member, &resolver),
+        encode_stable_graph_state(&duplicate_member, &resolver),
         Err(StableIdentityError::InvalidHyperedge {
             hyperedge: duplicate_member.hyperedges[0].0,
         })
@@ -716,14 +716,14 @@ fn stable_graph_state_refuses_topology_and_fact_ambiguity() {
     let mut empty_hyperedge = StateFacts::from_graph(&value.graph);
     empty_hyperedge.hyperedges[0].2.clear();
     assert!(matches!(
-        encode_stable_graph_state_v1(&empty_hyperedge, &resolver),
+        encode_stable_graph_state(&empty_hyperedge, &resolver),
         Err(StableIdentityError::InvalidHyperedge { .. })
     ));
 
     let mut unknown_member = StateFacts::from_graph(&value.graph);
     unknown_member.hyperedges[0].2[0] = NodeId(999);
     assert!(matches!(
-        encode_stable_graph_state_v1(&unknown_member, &resolver),
+        encode_stable_graph_state(&unknown_member, &resolver),
         Err(StableIdentityError::InvalidHyperedge { .. })
     ));
 }
@@ -731,7 +731,7 @@ fn stable_graph_state_refuses_topology_and_fact_ambiguity() {
 #[test]
 fn stable_graph_state_refuses_non_finite_values_and_strength_aliases() {
     let value = state_fixture::<MemoryGraph>(false);
-    let resolver = StableElementResolverV1::seal(
+    let resolver = StableElementResolver::seal(
         &value.graph,
         "demo/world",
         &value.node_names,
@@ -754,7 +754,7 @@ fn stable_graph_state_refuses_non_finite_values_and_strength_aliases() {
         .update_node(workers, "class/wage", f64::INFINITY)
         .unwrap();
     assert_eq!(
-        encode_stable_graph_state_v1(&non_finite, &resolver),
+        encode_stable_graph_state(&non_finite, &resolver),
         Err(StableIdentityError::NonFiniteValue {
             section: "node f64 attributes",
         })
@@ -763,7 +763,7 @@ fn stable_graph_state_refuses_non_finite_values_and_strength_aliases() {
     let mut nan = StateFacts::from_graph(&value.graph);
     nan.hyperedge_f64[0].2 = f64::NAN;
     assert_eq!(
-        encode_stable_graph_state_v1(&nan, &resolver),
+        encode_stable_graph_state(&nan, &resolver),
         Err(StableIdentityError::NonFiniteValue {
             section: "hyperedge f64 attributes",
         })
@@ -778,7 +778,7 @@ fn stable_graph_state_refuses_non_finite_values_and_strength_aliases() {
         1.0,
     )];
     assert_eq!(
-        encode_stable_graph_state_v1(&invalid, &resolver),
+        encode_stable_graph_state(&invalid, &resolver),
         Err(StableIdentityError::StrengthAttribute)
     );
 }

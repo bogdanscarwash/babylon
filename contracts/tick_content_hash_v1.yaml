@@ -275,7 +275,7 @@ layouts:
         body: event_count_u32 then event_name_str32, payload_count_u32, label_str32, ValueV1 rows
         order: executable_arrival_and_source_pair_order
       - tag: 3
-        body: receipt_count_u32 then rule_qname_str32, RuleRoleV1, EvidenceClassV1, ordinal_u32, EffectSignatureV1 rows
+        body: receipt_count_u32 then rule_qname_str32, RuleRole, EvidenceClass, ordinal_u32, EffectSignature rows
         order: published_receipt_order
       - {tag: 4, body: accepted_action_outcome_count_u16, exact_value: 0}
   tick_content_hash_v1:

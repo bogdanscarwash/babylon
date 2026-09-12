@@ -1,6 +1,6 @@
 //! The per-file diagnostic pass (issue #652 Task 6, plan §6.3): resolve a
 //! `.bsl` path to its content set(s) via the [`ContentSetManifest`], run
-//! `babylon-tick`'s `diagnose_content_set`, and map every resulting error
+//! `babylon-tick`'s `diagnose_content_set_sources`, and map every resulting error
 //! to a [`lsp_types::Diagnostic`] located within THIS file's own forest.
 //! Sits above [`crate::diagnostics`] (the mapping layer) and
 //! [`crate::locator`]; [`crate::lifecycle`]'s push/pull wiring calls in
@@ -17,22 +17,25 @@ use std::path::{Path, PathBuf};
 
 use lsp_types::{Diagnostic, DiagnosticSeverity, Uri};
 
-use babylon_bsl::{compose_declaration_preludes, ContentSetAnalysisV1, FormPath};
+use babylon_bsl::{
+    probability::ContentSetAnalysis, reader::FormPath, scenario::compose_declaration_preludes,
+};
 use babylon_tick::{
     analyze_content_set_sources_with_kernel_slots, diagnose_content_set_sources,
-    forecast_scenario_determined_event_likelihoods_with_kernel_slots, ContentRuleSourceV1,
-    ContentSetSourceAnalysisErrorV1, ForecastErrorV1, SourcedPrepareErrorV1,
+    forecast_scenario_determined_event_likelihoods_with_kernel_slots, ContentRuleSource,
+    ContentSetSourceAnalysisError, ForecastError, SourcedPrepareError,
 };
 
 use crate::authoring::{
     merge_content_set_snapshots, snapshot_from_content_analysis, AuthoringSnapshot,
     EventLikelihoodAnalysisFact, EventLikelihoodFact, ForecastRefusalStage,
 };
-use crate::content_manifest::{ContentSetManifest, KernelSlotReservationMatch};
+use crate::content_manifest::ContentSetManifest;
 use crate::diagnostics::{diagnostics_for_file, missing_manifest_row_diagnostic, Located};
 use crate::document_store::DocumentStore;
 use crate::line_index::LineIndex;
 use crate::uri::{file_path_from_uri, uri_from_file_path};
+use babylon_tick::kernel_slot::KernelSlotReservationMatch;
 
 /// Obtain a content-root-relative file's current text — open-document
 /// content when open, disk content otherwise (§6.1: "on-disk edits
@@ -94,7 +97,7 @@ impl SourceReader for FixtureSourceReader {
 }
 
 /// Diagnose one `.bsl` file (§6.3's own bullet): resolve its content
-/// set(s) from `manifest`, run `diagnose_content_set` against each, and
+/// set(s) from `manifest`, run `diagnose_content_set_sources` against each, and
 /// map every resulting `PrepareError` to a `Diagnostic` located in THIS
 /// file's own `(forest, SpanTable)`. A path naming no manifest row at all
 /// gets exactly the Information notice (§6.3's own "declaration-
@@ -164,7 +167,7 @@ pub fn diagnose_bsl(
             .prelude
             .iter()
             .zip(&prelude_srcs)
-            .map(|(source_id, source)| ContentRuleSourceV1 { source_id, source })
+            .map(|(source_id, source)| ContentRuleSource { source_id, source })
             .collect::<Vec<_>>();
         let prelude_src = if prelude_refs.is_empty() {
             None
@@ -184,7 +187,7 @@ pub fn diagnose_bsl(
             .collect::<Vec<_>>();
         let named_sources = rule_srcs
             .iter()
-            .map(|(source_id, rule_src)| ContentRuleSourceV1 {
+            .map(|(source_id, rule_src)| ContentRuleSource {
                 source_id,
                 source: rule_src,
             })
@@ -193,7 +196,7 @@ pub fn diagnose_bsl(
             diagnose_content_set_sources(&scenario_src, prelude_src.as_deref(), &named_sources);
         located.extend(prepare_refusals_for_source(&errors, content_relative_path));
         located.extend(kernel_slot_refusals_from_sources(
-            ContentRuleSourceV1 {
+            ContentRuleSource {
                 source_id: &set.scenario,
                 source: &scenario_src,
             },
@@ -206,7 +209,7 @@ pub fn diagnose_bsl(
     diagnostics_for_file(uri, &text, &line_index, &located)
 }
 
-fn prepare_refusals_for_source(errors: &[SourcedPrepareErrorV1], source_id: &str) -> Vec<Located> {
+fn prepare_refusals_for_source(errors: &[SourcedPrepareError], source_id: &str) -> Vec<Located> {
     errors
         .iter()
         .filter(|sourced| {
@@ -220,9 +223,9 @@ fn prepare_refusals_for_source(errors: &[SourcedPrepareErrorV1], source_id: &str
 }
 
 fn kernel_slot_refusals_from_sources(
-    scenario_source: ContentRuleSourceV1<'_>,
-    prelude_sources: &[ContentRuleSourceV1<'_>],
-    rule_sources: &[ContentRuleSourceV1<'_>],
+    scenario_source: ContentRuleSource<'_>,
+    prelude_sources: &[ContentRuleSource<'_>],
+    rule_sources: &[ContentRuleSource<'_>],
     manifest: &ContentSetManifest,
     source_id: &str,
 ) -> Vec<Located> {
@@ -233,7 +236,7 @@ fn kernel_slot_refusals_from_sources(
         rule_sources,
         &kernel_slots,
     ) {
-        Err(ContentSetSourceAnalysisErrorV1 {
+        Err(ContentSetSourceAnalysisError {
             error: babylon_tick::PrepareError::KernelSlot(_),
             partial_analysis: Some(analysis),
         }) => kernel_slot_refusals(&analysis, manifest, source_id),
@@ -242,7 +245,7 @@ fn kernel_slot_refusals_from_sources(
 }
 
 fn kernel_slot_refusals(
-    analysis: &ContentSetAnalysisV1,
+    analysis: &ContentSetAnalysis,
     manifest: &ContentSetManifest,
     source_id: &str,
 ) -> Vec<Located> {
@@ -300,8 +303,8 @@ fn kernel_slot_refusals(
 fn likelihood_analysis_facts(
     scenario_src: &str,
     prelude_src: Option<&str>,
-    rule_sources: &[ContentRuleSourceV1<'_>],
-    analysis: &ContentSetAnalysisV1,
+    rule_sources: &[ContentRuleSource<'_>],
+    analysis: &ContentSetAnalysis,
     manifest: &ContentSetManifest,
 ) -> Vec<(String, EventLikelihoodAnalysisFact)> {
     let kernel_slots = manifest.borrowed_kernel_slots();
@@ -326,14 +329,14 @@ fn likelihood_analysis_facts(
                         })
                         .collect(),
                 ),
-                Err(ForecastErrorV1::NotExactlyEnumerable { reason }) => {
+                Err(ForecastError::NotExactlyEnumerable { reason }) => {
                     EventLikelihoodAnalysisFact::StateDependent { reason }
                 }
-                Err(ForecastErrorV1::Preparation(error)) => EventLikelihoodAnalysisFact::Refused {
+                Err(ForecastError::Preparation(error)) => EventLikelihoodAnalysisFact::Refused {
                     stage: ForecastRefusalStage::Preparation,
                     reason: error.to_string(),
                 },
-                Err(ForecastErrorV1::Execution(error)) => EventLikelihoodAnalysisFact::Refused {
+                Err(ForecastError::Execution(error)) => EventLikelihoodAnalysisFact::Refused {
                     stage: ForecastRefusalStage::Execution,
                     reason: error.to_string(),
                 },
@@ -378,7 +381,7 @@ pub fn analyze_probability_authoring(
             .prelude
             .iter()
             .zip(&prelude_srcs)
-            .map(|(source_id, source)| ContentRuleSourceV1 { source_id, source })
+            .map(|(source_id, source)| ContentRuleSource { source_id, source })
             .collect::<Vec<_>>();
         let prelude = if prelude_refs.is_empty() {
             None
@@ -398,15 +401,15 @@ pub fn analyze_probability_authoring(
         };
         let named_sources = rule_sources
             .iter()
-            .map(|(source_id, source)| ContentRuleSourceV1 { source_id, source })
+            .map(|(source_id, source)| ContentRuleSource { source_id, source })
             .collect::<Vec<_>>();
         let kernel_slots = manifest.borrowed_kernel_slots();
         let (Ok(analysis)
-        | Err(ContentSetSourceAnalysisErrorV1 {
+        | Err(ContentSetSourceAnalysisError {
             partial_analysis: Some(analysis),
             ..
         })) = analyze_content_set_sources_with_kernel_slots(
-            ContentRuleSourceV1 {
+            ContentRuleSource {
                 source_id: &set.scenario,
                 source: &scenario_src,
             },
@@ -517,7 +520,7 @@ mod tests {
     // "vitality" is one of `babylon-tick`'s own registered namespaces
     // (`registered_systems`) — unlike "event" (a babylon-bsl conformance-
     // corpus-only namespace), a rule anchored under it clears the §2.3
-    // anchor default check that `diagnose_content_set` actually runs.
+    // anchor default check that `diagnose_content_set_sources` actually runs.
     const RULE: &str = "(rule vitality/probe :role mechanic :evidence derived :material-basis \"x\" :fuel 16 (bindings) \
                          (effects (emit EventType/CONSCIOUSNESS_SHIFT (gate 0))))";
     const KERNEL_SCENARIO: &str = "(scenario ft/probe \
@@ -1074,15 +1077,15 @@ note = "Mass declaration ownership fixture"
         let prelude_source = source.read("prelude.bsl").expect("prelude source");
         let rule_source = source.read("rules/probe.bsl").expect("rule source");
         let analysis = babylon_tick::analyze_content_set_sources(
-            babylon_tick::ContentRuleSourceV1 {
+            babylon_tick::ContentRuleSource {
                 source_id: "scenario.bscn",
                 source: &scenario_source,
             },
-            &[babylon_tick::ContentRuleSourceV1 {
+            &[babylon_tick::ContentRuleSource {
                 source_id: "prelude.bsl",
                 source: &prelude_source,
             }],
-            &[babylon_tick::ContentRuleSourceV1 {
+            &[babylon_tick::ContentRuleSource {
                 source_id: "rules/probe.bsl",
                 source: &rule_source,
             }],
@@ -1209,8 +1212,14 @@ note = "Mass declaration ownership fixture"
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].event_type, "EXCESSIVE_FORCE");
         assert_eq!(rows[0].favorable_outcomes, ["EXCESSIVE_FORCE"]);
-        assert_eq!(rows[0].numerator, babylon_bsl::TICKET_DENOMINATOR / 4);
-        assert_eq!(rows[0].denominator, babylon_bsl::TICKET_DENOMINATOR);
+        assert_eq!(
+            rows[0].numerator,
+            babylon_bsl::probability::TICKET_DENOMINATOR / 4
+        );
+        assert_eq!(
+            rows[0].denominator,
+            babylon_bsl::probability::TICKET_DENOMINATOR
+        );
 
         let mut multi_carrier = source.clone();
         multi_carrier.files.insert(

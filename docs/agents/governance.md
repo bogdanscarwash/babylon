@@ -179,6 +179,11 @@ identity-mismatched, or API-failed review does not block a merge. A top-level
 comment without a reply is also advisory. Any unresolved review thread blocks
 the merge, regardless of its author.
 
+Rust has one current implementation and persistence schema. Refactoring can
+retire superseded code and implementation-coupled tests while preserving current
+behavioral evidence. Refuse existing incompatible databases before mutation.
+Never migrate, reset, or delete them to qualify a change.
+
 Each PR records a behavioral-contract disposition. Changed behavior links a
 durable, implementation-independent contract. No behavior change includes an
 explanation of why the current contracts are enough.

@@ -1,7 +1,7 @@
 //! Exact committed component access belongs exclusively to the full observer.
 
 use super::*;
-use babylon_persistence::SemanticArchiveReaderErrorV1;
+use babylon_persistence::SemanticArchiveReaderError;
 use postgres::GenericClient;
 
 const RELATIONS: [(&str, &str); 24] = [
@@ -83,10 +83,10 @@ fn prepared_target() -> DisposableTarget {
     // The observer's existing economy schema depends on Archive relations
     // installed by the normal campaign foundation path.
     drop(
-        DurableMaterialRuntimeV3::create(
+        DurableMaterialRuntime::create(
             &target.writer,
             CampaignId::from_uuid(Uuid::from_u128(FOUNDATION_CAMPAIGN)),
-            MichiganContentPresetV1::new_campaign(MichiganDeliveryPresetV1::Standard)
+            MichiganContentPreset::new_campaign(MichiganDeliveryPreset::Standard)
                 .create_foundation(&crate::test_support::catalog())
                 .unwrap(),
         )
@@ -96,8 +96,8 @@ fn prepared_target() -> DisposableTarget {
 }
 
 fn install(target: &DisposableTarget) {
-    install_reader_role_v1(&target.writer).unwrap();
-    install_observer_economy_schema_v1(&target.writer).unwrap();
+    install_reader_role(&target.writer).unwrap();
+    provision_observer_role(&target.writer).unwrap();
 }
 
 fn rows(client: &mut impl GenericClient, relation: &str, campaign: CampaignId) -> Vec<String> {
@@ -117,13 +117,13 @@ fn rows(client: &mut impl GenericClient, relation: &str, campaign: CampaignId) -
 
 #[test]
 #[ignore = "requires the disposable PostgreSQL harness; independent clone ownership"]
-fn exact_rows_require_the_matching_v3_commit_marker() {
+fn exact_rows_require_the_matching_commit_marker() {
     let mut target = prepared_target();
     let campaign = CampaignId::from_uuid(Uuid::from_u128(41_001));
-    let mut runtime = DurableMaterialRuntimeV3::create(
+    let mut runtime = DurableMaterialRuntime::create(
         &target.writer,
         campaign,
-        MichiganContentPresetV1::new_campaign(MichiganDeliveryPresetV1::Standard)
+        MichiganContentPreset::new_campaign(MichiganDeliveryPreset::Standard)
             .create_foundation(&crate::test_support::catalog())
             .unwrap(),
     )
@@ -198,16 +198,16 @@ fn assert_sql_denied(config: &Config, relation: &str) {
 }
 
 fn assert_preview_refused(
-    known: &ObserverEconomyReaderV1,
-    archive: &SemanticArchiveReaderV1,
+    known: &ObserverEconomyReader,
+    archive: &SemanticArchiveReader,
     campaign: CampaignId,
 ) {
     assert_eq!(
         known.snapshot(campaign, 0),
-        Err(ObserverEconomyErrorV1::Authority)
+        Err(ObserverEconomyError::Authority)
     );
     let error = archive.committed_tick_status(campaign).unwrap_err();
-    let SemanticArchiveReaderErrorV1::WriterAuthorityRefused(held) = error else {
+    let SemanticArchiveReaderError::WriterAuthorityRefused(held) = error else {
         panic!("expected exact Archive privilege refusal, got {error:?}");
     };
     for (relation, view) in RELATIONS {
@@ -226,20 +226,19 @@ fn full_observer_requires_every_view_and_preview_refuses_all_grant_paths() {
     let observer_config = target.login("babylon_observer", "fullcomponents");
     let known_config = target.login("babylon_reader", "knowncomponents");
     let observer =
-        ObserverEconomyReaderV1::connect(&observer_config, ObserverVisibilityV1::FullObserver)
-            .unwrap();
-    let known = ObserverEconomyReaderV1::connect(&known_config, ObserverVisibilityV1::KnownPreview)
-        .unwrap();
-    let archive = SemanticArchiveReaderV1::new(&known_config).unwrap();
+        ObserverEconomyReader::connect(&observer_config, ObserverVisibility::FullObserver).unwrap();
+    let known =
+        ObserverEconomyReader::connect(&known_config, ObserverVisibility::KnownPreview).unwrap();
+    let archive = SemanticArchiveReader::new(&known_config).unwrap();
     let absent = CampaignId::from_uuid(Uuid::from_u128(41_002));
     let mut writer = target.writer.connect(NoTls).unwrap();
     assert_eq!(
         known.snapshot(absent, 0),
-        Err(ObserverEconomyErrorV1::CampaignAbsent)
+        Err(ObserverEconomyError::CampaignAbsent)
     );
     assert_eq!(
         observer.snapshot(absent, 0),
-        Err(ObserverEconomyErrorV1::CampaignAbsent)
+        Err(ObserverEconomyError::CampaignAbsent)
     );
     assert_eq!(archive.committed_tick_status(absent).unwrap(), None);
     for (relation, view) in RELATIONS {
@@ -252,7 +251,7 @@ fn full_observer_requires_every_view_and_preview_refuses_all_grant_paths() {
             .unwrap();
         assert_eq!(
             observer.snapshot(absent, 0),
-            Err(ObserverEconomyErrorV1::Authority),
+            Err(ObserverEconomyError::Authority),
             "{view}"
         );
         writer
@@ -283,7 +282,7 @@ fn full_observer_requires_every_view_and_preview_refuses_all_grant_paths() {
         }
         assert_eq!(
             known.snapshot(absent, 0),
-            Err(ObserverEconomyErrorV1::CampaignAbsent)
+            Err(ObserverEconomyError::CampaignAbsent)
         );
         assert_eq!(archive.committed_tick_status(absent).unwrap(), None);
     }
@@ -315,8 +314,8 @@ fn schema_identity_rejects_source_definition_and_partial_install_drift() {
         )
         .unwrap();
     assert_eq!(
-        install_observer_economy_schema_v1(&target.writer),
-        Err(ObserverEconomyErrorV1::SchemaDrift)
+        provision_observer_role(&target.writer),
+        Err(ObserverEconomyError::SchemaDrift)
     );
     writer
         .execute(
@@ -335,8 +334,8 @@ fn schema_identity_rejects_source_definition_and_partial_install_drift() {
         "CREATE OR REPLACE VIEW public.v_observer_graph_node_v1 AS SELECT component.* FROM babylon_state.graph_node_v1 component WHERE false",
     ).unwrap();
     assert_eq!(
-        install_observer_economy_schema_v1(&target.writer),
-        Err(ObserverEconomyErrorV1::SchemaDrift)
+        provision_observer_role(&target.writer),
+        Err(ObserverEconomyError::SchemaDrift)
     );
     writer
         .batch_execute(&format!(
@@ -348,8 +347,8 @@ fn schema_identity_rejects_source_definition_and_partial_install_drift() {
         .batch_execute("DROP VIEW public.v_observer_graph_node_v1")
         .unwrap();
     assert_eq!(
-        install_observer_economy_schema_v1(&target.writer),
-        Err(ObserverEconomyErrorV1::SchemaDrift)
+        provision_observer_role(&target.writer),
+        Err(ObserverEconomyError::SchemaDrift)
     );
     writer.batch_execute(&format!(
         "CREATE VIEW public.v_observer_graph_node_v1 AS {original}; GRANT SELECT ON public.v_observer_graph_node_v1 TO babylon_observer"
@@ -359,7 +358,7 @@ fn schema_identity_rejects_source_definition_and_partial_install_drift() {
         .batch_execute("DROP TABLE public.observer_tick_components_schema_v1")
         .unwrap();
     assert_eq!(
-        install_observer_economy_schema_v1(&target.writer),
-        Err(ObserverEconomyErrorV1::SchemaDrift)
+        provision_observer_role(&target.writer),
+        Err(ObserverEconomyError::SchemaDrift)
     );
 }

@@ -3,12 +3,12 @@
 use postgres::Config;
 
 use crate::current_schema::{install_current_schema, CurrentSchemaError, CurrentSchemaReport};
-use crate::h3_reference_cohort::{representative_h3_reference_cohort_v1, H3ReferenceCohortError};
+use crate::h3_reference_cohort::{representative_h3_reference_cohort, H3ReferenceCohortError};
 use crate::h3_reference_installer::{
-    install_michigan_h3_reference_bundle_v1, H3ReferenceInstallError, H3ReferenceInstallReport,
+    install_michigan_h3_reference_bundle, H3ReferenceInstallError, H3ReferenceInstallReport,
 };
 use crate::michigan_dynamic_hex_foundation::{
-    michigan_dynamic_hex_foundation_v1, MichiganDynamicHexFoundationDecodeErrorV1,
+    michigan_dynamic_hex_foundation, MichiganDynamicHexFoundationDecodeError,
 };
 
 /// Receipts from the native schema and immutable reference installation.
@@ -26,7 +26,7 @@ pub enum CurrentRuntimeBootstrapError {
     /// The embedded H3 source fixture failed before database access.
     ReferenceCohort(H3ReferenceCohortError),
     /// The embedded Michigan foundation fixture failed before database access.
-    ReferenceFoundation(MichiganDynamicHexFoundationDecodeErrorV1),
+    ReferenceFoundation(MichiganDynamicHexFoundationDecodeError),
     /// The current schema could not be constructed or verified.
     CurrentSchema(CurrentSchemaError),
     /// The exact immutable reference bundle could not be installed.
@@ -52,14 +52,14 @@ impl std::error::Error for CurrentRuntimeBootstrapError {}
 pub fn bootstrap_current_runtime(
     config: &Config,
 ) -> Result<CurrentRuntimeBootstrapReport, CurrentRuntimeBootstrapError> {
-    let cohort = representative_h3_reference_cohort_v1()
+    let cohort = representative_h3_reference_cohort()
         .map_err(CurrentRuntimeBootstrapError::ReferenceCohort)?;
-    let foundation = michigan_dynamic_hex_foundation_v1()
+    let foundation = michigan_dynamic_hex_foundation()
         .map_err(CurrentRuntimeBootstrapError::ReferenceFoundation)?;
     let schema =
         install_current_schema(config).map_err(CurrentRuntimeBootstrapError::CurrentSchema)?;
     let reference_bundle_installation =
-        install_michigan_h3_reference_bundle_v1(config, cohort, foundation)
+        install_michigan_h3_reference_bundle(config, cohort, foundation)
             .map_err(CurrentRuntimeBootstrapError::ReferenceInstall)?;
     Ok(CurrentRuntimeBootstrapReport {
         reference_bundle_installation,

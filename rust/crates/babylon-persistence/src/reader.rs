@@ -1,7 +1,7 @@
 //! Fog-safe read-only Archive reader and explicit reader-role provisioning.
 //!
 //! `SemanticArchiveReaderV1` is the split read-only counterpart of
-//! [`SemanticArchiveStoreV1`](crate::SemanticArchiveStoreV1): it exposes
+//! [`SemanticArchiveStore`](crate::SemanticArchiveStoreV1): it exposes
 //! search and projection reads and is structurally incapable of schema
 //! installation, knowledge grants, or receipt materialization. Client
 //! credentials ship with the client, so fog is enforced by the `PostgreSQL`
@@ -12,7 +12,7 @@
 //! The reader role is `NOLOGIN` by design. A deployment provisions one
 //! confined `LOGIN` role as a member of `babylon_reader`
 //! (`NOSUPERUSER NOCREATEDB NOCREATEROLE`) and points
-//! [`READER_DSN_ENV_V1`] at that credential. Because the bounded startup
+//! [`READER_DSN_ENV`] at that credential. Because the bounded startup
 //! options pin `event_triggers=off`, that login also needs `GRANT SET ON
 //! PARAMETER event_triggers` (the parameter is grant-only under the runtime
 //! hardening). The handle refuses to operate on connect unless the session's
@@ -23,46 +23,46 @@ use std::str::FromStr;
 
 use postgres::{Config, NoTls};
 
-use crate::archive::{database, decode, decode_digest, SemanticArchiveErrorV1};
+use crate::archive::{database, decode, decode_digest, SemanticArchiveError};
 use crate::identity::CampaignId;
 use crate::postgres_catalog::{
     validate_connection_target, CatalogError, ConnectionTargetRejection, CATALOG_CONNECT_TIMEOUT,
     CATALOG_STARTUP_OPTIONS, CATALOG_TCP_USER_TIMEOUT,
 };
-use crate::postgres_diagnostic::PostgresDiagnosticV1;
+use crate::postgres_diagnostic::PostgresDiagnostic;
 use crate::SCHEMA_ADVISORY_LOCK_KEY;
 
 /// Environment variable admitting the read-only reader DSN.
-pub const READER_DSN_ENV_V1: &str = "BABYLON_READER_DSN";
+pub const READER_DSN_ENV: &str = "BABYLON_READER_DSN";
 /// Exact dedicated read-only role identity.
-pub const READER_ROLE_NAME_V1: &str = "babylon_reader";
+pub const READER_ROLE_NAME: &str = "babylon_reader";
 /// Exact fog-safe acknowledged-commit tick-status relation.
-pub const COMMITTED_TICK_STATUS_VIEW_V1: &str = "public.v_committed_tick_status_v1";
+pub const COMMITTED_TICK_STATUS_VIEW: &str = "public.v_committed_tick_status_v1";
 /// Exact role DDL. `CREATE ROLE` is transactional in `PostgreSQL`, so the
 /// installer executes this statement inside the same Serializable transaction
 /// as the grants; a failed install leaves no cluster-wide partial
 /// state.
-pub const READER_ROLE_CREATE_SQL_V1: &str =
+pub const READER_ROLE_CREATE_SQL: &str =
     "CREATE ROLE babylon_reader NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS";
 /// Canonical whitespace-normalized view definition the installed relation
 /// must store. `pg_get_viewdef` reconstructs the pinned `CREATE VIEW` body;
 /// both sides are canonicalized (whitespace collapsed, trailing statement
 /// separator trimmed) before comparison.
-pub const READER_VIEW_CANONICAL_DEF_V1: &str = "SELECT campaign_id, resolve_tick, \
+pub const READER_VIEW_CANONICAL_DEF: &str = "SELECT campaign_id, resolve_tick, \
     envelope_layout_version, tick_content_hash, envelope_digest \
     FROM babylon_state.tick_commit";
 
-const READER_ROLE_MARKERS_SQL_V1: &str = "SELECT \
+const READER_ROLE_MARKERS_SQL: &str = "SELECT \
     EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = 'babylon_reader'), \
     pg_catalog.to_regclass('public.v_committed_tick_status_v1') IS NOT NULL";
-const READER_ROLE_ATTRIBUTES_SQL_V1: &str = "SELECT rolsuper, rolcreatedb, rolcreaterole, \
+const READER_ROLE_ATTRIBUTES_SQL: &str = "SELECT rolsuper, rolcreatedb, rolcreaterole, \
     rolcanlogin, rolreplication, rolbypassrls FROM pg_catalog.pg_roles WHERE rolname = 'babylon_reader'";
 /// Effective-privilege census over the restricted relations: relation-level
 /// and column-level ACL entries (`aclexplode`), ownership, and everything
 /// inherited through `pg_auth_members` role-membership recursion, including
 /// grants to `PUBLIC` (role oid `0`). Entries read `schema.relation:privilege`
 /// with a ` (grantable)` suffix when the grant carries `WITH GRANT OPTION`.
-pub(crate) const READER_PRIVILEGE_CENSUS_SQL_V1: &str = "WITH RECURSIVE role_closure(oid) AS (\
+pub(crate) const READER_PRIVILEGE_CENSUS_SQL: &str = "WITH RECURSIVE role_closure(oid) AS (\
     SELECT 0::pg_catalog.oid \
     UNION \
     SELECT pg_roles.oid FROM pg_catalog.pg_roles WHERE pg_roles.rolname = $1 \
@@ -117,12 +117,12 @@ pub(crate) const READER_PRIVILEGE_CENSUS_SQL_V1: &str = "WITH RECURSIVE role_clo
     CROSS JOIN LATERAL pg_catalog.aclexplode(attributes.attacl) acl \
     JOIN role_closure ON role_closure.oid = acl.grantee) \
     SELECT entry FROM held ORDER BY entry";
-const READER_VIEW_IDENTITY_SQL_V1: &str = "SELECT relation.relkind::pg_catalog.text, \
+const READER_VIEW_IDENTITY_SQL: &str = "SELECT relation.relkind::pg_catalog.text, \
     pg_catalog.pg_get_viewdef(relation.oid) \
     FROM pg_catalog.pg_class relation \
     JOIN pg_catalog.pg_namespace namespace ON namespace.oid = relation.relnamespace \
     WHERE namespace.nspname = 'public' AND relation.relname = 'v_committed_tick_status_v1'";
-const READER_SESSION_AUTHORITY_SQL_V1: &str = "SELECT current_user::pg_catalog.text, \
+const READER_SESSION_AUTHORITY_SQL: &str = "SELECT current_user::pg_catalog.text, \
     (SELECT pg_roles.rolsuper FROM pg_catalog.pg_roles WHERE pg_roles.rolname = current_user)";
 /// Exact fog-safe projection grants on the one current schema.
 pub(crate) const READER_VIEWS: [&str; 12] = [
@@ -141,25 +141,25 @@ pub(crate) const READER_VIEWS: [&str; 12] = [
 ];
 /// Known-acknowledged-commit tick status read. The read goes through the view
 /// only; `babylon_state.tick_commit` stays revoked from the reader role.
-pub const COMMITTED_TICK_STATUS_SQL_V1: &str = "SELECT campaign_id, resolve_tick, \
+pub const COMMITTED_TICK_STATUS_SQL: &str = "SELECT campaign_id, resolve_tick, \
     envelope_layout_version, tick_content_hash, envelope_digest \
     FROM public.v_committed_tick_status_v1 \
     WHERE campaign_id = $1::uuid \
     ORDER BY resolve_tick DESC LIMIT 1";
 
 /// Fog-safe receipt-processing status without page or raw-ledger access.
-pub const ARCHIVE_VERIFICATION_STATUS_SQL_V1: &str =
+pub const ARCHIVE_VERIFICATION_STATUS_SQL: &str =
     "SELECT durable_tick, processed_tick FROM public.v_archive_verification_v1 \
      WHERE campaign_id = $1::uuid";
 
 /// Campaign-wide processing progress, separate from a page's content source tick.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct ArchiveVerificationStatusV1 {
+pub struct ArchiveVerificationStatus {
     durable_tick: u64,
     processed_tick: u64,
 }
 
-impl ArchiveVerificationStatusV1 {
+impl ArchiveVerificationStatus {
     /// Highest acknowledged commit.
     #[must_use]
     pub const fn durable_tick(&self) -> u64 {
@@ -175,7 +175,7 @@ impl ArchiveVerificationStatusV1 {
 
 /// One acknowledged-commit tail row observed through the fog-safe view.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct CommittedTickStatusV1 {
+pub struct CommittedTickStatus {
     campaign_id: CampaignId,
     resolve_tick: u64,
     envelope_layout_version: i16,
@@ -183,7 +183,7 @@ pub struct CommittedTickStatusV1 {
     envelope_digest: [u8; 32],
 }
 
-impl CommittedTickStatusV1 {
+impl CommittedTickStatus {
     /// Borrow the committed campaign identity.
     #[must_use]
     pub const fn campaign_id(&self) -> &CampaignId {
@@ -217,7 +217,7 @@ impl CommittedTickStatusV1 {
 
 /// Idempotent reader-role install result.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ReaderRoleDispositionV1 {
+pub enum ReaderRoleDisposition {
     /// The role, view, or grants committed now.
     Installed,
     /// The exact role attributes, view, and view grant already existed.
@@ -226,7 +226,7 @@ pub enum ReaderRoleDispositionV1 {
 
 /// Stable closed refusal taxonomy for reader construction and installation.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum SemanticArchiveReaderErrorV1 {
+pub enum SemanticArchiveReaderError {
     CurrentSchema(crate::CurrentSchemaError),
     /// The reader DSN environment variable is unset.
     MissingEnv(&'static str),
@@ -249,7 +249,7 @@ pub enum SemanticArchiveReaderErrorV1 {
     /// carry the observed census.
     WriterAuthorityRefused(Vec<String>),
     /// One read crossed the store boundary and failed there.
-    Archive(SemanticArchiveErrorV1),
+    Archive(SemanticArchiveError),
     /// The advisory lock did not release from this session.
     LockMismatch,
     /// One database operation failed with a bounded secret-safe driver diagnostic.
@@ -257,30 +257,27 @@ pub enum SemanticArchiveReaderErrorV1 {
         /// Stable operation identity.
         operation: &'static str,
         /// Secret-safe `PostgreSQL` classification, SQLSTATE, and message.
-        diagnostic: PostgresDiagnosticV1,
+        diagnostic: PostgresDiagnostic,
     },
 }
 
-impl std::fmt::Display for SemanticArchiveReaderErrorV1 {
+impl std::fmt::Display for SemanticArchiveReaderError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(formatter, "semantic Archive reader refusal: {self:?}")
     }
 }
 
-impl std::error::Error for SemanticArchiveReaderErrorV1 {}
+impl std::error::Error for SemanticArchiveReaderError {}
 
-fn database_error(
-    operation: &'static str,
-    error: &postgres::Error,
-) -> SemanticArchiveReaderErrorV1 {
-    SemanticArchiveReaderErrorV1::Database {
+fn database_error(operation: &'static str, error: &postgres::Error) -> SemanticArchiveReaderError {
+    SemanticArchiveReaderError::Database {
         operation,
-        diagnostic: PostgresDiagnosticV1::capture(error),
+        diagnostic: PostgresDiagnostic::capture(error),
     }
 }
 
-fn archive_boundary(error: SemanticArchiveErrorV1) -> SemanticArchiveReaderErrorV1 {
-    SemanticArchiveReaderErrorV1::Archive(error)
+fn archive_boundary(error: SemanticArchiveError) -> SemanticArchiveReaderError {
+    SemanticArchiveReaderError::Archive(error)
 }
 
 /// Collapse whitespace and trim the trailing statement separator so a
@@ -301,9 +298,9 @@ pub(crate) fn census_role_privileges(
     client: &mut impl postgres::GenericClient,
     role: &str,
     operation: &'static str,
-) -> Result<Vec<String>, SemanticArchiveReaderErrorV1> {
+) -> Result<Vec<String>, SemanticArchiveReaderError> {
     let rows = client
-        .query(READER_PRIVILEGE_CENSUS_SQL_V1, &[&role])
+        .query(READER_PRIVILEGE_CENSUS_SQL, &[&role])
         .map_err(|error| database_error(operation, &error))?;
     rows.iter()
         .map(|row| row.try_get::<_, String>(0))
@@ -319,27 +316,27 @@ fn exact_reader_footprint(held: &[String]) -> bool {
     held == expected
 }
 
-fn connection_target_error(error: &CatalogError) -> SemanticArchiveReaderErrorV1 {
+fn connection_target_error(error: &CatalogError) -> SemanticArchiveReaderError {
     // The validator is a pure target check: its only failure construction is
     // one bounded target rejection, so any other variant is an internal fault.
     let CatalogError::UnsupportedConnectionTarget { reason } = error else {
         unreachable!("connection target validation only reports target rejections")
     };
-    SemanticArchiveReaderErrorV1::ConnectionTarget(*reason)
+    SemanticArchiveReaderError::ConnectionTarget(*reason)
 }
 
 /// Split read-only `PostgreSQL` handle for fog-safe Archive reads.
 ///
 /// Writer operations (`install_schema`, `grant_knowledge`,
 /// `materialize_receipt`, worker sweeps) are unrepresentable on this type;
-/// [`SemanticArchiveStoreV1`](crate::SemanticArchiveStoreV1) and the runtime
+/// [`SemanticArchiveStore`](crate::SemanticArchiveStoreV1) and the runtime
 /// binary remain the sole writers.
 #[derive(Clone)]
-pub struct SemanticArchiveReaderV1 {
+pub struct SemanticArchiveReader {
     config: Config,
 }
 
-impl SemanticArchiveReaderV1 {
+impl SemanticArchiveReader {
     /// Parse and validate one explicit local-only reader DSN.
     ///
     /// The raw parsed [`Config`] is validated before any bounded startup
@@ -348,34 +345,34 @@ impl SemanticArchiveReaderV1 {
     /// socket opens.
     ///
     /// # Errors
-    /// Returns [`SemanticArchiveReaderErrorV1`] for a malformed DSN or an
+    /// Returns [`SemanticArchiveReaderError`] for a malformed DSN or an
     /// out-of-contract connection target.
-    pub fn from_dsn(raw: &str) -> Result<Self, SemanticArchiveReaderErrorV1> {
-        let config = Config::from_str(raw).map_err(|_| SemanticArchiveReaderErrorV1::InvalidDsn)?;
+    pub fn from_dsn(raw: &str) -> Result<Self, SemanticArchiveReaderError> {
+        let config = Config::from_str(raw).map_err(|_| SemanticArchiveReaderError::InvalidDsn)?;
         Self::new(&config)
     }
 
-    /// Admit the reader DSN from [`READER_DSN_ENV_V1`].
+    /// Admit the reader DSN from [`READER_DSN_ENV`].
     ///
     /// # Errors
-    /// Returns [`SemanticArchiveReaderErrorV1`] for a missing or non-UTF-8
+    /// Returns [`SemanticArchiveReaderError`] for a missing or non-UTF-8
     /// environment value, a malformed DSN, or an out-of-contract target.
-    pub fn from_env() -> Result<Self, SemanticArchiveReaderErrorV1> {
-        let raw = std::env::var_os(READER_DSN_ENV_V1)
-            .ok_or(SemanticArchiveReaderErrorV1::MissingEnv(READER_DSN_ENV_V1))?;
+    pub fn from_env() -> Result<Self, SemanticArchiveReaderError> {
+        let raw = std::env::var_os(READER_DSN_ENV)
+            .ok_or(SemanticArchiveReaderError::MissingEnv(READER_DSN_ENV))?;
         let dsn = raw
             .into_string()
-            .map_err(|_| SemanticArchiveReaderErrorV1::EnvNotUtf8(READER_DSN_ENV_V1))?;
+            .map_err(|_| SemanticArchiveReaderError::EnvNotUtf8(READER_DSN_ENV))?;
         Self::from_dsn(&dsn)
     }
 
     /// Validate one explicit local-only connection target and bind the reader.
     ///
     /// # Errors
-    /// Returns [`SemanticArchiveReaderErrorV1::ConnectionTarget`] for
+    /// Returns [`SemanticArchiveReaderError::ConnectionTarget`] for
     /// caller-supplied startup options, host-address overrides, multi-host or
     /// multi-port targets, a missing host, or a non-loopback TCP target.
-    pub fn new(config: &Config) -> Result<Self, SemanticArchiveReaderErrorV1> {
+    pub fn new(config: &Config) -> Result<Self, SemanticArchiveReaderError> {
         validate_connection_target(config).map_err(|error| connection_target_error(&error))?;
         Ok(Self {
             config: config.clone(),
@@ -393,10 +390,10 @@ impl SemanticArchiveReaderV1 {
     pub fn committed_tick_status(
         &self,
         campaign_id: CampaignId,
-    ) -> Result<Option<CommittedTickStatusV1>, SemanticArchiveReaderErrorV1> {
+    ) -> Result<Option<CommittedTickStatus>, SemanticArchiveReaderError> {
         let mut client = self.connect("connect committed tick status reader")?;
         client
-            .query_opt(COMMITTED_TICK_STATUS_SQL_V1, &[campaign_id.as_uuid()])
+            .query_opt(COMMITTED_TICK_STATUS_SQL, &[campaign_id.as_uuid()])
             .map_err(|error| archive_boundary(database("read committed tick status view", &error)))?
             .map(|row| decode_committed_tick_status(campaign_id, &row))
             .transpose()
@@ -412,20 +409,20 @@ impl SemanticArchiveReaderV1 {
     pub fn archive_verification_status(
         &self,
         campaign_id: CampaignId,
-    ) -> Result<Option<ArchiveVerificationStatusV1>, SemanticArchiveReaderErrorV1> {
+    ) -> Result<Option<ArchiveVerificationStatus>, SemanticArchiveReaderError> {
         let mut client = self.connect("connect Archive verification reader")?;
         let row = client
-            .query_opt(ARCHIVE_VERIFICATION_STATUS_SQL_V1, &[campaign_id.as_uuid()])
+            .query_opt(ARCHIVE_VERIFICATION_STATUS_SQL, &[campaign_id.as_uuid()])
             .map_err(|error| database_error("read Archive verification status", &error))?;
         row.map(|row| {
             let durable_tick = u64::try_from(decode::<i64>(&row, 0)?)
-                .map_err(|_| SemanticArchiveErrorV1::StoredPageMismatch)?;
+                .map_err(|_| SemanticArchiveError::StoredPageMismatch)?;
             let processed_tick = u64::try_from(decode::<i64>(&row, 1)?)
-                .map_err(|_| SemanticArchiveErrorV1::StoredPageMismatch)?;
+                .map_err(|_| SemanticArchiveError::StoredPageMismatch)?;
             if processed_tick > durable_tick {
-                return Err(SemanticArchiveErrorV1::StoredPageMismatch);
+                return Err(SemanticArchiveError::StoredPageMismatch);
             }
-            Ok(ArchiveVerificationStatusV1 {
+            Ok(ArchiveVerificationStatus {
                 durable_tick,
                 processed_tick,
             })
@@ -437,7 +434,7 @@ impl SemanticArchiveReaderV1 {
     pub(crate) fn connect(
         &self,
         operation: &'static str,
-    ) -> Result<postgres::Client, SemanticArchiveReaderErrorV1> {
+    ) -> Result<postgres::Client, SemanticArchiveReaderError> {
         // The stored config stays raw: validation must observe the caller's
         // exact target, not the bounded startup options added here.
         let mut bounded = self.config.clone();
@@ -459,9 +456,9 @@ impl SemanticArchiveReaderV1 {
 /// owner credential, or any inherited extra privilege is a loud refusal.
 fn confine_reader_authority(
     client: &mut postgres::Client,
-) -> Result<(), SemanticArchiveReaderErrorV1> {
+) -> Result<(), SemanticArchiveReaderError> {
     let row = client
-        .query_one(READER_SESSION_AUTHORITY_SQL_V1, &[])
+        .query_one(READER_SESSION_AUTHORITY_SQL, &[])
         .map_err(|error| database_error("census reader session authority", &error))?;
     let session_role: String = row
         .try_get(0)
@@ -481,7 +478,7 @@ fn confine_reader_authority(
     if exact_reader_footprint(&held) {
         Ok(())
     } else {
-        Err(SemanticArchiveReaderErrorV1::WriterAuthorityRefused(held))
+        Err(SemanticArchiveReaderError::WriterAuthorityRefused(held))
     }
 }
 
@@ -489,9 +486,9 @@ fn confine_reader_authority(
 ///
 /// # Errors
 /// Refuses incompatible schemas, role attributes and any partial or extra privileges.
-pub fn install_reader_role_v1(
+pub fn install_reader_role(
     config: &Config,
-) -> Result<ReaderRoleDispositionV1, SemanticArchiveReaderErrorV1> {
+) -> Result<ReaderRoleDisposition, SemanticArchiveReaderError> {
     validate_connection_target(config).map_err(|error| connection_target_error(&error))?;
     let mut client = crate::current_schema::bounded_config(config)
         .connect(NoTls)
@@ -513,13 +510,13 @@ pub fn install_reader_role_v1(
     match (result, unlock) {
         (Err(error), _) | (Ok(_), Err(error)) => Err(error),
         (Ok(disposition), Ok(true)) => Ok(disposition),
-        (Ok(_), Ok(false)) => Err(SemanticArchiveReaderErrorV1::LockMismatch),
+        (Ok(_), Ok(false)) => Err(SemanticArchiveReaderError::LockMismatch),
     }
 }
 
 fn install_reader_role_locked(
     client: &mut postgres::Client,
-) -> Result<ReaderRoleDispositionV1, SemanticArchiveReaderErrorV1> {
+) -> Result<ReaderRoleDisposition, SemanticArchiveReaderError> {
     let mut tx = client
         .build_transaction()
         .isolation_level(postgres::IsolationLevel::Serializable)
@@ -527,9 +524,9 @@ fn install_reader_role_locked(
         .start()
         .map_err(|error| database_error("begin reader role provisioning", &error))?;
     crate::current_schema::require_current_schema(&mut tx)
-        .map_err(SemanticArchiveReaderErrorV1::CurrentSchema)?;
+        .map_err(SemanticArchiveReaderError::CurrentSchema)?;
     let row = tx
-        .query_one(READER_ROLE_MARKERS_SQL_V1, &[])
+        .query_one(READER_ROLE_MARKERS_SQL, &[])
         .map_err(|error| database_error("inspect reader role", &error))?;
     let role_exists: bool = row
         .try_get(0)
@@ -538,16 +535,12 @@ fn install_reader_role_locked(
         verify_reader_role_attributes(&mut tx)?;
     }
     verify_reader_view_identity(&mut tx)?;
-    let held = census_role_privileges(
-        &mut tx,
-        READER_ROLE_NAME_V1,
-        "census reader role privileges",
-    )?;
+    let held = census_role_privileges(&mut tx, READER_ROLE_NAME, "census reader role privileges")?;
     let disposition = if exact_reader_footprint(&held) {
-        ReaderRoleDispositionV1::AlreadyCurrent
+        ReaderRoleDisposition::AlreadyCurrent
     } else if held.is_empty() {
         if !role_exists {
-            tx.batch_execute(READER_ROLE_CREATE_SQL_V1)
+            tx.batch_execute(READER_ROLE_CREATE_SQL)
                 .map_err(|error| database_error("create reader role", &error))?;
         }
         let grants = format!(
@@ -556,19 +549,15 @@ fn install_reader_role_locked(
         );
         tx.batch_execute(&grants)
             .map_err(|error| database_error("grant reader projections", &error))?;
-        ReaderRoleDispositionV1::Installed
+        ReaderRoleDisposition::Installed
     } else {
-        return Err(SemanticArchiveReaderErrorV1::PrivilegeDrift(held));
+        return Err(SemanticArchiveReaderError::PrivilegeDrift(held));
     };
     crate::current_schema::require_current_schema(&mut tx)
-        .map_err(SemanticArchiveReaderErrorV1::CurrentSchema)?;
-    let held = census_role_privileges(
-        &mut tx,
-        READER_ROLE_NAME_V1,
-        "verify reader role privileges",
-    )?;
+        .map_err(SemanticArchiveReaderError::CurrentSchema)?;
+    let held = census_role_privileges(&mut tx, READER_ROLE_NAME, "verify reader role privileges")?;
     if !exact_reader_footprint(&held) {
-        return Err(SemanticArchiveReaderErrorV1::PrivilegeDrift(held));
+        return Err(SemanticArchiveReaderError::PrivilegeDrift(held));
     }
     tx.commit()
         .map_err(|error| database_error("commit reader provisioning", &error))?;
@@ -577,16 +566,16 @@ fn install_reader_role_locked(
 
 fn verify_reader_role_attributes(
     client: &mut impl postgres::GenericClient,
-) -> Result<(), SemanticArchiveReaderErrorV1> {
+) -> Result<(), SemanticArchiveReaderError> {
     let row = client
-        .query_one(READER_ROLE_ATTRIBUTES_SQL_V1, &[])
+        .query_one(READER_ROLE_ATTRIBUTES_SQL, &[])
         .map_err(|error| database_error("inspect reader role attributes", &error))?;
     for index in 0..6 {
         if row
             .try_get::<_, bool>(index)
             .map_err(|error| database_error("decode reader role attributes", &error))?
         {
-            return Err(SemanticArchiveReaderErrorV1::RoleMismatch);
+            return Err(SemanticArchiveReaderError::RoleMismatch);
         }
     }
     Ok(())
@@ -594,11 +583,11 @@ fn verify_reader_role_attributes(
 
 fn verify_reader_view_identity(
     client: &mut impl postgres::GenericClient,
-) -> Result<(), SemanticArchiveReaderErrorV1> {
+) -> Result<(), SemanticArchiveReaderError> {
     let row = client
-        .query_opt(READER_VIEW_IDENTITY_SQL_V1, &[])
+        .query_opt(READER_VIEW_IDENTITY_SQL, &[])
         .map_err(|error| database_error("inspect reader view identity", &error))?
-        .ok_or(SemanticArchiveReaderErrorV1::ViewMismatch)?;
+        .ok_or(SemanticArchiveReaderError::ViewMismatch)?;
     let relkind: String = row
         .try_get(0)
         .map_err(|error| database_error("decode reader view relkind", &error))?;
@@ -610,28 +599,28 @@ fn verify_reader_view_identity(
             .as_deref()
             .map(canonicalize_view_definition)
             .as_deref()
-            == Some(READER_VIEW_CANONICAL_DEF_V1)
+            == Some(READER_VIEW_CANONICAL_DEF)
     {
         Ok(())
     } else {
-        Err(SemanticArchiveReaderErrorV1::ViewMismatch)
+        Err(SemanticArchiveReaderError::ViewMismatch)
     }
 }
 
 fn decode_committed_tick_status(
     campaign_id: CampaignId,
     row: &postgres::Row,
-) -> Result<CommittedTickStatusV1, SemanticArchiveErrorV1> {
+) -> Result<CommittedTickStatus, SemanticArchiveError> {
     let stored_campaign: uuid::Uuid = decode(row, 0)?;
     if stored_campaign != *campaign_id.as_uuid() {
-        return Err(SemanticArchiveErrorV1::StoredPageMismatch);
+        return Err(SemanticArchiveError::StoredPageMismatch);
     }
     let resolve_tick = u64::try_from(decode::<i64>(row, 1)?)
         .ok()
         .filter(|tick| *tick > 0)
-        .ok_or(SemanticArchiveErrorV1::StoredPageMismatch)?;
+        .ok_or(SemanticArchiveError::StoredPageMismatch)?;
     let envelope_layout_version: i16 = decode(row, 2)?;
-    Ok(CommittedTickStatusV1 {
+    Ok(CommittedTickStatus {
         campaign_id,
         resolve_tick,
         envelope_layout_version,

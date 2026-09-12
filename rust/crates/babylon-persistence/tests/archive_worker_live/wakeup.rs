@@ -1,11 +1,11 @@
 //! Real commit-bound hints, cancellable publication, and listener catch-up.
 use super::*;
-use babylon_persistence::archive_driver::{ArchiveDriverEventV1, ArchiveDriverV1};
+use babylon_persistence::archive_driver::{ArchiveDriver, ArchiveDriverEvent};
 use babylon_persistence::{
-    material_runtime::{DurableMaterialRuntimeV3, MaterialRuntimeErrorV3},
-    michigan_content::MichiganContentPresetV1,
-    michigan_material::MichiganDeliveryPresetV1,
-    ArchiveWorkerCancellationV1, ARCHIVE_WAKEUP_CHANNEL_V1,
+    material_runtime::{DurableMaterialRuntime, MaterialRuntimeError},
+    michigan_content::MichiganContentPreset,
+    michigan_material::MichiganDeliveryPreset,
+    ArchiveWorkerCancellation, ARCHIVE_WAKEUP_CHANNEL,
 };
 use postgres::fallible_iterator::FallibleIterator as _;
 use std::sync::mpsc::{self, Receiver};
@@ -26,7 +26,7 @@ fn next_hint(client: &mut postgres::Client, wait: Duration) -> Option<postgres::
         .expect("notification connection")
 }
 fn assert_verifier_refuses_wakeup_drift(
-    store: &SemanticArchiveStoreV1,
+    store: &SemanticArchiveStore,
     writer: &mut postgres::Client,
 ) {
     writer
@@ -36,7 +36,7 @@ fn assert_verifier_refuses_wakeup_drift(
         .expect("isolated trigger corruption");
     assert!(matches!(
         store.verify_schema(),
-        Err(SemanticArchiveErrorV1::CurrentSchema(_)) | Err(SemanticArchiveErrorV1::SchemaMismatch)
+        Err(SemanticArchiveError::CurrentSchema(_) | SemanticArchiveError::SchemaMismatch)
     ));
     writer
         .batch_execute(
@@ -48,7 +48,7 @@ fn assert_verifier_refuses_wakeup_drift(
         .expect("isolated function exposure");
     assert!(matches!(
         store.verify_schema(),
-        Err(SemanticArchiveErrorV1::CurrentSchema(_)) | Err(SemanticArchiveErrorV1::SchemaMismatch)
+        Err(SemanticArchiveError::CurrentSchema(_) | SemanticArchiveError::SchemaMismatch)
     ));
     writer
         .batch_execute("REVOKE ALL ON FUNCTION babylon_meta.archive_wakeup_v1() FROM PUBLIC")
@@ -57,7 +57,7 @@ fn assert_verifier_refuses_wakeup_drift(
 }
 fn assert_empty_hint(listener: &mut postgres::Client) {
     let hint = next_hint(listener, Duration::from_secs(2)).expect("committed hint");
-    assert_eq!(hint.channel(), ARCHIVE_WAKEUP_CHANNEL_V1);
+    assert_eq!(hint.channel(), ARCHIVE_WAKEUP_CHANNEL);
     assert_eq!(hint.payload(), "");
 }
 
@@ -66,7 +66,7 @@ fn assert_empty_hint(listener: &mut postgres::Client) {
 fn live_wakeup_is_commit_bound_empty_and_verifier_refuses_trigger_drift() {
     let target =
         LiveWorkerTarget::create("wakeupcommit", 0x2200_0000_0000_0000_0000_0000_0000_00f1, 1);
-    let store = SemanticArchiveStoreV1::new(&target.config);
+    let store = SemanticArchiveStore::new(&target.config);
     store.verify_schema().expect("current schema");
     let mut listener = listen(&target.config);
     let mut writer = target.config.connect(NoTls).expect("probe writer");
@@ -86,8 +86,8 @@ fn live_wakeup_is_commit_bound_empty_and_verifier_refuses_trigger_drift() {
 
     let campaign =
         CampaignId::from_uuid(Uuid::from_u128(0x2200_0000_0000_0000_0000_0000_0000_00f4));
-    let (session, bundle) = runtime_fixture_with_seed(WORKER_SEED);
-    let foundation = DurableReplayRuntimeV2::create(&target.config, campaign, session, bundle)
+    let foundation = current_material::foundation();
+    let foundation = DurableMaterialRuntime::create(&target.config, campaign, foundation)
         .expect("real zero-tick campaign enrollment");
     assert_empty_hint(&mut listener);
     drop(foundation);
@@ -96,7 +96,7 @@ fn live_wakeup_is_commit_bound_empty_and_verifier_refuses_trigger_drift() {
 
     // The worker's own pages, consumption, and seal have typed progress results;
     // those writes must not feed another database wake back into this driver.
-    let report = ArchiveWorkerV1::new(&target.config)
+    let report = ArchiveWorker::new(&target.config)
         .sweep_once(target.campaign_id, &StubPageProducer)
         .expect("canonical Archive publication");
     assert_eq!(report.verified_tick(), 2);
@@ -107,15 +107,15 @@ fn live_wakeup_is_commit_bound_empty_and_verifier_refuses_trigger_drift() {
     target.finish();
 }
 
-struct CancelAfterProduce(ArchiveWorkerCancellationV1);
-impl ArchiveDossierProducerV1 for CancelAfterProduce {
+struct CancelAfterProduce(ArchiveWorkerCancellation);
+impl ArchiveDossierProducer for CancelAfterProduce {
     fn produce(
         &self,
         campaign: Uuid,
-        receipt: &PendingArchiveReceiptV1,
-        knowledge: &babylon_persistence::ArchiveKnowledgeV1,
+        receipt: &PendingArchiveReceipt,
+        knowledge: &babylon_persistence::ArchiveKnowledge,
         page_budget: usize,
-    ) -> Result<ArchiveProducerOutcomeV1, SemanticArchiveErrorV1> {
+    ) -> Result<ArchiveProducerOutcome, SemanticArchiveError> {
         let result = StubPageProducer.produce(campaign, receipt, knowledge, page_budget);
         self.0.request_stop();
         result
@@ -126,15 +126,15 @@ impl ArchiveDossierProducerV1 for CancelAfterProduce {
 fn live_worker_stop_rolls_back_uncommitted_pin_and_page_then_retry_drains() {
     let target =
         LiveWorkerTarget::create("wakeupcancel", 0x2200_0000_0000_0000_0000_0000_0000_00f2, 1);
-    let cancellation = ArchiveWorkerCancellationV1::default();
-    let mut worker = ArchiveWorkerV1::new(&target.config);
+    let cancellation = ArchiveWorkerCancellation::default();
+    let mut worker = ArchiveWorker::new(&target.config);
     assert_eq!(
         worker.sweep_cancellable(
             target.campaign_id,
             &CancelAfterProduce(cancellation.clone()),
             &cancellation
         ),
-        Err(SemanticArchiveErrorV1::WorkerCanceled)
+        Err(SemanticArchiveError::WorkerCanceled)
     );
     assert_eq!(archive_page_count(&target.config, target.campaign_id), 0);
     assert_eq!(
@@ -170,14 +170,14 @@ fn live_worker_stop_rolls_back_uncommitted_pin_and_page_then_retry_drains() {
     target.finish();
 }
 
-fn wait_progress(receiver: &Receiver<ArchiveDriverEventV1>, tick: u64, request: Option<u64>) {
+fn wait_progress(receiver: &Receiver<ArchiveDriverEvent>, tick: u64, request: Option<u64>) {
     let deadline = Instant::now() + Duration::from_secs(90);
     loop {
         let event = receiver
             .recv_timeout(deadline.saturating_duration_since(Instant::now()))
             .expect("bounded driver progress");
         match event {
-            ArchiveDriverEventV1::Progress {
+            ArchiveDriverEvent::Progress {
                 request_id,
                 durable_tick,
                 verified_tick,
@@ -193,12 +193,12 @@ fn wait_progress(receiver: &Receiver<ArchiveDriverEventV1>, tick: u64, request: 
                     return;
                 }
             }
-            ArchiveDriverEventV1::Failure { retrying: true, .. } => {}
+            ArchiveDriverEvent::Failure { retrying: true, .. } => {}
             other => panic!("unexpected driver result: {other:?}"),
         }
     }
 }
-fn stop(driver: &mut ArchiveDriverV1) {
+fn stop(driver: &mut ArchiveDriver) {
     driver.request_stop();
     let deadline = Instant::now() + Duration::from_secs(15);
     while !driver.is_finished() && Instant::now() < deadline {
@@ -216,9 +216,10 @@ fn listener_pid(client: &mut postgres::Client, database: &str) -> i32 {
 }
 fn commit_next(config: &Config, campaign: CampaignId, tick: u64) {
     let mut runtime =
-        DurableReplayRuntimeV2::open(config, campaign).expect("reopen same authoritative campaign");
-    let actions = OrderedPracticeActionBatchV1::empty(
-        runtime.foundation().replay_session_identity().clone(),
+        DurableMaterialRuntime::open(config, campaign, current_material::foundation().digest())
+            .expect("reopen same authoritative campaign");
+    let actions = OrderedPracticeActionBatch::empty(
+        runtime.session().graph_session().session_identity().clone(),
         tick,
     )
     .expect("empty next actions");
@@ -226,8 +227,7 @@ fn commit_next(config: &Config, campaign: CampaignId, tick: u64) {
         runtime
             .advance_and_commit(&mut CollectingSink::default(), &actions)
             .expect("real next commit")
-            .resolve_tick()
-            .get(),
+            .resolve_tick(),
         tick
     );
 }
@@ -245,7 +245,7 @@ fn assert_offline_gap_catches_up(target: &LiveWorkerTarget, observer: &mut postg
         "offline commit has no live worker or replayed notification"
     );
     let (sender, receiver) = mpsc::sync_channel(16);
-    let mut restarted = ArchiveDriverV1::start(&target.config, target.campaign_id, move |event| {
+    let mut restarted = ArchiveDriver::start(&target.config, target.campaign_id, move |event| {
         sender.try_send(event).is_ok()
     })
     .expect("restart after offline commit");
@@ -265,7 +265,7 @@ fn live_driver_catches_startup_backlog_and_reconnect_then_stops_under_backpressu
     let target =
         LiveWorkerTarget::create("wakeupdriver", 0x2200_0000_0000_0000_0000_0000_0000_00f3, 2);
     let (sender, receiver) = mpsc::sync_channel(16);
-    let mut driver = ArchiveDriverV1::start(&target.config, target.campaign_id, move |event| {
+    let mut driver = ArchiveDriver::start(&target.config, target.campaign_id, move |event| {
         sender.try_send(event).is_ok()
     })
     .expect("driver starts");
@@ -293,7 +293,7 @@ fn live_driver_catches_startup_backlog_and_reconnect_then_stops_under_backpressu
     drop(observer);
     let backpressure_seen = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
     let sink_signal = backpressure_seen.clone();
-    let mut blocked = ArchiveDriverV1::start(&target.config, target.campaign_id, move |_| {
+    let mut blocked = ArchiveDriver::start(&target.config, target.campaign_id, move |_| {
         sink_signal.store(true, std::sync::atomic::Ordering::Release);
         false
     })
@@ -361,8 +361,8 @@ fn assert_no_candidate_rows(client: &mut postgres::Client, campaign: CampaignId,
     );
 }
 
-fn material_actions(runtime: &DurableMaterialRuntimeV3, tick: u64) -> OrderedPracticeActionBatchV1 {
-    OrderedPracticeActionBatchV1::empty(
+fn material_actions(runtime: &DurableMaterialRuntime, tick: u64) -> OrderedPracticeActionBatch {
+    OrderedPracticeActionBatch::empty(
         runtime.session().graph_session().session_identity().clone(),
         tick,
     )
@@ -370,7 +370,7 @@ fn material_actions(runtime: &DurableMaterialRuntimeV3, tick: u64) -> OrderedPra
 }
 
 fn assert_marker_fault_rolls_back(
-    runtime: &mut DurableMaterialRuntimeV3,
+    runtime: &mut DurableMaterialRuntime,
     writer: &mut postgres::Client,
 ) {
     let prior_tail = runtime.tail().copied().expect("committed opening tail");
@@ -394,7 +394,7 @@ fn assert_marker_fault_rolls_back(
     writer
         .batch_execute(&exact_function)
         .expect("restore exact wakeup function");
-    let Err(MaterialRuntimeErrorV3::Database(error)) = refused else {
+    let Err(MaterialRuntimeError::Database(error)) = refused else {
         panic!("notification failure must refuse the commit acknowledgement");
     };
     assert_eq!(
@@ -430,11 +430,11 @@ fn live_notification_failure_rolls_back_material_commit_and_preserves_memory_bef
     let config = database.config(&base);
     let campaign =
         CampaignId::from_uuid(Uuid::from_u128(0x2200_0000_0000_0000_0000_0000_0000_00f5));
-    let foundation = MichiganContentPresetV1::new_campaign(MichiganDeliveryPresetV1::Standard)
+    let foundation = MichiganContentPreset::new_campaign(MichiganDeliveryPreset::Standard)
         .create_foundation(&crate::test_support::catalog())
         .expect("admitted material foundation");
     let foundation_digest = foundation.digest();
-    let mut runtime = DurableMaterialRuntimeV3::create(&config, campaign, foundation)
+    let mut runtime = DurableMaterialRuntime::create(&config, campaign, foundation)
         .expect("runtime opens before trigger fault");
     let opening_actions = material_actions(&runtime, 1);
     assert_eq!(
@@ -448,7 +448,7 @@ fn live_notification_failure_rolls_back_material_commit_and_preserves_memory_bef
         .connect(NoTls)
         .expect("test-owned trigger fault connection");
     assert_marker_fault_rolls_back(&mut runtime, &mut writer);
-    SemanticArchiveStoreV1::new(&config)
+    SemanticArchiveStore::new(&config)
         .verify_schema()
         .expect("restored trigger identity is exact");
     let next_actions = material_actions(&runtime, 2);
@@ -456,7 +456,7 @@ fn live_notification_failure_rolls_back_material_commit_and_preserves_memory_bef
         .advance_and_commit(&mut CollectingSink::default(), &next_actions)
         .expect("same live runtime retries exact next tick");
     assert_eq!(second.resolve_tick(), 2);
-    let reopened = DurableMaterialRuntimeV3::open(&config, campaign, foundation_digest)
+    let reopened = DurableMaterialRuntime::open(&config, campaign, foundation_digest)
         .expect("durable material reopen");
     assert_eq!(reopened.tail(), Some(&second));
     assert_eq!(

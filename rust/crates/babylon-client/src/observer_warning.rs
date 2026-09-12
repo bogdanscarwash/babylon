@@ -482,7 +482,7 @@ mod tests {
         let (mut app, _) = app(1366, 768);
         let entity = button(&mut app, WarningAction::Continue);
         let session = crate::observer::ObserverSession::new(
-            babylon_persistence::CampaignId::from_uuid(uuid::Uuid::nil()),
+            babylon_persistence::identity::CampaignId::from_uuid(uuid::Uuid::nil()),
         );
         app.world_mut().trigger(ObserverKeyboardActivate {
             entity,

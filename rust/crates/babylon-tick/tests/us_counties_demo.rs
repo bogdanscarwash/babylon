@@ -5,8 +5,8 @@
 
 use babylon_bsl::structural_verbs::CollectingSink;
 use babylon_graph::hypergraph_store::HypergraphStore;
-use babylon_kernel::replay::ReplaySessionIdV1;
-use babylon_tick::RuleDiagnosticSession;
+use babylon_kernel::replay::ReplaySessionId;
+use babylon_tick::diagnostic::RuleDiagnosticSession;
 
 const SCENARIO: &str = include_str!("../content/scenarios/us-counties-lifecycle-demo.bscn");
 const VITALITY: &str = include_str!("../content/rules/vitality.bsl");
@@ -16,7 +16,7 @@ const LIFECYCLE: &str = include_str!("../content/rules/lifecycle.bsl");
 fn the_demo_scenario_loads_and_ticks_both_packs() {
     let rule_src = format!("{VITALITY}\n{LIFECYCLE}");
     let session_id =
-        ReplaySessionIdV1::try_from("us-counties-demo-test").expect("literal is non-empty");
+        ReplaySessionId::try_from("us-counties-demo-test").expect("literal is non-empty");
     let mut session = RuleDiagnosticSession::new(
         SCENARIO,
         None,

@@ -985,13 +985,12 @@ fn community_world_4_hashes_are_pinned() {
 /// prior pins.
 #[test]
 fn community_world_5_arc_hashes_are_pinned() {
-    let mut session = babylon_tick::RuleDiagnosticSession::new(
+    let mut session = babylon_tick::diagnostic::RuleDiagnosticSession::new(
         COMMUNITY_W5,
         Some(&practice_prelude()),
         COMMUNITY_PACK,
         HypergraphStore::new(),
-        babylon_kernel::replay::ReplaySessionIdV1::try_from("community-decay-arc")
-            .expect("literal"),
+        babylon_kernel::replay::ReplaySessionId::try_from("community-decay-arc").expect("literal"),
         babylon_kernel::replay::ReplaySeed::new(0),
     )
     .expect("world 5 session");

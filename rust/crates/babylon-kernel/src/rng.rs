@@ -1,6 +1,6 @@
 //! Deterministic per-carrier `ChaCha8` streams keyed by explicit replay identity.
 
-use crate::replay::{ReplayIdentityError, ReplaySeed, ReplaySessionIdV1, RngDomainV2};
+use crate::replay::{ReplayIdentityError, ReplaySeed, ReplaySessionId, RngDomain};
 use rand_chacha::ChaCha8Rng;
 use rand_core::{Rng, SeedableRng};
 use sha2::{Digest, Sha256};
@@ -15,10 +15,10 @@ use sha2::{Digest, Sha256};
 /// Returns [`ReplayIdentityError`] if a carrier length cannot be represented
 /// in this version's required big-endian `u32` field.
 pub fn seed_for(
-    session: &ReplaySessionIdV1,
+    session: &ReplaySessionId,
     seed: ReplaySeed,
     tick: u64,
-    domain: &RngDomainV2,
+    domain: &RngDomain,
     validated_carrier_key: &[u8],
 ) -> Result<[u8; 32], ReplayIdentityError> {
     let carrier_length = u32::try_from(validated_carrier_key.len()).map_err(|_| {
@@ -64,10 +64,10 @@ impl KernelRng {
     /// Returns [`ReplayIdentityError`] when the exact V2 key preimage cannot
     /// encode one of its checked fields.
     pub fn for_carrier(
-        session: &ReplaySessionIdV1,
+        session: &ReplaySessionId,
         seed: ReplaySeed,
         tick: u64,
-        domain: &RngDomainV2,
+        domain: &RngDomain,
         validated_carrier_key: &[u8],
     ) -> Result<Self, ReplayIdentityError> {
         let key = seed_for(session, seed, tick, domain, validated_carrier_key)?;

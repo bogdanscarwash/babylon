@@ -10,27 +10,27 @@ fn first_fields() -> Vec<String> {
 
 #[test]
 fn pinned_cells_preserve_exact_coverage_disclosure_composites_and_provenance() {
-    let sectors = michigan_county_sectors_v1().unwrap();
-    assert!(std::ptr::eq(sectors, michigan_county_sectors_v1().unwrap()));
+    let sectors = michigan_county_sectors().unwrap();
+    assert!(std::ptr::eq(sectors, michigan_county_sectors().unwrap()));
     let rows = sectors.rows();
     assert_eq!(rows.len(), 1603);
     assert_eq!(
         rows.iter()
-            .map(MichiganCountySectorV1::county_geoid)
+            .map(MichiganCountySector::county_geoid)
             .collect::<BTreeSet<_>>()
             .len(),
         83
     );
     assert_eq!(
         rows.iter()
-            .filter(|row| row.disclosure() == MichiganSectorDisclosureV1::Suppressed)
+            .filter(|row| row.disclosure() == MichiganSectorDisclosure::Suppressed)
             .count(),
         416
     );
     assert_eq!(
         rows.iter()
             .filter(
-                |row| row.sector_code().disposition() == MichiganSectorDispositionV1::Unclassified
+                |row| row.sector_code().disposition() == MichiganSectorDisposition::Unclassified
             )
             .count(),
         81
@@ -38,13 +38,13 @@ fn pinned_cells_preserve_exact_coverage_disclosure_composites_and_provenance() {
     assert_eq!(MAX_ROWS - rows.len(), 57);
     assert_eq!(
         rows.iter()
-            .map(MichiganCountySectorV1::annual_avg_estabs_count)
+            .map(MichiganCountySector::annual_avg_estabs_count)
             .sum::<u64>(),
         235_170
     );
     assert_eq!(
         rows.iter()
-            .filter_map(MichiganCountySectorV1::total_annual_wages)
+            .filter_map(MichiganCountySector::total_annual_wages)
             .max(),
         Some(10_954_108_416)
     );
@@ -64,21 +64,16 @@ fn pinned_cells_preserve_exact_coverage_disclosure_composites_and_provenance() {
             row.total_annual_wages(),
             row.annual_avg_wkly_wage(),
         ];
-        if row.disclosure() == MichiganSectorDisclosureV1::Suppressed {
+        if row.disclosure() == MichiganSectorDisclosure::Suppressed {
             assert_eq!(measures, [None; 3]);
         } else {
             assert!(measures.iter().all(Option::is_some));
         }
     }
-    assert_eq!(
-        semantic_digest(rows).unwrap(),
-        QCEW_SECTORS_SEMANTIC_SHA256_V1
-    );
+    assert_eq!(semantic_digest(rows).unwrap(), QCEW_SECTORS_SEMANTIC_SHA256);
     let contract = include_str!("../../../../../contracts/qcew_county_sectors_v1.yaml");
-    assert!(contract.contains(&format!("sha256: {QCEW_SECTORS_ARTIFACT_SHA256_V1}")));
-    assert!(contract.contains(&format!(
-        "semantic_sha256: {QCEW_SECTORS_SEMANTIC_SHA256_V1}"
-    )));
+    assert!(contract.contains(&format!("sha256: {QCEW_SECTORS_ARTIFACT_SHA256}")));
+    assert!(contract.contains(&format!("semantic_sha256: {QCEW_SECTORS_SEMANTIC_SHA256}")));
 }
 
 #[test]
@@ -97,7 +92,7 @@ fn quoted_commas_and_doubled_quotes_preserve_exact_field_content() {
         "a,b,c,d,e,f,g,h,i,j,k,extra",
         "a,b,c,d,e,f,g,h,i,j",
     ] {
-        assert_eq!(csv_record(malformed), Err(MichiganSectorsErrorV1::CsvShape));
+        assert_eq!(csv_record(malformed), Err(MichiganSectorsError::CsvShape));
     }
 }
 
@@ -112,19 +107,19 @@ fn suppressed_metrics_are_absent_while_disclosed_zero_stays_exact() {
     fields[6] = "0".into();
     assert_eq!(
         parse_row(&fields, &sources),
-        Err(MichiganSectorsErrorV1::Disclosure)
+        Err(MichiganSectorsError::Disclosure)
     );
     fields[4].clear();
     assert_eq!(
         parse_row(&fields, &sources),
-        Err(MichiganSectorsErrorV1::Value)
+        Err(MichiganSectorsError::Value)
     );
     fields[7] = "0".into();
     fields[8] = "0".into();
     let observed_zero = parse_row(&fields, &sources).unwrap();
     assert_eq!(
         observed_zero.disclosure(),
-        MichiganSectorDisclosureV1::Disclosed
+        MichiganSectorDisclosure::Disclosed
     );
     assert_eq!(observed_zero.annual_avg_emplvl(), Some(0));
     assert_eq!(observed_zero.total_annual_wages(), Some(0));
@@ -132,7 +127,7 @@ fn suppressed_metrics_are_absent_while_disclosed_zero_stays_exact() {
     fields[5] = "0".into();
     assert_eq!(
         parse_row(&fields, &sources),
-        Err(MichiganSectorsErrorV1::Value)
+        Err(MichiganSectorsError::Value)
     );
 }
 
@@ -140,16 +135,16 @@ fn suppressed_metrics_are_absent_while_disclosed_zero_stays_exact() {
 fn identities_provenance_and_exact_integer_domain_refuse_lossy_admission() {
     let sources = source_pins(SOURCE_MANIFEST).unwrap();
     for (column, replacement, error) in [
-        (0, "26002", MichiganSectorsErrorV1::RowIdentity),
-        (0, "26167", MichiganSectorsErrorV1::RowIdentity),
-        (1, "31", MichiganSectorsErrorV1::RowIdentity),
-        (1, "331", MichiganSectorsErrorV1::RowIdentity),
-        (2, "", MichiganSectorsErrorV1::Value),
-        (2, "hidden\ttext", MichiganSectorsErrorV1::Value),
-        (3, "unclassified", MichiganSectorsErrorV1::RowIdentity),
-        (4, "X", MichiganSectorsErrorV1::Disclosure),
-        (9, "other-source.csv", MichiganSectorsErrorV1::Provenance),
-        (10, "0000", MichiganSectorsErrorV1::Provenance),
+        (0, "26002", MichiganSectorsError::RowIdentity),
+        (0, "26167", MichiganSectorsError::RowIdentity),
+        (1, "31", MichiganSectorsError::RowIdentity),
+        (1, "331", MichiganSectorsError::RowIdentity),
+        (2, "", MichiganSectorsError::Value),
+        (2, "hidden\ttext", MichiganSectorsError::Value),
+        (3, "unclassified", MichiganSectorsError::RowIdentity),
+        (4, "X", MichiganSectorsError::Disclosure),
+        (9, "other-source.csv", MichiganSectorsError::Provenance),
+        (10, "0000", MichiganSectorsError::Provenance),
     ] {
         let mut fields = first_fields();
         fields[column] = replacement.into();
@@ -165,19 +160,19 @@ fn identities_provenance_and_exact_integer_domain_refuse_lossy_admission() {
         "１２",
         "9223372036854775808",
     ] {
-        assert_eq!(integer(invalid), Err(MichiganSectorsErrorV1::Value));
+        assert_eq!(integer(invalid), Err(MichiganSectorsError::Value));
     }
     assert_eq!(
         integer("9223372036854775807"),
         Ok(9_223_372_036_854_775_807)
     );
     for code in ["31-33", "44-45", "48-49"] {
-        let code = MichiganSectorCodeV1::parse(code).unwrap();
-        assert_eq!(code.disposition(), MichiganSectorDispositionV1::Classified);
+        let code = MichiganSectorCode::parse(code).unwrap();
+        assert_eq!(code.disposition(), MichiganSectorDisposition::Classified);
     }
     assert_eq!(
-        MichiganSectorCodeV1::parse("99").unwrap().disposition(),
-        MichiganSectorDispositionV1::Unclassified
+        MichiganSectorCode::parse("99").unwrap().disposition(),
+        MichiganSectorDisposition::Unclassified
     );
 }
 
@@ -190,13 +185,13 @@ fn duplicate_reordered_missing_and_changed_cells_do_not_pass_semantic_admission(
     duplicate.insert(2, lines[1]);
     assert_eq!(
         checked_csv(&(duplicate.join("\n") + "\n"), &pins),
-        Err(MichiganSectorsErrorV1::Ordering)
+        Err(MichiganSectorsError::Ordering)
     );
     let mut reordered = lines.clone();
     reordered.swap(1, 2);
     assert_eq!(
         checked_csv(&(reordered.join("\n") + "\n"), &pins),
-        Err(MichiganSectorsErrorV1::Ordering)
+        Err(MichiganSectorsError::Ordering)
     );
     let missing = lines
         .iter()
@@ -207,17 +202,17 @@ fn duplicate_reordered_missing_and_changed_cells_do_not_pass_semantic_admission(
         + "\n";
     assert_eq!(
         checked_csv(&missing, &pins),
-        Err(MichiganSectorsErrorV1::Coverage)
+        Err(MichiganSectorsError::Coverage)
     );
     let changed = source.replacen(",N,9,,,,", ",N,10,,,,", 1);
     assert_ne!(changed, source);
     assert_eq!(
         checked_csv(&changed, &pins),
-        Err(MichiganSectorsErrorV1::SemanticDigest)
+        Err(MichiganSectorsError::SemanticDigest)
     );
     assert_eq!(
         checked_csv(source.trim_end_matches('\n'), &pins),
-        Err(MichiganSectorsErrorV1::CsvShape)
+        Err(MichiganSectorsError::CsvShape)
     );
 }
 
@@ -234,36 +229,33 @@ fn gzip_limits_headers_crc_and_trailing_members_are_checked() {
     assert_eq!(decode_gzip(&gzip(b"bounded\n")), Ok("bounded\n".into()));
     assert_eq!(
         decode_gzip(&vec![0; MAX_BYTES + 1]),
-        Err(MichiganSectorsErrorV1::ArtifactSize)
+        Err(MichiganSectorsError::ArtifactSize)
     );
     assert_eq!(
         decode_gzip(&gzip(&vec![b'a'; MAX_BYTES + 1])),
-        Err(MichiganSectorsErrorV1::ArtifactSize)
+        Err(MichiganSectorsError::ArtifactSize)
     );
     let mut timestamp = gzip(b"bounded\n");
     timestamp[4] = 1;
     assert_eq!(
         decode_gzip(&timestamp),
-        Err(MichiganSectorsErrorV1::ArtifactDecode)
+        Err(MichiganSectorsError::ArtifactDecode)
     );
     let mut crc = gzip(b"bounded\n");
     let checksum = crc.len() - 8;
     crc[checksum] ^= 1;
-    assert_eq!(
-        decode_gzip(&crc),
-        Err(MichiganSectorsErrorV1::ArtifactDecode)
-    );
+    assert_eq!(decode_gzip(&crc), Err(MichiganSectorsError::ArtifactDecode));
     let mut trailing = gzip(b"bounded\n");
     trailing.extend(gzip(b"extra\n"));
     assert_eq!(
         decode_gzip(&trailing),
-        Err(MichiganSectorsErrorV1::ArtifactDecode)
+        Err(MichiganSectorsError::ArtifactDecode)
     );
     let mut truncated = gzip(b"bounded\n");
     truncated.pop();
     assert_eq!(
         decode_gzip(&truncated),
-        Err(MichiganSectorsErrorV1::ArtifactDecode)
+        Err(MichiganSectorsError::ArtifactDecode)
     );
 }
 
@@ -273,17 +265,17 @@ fn public_admission_pins_source_manifest_before_parsing_and_exact_compressed_byt
     source.push(b' ');
     assert_eq!(
         admit(b"not gzip", &source),
-        Err(MichiganSectorsErrorV1::SourceDigest)
+        Err(MichiganSectorsError::SourceDigest)
     );
     assert_eq!(
         admit(b"not gzip", SOURCE_MANIFEST),
-        Err(MichiganSectorsErrorV1::ArtifactDigest)
+        Err(MichiganSectorsError::ArtifactDigest)
     );
     let mut raw = ARTIFACT.to_vec();
     raw.push(0);
     assert_eq!(
         admit(&raw, SOURCE_MANIFEST),
-        Err(MichiganSectorsErrorV1::ArtifactDigest)
+        Err(MichiganSectorsError::ArtifactDigest)
     );
 }
 

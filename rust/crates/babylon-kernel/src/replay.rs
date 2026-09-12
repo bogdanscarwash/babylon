@@ -64,9 +64,9 @@ pub enum ReplayIdentityError {
 /// The authoritative logical replay session namespace, encoded as strict
 /// graphic ASCII and never normalized.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ReplaySessionIdV1(Vec<u8>);
+pub struct ReplaySessionId(Vec<u8>);
 
-impl ReplaySessionIdV1 {
+impl ReplaySessionId {
     /// The exact session bytes after checked construction.
     #[must_use]
     pub fn as_bytes(&self) -> &[u8] {
@@ -95,7 +95,7 @@ impl ReplaySessionIdV1 {
     }
 }
 
-impl TryFrom<&[u8]> for ReplaySessionIdV1 {
+impl TryFrom<&[u8]> for ReplaySessionId {
     type Error = ReplayIdentityError;
 
     fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
@@ -109,7 +109,7 @@ impl TryFrom<&[u8]> for ReplaySessionIdV1 {
     }
 }
 
-impl TryFrom<&str> for ReplaySessionIdV1 {
+impl TryFrom<&str> for ReplaySessionId {
     type Error = ReplayIdentityError;
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
@@ -139,7 +139,7 @@ impl ReplaySeed {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum RngLayoutVersion {
     /// The seed-aware replay layout.
-    V2,
+    SeededCarrier,
 }
 
 impl TryFrom<u32> for RngLayoutVersion {
@@ -147,7 +147,7 @@ impl TryFrom<u32> for RngLayoutVersion {
 
     fn try_from(value: u32) -> Result<Self, Self::Error> {
         match value {
-            2 => Ok(Self::V2),
+            2 => Ok(Self::SeededCarrier),
             _ => Err(ReplayIdentityError::UnsupportedRngLayoutVersion { value }),
         }
     }
@@ -155,9 +155,9 @@ impl TryFrom<u32> for RngLayoutVersion {
 
 /// A checked V2 RNG domain: a strict-ASCII firing-rule qname.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct RngDomainV2(String);
+pub struct RngDomain(String);
 
-impl RngDomainV2 {
+impl RngDomain {
     /// Borrow the checked UTF-8 domain text.
     #[must_use]
     pub fn as_str(&self) -> &str {
@@ -171,7 +171,7 @@ impl RngDomainV2 {
     }
 }
 
-impl TryFrom<&str> for RngDomainV2 {
+impl TryFrom<&str> for RngDomain {
     type Error = ReplayIdentityError;
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
@@ -196,7 +196,7 @@ impl TryFrom<&str> for RngDomainV2 {
 #[derive(Debug, Clone, Copy)]
 pub struct RngSeedContext<'a> {
     /// The checked replay session identity.
-    pub session: &'a ReplaySessionIdV1,
+    pub session: &'a ReplaySessionId,
     /// The explicit replay seed.
     pub seed: ReplaySeed,
 }

@@ -1,6 +1,6 @@
 //! Identity, period, and conservation checks for disclosed staffing accounts.
 
-use babylon_persistence::ProductionStaffingAccountV1;
+use babylon_persistence::production_observation::ProductionStaffingAccount;
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) struct StaffingIdentity<'a> {
@@ -9,8 +9,8 @@ pub(crate) struct StaffingIdentity<'a> {
     unit: &'a str,
 }
 
-impl<'a> From<&'a ProductionStaffingAccountV1> for StaffingIdentity<'a> {
-    fn from(account: &'a ProductionStaffingAccountV1) -> Self {
+impl<'a> From<&'a ProductionStaffingAccount> for StaffingIdentity<'a> {
+    fn from(account: &'a ProductionStaffingAccount) -> Self {
         Self {
             pool: &account.pool_id,
             site: &account.site_id,
@@ -47,7 +47,7 @@ impl std::fmt::Display for StaffingError {
 }
 
 pub(crate) fn validate_staffing_period(
-    account: &ProductionStaffingAccountV1,
+    account: &ProductionStaffingAccount,
     tick: u64,
 ) -> Result<(), StaffingError> {
     if tick.checked_add(1) != Some(account.next_opening_period) {
@@ -63,7 +63,7 @@ pub(crate) fn validate_staffing_period(
 }
 
 pub(crate) fn validate_staffing_balance(
-    account: &ProductionStaffingAccountV1,
+    account: &ProductionStaffingAccount,
 ) -> Result<(), StaffingError> {
     if account.employed.checked_add(account.reserve) == Some(account.labor_force) {
         Ok(())

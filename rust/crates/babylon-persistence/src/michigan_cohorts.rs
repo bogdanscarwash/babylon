@@ -6,24 +6,24 @@
 
 use std::{collections::BTreeMap, fmt::Write as _, sync::OnceLock};
 
-use babylon_graph::{hypergraph_store::HypergraphStore, stable_element::StableElementKeyV1};
+use babylon_graph::{hypergraph_store::HypergraphStore, stable_element::StableElementKey};
 use babylon_tick::replay_session::ReplayTickSession;
 
 use crate::{
     michigan_economy::{
-        append_county_observations, michigan_economy_v1, observer_foundation_from_source,
-        MichiganEconomyErrorV1, QCEW_ECONOMICS_ARTIFACT_SHA256_V1,
+        append_county_observations, michigan_economy, observer_foundation_from_source,
+        MichiganEconomyError, QCEW_ECONOMICS_ARTIFACT_SHA256,
     },
     michigan_sectors::{
-        michigan_county_sectors_v1, MichiganCountySectorV1, MichiganCountySectorsV1,
-        MichiganSectorCodeV1, MichiganSectorDispositionV1, MichiganSectorsErrorV1,
-        QCEW_SECTORS_ARTIFACT_SHA256_V1, QCEW_SECTORS_SEMANTIC_SHA256_V1,
+        michigan_county_sectors, MichiganCountySector, MichiganCountySectors, MichiganSectorCode,
+        MichiganSectorDisposition, MichiganSectorsError, QCEW_SECTORS_ARTIFACT_SHA256,
+        QCEW_SECTORS_SEMANTIC_SHA256,
     },
-    FoundationContentBundleV2,
+    FoundationContentBundle,
 };
 
-pub const MICHIGAN_COHORT_SCENARIO_V2: &str = "production/michigan-observer-v2";
-pub const MICHIGAN_COHORT_SESSION_V2: &str = "g4/michigan-observer-v2";
+pub const MICHIGAN_COHORT_SCENARIO: &str = "production/michigan-observer-v2";
+pub const MICHIGAN_COHORT_SESSION: &str = "g4/michigan-observer-v2";
 
 const BUSINESS_FIELDS: [(&str, &str); 4] = [
     ("qcew-establishments", "extensive"),
@@ -34,11 +34,11 @@ const BUSINESS_FIELDS: [(&str, &str); 4] = [
 
 /// Deterministic source composition with immutable source identities.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct MichiganCohortsV2 {
+pub struct MichiganCohorts {
     scenario_source: String,
     defines: Vec<u8>,
 }
-impl MichiganCohortsV2 {
+impl MichiganCohorts {
     #[must_use]
     pub fn scenario_source(&self) -> &str {
         &self.scenario_source
@@ -50,22 +50,22 @@ impl MichiganCohortsV2 {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum MichiganCohortsErrorV1 {
-    Economy(MichiganEconomyErrorV1),
-    Sectors(MichiganSectorsErrorV1),
+pub enum MichiganCohortsError {
+    Economy(MichiganEconomyError),
+    Sectors(MichiganSectorsError),
     NumericRepresentation,
     Coverage,
 }
-impl std::fmt::Display for MichiganCohortsErrorV1 {
+impl std::fmt::Display for MichiganCohortsError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Michigan cohort foundation refused: {self:?}")
     }
 }
-impl std::error::Error for MichiganCohortsErrorV1 {}
+impl std::error::Error for MichiganCohortsError {}
 
 /// Exact composite NAICS code remains part of the stable local subject name.
 #[must_use]
-pub fn michigan_business_local_name_v1(row: &MichiganCountySectorV1) -> String {
+pub fn michigan_business_local_name(row: &MichiganCountySector) -> String {
     format!(
         "business-{}-{}",
         row.county_geoid(),
@@ -74,28 +74,28 @@ pub fn michigan_business_local_name_v1(row: &MichiganCountySectorV1) -> String {
 }
 
 #[must_use]
-pub fn michigan_business_subject_v2(row: &MichiganCountySectorV1) -> StableElementKeyV1 {
-    michigan_business_subject_for_owner_v2(row.county_geoid(), row.sector_code().as_str())
+pub fn michigan_business_subject(row: &MichiganCountySector) -> StableElementKey {
+    michigan_business_subject_for_owner(row.county_geoid(), row.sector_code().as_str())
 }
 
 /// Construct the same subject from captured owner identity without reading current sources.
 #[must_use]
-pub fn michigan_business_subject_for_owner_v2(
+pub fn michigan_business_subject_for_owner(
     county_geoid: &str,
     sector_code: &str,
-) -> StableElementKeyV1 {
-    StableElementKeyV1::Node {
-        scenario: MICHIGAN_COHORT_SCENARIO_V2.to_owned(),
+) -> StableElementKey {
+    StableElementKey::Node {
+        scenario: MICHIGAN_COHORT_SCENARIO.to_owned(),
         local_name: format!("business-{county_geoid}-{sector_code}"),
     }
 }
 
 /// Code 99 has no classified sector subject or membership.
 #[must_use]
-pub fn michigan_sector_subject_v2(code: MichiganSectorCodeV1) -> Option<StableElementKeyV1> {
-    (code.disposition() == MichiganSectorDispositionV1::Classified).then(|| {
-        StableElementKeyV1::Hyperedge {
-            scenario: MICHIGAN_COHORT_SCENARIO_V2.to_owned(),
+pub fn michigan_sector_subject(code: MichiganSectorCode) -> Option<StableElementKey> {
+    (code.disposition() == MichiganSectorDisposition::Classified).then(|| {
+        StableElementKey::Hyperedge {
+            scenario: MICHIGAN_COHORT_SCENARIO.to_owned(),
             local_name: format!("sector-{}", code.as_str()),
         }
     })
@@ -103,9 +103,9 @@ pub fn michigan_sector_subject_v2(code: MichiganSectorCodeV1) -> Option<StableEl
 
 fn append_business(
     source: &mut String,
-    row: &MichiganCountySectorV1,
-) -> Result<(), MichiganCohortsErrorV1> {
-    writeln!(source, "  (node {} NodeType/ORGANIZATION\n    (organization/kind OrgKind/BUSINESS)\n    (organization/county-fips {})", michigan_business_local_name_v1(row), row.county_geoid()).expect("String write");
+    row: &MichiganCountySector,
+) -> Result<(), MichiganCohortsError> {
+    writeln!(source, "  (node {} NodeType/ORGANIZATION\n    (organization/kind OrgKind/BUSINESS)\n    (organization/county-fips {})", michigan_business_local_name(row), row.county_geoid()).expect("String write");
     let values = [
         Some(row.annual_avg_estabs_count()),
         row.annual_avg_emplvl(),
@@ -117,7 +117,7 @@ fn append_business(
             // The graph stores these int fields through binary64. Refuse a
             // value that could lose its exact public-record integer identity.
             if value > 9_007_199_254_740_992 {
-                return Err(MichiganCohortsErrorV1::NumericRepresentation);
+                return Err(MichiganCohortsError::NumericRepresentation);
             }
             writeln!(source, "    (organization/{field} {value})").expect("String write");
         }
@@ -128,19 +128,19 @@ fn append_business(
 
 fn append_sectors(
     source: &mut String,
-    sectors: &MichiganCountySectorsV1,
-) -> Result<(), MichiganCohortsErrorV1> {
-    let mut memberships = BTreeMap::<MichiganSectorCodeV1, Vec<String>>::new();
+    sectors: &MichiganCountySectors,
+) -> Result<(), MichiganCohortsError> {
+    let mut memberships = BTreeMap::<MichiganSectorCode, Vec<String>>::new();
     for row in sectors.rows() {
-        if row.sector_code().disposition() == MichiganSectorDispositionV1::Classified {
+        if row.sector_code().disposition() == MichiganSectorDisposition::Classified {
             memberships
                 .entry(row.sector_code())
                 .or_default()
-                .push(michigan_business_local_name_v1(row));
+                .push(michigan_business_local_name(row));
         }
     }
     if memberships.len() != 19 || memberships.values().map(Vec::len).sum::<usize>() != 1_522 {
-        return Err(MichiganCohortsErrorV1::Coverage);
+        return Err(MichiganCohortsError::Coverage);
     }
     for (code, members) in memberships {
         write!(
@@ -157,24 +157,24 @@ fn append_sectors(
     Ok(())
 }
 
-fn build_cohorts() -> Result<MichiganCohortsV2, MichiganCohortsErrorV1> {
+fn build_cohorts() -> Result<MichiganCohorts, MichiganCohortsError> {
     build_cohorts_with_workforce(&[])
 }
 
 fn build_cohorts_with_workforce(
-    workforce: &[crate::michigan_material::MichiganWorkforceSeedV1],
-) -> Result<MichiganCohortsV2, MichiganCohortsErrorV1> {
-    let economy = michigan_economy_v1().map_err(MichiganCohortsErrorV1::Economy)?;
-    let sectors = michigan_county_sectors_v1().map_err(MichiganCohortsErrorV1::Sectors)?;
+    workforce: &[crate::michigan_material::MichiganWorkforceSeed],
+) -> Result<MichiganCohorts, MichiganCohortsError> {
+    let economy = michigan_economy().map_err(MichiganCohortsError::Economy)?;
+    let sectors = michigan_county_sectors().map_err(MichiganCohortsError::Sectors)?;
     if sectors.rows().len() != 1_603 {
-        return Err(MichiganCohortsErrorV1::Coverage);
+        return Err(MichiganCohortsError::Coverage);
     }
     let workforce_type = if workforce.is_empty() {
         ""
     } else {
         " SOCIAL_CLASS"
     };
-    let mut source = format!("(scenario {MICHIGAN_COHORT_SCENARIO_V2}\n  (defvocabulary NodeType (TERRITORY ORGANIZATION{workforce_type}))\n  (defvocabulary HyperedgeType (ECONOMIC_SECTOR))\n  (deffield territory/county-fips int extensive)\n");
+    let mut source = format!("(scenario {MICHIGAN_COHORT_SCENARIO}\n  (defvocabulary NodeType (TERRITORY ORGANIZATION{workforce_type}))\n  (defvocabulary HyperedgeType (ECONOMIC_SECTOR))\n  (deffield territory/county-fips int extensive)\n");
     append_county_observations(&mut source, economy.counties());
     source.push_str("  (defenum OrgKind (STATE_APPARATUS BUSINESS POLITICAL_FACTION CIVIL_SOCIETY))\n  (deffield organization/kind enum OrgKind)\n  (deffield organization/county-fips int intensive)\n");
     for (field, quantity) in BUSINESS_FIELDS {
@@ -189,7 +189,7 @@ fn build_cohorts_with_workforce(
     }
     append_sectors(&mut source, sectors)?;
     if !workforce.is_empty() {
-        for field in babylon_tick::material_staffing::STAFFING_FIELDS_V1 {
+        for field in babylon_tick::material_staffing::STAFFING_FIELDS {
             writeln!(&mut source, "  (deffield {field} int extensive)").expect("String write");
         }
         for seed in workforce {
@@ -197,25 +197,25 @@ fn build_cohorts_with_workforce(
         }
     }
     source.push_str(")\n");
-    let defines = format!("{{\"qcew_vintage\":2024,\"county_artifact_sha256\":\"{QCEW_ECONOMICS_ARTIFACT_SHA256_V1}\",\"sector_artifact_sha256\":\"{QCEW_SECTORS_ARTIFACT_SHA256_V1}\",\"sector_semantic_sha256\":\"{QCEW_SECTORS_SEMANTIC_SHA256_V1}\",\"cohort_composition_version\":2}}").into_bytes();
-    Ok(MichiganCohortsV2 {
+    let defines = format!("{{\"qcew_vintage\":2024,\"county_artifact_sha256\":\"{QCEW_ECONOMICS_ARTIFACT_SHA256}\",\"sector_artifact_sha256\":\"{QCEW_SECTORS_ARTIFACT_SHA256}\",\"sector_semantic_sha256\":\"{QCEW_SECTORS_SEMANTIC_SHA256}\",\"cohort_composition_version\":2}}").into_bytes();
+    Ok(MichiganCohorts {
         scenario_source: source,
         defines,
     })
 }
 
 /// Material-only graph composition. The observed foundation has no workforce seeds.
-pub(crate) fn michigan_staffed_scenario_v1(
-    workforce: &[crate::michigan_material::MichiganWorkforceSeedV1],
-) -> Result<String, MichiganCohortsErrorV1> {
+pub(crate) fn michigan_staffed_scenario(
+    workforce: &[crate::michigan_material::MichiganWorkforceSeed],
+) -> Result<String, MichiganCohortsError> {
     Ok(build_cohorts_with_workforce(workforce)?.scenario_source)
 }
 
 /// Construct only from the two admitted, digest-pinned observed artifacts.
 /// # Errors
 /// Refuses source, exact numeric representation, or coverage failures.
-pub fn michigan_cohorts_v2() -> Result<&'static MichiganCohortsV2, MichiganCohortsErrorV1> {
-    static COHORTS: OnceLock<Result<MichiganCohortsV2, MichiganCohortsErrorV1>> = OnceLock::new();
+pub fn michigan_cohorts() -> Result<&'static MichiganCohorts, MichiganCohortsError> {
+    static COHORTS: OnceLock<Result<MichiganCohorts, MichiganCohortsError>> = OnceLock::new();
     COHORTS
         .get_or_init(build_cohorts)
         .as_ref()
@@ -225,21 +225,16 @@ pub fn michigan_cohorts_v2() -> Result<&'static MichiganCohortsV2, MichiganCohor
 /// Prepare the new content revision without admitting it to the runtime catalog.
 /// # Errors
 /// Refuses source, graph, or foundation construction errors.
-pub fn michigan_cohort_foundation_v2() -> Result<
-    (
-        ReplayTickSession<HypergraphStore>,
-        FoundationContentBundleV2,
-    ),
-    MichiganCohortsErrorV1,
-> {
-    let cohorts = michigan_cohorts_v2()?;
+pub fn michigan_cohort_foundation(
+) -> Result<(ReplayTickSession<HypergraphStore>, FoundationContentBundle), MichiganCohortsError> {
+    let cohorts = michigan_cohorts()?;
     observer_foundation_from_source(
         cohorts.scenario_source(),
-        MICHIGAN_COHORT_SESSION_V2,
+        MICHIGAN_COHORT_SESSION,
         cohorts.defines_bytes(),
-        FoundationContentBundleV2::try_new,
+        FoundationContentBundle::try_new,
     )
-    .map_err(MichiganCohortsErrorV1::Economy)
+    .map_err(MichiganCohortsError::Economy)
 }
 
 #[cfg(test)]

@@ -4,8 +4,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
 
 use babylon_persistence::{
-    ObserverEconomySnapshotV1, ProductionFinalDemandAccountV2, ProductionSiteRoleV2,
-    ProductionSiteV2, ProductionSnapshotV2,
+    observer_reader::ObserverEconomySnapshot, production_observation::ProductionFinalDemandAccount,
+    production_observation::ProductionSite, production_observation::ProductionSiteRole,
+    production_observation::ProductionSnapshot,
 };
 
 use crate::map_economy_lens::{
@@ -17,9 +18,7 @@ use crate::workforce::{
     validate_staffing_balance, validate_staffing_period, StaffingError, StaffingIdentity,
 };
 
-fn owners(
-    snapshot: &ProductionSnapshotV2,
-) -> Result<BTreeMap<&str, &ProductionSiteV2>, &'static str> {
+fn owners(snapshot: &ProductionSnapshot) -> Result<BTreeMap<&str, &ProductionSite>, &'static str> {
     let mut owners = BTreeMap::new();
     for site in &snapshot.sites {
         if owners.insert(site.id.as_str(), site).is_some() {
@@ -33,8 +32,8 @@ fn owners(
 }
 
 fn compatible_owners(
-    current: &ProductionSnapshotV2,
-    compared: &ProductionSnapshotV2,
+    current: &ProductionSnapshot,
+    compared: &ProductionSnapshot,
 ) -> Result<(), &'static str> {
     let current = owners(current)?;
     let compared = owners(compared)?;
@@ -67,7 +66,7 @@ struct WorkforceTotals<'a> {
 }
 
 fn workforce(
-    snapshot: &ProductionSnapshotV2,
+    snapshot: &ProductionSnapshot,
     tick: u64,
 ) -> Result<WorkforceTotals<'_>, &'static str> {
     let owners = owners(snapshot)?;
@@ -104,8 +103,8 @@ fn workforce(
 
 fn write_workforce(
     output: &mut String,
-    current: &ProductionSnapshotV2,
-    compared: &ProductionSnapshotV2,
+    current: &ProductionSnapshot,
+    compared: &ProductionSnapshot,
     tick: u64,
 ) -> Result<(), &'static str> {
     compatible_owners(current, compared)?;
@@ -137,7 +136,7 @@ enum MaterialPrincipal<'a> {
 }
 
 fn material_principals<'a>(
-    snapshot: &'a ProductionSnapshotV2,
+    snapshot: &'a ProductionSnapshot,
     kind: MaterialLensKind,
     good: &MaterialGoodKey,
 ) -> Result<BTreeSet<MaterialPrincipal<'a>>, &'static str> {
@@ -202,7 +201,7 @@ fn material_principals<'a>(
 }
 
 fn material_total(
-    snapshot: &ObserverEconomySnapshotV1,
+    snapshot: &ObserverEconomySnapshot,
     lens: &MapLens,
 ) -> Result<(String, u64), &'static str> {
     let projection = project_map_lens(Some(snapshot), lens);
@@ -225,8 +224,8 @@ fn material_total(
 
 fn write_material(
     output: &mut String,
-    current: &ObserverEconomySnapshotV1,
-    compared: &ObserverEconomySnapshotV1,
+    current: &ObserverEconomySnapshot,
+    compared: &ObserverEconomySnapshot,
     lens: &MapLens,
 ) -> Result<(), &'static str> {
     let MapLens::Material {
@@ -268,9 +267,9 @@ struct RetailIdentity<'a> {
 }
 
 fn retail_accounts<'a>(
-    snapshot: &'a ProductionSnapshotV2,
+    snapshot: &'a ProductionSnapshot,
     good: &MaterialGoodKey,
-) -> Result<BTreeMap<RetailIdentity<'a>, &'a ProductionFinalDemandAccountV2>, &'static str> {
+) -> Result<BTreeMap<RetailIdentity<'a>, &'a ProductionFinalDemandAccount>, &'static str> {
     let owners = owners(snapshot)?;
     let mut rows = BTreeMap::new();
     let mut counties = BTreeSet::new();
@@ -298,7 +297,7 @@ fn retail_accounts<'a>(
             || retailers.len() != row.retailer_site_ids.len()
             || retailers.iter().any(|id| {
                 owners.get(id.as_str()).is_none_or(|owner| {
-                    owner.role != ProductionSiteRoleV2::Retail
+                    owner.role != ProductionSiteRole::Retail
                         || owner.county_geoid != row.county_geoid
                 })
             })
@@ -344,7 +343,7 @@ struct RetailTotals {
 }
 
 impl RetailTotals {
-    fn add(&mut self, row: &ProductionFinalDemandAccountV2, tick: u64) -> Result<(), &'static str> {
+    fn add(&mut self, row: &ProductionFinalDemandAccount, tick: u64) -> Result<(), &'static str> {
         let newly_fulfilled = match (&row.completed, tick) {
             (None, 0) if row.fulfilled == 0 => 0,
             (Some(done), tick)
@@ -376,7 +375,7 @@ impl RetailTotals {
     }
 }
 
-fn retail_order_principals(row: &ProductionFinalDemandAccountV2) -> BTreeSet<(&str, &str)> {
+fn retail_order_principals(row: &ProductionFinalDemandAccount) -> BTreeSet<(&str, &str)> {
     row.orders
         .iter()
         .map(|order| (order.order_id.as_str(), order.retailer_site_id.as_str()))
@@ -385,8 +384,8 @@ fn retail_order_principals(row: &ProductionFinalDemandAccountV2) -> BTreeSet<(&s
 
 fn write_retail(
     output: &mut String,
-    current: &ProductionSnapshotV2,
-    compared: &ProductionSnapshotV2,
+    current: &ProductionSnapshot,
+    compared: &ProductionSnapshot,
     good: &MaterialGoodKey,
     tick: u64,
     unit: &str,
@@ -436,8 +435,8 @@ fn write_retail(
 
 pub(super) fn write(
     output: &mut String,
-    current: &ObserverEconomySnapshotV1,
-    compared: &ObserverEconomySnapshotV1,
+    current: &ObserverEconomySnapshot,
+    compared: &ObserverEconomySnapshot,
     lens: &MapLens,
 ) {
     let (Some(left), Some(right)) = (&current.production, &compared.production) else {

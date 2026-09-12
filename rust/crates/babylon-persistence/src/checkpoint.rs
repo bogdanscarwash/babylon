@@ -2,23 +2,23 @@
 
 use std::collections::TryReserveError;
 
-use babylon_kernel::sha256_of;
-use babylon_kernel::tick_content_hash::TickContentHashV1;
-use babylon_tick::replay_session::IdentifiedTickReportV2;
+use babylon_kernel::content_digest::sha256_of;
+use babylon_kernel::tick_content_hash::TickContentHash;
+use babylon_tick::replay_session::IdentifiedTickReport;
 
-use crate::committed_tick_envelope::CommittedTickRowV2;
+use crate::committed_tick_envelope::CommittedTickRow;
 use crate::identity::CampaignId;
-use crate::runtime::RustPersistenceRuntimeErrorV2;
+use crate::runtime::RustPersistenceRuntimeError;
 use crate::semantic_codec;
 
-const FULL_CHECKPOINT_SECTION_COUNT_V1: usize = 9;
+const FULL_CHECKPOINT_SECTION_COUNT: usize = 9;
 const ROW_LENGTH_BYTES: usize = 8;
 
 /// A durable one-based tick that fits `PostgreSQL` `BIGINT` exactly.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct CommittedResolveTickV1(u64);
+pub struct CommittedResolveTick(u64);
 
-impl CommittedResolveTickV1 {
+impl CommittedResolveTick {
     /// Return the positive PostgreSQL-compatible tick.
     #[must_use]
     pub const fn get(self) -> u64 {
@@ -28,21 +28,21 @@ impl CommittedResolveTickV1 {
 
 /// A durable tick-number domain refusal.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CommittedResolveTickErrorV1 {
+pub enum CommittedResolveTickError {
     /// Tick zero is foundation state, never a committed tick marker.
     SyntheticTickZero,
     /// The unsigned value cannot fit `PostgreSQL` `BIGINT`.
     OutOfPostgresRange,
 }
 
-impl TryFrom<u64> for CommittedResolveTickV1 {
-    type Error = CommittedResolveTickErrorV1;
+impl TryFrom<u64> for CommittedResolveTick {
+    type Error = CommittedResolveTickError;
 
     fn try_from(value: u64) -> Result<Self, Self::Error> {
         if value == 0 {
-            Err(CommittedResolveTickErrorV1::SyntheticTickZero)
+            Err(CommittedResolveTickError::SyntheticTickZero)
         } else if value > i64::MAX as u64 {
-            Err(CommittedResolveTickErrorV1::OutOfPostgresRange)
+            Err(CommittedResolveTickError::OutOfPostgresRange)
         } else {
             Ok(Self(value))
         }
@@ -51,14 +51,14 @@ impl TryFrom<u64> for CommittedResolveTickV1 {
 
 /// Closed checkpoint completeness marker.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CheckpointCompletenessV1 {
+pub enum CheckpointCompleteness {
     /// All nine required reconstruction sections are present.
     Full,
     /// A sparse continuation that is never a restart root.
     Delta,
 }
 
-impl CheckpointCompletenessV1 {
+impl CheckpointCompleteness {
     const fn tag(self) -> u8 {
         match self {
             Self::Full => 1,
@@ -76,7 +76,7 @@ impl CheckpointCompletenessV1 {
 
 /// Closed order of the nine required full-checkpoint sections.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum FullCheckpointSectionTagV1 {
+pub enum FullCheckpointSectionTag {
     StableGraph,
     WorldRegisters,
     ResolverManifest,
@@ -88,7 +88,7 @@ pub enum FullCheckpointSectionTagV1 {
     SemanticState,
 }
 
-impl FullCheckpointSectionTagV1 {
+impl FullCheckpointSectionTag {
     /// Return the exact closed section tag.
     #[must_use]
     pub const fn tag(self) -> u8 {
@@ -108,16 +108,16 @@ impl FullCheckpointSectionTagV1 {
 
 /// Digest-bound summary of one exact full-checkpoint source section.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CommittedCheckpointSectionV1 {
-    tag: FullCheckpointSectionTagV1,
+pub struct CommittedCheckpointSection {
+    tag: FullCheckpointSectionTag,
     row_count: u32,
     sha256: [u8; 32],
 }
 
-impl CommittedCheckpointSectionV1 {
+impl CommittedCheckpointSection {
     /// Return the closed section tag.
     #[must_use]
-    pub const fn tag(&self) -> FullCheckpointSectionTagV1 {
+    pub const fn tag(&self) -> FullCheckpointSectionTag {
         self.tag
     }
 
@@ -136,16 +136,16 @@ impl CommittedCheckpointSectionV1 {
 
 /// One exact nine-section restart-root manifest.
 #[derive(Debug, PartialEq, Eq)]
-pub struct CommittedFullCheckpointV1 {
-    completeness: CheckpointCompletenessV1,
-    sections: Vec<CommittedCheckpointSectionV1>,
+pub struct CommittedFullCheckpoint {
+    completeness: CheckpointCompleteness,
+    sections: Vec<CommittedCheckpointSection>,
     exact_section_bytes: Vec<Vec<u8>>,
-    rows: Vec<CommittedTickRowV2>,
+    rows: Vec<CommittedTickRow>,
     manifest_bytes: Vec<u8>,
     manifest_sha256: [u8; 32],
 }
 
-impl CommittedFullCheckpointV1 {
+impl CommittedFullCheckpoint {
     /// Capture the nine exact report-owned reconstruction sections.
     ///
     /// # Errors
@@ -153,23 +153,23 @@ impl CommittedFullCheckpointV1 {
     /// or allocation refusal before exposing a partial checkpoint.
     pub fn capture(
         campaign_id: CampaignId,
-        resolve_tick: CommittedResolveTickV1,
-        report: &IdentifiedTickReportV2,
-    ) -> Result<Self, RustPersistenceRuntimeErrorV2> {
+        resolve_tick: CommittedResolveTick,
+        report: &IdentifiedTickReport,
+    ) -> Result<Self, RustPersistenceRuntimeError> {
         if u64::try_from(report.result_registers().completed_tick()).ok()
             != Some(resolve_tick.get())
         {
-            return Err(RustPersistenceRuntimeErrorV2::ReplaySource);
+            return Err(RustPersistenceRuntimeError::ReplaySource);
         }
-        let source_sections = checkpoint_source_sections_v1(report)?;
-        let sections = summarize_sections_v1(&source_sections)?;
+        let source_sections = checkpoint_source_sections(report)?;
+        let sections = summarize_sections(&source_sections)?;
         let exact_section_bytes = source_sections
             .iter()
             .map(|source| copy_bytes("checkpoint retained section bytes", &source.bytes))
             .collect::<Result<Vec<_>, _>>()?;
-        let rows = encode_checkpoint_rows_from_sources_v1(&source_sections)?;
-        Self::validate_restart_root(CheckpointCompletenessV1::Full, &sections)?;
-        let encoded_sections = encoded_section_summaries_v1(&sections)?;
+        let rows = encode_checkpoint_rows_from_sources(&source_sections)?;
+        Self::validate_restart_root(CheckpointCompleteness::Full, &sections)?;
+        let encoded_sections = encoded_section_summaries(&sections)?;
         let manifest_bytes = semantic_codec::encode_full_checkpoint(
             campaign_id,
             resolve_tick.get(),
@@ -177,7 +177,7 @@ impl CommittedFullCheckpointV1 {
         )?;
         let manifest_sha256 = sha256_of(&manifest_bytes);
         Ok(Self {
-            completeness: CheckpointCompletenessV1::Full,
+            completeness: CheckpointCompleteness::Full,
             sections,
             exact_section_bytes,
             rows,
@@ -191,23 +191,23 @@ impl CommittedFullCheckpointV1 {
     /// # Errors
     /// Refuses deltas and every missing, duplicate, or out-of-order section.
     pub fn validate_restart_root(
-        completeness: CheckpointCompletenessV1,
-        sections: &[CommittedCheckpointSectionV1],
-    ) -> Result<(), RustPersistenceRuntimeErrorV2> {
+        completeness: CheckpointCompleteness,
+        sections: &[CommittedCheckpointSection],
+    ) -> Result<(), RustPersistenceRuntimeError> {
         let mut tags = reserve_vec("checkpoint restart-root tags", sections.len())?;
         tags.extend(sections.iter().map(|section| section.tag.tag()));
         semantic_codec::validate_restart_root(completeness.name(), &tags).map_err(|error| {
-            if completeness == CheckpointCompletenessV1::Delta {
-                RustPersistenceRuntimeErrorV2::DeltaCheckpointNotRestartRoot
+            if completeness == CheckpointCompleteness::Delta {
+                RustPersistenceRuntimeError::DeltaCheckpointNotRestartRoot
             } else {
-                RustPersistenceRuntimeErrorV2::from(error)
+                RustPersistenceRuntimeError::from(error)
             }
         })
     }
 
     /// Return the fixed full completeness marker.
     #[must_use]
-    pub const fn completeness(&self) -> CheckpointCompletenessV1 {
+    pub const fn completeness(&self) -> CheckpointCompleteness {
         self.completeness
     }
 
@@ -219,13 +219,13 @@ impl CommittedFullCheckpointV1 {
 
     /// Borrow the exact ordered nine section summaries.
     #[must_use]
-    pub fn sections(&self) -> &[CommittedCheckpointSectionV1] {
+    pub fn sections(&self) -> &[CommittedCheckpointSection] {
         &self.sections
     }
 
     /// Borrow the exact nine checkpoint rows in section-tag order.
     #[must_use]
-    pub fn rows(&self) -> &[CommittedTickRowV2] {
+    pub fn rows(&self) -> &[CommittedTickRow] {
         &self.rows
     }
 
@@ -242,15 +242,15 @@ impl CommittedFullCheckpointV1 {
 
 /// Exact checkpoint rows composed from one identified report.
 #[derive(Debug, PartialEq, Eq)]
-pub struct CheckpointRowsV1 {
-    source_tick: CommittedResolveTickV1,
-    rows: Vec<CommittedTickRowV2>,
+pub struct CheckpointRows {
+    source_tick: CommittedResolveTick,
+    rows: Vec<CommittedTickRow>,
 }
 
-impl CheckpointRowsV1 {
+impl CheckpointRows {
     /// Return the report-owned durable tick.
     #[must_use]
-    pub const fn source_tick(&self) -> CommittedResolveTickV1 {
+    pub const fn source_tick(&self) -> CommittedResolveTick {
         self.source_tick
     }
 
@@ -262,62 +262,58 @@ impl CheckpointRowsV1 {
 
     /// Borrow exact checkpoint rows in section-tag order.
     #[must_use]
-    pub fn rows(&self) -> &[CommittedTickRowV2] {
+    pub fn rows(&self) -> &[CommittedTickRow] {
         &self.rows
     }
 
-    pub(crate) fn into_rows(self) -> Vec<CommittedTickRowV2> {
+    pub(crate) fn into_rows(self) -> Vec<CommittedTickRow> {
         self.rows
     }
 }
 
 /// Exact singular Archive outbox receipt for one identified tick.
 #[derive(Debug, PartialEq, Eq)]
-pub struct ArchiveDirtyReceiptV1 {
-    tick_content_hash: TickContentHashV1,
-    row: CommittedTickRowV2,
+pub struct ArchiveDirtyReceipt {
+    tick_content_hash: TickContentHash,
+    row: CommittedTickRow,
 }
 
-impl ArchiveDirtyReceiptV1 {
+impl ArchiveDirtyReceipt {
     /// Return the exact constitutional tick identity carried by the receipt.
     #[must_use]
-    pub const fn tick_content_hash(&self) -> TickContentHashV1 {
+    pub const fn tick_content_hash(&self) -> TickContentHash {
         self.tick_content_hash
     }
 
     /// Borrow the exact singular semantic row.
     #[must_use]
-    pub const fn row(&self) -> &CommittedTickRowV2 {
+    pub const fn row(&self) -> &CommittedTickRow {
         &self.row
-    }
-
-    pub(crate) fn into_row(self) -> CommittedTickRowV2 {
-        self.row
     }
 }
 
-pub(crate) fn compose_checkpoint_rows_v1(
-    report: &IdentifiedTickReportV2,
-    resolve_tick: CommittedResolveTickV1,
-) -> Result<CheckpointRowsV1, RustPersistenceRuntimeErrorV2> {
-    let source_sections = checkpoint_source_sections_v1(report)?;
-    let rows = encode_checkpoint_rows_from_sources_v1(&source_sections)?;
-    Ok(CheckpointRowsV1 {
+pub(crate) fn compose_checkpoint_rows(
+    report: &IdentifiedTickReport,
+    resolve_tick: CommittedResolveTick,
+) -> Result<CheckpointRows, RustPersistenceRuntimeError> {
+    let source_sections = checkpoint_source_sections(report)?;
+    let rows = encode_checkpoint_rows_from_sources(&source_sections)?;
+    Ok(CheckpointRows {
         source_tick: resolve_tick,
         rows,
     })
 }
 
-fn encode_checkpoint_rows_from_sources_v1(
-    source_sections: &[CheckpointSourceSectionV1],
-) -> Result<Vec<CommittedTickRowV2>, RustPersistenceRuntimeErrorV2> {
+fn encode_checkpoint_rows_from_sources(
+    source_sections: &[CheckpointSourceSection],
+) -> Result<Vec<CommittedTickRow>, RustPersistenceRuntimeError> {
     let mut rows = reserve_vec("checkpoint semantic rows", source_sections.len())?;
     let mut body_bytes = 0_usize;
     for source in source_sections {
         let row = semantic_codec::encode_checkpoint_row(
             source.tag.tag(),
             0,
-            CheckpointCompletenessV1::Full.tag(),
+            CheckpointCompleteness::Full.tag(),
             &source.bytes,
         )?;
         body_bytes = checked_row_body_sum(body_bytes, &row)?;
@@ -326,31 +322,31 @@ fn encode_checkpoint_rows_from_sources_v1(
     Ok(rows)
 }
 
-pub(crate) fn compose_archive_dirty_receipt_v1(
-    report: &IdentifiedTickReportV2,
-) -> Result<ArchiveDirtyReceiptV1, RustPersistenceRuntimeErrorV2> {
+pub(crate) fn compose_archive_dirty_receipt(
+    report: &IdentifiedTickReport,
+) -> Result<ArchiveDirtyReceipt, RustPersistenceRuntimeError> {
     let tick_content_hash = report.tick_content_hash();
     let row = semantic_codec::encode_archive_dirty_receipt(tick_content_hash.as_bytes())?;
     checked_row_body_sum(0, &row)?;
-    Ok(ArchiveDirtyReceiptV1 {
+    Ok(ArchiveDirtyReceipt {
         tick_content_hash,
         row,
     })
 }
 
-struct CheckpointSourceSectionV1 {
-    tag: FullCheckpointSectionTagV1,
+struct CheckpointSourceSection {
+    tag: FullCheckpointSectionTag,
     row_count: u32,
     bytes: Vec<u8>,
 }
 
-fn checkpoint_source_sections_v1(
-    report: &IdentifiedTickReportV2,
-) -> Result<Vec<CheckpointSourceSectionV1>, RustPersistenceRuntimeErrorV2> {
-    let stable_graph_count = stable_graph_row_count_v1(report)?;
+fn checkpoint_source_sections(
+    report: &IdentifiedTickReport,
+) -> Result<Vec<CheckpointSourceSection>, RustPersistenceRuntimeError> {
+    let stable_graph_count = stable_graph_row_count(report)?;
     let material_count =
         u32::try_from(report.material_state_rows().source_count()).map_err(|_| {
-            RustPersistenceRuntimeErrorV2::IntegerConversion {
+            RustPersistenceRuntimeError::IntegerConversion {
                 field: "checkpoint semantic state row count",
                 value: report.material_state_rows().source_count(),
             }
@@ -362,51 +358,51 @@ fn checkpoint_source_sections_v1(
     let reference_digest = report.reference_digest();
     let sources = [
         (
-            FullCheckpointSectionTagV1::StableGraph,
+            FullCheckpointSectionTag::StableGraph,
             stable_graph_count,
             report.result_stable_graph().canonical_bytes(),
         ),
         (
-            FullCheckpointSectionTagV1::WorldRegisters,
+            FullCheckpointSectionTag::WorldRegisters,
             1,
             report.result_registers().canonical_bytes(),
         ),
         (
-            FullCheckpointSectionTagV1::ResolverManifest,
+            FullCheckpointSectionTag::ResolverManifest,
             1,
             report.resolver_manifest_bytes(),
         ),
         (
-            FullCheckpointSectionTagV1::PreparedEnvironment,
+            FullCheckpointSectionTag::PreparedEnvironment,
             1,
             report.prepared_environment_bytes(),
         ),
         (
-            FullCheckpointSectionTagV1::ReplaySessionIdentity,
+            FullCheckpointSectionTag::ReplaySessionIdentity,
             1,
             report.replay_session_identity().as_bytes(),
         ),
-        (FullCheckpointSectionTagV1::RngSeed, 1, rng_seed.as_slice()),
+        (FullCheckpointSectionTag::RngSeed, 1, rng_seed.as_slice()),
         (
-            FullCheckpointSectionTagV1::ContentDigest,
+            FullCheckpointSectionTag::ContentDigest,
             1,
             content_digest.as_slice(),
         ),
         (
-            FullCheckpointSectionTagV1::ReferenceDigest,
+            FullCheckpointSectionTag::ReferenceDigest,
             1,
             reference_digest.as_bytes().as_slice(),
         ),
         (
-            FullCheckpointSectionTagV1::SemanticState,
+            FullCheckpointSectionTag::SemanticState,
             material_count,
             report.material_state_rows().canonical_bytes(),
         ),
     ];
-    debug_assert_eq!(sources.len(), FULL_CHECKPOINT_SECTION_COUNT_V1);
+    debug_assert_eq!(sources.len(), FULL_CHECKPOINT_SECTION_COUNT);
     let mut sections = reserve_vec("checkpoint source sections", sources.len())?;
     for (tag, row_count, bytes) in sources {
-        sections.push(CheckpointSourceSectionV1 {
+        sections.push(CheckpointSourceSection {
             tag,
             row_count,
             bytes: copy_bytes("checkpoint source section bytes", bytes)?,
@@ -415,12 +411,12 @@ fn checkpoint_source_sections_v1(
     Ok(sections)
 }
 
-fn summarize_sections_v1(
-    sources: &[CheckpointSourceSectionV1],
-) -> Result<Vec<CommittedCheckpointSectionV1>, RustPersistenceRuntimeErrorV2> {
+fn summarize_sections(
+    sources: &[CheckpointSourceSection],
+) -> Result<Vec<CommittedCheckpointSection>, RustPersistenceRuntimeError> {
     let mut sections = reserve_vec("checkpoint section summaries", sources.len())?;
     for source in sources {
-        sections.push(CommittedCheckpointSectionV1 {
+        sections.push(CommittedCheckpointSection {
             tag: source.tag,
             row_count: source.row_count,
             sha256: sha256_of(&source.bytes),
@@ -429,9 +425,9 @@ fn summarize_sections_v1(
     Ok(sections)
 }
 
-fn encoded_section_summaries_v1(
-    sections: &[CommittedCheckpointSectionV1],
-) -> Result<Vec<(u8, u32, [u8; 32])>, RustPersistenceRuntimeErrorV2> {
+fn encoded_section_summaries(
+    sections: &[CommittedCheckpointSection],
+) -> Result<Vec<(u8, u32, [u8; 32])>, RustPersistenceRuntimeError> {
     let mut encoded = reserve_vec("checkpoint encoded section summaries", sections.len())?;
     encoded.extend(
         sections
@@ -441,9 +437,9 @@ fn encoded_section_summaries_v1(
     Ok(encoded)
 }
 
-fn stable_graph_row_count_v1(
-    report: &IdentifiedTickReportV2,
-) -> Result<u32, RustPersistenceRuntimeErrorV2> {
+fn stable_graph_row_count(
+    report: &IdentifiedTickReport,
+) -> Result<u32, RustPersistenceRuntimeError> {
     let rows = report.result_stable_graph().rows();
     let count = [
         rows.nodes().len(),
@@ -456,10 +452,10 @@ fn stable_graph_row_count_v1(
     ]
     .into_iter()
     .try_fold(0_usize, usize::checked_add)
-    .ok_or(RustPersistenceRuntimeErrorV2::CapacityOverflow {
+    .ok_or(RustPersistenceRuntimeError::CapacityOverflow {
         field: "checkpoint stable graph row count",
     })?;
-    u32::try_from(count).map_err(|_| RustPersistenceRuntimeErrorV2::IntegerConversion {
+    u32::try_from(count).map_err(|_| RustPersistenceRuntimeError::IntegerConversion {
         field: "checkpoint stable graph row count",
         value: count,
     })
@@ -467,13 +463,13 @@ fn stable_graph_row_count_v1(
 
 fn checked_row_body_sum(
     current: usize,
-    row: &CommittedTickRowV2,
-) -> Result<usize, RustPersistenceRuntimeErrorV2> {
+    row: &CommittedTickRow,
+) -> Result<usize, RustPersistenceRuntimeError> {
     current
         .checked_add(ROW_LENGTH_BYTES)
         .and_then(|value| value.checked_add(row.key().len()))
         .and_then(|value| value.checked_add(row.payload().len()))
-        .ok_or(RustPersistenceRuntimeErrorV2::CapacityOverflow {
+        .ok_or(RustPersistenceRuntimeError::CapacityOverflow {
             field: "checkpoint row body bytes",
         })
 }
@@ -481,12 +477,12 @@ fn checked_row_body_sum(
 fn reserve_vec<T>(
     field: &'static str,
     capacity: usize,
-) -> Result<Vec<T>, RustPersistenceRuntimeErrorV2> {
+) -> Result<Vec<T>, RustPersistenceRuntimeError> {
     let mut values = Vec::new();
     values
         .try_reserve_exact(capacity)
         .map_err(
-            |_: TryReserveError| RustPersistenceRuntimeErrorV2::Allocation {
+            |_: TryReserveError| RustPersistenceRuntimeError::Allocation {
                 field,
                 requested: capacity,
             },
@@ -497,14 +493,11 @@ fn reserve_vec<T>(
 fn reserve_bytes(
     field: &'static str,
     capacity: usize,
-) -> Result<Vec<u8>, RustPersistenceRuntimeErrorV2> {
+) -> Result<Vec<u8>, RustPersistenceRuntimeError> {
     reserve_vec(field, capacity)
 }
 
-fn copy_bytes(
-    field: &'static str,
-    source: &[u8],
-) -> Result<Vec<u8>, RustPersistenceRuntimeErrorV2> {
+fn copy_bytes(field: &'static str, source: &[u8]) -> Result<Vec<u8>, RustPersistenceRuntimeError> {
     let mut bytes = reserve_bytes(field, source.len())?;
     bytes.extend_from_slice(source);
     Ok(bytes)

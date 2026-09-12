@@ -141,7 +141,9 @@ fn type_env() -> TypeEnv {
 /// could still be rejected by `load_rule` — which is what happened to every
 /// `:as`-using rule, including §2.6's own worked example. Vectors that
 /// claim a construct is *authorable* must go through here.
-fn load(source: &str) -> Result<babylon_bsl::LoadedRule, babylon_bsl::LoadError> {
+fn load(
+    source: &str,
+) -> Result<babylon_bsl::rule_pipeline::LoadedRule, babylon_bsl::rule_pipeline::LoadError> {
     let v = vocabulary();
     let types = type_env();
     let ceilings = ceilings();
@@ -778,7 +780,7 @@ mod c7_computed_bindings {
     use babylon_bsl::fuel::IntrinsicCosts;
     use babylon_bsl::intrinsic_host::EmptyIntrinsicHost;
     use babylon_bsl::rule_pipeline::resolve_expr_bindings;
-    use babylon_kernel::Currency;
+    use babylon_kernel::currency::Currency;
     use std::collections::HashMap;
 
     fn decls(bindings: &str) -> Vec<babylon_bsl::bindings::BindingDecl> {

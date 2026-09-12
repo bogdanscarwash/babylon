@@ -1,6 +1,6 @@
 //! Pure current campaign habitation and practice-input authority contracts.
 
-use babylon_kernel::sha256_of;
+use babylon_kernel::content_digest::sha256_of;
 
 use crate::actor::ActorOrganizationId;
 

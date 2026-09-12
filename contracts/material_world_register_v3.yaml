@@ -46,8 +46,8 @@ transition:
   quantity_realization: Delivered internal commodity quantity; no payment or claim.
   final_demand: Finite county orders credited once at retail handoff; no implied consumption.
 publication:
-  owner: MaterialReplaySessionV3
-  prepare: Detached graph and material candidates with exact MaterialTickReceiptsV4 bytes.
+  owner: babylon_tick::material_replay::MaterialReplaySession
+  prepare: Detached graph and material candidates with exact babylon_tick::material_world::MaterialTickReceipts bytes.
   commit: Preflight all publication allocations before the one durable operation.
   success: Infallible moves publish graph, material register, completed tick and graph event sink.
   failure: Graph, material register, identity, completed tick and event sink remain unchanged.

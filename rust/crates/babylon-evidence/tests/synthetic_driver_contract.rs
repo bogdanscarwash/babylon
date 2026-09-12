@@ -2,7 +2,7 @@ use babylon_evidence::{
     bind_synthetic_driver, parse_synthetic_driver_contract, Digest32, SfsPreregistration,
     SyntheticDriverContractError,
 };
-use babylon_kernel::sha256_of;
+use babylon_kernel::content_digest::sha256_of;
 use babylon_practice_contract::PracticeId;
 
 const DRIVER: &[u8] = include_bytes!("fixtures/sfs_synthetic_driver_contract.txt");

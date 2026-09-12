@@ -10,14 +10,15 @@
 //! `%.6f` statblock formatting with -0.0 -> 0.0.
 
 use babylon_persistence::{
-    county_committed_signals_v1, desired_county_projection_v1, filter_granted_county_plans_v1,
-    format_county_statblock_value_v1, ArchiveSubjectKindV1, CommittedTerritoryFieldsV1,
-    CountyGrantIndexV1, CountyPagePlanV1, CountyPlaceLinkV1, CountySignalV1,
-    COMMITTED_TICK_SOURCE_ID_V1, COUNTY_DECISION_QUESTION_V1, COUNTY_MEDIAN_WAGE_GRANT_KEY_V1,
-    COUNTY_MEDIAN_WAGE_LABEL_V1, COUNTY_PHI_HOUR_LABEL_V1,
+    county_committed_signals, desired_county_projection, filter_granted_county_plans,
+    format_county_statblock_value, ArchiveSubjectKind, CommittedTerritoryFields, CountyGrantIndex,
+    CountyPagePlan, CountyPlaceLink, CountySignal, COMMITTED_TICK_SOURCE_ID,
+    COUNTY_DECISION_QUESTION, COUNTY_MEDIAN_WAGE_GRANT_KEY, COUNTY_MEDIAN_WAGE_LABEL,
+    COUNTY_PHI_HOUR_LABEL,
 };
 use babylon_persistence::{
-    michigan_spatial_reference_products_v1, representative_h3_reference_cohort_v1,
+    h3_reference_cohort::representative_h3_reference_cohort,
+    spatial_reference_products::michigan_spatial_reference_products,
 };
 use serde_json::Value;
 
@@ -52,7 +53,7 @@ fn decode_committed(value: &Value, field: &str) -> Option<f64> {
     }
 }
 
-fn expected_signal(signal: &CountySignalV1) -> Value {
+fn expected_signal(signal: &CountySignal) -> Value {
     serde_json::json!({
         "grant_key": signal.grant_key(),
         "label": signal.label(),
@@ -76,13 +77,13 @@ fn rows() -> Vec<Value> {
     rows
 }
 
-fn parse_links(data: &Value) -> Vec<CountyPlaceLinkV1> {
+fn parse_links(data: &Value) -> Vec<CountyPlaceLink> {
     data["links"]
         .as_array()
         .expect("links array")
         .iter()
         .map(|link| {
-            CountyPlaceLinkV1::try_new(
+            CountyPlaceLink::try_new(
                 link["place_geoid"]
                     .as_str()
                     .expect("place geoid text")
@@ -97,12 +98,12 @@ fn parse_links(data: &Value) -> Vec<CountyPlaceLinkV1> {
         .collect()
 }
 
-fn parse_grants(data: &Value) -> CountyGrantIndexV1 {
+fn parse_grants(data: &Value) -> CountyGrantIndex {
     let county_ref = data["county_geoid"].as_str().expect("county geoid text");
     let mut rows = Vec::new();
     if data["grants"]["county_subject"].as_bool() == Some(true) {
         rows.push((
-            ArchiveSubjectKindV1::County,
+            ArchiveSubjectKind::County,
             county_ref.to_owned(),
             "subject".to_owned(),
         ));
@@ -112,7 +113,7 @@ fn parse_grants(data: &Value) -> CountyGrantIndexV1 {
         .expect("field keys array")
     {
         rows.push((
-            ArchiveSubjectKindV1::County,
+            ArchiveSubjectKind::County,
             county_ref.to_owned(),
             key.as_str().expect("grant key text").to_owned(),
         ));
@@ -122,17 +123,17 @@ fn parse_grants(data: &Value) -> CountyGrantIndexV1 {
         .expect("place subjects array")
     {
         rows.push((
-            ArchiveSubjectKindV1::Place,
+            ArchiveSubjectKind::Place,
             geoid.as_str().expect("place geoid text").to_owned(),
             "subject".to_owned(),
         ));
     }
-    CountyGrantIndexV1::try_from_rows(rows).expect("valid grant index")
+    CountyGrantIndex::try_from_rows(rows).expect("valid grant index")
 }
 
 fn products_links_for(county_geoid: &str) -> Vec<(String, String)> {
-    let cohort = representative_h3_reference_cohort_v1().expect("reference cohort");
-    let products = michigan_spatial_reference_products_v1(cohort).expect("reference products");
+    let cohort = representative_h3_reference_cohort().expect("reference cohort");
+    let products = michigan_spatial_reference_products(cohort).expect("reference products");
     let names: std::collections::BTreeMap<&str, &str> = products
         .places()
         .iter()
@@ -154,18 +155,18 @@ fn products_links_for(county_geoid: &str) -> Vec<(String, String)> {
     links
 }
 
-fn assert_plan_signals(row: &Value, fields: &CommittedTerritoryFieldsV1) -> CountyPagePlanV1 {
+fn assert_plan_signals(row: &Value, fields: &CommittedTerritoryFields) -> CountyPagePlan {
     let data = &row["data"];
     // The plan carries every committed field; each formatted value must
     // equal the oracle-generated statblock text byte for byte.
-    let plan_signals = county_committed_signals_v1(fields).expect("committed signals");
+    let plan_signals = county_committed_signals(fields).expect("committed signals");
     let expected_plan: Vec<Value> = data["expected"]["plan_signals"]
         .as_array()
         .expect("plan signals array")
         .clone();
     let actual_plan: Vec<Value> = plan_signals.iter().map(expected_signal).collect();
     assert_eq!(actual_plan, expected_plan, "{} plan signals", row["id"]);
-    CountyPagePlanV1::try_new(
+    CountyPagePlan::try_new(
         data["county_geoid"]
             .as_str()
             .expect("county geoid")
@@ -181,11 +182,11 @@ fn assert_plan_signals(row: &Value, fields: &CommittedTerritoryFieldsV1) -> Coun
     .expect("valid county page plan")
 }
 
-fn assert_visible_signals(row: &Value, plan: &CountyPagePlanV1, grants: &CountyGrantIndexV1) {
+fn assert_visible_signals(row: &Value, plan: &CountyPagePlan, grants: &CountyGrantIndex) {
     let data = &row["data"];
     // Grant filtering decides which plan signals are visible.
-    let county_ref = babylon_persistence::ArchivePageRefV1::try_new(
-        ArchiveSubjectKindV1::County,
+    let county_ref = babylon_persistence::ArchivePageRef::try_new(
+        ArchiveSubjectKind::County,
         data["county_geoid"]
             .as_str()
             .expect("county geoid")
@@ -205,11 +206,11 @@ fn assert_visible_signals(row: &Value, plan: &CountyPagePlanV1, grants: &CountyG
     assert_eq!(visible, expected_visible, "{} visible signals", row["id"]);
 }
 
-fn assert_projection(row: &Value, plan: &CountyPagePlanV1, grants: &CountyGrantIndexV1) {
+fn assert_projection(row: &Value, plan: &CountyPagePlan, grants: &CountyGrantIndex) {
     let data = &row["data"];
     // The semantic projection pins labels, values, and the committed
     // provenance identity the renderer cites.
-    let projection = desired_county_projection_v1(plan, grants).expect("desired projection");
+    let projection = desired_county_projection(plan, grants).expect("desired projection");
     assert_eq!(
         projection.title(),
         data["title"].as_str().expect("title"),
@@ -218,7 +219,7 @@ fn assert_projection(row: &Value, plan: &CountyPagePlanV1, grants: &CountyGrantI
     );
     assert_eq!(
         projection.question(),
-        COUNTY_DECISION_QUESTION_V1,
+        COUNTY_DECISION_QUESTION,
         "{}",
         row["id"]
     );
@@ -247,7 +248,7 @@ fn assert_projection(row: &Value, plan: &CountyPagePlanV1, grants: &CountyGrantI
         );
         assert_eq!(
             signal.source_id(),
-            COMMITTED_TICK_SOURCE_ID_V1,
+            COMMITTED_TICK_SOURCE_ID,
             "{}",
             row["id"]
         );
@@ -301,7 +302,7 @@ fn shared_vectors_reproduce_the_oracle_pinned_display_values() {
     );
     for row in &rows {
         let data = &row["data"];
-        let fields = CommittedTerritoryFieldsV1::try_new(
+        let fields = CommittedTerritoryFields::try_new(
             decode_committed(&data["committed"]["median_wage_bits"], "median_wage_bits"),
             decode_committed(&data["committed"]["phi_hour_bits"], "phi_hour_bits"),
         )
@@ -312,7 +313,7 @@ fn shared_vectors_reproduce_the_oracle_pinned_display_values() {
         assert_projection(row, &plan, &grants);
         // The county subject grant is present in every parity vector, so the
         // fog-safe page filter must keep the plan.
-        let granted = filter_granted_county_plans_v1(std::slice::from_ref(&plan), &grants);
+        let granted = filter_granted_county_plans(std::slice::from_ref(&plan), &grants);
         assert_eq!(
             granted.len(),
             1,
@@ -337,7 +338,7 @@ fn negative_zero_committed_bits_canonicalize_like_the_oracle_boundary() {
     // canonicalize -0.0 to +0.0, so the display value is "0.000000" and the
     // vector pins the canonicalized view bits.
     assert_eq!(
-        format_county_statblock_value_v1(f64::from_bits(NEGATIVE_ZERO_BITS)),
+        format_county_statblock_value(f64::from_bits(NEGATIVE_ZERO_BITS)),
         Ok("0.000000".to_owned())
     );
     assert_eq!(
@@ -348,11 +349,11 @@ fn negative_zero_committed_bits_canonicalize_like_the_oracle_boundary() {
         .as_array()
         .expect("plan signals")
         .iter()
-        .find(|signal| signal["grant_key"] == COUNTY_MEDIAN_WAGE_GRANT_KEY_V1)
+        .find(|signal| signal["grant_key"] == COUNTY_MEDIAN_WAGE_GRANT_KEY)
         .expect("median-wage signal");
     assert_eq!(median_signal["value"], "0.000000");
-    assert_eq!(COUNTY_MEDIAN_WAGE_LABEL_V1, "Median wage");
-    assert_eq!(COUNTY_PHI_HOUR_LABEL_V1, "Imperial rent Φ");
+    assert_eq!(COUNTY_MEDIAN_WAGE_LABEL, "Median wage");
+    assert_eq!(COUNTY_PHI_HOUR_LABEL, "Imperial rent Φ");
 }
 
 #[test]
@@ -361,8 +362,8 @@ fn vector_links_and_titles_match_the_pinned_reference_products() {
     for row in &rows {
         let data = &row["data"];
         let geoid = data["county_geoid"].as_str().expect("county geoid");
-        let cohort = representative_h3_reference_cohort_v1().expect("reference cohort");
-        let products = michigan_spatial_reference_products_v1(cohort).expect("reference products");
+        let cohort = representative_h3_reference_cohort().expect("reference cohort");
+        let products = michigan_spatial_reference_products(cohort).expect("reference products");
         let county = products
             .counties()
             .iter()

@@ -14,7 +14,7 @@ const SENSITIVE_FIELD_NAMES: [&str; 10] = [
 
 /// Stable classification of one `PostgreSQL` client or server failure.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PostgresFailureClassV1 {
+pub enum PostgresFailureClass {
     /// The server rejected authentication or authorization establishment.
     Authentication,
     /// No server response was available because the endpoint could not be reached.
@@ -31,13 +31,13 @@ pub enum PostgresFailureClassV1 {
 
 /// Bounded diagnostic retained from a `postgres::Error` without connection material.
 #[derive(Clone, PartialEq, Eq)]
-pub struct PostgresDiagnosticV1 {
-    classification: PostgresFailureClassV1,
+pub struct PostgresDiagnostic {
+    classification: PostgresFailureClass,
     sqlstate: Option<Box<str>>,
     message: Box<str>,
 }
 
-impl PostgresDiagnosticV1 {
+impl PostgresDiagnostic {
     /// Capture a stable classification and bounded safe message.
     ///
     /// Only the primary server message is considered. Detail, hint, query text,
@@ -47,15 +47,15 @@ impl PostgresDiagnosticV1 {
         if let Some(server) = error.as_db_error() {
             let classification = classify_server(server);
             let message = match classification {
-                PostgresFailureClassV1::Authentication => "authentication rejected".into(),
-                PostgresFailureClassV1::UnsupportedStartupSetting => {
+                PostgresFailureClass::Authentication => "authentication rejected".into(),
+                PostgresFailureClass::UnsupportedStartupSetting => {
                     "unrecognized configuration parameter <redacted>".into()
                 }
-                PostgresFailureClassV1::Timeout => "database operation timed out".into(),
-                PostgresFailureClassV1::ServerRejected => {
+                PostgresFailureClass::Timeout => "database operation timed out".into(),
+                PostgresFailureClass::ServerRejected => {
                     sanitize_server_message(server.message()).into_boxed_str()
                 }
-                PostgresFailureClassV1::Reachability | PostgresFailureClassV1::Client => {
+                PostgresFailureClass::Reachability | PostgresFailureClass::Client => {
                     unreachable!("server errors have a server classification")
                 }
             };
@@ -67,19 +67,19 @@ impl PostgresDiagnosticV1 {
         }
 
         let classification = if error_chain_has_timeout(error) {
-            PostgresFailureClassV1::Timeout
+            PostgresFailureClass::Timeout
         } else if error_chain_has_io(error) {
-            PostgresFailureClassV1::Reachability
+            PostgresFailureClass::Reachability
         } else {
-            PostgresFailureClassV1::Client
+            PostgresFailureClass::Client
         };
         let message = match classification {
-            PostgresFailureClassV1::Timeout => "database operation timed out",
-            PostgresFailureClassV1::Reachability => "database endpoint unreachable",
-            PostgresFailureClassV1::Client => "database client rejected operation",
-            PostgresFailureClassV1::Authentication
-            | PostgresFailureClassV1::UnsupportedStartupSetting
-            | PostgresFailureClassV1::ServerRejected => {
+            PostgresFailureClass::Timeout => "database operation timed out",
+            PostgresFailureClass::Reachability => "database endpoint unreachable",
+            PostgresFailureClass::Client => "database client rejected operation",
+            PostgresFailureClass::Authentication
+            | PostgresFailureClass::UnsupportedStartupSetting
+            | PostgresFailureClass::ServerRejected => {
                 unreachable!("client errors have a client classification")
             }
         };
@@ -92,7 +92,7 @@ impl PostgresDiagnosticV1 {
 
     /// Return the stable failure classification.
     #[must_use]
-    pub const fn classification(&self) -> PostgresFailureClassV1 {
+    pub const fn classification(&self) -> PostgresFailureClass {
         self.classification
     }
 
@@ -109,7 +109,7 @@ impl PostgresDiagnosticV1 {
     }
 }
 
-impl std::fmt::Debug for PostgresDiagnosticV1 {
+impl std::fmt::Debug for PostgresDiagnostic {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
             .debug_struct("PostgresDiagnosticV1")
@@ -120,20 +120,20 @@ impl std::fmt::Debug for PostgresDiagnosticV1 {
     }
 }
 
-fn classify_server(error: &postgres::error::DbError) -> PostgresFailureClassV1 {
+fn classify_server(error: &postgres::error::DbError) -> PostgresFailureClass {
     if error
         .message()
         .starts_with("unrecognized configuration parameter")
     {
-        PostgresFailureClassV1::UnsupportedStartupSetting
+        PostgresFailureClass::UnsupportedStartupSetting
     } else if error.code().code().starts_with("28") {
-        PostgresFailureClassV1::Authentication
+        PostgresFailureClass::Authentication
     } else if error.code() == &SqlState::QUERY_CANCELED
         || error.code() == &SqlState::LOCK_NOT_AVAILABLE
     {
-        PostgresFailureClassV1::Timeout
+        PostgresFailureClass::Timeout
     } else {
-        PostgresFailureClassV1::ServerRejected
+        PostgresFailureClass::ServerRejected
     }
 }
 

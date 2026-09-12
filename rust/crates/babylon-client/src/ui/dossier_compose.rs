@@ -15,9 +15,9 @@
 //! (`~~[Detroit](subject:…)~~`) render as DIM text plus a "· pending" suffix
 //! (decision 2) — no combining-glyph tricks, testable headless.
 
-use babylon_persistence::archive_revision::{ArchiveAtomChangeV2, ArchiveDossierStateV2};
-use babylon_persistence::ArchiveSignalV1;
-use babylon_persistence::{fog_chip_v1, ArchiveAtomV1, ArchiveAtomValueV1};
+use babylon_persistence::archive_revision::{ArchiveAtomChange, ArchiveDossierState};
+use babylon_persistence::ArchiveSignal;
+use babylon_persistence::{fog_chip, ArchiveAtom, ArchiveAtomValue};
 
 /// The one decision question the dossier card answers (ADR249 R9), pinned in
 /// exactly one place so the manifest row and the rendered card cannot drift.
@@ -135,7 +135,7 @@ pub fn chip_text(chip: &PlaceChip) -> String {
     match &chip.label {
         Some(label) if chip.pending => format!("{label} · pending"),
         Some(label) => label.clone(),
-        None => fog_chip_v1("place", &chip.geoid),
+        None => fog_chip("place", &chip.geoid),
     }
 }
 
@@ -164,19 +164,19 @@ pub fn compose_vague(kind: &str, id: &str) -> Vec<String> {
 /// Render one typed atom value with the statblock's `%.6f` discipline for
 /// floats, matching the pinned citation-line and chronicle spellings.
 #[must_use]
-pub fn atom_value_text(value: &ArchiveAtomValueV1) -> String {
+pub fn atom_value_text(value: &ArchiveAtomValue) -> String {
     match value {
-        ArchiveAtomValueV1::Text(text) => text.clone(),
-        ArchiveAtomValueV1::F64(number) => format!("{number:.6}"),
-        ArchiveAtomValueV1::U64(number) => number.to_string(),
-        ArchiveAtomValueV1::Bool(flag) => flag.to_string(),
+        ArchiveAtomValue::Text(text) => text.clone(),
+        ArchiveAtomValue::F64(number) => format!("{number:.6}"),
+        ArchiveAtomValue::U64(number) => number.to_string(),
+        ArchiveAtomValue::Bool(flag) => flag.to_string(),
     }
 }
 
 /// The atoms that become signal rows: everything except the subject-identity
 /// atom (the card title) and link atoms (place chips). Position order is the
 /// Archive's composition order, preserved.
-pub fn signal_atoms(atoms: &[ArchiveAtomV1]) -> impl Iterator<Item = &ArchiveAtomV1> {
+pub fn signal_atoms(atoms: &[ArchiveAtom]) -> impl Iterator<Item = &ArchiveAtom> {
     atoms
         .iter()
         .filter(|atom| atom.signal_key() != "subject" && atom.signal_key() != "link")
@@ -185,7 +185,7 @@ pub fn signal_atoms(atoms: &[ArchiveAtomV1]) -> impl Iterator<Item = &ArchiveAto
 /// One signal row as toned segments: label BONE-dim, value BONE, citation
 /// DIM — `median-wage: 31.400000 — committed-tick-v1; campaign/12/…`.
 #[must_use]
-pub fn signal_row_segments(atom: &ArchiveAtomV1) -> Vec<DossierSegment> {
+pub fn signal_row_segments(atom: &ArchiveAtom) -> Vec<DossierSegment> {
     vec![
         DossierSegment::new(format!("{}: ", atom.signal_key()), DossierTone::BoneDim),
         DossierSegment::new(atom_value_text(atom.value()), DossierTone::Bone),
@@ -202,7 +202,7 @@ pub fn signal_row_segments(atom: &ArchiveAtomV1) -> Vec<DossierSegment> {
 
 /// Exact retained display labels and values, with evidence expanded inline.
 #[must_use]
-pub fn retained_signal_segments(signal: &ArchiveSignalV1, details: bool) -> Vec<DossierSegment> {
+pub fn retained_signal_segments(signal: &ArchiveSignal, details: bool) -> Vec<DossierSegment> {
     let mut parts = vec![
         DossierSegment::new(format!("{}: ", signal.label()), DossierTone::BoneDim),
         DossierSegment::new(signal.value(), DossierTone::Bone),
@@ -222,12 +222,12 @@ pub fn retained_signal_segments(signal: &ArchiveSignalV1, details: bool) -> Vec<
 }
 
 /// A bounded or unfinished change page never implies that no changes occurred.
-pub(crate) fn chronicle_header(state: &ArchiveDossierStateV2) -> DossierSegment {
+pub(crate) fn chronicle_header(state: &ArchiveDossierState) -> DossierSegment {
     match state {
-        ArchiveDossierStateV2::Pending { .. } => {
+        ArchiveDossierState::Pending { .. } => {
             DossierSegment::new("Changes await Archive completion.", DossierTone::Crimson)
         }
-        ArchiveDossierStateV2::Ready { page, .. } => {
+        ArchiveDossierState::Ready { page, .. } => {
             let mut text = format!(
                 "Retained change coverage starts at period {}.",
                 page.changes.coverage_from_tick
@@ -237,7 +237,7 @@ pub(crate) fn chronicle_header(state: &ArchiveDossierStateV2) -> DossierSegment 
             }
             DossierSegment::new(text, DossierTone::Dim)
         }
-        ArchiveDossierStateV2::Unavailable(_) => DossierSegment::new(
+        ArchiveDossierState::Unavailable(_) => DossierSegment::new(
             "Change history is unavailable for this observation.",
             DossierTone::Dim,
         ),
@@ -246,7 +246,7 @@ pub(crate) fn chronicle_header(state: &ArchiveDossierStateV2) -> DossierSegment 
 
 /// Report publication differences without calling absence zero or a verification.
 #[must_use]
-pub fn chronicle_row_segments(row: &ArchiveAtomChangeV2) -> Vec<DossierSegment> {
+pub fn chronicle_row_segments(row: &ArchiveAtomChange) -> Vec<DossierSegment> {
     let mut segments = vec![DossierSegment::new(
         format!(
             "Published period {} · {} ",
@@ -345,21 +345,21 @@ pub fn dual_tick_segments(durable: Option<u64>, verified: Option<u64>) -> Vec<Do
 mod tests {
     use super::*;
     use babylon_persistence::{
-        ArchiveAtomSubjectKindV1, ArchiveAtomSubjectV1, ArchiveAtomValueV1, ArchiveCitationV1,
-        ArchiveEvidenceClassV1, CampaignId,
+        identity::CampaignId, ArchiveAtomSubject, ArchiveAtomSubjectKind, ArchiveAtomValue,
+        ArchiveCitation, ArchiveEvidenceClass,
     };
     use uuid::Uuid;
 
-    fn atom(signal_key: &str, value: &str, valid_tick: u64) -> ArchiveAtomV1 {
-        ArchiveAtomV1::try_new(
+    fn atom(signal_key: &str, value: &str, valid_tick: u64) -> ArchiveAtom {
+        ArchiveAtom::try_new(
             CampaignId::from_uuid(Uuid::nil()),
-            ArchiveAtomSubjectV1::try_new(ArchiveAtomSubjectKindV1::County, "26163".to_owned())
+            ArchiveAtomSubject::try_new(ArchiveAtomSubjectKind::County, "26163".to_owned())
                 .expect("subject admits"),
             signal_key.to_owned(),
             signal_key.to_owned(),
-            ArchiveEvidenceClassV1::Observed,
-            &ArchiveAtomValueV1::Text(value.to_owned()),
-            ArchiveCitationV1::try_new(
+            ArchiveEvidenceClass::Observed,
+            &ArchiveAtomValue::Text(value.to_owned()),
+            ArchiveCitation::try_new(
                 "committed-tick-v1".to_owned(),
                 "campaign/12/Wayne".to_owned(),
             )
@@ -463,9 +463,9 @@ mod tests {
 
     #[test]
     fn f64_values_render_with_the_statblock_six_decimal_discipline() {
-        assert_eq!(atom_value_text(&ArchiveAtomValueV1::F64(31.4)), "31.400000");
-        assert_eq!(atom_value_text(&ArchiveAtomValueV1::U64(728_576)), "728576");
-        assert_eq!(atom_value_text(&ArchiveAtomValueV1::Bool(true)), "true");
+        assert_eq!(atom_value_text(&ArchiveAtomValue::F64(31.4)), "31.400000");
+        assert_eq!(atom_value_text(&ArchiveAtomValue::U64(728_576)), "728576");
+        assert_eq!(atom_value_text(&ArchiveAtomValue::Bool(true)), "true");
     }
 
     #[test]
@@ -477,7 +477,7 @@ mod tests {
             (None, Some(after), "(added within retained coverage) 0"),
             (Some(before), None, "2 → removed from this publication"),
         ] {
-            let row = ArchiveAtomChangeV2 {
+            let row = ArchiveAtomChange {
                 publication_tick: 14,
                 signal_key: "jobs".into(),
                 before: old,

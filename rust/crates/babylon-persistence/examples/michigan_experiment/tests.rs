@@ -20,7 +20,7 @@ fn matrix_changes_only_stock_and_selected_delivery() {
     );
     let reformatted = format!("# irrelevant comment\n{}\n", run::BASELINE);
     let catalog =
-        babylon_persistence::michigan_material::MichiganMaterialCatalogV1::from_defines_toml(
+        babylon_persistence::michigan_material::MichiganMaterialCatalog::from_defines_toml(
             &reformatted,
         )
         .unwrap();

@@ -66,7 +66,7 @@
 //! sufficient evidence that coverage is complete; `cargo test -p
 //! babylon-tick --locked --bin bsl-fuel-report` is.
 
-use babylon_bsl::compose_declaration_preludes;
+use babylon_bsl::scenario::compose_declaration_preludes;
 use babylon_tick::{any_over_budget, fuel_bound_report};
 use std::process::ExitCode;
 

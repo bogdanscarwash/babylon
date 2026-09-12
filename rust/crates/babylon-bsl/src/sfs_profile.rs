@@ -10,7 +10,7 @@ use crate::causal_contract::{
 use crate::fuel::{CardinalityCeilings, IntrinsicCosts, SfsFuelIdentityError};
 use crate::reader::{Atom, SExpr};
 use crate::vocabulary::{ClosedVocabulary, EnumKind};
-use babylon_kernel::sha256_of;
+use babylon_kernel::content_digest::sha256_of;
 use std::collections::{BTreeMap, BTreeSet};
 
 const MAX_POLICY_ENTRIES: usize = 64;
@@ -34,7 +34,7 @@ const FORBIDDEN_OBSERVABLE_SUFFIXES: [&str; 5] = [
 
 /// The digest-pinned, byte-sorted registry that the non-authorability sentinel
 /// permits only at this declaration site.
-pub const FORBIDDEN_AUTHORITATIVE_IDENTIFIERS_V1: [&str; 10] = [
+pub const FORBIDDEN_AUTHORITATIVE_IDENTIFIERS: [&str; 10] = [
     "SfsAggregate",
     "SfsClassification",
     "SfsHinterlandClass",

@@ -39,7 +39,7 @@ const RESERVED_ENGINE_TOKENS: [&str; 10] = [
     "SfsPoliticalSubjectivity",
 ];
 
-const REGISTRY_NAME: &str = "FORBIDDEN_AUTHORITATIVE_IDENTIFIERS_V1";
+const REGISTRY_NAME: &str = "FORBIDDEN_AUTHORITATIVE_IDENTIFIERS";
 const REGISTRY_PATH: &str = "babylon-bsl/src/sfs_profile.rs";
 const REGISTRY_DIGEST: &str = "65e7a808f3b078da9c91e424f8fc6ca0a1309eac9882a707c8033aaf0620fb4b";
 const MAX_MANIFESTS: usize = 32;
@@ -1599,7 +1599,7 @@ fn validate_registry_rows(rows: &[String]) -> Result<(), String> {
         rendered.extend_from_slice(row.as_bytes());
         rendered.push(b'\n');
     }
-    let digest = babylon_kernel::sha256_of(&rendered);
+    let digest = babylon_kernel::content_digest::sha256_of(&rendered);
     let mut digest_hex = String::with_capacity(64);
     for byte_index in 0..32 {
         let Some(byte) = digest.get(byte_index) else {
@@ -1656,7 +1656,7 @@ fn scan_sexpr_source(
     bytes: &[u8],
     extension: &str,
 ) -> Result<Vec<SourceFinding>, String> {
-    let forms = babylon_bsl::read_all(bytes).map_err(|error| {
+    let forms = babylon_bsl::reader::read_all(bytes).map_err(|error| {
         format!(
             "{}: {extension} reader refusal at byte {}: {:?}",
             path.display(),

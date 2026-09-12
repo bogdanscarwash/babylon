@@ -1,7 +1,7 @@
 //! Bounded measurements of real native frame intervals. This observes client
 //! scheduling and viewport state only; it never reads simulation state.
 
-use babylon_persistence::CampaignId;
+use babylon_persistence::identity::CampaignId;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 

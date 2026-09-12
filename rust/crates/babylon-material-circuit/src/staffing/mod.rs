@@ -7,11 +7,10 @@ mod model;
 mod transition;
 
 pub use model::{
-    StaffingErrorV2, StaffingPolicyV1, StaffingPoolBindingV2, StaffingPoolIdV1,
-    StaffingPoolStateV2, StaffingReceiptV2, StaffingStateV2, StaffingTransitionV2,
-    StaffingWorkRequestV2, StaffingWorkSourceV2,
+    StaffingError, StaffingPolicy, StaffingPoolBinding, StaffingPoolId, StaffingPoolState,
+    StaffingReceipt, StaffingState, StaffingTransition, StaffingWorkRequest, StaffingWorkSource,
 };
-pub use transition::advance_staffing_v2;
+pub use transition::advance_staffing;
 
 #[cfg(test)]
 mod tests;

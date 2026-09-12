@@ -12,15 +12,14 @@ use babylon_client::ui::dossier_card::{
 };
 use babylon_client::ui::dossier_compose::{DOSSIER_DECISION_QUESTION, INVESTIGATE_SEALED_CHIP};
 use babylon_persistence::archive_revision::{
-    ArchiveAtomChangeV2, ArchiveChangePageV2, ArchiveDossierLinkV2, ArchiveDossierPageV2,
-    ArchiveDossierPendingV2, ArchiveDossierReadV2, ArchiveDossierStateV2,
-    ArchiveDossierUnavailableV2, ArchiveLinkedPageStateV2, ArchivePublicationOriginV2,
-    ArchiveReadScopeV2,
+    ArchiveAtomChange, ArchiveChangePage, ArchiveDossierLink, ArchiveDossierPage,
+    ArchiveDossierPending, ArchiveDossierRead, ArchiveDossierState, ArchiveDossierUnavailable,
+    ArchiveLinkedPageState, ArchiveReadScope,
 };
 use babylon_persistence::{
-    ArchiveAtomSubjectKindV1, ArchiveAtomSubjectV1, ArchiveAtomV1, ArchiveAtomValueV1,
-    ArchiveCitationV1, ArchiveEvidenceClassV1, ArchivePageRefV1, ArchiveSignalV1,
-    ArchiveSubjectKindV1, CampaignId,
+    identity::CampaignId, ArchiveAtom, ArchiveAtomSubject, ArchiveAtomSubjectKind,
+    ArchiveAtomValue, ArchiveCitation, ArchiveEvidenceClass, ArchivePageRef, ArchiveSignal,
+    ArchiveSubjectKind,
 };
 use bevy::asset::AssetPlugin;
 use bevy::picking::backend::HitData;
@@ -159,16 +158,16 @@ fn new_observer_app(window_size: (u32, u32)) -> (ReaderDsnGuard, App) {
 
 /// One Archive atom on county 01001 (atlas index 0), the dossier.rs test
 /// fixture shape.
-fn atom(signal_key: &str, value: &str, valid_tick: u64) -> ArchiveAtomV1 {
-    ArchiveAtomV1::try_new(
+fn atom(signal_key: &str, value: &str, valid_tick: u64) -> ArchiveAtom {
+    ArchiveAtom::try_new(
         CampaignId::from_uuid(Uuid::nil()),
-        ArchiveAtomSubjectV1::try_new(ArchiveAtomSubjectKindV1::County, "01001".to_owned())
+        ArchiveAtomSubject::try_new(ArchiveAtomSubjectKind::County, "01001".to_owned())
             .expect("subject admits"),
         signal_key.to_owned(),
         "employment".to_owned(),
-        ArchiveEvidenceClassV1::Observed,
-        &ArchiveAtomValueV1::Text(value.to_owned()),
-        ArchiveCitationV1::try_new("src".to_owned(), "loc".to_owned()).expect("citation admits"),
+        ArchiveEvidenceClass::Observed,
+        &ArchiveAtomValue::Text(value.to_owned()),
+        ArchiveCitation::try_new("src".to_owned(), "loc".to_owned()).expect("citation admits"),
         valid_tick,
     )
     .expect("atom admits")
@@ -176,27 +175,26 @@ fn atom(signal_key: &str, value: &str, valid_tick: u64) -> ArchiveAtomV1 {
 
 /// Requested/durable period 12 with retained period-11 content still awaiting
 /// processing. Links preserve three disclosure states and one exact change.
-fn fixture_projection() -> ArchiveDossierReadV2 {
+fn fixture_projection() -> ArchiveDossierRead {
     let campaign = CampaignId::from_uuid(Uuid::nil());
-    let source = ArchiveReadScopeV2::committed(campaign, 11, [11; 32]).unwrap();
-    let signal = ArchiveSignalV1::try_new(
+    let source = ArchiveReadScope::committed(campaign, 11, [11; 32]).unwrap();
+    let signal = ArchiveSignal::try_new(
         "employment".into(),
         "Employment".into(),
         "728576 jobs".into(),
-        ArchiveCitationV1::try_new("src".into(), "loc".into()).unwrap(),
+        ArchiveCitation::try_new("src".into(), "loc".into()).unwrap(),
     )
     .unwrap();
-    let page = ArchiveDossierPageV2 {
+    let page = ArchiveDossierPage {
         revision_id: [7; 32],
         effective_tick: 11,
-        origin: ArchivePublicationOriginV2::Materialized,
         content_source: source,
         title: "Autauga County".into(),
         question: DOSSIER_DECISION_QUESTION.into(),
         signals: vec![signal],
         markdown: "Retained fixture narrative".into(),
         content_sha256: [8; 32],
-        citations: vec![ArchiveCitationV1::try_new("src".into(), "loc".into()).unwrap()],
+        citations: vec![ArchiveCitation::try_new("src".into(), "loc".into()).unwrap()],
         atoms: vec![
             atom("subject", "Autauga County", 1),
             atom("employment", "728576 jobs", 11),
@@ -205,25 +203,25 @@ fn fixture_projection() -> ArchiveDossierReadV2 {
             (
                 "0101076",
                 Some("Prattville"),
-                ArchiveLinkedPageStateV2::KnownReady,
+                ArchiveLinkedPageState::KnownReady,
             ),
             (
                 "0101128",
                 Some("Millbrook"),
-                ArchiveLinkedPageStateV2::KnownPending,
+                ArchiveLinkedPageState::KnownPending,
             ),
-            ("0199999", None, ArchiveLinkedPageStateV2::Unknown),
+            ("0199999", None, ArchiveLinkedPageState::Unknown),
         ]
         .into_iter()
-        .map(|(id, label, target_state)| ArchiveDossierLinkV2 {
-            target: ArchivePageRefV1::try_new(ArchiveSubjectKindV1::Place, id.into()).unwrap(),
+        .map(|(id, label, target_state)| ArchiveDossierLink {
+            target: ArchivePageRef::try_new(ArchiveSubjectKind::Place, id.into()).unwrap(),
             retained_label: label.map(str::to_owned),
             target_state,
         })
         .collect(),
-        changes: ArchiveChangePageV2 {
+        changes: ArchiveChangePage {
             coverage_from_tick: 1,
-            changes: vec![ArchiveAtomChangeV2 {
+            changes: vec![ArchiveAtomChange {
                 publication_tick: 11,
                 signal_key: "employment".into(),
                 before: Some(atom("employment", "710000 jobs", 10)),
@@ -232,15 +230,14 @@ fn fixture_projection() -> ArchiveDossierReadV2 {
             next_cursor: None,
         },
     };
-    ArchiveDossierReadV2 {
-        scope: ArchiveReadScopeV2::committed(campaign, 12, [12; 32]).unwrap(),
-        subject: ArchivePageRefV1::try_new(ArchiveSubjectKindV1::County, "01001".into()).unwrap(),
+    ArchiveDossierRead {
+        scope: ArchiveReadScope::committed(campaign, 12, [12; 32]).unwrap(),
+        subject: ArchivePageRef::try_new(ArchiveSubjectKind::County, "01001".into()).unwrap(),
         durable_tick: 12,
         processed_tick: 11,
-        history_floor_tick: 0,
-        state: ArchiveDossierStateV2::Pending {
+        state: ArchiveDossierState::Pending {
             page: Some(page),
-            reason: ArchiveDossierPendingV2::ReceiptProcessing,
+            reason: ArchiveDossierPending::ReceiptProcessing,
         },
     }
 }
@@ -248,17 +245,19 @@ fn fixture_projection() -> ArchiveDossierReadV2 {
 fn install_observer_frame(app: &mut App) {
     use babylon_client::observer::ObserverSession;
     use babylon_client::observer_ui::ObserverFrame;
-    use babylon_persistence::{ObserverEconomySnapshotV1, ObserverVisibilityV1};
+    use babylon_persistence::{
+        observer_reader::ObserverEconomySnapshot, observer_reader::ObserverVisibility,
+    };
     let session = app.world().resource::<ObserverSession>();
     let hash = format!("{:02x}", session.viewed_tick).repeat(32);
-    let frame = ObserverEconomySnapshotV1 {
+    let frame = ObserverEconomySnapshot {
         campaign_id: session.campaign.as_uuid().to_string(),
         resolve_tick: session.viewed_tick,
         foundation_digest: String::new(),
         nominal_world_hash: None,
         tick_content_hash: Some(hash),
         envelope_digest: None,
-        visibility: ObserverVisibilityV1::FullObserver,
+        visibility: ObserverVisibility::FullObserver,
         counties: Vec::new(),
         production: None,
     };
@@ -268,7 +267,7 @@ fn install_observer_frame(app: &mut App) {
     assert!(session.installed(&context));
 }
 
-fn installed_fixture(app: &App, read: ArchiveDossierReadV2) -> InstalledDossier {
+fn installed_fixture(app: &App, read: ArchiveDossierRead) -> InstalledDossier {
     let selected = app.world().resource::<SelectedCounty>().0.unwrap();
     let county = app
         .world()
@@ -401,7 +400,7 @@ fn find_entity_with_text(app: &mut App, root: Entity, wanted: &str) -> Option<En
 /// (its destructuring match needs `InFlight`), so the orphaned task can
 /// never overwrite the seeded projection, and one update repaints every
 /// zone from it.
-fn seize_card(app: &mut App, projection: ArchiveDossierReadV2) {
+fn seize_card(app: &mut App, projection: ArchiveDossierRead) {
     let county = app
         .world()
         .resource::<CountyAtlas>()
@@ -654,17 +653,16 @@ fn seeded_projection_renders_the_whole_card_after_one_update() {
     assert!(zone_text(&mut app, DossierZone::Actions).ends_with(INVESTIGATE_SEALED_CHIP));
 }
 
-fn pending_and_verified_fixture() -> (ArchiveDossierReadV2, ArchiveDossierReadV2) {
+fn pending_and_verified_fixture() -> (ArchiveDossierRead, ArchiveDossierRead) {
     let mut pending = fixture_projection();
-    pending.history_floor_tick = 1;
     let mut ready = pending.clone();
-    let ArchiveDossierStateV2::Pending {
+    let ArchiveDossierState::Pending {
         page: Some(page), ..
     } = &mut pending.state
     else {
         unreachable!()
     };
-    ready.state = ArchiveDossierStateV2::Ready {
+    ready.state = ArchiveDossierState::Ready {
         page: page.clone(),
         verified_through_tick: 12,
     };
@@ -721,9 +719,8 @@ fn granted_chip_reads_the_exact_linked_subject_and_can_return_to_the_county() {
     assert!(!zone_text(&mut app, DossierZone::Signals).contains("728576 jobs"));
     app.update(); // Starts the real target read; no county result may answer it.
     let mut read = fixture_projection();
-    read.subject =
-        ArchivePageRefV1::try_new(ArchiveSubjectKindV1::Place, "0101076".into()).unwrap();
-    let ArchiveDossierStateV2::Pending {
+    read.subject = ArchivePageRef::try_new(ArchiveSubjectKind::Place, "0101076".into()).unwrap();
+    let ArchiveDossierState::Pending {
         page: Some(page), ..
     } = &mut read.state
     else {
@@ -865,10 +862,8 @@ fn obsolete_campaign_generation_and_county_results_cannot_install_or_report_erro
                         .resource::<babylon_client::observer::ObserverSession>()
                         .context(),
                 ),
-                read_scope: ArchiveReadScopeV2::committed(requested_campaign, 12, [12; 32])
-                    .unwrap(),
-                subject: ArchivePageRefV1::try_new(ArchiveSubjectKindV1::County, fips.into())
-                    .unwrap(),
+                read_scope: ArchiveReadScope::committed(requested_campaign, 12, [12; 32]).unwrap(),
+                subject: ArchivePageRef::try_new(ArchiveSubjectKind::County, fips.into()).unwrap(),
             },
             task,
         };
@@ -919,9 +914,8 @@ fn unchanged_card_and_unfinished_task_preserve_the_rendered_subtree() {
                     .resource::<babylon_client::observer::ObserverSession>()
                     .context(),
             ),
-            read_scope: ArchiveReadScopeV2::committed(campaign, 12, [12; 32]).unwrap(),
-            subject: ArchivePageRefV1::try_new(ArchiveSubjectKindV1::County, "01001".into())
-                .unwrap(),
+            read_scope: ArchiveReadScope::committed(campaign, 12, [12; 32]).unwrap(),
+            subject: ArchivePageRef::try_new(ArchiveSubjectKind::County, "01001".into()).unwrap(),
         },
         task,
     };
@@ -1051,17 +1045,16 @@ fn assert_historical_observer_archive(app: &mut App, root: Entity) {
         DossierFetchState::InFlight { .. } | DossierFetchState::Failed(_)
     ));
     let mut read = fixture_projection();
-    read.scope = ArchiveReadScopeV2::committed(read.scope.campaign_id(), 10, [10; 32]).unwrap();
-    read.history_floor_tick = 11;
-    read.state =
-        ArchiveDossierStateV2::Unavailable(ArchiveDossierUnavailableV2::HistoryNotRetained);
+    read.scope = ArchiveReadScope::committed(read.scope.campaign_id(), 10, [10; 32]).unwrap();
+    read.state = ArchiveDossierState::Unavailable(ArchiveDossierUnavailable::PageNotMaterialized);
     let installed = installed_fixture(app, read);
     app.world_mut().resource_mut::<ActiveCountyDossier>().0 = Some(installed);
     *app.world_mut().resource_mut::<DossierFetchState>() = DossierFetchState::Idle;
     app.update();
     let text = zone_text(app, DossierZone::DualTick);
     assert!(
-        text.contains("Viewing period 10") && text.contains("predates retained Archive history"),
+        text.contains("Viewing period 10")
+            && text.contains("No Archive page has been published for this subject at this period"),
         "{text}"
     );
     assert!(!zone_text(app, DossierZone::Signals).contains("728576 jobs"));
@@ -1072,8 +1065,8 @@ fn assert_historical_observer_archive(app: &mut App, root: Entity) {
         "Which cited observations are available at this period?"
     );
     let mut read = fixture_projection();
-    read.scope = ArchiveReadScopeV2::committed(read.scope.campaign_id(), 10, [10; 32]).unwrap();
-    let ArchiveDossierStateV2::Pending {
+    read.scope = ArchiveReadScope::committed(read.scope.campaign_id(), 10, [10; 32]).unwrap();
+    let ArchiveDossierState::Pending {
         page: Some(mut page),
         ..
     } = read.state
@@ -1083,15 +1076,15 @@ fn assert_historical_observer_archive(app: &mut App, root: Entity) {
     page.content_source = read.scope.clone();
     page.effective_tick = 10;
     page.atoms = vec![atom("employment", "710000 jobs", 10)];
-    page.signals = vec![ArchiveSignalV1::try_new(
+    page.signals = vec![ArchiveSignal::try_new(
         "employment".into(),
         "Employment".into(),
         "710000 jobs".into(),
-        ArchiveCitationV1::try_new("src".into(), "loc".into()).unwrap(),
+        ArchiveCitation::try_new("src".into(), "loc".into()).unwrap(),
     )
     .unwrap()];
     page.changes.changes.clear();
-    read.state = ArchiveDossierStateV2::Ready {
+    read.state = ArchiveDossierState::Ready {
         page,
         verified_through_tick: 10,
     };

@@ -20,7 +20,7 @@ fn hex_bytes(value: &str) -> Vec<u8> {
 #[test]
 fn retained_budget_bytes_and_refusals_match_the_independent_contract() {
     assert_eq!(
-        babylon_kernel::sha256_of(SCHEMA),
+        babylon_kernel::content_digest::sha256_of(SCHEMA),
         PRACTICE_BUDGET_TOPOLOGY_SOURCE_SHA256
     );
     let delta = OrganizationBudgetDelta {

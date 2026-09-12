@@ -1,13 +1,14 @@
 //! Live `PostgreSQL` contracts for the Michigan H3 reference-bundle installer.
 
 use super::{assert_lock_released, database_user, ScratchDatabase};
-use babylon_kernel::tick_content_hash::RefDigestV1;
+use babylon_kernel::tick_content_hash::RefDigest;
 use babylon_persistence::{
-    install_current_schema, install_michigan_h3_reference_bundle_v1,
-    michigan_dynamic_hex_foundation_v1, representative_h3_reference_cohort_v1, CatalogError,
-    CurrentSchemaDisposition, CurrentSchemaError, H3ReferenceCohort, H3ReferenceInstallConflict,
-    H3ReferenceInstallDisposition, H3ReferenceInstallError, H3ReferenceInstallOperation,
-    H3ReferenceInstallReport, SCHEMA_ADVISORY_LOCK_KEY,
+    h3_reference_cohort::representative_h3_reference_cohort,
+    h3_reference_cohort::H3ReferenceCohort, install_current_schema,
+    install_michigan_h3_reference_bundle, michigan_dynamic_hex_foundation,
+    postgres_catalog::CatalogError, CurrentSchemaDisposition, CurrentSchemaError,
+    H3ReferenceInstallConflict, H3ReferenceInstallDisposition, H3ReferenceInstallError,
+    H3ReferenceInstallOperation, H3ReferenceInstallReport, SCHEMA_ADVISORY_LOCK_KEY,
 };
 use postgres::{Config, NoTls};
 
@@ -107,7 +108,7 @@ fn verify_connection_failure_redacts_credentials(cohort: &H3ReferenceCohort) {
             diagnostic: Some(diagnostic),
         } => assert_eq!(
             diagnostic.classification(),
-            babylon_persistence::PostgresFailureClassV1::Reachability
+            babylon_persistence::PostgresFailureClass::Reachability
         ),
         _ => panic!("connection refusal must remain a redacted typed database error"),
     }
@@ -659,7 +660,7 @@ fn babylon_catalog_snapshot(config: &Config) -> Vec<(String, String)> {
 }
 
 pub(super) fn representative_cohort() -> H3ReferenceCohort {
-    representative_h3_reference_cohort_v1()
+    representative_h3_reference_cohort()
         .expect("the sole checked-in source fixture must validate")
         .clone()
 }
@@ -668,17 +669,17 @@ pub(super) fn install_reference_bundle(
     config: &Config,
     cohort: &H3ReferenceCohort,
 ) -> Result<H3ReferenceInstallReport, H3ReferenceInstallError> {
-    let foundation = michigan_dynamic_hex_foundation_v1()
+    let foundation = michigan_dynamic_hex_foundation()
         .expect("the sole checked Michigan foundation fixture must validate");
-    install_michigan_h3_reference_bundle_v1(config, cohort, foundation)
+    install_michigan_h3_reference_bundle(config, cohort, foundation)
 }
 
-fn digest(text: &str) -> RefDigestV1 {
+fn digest(text: &str) -> RefDigest {
     assert_eq!(text.len(), 64);
     let mut bytes = [0_u8; 32];
     for (index, byte) in bytes.iter_mut().enumerate().take(32) {
         let offset = index * 2;
         *byte = u8::from_str_radix(&text[offset..offset + 2], 16).unwrap();
     }
-    RefDigestV1::from_bytes(bytes)
+    RefDigest::from_bytes(bytes)
 }

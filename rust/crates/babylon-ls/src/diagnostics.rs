@@ -22,7 +22,7 @@
 //! | Any error carrying an [`ErrorIdentity`] (§2.3) | **Form** | One of [`crate::locator`]'s four strategies, dispatched by [`crate::locator::locate`]. Unique match ⇒ that span. Ambiguous ⇒ file-level range plus one `relatedInformation` entry per candidate, sorted into document order. Absent ⇒ file-level, no `relatedInformation`. `data.precision` reads `"form"` regardless of which of the three outcomes the search landed on — it names the error's own CLASS (it carries typed identity at all), not the search's runtime luck. |
 //! | `E-TYPE` (15 codes) | **File** | `TypeError` is `{code, message}` with no struct variants (`typecheck.rs:81-85`) — nothing to locate. Wave 2 gives it identity at the raise site. |
 //! | Prose-only variants (`Malformed{message}` in six modules; `DomainError::Undeterminable{candidates}`) | **File** (`Undeterminable` ⇒ file + `relatedInformation`, via [`ErrorIdentity::Ambiguous`]) | By construction: the loader names no single token. |
-//! | `E-EVAL` reached with no live session | **File**, distinct message | Not reachable from [`babylon_tick::diagnose_content_set`] today — evaluation never runs during a diagnostic pass (load-time checks only); documented for completeness, unimplemented here because nothing produces it yet (the same disclosed-gap discipline as [`crate::locator`]'s `ErrorIdentity::Edge` note). |
+//! | `E-EVAL` reached with no live session | **File**, distinct message | Not reachable from [`babylon_tick::diagnose_content_set_sources`] today — evaluation never runs during a diagnostic pass (load-time checks only); documented for completeness, unimplemented here because nothing produces it yet (the same disclosed-gap discipline as [`crate::locator`]'s `ErrorIdentity::Edge` note). |
 
 use lsp_types::{
     Diagnostic, DiagnosticRelatedInformation, DiagnosticSeverity, Location, NumberOrString, Range,
@@ -31,8 +31,11 @@ use lsp_types::{
 
 use babylon_bsl::rule_pipeline::LoadError;
 use babylon_bsl::scenario::ScenarioError;
-use babylon_bsl::{read_all_spanned, ErrorIdentity, FormPath, SExpr, SpanTable};
-use babylon_tick::kernel_slot::KernelSlotLedgerErrorV1;
+use babylon_bsl::{
+    error_identity::ErrorIdentity, reader::read_all_spanned, reader::FormPath, reader::SExpr,
+    reader::SpanTable,
+};
+use babylon_tick::kernel_slot::KernelSlotLedgerError;
 use babylon_tick::PrepareError;
 
 use crate::line_index::LineIndex;
@@ -104,7 +107,7 @@ impl Located {
         Self {
             code: err.spec_code(),
             family: family_of_load_error(err),
-            identity: babylon_bsl::identity_of(err),
+            identity: babylon_bsl::error_identity::identity_of(err),
             position,
             form_path,
             message: err.to_string(),
@@ -147,7 +150,7 @@ impl Located {
                 Self {
                     code: decl_error.spec_code(),
                     family: family_of_load_error(&wrapped),
-                    identity: babylon_bsl::identity_of(&wrapped),
+                    identity: babylon_bsl::error_identity::identity_of(&wrapped),
                     position: None,
                     form_path: None,
                     message: err.to_string(),
@@ -162,19 +165,17 @@ impl Located {
             }
             PrepareError::KernelSlot(error) => {
                 let rule = match error {
-                    KernelSlotLedgerErrorV1::MissingLiveReservation { rule, .. }
-                    | KernelSlotLedgerErrorV1::LiveSampleMismatch { rule, .. }
-                    | KernelSlotLedgerErrorV1::LiveSlotMismatch { rule, .. } => Some(rule),
-                    KernelSlotLedgerErrorV1::LiveSampleMoved { actual_rule, .. } => {
-                        Some(actual_rule)
-                    }
-                    KernelSlotLedgerErrorV1::OrdinalCapacity { .. }
-                    | KernelSlotLedgerErrorV1::Ordinal { .. }
-                    | KernelSlotLedgerErrorV1::Collision { .. }
-                    | KernelSlotLedgerErrorV1::Rebind { .. }
-                    | KernelSlotLedgerErrorV1::SampleCollision { .. }
-                    | KernelSlotLedgerErrorV1::RuleSlotSequence { .. }
-                    | KernelSlotLedgerErrorV1::InvalidQName { .. } => None,
+                    KernelSlotLedgerError::MissingLiveReservation { rule, .. }
+                    | KernelSlotLedgerError::LiveSampleMismatch { rule, .. }
+                    | KernelSlotLedgerError::LiveSlotMismatch { rule, .. } => Some(rule),
+                    KernelSlotLedgerError::LiveSampleMoved { actual_rule, .. } => Some(actual_rule),
+                    KernelSlotLedgerError::OrdinalCapacity { .. }
+                    | KernelSlotLedgerError::Ordinal { .. }
+                    | KernelSlotLedgerError::Collision { .. }
+                    | KernelSlotLedgerError::Rebind { .. }
+                    | KernelSlotLedgerError::SampleCollision { .. }
+                    | KernelSlotLedgerError::RuleSlotSequence { .. }
+                    | KernelSlotLedgerError::InvalidQName { .. } => None,
                 };
                 Self {
                     code: None,
@@ -256,7 +257,7 @@ pub fn family_of_load_error(err: &LoadError) -> &'static str {
         // (`E-LOAD-002`, anchor/system REGISTRATION) — every other
         // wrapped type's uncoded arm is a bare `Malformed{message}`
         // (shape-level, `E-PARSE`) alone.
-        LoadError::Anchor(babylon_bsl::AnchorError::UnregisteredAnchorSystem { .. })
+        LoadError::Anchor(babylon_bsl::mod_anchors::AnchorError::UnregisteredAnchorSystem { .. })
         | LoadError::Content(_)
         | LoadError::DuplicateRuleId { .. }
         | LoadError::DeferredShapeVerb(_)
@@ -559,7 +560,7 @@ mod tests {
     use crate::line_index::LineIndex;
     use babylon_bsl::rule_pipeline::LoadError;
     use babylon_bsl::scenario::{load_scenario, ScenarioError};
-    use babylon_bsl::{read, DeclError, ErrorIdentity};
+    use babylon_bsl::{declarations::DeclError, error_identity::ErrorIdentity, reader::read};
     use babylon_graph::hypergraph_store::HypergraphStore;
     use lsp_types::{DiagnosticSeverity, Uri};
 
@@ -613,10 +614,11 @@ mod tests {
     fn loader_probability_form_path_maps_to_the_exact_form_span() {
         let text = "(foo bar)";
         let line_index = LineIndex::new(text);
-        let error = LoadError::Probability(babylon_bsl::ProbabilityError::InvalidForm {
-            message: "probability refusal".to_owned(),
-            form_path: vec![0, 1],
-        });
+        let error =
+            LoadError::Probability(babylon_bsl::probability::ProbabilityError::InvalidForm {
+                message: "probability refusal".to_owned(),
+                form_path: vec![0, 1],
+            });
         let located = Located::from_load_error(&error);
         let diagnostics = diagnostics_for_file(&uri(), text, &line_index, &[located]);
         assert_eq!(diagnostics.len(), 1);
@@ -654,16 +656,16 @@ mod tests {
         // #652 Task 6.2) — this row instead exercises a genuinely UNCODED
         // `BoundError::Malformed` (missing `:fuel`), the same shape-level
         // family every bare `Malformed` variant classifies.
-        let rule = babylon_bsl::read(
+        let rule = babylon_bsl::reader::read(
             "(rule demo/no-fuel :role mechanic :evidence derived :material-basis \"x\" (bindings) \
              (effects (update-node self social-class/agitation (add 0.05i))))",
         )
         .expect("must parse")
         .0;
-        let err = babylon_bsl::check_rule(
+        let err = babylon_bsl::bound_checker::check_rule(
             &rule,
-            &babylon_bsl::CardinalityCeilings::default(),
-            &babylon_bsl::IntrinsicCosts::default(),
+            &babylon_bsl::fuel::CardinalityCeilings::default(),
+            &babylon_bsl::fuel::IntrinsicCosts::default(),
         )
         .expect_err("missing :fuel must be rejected");
         let load_err = LoadError::Bound(err);
@@ -675,7 +677,7 @@ mod tests {
     fn family_of_load_error_lexical_is_e_lex_even_when_uncoded() {
         // An unterminated list: `ReadErrorKind::UnterminatedList`, no
         // `LexCode` at all — uncoded, but still the reader's own stage.
-        let err = babylon_bsl::read("(rule foo").expect_err("must be a read error");
+        let err = babylon_bsl::reader::read("(rule foo").expect_err("must be a read error");
         let load_err = LoadError::Read(err);
         assert_eq!(load_err.spec_code(), None);
         assert_eq!(family_of_load_error(&load_err), "E-LEX");
@@ -793,7 +795,7 @@ mod tests {
         let err = read("(~= agitation 0.5p)").expect_err("must be a read error");
         let located = Located {
             code: Some(match &err.kind {
-                babylon_bsl::ReadErrorKind::Lex(code) => code.spec_code(),
+                babylon_bsl::reader::ReadErrorKind::Lex(code) => code.spec_code(),
                 _ => unreachable!("this fixture is a lex error"),
             }),
             family: "E-LEX",
@@ -862,7 +864,7 @@ mod tests {
                     (intrinsic floor :params (real) :returns int :cost 6) \
                     (rule event/probe :role mechanic :evidence derived :material-basis \"x\" :fuel 16 (bindings) (effects (emit EventType/CONSCIOUSNESS_SHIFT (gate 0))))";
         let line_index = LineIndex::new(text);
-        let load_err = LoadError::Intrinsic(babylon_bsl::DeclError::Duplicate {
+        let load_err = LoadError::Intrinsic(babylon_bsl::declarations::DeclError::Duplicate {
             name: "floor".to_owned(),
             what: "intrinsic",
         });

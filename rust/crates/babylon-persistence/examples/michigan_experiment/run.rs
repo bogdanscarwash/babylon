@@ -2,12 +2,12 @@ use std::collections::BTreeMap;
 
 use babylon_bsl::structural_verbs::CollectingSink;
 use babylon_graph::hypergraph_store::HypergraphStore;
-use babylon_kernel::sha256_of;
-use babylon_persistence::michigan_content::MichiganContentPresetV1;
-use babylon_persistence::michigan_material::{MichiganDeliveryPresetV1, MichiganMaterialCatalogV1};
-use babylon_practice_contract::ordered_action_v1::OrderedPracticeActionBatchV1;
-use babylon_tick::material_replay::MaterialReplaySessionV3;
-use babylon_tick::replay_session::ReplayCommitDispositionV1;
+use babylon_kernel::content_digest::sha256_of;
+use babylon_persistence::michigan_content::MichiganContentPreset;
+use babylon_persistence::michigan_material::{MichiganDeliveryPreset, MichiganMaterialCatalog};
+use babylon_practice_contract::OrderedPracticeActionBatch;
+use babylon_tick::material_replay::MaterialReplaySession;
+use babylon_tick::replay_session::ReplayCommitDisposition;
 use serde::Serialize;
 use serde_json::{json, Value};
 
@@ -25,36 +25,36 @@ const ACCEPTED_REGIONAL_PARAMETERS_SHA256: &str =
 #[derive(Clone, Copy)]
 pub struct CaseSpec {
     pub id: &'static str,
-    pub delivery: MichiganDeliveryPresetV1,
+    pub delivery: MichiganDeliveryPreset,
     pub opening_sheet_kg: u64,
 }
 
 pub const SPECS: [CaseSpec; 4] = [
     CaseSpec {
         id: "standard-0",
-        delivery: MichiganDeliveryPresetV1::Standard,
+        delivery: MichiganDeliveryPreset::Standard,
         opening_sheet_kg: 0,
     },
     CaseSpec {
         id: "delayed-0",
-        delivery: MichiganDeliveryPresetV1::Delayed,
+        delivery: MichiganDeliveryPreset::Delayed,
         opening_sheet_kg: 0,
     },
     CaseSpec {
         id: "standard-320",
-        delivery: MichiganDeliveryPresetV1::Standard,
+        delivery: MichiganDeliveryPreset::Standard,
         opening_sheet_kg: 320,
     },
     CaseSpec {
         id: "delayed-320",
-        delivery: MichiganDeliveryPresetV1::Delayed,
+        delivery: MichiganDeliveryPreset::Delayed,
         opening_sheet_kg: 320,
     },
 ];
 
 pub struct Case {
     pub spec: CaseSpec,
-    pub catalog: MichiganMaterialCatalogV1,
+    pub catalog: MichiganMaterialCatalog,
 }
 
 pub fn hex(bytes: &[u8]) -> String {
@@ -70,7 +70,7 @@ pub fn digest_json(value: &impl Serialize) -> Result<String> {
     Ok(hex(&sha256_of(&serde_json::to_vec(value)?)))
 }
 
-fn regional_parameters(catalog: &MichiganMaterialCatalogV1) -> Result<Value> {
+fn regional_parameters(catalog: &MichiganMaterialCatalog) -> Result<Value> {
     let capture: Value = serde_json::from_slice(catalog.defines_bytes())?;
     let definitions = capture
         .get("defines")
@@ -100,7 +100,7 @@ fn regional_parameters(catalog: &MichiganMaterialCatalogV1) -> Result<Value> {
 }
 
 pub fn cases() -> Result<Vec<Case>> {
-    let original = MichiganMaterialCatalogV1::from_defines_toml(BASELINE)
+    let original = MichiganMaterialCatalog::from_defines_toml(BASELINE)
         .map_err(|error| contract(format!("baseline validation: {error}")))?;
     let baseline = regional_parameters(&original)?;
     if digest_json(&baseline)? != ACCEPTED_REGIONAL_PARAMETERS_SHA256
@@ -130,7 +130,7 @@ pub fn cases() -> Result<Vec<Case>> {
             );
             let text = toml::to_string(&authored)
                 .map_err(|error| contract(format!("case TOML: {error}")))?;
-            let catalog = MichiganMaterialCatalogV1::from_defines_toml(&text)
+            let catalog = MichiganMaterialCatalog::from_defines_toml(&text)
                 .map_err(|error| contract(format!("{} validation: {error}", spec.id)))?;
             let mut resolved = regional_parameters(&catalog)?;
             resolved["process"]["panel_forming"]["OPENING_INPUT_UNITS"] = json!(0);
@@ -169,8 +169,8 @@ pub struct CaseResult {
     pub rows: Vec<PeriodRow>,
 }
 
-fn foundation(case: &Case) -> Result<(Value, MaterialReplaySessionV3<HypergraphStore>)> {
-    let foundation = MichiganContentPresetV1::new_campaign(case.spec.delivery)
+fn foundation(case: &Case) -> Result<(Value, MaterialReplaySession<HypergraphStore>)> {
+    let foundation = MichiganContentPreset::new_campaign(case.spec.delivery)
         .create_foundation(&case.catalog)
         .map_err(|error| contract(format!("{} foundation: {error:?}", case.spec.id)))?;
     let graph = foundation.graph_foundation();
@@ -199,7 +199,7 @@ pub fn run_case(case: &Case, mut emit: impl FnMut(&PeriodRow) -> Result<()>) -> 
         usize::try_from(PERIODS).map_err(|_| contract("period bound exceeds platform capacity"))?;
     let mut rows = Vec::with_capacity(period_count);
     for period in 1..=PERIODS {
-        let actions = OrderedPracticeActionBatchV1::empty(
+        let actions = OrderedPracticeActionBatch::empty(
             session.graph_session().session_identity().clone(),
             period,
         )
@@ -216,7 +216,7 @@ pub fn run_case(case: &Case, mut emit: impl FnMut(&PeriodRow) -> Result<()>) -> 
         let row = observe::period(case, session.material().state(), &candidate)?;
         session
             .commit_prepared_and_publish(&mut CollectingSink::default(), candidate, |_| {
-                Ok::<_, std::convert::Infallible>(ReplayCommitDispositionV1::Committed)
+                Ok::<_, std::convert::Infallible>(ReplayCommitDisposition::Committed)
             })
             .map_err(|error| contract(format!("local publication: {error:?}")))?;
         emit(&row)?;
